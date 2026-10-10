@@ -4546,7 +4546,8 @@ async function openSeededSession(
         }
         const project = room.querySelector(".ah-project-list-item");
         if (project) {
-          if (!project.classList.contains("is-selected")) project.click();
+          // a project row with a host act (H4) is a box: its covering button chooses
+          if (!project.classList.contains("is-selected")) (project.querySelector(".ah-project-list-item__hit") ?? project).click();
           return "project";
         }
         // PJ-4 (H5): Temporary is one folded line at the list's foot — open it

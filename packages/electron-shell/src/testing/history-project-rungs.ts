@@ -123,7 +123,8 @@ const chooseProject = (name: string, session: boolean): string => `(() => {
     if (fold) { fold.click(); return "fold"; }
     return "no project row";
   }
-  if (!row.classList.contains("is-selected")) { row.click(); return "project"; }
+  // a project row with a host act (H4) is a box: its covering button chooses
+  if (!row.classList.contains("is-selected")) { (row.querySelector(".ah-project-list-item__hit") ?? row).click(); return "project"; }
   if (!${session}) return "chosen";
   const first = room.querySelector(".ah-session-list-item");
   if (!first) return "no session row";
@@ -442,6 +443,36 @@ export async function historyByProjectPhotos(
     win.webContents.executeJavaScript(
       `(${HISTORY_ROOM}?.querySelector(${JSON.stringify(selector)})?.click(), "ok")`,
     );
+  // A menu is opened as a person's pointer opens it (ROOM API v3: a synthetic
+  // `.click()` reads as a key's, and a key's open rings its row): a real
+  // press at the control's centre, sent into this window's page — the
+  // smoke's own window, never the OS's input
+  const pointAt = async (selector: string): Promise<void> => {
+    const at = JSON.parse(
+      String(
+        await win.webContents.executeJavaScript(`(() => {
+          const r = ${HISTORY_ROOM}?.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect();
+          return JSON.stringify(r ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null);
+        })()`),
+      ),
+    ) as { x: number; y: number } | null;
+    if (at === null) throw new Error(`nothing to press at ${selector}`);
+    win.webContents.sendInputEvent({ type: "mouseMove", x: at.x, y: at.y });
+    win.webContents.sendInputEvent({
+      type: "mouseDown",
+      x: at.x,
+      y: at.y,
+      button: "left",
+      clickCount: 1,
+    });
+    win.webContents.sendInputEvent({
+      type: "mouseUp",
+      x: at.x,
+      y: at.y,
+      button: "left",
+      clickCount: 1,
+    });
+  };
   const drawn = `(() => {
     const room = ${HISTORY_ROOM};
     if (!room) return "{}";
@@ -453,6 +484,14 @@ export async function historyByProjectPhotos(
       chips: [...room.querySelectorAll("button.ah-chipselect")].map(words),
       folder: room.querySelector("button.ah-folderpick")?.getAttribute("title") ?? null,
       menu: [...room.querySelectorAll(".ah-menu [role=menu] .ah-menu__item")].map((node) => (node.disabled ? "(off) " : "") + words(node)),
+      // ROOM API v3: the menu hangs in the room's root, inside the room's box,
+      // and a pointer's open rings no row
+      layer: (() => {
+        const menu = room.querySelector(":scope > .ah-menu[data-layer]");
+        if (!menu) return null;
+        const m = menu.getBoundingClientRect(), r = room.getBoundingClientRect();
+        return { side: menu.getAttribute("data-side"), inside: m.left >= r.left && m.right <= r.right && m.top >= r.top && m.bottom <= r.bottom, ringed: [...menu.querySelectorAll(".ah-menu__item")].filter((node) => node.matches(":focus-visible")).length };
+      })(),
     });
   })()`;
   for (const theme of ["light", "dark"] as const) {
@@ -473,7 +512,7 @@ export async function historyByProjectPhotos(
         }
       }
       if (open.trigger !== null) {
-        await press(open.trigger);
+        await pointAt(open.trigger);
         await untilValue(
           win,
           `${open.shot}'s menu open`,
@@ -489,8 +528,9 @@ export async function historyByProjectPhotos(
       if (theme === "light")
         seen[open.shot] = JSON.parse(String(await win.webContents.executeJavaScript(drawn)));
       if (open.trigger !== null) {
-        // the trigger again folds it (the room's own toggle)
-        await press(open.trigger);
+        // Escape folds it (the room's own close)
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
         await untilValue(
           win,
           `${open.shot}'s menu folded`,

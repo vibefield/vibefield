@@ -198,7 +198,8 @@ async function jumpToSteps(
           return "session";
         }
         const project = room.querySelector(".ah-project-list-item");
-        if (project && !project.classList.contains("is-selected")) project.click();
+        // a project row with a host act (H4) is a box: its covering button chooses
+        if (project && !project.classList.contains("is-selected")) (project.querySelector(".ah-project-list-item__hit") ?? project).click();
         // PJ-4 (H5): a project in a folded section (Temporary) opens its fold first
         if (!project) room.querySelector('.ah-fold[aria-expanded="false"]')?.click();
         return "project";

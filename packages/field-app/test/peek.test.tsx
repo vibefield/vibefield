@@ -359,7 +359,8 @@ function typeInto(input: HTMLInputElement, text: string): void {
 /** ⌘3, and the room's rows in it. */
 async function openHistory(): Promise<void> {
   to("history");
-  await until(() => slot()?.querySelector("button.ah-project-list-item"), "the room's rows");
+  // a row with a host act (H4) is a box, not a button: any project row will do
+  await until(() => slot()?.querySelector(".ah-project-list-item"), "the room's rows");
 }
 
 /** The frame's button, pressed; answers the popup's field. */

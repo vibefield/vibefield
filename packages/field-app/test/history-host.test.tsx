@@ -35,6 +35,7 @@ import {
   type HistoryActsDeps,
   hostKeyOf,
   newAgent,
+  projectIntent,
   resumeTarget,
   spawnParamsOf,
 } from "../src/history/acts";
@@ -205,7 +206,7 @@ function spyActs() {
     jump: vi.fn(),
     newAgent: vi.fn(),
     intent: vi.fn<(params: ProjectIntentParams, words: { done: string; verb: string }) => void>(),
-    rename: vi.fn(),
+    rename: vi.fn<(key: string, name: string) => Promise<void>>(async () => undefined),
     shown: vi.fn(),
   } satisfies HistoryHostActs;
 }
@@ -526,7 +527,7 @@ describe("R5: New agent and the project's acts", () => {
   it("New agent: Starts in names ③'s folder; one row per agent and persona from agent.providers; the model and effort row says it can't be set yet", () => {
     const acts = spyActs();
     const inputs = historyHostInputs(MODEL, { ...NO_HOST_STATE, home: "/Users/me" }, acts);
-    const [newAgentAct, own] = inputs.projectActs?.("p1:vibe", { folder: null }) ?? [];
+    const [newAgentAct, ...others] = inputs.projectActs?.("p1:vibe", { folder: null }) ?? [];
     expect(newAgentAct?.key).toBe("new-agent");
     expect(newAgentAct?.primary).toBe(true);
     const groups = newAgentAct?.menu?.groups ?? [];
@@ -549,7 +550,8 @@ describe("R5: New agent and the project's acts", () => {
       disabled: true,
       detail: "Model and effort can't be set from here yet (PJ-6)",
     });
-    expect(own?.key).toBe("project-acts");
+    // ②'s head keeps New agent alone: H4's acts sit where they act
+    expect(others).toEqual([]);
   });
 
   it("New agent follows ③: a folder on another desktop names why it can't start there, and its rows are dimmed", () => {
@@ -561,36 +563,113 @@ describe("R5: New agent and the project's acts", () => {
     expect(items(act?.menu).filter((row) => row.onSelect !== undefined)).toEqual([]);
   });
 
-  it("H4: each act is its intent — rename (in the card), pin, hide, and a folder's split", () => {
+  it("H4 (a): pin and hide at ①'s row end — each its intent; a pinned project unpins, a hidden one shows again; Temporary has none", () => {
     const acts = spyActs();
     const inputs = historyHostInputs(MODEL, NO_HOST_STATE, acts);
-    const own = (inputs.projectActs?.("p1:vibe", { folder: null }) ?? [])[1];
-    const rows = items(own?.menu);
-    rows.find((row) => row.key === "rename")?.onSelect?.();
-    expect(acts.rename).toHaveBeenCalledWith("p1:vibe");
-    rows.find((row) => row.key === "pin")?.onSelect?.();
-    rows.find((row) => row.key === "hide")?.onSelect?.();
-    rows.find((row) => row.key === `${STUDIO}\u001fpl_wt`)?.onSelect?.();
-    expect(acts.intent.mock.calls.map(([params]) => params)).toEqual([
-      { key: "p1:vibe", op: "pin", pinned: true },
-      { key: "p1:vibe", op: "hide", hidden: true },
-      { key: "p1:vibe", op: "split", place: { device: STUDIO, placeId: "pl_wt" } },
+    const act = inputs.projectRow?.("p1:vibe")?.act;
+    expect(act?.key).toBe("project-acts");
+    expect(act?.label).toBe("Pin or hide vibe-field");
+    const rows = items(act?.menu);
+    expect(rows.map((row) => [row.key, row.label])).toEqual([
+      ["pin", "Pin to the top"],
+      ["hide", "Hide"],
     ]);
-    // a pinned project unpins; Temporary is not a project: no acts at all
-    const pinned = (inputs.projectActs?.("p1:notes", { folder: null }) ?? [])[1];
-    expect(items(pinned?.menu).find((row) => row.key === "pin")?.label).toBe("Unpin");
-    expect(inputs.projectActs?.("p1:temp", { folder: null })?.map((act) => act.key)).toEqual([
-      "new-agent",
+    expect(rows[1]?.detail).toBe("It folds under Hidden, at the list's foot");
+    rows[0]?.onSelect?.();
+    rows[1]?.onSelect?.();
+    expect(acts.intent.mock.calls).toEqual([
+      [
+        { key: "p1:vibe", op: "pin", pinned: true },
+        { done: "Pinned vibe-field", verb: "pin" },
+      ],
+      [
+        { key: "p1:vibe", op: "hide", hidden: true },
+        { done: "Hid vibe-field", verb: "hide it" },
+      ],
     ]);
-    // Home groups by its desktop alone: no split
-    const home = (inputs.projectActs?.("p1:home", { folder: null }) ?? [])[1];
-    expect(home?.menu?.groups.map((group) => group.key)).toEqual(["project"]);
+    // the fixture's notes is pinned, old is hidden: the rows say the way back
+    expect(items(inputs.projectRow?.("p1:notes")?.act?.menu)[0]?.label).toBe("Unpin");
+    const old = items(inputs.projectRow?.("p1:old")?.act?.menu);
+    expect(old[1]?.label).toBe("Show again");
+    old[1]?.onSelect?.();
+    expect(acts.intent.mock.calls.at(-1)?.[0]).toEqual({
+      key: "p1:old",
+      op: "hide",
+      hidden: false,
+    });
+    // Temporary is not a project: no act (absent, never disabled); Home has its own
+    expect(inputs.projectRow?.("p1:temp")?.act).toBeUndefined();
+    expect(inputs.projectRow?.("p1:home")?.act?.key).toBe("project-acts");
   });
 
-  it("the card: the rename field while renaming, else the suggestions", () => {
+  it('H4 (b): "Not part of this project" on each of ③\'s folder rows — a split, pressed; never for a one-folder project, Home or Temporary', () => {
     const acts = spyActs();
-    const renaming = historyHostInputs(MODEL, { ...NO_HOST_STATE, renaming: "p1:vibe" }, acts);
-    expect(isValidElement(renaming.projectCard?.("p1:vibe"))).toBe(true);
+    const inputs = historyHostInputs(MODEL, NO_HOST_STATE, acts);
+    const folders = inputs.folders?.("p1:vibe")?.groups.flatMap((group) => group.folders) ?? [];
+    expect(folders.map((folder) => [folder.key, folder.act?.label ?? null])).toEqual([
+      [`${STUDIO}\u001fpl_vf`, "Not part of this project"],
+      [`${STUDIO}\u001fpl_wt`, "Not part of this project"],
+      [`${LAPTOP}\u001fpl_lap`, "Not part of this project"],
+    ]);
+    expect(folders[1]?.act?.menu).toBeUndefined();
+    folders[1]?.act?.onPress?.();
+    expect(acts.intent).toHaveBeenCalledWith(
+      { key: "p1:vibe", op: "split", place: { device: STUDIO, placeId: "pl_wt" } },
+      { done: "feature is no longer part of vibe-field", verb: "split it" },
+    );
+    for (const key of ["p1:notes", "p1:home", "p1:temp"]) {
+      const only = inputs.folders?.(key)?.groups.flatMap((group) => group.folders) ?? [];
+      expect(
+        only.every((folder) => folder.act === undefined),
+        key,
+      ).toBe(true);
+    }
+  });
+
+  it("H4 (c): rename on ②'s name — the room's field commits through the controller's rename, whose refusal words the room says; Temporary has none", async () => {
+    const acts = spyActs();
+    const inputs = historyHostInputs(MODEL, NO_HOST_STATE, acts);
+    const rename = inputs.projectRename?.("p1:vibe");
+    expect(rename?.label).toBe("Rename vibe-field");
+    await rename?.onRename("vibe");
+    expect(acts.rename).toHaveBeenCalledWith("p1:vibe", "vibe");
+    // a refusal reaches the room as the rejection it says under the field
+    acts.rename.mockRejectedValueOnce(
+      new Error("the project changed while you looked — try again"),
+    );
+    await expect(rename?.onRename("vf")).rejects.toThrow("the project changed while you looked");
+    expect(inputs.projectRename?.("p1:temp")).toBeNull();
+    expect(inputs.projectRename?.("p1:home")?.label).toBe("Rename Home");
+  });
+
+  it("H4 (c): the intent's own words are the refusal's — a key that moved, a bucket, a project gone", async () => {
+    const refusing = (reason: string) => ({
+      request: async () => {
+        throw Object.assign(new Error("refused"), {
+          kind: "PRECONDITION_FAILED",
+          details: { reason },
+        });
+      },
+    });
+    const ask = { key: "p1:vibe", op: "rename" as const, name: "vf" };
+    expect(await projectIntent(refusing("key-moved") as never, ask)).toEqual({
+      state: "refused",
+      reason: "the project changed while you looked — try again",
+    });
+    expect(await projectIntent(refusing("not-a-project") as never, ask)).toEqual({
+      state: "refused",
+      reason: "Temporary is not a project",
+    });
+    expect(await projectIntent(refusing("no-such-project") as never, ask)).toEqual({
+      state: "refused",
+      reason: "the project is no longer listed",
+    });
+    const taking = { request: async () => ({ key: "p1:vibe2" }) };
+    expect(await projectIntent(taking as never, ask)).toEqual({ state: "done", key: "p1:vibe2" });
+  });
+
+  it("the card: the suggestions, else nothing (rename is on ②'s name since v3)", () => {
+    const acts = spyActs();
     const quiet = historyHostInputs(MODEL, NO_HOST_STATE, acts);
     expect(quiet.projectCard?.("p1:vibe")).toBeNull();
     const suggested = historyHostInputs(

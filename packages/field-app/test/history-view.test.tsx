@@ -223,8 +223,13 @@ const historySlot = (): HTMLElement | null =>
 /** Choose the scripted session in the room, the way a person does: its
  * project, then the session. */
 async function choose(): Promise<void> {
+  // PJ-4 (ROOM API v3, H4): a project row with a host act (pin, hide) is a
+  // box whose covering button is the selection; one without is the button
   const project = await until(
-    () => historySlot()?.querySelector<HTMLButtonElement>("button.ah-project-list-item"),
+    () =>
+      historySlot()?.querySelector<HTMLButtonElement>(
+        ".ah-project-list-item__hit, button.ah-project-list-item",
+      ),
     "the room's project row",
   );
   act(() => project.click());
@@ -259,7 +264,7 @@ describe("History in the frame (AR-8c)", () => {
     expect(frame.closest(".vf-history")).not.toBeNull();
     expect(frame.getAttribute("data-ah-surface")).toBe("host");
     await until(
-      () => historySlot()?.querySelector("button.ah-project-list-item"),
+      () => historySlot()?.querySelector(".ah-project-list-item"),
       "the catalog's rows in the room",
     );
     const scroller = await until(

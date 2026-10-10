@@ -295,7 +295,14 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
           sayOnHistoryLine(intentNote(outcome, words)),
         );
       },
-      rename: (key) => setHostState((state) => ({ ...state, renaming: key })),
+      // H4 — the room keeps its field open on a rejection and says the
+      // error's words under it: the intent's own (`projectIntent`); a rename
+      // that took is said on the line
+      rename: async (key, name) => {
+        const outcome = await projectIntent(fieldd, { key, op: "rename", name });
+        if (outcome.state === "refused") throw new Error(outcome.reason);
+        sayOnHistoryLine(`Renamed to ${name}`);
+      },
       shown: (project) => showSuggestions(project),
     }),
     [deps, fieldd, noteRun, showSuggestions],

@@ -5,6 +5,7 @@ import type { FrameSurface } from "../frame/frame-surface";
 import type { HistoryLineDoor } from "../frame/line-door";
 import { ViewsTrackView } from "../frame/ViewsTrack";
 import type { ViewKeys } from "../frame/views";
+import { projectIntent } from "../history/acts";
 import { HistoryRoomView } from "../history/HistoryRoomView";
 import {
   type HistoryHostActs,
@@ -56,7 +57,9 @@ function HistoryStatePreview({ state }: { state: HistoryState }): ReactElement {
  * (`historyHostInputs`) over the model the controller would gather — colours,
  * desktop marks, Live now / Home / Temporary, row acts, New agent and the
  * project's acts, ③'s folders, the chips. The chips and Rename… answer here
- * as they do in the product; an act that would ask fieldd (Resume, Jump to,
+ * as they do in the product, and Rename asks the fixture fieldd through the
+ * shipping intent — which refuses, so the plate shows how a refusal reads
+ * under the name; an act that would ask fieldd otherwise (Resume, Jump to,
  * New agent, pin, hide, split) does nothing — a catalog acts on no one. */
 function HistoryProjectsPreview(): ReactElement {
   const [fixture] = useState(() => historyProjectsFixture());
@@ -79,10 +82,15 @@ function HistoryProjectsPreview(): ReactElement {
       jump: () => undefined,
       newAgent: () => undefined,
       intent: () => undefined,
-      rename: (key) => setState((now) => ({ ...now, renaming: key })),
+      // H4's rename asks the fixture fieldd through the SHIPPING intent, and
+      // the room says its refusal under the name
+      rename: async (key, name) => {
+        const outcome = await projectIntent(fixture.client, { key, op: "rename", name });
+        if (outcome.state === "refused") throw new Error(outcome.reason);
+      },
       shown: () => undefined,
     }),
-    [],
+    [fixture],
   );
   const inputs = useMemo(() => historyHostInputs(model, state, acts), [model, state, acts]);
   return (

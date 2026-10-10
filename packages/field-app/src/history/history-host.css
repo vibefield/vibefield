@@ -84,27 +84,6 @@
   font-weight: 600;
 }
 
-.vf-history-rename label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.vf-history-rename input {
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--vf-hairline-strong);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--vf-text-primary);
-  font: inherit;
-}
-
-.vf-history-rename input:focus-visible {
-  outline: 2px solid var(--vf-select);
-  outline-offset: 1px;
-}
-
 .vf-history-suggestion {
   display: flex;
   flex-direction: column;

@@ -10,6 +10,7 @@ import type {
   RoomMenuGroup,
   RoomMenuItem,
   RoomProjectRow,
+  RoomRename,
   RoomSection,
   RoomSessionRow,
 } from "@rosetta/room";
@@ -46,7 +47,7 @@ import {
 // is a host input the room draws in its own vocabulary and never interprets
 // (A-D9): a colour, marks, sections, row and head acts, ③'s folders, chips. It
 // is PURE — `historyHostInputs(model, state, acts)` over the host model
-// (`host-model.ts`), the controller's small UI state (filters, a rename) and
+// (`host-model.ts`), the controller's small UI state (filters, a home) and
 // its acts (`acts.ts`) — so the product and the catalog draw the same thing
 // over different data. The room calls these during its render: the controller
 // memoizes the whole object per model and state (ROOM API v1).
@@ -62,11 +63,14 @@ import {
 //      than 14 days behind "Show older";
 //   R4 a session's mark and folder in the id slot, Resume or Jump to — or the
 //      reason — at its end (PJ-D9), and a device-qualified host key;
-//   R5 New agent (H6) and the project's acts (H4) in ②'s head, the
-//      suggestions or a rename in its card, Resume or Jump to in ④'s;
+//   R5 New agent (H6) in ②'s head, the suggestions in its card, Resume or
+//      Jump to in ④'s;
 //   R6 ③'s head as every folder by desktop — one on another desktop says
 //      "Files stay on Studio" (PJ-D22) and is never opened here;
-//   R7 a desktop chip over the list, an agent chip over a project.
+//   R7 a desktop chip over the list, an agent chip over a project;
+//   H4 (ROOM API v3, James's slots) each project act where it acts: pin and
+//      hide at ①'s row end, "Not part of this project" on ③'s folder row,
+//      rename on ②'s name itself.
 
 /* ── the state the controller keeps, and its acts ──────────────────────── */
 
@@ -75,8 +79,6 @@ export interface HistoryHostState {
   readonly desktop: string | null;
   /** ②'s agent chip: a catalog id, or null for any */
   readonly agent: string | null;
-  /** the project being renamed in its card (H4), or null */
-  readonly renaming: string | null;
   /** each project's suggestions, once `project.get` answered them (PJ-D16) */
   readonly suggestions: ReadonlyMap<string, readonly ProjectSuggestion[]>;
   /** the window's home, so a path under it reads `~/…` (AR-8 L2) */
@@ -86,7 +88,6 @@ export interface HistoryHostState {
 export const NO_HOST_STATE: HistoryHostState = {
   desktop: null,
   agent: null,
-  renaming: null,
   suggestions: new Map(),
   home: null,
 };
@@ -99,7 +100,9 @@ export interface HistoryHostActs {
   newAgent(ask: NewAgentAsk): void;
   /** H4 — an act on a project, and the words its outcome is said in */
   intent(params: ProjectIntentParams, words: { done: string; verb: string }): void;
-  rename(key: string | null): void;
+  /** H4 — rename a project: resolves once fieldd took it, rejects with an
+   * Error in the intent's own words (the room says them under the field) */
+  rename(key: string, name: string): Promise<void>;
   /** ③ shows a folder of a project now (R6's `onShow`) */
   shown(project: string, folder: string | null): void;
 }
@@ -288,6 +291,7 @@ function foldersOf(
       folders: places.map((place): RoomFolder => {
         const elsewhere = elsewhereOf(place, device);
         const path = place.path ?? place.name;
+        const split = folderAct(project, place, acts);
         return {
           key: folderKeyOf(place),
           path,
@@ -295,6 +299,7 @@ function foldersOf(
           label: homePath(path, device.here ? state.home : null),
           ...(placeDetail(model, place) !== undefined ? { detail: placeDetail(model, place) } : {}),
           ...(place.worktreeOf !== undefined ? { depth: 1 as const } : {}),
+          ...(split !== undefined ? { act: split } : {}),
           // lane room's finding 4: an elsewhere folder leaves the worktree
           // engine on its last root, so ITS caption names it — always
           ...(elsewhere !== undefined
@@ -435,118 +440,89 @@ function newAgentAct(
   };
 }
 
-/** H4 — the project's acts, in ②'s head behind its `···`: rename, pin, hide,
- * and a folder's "Not part of this project" (split). Temporary is not a
- * project: it has none (absent, never disabled — D-i6). */
-function projectActsAct(project: ProjectSummary, acts: HistoryHostActs): RoomAct | null {
-  if (project.bucket === "temp") return null;
+/** H4 — pin and hide, at ①'s row end (James's slot; ROOM API v3): a quiet
+ * `···` opening the two rows. Temporary is not a project: it has none
+ * (absent, never disabled — D-i6). */
+function projectRowAct(project: ProjectSummary, acts: HistoryHostActs): RoomAct | undefined {
+  if (project.bucket === "temp") return undefined;
   const key = project.key;
-  const main: RoomMenuItem[] = [
-    { key: "rename", label: "Rename…", onSelect: () => acts.rename(key) },
-    {
-      key: "pin",
-      label: project.pinned === true ? "Unpin" : "Pin to the top",
-      onSelect: () =>
-        acts.intent(
-          { key, op: "pin", pinned: project.pinned !== true },
-          project.pinned === true
-            ? { done: `Unpinned ${project.name}`, verb: "unpin" }
-            : { done: `Pinned ${project.name}`, verb: "pin" },
-        ),
-    },
-    {
-      key: "hide",
-      label: project.hidden === true ? "Show again" : "Hide",
-      detail: project.hidden === true ? undefined : "It folds under Hidden, at the list's foot",
-      onSelect: () =>
-        acts.intent(
-          { key, op: "hide", hidden: project.hidden !== true },
-          project.hidden === true
-            ? { done: `${project.name} shows again`, verb: "show it again" }
-            : { done: `Hid ${project.name}`, verb: "hide it" },
-        ),
-    },
-  ];
-  const groups: RoomMenuGroup[] = [{ key: "project", items: main }];
-  // a desktop's Home groups by its desktop alone: nothing to split (J11)
-  if (project.kind !== "home" && project.places.length > 1)
-    groups.push({
-      key: "split",
-      title: "Not part of this project",
-      items: project.places.map(
-        (place): RoomMenuItem => ({
-          key: folderKeyOf(place),
-          label: place.path ?? place.name,
-          ...(place.branch !== undefined ? { detail: place.branch } : {}),
-          filterText: place.path ?? place.name,
-          onSelect: () =>
-            acts.intent(
-              { key, op: "split", place: place.ref },
-              { done: `${place.name} is no longer part of ${project.name}`, verb: "split it" },
-            ),
-        }),
-      ),
-    });
   return {
     key: "project-acts",
-    label: "Project acts",
+    label: `Pin or hide ${project.name}`,
     content: glyphAct("ellipsis"),
     menu: {
-      label: `${project.name} — acts`,
-      groups,
-      filterAfter: 12,
-      filterPlaceholder: "Filter folders",
+      label: `${project.name} — pin or hide`,
+      groups: [
+        {
+          key: "project",
+          items: [
+            {
+              key: "pin",
+              label: project.pinned === true ? "Unpin" : "Pin to the top",
+              onSelect: () =>
+                acts.intent(
+                  { key, op: "pin", pinned: project.pinned !== true },
+                  project.pinned === true
+                    ? { done: `Unpinned ${project.name}`, verb: "unpin" }
+                    : { done: `Pinned ${project.name}`, verb: "pin" },
+                ),
+            },
+            {
+              key: "hide",
+              label: project.hidden === true ? "Show again" : "Hide",
+              ...(project.hidden === true
+                ? {}
+                : { detail: "It folds under Hidden, at the list's foot" }),
+              onSelect: () =>
+                acts.intent(
+                  { key, op: "hide", hidden: project.hidden !== true },
+                  project.hidden === true
+                    ? { done: `${project.name} shows again`, verb: "show it again" }
+                    : { done: `Hid ${project.name}`, verb: "hide it" },
+                ),
+            },
+          ],
+        },
+      ],
     },
   };
 }
 
-/* ── the cards ─────────────────────────────────────────────────────────── */
-
-/** H4's rename, in ②'s card slot: the name in a field, Enter to keep it,
- * Escape to leave it. (The room has no editable name of its own: a v3 ask.) */
-export function RenameCard({
-  name,
-  onDone,
-}: {
-  name: string;
-  onDone: (next: string | null) => void;
-}): ReactElement {
-  const [value, setValue] = useState(name);
-  return (
-    <form
-      className="vf-history-card vf-history-rename"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const next = value.trim();
-        onDone(next === "" || next === name ? null : next);
-      }}
-    >
-      <label>
-        <span>Rename the project</span>
-        <input
-          autoFocus
-          value={value}
-          maxLength={120}
-          onChange={(event) => setValue(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
-              onDone(null);
-            }
-          }}
-        />
-      </label>
-      <div className="vf-history-card-acts">
-        <button type="button" onClick={() => onDone(null)}>
-          Cancel
-        </button>
-        <button type="submit" data-primary="true">
-          Rename
-        </button>
-      </div>
-    </form>
-  );
+/** H4 — "Not part of this project" on ③'s folder row (a split; ROOM API v3:
+ * pressed, never a menu). Only where a folder can leave: a project of more
+ * than one folder, never a desktop's Home (it groups by its desktop alone,
+ * J11) nor Temporary (not a project). */
+function folderAct(
+  project: ProjectSummary,
+  place: ProjectPlace,
+  acts: HistoryHostActs,
+): RoomAct | undefined {
+  if (project.bucket === "temp" || project.kind === "home" || project.places.length < 2)
+    return undefined;
+  return {
+    key: "split",
+    label: "Not part of this project",
+    content: "Not part of this project",
+    onPress: () =>
+      acts.intent(
+        { key: project.key, op: "split", place: place.ref },
+        { done: `${place.name} is no longer part of ${project.name}`, verb: "split it" },
+      ),
+  };
 }
+
+/** H4 — rename on ②'s name itself (ROOM API v3's `projectRename`). The room
+ * keeps the field open on a rejection and says the error's words under it:
+ * they are fieldd's intent's, as `acts.rename` words them. */
+function projectRenameOf(project: ProjectSummary, acts: HistoryHostActs): RoomRename | null {
+  if (project.bucket === "temp") return null;
+  return {
+    label: `Rename ${project.name}`,
+    onRename: (name) => acts.rename(project.key, name),
+  };
+}
+
+/* ── the cards ─────────────────────────────────────────────────────────── */
 
 const SUGGESTION_WORDS: Record<string, string> = {
   "related-history": "shares old history with",
@@ -834,6 +810,7 @@ export function historyHostInputs(
       if (found === undefined) return null;
       const devices = model.devices.filter((device) => found.devices.includes(device.id));
       const elsewhere = elsewhereCounts(model, found);
+      const rowAct = projectRowAct(found, acts);
       return {
         marks: (
           <span className="vf-history-marks">
@@ -857,6 +834,7 @@ export function historyHostInputs(
             }
           : {}),
         live: liveCountOf(model, key),
+        ...(rowAct !== undefined ? { act: rowAct } : {}),
       };
     },
     projectSections: projectSectionsOf(model, state),
@@ -884,30 +862,17 @@ export function historyHostInputs(
     projectActs: (key, context) => {
       const found = project(key);
       if (found === undefined) return null;
-      const own = projectActsAct(found, acts);
-      return [
-        newAgentAct(model, found, context.folder, state, acts),
-        ...(own === null ? [] : [own]),
-      ];
+      // ②'s head keeps New agent alone: pin, hide, split and rename sit where
+      // they act (H4), so a `···` here would only repeat them
+      return [newAgentAct(model, found, context.folder, state, acts)];
+    },
+    projectRename: (key) => {
+      const found = project(key);
+      return found === undefined ? null : projectRenameOf(found, acts);
     },
     projectCard: (key) => {
       const found = project(key);
       if (found === undefined) return null;
-      if (state.renaming === key)
-        return (
-          <RenameCard
-            key={`rename-${key}`}
-            name={found.name}
-            onDone={(next) => {
-              acts.rename(null);
-              if (next !== null)
-                acts.intent(
-                  { key, op: "rename", name: next },
-                  { done: `Renamed to ${next}`, verb: "rename it" },
-                );
-            }}
-          />
-        );
       const suggestions = state.suggestions.get(key) ?? [];
       return suggestions.length === 0 ? null : (
         <SuggestionsCard project={found} suggestions={suggestions} model={model} acts={acts} />

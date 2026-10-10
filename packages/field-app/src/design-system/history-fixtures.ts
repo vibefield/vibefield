@@ -1,4 +1,4 @@
-import type { CatalogPort, CatalogStatus, RoomPorts } from "@rosetta/room";
+import type { CatalogPort, CatalogStatus, HostPort, RoomPorts } from "@rosetta/room";
 import { createDemoPorts, createRoomDemo, type RoomDemo } from "@rosetta/room/fixtures";
 import {
   AGENT_CATALOG_READERS,
@@ -304,6 +304,10 @@ export function historyProjectsClient(demo: RoomDemo): HistoryDoorClient {
           return { rows: fixtureSessions(demo), sources };
         case "index.threads":
           return { rows: [] };
+        case "project.intent":
+          // H4's acts reach no project from a catalog: the refusal's look,
+          // in words that say so (the room says them under its name field)
+          throw new Error("a catalog changes no project; these are fixtures");
         case "project.figures":
           return fixtureFigures(demo, String(params["key"]));
         case "project.figuresDay": {
@@ -339,13 +343,33 @@ export function historyProjectsClient(demo: RoomDemo): HistoryDoorClient {
   };
 }
 
+/** The catalog's desktop: no files to show. ③'s head — the folder list and
+ * its acts — is drawn; the worktree under it says why it has none, as a
+ * desktop whose files engine refused would. */
+const NO_FILES = "the catalog has no files; its folders are fixtures";
+const CATALOG_DESKTOP: HostPort = {
+  homeDir: "/Users/demo",
+  platform: "darwin",
+  openInBrowser: async () => false,
+  favicon: async () => null,
+  worktree: {
+    open: async () => ({ ok: false, error: NO_FILES }),
+    gitFacts: async () => null,
+    fileAction: async () => ({ ok: false, error: NO_FILES }),
+    ports: () => () => undefined,
+  },
+};
+
 /** History by project: the demo's room, its catalog the SHIPPING adapter
  * over the fixture fieldd (the index's own state is the demo's). */
-function projectsPorts(demo: RoomDemo): { ports: RoomPorts; catalog: HistoryCatalogPort } {
+function projectsPorts(
+  demo: RoomDemo,
+  client: HistoryDoorClient,
+): { ports: RoomPorts; catalog: HistoryCatalogPort } {
   const ports = createDemoPorts(demo);
-  const shipping = catalogPortOver(historyProjectsClient(demo), { now: () => demo.now });
+  const shipping = catalogPortOver(client, { now: () => demo.now });
   const catalog: HistoryCatalogPort = { ...shipping, status: ports.catalog.status };
-  return { ports: { ...ports, catalog }, catalog };
+  return { ports: { ...ports, catalog, host: CATALOG_DESKTOP }, catalog };
 }
 
 /** PJ-4 — what the history controller gathers beside the listing, for the
@@ -355,6 +379,8 @@ function projectsPorts(demo: RoomDemo): { ports: RoomPorts; catalog: HistoryCata
  * and the agents this desktop offers, read from the catalog by the demo's
  * runtimes' kinds — never an agent id written here (R23b, AR-L1). */
 export interface HistoryProjectsFixture {
+  /** the fixture fieldd: H4's acts ask it, as the product's ask fieldd */
+  readonly client: HistoryDoorClient;
   readonly ports: RoomPorts;
   readonly catalog: HistoryCatalogPort;
   readonly roster: readonly DeviceInfo[];
@@ -364,7 +390,8 @@ export interface HistoryProjectsFixture {
 
 export function historyProjectsFixture(now: number = Date.now()): HistoryProjectsFixture {
   const demo = createRoomDemo(now);
-  const { ports, catalog } = projectsPorts(demo);
+  const client = historyProjectsClient(demo);
+  const { ports, catalog } = projectsPorts(demo, client);
   const roster: DeviceInfo[] = [
     {
       deviceId: FIXTURE_DESKTOP,
@@ -414,14 +441,14 @@ export function historyProjectsFixture(now: number = Date.now()): HistoryProject
             stateChangedAt: new Date(now - 60_000).toISOString(),
           },
         ];
-  return { ports, catalog, roster, runs, providers };
+  return { client, ports, catalog, roster, runs, providers };
 }
 
 /** The room's ports for one catalog state, over the package's demo. */
 export function historyFixturePorts(state: HistoryState, now: number = Date.now()): RoomPorts {
   const demo = createRoomDemo(now);
   const ports = createDemoPorts(demo);
-  if (state === "projects") return projectsPorts(demo).ports;
+  if (state === "projects") return projectsPorts(demo, historyProjectsClient(demo)).ports;
   if (state === "unavailable") return { ...ports, catalog: unavailableCatalog(ports.catalog) };
   if (state === "consent") return { ...ports, catalog: consentCatalog(ports.catalog) };
   return ports;
