@@ -8,6 +8,7 @@
     "./face": "./src/face.tsx",
     "./tokens.css": "./src/tokens.css",
     "./primitives": "./src/primitives.tsx",
+    "./project-ink": "./src/project-ink.ts",
     "./icons": "./src/icons/index.tsx",
     "./face-stickers": "./src/face-stickers/index.tsx",
     "./glyphs": "./src/glyphs/index.ts"

@@ -90,6 +90,11 @@
   --vf-ink-danger: #d70015;
   --vf-ink-info: #0a6a93;
 
+  /* §2.9 The project ink: only the HUE is a project's (dealt on the cool half,
+     design-kit project-ink.ts); its lightness and chroma are the theme's. */
+  --vf-project-ink-l: 0.6;
+  --vf-project-ink-c: 0.15;
+
   /* §2.6 Organizational accents — the curated set, assigned per object and used
      as TINT. They group and label; they never signal state (that is §2.5's job,
      above). Transcribed here rather than at each use site because this file is
@@ -262,6 +267,8 @@
   --vf-ink-attention: var(--vf-orange);
   --vf-ink-danger: var(--vf-red);
   --vf-ink-info: var(--vf-cyan);
+  /* §2.9 the project ink by night: lighter, the same chroma */
+  --vf-project-ink-l: 0.74;
 
   /* §2.1 Ground */
   --vf-canvas-bg: #171717;

@@ -1,4 +1,5 @@
 import { faceLiftHostClass, UserFaceView } from "@vibefield/design-kit/face";
+import { projectInk, projectInkHue } from "@vibefield/design-kit/project-ink";
 import type { CSSProperties, ReactElement } from "react";
 import { FACE_LADDER, FIXTURE_ME, FIXTURE_OTHERS } from "../account-fixtures";
 import { Section, Specimen } from "../catalog-ui";
@@ -18,6 +19,15 @@ const STATE_COLORS = [
   { label: "Information", token: "--vf-cyan", value: "var(--vf-cyan)" },
   { label: "Selection", token: "--vf-select", value: "var(--vf-select)" },
 ] as const;
+
+/** The first deals fieldd makes, as their inks (DESIGN.md §2.9): the golden
+ * walk over the cool half, in the theme's tone — the catalog's theme switch
+ * shows both. */
+const PROJECT_INKS = Array.from({ length: 16 }, (_, ink) => ({
+  label: `Deal ${ink} · ${Math.round(projectInkHue(ink))}°`,
+  token: `projectInk(${ink})`,
+  value: projectInk(ink),
+}));
 
 const ACCENT_COLORS = Array.from({ length: 8 }, (_, index) => ({
   label: `Accent ${index + 1}`,
@@ -54,6 +64,17 @@ export function FoundationsSection(): ReactElement {
       <Specimen title="Organizational accents" source="design-kit/tokens.css · DESIGN.md §2.6">
         <div className="vf-ds-accent-line">
           {ACCENT_COLORS.map((color) => (
+            <ColorSwatch key={color.token} {...color} compact />
+          ))}
+        </div>
+      </Specimen>
+
+      <Specimen
+        title="Project inks · the cool half"
+        source="design-kit/project-ink.ts · DESIGN.md §2.9"
+      >
+        <div className="vf-ds-accent-line">
+          {PROJECT_INKS.map((color) => (
             <ColorSwatch key={color.token} {...color} compact />
           ))}
         </div>

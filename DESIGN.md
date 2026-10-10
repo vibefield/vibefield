@@ -294,6 +294,50 @@ and the chrome.
 glass in the window's own pixels over the lit mat):* the label reads **9.2:1** by day and **11.3:1**
 by night (three runs: 9.1–9.2 and 11.3). The arrow's white edge is `--vf-presence-edge`.
 
+### 2.9 The project ink — the cool half (PJ-L7)
+
+**One project, one ink, everywhere** (PJ-L7, PJ-D5 (a) ruled 2026-10-07; P3: a record freezes the
+ink of its first act). fieldd deals every project a number, `ink`, in `[0, 997)`
+(`PROJECT_GROUPING.INK_DEALS`): a record keeps the one it was dealt, a record-less project's comes
+from its strongest anchor. That number is the project's colour on every surface — History, Godview,
+the swarm, the phone — and this entry is the one map from it to a hue. It supersedes the per-device
+and per-room deals (D-i13, AR5-D3; the History room's own 333° wheel and puppeteer's
+`project-tint.ts`, which withhold only the band around the selection, read here as the old way).
+
+- **The hue is OKLCH's, and only the cool half is the projects'.** State keeps the warm half and
+  green — the wheel from **350° through 0° to 180°** is withheld, where §2.5's red (28°), orange
+  (67°), yellow (95°) and green (147°) sit, with 38° clear of red and 33° of green at the band's
+  edges — and so is **238°–265°**, the band around `--vf-select` (251°), so no project reads as the
+  selection. What is left are two arcs, **180°–238°** (cyan to blue, 58°) and **265°–350°**
+  (violet to pink, 85°): 143° in all. *The one overlap, said:* `--vf-cyan` (231°, info and links)
+  and its ink (`--vf-ink-info`, 235°) sit inside the first arc. They mean information, never a
+  state a person must answer, and an ink is drawn as a mark, never as text or a link (below), so
+  the record's bands stand as ruled.
+- **The deal walks the golden ratio across the arcs:** `hue(i) = arcs((0.12 + i·φ) mod 1 · 143°)`,
+  φ = 0.6180339887…, where `arcs(x)` lays x along 180°→238° and then 265°→350° — the PJ page's own
+  `projectHue`, so neighbouring numbers never sit side by side and the page's drawing and the
+  product's agree.
+- **Lightness and chroma are the theme's,** so no project is louder than another and each is the
+  same hue in light and dark: `--vf-project-ink-l` **0.60** by day and **0.74** by night,
+  `--vf-project-ink-c` **0.15** in both (puppeteer's and the History room's `--tint-l`/`--tint-c`,
+  the same numbers). At 0.15 some hues leave sRGB (405 of the 997 by day, 564 by night): a hue
+  keeps its hue and lightness and gives up chroma until it fits (down to 0.10 by day, 0.13 by
+  night), the way the engine maps an `oklch()` it cannot show — and the hex form the canvases take
+  (`projectInkHex`) does the same.
+- **Contrast** (measured over all 997, both themes): **3.3–4.3:1** against white and the inset fill
+  by day, **5.6–9.7:1** against `#1C1C1E`, `#2C2C2E` and black by night — every ink clears 3:1, the
+  floor for a mark that must be seen. It does not clear 4.5:1 by day, so **an ink is never text**.
+- **How it is drawn:** as the **folder mark** (`folder`, §13), filled with the ink at a quarter and
+  stroked in it — never a round dot, which reads as state (PJ-L7). Godview's swarm and timeline wake
+  still wear puppeteer's own deal (§2.6's exception) until they take this ink (PJ-5). A device
+  never gets an ink (§2.8, PJ-D24): a desktop is its OS mark.
+- **Where it lives in code:** the design kit's `projectInk(ink)` answers the CSS colour,
+  `oklch(var(--vf-project-ink-l) var(--vf-project-ink-c) <hue>)`, so it follows the theme on its
+  own; `projectInkHue(ink)` the hue, and `projectInkHex(ink, theme)` the sRGB hex for a surface
+  that cannot resolve CSS (a WebGPU canvas). History hands the room `projectInk(ink)` as each
+  project's colour (A-D2) once the room takes a host colour (PJ-4's second half, the room's R1);
+  until then the room still deals its own.
+
 ---
 
 ## 3. Typography
