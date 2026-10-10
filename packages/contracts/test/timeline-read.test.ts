@@ -92,9 +92,16 @@ describe("the record's words ride through; the past never says blocked or unseen
     const floor = AgentRecordedLanesResult.parse(fixture("agent-recorded-lanes.floor.json"));
     expect(floor.ended.flatMap((lane) => lane.spans.map((span) => span.kind))).toEqual(["bounds"]);
     // no cap, no `truncated`, no "loading": the states are three
-    expect(AgentRecordedLanesResult.shape.state.options).toEqual(["complete", "partial", "unavailable"]);
+    expect(AgentRecordedLanesResult.shape.state.options).toEqual([
+      "complete",
+      "partial",
+      "unavailable",
+    ]);
     const lanes = AgentRecordedLanesResult.parse(fixture("agent-recorded-lanes.valid.json"));
-    expect(lanes.ended[0]).toMatchObject({ title: "Split the invoice writer", profileSet: "native" });
+    expect(lanes.ended[0]).toMatchObject({
+      title: "Split the invoice writer",
+      profileSet: "native",
+    });
   });
 
   it("both doors ride the record's consent and are asked where the record lives", () => {
