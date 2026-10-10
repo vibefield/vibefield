@@ -15,6 +15,8 @@ import {
   type BrowserSurfaceNativeWindowOptions,
   type BrowserSurfaceNavigationState,
   type BrowserSurfacePaint,
+  editingCommandsOf,
+  virtualKeyCodeOf,
 } from "../src/main/live-surfaces/browser-producer";
 import type { LiveSurfaceRuntimeAttachContext } from "../src/main/live-surfaces/runtime";
 
@@ -652,7 +654,21 @@ describe("BrowserLiveSurfaceRuntime", () => {
       { type: "mousePressed", x: 160, y: 90, button: "left", clickCount: 1 },
       { type: "mouseWheel", x: 10, y: 12, deltaX: 0, deltaY: 40 },
     ]);
-    expect(window?.keyInputs).toEqual([{ type: "keyDown", key: "a", code: "KeyA", modifiers: 4 }]);
+    // PT-3: a letter carries its virtual code (a page's own chords act on it), and on the Mac ⌘A its editing command
+    const selectAll = editingCommandsOf(
+      { type: "down", code: "KeyA", modifiers: { meta: true } },
+      process.platform,
+    );
+    expect(window?.keyInputs).toEqual([
+      {
+        type: "keyDown",
+        key: "a",
+        code: "KeyA",
+        modifiers: 4,
+        windowsVirtualKeyCode: 65,
+        ...(selectAll === undefined ? {} : { commands: selectAll }),
+      },
+    ]);
     expect(window?.textInputs).toEqual(["hello"]);
 
     // A stale geometry revision is dropped and counted, never re-mapped.
@@ -695,7 +711,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
     result.runtime.dispose();
   });
 
-  it("PT-3: carries an IME composition, the buttons a drag holds, the wheel in the page's DEVICE px, and the page's cursor", async () => {
+  it("PT-3: carries an IME composition, the buttons a drag holds, the wheel in the page's CSS px, ⏎'s char, and the page's cursor", async () => {
     const result = setup({ source: { ...source(), deviceScaleFactor: 2 } });
     const renderer = attach(result.runtime);
     renderer.attachment.setDemand(demand(1, "live", 30, { width: 640, height: 360 }));
@@ -726,6 +742,81 @@ describe("BrowserLiveSurfaceRuntime", () => {
     expect(window?.mouseInputs).toEqual([
       { type: "mouseMoved", x: 20, y: 30, button: "none", buttons: 1 },
       { type: "mouseWheel", x: 10, y: 12, deltaX: 3, deltaY: 40 },
+    ]);
+    // a key's virtual code: a special key's by its name, a letter's and a digit's by its physical key — never another's
+    expect(
+      [
+        ["Backspace", "Backspace"],
+        ["a", "KeyA"],
+        ["Z", "KeyZ"],
+        ["7", "Digit7"],
+        ["é", "KeyE"],
+        ["!", "Digit1"],
+        ["F5", "F5"],
+        ["constructor", "Unidentified"],
+      ].map(([k, c]) => virtualKeyCodeOf(k ?? "", c ?? "")),
+    ).toEqual([8, 65, 90, 55, 69, 49, undefined, undefined]);
+    // the Mac's editing chords ride with their command (no menu reaches an offscreen page); a chord with ⌃ or ⌥, an up, a key
+    // with no command, and any chord off the Mac carry none
+    const mac = (
+      code: string,
+      modifiers: { meta?: true; shift?: true; control?: true; alt?: true },
+      type: "down" | "up" = "down",
+    ) => editingCommandsOf({ type, code, modifiers }, "darwin");
+    expect([
+      mac("KeyA", { meta: true }),
+      mac("KeyC", { meta: true }),
+      mac("KeyV", { meta: true }),
+      mac("KeyX", { meta: true }),
+      mac("KeyZ", { meta: true }),
+      mac("KeyZ", { meta: true, shift: true }),
+    ]).toEqual([["selectAll"], ["copy"], ["paste"], ["cut"], ["undo"], ["redo"]]);
+    expect([
+      mac("KeyA", { meta: true, shift: true }),
+      mac("KeyA", { meta: true, control: true }),
+      mac("KeyA", { meta: true, alt: true }),
+      mac("KeyA", { meta: true }, "up"),
+      mac("KeyQ", { meta: true }),
+      mac("KeyA", { control: true }),
+      editingCommandsOf({ type: "down", code: "KeyA", modifiers: { meta: true } }, "linux"),
+      editingCommandsOf({ type: "down", code: "KeyV", modifiers: { control: true } }, "win32"),
+    ]).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+    // ⏎ down makes its char (a form's submission, a textarea's newline — the page's keypress), alone or with ⇧; its up, and
+    // ⌘⏎, none; another key never
+    const key = (key: string, action: "down" | "up", mods: { shift?: true; meta?: true } = {}) =>
+      renderer.attachment.dispatchInput?.(
+        {
+          kind: "key",
+          action,
+          key,
+          code: key === "a" ? "KeyA" : key,
+          modifiers: { alt: false, ctrl: false, meta: false, shift: false, ...mods },
+        },
+        revision,
+      );
+    key("Enter", "down");
+    key("Enter", "up");
+    key("Enter", "down", { shift: true });
+    key("Enter", "down", { meta: true });
+    key("a", "down");
+    await flush();
+    expect(
+      window?.keyInputs.map((k) => [k.type, k.key, k.text ?? null, k.unmodifiedText ?? null]),
+    ).toEqual([
+      ["keyDown", "Enter", "\r", "\r"],
+      ["keyUp", "Enter", null, null],
+      ["keyDown", "Enter", "\r", "\r"],
+      ["keyDown", "Enter", null, null],
+      ["keyDown", "a", null, null],
     ]);
     // the page's cursor: said with the browser state, once it has one; Electron's names as CSS says them — its `hand` is a link's
     // (CSS `pointer`), its `pointer` Chromium's ARROW (CSS `default`)

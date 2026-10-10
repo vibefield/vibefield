@@ -148,6 +148,11 @@ export interface BrowserSurfaceNativeKeyInput {
   readonly autoRepeat?: boolean;
   readonly location?: 0 | 1 | 2 | 3;
   readonly windowsVirtualKeyCode?: number;
+  /** The char the key makes (CDP makes its keypress of it): only ⏎'s, "\r" — the wire's text arrives as `insertText`. */
+  readonly text?: string;
+  readonly unmodifiedText?: string;
+  /** The editing command the key's chord means where a menu would send it (the Mac's ⌘A ⌘C ⌘V ⌘X ⌘Z ⇧⌘Z). */
+  readonly commands?: readonly string[];
 }
 
 export interface BrowserSurfaceKeyModifiers {
@@ -535,6 +540,45 @@ const KEY_VIRTUAL_CODES: Readonly<Record<string, number>> = {
   Delete: 46,
 };
 
+/** A key's Windows virtual key code: a special key's by its name; a letter's or a digit's by its physical key (PT-3 — the
+ * page's own chords act on it: ⌃A and the rest off the Mac). */
+export function virtualKeyCodeOf(key: string, code: string): number | undefined {
+  if (Object.hasOwn(KEY_VIRTUAL_CODES, key)) return KEY_VIRTUAL_CODES[key];
+  const glyph = /^(?:Key[A-Z]|Digit[0-9])$/.test(code) ? code.at(-1) : undefined;
+  return glyph?.charCodeAt(0);
+}
+
+/** The Mac's editing chords and the command each means (Blink's editing commands, as CDP's `commands` names them). */
+const MAC_EDITING: ReadonlyMap<string, string> = new Map([
+  ["KeyA", "selectAll"],
+  ["KeyC", "copy"],
+  ["KeyV", "paste"],
+  ["KeyX", "cut"],
+  ["KeyZ", "undo"],
+]);
+
+/**
+ * The page's own editing chords on the Mac — ⌘A ⌘C ⌘V ⌘X, ⌘Z and ⇧⌘Z (PT-3 ruling 7: every key but the browser's chords is
+ * the page's): Chromium takes them from the app's MENU there, and no menu reaches a page in an offscreen window — the PT-3
+ * smoke's probe saw ⌘A select nothing — so each rides with its editing command (CDP's `commands`), as a browser's own menu
+ * would send it. Off the Mac a page's key bindings act on the key itself (its virtual code).
+ */
+export function editingCommandsOf(
+  request: {
+    readonly type: "down" | "up";
+    readonly code: string;
+    readonly modifiers?: BrowserSurfaceKeyModifiers;
+  },
+  platform: NodeJS.Platform,
+): readonly string[] | undefined {
+  const m = request.modifiers;
+  if (platform !== "darwin" || request.type !== "down" || m?.meta !== true) return undefined;
+  if (m.control === true || m.alt === true) return undefined;
+  if (request.code === "KeyZ" && m.shift === true) return ["redo"];
+  const command = m.shift === true ? undefined : MAC_EDITING.get(request.code);
+  return command === undefined ? undefined : [command];
+}
+
 /** Wire input (CSS logical, validated by contracts) → the engine's request.
  * A pass-through by design: coordinates are NEVER re-scaled here (LSF §10.2);
  * the engine's own bounds and staleness checks stay the authority. */
@@ -567,7 +611,7 @@ function browserInputRequest(
   if (input.kind === "text") return { kind: "text", geometryRevision, text: input.text };
   if (input.kind === "compose")
     return { kind: "compose", geometryRevision, text: input.text, caret: input.caret };
-  const virtualKeyCode = KEY_VIRTUAL_CODES[input.key];
+  const virtualKeyCode = virtualKeyCodeOf(input.key, input.code);
   return {
     kind: "key",
     geometryRevision,
@@ -583,6 +627,11 @@ function browserInputRequest(
     ...(input.autoRepeat === undefined ? {} : { autoRepeat: input.autoRepeat }),
     ...(virtualKeyCode === undefined ? {} : { windowsVirtualKeyCode: virtualKeyCode }),
   };
+}
+
+/** ⏎ makes its char alone or with ⇧ (a line break) — never under ⌘, ⌃ or ⌥ (the page's shortcuts). */
+function enterMakesChar(modifiers: BrowserSurfaceKeyModifiers | undefined): boolean {
+  return modifiers?.meta !== true && modifiers?.control !== true && modifiers?.alt !== true;
 }
 
 function keyModifierMask(modifiers: BrowserSurfaceKeyModifiers | undefined): number {
@@ -878,6 +927,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       ) {
         throw new Error("Browser key input has invalid key state");
       }
+      const commands = editingCommandsOf(request, process.platform);
       await window.dispatchKey({
         type: request.type === "down" ? "keyDown" : "keyUp",
         key: request.key,
@@ -888,6 +938,13 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         ...(request.windowsVirtualKeyCode === undefined
           ? {}
           : { windowsVirtualKeyCode: request.windowsVirtualKeyCode }),
+        // ⏎'s char (PT-3): a page acts on its KEYPRESS — a form's implicit submission, a textarea's newline — and CDP makes
+        // one only for a keyDown that carries its text (the wire's text arrives as `insertText`, which makes none). The
+        // PT-3 smoke's KEYS row: without it, ⏎ in a field submitted nothing.
+        ...(request.type === "down" && request.key === "Enter" && enterMakesChar(request.modifiers)
+          ? { text: "\r", unmodifiedText: "\r" }
+          : {}),
+        ...(commands === undefined ? {} : { commands }),
       });
       return;
     }
