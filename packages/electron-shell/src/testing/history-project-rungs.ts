@@ -238,7 +238,7 @@ export async function historyNewAgentRung(
         return JSON.stringify({
           key: row.getAttribute("data-key"),
           disabled: row.disabled || row.getAttribute("aria-disabled") === "true",
-          text: (row.textContent ?? "").replace(/s+/g, " ").trim(),
+          text: (row.textContent ?? "").replace(/\\s+/g, " ").trim(),
         });
       })()`,
       10_000,
@@ -248,7 +248,7 @@ export async function historyNewAgentRung(
     if (row.disabled)
       throw new Error(`New agent's row for the typed agent is disabled: ${row.text}`);
     const startsIn = await evaluate(
-      `([...(${HISTORY_ROOM}?.querySelectorAll(".ah-menu [role=menu] .ah-menu__item") ?? [])].find((c) => c.getAttribute("data-key") === "where")?.textContent ?? "").replace(/s+/g, " ").trim()`,
+      `([...(${HISTORY_ROOM}?.querySelectorAll(".ah-menu [role=menu] .ah-menu__item") ?? [])].find((c) => c.getAttribute("data-key") === "where")?.textContent ?? "").replace(/\\s+/g, " ").trim()`,
     );
     await evaluate(
       `([...(${HISTORY_ROOM}?.querySelectorAll(".ah-menu [role=menu] .ah-menu__item") ?? [])].find((c) => c.getAttribute("data-key") === ${JSON.stringify(row.key)})?.click(), "ok")`,
@@ -441,7 +441,7 @@ export async function historyByProjectPhotos(
   const drawn = `(() => {
     const room = ${HISTORY_ROOM};
     if (!room) return "{}";
-    const words = (node) => (node?.textContent ?? "").replace(/s+/g, " ").trim();
+    const words = (node) => (node?.textContent ?? "").replace(/\\s+/g, " ").trim();
     return JSON.stringify({
       sections: [...room.querySelectorAll(".ah-section[data-section], .ah-fold[data-section]")].map((node) => node.getAttribute("data-section") + ": " + words(node)),
       rowActs: [...room.querySelectorAll('.ah-hostact[data-place="row"]')].map((node) => node.getAttribute("data-act")),
