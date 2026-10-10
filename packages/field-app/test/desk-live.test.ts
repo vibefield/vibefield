@@ -985,3 +985,74 @@ describe("PT-4 — the page as a device sees it", () => {
     expect(live.label("no-such-key")).toBeUndefined();
   });
 });
+
+describe("PT-5a — the parked desk (ruling 5)", () => {
+  const KEY = "13918995204487956201-1";
+  const PAUSED = {
+    mode: "paused",
+    targetFps: 0,
+    priority: 0,
+    interactive: false,
+    logicalViewport: { width: 1280, height: 800 },
+  };
+
+  it("PARKED, every page is paused — its kinds are not ticked and cannot ask — and at the UNPARK each is asked what its face LAST asked; an ask made meanwhile is kept, not sent; the same word twice is nothing", () => {
+    const t = setup();
+    const a = t.live.open(KEY, PAGE, () => {});
+    const b = t.live.open("k-2", PAGE, () => {});
+    const [ha, hb] = t.handles;
+    if (ha === undefined || hb === undefined) throw new Error("no handles");
+    for (const h of [ha, hb]) h.set({ status: "live", presentation: fakePresentation() as never });
+    a.demand(SEEN);
+    const sent = (h: typeof ha) => h.demands.length;
+    const before = [sent(ha), sent(hb)];
+    // the desk parks: both pages paused, at their layout — the one never asked for too
+    t.live.park(true);
+    expect(ha.demands.at(-1)).toEqual(PAUSED);
+    expect(hb.demands.at(-1)).toEqual(PAUSED);
+    expect([sent(ha), sent(hb)]).toEqual([(before[0] ?? 0) + 1, (before[1] ?? 0) + 1]);
+    expect(t.live.stats()).toMatchObject({ parks: 1, parked: true });
+    // parked again: nothing more
+    t.live.park(true);
+    expect(sent(ha)).toBe((before[0] ?? 0) + 1);
+    // an ask made while parked (a kind's dispose, a late tick): kept as the face's last, never sent
+    b.demand({ ...SEEN, fps: 60, interactive: true });
+    expect(sent(hb)).toBe((before[1] ?? 0) + 1);
+    expect(t.live.faces().find((f) => f.key === "k-2")?.demand).toMatchObject({ fps: 60 });
+    // the desk runs again: each page is asked what its face last asked
+    t.live.park(false);
+    expect(ha.demands.at(-1)).toMatchObject({ mode: "live", targetFps: 30, priority: 50 });
+    expect(hb.demands.at(-1)).toMatchObject({ mode: "live", targetFps: 60, priority: 80 });
+    expect(t.live.stats()).toMatchObject({ parks: 1, parked: false });
+    // running again: an ask is sent as ever
+    a.demand(UNSEEN);
+    expect(ha.demands.at(-1)).toMatchObject({ mode: "paused" });
+    t.live.park(false);
+    expect(t.live.stats().parks).toBe(1);
+  });
+
+  it("a face that never asked is paused at its spec's layout through a park and its unpark; a face opened on a parked desk stays paused until the desk runs; a closed face is told nothing", () => {
+    const t = setup();
+    const a = t.live.open(KEY, PAGE, () => {});
+    const ha = t.handles[0];
+    if (ha === undefined) throw new Error("no handle");
+    ha.set({ status: "live", presentation: fakePresentation() as never });
+    t.live.park(true);
+    t.live.park(false);
+    expect(ha.demands.slice(-2)).toEqual([PAUSED, PAUSED]);
+    // opened while parked: its first ask is kept
+    t.live.park(true);
+    const late = t.live.open("k-late", PAGE, () => {});
+    const hl = t.handles[1];
+    if (hl === undefined) throw new Error("no handle");
+    const opened = hl.demands.length;
+    late.demand(SEEN);
+    expect(hl.demands).toHaveLength(opened);
+    // closed while parked: the unpark tells it nothing
+    const closedAt = ha.demands.length;
+    a.close();
+    t.live.park(false);
+    expect(ha.demands).toHaveLength(closedAt);
+    expect(hl.demands.at(-1)).toMatchObject({ mode: "live", targetFps: 30 });
+  });
+});

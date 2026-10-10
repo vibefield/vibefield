@@ -582,7 +582,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
     }
   });
 
-  it("a page whose renderer LEFT is MUTED for its grace — a pause stops its painting, not its sound — and unmuted when one re-attaches; an attached pause keeps its sound (PT-2)", async () => {
+  it("a page is HEARD only while it is asked for live (PT-5a ruling 4): an attached pause is silent — a pause stops its painting, not its sound — a page whose renderer LEFT is muted for its grace, and one seen live again is heard again", async () => {
     // Electron 43 (PT-2's probe): an offscreen page under `stopPainting()` paints nothing and its audio plays on —
     // `isCurrentlyAudible()` true, its AudioContext's clock running. The grace keeps a page no renderer shows: silent.
     vi.useFakeTimers();
@@ -593,12 +593,19 @@ describe("BrowserLiveSurfaceRuntime", () => {
       await vi.advanceTimersByTimeAsync(0);
       const window = result.native.windows[0];
       window?.paint(sharedPaint(320, 180).paint);
-      // an attached pause (a pane off the view, the pool's own grace): painting stops, the sound stays the page's
+      expect(window?.mutes).toEqual([]);
+      // an attached pause (a pane off the view, a parked desk, the pool's idle demand after a delete): painting stops AND
+      // the page goes silent, at once
       first.attachment.setDemand(demand(2, "paused"));
       expect(result.runtime.summary.state).toBe("paused");
-      expect(window?.muted).toBe(false);
+      expect(window?.muted).toBe(true);
+      // seen live again: heard again
       first.attachment.setDemand(demand(3, "live", 30, { width: 640, height: 360 }));
       expect(result.runtime.summary.state).toBe("live");
+      expect(window?.muted).toBe(false);
+      // the same ask again says nothing more to the page's sound
+      first.attachment.setDemand(demand(4, "live", 60, { width: 640, height: 360 }));
+      expect(window?.mutes).toEqual([true, false]);
       // the renderer leaves: paused AND muted while the grace keeps it
       first.attachment.dispose();
       expect(result.runtime.summary.state).toBe("paused");
@@ -610,7 +617,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(result.native.windows).toHaveLength(1);
       expect(result.runtime.summary.state).toBe("live");
       expect(window?.muted).toBe(false);
-      expect(window?.mutes).toEqual([true, false]);
+      expect(window?.mutes).toEqual([true, false, true, false]);
       // none back: muted, then hibernated once the grace lapses; the page made again for the next renderer is born with its
       // sound, and is muted in its own grace
       second.attachment.dispose();

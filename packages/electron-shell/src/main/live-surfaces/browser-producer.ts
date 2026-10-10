@@ -838,7 +838,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #restartTimer: ReturnType<typeof setTimeout> | null = null;
   #hibernateTimer: ReturnType<typeof setTimeout> | null = null;
   /** Muted because no renderer is attached (the grace's page); unmuted when one comes back. */
-  #mutedDetached = false;
+  #muted = false;
   #effectiveDemand: LiveSurfaceDemandV1 | null = null;
   #transport: "shared-texture" | "cpu-bgra" | undefined;
   /** The logical viewport the page is CURRENTLY laid out at (DT-3f): starts as
@@ -1457,12 +1457,15 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       // whole; none back, it hibernates once the grace lapses (PT-2). An explicit `hibernated` demand still hibernates at once.
       // A pause stops the page's frames, never its sound: a page no renderer shows is MUTED while the grace keeps it.
       if (state === "live") this.pauseProducer();
-      this.muteDetached(true);
+      this.mute(true);
       this.armDetachedHibernate();
       return;
     }
     this.cancelDetachedHibernate();
-    this.muteDetached(false);
+    // PT-5a (ruling 4) — WHO HEARS A PAGE: one asked for LIVE — its pane seen, or held — and no other. An ATTACHED pause is
+    // silent too: a pane off the view, a parked desk, and a deleted pane's page in the pool's grace (the pool's idle demand
+    // is a paused one, written the moment its last face lets go: silent AT ONCE). Seen live again, it is heard again.
+    this.mute(demand.mode !== "live");
     if (demand.mode === "live") {
       if (state === "created" || state === "hibernated" || state === "failed") {
         this.startProducer();
@@ -1844,11 +1847,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   }
 
   /** A page whose renderer left is silent until one is attached again (an attached pause keeps its sound — PT-5's call). */
-  private muteDetached(muted: boolean): void {
-    if (this.#mutedDetached === muted) return;
+  private mute(muted: boolean): void {
+    if (this.#muted === muted) return;
     const window = this.#window;
     if (window === null || window.isDestroyed()) return;
-    this.#mutedDetached = muted;
+    this.#muted = muted;
     window.setAudioMuted(muted);
   }
 
@@ -2022,7 +2025,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#window = null;
     this.#callbacks = null;
     // the next window is born with its sound
-    this.#mutedDetached = false;
+    this.#muted = false;
     if (this.#startupTimer !== null) {
       clearTimeout(this.#startupTimer);
       this.#startupTimer = null;

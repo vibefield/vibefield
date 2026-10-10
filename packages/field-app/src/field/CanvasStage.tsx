@@ -196,8 +196,19 @@ export function CanvasStage({
     };
     return { layer, live };
   }, [ce, mount, kinds, registry]);
-  // the mount's faces closed with it (its kinds close theirs on their own dispose — this is the service's word)
-  useEffect(() => () => live?.dispose(), [live]);
+  // the mount's faces closed with it (its kinds close theirs on their own dispose — this is the service's word); and, PT-5a
+  // (ruling 5), the desk's PARK told to it as the frame gate announces it (ICE I41): a parked desk's kinds are not ticked
+  // and cannot ask, so the service pauses their pages and gives each its last ask back at the unpark
+  useEffect(() => {
+    if (live === undefined) return;
+    const frame = ce.engine.frame;
+    if (frame.isParked()) live.park(true);
+    const off = frame.onParked((parked) => live.park(parked));
+    return () => {
+      off();
+      live.dispose();
+    };
+  }, [live, ce]);
 
   // THE THEME BRIDGE (ruling 2; r4 §4): every change of the owner's answer re-dresses the live desk
   // — and only a change: the layer was MADE in the theme it wears (`wornRef`).

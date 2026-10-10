@@ -28,6 +28,9 @@
 //    same port ahead of the emulation — so a page that reloads for its new device loads at that device's size.
 //  - ONE PROFILE (PT-4 ruling 3): every desk page is minted into the SAME persistent profile (`DESK_PROFILE`), as the tabs
 //    of one browser are — main keeps it under the user's data, apart from the app's own session.
+//  - THE PARKED DESK (PT-5a ruling 5; design-019 §8): while the desk's loop is parked its kinds are not ticked and cannot
+//    ask, so the service asks for them — `park(true)` pauses every page (LSF mutes a page that is not asked for live:
+//    ruling 4), `park(false)` gives each page its face's LAST ask back.
 //  - THE FAVICON (PT-4 ruling 4): the page's icon rides LSF's browser state; the face's words carry its bytes under
 //    `extra.favicon` (decoded once a key) — `null` where the page has none, absent before the page has said anything.
 
@@ -99,6 +102,9 @@ export interface DeskLiveStats {
   /** PT-4: specs that moved under an open page (`respec`), and emulations told down a page's lane. */
   readonly respecs: number;
   readonly emulations: number;
+  /** PT-5a: times the desk parked, and whether it is parked now. */
+  readonly parks: number;
+  readonly parked: boolean;
 }
 
 /** A page's favicon as a face's words carry it (`LiveInfo.extra.favicon`): a key to compare, the image's type, its bytes. */
@@ -151,6 +157,11 @@ export interface DeskLiveSources extends LiveSources {
   stats(): DeskLiveStats;
   /** The faces open now — a smoke's witness of the law's asks, the source's pace and the texture's life. */
   faces(): readonly DeskLiveFaceRow[];
+  /**
+   * PT-5a (ruling 5) — the desk's loop parked (`true`: every page paused, and so silent) or running again (`false`: each
+   * page asked for what its face LAST asked). The same word twice is nothing.
+   */
+  park(parked: boolean): void;
   /** Every face closed (the mount is going). */
   dispose(): void;
 }
@@ -413,7 +424,12 @@ function faviconOf(icon: NonNullable<LiveSurfaceBrowserStateV1["favicon"]>): Liv
   return { key: icon.key, type: icon.mediaType, bytes };
 }
 
+/** What a parked desk asks of a page: paused — no frames, and (LSF's rule) no sound — its layout kept. */
+const PARKED = { mode: "paused", fps: 0, raster: [0, 0], interactive: false } as const;
+
 export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
+  /** PT-5a: the desk's loop is parked — every page is held paused until it runs again. */
+  let parked = false;
   const faces = new Map<string, { face: LiveFace; row: () => DeskLiveFaceRow }>();
   const counts = {
     opened: 0,
@@ -427,6 +443,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     navigations: 0,
     navigationsRefused: 0,
     respecs: 0,
+    parks: 0,
     emulations: 0,
   };
   /** The open pages' lanes by key (a failed face has none): what `navigate` and `respec` reach, and what a page is called. */
@@ -436,6 +453,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       readonly handle: SurfaceHandle<ProductSurfaceFrame>;
       respec(page: LiveBrowserSpec): void;
       label(): string;
+      park(parked: boolean): void;
     }
   >();
   const wireOf = (key: string): LiveSurfaceDemandV1 | null =>
@@ -635,7 +653,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         if (closed) return;
         asked = d;
         counts.demands += 1;
-        handle.setDemand(liveDemandIntent(d));
+        // a parked desk's pages stay paused whatever is asked: the ask is kept, and given back at the unpark
+        if (!parked) handle.setDemand(liveDemandIntent(d));
       },
       // in the DISPLAYED frame's logical px, stamped with that frame's geometry revision; nothing displayed yet: nothing sent
       input(e: LiveInput): void {
@@ -713,6 +732,15 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         tellDevice();
       },
       label: called,
+      park(now) {
+        handle.setDemand(
+          liveDemandIntent(
+            now
+              ? { ...PARKED, viewport: asked?.viewport ?? page.viewport }
+              : (asked ?? { ...PARKED, viewport: page.viewport }),
+          ),
+        );
+      },
     });
     return face;
   };
@@ -738,7 +766,13 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       },
     },
     label: (key) => lanes.get(key)?.label(),
-    stats: () => ({ ...counts, open: faces.size }),
+    park(now) {
+      if (now === parked) return;
+      parked = now;
+      if (now) counts.parks += 1;
+      for (const lane of lanes.values()) lane.park(now);
+    },
+    stats: () => ({ ...counts, open: faces.size, parked }),
     faces: () => [...faces.values()].map((f) => f.row()),
     dispose() {
       for (const { face } of [...faces.values()]) face.close();
