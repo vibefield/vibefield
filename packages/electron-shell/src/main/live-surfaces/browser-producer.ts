@@ -120,10 +120,33 @@ export interface BrowserSurfaceNativeWindow {
   /** PT-4: an icon fetched THROUGH THE PAGE'S OWN SESSION (its cookies, its guard), held to `maxBytes`; null — not
    * answered, not an image, or past the cap. */
   fetchIcon(url: string, maxBytes: number): Promise<BrowserSurfaceIcon | null>;
+  /** PT-5a: the page asked for something it MAY NOT have, and was answered at once (`BrowserSurfaceRefusal`); a pop-up
+   * comes with the address it asked for. */
+  onRefused(listener: (what: BrowserSurfaceRefusal, url?: string) => void): () => void;
   onPaint(listener: (paint: BrowserSurfacePaint) => void): () => void;
   onRenderProcessGone(listener: (reason: string) => void): () => void;
   onDestroyed(listener: () => void): () => void;
 }
+
+/**
+ * PT-5a (ruling 7) — WHAT A PAGE MAY NOT DO, each answered at once and never by a native window:
+ *  - `alert` — dismissed; `confirm` — cancelled (`prompt` is cancelled before it reaches the engine: uncounted);
+ *  - `beforeunload` — the page leaves; `popup` (`window.open`, `target=_blank`) — no window: the SAME pane goes there;
+ *  - `download` — cancelled, and said in the page's state (`refused`) for the head to say for a moment;
+ *  - `file-picker` — cancelled (the input hears `cancel`); `auth` — HTTP auth cancelled (the page's own 401).
+ * Permission requests are denied by the session's handlers and `window.close()` is replaced before the page's scripts run:
+ * neither is counted here.
+ */
+export const BROWSER_SURFACE_REFUSALS = [
+  "alert",
+  "confirm",
+  "beforeunload",
+  "popup",
+  "download",
+  "file-picker",
+  "auth",
+] as const;
+export type BrowserSurfaceRefusal = (typeof BROWSER_SURFACE_REFUSALS)[number];
 
 export interface BrowserSurfaceNavigationState {
   readonly url: string;
@@ -372,6 +395,8 @@ export interface BrowserLiveSurfaceRuntimeStats {
   /** PT-4: emulations applied that differed from the one before; reloads they asked (the page's told device moved). */
   readonly emulations: number;
   readonly emulationReloads: number;
+  /** PT-5a: what the page asked for and was refused, counted by kind (the diagnostics' count — ruling 7). */
+  readonly refused: Readonly<Record<BrowserSurfaceRefusal, number>>;
   readonly effectiveDemand: LiveSurfaceDemandV1 | null;
 }
 
@@ -388,6 +413,7 @@ interface SourceCallbacks {
   readonly removeNavigation: () => void;
   readonly removeCursor: () => void;
   readonly removeFavicon: () => void;
+  readonly removeRefused: () => void;
 }
 
 function increment(value: number, name: string): number {
@@ -864,6 +890,17 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #navigationDropped = 0;
   #emulations = 0;
   #emulationReloads = 0;
+  /** PT-5a: the page's refusals by kind, and the last one a person is told of (its serial counts them for the page's life). */
+  readonly #refusals: Record<BrowserSurfaceRefusal, number> = {
+    alert: 0,
+    confirm: 0,
+    beforeunload: 0,
+    popup: 0,
+    download: 0,
+    "file-picker": 0,
+    auth: 0,
+  };
+  #refused: LiveSurfaceBrowserStateV1["refused"];
 
   constructor(options: BrowserLiveSurfaceRuntimeOptions) {
     this.surfaceId = LiveSurfaceIdV1.parse(options.surfaceId);
@@ -920,6 +957,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
               this.#faviconOrigin === webOriginOf(this.#browserState.url)
                 ? { favicon: this.#favicon }
                 : {}),
+              ...(this.#refused === undefined ? {} : { refused: this.#refused }),
             },
           }),
       ...(this.#error === undefined ? {} : { error: this.#error }),
@@ -948,6 +986,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       navigationDropped: this.#navigationDropped,
       emulations: this.#emulations,
       emulationReloads: this.#emulationReloads,
+      refused: { ...this.#refusals },
       effectiveDemand: this.#effectiveDemand === null ? null : copyDemand(this.#effectiveDemand),
     };
   }
@@ -1359,6 +1398,35 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     if (this.#browserState !== undefined) this.publishSummary();
   }
 
+  /**
+   * PT-5a — the page asked for what it may not have (the native window answered it at once): counted; a POP-UP's address
+   * is where the SAME pane goes (a desk has no tabs) — through the same top-level policy as any navigation, and only while
+   * the page is live; a cancelled DOWNLOAD is said in the page's state, its serial moved, for the head to say for a moment.
+   */
+  private acceptRefusal(
+    window: BrowserSurfaceNativeWindow,
+    epoch: number,
+    what: BrowserSurfaceRefusal,
+    url: string | undefined,
+  ): void {
+    if (!this.ownsProducer(window, epoch)) return;
+    this.#refusals[what] += 1;
+    if (what === "popup") {
+      if (
+        url !== undefined &&
+        isAllowedBrowserTopLevelUrl(url) &&
+        url !== "about:blank" &&
+        !window.isDestroyed() &&
+        this.#lifecycle.snapshot.state === "live"
+      )
+        void window.loadURL(url).catch(() => undefined);
+      return;
+    }
+    if (what !== "download") return;
+    this.#refused = { what: "download", serial: (this.#refused?.serial ?? 0) + 1 };
+    if (this.#browserState !== undefined) this.publishSummary();
+  }
+
   /** PT-3: the page's cursor moved — a summary, so the renderer's face says it (`LiveInfo.cursor`) and wakes its desk. */
   private acceptCursor(window: BrowserSurfaceNativeWindow, epoch: number, cursor: string): void {
     if (!this.ownsProducer(window, epoch)) return;
@@ -1454,6 +1522,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       );
       const removeCursor = window.onCursor((cursor) => this.acceptCursor(window, epoch, cursor));
       const removeFavicon = window.onFavicon((urls) => this.acceptFavicon(window, epoch, urls));
+      const removeRefused = window.onRefused((what, url) =>
+        this.acceptRefusal(window, epoch, what, url),
+      );
       this.#callbacks = {
         removePaint,
         removeGone,
@@ -1461,6 +1532,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         removeNavigation,
         removeCursor,
         removeFavicon,
+        removeRefused,
       };
       this.#producersStarted += 1;
       this.applyFrameRate();
@@ -1901,6 +1973,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         ),
         removeCursor: window.onCursor((cursor) => this.acceptCursor(window, epoch, cursor)),
         removeFavicon: window.onFavicon((urls) => this.acceptFavicon(window, epoch, urls)),
+        removeRefused: window.onRefused((what, url) =>
+          this.acceptRefusal(window, epoch, what, url),
+        ),
       };
       this.#producersStarted += 1;
       this.applyFrameRate();
@@ -1958,6 +2033,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     callbacks?.removeNavigation();
     callbacks?.removeCursor();
     callbacks?.removeFavicon();
+    callbacks?.removeRefused();
     this.#cursor = undefined;
     this.#touching = false;
     if (window === null) return;

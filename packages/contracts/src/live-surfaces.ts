@@ -461,6 +461,15 @@ export const LiveSurfaceBrowserStateV1 = z
       })
       .passthrough()
       .optional(),
+    /** PT-5a: the last thing the page asked for that it MAY NOT have and a person should be told of — today a download,
+     * cancelled. `serial` counts the page's refusals: a holder says it (for a moment) when the serial moves, never twice. */
+    refused: z
+      .object({
+        what: z.enum(["download"]),
+        serial: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 export type LiveSurfaceBrowserStateV1 = z.infer<typeof LiveSurfaceBrowserStateV1>;

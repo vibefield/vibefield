@@ -263,6 +263,30 @@ describe("LSF-1 Live Surfaces contracts", () => {
       expect(LiveSurfaceBrowserStateV1.safeParse({ ...state, cursor }).success, cursor).toBe(false);
   });
 
+  it("PT-5a: the browser state says what the page asked for and was REFUSED — a download, with a serial that counts them", () => {
+    const state = {
+      url: "https://example.test/",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+    };
+    expect(
+      LiveSurfaceBrowserStateV1.parse({ ...state, refused: { what: "download", serial: 3 } }),
+    ).toMatchObject({ refused: { what: "download", serial: 3 } });
+    expect(LiveSurfaceBrowserStateV1.parse(state)).not.toHaveProperty("refused");
+    for (const refused of [
+      { what: "download" },
+      { what: "download", serial: 0 },
+      { what: "download", serial: 1.5 },
+      { what: "alert", serial: 1 },
+      { serial: 1 },
+    ])
+      expect(
+        LiveSurfaceBrowserStateV1.safeParse({ ...state, refused }).success,
+        JSON.stringify(refused),
+      ).toBe(false);
+  });
+
   it("PT-4: a browser source says the device its page is seen as — its density, mobile, touch, its agent with its hints, its scheme — at its creation and as an `emulate` command; the state carries the page's favicon, held small", () => {
     const phone = {
       deviceScaleFactor: 3,

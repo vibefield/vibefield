@@ -24,6 +24,7 @@ import {
   type BrowserSurfaceNativeWindowOptions,
   type BrowserSurfaceNavigationState,
   type BrowserSurfacePaint,
+  type BrowserSurfaceRefusal,
   editingCommandsOf,
   engineAgentOf,
   faviconOf,
@@ -163,6 +164,16 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
   onFavicon(listener: (urls: readonly string[]) => void): () => void {
     this.#events.on("favicon", listener);
     return () => this.#events.off("favicon", listener);
+  }
+
+  onRefused(listener: (what: BrowserSurfaceRefusal, url?: string) => void): () => void {
+    this.#events.on("refused", listener);
+    return () => this.#events.off("refused", listener);
+  }
+
+  /** PT-5a: the page asked for what it may not have (its guards answered it; the window tells the producer). */
+  refuse(what: BrowserSurfaceRefusal, url?: string): void {
+    this.#events.emit("refused", what, url);
   }
 
   /** The page named its icons (Electron's `page-favicon-updated` — said only when they differ from the page before's). */
@@ -1663,6 +1674,72 @@ describe("BrowserLiveSurfaceRuntime", () => {
     expect(faviconOf({ mediaType: "image/png", bytes: new Uint8Array(0) })).toBeUndefined();
     expect(faviconOf({ mediaType: "application/octet-stream", bytes })).toBeUndefined();
     expect(faviconOf({ mediaType: "image/png", bytes: new Uint8Array(32_768) })).toBeDefined();
+  });
+
+  it("PT-5a: what a page MAY NOT do is counted by kind; a POP-UP's address is where the SAME pane goes — a web address, while the page is live, never a new window — and a cancelled DOWNLOAD is said in the page's state, its serial moving each time", async () => {
+    const result = setup();
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await flush();
+    const window = result.native.windows[0];
+    if (window === undefined) throw new Error("no window");
+    expect(result.runtime.stats.refused).toEqual({
+      alert: 0,
+      confirm: 0,
+      beforeunload: 0,
+      popup: 0,
+      download: 0,
+      "file-picker": 0,
+      auth: 0,
+    });
+    // before its first frame the page is not live: a pop-up is counted and goes nowhere
+    window.refuse("popup", "https://example.test/early");
+    expect(window.loadedUrls).toEqual(["https://example.test/app"]);
+    window.paint(sharedPaint(640, 360).paint);
+    window.emitNavigationState(NAV);
+    // a pop-up: the SAME pane is sent there — one window, as before
+    window.refuse("popup", "https://example.test/elsewhere");
+    expect(window.loadedUrls).toEqual([
+      "https://example.test/app",
+      "https://example.test/elsewhere",
+    ]);
+    expect(result.native.windows).toHaveLength(1);
+    // never past the top-level policy, never to nowhere
+    for (const url of ["file:///etc/passwd", "javascript:alert(1)", "about:blank", undefined])
+      window.refuse("popup", url);
+    expect(window.loadedUrls).toHaveLength(2);
+    // the dialogs, the picker, HTTP auth: answered by the window, counted here, nothing said to the page's state
+    const published = renderer.summaries.length;
+    for (const what of [
+      "alert",
+      "alert",
+      "confirm",
+      "beforeunload",
+      "file-picker",
+      "auth",
+    ] as const)
+      window.refuse(what);
+    expect(renderer.summaries).toHaveLength(published);
+    expect(result.runtime.summary.browser).not.toHaveProperty("refused");
+    // a download: cancelled by the session's guard — said, for the head to say for a moment
+    window.refuse("download");
+    expect(result.runtime.summary.browser?.refused).toEqual({ what: "download", serial: 1 });
+    expect(renderer.summaries.at(-1)?.browser?.refused).toEqual({ what: "download", serial: 1 });
+    window.refuse("download");
+    expect(result.runtime.summary.browser?.refused).toEqual({ what: "download", serial: 2 });
+    expect(result.runtime.stats.refused).toEqual({
+      alert: 2,
+      confirm: 1,
+      beforeunload: 1,
+      popup: 6,
+      download: 2,
+      "file-picker": 1,
+      auth: 1,
+    });
+    result.runtime.dispose();
+    // a window that is no longer the runtime's says nothing
+    window.refuse("download");
+    expect(result.runtime.stats.refused.download).toBe(2);
   });
 
   it("PT-4: a PERSISTENT profile lives under its user's profiles root by an opaque name — one ref, one directory; a memory profile, or no root, is Electron's own partition", async () => {

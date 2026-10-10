@@ -11,6 +11,7 @@ import {
   type BrowserSurfaceNativeWindowOptions,
   type BrowserSurfaceNavigationState,
   type BrowserSurfacePaint,
+  type BrowserSurfaceRefusal,
   engineAgentOf,
 } from "./browser-producer";
 import {
@@ -20,6 +21,17 @@ import {
 
 /** How long a favicon's fetch may take before the page is said to have none. */
 const FAVICON_TIMEOUT_MS = 5_000;
+
+/**
+ * PT-5a — said to every document before its own scripts run (CDP `Page.addScriptToEvaluateOnNewDocument`): a page may not
+ * close its own window (Electron destroys the WebContents under a script's `window.close()` with no event to refuse — the
+ * probe), and its `prompt` answers as a cancelled one (Electron's throws "prompt() is not supported").
+ */
+const PAGE_GUARD_SCRIPT =
+  '(() => { try { Object.defineProperty(window, "close", { value: function close() {}, writable: true, configurable: true }); } catch {} window.prompt = function prompt() { return null; }; })();';
+
+/** The file picker never shown: CDP says it was asked for (`Page.fileChooserOpened`) and cancels it — the input hears `cancel`. */
+const NO_FILE_PICKER = { enabled: true, cancel: true } as const;
 
 function integerDimension(value: number): number {
   return Math.max(1, Math.min(16_384, Math.round(value)));
@@ -60,6 +72,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   #remoteLoadStarted = false;
   #debuggerAttached = false;
   #commandTail: Promise<void> = Promise.resolve();
+  /** PT-5a: who hears what the page asked for and may not have. */
+  readonly #refusedListeners = new Set<(what: BrowserSurfaceRefusal, url?: string) => void>();
 
   constructor(
     readonly window: BrowserWindow,
@@ -67,6 +81,56 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     readonly bootstrapReady: Promise<void>,
   ) {
     this.controlContents = window.webContents;
+    window.webContents.debugger.on("message", (_event, method, params, sessionId) =>
+      this.heard(method, params as Readonly<Record<string, unknown>>, sessionId),
+    );
+  }
+
+  /** PT-5a: the page asked for what it may not have — told to the producer (the guards have already answered the page). */
+  refused(what: BrowserSurfaceRefusal, url?: string): void {
+    for (const listener of [...this.#refusedListeners]) listener(what, url);
+  }
+
+  onRefused(listener: (what: BrowserSurfaceRefusal, url?: string) => void): () => void {
+    this.#refusedListeners.add(listener);
+    return () => this.#refusedListeners.delete(listener);
+  }
+
+  /**
+   * PT-5a — what CDP says of the page's asks. A dialog is WebContents-wide and said on every session with its Page domain on,
+   * so it is counted on the page's own session alone (`alert`, `confirm`; `beforeunload` is `will-prevent-unload`'s to say);
+   * a file picker is its frame's. A frame in ANOTHER process is a target of its own (`Target.attachedToTarget`): the same
+   * guards are put on its session as it attaches — the page's own session does not reach it (the probe).
+   */
+  private heard(
+    method: string,
+    params: Readonly<Record<string, unknown>>,
+    sessionId: string | undefined,
+  ): void {
+    if (method === "Page.fileChooserOpened") {
+      this.refused("file-picker");
+      return;
+    }
+    if (method === "Page.javascriptDialogOpening") {
+      const type = params["type"];
+      if ((sessionId === undefined || sessionId === "") && (type === "alert" || type === "confirm"))
+        this.refused(type);
+      return;
+    }
+    if (method !== "Target.attachedToTarget") return;
+    const info = params["targetInfo"] as { readonly type?: unknown } | undefined;
+    const child = params["sessionId"];
+    if (info?.type !== "iframe" || typeof child !== "string" || this.isDestroyed()) return;
+    const cdp = this.window.webContents.debugger;
+    void (async () => {
+      await cdp.sendCommand("Page.enable", {}, child);
+      await cdp.sendCommand("Page.setInterceptFileChooserDialog", NO_FILE_PICKER, child);
+      await cdp.sendCommand(
+        "Page.addScriptToEvaluateOnNewDocument",
+        { source: PAGE_GUARD_SCRIPT },
+        child,
+      );
+    })().catch(() => undefined);
   }
 
   loadURL(url: string): Promise<void> {
@@ -374,10 +438,32 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     return result;
   }
 
+  /**
+   * The page's CDP session — and, PT-5a, its GUARDS, put on as it attaches (before the page's first load: the window's first
+   * layout asks for it, after the bootstrap document): the file picker intercepted and cancelled, `window.close` and
+   * `prompt` replaced in every new document, frames in other processes attached so they are guarded too. A guard that
+   * cannot be set fails the command that asked for the session — the page is never loaded without them.
+   */
   private async ensureDebugger(): Promise<void> {
     if (this.isDestroyed()) throw new Error("Browser surface target is unavailable");
-    if (!this.window.webContents.debugger.isAttached()) {
-      this.window.webContents.debugger.attach("1.3");
+    const cdp = this.window.webContents.debugger;
+    if (!cdp.isAttached()) {
+      cdp.attach("1.3");
+      try {
+        await cdp.sendCommand("Page.enable");
+        await cdp.sendCommand("Page.setInterceptFileChooserDialog", NO_FILE_PICKER);
+        await cdp.sendCommand("Page.addScriptToEvaluateOnNewDocument", {
+          source: PAGE_GUARD_SCRIPT,
+        });
+        await cdp.sendCommand("Target.setAutoAttach", {
+          autoAttach: true,
+          waitForDebuggerOnStart: false,
+          flatten: true,
+        });
+      } catch (error) {
+        cdp.detach();
+        throw error;
+      }
     }
     this.#debuggerAttached = true;
   }
@@ -417,11 +503,19 @@ export class ElectronBrowserSurfaceNative implements BrowserSurfaceNative {
         allowRunningInsecureContent: false,
         spellcheck: false,
         autoplayPolicy: "document-user-activation-required",
+        // PT-5a: a page never raises a native dialog — `alert` returns at once, `confirm` answers false (ruling 7)
+        disableDialogs: true,
       },
     });
-    installGuardedBrowserSurfaceContents(window.webContents);
+    // the guards are installed BEFORE the bootstrap document; what they refuse is told to the window made just below
+    const told: { refused?: (what: BrowserSurfaceRefusal, url?: string) => void } = {};
+    installGuardedBrowserSurfaceContents(window.webContents, (what, url) =>
+      told.refused?.(what, url),
+    );
     const bootstrapReady = window.loadURL("about:blank");
-    return new ElectronBrowserSurfaceWindow(window, options, bootstrapReady);
+    const surface = new ElectronBrowserSurfaceWindow(window, options, bootstrapReady);
+    told.refused = (what, url) => surface.refused(what, url);
+    return surface;
   }
 
   monotonicNowUs(): bigint {

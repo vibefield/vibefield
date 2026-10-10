@@ -112,18 +112,20 @@ describe("Browser Live Surface security", () => {
 
   it("denies popups, external navigation, and webview attachment per WebContents", () => {
     const listeners = new Map<string, (...args: never[]) => void>();
-    const hooks: { windowOpen: (() => { action: "deny" }) | null } = { windowOpen: null };
+    const hooks: { windowOpen: ((details: { url: string }) => { action: "deny" }) | null } = {
+      windowOpen: null,
+    };
     const contents = {
       on: (event: string, listener: (...args: never[]) => void) => {
         listeners.set(event, listener);
         return contents;
       },
-      setWindowOpenHandler: (handler: () => { action: "deny" }) => {
+      setWindowOpenHandler: (handler: (details: { url: string }) => { action: "deny" }) => {
         hooks.windowOpen = handler;
       },
     };
     installGuardedBrowserSurfaceContents(contents);
-    expect(hooks.windowOpen?.()).toEqual({ action: "deny" });
+    expect(hooks.windowOpen?.({ url: "https://example.test/popup" })).toEqual({ action: "deny" });
     const external = { preventDefault: vi.fn() };
     listeners.get("will-navigate")?.(external as never, "mailto:user@example.test" as never);
     expect(external.preventDefault).toHaveBeenCalledOnce();
@@ -133,5 +135,67 @@ describe("Browser Live Surface security", () => {
     const webview = { preventDefault: vi.fn() };
     listeners.get("will-attach-webview")?.(webview as never);
     expect(webview.preventDefault).toHaveBeenCalledOnce();
+  });
+
+  it("PT-5a: answers what a page may not do AT ONCE and tells it — a pop-up denied with its address, a page asking to stay unloaded all the same, HTTP auth cancelled, a download told to the contents that asked", () => {
+    const listeners = new Map<string, (...args: never[]) => void>();
+    const hooks: { windowOpen: ((details: { url: string }) => { action: "deny" }) | null } = {
+      windowOpen: null,
+    };
+    const contents = {
+      on: (event: string, listener: (...args: never[]) => void) => {
+        listeners.set(event, listener);
+        return contents;
+      },
+      setWindowOpenHandler: (handler: (details: { url: string }) => { action: "deny" }) => {
+        hooks.windowOpen = handler;
+      },
+    };
+    const told: [string, string | undefined][] = [];
+    installGuardedBrowserSurfaceContents(contents, (what, url) => told.push([what, url]));
+    // a pop-up: no window, its address told
+    expect(hooks.windowOpen?.({ url: "https://example.test/popup" })).toEqual({ action: "deny" });
+    // a page that asks to stay: Electron lets the unload go on only when THIS event is prevented
+    const unload = { preventDefault: vi.fn() };
+    listeners.get("will-prevent-unload")?.(unload as never);
+    expect(unload.preventDefault).toHaveBeenCalledOnce();
+    // HTTP auth: prevented (no native sheet) and answered with no credentials — the page's own 401
+    const login = { preventDefault: vi.fn() };
+    const answer = vi.fn();
+    listeners.get("login")?.(login as never, {} as never, {} as never, answer as never);
+    expect(login.preventDefault).toHaveBeenCalledOnce();
+    expect(answer).toHaveBeenCalledExactlyOnceWith();
+    expect(told).toEqual([
+      ["popup", "https://example.test/popup"],
+      ["beforeunload", undefined],
+      ["auth", undefined],
+    ]);
+    // a download: the SESSION's guard cancels it and tells the contents that asked — and no other page of the session
+    const download: {
+      guard: ((e: { preventDefault(): void }, i?: unknown, c?: unknown) => void) | null;
+    } = { guard: null };
+    const target: BrowserSurfaceSession = {
+      webRequest: { onBeforeRequest: () => undefined },
+      setPermissionRequestHandler: () => undefined,
+      setPermissionCheckHandler: () => undefined,
+      on: (_event, listener) => {
+        download.guard = listener;
+        return target;
+      },
+    };
+    installGuardedBrowserSurfaceSession(target);
+    const other = { on: () => other, setWindowOpenHandler: () => undefined };
+    const elsewhere: string[] = [];
+    installGuardedBrowserSurfaceContents(other as never, (what) => elsewhere.push(what));
+    const event = { preventDefault: vi.fn() };
+    download.guard?.(event, {}, contents);
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(told.at(-1)).toEqual(["download", undefined]);
+    expect(elsewhere).toEqual([]);
+    // a download nobody of ours asked for (no contents): cancelled all the same, told to no one
+    const orphan = { preventDefault: vi.fn() };
+    download.guard?.(orphan);
+    expect(orphan.preventDefault).toHaveBeenCalledOnce();
+    expect(told).toHaveLength(4);
   });
 });
