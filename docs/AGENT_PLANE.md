@@ -48,7 +48,11 @@ first step — **not** through `pnpm check:deps`, which is a different script.
 MV's monitor ownership is written in [architecture](agent-plane/architecture.html#monitor-ownership),
 its backend/window composition in [system](agent-plane/system.html#monitor-backend), and its one model
 subscription plus `agent.reportShown` in [api](agent-plane/api.html#monitor-model). Only the model syncs;
-one SDK view mounts per window. Godview is runtime only: it records no history. The ownership law assigns
+one SDK view mounts per window. Godview is runtime only: it records no history. *Corrected 2026-10-10 (TL):
+"runtime only" is no longer the whole of what a view draws. A view that declares `history` is lent the record's
+past, read by fieldd from rosettad at a window's ask and held nowhere, so the timeline draws it; Godview still
+records nothing. The seam's row is in [architecture](agent-plane/architecture.html#seams), its two doors in
+[api](agent-plane/api.html).* The ownership law assigns
 transcript ingestion solely to rosetta; architecture names the pre-existing runtime adapter readers that
 still need migration. MV adds no reader and does not claim that separate gap is closed. Find and usage
 are host chrome with injected ports, outside the sandboxed views.

@@ -1665,28 +1665,58 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   in birth order and never move (TL-D4). A lane is 24–36px (18px for a bare terminal, kept in a
   quiet group under the agents, TL-D7). It opens on the last hour, following now (TL-D5), with
   presets 15M · 1H · 4H · 12H. Pinch or ⌘-scroll zooms at the pointer (240ms, island) and a drag pans.
-  **Runtime only (MV-6, MV-D13, 2026-10-03):** a lane begins at its row's birth, claims no state
-  before `statusSince`, and draws its current state from there to now. It keeps no previous spans.
-  A row leaving the model leaves the timeline. **Each lane is one wake**, drawn in the current
-  state's width; earlier time is an unrecorded thread, never a guessed state.
-  - Work: 2 × 22% of the lane height, clamped 8–15px, in the project's colour (§2.6's
-    exception), with a soft glow (the outline's own blur, 5px light at 24% · 6px dark at 62%) and a
-    1px sheen along it.
+  **Runtime only where no record is lent (MV-6, MV-D13, 2026-10-03):** a lane begins at its row's
+  birth, claims no state before `statusSince`, and draws its current state from there to now; a
+  row leaving the model leaves the timeline. That is still the whole drawing on the phone, in
+  puppeteer's own Godview and on a desktop with no record.
+  **The record's past (TL · TLV, 2026-10-10; docket v9, T1–T6).** Where the host lends `history`,
+  a lane also draws what rosettad's record says of the last 24 hours. It is read at each ask;
+  the view keeps nothing and nothing here records. *(Corrected 2026-10-10: this paragraph said
+  the timeline was runtime only everywhere and kept no previous spans.)*
+  **Each lane is one wake**: the record's stretches, then the current state, each in its own
+  width. Time no stretch covers is a dotted thread, never a guessed state. Blocked and unseen are
+  drawn only from the runtime: the record does not say them.
+  - Work, now or recorded: 2 × 22% of the lane height, clamped 8–15px, in the project's colour
+    (§2.6's exception), with a 1px sheen along it. A live lane adds a soft glow (the outline's own
+    blur, 5px light at 24% · 6px dark at 62%).
   - Blocked and unseen: a 4.4–7.6px thread in `--vf-orange` and the swarm's blue.
-  - Idle: a 1.7px hairline in text-faint.
-  - Time the record does not hold: a dotted text-faint thread, never a state.
+  - Idle, and recorded quiet: a 1.7px hairline in text-faint.
+  - Time the record does not hold: a dotted text-faint thread (1.2px dots, 3.4px apart), never a
+    state. A silence longer than 15 minutes is not recorded.
+  - Session bounds alone (the record holds a run's start and end, nothing between): a flat
+    4.4–7.6px band in the project's colour at 50%. It is never work's swell, and the map never
+    counts it.
+  - The seam: where the record runs unbroken into the current state, a 1px cut across the wake in
+    the ground colour at 70%. A gap there is already the dotted thread.
+  **A run that ended keeps its lane** (TL-D6, restored 2026-10-10 and fed from the record). It
+  stays in its birth slot at 45%, wake and name, until it scrolls out past the left edge. A
+  2 × 12px tick in text-muted marks its last recorded activity. It has no glow and, past that
+  tick, no body. It is named by its session's title, else by what ran it and its project. A
+  receding filter (the profile tab) takes it to 30% of that; a narrowing one (the scope row's
+  desktop) removes it, as each does a live row. It is lit and read, never opened. Only a run this
+  runtime ran is a lane.
   **At the head** sit the swarm's bodies, lit as the swarm lights them, the swarm's wave ringing out of
   one you owe (1.1s, island, the view's only loop). Beside each body is a readout: the current
   state's length, then its word. Names float over the wakes' far end; there is no rail. **Pointing
-  at a lane (or ↑ ↓) lights it and quiets the rest to 30%.** Looking back can show only the
-  current span where it covers that moment; before it the body claims no recorded state. The clock
-  chip turns to the outlined head time, and NOW glides back (600ms, island). Closed-span readouts
-  and retained ended lanes are retired with the history book; these controls do not record a day.
+  at a lane (or ↑ ↓) lights it and quiets the rest to 30%.** Looking back shows the current span
+  where it covers that moment. Before it, a lane with a record says what the record says: a
+  worked stretch as work reads (`4:39` · `working · of 12m`), `quiet`, or `–` · `detail not
+  recorded` on bounds alone; any other time is `–` · `not recorded`. Those last two wear a hollow
+  body (a 1px dashed text-faint ring). Past its last activity an ended lane reads `last active
+  27m ago`, or `last active 14:32` when looking back. The clock chip turns to the outlined head
+  time, and NOW glides back (600ms, island). *(Corrected 2026-10-10: closed-span readouts and
+  ended lanes were retired with the history book at MV-6. They are back, read from the record;
+  these controls still record nothing.)*
+  **When the record is partial or cannot be read now**, one sentence under SINCE says so in the
+  record's own words, and a narrow head says `RECORD PARTIAL` or `NO RECORD NOW`. A whole record
+  says nothing.
   **The map of the day** is its own 46px strip above the axis (TL-D17). Its right end lines up with
   the head while following now.
-  - It is drawn as Pulse (TL-D15): only the current spans summed into one ridge, smoothed by an ~8px
+  - It is drawn as Pulse (TL-D15): the current spans, and with a record its worked stretches on
+    live and ended lanes (T6), summed into one ridge, smoothed by an ~8px
     gaussian. Work stacks above a line in each project's colour, its height the number of agents
     working, drawn and never printed (FC-D18). Waits hang below in orange, then blue.
+    Waits come only from the rows; bounds alone count nothing.
   - Only the window in view keeps its colour; the rest of the day is grayed.
   - The head is a 2px line with a knob, filled while following now and hollow while looking back.
   - **Pressing the map puts the head there, and dragging moves the head** across the known spans
@@ -1696,9 +1726,10 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   opened (TL-D3), text-faint for idle. Never red; now is ink. One click opens the agent in the pane
   you are in (the views' `select`).
   **Reduced motion:** no wave, no glide, no zoom tween; positions jump.
-  **There is no history book.** MV-D13 superseded TL-D8's status ledger: `agent.history` and
-  fieldd's status recorder are removed. A future history capability must READ
-  rosettad's record; neither a view nor its backend may begin recording one.
+  **There is no history book; the timeline reads a record it does not keep.** MV-D13 superseded
+  TL-D8's status ledger: `agent.history` and fieldd's status recorder are removed. The `history`
+  capability (2026-10-10) READS rosettad's record through the backend at each ask; neither a view
+  nor its backend may begin recording one.
 - **Godview's spend view is where the money went** (SV · MV-7 — James ruled 2026-10-07, M177: the
   runtime-only view as built, puppeteer `feat/sv-live` `d1890e0`; SV-D15…D19 are ruled later).
   A fifth monitor view (`SPEND`, after the timeline), painted into a canvas like the timeline:

@@ -8773,3 +8773,288 @@ On top of One Frame's GV-D3/D8/D9/D10 (10-02) and "go with a" (10-08). Plan: `dr
 - The paired perf run (`pnpm perf:godview --source-a model`, M40) and a paired capture against the pre-P2 tree. The machine was shared with three lanes. The bar's height is unchanged, but its tools moved 56 px left.
 - The CDP trace of the blur-18 scrim over the live swarm.
 - The live pane's ground uses the token default, not the viewer's terminal appearance.
+
+## PJ-4 phase B — History draws your projects through the room's host inputs: your colour, the desktops' marks, sections, acts where they act, New agent, and the room's own reader in the Peek (2026-10-10; `96b16de8`, sha for sha, inside main `0e020306` — twenty-seven commits `74d56588`→`96b16de8` as gated; lane pj4 over main `8f58019e`, carried sha for sha by lane land2's chain `land/wave2`; rosetta `vf/room-host-slots` `3449648`)
+
+**Why:** James ruled docket v9 on 2026-10-09 (23:03–23:17), every lean, and said "done my ruling, go ahead".
+- H1 (a): we map, the room draws. VibeField hands the room your projects in its own shapes, plus optional upstream slots.
+- H4 (a): the acts live on the project. The ruling's words, as the plan quotes them: "A ··· in the project's head … pin and hide ALSO on list rows". Rename is on the name itself, split is on a folder's row in ③ ("Not part of this project"), and there is a Hidden foot.
+- H5 (a): Home is a row; Temporary is one folded row at the foot.
+- H6 (a): ship New agent now, with folder, agent and profile. Model and effort say they cannot be set yet (PJ-6).
+- PK3 (a): the past peek is rosetta's own reader.
+- H3 (a) bounds all of it: this desktop's sessions, with marks for the rest.
+- The lead's A-D9 (the room stays device-unaware), W2 (PK3's swap lands with this slice) and M18 (②'s `···` returns).
+
+Phase A (`36295d77`) landed the data. The plan is `draft/history-finish/build-hf.md` §3c–§3d and §5 (M14, M15, M18), with briefs `briefs/pj4.md`, `briefs/pj4-finish.md` and `briefs/room.md`. The room's contract is `surveys/room-api-v1.md`, `room-api-v2.md` and `room-api-v3.md`.
+
+**What landed:**
+- **The room, upstream** (rosetta `vf/room-host-slots`, fourteen commits `1c5a49a`→`3449648` on main `eab2f57`). Every input is optional, so rosetta's own app passes none.
+  - R1 `projectTint`: a host's colour per project.
+  - R2 `projectRow`: marks, a second line, a live count.
+  - R3 `projectSections` and `sessionSections`, with folds.
+  - R4 `sessionRow`: an id slot, an act or a reason, and a host key passed through untouched (`RoomSelection.hostKey`).
+  - R5 `projectActs`, `projectCard`, `sessionActs`, and the room's menu rows.
+  - R6 `folders`: ③'s head as the host's folder list, following the session. A folder `elsewhere` is never opened.
+  - R7 `projectFilters` and `sessionFilters`: chips as buttons with popover rows.
+  - R8 `CatalogPort.projectStatsBatch` and R9 `repositoryUrl`. Both are built and witnessed in the room; VibeField's adapter passes neither yet.
+  - PK3: `TranscriptReader`, read-only, at `{sessionId, timelineId?, query?}`, read by value.
+  - ROOM API v3: host menus are drawn in the room's root, flipped and clamped inside the room; a menu a pointer opens rings no row; H4's slots are `RoomProjectRow.act`, `RoomFolder.act` and `projectRename`.
+  - RO-16: `tildePath` shortens only at the home folder's boundary.
+  - A folder pick lasts only while its session does.
+- **EL8, twice inside this slice,** each alone, the sha line only: `6c78915a` (rosetta `eab2f57` → `a107682`) and `7768ed3a` (→ `3449648`). The pin both slices land on is `2a91bf0` (the TL entry below).
+- **The join grows** (`40263ad2`, `5bbb974b`).
+  - `IndexSession.place` (a `PlaceRef`) beside `projectKey`: the place that holds the cwd, from fieldd, so the window resolves no path. A row's own `place` is never trusted, and a peer daemon never gets it.
+  - `ProjectSummary.pinned` and `.hidden`, present only when true.
+  - `IndexSearchHit.projectKey`, and keyed `index.recent` rows.
+- **DESIGN.md §8 first:** "It lists your projects", "The list's order", "The project's acts sit where they act", "The card's look", and the corrected peek under "Search — the Peek".
+- **The host model and inputs** (`history/host-model.ts`, `history/host-inputs.tsx`, both pure).
+  - R1: the project's ink (§2.9), never the room's dealt tint.
+  - R2: each desktop's OS mark, faint while asleep; "4 sessions on Studio"; "n live".
+  - R3, the list's order: Live now, Pinned, the rest (each desktop's Home among them), Temporary as one folded line at the foot, then Hidden.
+    - Temporary's fold never says "0". It reads "Temporary · n · Show" for the last 14 days, "Temporary · older than 14 days · n · Show" when only older sessions exist, and is a plain row when it holds none.
+  - R4, a session row: this desktop's mark and the folder (FitPath), then Jump to while it runs here, else Resume, or the reason in the launcher's words. The host key is device-qualified.
+  - R5, New agent (H6): "Starts in" names the folder ③ shows; one row per agent and persona from `agent.providers` (no agent literal, R23); one dimmed row says "Model and effort can't be set from here yet (PJ-6)". ②'s card slot carries the suggestions (PJ-D16).
+  - R6: ③'s folders by desktop, a linked worktree one step in. Another desktop's folder says "Files stay on Studio". A gone or unmounted folder here says so.
+  - R7: any desktop ▾ over the list (each row says its standing and its count, "here · 5", "asleep · 1"; a desktop with none of these projects is dimmed) and any agent ▾ over a project's sessions.
+  - No desktop chip over a project's sessions: they are all this desktop's until DS-7 (H3).
+- **The acts** (`history/acts.ts`).
+  - Resume and Jump to on any session. A session another desktop holds is refused by its host key.
+  - New agent is `agent.spawn {provider, cwd, profileId}`, then the pane in Godview.
+  - H4, each through `project.intent`:
+    - ②'s head carries New agent and a `···` (Pin to the top / Unpin, Hide / Show again);
+    - the same pin and hide at ①'s row end;
+    - rename on ②'s name itself, with a refusal said under the field in the intent's own words;
+    - "Not part of this project" on ③'s folder rows (a split), for a project of more than one folder, never Home nor Temporary.
+  - Temporary has none of the acts.
+  - Outcomes are said on the line (`sayOnHistoryLine`).
+- **One meta feed per catalog port,** and one ports set per window (`window-ports.ts`), so the Peek's reader shares History's leases.
+- **PK3:** the Peek's past picture is the room's `TranscriptReader` at the matched line (`PeekReaderView`, in the room's chunk). The matched lines stand in while it arrives and if it cannot draw. A match stays neutral (K1): the text's ink at 11%, weight 600, never `--vf-select`.
+- **"Every project"** in the Peek names fieldd's projects with a folder here (`project.list`) and narrows by the PJ key.
+- **The catalog:** the History-by-project plate mounts the shipping view, adapter, builder and intent over a fixture fieldd (UI_SYSTEM). The After Hours illustration sheet no longer styles the room's `ah-section` and `ah-empty`.
+
+**Witnesses:**
+- vitest, field-app:
+  - lane room's witnesses, cherry-picked: `room-reader` 6, `room-host-inputs` 25, `room-host-v3` 11 (42/42);
+  - `history-host` 25, `history-projects-plate` 3, `history-doors` +1 (one feed, a late reader, the last close), `history-view` (the pick through a row's covering button);
+  - `peek`, `peek-model`, `peek-plate` (the reader landed on the matched line in the shipping plate).
+- vitest, fieldd: `project-doors` +2 (the place beside the key, a forged one dropped; pin and hide from a record), `project-doors-phone` (a window's row carries its place, a peer daemon's none; `index.recent` rows carry the key).
+- Contracts fixtures: `index-sessions.keyed` carries `place`; new `project-summary.hidden`.
+- The room with no inputs: a lane golden of its DOM (four states, fixed clock, written at rosetta `eab2f57`) is byte-identical at every room commit.
+- Red-proofs:
+  - the reader's steady mark, with the room's 1.5 s clear restored;
+  - R6 without the room's reset;
+  - room v3 with the menu layer forced off (5 of 11 fail), and with every open treated as a key's;
+  - "1 sessions" and "Temporary 0" on the old code;
+  - the catalog's illustration sheet unscoped.
+- `smoke:godview` (offscreen):
+  - `historyNewAgent` (H6, PJ-L5): New agent from History starts the typed stub in the folder ③ shows. Three witnesses agree: the line says "Started in …", fieldd lists a new run whose workspace is that folder, and the stub's own record says it ran there.
+  - `historyGoneFolder` (R4, PJ-D9): Resume on a session whose folder was renamed aside says "Could not resume — folder is gone", and the window stays on History.
+  - Photographs, light and dark, each menu opened with a real pointer press: the room at rest, New agent's menu, both chips, ③'s folders.
+- Photographs of the catalog plate, both themes (`/Volumes/SamsungRed/lanes/pj4/shots-final/plate/`): the row act, the folder act, the head acts, rename, rename refused.
+
+**Validation:**
+- Lane pj4's `gate.sh` on `96b16de8` (2026-10-10, 10:05–10:14): `verify.log` **EXIT 0**, `smoke.log` EXIT 0, `smoke-godview.log` EXIT 0, and the photograph pass EXIT 0.
+- An earlier tip, `376dcad5`: verify and smoke EXIT 0, `smoke:godview` EXIT 2. A real pointer press landed while ③'s worktree column was still opening. Fixed by `7c8503a1`.
+- The combined tree holds this slice and the next (`ad1879de` as first gated, `0e020306` as landed): see the TL entry's Validation.
+- The landed tree is the gated tree: main took the chain by a fast-forward, sha for sha (`0e020306`). Lane land2's gate on it (2026-10-10, 18:26–18:35): `pnpm verify` **EXIT 0**, `pnpm smoke` EXIT 0, `pnpm smoke:godview` EXIT 0. The no-record pass and its one red are in the TL entry's Validation.
+
+**Found:**
+- The room draws whatever count a fold is given and falls back to its ROW count when given none. So "no count" is not a host option, and an empty Temporary is drawn as a plain row.
+- The cut builder removed ②'s `···` as a duplicate (`376dcad5`). H4 (a) names both places, and the lead ruled it back (M18, `96b16de8`).
+- biome folded a lone `\s` in an evaluated template string into `s`, so the History rungs' readouts read "any de ktop". No assertion read them (`3842a0c1`).
+- A synthetic `.click()` reads as a key and rings the menu's row. The photographs press with `sendInputEvent`.
+- The sticky day-head band in History is VibeField's own rule, not the room's: DK-15's `history-room-glass.css` paints `.ah-day::before` in `--vf-chrome-solid` at full strength over a 72% ground. It is the same on GPU and software, and it predates this wave.
+- `pnpm siblings:pin` rewrites the whole lock in a layout biome refuses. Each pin commit keeps the sha line only.
+
+**Owed:**
+- With James, not decided by this landing: the sticky day-head band; PK2, the search circle's 8 px overhang (P2's entry).
+- R8 and R9 are not consumed: History still asks figures per project, and the repository act is the room's own reading.
+- Petition (rosetta): the room's `openAt({projectId})` or an in-place re-key (phase A's finding, still open).
+- Other desktops' sessions in History wait on DS-7; the phone over `project.*` is PJ-7; model and effort in New agent are PJ-6.
+- Nothing is pushed in any repo.
+
+## TL — Godview's timeline reads the past from the record: rosetta's turns through fieldd's doors and the monitor's port, lent to the view as `history` (2026-10-10; main `0e020306`, sha for sha — twenty-one commits: nineteen as first gated, `8457384e`→`2feaea93`, the pins `4808a9e4` and `441fcb81`, then `ebeaac4c` · `4e181dbf` · `70fe26dc` · `ad1879de`; and the window's two fixes the perf reading found, `6621037b` · `0e020306`; lane tl cherry-picked onto PJ-4 phase B by lane land2, chain `land/wave2` over main `8f58019e`; rosetta `2a91bf0`, puppeteer `c20a07d`)
+
+**Why:** James ruled docket v9 on 2026-10-09 (23:03–23:17), every lean.
+- T0 (a), split. The mark's words, where "I" is the History lead: "I build the read (rosetta's route, fieldd's door, the monitor's port); the MV lead draws it in the view."
+- T1 (a): worked and quiet, ended and live lanes, from rosetta's turns. Blocked and unseen are never guessed, and a silence over 15 min stays "not recorded".
+- T2 (a): the view's 24 hours.
+- T3 (a): the same wake.
+- T4 (a): a new rosetta route.
+- T5 (a): a first version before the route, with ended runs as one band each.
+- T6 (a): the map of the day from the same turns.
+- The lead's B-D4 (shaped per desktop, built for this one first), B-D5 (the phone later) and B-D6 (backend-owned).
+- TIMELINE SHAPES v2, agreed with the MV lead (M10), and the MV lead's ruling on filters (M13).
+
+It is TL-D8's successor under the laws of 2026-10-03: Godview records nothing, only rosetta reads transcripts, and a view draws only what it is lent. James said "Merge" for the three repos on 2026-10-10 (M20). The plan is `draft/history-finish/build-hf.md` §3c–§3d and §5 (M10–M13, M19–M21), with briefs `briefs/tl.md` and `briefs/land2.md`. The contract is `surveys/timeline-shapes-v1.md` with `timeline-shapes-v2-mv-answer.md`; the MV lead's gate asks are `surveys/mv-lead-combined-gate-2026-10-10.md`.
+
+**What landed:**
+- **rosetta: `GET /api/activity`** (`db6dd7e` on `vf/activity-route`, carried as `2a91bf0`). Every top-level session's turn spans in a time window, from rosettad's own tables.
+  - `TurnSpan {group_id, kind, first_at, last_at, gaps}`. A gap is a stretch between activity instants longer than `gap_ms` (15 min by default).
+  - The window is at most seven days. `limit` truncates and says so. A Pending session's turns are withheld.
+  - Bearer-only. PROTOCOL_VERSION 26 → 27. No schema change, and nothing stored.
+- **puppeteer: the history capability and the port** (`vf/monitor-history-port`, four commits `53e6828`→`a4f088e`).
+  - view-sdk: `MonitorCapabilities.history` is `MonitorHistory` (it was `never`), a minor (MV-D10). The manifest is the ask (`viewWantsHistory`). `keepPast` and `lendHistory` are the host's helpers; `fixtureHistory` is for tests and labs.
+  - monitor: `CreateMonitorBackendOptions.history?: MonitorHistoryPort` and `MonitorBackend.readPast(window)`, asked on demand and held nowhere.
+  - The derivation (`past.ts`): worked inside a turn, quiet between turns, unrecorded across a silence over 15 min, and `bounds` for the floor.
+  - Only this runtime's runs are lanes. A `past:` id is no command. An ended lane's colour is read, never dealt.
+- **Contracts: two doors.**
+  - `index.activity {sinceMs, untilMs, sessions?, silenceMs?, device?}` → `IndexActivityResult {fidelity: "turns" | "bounds", partial, detail?, clipped?, sessions}`. Scope `index.search`, `federate`.
+  - `agent.recordedLanes {sinceMs, untilMs, device?}` → `AgentRecordedLanesResult`, the SDK's `MonitorPastSnapshot` field for field. Span kinds are worked, quiet, unrecorded and bounds; states are complete, partial and unavailable. It is not the removed `agent.history`.
+  - `INDEX_ACTIVITY` in the registries: the day, T1's 15-minute cut, the session ceiling.
+  - Readers for rosetta's wire (`IndexActivityResponse`, protocol 27). Its golden is rosetta's own, transcribed verbatim.
+- **fieldd.**
+  - `index-activity.ts`: the route is preferred, one GET of `/api/activity` per day-window, parsed and never cast. A route that cannot answer gives way to the catalog's session bounds and says `partial`. It never pages `index.timeline`.
+  - `monitorHistoryPort(reader, catalog, runs)`: the record's sessions beside the runs THIS runtime ran (`AgentRuntimeService.recordedRuns()`, read off the verified session records). A session rosetta holds that this runtime never ran is no lane.
+  - No rosettad configured means no port: `agent.recordedLanes` refuses NOT_FOUND `{service: "agent.monitor", state: "no-record"}`. A rosettad configured but not up answers `unavailable` at once, in a person's words.
+  - Reading the past writes no project identity.
+  - `agent-monitor.ts`'s header said "never a ledger on disk and never a history door (MV-D22; TL-D8 stands)". It is amended at its source, dated 2026-10-09, with the ruling.
+- **The window** (`godview/monitor/monitor-history.ts`, `useMonitorHistory`).
+  - It reads only while a mounted view's manifest declares `history`, over the fixed day [now − 24 h, now]. Nothing is read while Godview is closed (PF6).
+  - `keepPast` keeps the same snapshot when only `readAt` moved. `MonitorHistory` is built once per snapshot, theme or filter, never per publish.
+  - A run leaving the model reads again after 1 s. A seam moving or a row arriving waits 30 s.
+  - One re-read is pending at a time, held apart from the watch (`0e020306`). A leaving takes a pending read with it; a seam or an arrival is served by the one already wanted. A later publish neither drops it nor puts it off.
+  - The rows are watched only while a read could follow (`6621037b`): walked once per publish, and not at all for a view that does not ask or a door that said `no-record`. The rows a watch begins with are its baseline.
+  - A failed re-read after a good one keeps the last past, marked `partial`. A door that says `no-record` lends nothing and is not asked again.
+  - M13: a chosen desktop narrows the ended lanes before they are lent (`narrowPast`); the profile tab recedes them.
+- **The marker** (`ebeaac4c`): `GODVIEW_MONITOR` gains `history: "absent" | "complete" | "partial" | "unavailable"` and `endedLanes`, read off the lent object and never a view's DOM (MV-5).
+- **The view half** (puppeteer `vf/timeline-past-view`, nine commits `74de92d`→`c20a07d`, the MV lead's): the timeline draws a row's recorded past before its current state, and the runs that ended. The MV lead's own account is "The view half" below, placed as written.
+- **EL8.**
+  - In-lane pins: `8457384e` (puppeteer `594d222` → `dcbc359`) and `18a9d81e` (→ `a4f088e`).
+  - The landing's pins: `4808a9e4` (rosetta `3449648` → `2a91bf0`, one sha holding the room's host slots and the activity route) and `441fcb81` (puppeteer `a4f088e` → `c20a07d`).
+  - Lane tl's own rosetta pin `f1234507` was dropped from the chain: its one lock line conflicts with PJ-4's. `4808a9e4` carries its record.
+  - Protocol 26 → 27 is lockstep: a rosettad from before the pin reads `incompatible`.
+  - As landed: rosetta main `2a91bf0` (only the ref moved; James's checkout stayed on his own branch) and puppeteer main `c20a07d`, each a fast-forward. Neither pin was re-made: `4808a9e4` and `441fcb81` already name those shas. `../rosetta-pin` moved to `2a91bf0`.
+- **Docs at source.**
+  - `docs/agent-plane/api.html`: both doors, and `GET /api/activity` among rosettad's routes.
+  - `docs/agent-plane/architecture.html` (`70fe26dc`): the history capability's row in the seams table; the monitor-ownership note names the capability; the MV row's stale "integration gates precede main landing" is corrected in its cell.
+  - `docs/AGENT_PLANE.md`'s "runtime only" sentence and the 2026-10-03 laws in `docs/DECISIONS.md` each carry a dated note (this ledger's commit).
+  - `DESIGN.md` §8, "Godview's timeline is the swarm through time" (this ledger's commit; the MV lead's words, every number read from puppeteer `c20a07d`). No commit of the chain had touched it, and five places still said the timeline kept no past. Each is corrected at its source: runtime only where no record is lent; the record's stretches, the dotted thread, the bounds band and the seam; an ended run's lane at 45%; the looking-back readouts; the map's worked stretches; "the timeline reads a record it does not keep". A TV pick that changes the look moves these lines with its commit.
+
+**The view half (the MV lead's account, placed as written; puppeteer `vf/timeline-past-view` `c20a07d`):**
+
+> **The timeline draws the record's past (the view half; MV lead, puppeteer `vf/timeline-past-view` `c20a07d`, 9 commits on `vf/monitor-history-port` `a4f088e`).** Docket v9 T0 (a) split the work: History built the read, and the view draws it.
+>
+> **What the view draws:**
+> - **A live lane's past**, before its current state:
+>   - work as the wake, in the project's colour;
+>   - quiet as the hairline;
+>   - a dotted thread wherever the record cannot say (an `unrecorded` span, or time no span covers);
+>   - a 1 px seam in the ground colour where the record runs unbroken into the runtime's state.
+> - **A run that ended** (TL-D6, restored from before MV-6 and fed by `history.ended`):
+>   - faint, in its birth slot, with an end tick and no blur;
+>   - named by the session's title;
+>   - reading `last active 27m ago`;
+>   - lit and readable, never opened: no command ever receives a `past:` id.
+> - **The floor (T5):** one flat faint band per ended run; `–` · `detail not recorded`; never counted as work.
+> - **The map of the day (T6):** counted from the same spans, plus the working rows since `statusSince`. Waits come only from model rows.
+> - **The record's sentence** when it is partial or cannot be read: under SINCE; `RECORD PARTIAL` / `NO RECORD NOW` in the narrow head.
+> - **With `history` absent:** exactly what it drew before. That covers puppeteer's own Godview, the phone, and a desktop with no record.
+>
+> **Rulings:** TV-1…TV-8 (page *The Timeline's Past*, db `decisions`) were not yet ruled at this landing (the db read empty at 2026-10-11 01:28 UTC). The view is built at each mark's recommended lean. A pick that differs is one follow-up commit on puppeteer and one EL8 pin, and DESIGN.md's lines move with that commit.
+>
+> **Witnesses (lane `/Volumes/SamsungRed/lanes/tlv`):**
+> - puppeteer's gate at `dfe46d0` (`c20a07d` adds only the four re-recorded goldens): typecheck, packages, support, tests and the view wall 0. The three reds are the pin's own: the stale `adapter-codex` groundtruth map, that map's script test, and one format warning.
+> - Goldens 64 of 64: the 60 existing are untouched since the pin `594d222`; four new, with history lent (turns and the floor, light and dark). Swarm frames 3/3 and the four smokes 0.
+> - **Perf in puppeteer's harness, by M40's literal rule:**
+>   - **History absent** (A = `a4f088e`, B = `c20a07d`): n10 and n20 level at R7.
+>     - One fresh red at n60: main-thread tasks +4.40 ms/s, z 4.8, with the A/A arm at +9.52.
+>     - It was diagnosed before it was measured again (no per-lane work added to the absent path), then read level by a targeted R14: +0.85 ms/s, z 0.3.
+>     - Ten rounds clear of another lane's load read +1.34, z 0.5. The rule for dropping the first four was fixed before any result was read.
+>   - **History lent** (n20 + 40 ended runs against the same build without): main-thread tasks +9.61 ms/s (8.9 %); frames and long frames unchanged.
+> - **Perf in VibeField's window on the combined tree** (lane `/Volumes/SamsungRed/lanes/tlv/logs/vf-ab-ad1879de/` and `vf-ab-0e020306/`; A = main `8f58019e` over puppeteer `594d222`; both arms read the model; the lab starts no rosettad, so both read the no-record path):
+>   - **On `ad1879de`, R7 over every view (`perf2`): WORSE on one row by M40's literal rule.** Timeline × n10, script 76.30 → 78.53 ms/s, T +2.69 (3.5 %), z 8.3; the null arm T₀ −1.36, z₀ 0.4. The other 11 cells read level; swarm × n10 react render was noisy. Captures at n20: list and timeline 0 differing pixels in 8, swarm and rain inside their own A/A in 8.
+>   - **The first diagnosis was wrong and its test said so.** I read it as a first-mount cost, because the lab warms only the swarm and the timeline first runs in the n10 cell. The test (`first1`: the timeline alone, n20 then n10) was fixed before it ran. It refuted it: n10 run second still read worse (task +2.61 ms/s, 2.3 %, z 4.4), and the first cell carried nothing.
+>   - **The split** (three pairs with a third arm, main's host over the new view; readings fixed first in `split-prediction.txt`): the task totals decided nothing, because the same build against itself moved by 4 to 6.5 ms/s at n10. The per-root render rows did:
+>     - the view's own root level in two runs and +0.91 ms/s (z 2.3) in a third; no frame work added (rAF −0.06);
+>     - the host's root +0.43 ms/s at n10 (z 4.3, seven rounds of seven) and +0.96 at n20 (z 3.1);
+>     - with History's fix, −0.43 and +0.21.
+>   - **The cause was the host's**, and History fixed it (`6621037b`, `0e020306`): while the timeline was mounted the hook rebuilt a key over the agent rows and re-ran an effect on every monitor commit, also on a desktop with no record.
+>   - **The reading of record, main against `0e020306`, R7 over every view (`vf-ab-0e020306/perf`: 21 launches, 252 cells, audit 0): PASS by M40's literal rule.** No gate row reads worse, noisy or shifted in any of the 12 cells.
+>     - Timeline × n10, the row that was red: task 125.92 → 122.88 ms/s, T −1.87 (z 1.6); script 81.76 → 80.18, T −1.40 (z 2.5; the null arm T₀ −2.35, z₀ 2.7); react render T +0.22 (z 0.7).
+>     - The host's root, where the cost was: +0.17 ms/s at n10 (z 1.0; four rounds up and three down, where it had been seven of seven), −0.06 at n20, +0.19 at n60. Nothing more per commit: +0.00 ms (z 0.5), where it had been +0.01 (z 15.8). The view's own root: +0.06, −0.38, −0.38.
+>     - Captures at n20: list and timeline 0 differing pixels in 8; swarm and rain inside their own A/A in 8; sanity 8 of 8.
+>     - Marks on rows the gate does not read (M33 gates total work): js heap in rain × n10 reads worse (+15.3 MB, z 8.1). Four of its rounds sit near +16, one at +2.6 and two near −25; the same build against itself ran from −26 to +20; and the R7 on `ad1879de` read that row +0.35. js heap in list × n20 and two counters in timeline × n60 read noisy; rAF work in rain × n20 reads better.
+>     - One launch of the 21 was disturbed. Main's launch in round 5 began under the quiet line (load 11.96) and ended at a one-minute load of 108. That makes main slower in that round, which favours the new tree. With round 5 left out afterwards (a check, not a reading) no gate row clears the rule either; the timeline rows read task −1.19, −3.62 and −4.16 ms/s.
+>   - **Left, for the lab:**
+>     - its warm-up should run every measured view, not the swarm alone;
+>     - `waitForLabDeck` should print the last deck state when it times out (one launch in run 1 was lost to it, on main's own code);
+>     - the audit's load range reads only the load before each launch (2.7 to 14.8 here). It should also read the load each report records at its end, so a storm that arrives mid-launch is named by the audit.
+>
+> **Known, not fixed:**
+> - The view's cost with history lent is the 60 lanes it then draws. Ended rows are held by identity, so a publish rebuilds only live rows.
+> - An ended lane cannot be opened (TV-8).
+> - Sessions this runtime never ran are no lanes (TV-7).
+
+**Witnesses:**
+- rosetta at `2a91bf0`, its CI's list, each log EXIT 0: `cargo fmt --all --check`; clippy `-D warnings`; `cargo test --workspace` (the route's rows among them); `tsc -p clients/ts`; its node tests 13/13; the list-order and recovery tests 25/25; the room's and the app's typecheck; the app's `node --test` 448/448.
+- puppeteer: `past.test.ts` 21 and monitor 193 at `a4f088e` (1 skipped, as at the pin); `host/history.test.ts` 6 and view-sdk 225 at `bf1e5ed`.
+- puppeteer's view wall at `c20a07d`, fail mode: 5 views, 113 files, 0 breaches. The same with VibeField's 49 stylesheets read as host CSS.
+- vitest, VibeField:
+  - contracts: seven fixtures for the two doors, plus `index-activity-response.rosetta-27.json`; `timeline-read.test.ts`;
+  - fieldd `index-activity-doors`: the route, the floor behind a scripted 404, withheld → partial, a stranger session never a lane, no `seq` to a peer, no identity file written, NOT_FOUND `no-record`, a silent rosettad `unavailable` in under 2 s;
+  - fieldd `agent-monitor`: the hosted join keeps our gone run and drops a stranger;
+  - field-app `godview-monitor-history` 20 (15 as first gated; five with the two fixes, each red on its parent);
+  - field-app `godview-monitor` 75: the marker's four rows, and one `capabilities` object across model publishes while the past is unchanged.
+- Red-proofs:
+  - `keepPast` removed from the hook (3 cases);
+  - the narrowing disabled (the peer-desktop case);
+  - puppeteer's v1 rule restored, every session without a row ended (2 cases);
+  - the marker's two facts forced to `absent` and 0;
+  - the identity row, three ways: the stage's memo dropped, the held spawn menu dropped, the lent history keyed on the rows;
+  - the two rungs, one product mutant each: the hook lends nothing; a `no-record` refusal read as "not now".
+- `smoke:godview` (offscreen), new module `testing/timeline-past-rungs.ts`, after Jump to:
+  - `timelinePast`, on the smoke's real rosettad: `agent.recordedLanes` answers `complete`, fidelity `turns`, with the run Jump to ended as one lane (`past:<agent>:<native id>`). The stage's marker says `history: complete`, `endedLanes: 1`.
+  - `timelineNoRecord`, with `FIELDD_ROSETTAD_BIN` unset: the door refuses NOT_FOUND `no-record` ("this desktop keeps no record of past runs"). Every marker for 3 s says `absent`, 0.
+- Captures (`pnpm capture:godview`; A main `8f58019e`, B `ad1879de`; history absent; n = 20, both themes, five views): list, timeline and spend differ by 0 pixels in 12 captures; swarm and rain are inside their own A/A in 8 (`/Volumes/SamsungRed/lanes/land2/captures/summary.md`).
+
+**Validation:**
+- Lane land2's `gate.sh` on `ad1879de`, the combined tree before the window's two fixes (2026-10-10, 11:21–11:33): `verify.log` **EXIT 0**, `smoke.log` EXIT 0, `smoke-godview.log` EXIT 0. The no-record pass `logs/smoke-godview-norecord.log`: EXIT 0.
+- `pnpm siblings:pin rosetta` and `pnpm siblings:pin puppeteer`, each EXIT 0: rosettad built from the pinned checkout, wall R23 green (10 catalog rows honoured by both pins), `pnpm typecheck` green for 25 projects.
+- Not gated alone:
+  - the TL commits `abe27b53`→`2feaea93` sit on a lock whose rosetta has no activity route until `4808a9e4`;
+  - `18a9d81e` does not typecheck alone, because its consumers move in the commits after it.
+- Lane tl's own gate before the chain: `76e04491` on main `8f58019e`, verify, smoke and smoke:godview EXIT 0. One earlier verify stopped in biome's step; `357b50c7` fixed it.
+- **The landed tree is the gated tree.** Main took `0e020306` by a fast-forward at 18:40 on 2026-10-10 (01:40 UTC on 10-11), sha for sha, with puppeteer's and rosetta's mains in the same minute (`draft/history-finish/land-wave2.sh`, every guard green). No gate ran again on main.
+- **Lane land2's gate on `0e020306`** (`lanes/land2/gate2.sh`, 18:26–18:39, Nx cache off, so the window's two fixes were typechecked here for the first time):
+  - `pnpm verify` **EXIT 0**; `pnpm smoke` EXIT 0.
+  - `pnpm smoke:godview` with the lane's rosettad at `2a91bf0`: EXIT 0. The past rung read the door `complete` at fidelity `turns`, `history: complete` and one ended lane, the run Jump to had just ended.
+  - The no-record pass (`FIELDD_ROSETTAD_BIN` unset): **run 1 EXIT 2, run 2 EXIT 0.** Run 2's rung read the door's NOT_FOUND `no-record`, `history: absent`, no ended lane, and 8 markers over 3 s.
+  - Run 1's red was not the past rung. It was the frame line's send step: "the routed pane did not create /tmp/fr2….txt", the pane's own Return after a paste not running the command inside 10 s. The same step passed in the with-record pass on the same tree minutes before, and it failed the same way in lanes pj2 (10-07), peek and jump (10-08), before any of this chain existed. The log is kept as `lanes/land2/logs/smoke-godview-norecord-red1.log`.
+- The paired perf in VibeField's window, the MV lead's: `perf2`, `first1`, `splitV-1`, `splitH-1`, `fixH-1` in `/Volumes/SamsungRed/lanes/tlv/logs/vf-ab-ad1879de/`, each EXIT 0 with its audit EXIT 0; the rows are under Found. The reading of record on `0e020306`, `/Volumes/SamsungRed/lanes/tlv/logs/vf-ab-0e020306/`: proof, proof-audit, perf, perf-audit and captures each EXIT 0, `R7 VERDICT (perf): pass`, JOB EXIT 0 (2026-10-11 01:26 UTC).
+
+**Found:**
+- v1 drew every recorded session without a row as an ended lane. That would have shown an agent running in another terminal app as an ended, faint lane (v2 item 7).
+- The SDK's slot keeps a view's capabilities while their members are the same objects (`keepRecord`). So a view's input alone cannot show whether the stage rebuilt the record it hands over; the identity row reads the prop.
+- **The paired perf read the first combined tree worse on one cell, and what could be shown of the cost was the window's.** The MV lead's runs, each R = 7, both arms on the model with no rosettad (logs in `/Volumes/SamsungRed/lanes/tlv/logs/vf-ab-ad1879de/`):
+  - `perf2`, every view, A main `8f58019e` (puppeteer `594d222`) against B `ad1879de` (`c20a07d`): 11 of 12 cells level. Timeline × n10 read worse by M40's literal rule: script 76.30 → 78.53 ms/s, T +2.69 (3.5 % of A), z 8.3, null arm −1.36. Frame p50, p95 and long frames did not move in any cell.
+  - `first1`, the timeline alone with n20 before n10: n10 still read worse when it ran second (task 114.78 → 117.71 ms/s, T +2.61, z 4.4) and the first cell carried nothing. So it is not a cost paid once at the timeline's first mount.
+  - By React root, across both runs: the view's own root is level in all five timeline cells (every z below 1). The host's root renders +0.70 to +1.16 ms/s more only while the timeline is mounted, 12 to 20 µs a commit, with commits unchanged.
+  - Three pairs to split it (`splitV` main's host over the new view; `splitH` that against B; `fixH` that against `0e020306`): the task totals could size nothing, because the same build against itself read −6.46 and −4.14 ms/s at n10. Per root: the view adds no frame work (rAF −0.06 ms/s twice) and its root shows nothing past z 2.3; the host's root reads +0.43 at n10 (z 4.3, all seven rounds positive) and +0.96 at n20 without the fix, and −0.43 and +0.21 with it. About +0.2 ms/s of fixed hooks is left.
+  - **The reading of record, main against `0e020306`, R = 7 over every view: PASS by M40's literal rule.** No gate row reads worse, noisy or shifted in the 12 cells. Timeline × n10, the row that was red: task 125.92 → 122.88 ms/s, T −1.87 (z 1.6); script T −1.40 (z 2.5). The host's root at n10: +0.17 ms/s (z 1.0), where it had been +0.43 (z 4.3).
+    - One of the 21 launches was disturbed: main's, in round 5, ended at a one-minute load of 108. That favours the new tree. With that round left out afterwards no gate row clears the rule either.
+    - The full rows, and the marks on rows the gate does not read, are in the view half's account above.
+  - Read in the code: `useMonitorHistory` rebuilt a key of every agent row's `statusSince` on each render of the monitor while the timeline was mounted, also after the door had said `no-record`. In the perf lab that key changes on every publish, so each host commit also re-ran the watch effect. Neither existed on main.
+  - `6621037b`: the key is a memo on the rows' identity and is undefined while nothing watches, so the effect's dependency does not move.
+- A view that began to ask after the monitor was mounted read the record twice. Godview opens on the swarm; switching to the timeline read at once, and again 30 s later with nothing moved. The watch's baseline was the empty key from before it asked, so every row read as arrived. The second answer changed nothing on screen (`keepPast` held the object); it cost one `agent.recordedLanes` per switch. Fixed in `6621037b`.
+- A run's leaving could lose its re-read (v2 item 8 says an ended lane appears "in a second, not thirty"). The timer lived in the watch effect's cleanup, so the next change of the rows' key cleared it. When another agent's status changed inside that second, the read was dropped (that agent has no lane in the record) or put off to the 30 s floor (its status had passed its seam). Fixed in `0e020306`. No test had two agents.
+- The paired perf's own spread was larger than the effect in two of the split's pairs: one build read 120.89 ms/s in a pair's second slot and 126.12 and 127.58 in the first. The load before that job was Spotlight indexing the two perf trees built minutes earlier (`mdutil -s /Volumes/SamsungRed`: indexing enabled; `mds`, `mds_stores` and `mdworker_shared` at the top of `ps`, load 60).
+- A lab launch can time out "waiting for the terminal deck to open a pane". It was seen twice, once per tree: one capture launch of B (1 of 4; B passed alone and the pair was run again), and one perf launch of A′, main's own code, at load 8.6. So it predates this chain. The lab's timeout prints no last deck state, so neither lead can name the cause.
+- A smoke in a fresh lane before any cargo build exits 1 in 22 s with no reason line.
+- rosetta's `cargo test` leaves four untracked `crates/*/bindings/` folders.
+- puppeteer's `pnpm format:check` is red at the pin on `scripts/capture-swarm-states.mjs` alone, a file this work did not touch.
+- The MV lead's optional ask (f), a perf-lab switch that lends a history, was skipped: the past door sits over the deck's real client (`GodviewDeck.tsx:1140`), so a lab-lent history needs product code. The identity test stands in.
+
+**Owed:**
+- With James, not decided by this landing: TV-1…TV-8 on the MV lead's page *The Timeline's Past*. The view is built at every lean. A pick that changes pixels is a follow-up puppeteer commit and one more EL8 pin.
+  - TV-7 (sessions VibeField never ran) and TV-8 (opening an ended lane in History) are among them.
+- Also open with James, from P2: GV-D5, whether Godview's filter persists.
+- The no-record rung stays out of the default gate (M21). One run has one configuration, so with rosettad present the rung reports "unavailable" with its reason. It runs as a second pass at a landing that touches the past door.
+- Built for this desktop only (B-D4). The past for other desktops and for the phone (B-D5) is later.
+- The lab's deck timeout should print the last deck state (`godview-lab-window.ts`, `waitForLabDeck`), so the launch flake above can be named.
+- `smoke:godview`'s line-send step is intermittent: four sightings since 10-07, one in this gate (Validation). The pane's Return after a paste needs its own look.
+- `useMonitorHistory` stamps `device.self` when an answer arrives (`snapshotFrom(answer, hereRef.current)`). If this desktop's id is not known at that moment, its ended lanes wear a peer's mark until the next read. Read in the code by the MV lead, not witnessed.
+- With James: Spotlight indexes the SSD the lanes and perf trees live on, so each new tree loads the machine for minutes. Turning indexing off for the volume, or excluding `lanes/`, is his setting.
+- The perf lab measures no lent history: both arms run the `no-record` door. With a record the window walks the rows once per publish and its watch runs when a status moves; that path has no reading.
+- Petition (rosetta): a `.gitignore` line for `crates/*/bindings/`.
+- Nothing is pushed in any repo. The pins `2a91bf0` and `c20a07d` are on no remote branch, so the lock cannot fetch them elsewhere.
