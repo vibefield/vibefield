@@ -448,15 +448,24 @@ export async function historyByProjectPhotos(
   // press at the control's centre, sent into this window's page — the
   // smoke's own window, never the OS's input
   const pointAt = async (selector: string): Promise<void> => {
-    const at = JSON.parse(
-      String(
-        await win.webContents.executeJavaScript(`(() => {
-          const r = ${HISTORY_ROOM}?.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect();
-          return JSON.stringify(r ? { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } : null);
-        })()`),
-      ),
-    ) as { x: number; y: number } | null;
-    if (at === null) throw new Error(`nothing to press at ${selector}`);
+    // where the control rests: a column still sliding in (③'s worktree)
+    // moves it under the press, so the same centre twice, 150 ms apart
+    const centre = `(() => {
+      const r = ${HISTORY_ROOM}?.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect();
+      return r && r.width > 0 ? Math.round(r.left + r.width / 2) + "," + Math.round(r.top + r.height / 2) : "";
+    })()`;
+    let last = "";
+    let resting = "";
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline && resting === "") {
+      const now = String(await win.webContents.executeJavaScript(centre));
+      if (now !== "" && now === last) resting = now;
+      last = now;
+      await sleep(150);
+    }
+    if (resting === "") throw new Error(`nothing at rest to press at ${selector} (${last})`);
+    const [x, y] = resting.split(",").map(Number);
+    const at = { x: x ?? 0, y: y ?? 0 };
     win.webContents.sendInputEvent({ type: "mouseMove", x: at.x, y: at.y });
     win.webContents.sendInputEvent({
       type: "mouseDown",
