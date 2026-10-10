@@ -8,7 +8,12 @@
  * drew before (rosetta's app, the reference host, passes none). Lane pj4 codes
  * the adapter against these shapes.
  */
-import { HistoryRoom, type HistoryRoomHandle, type HistoryRoomProps } from "@rosetta/room";
+import {
+  HistoryRoom,
+  type HistoryRoomHandle,
+  type HistoryRoomProps,
+  type RoomSelection,
+} from "@rosetta/room";
 import { createDemoPorts, createRoomDemo } from "@rosetta/room/fixtures";
 import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -244,5 +249,106 @@ describe("R3 — sections over the lists", () => {
     await until(() => sessionList(el)?.querySelector("[data-motion-key='s0']"), "②'s rows");
     expect(el.querySelector(".ah-section, .ah-fold")).toBeNull();
     expect(drawn(ledger(el)).sort()).toEqual(["p0", "p1", "p2", "p3", "p4", "p5"]);
+  });
+});
+
+const sessionRowOf = (el: HTMLElement, id: string) =>
+  el.querySelector<HTMLElement>(`.ah-session-list-item[data-motion-key="${id}"]`);
+
+describe("R4 — a session row's id slot, its act or reason, and the host's key", () => {
+  it("given, the id slot is the host's, the act sits before the time, and the host key rides the selection", async () => {
+    const pressed: string[] = [];
+    const selections: (RoomSelection | null)[] = [];
+    const { el } = await room({
+      onSelect: (selection) => selections.push(selection),
+      sessionRow: (session) =>
+        session.id === "s0"
+          ? {
+              hostKey: "mac:s0",
+              id: (
+                <>
+                  <i data-host-mark="" />
+                  …/vibe-field
+                </>
+              ),
+              idTitle: "~/Projects/vibe-field",
+              act: {
+                key: "resume",
+                label: "Resume this session",
+                content: "Resume",
+                onPress: () => pressed.push("s0"),
+              },
+            }
+          : session.id === "s1"
+            ? { hostKey: "studio:s1", reason: "asleep" }
+            : null,
+    });
+    act(() => projectRow(el, "p0")?.click());
+    const s0 = await until(() => sessionRowOf(el, "s0"), "s0's row");
+    // a row with an act is a box: one button covers it, the act sits above, and no button holds another
+    expect(s0.tagName).toBe("DIV");
+    expect(el.querySelector("button button")).toBeNull();
+    const hit = s0.querySelector<HTMLButtonElement>(":scope > button.ah-session-list-item__hit")!;
+    expect(hit.getAttribute("aria-label")).toContain("One frame for four views");
+    const slot = s0.querySelector<HTMLElement>(".ah-session-list-item__native-id[data-host]")!;
+    expect(slot.querySelector("[data-host-mark]")).not.toBeNull();
+    expect(slot.textContent).toBe("…/vibe-field");
+    expect(slot.title).toBe("~/Projects/vibe-field");
+    const end = s0.querySelector(".ah-session-list-item__footer > .ah-session-list-item__end")!;
+    const actButton = end.firstElementChild as HTMLButtonElement;
+    expect(actButton.matches("button.ah-hostact[data-place='row'][data-act='resume']")).toBe(true);
+    expect(actButton.textContent).toBe("Resume");
+    expect(actButton.getAttribute("aria-label")).toBe("Resume this session");
+    expect(end.lastElementChild?.className).toBe("ah-last");
+    // pressing the act is the host's alone: the selection does not move
+    act(() => actButton.click());
+    expect(pressed).toEqual(["s0"]);
+    expect(selections.at(-1)).toBeNull();
+    // pressing the row selects it, with the host's key passed through untouched
+    act(() => hit.click());
+    await until(() => selections.at(-1)?.sessionId === "s0", "s0 selected");
+    expect(selections.at(-1)).toEqual({
+      sessionId: "s0",
+      nativeSessionId: "native-claude-0",
+      folder: "/Users/demo/Projects/vibe-field",
+      hostKey: "mac:s0",
+    });
+    expect(s0.classList.contains("is-selected")).toBe(true);
+    expect(hit.getAttribute("aria-current")).toBe("true");
+    // a reason with no act keeps the row one button, the reason before the time
+    const s1 = sessionRowOf(el, "s1")!;
+    expect(s1.tagName).toBe("BUTTON");
+    expect(
+      s1.querySelector(".ah-session-list-item__end > .ah-session-list-item__reason")?.textContent,
+    ).toBe("asleep");
+    act(() => s1.click());
+    await until(() => selections.at(-1)?.sessionId === "s1", "s1 selected");
+    expect(selections.at(-1)?.hostKey).toBe("studio:s1");
+    // a row the host leaves alone is the room's own
+    const s2 = sessionRowOf(el, "s2")!;
+    expect(
+      s2.querySelector(".ah-session-list-item__native-id:not([data-host]) > span")?.textContent,
+    ).toBe("native-codex-2");
+    expect(s2.querySelector(".ah-session-list-item__end")).toBeNull();
+  });
+
+  it("absent, every row is one button with its native id, and the selection carries no host key", async () => {
+    const selections: (RoomSelection | null)[] = [];
+    const { el } = await room({ onSelect: (selection) => selections.push(selection) });
+    act(() => projectRow(el, "p0")?.click());
+    const s0 = await until(() => sessionRowOf(el, "s0"), "s0's row");
+    for (const row of el.querySelectorAll(".ah-session-list-item"))
+      expect(row.tagName).toBe("BUTTON");
+    expect(
+      el.querySelector("[data-host], .ah-hostact, .ah-session-list-item__end, [data-host-act]"),
+    ).toBeNull();
+    act(() => s0.click());
+    await until(() => selections.at(-1)?.sessionId === "s0", "s0 selected");
+    expect(selections.at(-1)).toEqual({
+      sessionId: "s0",
+      nativeSessionId: "native-claude-0",
+      folder: "/Users/demo/Projects/vibe-field",
+    });
+    expect("hostKey" in (selections.at(-1) ?? {})).toBe(false);
   });
 });
