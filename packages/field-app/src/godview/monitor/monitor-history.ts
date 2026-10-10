@@ -5,6 +5,7 @@ import { projectColourFor } from "@vibecook/puppeteer-view-sdk/toolkit";
 import type { MonitorPalette } from "@vibecook/puppeteer-views";
 import type { AgentRecordedLanesResult } from "@vibefield/contracts";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { sdkOsMark } from "./model-board";
 
 // TL (docket v9, RULED 2026-10-09; B-D6 (a)) — THE RECORD'S PAST, LENT TO A
 // VIEW (capability `history`). The backend beside the runtime derives each
@@ -33,7 +34,9 @@ export interface RecordedLanesPort {
 }
 
 /** The backend's answer as the view's capability: `device.self` said by this
- * reader (it never travels), each ended lane coloured with the theme. */
+ * reader as it says it for the model's rows (`modelRowFrom`: it never travels),
+ * the OS mark kept only when it is the SDK's word, each ended lane coloured with
+ * the theme. */
 export function historyForView(
   answer: AgentRecordedLanesResult,
   here: string | undefined,
@@ -46,8 +49,8 @@ export function historyForView(
       device: {
         id: lane.device.id,
         name: lane.device.name,
-        ...(lane.device.os !== undefined ? { os: lane.device.os as never } : {}),
-        self: here === undefined || lane.device.id === here,
+        ...(sdkOsMark(lane.device.os) !== undefined ? { os: sdkOsMark(lane.device.os) } : {}),
+        self: lane.device.id === here,
       },
     })),
   };

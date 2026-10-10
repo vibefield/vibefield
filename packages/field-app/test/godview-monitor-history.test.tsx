@@ -64,7 +64,7 @@ const ANSWER = AgentRecordedLanesResult.parse({
     {
       id: "past:claude:nat-peer",
       project: { name: "" },
-      device: { id: "01JPEER", name: "Laptop" },
+      device: { id: "01JPEER", name: "Laptop", os: "an-os-this-build-has-no-mark-for" },
       startedAt: NOW - 2 * HOUR,
       endedAt: NOW - HOUR,
       spans: [{ kind: "active", from: NOW - 2 * HOUR, to: NOW - HOUR }],
@@ -170,9 +170,12 @@ describe("the window asks the backend's door only while a mounted view asks (PF6
     const history = last()!;
     expect(history.fidelity).toBe("bounds");
     const colourFor = projectColourFor(PALETTE);
-    expect(history.ended.map((lane) => [lane.id, lane.colour, lane.device.self])).toEqual([
-      ["past:claude:nat-today", colourFor(3), true],
-      ["past:claude:nat-peer", colourFor(undefined), false],
+    // `self` and the OS mark are said as the model's rows say them (`modelRowFrom`)
+    expect(
+      history.ended.map((lane) => [lane.id, lane.colour, lane.device.self, lane.device.os]),
+    ).toEqual([
+      ["past:claude:nat-today", colourFor(3), true, "mac"],
+      ["past:claude:nat-peer", colourFor(undefined), false, undefined],
     ]);
   });
 

@@ -82,6 +82,11 @@ export function isTerminalBoardRow(row: AgentModelBoardRow): row is AgentDeskTer
   return row.kind === "terminal" && !("status" in row);
 }
 
+/** A wire OS word as the SDK's mark, kept only when it is one of the SDK's words. */
+export function sdkOsMark(os: string | undefined): DeviceOs | undefined {
+  return os !== undefined && SDK_OS.has(os) ? (os as DeviceOs) : undefined;
+}
+
 /** The wire row as the SDK's row, with the reader's one fact joined. The wire
  * mirrors the SDK field for field (fieldd parses real backend rows through the
  * contract); the OS mark is kept only when it is one of the SDK's words.
@@ -92,7 +97,7 @@ export function isTerminalBoardRow(row: AgentModelBoardRow): row is AgentDeskTer
  * carries the fact and no view derives write policy. */
 export function modelRowFrom(wire: WireMonitorRow, here: string | undefined): MonitorAgentRow {
   const { os, ...device } = wire.device;
-  const marked = os !== undefined && SDK_OS.has(os) ? (os as DeviceOs) : undefined;
+  const marked = sdkOsMark(os);
   return {
     ...wire,
     writable: wire.writable ?? wire.attachable,
