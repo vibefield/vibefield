@@ -6,7 +6,13 @@
 // silhouette. No GPU.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { eyeOf } from "@vibefield/plugin-sdk/desk";
+import {
+  createSight,
+  type Entity,
+  eyeOf,
+  kindPalette,
+  type SlotContext,
+} from "@vibefield/plugin-sdk/desk";
 import { describe, expect, it } from "vitest";
 import {
   BROWSER,
@@ -36,8 +42,8 @@ import {
   Pane,
   PaneUniforms,
   pageDemand,
-  pageOnBox,
   pagePoint,
+  pageRect,
   paneDemand,
   paneFinish,
   paneLook,
@@ -440,10 +446,25 @@ describe("resizing and the stream", () => {
   });
 });
 
-describe("the live page SEEN where it is drawn — its page on the slot's box (PT-2)", () => {
-  it("is seen while any of its page meets the box, and not once it lies past it — whatever its reach still prepares", () => {
+describe("the live page SEEN where it is drawn — its page's rect told whole, the sight meeting the slot's box (PT-2; ICE I50)", () => {
+  it("the pass tells the page's own rect — its centre under the head, the extents that cover it", () => {
     const { G, rect } = pane("laptop", 400, 300);
     const S = G.shape;
+    expect(pageRect(G)).toEqual({
+      cx: rect.cx + S.page[0],
+      cy: rect.cy + S.page[1],
+      w: 2 * S.page[2],
+      h: 2 * S.page[3],
+    });
+    // the page is the pane less its border and its head: smaller, and lower
+    expect(pageRect(G).w).toBeLessThan(rect.w);
+    expect(pageRect(G).cy).toBeGreaterThan(rect.cy);
+  });
+
+  it("is seen while any of its page meets the box, and not once it lies past it — whatever its reach still prepares (the pane's own clip is gone: ICE's sight holds this)", () => {
+    const { G, rect } = pane("laptop", 400, 300);
+    const S = G.shape;
+    const face = pageRect(G);
     // the page's world rect, as the pane lies flat
     const px0 = rect.cx + S.page[0] - S.page[2];
     const px1 = rect.cx + S.page[0] + S.page[2];
@@ -453,19 +474,27 @@ describe("the live page SEEN where it is drawn — its page on the slot's box (P
       zoom,
       width: 1200,
       height: 800,
+      dpr: 2,
     });
+    /** What ICE's sight says of the page after a frame whose one slot was told it, as the pass tells it. */
+    const seen = (v: object): boolean => {
+      const sight = createSight();
+      sight.saw(1 as Entity, { view: v } as unknown as SlotContext, face);
+      sight.step();
+      return sight.of(1 as Entity)?.seen === true;
+    };
     // the view over the pane: seen
-    expect(pageOnBox(G, view(rect.cx - 600, rect.cy - 400))).toBe(true);
+    expect(seen(view(rect.cx - 600, rect.cy - 400))).toBe(true);
     // the page's right edge just past the view's left: unseen (a shadow and a glow still reach in — the pass prepares it)
-    expect(pageOnBox(G, view(px1 + 1, rect.cy - 400))).toBe(false);
-    expect(pageOnBox(G, view(px1 - 1, rect.cy - 400))).toBe(true);
+    expect(seen(view(px1 + 1, rect.cy - 400))).toBe(false);
+    expect(seen(view(px1 - 1, rect.cy - 400))).toBe(true);
     // at a zoom of 2 the view spans 600 world units: its left edge at the view's right edge is past it, a unit in is seen
-    expect(pageOnBox(G, view(px0 - 600 + 1, rect.cy - 200, 2))).toBe(true);
-    expect(pageOnBox(G, view(px0 - 600, rect.cy - 200, 2))).toBe(false);
+    expect(seen(view(px0 - 600 + 1, rect.cy - 200, 2))).toBe(true);
+    expect(seen(view(px0 - 600, rect.cy - 200, 2))).toBe(false);
     // a slot's own box (a mini mat's face): the page must meet THAT, not the attachment
-    expect(
-      pageOnBox(G, { ...view(rect.cx - 600, rect.cy - 400), box: { x: 0, y: 0, w: 10, h: 10 } }),
-    ).toBe(false);
+    expect(seen({ ...view(rect.cx - 600, rect.cy - 400), box: { x: 0, y: 0, w: 10, h: 10 } })).toBe(
+      false,
+    );
   });
 });
 
@@ -564,10 +593,12 @@ describe("the records and the shader", () => {
 
   it("a pane's record carries its geometry, its own eye, its glass, its page and its head's raster split by name", () => {
     const { S, G } = pane("laptop");
-    const look = paneLook({
-      canvasBg: { token: "t", css: "#fafafa" },
-      select: { token: "t", css: "#4a90d9" },
-    });
+    const look = paneLook(
+      kindPalette({
+        canvasBg: { token: "t", css: "#fafafa" },
+        select: { token: "t", css: "#4a90d9" },
+      }),
+    );
     const v = paneValues({
       geometry: G,
       finish: paneFinish(look, "float"),
@@ -600,10 +631,12 @@ describe("the records and the shader", () => {
 
   it("every glass has a finish in the theme, each an edge colour over a path", () => {
     expect([...PANE_FINISHES]).toEqual(["low-iron", "float", "smoke", "bronze"]);
-    const look = paneLook({
-      canvasBg: { token: "t", css: "#fafafa" },
-      select: { token: "t", css: "#4a90d9" },
-    });
+    const look = paneLook(
+      kindPalette({
+        canvasBg: { token: "t", css: "#fafafa" },
+        select: { token: "t", css: "#4a90d9" },
+      }),
+    );
     for (const n of PANE_FINISHES) {
       const f = paneFinish(look, n);
       expect(f.edge.every((c) => c >= 0 && c <= 1)).toBe(true);

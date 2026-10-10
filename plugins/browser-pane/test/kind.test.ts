@@ -120,7 +120,7 @@ describe("the browser pane's kind, judged by the kind-conformance harness WITH t
 });
 
 const lamp = lampOf(DEFAULT_GRID.mat.plane);
-const look = paneLook(productPalette.light);
+const look = paneLook(kindPalette(productPalette.light));
 const theme = { name: "light" } as ObjectContext["theme"];
 const ctxOf = (props: Record<string, unknown>, extra: Partial<ObjectContext> = {}): ObjectContext =>
   ({

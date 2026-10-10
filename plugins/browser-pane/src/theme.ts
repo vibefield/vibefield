@@ -9,13 +9,13 @@
 // float glass (the green edge iron gives it), a grey smoke, a bronze. None is a DESIGN.md token yet: the material book
 // moves first (BROWSER.md Q-10).
 //
-// THE CAST: the colour a shadow casts on the mat is the desk's (ICE `MAT_COLORS.cast` — the tree-shadow design's
-// `--cast-rgb`), which the SDK's door does not carry (PT-1 ruling 10). The pane keeps a COPY here, named for its
-// source, until the cast is a palette role (the ask: I46) — the comment pad draws its shadow black instead.
+// THE CAST: the colour a shadow casts on the mat is the DESK's — a role of the palette a kind's `theme` is handed
+// (`KindPalette.cast`, ICE I46 since `0.16.0-portals.4`: the tree-shadow design's `--cast-rgb`). The pane reads it there
+// and keeps no copy (PT-1 ruling 10's copy, retired at PT-5a).
 //
 // The same colours by day and by night: the LIGHT changes (the Moon, the night's chain — the kit's).
 
-import { type Palette, type RGB, rgb, type TokenRef } from "@vibefield/plugin-sdk/desk";
+import { type KindPalette, type RGB, rgb, type TokenRef } from "@vibefield/plugin-sdk/desk";
 import { PANE_FINISHES, type PaneFinishName } from "./ids";
 import type { PaneFinish, PaneLookValues } from "./layout";
 
@@ -29,7 +29,6 @@ export interface PaneTokens {
   readonly finishes: Readonly<Record<PaneFinishName, FinishToken>>;
   readonly panelOff: TokenRef;
   readonly frost: TokenRef;
-  readonly cast: TokenRef;
   readonly sky: TokenRef;
   readonly leaves: TokenRef;
   readonly room: TokenRef;
@@ -37,8 +36,9 @@ export interface PaneTokens {
   readonly nightLeaves: TokenRef;
 }
 
-/** A host's palette as the pane reads it: its `select` (the loading line), and optionally its own dress for the pane. */
-export interface BrowserPanePalette extends Palette {
+/** A host's palette as the pane reads it: its `select` (the loading line), its `cast` (the shadow's colour on the mat), and
+ * optionally its own dress for the pane. */
+export interface BrowserPanePalette extends KindPalette {
   readonly browserPanes?: PaneTokens;
 }
 
@@ -62,10 +62,6 @@ export const BROWSER_PANE_PALETTE: PaneTokens = {
   },
   panelOff: t("a page's film with nothing on it (the phone's black, a hair lifted)", "#08090b"),
   frost: t("sandblasted glass (a pale grey-white)", "#e4e6e2"),
-  cast: t(
-    "the mat's cast — a copy of ICE MAT.cast (tree-shadow --cast-rgb) until the desk lends it (I46)",
-    "#0e1a0a",
-  ),
   sky: t(
     "the day's sky over the desk, mirrored (a pale, slightly cool white — the phone's)",
     "#dfe7ee",
@@ -93,7 +89,7 @@ export function paneLook(palette: BrowserPanePalette): PaneLookValues {
   }
   const c = (token: TokenRef): RGB => rgb(token.css);
   return {
-    cast: c(own.cast),
+    cast: rgb(palette.cast.css),
     panelOff: c(own.panelOff),
     frost: c(own.frost),
     progress: rgb(palette.select.css),

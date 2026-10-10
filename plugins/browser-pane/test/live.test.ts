@@ -12,6 +12,7 @@ import {
   type Entity,
   type HeldEvent,
   type KindHost,
+  kindPalette,
   LIVE,
   type LiveDemand,
   type LiveFace,
@@ -404,7 +405,7 @@ describe("the pane's live page — its faces", () => {
 });
 
 const lamp = lampOf(DEFAULT_GRID.mat.plane);
-const look = paneLook(productPalette.light);
+const look = paneLook(kindPalette(productPalette.light));
 const ctxOf = (props: Record<string, unknown>, local: unknown): ObjectContext =>
   ({
     entity: 1 as Entity,

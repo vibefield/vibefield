@@ -75,7 +75,7 @@ export interface PaneFinish {
 
 /** The pane's colours as the knobs take them (theme.ts `paneLook`). */
 export interface PaneLookValues {
-  /** The colour a shadow casts on the mat by day (the mat's cast — a plugin's copy until the desk's is a palette role: ask I46). */
+  /** The colour a shadow casts on the mat by day — the desk's, read off the palette's `cast` role (ICE I46). */
   readonly cast: RGB;
   readonly panelOff: RGB;
   readonly frost: RGB;
