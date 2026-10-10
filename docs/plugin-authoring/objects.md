@@ -795,6 +795,12 @@ export interface HeldToolDef {
     readonly bar?: boolean;
     /** An action's op. */
     run?(api: HeldToolApi): void;
+    /**
+     * Its STATE NOW (petition I49 — `HeldToolState`): asked with the anchor, as the kind's `open.readout` is, and when the tool is used.
+     * Undefined — or absent — the tool as declared. One that THROWS is caught where it is asked (the desk says so once, never a strike):
+     * the tool stands as declared.
+     */
+    state?(ctx: HeldToolStateContext): HeldToolState | undefined;
 }
 /**
  * A held tool's GLYPH (design-016 §5 · K-L2, K8a): a NAME the bar draws (its set — `SELECTION_GLYPHS` in `@ice/react`, which an

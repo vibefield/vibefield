@@ -28,6 +28,7 @@ import {
   DESK_OBJECT,
   FIT,
   isObjectKind,
+  kindPalette,
   lod,
   type ObjectContext,
   type ObjectKind,
@@ -970,7 +971,7 @@ function deskFor(
       let had = looks.get(theme);
       if (had === undefined) {
         try {
-          had = { look: kind.theme?.(themes[theme], theme) };
+          had = { look: kind.theme?.(kindPalette(themes[theme]), theme) };
         } catch (error) {
           had = { error: `its theme(palette, "${theme}") threw: ${messageOf(error)}` };
         }

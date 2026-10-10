@@ -35,11 +35,12 @@ import type { WidgetType } from "@vibecook/ice";
 import {
   createStill,
   service,
+  stillLive,
   TEXT_RASTER,
   type TextRaster,
   type ThemeName,
 } from "@vibecook/ice/desk";
-import { LIVE, type LiveSources, stillLive } from "@vibecook/ice/desk/kit";
+import { LIVE, type LiveSources } from "@vibecook/ice/desk/kit";
 import type { ObjectContribution } from "@vibefield/contracts";
 import { buildObjectType } from "@vibefield/field-app/object-types";
 import type { ObjectBinding } from "@vibefield/plugin-sdk";

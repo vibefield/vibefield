@@ -3,14 +3,16 @@
 // (ICE design-016 K-L1 — the SDK is a plugin's only door onto ICE; K-L2 — a plugin kind compiles
 // exactly as one of ICE's six built-ins does, from these same names):
 //
-//  - `@vibecook/ice/desk/kit`, WHOLE but the live face's HOST half — the render kit a kind's pass is
-//    written against: the slot's view and its mat (`MatPass`), the lamp and its light, the kit's WGSL
-//    by name (`kitWgsl`), a container's inside, the finishes, the service keys a kind is lent
-//    (`TEXT_RASTER`, `PICTURE_DECODER`, `BLOB_STORE`, `serviceKey`/`service`), and since PT-2 the
-//    LIVE FACE a kind reads (ICE design-019: `LIVE`, `LiveFace` and its words, `LiveTexture`,
-//    `liveDepth`, `createSight`). Its two host pieces are NOT handed over: `createLiveTexture` (the
-//    writer a host fills on the desk's device) and `stillLive` (a still host's source of committed
-//    bytes) — a kind SAMPLES the texture its host's `LIVE` service fills and never makes one (PA-22).
+//  - `@vibecook/ice/desk/kit`, WHOLE — the render kit a kind's pass is written against: the slot's
+//    view and its mat (`MatPass`), the lamp and its light, the kit's WGSL by name (`kitWgsl`), a
+//    container's inside, the finishes, the service keys a kind is lent (`TEXT_RASTER`,
+//    `PICTURE_DECODER`, `BLOB_STORE`, `serviceKey`/`service`), and since PT-2 the LIVE FACE a kind
+//    reads (ICE design-019: `LIVE`, `LiveFace` and its words, `LiveTexture`, `liveDepth`,
+//    `createSight`). The live face's HOST half — `createLiveTexture` (the writer a host fills on the
+//    desk's device) and `stillLive` (a still host's source of committed bytes) — is not in the kit
+//    since ICE `0.16.0-portals.4` (I51: it lives on `@vibecook/ice/desk`, the host's entry), so this
+//    door hands it to no one without a word of its own: a kind SAMPLES the texture its host's `LIVE`
+//    service fills and never makes one (PA-22).
 //  - `@vibecook/ice/desk/engine` — the raw-WebGPU engine a pass is built with (`compose`/`compile`,
 //    pipelines, `defineStruct`, targets), LESS device acquisition (`acquire`/`adopt`): a kind draws
 //    on the HOST's one device, handed to its `create` (DK-D22 — a plugin gets no device of its own).
@@ -44,6 +46,8 @@ export type {
   HeldGlyph,
   HeldToolApi,
   HeldToolDef,
+  HeldToolState,
+  HeldToolStateContext,
   MenuActionApi,
   MenuActionDef,
   TrayEntry,
@@ -76,8 +80,10 @@ export {
   type KindFault,
   type KindHost,
   type KindLocal,
+  type KindPalette,
   type KindPass,
   type KindProgram,
+  kindPalette,
   MISSING_INK,
   NO_DOCS,
   numberProp,
@@ -142,14 +148,6 @@ export {
   type Visibility,
 } from "@vibecook/ice/desk/engine";
 export * from "@vibecook/ice/desk/kit";
-
-/**
- * THE LIVE FACE'S HOST HALF stays off this door (PT-2): a local export hides a star export's name, so importing either from
- * here is a type error — `undefined` has no call signature — and at run time each is undefined. A host imports them from
- * `@vibecook/ice/desk/kit` itself.
- */
-export const createLiveTexture: undefined = undefined;
-export const stillLive: undefined = undefined;
 
 // docs:begin live-browser-spec
 /**

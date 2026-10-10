@@ -6,7 +6,8 @@
 // PT-4 — the page as a device sees it: the spec's device and scheme are the source's emulation at the mint and an `emulate` told
 // down the lane as it goes live and whenever the spec moves (`respec` — the viewport's demand first); the desk's pages share ONE
 // persistent profile; the favicon rides the face's words (`extra.favicon`); a page is called by its title, else its spec's label.
-import type { LiveDemand, LiveTextureOptions, LiveWriter } from "@vibecook/ice/desk/kit";
+import type { LiveTextureOptions, LiveWriter } from "@vibecook/ice/desk";
+import type { LiveDemand } from "@vibecook/ice/desk/kit";
 import type { LiveSurfaceFrameMetadataV1, LiveSurfaceRuntimeSummaryV1 } from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {

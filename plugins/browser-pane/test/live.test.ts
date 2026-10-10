@@ -199,7 +199,13 @@ function fakeHost(
     /** A frame drawn: the slot's view tells the sight what it drew of `e`'s page, then the count moves. */
     draw(local: ReturnType<typeof createPaneLocal>, e: Entity, zoom: number, target?: "hand") {
       const S = shapeOf(PANE_SIZE);
-      const slot = { view: { zoom, dpr: 2 }, ...(target === undefined ? {} : { target }) };
+      // the slot's whole view, its camera on the face's centre: the sight believes only a face that MEETS the slot's box
+      // (ICE I50, `0.16.0-portals.4` — it clips; the pane's own clip is gone)
+      const [width, height] = [4000, 4000];
+      const slot = {
+        view: { camX: -width / 2 / zoom, camY: -height / 2 / zoom, zoom, width, height, dpr: 2 },
+        ...(target === undefined ? {} : { target }),
+      };
       local.sight.saw(e, slot as unknown as SlotContext, {
         cx: 0,
         cy: 0,

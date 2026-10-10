@@ -1,6 +1,10 @@
 import type { CanvasEngine, WidgetType } from "@vibecook/ice";
-import { type DeskLayerHandle, type DeskLayerStatus, objectKindOf } from "@vibecook/ice/desk";
-import { createLiveTexture } from "@vibecook/ice/desk/kit";
+import {
+  createLiveTexture,
+  type DeskLayerHandle,
+  type DeskLayerStatus,
+  objectKindOf,
+} from "@vibecook/ice/desk";
 import { Desk, type LayerFactory } from "@vibecook/ice/react";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import {

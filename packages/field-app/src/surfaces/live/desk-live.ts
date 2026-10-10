@@ -31,6 +31,7 @@
 //  - THE FAVICON (PT-4 ruling 4): the page's icon rides LSF's browser state; the face's words carry its bytes under
 //    `extra.favicon` (decoded once a key) — `null` where the page has none, absent before the page has said anything.
 
+import type { LiveTextureOptions, LiveWriter } from "@vibecook/ice/desk";
 import type {
   LiveDemand,
   LiveFace,
@@ -39,8 +40,6 @@ import type {
   LiveSources,
   LiveState,
   LiveTexture,
-  LiveTextureOptions,
-  LiveWriter,
 } from "@vibecook/ice/desk/kit";
 import {
   LIVE_SURFACE_FPS_BUCKETS_V1,

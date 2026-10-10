@@ -78,13 +78,14 @@ const PIN_EXPECTATIONS = [
   // exit touched.
   { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.14"/m, label: 'truffle-core = "=0.7.14"' },
   // A PRERELEASE on `next` since PORTALS PT-2 (0.16.0-portals.2 — M24 LT1 + LT2, the live
-  // face and the hand's input; PT-3: 0.16.0-portals.3, LT3's render half contained; DK-18
-  // had pinned 0.15.0 FINAL, the cutover's release): anchored to the line's end, so
-  // `0.16.0-portals.3` never passes for a later `…portals.30`.
+  // face and the hand's input; PT-3: 0.16.0-portals.3, LT3's render half contained; PT-5a:
+  // 0.16.0-portals.4, LT4 — the asks PORTALS found; DK-18 had pinned 0.15.0 FINAL, the
+  // cutover's release): anchored to the line's end, so `0.16.0-portals.4` never passes for
+  // a later `…portals.40`.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ice":\s*0\.16\.0-portals\.3\s*$/m,
-    label: '"@vibecook/ice": 0.16.0-portals.3',
+    re: /"@vibecook\/ice":\s*0\.16\.0-portals\.4\s*$/m,
+    label: '"@vibecook/ice": 0.16.0-portals.4',
   },
   { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.12\.0"/m, label: 'ghosttea = "=0.12.0"' },
   // TM-1 (2026-09-14): the ghosttea-truffle row is GONE with the crate — the TSP1

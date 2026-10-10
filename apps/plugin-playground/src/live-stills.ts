@@ -6,7 +6,7 @@
 // mips — from bytes the plugin owns, never a third party's pixels and never a producer. Absent: no `LIVE` lent, and a live
 // kind draws its film. Authoring-time only, as `states.ts` is: never in a `.vfplugin`.
 
-import type { LiveStill } from "@vibecook/ice/desk/kit";
+import type { LiveStill } from "@vibecook/ice/desk";
 import { type Refusal, refusal } from "./verdict";
 
 export const LIVE_RELATIVE_PATH = "playground/live.ts";

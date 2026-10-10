@@ -8,6 +8,7 @@
  * after the tools, Done.
  */
 import type { HeldToolDef } from "@vibecook/ice";
+import { kindPalette } from "@vibecook/ice/desk";
 import {
   BOARD_TOOLS,
   boardKind,
@@ -44,7 +45,8 @@ const slotsOf = (
       ...(swatches[t.id] !== undefined ? { swatch: swatches[t.id] as string } : {}),
     }));
 
-const palette = deskLook("light").palette;
+// a kind's `theme` takes the palette AS A KIND IS HANDED IT (ICE I46: its cast colour a role of it)
+const palette = kindPalette(deskLook("light").palette);
 const swatchesOf = (look: unknown): Record<string, string> =>
   (look as { swatches: Record<string, string> }).swatches;
 
@@ -278,7 +280,7 @@ describe("what a slot looks like, and where the runs change (§8, R13)", () => {
     expect(slotsKey(NOTEBOOK)).toBe(slotsKey(NOTEBOOK.map((s) => ({ ...s }))));
     const night = slotsOf(
       NOTEBOOK_TOOLS,
-      swatchesOf(notebookKind().theme?.(deskLook("dark").palette, "dark")),
+      swatchesOf(notebookKind().theme?.(kindPalette(deskLook("dark").palette), "dark")),
     );
     const changed = NOTEBOOK.some((s, i) => s.swatch !== night[i]?.swatch);
     expect(slotsKey(night) !== slotsKey(NOTEBOOK)).toBe(changed);

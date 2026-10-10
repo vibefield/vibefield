@@ -13,7 +13,7 @@ import type { ObjectBinding, ObjectContext, ObjectHit, ObjectKind } from "../src
 import * as door from "../src/desk";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-/** The live face's host half (PT-2): ICE's kit has them; the door hides them. */
+/** The live face's host half (PT-2): on ICE's `/desk` since `0.16.0-portals.4` (I51), in no kit — and not through this door. */
 const HOST_HALF = ["createLiveTexture", "stillLive"];
 const SOURCE = readFileSync(join(HERE, "..", "src", "desk.ts"), "utf8");
 
@@ -38,7 +38,6 @@ describe("the SDK's /desk door", () => {
 
   it("hands over the render kit WHOLE, the same bindings ICE's kinds use (one copy) — but the live face's host half", () => {
     for (const name of Object.keys(iceKit)) {
-      if (HOST_HALF.includes(name)) continue;
       expect(door, `kit name ${name}`).toHaveProperty(name);
       expect((door as Record<string, unknown>)[name], name).toBe(
         (iceKit as Record<string, unknown>)[name],
@@ -53,10 +52,11 @@ describe("the SDK's /desk door", () => {
     expect(door.liveDepth).toBe(iceKit.liveDepth);
     expectTypeOf<door.LiveFace>().toEqualTypeOf<iceKit.LiveFace>();
     expectTypeOf<door.LiveTexture>().toEqualTypeOf<iceKit.LiveTexture>();
-    // the host's half is in ICE's kit and NOT through this door
+    // the host's half is on ICE's host entry, in no kit, and NOT through this door (it names neither)
     for (const name of HOST_HALF) {
-      expect(typeof (iceKit as Record<string, unknown>)[name], name).toBe("function");
-      expect((door as Record<string, unknown>)[name], name).toBeUndefined();
+      expect(typeof (iceDesk as Record<string, unknown>)[name], name).toBe("function");
+      expect(iceKit, name).not.toHaveProperty(name);
+      expect(door, name).not.toHaveProperty(name);
     }
     // and a kind reaches a live page's keys, its redraw and the desk's frames through its host
     expectTypeOf<door.KindHost["keyOf"]>().toEqualTypeOf<iceDesk.KindHost["keyOf"]>();

@@ -12,6 +12,7 @@ import {
   type Entity,
   type HeldToolApi,
   isObjectKind,
+  kindPalette,
   lampOf,
   type MenuActionApi,
   type ObjectContext,
@@ -295,7 +296,7 @@ describe("the desk clock's world half", () => {
   it("its look is its own palette's unless the host's names the clocks", () => {
     const k = clockKind();
     const own = k.theme?.(
-      { canvasBg: { token: "x", css: "#000" }, select: { token: "y", css: "#fff" } },
+      kindPalette({ canvasBg: { token: "x", css: "#000" }, select: { token: "y", css: "#fff" } }),
       "light",
     );
     expect(own).toEqual(clockLook());

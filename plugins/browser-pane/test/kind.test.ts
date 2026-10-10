@@ -11,6 +11,7 @@ import {
   defineObject,
   type Entity,
   isObjectKind,
+  kindPalette,
   lampOf,
   type ObjectContext,
   objectKindOf,
@@ -315,7 +316,7 @@ describe("the browser pane's world half", () => {
   });
 
   it("dresses its glass from its props (an unknown finish is low-iron), its loading line the host's selection", () => {
-    const L = k.theme?.(productPalette.light, "light") as PaneLookValues;
+    const L = k.theme?.(kindPalette(productPalette.light), "light") as PaneLookValues;
     const smoke = k.record(
       k.resolve(ctxOf({})),
       ctxOf({ finish: "smoke" }, { look: L }),

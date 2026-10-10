@@ -180,7 +180,16 @@ overrides:
   # `ops` may carry `putDown` (the hand let go when its object's kind goes
   # missing). No API a plugin uses moved; strata 0.13.0 and loro ^1.13.8
   # unchanged.
-  "@vibecook/ice": 0.16.0-portals.3
+  # 2026-10-10 bumped 0.16.0-portals.3 → 0.16.0-portals.4 (PORTALS PT-5a) — on
+  # `next`: ICE `08787d2` (LT4, M24 — the asks PORTALS found). I49: a held
+  # tool says its STATE (`HeldToolDef.state` → enabled / glyph / label, on the
+  # anchor's rows). I50: the sight meets the slot's box (`Sight.saw` clips).
+  # I46: the cast colour is a palette role — a kind's `theme` takes a
+  # `KindPalette` (`kindPalette(palette)`), a compile break for a direct
+  # caller. I51: the live face's HOST half (`createLiveTexture`, `stillLive`)
+  # left `/desk/kit` for `/desk` — the SDK's two shadow exports go with it.
+  # strata 0.13.0 and loro ^1.13.8 unchanged.
+  "@vibecook/ice": 0.16.0-portals.4
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -313,7 +322,7 @@ catalog:
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
-  - '@vibecook/ice@0.16.0-portals.3'
+  - '@vibecook/ice@0.16.0-portals.4'
   - '@vibecook/ghosttea-client@0.12.0'
   - '@vibecook/ghosttea-protocol@0.12.0'
   - '@vibecook/ghosttea-electron@0.12.0'
