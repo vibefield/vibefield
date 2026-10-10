@@ -49,7 +49,12 @@ import {
   monitorParameterDefaults,
   monitorViewFor,
 } from "@vibecook/puppeteer-views";
-import type { AgentPersona, AgentProfileSet, TerminalInfo } from "@vibefield/contracts";
+import {
+  type AgentPersona,
+  type AgentProfileSet,
+  AgentRecordedLanesResult,
+  type TerminalInfo,
+} from "@vibefield/contracts";
 import { act, Profiler } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -63,6 +68,7 @@ import {
   useMonitorFeed,
 } from "../src/godview/monitor/GodviewAgentsProvider";
 import { monitorHoldsKeys } from "../src/godview/monitor/launcher-keys";
+import type { RecordedLanesPort } from "../src/godview/monitor/monitor-history";
 import type { MonitorDoor, ProfileSetsPort } from "../src/godview/monitor/remote-door";
 import { HERE_DEVICE_ID } from "../src/godview/monitor/spawn-menu";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
@@ -2027,6 +2033,147 @@ describe("the spawn menu and the create it asks for (SB-3)", () => {
     await createAt({ x: 10, y: 10 });
     expect(door.createTerminal).toHaveBeenCalledExactlyOnceWith();
     expect(ackText(host)).toBe("terminal opened in the active pane");
+  });
+});
+
+// ---- TL — the record's past on the stage ----------------------------------------
+//
+// `godview-monitor-history.test.tsx` holds the hook: when it reads, what it
+// keeps, how it narrows and recedes. These rows hold what only the mounted
+// STAGE can show: the two facts its marker states of the past it lends
+// (`history`, `endedLanes`) — read off the lent object, never off the view's
+// DOM (MV-5's rule), so a smoke can tell a host that lent nothing from a view
+// that drew nothing.
+
+const pastProbeView = createRecordingView("past-probe", {
+  manifest: { capabilities: { optional: ["history"] } },
+});
+const PAST_PROBE: MonitorViewEntry = {
+  id: "past-probe",
+  label: "PAST",
+  mark: pastProbeView.view.manifest.mark,
+  parameterGroups: [],
+  view: pastProbeView.view,
+};
+
+const PAST_AT = Date.UTC(2026, 9, 9, 12);
+const PAST_HOUR = 60 * 60_000;
+const pastLane = (id: string, hoursAgo: number) => ({
+  id,
+  provider: { id: "claude", label: "Claude Code" },
+  project: { name: "billing-api", seq: 3 },
+  device: { id: "this-device", name: "This Mac", os: "mac" },
+  startedAt: PAST_AT - (hoursAgo + 1) * PAST_HOUR,
+  endedAt: PAST_AT - hoursAgo * PAST_HOUR,
+  spans: [
+    {
+      kind: "bounds",
+      from: PAST_AT - (hoursAgo + 1) * PAST_HOUR,
+      to: PAST_AT - hoursAgo * PAST_HOUR,
+    },
+  ],
+});
+/** Two runs that ended in the day, as `agent.recordedLanes` answers them. */
+const PAST = AgentRecordedLanesResult.parse({
+  sinceMs: PAST_AT - 24 * PAST_HOUR,
+  untilMs: PAST_AT,
+  readAt: PAST_AT,
+  fidelity: "bounds",
+  state: "complete",
+  live: [],
+  ended: [pastLane("past:claude:nat-early", 3), pastLane("past:claude:nat-late", 1)],
+});
+
+/** A door's `pastLanes` answering what the row hands it, its asks counted. */
+function pastPort(
+  answer: () => Promise<AgentRecordedLanesResult>,
+): RecordedLanesPort & { asks: number } {
+  const port = {
+    asks: 0,
+    read: () => {
+      port.asks += 1;
+      return answer();
+    },
+  };
+  return port;
+}
+
+async function mountPastProbe(door: MonitorDoor): Promise<HTMLElement> {
+  syncBoard(PANES);
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  await act(async () => {
+    root?.render(
+      <GodviewAgentsProvider door={door}>
+        <GodviewMonitor view={PAST_PROBE} parameters={{}} door={door} panes={PANES} />
+      </GodviewAgentsProvider>,
+    );
+  });
+  await settle();
+  return container;
+}
+
+describe("the record's past on the stage (TL): what the marker says of it", () => {
+  it("says `absent` and no ended lanes for a view that declares no history, and never asks the door", async () => {
+    const port = pastPort(async () => PAST);
+    await mountProbe(Object.assign(fakeDoor(), { pastLanes: port }));
+    expect(port.asks).toBe(0);
+    expect(latest()).toMatchObject({ viewId: "probe", history: "absent", endedLanes: 0 });
+    expect(probed?.capabilities.history).toBeUndefined();
+  });
+
+  it("says `absent` until the door answers, then the lent past's own state and how many runs ended in it", async () => {
+    let release: (answer: AgentRecordedLanesResult) => void = () => undefined;
+    const waiting = new Promise<AgentRecordedLanesResult>((resolve) => {
+      release = resolve;
+    });
+    const port = pastPort(() => waiting);
+    await mountPastProbe(Object.assign(fakeDoor(), { pastLanes: port }));
+    expect(port.asks).toBe(1);
+    expect(latest()).toMatchObject({ viewId: "past-probe", history: "absent", endedLanes: 0 });
+    await act(async () => release(PAST));
+    await settle();
+    expect(latest()).toMatchObject({ viewId: "past-probe", history: "complete", endedLanes: 2 });
+    // the marker counts what the view was lent, not what it drew
+    expect(pastProbeView.lastInput?.capabilities.history?.ended.map((lane) => lane.id)).toEqual([
+      "past:claude:nat-early",
+      "past:claude:nat-late",
+    ]);
+  });
+
+  it("a desktop that keeps no record (the door's NOT_FOUND `no-record`) stays `absent`", async () => {
+    const port = pastPort(() =>
+      Promise.reject({
+        rpc: {
+          data: { kind: "NOT_FOUND", details: { service: "agent.monitor", state: "no-record" } },
+        },
+      }),
+    );
+    await mountPastProbe(Object.assign(fakeDoor(), { pastLanes: port }));
+    expect(port.asks).toBe(1);
+    expect(latest()).toMatchObject({ viewId: "past-probe", history: "absent", endedLanes: 0 });
+    expect(pastProbeView.lastInput?.capabilities.history).toBeUndefined();
+  });
+
+  it("a record that cannot be read now says `unavailable` with no lanes; one read in part says `partial` with its lanes", async () => {
+    const starting = pastPort(async () => ({
+      ...PAST,
+      state: "unavailable" as const,
+      detail: "The agent index is starting",
+      ended: [],
+    }));
+    await mountPastProbe(Object.assign(fakeDoor(), { pastLanes: starting }));
+    expect(latest()).toMatchObject({ history: "unavailable", endedLanes: 0 });
+    act(() => root?.unmount());
+    container?.remove();
+    const inPart = pastPort(async () => ({
+      ...PAST,
+      state: "partial" as const,
+      detail: "The agent index's turns could not be read; these are its sessions' bounds.",
+    }));
+    await mountPastProbe(Object.assign(fakeDoor(), { pastLanes: inPart }));
+    expect(latest()).toMatchObject({ history: "partial", endedLanes: 2 });
   });
 });
 

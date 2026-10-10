@@ -654,9 +654,22 @@ export function GodviewMonitor({
       usageTiles,
       profileTab: chosenId ?? "all",
       shownAgents: shown.length,
+      history: history?.state ?? "absent",
+      endedLanes: history?.ended.length ?? 0,
       runs,
     });
-  }, [agents, view.id, sources, swarmPhysics, swarmRenderer, usageTiles, chosenId, shown, runs]);
+  }, [
+    agents,
+    view.id,
+    sources,
+    swarmPhysics,
+    swarmRenderer,
+    usageTiles,
+    chosenId,
+    shown,
+    history,
+    runs,
+  ]);
 
   // The stage binds no key of its own any more. FC-D18 (ruled 2026-10-01)
   // removed the counters' ⌘1–⌘3 (⌘1–⌘4 are the frame's views, One Frame FR-1);
