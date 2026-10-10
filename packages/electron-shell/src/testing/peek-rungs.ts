@@ -72,6 +72,55 @@ async function type(win: BrowserWindow, text: string): Promise<void> {
 
 const VIEW_NOW = `(document.querySelector(".vf-views-line")?.getAttribute("data-view") ?? "absent")`;
 
+/** P2 — Live now as the window draws it: whether the popup is open and on
+ * which scope, its live rows (title, state, the floor session a row's pane
+ * is), what the hot row's live peek is doing, and whether the instrument bar
+ * still carries a FIND of its own. */
+export interface LiveNowFacts {
+  open: boolean;
+  scope: string | null;
+  rows: { title: string | null; state: string | null; floor: string | null }[];
+  livePeek: string | null;
+  foot: string | null;
+  inBar: boolean;
+}
+
+export const LIVE_NOW = `(() => {
+  const pop = document.querySelector('.vf-peek-pop[role="dialog"]');
+  const rows = [...(pop?.querySelectorAll('.vf-peek-row[data-kind="live"]') ?? [])].map((row) => ({
+    title: row.querySelector(".vf-peek-title")?.textContent ?? null,
+    state: row.querySelector(".vf-peek-dot")?.getAttribute("data-state") ?? null,
+    floor: row.getAttribute("data-floor-session"),
+  }));
+  return JSON.stringify({
+    open: pop !== null,
+    scope: pop?.getAttribute("data-scope") ?? null,
+    rows,
+    livePeek: pop?.querySelector("[data-live-peek]")?.getAttribute("data-live-peek") ?? null,
+    foot: pop?.querySelector(".vf-peek-said")?.textContent ?? null,
+    inBar: document.querySelector('.vf-godview-header button[aria-label="Find an agent by what was said"]') !== null,
+  });
+})()`;
+
+/** PK2 — Godview's head as drawn: the frame's search button, the bar, and
+ * the bar's last tool beside it, in CSS px (DESIGN.md §8 "Search — the Peek"). */
+const HEAD_NOW = `(() => {
+  const rect = (element) => {
+    if (element === null) return null;
+    const box = element.getBoundingClientRect();
+    return { x: box.x, y: box.y, width: box.width, height: box.height };
+  };
+  const search = rect(document.querySelector(".vf-peek-find"));
+  const bar = rect(document.querySelector(".vf-godview .vf-godview-header"));
+  const tool = rect(document.querySelector('.vf-godview-header [aria-label="System control"]'));
+  return JSON.stringify({
+    window: { width: window.innerWidth, height: window.innerHeight },
+    search, bar, systemControl: tool,
+    gap: search && tool ? search.x - (tool.x + tool.width) : null,
+    overhang: search && bar ? search.y + search.height - (bar.y + bar.height) : null,
+  });
+})()`;
+
 /** The popup's place and the field's recede, as the window draws them now. */
 const PEEK_NOW = `(() => {
   const pop = document.querySelector('.vf-peek-pop[role="dialog"]');
@@ -427,13 +476,25 @@ export async function peekPhotosRung(
     await sleep(500);
     shots.push(await capture(win, join(opts.shotDir, `peek-${theme}.png`)));
   }
-  await win.webContents.executeJavaScript(`window.vibefield.theme.set("auto")`);
   key(win, "Escape");
   await untilValue(win, "Esc folding the photographed Peek", PEEK_NOW, 10_000, (value) => {
     const now = JSON.parse(value) as PeekNow;
     return !now.open && now.recedeTransform === "none";
   });
-  return { word: opts.word, rows: found.rows, shots };
+  // PK2 (a): Godview's head, the frame's search button at its right end
+  // beside System control — photographed and measured in both themes
+  chord(win, "2");
+  await untilValue(win, "⌘2 to Godview", VIEW_NOW, 10_000, (value) => value === "godview");
+  const heads: Record<string, unknown> = {};
+  for (const theme of ["light", "dark"] as const) {
+    await win.webContents.executeJavaScript(`window.vibefield.theme.set(${JSON.stringify(theme)})`);
+    await untilValue(win, `the ${theme} theme`, THEME_NOW, 5_000, (value) => value === theme);
+    await sleep(500);
+    shots.push(await capture(win, join(opts.shotDir, `godview-head-${theme}.png`)));
+    heads[theme] = JSON.parse(String(await win.webContents.executeJavaScript(HEAD_NOW)));
+  }
+  await win.webContents.executeJavaScript(`window.vibefield.theme.set("auto")`);
+  return { word: opts.word, rows: found.rows, shots, heads };
 }
 
 /** Where the Peek's photographs go: the run's own directory when it names

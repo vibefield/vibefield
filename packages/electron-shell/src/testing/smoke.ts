@@ -97,6 +97,8 @@ import {
 } from "./live-surface-lab-contract";
 import { type LoopbackExchange, recordLoopback } from "./loopback-network";
 import {
+  LIVE_NOW,
+  type LiveNowFacts,
   PEEK_SEED_WORD,
   peekGeometryRung,
   peekPhotosRung,
@@ -3807,8 +3809,6 @@ interface MonitorFacts {
   swarmRenderer: string;
   /** AR-5: the usage column's tiles; -1 while no column is mounted. */
   usageTiles: number;
-  /** AR-5: `open` · `closed`. */
-  findSheet: string;
   /** AR-7: the fold's rows, by run, as the stage received them — optional:
    * a stage built before the field existed publishes none, and the typed-agent
    * rows then fail on it by name rather than on a TypeError. */
@@ -4155,6 +4155,23 @@ async function waitForShellMarker(
     await sleep(25);
   }
   throw new Error(`the routed pane did not create ${path}`);
+}
+
+/** P2 — Live now as the window draws it, until `accept` holds. */
+async function untilLiveNow(
+  win: BrowserWindow,
+  accept: (now: LiveNowFacts) => boolean,
+  what: string,
+  timeoutMs: number,
+): Promise<LiveNowFacts> {
+  const deadline = Date.now() + timeoutMs;
+  let seen: LiveNowFacts | null = null;
+  while (Date.now() < deadline) {
+    seen = JSON.parse(String(await win.webContents.executeJavaScript(LIVE_NOW))) as LiveNowFacts;
+    if (accept(seen)) return seen;
+    await sleep(150);
+  }
+  throw new Error(`${what} did not happen within ${timeoutMs}ms (${JSON.stringify(seen)})`);
 }
 
 /** What has DOM focus, for a failure message. Diagnostic only — no assertion
@@ -6655,40 +6672,53 @@ export async function runSmokeGodview(opts: {
         `${paneFrame.narrow} pane(s) took the narrow tier in a full-width deck — the readout is hidden for nobody`,
       );
     }
-    // AR-5 (D6): ⌘F summons the find sheet over the stage, Escape dismisses it.
-    // The chord is pressed the way the zoom chord is — into Chromium's input
-    // pipeline, never OS injection — and both edges are read off the marker,
-    // with the sheet's own element checked while it says open. Focus is read
-    // before and after: the sheet takes it on open, and a sheet that kept it
-    // on close would leave the user's cursor nowhere — which the very next
-    // row (typing into the pane) would then fail on for the wrong reason.
+    // P2 (2026-10-09; DESIGN.md §8 "Search — the Peek"): ⌘F opens the
+    // frame's Peek over Godview, ON LIVE NOW — puppeteer's Find sheet left
+    // VibeField with the bar's FIND — and a live row is listed: the smoke's
+    // own free shell, whose pane the live peek WATCHES (the watch-only pane:
+    // no focus, no geometry claim). The chord is pressed into Chromium's input
+    // pipeline, never OS injection, and every edge is read off the DOM. Focus
+    // is read before and after: the popup takes it on open, Escape folds it
+    // and gives it back — which the very next row (typing into the pane) would
+    // otherwise fail on for the wrong reason.
     const focusBeforeFind = await focusReport(win);
     pressChord(win, "f");
-    const findOpened = await monitorWatch.until(
-      (facts) => facts.findSheet === "open",
-      "the find sheet to open on ⌘F",
-      10_000,
+    const liveNow = await untilLiveNow(
+      win,
+      (now) => now.open && now.scope === "live" && now.rows.length > 0,
+      "the Peek to open on Live now with a live row (⌘F in Godview)",
+      15_000,
     );
-    verdict["findSheet"] = findOpened.findSheet;
-    const findSheetMounted = (await win.webContents.executeJavaScript(
-      `document.querySelector("#vf-find-sheet") !== null`,
-    )) as boolean;
-    if (!findSheetMounted) {
-      throw new Error("the marker says the find sheet is open and the DOM has no sheet");
+    verdict["peekLiveNow"] = liveNow;
+    if (liveNow.inBar) {
+      throw new Error("the instrument bar still carries FIND — search is the frame's button now");
+    }
+    const watched = await untilLiveNow(
+      win,
+      (now) => now.livePeek === "watching" || now.livePeek === "unavailable",
+      "the live peek to watch the hot row's pane",
+      15_000,
+    );
+    verdict["livePeek"] = watched.livePeek;
+    if (watched.livePeek !== "watching") {
+      throw new Error(
+        `the live peek did not watch the free shell's pane (${JSON.stringify(watched)})`,
+      );
     }
     win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
     win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
-    const findClosed = await monitorWatch.until(
-      (facts) => facts.findSheet === "closed",
-      "the find sheet to close on Escape",
+    const liveClosed = await untilLiveNow(
+      win,
+      (now) => !now.open,
+      "Escape to fold the Peek",
       10_000,
     );
-    verdict["findSheetAfterEscape"] = findClosed.findSheet;
+    verdict["peekAfterEscape"] = liveClosed.open ? "open" : "folded";
     const focusAfterFind = await focusReport(win);
     verdict["focusAroundFind"] = `${focusBeforeFind} → ${focusAfterFind}`;
     if (focusAfterFind !== focusBeforeFind) {
       throw new Error(
-        `the find sheet did not give focus back (before ⌘F: ${focusBeforeFind}; after Escape: ${focusAfterFind})`,
+        `the Peek did not give focus back (before ⌘F: ${focusBeforeFind}; after Escape: ${focusAfterFind})`,
       );
     }
     // Focus is necessary, not sufficient. The pane's input is a routed

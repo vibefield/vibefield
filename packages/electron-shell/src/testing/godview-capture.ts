@@ -75,7 +75,47 @@ export interface GodviewCapture {
   delivered: number;
   deck: LabDeckState;
   monitor: LabMonitorState;
+  /** PK2 (P2) — the head's band as drawn: the frame's search button, the bar,
+   * and the bar's last tool beside it, in CSS px (null where absent). */
+  head: GodviewHeadFacts;
 }
+
+interface HeadRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface GodviewHeadFacts {
+  window: { width: number; height: number };
+  search: HeadRect | null;
+  bar: HeadRect | null;
+  systemControl: HeadRect | null;
+  views: HeadRect | null;
+  /** the gap from System control's right edge to the button's left edge */
+  gap: number | null;
+  /** how far the button hangs below the bar's foot */
+  overhang: number | null;
+}
+
+const HEAD_FACTS = `(() => {
+  const rect = (element) => {
+    if (element === null) return null;
+    const box = element.getBoundingClientRect();
+    return { x: box.x, y: box.y, width: box.width, height: box.height };
+  };
+  const search = rect(document.querySelector(".vf-peek-find"));
+  const bar = rect(document.querySelector(".vf-godview .vf-godview-header"));
+  const systemControl = rect(document.querySelector('.vf-godview-header [aria-label="System control"]'));
+  const views = rect(document.querySelector('.vf-godview-header [role="group"][aria-label="Monitor view"]'));
+  return {
+    window: { width: window.innerWidth, height: window.innerHeight },
+    search, bar, systemControl, views,
+    gap: search && systemControl ? search.x - (systemControl.x + systemControl.width) : null,
+    overhang: search && bar ? search.y + search.height - (bar.y + bar.height) : null,
+  };
+})()`;
 
 /** A capture's content, sampled on a grid of the BGRA bitmap. */
 export function bitmapContent(
@@ -215,6 +255,7 @@ export async function runGodviewCapture(opts: {
           const deck = singlePaneLabDeck(lab.deck.current());
           const membership = labMonitorMembership(monitor.current(), view);
           const shot = await capture(win, out, name);
+          const head = await page<GodviewHeadFacts>(win, HEAD_FACTS);
           const record: GodviewCapture = {
             name,
             view,
@@ -226,6 +267,7 @@ export async function runGodviewCapture(opts: {
             delivered: state.delivered,
             deck,
             monitor: membership,
+            head,
           };
           captures.push(record);
           say({ kind: "capture", ...record });

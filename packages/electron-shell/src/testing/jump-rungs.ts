@@ -17,6 +17,10 @@ import type { StagedTypedAgent } from "./typed-agent";
 //     create says JUMP TO under `jump`, and pressed, the window moves to
 //     Godview with the agent's pane the ACTIVE one — the same pane, activated,
 //     never mounted again (the deck's pane count does not move);
+//   · LIVE NOW IN HISTORY (P2, docket PK5): another pane active again, ⌘F in
+//     History and Live now list the running agent — the Peek's own feed, open
+//     only while the tab shows — and a pick reveals its pane in Godview,
+//     activated, never mounted again (Jump to's path);
 //   · the run's PTY ended, History showing again says Resume once more.
 //
 // It leaves Godview's active pane showing that ENDED session, so the smoke runs
@@ -44,6 +48,9 @@ interface JumpDeckWatch {
 }
 
 const VIEW_NOW = `(document.querySelector(".vf-views-line")?.getAttribute("data-view") ?? "absent")`;
+
+/** The Peek's popup: open or not, and its scope (P2). */
+const PEEK_SCOPE = `(document.querySelector('.vf-peek-pop[role="dialog"]')?.getAttribute("data-scope") ?? "closed")`;
 const HISTORY_ROOM = `document.querySelector('[data-cover-view="history"] .vf-history .ah-frame')`;
 
 /** The line's create as the window draws it now. */
@@ -299,6 +306,73 @@ async function jumpToSteps(
     );
   }
   verdict["jumped"] = { note, activeSessionId: jumped.activeSessionId, panes: jumped.panes };
+
+  // 6b. Live now in History (P2, docket PK5): the agent's pane not the active
+  //     one again; ⌘F in History, Live now, the running agent listed by its
+  //     floor session; picked, the window moves to Godview and the deck
+  //     reveals the same pane — activated, the deck's panes unchanged.
+  await opts.split();
+  const resplit = await opts.deck.until(
+    (facts) => facts.activeSessionId !== undefined && facts.activeSessionId !== floor,
+    "another split pane to be the active one (Live now)",
+    30_000,
+  );
+  await toView("history");
+  const modifiers: ("meta" | "control")[] = [process.platform === "darwin" ? "meta" : "control"];
+  win.webContents.sendInputEvent({ type: "keyDown", keyCode: "f", modifiers });
+  win.webContents.sendInputEvent({ type: "keyUp", keyCode: "f", modifiers });
+  await untilValue(
+    "⌘F to open the Peek on Everything in History",
+    () => evaluate(PEEK_SCOPE),
+    (scope) => scope === "everything",
+    10_000,
+  );
+  await evaluate(`(() => {
+    const radios = [...document.querySelectorAll('.vf-peek-pop [role="radio"]')];
+    radios.find((radio) => radio.textContent === "Live now")?.click();
+    return "ok";
+  })()`);
+  const listed = await untilValue(
+    "Live now in History to list the running agent by its floor session",
+    () =>
+      evaluate(`(() => {
+        const row = document.querySelector('.vf-peek-pop .vf-peek-row[data-floor-session=${JSON.stringify(floor)}]');
+        return row ? JSON.stringify({
+          title: row.querySelector(".vf-peek-title")?.textContent ?? null,
+          state: row.querySelector(".vf-peek-when")?.textContent ?? null,
+          foot: document.querySelector(".vf-peek-pop .vf-peek-said")?.textContent ?? null,
+        }) : "absent";
+      })()`),
+    (value) => value !== "absent",
+    30_000,
+  );
+  await evaluate(
+    `(document.querySelector('.vf-peek-pop .vf-peek-row[data-floor-session=${JSON.stringify(floor)}]')?.click(), "ok")`,
+  );
+  await untilValue(
+    "the window to move to Godview from Live now",
+    () => evaluate(VIEW_NOW),
+    (now) => now === "godview",
+    20_000,
+  );
+  const revealed = await opts.deck.until(
+    (facts) => facts.active && facts.activeSessionId === floor,
+    "the agent's pane to be the active one after a Live now pick",
+    30_000,
+  );
+  if (
+    revealed.panes !== resplit.panes ||
+    [...revealed.sessionIds].sort().join() !== [...resplit.sessionIds].sort().join()
+  ) {
+    throw new Error(
+      `a Live now pick mounted rather than activated: before ${JSON.stringify(resplit)} after ${JSON.stringify(revealed)}`,
+    );
+  }
+  verdict["liveNow"] = {
+    listed: JSON.parse(listed) as unknown,
+    activeSessionId: revealed.activeSessionId,
+    panes: revealed.panes,
+  };
 
   // 7. The run's PTY ended: History showing again says Resume once more.
   await opts.handle.client.request("terminal.terminate", { sessionId: floor });
