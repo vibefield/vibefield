@@ -364,7 +364,7 @@ const OTHERS = `(() => {
  * A point where a press PANS (nothing takes it — the bare mat, or a calendar's paper, which pans too) from which a drag by
  * (dx, dy) stays inside the desk (desk CSS px).
  */
-const BARE_FOR = (dx: number, dy: number): string => `(() => {
+export const BARE_FOR = (dx: number, dy: number): string => `(() => {
   const d = globalThis.__vfDesk; const el = document.querySelector("[data-desk]"); const r = el.getBoundingClientRect();
   for (let y = 160; y < r.height - 160; y += 20) for (let x = 40; x < r.width - 40; x += 20) {
     const tx = x + ${dx}, ty = y + ${dy};

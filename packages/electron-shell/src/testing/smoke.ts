@@ -37,6 +37,7 @@ import {
   Menu,
   MessageChannelMain,
   powerSaveBlocker,
+  session,
   type WebContents,
   webContents,
 } from "electron";
@@ -120,6 +121,7 @@ import { browserPaneRows, PANE_FLAG } from "./smoke-browser-pane";
 import { coverRows } from "./smoke-covers";
 import { removeSmokeRoot, SMOKE_RUN_ENV, stopRunDaemons } from "./smoke-daemons";
 import { deskRigRows } from "./smoke-desk-rig";
+import { DEVICE_FLAG, type DeviceRowsDriver, devicePaneRows } from "./smoke-device-pane";
 import { LIVE_FLAG, type LiveRowsDriver, livePaneRows } from "./smoke-live-pane";
 import { faultRows, peersRows } from "./smoke-peers";
 import { pegboardRows } from "./smoke-pegboard";
@@ -1115,6 +1117,12 @@ export async function runSmokeCanvas(opts: {
         // PT-3 — the page in use, its rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs
         // --smoke-canvas --use-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
         problems.push(...(await useRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
+      } else if (process.argv.includes(DEVICE_FLAG)) {
+        // PT-4 — the page as a device sees it, its rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs
+        // --smoke-canvas --device-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
+        problems.push(
+          ...(await deviceRows(win, shotDir, opts.viteUrl, opts.liveSurfaces, opts.root)),
+        );
       } else if (process.argv.includes(PANE_FLAG)) {
         // PT-1 — the browser pane's rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs
         // --smoke-canvas --browser-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
@@ -1289,6 +1297,13 @@ export async function runSmokeCanvas(opts: {
         // in, composed in, hovered, its held tools pressed, put down and still (testing/smoke-use-pane.ts). After PT-2's (each
         // lays its own pane and deletes it) and before the refusal's
         problems.push(...(await useRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
+        // PT-4 (PORTALS): the page as a device sees it — a pane pointed at the fixture and switched: its device (an iPhone's
+        // agent, hints, fingers and view; a touch in hand; back to the laptop), the desk's theme and its own scheme, its
+        // favicon and title, and a second pane's page reading the first's cookie (testing/smoke-device-pane.ts). After PT-3's
+        // (each lays its own panes and deletes them) and before the refusal's
+        problems.push(
+          ...(await deviceRows(win, shotDir, opts.viteUrl, opts.liveSurfaces, opts.root)),
+        );
         // DK-9: last — it leaves the desk on its card
         problems.push(...(await deskRefusalRow(win, opts.viteUrl)));
       }
@@ -1766,6 +1781,56 @@ async function useRows(
     return [`PT-3 USE: ${error instanceof Error ? error.message : String(error)}`];
   } finally {
     if (attachedHere && dbg.isAttached()) dbg.detach();
+    await fixture.close();
+  }
+}
+
+/** PT-4's rows on the smoke's fixture page (testing/smoke-device-pane.ts): PT-2's driver; the cookies the app's SHELL holds for
+ * an origin — its window's session and Electron's default; and the desk's pages' profile where main keeps it, under the
+ * run's user root (`LAYOUT.BROWSER_PROFILES_DIR`). */
+async function deviceRows(
+  win: BrowserWindow,
+  shotDir: string | undefined,
+  viteUrl: string,
+  liveSurfaces: (() => { readonly runtimes: number; readonly owners: number } | null) | undefined,
+  root: string,
+): Promise<string[]> {
+  const fixture = await startLiveFixture();
+  try {
+    const driver: DeviceRowsDriver = {
+      win,
+      shotDir,
+      say: (line) => console.log(line),
+      fixture,
+      custody: () => liveSurfaces?.() ?? null,
+      reload: async () => {
+        const ready = waitForConsole(win, "DESK_READY ", 60_000);
+        await loadRenderer(win, "smoke-canvas", viteUrl, { presenceRelay: "1", deskFaults: "1" });
+        try {
+          await ready;
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      shellCookies: async (url) => {
+        const own = await win.webContents.session.cookies.get({ url });
+        const base =
+          win.webContents.session === session.defaultSession
+            ? []
+            : await session.defaultSession.cookies.get({ url });
+        return own.length + base.length;
+      },
+      profile: (name) => {
+        const dir = join(root, ...LAYOUT.BROWSER_PROFILES_DIR, name);
+        return { dir, entries: existsSync(dir) ? readdirSync(dir).length : 0 };
+      },
+      chrome: process.versions.chrome ?? "",
+    };
+    return await devicePaneRows(driver);
+  } catch (error) {
+    return [`PT-4 DEVICE: ${error instanceof Error ? error.message : String(error)}`];
+  } finally {
     await fixture.close();
   }
 }

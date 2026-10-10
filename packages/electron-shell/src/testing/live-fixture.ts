@@ -12,15 +12,58 @@
 // a page taller than its view (WHEEL) — each where the ground stays the page's (the PT-2 rows' shares hold). With each ask
 // it REPORTS what it saw — its address, its scroll, its selection, its field and what has the focus — and the smoke reads
 // the latest (`report()`). `/next` is the same page by another address (its headline narrower), where the link goes.
+// PT-4 — and a page that says HOW IT IS SEEN: with each ask, its user agent and its client hints, its fingers, its view's
+// density, its colour scheme, the type of the last pointer event it got and its touches; its TITLE is its own
+// (`FIXTURE_TITLE`), its FAVICON one flat colour (`/icon.png`, `FIXTURE_ICON_HUE` — `/page`'s alone: `/next` names none, and
+// the server has no `/favicon.ico`); `/page?store=<v>` keeps `<v>` in a cookie and in its storage, and every page says the
+// cookie and the stored value it reads — each page's latest word kept by its address too (`reportAt`), and the Cookie header
+// each load came with (`cookieSeen`). It names its VIEWPORT (`width=device-width, initial-scale=1`) as a page made for
+// phones does: a phone's page with none is laid out 980 px wide (the PT-4 smoke's first PHONE row said so) — and `/legacy`
+// is that page, by its own address: the same page naming NO viewport, which a phone lays out 980 wide and a desktop at
+// its window's width (the witness of a phone's LAYOUT, beside its agent's word).
 
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { crc32, deflateSync } from "node:zlib";
 
 /** The fixture's ground: a saturated blue, far from the mat's green and the sample page's warm whites. */
 export const FIXTURE_HUE = { r: 29, g: 111, b: 216 } as const;
 
 /** How often the page asks the server (ms) — its pace follows the answer. */
 export const FIXTURE_ASK_MS = 250;
+
+/** PT-4 — the page's title (`/next`'s says where it is). */
+export const FIXTURE_TITLE = "Portals fixture";
+/** PT-4 — the favicon's one flat colour: a magenta far from the ground's blue, the runner's yellow and the mat's green. */
+export const FIXTURE_ICON_HUE = { r: 226, g: 30, b: 160 } as const;
+/** PT-4 — the cookie (and the storage key) `/page?store=<v>` keeps `<v>` under. */
+export const FIXTURE_COOKIE = "pt4";
+
+/** PT-4 — the favicon's bytes: a 32 × 32 PNG of `FIXTURE_ICON_HUE`, opaque (made here: signature, IHDR, one IDAT, IEND). */
+export function fixtureIcon(size = 32): Buffer {
+  const chunk = (type: string, data: Buffer): Buffer => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(data.length, 0);
+    head.write(type, 4, "latin1");
+    const sum = Buffer.alloc(4);
+    sum.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])) >>> 0, 0);
+    return Buffer.concat([head, data, sum]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(size, 0);
+  ihdr.writeUInt32BE(size, 4);
+  ihdr.set([8, 6, 0, 0, 0], 8); // 8 bits a channel, RGBA, deflate, no filter method, no interlace
+  const row = Buffer.alloc(1 + size * 4);
+  for (let x = 0; x < size; x += 1)
+    row.set([FIXTURE_ICON_HUE.r, FIXTURE_ICON_HUE.g, FIXTURE_ICON_HUE.b, 255], 1 + x * 4);
+  const rows = Buffer.concat(Array.from({ length: size }, () => row));
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", deflateSync(rows)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
 
 export interface LiveFixture {
   /** `http://127.0.0.1:<port>` */
@@ -37,6 +80,12 @@ export interface LiveFixture {
   report(): FixtureReport | null;
   /** PT-3 — how many times each address was served (`/page`, `/next`). */
   served(path: "/page" | "/next"): number;
+  /** PT-4 — the latest word of the page AT `path` (its path and query, as it says them), or null: two pages, two words. */
+  reportAt(path: string): FixtureReport | null;
+  /** PT-4 — the Cookie header the last load of `path` (its path and query) came with ("" for none), or null: never loaded. */
+  cookieSeen(path: string): string | null;
+  /** PT-4 — how many times the favicon was served. */
+  icons(): number;
   close(): Promise<void>;
 }
 
@@ -61,6 +110,25 @@ export interface FixtureReport {
     readonly field: FixtureRect;
     readonly word: FixtureRect;
   };
+  /** PT-4 — how it is seen: `navigator.userAgent` and `.platform`; its client hints (`navigator.userAgentData` — null where
+   * the engine gives none); `navigator.maxTouchPoints`; `devicePixelRatio`; whether `prefers-color-scheme: dark` matches. */
+  readonly ua: string;
+  readonly platform: string;
+  readonly uaData: {
+    readonly platform: string;
+    readonly mobile: boolean;
+    readonly brands: readonly string[];
+  } | null;
+  readonly touchPoints: number;
+  readonly dpr: number;
+  readonly dark: boolean;
+  /** PT-4 — the `pointerType` of the last pointer event it got ("" before any), and its `touchstart`s counted. */
+  readonly pointer: string;
+  readonly touches: number;
+  /** PT-4 — `document.cookie`, what its storage keeps under `FIXTURE_COOKIE` ("" for nothing), and `document.title`. */
+  readonly cookie: string;
+  readonly stored: string;
+  readonly title: string;
 }
 
 /** A part's box in the page's view, CSS px. */
@@ -87,12 +155,18 @@ const hex = (c: { r: number; g: number; b: number }): string =>
 
 /** The page's HTML: its ground, headline, bars and runner; its memory; its pace, asked of the server — and (PT-3) its link,
  * field and words, its height past its view, and what it saw, reported with each ask. `/next` narrows its headline. */
-export function fixtureHtml(path: "/page" | "/next" = "/page"): string {
-  const head = path === "/page" ? 56 : 30;
+export function fixtureHtml(path: "/page" | "/next" | "/legacy" = "/page"): string {
+  const head = path === "/next" ? 30 : 56;
   const px = (v: number, of: number): string => `${((v / of) * 100).toFixed(4)}%`;
   const { link, field, wordAt } = FIXTURE_PARTS;
+  const title = path === "/page" ? FIXTURE_TITLE : `${FIXTURE_TITLE} — ${path.slice(1)}`;
+  const icon = path === "/next" ? "" : '<link rel="icon" type="image/png" href="/icon.png">';
+  const viewport =
+    path === "/legacy"
+      ? ""
+      : '<meta name="viewport" content="width=device-width, initial-scale=1">';
   return `<!doctype html>
-<html><head><meta charset="utf-8"><title>PT-2 fixture</title>
+<html><head><meta charset="utf-8">${viewport}<title>${title}</title>${icon}
 <style>
   html, body { margin: 0; background: ${hex(FIXTURE_HUE)}; }
   html { scrollbar-width: none; }
@@ -123,8 +197,21 @@ export function fixtureHtml(path: "/page" | "/next" = "/page"): string {
   const token = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
   const runner = document.getElementById("runner");
   const field = document.getElementById("field");
-  let x = 0, timer = null, submitted = 0;
+  let x = 0, timer = null, submitted = 0, pointer = "", touches = 0;
   document.getElementById("form").addEventListener("submit", (e) => { e.preventDefault(); submitted += 1; });
+  for (const type of ["pointerdown", "pointermove", "pointerup"])
+    addEventListener(type, (e) => { pointer = e.pointerType; }, true);
+  addEventListener("touchstart", () => { touches += 1; }, { capture: true, passive: true });
+  const store = new URLSearchParams(location.search).get("store");
+  if (store) {
+    document.cookie = "${FIXTURE_COOKIE}=" + encodeURIComponent(store) + "; path=/; max-age=3600";
+    try { localStorage.setItem("${FIXTURE_COOKIE}", store); } catch {}
+  }
+  const stored = () => { try { return localStorage.getItem("${FIXTURE_COOKIE}") || ""; } catch { return ""; } };
+  const hints = () => navigator.userAgentData
+    ? { platform: navigator.userAgentData.platform, mobile: navigator.userAgentData.mobile,
+        brands: navigator.userAgentData.brands.map((b) => b.brand) }
+    : null;
   const pace = (play) => {
     if (play && timer === null) timer = setInterval(() => { x = (x + 1.3) % 88; runner.style.left = x + "%"; }, 33);
     if (!play && timer !== null) { clearInterval(timer); timer = null; }
@@ -142,6 +229,17 @@ export function fixtureHtml(path: "/page" | "/next" = "/page"): string {
     submitted,
     view: [innerWidth, innerHeight],
     parts: { link: box("next"), field: box("field"), word: box("word") },
+    ua: navigator.userAgent,
+    platform: navigator.platform,
+    uaData: hints(),
+    touchPoints: navigator.maxTouchPoints,
+    dpr: devicePixelRatio,
+    dark: matchMedia("(prefers-color-scheme: dark)").matches,
+    pointer,
+    touches,
+    cookie: document.cookie,
+    stored: stored(),
+    title: document.title,
   }));
   const ask = () => fetch("/beacon?token=" + token + "&report=" + report(), { cache: "no-store" })
     .then((r) => r.json()).then((a) => pace(a.play === true)).catch(() => {});
@@ -157,12 +255,22 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   let nexts = 0;
   let playing = false;
   let last: FixtureReport | null = null;
+  let icons = 0;
+  const lastAt = new Map<string, FixtureReport>();
+  const cookies = new Map<string, string>();
   const tokens: string[] = [];
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
-    if (url.pathname === "/page" || url.pathname === "/next") {
+    if (url.pathname === "/icon.png") {
+      icons += 1;
+      res.writeHead(200, { "content-type": "image/png", "cache-control": "no-store" });
+      res.end(fixtureIcon());
+      return;
+    }
+    if (url.pathname === "/page" || url.pathname === "/next" || url.pathname === "/legacy") {
       if (url.pathname === "/page") loads += 1;
-      else nexts += 1;
+      else if (url.pathname === "/next") nexts += 1;
+      cookies.set(url.pathname + url.search, req.headers.cookie ?? "");
       res.writeHead(200, {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "no-store",
@@ -178,6 +286,7 @@ export async function startLiveFixture(): Promise<LiveFixture> {
         try {
           const r = JSON.parse(said) as Omit<FixtureReport, "token">;
           last = { ...r, token };
+          lastAt.set(last.path, last);
         } catch {
           /* a report the page did not finish: the last one stands */
         }
@@ -202,6 +311,9 @@ export async function startLiveFixture(): Promise<LiveFixture> {
     tokens: () => [...tokens],
     report: () => last,
     served: (path) => (path === "/page" ? loads : nexts),
+    reportAt: (path) => lastAt.get(path) ?? null,
+    cookieSeen: (path) => cookies.get(path) ?? null,
+    icons: () => icons,
     close: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections?.();
