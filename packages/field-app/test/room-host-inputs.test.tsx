@@ -693,6 +693,16 @@ describe("R6 — ③'s head as the host's folder list", () => {
     act(() => sessionRowOf(el, "s0")?.click());
     await until(() => shown.at(-1) === "mac:vf", "onShow(mac:vf) for s0");
     expect(head(el, 3)?.querySelector(".ah-elsewhere")).toBeNull();
+    // a pick lasts while its session does: away and back, ③ follows s0 again
+    act(() => pick.click());
+    act(() =>
+      head(el, 3)?.querySelector<HTMLButtonElement>(".ah-menu__item[data-key='mac:lane']")?.click(),
+    );
+    await until(() => shown.at(-1) === "mac:lane", "the pick on s0");
+    act(() => sessionRowOf(el, "s1")?.click());
+    await until(() => shown.at(-1) === "studio:vf", "s1 again");
+    act(() => sessionRowOf(el, "s0")?.click());
+    await until(() => shown.at(-1) === "mac:vf", "s0 followed, its old pick gone");
   });
 
   it("a filter narrows the list by path", async () => {
