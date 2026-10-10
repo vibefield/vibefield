@@ -8654,3 +8654,59 @@ Within it sit the contract's 21 marks (MV-D1…D22, D16 marks only), built as `d
 - P2, Live now in Godview: puppeteer's FindSheet leaves VibeField, and the monitor publishes a find door. It waits on docket PK2 (the button until Stories), PK4 (⌥0–⌥9) and PK5 (live search from History).
 - PK3 decides the past peek's picture (rosetta's reader, lean).
 - The MV lead: Godview gained one door verb, `reveal` (`341b56a5`). No view module changed.
+
+## PJ-4 phase A — History lists your projects: fieldd tags every session with its project, figures merge across folders and desktops, inks deal on the cool half (2026-10-10; `36295d77` — seven commits `ff6cd70b`→`36295d77`; lane pj4 over main `69b52855`, fast-forward)
+
+**Why:** James ruled docket v9 on 2026-10-09 (23:15–23:17), every lean.
+- H1 (a): we map, the room draws.
+- H2 (a): one merged figure, honest when partial.
+- H3 (a): this desktop's sessions, with marks for the rest.
+- H5 (a): Home is a row; Temporary is folded at the foot.
+- The lead's A-D2 (ink → colour in the kit, DESIGN.md first), A-D4 (fieldd tags, the window never groups) and A-D9 (the room stays device-unaware).
+
+The plan is `draft/history-finish/build-hf.md` §3c–§3d, with brief `briefs/pj4.md` and survey `surveys/s-pj4.md` Part A. Phase B (the room's host inputs, on rosetta `vf/room-host-slots` `a107682`) follows.
+
+**What landed:**
+- **The join (A-D4).** `IndexSession.projectKey` and `IndexThread.projectKey` (a thread carries its root's key) are computed by the answering daemon with the same resolvers `project.sessions` files by, beside DS-D9's `family`.
+  - A window, the shell and the phone get the column. A peer daemon never does (DS-L4), and a key already on a row is never trusted.
+  - A column, not a snapshot door, because the window already pages `index.sessions`/`index.threads` for the whole topology.
+  - `project.subscribe` pings carry a `tables` hint, so AR-8 L1's economy holds now that History listens to the project pings.
+- **Merged figures (H2).** `project.figures {key, sinceMs, offsetMinutes}` and `project.figuresDay {key, day, offsetMinutes}` (scope `project.read`, federate, refused to a peer daemon).
+  - They fan out to every (desktop, rosetta project) pair filing one of the project's sessions, keyed by both (rosetta's ids collide across desktops that share a path).
+  - A part is WHOLE when every session it files joins this project, else SPLIT. A split part's days are left out (`partial`), but its contribution rows are kept for this project's sessions, so lifetime totals stay exact.
+  - An asleep, silent or not-ready desktop is named in `sources`, with `partial`/`lifetimePartial`. Peers are asked through `IndexMesh.ask` (DS-6b's rules).
+- **Inks (A-D2, PJ-L7).** DESIGN.md §2.9 comes first.
+  - OKLCH on the cool half: projects get 180–238° and 265–350°, state keeps 350°→180°, and the selection keeps 238–265°. The PJ page's own golden-ratio walk deals them.
+  - L 0.60 by day and 0.74 by night, C 0.15, as tokens.
+  - Measured over all 997 inks: 3.3–4.3:1 by day and 5.6–9.7:1 by night, so an ink is never text.
+  - The design kit's `./project-ink` exports `projectInk`/`projectInkHue`/`projectInkHex`, with a catalog swatch row.
+- **The adapter (H1, H3, V6).**
+  - ProjectRow.id is the PJ key. The name is PJ's (" · <parent>" when two read alike).
+  - `root_paths` are this desktop's places only, and `git_repo` is the normalized remote key. `session.project_id` = `projectKey`.
+  - A project is listed only with a place here.
+  - **The device guard** drops any row naming another desktop. With this desktop's id unknown, nothing naming a desktop passes.
+  - A regroup re-keys the selection through the room's own `openAt`.
+- **H5's data** (`history/sections.ts`): each desktop's Home, and Temporary split at 14 days. They are drawn as ordinary rows until phase B's sections.
+- **The catalog** draws History by project through the shipping adapter over a fixture fieldd (UI_SYSTEM).
+
+**Witnesses:**
+- vitest: fieldd `project-doors` +15 (join 7, figures 8), `project-doors-phone` +2, `index-mesh` +1; contracts fixtures `index-sessions.keyed`, `index-threads.keyed`, `project-changes-delta.tables`, `project-figures(-day)(-params)`; field-app `history-doors` rewritten for PJ (27), `history-view` +1 (a regroup over the real room), `history-sections` 3, `project-ink` 8, `history-projects-plate` 1.
+- `history-witness`: real fieldd + rosettad file the session under a listed PJ project, its place published through the scanner's own write path.
+- Red-proofs:
+  - daily figures from every part;
+  - a split part kept whole;
+  - the device guard always true;
+  - roots without the device check;
+  - HistoryView without the re-key.
+- `smoke:godview` (offscreen), `historyByProject`: the real fieldd files the seeded session (cwd under `/private/tmp`) in the Temporary bucket, and the real room lists and chooses it by that name.
+
+**Validation:** the lane's `gate.sh` on `36295d77`, the landed tree: `verify.log` **EXIT 0** (with the real rosettad), `smoke.log` EXIT 0, `smoke-godview.log` EXIT 0. An earlier run at `42f63bfc` was red on preflight R23b (agent-id literals in the catalog fixture), fixed by `36295d77`.
+
+**Found:**
+- `--vf-cyan` (231°) and `--vf-ink-info` (235°) sit inside the first project arc. Recorded in §2.9; the ruled band is not moved.
+- The room lets go of a chosen PROJECT when no session is chosen, and a session's re-key passes through one empty commit. Room petition: `openAt({projectId})` or an in-place re-key.
+- The Peek's "Every project" dropdown still lists rosetta's projects (`frame/peek-port.ts`). It moves to `project.list` with phase B's PK3 swap.
+- The smoke's shot directory under the OS temp is shared by every lane.
+- No kit mirrors yet: the phone reads the column with PJ-7.
+
+**Next:** phase B on the room branch: colour, marks, sections, row acts, New agent (H6), the folder dropdown, chips, PK3's reader, then H4's acts. Rosetta's branch merges at James's word.
