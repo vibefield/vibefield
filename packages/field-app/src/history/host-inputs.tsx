@@ -216,7 +216,6 @@ function sessionAct(
   model: HistoryHostModel,
   session: IndexSession,
   acts: HistoryHostActs,
-  place: "row" | "head",
 ): { act?: RoomAct; reason?: ReactNode } {
   const target = targetOf(model, session);
   if (isLive(model, session))
@@ -224,7 +223,7 @@ function sessionAct(
       act: {
         key: "jump",
         label: "Jump to this session",
-        content: glyphAct("jump", place === "row" ? "Jump to" : "Jump to"),
+        content: glyphAct("jump", "Jump to"),
         onPress: () => acts.jump(target),
       },
     };
@@ -513,16 +512,18 @@ function folderAct(
 
 /** H4 — rename on ②'s name itself (ROOM API v3's `projectRename`). The room
  * keeps the field open on a rejection and says the error's words under it:
- * they are fieldd's intent's, as `acts.rename` words them. */
+ * they are fieldd's intent's, as `acts.rename` words them. The room says the
+ * name after the label ("Rename the project: vibe-field"), so the label
+ * never carries it. */
 function projectRenameOf(project: ProjectSummary, acts: HistoryHostActs): RoomRename | null {
   if (project.bucket === "temp") return null;
   return {
-    label: `Rename ${project.name}`,
+    label: "Rename the project",
     onRename: (name) => acts.rename(project.key, name),
   };
 }
 
-/* ── the cards ─────────────────────────────────────────────────────────── */
+/* ── the card ──────────────────────────────────────────────────────────── */
 
 const SUGGESTION_WORDS: Record<string, string> = {
   "related-history": "shares old history with",
@@ -845,7 +846,7 @@ export function historyHostInputs(
       if (session === undefined) return null;
       const here = deviceOf(model, session.device ?? model.self ?? "");
       const path = session.cwd ?? null;
-      const { act, reason } = sessionAct(model, session, acts, "row");
+      const { act, reason } = sessionAct(model, session, acts);
       return {
         hostKey: hostKeyOf(here.id, session.sessionId),
         id: (
@@ -881,7 +882,7 @@ export function historyHostInputs(
     sessionActs: (row): RoomHeadActs | null => {
       const session = model.sessions.get(row.root_session_id) ?? model.sessions.get(row.id);
       if (session === undefined) return null;
-      const { act, reason } = sessionAct(model, session, acts, "head");
+      const { act, reason } = sessionAct(model, session, acts);
       return {
         ...(act !== undefined ? { acts: [act] } : {}),
         ...(reason !== undefined ? { reason } : {}),

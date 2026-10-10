@@ -1857,9 +1857,10 @@ its hot-point glow and rim left with the card (above); its last two rows are the
         would only repeat them, so it is gone.
     - **②'s card slot** carries the **suggestions** (PJ-D16): "vibe-field shares old history with
       **vf-docs**" with **Not the same** and **One project**.
-    - **The cards' look** (VibeField's own, inside the room's card slot): corners 12, the hairline,
-      padded 10 12, its words at 12.5/400 in secondary ink, its buttons 26 tall, corners 13,
-      12/500 — the ready fill, the one primary inverted on the foreground like the room's go.
+    - **The card's look** (VibeField's own, inside the room's card slot; the suggestions are its
+      one card since rename moved to ②'s name): corners 12, the hairline, padded 10 12, its words
+      at 12.5/400 in secondary ink, its buttons 26 tall, corners 13, 12/500 — the ready fill, the
+      one primary inverted on the foreground like the room's go.
   - **Its first open says "Opening History"** (2026-10-04): the room — its code and its sheet — is
     its own chunk, on neither the first paint nor the canvas's. It loads when the window is first
     idle after the canvas has drawn, or at the first ⌘3 if that comes sooner. While it arrives the

@@ -1,8 +1,9 @@
 /* PJ-4 — what VibeField draws INSIDE the room's host slots (DESIGN.md §8
    "History" — "It lists your projects"): the desktops' marks, a session's
    folder, the acts' glyph and word, the reasons, ③'s honest states, the
-   cards. The room sizes and places the slots (rosetta host-inputs.css); these
-   rules style only VibeField's own content in them, on the kit's tokens. */
+   suggestions' card. The room sizes and places the slots (rosetta
+   host-inputs.css); these rules style only VibeField's own content in them,
+   on the kit's tokens. */
 
 .vf-history-marks {
   display: inline-flex;

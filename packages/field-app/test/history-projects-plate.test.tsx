@@ -9,7 +9,10 @@
  * first — with the chosen session in its project, and the
  * project that also holds a checkout on the asleep laptop shows this
  * desktop's folder alone (the device guard, drawn) and says what the laptop
- * holds by its mark and name.
+ * holds by its mark and name. H4's acts are drawn where they act — a `···`
+ * at each project's row end, "Not part of this project" on ③'s folder rows,
+ * rename on ②'s name — and a rename asks the fixture fieldd, whose refusal
+ * the room says under the name.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -45,19 +48,25 @@ async function until<T>(read: () => T | null | undefined, label: string, ms = 8_
   }
 }
 
+const nameOf = (row: Element): string | null | undefined =>
+  row.querySelector(".ah-project-list-item__header strong")?.textContent;
+
+/** The plate, mounted, once the room has drawn fieldd's eight projects. */
+async function plate(): Promise<Element[]> {
+  host = document.createElement("div");
+  document.body.appendChild(host);
+  root = createRoot(host);
+  await act(async () => root?.render(<HistoryPreview state="projects" />));
+  return until(() => {
+    const found = [...(host?.querySelectorAll(".ah-project-list-item") ?? [])];
+    return found.length >= 8 ? found : null;
+  }, "the projects' rows");
+}
+
 describe("History by project — the catalog's plate (PJ-4)", () => {
   it("lists fieldd's projects by name through the shipping adapter, the chosen session in its project, and never a remote folder", async () => {
-    host = document.createElement("div");
-    document.body.appendChild(host);
-    root = createRoot(host);
-    await act(async () => root?.render(<HistoryPreview state="projects" />));
-    const rows = await until(() => {
-      const found = [...(host?.querySelectorAll(".ah-project-list-item") ?? [])];
-      return found.length >= 8 ? found : null;
-    }, "the projects' rows");
-    const names = rows.map(
-      (row) => row.querySelector(".ah-project-list-item__header strong")?.textContent,
-    );
+    const rows = await plate();
+    const names = rows.map(nameOf);
     // Home is a row (J11); the demo's Temporary holds no session here, so it
     // is a plain row too — a fold never says "0" (H5)
     expect(new Set(names)).toEqual(
@@ -77,10 +86,7 @@ describe("History by project — the catalog's plate (PJ-4)", () => {
     const live = host?.querySelector('.ah-section[data-section="live"]');
     expect(live?.textContent).toBe("Live now");
     // R2 — the project's other desktop, by its mark and name, asleep
-    const vibe = rows.find(
-      (row) =>
-        row.querySelector(".ah-project-list-item__header strong")?.textContent === "vibe-field",
-    );
+    const vibe = rows.find((row) => nameOf(row) === "vibe-field");
     expect(vibe?.textContent).toContain("4 sessions on Laptop (asleep)");
     expect(vibe?.querySelector(".vf-history-mark[data-asleep]")).not.toBeNull();
     // the plate opens at the demo's first session: its project is chosen
@@ -117,6 +123,99 @@ describe("History by project — the catalog's plate (PJ-4)", () => {
         chip.getAttribute("data-filter"),
       ),
     ).toEqual(["desktop", "agent"]);
+  }, 30_000);
+
+  it("H4 on the plate — the acts where they act: a `···` at each project's row end but Temporary's, ②'s head New agent alone, a split on ③'s folder rows, and a rename refused under ②'s name in the fixture fieldd's words", async () => {
+    const rows = await plate();
+    // (a) pin and hide at ①'s row end: every project, never Temporary (not a project)
+    const acted = rows.filter(
+      (row) => row.querySelector('.ah-hostact[data-place="row"][data-act="project-acts"]') !== null,
+    );
+    expect(new Set(acted.map(nameOf))).toEqual(
+      new Set([
+        "vibe-field",
+        "rosetta",
+        "puppeteer",
+        "infinite-canvas-engine",
+        "ghosttea",
+        "truffle",
+        "Home",
+      ]),
+    );
+    const more = acted
+      .find((row) => nameOf(row) === "vibe-field")
+      ?.querySelector<HTMLElement>('.ah-hostact[data-place="row"][data-act="project-acts"]');
+    expect(more?.getAttribute("aria-label")).toBe("Pin or hide vibe-field");
+    act(() => more?.click());
+    const menuRows = (): string[] =>
+      [...(host?.querySelectorAll(".ah-frame > .ah-menu[data-layer] .ah-menu__item") ?? [])].map(
+        (row) => row.getAttribute("data-key") ?? "",
+      );
+    expect(menuRows()).toEqual(["pin", "hide"]);
+    act(() =>
+      host
+        ?.querySelector<HTMLElement>(
+          '.ah-frame > .ah-menu[data-layer] .ah-menu__item[data-key="pin"]',
+        )
+        ?.click(),
+    );
+    expect(host?.querySelector(".ah-menu")).toBeNull();
+    // ②'s head keeps New agent alone, and its card slot is empty without a
+    // suggestion: the rename card is gone
+    await until(
+      () => host?.querySelector(".ah-project-list-item.is-selected"),
+      "the chosen project",
+    );
+    expect(
+      [...(host?.querySelectorAll('.ah-hostact[data-place="head"]') ?? [])].map((node) =>
+        node.getAttribute("data-act"),
+      ),
+    ).toEqual(["new-agent"]);
+    expect(host?.querySelector(".ah-hostcard, .vf-history-card")).toBeNull();
+    // (b) "Not part of this project" beside each of vibe-field's two folders
+    act(() => host?.querySelector<HTMLElement>("button.ah-folderpick")?.click());
+    expect(
+      [...(host?.querySelectorAll(".ah-frame > .ah-menu[data-layer] .ah-menu__row") ?? [])].map(
+        (row) => row.querySelector(".ah-menu__act")?.getAttribute("aria-label"),
+      ),
+    ).toEqual(["Not part of this project", "Not part of this project"]);
+    act(() =>
+      host?.querySelector<HTMLElement>(".ah-frame > .ah-menu[data-layer] .ah-menu__act")?.click(),
+    );
+    expect(host?.querySelector(".ah-menu")).toBeNull();
+    // (c) rename on ②'s name: the fixture fieldd refuses through the shipping
+    // intent, and the room says its words under the field
+    const name = await until(
+      () => host?.querySelector<HTMLButtonElement>(".ah-meta__head .ah-colhead > button.ah-rename"),
+      "②'s name",
+    );
+    expect(name.textContent).toBe("vibe-field");
+    expect(name.getAttribute("aria-label")).toBe("Rename the project: vibe-field");
+    act(() => name.click());
+    const field = (): HTMLInputElement | null =>
+      host?.querySelector<HTMLInputElement>("input.ah-rename__field") ?? null;
+    act(() => {
+      const input = field();
+      if (input === null) throw new Error("no rename field");
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+        input,
+        "vibe-field app",
+      );
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() =>
+      field()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+    );
+    const failure = await until(() => host?.querySelector(".ah-rename__failure"), "the refusal");
+    expect(failure.textContent).toBe(
+      "Could not rename — a catalog changes no project; these are fixtures",
+    );
+    expect(field()?.getAttribute("aria-invalid")).toBe("true");
+    act(() =>
+      field()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
+    );
+    expect(field()).toBeNull();
+    expect(host?.querySelector(".ah-meta__head button.ah-rename")?.textContent).toBe("vibe-field");
   }, 30_000);
 
   it("the catalog's own sheets never style the room's classes — After Hours' shared `ah-` names are scoped to its surface", () => {

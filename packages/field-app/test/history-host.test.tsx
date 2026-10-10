@@ -630,7 +630,8 @@ describe("R5: New agent and the project's acts", () => {
     const acts = spyActs();
     const inputs = historyHostInputs(MODEL, NO_HOST_STATE, acts);
     const rename = inputs.projectRename?.("p1:vibe");
-    expect(rename?.label).toBe("Rename vibe-field");
+    // the room says the name after it ("Rename the project: vibe-field")
+    expect(rename?.label).toBe("Rename the project");
     await rename?.onRename("vibe");
     expect(acts.rename).toHaveBeenCalledWith("p1:vibe", "vibe");
     // a refusal reaches the room as the rejection it says under the field
@@ -639,7 +640,7 @@ describe("R5: New agent and the project's acts", () => {
     );
     await expect(rename?.onRename("vf")).rejects.toThrow("the project changed while you looked");
     expect(inputs.projectRename?.("p1:temp")).toBeNull();
-    expect(inputs.projectRename?.("p1:home")?.label).toBe("Rename Home");
+    expect(inputs.projectRename?.("p1:home")?.label).toBe("Rename the project");
   });
 
   it("H4 (c): the intent's own words are the refusal's — a key that moved, a bucket, a project gone", async () => {

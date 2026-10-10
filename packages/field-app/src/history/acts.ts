@@ -229,8 +229,9 @@ export async function projectIntent(
   }
 }
 
-/** The words a project's act is said in: what it did ("Renamed vibe-field"),
- * or what it could not do and why ("Could not rename — …"). */
+/** The words a project's act is said in on the line: what it did ("Pinned
+ * vibe-field"), or what it could not do and why ("Could not pin — …"). A
+ * rename's refusal is not said here: the room says it under ②'s name. */
 export function intentNote(
   outcome: IntentOutcome,
   words: { readonly done: string; readonly verb: string },
