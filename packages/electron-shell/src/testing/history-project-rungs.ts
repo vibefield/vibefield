@@ -425,15 +425,19 @@ export async function historyByProjectPhotos(
   // what each photograph holds open (lane room's finding 2: the host's menus,
   // chips, sections and row acts, measured in happy-dom, seen in Electron):
   // the room at rest, ②'s New agent menu, ①'s desktop chip, ②'s agent chip
-  const opens: ReadonlyArray<{ shot: string; trigger: string | null }> = [
+  // and ③'s folder list, the worktree opened for it (its toggle, then shut)
+  const opens: ReadonlyArray<{ shot: string; trigger: string | null; worktree?: boolean }> = [
     { shot: "history-by-project", trigger: null },
     {
       shot: "history-new-agent",
       trigger: '.ah-hostact[data-place="head"][data-act="new-agent"]',
     },
+    { shot: "history-folders", trigger: "button.ah-folderpick", worktree: true },
     { shot: "history-chip-desktop", trigger: 'button.ah-chipselect[data-filter="desktop"]' },
     { shot: "history-chip-agent", trigger: 'button.ah-chipselect[data-filter="agent"]' },
   ];
+  const WORKTREE_TOGGLE = 'button[aria-label="Toggle the project worktree"]';
+  const worktreeOpen = `(${HISTORY_ROOM}?.querySelector(${JSON.stringify(WORKTREE_TOGGLE)})?.getAttribute("aria-pressed") ?? "absent")`;
   const press = (selector: string): Promise<unknown> =>
     win.webContents.executeJavaScript(
       `(${HISTORY_ROOM}?.querySelector(${JSON.stringify(selector)})?.click(), "ok")`,
@@ -455,6 +459,19 @@ export async function historyByProjectPhotos(
     await win.webContents.executeJavaScript(`window.vibefield.theme.set(${JSON.stringify(theme)})`);
     await untilValue(win, `the ${theme} theme`, THEME_NOW, 5_000, (value) => value === theme);
     for (const open of opens) {
+      let opened = false;
+      if (open.worktree === true) {
+        const now = String(await win.webContents.executeJavaScript(worktreeOpen));
+        if (now === "absent") {
+          seen[open.shot] = { unavailable: "this room offers no worktree here" };
+          continue;
+        }
+        if (now === "false") {
+          await press(WORKTREE_TOGGLE);
+          await untilValue(win, "the worktree shown", worktreeOpen, 5_000, (v) => v === "true");
+          opened = true;
+        }
+      }
       if (open.trigger !== null) {
         await press(open.trigger);
         await untilValue(
@@ -481,6 +498,10 @@ export async function historyByProjectPhotos(
           5_000,
           (value) => value === "folded",
         );
+      }
+      if (opened) {
+        await press(WORKTREE_TOGGLE);
+        await untilValue(win, "the worktree shut", worktreeOpen, 5_000, (v) => v === "false");
       }
     }
   }

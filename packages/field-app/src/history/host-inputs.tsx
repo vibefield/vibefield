@@ -371,6 +371,18 @@ function newAgentAct(
   else if (!place.exists) why = "the folder is gone";
   const where = path === null ? "" : homePath(path, device?.here === true ? state.home : null);
   const working = place === undefined ? 0 : workingIn(model, place);
+  // what is true of the folder — never where it is drawn: ③ is a column the
+  // person may have closed (Electron's photographs, PJ-4)
+  const facts = [
+    place?.branch,
+    working === 1
+      ? "1 agent is already working there"
+      : working > 1
+        ? `${working} agents are already working there`
+        : null,
+  ]
+    .filter((part): part is string => typeof part === "string" && part !== "")
+    .join(" · ");
   const startsIn: RoomMenuGroup = {
     key: "starts-in",
     title: "Starts in",
@@ -379,21 +391,7 @@ function newAgentAct(
         key: "where",
         ...(device !== undefined ? { mark: <DeviceMark device={device} /> } : {}),
         label: where === "" ? "nowhere yet" : where,
-        ...(why !== null
-          ? { detail: why, disabled: true }
-          : {
-              detail:
-                [
-                  place?.branch,
-                  working === 1
-                    ? "1 agent is already working there"
-                    : working > 1
-                      ? `${working} agents are already working there`
-                      : null,
-                ]
-                  .filter((part): part is string => typeof part === "string")
-                  .join(" · ") || "follows the folder shown on the right",
-            }),
+        ...(why !== null ? { detail: why, disabled: true } : facts === "" ? {} : { detail: facts }),
       },
     ],
   };
@@ -654,7 +652,11 @@ function desktopChip(
               key: each.id,
               mark: <DeviceMark device={each} />,
               label: each.name,
-              aside: each.here ? "here" : each.asleep ? "asleep" : String(counts(each)),
+              // "here 7" — its standing, then how many of these projects live
+              // on it (DESIGN.md §8, R7)
+              aside: [each.here ? "here" : each.asleep ? "asleep" : null, String(counts(each))]
+                .filter((part): part is string => part !== null)
+                .join(" · "),
               ...(reason !== null ? { disabled: true, detail: reason } : {}),
               checked: chosen === each.id,
               ...(reason === null ? { onSelect: () => onChoose(each.id) } : {}),

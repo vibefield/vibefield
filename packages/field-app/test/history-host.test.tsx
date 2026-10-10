@@ -625,8 +625,10 @@ describe("R7: the chips", () => {
     const rows = items(desktop?.menu);
     expect(rows.map((row) => [row.key, row.aside ?? null, row.checked ?? null])).toEqual([
       ["any", null, true],
-      [STUDIO, "here", false],
-      [LAPTOP, "asleep", false],
+      // its standing, then how many of the projects listed here live on it:
+      // all five on Studio; on the laptop only vibe-field (away is not listed)
+      [STUDIO, "here · 5", false],
+      [LAPTOP, "asleep · 1", false],
     ]);
     rows.find((row) => row.key === LAPTOP)?.onSelect?.();
     expect(acts.setDesktop).toHaveBeenCalledWith(LAPTOP);
