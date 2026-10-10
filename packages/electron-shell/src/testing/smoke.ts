@@ -5929,14 +5929,48 @@ async function spawnBloomRows(ctx: {
     if (typeof id !== "string") {
       throw new Error(`agents.profileSets.create answered no set: ${JSON.stringify(answer)}`);
     }
+    // P2 (GV-D3): the profiles are offered in search's Live now — the
+    // scope row's dropdown, the bar's tabs retired (PK4). ⌘F opens it, the
+    // dropdown lists the new profile, and two Escapes fold the menu and the
+    // popup (the keyboard goes back to the pane the next items type in).
+    pressChord(win, "f");
     await waitForRendererFact(
       win,
-      `the profile tabs to offer ${BLOOM_PROFILE_LABEL}`,
-      30_000,
-      `document.querySelector('[data-profile-tab=${JSON.stringify(id)}]') !== null`,
-      `JSON.stringify([...document.querySelectorAll("[data-profile-tab]")].map((tab) => tab.getAttribute("data-profile-tab")))`,
+      "⌘F to open the Peek on Live now (the spawn bloom's profile witness)",
+      15_000,
+      `document.querySelector('.vf-peek-pop[role="dialog"]')?.getAttribute("data-scope") === "live"`,
     );
-    say(1, "profile-made", { set: id, label: BLOOM_PROFILE_LABEL });
+    const PROFILE_ROWS = `JSON.stringify([...document.querySelectorAll('.vf-peek-pop .vf-peek-menu [role="menuitemradio"] .vf-menu-label')].map((row) => row.textContent))`;
+    const deadline = Date.now() + 30_000;
+    let offered: string[] = [];
+    while (Date.now() < deadline) {
+      // the dropdown is drawn once a profile besides This Mac exists; opened, it lists them
+      await evaluate(`(() => {
+        const dd = document.querySelector('.vf-peek-pop [data-peek-dd="profile"] .vf-peek-dd');
+        if (dd && dd.getAttribute("aria-expanded") !== "true") dd.click();
+        return "ok";
+      })()`);
+      offered = JSON.parse(await evaluate<string>(PROFILE_ROWS)) as string[];
+      if (offered.includes(BLOOM_PROFILE_LABEL)) break;
+      await sleep(200);
+    }
+    if (!offered.includes(BLOOM_PROFILE_LABEL)) {
+      throw new Error(
+        `search's profile filter did not offer ${BLOOM_PROFILE_LABEL} within 30000ms — ${JSON.stringify(offered)}`,
+      );
+    }
+    for (let press = 0; press < 2; press += 1) {
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await sleep(150);
+    }
+    await waitForRendererFact(
+      win,
+      "Escape to fold the Peek after the profile witness",
+      10_000,
+      `document.querySelector('.vf-peek-pop[role="dialog"]') === null`,
+    );
+    say(1, "profile-made", { set: id, label: BLOOM_PROFILE_LABEL, offered });
     return { id, label: BLOOM_PROFILE_LABEL };
   });
 
