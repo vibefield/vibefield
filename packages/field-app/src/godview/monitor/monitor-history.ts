@@ -27,7 +27,9 @@ import { sdkOsMark } from "./model-board";
 // HISTORY_LEFT_DEBOUNCE_MS (its ended lane appears in a second, not thirty); a
 // row's status moving past its seam, or a new agent row, at most every
 // HISTORY_REFRESH_MIN_MS (the view draws "not recorded" between the seam and a
-// newer status until then).
+// newer status until then). ONE re-read is pending at a time and a later
+// publish never drops it or puts it off: a leaving takes a pending read with
+// it, a seam or an arrival is served by the one already wanted.
 //
 // Honest states (v2 items 3, 9): before the first answer the capability is
 // absent (the view draws today's floor). A record that cannot be read now is
@@ -165,12 +167,18 @@ export function useMonitorHistory(options: MonitorHistoryOptions): MonitorHistor
   const hereRef = useRef(here);
   hereRef.current = here;
   const seams = useRef<ReadonlyMap<string, number>>(new Map());
+  /** the one re-read the rows asked for and that has not begun */
+  const again = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  // a new door forgets what the old one said
+  // a new door forgets what the old one said, and what was wanted of it; so does a closed stage
   useEffect(() => {
     setNoRecord(false);
     setSnapshot(undefined);
     lastGood.current = undefined;
+    return () => {
+      clearTimeout(again.current);
+      again.current = undefined;
+    };
   }, [port]);
 
   // read: at once while the view asks, again for each generation the rows asked for
@@ -242,21 +250,37 @@ export function useMonitorHistory(options: MonitorHistoryOptions): MonitorHistor
   useEffect(() => {
     const before = watched.current;
     watched.current = rowsKey;
-    if (rowsKey === undefined || before === undefined || before === rowsKey) return;
+    const readAgainIn = (wait: number): void => {
+      clearTimeout(again.current);
+      again.current = setTimeout(() => {
+        again.current = undefined;
+        setGeneration((value) => value + 1);
+      }, wait);
+    };
+    if (rowsKey === undefined) {
+      // the watch ended (the view went, or the door has no record): nothing is wanted
+      clearTimeout(again.current);
+      again.current = undefined;
+      return;
+    }
+    if (before === undefined || before === rowsKey) return;
     const was = parseRowsKey(before);
     const is = parseRowsKey(rowsKey);
-    const left = [...was.keys()].some((id) => !is.has(id));
+    if ([...was.keys()].some((id) => !is.has(id))) {
+      // a leaving waits a second for others leaving with it, and takes a read already wanted with it
+      readAgainIn(HISTORY_LEFT_DEBOUNCE_MS);
+      return;
+    }
+    // a read already wanted serves a seam or an arrival too, and neither puts it off
+    if (again.current !== undefined) return;
     const moved = [...is].some(([id, since]) => {
       if (!was.has(id)) return true;
       const seam = seams.current.get(id);
       return seam !== undefined && since > seam;
     });
-    if (!left && !moved) return;
-    const wait = left
-      ? HISTORY_LEFT_DEBOUNCE_MS
-      : Math.max(0, lastRead.current + HISTORY_REFRESH_MIN_MS - nowRef.current());
-    const timer = setTimeout(() => setGeneration((value) => value + 1), wait);
-    return () => clearTimeout(timer);
+    if (moved) {
+      readAgainIn(Math.max(0, lastRead.current + HISTORY_REFRESH_MIN_MS - nowRef.current()));
+    }
   }, [rowsKey]);
 
   const tintL = palette.tint.l;

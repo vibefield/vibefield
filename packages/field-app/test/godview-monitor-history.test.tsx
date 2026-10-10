@@ -352,6 +352,35 @@ describe("re-reads follow the rows (v2 item 8)", () => {
     expect(historyRowsKey(ROWS)).toBe(`run-1@${NOW - HOUR}`);
   });
 
+  it("a leaving is not dropped by the next publish: another row's status moving inside the second changes nothing", async () => {
+    const port = fakePort();
+    const other = { id: "run-2", kind: "agent", statusSince: NOW - HOUR };
+    await mount({ port, wants: true, rows: [ROWS[0]!, other] });
+    await port.answer();
+    await update({ port, wants: true, rows: [other] });
+    await advance(HISTORY_LEFT_DEBOUNCE_MS / 2);
+    // the record holds no lane for run-2, so its status moves no re-read of its own
+    await update({ port, wants: true, rows: [{ ...other, statusSince: NOW }] });
+    await advance(HISTORY_LEFT_DEBOUNCE_MS / 2);
+    expect(port.asks).toHaveLength(2);
+  });
+
+  it("a leaving is not put off to the floor by a seam moving inside the second", async () => {
+    const port = fakePort();
+    const other = { id: "run-2", kind: "agent", statusSince: NOW - HOUR };
+    await mount({ port, wants: true, rows: [ROWS[0]!, other] });
+    await port.answer({ ...ANSWER, live: [{ id: "run-2", seamAt: NOW - HOUR, spans: [] }] });
+    await update({ port, wants: true, rows: [other] });
+    await advance(HISTORY_LEFT_DEBOUNCE_MS / 2);
+    await update({ port, wants: true, rows: [{ ...other, statusSince: NOW }] });
+    await advance(HISTORY_LEFT_DEBOUNCE_MS / 2);
+    expect(port.asks).toHaveLength(2);
+    // and that one read served the seam too: nothing more is asked at the floor
+    await port.answer({ ...ANSWER, live: [{ id: "run-2", seamAt: NOW, spans: [] }] });
+    await advance(10 * HISTORY_REFRESH_MIN_MS);
+    expect(port.asks).toHaveLength(2);
+  });
+
   it("a view that begins to ask reads once: the rows it begins with are the baseline, not a row arriving", async () => {
     const port = fakePort();
     await mount({ port, wants: false, rows: ROWS });
