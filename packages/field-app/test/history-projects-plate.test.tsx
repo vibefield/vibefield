@@ -10,12 +10,17 @@
  * desktop's folder alone (the device guard, drawn) and says what the laptop
  * holds by its mark and name.
  */
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { HistoryPreview } from "../src/design-system/HistoryPreview";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 let root: Root | null = null;
 let host: HTMLElement | null = null;
@@ -113,4 +118,28 @@ describe("History by project — the catalog's plate (PJ-4)", () => {
       ),
     ).toEqual(["desktop", "agent"]);
   }, 30_000);
+
+  it("the catalog's own sheets never style the room's classes — After Hours' shared `ah-` names are scoped to its surface", () => {
+    // Electron's photographs (PJ-4) found Live now's head 146px tall in the
+    // catalog: the After Hours sheet's bare `.ah-section` (padding 66px 0) is
+    // also the room's section head. A class both sheets name is scoped with
+    // `:where(.ah)` in the illustration sheet, so the plates draw the room's own.
+    const classes = (css: string): Set<string> =>
+      new Set([...css.matchAll(/\.(ah-[A-Za-z0-9_-]+)/gu)].map((match) => match[1] ?? ""));
+    const roomStyles = join(HERE, "..", "node_modules", "@rosetta", "room", "src", "styles");
+    const room = new Set(
+      readdirSync(roomStyles)
+        .filter((name) => name.endsWith(".css"))
+        .flatMap((name) => [...classes(readFileSync(join(roomStyles, name), "utf8"))]),
+    );
+    const sheet = readFileSync(
+      join(HERE, "..", "src", "design-system", "styles", "fieldmarks.css"),
+      "utf8",
+    );
+    const bare = sheet
+      .replace(/\/\*[\s\S]*?\*\//gu, "")
+      .replace(/:where\(\.ah\) \.ah-[A-Za-z0-9_-]+/gu, "");
+    expect([...classes(bare)].filter((name) => room.has(name))).toEqual([]);
+    expect(room.has("ah-section")).toBe(true);
+  });
 });
