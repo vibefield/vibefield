@@ -11,6 +11,7 @@ import {
   type DeskLiveDeps,
   fpsBucket,
   liveDemandIntent,
+  liveInputEvents,
 } from "../src/surfaces/live/desk-live";
 
 import type {
@@ -146,8 +147,20 @@ function fakeHandle(key: string, opts: SurfaceAcquireOptions) {
     setDemand(d: SurfaceDemandRequest) {
       h.demands.push(d);
     },
-    sendInput: () => false,
-    navigate: () => false,
+    /** What the face sent down the page's lane, with the revision it was stamped with; and its navigations. */
+    inputs: [] as { event: unknown; revision: number | undefined }[],
+    navigations: [] as unknown[],
+    lane: true,
+    sendInput(event: unknown, revision?: number) {
+      if (!h.lane) return false;
+      h.inputs.push({ event, revision });
+      return true;
+    },
+    navigate(command: unknown) {
+      if (!h.lane) return false;
+      h.navigations.push(command);
+      return true;
+    },
     retry() {
       h.retried += 1;
     },
@@ -453,6 +466,8 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         arrivals: 0,
         presented: 0,
         dropped: 0,
+        inputs: 0,
+        lastInput: null,
         texture: undefined,
       },
     ]);
@@ -483,6 +498,8 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         arrivals: 3,
         presented: 1,
         dropped: 1,
+        inputs: 0,
+        lastInput: null,
         texture: { width: 2560, height: 1600, revision: 1, epoch: 0 },
       },
     ]);
@@ -500,6 +517,8 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         arrivals: 0,
         presented: 0,
         dropped: 0,
+        inputs: 0,
+        lastInput: null,
         texture: undefined,
       },
     ]);
@@ -577,5 +596,163 @@ describe("the demand map — the kind's LiveDemand in the pool's words (ruling 5
     face.demand(SEEN);
     face.demand(UNSEEN);
     expect(handle.demands).toEqual([liveDemandIntent(SEEN), liveDemandIntent(UNSEEN)]);
+  });
+});
+
+describe("PT-3 — the face in use: its input, the page's cursor, a page navigated by its key", () => {
+  it("input reaches the page's lane in the DISPLAYED frame's logical px, stamped with that frame's revision — nothing before a frame", () => {
+    const { live, face, presentation, handle } = attached();
+    // nothing displayed yet: nothing to map against, nothing sent
+    face.input?.({ kind: "pointer", x: 10, y: 10, button: 0, buttons: 1, count: 1, phase: "down" });
+    expect(handle.inputs).toEqual([]);
+    expect(live.stats().inputsUnsent).toBe(1);
+    face.demand(SEEN);
+    presentation.land();
+    expect(face.take()).toBe(true);
+    // a press, its drag and its release — the frame's revision (1) on each, the point held inside its logical size
+    face.input?.({
+      kind: "pointer",
+      x: 640,
+      y: 400,
+      button: 0,
+      buttons: 1,
+      count: 2,
+      phase: "down",
+    });
+    face.input?.({
+      kind: "pointer",
+      x: 1500,
+      y: -20,
+      button: -1,
+      buttons: 1,
+      count: 0,
+      phase: "move",
+    });
+    face.input?.({ kind: "pointer", x: 700, y: 410, button: 0, buttons: 0, count: 2, phase: "up" });
+    face.input?.({ kind: "wheel", x: 10, y: 20, dx: 0, dy: 120 });
+    face.input?.({ kind: "key", key: "a", code: "KeyA", phase: "down", mods: 1 | 4, repeat: true });
+    face.input?.({ kind: "compose", text: "にほ", caret: 2 });
+    face.input?.({ kind: "text", text: "にほん" });
+    expect(handle.inputs).toEqual([
+      {
+        event: {
+          kind: "pointer",
+          action: "down",
+          x: 640,
+          y: 400,
+          button: "left",
+          clickCount: 2,
+          buttons: 1,
+        },
+        revision: 1,
+      },
+      { event: { kind: "pointer", action: "move", x: 1280, y: 0, buttons: 1 }, revision: 1 },
+      {
+        event: { kind: "pointer", action: "up", x: 700, y: 410, button: "left", clickCount: 2 },
+        revision: 1,
+      },
+      { event: { kind: "wheel", x: 10, y: 20, deltaX: 0, deltaY: 120 }, revision: 1 },
+      {
+        event: {
+          kind: "key",
+          action: "down",
+          key: "a",
+          code: "KeyA",
+          modifiers: { alt: true, ctrl: false, meta: true, shift: false },
+          autoRepeat: true,
+        },
+        revision: 1,
+      },
+      { event: { kind: "compose", text: "にほ", caret: 2 }, revision: 1 },
+      { event: { kind: "text", text: "にほん" }, revision: 1 },
+    ]);
+    expect(live.stats().inputs).toBe(7);
+    const row = live.faces()[0];
+    expect(row?.inputs).toBe(7);
+    expect(row?.lastInput).toBe("text");
+    // the lane gone (a close lost the race): the face counts what it could not send
+    handle.lane = false;
+    face.input?.({ kind: "text", text: "x" });
+    expect(live.stats().inputsUnsent).toBe(2);
+  });
+
+  it("maps what the wire can carry, and says what it cannot as the wire can say it", () => {
+    const L = [1280, 800] as const;
+    // the secondary button by DOM's number; a click count past the wire's three held to three
+    expect(
+      liveInputEvents(
+        { kind: "pointer", x: 1, y: 2, button: 2, buttons: 2, count: 5, phase: "down" },
+        L,
+      ),
+    ).toEqual([
+      { kind: "pointer", action: "down", x: 1, y: 2, button: "right", clickCount: 3, buttons: 2 },
+    ]);
+    // a key name past the wire's bound is not sent; an IME's caret held inside its text; a long text sent in pieces
+    expect(
+      liveInputEvents(
+        { kind: "key", key: "x".repeat(33), code: "KeyX", phase: "down", mods: 0, repeat: false },
+        L,
+      ),
+    ).toEqual([]);
+    expect(liveInputEvents({ kind: "compose", text: "ab", caret: 9 }, L)).toEqual([
+      { kind: "compose", text: "ab", caret: 2 },
+    ]);
+    const long = liveInputEvents({ kind: "text", text: "y".repeat(16_385) }, L);
+    expect(long.map((e) => (e.kind === "text" ? e.text.length : -1))).toEqual([16_384, 1]);
+    expect(liveInputEvents({ kind: "text", text: "" }, L)).toEqual([]);
+    // a wheel's deltas held inside the wire's bound
+    expect(liveInputEvents({ kind: "wheel", x: 0, y: 0, dx: -1e9, dy: 1e9 }, L)).toEqual([
+      { kind: "wheel", x: 0, y: 0, deltaX: -100_000, deltaY: 100_000 },
+    ]);
+  });
+
+  it("the page's CURSOR is the face's word, and a cursor that moves is an arrival (LT2's question 8)", () => {
+    const { face, handle, arrived } = attached();
+    const browser = {
+      url: "http://127.0.0.1:4321/",
+      title: "Fixture",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+    };
+    handle.set({ browser: browser as never });
+    expect(face.info().cursor).toBeUndefined();
+    const before = arrived.mock.calls.length;
+    handle.set({ browser: { ...browser, cursor: "pointer" } as never });
+    expect(face.info().cursor).toBe("pointer");
+    expect(arrived.mock.calls.length).toBe(before + 1);
+    // the same words again: no arrival
+    handle.set({ browser: { ...browser, cursor: "pointer" } as never });
+    expect(arrived.mock.calls.length).toBe(before + 1);
+    handle.set({ browser: { ...browser, cursor: "text" } as never });
+    expect(face.info().cursor).toBe("text");
+    expect(arrived.mock.calls.length).toBe(before + 2);
+  });
+
+  it("a page is NAVIGATED by its face's key through the second service — never a key with no page open, nor a refused one", () => {
+    const { live, handle, face } = attached();
+    expect(live.navigation.navigate("13918995204487956201-1", { action: "back" })).toBe(true);
+    expect(
+      live.navigation.navigate("13918995204487956201-1", {
+        action: "go",
+        url: "http://127.0.0.1:4321/next",
+      }),
+    ).toBe(true);
+    expect(handle.navigations).toEqual([
+      { action: "back" },
+      { action: "go", url: "http://127.0.0.1:4321/next" },
+    ]);
+    // a key no face holds: refused, counted
+    expect(live.navigation.navigate("no-such-key", { action: "reload" })).toBe(false);
+    // a face the gate refused holds no page: refused too
+    const refusing = setup({
+      gate: () => ({ refused: "plugin x is not granted surface.browser" }),
+    });
+    refusing.live.open("k2", PAGE, () => {});
+    expect(refusing.live.navigation.navigate("k2", { action: "reload" })).toBe(false);
+    // closed: its page is no longer the face's to navigate
+    face.close();
+    expect(live.navigation.navigate("13918995204487956201-1", { action: "reload" })).toBe(false);
+    expect(live.stats()).toMatchObject({ navigations: 2, navigationsRefused: 2 });
   });
 });

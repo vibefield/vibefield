@@ -16,11 +16,17 @@
 //    page's logical viewport, priority 80 in use / 50 at rest).
 //  - ONE SERVICE PER DESK MOUNT: its writers are made on that mount's device; a remount makes a new service, and the pool's
 //    grace keeps the page attached across it.
+//  - IN USE (PT-3 rulings 3–6): a face takes INPUT in the coordinates of the frame it DISPLAYED (its logical size); the service
+//    stamps each with the geometry revision of the frame it presented (LSF drops a stale one, the service drops nothing itself)
+//    and sends it down the pool's lane — a pointer, a wheel (the page's CSS px), a key, committed text, an IME composition.
+//    The face's words carry the page's CURSOR, and a cursor that moves is an arrival. NAVIGATION goes through the page, by the
+//    face's key (`navigate` — the second service, `BROWSER_NAVIGATION`): never by re-opening it.
 
 import type {
   LiveDemand,
   LiveFace,
   LiveInfo,
+  LiveInput,
   LiveSources,
   LiveState,
   LiveTexture,
@@ -31,9 +37,14 @@ import {
   LIVE_SURFACE_FPS_BUCKETS_V1,
   type LiveSurfaceDemandV1,
   type LiveSurfaceFpsBucketV1,
+  type LiveSurfaceInputEventV1,
   SurfaceOpenResultV1,
 } from "@vibefield/contracts";
-import { type LiveBrowserSpec, liveBrowserSpec } from "@vibefield/plugin-sdk/desk";
+import {
+  type BrowserNavigation,
+  type LiveBrowserSpec,
+  liveBrowserSpec,
+} from "@vibefield/plugin-sdk/desk";
 import type {
   ProductSurfaceFrame,
   SurfaceDemandIntent,
@@ -69,6 +80,12 @@ export interface DeskLiveStats {
   readonly demands: number;
   /** ICE writers made — one per face and device; a remade one is a new texture (the PLAYING row's "none remade"). */
   readonly writers: number;
+  /** PT-3: inputs sent down a page's lane, and those the service could not send (no frame presented yet, a closed lane). */
+  readonly inputs: number;
+  readonly inputsUnsent: number;
+  /** PT-3: navigations sent to a page by its key, and those refused (no page open for the key). */
+  readonly navigations: number;
+  readonly navigationsRefused: number;
 }
 
 /** One open face as a smoke reads it. */
@@ -85,6 +102,9 @@ export interface DeskLiveFaceRow {
   readonly arrivals: number;
   readonly presented: number;
   readonly dropped: number;
+  /** PT-3: inputs this face sent, and the last one's kind — a smoke's witness that a page in hand was told. */
+  readonly inputs: number;
+  readonly lastInput: LiveInput["kind"] | null;
   /** The face's texture: its size, its present count, its generation (a remade texture is a new epoch). */
   readonly texture:
     | {
@@ -97,6 +117,8 @@ export interface DeskLiveFaceRow {
 }
 
 export interface DeskLiveSources extends LiveSources {
+  /** PT-3: what the desk lends under `BROWSER_NAVIGATION` — a page navigated by its face's key, never re-opened. */
+  readonly navigation: BrowserNavigation;
   stats(): DeskLiveStats;
   /** The faces open now — a smoke's witness of the law's asks, the source's pace and the texture's life. */
   faces(): readonly DeskLiveFaceRow[];
@@ -187,8 +209,85 @@ export function liveInfoOf(state: SurfaceHandleState<ProductSurfaceFrame>): Live
     ...(b.loading ? { loading: LOADING } : {}),
     back: b.canGoBack,
     forward: b.canGoForward,
+    ...(b.cursor === undefined ? {} : { cursor: b.cursor }),
     ...degraded,
   };
+}
+
+/** The pointer's button in LSF's words (DOM's numbering: 0 the primary, 1 the middle, 2 the secondary). */
+const BUTTONS = ["left", "middle", "right"] as const;
+
+/** What CDP calls the modifiers, from the face's mask (Alt 1, Ctrl 2, Meta 4, Shift 8 — `LiveInput` key's `mods`). */
+const modifiersOf = (mods: number) => ({
+  alt: (mods & 1) !== 0,
+  ctrl: (mods & 2) !== 0,
+  meta: (mods & 4) !== 0,
+  shift: (mods & 8) !== 0,
+});
+
+/** The longest text one input carries (the wire's and the producer's bound): longer is sent in pieces. */
+const TEXT_MAX = 16_384;
+
+/**
+ * A face's input in LSF's words (PT-3 ruling 3) — in the displayed frame's logical px, held inside its `[w, h]` (the producer
+ * refuses a point outside it); what the wire cannot carry (a key name past its bound, a text past its own in pieces) is
+ * said as LSF can say it, or not at all.
+ */
+export function liveInputEvents(
+  e: LiveInput,
+  logical: readonly [number, number],
+): readonly LiveSurfaceInputEventV1[] {
+  const at = (x: number, y: number) => ({
+    x: Math.min(Math.max(x, 0), logical[0]),
+    y: Math.min(Math.max(y, 0), logical[1]),
+  });
+  switch (e.kind) {
+    case "pointer": {
+      const button = BUTTONS[e.button];
+      return [
+        {
+          kind: "pointer",
+          action: e.phase,
+          ...at(e.x, e.y),
+          ...(e.phase === "move" || button === undefined ? {} : { button }),
+          ...(e.phase === "move" ? {} : { clickCount: Math.min(Math.max(e.count, 1), 3) }),
+          ...(e.buttons > 0 ? { buttons: Math.min(e.buttons, 31) } : {}),
+        },
+      ];
+    }
+    case "wheel":
+      return [
+        {
+          kind: "wheel",
+          ...at(e.x, e.y),
+          deltaX: Math.min(Math.max(e.dx, -100_000), 100_000),
+          deltaY: Math.min(Math.max(e.dy, -100_000), 100_000),
+        },
+      ];
+    case "key":
+      if (e.key.length < 1 || e.key.length > 32 || e.code.length < 1 || e.code.length > 64)
+        return [];
+      return [
+        {
+          kind: "key",
+          action: e.phase,
+          key: e.key,
+          code: e.code,
+          modifiers: modifiersOf(e.mods),
+          ...(e.repeat ? { autoRepeat: true } : {}),
+        },
+      ];
+    case "text": {
+      const pieces: LiveSurfaceInputEventV1[] = [];
+      for (let i = 0; i < e.text.length; i += TEXT_MAX)
+        pieces.push({ kind: "text", text: e.text.slice(i, i + TEXT_MAX) });
+      return pieces;
+    }
+    case "compose": {
+      const text = e.text.slice(0, TEXT_MAX);
+      return [{ kind: "compose", text, caret: Math.min(Math.max(e.caret, 0), text.length) }];
+    }
+  }
 }
 
 /** What a face says, as one string — so the handle's every publish is not a change of the face's words. */
@@ -244,7 +343,20 @@ function browserSource(key: string, page: LiveBrowserSpec) {
 
 export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
   const faces = new Map<string, { face: LiveFace; row: () => DeskLiveFaceRow }>();
-  const counts = { opened: 0, refused: 0, presented: 0, dropped: 0, demands: 0, writers: 0 };
+  const counts = {
+    opened: 0,
+    refused: 0,
+    presented: 0,
+    dropped: 0,
+    demands: 0,
+    writers: 0,
+    inputs: 0,
+    inputsUnsent: 0,
+    navigations: 0,
+    navigationsRefused: 0,
+  };
+  /** The open pages' lanes by key (a failed face has none): what `navigate` reaches. */
+  const lanes = new Map<string, SurfaceHandle<ProductSurfaceFrame>>();
   const wireOf = (key: string): LiveSurfaceDemandV1 | null =>
     deps
       .pool()
@@ -265,6 +377,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         arrivals: 0,
         presented: 0,
         dropped: 0,
+        inputs: 0,
+        lastInput: null,
         texture: undefined,
       }),
     });
@@ -332,7 +446,12 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     let asked: LiveDemand | undefined;
     let writer: LiveWriter | undefined;
     let writerDevice: GPUDevice | undefined;
-    const tally = { arrivals: 0, presented: 0, dropped: 0 };
+    /** The frame the face DISPLAYS: its geometry revision and logical size — what input is mapped against and stamped with. */
+    let shown:
+      | { readonly revision: number; readonly logical: readonly [number, number] }
+      | undefined;
+    const tally = { arrivals: 0, presented: 0, dropped: 0, inputs: 0 };
+    let lastInput: LiveInput["kind"] | null = null;
     // close() unsubscribes both listeners at once, so nothing tells after it
     const tell = (): void => arrived();
     const listen = (next: SurfaceHandleState<ProductSurfaceFrame>["presentation"]): void => {
@@ -385,7 +504,10 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
             writerDevice = device;
             counts.writers += 1;
           }
-          writer.present(frame, rect, logicalOf(size));
+          const logical = logicalOf(size);
+          writer.present(frame, rect, logical);
+          shown =
+            logical === undefined ? undefined : { revision: metadata.geometry.revision, logical };
           return true;
         });
         if (r.kind !== "consumed") return changed;
@@ -401,9 +523,26 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         counts.demands += 1;
         handle.setDemand(liveDemandIntent(d));
       },
+      // in the DISPLAYED frame's logical px, stamped with that frame's geometry revision; nothing displayed yet: nothing sent
+      input(e: LiveInput): void {
+        if (closed) return;
+        const at = shown;
+        const events = at === undefined ? [] : liveInputEvents(e, at.logical);
+        if (at === undefined || events.length === 0) {
+          counts.inputsUnsent += 1;
+          return;
+        }
+        for (const event of events) {
+          if (handle.sendInput(event, at.revision)) counts.inputs += 1;
+          else counts.inputsUnsent += 1;
+        }
+        tally.inputs += 1;
+        lastInput = e.kind;
+      },
       close(): void {
         if (closed) return;
         closed = true;
+        lanes.delete(key);
         offState();
         offFrame?.();
         offFrame = null;
@@ -424,6 +563,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
           state: face.state(),
           info: face.info(),
           ...tally,
+          lastInput,
           texture:
             t === undefined
               ? undefined
@@ -431,11 +571,23 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         };
       },
     });
+    lanes.set(key, handle);
     return face;
   };
 
   return {
     open,
+    navigation: {
+      navigate(key, command) {
+        const lane = lanes.get(key);
+        if (lane === undefined || !lane.navigate(command)) {
+          counts.navigationsRefused += 1;
+          return false;
+        }
+        counts.navigations += 1;
+        return true;
+      },
+    },
     stats: () => ({ ...counts, open: faces.size }),
     faces: () => [...faces.values()].map((f) => f.row()),
     dispose() {

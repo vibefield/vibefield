@@ -9,6 +9,7 @@ import {
 } from "@vibecook/ice/desk";
 import { LIVE, type LiveSources, service } from "@vibecook/ice/desk/kit";
 import { deskPalette, deskTheme } from "@vibecook/ice/desk/objects";
+import { BROWSER_NAVIGATION, type BrowserNavigation } from "@vibefield/plugin-sdk/desk";
 import { deskText } from "./desk-assets";
 import { deskBlobs } from "./desk-blobs";
 
@@ -65,8 +66,9 @@ export interface FieldDeskLayerOptions {
   /** Told the layer's OWN device once it arrives (ICE's `onDevice`) — the smokes' GPU faults reach it (DK-16), and the live
    * service's writers are made on it (PT-2). */
   readonly onDevice?: (device: GPUDevice) => void;
-  /** PT-2 — the desk's live pages (`surfaces/live/desk-live.ts`), lent under ICE's `LIVE`: a portal kind's face opens on it. */
-  readonly live?: LiveSources;
+  /** PT-2 — the desk's live pages (`surfaces/live/desk-live.ts`), lent under ICE's `LIVE`: a portal kind's face opens on it.
+   * PT-3 — their `navigation`, lent beside it under `BROWSER_NAVIGATION`: a page navigated by its face's key. */
+  readonly live?: LiveSources & { readonly navigation?: BrowserNavigation };
 }
 
 /**
@@ -94,6 +96,15 @@ export function fieldDeskLayer(opts: FieldDeskLayerOptions): DeskLayerFactory {
     ...(opts.gpuLedger === true ? { gpuLedger: true } : {}),
     ...(opts.gpu === undefined ? {} : { gpu: opts.gpu }),
     ...(opts.onDevice === undefined ? {} : { onDevice: opts.onDevice }),
-    ...(opts.live === undefined ? {} : { services: [service(LIVE, opts.live)] }),
+    ...(opts.live === undefined
+      ? {}
+      : {
+          services: [
+            service(LIVE, opts.live),
+            ...(opts.live.navigation === undefined
+              ? []
+              : [service(BROWSER_NAVIGATION, opts.live.navigation)]),
+          ],
+        }),
   });
 }
