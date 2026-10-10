@@ -14,7 +14,7 @@
       "device": { "id": "01JDESK", "name": "Studio", "os": "mac" },
       "startedAt": 1791536400000,
       "endedAt": 1791541800000,
-      "spans": [{ "kind": "active", "from": 1791536400000, "to": 1791541800000 }]
+      "spans": [{ "kind": "bounds", "from": 1791536400000, "to": 1791541800000 }]
     }
   ]
 }

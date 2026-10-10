@@ -650,13 +650,15 @@ export const AgentRecordedLanesParams = z
   );
 export type AgentRecordedLanesParams = z.infer<typeof AgentRecordedLanesParams>;
 
-/** One stretch of a lane's past (the SDK's `MonitorPastSpan`): `worked` inside
- * a turn, `quiet` between turns, `unrecorded` across a long silence inside one,
- * `active` the floor's band (bounds alone). Never blocked, never unseen: the
- * record says neither. Closed, as the SDK's type is. */
+/** One stretch of a lane's past (the SDK's `MonitorPastSpan`, TIMELINE SHAPES
+ * v2): `worked` inside a turn, `quiet` between turns, `unrecorded` across a long
+ * silence inside one, `bounds` a session's bounds alone (the floor, or one
+ * session whose turns were not read — drawn flat and faint, never counted).
+ * Never blocked, never unseen: the record says neither. Closed, as the SDK's
+ * type is. */
 export const MonitorPastSpan = z
   .object({
-    kind: z.enum(["worked", "quiet", "unrecorded", "active"]),
+    kind: z.enum(["worked", "quiet", "unrecorded", "bounds"]),
     from: z.number().int(),
     to: z.number().int(),
   })
@@ -673,12 +675,19 @@ export const MonitorLivePast = z
   .passthrough();
 export type MonitorLivePast = z.infer<typeof MonitorLivePast>;
 
-/** A run the record holds that the model does not (`past:<provider>:<native id>`).
- * `device.self` is not carried, as on every row: the reader says it. */
+/** A run THIS runtime ran that the model no longer holds (`past:<provider>:<native
+ * id>`; a session this runtime never ran is no lane, v2 item 7). `device.self` is
+ * not carried, as on every row: the reader says it, and the reader computes
+ * `receded` from its own filters with `profileSet`. Never openable in v1: no
+ * command takes a `past:` id. */
 export const MonitorEndedRow = z
   .object({
     id: z.string().min(1),
     provider: z.object({ id: z.string(), label: z.string() }).passthrough().optional(),
+    /** the run's title, else the record's */
+    title: z.string().optional(),
+    /** the Agent Profile SET the run was born under */
+    profileSet: z.string().optional(),
     project: z
       .object({
         name: z.string(),
@@ -696,8 +705,11 @@ export type MonitorEndedRow = z.infer<typeof MonitorEndedRow>;
 
 /** `agent.recordedLanes`' answer: the SDK's `MonitorPastSnapshot`, field for
  * field (fieldd pins the two, `agent-monitor.ts`). `state` is the honest word —
- * `unavailable` with `detail` when the record could not be read (no rosettad,
- * still starting), `partial` when some of it was not. */
+ * `unavailable` with `detail` when a record should be here and cannot be read
+ * now (rosettad starting, a peer asleep), `partial` when some of it was not.
+ * A desktop that keeps no record at all refuses the door NOT_FOUND {state:
+ * "no-record"}: its window lends no past and draws today's floor. No cap, no
+ * `truncated`: dropped sessions are `partial` with a detail. */
 export const AgentRecordedLanesResult = z
   .object({
     sinceMs: z.number().int(),

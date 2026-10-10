@@ -84,13 +84,17 @@ describe("the record's words ride through; the past never says blocked or unseen
     expect(bounds.sessions[1]).toHaveProperty("aFieldFromANewerPeer", true);
   });
 
-  it("a span is worked, quiet, unrecorded or the floor's active band — nothing else", () => {
-    for (const kind of ["worked", "quiet", "unrecorded", "active"])
+  it("a span is worked, quiet, unrecorded or a session's bounds — nothing else (v2)", () => {
+    for (const kind of ["worked", "quiet", "unrecorded", "bounds"])
       expect(MonitorPastSpan.safeParse({ kind, from: 0, to: 1 }).success, kind).toBe(true);
-    for (const kind of ["blocked", "unseen", "idle", "working"])
+    for (const kind of ["blocked", "unseen", "idle", "working", "active", "loading"])
       expect(MonitorPastSpan.safeParse({ kind, from: 0, to: 1 }).success, kind).toBe(false);
     const floor = AgentRecordedLanesResult.parse(fixture("agent-recorded-lanes.floor.json"));
-    expect(floor.ended.flatMap((lane) => lane.spans.map((span) => span.kind))).toEqual(["active"]);
+    expect(floor.ended.flatMap((lane) => lane.spans.map((span) => span.kind))).toEqual(["bounds"]);
+    // no cap, no `truncated`, no "loading": the states are three
+    expect(AgentRecordedLanesResult.shape.state.options).toEqual(["complete", "partial", "unavailable"]);
+    const lanes = AgentRecordedLanesResult.parse(fixture("agent-recorded-lanes.valid.json"));
+    expect(lanes.ended[0]).toMatchObject({ title: "Split the invoice writer", profileSet: "native" });
   });
 
   it("both doors ride the record's consent and are asked where the record lives", () => {
