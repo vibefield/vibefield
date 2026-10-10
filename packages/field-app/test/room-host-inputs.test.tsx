@@ -76,6 +76,10 @@ async function room(inputs: Inputs = {}, desktop: HostPort | null = null) {
   return { el, demo, handle, render };
 }
 
+/** The room's root, where its host menus are drawn over every column (v3). */
+const layer = (el: HTMLElement) => el.querySelector<HTMLElement>(".ah-frame");
+const frameOf = (el: HTMLElement) => el.querySelector<HTMLElement>(".ah-frame") as HTMLElement;
+
 const projectRow = (el: HTMLElement, id: string) =>
   el.querySelector<HTMLElement>(`.ah-project-list-item[data-motion-key="${id}"]`);
 
@@ -650,15 +654,15 @@ describe("R6 — ③'s head as the host's folder list", () => {
     );
     // the list: every folder by group, the shown one checked, a worktree one step in, a filter past two
     act(() => pick.click());
-    const rows = [...(head(el, 3)?.querySelectorAll<HTMLButtonElement>(".ah-menu__item") ?? [])];
+    const rows = [...(layer(el)?.querySelectorAll<HTMLButtonElement>(".ah-menu__item") ?? [])];
     expect(rows.map((row) => row.dataset.key)).toEqual(["mac:vf", "mac:lane", "studio:vf"]);
     expect(rows.map((row) => row.getAttribute("aria-checked"))).toEqual(["false", "true", "false"]);
     expect(rows[1]?.dataset.depth).toBe("1");
     expect(rows[0]?.querySelector(".ah-menu__label")?.textContent).toBe("~/Projects/vibe-field");
     expect(
-      [...(head(el, 3)?.querySelectorAll(".ah-menu__title") ?? [])].map((t) => t.textContent),
+      [...(layer(el)?.querySelectorAll(".ah-menu__title") ?? [])].map((t) => t.textContent),
     ).toEqual(["This Mac", "Studio"]);
-    const filter = head(el, 3)?.querySelector<HTMLInputElement>(".ah-menu__filter");
+    const filter = layer(el)?.querySelector<HTMLInputElement>(".ah-menu__filter");
     expect(filter?.placeholder).toBe("Filter 3 folders");
     // the reader's pick
     act(() => rows[0]?.click());
@@ -680,7 +684,7 @@ describe("R6 — ③'s head as the host's folder list", () => {
     );
     act(() => pick.click());
     const checked = [
-      ...(head(el, 3)?.querySelectorAll<HTMLButtonElement>(".ah-menu__item[aria-checked='true']") ??
+      ...(layer(el)?.querySelectorAll<HTMLButtonElement>(".ah-menu__item[aria-checked='true']") ??
         []),
     ];
     expect(checked.map((row) => row.dataset.key)).toEqual(["studio:vf"]);
@@ -696,7 +700,7 @@ describe("R6 — ③'s head as the host's folder list", () => {
     // a pick lasts while its session does: away and back, ③ follows s0 again
     act(() => pick.click());
     act(() =>
-      head(el, 3)?.querySelector<HTMLButtonElement>(".ah-menu__item[data-key='mac:lane']")?.click(),
+      layer(el)?.querySelector<HTMLButtonElement>(".ah-menu__item[data-key='mac:lane']")?.click(),
     );
     await until(() => shown.at(-1) === "mac:lane", "the pick on s0");
     act(() => sessionRowOf(el, "s1")?.click());
@@ -728,7 +732,7 @@ describe("R6 — ③'s head as the host's folder list", () => {
     );
     act(() => pick.click());
     const filter = await until(
-      () => head(el, 3)?.querySelector<HTMLInputElement>(".ah-menu__filter"),
+      () => layer(el)?.querySelector<HTMLInputElement>(".ah-menu__filter"),
       "the filter",
     );
     expect(document.activeElement).toBe(filter);
@@ -738,7 +742,7 @@ describe("R6 — ③'s head as the host's folder list", () => {
       filter.dispatchEvent(new Event("input", { bubbles: true }));
     });
     expect(
-      [...(head(el, 3)?.querySelectorAll<HTMLButtonElement>(".ah-menu__item") ?? [])].map(
+      [...(layer(el)?.querySelectorAll<HTMLButtonElement>(".ah-menu__item") ?? [])].map(
         (row) => row.dataset.key,
       ),
     ).toEqual(["b"]);
@@ -826,7 +830,9 @@ describe("R7 — filter chips as buttons with popover rows", () => {
     expect(chip.textContent).toBe("any desktop");
     expect(chip.hasAttribute("data-set")).toBe(false);
     act(() => chip.click());
-    const studio = bar.querySelector<HTMLButtonElement>(".ah-menu__item[data-key='studio']")!;
+    const studio = frameOf(el).querySelector<HTMLButtonElement>(
+      ".ah-menu__item[data-key='studio']",
+    )!;
     expect(studio.querySelector("[data-os='studio']")).not.toBeNull();
     expect(studio.querySelector(".ah-menu__aside")?.textContent).toBe("asleep");
     act(() => studio.click());
