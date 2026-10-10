@@ -32,7 +32,7 @@ export const Pane = defineStruct("Pane", [
   ["cap", "vec4f"], // the address capsule: centre u, v, half extents
   ["tint", "vec4f"], // the glass's edge colour (sRGB — what a long path through it shows), the path it is measured over (world)
   ["screen", "vec4f"], // the page's texture: texels wide, high; its last level; on (0…1: a page in hand)
-  ["screen2", "vec4f"], // unused; brightness; the glow's level; loading (0…1, < 0 = not loading)
+  ["screen2", "vec4f"], // a NOTICE (0/1 — the film with the page's texture added as words' light); brightness; the glow's level; loading (0…1, < 0 = not loading)
   ["ink", "vec4f"], // the head's raster: on (0/1), the engraving's share of its rows, where the print's rows start (both 0…1), unused
   ["hover", "vec4f"], // a control under the pointer (in use — PT-3): its centre u, v, radius, presence (pressed > 1)
   ["light", "vec4f"], // toward the lamp (unit), the page's shadow alpha
@@ -78,6 +78,8 @@ export interface PaneLookValues {
   /** The colour a shadow casts on the mat by day — the desk's, read off the palette's `cast` role (ICE I46). */
   readonly cast: RGB;
   readonly panelOff: RGB;
+  /** PT-5a: the ink of the words a failed page's film carries. */
+  readonly notice: RGB;
   readonly frost: RGB;
   readonly progress: RGB;
   readonly sky: RGB;
@@ -98,6 +100,11 @@ export interface PagePlan {
   /** The texture's texels (`pageTexels` — a CSS px a texel, under the cap). */
   readonly width: number;
   readonly height: number;
+  /**
+   * PT-5a — a failed page's NOTICE: the bytes the pass lays as the page (the words' light over black — notice-canvas.ts),
+   * drawn as the FILM with those words on it. Absent: the sample's still (the pass generates it) or a live page's texture.
+   */
+  readonly notice?: Uint8Array<ArrayBuffer> | undefined;
 }
 
 /** A head raster's bitmap: its engraving (alpha) and print (premultiplied RGBA) halves, rows top-down (head.ts `engraveSplit`). */
@@ -193,7 +200,12 @@ export function paneValues(p: PaneInstance) {
       page === null
         ? [1, 1, 0, 0]
         : [page.width, page.height, levelsOf(page.width, page.height) - 1, 1],
-    screen2: [0, p.brightness, glowLevel(page?.width ?? 1), p.loading],
+    screen2: [
+      page?.notice === undefined ? 0 : 1,
+      p.brightness,
+      glowLevel(page?.width ?? 1),
+      p.loading,
+    ],
     ink: inked ? [1, split.h / split.height, split.at / split.height, 0] : [0, 0, 0, 0],
     hover: h ? [h.u, h.v, h.r, h.presence] : [0, 0, 1, 0],
     light: [G.light[0], G.light[1], G.light[2], G.shadowAlpha],

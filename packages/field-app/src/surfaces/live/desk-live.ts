@@ -31,6 +31,11 @@
 //  - THE PARKED DESK (PT-5a ruling 5; design-019 §8): while the desk's loop is parked its kinds are not ticked and cannot
 //    ask, so the service asks for them — `park(true)` pauses every page (LSF mutes a page that is not asked for live:
 //    ruling 4), `park(false)` gives each page its face's LAST ask back.
+//  - A PAGE'S FAILURES ARE SAID (PT-5a ruling 3): a load that failed, a page that stopped, a lane lost, a page the desk may
+//    not open — each a `failed` state whose reason begins with the SDK's word for it (`LIVE_BROWSER_FAILURES`), with a `retry`
+//    wherever trying again can help. A failed page's frames are NEVER shown (the engine's own error page stays unseen): its
+//    texture is hidden until a frame of the page that follows lands, and nothing is sent to it meanwhile. The page's source
+//    says its stops (`whenStopped: "say"`): a desk page is never restarted behind the person.
 //  - THE FAVICON (PT-4 ruling 4): the page's icon rides LSF's browser state; the face's words carry its bytes under
 //    `extra.favicon` (decoded once a key) — `null` where the page has none, absent before the page has said anything.
 
@@ -55,7 +60,10 @@ import {
 } from "@vibefield/contracts";
 import {
   type BrowserNavigation,
+  type LiveBrowserFailure,
+  type LiveBrowserRefusal,
   type LiveBrowserSpec,
+  liveBrowserFailureReason,
   liveBrowserSpec,
 } from "@vibefield/plugin-sdk/desk";
 import type {
@@ -146,6 +154,11 @@ export interface DeskLiveFaceRow {
         readonly epoch: number;
       }
     | undefined;
+  /** PT-5a: the texture is HIDDEN (`texture()` answers none) — it holds what no face may show (the engine's own error page,
+   * a page from before it failed) until a frame of the page that follows lands; and the serial of the last thing the page
+   * asked for and was refused (0: nothing). */
+  readonly veiled: boolean;
+  readonly refused: number;
 }
 
 export interface DeskLiveSources extends LiveSources {
@@ -200,10 +213,25 @@ export function liveDemandIntent(d: LiveDemand): SurfaceDemandIntent {
   };
 }
 
-/** The face's state, read off the pool's handle and the producer's summary. */
+/** How a failed face is tried again: the pool mints its page anew (a lost lane), or the page is asked to load again. */
+export interface LiveRetries {
+  readonly mint: () => void;
+  readonly reload: () => void;
+}
+
+/**
+ * The face's state, read off the pool's handle and the producer's summary. PT-5a (ruling 3) — A PAGE'S FAILURES ARE SAID,
+ * each in the SDK's words (`LIVE_BROWSER_FAILURES`, the producer's own message after them for a diagnostic):
+ *  - its LOAD failed (`browser.failure` — the producer is alive, behind the engine's own error page, which no face shows):
+ *    the load's reason; `retry` reloads (the engine asks for the failed address again);
+ *  - the page STOPPED (`failed`: `producer-crashed` — its process gone; `frame-stalled` the person's to recover — unresponsive
+ *    past the producer's bound): `retry` reloads, and the producer starts again where the page was;
+ *  - a source that cannot be brought back (`permanent`) may not be: no `retry`; any other failure: `failed`, `retry` reloads;
+ *  - the lane is LOST: `retry` mints it again.
+ */
 export function liveStateOf(
   state: SurfaceHandleState<ProductSurfaceFrame>,
-  retry: () => void,
+  retries: LiveRetries,
 ): LiveState {
   switch (state.status) {
     case "attaching":
@@ -211,9 +239,41 @@ export function liveStateOf(
     case "released":
       return { is: "closed" };
     case "lost":
-      return { is: "failed", reason: state.error?.message ?? "the page was lost", retry };
+      return {
+        is: "failed",
+        reason: liveBrowserFailureReason("lost", state.error?.message),
+        retry: retries.mint,
+      };
     case "live": {
       const summary = state.presentation?.summary;
+      if (summary?.state === "closed") return { is: "closed" };
+      if (summary?.state === "failed") {
+        const error = summary.error;
+        if (error?.recovery === "permanent")
+          return { is: "failed", reason: liveBrowserFailureReason("may-not", error.message) };
+        const word: LiveBrowserFailure =
+          error?.code === "producer-crashed"
+            ? "stopped"
+            : error?.code === "frame-stalled" && error.recovery === "user-action"
+              ? "unresponsive"
+              : error?.code === "source-not-found"
+                ? "load-failed"
+                : "failed";
+        return {
+          is: "failed",
+          reason: liveBrowserFailureReason(word, error?.message),
+          retry: retries.reload,
+        };
+      }
+      const failure = state.browser?.failure;
+      if (failure !== undefined)
+        return {
+          is: "failed",
+          reason: liveBrowserFailureReason(
+            failure.reason === "failed" ? "load-failed" : failure.reason,
+          ),
+          retry: retries.reload,
+        };
       switch (summary?.state) {
         case undefined:
         case "created":
@@ -222,10 +282,6 @@ export function liveStateOf(
           return { is: "starting" };
         case "live":
           return { is: "live" };
-        case "closed":
-          return { is: "closed" };
-        case "failed":
-          return { is: "failed", reason: summary.error?.message ?? "the page failed", retry };
         default:
           // paused, hibernated: the last frame holds
           return { is: "paused" };
@@ -233,6 +289,13 @@ export function liveStateOf(
     }
   }
 }
+
+/** PT-5a: is the face's page one whose frames no face may show — its load failed (the engine's own error page), it stopped,
+ * its lane is lost? */
+const failing = (state: SurfaceHandleState<ProductSurfaceFrame>): boolean =>
+  state.status === "lost" ||
+  state.presentation?.summary.state === "failed" ||
+  state.browser?.failure !== undefined;
 
 /** LSF reports a page loading, not how far: an indeterminate line (half way). */
 const LOADING = 0.5;
@@ -339,14 +402,18 @@ const wordsOf = (state: SurfaceHandleState<ProductSurfaceFrame>): string =>
     state.error?.message ?? null,
   ]);
 
-/** A face that cannot open: its state says why; it takes nothing, draws its film, closes to nothing. */
+/** A face that cannot open — the desk MAY NOT (PT-5a: said in the SDK's word, the gate's own after it; nothing to try
+ * again): its state says why; it takes nothing, draws its film, closes to nothing. */
 function failedFace(key: string, reason: string, release: () => void): LiveFace {
   let closed = false;
   return {
     key,
     texture: () => undefined,
     take: () => false,
-    state: () => (closed ? { is: "closed" } : { is: "failed", reason }),
+    state: () =>
+      closed
+        ? { is: "closed" }
+        : { is: "failed", reason: liveBrowserFailureReason("may-not", reason) },
     info: () => ({}),
     demand: () => {},
     close() {
@@ -409,12 +476,19 @@ function browserSource(page: LiveBrowserSpec) {
   return {
     kind: "browser" as const,
     initialUrl: page.url,
+    // PT-5a: a desk page that stops is SAID to have stopped, and waits for its reload — never restarted behind the person
+    whenStopped: "say" as const,
     profile: { mode: "persistent" as const, ref: DESK_PROFILE },
     logicalViewport: { width: page.viewport[0], height: page.viewport[1] },
     deviceScaleFactor: page.deviceScaleFactor,
     emulation: emulationOf(page),
   };
 }
+
+/** PT-5a: what the page asked for and may not have, as the face's words carry it (`LiveBrowserRefusal`). */
+const refusalOf = (
+  refused: NonNullable<LiveSurfaceBrowserStateV1["refused"]>,
+): LiveBrowserRefusal => ({ what: refused.what, serial: refused.serial });
 
 /** A favicon's bytes out of the state's base64. */
 function faviconOf(icon: NonNullable<LiveSurfaceBrowserStateV1["favicon"]>): LiveFavicon {
@@ -482,6 +556,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         inputs: 0,
         lastInput: null,
         texture: undefined,
+        veiled: false,
+        refused: 0,
       }),
     });
     return face;
@@ -546,6 +622,9 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     let frameOwed = false;
     let wordsOwed = false;
     let words = wordsOf(handle.state);
+    /** PT-5a — the texture holds what no face may show (the engine's own error page; a page from before its failed load, or
+     * before it stopped): hidden — the kind draws its film — until a frame of the page that follows lands. */
+    let veiled = failing(handle.state);
     /** The last demand the kind sent: paused (unseen) until it says otherwise. */
     let asked: LiveDemand | undefined;
     let writer: LiveWriter | undefined;
@@ -592,6 +671,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       if (state.presentation !== presentation) listen(state.presentation);
       // a lane gone live is told the spec's device (a page re-bound after a reload may have been told another)
       if (state.status === "live") tellDevice();
+      if (failing(state)) veiled = true;
       const now = wordsOf(state);
       if (now === words) return;
       words = now;
@@ -601,7 +681,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
 
     const face: LiveFace = {
       key,
-      texture: (): LiveTexture | undefined => writer?.face,
+      texture: (): LiveTexture | undefined => (veiled ? undefined : writer?.face),
       take(): boolean {
         if (closed) return false;
         const changed = wordsOwed;
@@ -611,8 +691,14 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         const p = presentation;
         if (p === null || p.closed) return changed;
         const device = deps.device();
-        if (asked === undefined || asked.mode === "paused" || device === undefined) {
-          // an unseen face's frame (ruling 6) — or one before the device: taken and closed, drawn nowhere
+        if (
+          asked === undefined ||
+          asked.mode === "paused" ||
+          device === undefined ||
+          failing(handle.state)
+        ) {
+          // an unseen face's frame (ruling 6) — or one before the device, or a failed page's (PT-5a: the engine's own
+          // error page is never shown): taken and closed, drawn nowhere
           if (p.presentLatestVia(() => false).kind !== "idle") {
             counts.dropped += 1;
             tally.dropped += 1;
@@ -637,17 +723,36 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         if (r.kind !== "consumed") return changed;
         counts.presented += 1;
         tally.presented += 1;
+        // a frame of the page as it is now: the face shows its texture again
+        veiled = false;
         return true;
       },
-      state: () => (closed ? { is: "closed" } : liveStateOf(handle.state, () => handle.retry())),
+      state: () =>
+        closed
+          ? { is: "closed" }
+          : liveStateOf(handle.state, {
+              mint: () => handle.retry(),
+              reload: () => {
+                handle.navigate({ action: "reload" });
+              },
+            }),
       info: (): LiveInfo => {
         if (closed) return {};
         const state = handle.state;
         const info = liveInfoOf(state);
-        // the host's word on the page's favicon: its bytes, `null` where it has none — nothing before the page has spoken
+        // the host's word on the page's favicon: its bytes, `null` where it has none — nothing before the page has spoken;
+        // and (PT-5a) the last thing the page asked for and may not have, to be said
         return state.browser === null
           ? info
-          : { ...info, extra: { favicon: iconOf(state.browser.favicon) } };
+          : {
+              ...info,
+              extra: {
+                favicon: iconOf(state.browser.favicon),
+                ...(state.browser.refused === undefined
+                  ? {}
+                  : { refused: refusalOf(state.browser.refused) }),
+              },
+            };
       },
       demand(d: LiveDemand): void {
         if (closed) return;
@@ -659,7 +764,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       // in the DISPLAYED frame's logical px, stamped with that frame's geometry revision; nothing displayed yet: nothing sent
       input(e: LiveInput): void {
         if (closed) return;
-        const at = shown;
+        // PT-5a: nothing is sent to a page whose frames are not shown (a press must never land on what nobody sees)
+        const at = veiled ? undefined : shown;
         const events = at === undefined ? [] : liveInputEvents(e, at.logical);
         if (at === undefined || events.length === 0) {
           counts.inputsUnsent += 1;
@@ -708,6 +814,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
             t === undefined
               ? undefined
               : { width: t.width, height: t.height, revision: t.revision, epoch: t.epoch },
+          veiled,
+          refused: handle.state.browser?.refused?.serial ?? 0,
         };
       },
     });

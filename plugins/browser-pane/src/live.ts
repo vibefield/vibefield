@@ -25,6 +25,7 @@ import {
   type Entity,
   type KindHost,
   LIVE,
+  type LiveBrowserRefusal,
   type LiveBrowserSpec,
   type LiveFace,
   type LiveInfo,
@@ -32,7 +33,7 @@ import {
   type LiveState,
   type Sight,
 } from "@vibefield/plugin-sdk/desk";
-import { pageFavicon } from "./head";
+import { pageFavicon, pageRefusal, REFUSAL_SAY_MS } from "./head";
 import {
   BROWSER,
   type BrowserLaw,
@@ -75,6 +76,10 @@ interface FaceEntry {
   texture: unknown;
   epoch: number;
   words: string;
+  /** PT-5a — the serial of the last refusal the page's words carried, and until when (the frame clock, ms) the head says it. */
+  refusal: number;
+  sayUntil: number;
+  said: LiveBrowserRefusal["what"] | undefined;
 }
 
 export interface PaneFaces {
@@ -97,8 +102,11 @@ export interface PaneFaces {
   ): { readonly key: string; readonly state: LiveState; readonly info: LiveInfo } | undefined;
   /** PT-3 — `e`'s face if it is open (never opens one). */
   opened(e: Entity): LiveFace | undefined;
-  /** PT-3 — send `e`'s face an input (false: no face, or a view-only one). */
+  /** PT-3 — send `e`'s face an input (false: no face, a view-only one — or, PT-5a, a FAILED one: nothing is sent to a page
+   * nobody sees). */
   send(e: Entity, input: LiveInput): boolean;
+  /** PT-5a — what `e`'s head says for a moment: something its page asked for and was refused, while the moment lasts. */
+  saying(e: Entity): LiveBrowserRefusal["what"] | undefined;
   forget(e: Entity): void;
   dispose(): void;
   stats(): PaneFaceStats;
@@ -127,6 +135,9 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
   const woken = new Set<Entity>();
   /** Panes whose shape moved since their last demand: the law is asked again with the sight it has. */
   const relaw = new Set<Entity>();
+  /** PT-5a — panes whose head is saying a refusal (each remade once more when its moment ends), and the frame clock. */
+  const speaking = new Set<Entity>();
+  let clock = 0;
   const counts = {
     opened: 0,
     closed: 0,
@@ -145,6 +156,7 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
     faces.delete(e);
     woken.delete(e);
     relaw.delete(e);
+    speaking.delete(e);
     counts.closed += 1;
   };
 
@@ -153,7 +165,17 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
     counts.landed += 1;
     const t = f.face.texture();
     const words = wordsOf(f.face);
-    const remade = t !== f.texture || (t?.epoch ?? -1) !== f.epoch || words !== f.words;
+    // PT-5a — the page asked for something it may not have (a download): a serial that MOVED under the open face is said
+    // on the head for a moment (one already there at the open is an old one's)
+    const refusal = pageRefusal(f.face.info());
+    const refused = refusal !== undefined && refusal.serial > f.refusal;
+    if (refusal !== undefined) f.refusal = Math.max(f.refusal, refusal.serial);
+    if (refused) {
+      f.said = refusal.what;
+      f.sayUntil = clock + REFUSAL_SAY_MS;
+      speaking.add(e);
+    }
+    const remade = t !== f.texture || (t?.epoch ?? -1) !== f.epoch || words !== f.words || refused;
     f.texture = t;
     f.epoch = t?.epoch ?? -1;
     f.words = words;
@@ -192,6 +214,9 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
         texture: undefined,
         epoch: -1,
         words: wordsOf(face),
+        refusal: 0,
+        sayUntil: Number.NEGATIVE_INFINITY,
+        said: undefined,
       };
       faces.set(e, f);
       counts.opened += 1;
@@ -203,6 +228,8 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
         f.epoch = t?.epoch ?? -1;
         f.words = wordsOf(face);
       }
+      // a refusal the page's words already carry is an old one's: never said at the open
+      f.refusal = pageRefusal(face.info())?.serial ?? 0;
       return face;
     },
     drop: (e) => {
@@ -210,6 +237,17 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
       sight.forget(e);
     },
     tick(now) {
+      clock = now;
+      // a head that has said its refusal for its moment says its address again
+      for (const e of speaking) {
+        const f = faces.get(e);
+        if (f !== undefined && now < f.sayUntil) continue;
+        speaking.delete(e);
+        if (f === undefined) continue;
+        f.said = undefined;
+        host?.remake?.(e);
+        counts.remakes += 1;
+      }
       let redraw = false;
       for (const e of woken) {
         const f = faces.get(e);
@@ -262,7 +300,16 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
         const f = faces.get(e);
         if (f !== undefined) next = Math.min(next, Math.max(now, f.viewportAt + PAGE_REMAKE_MS));
       }
+      // a head saying a refusal is due when its moment ends
+      for (const e of speaking) {
+        const f = faces.get(e);
+        if (f !== undefined) next = Math.min(next, Math.max(now, f.sayUntil));
+      }
       return next;
+    },
+    saying(e) {
+      const f = faces.get(e);
+      return f !== undefined && clock < f.sayUntil ? f.said : undefined;
     },
     words(e) {
       const f = faces.get(e);
@@ -273,7 +320,8 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
     opened: (e) => faces.get(e)?.face,
     send(e, input) {
       const f = faces.get(e)?.face;
-      if (f?.input === undefined) return false;
+      // (a failed page is not sent anything: what is there — the engine's own error page — is seen by nobody)
+      if (f?.input === undefined || f.state().is === "failed") return false;
       counts.sent += 1;
       f.input(input);
       return true;
@@ -286,6 +334,7 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
       for (const e of [...faces.keys()]) close(e);
       woken.clear();
       relaw.clear();
+      speaking.clear();
     },
     stats: () => ({ ...counts }),
   };

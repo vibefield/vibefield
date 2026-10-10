@@ -43,6 +43,7 @@ import {
   type HeadState,
   headKey,
   pageFavicon,
+  REFUSAL_WORDS,
 } from "./head";
 import { SAMPLE_URL } from "./ids";
 import {
@@ -54,8 +55,9 @@ import {
   type PaneShape,
   wheelToPage,
 } from "./law";
-import type { HeadBitmap } from "./layout";
+import type { HeadBitmap, PagePlan } from "./layout";
 import { createPaneFaces, isPageUrl, type PaneFaceStats } from "./live";
+import { failureWords, noticeKey, noticeTexels, RETRY_LABEL } from "./notice";
 import { PAGE_REMAKE_MS } from "./pass";
 
 /** The pass's doors the local reads (the root pass, once the ground has made it). */
@@ -133,6 +135,20 @@ export interface PaneLocal extends KindLocal {
   addressed(): ReadonlyMap<Entity, string>;
   /** PT-3 — the hand's doors (its DOM half binds them as it joins). */
   bind(hand: PaneHandDoors | undefined): void;
+  /**
+   * PT-5a — a FAILED page's notice as the pass lays it (its page's plan: the words' light, drawn by the lent raster — once
+   * a reason, a size and an ink), or undefined: no raster lent on this desk — the film carries no words.
+   */
+  notice(
+    e: Entity,
+    S: PaneShape,
+    state: Extract<LiveState, { is: "failed" }>,
+    ink: string,
+  ): PagePlan | undefined;
+  /** PT-5a — what `e`'s head says for a moment instead of its address (a download refused), or undefined. */
+  saying(e: Entity): string | undefined;
+  /** PT-5a — notices drawn since the desk was made (a test's witness). */
+  readonly notices: number;
 }
 
 const doorsOf = (host: KindHost | undefined): PaneDoors | undefined => {
@@ -163,11 +179,24 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
     return key !== undefined && nav?.navigate(key, command) === true;
   };
   const act = (e: Entity, control: HeldPart): void => {
-    if (control === "back" || control === "forward") navigate(e, { action: control });
-    else if (control === "reload")
-      navigate(e, { action: live.words(e)?.info.loading !== undefined ? "stop" : "reload" });
+    const words = live.words(e);
+    // PT-5a — a FAILED page: "Try again" on its film, and ↻ on its head and on the bar, are the face's own retry (a reload
+    // of the address that failed, a stopped page loaded again, a lost one opened again); with nothing to try, nothing
+    if (control === "retry" || (control === "reload" && words?.state.is === "failed")) {
+      if (words?.state.is === "failed") words.state.retry?.();
+      return;
+    }
+    if (control === "back" || control === "forward") {
+      // nowhere to go: nothing is asked (the bar's slot is disabled, the head's chevron a hairline — and its chord the same)
+      if ((control === "back" ? words?.info.back : words?.info.forward) !== true) return;
+      navigate(e, { action: control });
+    } else if (control === "reload")
+      navigate(e, { action: words?.info.loading !== undefined ? "stop" : "reload" });
     else if (control === "address") hand?.address(e);
   };
+  /** PT-5a — each failed pane's notice, by what it is drawn from. */
+  const noticed = new Map<Entity, PagePlan>();
+  let notices = 0;
   const heads = new Map<Entity, { readonly key: string; readonly bitmap: HeadBitmap }>();
   const saying = new Map<Entity, HeadState>();
   let drawn = 0;
@@ -227,11 +256,45 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
     get respecs() {
       return respecs;
     },
+    notice(e, S, state, ink) {
+      const texels = noticeTexels(S.viewport);
+      const spec = {
+        viewport: S.viewport,
+        texels,
+        words: failureWords(state.reason),
+        retry: state.retry === undefined ? null : RETRY_LABEL,
+        ink,
+      };
+      const key = noticeKey(spec);
+      const had = noticed.get(e);
+      if (had?.key === key) return had;
+      const bytes = host?.use?.(HEAD_RASTER)?.notice?.(spec);
+      if (bytes === undefined) return undefined;
+      const plan: PagePlan = {
+        key,
+        viewport: S.viewport,
+        scheme: "dark",
+        width: texels[0],
+        height: texels[1],
+        notice: bytes,
+      };
+      noticed.set(e, plan);
+      notices += 1;
+      return plan;
+    },
+    saying(e) {
+      const what = live.saying(e);
+      return what === undefined ? undefined : REFUSAL_WORDS[what];
+    },
+    get notices() {
+      return notices;
+    },
     drop(e) {
       live.drop(e);
       urls.delete(e);
       specs.delete(e);
       pressing.delete(e);
+      noticed.delete(e);
     },
     sight: live.sight,
     page: (e) => live.words(e),
@@ -342,6 +405,7 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
       urls.delete(e);
       specs.delete(e);
       stoodAt.delete(e);
+      noticed.delete(e);
     },
     dispose() {
       live.dispose();
@@ -350,6 +414,7 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
       laidOut.clear();
       pressing.clear();
       urls.clear();
+      noticed.clear();
       hand = undefined;
       wired?.onPending(undefined);
       wired = undefined;

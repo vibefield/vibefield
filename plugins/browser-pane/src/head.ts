@@ -7,11 +7,12 @@
 // The raster holds both: its upper half the engraving's coverage (alpha), its lower half the colour print
 // (premultiplied), a two-texel gutter between — `engraveSplit` says where each half's rows are.
 
-import { type LiveInfo, serviceKey } from "@vibefield/plugin-sdk/desk";
+import { type LiveBrowserRefusal, type LiveInfo, serviceKey } from "@vibefield/plugin-sdk/desk";
 import { displayOf, isSecure } from "./address";
 import { SAMPLE_URL } from "./ids";
 import type { PaneShape } from "./law";
 import type { HeadBitmap } from "./layout";
+import type { NoticeSpec } from "./notice";
 
 /** What the head says. */
 export interface HeadState {
@@ -26,6 +27,8 @@ export interface HeadState {
   readonly canForward: boolean;
   /** The viewport, CSS px — the dev browser's size readout, set flush right. */
   readonly viewport: readonly [number, number];
+  /** PT-5a — what the capsule says INSTEAD of its address, for a moment (a download refused): alone, no lock, no favicon. */
+  readonly saying?: string;
 }
 
 /**
@@ -40,6 +43,8 @@ export function headStateOf(
   info?: LiveInfo,
   /** PT-4: a live page's favicon id as the desk state answers it (`PaneLocal.icon`) — null: the host says nothing of one. */
   icon: string | null = null,
+  /** PT-5a: what the capsule says instead of the address for a moment (`PaneLocal.saying`). */
+  saying?: string,
 ): HeadState {
   const at = info?.address ?? url;
   return {
@@ -50,7 +55,30 @@ export function headStateOf(
     canBack: info?.back === true,
     canForward: info?.forward === true,
     viewport: S.viewport,
+    ...(saying === undefined ? {} : { saying }),
   };
+}
+
+/** What the head says, for a moment, of something the page asked for and may not have (the SDK's `LiveBrowserRefusal`). */
+export const REFUSAL_WORDS: Readonly<Record<LiveBrowserRefusal["what"], string>> = {
+  download: "Download blocked",
+};
+/** How long the head says it (ms). */
+export const REFUSAL_SAY_MS = 2600;
+
+/** What the host's face says the page asked for and may not have (`info.extra.refused`), or undefined: nothing, or a word
+ * this pane does not know. */
+export function pageRefusal(info: LiveInfo | undefined): LiveBrowserRefusal | undefined {
+  const said = info?.extra?.refused;
+  if (typeof said !== "object" || said === null) return undefined;
+  const { what, serial } = said as Partial<LiveBrowserRefusal>;
+  return typeof what === "string" &&
+    Object.hasOwn(REFUSAL_WORDS, what) &&
+    typeof serial === "number" &&
+    Number.isSafeInteger(serial) &&
+    serial > 0
+    ? { what, serial }
+    : undefined;
 }
 
 /** A page's favicon as the host's face says it (`LiveInfo.extra.favicon` — VibeField's contract): a key to compare, the
@@ -88,6 +116,11 @@ export interface HeadRaster {
    * false while it is being decoded — `ready` is called once it is — and for good when it cannot be read.
    */
   picture?(favicon: PageFavicon, ready: () => void): boolean;
+  /**
+   * PT-5a — a failed page's NOTICE (notice.ts): its words' light over black, opaque sRGB rgba8 rows from the top, at the
+   * spec's texels. Undefined where the service cannot draw one — the film then carries no words.
+   */
+  notice?(spec: NoticeSpec): Uint8Array<ArrayBuffer> | undefined;
 }
 
 /**
@@ -121,6 +154,8 @@ export const headKey = (S: PaneShape, st: HeadState, tpu: number): string => {
     st.canBack,
     st.canForward,
     st.viewport.join("x"),
+    // (only when it says something: the committed heads' keys stand as they were cut)
+    ...(st.saying === undefined ? [] : [`say:${st.saying}`]),
   ].join("|");
 };
 

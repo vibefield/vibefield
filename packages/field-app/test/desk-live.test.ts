@@ -9,6 +9,7 @@
 import type { LiveTextureOptions, LiveWriter } from "@vibecook/ice/desk";
 import type { LiveDemand } from "@vibecook/ice/desk/kit";
 import type { LiveSurfaceFrameMetadataV1, LiveSurfaceRuntimeSummaryV1 } from "@vibefield/contracts";
+import { liveBrowserFailure } from "@vibefield/plugin-sdk/desk";
 import { describe, expect, it, vi } from "vitest";
 import {
   createDeskLiveSources,
@@ -20,7 +21,6 @@ import {
   liveDemandIntent,
   liveInputEvents,
 } from "../src/surfaces/live/desk-live";
-
 import type {
   SurfaceAcquireOptions,
   SurfaceDemandRequest,
@@ -335,6 +335,8 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
           source: {
             kind: "browser",
             initialUrl: "http://127.0.0.1:4321/",
+            // PT-5a: a desk page that stops is SAID to have stopped — never restarted behind the person
+            whenStopped: "say",
             profile: { mode: "persistent", ref: "desk" },
             logicalViewport: { width: 1280, height: 800 },
             deviceScaleFactor: 2,
@@ -452,7 +454,8 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
     expect(face.state()).toEqual({ is: "paused" });
     handle.set({ status: "lost", presentation: null, error: new Error("the window went away") });
     const lost = face.state();
-    expect(lost).toMatchObject({ is: "failed", reason: "the window went away" });
+    // PT-5a: said in the SDK's word (the pool's own after it), and its retry mints the page again
+    expect(lost).toMatchObject({ is: "failed", reason: "lost: the window went away" });
     if (lost.is === "failed") lost.retry?.();
     expect(handle.retried).toBe(1);
 
@@ -533,6 +536,8 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         inputs: 0,
         lastInput: null,
         texture: undefined,
+        veiled: false,
+        refused: 0,
       },
     ]);
     face.demand(UNSEEN);
@@ -568,6 +573,8 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         inputs: 0,
         lastInput: null,
         texture: { width: 2560, height: 1600, revision: 1, epoch: 0 },
+        veiled: false,
+        refused: 0,
       },
     ]);
     expect(live.stats()).toMatchObject({ presented: 1, dropped: 1, writers: 1 });
@@ -579,7 +586,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         key: "k-2",
         demand: undefined,
         wire: null,
-        state: { is: "failed", reason: "no object on this board holds this face" },
+        state: { is: "failed", reason: "may-not: no object on this board holds this face" },
         info: {},
         favicon: null,
         label: "",
@@ -590,6 +597,8 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         inputs: 0,
         lastInput: null,
         texture: undefined,
+        veiled: false,
+        refused: 0,
       },
     ]);
   });
@@ -602,10 +611,12 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
     });
     const face = t.live.open("k-1", PAGE, () => {});
     expect(t.handles).toHaveLength(0);
+    // PT-5a: the desk MAY NOT — the SDK's word, the gate's own after it, and nothing to try again
     expect(face.state()).toEqual({
       is: "failed",
-      reason: "FORBIDDEN_SCOPE: plugin acme.tools is not granted surface.browser",
+      reason: "may-not: FORBIDDEN_SCOPE: plugin acme.tools is not granted surface.browser",
     });
+    expect(liveBrowserFailure((face.state() as { reason: string }).reason)).toBe("may-not");
     expect(face.take()).toBe(false);
     expect(face.texture()).toBeUndefined();
     face.close();
@@ -614,11 +625,14 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
 
   it("refuses a spec it cannot read, and a window with no live surfaces — each a failed face, said", () => {
     const unread = setup().live.open("k-1", { ...PAGE, viewport: "wide" }, () => {});
-    expect(unread.state()).toEqual({ is: "failed", reason: "not a page this desk can open" });
+    expect(unread.state()).toEqual({
+      is: "failed",
+      reason: "may-not: not a page this desk can open",
+    });
     const none = setup({ pool: () => null }).live.open("k-1", PAGE, () => {});
     expect(none.state()).toEqual({
       is: "failed",
-      reason: "live pages are unavailable in this window",
+      reason: "may-not: live pages are unavailable in this window",
     });
   });
 });
@@ -983,6 +997,143 @@ describe("PT-4 — the page as a device sees it", () => {
       expect(live.faces()[0]?.label, JSON.stringify(title)).toBe("127.0.0.1:4321");
     }
     expect(live.label("no-such-key")).toBeUndefined();
+  });
+});
+
+describe("PT-5a — a page's failures are said (ruling 3)", () => {
+  const NAV = {
+    url: "http://127.0.0.1:4321/",
+    loading: false,
+    canGoBack: false,
+    canGoForward: false,
+  };
+  const summary = (state: string, error?: { code: string; message: string; recovery: string }) =>
+    ({
+      ...fakePresentation(state as never),
+      summary: { state, transport: "shared-texture", ...(error === undefined ? {} : { error }) },
+    }) as never;
+
+  it("a LOAD that failed is a failed face in the SDK's word for it — whatever the producer's state, its address kept — and its retry RELOADS the page (never a new mint)", () => {
+    const { face, handle } = attached();
+    for (const [reason, word] of [
+      ["name-not-resolved", "name-not-resolved"],
+      ["offline", "offline"],
+      ["connection-refused", "connection-refused"],
+      ["connection-failed", "connection-failed"],
+      ["timed-out", "timed-out"],
+      ["certificate", "certificate"],
+      ["blocked", "blocked"],
+      ["failed", "load-failed"],
+    ] as const) {
+      handle.set({ browser: { ...NAV, failure: { reason } } as never });
+      const state = face.state();
+      expect(state, reason).toMatchObject({ is: "failed", reason: word });
+      expect(liveBrowserFailure((state as { reason: string }).reason)).toBe(word);
+    }
+    // before its first frame (the producer still `starting`), and paused: a failed load all the same
+    handle.set({ presentation: summary("starting") });
+    expect(face.state()).toMatchObject({ is: "failed", reason: "load-failed" });
+    handle.set({ presentation: summary("paused") });
+    expect(face.state()).toMatchObject({ is: "failed", reason: "load-failed" });
+    // the address that was ASKED for stays the face's word
+    expect(face.info().address).toBe("http://127.0.0.1:4321/");
+    const failed = face.state();
+    if (failed.is !== "failed") throw new Error("not failed");
+    failed.retry?.();
+    expect(handle.navigations).toEqual([{ action: "reload" }]);
+    expect(handle.retried).toBe(0);
+    // the page commits: live again
+    handle.set({ presentation: summary("live"), browser: NAV as never });
+    expect(face.state()).toEqual({ is: "live" });
+  });
+
+  it("a page that STOPPED is said — its process gone `stopped`, unresponsive past the bound `unresponsive` — and its retry reloads; a source that cannot be brought back MAY NOT, with nothing to try; any other failure is `failed`", () => {
+    const { face, handle } = attached();
+    handle.set({ browser: NAV as never });
+    const says = (code: string, recovery: string) => {
+      handle.set({
+        presentation: summary("failed", { code, message: "the producer's words", recovery }),
+      });
+      return face.state() as { is: string; reason: string; retry?: () => void };
+    };
+    const stopped = says("producer-crashed", "user-action");
+    expect(stopped).toMatchObject({ is: "failed", reason: "stopped: the producer's words" });
+    expect(liveBrowserFailure(stopped.reason)).toBe("stopped");
+    stopped.retry?.();
+    expect(handle.navigations).toEqual([{ action: "reload" }]);
+    expect(says("frame-stalled", "user-action").reason).toBe("unresponsive: the producer's words");
+    // no first paint within the producer's deadline: not the person's page hanging — a failure, tried again by a reload
+    const stalled = says("frame-stalled", "automatic");
+    expect(stalled.reason).toBe("failed: the producer's words");
+    expect(stalled.retry).toBeTypeOf("function");
+    expect(says("source-not-found", "user-action").reason).toBe(
+      "load-failed: the producer's words",
+    );
+    const never = says("security-rejected", "permanent");
+    expect(never.reason).toBe("may-not: the producer's words");
+    expect(never.retry).toBeUndefined();
+    // the page's address is kept through it all (the head's)
+    expect(face.info().address).toBe("http://127.0.0.1:4321/");
+  });
+
+  it("a failed page's frames are NEVER shown: the engine's own error page is taken and closed, the texture HIDDEN from the moment the page fails until a frame of the page that follows lands — and nothing is sent to what nobody sees", () => {
+    const { face, handle, presentation, live, writers } = attached();
+    face.demand(SEEN);
+    presentation.land();
+    expect(face.take()).toBe(true);
+    expect(face.texture()).toBeDefined();
+    face.input?.({ kind: "wheel", x: 10, y: 10, dx: 0, dy: 40 });
+    expect(handle.inputs).toHaveLength(1);
+    // the load fails: the page that was there is not shown either (the film is the kind's to draw)
+    handle.set({ browser: { ...NAV, failure: { reason: "connection-refused" } } as never });
+    expect(face.take()).toBe(true);
+    expect(face.texture()).toBeUndefined();
+    expect(live.faces()[0]).toMatchObject({ veiled: true });
+    // the engine paints its error page: taken, closed, drawn nowhere
+    const error = presentation.land();
+    expect(face.take()).toBe(false);
+    expect(error.close).toHaveBeenCalledTimes(1);
+    expect(writers[0]?.presented).toHaveLength(1);
+    expect(face.texture()).toBeUndefined();
+    // a press, a key: not sent
+    face.input?.({ kind: "wheel", x: 10, y: 10, dx: 0, dy: 40 });
+    face.input?.({ kind: "text", text: "a" });
+    expect(handle.inputs).toHaveLength(1);
+    // the page commits — the texture stays hidden (it still holds the old page) until its first frame lands
+    handle.set({ browser: NAV as never });
+    expect(face.state()).toEqual({ is: "live" });
+    expect(face.take()).toBe(true);
+    expect(face.texture()).toBeUndefined();
+    presentation.land();
+    expect(face.take()).toBe(true);
+    expect(face.texture()).toBeDefined();
+    expect(writers[0]?.presented).toHaveLength(2);
+    expect(live.faces()[0]).toMatchObject({ veiled: false });
+    face.input?.({ kind: "wheel", x: 10, y: 10, dx: 0, dy: 40 });
+    expect(handle.inputs).toHaveLength(2);
+    // a page that stopped hides its last frame too, and a lost lane's
+    handle.set({
+      presentation: summary("failed", {
+        code: "producer-crashed",
+        message: "",
+        recovery: "user-action",
+      }),
+    });
+    expect(face.texture()).toBeUndefined();
+  });
+
+  it("what the page asked for and MAY NOT have rides the face's words (`extra.refused`, with its serial), and a new one is an arrival", () => {
+    const { face, handle, arrived, live } = attached();
+    handle.set({ browser: NAV as never });
+    expect(face.info().extra).toEqual({ favicon: null });
+    arrived.mockClear();
+    handle.set({ browser: { ...NAV, refused: { what: "download", serial: 1 } } as never });
+    expect(arrived).toHaveBeenCalledTimes(1);
+    expect(face.info().extra).toEqual({ favicon: null, refused: { what: "download", serial: 1 } });
+    expect(live.faces()[0]).toMatchObject({ refused: 1 });
+    handle.set({ browser: { ...NAV, refused: { what: "download", serial: 2 } } as never });
+    expect(arrived).toHaveBeenCalledTimes(2);
+    expect(face.info().extra?.refused).toEqual({ what: "download", serial: 2 });
   });
 });
 

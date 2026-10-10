@@ -28,6 +28,8 @@ export interface FinishToken extends TokenRef {
 export interface PaneTokens {
   readonly finishes: Readonly<Record<PaneFinishName, FinishToken>>;
   readonly panelOff: TokenRef;
+  /** PT-5a: the words on a failed page's film (a host's dress may leave it out: the plugin's own then). */
+  readonly notice?: TokenRef;
   readonly frost: TokenRef;
   readonly sky: TokenRef;
   readonly leaves: TokenRef;
@@ -61,6 +63,10 @@ export const BROWSER_PANE_PALETTE: PaneTokens = {
     bronze: glass("bronze-tinted glass (a 40 mm path)", "#8d6f55", 40),
   },
   panelOff: t("a page's film with nothing on it (the phone's black, a hair lifted)", "#08090b"),
+  notice: t(
+    "the words a failed page's film carries (a soft white — the film is dark in both schemes)",
+    "#e6e8ea",
+  ),
   frost: t("sandblasted glass (a pale grey-white)", "#e4e6e2"),
   sky: t(
     "the day's sky over the desk, mirrored (a pale, slightly cool white — the phone's)",
@@ -91,6 +97,7 @@ export function paneLook(palette: BrowserPanePalette): PaneLookValues {
   return {
     cast: rgb(palette.cast.css),
     panelOff: c(own.panelOff),
+    notice: c(own.notice ?? (BROWSER_PANE_PALETTE.notice as TokenRef)),
     frost: c(own.frost),
     progress: rgb(palette.select.css),
     sky: c(own.sky),

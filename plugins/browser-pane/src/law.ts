@@ -33,6 +33,7 @@ import {
   PHYSICS,
 } from "@vibefield/plugin-sdk/desk";
 import { DEFAULT_DEVICE, type Device, MIN_VIEWPORT, MM, PANE_MM, viewportOf } from "./devices";
+import { retryAt } from "./notice";
 
 export { MM };
 
@@ -271,6 +272,9 @@ export interface PaneGeometry {
   readonly alpha: number;
   /** PT-3 — drawn IN HAND: its page and its head's controls are named parts (`heldPartAt`); at rest every point is the pane. */
   readonly held?: boolean;
+  /** PT-5a — its page FAILED: the page's area is the film with a notice on it (notice.ts) — in hand its "Try again" capsule
+   * is a part where there is something to try (`retry`), and the rest of the film is the pane's own glass. */
+  readonly notice?: { readonly retry: boolean };
   /** The world rect the pass's quad covers: the pane as the eye sees it, its shadow, and its glow's reach. */
   readonly bounds: {
     readonly x0: number;
@@ -343,6 +347,7 @@ export function resolvePane(
   law: BrowserLaw = BROWSER,
   glow = 0,
   held = false,
+  notice?: { readonly retry: boolean },
 ): PaneGeometry {
   // square to the mat and never tipped: core's drag carries the rect, and nothing on this desk turns by itself
   const h = heightOf(flux, law);
@@ -366,6 +371,7 @@ export function resolvePane(
     shadowAlpha: law.shadow.alpha + (law.shadow.alphaHeld - law.shadow.alpha) * aloft,
     alpha: flux.fade,
     ...(held ? { held: true } : {}),
+    ...(notice === undefined ? {} : { notice: { retry: notice.retry } }),
   };
   let x0 = Number.POSITIVE_INFINITY;
   let y0 = Number.POSITIVE_INFINITY;
@@ -625,19 +631,27 @@ export function openExtent(
   return { cx: rect.cx, cy: rect.cy + (top + foot) / 2, w: 2 * S.page[2], h: foot - top };
 }
 
-/** A pane's NAMED PARTS in hand (PT-3 ruling 2): its page, and its head's engraved controls (the size readout is not one). */
-export type HeldPart = "page" | "back" | "forward" | "reload" | "address";
-export const HELD_CONTROLS: readonly HeldPart[] = ["back", "forward", "reload", "address"];
+/** A pane's NAMED PARTS in hand (PT-3 ruling 2): its page, and its head's engraved controls (the size readout is not one) —
+ * and (PT-5a) a failed page's "Try again" capsule (`retry`). */
+export type HeldPart = "page" | "back" | "forward" | "reload" | "address" | "retry";
+export const HELD_CONTROLS: readonly HeldPart[] = ["back", "forward", "reload", "address", "retry"];
 
 /**
  * What the hand points at on a pane IN HAND (ruling 2): its PAGE (presses there are the kind's — a double-click selects a word,
  * never puts the pane down), an engraved CONTROL of its head, the rest of the glass (`content` — the object's, a drag carries
  * it), or nothing past its silhouette. As the pane's own eye draws it (`pickPane`): what is pressed is what is seen.
+ * PT-5a — a FAILED page has no page to press: its film is the pane's own glass (`content`), but for the notice's capsule
+ * (`retry`) where there is something to try.
  */
 export function heldPartAt(G: PaneGeometry, wx: number, wy: number): HeldPart | "content" | null {
   const pick = pickPane(G, wx, wy);
   if (pick === null) return null;
-  if (pick.part === "page") return "page";
+  if (pick.part === "page") {
+    if (G.notice === undefined) return "page";
+    return G.notice.retry && retryAt(G.shape.viewport, pick.point[0], pick.point[1])
+      ? "retry"
+      : "content";
+  }
   if (pick.part === "band" && pick.control !== null && pick.control !== "size") return pick.control;
   return "content";
 }

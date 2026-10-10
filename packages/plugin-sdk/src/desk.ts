@@ -295,6 +295,63 @@ export interface BrowserNavigation {
 /** The key the host lends a browser kind its pages' navigation under (`KindHost.use(BROWSER_NAVIGATION)`). */
 export const BROWSER_NAVIGATION = serviceKey<BrowserNavigation>("vibefield.browser.navigation");
 
+// docs:begin live-browser-failure
+/**
+ * WHY A BROWSER FACE FAILED (PT-5a) — VibeField's contract for a failed browser face's `LiveState.reason` (ICE leaves the
+ * string to the host): a WORD of this closed set, then — after `": "` — the host's own detail, which is for a diagnostic and
+ * never for a person. A kind says each word in a person's words on its face; the state's `retry` is there when trying again
+ * can help.
+ *  - the page's LOAD failed — `LiveInfo.address` is still the address that was ASKED for, never the engine's error page:
+ *    `name-not-resolved`, `offline`, `connection-refused`, `connection-failed`, `timed-out`, `certificate` (refused, never
+ *    bypassed), `blocked` (an address the desk does not open), `load-failed` (any other). `retry` asks for it again;
+ *  - the page STOPPED: `stopped` (its process is gone), `unresponsive` (it stopped answering, and was closed). `retry`
+ *    loads it again, where it was;
+ *  - `lost`: the desk lost its hold of the page. `retry` opens it again;
+ *  - `may-not`: the desk may not open a page for this object (its plugin is not granted the capability, this window lends
+ *    no pages). No `retry`;
+ *  - `failed`: anything else.
+ */
+export const LIVE_BROWSER_FAILURES = [
+  "name-not-resolved",
+  "offline",
+  "connection-refused",
+  "connection-failed",
+  "timed-out",
+  "certificate",
+  "blocked",
+  "load-failed",
+  "stopped",
+  "unresponsive",
+  "lost",
+  "may-not",
+  "failed",
+] as const;
+export type LiveBrowserFailure = (typeof LIVE_BROWSER_FAILURES)[number];
+
+/** A failed browser face's reason as the host says it: the word, then its own detail (none: the word alone). */
+export const liveBrowserFailureReason = (failure: LiveBrowserFailure, detail?: string): string =>
+  detail === undefined || detail === "" ? failure : `${failure}: ${detail}`;
+
+/** The word of a failed browser face's reason — `failed` for a reason that is none of them (a host older than PT-5a). */
+export function liveBrowserFailure(reason: string): LiveBrowserFailure {
+  const at = reason.indexOf(": ");
+  const word = at < 0 ? reason : reason.slice(0, at);
+  return (LIVE_BROWSER_FAILURES as readonly string[]).includes(word)
+    ? (word as LiveBrowserFailure)
+    : "failed";
+}
+
+/**
+ * WHAT A PAGE ASKED FOR AND MAY NOT HAVE (PT-5a) — `LiveInfo.extra.refused` on a browser face: the last such thing the host
+ * answered for the page and wants SAID (a download: cancelled — a desk keeps no files for a page), with a serial that moves
+ * each time. A kind says it for a moment when the serial moves under an open face. Absent: nothing was.
+ */
+export interface LiveBrowserRefusal {
+  readonly what: "download";
+  readonly serial: number;
+}
+// docs:end live-browser-failure
+
 // docs:begin object-binding
 /**
  * An OBJECT's code half (spec §12.8; DK-0f's contract): the value of the renderer module's NAMED

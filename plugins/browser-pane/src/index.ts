@@ -28,6 +28,8 @@ export {
   type PaneLocal,
 } from "./local";
 export { browserPaneManifest } from "./manifest";
+export * from "./notice";
+export { drawNotice, type NoticeContext, noticeBytes, wrapTwo } from "./notice-canvas";
 export { browserPane } from "./object";
 export { PageTexture } from "./page";
 export { PAGE_REMAKE_MS, PanePass, type PaneStats, PaneSurface } from "./pass";

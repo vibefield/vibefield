@@ -138,7 +138,8 @@ describe("the desk door's reads (DK-8)", () => {
     expect(door?.live()).toEqual({ stats: live.stats(), faces: live.faces() });
     expect(door?.live()?.faces[0]).toMatchObject({
       key: "13918995204487956201-1",
-      state: { is: "failed", reason: "live pages are unavailable in this window" },
+      // PT-5a: the desk MAY NOT — the SDK's word for it, the window's own after
+      state: { is: "failed", reason: "may-not: live pages are unavailable in this window" },
     });
     expect(door?.live()?.stats).toMatchObject({ opened: 1, refused: 1, open: 1 });
     undo();

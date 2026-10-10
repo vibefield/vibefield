@@ -39,6 +39,10 @@ import {
   HEAD_RASTER,
   type HeadRaster,
   isPageUrl,
+  NOTICE_WORDS,
+  type NoticeSpec,
+  noticeLayout,
+  noticeTexels,
   openExtent,
   PAGE_REMAKE_MS,
   PANE_SIZE,
@@ -47,7 +51,10 @@ import {
   type PaneInstance,
   paneDemand,
   paneLook,
+  paneValues,
   pointAt,
+  REFUSAL_SAY_MS,
+  RETRY_LABEL,
   SAMPLE_URL,
   seen,
   shapeOf,
@@ -516,6 +523,253 @@ describe("the pane's live page — its record", () => {
   });
 });
 
+describe("PT-5a — a failed page's face (ruling 3)", () => {
+  const k = browserPaneKind();
+  const KEY = "13918995204487956201-1";
+  /** A head raster that draws a notice as its spec, counted. */
+  const noticing = () => {
+    const drawn: NoticeSpec[] = [];
+    const head: HeadRaster = {
+      raster: () => undefined,
+      notice: (spec) => {
+        drawn.push(spec);
+        return new Uint8Array(spec.texels[0] * spec.texels[1] * 4);
+      },
+    };
+    return { head, drawn };
+  };
+  /** The pane recorded, its face saying `state` (and `info`), recorded again. */
+  const failing = (state: LiveState, opts: { head?: HeadRaster; held?: boolean } = {}) => {
+    const t = fakeHost(opts.head === undefined ? {} : { head: opts.head });
+    const local = createPaneLocal(t.host);
+    const ctx = {
+      ...ctxOf({ url: PAGE }, local),
+      ...(opts.held === true ? { held: { e: 1, open: true, grow: 1, snap: true } } : {}),
+    } as unknown as ObjectContext;
+    k.record(k.resolve(ctx), ctx);
+    const face = t.faces.get(KEY);
+    if (face === undefined) throw new Error("no face");
+    face.land({ logical: [1280, 800] });
+    face.say({ state, info: { address: PAGE, back: false, forward: false } });
+    local.tick?.(0);
+    const G = k.resolve(ctx) as PaneGeometry;
+    const r = k.record(G, ctx) as PaneInstance;
+    return { t, local, face, ctx, G, r };
+  };
+
+  it("a failed page is the FILM with its NOTICE on it — never its texture (the last frame, the engine's own error page): the words by the host's word, Try again where there is something to try, drawn once", () => {
+    const n = noticing();
+    const retry = (): void => {};
+    const { t, local, face, ctx, G, r } = failing(
+      { is: "failed", reason: "connection-refused: net::ERR_CONNECTION_REFUSED", retry },
+      { head: n.head },
+    );
+    // the state's move remade the pane
+    expect(t.n.remake).toContain(1);
+    // its texture is there — and is NOT the page
+    expect(face.texture()).toBeDefined();
+    expect(r.page?.notice).toBeInstanceOf(Uint8Array);
+    expect(r.page?.key).toMatch(/^notice\|/);
+    expect([r.page?.width, r.page?.height]).toEqual(noticeTexels(G.shape.viewport));
+    expect(n.drawn).toEqual([
+      {
+        viewport: G.shape.viewport,
+        texels: noticeTexels(G.shape.viewport),
+        words: NOTICE_WORDS["connection-refused"],
+        retry: RETRY_LABEL,
+        ink: "rgb(230 232 234)",
+      },
+    ]);
+    // the record tells the shader: the film, the words added as light
+    expect(paneValues(r).screen2[0]).toBe(1);
+    expect(paneValues(r).screen[3]).toBe(1);
+    // it keeps its face (its sight is told: a page tried again must be asked for) and the asked address on its head
+    expect(r.live?.face).toBe(face);
+    expect(local.said(1 as Entity)).toMatchObject({ display: "127.0.0.1:4321" });
+    // the same failure recorded again draws nothing new
+    k.record(G, ctx);
+    expect(n.drawn).toHaveLength(1);
+    expect(local.notices).toBe(1);
+    // with NOTHING to try: no capsule asked of the raster, and the geometry says so
+    const refused = failing({ is: "failed", reason: "may-not: no grant" }, { head: n.head });
+    expect(n.drawn.at(-1)).toMatchObject({ words: NOTICE_WORDS["may-not"], retry: null });
+    expect(refused.G.notice).toEqual({ retry: false });
+    expect(G.notice).toEqual({ retry: true });
+    // the page loads again: its texture is the page once more, and the film's flag is gone
+    face.say({ state: { is: "live" } });
+    local.tick?.(0);
+    const back = k.record(k.resolve(ctx), ctx) as PaneInstance;
+    expect(back.page?.key).toMatch(/^live\|/);
+    expect(back.page?.notice).toBeUndefined();
+    expect(paneValues(back).screen2[0]).toBe(0);
+    expect((k.resolve(ctx) as PaneGeometry).notice).toBeUndefined();
+  });
+
+  it("with no raster lent (a Node still) a failed page is the film alone — still never its texture", () => {
+    const { r, G } = failing({ is: "failed", reason: "stopped", retry: () => {} });
+    expect(r.page).toBeNull();
+    expect(paneValues(r).screen[3]).toBe(0);
+    expect(G.notice).toEqual({ retry: true });
+  });
+
+  it("IN HAND the capsule is a PART — `retry` — and the rest of the film the pane's own glass; at rest every point is the pane; with nothing to try there is no part", () => {
+    const retry = (): void => {};
+    const held = failing({ is: "failed", reason: "offline", retry }, { held: true });
+    const ext = openExtent(held.ctx.rect, held.G.shape);
+    const [cx, cy] = noticeLayout(held.G.shape.viewport).retry;
+    const world = (x: number, y: number): readonly [number, number] => {
+      const [u, v] = faceOfPage(held.G.shape, x, y);
+      return seen(held.G.eye, pointAt(held.G, u, v));
+    };
+    expect(ext.w).toBeGreaterThan(0);
+    expect(k.hit?.(held.G, ...world(cx, cy))).toBe("retry");
+    expect(k.hit?.(held.G, ...world(40, 40))).toBe("content");
+    expect(k.hit?.(held.G, ...world(cx, cy + 200))).toBe("content");
+    // its cursor is a control's
+    const cursor = k.open?.cursor;
+    expect(
+      typeof cursor === "function"
+        ? cursor({ entity: 1 as Entity, part: "retry", local: held.local } as never)
+        : undefined,
+    ).toBe("pointer");
+    // at rest: the pane
+    const rest = failing({ is: "failed", reason: "offline", retry });
+    expect(k.hit?.(rest.G, ...world(cx, cy))).toBe("content");
+    // nothing to try: no part
+    const never = failing({ is: "failed", reason: "may-not: no grant" }, { held: true });
+    expect(k.hit?.(never.G, ...world(cx, cy))).toBe("content");
+    // a live page in hand is its page, as before
+    const live = failing({ is: "live" }, { held: true });
+    expect(k.hit?.(live.G, ...world(cx, cy))).toBe("page");
+  });
+
+  it("a press on the capsule released over it TRIES AGAIN — the face's own retry — and so does ↻ (the head's, the bar's, ⌘R's); a release elsewhere, or nothing to try, does nothing; NOTHING is sent to a failed page", () => {
+    let tried = 0;
+    const retry = (): void => {
+      tried += 1;
+    };
+    const { t, local, face } = failing(
+      { is: "failed", reason: "timed-out", retry },
+      { held: true },
+    );
+    const down = {
+      type: "pointer",
+      phase: "down",
+      x: 0,
+      y: 0,
+      part: "retry",
+      button: 0,
+      buttons: 1,
+      count: 1,
+    };
+    const up = { ...down, phase: "up", buttons: 0 };
+    local.held?.(1 as Entity, [down, up] as unknown as HeldEvent[]);
+    expect(tried).toBe(1);
+    // released off the capsule: nothing
+    local.held?.(1 as Entity, [down, { ...up, part: "content" }] as unknown as HeldEvent[]);
+    expect(tried).toBe(1);
+    // ↻: the same retry — never a navigation of its own on a failed page
+    local.act(1 as Entity, "reload");
+    local.act(1 as Entity, "retry");
+    expect(tried).toBe(3);
+    expect(t.navigations).toEqual([]);
+    // nothing is sent to it: a key, a wheel, a press on where its page was
+    expect(local.send(1 as Entity, { kind: "text", text: "a" })).toBe(false);
+    local.held?.(
+      1 as Entity,
+      [{ type: "wheel", x: 0, y: 0, dx: 0, dy: 40 }] as unknown as HeldEvent[],
+    );
+    expect(face.inputs).toEqual([]);
+    // nothing to try: ↻ and the capsule's act do nothing at all
+    const never = failing({ is: "failed", reason: "may-not: no grant" });
+    never.local.act(1 as Entity, "reload");
+    never.local.act(1 as Entity, "retry");
+    expect(never.t.navigations).toEqual([]);
+  });
+
+  it("a DOWNLOAD the page was refused is SAID on the head for a moment — when its serial moves under the open face, never one already there at the open — then the address again; the kind is due when the moment ends", () => {
+    const t = fakeHost({ holds: true });
+    const local = createPaneLocal(t.host);
+    const ctx = ctxOf({ url: PAGE }, local);
+    const record = (): PaneInstance => k.record(k.resolve(ctx), ctx) as PaneInstance;
+    record();
+    const face = t.faces.get(KEY);
+    if (face === undefined) throw new Error("no face");
+    const info = (serial?: number) => ({
+      address: PAGE,
+      extra: {
+        favicon: null,
+        ...(serial === undefined ? {} : { refused: { what: "download", serial } }),
+      },
+    });
+    face.say({ state: { is: "live" }, info: info() });
+    local.tick?.(1_000);
+    const plain = record().head.key;
+    expect(local.saying(1 as Entity)).toBeUndefined();
+    expect(local.due?.(1_000)).toBe(Number.POSITIVE_INFINITY);
+    // the page tries a download: the host cancels it and says so — the head says it
+    t.n.remake.length = 0;
+    face.say({ info: info(1) });
+    local.tick?.(2_000);
+    expect(t.n.remake).toEqual([1]);
+    expect(local.saying(1 as Entity)).toBe("Download blocked");
+    const said = record();
+    expect(said.head.key).toContain("say:Download blocked");
+    expect(local.said(1 as Entity)?.saying).toBe("Download blocked");
+    expect(local.due?.(2_000)).toBe(2_000 + REFUSAL_SAY_MS);
+    // still saying it just before the moment ends; a frame with the same serial is no new refusal
+    face.land();
+    local.tick?.(2_000 + REFUSAL_SAY_MS - 1);
+    expect(local.saying(1 as Entity)).toBe("Download blocked");
+    // the moment ends: the pane is remade, saying its address
+    t.n.remake.length = 0;
+    local.tick?.(2_000 + REFUSAL_SAY_MS);
+    expect(t.n.remake).toEqual([1]);
+    expect(local.saying(1 as Entity)).toBeUndefined();
+    expect(record().head.key).toBe(plain);
+    expect(local.due?.(2_000 + REFUSAL_SAY_MS)).toBe(Number.POSITIVE_INFINITY);
+    // another: said again
+    face.say({ info: info(2) });
+    local.tick?.(9_000);
+    expect(local.saying(1 as Entity)).toBe("Download blocked");
+  });
+
+  it("a face opened on a page whose words ALREADY carry a refusal says nothing of it — only one that arrives after", () => {
+    // the host's face holds its words before the pane first reads it (a page re-bound after the window's reload)
+    const t = fakeHost();
+    const open = t.host.use?.(LIVE)?.open;
+    const said = {
+      address: PAGE,
+      extra: { favicon: null, refused: { what: "download", serial: 4 } },
+    };
+    if (open === undefined) throw new Error("no LIVE");
+    const host: KindHost = {
+      ...t.host,
+      use: <T>(key: { name: string }) =>
+        key.name === LIVE.name
+          ? ({
+              open(key2: string, spec: Readonly<Record<string, unknown>>, arrived: () => void) {
+                const f = open(key2, spec, arrived) as ReturnType<typeof fakeFace>;
+                f.say({ state: { is: "live" }, info: said });
+                return f;
+              },
+            } as T)
+          : t.host.use?.(key as never),
+    };
+    const local = createPaneLocal(host);
+    const ctx = ctxOf({ url: PAGE }, local);
+    k.record(k.resolve(ctx), ctx);
+    local.tick?.(500);
+    expect(local.saying(1 as Entity)).toBeUndefined();
+    // the next one IS said
+    t.faces.get(KEY)?.say({
+      info: { ...said, extra: { favicon: null, refused: { what: "download", serial: 5 } } },
+    });
+    local.tick?.(600);
+    expect(local.saying(1 as Entity)).toBe("Download blocked");
+  });
+});
+
 describe("PT-3 — the pane in use: its hand's input, its controls, the url it follows", () => {
   const k = browserPaneKind();
   const KEY = "13918995204487956201-1";
@@ -617,6 +871,12 @@ describe("PT-3 — the pane in use: its hand's input, its controls, the url it f
     const at = (c: readonly [number, number] | null) => hand(c?.[0] ?? 0, c?.[1] ?? 0);
     const click = (part: string, c: readonly [number, number]) =>
       local.held?.(1 as Entity, [press("down", c, part, 1), press("up", c, part, 0)]);
+    // PT-5a: with NOWHERE to go ‹ and › ask nothing (the bar's slot is disabled, the head's chevron a hairline)
+    click("back", at(L.back));
+    click("forward", at(L.forward));
+    expect(t.navigations).toEqual([]);
+    face.say({ state: { is: "live" }, info: { address: PAGE, back: true, forward: true } });
+    local.tick?.(0);
     click("back", at(L.back));
     click("forward", at(L.forward));
     click("reload", at(L.reload));

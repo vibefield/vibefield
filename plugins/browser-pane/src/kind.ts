@@ -105,8 +105,8 @@ const runControl =
 
 /** A held page's words as a tool's state reads them: off the pane's desk state (ICE I49 — `HeldToolStateContext.local`);
  * none where no desk answers, or the pane shows no live page (a still, the film). */
-const infoOf = (c: HeldToolStateContext): LiveInfo | undefined =>
-  (c.local as PaneLocal | undefined)?.page(c.entity)?.info;
+const pageOf = (c: HeldToolStateContext) => (c.local as PaneLocal | undefined)?.page(c.entity);
+const infoOf = (c: HeldToolStateContext): LiveInfo | undefined => pageOf(c)?.info;
 
 /** ↻ while the page loads: Stop — the head's ✕. */
 export const STOP_GLYPH = { path: "M7 7 L17 17 M17 7 L7 17" } as const;
@@ -116,7 +116,8 @@ export const STOP_GLYPH = { path: "M7 7 L17 17 M17 7 L7 17" } as const;
  * one editor over the head's capsule), the DEVICE (PT-1's switch, to the next device). The chords are the browser's (⌘[ ⌘] ⌘R
  * ⌘L) — while the page's lease holds the keys, the lease runs them (ruling 7). PT-5a (ruling 2; ICE I49) — each SAYS ITS STATE,
  * read with the anchor: ‹ and › are DISABLED where the page has nowhere to go (a still has nowhere), and ↻ reads STOP — its
- * glyph the head's ✕, its label — while the page loads. The bar and the head say the same truth now.
+ * glyph the head's ✕, its label — while the page loads. The bar and the head say the same truth now. On a FAILED page ↻ is
+ * the face's "Try again" (ruling 3) — and DISABLED where there is nothing to try (a page the desk may not open).
  */
 export const PANE_TOOLS: readonly HeldToolDef[] = [
   {
@@ -147,8 +148,12 @@ export const PANE_TOOLS: readonly HeldToolDef[] = [
     hint: "⌘R",
     glyph: { path: "M18.5 12 A6.5 6.5 0 1 1 15.6 6.6 M18.5 4.5 V9 H14" },
     run: runControl("reload"),
-    state: (c) =>
-      infoOf(c)?.loading !== undefined ? { glyph: STOP_GLYPH, label: "Stop" } : undefined,
+    state: (c) => {
+      const page = pageOf(c);
+      if (page?.state.is === "failed")
+        return page.state.retry === undefined ? { enabled: false } : undefined;
+      return page?.info.loading !== undefined ? { glyph: STOP_GLYPH, label: "Stop" } : undefined;
+    },
   },
   {
     id: "address",
@@ -226,6 +231,8 @@ export function browserPaneKind(
       // by night a lit page's glow reaches round the pane: the quad grows to hold it (a still's, or a live page's)
       const url = urlOf(ctx.props);
       const lit = ctx.theme.name === "dark" && (url === SAMPLE_URL || isPageUrl(url, SAMPLE_URL));
+      // PT-5a — a failed page (as its face last said: a state that moves remakes the pane): its film carries a notice
+      const state = (ctx.local as PaneLocal | undefined)?.page(ctx.entity)?.state;
       return resolvePane(
         ctx.rect,
         ctx.flux,
@@ -234,6 +241,7 @@ export function browserPaneKind(
         law,
         lit ? glowReach(law) : 0,
         ctx.held !== undefined,
+        state?.is === "failed" ? { retry: state.retry !== undefined } : undefined,
       );
     },
     record(G: PaneGeometry, ctx: ObjectContext): PaneInstance {
@@ -271,8 +279,15 @@ export function browserPaneKind(
           local?.laid(ctx.entity, G, openExtent(ctx.rect, S), ctx.view.zoom);
       }
       const words = face === undefined ? undefined : local?.page(ctx.entity);
-      // PT-4 — the page's favicon as the head can print it now (its picture decoded), the generic mark where it has none
-      const state = headStateOf(url, S, words?.info, local?.icon(ctx.entity, words?.info));
+      // PT-4 — the page's favicon as the head can print it now (its picture decoded), the generic mark where it has none;
+      // PT-5a — and what the capsule says for a moment instead of its address (a download refused)
+      const state = headStateOf(
+        url,
+        S,
+        words?.info,
+        local?.icon(ctx.entity, words?.info),
+        face === undefined ? undefined : local?.saying(ctx.entity),
+      );
       const tpu = bandDensity(S, bandFor(ctx.view.zoom * ctx.view.dpr));
       const laid = local?.head(ctx.entity, S, state, tpu);
       const key = laid?.key ?? headKey(S, state, tpu);
@@ -289,17 +304,34 @@ export function browserPaneKind(
             ? { key, still: key, split }
             : { key };
       const t = face?.texture();
+      // PT-5a (ruling 3) — A FAILED PAGE: the film, and on it why in a person's words (the lent raster draws them — none
+      // lent, the film alone), with "Try again" where there is something to try. Never the page's last frame, never the
+      // engine's own error page.
+      const failed = words?.state.is === "failed" ? words.state : undefined;
+      const [nr, ng, nb] = look.notice;
+      const notice =
+        failed === undefined
+          ? undefined
+          : local?.notice(
+              ctx.entity,
+              S,
+              failed,
+              `rgb(${Math.round(nr * 255)} ${Math.round(ng * 255)} ${Math.round(nb * 255)})`,
+            );
       return {
         geometry: G,
         finish: paneFinish(look, stringProp(ctx.props, "finish", "low-iron")),
         look,
-        // a live page's texture once its first frame lands (the film before), the sample's still, or the film
+        // a live page's texture once its first frame lands (the film before), the sample's still, or the film — a failed
+        // page's notice on its film
         page:
           face === undefined
             ? pagePlan(url, S, scheme)
-            : t === undefined
-              ? null
-              : livePlan(t, S.viewport, scheme),
+            : failed !== undefined
+              ? (notice ?? null)
+              : t === undefined
+                ? null
+                : livePlan(t, S.viewport, scheme),
         brightness: 1,
         loading: words?.info.loading ?? -1,
         head,

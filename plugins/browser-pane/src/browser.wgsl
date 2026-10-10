@@ -439,7 +439,8 @@ fn shade_pane(P: Pane, u: MatUniforms, k: PaneUniforms, s: vec2f, px: f32, frag:
       }
       let panel = srgb_to_linear(k.panelOff.rgb) * (0.5 + 0.5 * gobo);
       let off = srgb_to_linear(bw_chain(u, clamp(k.panelOff.rgb * bw_lambert(n, L, k), vec3f(0.0), vec3f(1.0)), gobo, bn.y));
-      var page = select(off, mix(panel, u.eigengrau.xyz, night), P.screen.w > 0.0);
+      // a NOTICE (PT-5a — a failed page's words) is the FILM with the words' light on it, never a lit page
+      var page = select(off, mix(panel, u.eigengrau.xyz, night), P.screen.w > 0.0 && P.screen2.x <= 0.0);
       page = page + vec3f(k.glass2.y * gobo * (1.0 - night));
       page = page + em * mix(k.glass2.w, k.glass2.z, night);
       page = page + F * k.glass2.x * mirror + glint;

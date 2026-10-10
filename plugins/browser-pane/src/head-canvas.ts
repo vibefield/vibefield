@@ -28,6 +28,7 @@ import {
 } from "./head";
 import { bandLayout, type PaneShape } from "./law";
 import type { HeadBitmap } from "./layout";
+import { drawNotice, type NoticeContext, noticeBytes } from "./notice-canvas";
 import { sampleFavicon } from "./sample-page";
 
 const SANS = `-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif`;
@@ -159,13 +160,16 @@ export function drawHead(
   const left = cx - chx + 1.7 * mm;
   const right = cx + chx - 1.7 * mm - reserve;
   const size = 2.5 * mm;
-  const text = st.display || PROMPT;
-  ctx.font = `${st.display ? 600 : 500} ${size}px ${SANS}`;
+  // PT-5a: for a moment the capsule SAYS something instead (a download refused) — alone: no lock, no favicon
+  const saying = st.saying !== undefined;
+  if (saying) favicon = null;
+  const text = st.saying ?? (st.display || PROMPT);
+  ctx.font = `${st.display || saying ? 600 : 500} ${size}px ${SANS}`;
   ctx.textBaseline = "middle";
-  const generic = favicon === null && st.favicon === GENERIC_FAVICON;
+  const generic = !saying && favicon === null && st.favicon === GENERIC_FAVICON;
   const icon = favicon || generic ? 2.8 * mm : 0;
   const gap = favicon || generic ? 1.15 * mm : 0;
-  const lock = st.secure && st.display ? 1.95 * mm : 0;
+  const lock = !saying && st.secure && st.display ? 1.95 * mm : 0;
   const room = right - left - icon - gap - lock;
   let shown = text;
   if (ctx.measureText(shown).width > room) {
@@ -204,7 +208,7 @@ export function drawHead(
     ctx.stroke();
   }
   if (icon) x += icon + gap;
-  ctx.globalAlpha = st.display ? 1 : 0.6;
+  ctx.globalAlpha = st.display || saying ? 1 : 0.6;
   ctx.fillText(shown, x, cy + 0.08 * mm);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
@@ -269,6 +273,11 @@ export function headRaster(
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (ctx === null) return undefined;
   let sample: OffscreenCanvas | null | undefined;
+  /** The notices' own canvas (a page's size — made the first time a page fails, never the heads' small one resized). */
+  let notices:
+    | { readonly canvas: OffscreenCanvas; readonly ctx: OffscreenCanvasRenderingContext2D }
+    | null
+    | undefined;
   const pictures = createFaviconPictures(decode);
   const icon = (id: string | null): CanvasImageSource | null => {
     if (id === null) return null;
@@ -282,6 +291,16 @@ export function headRaster(
       return headBitmap(ctx as HeadContext, width, height);
     },
     picture: pictures.offer,
+    notice(spec) {
+      if (notices === undefined) {
+        const c = new OffscreenCanvas(1, 1);
+        const cx = c.getContext("2d", { willReadFrequently: true });
+        notices = cx === null ? null : { canvas: c, ctx: cx };
+      }
+      if (notices === null) return undefined;
+      const { width, height } = drawNotice(notices.canvas, notices.ctx as NoticeContext, spec);
+      return noticeBytes(notices.ctx as NoticeContext, width, height);
+    },
   };
 }
 

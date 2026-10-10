@@ -416,23 +416,27 @@ export class PanePass implements KindPass<PaneInstance> {
       // the sight is told every page this slot PREPARED — within its reach, it may lie past the box: the sight believes
       // only one that meets it (ICE I50)
       live.sight.saw(live.e, s, pageRect(r.geometry));
-      const t = live.face.texture();
-      surface.live = t;
-      this.lay(surface, r);
-      if (t === undefined) return;
-      const depth = liveDepth(t, px);
-      t.prepare(
-        encoder,
-        s.light.night > 0 ? Math.max(depth, Math.ceil(glowLevel(t.width))) : depth,
-      );
-      return;
+      // PT-5a — a FAILED page's notice is laid as a still is (below): the face's texture is not shown (its sight is told
+      // all the same — a page tried again must be asked for)
+      if (r.page?.notice === undefined) {
+        const t = live.face.texture();
+        surface.live = t;
+        this.lay(surface, r);
+        if (t === undefined) return;
+        const depth = liveDepth(t, px);
+        t.prepare(
+          encoder,
+          s.light.night > 0 ? Math.max(depth, Math.ceil(glowLevel(t.width))) : depth,
+        );
+        return;
+      }
     }
     surface.live = undefined;
     const plan = r.page;
     if (plan !== null && plan.key !== surface.pageKey) {
       if (surface.pageKey === null || now - surface.madeAt >= PAGE_REMAKE_MS) {
         surface.page.presentBytes(
-          samplePage(plan.viewport, plan.scheme, [plan.width, plan.height]),
+          plan.notice ?? samplePage(plan.viewport, plan.scheme, [plan.width, plan.height]),
           plan.width,
           plan.height,
         );
