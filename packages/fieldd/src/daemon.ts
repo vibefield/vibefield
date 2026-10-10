@@ -3260,6 +3260,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         sinceMs: parsed.data.sinceMs,
         untilMs: parsed.data.untilMs,
       });
+      // no record source here (no rosettad configured): nothing to lend, said
+      // so the window draws today's floor and asks no more (v2 item 9)
+      if (past === undefined)
+        throw new RpcCallError("NOT_FOUND", "this desktop keeps no record of past runs", false, {
+          service: "agent.monitor",
+          state: "no-record",
+        });
       return wireRecordedLanes(past, ctx.principal.kind === "peer-fieldd" ? "peer" : "window");
     });
     // AR-5d — the usage column's feed (agent-usage.ts). Both doors answer the
@@ -3700,8 +3707,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         file: join(config.dataDir, ...LAYOUT.PROJECT_IDENTITY_FILE),
         logger: logger.child({ component: "agent.monitor.identity" }),
       }),
-      // TL — the record, read at each ask and held nowhere (index-activity.ts)
-      history: monitorHistoryPort(activity, agents.catalog),
+      // TL — the record, read at each ask and held nowhere (index-activity.ts),
+      // beside this runtime's own run records: only those runs are lanes (v2).
+      // A desktop with no rosettad keeps no record: no port, so its windows are
+      // lent no past at all and draw today's floor (v2 item 9).
+      ...(rosettad !== null
+        ? { history: monitorHistoryPort(activity, agents.catalog, () => agents.recordedRuns()) }
+        : {}),
       logger,
     });
     // D1 (2026-10-01) — a peer that dialled before the roster could vouch for

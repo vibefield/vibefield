@@ -1,6 +1,7 @@
 import type {
   MonitorHistoryPort,
   MonitorRecordedActivity,
+  MonitorRecordedRun,
   MonitorRecordedSession,
 } from "@vibecook/puppeteer-monitor";
 import {
@@ -194,6 +195,7 @@ function recordedSession(
     // a live run is keyed by its workspace's root, the record's session by its
     // own cwd: the same folder for a run VibeField launched there
     ...(session.cwd !== undefined && session.cwd !== "" ? { projectKey: session.cwd } : {}),
+    ...(session.title !== undefined && session.title !== "" ? { title: session.title } : {}),
     ...(session.turns !== undefined
       ? {
           turns: session.turns.map((turn) => ({
@@ -208,12 +210,27 @@ function recordedSession(
   };
 }
 
-/** The monitor backend's history port over the reader: the record's answer in
- * the port's words, and a refusal as a person's sentence (the past's
- * `unavailable`). */
+/** One run this runtime ran, as the host's records keep it (`AgentRuntimeService.recordedRuns`). */
+export interface HostRecordedRun {
+  /** the catalog id (= puppeteer's provider id) */
+  provider: string;
+  nativeSessionId: string;
+  runtimeRunId: string;
+  createdAt?: number | undefined;
+  profileSet?: string | undefined;
+  projectKey?: string | undefined;
+  title?: string | undefined;
+}
+
+/** The monitor backend's history port over the reader and this runtime's run
+ * records: the record's answer in the port's words, beside the runs the
+ * backend may join it to (TIMELINE SHAPES v2 item 7 — only those are lanes), and
+ * a refusal as a person's sentence (the past's `unavailable`). Fast by
+ * construction: a daemon or a catalog that is not up refuses at once. */
 export function monitorHistoryPort(
   reader: ActivityReader,
   catalog: Pick<AgentCatalogReaders, "entry">,
+  runs: () => readonly HostRecordedRun[],
 ): MonitorHistoryPort {
   return {
     async read(window, options) {
@@ -239,11 +256,25 @@ export function monitorHistoryPort(
         const recorded = recordedSession(session, catalog);
         if (recorded !== undefined) sessions.push(recorded);
       }
+      // only the runs a session of this answer could be: the join needs no more
+      const wanted = new Set(sessions.map((session) => session.nativeSessionId));
+      const ours: MonitorRecordedRun[] = runs()
+        .filter((run) => wanted.has(run.nativeSessionId))
+        .map((run) => ({
+          provider: { id: run.provider, label: catalog.entry(run.provider)?.label ?? run.provider },
+          nativeSessionId: run.nativeSessionId,
+          runtimeRunId: run.runtimeRunId,
+          ...(run.createdAt !== undefined ? { createdAt: run.createdAt } : {}),
+          ...(run.profileSet !== undefined ? { profileSet: run.profileSet } : {}),
+          ...(run.projectKey !== undefined ? { projectKey: run.projectKey } : {}),
+          ...(run.title !== undefined ? { title: run.title } : {}),
+        }));
       const activity: MonitorRecordedActivity = {
         fidelity: result.fidelity,
         partial: result.partial,
         ...(result.detail !== undefined ? { detail: result.detail } : {}),
         sessions,
+        runs: ours,
       };
       return activity;
     },

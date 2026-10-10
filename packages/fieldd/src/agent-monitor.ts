@@ -147,8 +147,9 @@ export interface AgentMonitorService {
   /** What a screen shows in its active pane; false when no such screen is open. */
   reportShown(screenId: string, ids: readonly string[]): boolean;
   /** TL — the lanes' past for a window, read through to the record and joined
-   * with the model now (`agent.recordedLanes`); never rejects. */
-  readPast(window: { sinceMs: number; untilMs: number }): Promise<MonitorPastSnapshot>;
+   * with the model now (`agent.recordedLanes`); never rejects. Undefined when
+   * this desktop has no record source (no history port). */
+  readPast(window: { sinceMs: number; untilMs: number }): Promise<MonitorPastSnapshot | undefined>;
   dispose(): void;
 }
 

@@ -12,24 +12,27 @@
 // empty day; nothing pages a transcript (only rosetta reads them); an ended run
 // is ONE active band; and a desktop with no index says so in words.
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   AGENT_CATALOG,
+  AGENT_SESSION_RECORD_FORMAT,
   AgentRecordedLanesResult,
+  type AgentSessionRecord,
   CONTRACTS_VERSION,
   createAgentCatalogReaders,
   INDEX_ACTIVITY,
   IndexActivityResult,
   type IndexCatalogSession,
+  LAYOUT,
   SOCKETS,
 } from "@vibefield/contracts";
 import type { WsCtor } from "@vibefield/fieldd-client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { bootstrap, type FielddDaemon } from "../src/index";
+import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import {
   activityFromCatalog,
   activityUnreadWords,
@@ -152,9 +155,33 @@ describe("the floor's reader: the catalog's bounds, never a transcript", () => {
         ]),
       }),
       catalog,
+      () => [
+        {
+          provider: "claude",
+          nativeSessionId: "nat-now",
+          runtimeRunId: "run-now",
+          createdAt: NOW - HOUR - MIN,
+          profileSet: "native",
+          projectKey: "/work/app",
+          title: "Split the invoice writer",
+        },
+        // a run of ours with no session in this answer: the join needs no more
+        { provider: "claude", nativeSessionId: "nat-elsewhere", runtimeRunId: "run-elsewhere" },
+      ],
     );
     const answer = await port.read(WINDOW, { silenceMs: INDEX_ACTIVITY.SILENCE_MS });
     expect(answer.fidelity).toBe("bounds");
+    expect(answer.runs).toEqual([
+      {
+        provider: { id: "claude", label: catalog.entry("claude")!.label },
+        nativeSessionId: "nat-now",
+        runtimeRunId: "run-now",
+        createdAt: NOW - HOUR - MIN,
+        profileSet: "native",
+        projectKey: "/work/app",
+        title: "Split the invoice writer",
+      },
+    ]);
     expect(answer.sessions.map((s) => s.nativeSessionId)).toEqual([
       "nat-now",
       "nat-morning",
@@ -180,6 +207,7 @@ describe("the floor's reader: the catalog's bounds, never a transcript", () => {
       const port = monitorHistoryPort(
         createActivityReader({ catalog: fakeCatalog([], phase, false) }),
         catalog,
+        () => [],
       );
       await expect(port.read(WINDOW, { silenceMs: INDEX_ACTIVITY.SILENCE_MS })).rejects.toThrow(
         words,
@@ -272,6 +300,7 @@ describe("the reader prefers rosettad's route (T4) and gives way to the floor ho
         },
       }),
       createAgentCatalogReaders(AGENT_CATALOG),
+      () => [],
     );
     const answer = await port.read(WINDOW, { silenceMs: INDEX_ACTIVITY.SILENCE_MS });
     expect(answer.fidelity).toBe("turns");
@@ -316,6 +345,9 @@ const sessionRow = (
 const SESSIONS = [
   sessionRow("today", { first_at: NOW - 3 * HOUR, last_at: NOW - 2 * HOUR }),
   sessionRow("late", { first_at: NOW - 50 * MIN, last_at: NOW - 10 * MIN }),
+  // TIMELINE SHAPES v2 item 7 — an agent this runtime never ran (another
+  // terminal app), active right now: in the record, never a lane
+  sessionRow("stranger", { first_at: NOW - 40 * MIN, last_at: NOW - 5 * MIN }),
   sessionRow("yesterday", { first_at: NOW - 30 * HOUR, last_at: NOW - 29 * HOUR }),
   // a delegated thread: transcript structure, never a lane of its own
   sessionRow(
@@ -324,6 +356,40 @@ const SESSIONS = [
     { parent_session_id: "today", root_session_id: "today", role: "subagent" },
   ),
 ];
+
+/** A run THIS runtime ran, written through the SIGNING store (a hand-authored
+ * record would not verify), exited: the model holds no row for it, so its
+ * session is an ended lane. */
+function writeRunRecord(
+  dataDir: string,
+  native: string,
+  createdAt: number,
+  extra: Partial<AgentSessionRecord> = {},
+): void {
+  const at = new Date(createdAt).toISOString();
+  const record: AgentSessionRecord = {
+    format: AGENT_SESSION_RECORD_FORMAT,
+    runtimeRunId: `run-${native}`,
+    runtimeEpoch: 1,
+    provider: "claude",
+    profileSet: "native",
+    cwd: "/work/app",
+    continuation: {
+      providerId: "claude",
+      nativeSessionId: `nat-${native}`,
+      implementation: "native",
+    },
+    createdAt: at,
+    updatedAt: at,
+    exited: { at, exitCode: 0, signal: null, reason: "completed" },
+    ...extra,
+  };
+  new SessionRecordStore({
+    dir: join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR),
+    keyPath: join(dataDir, ...LAYOUT.AGENT_SESSIONS_KEY_FILE),
+    now: () => new Date(createdAt),
+  }).write(record);
+}
 
 let cleanup: Array<() => void | Promise<void>> = [];
 
@@ -346,6 +412,8 @@ async function open(url: string, headers?: Record<string, string>): Promise<WsRp
 
 interface World {
   daemon: FielddDaemon;
+  /** fieldd's project identity file: a past only read must never write it */
+  identityFile: string;
   asked(): string[];
   /** rescript rosettad's `/api/activity` (re-read per request) */
   activity(script: unknown): void;
@@ -378,6 +446,9 @@ beforeAll(async () => {
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
   writeLinkFixture(dataDir, TEST_LOGIN);
+  // this runtime ran `today` and `late` (not `stranger`)
+  writeRunRecord(dataDir, "today", NOW - 3 * HOUR - MIN, { title: "Split the invoice writer" });
+  writeRunRecord(dataDir, "late", NOW - 51 * MIN);
   const files = {
     sessions: join(dataDir, "sessions.json"),
     projects: join(dataDir, "projects.json"),
@@ -445,6 +516,7 @@ beforeAll(async () => {
   await helloAs(window, daemon.tokens.mint(["index.read", "index.search"], "act-window").token);
   world = {
     daemon,
+    identityFile: join(dataDir, ...LAYOUT.PROJECT_IDENTITY_FILE),
     asked: () =>
       readFileSync(files.log, "utf8")
         .split("\n")
@@ -494,6 +566,15 @@ const TURNS = {
       gaps: [],
     },
   ],
+  stranger: [
+    {
+      group_id: "g4",
+      kind: "human_turn",
+      first_at: NOW - 40 * MIN,
+      last_at: NOW - 5 * MIN,
+      gaps: [],
+    },
+  ],
   late: [
     {
       group_id: "g3",
@@ -514,8 +595,8 @@ describe("index.activity — rosettad's turns through its route (T4)", () => {
     const answer = IndexActivityResult.parse(await world.window.call("index.activity", window));
     expect(answer.fidelity).toBe("turns");
     expect(answer.partial).toBe(false);
-    expect(answer.sessions.map((s) => s.sessionId)).toEqual(["late", "today"]);
-    expect(answer.sessions[1]).toMatchObject({
+    expect(answer.sessions.map((s) => s.sessionId)).toEqual(["stranger", "late", "today"]);
+    expect(answer.sessions.find((s) => s.sessionId === "today")).toMatchObject({
       nativeSessionId: "nat-today",
       kind: "claude-code",
       provider: "claude",
@@ -547,7 +628,7 @@ describe("index.activity — rosettad's turns through its route (T4)", () => {
     expect(answer.partial).toBe(true);
     expect(answer.detail).toMatch(/not read every session/);
     // a withheld session's turns are not "none": its bounds stand in
-    expect(answer.sessions[0]).not.toHaveProperty("turns");
+    expect(answer.sessions.find((s) => s.sessionId === "late")).not.toHaveProperty("turns");
     world.activity({ turns: TURNS });
   });
 });
@@ -561,6 +642,11 @@ describe("agent.recordedLanes — the backend's lanes from rosettad's turns (T1,
     );
     expect(past.fidelity).toBe("turns");
     expect(past.state).toBe("complete");
+    // the stranger has turns in the record too, and is still no lane
+    expect(past.ended.map((lane) => lane.id)).toEqual([
+      "past:claude:nat-today",
+      "past:claude:nat-late",
+    ]);
     const today = past.ended.find((lane) => lane.id === "past:claude:nat-today");
     expect(today?.spans).toEqual([
       { kind: "worked", from: NOW - 3 * HOUR, to: NOW - 3 * HOUR + 5 * MIN },
@@ -574,14 +660,14 @@ describe("agent.recordedLanes — the backend's lanes from rosettad's turns (T1,
       for (const span of lane.spans) expect(["worked", "quiet", "unrecorded"]).toContain(span.kind);
   });
 
-  it("a withheld session is one active band, and the past says partial", async () => {
+  it("a withheld session is one bounds span, and the past says partial", async () => {
     world.activity({ turns: TURNS, withheld: ["late"] });
     const past = AgentRecordedLanesResult.parse(
       await world.window.call("agent.recordedLanes", day()),
     );
     expect(past.state).toBe("partial");
     const late = past.ended.find((lane) => lane.id === "past:claude:nat-late");
-    expect(late?.spans).toEqual([{ kind: "active", from: NOW - 50 * MIN, to: NOW - 10 * MIN }]);
+    expect(late?.spans).toEqual([{ kind: "bounds", from: NOW - 50 * MIN, to: NOW - 10 * MIN }]);
     world.activity({ turns: TURNS });
   });
 });
@@ -595,8 +681,8 @@ describe("index.activity — the floor when the route cannot answer (T5)", () =>
     expect(answer.fidelity).toBe("bounds");
     expect(answer.partial).toBe(true);
     expect(answer.detail).toMatch(/turns could not be read/);
-    expect(answer.sessions.map((s) => s.sessionId)).toEqual(["late", "today"]);
-    expect(answer.sessions[1]).toMatchObject({
+    expect(answer.sessions.map((s) => s.sessionId)).toEqual(["stranger", "late", "today"]);
+    expect(answer.sessions.find((s) => s.sessionId === "today")).toMatchObject({
       nativeSessionId: "nat-today",
       kind: "claude-code",
       provider: "claude",
@@ -632,17 +718,17 @@ describe("index.activity — the floor when the route cannot answer (T5)", () =>
 
   it("the phone reads it (its own preset carries the scope); a peer daemon is answered from this desktop's record", async () => {
     const phone = IndexActivityResult.parse(await world.phone.call("index.activity", day()));
-    expect(phone.sessions.map((s) => s.sessionId)).toEqual(["late", "today"]);
+    expect(phone.sessions.map((s) => s.sessionId)).toEqual(["stranger", "late", "today"]);
     expect(phone.clipped).toBe(false);
     const peer = IndexActivityResult.parse(await world.peer.call("index.activity", day()));
-    expect(peer.sessions.map((s) => s.sessionId)).toEqual(["late", "today"]);
+    expect(peer.sessions.map((s) => s.sessionId)).toEqual(["stranger", "late", "today"]);
   });
 });
 
 describe("agent.recordedLanes — the backend's lanes over the floor (B-D6 (a), T5)", () => {
   beforeAll(() => world.activity({ status: 404 }));
 
-  it("draws each ended run as ONE active band from its first to its last activity, in birth order", async () => {
+  it("draws each ended run of ours as ONE bounds span from its first to its last activity, in birth order", async () => {
     const past = AgentRecordedLanesResult.parse(
       await world.window.call("agent.recordedLanes", day()),
     );
@@ -650,6 +736,7 @@ describe("agent.recordedLanes — the backend's lanes over the floor (B-D6 (a), 
     expect(past.state).toBe("partial");
     // the floor: no live row's past (it keeps the hatch until turns arrive)
     expect(past.live).toEqual([]);
+    // only this runtime's runs: `stranger` (in the record, active now) is no lane
     expect(past.ended.map((lane) => lane.id)).toEqual([
       "past:claude:nat-today",
       "past:claude:nat-late",
@@ -657,13 +744,18 @@ describe("agent.recordedLanes — the backend's lanes over the floor (B-D6 (a), 
     const [today] = past.ended;
     expect(today).toMatchObject({
       provider: { id: "claude" },
+      title: "Split the invoice writer",
+      profileSet: "native",
       project: { name: "app" },
-      startedAt: NOW - 3 * HOUR,
+      startedAt: NOW - 3 * HOUR - MIN,
       endedAt: NOW - 2 * HOUR,
-      spans: [{ kind: "active", from: NOW - 3 * HOUR, to: NOW - 2 * HOUR }],
+      spans: [{ kind: "bounds", from: NOW - 3 * HOUR, to: NOW - 2 * HOUR }],
     });
-    // the window's own desktop dealt the colour; `self` is the reader's to say
-    expect(typeof today?.project.seq).toBe("number");
+    // colour is read, never dealt: `/work/app` was never dealt here, so the
+    // lane wears the neutral ramp and the identity file stays unwritten
+    expect(today?.project).not.toHaveProperty("seq");
+    expect(existsSync(world.identityFile)).toBe(false);
+    // `self` is the reader's to say
     expect(today?.device).not.toHaveProperty("self");
     expect(today?.device.id).toBe(world.daemon.devices.currentDeviceId());
     expect(world.asked().filter((url) => url.includes("/timeline"))).toEqual([]);
@@ -684,9 +776,9 @@ describe("agent.recordedLanes — the backend's lanes over the floor (B-D6 (a), 
   });
 });
 
-describe("a desktop with no agent index", () => {
-  it("refuses index.activity UNAVAILABLE and answers the lanes' past unavailable, in a person's words", async () => {
-    const dataDir = mkdtempSync(join(tmpdir(), "vf-act0-"));
+describe("a desktop with no record, and one whose record is not up", () => {
+  async function bareDaemon(prefix: string, rosettad?: { mode: string }) {
+    const dataDir = mkdtempSync(join(tmpdir(), prefix));
     cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
     mkdirSync(join(dataDir, "native", "run"), { recursive: true });
     writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
@@ -694,21 +786,56 @@ describe("a desktop with no agent index", () => {
     const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
     await mock.start();
     cleanup.push(() => mock.stop());
-    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    const home = join(dataDir, "home");
+    mkdirSync(home, { recursive: true });
+    const daemon = await bootstrap({
+      dataDir,
+      controlPort: 0,
+      dataPort: 0,
+      ...(rosettad !== undefined
+        ? {
+            rosettadBin: "/stand-in/rosettad",
+            rosettadHome: home,
+            rosettadSpawn: ((_bin: string, args: readonly string[], options: object) =>
+              spawn(process.execPath, [FAKE, ...args], {
+                ...options,
+                env: { ...process.env, FAKE_ROSETTAD_MODE: rosettad.mode },
+              })) as unknown as typeof spawn,
+          }
+        : {}),
+    });
     cleanup.push(() => daemon.stop());
     await until(() => daemon.devices.currentDeviceId() === mock.meshDeviceId, 15_000);
     const window = await open(`ws://127.0.0.1:${daemon.controlPort}`);
-    await helloAs(window, daemon.tokens.mint(["index.search"], "act0-window").token);
+    await helloAs(window, daemon.tokens.mint(["index.search"], `${prefix}window`).token);
+    return window;
+  }
+
+  it("no rosettad: index.activity refuses UNAVAILABLE, and the lanes' door says there is no record to lend (v2 item 9)", async () => {
+    const window = await bareDaemon("vf-act0-");
     const refused = await window.callErr("index.activity", day());
     expect(refused.data).toMatchObject({
       kind: "UNAVAILABLE",
       details: { service: "index", state: "unconfigured" },
     });
-    // the monitor is built with the device roster, which the wait above saw
+    // the monitor is built with the device roster, which the wait above saw;
+    // no record source = no capability: the window draws today's floor
+    const none = await window.callErr("agent.recordedLanes", day());
+    expect(none.data).toMatchObject({
+      kind: "NOT_FOUND",
+      retryable: false,
+      details: { service: "agent.monitor", state: "no-record" },
+    });
+  }, 60_000);
+
+  it("a rosettad that is not up answers the past unavailable AT ONCE, in a person's words — never a hanging read", async () => {
+    const window = await bareDaemon("vf-act1-", { mode: "silent" });
+    const asked = Date.now();
     const past = AgentRecordedLanesResult.parse(await window.call("agent.recordedLanes", day()));
+    expect(Date.now() - asked).toBeLessThan(2_000);
     expect(past).toMatchObject({
       state: "unavailable",
-      detail: "No agent index runs on this desktop",
+      detail: "The agent index is starting",
       live: [],
       ended: [],
     });

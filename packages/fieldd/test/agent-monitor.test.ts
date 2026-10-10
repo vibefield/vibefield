@@ -336,7 +336,7 @@ describe("the hosted backend — the model's rows for the fold's fixtures", () =
 });
 
 describe("the hosted backend — the record's past (TL, B-D6 (a))", () => {
-  it("joins a fold run with the record by its provider and native id: its past up to statusSince, the rest ended", async () => {
+  it("joins a fold run with the record by its provider and native id: its past up to statusSince, our gone run ended, a stranger's session none", async () => {
     const MIN = 60_000;
     const asked: unknown[] = [];
     const monitor = await testMonitor({
@@ -364,6 +364,23 @@ describe("the hosted backend — the record's past (TL, B-D6 (a))", () => {
                 projectKey: "/w/gone",
                 turns: [{ firstAt: T0 - 120 * MIN, lastAt: T0 - 90 * MIN }],
               },
+              {
+                // a session this runtime never ran (another terminal app): no lane
+                provider: { id: "claude", label: "Claude Code" },
+                nativeSessionId: "stranger-native",
+                firstAt: T0 - 20 * MIN,
+                lastAt: T0 + 5 * MIN,
+                turns: [{ firstAt: T0 - 20 * MIN, lastAt: T0 + 5 * MIN }],
+              },
+            ],
+            runs: [
+              {
+                provider: { id: "claude", label: "Claude Code" },
+                nativeSessionId: "gone-native",
+                runtimeRunId: "run-gone",
+                projectKey: "/w/gone",
+                title: "Ship the gone thing",
+              },
             ],
           };
         },
@@ -371,7 +388,7 @@ describe("the hosted backend — the record's past (TL, B-D6 (a))", () => {
     });
     const row = monitor.row("run-working");
     const window = { sinceMs: NOW0 - 24 * 60 * MIN, untilMs: NOW0 };
-    const past = await monitor.service.readPast(window);
+    const past = (await monitor.service.readPast(window))!;
     expect(asked).toEqual([{ window, silenceMs: 15 * MIN }]);
     expect(past.live).toEqual([
       {
@@ -386,18 +403,23 @@ describe("the hosted backend — the record's past (TL, B-D6 (a))", () => {
     expect(past.ended).toMatchObject([
       {
         id: "past:claude:gone-native",
+        title: "Ship the gone thing",
         project: { name: "gone" },
         device: { id: "this-device", self: true },
         spans: [{ kind: "worked", from: T0 - 120 * MIN, to: T0 - 90 * MIN }],
       },
     ]);
+    // read, never dealt: the gone run's key was never dealt here, so no sequence and no write
+    expect(past.ended[0]?.project).not.toHaveProperty("seq");
+    expect(monitor.identity.entries().has("/w/gone")).toBe(false);
     monitor.service.dispose();
   });
 
-  it("with no record the past is unavailable, in words, and nothing is held", async () => {
+  it("with no record source there is no past to lend at all (v2 item 9)", async () => {
     const monitor = await testMonitor({ summaries: [working] });
-    const past = await monitor.service.readPast({ sinceMs: NOW0 - 60_000, untilMs: NOW0 });
-    expect(past).toMatchObject({ state: "unavailable", live: [], ended: [] });
+    await expect(
+      monitor.service.readPast({ sinceMs: NOW0 - 60_000, untilMs: NOW0 }),
+    ).resolves.toBeUndefined();
     monitor.service.dispose();
   });
 });
