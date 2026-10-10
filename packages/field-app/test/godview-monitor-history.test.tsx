@@ -351,6 +351,55 @@ describe("re-reads follow the rows (v2 item 8)", () => {
   it("only agent rows' seams move a re-read", () => {
     expect(historyRowsKey(ROWS)).toBe(`run-1@${NOW - HOUR}`);
   });
+
+  it("a view that begins to ask reads once: the rows it begins with are the baseline, not a row arriving", async () => {
+    const port = fakePort();
+    await mount({ port, wants: false, rows: ROWS });
+    await update({ port, wants: true, rows: ROWS });
+    await port.answer();
+    await advance(10 * HISTORY_REFRESH_MIN_MS);
+    expect(port.asks).toHaveLength(1);
+  });
+});
+
+/** Rows that count each walk of them (`historyRowsKey` filters). */
+function countedRows(rows: Rows): { rows: Rows; walks: () => number } {
+  let walks = 0;
+  const counted = new Proxy([...rows], {
+    get(target, key, receiver) {
+      if (key === "filter") walks += 1;
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  return { rows: counted, walks: () => walks };
+}
+
+describe("the rows are watched only while a read could follow", () => {
+  it("each publish is walked once while the view asks; never for a view that does not ask", async () => {
+    const port = fakePort();
+    const idle = countedRows(ROWS);
+    await mount({ port, wants: false, rows: idle.rows });
+    expect(idle.walks()).toBe(0);
+    const asked = countedRows(ROWS);
+    await update({ port, wants: true, rows: asked.rows });
+    await port.answer();
+    // the answer re-renders the window with the same rows: they are not walked again
+    expect(asked.walks()).toBe(1);
+  });
+
+  it("a door with no record stops the watch: a publish walks nothing", async () => {
+    const port = fakePort();
+    await mount({ port, wants: true, rows: ROWS });
+    await port.answer({
+      rpc: {
+        data: { kind: "NOT_FOUND", details: { service: "agent.monitor", state: "no-record" } },
+      },
+    });
+    const published = countedRows([...ROWS, { id: "run-new", kind: "agent", statusSince: NOW }]);
+    await update({ port, wants: true, rows: published.rows });
+    expect(published.walks()).toBe(0);
+    expect(last()).toBeUndefined();
+  });
 });
 
 describe("honest states (v2 items 3, 9)", () => {

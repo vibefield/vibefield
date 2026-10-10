@@ -144,17 +144,20 @@ export interface MonitorHistoryOptions {
 
 /** `capabilities.history` for the mounted view, read only while it declares it. */
 export function useMonitorHistory(options: MonitorHistoryOptions): MonitorHistory | undefined {
-  const { port, wants, here, palette, receded, desk } = options;
+  const { port, wants, rows, here, palette, receded, desk } = options;
   const now = options.now ?? Date.now;
   const asking = wants && port !== undefined;
-  // nothing to watch while nothing asks: no view pays for a past it does not draw
-  const rowsKey = asking ? historyRowsKey(options.rows) : "";
   /** the snapshot lent, kept as one object while nothing moves */
   const [snapshot, setSnapshot] = useState<MonitorPastSnapshot | undefined>(undefined);
   /** the door said there is no record here: lend nothing, ask no more */
   const [noRecord, setNoRecord] = useState(false);
   /** bumped to read again */
   const [generation, setGeneration] = useState(0);
+  // The rows are watched only while a read could follow, and walked once per
+  // publish: no view pays for a past it does not draw, and a desktop with no
+  // record pays nothing. Undefined: not watching.
+  const watching = asking && !noRecord;
+  const rowsKey = useMemo(() => (watching ? historyRowsKey(rows) : undefined), [watching, rows]);
   const lastRead = useRef(0);
   const lastGood = useRef<MonitorPastSnapshot | undefined>(undefined);
   const nowRef = useRef(now);
@@ -233,12 +236,13 @@ export function useMonitorHistory(options: MonitorHistoryOptions): MonitorHistor
   }, [snapshot]);
 
   // the rows moved while the view asks: a row left → read again within a
-  // second; a seam moved or a row arrived → no sooner than the floor
+  // second; a seam moved or a row arrived → no sooner than the floor. The rows
+  // a watch begins with are its baseline: the read that began it holds them.
   const watched = useRef<string | undefined>(undefined);
   useEffect(() => {
     const before = watched.current;
     watched.current = rowsKey;
-    if (!asking || noRecord || before === undefined || before === rowsKey) return;
+    if (rowsKey === undefined || before === undefined || before === rowsKey) return;
     const was = parseRowsKey(before);
     const is = parseRowsKey(rowsKey);
     const left = [...was.keys()].some((id) => !is.has(id));
@@ -253,7 +257,7 @@ export function useMonitorHistory(options: MonitorHistoryOptions): MonitorHistor
       : Math.max(0, lastRead.current + HISTORY_REFRESH_MIN_MS - nowRef.current());
     const timer = setTimeout(() => setGeneration((value) => value + 1), wait);
     return () => clearTimeout(timer);
-  }, [rowsKey, asking, noRecord]);
+  }, [rowsKey]);
 
   const tintL = palette.tint.l;
   const tintC = palette.tint.c;
