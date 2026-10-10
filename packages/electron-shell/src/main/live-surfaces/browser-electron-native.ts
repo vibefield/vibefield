@@ -263,19 +263,14 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     };
   }
 
-  onFavicon(listener: (urls: readonly string[] | null) => void): () => void {
+  onFavicon(listener: (urls: readonly string[]) => void): () => void {
     const contents = this.window.webContents;
-    // a new document: none of its icons is known yet (the bootstrap's is plumbing)
-    const began = (): void => {
-      if (this.#remoteLoadStarted && !this.isDestroyed()) listener(null);
-    };
+    // (the bootstrap document's is plumbing: nothing is said of it)
     const updated = (_event: Electron.Event, urls: string[]): void => {
       if (this.#remoteLoadStarted && !this.isDestroyed()) listener(urls);
     };
-    contents.on("did-navigate", began);
     contents.on("page-favicon-updated", updated);
     return () => {
-      contents.off("did-navigate", began);
       contents.off("page-favicon-updated", updated);
     };
   }

@@ -160,13 +160,13 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
     if (action === "reload") this.order.push("reload");
   }
 
-  onFavicon(listener: (urls: readonly string[] | null) => void): () => void {
+  onFavicon(listener: (urls: readonly string[]) => void): () => void {
     this.#events.on("favicon", listener);
     return () => this.#events.off("favicon", listener);
   }
 
-  /** The page named its icons (Electron's `page-favicon-updated`), or a new document began (`null`). */
-  favicons(urls: readonly string[] | null): void {
+  /** The page named its icons (Electron's `page-favicon-updated` — said only when they differ from the page before's). */
+  favicons(urls: readonly string[]): void {
     this.#events.emit("favicon", urls);
   }
 
@@ -1539,7 +1539,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
     laptop.runtime.dispose();
   });
 
-  it("PT-4: the page's FAVICON — the first http(s) icon it names, fetched through its own session and held to the cap, rides its state; a new document has none until it names one; a later page's word stands over an earlier fetch", async () => {
+  it("PT-4: the page's FAVICON — the first http(s) icon it names, fetched through its own session and held to the cap, rides its state; it STANDS through a reload and a walk within its site (a page naming the same icons says nothing), and a page of another origin has none until it names its own; a later word stands over an earlier fetch", async () => {
     const result = setup();
     const renderer = attach(result.runtime);
     renderer.attachment.setDemand(demand(1, "live"));
@@ -1573,13 +1573,52 @@ describe("BrowserLiveSurfaceRuntime", () => {
     await flush();
     expect(renderer.summaries).toHaveLength(published);
 
-    // a new document: none until it names one; a page that names none it can fetch has none
-    window.favicons(null);
+    // a RELOAD, and another page of its site: the engine says nothing of icons that did not change — the favicon stands
+    window.emitNavigationState({ ...NAV, loading: true });
+    window.emitNavigationState(NAV);
+    expect(result.runtime.summary.browser?.favicon).toEqual(favicon);
+    window.emitNavigationState({
+      ...NAV,
+      url: "https://example.test/elsewhere?x=1",
+      title: "Else",
+    });
+    expect(result.runtime.summary.browser?.favicon).toEqual(favicon);
+    expect(window.iconFetches).toHaveLength(2);
+    // a page of ANOTHER origin: none of its own is known — never the last site's on this one's head
+    window.emitNavigationState({ ...NAV, url: "https://other.test/" });
     expect(result.runtime.summary.browser).not.toHaveProperty("favicon");
-    expect(renderer.summaries.length).toBe(published + 1);
+    expect(renderer.summaries.at(-1)?.browser).not.toHaveProperty("favicon");
+    // …and an error page, a blank one: none
+    for (const url of ["chrome-error://chromewebdata/", "about:blank"]) {
+      window.emitNavigationState({ ...NAV, url });
+      expect(result.runtime.summary.browser, url).not.toHaveProperty("favicon");
+    }
+    // back on the first site with nothing said (its icons are the ones last named): its favicon again
+    window.emitNavigationState(NAV);
+    expect(result.runtime.summary.browser?.favicon).toEqual(favicon);
+    // the other origin names its own: under THAT origin, and gone again on the first
+    window.icons.set("https://other.test/o.png", {
+      mediaType: "image/png",
+      bytes: new Uint8Array([1, 2, 3]),
+    });
+    window.emitNavigationState({ ...NAV, url: "https://other.test/" });
+    window.favicons(["https://other.test/o.png"]);
+    await flush();
+    await flush();
+    expect(result.runtime.summary.browser?.favicon?.data).toBe(
+      Buffer.from([1, 2, 3]).toString("base64"),
+    );
+    window.emitNavigationState(NAV);
+    expect(result.runtime.summary.browser).not.toHaveProperty("favicon");
+    // a page that names none it can fetch has none
+    window.favicons(["https://example.test/icon.png"]);
+    await flush();
+    await flush();
+    expect(result.runtime.summary.browser?.favicon).toEqual(favicon);
+    const fetched = window.iconFetches.length;
     window.favicons(["data:image/png;base64,AAAA", "ftp://example.test/icon.png"]);
     await flush();
-    expect(window.iconFetches).toHaveLength(2);
+    expect(window.iconFetches).toHaveLength(fetched);
     expect(result.runtime.summary.browser).not.toHaveProperty("favicon");
 
     // not an image, too large, unanswered: none
@@ -1608,7 +1647,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       }),
     );
     window.favicons(["https://example.test/slow.png"]);
-    window.favicons(null);
+    window.favicons(["https://example.test/gone.png"]);
     answer({ mediaType: "image/png", bytes });
     await flush();
     await flush();

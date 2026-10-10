@@ -113,9 +113,10 @@ export interface BrowserSurfaceNativeWindow {
   onNavigationState(listener: (state: BrowserSurfaceNavigationState) => void): () => void;
   /** PT-3: the page's CURSOR as it changes (Electron's `cursor-changed`), as a CSS cursor name. */
   onCursor(listener: (cursor: string) => void): () => void;
-  /** PT-4: the page's FAVICON candidates as they change (Electron's `page-favicon-updated`) — and `null` as a new document
-   * begins: none is known of it yet. */
-  onFavicon(listener: (urls: readonly string[] | null) => void): () => void;
+  /** PT-4: the page NAMED its icons (Electron's `page-favicon-updated`). Said once a page has stopped loading, and ONLY when
+   * they differ from the page before's — a reload, and a page naming the same icons, say nothing (the PT-4 smoke lost its
+   * favicon at the first reload; the probe showed why). */
+  onFavicon(listener: (urls: readonly string[]) => void): () => void;
   /** PT-4: an icon fetched THROUGH THE PAGE'S OWN SESSION (its cookies, its guard), held to `maxBytes`; null — not
    * answered, not an image, or past the cap. */
   fetchIcon(url: string, maxBytes: number): Promise<BrowserSurfaceIcon | null>;
@@ -570,6 +571,18 @@ function stripControlCharacters(value: string): string {
  * schema downstream would read as a protocol fault and kill the renderer
  * generation — a 9KB URL must degrade to truncation, never to teardown.
  */
+/** A web page's origin (`https://host:port`), or undefined: no address, not one, or not a web page's (about:blank, an
+ * error page) — where a favicon is never shown. */
+function webOriginOf(url: string | undefined): string | undefined {
+  if (url === undefined) return undefined;
+  try {
+    const at = new URL(url);
+    return at.protocol === "http:" || at.protocol === "https:" ? at.origin : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function clampBrowserState(
   state: BrowserSurfaceNavigationState,
 ): LiveSurfaceBrowserStateV1 | undefined {
@@ -820,8 +833,12 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #emulation: LiveSurfaceBrowserEmulationV1 | undefined;
   /** PT-4: a finger is down on a touch page (a press began a touch; its moves and its release are the touch's). */
   #touching = false;
-  /** PT-4: the page's favicon, published with the browser state; the count that names the page whose icon is awaited. */
+  /** PT-4: the favicon the page last named and the ORIGIN it named it under — published with the browser state while the
+   * page stands on that origin (a page that names the same icons as the one before says nothing, so a reload and a walk
+   * within a site keep it; a page of another origin has none until it names its own); the count that names the word whose
+   * icon is awaited. */
   #favicon: LiveSurfaceBrowserStateV1["favicon"];
+  #faviconOrigin: string | undefined;
   #faviconSerial = 0;
   #error: LiveSurfaceErrorV1 | undefined;
   #lastPublishedSummary = "";
@@ -898,7 +915,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
             browser: {
               ...this.#browserState,
               ...(this.#cursor === undefined ? {} : { cursor: this.#cursor }),
-              ...(this.#favicon === undefined ? {} : { favicon: this.#favicon }),
+              ...(this.#favicon !== undefined &&
+              this.#faviconOrigin !== undefined &&
+              this.#faviconOrigin === webOriginOf(this.#browserState.url)
+                ? { favicon: this.#favicon }
+                : {}),
             },
           }),
       ...(this.#error === undefined ? {} : { error: this.#error }),
@@ -1304,21 +1325,22 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   }
 
   /**
-   * PT-4 — the page's FAVICON: its candidates as the page names them (or none yet, as a new document begins); the first
-   * http(s) one is fetched through the page's own session, held to the cap, and published with the browser state. A later
-   * page's word stands over an earlier fetch's answer.
+   * PT-4 — the page's FAVICON: the icons the page NAMES; the first http(s) one is fetched through the page's own session,
+   * held to the cap, and published with the browser state — under the origin the page stood on when it named them. A later
+   * word stands over an earlier fetch's answer.
    */
   private acceptFavicon(
     window: BrowserSurfaceNativeWindow,
     epoch: number,
-    urls: readonly string[] | null,
+    urls: readonly string[],
   ): void {
     if (!this.ownsProducer(window, epoch)) return;
     this.#faviconSerial += 1;
     const serial = this.#faviconSerial;
-    const url = urls?.find((candidate) => /^https?:\/\//iu.test(candidate));
+    const origin = webOriginOf(this.#browserState?.url);
+    const url = urls.find((candidate) => /^https?:\/\//iu.test(candidate));
     if (url === undefined) {
-      this.setFavicon(undefined);
+      this.setFavicon(undefined, origin);
       return;
     }
     void window
@@ -1326,13 +1348,14 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       .then((icon) => (icon === null ? undefined : faviconOf(icon)))
       .catch(() => undefined)
       .then((favicon) => {
-        if (serial === this.#faviconSerial && !this.#closed) this.setFavicon(favicon);
+        if (serial === this.#faviconSerial && !this.#closed) this.setFavicon(favicon, origin);
       });
   }
 
-  private setFavicon(next: LiveSurfaceBrowserStateV1["favicon"]): void {
-    if (this.#favicon?.key === next?.key) return;
+  private setFavicon(next: LiveSurfaceBrowserStateV1["favicon"], origin: string | undefined): void {
     this.#favicon = next;
+    this.#faviconOrigin = origin;
+    // (a summary is sent only when it changed: the same icon under the same origin publishes nothing)
     if (this.#browserState !== undefined) this.publishSummary();
   }
 
