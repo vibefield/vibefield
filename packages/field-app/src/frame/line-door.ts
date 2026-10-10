@@ -220,3 +220,26 @@ export function resetHistoryLineDoorForTest(): void {
   history = null;
   historyListeners.clear();
 }
+
+// ── WHAT THE FRAME SAYS ON THE LINE (P2) ────────────────────────────────────
+// The line's note is where an act's outcome is said (its create's, Jump to's).
+// An act started elsewhere in the frame — a live row the Peek opened, whose
+// popup folded at the pick — says its outcome there too, in the same words, so
+// a run that could not be shown is never only a log line (the honest-states
+// rule). The line's controller hears; anyone in the frame may speak.
+
+const lineHearers = new Set<(text: string) => void>();
+
+/** Say `text` in the line's note. False when no line is mounted to hear it. */
+export function sayOnLine(text: string): boolean {
+  for (const hear of lineHearers) hear(text);
+  return lineHearers.size > 0;
+}
+
+/** The line's side: hear what the frame says. */
+export function hearLineSays(hear: (text: string) => void): () => void {
+  lineHearers.add(hear);
+  return () => {
+    lineHearers.delete(hear);
+  };
+}

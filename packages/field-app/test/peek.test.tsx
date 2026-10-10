@@ -766,6 +766,30 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
     expect(feed.live()).toBe(0);
   });
 
+  it("says ON THE LINE when a live pick could not be shown — in Jump to's words, never only a log line", async () => {
+    const feed = liveFeedFake();
+    const reveal = vi.fn(async () => ({
+      state: "refused" as const,
+      reason: "its pane is gone from the deck",
+    }));
+    publishGodviewLineDoor({ canPlace: true, reveal } as unknown as LineViewDoor);
+    mount(fieldd(), { openLiveFeed: feed.open });
+    await openHistory();
+    const input = await openPeek();
+    liveNowTab();
+    feed.push({ runs: LIVE_RUNS, state: { kind: "live" } });
+    await until(() => (options().length === 2 ? true : null), "the live rows");
+    press(input, { key: "ArrowDown" });
+    press(input, { key: "Enter" });
+    expect(surfaceNow).toBeNull();
+    const note = await until(
+      () => host?.querySelector(".vf-line-note")?.textContent,
+      "the line's note",
+    );
+    expect(note).toBe("Could not jump — its pane is gone from the deck");
+    expect(reveal).toHaveBeenCalledExactlyOnceWith("pty-local");
+  });
+
   it("History's Live now with nothing matching offers everything for the words, keeping them", async () => {
     const feed = liveFeedFake();
     mount(fieldd(), { openLiveFeed: feed.open });

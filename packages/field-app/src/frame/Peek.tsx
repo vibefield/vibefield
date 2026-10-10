@@ -32,6 +32,7 @@ import {
   useGodviewFindDoor,
 } from "./find-door";
 import { type FrameSurface, foldSurface } from "./frame-surface";
+import { jumpNote, sayOnLine } from "./line-door";
 import { openLiveRow } from "./live-open";
 import { PeekButtonView, type PeekMenu, PeekView } from "./PeekView";
 import {
@@ -661,15 +662,17 @@ export function FramePeek({
   const openLive = useCallback(
     (row: PeekLiveRow) => {
       void openLiveRow(row, view).then((outcome) => {
-        if (outcome.state === "refused") {
-          getRendererLogger()
-            .child({ component: "peek" })
-            .info("renderer.peek.live_unshown", "a live row the Peek opened was not shown", {
-              row: row.id,
-              from: view,
-              reason: outcome.reason,
-            });
-        }
+        if (outcome.state !== "refused") return;
+        // said where the frame says an act's outcome — the line's note, in Jump
+        // to's words (the popup folded at the pick) — and logged
+        sayOnLine(jumpNote(outcome));
+        getRendererLogger()
+          .child({ component: "peek" })
+          .info("renderer.peek.live_unshown", "a live row the Peek opened was not shown", {
+            row: row.id,
+            from: view,
+            reason: outcome.reason,
+          });
       });
     },
     [view],

@@ -1936,7 +1936,8 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     Godview, does what the view's own select does: this desktop's run mounted in the active pane, a
     peer's attached there. From History it takes Jump to's path (P3): the frame moves to Godview and
     the deck reveals the pane showing the run (activated, or mounted in the active pane); a peer's
-    run is selected through Godview as it opens.
+    run is selected through Godview as it opens. A run that could not be shown is SAID, on the
+    line's note in Jump to's words ("Could not jump — ‹why›"): the popup folded at the pick.
   - **Open at the line.** A past row — ↵, a click or Open — folds the popup and opens History at the
     line: the room's own `openAt` with the hit's session and message, the session in its project and
     the transcript landed on the message (§8 "History"). Everything reads this desktop's index (K5);

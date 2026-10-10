@@ -62,6 +62,7 @@ import {
 import { type FrameSurface, foldSurface } from "./frame-surface";
 import {
   type HistoryLineDoor,
+  hearLineSays,
   historyCreateWaits,
   jumpNote,
   type LineViewDoor,
@@ -368,6 +369,9 @@ export function Composer({
     const timer = window.setTimeout(() => setNote(null), NOTE_MS);
     return () => window.clearTimeout(timer);
   }, [note]);
+  // what the frame says on the line — a live row the Peek opened that could
+  // not be shown (P2), in Jump to's words
+  useEffect(() => hearLineSays((text) => say(text, "create")), [say]);
 
   /** Redraw the editor from `next` and put the caret `caret` places in. */
   const redraw = useCallback((next: readonly DraftPart[], caret: number | null) => {
