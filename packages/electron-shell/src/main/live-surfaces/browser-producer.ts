@@ -1,5 +1,9 @@
+import { createHash } from "node:crypto";
+import { join } from "node:path";
 import {
   LiveSurfaceBrowserSourceV1 as BrowserSourceSchema,
+  LIVE_SURFACE_FAVICON_MAX_BYTES,
+  type LiveSurfaceBrowserEmulationV1,
   type LiveSurfaceBrowserSourceV1,
   type LiveSurfaceBrowserStateV1,
   type LiveSurfaceDemandV1,
@@ -17,7 +21,11 @@ import type {
   BrowserControlTargetRegistry,
   BrowserControlTargetWebContents,
 } from "./browser-control-target";
-import { browserSurfacePartition, isAllowedBrowserTopLevelUrl } from "./browser-security";
+import {
+  browserSurfacePartition,
+  browserSurfaceProfileName,
+  isAllowedBrowserTopLevelUrl,
+} from "./browser-security";
 import type {
   LiveSurfaceCpuFrame,
   LiveSurfaceRuntimeAttachContext,
@@ -85,8 +93,14 @@ export interface BrowserSurfaceNativeWindow {
     requested: LiveSurfacePixelSizeV1,
     logicalViewport: LiveSurfaceBrowserSourceV1["logicalViewport"],
     deviceScaleFactor: number,
+    /** PT-4: a phone's or a tablet's layout (the metrics override's `mobile`); absent: a desktop's. */
+    mobile?: boolean,
   ): Promise<LiveSurfacePixelSizeV1>;
+  /** PT-4: what the page is TOLD of its device — its agent with its hints, touch, the colour scheme (CDP's Emulation). */
+  setEmulation(emulation: BrowserSurfaceNativeEmulation): Promise<void>;
   dispatchMouse(input: BrowserSurfaceNativeMouseInput): Promise<void>;
+  /** PT-4: a finger on a touch device's page (CDP `Input.dispatchTouchEvent`). */
+  dispatchTouch(input: BrowserSurfaceNativeTouchInput): Promise<void>;
   dispatchKey(input: BrowserSurfaceNativeKeyInput): Promise<void>;
   dispatchText(text: string): Promise<void>;
   /** PT-3: an IME composition as it runs — its text and the caret within it (CDP `Input.imeSetComposition`). */
@@ -99,6 +113,12 @@ export interface BrowserSurfaceNativeWindow {
   onNavigationState(listener: (state: BrowserSurfaceNavigationState) => void): () => void;
   /** PT-3: the page's CURSOR as it changes (Electron's `cursor-changed`), as a CSS cursor name. */
   onCursor(listener: (cursor: string) => void): () => void;
+  /** PT-4: the page's FAVICON candidates as they change (Electron's `page-favicon-updated`) — and `null` as a new document
+   * begins: none is known of it yet. */
+  onFavicon(listener: (urls: readonly string[] | null) => void): () => void;
+  /** PT-4: an icon fetched THROUGH THE PAGE'S OWN SESSION (its cookies, its guard), held to `maxBytes`; null — not
+   * answered, not an image, or past the cap. */
+  fetchIcon(url: string, maxBytes: number): Promise<BrowserSurfaceIcon | null>;
   onPaint(listener: (paint: BrowserSurfacePaint) => void): () => void;
   onRenderProcessGone(listener: (reason: string) => void): () => void;
   onDestroyed(listener: () => void): () => void;
@@ -112,9 +132,49 @@ export interface BrowserSurfaceNavigationState {
   readonly canGoForward: boolean;
 }
 
+/** CDP's `userAgentMetadata` — the client hints an agent ships with. */
+export interface BrowserSurfaceUserAgentMetadata {
+  readonly brands: readonly { readonly brand: string; readonly version: string }[];
+  readonly fullVersionList: readonly { readonly brand: string; readonly version: string }[];
+  readonly platform: string;
+  readonly platformVersion: string;
+  readonly architecture: string;
+  readonly model: string;
+  readonly mobile: boolean;
+}
+
+/** An agent as a page reads it: `navigator.userAgent`, `navigator.platform`, `navigator.userAgentData`. */
+export interface BrowserSurfaceAgent {
+  readonly userAgent: string;
+  readonly navigatorPlatform: string;
+  readonly metadata: BrowserSurfaceUserAgentMetadata;
+}
+
+/** What the native window tells its page of its device (the metrics ride `setBackingRaster`). */
+export interface BrowserSurfaceNativeEmulation extends BrowserSurfaceAgent {
+  /** 0: a pointer device — touch off. */
+  readonly touchPoints: number;
+  /** Absent: the system's. */
+  readonly colorScheme?: "light" | "dark";
+}
+
+export interface BrowserSurfaceNativeTouchInput {
+  readonly type: "touchStart" | "touchMove" | "touchEnd";
+  /** The fingers down after this event (none for an end). */
+  readonly touchPoints: readonly { readonly x: number; readonly y: number; readonly id: number }[];
+}
+
+export interface BrowserSurfaceIcon {
+  readonly mediaType: string;
+  readonly bytes: Uint8Array;
+}
+
 export interface BrowserSurfaceNativeWindowOptions {
   readonly partition: string;
   readonly persistent: boolean;
+  /** PT-4: where a PERSISTENT profile lives — an absolute path under its user's data (`LAYOUT.BROWSER_PROFILES_DIR`), when
+   * the runtime was given a profiles' root; absent: Electron's own partition by `partition`'s name. */
+  readonly profilePath?: string;
   readonly logicalViewport: LiveSurfaceBrowserSourceV1["logicalViewport"];
   readonly initialBackingRaster: LiveSurfacePixelSizeV1;
   readonly deviceScaleFactor: number;
@@ -124,6 +184,71 @@ export interface BrowserSurfaceNativeWindowOptions {
 export interface BrowserSurfaceNative {
   createWindow(options: BrowserSurfaceNativeWindowOptions): BrowserSurfaceNativeWindow;
   monotonicNowUs(): bigint;
+  /** PT-4: the ENGINE'S OWN agent — its Chromium by name and bundled version, on the host's platform (`engineAgentOf`). */
+  engineAgent(): BrowserSurfaceAgent;
+}
+
+/** Chrome's own user-agent tokens per platform (frozen by its UA reduction), `navigator.platform`, and the hint's name. */
+const ENGINE_PLATFORMS: Readonly<
+  Record<string, { readonly token: string; readonly navigator: string; readonly hint: string }>
+> = {
+  darwin: { token: "Macintosh; Intel Mac OS X 10_15_7", navigator: "MacIntel", hint: "macOS" },
+  win32: { token: "Windows NT 10.0; Win64; x64", navigator: "Win32", hint: "Windows" },
+  linux: { token: "X11; Linux x86_64", navigator: "Linux x86_64", hint: "Linux" },
+};
+
+/**
+ * THE ENGINE'S OWN AGENT (PT-4 ruling 1): what a pane on a laptop or a desktop announces — the bundled Chromium as Chrome
+ * itself says it (its reduced string: the major and zeros), never Electron's own string, which names Electron and the app to
+ * every site. Its hints are given with it: an overridden agent's are empty otherwise (BW-5). The version is the host's
+ * (`process.versions.chrome`), never a number written here.
+ */
+export function engineAgentOf(host: {
+  readonly chrome: string;
+  readonly platform: string;
+  readonly arch: string;
+  readonly systemVersion: string;
+}): BrowserSurfaceAgent {
+  const major = host.chrome.split(".")[0] ?? host.chrome;
+  const os =
+    ENGINE_PLATFORMS[host.platform] ??
+    (ENGINE_PLATFORMS.linux as (typeof ENGINE_PLATFORMS)[string]);
+  return {
+    userAgent: `Mozilla/5.0 (${os.token}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`,
+    navigatorPlatform: os.navigator,
+    metadata: {
+      brands: [
+        { brand: "Chromium", version: major },
+        { brand: "Not?A_Brand", version: "99" },
+      ],
+      fullVersionList: [
+        { brand: "Chromium", version: host.chrome },
+        { brand: "Not?A_Brand", version: "99.0.0.0" },
+      ],
+      platform: os.hint,
+      platformVersion: host.systemVersion,
+      architecture: host.arch.startsWith("arm") ? "arm" : "x86",
+      model: "",
+      mobile: false,
+    },
+  };
+}
+
+/** What a page is TOLD of its device, as one string: its agent, its hints, mobile, touch — what only a load teaches it. */
+const toldKey = (e: LiveSurfaceBrowserEmulationV1 | undefined): string =>
+  e === undefined ? "" : JSON.stringify([e.agent ?? null, e.mobile, e.touchPoints]);
+
+/** A fetched icon as the state carries it: an image, within the cap, with a short digest of its bytes — else none. */
+export function faviconOf(icon: BrowserSurfaceIcon): LiveSurfaceBrowserStateV1["favicon"] {
+  const mediaType = icon.mediaType.split(";")[0]?.trim().toLowerCase() ?? "";
+  if (!/^image\/[a-z0-9.+-]{1,40}$/u.test(mediaType)) return undefined;
+  if (icon.bytes.byteLength === 0 || icon.bytes.byteLength > LIVE_SURFACE_FAVICON_MAX_BYTES)
+    return undefined;
+  return {
+    key: createHash("sha256").update(icon.bytes).digest("hex").slice(0, 16),
+    mediaType,
+    data: Buffer.from(icon.bytes).toString("base64"),
+  };
 }
 
 export type BrowserSurfaceMouseButton = "none" | "left" | "middle" | "right";
@@ -217,6 +342,9 @@ export interface BrowserLiveSurfaceRuntimeOptions {
   /** How long the page is kept PAUSED once no renderer is attached before it hibernates (default 60 s): a renderer that
    * re-attaches within it — a window reload's next document, re-bound by main's custody — finds the SAME page. 0: at once. */
   readonly detachedHibernateMs?: number;
+  /** PT-4: where this user's persistent browser profiles live (`<user root>/browser/profiles` — LAYOUT's); a persistent
+   * source's session is the directory under it named by its profile's digest. Absent: Electron's own partitions. */
+  readonly profilesRoot?: string;
   /** Optional main-private instrumentation; observer faults never affect frames. */
   readonly onPaintCallbackDurationUs?: (durationUs: bigint) => void;
 }
@@ -240,6 +368,9 @@ export interface BrowserLiveSurfaceRuntimeStats {
   readonly inputDropped: number;
   readonly navigationRequests: number;
   readonly navigationDropped: number;
+  /** PT-4: emulations applied that differed from the one before; reloads they asked (the page's told device moved). */
+  readonly emulations: number;
+  readonly emulationReloads: number;
   readonly effectiveDemand: LiveSurfaceDemandV1 | null;
 }
 
@@ -255,6 +386,7 @@ interface SourceCallbacks {
   readonly removeDestroyed: () => void;
   readonly removeNavigation: () => void;
   readonly removeCursor: () => void;
+  readonly removeFavicon: () => void;
 }
 
 function increment(value: number, name: string): number {
@@ -656,6 +788,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   readonly #cpuFallbackPaints: number;
   readonly #restartLimit: number;
   readonly #detachedHibernateMs: number;
+  readonly #profilesRoot: string | undefined;
   readonly #onPaintCallbackDurationUs: ((durationUs: bigint) => void) | undefined;
   readonly #lifecycle = new LiveSurfaceLifecycle();
   readonly #attachments = new Map<string, BrowserRuntimeAttachmentRecord>();
@@ -682,6 +815,14 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #browserState: LiveSurfaceBrowserStateV1 | undefined;
   /** PT-3: the cursor the page last showed (a CSS name), published with the browser state; reset with its window. */
   #cursor: string | undefined;
+  /** PT-4: the device the page is seen as — the source's at its creation, an `emulate` command's after. Survives its
+   * window: a producer started again is born on it. */
+  #emulation: LiveSurfaceBrowserEmulationV1 | undefined;
+  /** PT-4: a finger is down on a touch page (a press began a touch; its moves and its release are the touch's). */
+  #touching = false;
+  /** PT-4: the page's favicon, published with the browser state; the count that names the page whose icon is awaited. */
+  #favicon: LiveSurfaceBrowserStateV1["favicon"];
+  #faviconSerial = 0;
   #error: LiveSurfaceErrorV1 | undefined;
   #lastPublishedSummary = "";
   #cpuPaintStreak = 0;
@@ -704,6 +845,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #inputDropped = 0;
   #navigationRequests = 0;
   #navigationDropped = 0;
+  #emulations = 0;
+  #emulationReloads = 0;
 
   constructor(options: BrowserLiveSurfaceRuntimeOptions) {
     this.surfaceId = LiveSurfaceIdV1.parse(options.surfaceId);
@@ -712,6 +855,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       throw new Error("Browser source initial URL must use HTTP or HTTPS");
     }
     this.#viewport = roundedViewport(this.source.logicalViewport);
+    this.#emulation = this.source.emulation;
+    this.#profilesRoot = options.profilesRoot;
     this.#native = options.native;
     this.#controlTargets = options.controlTargets;
     this.#requestSharedTexture = options.requestSharedTexture ?? true;
@@ -750,10 +895,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       ...(this.#browserState === undefined
         ? {}
         : {
-            browser:
-              this.#cursor === undefined
-                ? this.#browserState
-                : { ...this.#browserState, cursor: this.#cursor },
+            browser: {
+              ...this.#browserState,
+              ...(this.#cursor === undefined ? {} : { cursor: this.#cursor }),
+              ...(this.#favicon === undefined ? {} : { favicon: this.#favicon }),
+            },
           }),
       ...(this.#error === undefined ? {} : { error: this.#error }),
     };
@@ -779,6 +925,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       inputDropped: this.#inputDropped,
       navigationRequests: this.#navigationRequests,
       navigationDropped: this.#navigationDropped,
+      emulations: this.#emulations,
+      emulationReloads: this.#emulationReloads,
       effectiveDemand: this.#effectiveDemand === null ? null : copyDemand(this.#effectiveDemand),
     };
   }
@@ -992,6 +1140,25 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     ) {
       throw new Error("Browser click count is outside the bounded contract");
     }
+    // PT-4 — A FINGER: on a touch device's page a press is a touch, its moves the touch's while it is down, its release
+    // the touch's end; a hover is nothing a finger does, and no other button is one. Sent as touch events from here
+    // (`Input.dispatchTouchEvent`), never by CDP's mouse-to-touch emulation: under `setEmitTouchEventsForMouse` a
+    // dispatched mouse event is swallowed and its command never answers (the PT-4 probe), and the commands queued behind it
+    // never run. The wheel stays the page's scroll (above).
+    if ((this.#emulation?.touchPoints ?? 0) > 0) {
+      const finger = [{ x, y, id: 0 }];
+      if (request.type === "down") {
+        if (request.button !== undefined && request.button !== "left") return;
+        this.#touching = true;
+        await window.dispatchTouch({ type: "touchStart", touchPoints: finger });
+      } else if (request.type === "move") {
+        if (this.#touching) await window.dispatchTouch({ type: "touchMove", touchPoints: finger });
+      } else if (this.#touching) {
+        this.#touching = false;
+        await window.dispatchTouch({ type: "touchEnd", touchPoints: [] });
+      }
+      return;
+    }
     await window.dispatchMouse({
       type:
         request.type === "move"
@@ -1014,6 +1181,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * beneath both paths; history/loading actions carry no URL at all.
    */
   async navigate(command: LiveSurfaceNavigationCommandV1): Promise<void> {
+    if (command.action === "emulate") {
+      if (this.#closed) throw new Error("Browser surface is not available for navigation");
+      this.emulate(command.emulation);
+      return;
+    }
     const window = this.#window;
     if (
       this.#closed ||
@@ -1031,6 +1203,137 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       return;
     }
     window.navigate(command.action);
+  }
+
+  /** The page's density: its device's as emulated, else its source's. */
+  private density(): number {
+    return this.#emulation?.deviceScaleFactor ?? this.source.deviceScaleFactor ?? 1;
+  }
+
+  private mobile(): boolean {
+    return this.#emulation?.mobile === true;
+  }
+
+  /** A window's birth: its user's profile directory for a persistent source (given a profiles' root), its density. */
+  private windowOptions(
+    viewport: LiveSurfaceBrowserSourceV1["logicalViewport"],
+    initialRaster: LiveSurfacePixelSizeV1,
+  ): BrowserSurfaceNativeWindowOptions {
+    const persistent = this.source.profile.mode === "persistent";
+    return {
+      partition: browserSurfacePartition(this.source),
+      persistent,
+      ...(persistent && this.#profilesRoot !== undefined
+        ? { profilePath: join(this.#profilesRoot, browserSurfaceProfileName(this.source)) }
+        : {}),
+      logicalViewport: viewport,
+      initialBackingRaster: initialRaster,
+      deviceScaleFactor: this.density(),
+      requestSharedTexture: this.#requestSharedTexture,
+    };
+  }
+
+  /** What the native window tells its page: the device's agent — or the engine's own — with touch and the scheme. */
+  private nativeEmulation(e: LiveSurfaceBrowserEmulationV1): BrowserSurfaceNativeEmulation {
+    const agent: BrowserSurfaceAgent =
+      e.agent === undefined
+        ? this.#native.engineAgent()
+        : {
+            userAgent: e.agent.userAgent,
+            navigatorPlatform: e.agent.navigatorPlatform,
+            // an agent that is not this engine's ships no brands of it (a Safari has none)
+            metadata: { brands: [], fullVersionList: [], ...e.agent.hints },
+          };
+    return {
+      ...agent,
+      touchPoints: e.touchPoints,
+      ...(e.colorScheme === undefined ? {} : { colorScheme: e.colorScheme }),
+    };
+  }
+
+  /** A window's first layout, its page told its device BEFORE it loads — a source that names none is told nothing (the
+   * engine as Electron has it). */
+  private bornOn(
+    window: BrowserSurfaceNativeWindow,
+    raster: LiveSurfacePixelSizeV1,
+    viewport: LiveSurfaceBrowserSourceV1["logicalViewport"],
+  ): Promise<LiveSurfacePixelSizeV1> {
+    const e = this.#emulation;
+    const laid = (): Promise<LiveSurfacePixelSizeV1> =>
+      window.setBackingRaster(raster, viewport, this.density(), this.mobile());
+    return e === undefined ? laid() : window.setEmulation(this.nativeEmulation(e)).then(laid);
+  }
+
+  /**
+   * PT-4 — THE DEVICE SWITCH under a running page (the `emulate` command): the page is told at once — its agent and hints,
+   * touch, the scheme, its density and mobile layout at the viewport the demand names — and, when what it is TOLD of its
+   * device moved (its agent, its hints, mobile, touch), RELOADED ONCE: a loaded document keeps what it learnt at its load
+   * (the probe: `ontouchstart` is absent until the next document; a site that chose its markup by its agent has chosen).
+   * A scheme or a density alone is told live. The same emulation again is nothing. A page asleep is born on it.
+   */
+  private emulate(next: LiveSurfaceBrowserEmulationV1): void {
+    const was = this.#emulation;
+    if (was !== undefined && JSON.stringify(was) === JSON.stringify(next)) return;
+    this.#emulation = next;
+    this.#emulations += 1;
+    const window = this.#window;
+    if (window === null || window.isDestroyed()) return;
+    const epoch = this.#lifecycle.snapshot.producerEpoch;
+    const told = toldKey(was) !== toldKey(next);
+    if (this.#rasterTimer !== null) {
+      clearTimeout(this.#rasterTimer);
+      this.#rasterTimer = null;
+    }
+    const viewport = this.wantedViewport();
+    const requested =
+      this.#effectiveDemand?.targetRasterSize ?? defaultRaster(viewport, this.density());
+    const bounded = this.#transport === "cpu-bgra" ? clampCpuRaster(requested) : requested;
+    void window
+      .setEmulation(this.nativeEmulation(next))
+      .then(() => window.setBackingRaster(bounded, viewport, this.density(), this.mobile()))
+      .then(() => {
+        if (!this.isCurrent(window, epoch)) return;
+        this.#viewport = viewport;
+        // a page that has loaded learns its device by loading again; one still to load is born on it
+        if (told && this.#browserState !== undefined) {
+          this.#emulationReloads += 1;
+          window.navigate("reload");
+        } else window.invalidate();
+      })
+      .catch(() => undefined);
+  }
+
+  /**
+   * PT-4 — the page's FAVICON: its candidates as the page names them (or none yet, as a new document begins); the first
+   * http(s) one is fetched through the page's own session, held to the cap, and published with the browser state. A later
+   * page's word stands over an earlier fetch's answer.
+   */
+  private acceptFavicon(
+    window: BrowserSurfaceNativeWindow,
+    epoch: number,
+    urls: readonly string[] | null,
+  ): void {
+    if (!this.ownsProducer(window, epoch)) return;
+    this.#faviconSerial += 1;
+    const serial = this.#faviconSerial;
+    const url = urls?.find((candidate) => /^https?:\/\//iu.test(candidate));
+    if (url === undefined) {
+      this.setFavicon(undefined);
+      return;
+    }
+    void window
+      .fetchIcon(url, LIVE_SURFACE_FAVICON_MAX_BYTES)
+      .then((icon) => (icon === null ? undefined : faviconOf(icon)))
+      .catch(() => undefined)
+      .then((favicon) => {
+        if (serial === this.#faviconSerial && !this.#closed) this.setFavicon(favicon);
+      });
+  }
+
+  private setFavicon(next: LiveSurfaceBrowserStateV1["favicon"]): void {
+    if (this.#favicon?.key === next?.key) return;
+    this.#favicon = next;
+    if (this.#browserState !== undefined) this.publishSummary();
   }
 
   /** PT-3: the page's cursor moved — a summary, so the renderer's face says it (`LiveInfo.cursor`) and wakes its desk. */
@@ -1110,18 +1413,10 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // the source's own viewport is only the no-opinion fallback (DT-3f).
     const viewport = this.wantedViewport();
     const demandRaster = this.#effectiveDemand?.targetRasterSize;
-    const initialRaster =
-      demandRaster ?? defaultRaster(viewport, this.source.deviceScaleFactor ?? 1);
+    const initialRaster = demandRaster ?? defaultRaster(viewport, this.density());
     let window: BrowserSurfaceNativeWindow;
     try {
-      window = this.#native.createWindow({
-        partition: browserSurfacePartition(this.source),
-        persistent: this.source.profile.mode === "persistent",
-        logicalViewport: viewport,
-        initialBackingRaster: initialRaster,
-        deviceScaleFactor: this.source.deviceScaleFactor ?? 1,
-        requestSharedTexture: this.#requestSharedTexture,
-      });
+      window = this.#native.createWindow(this.windowOptions(viewport, initialRaster));
       this.#viewport = viewport;
       this.#window = window;
       const removePaint = window.onPaint((paint) => this.acceptPaint(window, epoch, paint));
@@ -1135,12 +1430,14 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         this.acceptNavigationState(window, epoch, state),
       );
       const removeCursor = window.onCursor((cursor) => this.acceptCursor(window, epoch, cursor));
+      const removeFavicon = window.onFavicon((urls) => this.acceptFavicon(window, epoch, urls));
       this.#callbacks = {
         removePaint,
         removeGone,
         removeDestroyed,
         removeNavigation,
         removeCursor,
+        removeFavicon,
       };
       this.#producersStarted += 1;
       this.applyFrameRate();
@@ -1148,8 +1445,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         () => this.handleStartupTimeout(window, epoch),
         this.#startupTimeoutMs,
       );
-      void window
-        .setBackingRaster(initialRaster, viewport, this.source.deviceScaleFactor ?? 1)
+      void this.bornOn(window, initialRaster, viewport)
         .then(() => {
           if (!this.isCurrent(window, epoch)) return;
           this.#controlTargets?.associate(this.surfaceId, epoch, window.controlContents);
@@ -1495,14 +1791,13 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // viewport flips `#viewport` only once the native window confirms, so
     // geometry keeps naming the layout frames were actually painted at.
     const viewport = this.wantedViewport();
-    const requested =
-      demand.targetRasterSize ?? defaultRaster(viewport, this.source.deviceScaleFactor ?? 1);
+    const requested = demand.targetRasterSize ?? defaultRaster(viewport, this.density());
     const bounded = this.#transport === "cpu-bgra" ? clampCpuRaster(requested) : requested;
     this.#rasterTimer = setTimeout(() => {
       this.#rasterTimer = null;
       if (!this.isCurrent(window, epoch) || this.#effectiveDemand?.mode !== "live") return;
       void window
-        .setBackingRaster(bounded, viewport, this.source.deviceScaleFactor ?? 1)
+        .setBackingRaster(bounded, viewport, this.density(), this.mobile())
         .then(() => {
           if (this.isCurrent(window, epoch) && this.#effectiveDemand?.mode === "live") {
             this.#viewport = viewport;
@@ -1565,17 +1860,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     const epoch = this.#lifecycle.snapshot.producerEpoch;
     const viewport = this.wantedViewport();
     const initialRaster =
-      this.#effectiveDemand?.targetRasterSize ??
-      defaultRaster(viewport, this.source.deviceScaleFactor ?? 1);
+      this.#effectiveDemand?.targetRasterSize ?? defaultRaster(viewport, this.density());
     try {
-      const window = this.#native.createWindow({
-        partition: browserSurfacePartition(this.source),
-        persistent: this.source.profile.mode === "persistent",
-        logicalViewport: viewport,
-        initialBackingRaster: initialRaster,
-        deviceScaleFactor: this.source.deviceScaleFactor ?? 1,
-        requestSharedTexture: this.#requestSharedTexture,
-      });
+      const window = this.#native.createWindow(this.windowOptions(viewport, initialRaster));
       this.#window = window;
       this.#viewport = viewport;
       this.#callbacks = {
@@ -1590,6 +1877,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
           this.acceptNavigationState(window, epoch, state),
         ),
         removeCursor: window.onCursor((cursor) => this.acceptCursor(window, epoch, cursor)),
+        removeFavicon: window.onFavicon((urls) => this.acceptFavicon(window, epoch, urls)),
       };
       this.#producersStarted += 1;
       this.applyFrameRate();
@@ -1597,8 +1885,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         () => this.handleStartupTimeout(window, epoch),
         this.#startupTimeoutMs,
       );
-      void window
-        .setBackingRaster(initialRaster, viewport, this.source.deviceScaleFactor ?? 1)
+      void this.bornOn(window, initialRaster, viewport)
         .then(() => {
           if (this.isCurrent(window, epoch)) {
             this.#controlTargets?.associate(this.surfaceId, epoch, window.controlContents);
@@ -1647,7 +1934,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     callbacks?.removeDestroyed();
     callbacks?.removeNavigation();
     callbacks?.removeCursor();
+    callbacks?.removeFavicon();
     this.#cursor = undefined;
+    this.#touching = false;
     if (window === null) return;
     this.#controlTargets?.revoke(this.surfaceId, window.controlContents);
     if (!window.isDestroyed()) window.destroy();

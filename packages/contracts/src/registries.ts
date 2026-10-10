@@ -1242,6 +1242,12 @@ export const LAYOUT = {
   TERMINAL_FRAME_SOCKET: ["native", "run", SOCKETS.TERMINAL_FRAME],
   CRASH_DIR: ["crash"],
   EXPORTS_STAGING_DIR: ["exports", ".staging"],
+  /** PT-4 (PORTALS ruling 3) — this user's BROWSER PROFILES: the persistent sessions of live-surface browser pages
+   * (cookies, storage, cache), one directory per profile under an opaque name (a digest of the profile's mode and ref —
+   * `browser-security.ts`). The desk's pages share ONE — as the tabs of one browser do — apart from the app's own shell
+   * session, which is Electron's `userData`. Electron main's (`session.fromPath`), under the user because a browser's
+   * sign-ins are a person's: a second user of this machine never opens them. */
+  BROWSER_PROFILES_DIR: ["browser", "profiles"],
   /** AR-0 — the agent index (rosetta): the disposable SQLite projection
    * rosettad serves for this user (`serve --db`), with its ledger, assets and
    * search sidecars beside it. Per USER root (design: one rosettad per user). */

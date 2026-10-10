@@ -176,6 +176,7 @@ pub mod layout {
     pub const TERMINAL_FRAME_SOCKET: &[&str] = &["native", "run", "termframe.sock"];
     pub const CRASH_DIR: &[&str] = &["crash"];
     pub const EXPORTS_STAGING_DIR: &[&str] = &["exports", ".staging"];
+    pub const BROWSER_PROFILES_DIR: &[&str] = &["browser", "profiles"];
     pub const INDEX_DIR: &[&str] = &["index"];
     pub const INDEX_DB: &[&str] = &["index", "rosetta.db"];
     pub const INDEX_DAEMONS_DIR: &[&str] = &["index", "daemons"];
@@ -232,6 +233,7 @@ pub mod layout {
         ("TERMINAL_FRAME_SOCKET", TERMINAL_FRAME_SOCKET),
         ("CRASH_DIR", CRASH_DIR),
         ("EXPORTS_STAGING_DIR", EXPORTS_STAGING_DIR),
+        ("BROWSER_PROFILES_DIR", BROWSER_PROFILES_DIR),
         ("INDEX_DIR", INDEX_DIR),
         ("INDEX_DB", INDEX_DB),
         ("INDEX_DAEMONS_DIR", INDEX_DAEMONS_DIR),

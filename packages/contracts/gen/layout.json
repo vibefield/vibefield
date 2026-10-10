@@ -97,6 +97,10 @@
     "exports",
     ".staging"
   ],
+  "BROWSER_PROFILES_DIR": [
+    "browser",
+    "profiles"
+  ],
   "INDEX_DIR": [
     "index"
   ],

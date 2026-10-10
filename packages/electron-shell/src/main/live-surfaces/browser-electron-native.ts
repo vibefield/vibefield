@@ -1,17 +1,25 @@
 import { BrowserWindow, session } from "electron";
-import type {
-  BrowserSurfaceNative,
-  BrowserSurfaceNativeKeyInput,
-  BrowserSurfaceNativeMouseInput,
-  BrowserSurfaceNativeWindow,
-  BrowserSurfaceNativeWindowOptions,
-  BrowserSurfaceNavigationState,
-  BrowserSurfacePaint,
+import {
+  type BrowserSurfaceAgent,
+  type BrowserSurfaceIcon,
+  type BrowserSurfaceNative,
+  type BrowserSurfaceNativeEmulation,
+  type BrowserSurfaceNativeKeyInput,
+  type BrowserSurfaceNativeMouseInput,
+  type BrowserSurfaceNativeTouchInput,
+  type BrowserSurfaceNativeWindow,
+  type BrowserSurfaceNativeWindowOptions,
+  type BrowserSurfaceNavigationState,
+  type BrowserSurfacePaint,
+  engineAgentOf,
 } from "./browser-producer";
 import {
   installGuardedBrowserSurfaceContents,
   installGuardedBrowserSurfaceSession,
 } from "./browser-security";
+
+/** How long a favicon's fetch may take before the page is said to have none. */
+const FAVICON_TIMEOUT_MS = 5_000;
 
 function integerDimension(value: number): number {
   return Math.max(1, Math.min(16_384, Math.round(value)));
@@ -108,6 +116,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     requested: { width: number; height: number },
     logicalViewport: { width: number; height: number },
     deviceScaleFactor: number,
+    mobile = false,
   ): Promise<{ width: number; height: number }> {
     // The base derives from THIS call's viewport (DT-3f), never the
     // construction-time one: the viewport now follows the card, and a raster
@@ -125,7 +134,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         width: integerDimension(logicalViewport.width),
         height: integerDimension(logicalViewport.height),
         deviceScaleFactor,
-        mobile: false,
+        mobile,
         screenWidth: integerDimension(logicalViewport.width),
         screenHeight: integerDimension(logicalViewport.height),
       });
@@ -136,6 +145,45 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       const contentHeight = integerDimension(effective.height / this.options.deviceScaleFactor);
       this.window.setContentSize(contentWidth, contentHeight, false);
     }).then(() => ({ width: effective.width, height: effective.height }));
+  }
+
+  /**
+   * PT-4 — what the page is told of its device, over CDP's Emulation: its agent (`navigator.userAgent`, `navigator.platform`,
+   * the request header) WITH its client hints — an overridden agent's are empty otherwise; touch on or off with its points;
+   * the colour scheme, or the system's when none is named. Never `setEmitTouchEventsForMouse`: under it a dispatched mouse
+   * event is swallowed and its command never answers, and this window's commands run one behind another.
+   */
+  setEmulation(emulation: BrowserSurfaceNativeEmulation): Promise<void> {
+    return this.enqueue(async () => {
+      if (this.isDestroyed()) throw new Error("Browser surface was destroyed during emulation");
+      await this.bootstrapReady;
+      await this.ensureDebugger();
+      const cdp = this.window.webContents.debugger;
+      await cdp.sendCommand("Emulation.setUserAgentOverride", {
+        userAgent: emulation.userAgent,
+        platform: emulation.navigatorPlatform,
+        userAgentMetadata: emulation.metadata,
+      });
+      await cdp.sendCommand(
+        "Emulation.setTouchEmulationEnabled",
+        emulation.touchPoints > 0
+          ? { enabled: true, maxTouchPoints: emulation.touchPoints }
+          : { enabled: false },
+      );
+      await cdp.sendCommand("Emulation.setEmulatedMedia", {
+        features:
+          emulation.colorScheme === undefined
+            ? []
+            : [{ name: "prefers-color-scheme", value: emulation.colorScheme }],
+      });
+    });
+  }
+
+  dispatchTouch(input: BrowserSurfaceNativeTouchInput): Promise<void> {
+    return this.enqueue(async () => {
+      await this.ensureDebugger();
+      await this.window.webContents.debugger.sendCommand("Input.dispatchTouchEvent", input);
+    });
   }
 
   dispatchMouse(input: BrowserSurfaceNativeMouseInput): Promise<void> {
@@ -215,6 +263,58 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     };
   }
 
+  onFavicon(listener: (urls: readonly string[] | null) => void): () => void {
+    const contents = this.window.webContents;
+    // a new document: none of its icons is known yet (the bootstrap's is plumbing)
+    const began = (): void => {
+      if (this.#remoteLoadStarted && !this.isDestroyed()) listener(null);
+    };
+    const updated = (_event: Electron.Event, urls: string[]): void => {
+      if (this.#remoteLoadStarted && !this.isDestroyed()) listener(urls);
+    };
+    contents.on("did-navigate", began);
+    contents.on("page-favicon-updated", updated);
+    return () => {
+      contents.off("did-navigate", began);
+      contents.off("page-favicon-updated", updated);
+    };
+  }
+
+  /** Through the page's OWN session — its cookies, and the session's request guard (http and https alone at the top). */
+  async fetchIcon(url: string, maxBytes: number): Promise<BrowserSurfaceIcon | null> {
+    if (this.isDestroyed()) return null;
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), FAVICON_TIMEOUT_MS);
+    try {
+      const response = await this.window.webContents.session.fetch(url, { signal: abort.signal });
+      if (!response.ok || response.body === null) return null;
+      const declared = Number(response.headers.get("content-length") ?? Number.NaN);
+      if (Number.isFinite(declared) && declared > maxBytes) return null;
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      const reader = response.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > maxBytes) return null;
+        chunks.push(value);
+      }
+      const bytes = new Uint8Array(size);
+      let at = 0;
+      for (const chunk of chunks) {
+        bytes.set(chunk, at);
+        at += chunk.byteLength;
+      }
+      return { mediaType: response.headers.get("content-type") ?? "", bytes };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+      abort.abort();
+    }
+  }
+
   onCursor(listener: (cursor: string) => void): () => void {
     const handler = (_event: Electron.Event, type: string): void => listener(type);
     this.window.webContents.on("cursor-changed", handler);
@@ -291,9 +391,12 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
 /** Pinned Electron 43 Browser OSR adapter. */
 export class ElectronBrowserSurfaceNative implements BrowserSurfaceNative {
   createWindow(options: BrowserSurfaceNativeWindowOptions): BrowserSurfaceNativeWindow {
-    const targetSession = session.fromPartition(options.partition, {
-      cache: options.persistent,
-    });
+    // PT-4: a persistent profile lives under its USER's data (`LAYOUT.BROWSER_PROFILES_DIR`) when the runtime names where;
+    // else — and for a memory profile — Electron's own partition by name
+    const targetSession =
+      options.profilePath !== undefined
+        ? session.fromPath(options.profilePath, { cache: true })
+        : session.fromPartition(options.partition, { cache: options.persistent });
     installGuardedBrowserSurfaceSession(targetSession);
     const initial = baseRaster(options);
     const window = new BrowserWindow({
@@ -328,6 +431,15 @@ export class ElectronBrowserSurfaceNative implements BrowserSurfaceNative {
 
   monotonicNowUs(): bigint {
     return process.hrtime.bigint() / 1_000n;
+  }
+
+  engineAgent(): BrowserSurfaceAgent {
+    return engineAgentOf({
+      chrome: process.versions.chrome,
+      platform: process.platform,
+      arch: process.arch,
+      systemVersion: process.getSystemVersion(),
+    });
   }
 }
 

@@ -1,5 +1,10 @@
 import { EventEmitter } from "node:events";
-import type { LiveSurfaceDemandV1, LiveSurfaceRuntimeSummaryV1 } from "@vibefield/contracts";
+import { join } from "node:path";
+import type {
+  LiveSurfaceBrowserEmulationV1,
+  LiveSurfaceDemandV1,
+  LiveSurfaceRuntimeSummaryV1,
+} from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LiveSurfaceAuthority } from "../src/main/live-surfaces/authority";
 import {
@@ -8,16 +13,23 @@ import {
 } from "../src/main/live-surfaces/browser-control-target";
 import {
   BrowserLiveSurfaceRuntime,
+  type BrowserSurfaceAgent,
+  type BrowserSurfaceIcon,
   type BrowserSurfaceNative,
+  type BrowserSurfaceNativeEmulation,
   type BrowserSurfaceNativeKeyInput,
   type BrowserSurfaceNativeMouseInput,
+  type BrowserSurfaceNativeTouchInput,
   type BrowserSurfaceNativeWindow,
   type BrowserSurfaceNativeWindowOptions,
   type BrowserSurfaceNavigationState,
   type BrowserSurfacePaint,
   editingCommandsOf,
+  engineAgentOf,
+  faviconOf,
   virtualKeyCodeOf,
 } from "../src/main/live-surfaces/browser-producer";
+import { browserSurfaceProfileName } from "../src/main/live-surfaces/browser-security";
 import type { LiveSurfaceRuntimeAttachContext } from "../src/main/live-surfaces/runtime";
 
 const SURFACE_ID = "browser_surface_0123456789";
@@ -46,6 +58,19 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
   readonly frameRates: number[] = [];
   readonly backingRasters: Array<{ width: number; height: number }> = [];
   readonly rasterViewports: Array<{ width: number; height: number }> = [];
+  /** PT-4: each layout's density and whether it was a mobile one; what the page was told; its touches; its icon fetches. */
+  readonly rasterDensities: number[] = [];
+  readonly rasterMobile: boolean[] = [];
+  readonly emulations: BrowserSurfaceNativeEmulation[] = [];
+  readonly touchInputs: BrowserSurfaceNativeTouchInput[] = [];
+  readonly iconFetches: Array<{ url: string; maxBytes: number }> = [];
+  /** What a fetch of each icon answers (unset: nothing). */
+  readonly icons = new Map<
+    string,
+    BrowserSurfaceIcon | null | Promise<BrowserSurfaceIcon | null>
+  >();
+  /** The order the window was told things in: "emulate", "raster", "load", "reload". */
+  readonly order: string[] = [];
   readonly mouseInputs: BrowserSurfaceNativeMouseInput[] = [];
   readonly keyInputs: BrowserSurfaceNativeKeyInput[] = [];
   readonly textInputs: string[] = [];
@@ -67,6 +92,7 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
 
   async loadURL(url: string): Promise<void> {
     this.loadedUrls.push(url);
+    this.order.push("load");
   }
 
   isDestroyed(): boolean {
@@ -93,10 +119,24 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
   async setBackingRaster(
     requested: { width: number; height: number },
     logicalViewport: { width: number; height: number },
+    deviceScaleFactor: number,
+    mobile = false,
   ) {
     this.backingRasters.push({ ...requested });
     this.rasterViewports.push({ ...logicalViewport });
+    this.rasterDensities.push(deviceScaleFactor);
+    this.rasterMobile.push(mobile);
+    this.order.push("raster");
     return requested;
+  }
+
+  async setEmulation(emulation: BrowserSurfaceNativeEmulation): Promise<void> {
+    this.emulations.push(emulation);
+    this.order.push("emulate");
+  }
+
+  async dispatchTouch(input: BrowserSurfaceNativeTouchInput): Promise<void> {
+    this.touchInputs.push(input);
   }
 
   async dispatchMouse(input: BrowserSurfaceNativeMouseInput): Promise<void> {
@@ -117,6 +157,22 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
 
   navigate(action: "back" | "forward" | "reload" | "stop"): void {
     this.navigations.push(action);
+    if (action === "reload") this.order.push("reload");
+  }
+
+  onFavicon(listener: (urls: readonly string[] | null) => void): () => void {
+    this.#events.on("favicon", listener);
+    return () => this.#events.off("favicon", listener);
+  }
+
+  /** The page named its icons (Electron's `page-favicon-updated`), or a new document began (`null`). */
+  favicons(urls: readonly string[] | null): void {
+    this.#events.emit("favicon", urls);
+  }
+
+  async fetchIcon(url: string, maxBytes: number): Promise<BrowserSurfaceIcon | null> {
+    this.iconFetches.push({ url, maxBytes });
+    return (await this.icons.get(url)) ?? null;
   }
 
   onNavigationState(listener: (state: BrowserSurfaceNavigationState) => void): () => void {
@@ -180,7 +236,45 @@ class FakeNative implements BrowserSurfaceNative {
     this.now += 1n;
     return this.now;
   }
+
+  engineAgent(): BrowserSurfaceAgent {
+    return ENGINE;
+  }
 }
+
+/** The engine's own agent as the fake host has it: Chromium 150 on an Apple-silicon Mac. */
+const ENGINE = engineAgentOf({
+  chrome: "150.0.7871.114",
+  platform: "darwin",
+  arch: "arm64",
+  systemVersion: "26.5.2",
+});
+
+const IPHONE_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1";
+const PHONE: LiveSurfaceBrowserEmulationV1 = {
+  deviceScaleFactor: 3,
+  mobile: true,
+  touchPoints: 5,
+  agent: {
+    userAgent: IPHONE_UA,
+    navigatorPlatform: "iPhone",
+    hints: {
+      platform: "iOS",
+      platformVersion: "26.0",
+      architecture: "",
+      model: "iPhone",
+      mobile: true,
+    },
+  },
+  colorScheme: "dark",
+};
+const LAPTOP: LiveSurfaceBrowserEmulationV1 = {
+  deviceScaleFactor: 2,
+  mobile: false,
+  touchPoints: 0,
+  colorScheme: "light",
+};
 
 function source() {
   return {
@@ -1173,5 +1267,403 @@ describe("BrowserLiveSurfaceRuntime", () => {
     await vi.advanceTimersByTimeAsync(300);
     expect(result.native.windows[0]?.rasterViewports.at(-1)).toEqual({ width: 640, height: 360 });
     result.runtime.dispose();
+  });
+
+  // ── PT-4: the page as a device sees it ────────────────────────────────────────────────────────────────────────────
+  const NAV = {
+    url: "https://example.test/app",
+    title: "App",
+    loading: false,
+    canGoBack: false,
+    canGoForward: false,
+  };
+  const phoneSource = () => ({
+    ...source(),
+    logicalViewport: { width: 402, height: 874 },
+    deviceScaleFactor: 3,
+    emulation: PHONE,
+  });
+
+  it("PT-4: the engine's own agent is its Chromium by name and BUNDLED version on the host's platform — never Electron's string, never a number written down", () => {
+    expect(ENGINE).toEqual({
+      userAgent:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+      navigatorPlatform: "MacIntel",
+      metadata: {
+        brands: [
+          { brand: "Chromium", version: "150" },
+          { brand: "Not?A_Brand", version: "99" },
+        ],
+        fullVersionList: [
+          { brand: "Chromium", version: "150.0.7871.114" },
+          { brand: "Not?A_Brand", version: "99.0.0.0" },
+        ],
+        platform: "macOS",
+        platformVersion: "26.5.2",
+        architecture: "arm",
+        model: "",
+        mobile: false,
+      },
+    });
+    // another engine's version is another agent's; another platform's its own tokens
+    const win = engineAgentOf({
+      chrome: "151.0.1.2",
+      platform: "win32",
+      arch: "x64",
+      systemVersion: "10.0.26100",
+    });
+    expect(win.userAgent).toBe(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+    );
+    expect([win.navigatorPlatform, win.metadata.platform, win.metadata.architecture]).toEqual([
+      "Win32",
+      "Windows",
+      "x86",
+    ]);
+    expect(win.metadata.brands[0]).toEqual({ brand: "Chromium", version: "151" });
+    const linux = engineAgentOf({
+      chrome: "150.0.0.1",
+      platform: "linux",
+      arch: "arm64",
+      systemVersion: "6.8",
+    });
+    expect([linux.navigatorPlatform, linux.metadata.platform]).toEqual(["Linux x86_64", "Linux"]);
+    expect(
+      engineAgentOf({ chrome: "150.0.0.1", platform: "sunos", arch: "x64", systemVersion: "" })
+        .userAgent,
+    ).toContain("X11; Linux x86_64");
+    expect(ENGINE.userAgent).not.toMatch(/Electron|VibeField/iu);
+  });
+
+  it("PT-4: a page is BORN on its device — told its agent with its hints, touch and its scheme before it is laid out and loads, mobile at its density; a source that names none is told nothing", async () => {
+    const result = setup({ source: phoneSource() });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await flush();
+    await flush();
+    const window = result.native.windows[0];
+    expect(window?.options.deviceScaleFactor).toBe(3);
+    expect(window?.emulations).toEqual([
+      {
+        userAgent: IPHONE_UA,
+        navigatorPlatform: "iPhone",
+        // an agent that is not the engine's ships no brands of it
+        metadata: {
+          brands: [],
+          fullVersionList: [],
+          platform: "iOS",
+          platformVersion: "26.0",
+          architecture: "",
+          model: "iPhone",
+          mobile: true,
+        },
+        touchPoints: 5,
+        colorScheme: "dark",
+      },
+    ]);
+    expect(window?.order).toEqual(["emulate", "raster", "load"]);
+    expect(window?.rasterDensities).toEqual([3]);
+    expect(window?.rasterMobile).toEqual([true]);
+    expect(window?.backingRasters).toEqual([{ width: 1206, height: 2622 }]);
+    result.runtime.dispose();
+
+    // a device with no agent of its own: the ENGINE's, with its hints — no touch, the scheme said
+    const laptop = setup({ source: { ...source(), deviceScaleFactor: 2, emulation: LAPTOP } });
+    attach(laptop.runtime).attachment.setDemand(demand(1, "live"));
+    await flush();
+    await flush();
+    expect(laptop.native.windows[0]?.emulations).toEqual([
+      { ...ENGINE, touchPoints: 0, colorScheme: "light" },
+    ]);
+    expect(laptop.native.windows[0]?.rasterMobile).toEqual([false]);
+    laptop.runtime.dispose();
+
+    // a source that names no device (every one before PT-4): told nothing, laid out a desktop's
+    const plain = setup();
+    attach(plain.runtime).attachment.setDemand(demand(1, "live"));
+    await flush();
+    expect(plain.native.windows[0]?.emulations).toEqual([]);
+    expect(plain.native.windows[0]?.order).toEqual(["raster", "load"]);
+    expect(plain.native.windows[0]?.rasterMobile).toEqual([false]);
+    plain.runtime.dispose();
+  });
+
+  it("PT-4: the device SWITCH under a running page — told at once, laid out again, and RELOADED ONCE when what the page is told of its device moved; a scheme or a density alone is told live; the same again is nothing", async () => {
+    const result = setup({ source: { ...source(), deviceScaleFactor: 2, emulation: LAPTOP } });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live", 30, undefined, { width: 320, height: 180 }));
+    await flush();
+    await flush();
+    const window = result.native.windows[0];
+    if (window === undefined) throw new Error("no window");
+    window.paint(sharedPaint().paint);
+    // the page has loaded: its navigation truth is known
+    window.emitNavigationState(NAV);
+    window.order.length = 0;
+
+    // the same device again: nothing
+    await result.runtime.navigate({ action: "emulate", emulation: LAPTOP });
+    await flush();
+    expect(window.order).toEqual([]);
+    expect(result.runtime.stats.emulations).toBe(0);
+
+    // a phone: told, laid out mobile at the phone's density, reloaded once
+    await result.runtime.navigate({ action: "emulate", emulation: PHONE });
+    await flush();
+    await flush();
+    expect(window.order).toEqual(["emulate", "raster", "reload"]);
+    expect(window.emulations.at(-1)).toMatchObject({
+      userAgent: IPHONE_UA,
+      touchPoints: 5,
+      colorScheme: "dark",
+    });
+    expect([window.rasterDensities.at(-1), window.rasterMobile.at(-1)]).toEqual([3, true]);
+    expect(window.backingRasters.at(-1)).toEqual({ width: 960, height: 540 });
+    expect(window.navigations).toEqual(["reload"]);
+    expect(result.runtime.stats).toMatchObject({ emulations: 1, emulationReloads: 1 });
+
+    // the phone's SCHEME alone: told live — no reload, a frame asked
+    window.order.length = 0;
+    const invalidated = window.invalidate.mock.calls.length;
+    await result.runtime.navigate({
+      action: "emulate",
+      emulation: { ...PHONE, colorScheme: "light" },
+    });
+    await flush();
+    await flush();
+    expect(window.order).toEqual(["emulate", "raster"]);
+    expect(window.emulations.at(-1)?.colorScheme).toBe("light");
+    expect(window.navigations).toEqual(["reload"]);
+    expect(window.invalidate.mock.calls.length).toBe(invalidated + 1);
+    // its DENSITY alone: told live too
+    await result.runtime.navigate({
+      action: "emulate",
+      emulation: { ...PHONE, colorScheme: "light", deviceScaleFactor: 2 },
+    });
+    await flush();
+    await flush();
+    expect(window.rasterDensities.at(-1)).toBe(2);
+    expect(window.navigations).toEqual(["reload"]);
+    // back to the laptop: its agent is the engine's again — told, and reloaded once more
+    await result.runtime.navigate({ action: "emulate", emulation: LAPTOP });
+    await flush();
+    await flush();
+    expect(window.emulations.at(-1)).toEqual({ ...ENGINE, touchPoints: 0, colorScheme: "light" });
+    expect(window.navigations).toEqual(["reload", "reload"]);
+    expect(result.runtime.stats).toMatchObject({ emulations: 4, emulationReloads: 2 });
+    result.runtime.dispose();
+    await expect(result.runtime.navigate({ action: "emulate", emulation: PHONE })).rejects.toThrow(
+      /not available/,
+    );
+  });
+
+  it("PT-4: a page still to load is told its device and NOT reloaded; a page asleep is born on it when it wakes", async () => {
+    const result = setup({ source: { ...source(), deviceScaleFactor: 2, emulation: LAPTOP } });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await flush();
+    await flush();
+    const first = result.native.windows[0];
+    // no navigation truth yet — the page has not loaded: told, never reloaded
+    await result.runtime.navigate({ action: "emulate", emulation: PHONE });
+    await flush();
+    await flush();
+    expect(first?.emulations).toHaveLength(2);
+    expect(first?.navigations).toEqual([]);
+    // asleep (hibernated: no window): the device is kept, and the next window is born on it
+    first?.paint(sharedPaint().paint);
+    renderer.attachment.setDemand(demand(2, "hibernated"));
+    expect(result.runtime.summary.state).toBe("hibernated");
+    await result.runtime.navigate({ action: "emulate", emulation: LAPTOP });
+    expect(result.runtime.stats.emulations).toBe(2);
+    renderer.attachment.setDemand(demand(3, "live"));
+    await flush();
+    await flush();
+    const second = result.native.windows[1];
+    expect(second?.emulations).toEqual([{ ...ENGINE, touchPoints: 0, colorScheme: "light" }]);
+    expect(second?.options.deviceScaleFactor).toBe(2);
+    expect(second?.order).toEqual(["emulate", "raster", "load"]);
+    result.runtime.dispose();
+  });
+
+  it("PT-4: a press on a touch device's page is a TOUCH — its moves while it is down, its release its end; a hover and another button are nothing; the wheel stays the page's scroll", async () => {
+    const result = setup({ source: phoneSource() });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live", 30, { width: 1206, height: 2622 }));
+    await flush();
+    await flush();
+    const window = result.native.windows[0];
+    window?.paint(sharedPaint(1206, 2622).paint);
+    await flush();
+    const revision = result.runtime.summary.geometry?.revision ?? 0;
+    const send = (input: Parameters<NonNullable<typeof renderer.attachment.dispatchInput>>[0]) =>
+      renderer.attachment.dispatchInput?.(input, revision);
+    send({ kind: "pointer", action: "move", x: 50, y: 60 });
+    send({ kind: "pointer", action: "down", x: 100, y: 200, button: "left", clickCount: 1 });
+    send({ kind: "pointer", action: "move", x: 100, y: 150, buttons: 1 });
+    send({ kind: "pointer", action: "up", x: 100, y: 150, button: "left", clickCount: 1 });
+    send({ kind: "pointer", action: "move", x: 120, y: 150 });
+    send({ kind: "pointer", action: "down", x: 10, y: 20, button: "right", clickCount: 1 });
+    send({ kind: "pointer", action: "up", x: 10, y: 20, button: "right", clickCount: 1 });
+    send({ kind: "wheel", x: 100, y: 200, deltaX: 0, deltaY: 120 });
+    await flush();
+    await flush();
+    expect(window?.touchInputs).toEqual([
+      { type: "touchStart", touchPoints: [{ x: 100, y: 200, id: 0 }] },
+      { type: "touchMove", touchPoints: [{ x: 100, y: 150, id: 0 }] },
+      { type: "touchEnd", touchPoints: [] },
+    ]);
+    // never a mouse press on a touch page: the wheel alone is the mouse's
+    expect(window?.mouseInputs).toEqual([
+      { type: "mouseWheel", x: 100, y: 200, deltaX: 0, deltaY: 120 },
+    ]);
+    result.runtime.dispose();
+
+    // a pointer device's page: a press is the mouse's, as before
+    const laptop = setup({
+      source: { ...source(), emulation: { ...LAPTOP, deviceScaleFactor: 1 } },
+    });
+    const desk = attach(laptop.runtime);
+    desk.attachment.setDemand(demand(1, "live", 30, { width: 640, height: 360 }));
+    await flush();
+    await flush();
+    laptop.native.windows[0]?.paint(sharedPaint().paint);
+    await flush();
+    desk.attachment.dispatchInput?.(
+      { kind: "pointer", action: "down", x: 10, y: 20, button: "left", clickCount: 1 },
+      laptop.runtime.summary.geometry?.revision ?? 0,
+    );
+    await flush();
+    expect(laptop.native.windows[0]?.touchInputs).toEqual([]);
+    expect(laptop.native.windows[0]?.mouseInputs).toHaveLength(1);
+    laptop.runtime.dispose();
+  });
+
+  it("PT-4: the page's FAVICON — the first http(s) icon it names, fetched through its own session and held to the cap, rides its state; a new document has none until it names one; a later page's word stands over an earlier fetch", async () => {
+    const result = setup();
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await flush();
+    const window = result.native.windows[0];
+    if (window === undefined) throw new Error("no window");
+    window.emitNavigationState(NAV);
+    const bytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4]);
+    window.icons.set("https://example.test/icon.png", {
+      mediaType: "image/PNG; charset=binary",
+      bytes,
+    });
+    window.favicons(["data:image/png;base64,AAAA", "https://example.test/icon.png"]);
+    await flush();
+    await flush();
+    // never the data: one, never past the cap
+    expect(window.iconFetches).toEqual([
+      { url: "https://example.test/icon.png", maxBytes: 32_768 },
+    ]);
+    const favicon = result.runtime.summary.browser?.favicon;
+    expect(favicon).toEqual({
+      key: expect.stringMatching(/^[a-f0-9]{16}$/u),
+      mediaType: "image/png",
+      data: Buffer.from(bytes).toString("base64"),
+    });
+    expect(renderer.summaries.at(-1)?.browser?.favicon).toEqual(favicon);
+    // the same icon named again publishes nothing more
+    const published = renderer.summaries.length;
+    window.favicons(["https://example.test/icon.png"]);
+    await flush();
+    await flush();
+    expect(renderer.summaries).toHaveLength(published);
+
+    // a new document: none until it names one; a page that names none it can fetch has none
+    window.favicons(null);
+    expect(result.runtime.summary.browser).not.toHaveProperty("favicon");
+    expect(renderer.summaries.length).toBe(published + 1);
+    window.favicons(["data:image/png;base64,AAAA", "ftp://example.test/icon.png"]);
+    await flush();
+    expect(window.iconFetches).toHaveLength(2);
+    expect(result.runtime.summary.browser).not.toHaveProperty("favicon");
+
+    // not an image, too large, unanswered: none
+    window.icons.set("https://example.test/a.html", { mediaType: "text/html", bytes });
+    window.icons.set("https://example.test/big.png", {
+      mediaType: "image/png",
+      bytes: new Uint8Array(32_769),
+    });
+    for (const url of [
+      "https://example.test/a.html",
+      "https://example.test/big.png",
+      "https://example.test/gone.png",
+    ]) {
+      window.favicons([url]);
+      await flush();
+      await flush();
+      expect(result.runtime.summary.browser, url).not.toHaveProperty("favicon");
+    }
+
+    // an earlier page's fetch answering after a later page spoke: the later page's word stands
+    let answer: (icon: BrowserSurfaceIcon) => void = () => {};
+    window.icons.set(
+      "https://example.test/slow.png",
+      new Promise<BrowserSurfaceIcon>((resolve) => {
+        answer = resolve;
+      }),
+    );
+    window.favicons(["https://example.test/slow.png"]);
+    window.favicons(null);
+    answer({ mediaType: "image/png", bytes });
+    await flush();
+    await flush();
+    expect(result.runtime.summary.browser).not.toHaveProperty("favicon");
+    result.runtime.dispose();
+
+    // the shape: an image's type without its parameters, a digest of the bytes; never empty, never past the cap
+    expect(faviconOf({ mediaType: "image/x-icon", bytes })?.mediaType).toBe("image/x-icon");
+    expect(faviconOf({ mediaType: "image/png", bytes })?.key).toBe(favicon?.key);
+    expect(faviconOf({ mediaType: "image/png", bytes: new Uint8Array([9]) })?.key).not.toBe(
+      favicon?.key,
+    );
+    expect(faviconOf({ mediaType: "image/png", bytes: new Uint8Array(0) })).toBeUndefined();
+    expect(faviconOf({ mediaType: "application/octet-stream", bytes })).toBeUndefined();
+    expect(faviconOf({ mediaType: "image/png", bytes: new Uint8Array(32_768) })).toBeDefined();
+  });
+
+  it("PT-4: a PERSISTENT profile lives under its user's profiles root by an opaque name — one ref, one directory; a memory profile, or no root, is Electron's own partition", async () => {
+    const root = "/data/users/7/browser/profiles";
+    const desk = { ...source(), profile: { mode: "persistent" as const, ref: "desk" } };
+    const born = async (options: Parameters<typeof setup>[0]) => {
+      const result = setup(options);
+      attach(result.runtime).attachment.setDemand(demand(1, "live"));
+      await flush();
+      const made = result.native.windows[0]?.options;
+      result.runtime.dispose();
+      return made;
+    };
+    const first = await born({ source: desk, profilesRoot: root });
+    expect(first?.profilePath).toBe(join(root, browserSurfaceProfileName(desk)));
+    expect(first?.profilePath).toMatch(/\/browser\/profiles\/[a-f0-9]{40}$/u);
+    expect(first?.profilePath).not.toContain("desk");
+    expect(first?.persistent).toBe(true);
+    // another pane's page on the same ref: the SAME directory — the desk's pages share one profile
+    expect(
+      (
+        await born({
+          source: { ...desk, initialUrl: "https://example.test/other" },
+          profilesRoot: root,
+        })
+      )?.profilePath,
+    ).toBe(first?.profilePath);
+    // another ref: another directory
+    expect(
+      (
+        await born({
+          source: { ...desk, profile: { mode: "persistent", ref: "other" } },
+          profilesRoot: root,
+        })
+      )?.profilePath,
+    ).not.toBe(first?.profilePath);
+    // a memory profile, and a runtime given no root: no path — Electron's own partition by name
+    expect((await born({ profilesRoot: root }))?.profilePath).toBeUndefined();
+    const unrooted = await born({ source: desk });
+    expect(unrooted?.profilePath).toBeUndefined();
+    expect(unrooted?.partition).toMatch(/^persist:vibefield-live-surface:[a-f0-9]{40}$/u);
   });
 });

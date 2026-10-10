@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  LIVE_SURFACE_FAVICON_MAX_BASE64,
+  LIVE_SURFACE_FAVICON_MAX_BYTES,
   LIVE_SURFACE_MAX_PIXELS,
+  LiveSurfaceBrowserEmulationV1,
   LiveSurfaceBrowserStateV1,
   LiveSurfaceDemandV1,
   LiveSurfaceFrameEnvelopeV1,
@@ -8,6 +11,7 @@ import {
   LiveSurfaceGeometryV1,
   LiveSurfaceHostControlMessageV1,
   LiveSurfaceInputEventV1,
+  LiveSurfaceNavigationCommandV1,
   LiveSurfacePresentationCapabilitiesV1,
   LiveSurfaceRendererControlMessageV1,
   LiveSurfaceSequenceV1,
@@ -257,6 +261,108 @@ describe("LSF-1 Live Surfaces contracts", () => {
     expect(LiveSurfaceBrowserStateV1.parse(state)).not.toHaveProperty("cursor");
     for (const cursor of ["", "url(x.png)", "Pointer", "a".repeat(33)])
       expect(LiveSurfaceBrowserStateV1.safeParse({ ...state, cursor }).success, cursor).toBe(false);
+  });
+
+  it("PT-4: a browser source says the device its page is seen as — its density, mobile, touch, its agent with its hints, its scheme — at its creation and as an `emulate` command; the state carries the page's favicon, held small", () => {
+    const phone = {
+      deviceScaleFactor: 3,
+      mobile: true,
+      touchPoints: 5,
+      agent: {
+        userAgent:
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1",
+        navigatorPlatform: "iPhone",
+        hints: {
+          platform: "iOS",
+          platformVersion: "26.0",
+          architecture: "",
+          model: "iPhone",
+          mobile: true,
+        },
+      },
+      colorScheme: "dark",
+    };
+    expect(LiveSurfaceBrowserEmulationV1.parse(phone)).toEqual(phone);
+    // the engine's own: no agent, no touch — a scheme alone, or nothing but the two it must say
+    const laptop = { mobile: false, touchPoints: 0 };
+    expect(LiveSurfaceBrowserEmulationV1.parse(laptop)).toEqual(laptop);
+    expect(LiveSurfaceBrowserEmulationV1.parse({ ...laptop, colorScheme: "light" })).toMatchObject({
+      colorScheme: "light",
+    });
+    for (const bad of [
+      { touchPoints: 0 },
+      { mobile: false },
+      { ...laptop, touchPoints: 11 },
+      { ...laptop, touchPoints: 1.5 },
+      { ...laptop, deviceScaleFactor: 9 },
+      { ...laptop, colorScheme: "sepia" },
+      { ...laptop, agent: { userAgent: "x" } },
+      { ...phone, agent: { ...phone.agent, userAgent: "" } },
+      { ...phone, agent: { ...phone.agent, userAgent: "a\nb" } },
+      { ...phone, agent: { ...phone.agent, hints: { ...phone.agent.hints, mobile: "yes" } } },
+    ])
+      expect(LiveSurfaceBrowserEmulationV1.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    // on the source at its creation
+    const source = {
+      kind: "browser",
+      initialUrl: "https://example.test/",
+      profile: { mode: "persistent", ref: "desk" },
+      logicalViewport: { width: 402, height: 874 },
+      deviceScaleFactor: 3,
+    };
+    expect(LiveSurfaceSourceSpecV1.parse({ ...source, emulation: phone })).toMatchObject({
+      emulation: phone,
+    });
+    expect(LiveSurfaceSourceSpecV1.parse(source)).not.toHaveProperty("emulation");
+    expect(
+      LiveSurfaceSourceSpecV1.safeParse({ ...source, emulation: { mobile: true } }).success,
+    ).toBe(false);
+    // under a running page: the chrome's device switch, a navigation command
+    expect(LiveSurfaceNavigationCommandV1.parse({ action: "emulate", emulation: phone })).toEqual({
+      action: "emulate",
+      emulation: phone,
+    });
+    expect(LiveSurfaceNavigationCommandV1.safeParse({ action: "emulate" }).success).toBe(false);
+    expect(
+      LiveSurfaceRendererControlMessageV1.parse({
+        v: 1,
+        type: "navigate",
+        attachmentId: "attachment_0123456789abcdef",
+        navigation: { action: "emulate", emulation: laptop },
+      }),
+    ).toMatchObject({ navigation: { action: "emulate", emulation: laptop } });
+
+    // the favicon: a digest, an image's media type, its bytes in base64 — never past the cap, never another type
+    const state = {
+      url: "https://example.test/",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+    };
+    const favicon = { key: "0123456789abcdef", mediaType: "image/png", data: "iVBORw0KGgo=" };
+    expect(LiveSurfaceBrowserStateV1.parse({ ...state, favicon })).toMatchObject({ favicon });
+    expect(LiveSurfaceBrowserStateV1.parse(state)).not.toHaveProperty("favicon");
+    expect(LIVE_SURFACE_FAVICON_MAX_BYTES).toBe(32_768);
+    expect(LIVE_SURFACE_FAVICON_MAX_BASE64).toBe(43_692);
+    const atCap = "A".repeat(LIVE_SURFACE_FAVICON_MAX_BASE64);
+    expect(
+      LiveSurfaceBrowserStateV1.safeParse({ ...state, favicon: { ...favicon, data: atCap } })
+        .success,
+    ).toBe(true);
+    for (const bad of [
+      { ...favicon, data: `${atCap}AAAA` },
+      { ...favicon, data: "" },
+      { ...favicon, data: "not base64!" },
+      { ...favicon, mediaType: "text/html" },
+      { ...favicon, mediaType: "image/" },
+      { ...favicon, key: "0123" },
+      { ...favicon, key: "0123456789ABCDEF" },
+      { mediaType: "image/png", data: "iVBORw0KGgo=" },
+    ])
+      expect(
+        LiveSurfaceBrowserStateV1.safeParse({ ...state, favicon: bad }).success,
+        JSON.stringify(bad).slice(0, 80),
+      ).toBe(false);
   });
 
   it("keeps attach/demand control metadata separate from transferable frames", () => {

@@ -159,6 +159,49 @@ export const LiveSurfaceCropV1 = z.discriminatedUnion("mode", [
 ]);
 export type LiveSurfaceCropV1 = z.infer<typeof LiveSurfaceCropV1>;
 
+/** PT-4 — the client hints a user agent ships with (`navigator.userAgentData`, CDP's `userAgentMetadata`): without them an
+ * overridden agent's hints are EMPTY, and modern sites notice (BW-5). The brands are the producer's to say (none for an
+ * agent that is not its own engine's — a Safari has none). */
+export const LiveSurfaceBrowserClientHintsV1 = z
+  .object({
+    platform: z.string().max(64).refine(hasNoControlCharacters),
+    platformVersion: z.string().max(32).refine(hasNoControlCharacters),
+    architecture: z.string().max(16).refine(hasNoControlCharacters),
+    model: z.string().max(64).refine(hasNoControlCharacters),
+    mobile: z.boolean(),
+  })
+  .passthrough();
+export type LiveSurfaceBrowserClientHintsV1 = z.infer<typeof LiveSurfaceBrowserClientHintsV1>;
+
+/**
+ * PT-4 — THE PAGE AS A DEVICE SEES IT: what a browser source's page is told of the device it is shown on. The producer
+ * applies it over CDP at the page's creation and again when an `emulate` command moves it (`LiveSurfaceNavigationCommandV1`):
+ *  - `deviceScaleFactor`: the device's density, device px a CSS px (absent: the source's own);
+ *  - `mobile`: a phone's or a tablet's layout (the metrics override's `mobile`);
+ *  - `touchPoints`: how many fingers the device takes — 0 is a pointer device, and a press on a page with any arrives as a
+ *    TOUCH;
+ *  - `agent`: the user agent the device announces, `navigator.platform`, and its client hints. Absent: the engine's own —
+ *    the producer's Chromium by its own name and bundled version, never the app's;
+ *  - `colorScheme`: the `prefers-color-scheme` the page is told (absent: the system's).
+ */
+export const LiveSurfaceBrowserEmulationV1 = z
+  .object({
+    deviceScaleFactor: z.number().finite().positive().max(8).optional(),
+    mobile: z.boolean(),
+    touchPoints: z.number().int().min(0).max(10),
+    agent: z
+      .object({
+        userAgent: LiveSurfaceBoundedTextV1,
+        navigatorPlatform: z.string().max(32).refine(hasNoControlCharacters),
+        hints: LiveSurfaceBrowserClientHintsV1,
+      })
+      .passthrough()
+      .optional(),
+    colorScheme: z.enum(["light", "dark"]).optional(),
+  })
+  .passthrough();
+export type LiveSurfaceBrowserEmulationV1 = z.infer<typeof LiveSurfaceBrowserEmulationV1>;
+
 export const LiveSurfaceBrowserSourceV1 = z
   .object({
     kind: z.literal("browser"),
@@ -171,6 +214,8 @@ export const LiveSurfaceBrowserSourceV1 = z
       .passthrough(),
     logicalViewport: LiveSurfaceLogicalSizeV1,
     deviceScaleFactor: z.number().finite().positive().max(8).optional(),
+    /** PT-4: the device the page is born on (an `emulate` command moves it under a running page). */
+    emulation: LiveSurfaceBrowserEmulationV1.optional(),
   })
   .passthrough();
 export type LiveSurfaceBrowserSourceV1 = z.infer<typeof LiveSurfaceBrowserSourceV1>;
@@ -378,6 +423,11 @@ export const LiveSurfaceAttachTicketV1 = z
   .passthrough();
 export type LiveSurfaceAttachTicketV1 = z.infer<typeof LiveSurfaceAttachTicketV1>;
 
+/** PT-4: the most a favicon may weigh — a page's icon rides every summary of its state, so it is kept small; one past it
+ * is none. Its base64 is four characters for three bytes. */
+export const LIVE_SURFACE_FAVICON_MAX_BYTES = 32 * 1024;
+export const LIVE_SURFACE_FAVICON_MAX_BASE64 = 4 * Math.ceil(LIVE_SURFACE_FAVICON_MAX_BYTES / 3);
+
 /** The browser producer's committed navigation truth, carried on runtime
  * summaries so chrome (URL bar, back/forward) renders facts, never guesses.
  * Plain state like `error` — no revision of its own; the control port is FIFO
@@ -395,6 +445,21 @@ export const LiveSurfaceBrowserStateV1 = z
     cursor: z
       .string()
       .regex(/^[a-z][a-z-]{0,31}$/)
+      .optional(),
+    /** PT-4: the page's FAVICON — fetched by the producer through the page's own session (http/https only), held to
+     * `LIVE_SURFACE_FAVICON_MAX_BYTES`: its bytes (base64), their media type, and a short digest a holder compares instead
+     * of the bytes. Absent: the page has none the producer could read (a holder draws its generic mark). */
+    favicon: z
+      .object({
+        key: z.string().regex(/^[a-f0-9]{16}$/u),
+        mediaType: z.string().regex(/^image\/[a-z0-9.+-]{1,40}$/u),
+        data: z
+          .string()
+          .min(4)
+          .max(LIVE_SURFACE_FAVICON_MAX_BASE64)
+          .regex(/^[A-Za-z0-9+/]+={0,2}$/u),
+      })
+      .passthrough()
       .optional(),
   })
   .passthrough();
@@ -525,13 +590,19 @@ export const LiveSurfaceInputEventV1 = z.discriminatedUnion("kind", [
 export type LiveSurfaceInputEventV1 = z.infer<typeof LiveSurfaceInputEventV1>;
 
 /** Chrome-initiated navigation on a browser surface. `go` is re-validated by
- * the producer against the same top-level scheme policy as the initial load. */
+ * the producer against the same top-level scheme policy as the initial load.
+ * PT-4 — `emulate`: the page seen as another device, or in another scheme (the chrome's device switch): the producer
+ * re-applies it under the running page, and reloads the page ONCE when what the page is told of its device moved (its
+ * agent, its hints, mobile, touch) — a scheme or a density alone is told live. The same emulation again is nothing. */
 export const LiveSurfaceNavigationCommandV1 = z.discriminatedUnion("action", [
   z.object({ action: z.literal("go"), url: LiveSurfaceUrlV1 }).passthrough(),
   z.object({ action: z.literal("back") }).passthrough(),
   z.object({ action: z.literal("forward") }).passthrough(),
   z.object({ action: z.literal("reload") }).passthrough(),
   z.object({ action: z.literal("stop") }).passthrough(),
+  z
+    .object({ action: z.literal("emulate"), emulation: LiveSurfaceBrowserEmulationV1 })
+    .passthrough(),
 ]);
 export type LiveSurfaceNavigationCommandV1 = z.infer<typeof LiveSurfaceNavigationCommandV1>;
 

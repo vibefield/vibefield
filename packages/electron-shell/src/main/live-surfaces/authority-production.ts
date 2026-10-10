@@ -37,6 +37,9 @@ interface CaptureStack {
 
 export function createProductionLiveSurfaceSupport(opts: {
   capture: LiveSurfaceCapturePaths | null;
+  /** PT-4: where the attached user's persistent browser profiles live (`<user root>/browser/profiles` — LAYOUT's): a
+   * persistent browser source's session is a directory under it. Absent: Electron's own partitions. */
+  browserProfilesRoot?: string;
   logger?: Logger;
 }): ProductionLiveSurfaceSupport {
   let browserNative: ElectronBrowserSurfaceNative | null = null;
@@ -76,7 +79,14 @@ export function createProductionLiveSurfaceSupport(opts: {
   return {
     factories: {
       browser: (surfaceId, source) =>
-        new BrowserLiveSurfaceRuntime({ surfaceId, source, native: ensureBrowserNative() }),
+        new BrowserLiveSurfaceRuntime({
+          surfaceId,
+          source,
+          native: ensureBrowserNative(),
+          ...(opts.browserProfilesRoot === undefined
+            ? {}
+            : { profilesRoot: opts.browserProfilesRoot }),
+        }),
       sckWindow: (surfaceId, source) =>
         new SckLiveSurfaceRuntime({ surfaceId, source, client: ensureCapture().supervisor }),
       iosSimulator: (surfaceId, source) => {

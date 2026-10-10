@@ -14,6 +14,7 @@ import {
   type FrameZoomAct,
   FrameZoomRequest,
   IPC_CHANNELS,
+  LAYOUT,
   PluginModuleResolution,
   type ScreenshotCaptureResult,
   type ShellCommand,
@@ -939,6 +940,8 @@ async function main(
     // webContents identity the boundary proved.
     liveSurfaceSupport = createProductionLiveSurfaceSupport({
       capture: resources.macosLiveSurfaceCapture,
+      // PT-4: a browser page's persistent profile is its USER's — under the user's root, never Electron's own userData
+      browserProfilesRoot: join(userRoot, ...LAYOUT.BROWSER_PROFILES_DIR),
       logger: logger.child({ component: "live-surfaces.capture" }),
     });
     liveSurfaceAuthority = new LiveSurfaceAuthority({

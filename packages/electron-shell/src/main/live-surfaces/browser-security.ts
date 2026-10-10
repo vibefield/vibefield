@@ -33,15 +33,19 @@ export interface GuardedBrowserSurfaceWebContents {
   setWindowOpenHandler(handler: () => { action: "deny" }): void;
 }
 
-/** Stable opaque session name: profile refs never appear in Chromium partition paths. */
-export function browserSurfacePartition(source: LiveSurfaceBrowserSourceV1): string {
-  const digest = createHash("sha256")
+/** A profile's stable opaque name — a digest of its mode and ref: profile refs never appear in a path. */
+export function browserSurfaceProfileName(source: LiveSurfaceBrowserSourceV1): string {
+  return createHash("sha256")
     .update(source.profile.mode)
     .update("\0")
     .update(source.profile.ref)
     .digest("hex")
     .slice(0, 40);
-  const name = `vibefield-live-surface:${digest}`;
+}
+
+/** Stable opaque session name: profile refs never appear in Chromium partition paths. */
+export function browserSurfacePartition(source: LiveSurfaceBrowserSourceV1): string {
+  const name = `vibefield-live-surface:${browserSurfaceProfileName(source)}`;
   return source.profile.mode === "persistent" ? `persist:${name}` : name;
 }
 

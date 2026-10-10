@@ -23,6 +23,7 @@
   "TERMINAL_FRAME_SOCKET": ["native", "run", "termframe.sock"],
   "CRASH_DIR": ["crash"],
   "EXPORTS_STAGING_DIR": ["exports", ".staging"],
+  "BROWSER_PROFILES_DIR": ["browser", "profiles"],
   "INDEX_DIR": ["index"],
   "INDEX_DB": ["index", "rosetta.db"],
   "INDEX_DAEMONS_DIR": ["index", "daemons"],
