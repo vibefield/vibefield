@@ -73,16 +73,30 @@ export const NO_LIVE_FILTERS: LiveFilters = Object.freeze({
 });
 
 export interface GodviewFindDoor {
-  /** The live runs the view shows (its filters applied), in the window's order. */
-  readonly rows: readonly LiveFindAgent[];
-  /** rosetta's words, through the deck's door (`historyPortOver`). */
-  readonly history: HistoryPort;
+  /** The live runs the view shows (its filters applied), in the window's
+   * order: the SAME array until a run's searchable facts move — never rebuilt
+   * per model publish — and null until they are first computed. The monitor
+   * computes them only while someone listens (`subscribeRows`: the Peek open
+   * on Live now), so a closed Peek costs the stage nothing (MV's after-MV
+   * list: "Find re-renders on every publish"). */
+  rows(): readonly LiveFindAgent[] | null;
+  subscribeRows(listener: () => void): () => void;
+  /** rosetta's words, through the deck's door (`historyPortOver`) — Find's
+   * port, named for what it reads; not `MonitorCapabilities.history`. */
+  readonly transcripts: HistoryPort;
   /** What a row's pick does in Godview: the view's own select — a local run's
    * PTY mounted in the active pane, a peer's attached there. */
   select(rowId: string): void;
   readonly filters: LiveFilters;
   setDesk(id: string | null): void;
   setProfile(id: string | null): void;
+  /** QL-D2: while the Peek is open over Godview the stage holds the keys —
+   * its Escape is the Peek's, never a fresh pane's launcher's. Answers the
+   * release (idempotent). */
+  holdKeys(): () => void;
+  /** SB-3: the mounted view holds every key (a spawn bloom with the
+   * keyboard) — read at event time; the frame's ⌘F yields while it does. */
+  viewHoldsKeys(): boolean;
 }
 
 let door: GodviewFindDoor | null = null;

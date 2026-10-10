@@ -255,7 +255,7 @@ function fakeDoor(rows: readonly AgentSessionSummary[] = ROWS): FakeDoor {
     },
     createTerminal: vi.fn(async () => ({ state: "mounted" as const, sessionId: "born-1" })),
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),
-    history: unreachableHistory(),
+    transcripts: unreachableHistory(),
     usage: emptyUsage(),
   };
 }
@@ -1466,6 +1466,40 @@ const listRows = (host: HTMLElement): { project: string; receded: boolean }[] =>
     receded: row.classList.contains("is-receded"),
   }));
 
+/** A view that says, through its `report`, that it holds the keys — the spawn bloom's word since MV-5 (MV-D8). */
+async function mountReporting(door: MonitorDoor): Promise<{
+  host: HTMLElement;
+  holdKeys(held: boolean): Promise<void>;
+}> {
+  const recording = createRecordingView("keys-probe");
+  const entry: MonitorViewEntry = {
+    id: "keys-probe",
+    label: "KEYS",
+    parameterGroups: [],
+    mark: recording.view.manifest.mark,
+    view: recording.view,
+  };
+  syncBoard(PANES);
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  await act(async () => {
+    root?.render(
+      <GodviewAgentsProvider door={door}>
+        <GodviewMonitor view={entry} parameters={{}} door={door} panes={PANES} publishesFind />
+      </GodviewAgentsProvider>,
+    );
+  });
+  await settle();
+  const host = container;
+  return {
+    host,
+    holdKeys: async (held) => {
+      await act(async () => recording.commands[0]?.report({ keysHeld: held }));
+    },
+  };
+}
+
 describe("the profile filter (AR-S5; in search's Live now since P2, GV-D3)", () => {
   it("offers no profile while This Mac is the only one, and every profile once one exists — never in the bar", async () => {
     const door = tabDoor([NATIVE_SET]);
@@ -1538,40 +1572,6 @@ describe("the profile filter (AR-S5; in search's Live now since P2, GV-D3)", () 
       pane.remove();
     }
   });
-
-  /** A view that says, through its `report`, that it holds the keys — the spawn bloom's word since MV-5 (MV-D8). */
-  async function mountReporting(door: MonitorDoor): Promise<{
-    host: HTMLElement;
-    holdKeys(held: boolean): Promise<void>;
-  }> {
-    const recording = createRecordingView("keys-probe");
-    const entry: MonitorViewEntry = {
-      id: "keys-probe",
-      label: "KEYS",
-      parameterGroups: [],
-      mark: recording.view.manifest.mark,
-      view: recording.view,
-    };
-    syncBoard(PANES);
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-    await act(async () => {
-      root?.render(
-        <GodviewAgentsProvider door={door}>
-          <GodviewMonitor view={entry} parameters={{}} door={door} panes={PANES} publishesFind />
-        </GodviewAgentsProvider>,
-      );
-    });
-    await settle();
-    const host = container;
-    return {
-      host,
-      holdKeys: async (held) => {
-        await act(async () => recording.commands[0]?.report({ keysHeld: held }));
-      },
-    };
-  }
 
   it("takes neither ⌥2 nor ⌘F, whether a view holds the keys or not — the stage binds no key (P2)", async () => {
     // ⌘F is the frame's Peek (a product chord, peek.test.tsx), ⌥0–⌥9 retired
@@ -1681,6 +1681,78 @@ describe("the profile filter (AR-S5; in search's Live now since P2, GV-D3)", () 
     expect(chosenTab(host)).toBe("all");
     expect(host.querySelector(".vf-monitor-profile-empty")).toBeNull();
     expect(listRows(host).some((row) => row.receded)).toBe(false);
+  });
+});
+
+// ---- P2 — the find door: Live now's rows, the stage's keys --------------------
+
+describe("the find door (P2): Live now's rows made only while the Peek listens, held by content", () => {
+  const blockedClaude = (): AgentSessionSummary =>
+    managedSummary({
+      runtimeRunId: "run-claude",
+      kind: "claude",
+      label: "Claude",
+      status: "blocked",
+      blocker: { kind: "permission", tool: "Bash" },
+      profileSet: "work",
+      cwd: "/project/vibe-field",
+    });
+
+  it("makes no rows for a closed Peek, the same rows while nothing they say moved, new rows when one does — and keeps the door itself across publishes", async () => {
+    const door = tabDoor();
+    await mountMonitor("list", door);
+    const find = getGodviewFindDoor();
+    if (find === null) throw new Error("the stage published no find door");
+    // nobody listens: the find join is not made
+    expect(find.rows()).toBeNull();
+    let heard = 0;
+    let stop: (() => void) | undefined;
+    await act(async () => {
+      stop = find.subscribeRows(() => {
+        heard += 1;
+      });
+    });
+    await settle();
+    const first = getGodviewFindDoor()?.rows() ?? null;
+    expect(first?.filter((row) => row.agent !== undefined).map((row) => row.project)).toEqual(
+      expect.arrayContaining(["vibe-field", "voyager", "jabali"]),
+    );
+    expect(heard).toBeGreaterThan(0);
+    // the same rows published again: the same array, nobody told
+    const told = heard;
+    await act(async () => door.push(TAB_ROWS));
+    await settle();
+    expect(getGodviewFindDoor()?.rows()).toBe(first);
+    expect(heard).toBe(told);
+    // a status moves: new rows, told — and the door is the same object throughout
+    await act(async () => door.push([blockedClaude(), ...TAB_ROWS.slice(1)]));
+    await settle();
+    const next = getGodviewFindDoor()?.rows() ?? null;
+    expect(next).not.toBe(first);
+    expect(next?.find((row) => row.project === "vibe-field")?.status).toBe("blocked");
+    expect(heard).toBeGreaterThan(told);
+    expect(getGodviewFindDoor()).toBe(find);
+    // the last listener gone: no rows again
+    await act(async () => stop?.());
+    await settle();
+    expect(getGodviewFindDoor()?.rows()).toBeNull();
+  });
+
+  it("holds the keys for the Peek over the stage (QL-D2), and says when the mounted view holds them (SB-3)", async () => {
+    const { holdKeys } = await mountReporting(tabDoor());
+    const find = getGodviewFindDoor();
+    if (find === null) throw new Error("the stage published no find door");
+    expect(monitorHoldsKeys()).toBe(false);
+    const release = find.holdKeys();
+    expect(monitorHoldsKeys()).toBe(true);
+    release();
+    release();
+    expect(monitorHoldsKeys()).toBe(false);
+    expect(find.viewHoldsKeys()).toBe(false);
+    await holdKeys(true);
+    expect(getGodviewFindDoor()?.viewHoldsKeys()).toBe(true);
+    await holdKeys(false);
+    expect(getGodviewFindDoor()?.viewHoldsKeys()).toBe(false);
   });
 });
 

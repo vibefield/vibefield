@@ -100,6 +100,21 @@ const NO_FEED_SNAPSHOT: LiveFeedSnapshot = Object.freeze({
 });
 const NO_SUBSCRIPTION = (): (() => void) => () => undefined;
 
+/** Godview's live rows while `door` is handed (Live now showing over it):
+ * subscribed through the door, so the monitor makes its find join only then;
+ * null until the monitor has computed them. */
+function useGodviewRows(door: GodviewFindDoor | null): readonly LiveFindAgent[] | null {
+  const subscribeRows = door?.subscribeRows;
+  const readRows = door?.rows;
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      subscribeRows === undefined ? NO_SUBSCRIPTION() : subscribeRows(listener),
+    [subscribeRows],
+  );
+  const read = useCallback(() => (readRows === undefined ? null : readRows()), [readRows]);
+  return useSyncExternalStore(subscribe, read, read);
+}
+
 /** PK5 — History's own feed, held exactly while `shows`: opened when Live now
  * comes to show, disposed when it stops (a change of scope, the popup's close,
  * the view's change, unmount). */
@@ -316,14 +331,17 @@ export function Peek({
   const liveShows = open && scope === "live";
   const inGodview = view === "godview";
   const historyFeed = useLiveFeedWhile(openLiveFeed, liveShows && !inGodview);
+  // Godview's rows are listened to only while Live now shows over it: the
+  // monitor makes its find join only while someone listens
+  const godviewRows = useGodviewRows(liveShows && inGodview ? godview : null);
   let liveRuns: readonly LiveFindAgent[] = NO_RUNS;
   let liveFeed: LiveFeedState = { kind: "connecting" };
   let liveHistory: HistoryPort | null = null;
   if (inGodview) {
-    if (godview !== null) {
-      liveRuns = godview.rows;
+    if (godview !== null && godviewRows !== null) {
+      liveRuns = godviewRows;
       liveFeed = { kind: "live" };
-      liveHistory = godview.history;
+      liveHistory = godview.transcripts;
     }
   } else if (openLiveFeed === undefined) {
     liveFeed = { kind: "unavailable", reason: "this window has no feed of what runs" };
@@ -411,10 +429,15 @@ export function Peek({
   // ⌘F (Ctrl+F) — a product chord on the window's capture phase while a view
   // that searches is showing (History and Godview): it opens the Peek, or puts
   // the caret back in its field while it is open. Elsewhere it is left alone.
+  // SB-3: while Godview's mounted view holds every key (a spawn bloom with the
+  // keyboard), the frame's ⌘F yields too — read at event time
+  const godviewRef = useRef(godview);
+  godviewRef.current = inGodview ? godview : null;
   useEffect(() => {
     if (!bindKeys) return;
     return listenForProductChord(
-      (event) => searches && isSearchChord(event, keys),
+      (event) =>
+        searches && isSearchChord(event, keys) && godviewRef.current?.viewHoldsKeys() !== true,
       (event) => {
         if (event.repeat) return;
         if (open) focusField();
@@ -541,6 +564,14 @@ export function Peek({
       root.style.removeProperty("--vf-peek-find-width");
     };
   }, [searches, bindKeys]);
+
+  // QL-D2: open over Godview, the stage holds the keys — the Peek's Escape is
+  // never a fresh pane's launcher's (the door's `holdKeys` is one stable verb)
+  const holdKeys = open && inGodview && bindKeys ? godview?.holdKeys : undefined;
+  useEffect(() => {
+    if (holdKeys === undefined) return;
+    return holdKeys();
+  }, [holdKeys]);
 
   // GV-D3: in Godview the button wears the filter that is on, and its × clears it
   const token = inGodview && godview !== null ? filterToken(godview.filters) : null;

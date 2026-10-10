@@ -964,6 +964,9 @@ function godviewDoor(): {
   door: () => GodviewFindDoor;
   select: ReturnType<typeof vi.fn>;
   searched: Array<Record<string, unknown>>;
+  listening: () => number;
+  holds: () => number;
+  holdViewKeys: (held: boolean) => void;
 } {
   const select = vi.fn();
   const searched: unknown[] = [];
@@ -981,10 +984,24 @@ function godviewDoor(): {
     profile: null,
   };
   let current: GodviewFindDoor;
+  const rowListeners = new Set<() => void>();
+  let holds = 0;
+  let viewHolds = false;
   const republish = (): void => {
     current = {
-      rows: LIVE_RUNS,
-      history,
+      rows: () => LIVE_RUNS,
+      subscribeRows: (listener) => {
+        rowListeners.add(listener);
+        return () => rowListeners.delete(listener);
+      },
+      transcripts: history,
+      holdKeys: () => {
+        holds += 1;
+        return () => {
+          holds -= 1;
+        };
+      },
+      viewHoldsKeys: () => viewHolds,
       select,
       filters,
       setDesk: (id) => {
@@ -999,7 +1016,16 @@ function godviewDoor(): {
     publishGodviewFindDoor(current);
   };
   republish();
-  return { door: () => current, select, searched: searched as Array<Record<string, unknown>> };
+  return {
+    door: () => current,
+    select,
+    searched: searched as Array<Record<string, unknown>>,
+    listening: () => rowListeners.size,
+    holds: () => holds,
+    holdViewKeys: (held: boolean) => {
+      viewHolds = held;
+    },
+  };
 }
 
 const liveDropdown = (id: string): HTMLButtonElement | null =>
@@ -1095,6 +1121,32 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
     act(() => godview.door().setDesk("studio"));
     await openHistory();
     expect(host?.querySelector(".vf-peek-token")).toBeNull();
+  });
+
+  it("listens for the monitor's rows only while Live now shows, holds the stage's keys while open (QL-D2), and yields ⌘F to a view that holds them (SB-3)", async () => {
+    const godview = godviewDoor();
+    mount(fieldd());
+    to("godview");
+    expect(godview.listening()).toBe(0);
+    expect(godview.holds()).toBe(0);
+    await openPeek();
+    await until(() => (options().length === 2 ? true : null), "the live rows");
+    expect(godview.listening()).toBe(1);
+    expect(godview.holds()).toBe(1);
+    // Everything shows: the monitor's rows are not listened to; the keys stay held
+    everythingTab();
+    expect(godview.listening()).toBe(0);
+    expect(godview.holds()).toBe(1);
+    press(field() ?? document.body, { key: "Escape" });
+    expect(surfaceNow).toBeNull();
+    expect(godview.holds()).toBe(0);
+    // a spawn bloom with the keyboard holds every key: the frame's ⌘F yields
+    godview.holdViewKeys(true);
+    expect(press(document.body, { key: "f", metaKey: true }).defaultPrevented).toBe(false);
+    expect(surfaceNow).toBeNull();
+    godview.holdViewKeys(false);
+    expect(press(document.body, { key: "f", metaKey: true }).defaultPrevented).toBe(true);
+    expect(surfaceNow).toBe("search");
   });
 
   it("asks nothing of a feed of its own in Godview — the monitor's rows are the ones it reads (PF6 stays Godview's)", async () => {

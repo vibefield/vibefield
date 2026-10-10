@@ -177,9 +177,36 @@ const EMPTY_STAGE: StageGeometry = Object.freeze({
   obstacles: Object.freeze([]),
 });
 
+/** What makes Live now's rows the same: every fact the find model reads or
+ * the Peek draws — never a token count or an evidence tick (M19). */
+function liveRowsKey(rows: readonly LiveFindAgent[]): string {
+  return rows
+    .map((row) =>
+      [
+        row.id,
+        row.status,
+        row.project,
+        row.detail,
+        row.agent?.provider.id ?? "",
+        row.agent?.provider.label ?? "",
+        row.agent?.model ?? "",
+        row.agent?.branch ?? "",
+        row.agent?.account ?? "",
+        row.agent?.nativeSessionId ?? "",
+        row.agent?.monitor?.statusSince ?? "",
+        row.agent?.monitor?.session?.startedAt ?? "",
+        row.floorSessionId ?? "",
+        row.desk.id,
+        row.desk.name,
+        row.desk.os,
+      ].join("\u0001"),
+    )
+    .join("\n");
+}
+
 /** With no deck there is no daemon to ask: search's Live now says the
  * transcript search is off, and invents no answer. */
-const NO_HISTORY: HistoryPort = {
+const NO_TRANSCRIPTS: HistoryPort = {
   status: async () => ({
     reachable: false,
     detail: "no deck",
@@ -336,6 +363,9 @@ export function GodviewMonitor({
   // in search's Live now since P2 (GV-D3), which offers it only when there is
   // a choice to make — two desktops or more.
   const [deviceChoice, setDeviceChoice] = useState<string | null>(null);
+  /** P2 — whether the Peek listens for Live now's rows (the find door's
+   * `subscribeRows`): the find join is made only while it does. */
+  const [findWanted, setFindWanted] = useState(false);
   // MV-3b — THE WINDOW on the replica (`useMonitorAgents`): the backend's rows
   // through this window's one door, joined with the deck's panes, the chosen
   // profile and the chosen desktop; list and rain as SDK views on the window's
@@ -364,6 +394,7 @@ export function GodviewMonitor({
     hasProfiles: profilesPort !== undefined,
     chosenProfile: chosenId,
     device: deviceChoice,
+    find: findWanted,
   });
   const chromeRef = useRef<HTMLDivElement>(null);
   const usagePort = door?.usage;
@@ -402,7 +433,12 @@ export function GodviewMonitor({
   // what it paints with, where its simulation runs, and whether it holds the
   // keys. Never read off its DOM; the slot clears it when the view changes.
   const [viewReport, setViewReport] = useState<ViewReport>(NO_REPORT);
-  const onReport = useCallback((report: ViewReport): void => setViewReport(report), []);
+  /** Read by the Peek's ⌘F at event time (SB-3): a report lands between renders. */
+  const viewHoldsKeysRef = useRef(false);
+  const onReport = useCallback((report: ViewReport): void => {
+    viewHoldsKeysRef.current = report.keysHeld === true;
+    setViewReport(report);
+  }, []);
   /** AR-5: what the swarm paints with — `starting` while its physics runs and its device has not answered. */
   const swarmRenderer =
     viewReport.renderer ?? (viewReport.physics !== undefined ? "starting" : "none");
@@ -593,16 +629,50 @@ export function GodviewMonitor({
   // P2 — WHAT THE PEEK READS (`find-door.ts`): the live runs this stage shows
   // (its desktop and its profile, GV-D3 — they filter the view and search's
   // Live now alike), rosetta's words through the deck's door, the view's own
-  // select (what the find sheet's pick did), and the two filters, which the
-  // scope row sets. Each value is the same object while what it says is.
-  const shownIds = useHeldWhileSame(
-    shown.map((row) => row.id),
-    shown.map((row) => row.id).join("\n"),
-  );
-  const liveRows = useMemo<readonly LiveFindAgent[]>(() => {
-    const ids = new Set(shownIds);
+  // select (what the find sheet's pick did), the two filters, which the scope
+  // row sets, and the stage's two key facts. The rows are computed ONLY while
+  // the Peek listens (open on Live now) and handed on only when their content
+  // moves (MV's after-MV list: "Find re-renders on every publish"): the door
+  // itself is the same object while its filters are, so a closed Peek renders
+  // nothing for a model publish.
+  const rowListeners = useRef(new Set<() => void>());
+  const liveRowsRef = useRef<readonly LiveFindAgent[] | null>(null);
+  const shownKey = findWanted ? shown.map((row) => row.id).join("\n") : "";
+  const liveRowsNow = useMemo<readonly LiveFindAgent[] | null>(() => {
+    if (!findWanted) return null;
+    const ids = new Set(shownKey === "" ? [] : shownKey.split("\n"));
     return findAgents.filter((row) => ids.has(row.id));
-  }, [findAgents, shownIds]);
+  }, [findWanted, findAgents, shownKey]);
+  const liveRows = useHeldWhileSame(
+    liveRowsNow,
+    liveRowsNow === null ? "\u0000none" : liveRowsKey(liveRowsNow),
+  );
+  useEffect(() => {
+    liveRowsRef.current = liveRows;
+    for (const listener of [...rowListeners.current]) listener();
+  }, [liveRows]);
+  const readRows = useCallback(() => liveRowsRef.current, []);
+  const subscribeRows = useCallback((listener: () => void) => {
+    rowListeners.current.add(listener);
+    if (rowListeners.current.size === 1) setFindWanted(true);
+    return () => {
+      rowListeners.current.delete(listener);
+      if (rowListeners.current.size === 0) setFindWanted(false);
+    };
+  }, []);
+  // QL-D2: the Peek over the stage holds the keys while it is open, as the
+  // find sheet did — its Escape is the Peek's, never a fresh pane's launcher's
+  const holdKeys = useCallback(() => {
+    setMonitorHoldsKeys(true);
+    let held = true;
+    return () => {
+      if (!held) return;
+      held = false;
+      setMonitorHoldsKeys(false);
+    };
+  }, []);
+  // SB-3: read at event time — a view's report lands between renders
+  const readViewHoldsKeys = useCallback(() => viewHoldsKeysRef.current, []);
   const liveFilters = useHeldWhileSame<LiveFilters>(
     {
       desks:
@@ -622,17 +692,20 @@ export function GodviewMonitor({
     },
     JSON.stringify([devices, deviceChosen, showTabs ? tabs : null, chosenId ?? null]),
   );
-  const history = door?.history ?? NO_HISTORY;
+  const transcripts = door?.transcripts ?? NO_TRANSCRIPTS;
   const findDoor = useMemo<GodviewFindDoor>(
     () => ({
-      rows: liveRows,
-      history,
+      rows: readRows,
+      subscribeRows,
+      transcripts,
       select: (rowId) => commands.select(rowId),
       filters: liveFilters,
       setDesk: setDeviceChoice,
       setProfile: setProfileTab,
+      holdKeys,
+      viewHoldsKeys: readViewHoldsKeys,
     }),
-    [liveRows, history, commands, liveFilters],
+    [readRows, subscribeRows, transcripts, commands, liveFilters, holdKeys, readViewHoldsKeys],
   );
   useEffect(() => {
     if (!publishesFind) return;

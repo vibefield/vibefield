@@ -1127,7 +1127,7 @@ export function GodviewDeck({
       // AR-5 — the find sheet's daemon questions and the usage column's feed,
       // adapted from fieldd's doors to the views' ports (`monitor/doors.ts`).
       // The views never dial rosettad; the daemon's origin stays in fieldd.
-      history: historyPortOver(doorClient),
+      transcripts: historyPortOver(doorClient),
       usage: usagePortOver(doorClient),
       // The profile tabs filter existing sessions; terminal birth is independent.
       profiles: profileSetsPortOver(doorClient),

@@ -182,7 +182,7 @@ function fakeDoor(
     attach: vi.fn(async () => ({ state: "no-pane" as const })),
     createTerminal: vi.fn(async () => ({ state: "no-pane" as const })),
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),
-    history: unreachableHistory(),
+    transcripts: unreachableHistory(),
     usage: emptyUsage(),
     push: (frame) => held.push(frame),
     fail: (cause) => held.fail(cause),
@@ -517,6 +517,15 @@ const chooseDesk = async (id: string | null): Promise<void> => {
   await act(async () => getGodviewFindDoor()?.setDesk(id));
   await settle();
 };
+/** Live now's rows, as the Peek reads them: listened to, then read. */
+const liveRows = async () => {
+  const stop = getGodviewFindDoor()?.subscribeRows(() => undefined);
+  await settle();
+  const rows = getGodviewFindDoor()?.rows() ?? [];
+  stop?.();
+  await settle();
+  return rows;
+};
 
 describe("the device filter — in search's Live now (GV-D3)", () => {
   it("offers every desktop as its mark and its name, here first, all by default — and the bar draws no chip", async () => {
@@ -538,13 +547,13 @@ describe("the device filter — in search's Live now (GV-D3)", () => {
     expect(rows(view)).toHaveLength(2);
     expect(remoteRows(view)).toHaveLength(2);
     expect(getGodviewFindDoor()?.filters.desk).toBe(STUDIO);
-    expect(getGodviewFindDoor()?.rows.every((row) => !row.desk.self)).toBe(true);
+    expect((await liveRows()).every((row) => !row.desk.self)).toBe(true);
     expect(latest().shownAgents).toBe(2);
 
     await chooseDesk(HERE);
     expect(rows(view)).toHaveLength(LOCAL_ROWS.length);
     expect(remoteRows(view)).toHaveLength(0);
-    expect(getGodviewFindDoor()?.rows.every((row) => row.desk.self)).toBe(true);
+    expect((await liveRows()).every((row) => row.desk.self)).toBe(true);
 
     await chooseDesk(null);
     expect(rows(view)).toHaveLength(LOCAL_ROWS.length + 2);

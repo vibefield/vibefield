@@ -172,7 +172,7 @@ export function meshBoardDoor(): MonitorDoor {
     attach: async () => ({ state: "no-pane" }),
     createTerminal: async () => ({ state: "no-pane" }),
     mountLocal: async () => ({ state: "no-pane" }),
-    history: {
+    transcripts: {
       status: async () => ({
         reachable: false,
         detail: "no index in the catalog",

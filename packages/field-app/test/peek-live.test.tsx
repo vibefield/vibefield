@@ -36,6 +36,7 @@ import {
 } from "../src/frame/find-door";
 import type { LineViewDoor } from "../src/frame/line-door";
 import { type LiveOpenDoors, openLiveRow } from "../src/frame/live-open";
+import { PeekView } from "../src/frame/PeekView";
 import {
   liveFoot,
   liveIndexWords,
@@ -43,6 +44,7 @@ import {
   type PeekLiveRow,
   peekLiveRows,
 } from "../src/frame/peek-live";
+import { NO_PEEK_FILTERS } from "../src/frame/peek-model";
 import { LIVE_FACTS_REFRESH_MS, type LiveFind, useLiveFind } from "../src/frame/use-live-find";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -94,8 +96,11 @@ afterEach(() => {
 
 describe("the find door (`find-door.ts`)", () => {
   const door = (filters: LiveFilters = NO_LIVE_FILTERS): GodviewFindDoor => ({
-    rows: [],
-    history: {
+    rows: () => [],
+    subscribeRows: () => () => undefined,
+    holdKeys: () => () => undefined,
+    viewHoldsKeys: () => false,
+    transcripts: {
       status: async () => READY,
       facts: async () => [],
       search: async () => ({ status: READY, answered: true, hits: [], clipped: false }),
@@ -499,5 +504,89 @@ describe("opening a live row (`live-open.ts`)", () => {
       state: "refused",
       reason: "Godview is not showing its runs",
     });
+  });
+});
+
+describe("Live now's chrome pieces each stand alone (MV-8b)", () => {
+  it("a live peek that throws says so where it stood; the rows and the filters stay", async () => {
+    const [row] = peekLiveRows(
+      [
+        {
+          agent: run("row-1", { provider: "claude", floorSessionId: "pty-1" }),
+          factsScore: 0,
+          matched: [],
+          hits: [],
+          score: 0,
+          lastActiveMs: NOW,
+        },
+      ],
+      [],
+      "",
+    );
+    if (row === undefined) throw new Error("no row");
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host, { onCaughtError: () => undefined });
+    const props = {
+      open: true,
+      keys: "mac" as const,
+      view: "godview" as const,
+      layout: { width: 900, height: 560, folded: false },
+      query: "",
+      scope: "live" as const,
+      filters: NO_PEEK_FILTERS,
+      projects: [],
+      agents: [],
+      liveFilters: {
+        desks: [
+          {
+            id: "a",
+            name: "here",
+            os: "macos" as const,
+            here: true,
+            note: "1 agent",
+            quiet: false,
+          },
+          {
+            id: "b",
+            name: "studio",
+            os: "linux" as const,
+            here: false,
+            note: "0 agents",
+            quiet: false,
+          },
+        ],
+        desk: null,
+        profiles: [],
+        profile: null,
+      },
+      rows: [row],
+      hot: 0,
+      foot: "1 live session, waiting first",
+      none: null,
+      menu: null,
+      onQuery: () => undefined,
+      onScope: () => undefined,
+      onMenu: () => undefined,
+      onFilters: () => undefined,
+      onOpen: () => undefined,
+      onClose: () => undefined,
+    };
+    await act(async () =>
+      root?.render(
+        <PeekView
+          {...props}
+          renderLive={() => {
+            throw new Error("the pane could not be drawn");
+          }}
+        />,
+      ),
+    );
+    const said = [...(host.querySelectorAll('span[role="status"]') ?? [])].map(
+      (span) => span.textContent,
+    );
+    expect(said).toContain("Live peek unavailable");
+    expect(host.querySelectorAll('.vf-peek-row[data-kind="live"]')).toHaveLength(1);
+    expect(host.querySelector('[data-peek-dd="desk"]')).not.toBeNull();
   });
 });

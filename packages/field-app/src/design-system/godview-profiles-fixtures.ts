@@ -224,7 +224,7 @@ export function profileTabsDoor(): MonitorDoor {
     attach: async () => ({ state: "no-pane" }),
     createTerminal: async () => ({ state: "no-pane" }),
     mountLocal: async () => ({ state: "no-pane" }),
-    history: NO_HISTORY,
+    transcripts: NO_HISTORY,
     usage: NO_USAGE,
     profiles: {
       subscribe: (listener) => {
@@ -354,7 +354,7 @@ export function spawnBloomDoor(onBorn: (birth: CatalogBirth) => void): MonitorDo
       return { state: "mounted", sessionId, ...(profileSet !== undefined ? { profileSet } : {}) };
     },
     mountLocal: async () => ({ state: "no-pane" }),
-    history: NO_HISTORY,
+    transcripts: NO_HISTORY,
     usage: NO_USAGE,
     profiles: {
       subscribe: (listener) => {

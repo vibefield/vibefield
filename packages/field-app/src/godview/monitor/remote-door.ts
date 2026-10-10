@@ -54,10 +54,13 @@ export interface MonitorDoor {
    * terminal) in the ACTIVE pane. AR-4 — with `replacing`, in the pane that
    * is showing the PTY the session took the place of. */
   mountLocal(sessionId: string, options?: LocalMountOptions): Promise<LocalMountOutcome>;
-  /** AR-5 — the transcript history the find sheet asks (`index.status` /
+  /** AR-5 — rosetta's words, as Find asks them (`index.status` /
    * `index.sessions` / `index.search`), adapted to the views' port. The views
-   * never dial rosettad (AR-D14): the daemon's origin stays in fieldd. */
-  history: HistoryPort;
+   * never dial rosettad (AR-D14): the daemon's origin stays in fieldd.
+   * *P2 (2026-10-09):* the find sheet left; the frame's Peek asks it, through
+   * the find door. Named `transcripts` since — `history` was Find's, and is
+   * not `MonitorCapabilities.history` (the timeline's turn spans, lane tl). */
+  transcripts: HistoryPort;
   /** AR-5 — the account-usage readings the usage column draws
    * (`agents.usage` + its subscription), adapted to the views' port. */
   usage: MonitorUsagePort;

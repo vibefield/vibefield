@@ -1650,7 +1650,9 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   throws says "‹name› unavailable" where it stood (a deck piece in the deck's unavailable face),
   the monitor and its view stay mounted, and it is tried again only for a fact it is handed, at
   most once a window (1 s, doubling to 30 s while it keeps failing). (Find stood in this list until
-  P2, 2026-10-09: the sheet left VibeField for the frame's Peek.) The bar and the profile notice
+  P2, 2026-10-09: the sheet left VibeField for the frame's Peek — whose Live now rows, live peek and
+  scope-row filters each stand behind a boundary of their own, tried again for the rows, the run
+  and the filters they draw, each the same object while its content is.) The bar and the profile notice
   read only the window's own state, so they stay
   unavailable until the monitor mounts again (M192). It never
   leaves a silent blank. The deck builds the monitor's door, so a deck that fails whole leaves the

@@ -102,7 +102,7 @@ describe("M47 — the find sheet never reads the views' monitor", () => {
       attach: async () => ({ state: "no-pane" }),
       createTerminal: async () => ({ state: "no-pane" }),
       mountLocal: async () => ({ state: "no-pane" }),
-      history: nothing,
+      transcripts: nothing,
       usage: {
         snapshot: async () => ({ refreshedAt: CHECKED_AT, entries: [] }),
         subscribe: () => () => undefined,

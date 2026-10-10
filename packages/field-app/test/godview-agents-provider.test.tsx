@@ -51,7 +51,7 @@ function boardDoor(options: ScriptedModelBoardOptions = {}): MonitorDoor {
     attach: vi.fn(async () => ({ state: "no-pane" as const })),
     createTerminal: vi.fn(async () => ({ state: "no-pane" as const })),
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),
-    history: {
+    transcripts: {
       status: async () => ({ reachable: false, detail: "no index", checkedAt: "2026-09-13" }),
       facts: async () => [],
       search: async () => ({

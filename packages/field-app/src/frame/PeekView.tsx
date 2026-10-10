@@ -1,5 +1,6 @@
 import { ProfileGlyph } from "@vibecook/puppeteer-view-sdk/react";
-import type { SnippetSegment } from "@vibecook/puppeteer-views";
+import { keyLegend } from "@vibecook/puppeteer-view-sdk/toolkit";
+import { ChromeBoundary, type SnippetSegment } from "@vibecook/puppeteer-views";
 import type { FrameView } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import {
@@ -89,7 +90,8 @@ export function PeekButtonView({
         <FieldGlyph name="search" size={15} />
         {/* the key printed under the glyph, as the views track prints its keys */}
         <kbd className="vf-peek-key">
-          <span>{mac ? "⌘" : "Ctrl"}</span>F
+          <span>{mac ? "⌘" : "Ctrl"}</span>
+          {keyLegend("f")}
         </kbd>
       </button>
       {token !== null && (
@@ -367,6 +369,19 @@ export function openWords(row: PeekListRow, view: FrameView | undefined): string
   return row.lines.length > 0 ? "Open at the line" : "Open the session";
 }
 
+/** MV-8b: Live now's rows are a chrome piece of their own, tried again for
+ * the rows they list (the same array while their content is); Everything's
+ * are the past's, drawn as they were. */
+function liveBoundary(scope: PeekScope, rows: readonly PeekListRow[], items: ReactNode): ReactNode {
+  return scope === "live" ? (
+    <ChromeBoundary name="Live now" retryKey={rows}>
+      {items}
+    </ChromeBoundary>
+  ) : (
+    items
+  );
+}
+
 /** The distinct OS marks of every desktop: what "All desktops" wears. */
 function deskMarks(desks: readonly LiveDeskChoice[]): ReactNode {
   const seen = [...new Set(desks.map((desk) => desk.os))];
@@ -444,54 +459,62 @@ export function PeekView(props: PeekViewProps): ReactElement {
           role="listbox"
           aria-label="Sessions"
         >
-          {rows.map((row, index) => {
-            const where = whereWords(row);
-            const live = isLiveRow(row);
-            return (
-              // biome-ignore lint/a11y/useKeyWithClickEvents: the field holds the keys (↑ ↓ ↵), as a combobox's listbox does
-              <div
-                key={row.id}
-                id={optionId(index)}
-                role="option"
-                tabIndex={-1}
-                aria-selected={index === hot}
-                className="vf-peek-row"
-                data-hot={index === hot ? "true" : undefined}
-                data-kind={live ? "live" : "past"}
-                data-floor-session={live ? (row.floorSessionId ?? undefined) : undefined}
-                onClick={() => onOpen(index)}
-              >
-                <span className="vf-peek-row-head">
-                  <i
-                    className="vf-peek-dot"
-                    data-state={live ? row.state : undefined}
-                    aria-hidden="true"
-                  />
-                  <b className="vf-peek-title">{row.title}</b>
-                  <span className="vf-peek-when">{row.when}</span>
-                </span>
-                {(where !== null || (live && row.remote !== null)) && (
-                  <span className="vf-peek-sub">
-                    {where}
-                    {live && row.remote !== null && (
-                      <span className="vf-peek-os" title={OS_LABEL[row.remote.os]}>
-                        <OsMark os={row.remote.os} size={11} />
-                        {row.remote.name}
-                      </span>
-                    )}
+          {liveBoundary(
+            scope,
+            rows,
+            rows.map((row, index) => {
+              const where = whereWords(row);
+              const live = isLiveRow(row);
+              return (
+                // biome-ignore lint/a11y/useKeyWithClickEvents: the field holds the keys (↑ ↓ ↵), as a combobox's listbox does
+                <div
+                  key={row.id}
+                  id={optionId(index)}
+                  role="option"
+                  tabIndex={-1}
+                  aria-selected={index === hot}
+                  className="vf-peek-row"
+                  data-hot={index === hot ? "true" : undefined}
+                  data-kind={live ? "live" : "past"}
+                  data-floor-session={live ? (row.floorSessionId ?? undefined) : undefined}
+                  onClick={() => onOpen(index)}
+                >
+                  <span className="vf-peek-row-head">
+                    <i
+                      className="vf-peek-dot"
+                      data-state={live ? row.state : undefined}
+                      aria-hidden="true"
+                    />
+                    <b className="vf-peek-title">{row.title}</b>
+                    <span className="vf-peek-when">{row.when}</span>
                   </span>
-                )}
-                {row.lines.slice(0, PEEK_ROW_LINES).map((line) => (
-                  <RowLine key={line.id} line={line} />
-                ))}
-              </div>
-            );
-          })}
+                  {(where !== null || (live && row.remote !== null)) && (
+                    <span className="vf-peek-sub">
+                      {where}
+                      {live && row.remote !== null && (
+                        <span className="vf-peek-os" title={OS_LABEL[row.remote.os]}>
+                          <OsMark os={row.remote.os} size={11} />
+                          {row.remote.name}
+                        </span>
+                      )}
+                    </span>
+                  )}
+                  {row.lines.slice(0, PEEK_ROW_LINES).map((line) => (
+                    <RowLine key={line.id} line={line} />
+                  ))}
+                </div>
+              );
+            }),
+          )}
         </div>
         {!layout.folded &&
           hotRow !== undefined &&
           (isLiveRow(hotRow) ? (
-            <PeekLive row={hotRow} renderLive={renderLive} />
+            // MV-8b: the live peek is a chrome piece of its own, tried again
+            // for the run it shows
+            <ChromeBoundary name="Live peek" retryKey={hotRow.floorSessionId ?? hotRow.id}>
+              <PeekLive row={hotRow} renderLive={renderLive} />
+            </ChromeBoundary>
           ) : (
             <PeekPast row={hotRow} />
           ))}
@@ -555,79 +578,87 @@ export function PeekView(props: PeekViewProps): ReactElement {
     const desk = liveFilters.desks.find((entry) => entry.id === liveFilters.desk);
     const profile = liveFilters.profiles.find((entry) => entry.id === liveFilters.profile);
     dropdowns = (
-      <div className="vf-peek-dds">
-        {liveFilters.desks.length > 0 && (
-          <Dropdown
-            id="desk"
-            lead={
-              desk === undefined ? deskMarks(liveFilters.desks) : <OsMark os={desk.os} size={12} />
-            }
-            label={desk?.name ?? "All desktops"}
-            open={menu === "desk"}
-            onToggle={toggle("desk")}
-            choices={[
-              {
-                key: "all",
-                label: "All desktops",
-                on: liveFilters.desk === null,
-                pick: () => onLiveDesk?.(null),
-              },
-              ...liveFilters.desks.map((entry) => ({
-                key: entry.id,
-                label: entry.here ? `${entry.name} · here` : entry.name,
-                on: liveFilters.desk === entry.id,
-                pick: () => onLiveDesk?.(entry.id),
-                lead: <OsMark os={entry.os} size={11} />,
-                note: entry.note,
-                quiet: entry.quiet,
-              })),
-            ]}
-          />
-        )}
-        {liveFilters.profiles.length > 0 && (
-          <Dropdown
-            id="profile"
-            lead={
-              profile === undefined ? (
-                <FieldGlyph name="person" size={13} />
-              ) : (
-                <ProfileGlyph
-                  glyph={profile.glyph}
-                  kind={profile.kind}
-                  filled={profile.isDefault === true}
-                  size={13}
-                />
-              )
-            }
-            label={profile?.label ?? "Every profile"}
-            open={menu === "profile"}
-            onToggle={toggle("profile")}
-            choices={[
-              {
-                key: "every",
-                label: "Every profile",
-                on: liveFilters.profile === null,
-                pick: () => onLiveProfile?.(null),
-              },
-              ...liveFilters.profiles.map((entry) => ({
-                key: entry.id,
-                label: entry.label,
-                on: liveFilters.profile === entry.id,
-                pick: () => onLiveProfile?.(entry.id),
-                lead: (
+      // MV-8b: the scope row's filters are a chrome piece of their own, tried
+      // again for the filters they draw (held by content by the monitor)
+      <ChromeBoundary name="Live filters" retryKey={liveFilters}>
+        <div className="vf-peek-dds">
+          {liveFilters.desks.length > 0 && (
+            <Dropdown
+              id="desk"
+              lead={
+                desk === undefined ? (
+                  deskMarks(liveFilters.desks)
+                ) : (
+                  <OsMark os={desk.os} size={12} />
+                )
+              }
+              label={desk?.name ?? "All desktops"}
+              open={menu === "desk"}
+              onToggle={toggle("desk")}
+              choices={[
+                {
+                  key: "all",
+                  label: "All desktops",
+                  on: liveFilters.desk === null,
+                  pick: () => onLiveDesk?.(null),
+                },
+                ...liveFilters.desks.map((entry) => ({
+                  key: entry.id,
+                  label: entry.here ? `${entry.name} · here` : entry.name,
+                  on: liveFilters.desk === entry.id,
+                  pick: () => onLiveDesk?.(entry.id),
+                  lead: <OsMark os={entry.os} size={11} />,
+                  note: entry.note,
+                  quiet: entry.quiet,
+                })),
+              ]}
+            />
+          )}
+          {liveFilters.profiles.length > 0 && (
+            <Dropdown
+              id="profile"
+              lead={
+                profile === undefined ? (
+                  <FieldGlyph name="person" size={13} />
+                ) : (
                   <ProfileGlyph
-                    glyph={entry.glyph}
-                    kind={entry.kind}
-                    filled={entry.isDefault === true}
-                    size={12}
+                    glyph={profile.glyph}
+                    kind={profile.kind}
+                    filled={profile.isDefault === true}
+                    size={13}
                   />
-                ),
-                ...(entry.blocked === true ? { note: "waiting" } : {}),
-              })),
-            ]}
-          />
-        )}
-      </div>
+                )
+              }
+              label={profile?.label ?? "Every profile"}
+              open={menu === "profile"}
+              onToggle={toggle("profile")}
+              choices={[
+                {
+                  key: "every",
+                  label: "Every profile",
+                  on: liveFilters.profile === null,
+                  pick: () => onLiveProfile?.(null),
+                },
+                ...liveFilters.profiles.map((entry) => ({
+                  key: entry.id,
+                  label: entry.label,
+                  on: liveFilters.profile === entry.id,
+                  pick: () => onLiveProfile?.(entry.id),
+                  lead: (
+                    <ProfileGlyph
+                      glyph={entry.glyph}
+                      kind={entry.kind}
+                      filled={entry.isDefault === true}
+                      size={12}
+                    />
+                  ),
+                  ...(entry.blocked === true ? { note: "waiting" } : {}),
+                })),
+              ]}
+            />
+          )}
+        </div>
+      </ChromeBoundary>
     );
   }
   return (

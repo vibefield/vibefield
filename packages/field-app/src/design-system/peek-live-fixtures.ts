@@ -122,13 +122,19 @@ export function peekLiveFixtureDoor(
   filters: LiveFilters,
   onFilters: (next: LiveFilters) => void,
 ): GodviewFindDoor {
+  const rows = LIVE_FIXTURE_RUNS.filter(
+    (row) => filters.desk === null || row.desk.id === filters.desk,
+  );
   return {
-    rows: LIVE_FIXTURE_RUNS.filter((row) => filters.desk === null || row.desk.id === filters.desk),
-    history: HISTORY,
+    rows: () => rows,
+    subscribeRows: () => () => undefined,
+    transcripts: HISTORY,
     select: () => undefined,
     filters,
     setDesk: (desk) => onFilters({ ...filters, desk }),
     setProfile: (profile) => onFilters({ ...filters, profile }),
+    holdKeys: () => () => undefined,
+    viewHoldsKeys: () => false,
   };
 }
 

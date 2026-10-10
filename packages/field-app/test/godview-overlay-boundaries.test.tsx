@@ -118,7 +118,7 @@ function fakeDoor(): MonitorDoor {
     attach: vi.fn(async () => ({ state: "no-pane" as const })),
     createTerminal: vi.fn(async () => ({ state: "no-pane" as const })),
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),
-    history: {
+    transcripts: {
       status: async () => status,
       facts: async () => [],
       search: async () => ({ status, answered: false, hits: [], clipped: false }),
@@ -328,7 +328,16 @@ describe("the overlay's chrome cannot take down the monitor (M49)", () => {
     await settle();
     const door = getGodviewFindDoor();
     expect(door).not.toBeNull();
-    expect(door?.rows.some((row) => row.agent?.provider.label === "Claude")).toBe(true);
+    // the rows are made only while someone listens (the Peek open on Live now)
+    expect(door?.rows()).toBeNull();
+    const stop = door?.subscribeRows(() => undefined);
+    await settle();
+    expect(
+      getGodviewFindDoor()
+        ?.rows()
+        ?.some((row) => row.agent?.provider.label === "Claude"),
+    ).toBe(true);
+    stop?.();
     await setView("canvas");
     expect(getGodviewFindDoor()).toBeNull();
   });

@@ -110,6 +110,9 @@ export interface UseMonitorAgentsOptions {
   /** DS-3 — the chosen desktop's id, as the chip holds it; null is every
    * desktop, and a desktop that left the board falls back to all. */
   device?: string | null;
+  /** P2 — whether Live now's rows are wanted (the Peek listens): the find
+   * join is made only then, never for a closed Peek. Default true. */
+  find?: boolean;
 }
 
 export interface MonitorPaneFacts {
@@ -220,6 +223,7 @@ interface PendingSpawn {
 }
 
 const NO_PANES: MonitorPaneFacts = { sessionIds: [] };
+const NO_FIND_AGENTS: readonly LiveFindAgent[] = Object.freeze([]);
 const NO_PROFILES: readonly AgentProfileSet[] = [];
 const NO_IDS: readonly string[] = Object.freeze([]);
 const NO_HELD: readonly HeldModelRow[] = Object.freeze([]);
@@ -306,6 +310,7 @@ export function useMonitorAgents({
   hasProfiles = false,
   chosenProfile,
   device = null,
+  find = true,
 }: UseMonitorAgentsOptions): MonitorAgentsResult {
   // ── the replica and the board's own facts ────────────────────────────────
   const feed = useMonitorFeed();
@@ -826,12 +831,15 @@ export function useMonitorAgents({
   // facts), joined by the run each row was dealt; the sheet's join moves only
   // when a fact it keys moves, and reads the newest of them when it does.
   const chrome = feed?.chrome ?? null;
-  const findKey = useChromeKey(chrome, findJoinKey);
+  const findKey = useChromeKey(find ? chrome : null, findJoinKey);
   const findAgentsOf = useMemo(createFindAgents, []);
   const findAgents = useMemo<readonly LiveFindAgent[]>(
-    () => findAgentsOf(agents, joins.runByRow, chrome?.runs() ?? NO_RUNS, joins.sessionByRow),
+    () =>
+      find
+        ? findAgentsOf(agents, joins.runByRow, chrome?.runs() ?? NO_RUNS, joins.sessionByRow)
+        : NO_FIND_AGENTS,
     // keyed by the facts the sheet joins on, not by every frame a run moves in
-    [agents, joins, findKey, chrome, findAgentsOf],
+    [find, agents, joins, findKey, chrome, findAgentsOf],
   );
 
   return {
