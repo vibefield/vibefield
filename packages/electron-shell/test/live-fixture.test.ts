@@ -77,6 +77,7 @@ describe("the live pane's fixture page", () => {
       sel: "portals",
       field: "hello",
       focused: "field",
+      submitted: 1,
       view: [1280, 800],
       parts: {
         link: { x: 1, y: 2, w: 3, h: 4 },
@@ -98,7 +99,10 @@ describe("the live pane's fixture page", () => {
   it("PT-3: the page in use — a link to /next, a field, the word, a page past its view; it reports what it saw", () => {
     const page = fixtureHtml();
     expect(page).toMatch(/<a id="next" href="\/next">/);
-    expect(page).toMatch(/<input id="field" type="text"/);
+    expect(page).toMatch(/<form id="form" action="\/next"><input id="field" type="text"/);
+    expect(page).toContain(
+      'addEventListener("submit", (e) => { e.preventDefault(); submitted += 1; })',
+    );
     expect(page).toContain(`<span id="word">${FIXTURE_PARTS.word}</span>`);
     expect(page).toMatch(/#tall \{ height: 400vh; \}/);
     // what it reports with each ask: where it is, its scroll, its selection, its field, its focus, its view and its parts
@@ -108,6 +112,7 @@ describe("the live pane's fixture page", () => {
       "sel: String(window.getSelection()",
       "field: field.value",
       "focused: (document.activeElement",
+      "submitted,",
       "view: [innerWidth, innerHeight]",
       'parts: { link: box("next"), field: box("field"), word: box("word") }',
     ])

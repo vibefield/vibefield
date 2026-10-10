@@ -6,7 +6,8 @@
 //                and ⌘Z at rest, pressed until it has taken back the desk's last edit before (the finish), never sends the page
 //                back (a page's navigation is not a desk edit — ruling 9);
 //   DOUBLE     — a double-click selects a word on the page, and the pane stays in hand;
-//   KEYS       — text typed into the fixture's field arrives exactly;
+//   KEYS       — text typed into the fixture's field arrives exactly, a slip taken back by ⌫ on the way; ⏎ there submits the
+//                field's form (⏎'s own char — the page's implicit submission);
 //   IME        — a composition driven through CDP on the shell's editor lands, committed, in the fixture's field;
 //   CURSOR     — over the link the window shows `pointer`, over the field `text`;
 //   WHEEL      — the page scrolls by what the finger moved ON THE SCREEN (the wheel's travel the window saw, in the page's px as
@@ -14,6 +15,9 @@
 //   TOOLS      — the held bar's ‹ goes back, ↻ reloads (each a NEW document — the page's memory token changes); ⌘L puts the
 //                editor over the head's capsule holding the address, and a typed address and ⏎ go there; ⌘L then Esc returns
 //                to the page, the pane still in hand;
+//   EDIT       — the page's own editing chords (ruling 7: every key but the browser's is the page's): in its field ⌘A then a
+//                letter replaces what was typed, and ⌘Z takes the replacing back (the clipboard's chords ride the same road —
+//                the smoke never writes the Mac's clipboard; theirs are the units');
 //   ESC        — one press puts the pane down;
 //   IDLE       — a still page in hand: no desk frame, no GPU submit, no frame arriving over 1.2 s.
 // Then the pane is deleted (⌫) and the board is as found. `--use-pane` beside `--smoke-canvas` runs these rows alone after the
@@ -36,12 +40,16 @@ export const USE_ROWS = {
   wheelPx: 240,
   wheelSteps: 4,
   wheelSlack: 0.25,
-  /** what is typed; what the IME composes, then commits */
+  /** what is typed (its last letter first mistyped as `slip`, taken back by ⌫); what the IME composes, then commits */
   typed: "hello portals",
+  slip: "z",
   composing: "にほ",
   composed: "日本",
   /** where the typed address goes (the fixture's own) */
   typedPath: "/next?typed=1",
+  /** EDIT: what is typed, then what replaces it after ⌘A */
+  editTyped: "abc",
+  editReplaced: "x",
   /** IDLE watches this long */
   watchMs: 1200,
   /** the desk's last edit before the page is used (the finish), and the finish ⌘Z takes it back to (the type's default) */
@@ -77,7 +85,12 @@ export interface UseSeen {
     readonly panned: boolean;
     readonly held: boolean;
   };
-  readonly keys: { readonly field: string | null; readonly focused: string | null };
+  readonly keys: {
+    readonly field: string | null;
+    readonly focused: string | null;
+    /** the field's form's submits after ⏎ */
+    readonly submitted: number;
+  };
   readonly ime: { readonly field: string | null };
   readonly cursor: { readonly link: string | null; readonly field: string | null };
   readonly tools: {
@@ -90,6 +103,8 @@ export interface UseSeen {
     readonly escHeld: boolean;
     readonly escValue: string | null;
   };
+  /** the field after ⌘A and a letter, then after ⌘Z */
+  readonly edit: { readonly replaced: string | null; readonly undone: string | null };
   readonly esc: { readonly down: boolean };
   readonly idle: {
     readonly ms: number;
@@ -148,7 +163,7 @@ export function judgeWheel(seen: UseSeen["wheel"]): string[] {
   return out;
 }
 
-/** KEYS: the field has the focus and holds exactly what was typed. */
+/** KEYS: the field has the focus and holds exactly what was typed (the slip taken back); ⏎ submitted its form. */
 export function judgeKeys(seen: UseSeen["keys"]): string[] {
   const out: string[] = [];
   if (seen.focused !== "field")
@@ -157,6 +172,7 @@ export function judgeKeys(seen: UseSeen["keys"]): string[] {
     out.push(
       `KEYS: the field holds ${JSON.stringify(seen.field)}, not ${JSON.stringify(USE_ROWS.typed)}`,
     );
+  if (seen.submitted < 1) out.push("KEYS: ⏎ in the field did not submit its form");
   return out;
 }
 
@@ -202,6 +218,20 @@ export function judgeTools(seen: UseSeen["tools"]): string[] {
   if (seen.escValue !== "")
     out.push(
       `TOOLS: after Esc the editor holds ${JSON.stringify(seen.escValue)}, not the page's empty field`,
+    );
+  return out;
+}
+
+/** EDIT: ⌘A then a letter replaced the field's text; ⌘Z brought it back. */
+export function judgeEdit(seen: UseSeen["edit"]): string[] {
+  const out: string[] = [];
+  if (seen.replaced !== USE_ROWS.editReplaced)
+    out.push(
+      `EDIT: ⌘A then "${USE_ROWS.editReplaced}" left the field ${JSON.stringify(seen.replaced)}, not "${USE_ROWS.editReplaced}" — the page selected nothing`,
+    );
+  if (seen.undone !== USE_ROWS.editTyped)
+    out.push(
+      `EDIT: ⌘Z left the field ${JSON.stringify(seen.undone)}, not "${USE_ROWS.editTyped}" — the page's own undo`,
     );
   return out;
 }
@@ -370,6 +400,12 @@ export async function usePaneRows(d: UseRowsDriver): Promise<string[]> {
     );
     await sleep(400);
   };
+  /** The held bar's Done: the pane put down by the hand's own act (the rows' put-down; ESC's row is the one Esc). */
+  const done = async (): Promise<void> => {
+    await h.pressSelector('[data-selection-bar] [data-act="done"]');
+    await until("the pane put down by Done", 5_000, "globalThis.__vfDesk.held() === null");
+    await settledCamera();
+  };
   /** One Esc: true once nothing is in hand. */
   const putDown = async (): Promise<boolean> => {
     await key("Escape");
@@ -450,7 +486,7 @@ export async function usePaneRows(d: UseRowsDriver): Promise<string[]> {
     ).catch(() => undefined);
     const address = await js<string | null>(`${FACE_ROW(paneKey)}?.info?.address ?? null`);
     const urlThen = str((await propsOf(e))?.url);
-    await putDown();
+    await done();
     let undos = 0;
     let finish = str((await propsOf(e))?.finish);
     while (undos < USE_ROWS.undos && finish !== null && finish !== USE_ROWS.finishBefore) {
@@ -485,18 +521,31 @@ export async function usePaneRows(d: UseRowsDriver): Promise<string[]> {
     said.double = double;
     problems.push(...judgeDouble(double));
 
-    // ── KEYS: the field pressed (the page focuses it), the text typed — it arrives exactly ───────────────────────────
+    // ── KEYS: the field pressed (the page focuses it), the text typed with a slip taken back by ⌫, then ⏎ — the text arrives
+    // exactly, and ⏎'s char submits the field's form (the page counts it and stays) ──────────────────────────────────────
     await press(await part("field"));
     await hear("the field focused", (r) => r.focused === "field");
-    for (const ch of USE_ROWS.typed) {
-      const keyCode = ch === " " ? "Space" : ch;
-      win.webContents.sendInputEvent({ type: "keyDown", keyCode });
-      win.webContents.sendInputEvent({ type: "char", keyCode });
-      win.webContents.sendInputEvent({ type: "keyUp", keyCode });
-      await sleep(30);
-    }
+    const typeChars = async (text: string): Promise<void> => {
+      for (const ch of text) {
+        const keyCode = ch === " " ? "Space" : ch;
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode });
+        win.webContents.sendInputEvent({ type: "char", keyCode });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode });
+        await sleep(30);
+      }
+    };
+    await typeChars(USE_ROWS.typed.slice(0, -1) + USE_ROWS.slip);
+    await hear("the slip in the field", (r) => r.field.endsWith(USE_ROWS.slip));
+    await key("Backspace");
+    await typeChars(USE_ROWS.typed.slice(-1));
     const typed = await hear("the text in the field", (r) => r.field === USE_ROWS.typed);
-    const keys: UseSeen["keys"] = { field: typed?.field ?? null, focused: typed?.focused ?? null };
+    await key("Return");
+    const entered = await hear("the field's form submitted", (r) => r.submitted >= 1);
+    const keys: UseSeen["keys"] = {
+      field: typed?.field ?? null,
+      focused: typed?.focused ?? null,
+      submitted: entered?.submitted ?? 0,
+    };
     said.keys = keys;
     problems.push(...judgeKeys(keys));
 
@@ -657,12 +706,33 @@ export async function usePaneRows(d: UseRowsDriver): Promise<string[]> {
     said.tools = tools;
     problems.push(...judgeTools(tools));
 
+    // ── EDIT: the page's own editing chords in its field — ⌘A then a letter replaces, ⌘Z takes it back ──────────────────
+    await press(await part("field"));
+    await hear("the field focused for the chords", (r) => r.focused === "field");
+    await typeChars(USE_ROWS.editTyped);
+    await hear("the field typed for the chords", (r) => r.field === USE_ROWS.editTyped);
+    await key("a", [mod]);
+    await typeChars(USE_ROWS.editReplaced);
+    const replaced = await hear(
+      "⌘A's selection replaced",
+      (r) => r.field === USE_ROWS.editReplaced,
+    );
+    await key("z", [mod]);
+    const undone = await hear("⌘Z's undo", (r) => r.field === USE_ROWS.editTyped);
+    const edit: UseSeen["edit"] = {
+      replaced: replaced?.field ?? null,
+      undone: undone?.field ?? null,
+    };
+    said.edit = edit;
+    problems.push(...judgeEdit(edit));
+
     // ── ESC: one press puts the pane down ─────────────────────────────────────────────────────────────────────────
     const esc: UseSeen["esc"] = { down: await putDown() };
     said.esc = esc;
     problems.push(...judgeEsc(esc));
 
     // ── IDLE: picked up again, a press on the page's ground (nothing there to focus or blink), the page still in hand ─
+    if ((await held()) !== null) await done();
     await pickUp(e);
     const v = report()?.view ?? [1280, 800];
     await press(await onPage(v[0] * 0.85, v[1] * 0.3));
@@ -691,7 +761,7 @@ export async function usePaneRows(d: UseRowsDriver): Promise<string[]> {
     };
     said.idle = idle;
     problems.push(...judgeIdle(idle));
-    await putDown();
+    await done();
   } catch (error) {
     // a step that cannot go on ends the rows — never what the rows before it found (they are said with it)
     problems.push(`PT-3 USE: ${error instanceof Error ? error.message : String(error)}`);
@@ -699,7 +769,7 @@ export async function usePaneRows(d: UseRowsDriver): Promise<string[]> {
     d.fixture.setPlaying(false);
     say(`SMOKE_CANVAS_USE ${JSON.stringify(said)}`);
     try {
-      if ((await held()) !== null) await putDown();
+      if ((await held()) !== null) await done();
       if (pane !== undefined) {
         const at = await middleOf(pane);
         if (at !== null) {

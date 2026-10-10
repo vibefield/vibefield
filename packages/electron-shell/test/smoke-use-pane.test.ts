@@ -8,6 +8,7 @@ import {
   judgeClick,
   judgeCursor,
   judgeDouble,
+  judgeEdit,
   judgeEsc,
   judgeIdle,
   judgeIme,
@@ -95,17 +96,24 @@ describe("the page in use — its rows", () => {
     expect(judgeWheel({ ...ok, held: false })).toEqual(["WHEEL: the wheel put the pane down"]);
   });
 
-  it("KEYS: the field focused, holding exactly what was typed — a letter lost, doubled or the focus elsewhere refused", () => {
-    expect(judgeKeys({ field: USE_ROWS.typed, focused: "field" })).toEqual([]);
-    expect(judgeKeys({ field: "hhello portals", focused: "field" })).toEqual([
+  it("KEYS: the field focused, holding exactly what was typed, its form submitted by ⏎ — a letter lost, doubled, a slip kept, the focus elsewhere, no submit refused", () => {
+    expect(judgeKeys({ field: USE_ROWS.typed, focused: "field", submitted: 1 })).toEqual([]);
+    expect(judgeKeys({ field: "hhello portals", focused: "field", submitted: 1 })).toEqual([
       'KEYS: the field holds "hhello portals", not "hello portals"',
     ]);
-    expect(judgeKeys({ field: "hello portal", focused: "field" })[0]).toMatch(
+    expect(judgeKeys({ field: "hello portal", focused: "field", submitted: 1 })[0]).toMatch(
       /holds "hello portal"/,
     );
-    expect(judgeKeys({ field: "", focused: "" })).toEqual([
+    expect(judgeKeys({ field: "", focused: "", submitted: 1 })).toEqual([
       'KEYS: the page\'s focus is "", not its field',
       'KEYS: the field holds "", not "hello portals"',
+    ]);
+    // the slip kept (⌫ never reached the page), and ⏎ that submitted nothing
+    expect(judgeKeys({ field: "hello portalzs", focused: "field", submitted: 1 })[0]).toMatch(
+      /holds "hello portalzs"/,
+    );
+    expect(judgeKeys({ field: USE_ROWS.typed, focused: "field", submitted: 0 })).toEqual([
+      "KEYS: ⏎ in the field did not submit its form",
     ]);
   });
 
@@ -160,6 +168,17 @@ describe("the page in use — its rows", () => {
     expect(judgeTools({ ...ok, escValue: `${ORIGIN}/next?typed=1` })[0]).toMatch(
       /after Esc the editor holds/,
     );
+  });
+
+  it("EDIT: the page's own chords — ⌘A then a letter replaces the field, ⌘Z takes it back; a chord the page never heard refused", () => {
+    expect(judgeEdit({ replaced: "x", undone: "abc" })).toEqual([]);
+    expect(judgeEdit({ replaced: "abcx", undone: "abc" })).toEqual([
+      'EDIT: ⌘A then "x" left the field "abcx", not "x" — the page selected nothing',
+    ]);
+    expect(judgeEdit({ replaced: "x", undone: "x" })).toEqual([
+      'EDIT: ⌘Z left the field "x", not "abc" — the page\'s own undo',
+    ]);
+    expect(judgeEdit({ replaced: null, undone: null })).toHaveLength(2);
   });
 
   it("ESC: one press puts the pane down", () => {

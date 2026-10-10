@@ -51,6 +51,8 @@ export interface FixtureReport {
   /** The field's value, and the id of what has the focus ("" for nothing). */
   readonly field: string;
   readonly focused: string;
+  /** How many times the field's form was submitted (⏎ in the field — the page keeps it, never goes). */
+  readonly submitted: number;
   /** Its view, CSS px (`innerWidth`, `innerHeight`). */
   readonly view: readonly [number, number];
   /** Where its parts stand in its view now (CSS px, the view's own — what a press there lands on): the link, the field, the word. */
@@ -114,14 +116,15 @@ export function fixtureHtml(path: "/page" | "/next" = "/page"): string {
 <div class="bar" style="top:48vh;width:40%"></div>
 <div id="runner"></div>
 <a id="next" href="/next">next page</a>
-<input id="field" type="text" autocomplete="off" spellcheck="false">
+<form id="form" action="/next"><input id="field" type="text" autocomplete="off" spellcheck="false"></form>
 <p id="words">alpha <span id="word">portals</span> omega</p>
 <div id="tall"></div>
 <script>
   const token = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
   const runner = document.getElementById("runner");
   const field = document.getElementById("field");
-  let x = 0, timer = null;
+  let x = 0, timer = null, submitted = 0;
+  document.getElementById("form").addEventListener("submit", (e) => { e.preventDefault(); submitted += 1; });
   const pace = (play) => {
     if (play && timer === null) timer = setInterval(() => { x = (x + 1.3) % 88; runner.style.left = x + "%"; }, 33);
     if (!play && timer !== null) { clearInterval(timer); timer = null; }
@@ -136,6 +139,7 @@ export function fixtureHtml(path: "/page" | "/next" = "/page"): string {
     sel: String(window.getSelection() || ""),
     field: field.value,
     focused: (document.activeElement && document.activeElement.id) || "",
+    submitted,
     view: [innerWidth, innerHeight],
     parts: { link: box("next"), field: box("field"), word: box("word") },
   }));
