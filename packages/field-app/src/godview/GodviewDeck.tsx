@@ -86,6 +86,7 @@ import {
   historyPortOver,
   modelBoardOver,
   profileSetsPortOver,
+  recordedLanesPortOver,
   usagePortOver,
 } from "./monitor/doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
@@ -1134,6 +1135,9 @@ export function GodviewDeck({
       // MV-3 (MV-D18) — the model board and the screen's report: the monitor's
       // rows are the backend's, through this window's one door (`model-replica.ts`).
       model: modelBoardOver(doorClient),
+      // TL (B-D6 (a)) — the lanes' past, the backend's, asked only while a
+      // mounted view asks for it (`monitor-history.ts`, PF6)
+      pastLanes: recordedLanesPortOver(doorClient),
       // DS-4e (2026-10-01; `thinking-desktop-sync-plane.md` §6.3) — ANOTHER
       // desktop's session, mounted in the pane the user is in through the
       // SAME routed host a local pane rides: never ghosttea's remote palette,

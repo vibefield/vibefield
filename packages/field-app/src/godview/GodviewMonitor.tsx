@@ -1,4 +1,9 @@
-import type { MonitorTheme, StageGeometry, ViewReport } from "@vibecook/puppeteer-view-sdk";
+import type {
+  MonitorCapabilities,
+  MonitorTheme,
+  StageGeometry,
+  ViewReport,
+} from "@vibecook/puppeteer-view-sdk";
 import { frameScheduler, keepStage, MonitorViewHost } from "@vibecook/puppeteer-view-sdk/host";
 import { ProfileGlyph } from "@vibecook/puppeteer-view-sdk/react";
 import {
@@ -38,6 +43,7 @@ import { type ChromeRun, NO_RUNS, useChromeKey } from "./monitor/chrome-facts";
 import { choiceNote, type DeviceChoice } from "./monitor/device-filter";
 import { useMonitorFeed } from "./monitor/GodviewAgentsProvider";
 import { setMonitorHoldsKeys } from "./monitor/launcher-keys";
+import { useMonitorHistory } from "./monitor/monitor-history";
 import { chosenProfile, showsProfileTabs } from "./monitor/profile-tabs";
 import type { MonitorDoor, MonitorFeedState } from "./monitor/remote-door";
 import type { MonitorViewEntry } from "./monitor/types";
@@ -385,6 +391,7 @@ export function GodviewMonitor({
     devices,
     deviceChosen,
     tabs,
+    here,
   } = useMonitorAgents({
     palette,
     door,
@@ -439,6 +446,21 @@ export function GodviewMonitor({
     viewHoldsKeysRef.current = report.keysHeld === true;
     setViewReport(report);
   }, []);
+  // TL (docket v9; B-D6 (a)) — the record's past for the mounted view that
+  // asks (`ViewReport.history`), the backend's through this window's door,
+  // read only while that view is mounted and asking (PF6): the slot clears a
+  // view's report with the view, and this stage unmounts with Godview.
+  const history = useMonitorHistory({
+    port: door?.pastLanes,
+    ask: viewReport.history,
+    rows: agents,
+    here,
+    palette,
+  });
+  const viewCapabilities = useMemo<MonitorCapabilities>(
+    () => (history === undefined ? capabilities : { ...capabilities, history }),
+    [capabilities, history],
+  );
   /** AR-5: what the swarm paints with — `starting` while its physics runs and its device has not answered. */
   const swarmRenderer =
     viewReport.renderer ?? (viewReport.physics !== undefined ? "starting" : "none");
@@ -785,7 +807,7 @@ export function GodviewMonitor({
           stage={stageGeometry}
           theme={monitorTheme}
           parameters={parameters}
-          capabilities={capabilities}
+          capabilities={viewCapabilities}
           commands={commands}
           onReport={onReport}
           scheduler={frameScheduler}

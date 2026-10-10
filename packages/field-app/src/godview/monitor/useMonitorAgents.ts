@@ -184,6 +184,8 @@ export interface MonitorAgentsResult {
   spawnMenu: MonitorSpawnMenu | undefined;
   /** The model board's honest state (`no-door` · `connecting` · `live` · `unavailable`). */
   feed: MonitorFeedState;
+  /** Which desktop is here (the roster's own row, else the board's first); undefined before either says. */
+  here: string | undefined;
 }
 
 /** The local half's honest state, in the marker's words (`GodviewMonitorFacts.localState`). */
@@ -860,5 +862,6 @@ export function useMonitorAgents({
     tabs,
     spawnMenu,
     feed: feedFacts.state,
+    here,
   };
 }

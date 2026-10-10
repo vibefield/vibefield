@@ -1,5 +1,6 @@
 import type { AccountUsagePort, HistoryPort } from "@vibecook/puppeteer-views";
 import type { AgentProfileSet, DeviceInfo } from "@vibefield/contracts";
+import type { RecordedLanesPort } from "./monitor-history";
 
 export type MonitorFeedState =
   | { state: "no-door" | "loading" | "ready" }
@@ -77,6 +78,11 @@ export interface MonitorDoor {
    * from before the backend, the catalog) draws the stage with no rows and
    * says so (`no-door`). */
   model?: ModelBoardPort;
+  /** TL (B-D6 (a)) — the lanes' past as the backend derives it from the
+   * record (`agent.recordedLanes`), read only while a mounted view asks
+   * (capability `history`, PF6). Optional: a door without it lends no past,
+   * and the views draw runtime state alone. */
+  pastLanes?: RecordedLanesPort;
 }
 
 /** MV-3 — the model board's two verbs (`doors.ts` `modelBoardOver`). The

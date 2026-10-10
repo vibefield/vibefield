@@ -16,12 +16,14 @@ import type {
 import {
   AgentAccountUsageBatch,
   type AgentAccountUsageEntry,
+  AgentRecordedLanesResult,
   AgentsProfileSetsListResult,
   DeviceInfo,
   IndexSearchResult,
   IndexSessionsResult,
   IndexStatus,
 } from "@vibefield/contracts";
+import type { RecordedLanesPort } from "./monitor-history";
 import { instrumentModelClient } from "./perf/door-instruments";
 import type {
   DevicesPort,
@@ -401,6 +403,22 @@ export function modelBoardOver(client: DoorClient): ModelBoardPort {
     subscribe: (onFrame, opts) =>
       door.subscribe("agent.subscribe", { ...MODEL_BOARD_ASK }, onFrame, opts),
     reportShown: (ids) => door.request("agent.reportShown", { ids: [...ids] }),
+  };
+}
+
+/** TL (B-D6 (a)) — the lanes' past as the backend derives it from the record
+ * (`agent.recordedLanes`), asked only while a mounted view asks for it
+ * (`monitor-history.ts`). An answer the window cannot read is a refusal, which
+ * the hook words as the past's `unavailable`. */
+export function recordedLanesPortOver(client: DoorClient): RecordedLanesPort {
+  return {
+    read: async (window) =>
+      AgentRecordedLanesResult.parse(
+        await client.request("agent.recordedLanes", {
+          sinceMs: window.sinceMs,
+          untilMs: window.untilMs,
+        }),
+      ),
   };
 }
 
