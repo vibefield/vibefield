@@ -11,7 +11,7 @@ import {
   IndexModelHour,
   IndexSearchSource,
 } from "./agent-index";
-import { ProjectKey } from "./project-places";
+import { PlaceRef, ProjectKey } from "./project-places";
 import { PROJECT_DOORS } from "./registries";
 import { RowsSubscribeParams, rowsDelta, rowsOpen } from "./rows";
 
@@ -93,16 +93,6 @@ function refusePaths(value: unknown, ctx: z.RefinementCtx): void {
       path: field.split("."),
     });
 }
-
-/** A place as a reader names it: the device that owns it and its opaque id
- * (`PlaceFacts.placeId`) — never its path (P1). */
-export const PlaceRef = z
-  .object({
-    device: z.string().min(1).max(256),
-    placeId: z.string().min(1).max(256),
-  })
-  .passthrough();
-export type PlaceRef = z.infer<typeof PlaceRef>;
 
 /** An anchor as a REQUEST names one (`project.get {anchor}`): a first
  * commit, an identity remote's key, or a place — and never a local-path
@@ -189,6 +179,11 @@ export const ProjectSummary = z
     asOf: z.record(z.string(), z.string().min(1)),
     /** the grouping rule that made it (`GROUPING_VERSION`) */
     groupingVersion: z.number().int().nonnegative(),
+    /** PJ-4 (H4) — the person pinned it (its record's `pinned`); absent: not */
+    pinned: z.boolean().optional(),
+    /** PJ-4 (H4) — the person hid it (its record's `hidden`): listed, folded
+     * under "Hidden" at the list's foot, never dropped; absent: not */
+    hidden: z.boolean().optional(),
   })
   .passthrough();
 export type ProjectSummary = z.infer<typeof ProjectSummary>;

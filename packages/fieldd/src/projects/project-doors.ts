@@ -281,11 +281,17 @@ export class ProjectDoors {
    * no place holds yet. Never a refusal: a listing keyed by it answers without
    * the column rather than not at all. */
   keyOf(device: string, cwd: string | undefined): string | undefined {
+    return this.#joined(device, cwd)?.key;
+  }
+
+  /** The project's key and the place's ref a cwd joins (the longest path). */
+  #joined(device: string, cwd: string | undefined): { key: string; place: PlaceRef } | undefined {
     if (cwd === undefined || cwd.length === 0 || this.#opts.groups.current() === null)
       return undefined;
     const indexed = this.#require();
     const placeId = this.#resolverFor(indexed, device)(cwd);
-    return placeId === undefined ? undefined : indexed.places.get(placeId)?.project.key;
+    const held = placeId === undefined ? undefined : indexed.places.get(placeId);
+    return held === undefined ? undefined : { key: held.project.key, place: refOf(held.place) };
   }
 
   /** A listing's rows (`index.sessions`) with the join column: each row's own
@@ -294,12 +300,19 @@ export class ProjectDoors {
    * the only one this desktop answers with (DS-L4). */
   keyed<Row extends { device?: string | undefined; cwd?: string | undefined }>(
     rows: readonly Row[],
-  ): Array<Row & { projectKey?: string }> {
+  ): Array<Row & { projectKey?: string; place?: PlaceRef }> {
     const self = this.#opts.deviceId();
     return rows.map((row) => {
-      const { projectKey: _stale, ...rest } = row as Row & { projectKey?: unknown };
-      const key = this.keyOf(row.device ?? self, row.cwd);
-      return { ...(rest as Row), ...(key !== undefined ? { projectKey: key } : {}) };
+      const {
+        projectKey: _stale,
+        place: _stalePlace,
+        ...rest
+      } = row as Row & { projectKey?: unknown; place?: unknown };
+      const joined = this.#joined(row.device ?? self, row.cwd);
+      return {
+        ...(rest as Row),
+        ...(joined !== undefined ? { projectKey: joined.key, place: joined.place } : {}),
+      };
     });
   }
 
@@ -843,6 +856,9 @@ export class ProjectDoors {
         : [...project.anchors],
       asOf,
       groupingVersion: indexed.snapshot.result.groupingVersion,
+      // PJ-4 (H4) — the person's pin and hide, from the project's record
+      ...(project.pinned === true ? { pinned: true } : {}),
+      ...(project.hidden === true ? { hidden: true } : {}),
     };
   }
 

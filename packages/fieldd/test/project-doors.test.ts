@@ -656,6 +656,55 @@ describe("PJ-4 — the join column (A-D4): every catalog session carries its pro
     });
   });
 
+  it("R6: carries the place that holds the cwd beside the key — the folder ③ follows", () => {
+    const w = world();
+    w.groups.regroupNow();
+    const places = new Map(
+      w.doors.keyed(w.sessions.rows()).map((row) => [row.sessionId, row.place] as const),
+    );
+    expect(places.get("s1")).toEqual({ device: "dev-a", placeId: "pl-app" });
+    // the nested checkout's session: its own place, though the same project
+    expect(places.get("s2")).toEqual({ device: "dev-a", placeId: "pl-app-docs" });
+    expect(places.get("s4")).toEqual({ device: "dev-a", placeId: "pl-home" });
+    const [forged] = w.doors.keyed([
+      { ...session("dev-a", "x9", "/Volumes/Elsewhere", 5), place: { device: "x", placeId: "y" } },
+    ]);
+    expect(forged).not.toHaveProperty("place");
+  });
+
+  it("H4: a project's pin and hide ride its summary from its record — absent when not", () => {
+    const w = world();
+    const app = () =>
+      ProjectListResult.parse(w.doors.list({}, WINDOW_VIEW, 100)).rows.find((row) =>
+        row.places.some((p) => p.ref.placeId === "pl-app"),
+      );
+    w.groups.regroupNow();
+    expect(app()).not.toHaveProperty("pinned");
+    expect(app()).not.toHaveProperty("hidden");
+    const groups = new ProjectGroups({
+      deviceId: () => "dev-a",
+      local: { projects: w.projects, sessions: w.sessions },
+      peers: () => w.peers,
+      intents: () => ({
+        records: [
+          { id: "rec1", anchors: ["place:pl-app"], pinned: true, hidden: true, createdAt: 1 },
+        ],
+      }),
+    });
+    const doors = new ProjectDoors({
+      groups,
+      deviceId: () => "dev-a",
+      localSessions: () => w.sessions.rows(),
+      peerSessions: () => w.peers,
+      sources: () => [],
+    });
+    groups.regroupNow();
+    const pinned = ProjectListResult.parse(doors.list({}, WINDOW_VIEW, 100)).rows.find(
+      (row) => row.key === "r:rec1",
+    );
+    expect(pinned).toMatchObject({ pinned: true, hidden: true });
+  });
+
   it("leaves the column off a row no place holds, and never trusts one a row arrived with", () => {
     const w = world();
     w.groups.regroupNow();

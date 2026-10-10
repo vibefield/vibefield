@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isAbsoluteDesktopPath } from "./paths";
-import { PlaceFactsList, ProjectKey } from "./project-places";
+import { PlaceFactsList, PlaceRef, ProjectKey } from "./project-places";
 import { INDEX_TICKET, INDEX_TIMELINE } from "./registries";
 import { composeRemoteEndpoints, remoteDoorUrl, remoteEndpointSet } from "./remote-endpoints";
 import {
@@ -689,6 +689,9 @@ export const IndexSession = z
     // place scanner has not read: the room's unassigned bucket says so), and
     // in an answer to a peer daemon (it groups its own, DS-L4).
     projectKey: ProjectKey.optional(),
+    /** PJ-4 (R6) — the place that holds the cwd by that same longest path,
+     * beside its key: the folder ③ follows when the session is chosen. */
+    place: PlaceRef.optional(),
   })
   .passthrough();
 export type IndexSession = z.infer<typeof IndexSession>;

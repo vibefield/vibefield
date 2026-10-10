@@ -144,7 +144,6 @@ import {
 import { PluginRegistrySnapshot } from "../src/plugin-registry";
 import { PluginManifestV1 } from "../src/plugins";
 import {
-  PlaceRef,
   ProjectChangesDelta,
   ProjectChangesOpen,
   ProjectFiguresDayParams,
@@ -163,7 +162,7 @@ import {
   ProjectSubscribeParams,
   ProjectSummary,
 } from "../src/project-doors";
-import { PlaceFacts } from "../src/project-places";
+import { PlaceFacts, PlaceRef } from "../src/project-places";
 import { RemoteEndpointSet } from "../src/remote-endpoints";
 import {
   ScreenshotCaptureResult,

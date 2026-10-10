@@ -1,5 +1,5 @@
 {
-  "//": "PJ-4 (A-D4) — `index.sessions {scope: \"local\"}` as a WINDOW reads it: each row carries the join column `projectKey`, the PJ project whose place holds its cwd by the longest path — computed by the answering daemon from its own grouping, the key `project.list` answers. Two rosetta projects (a checkout and a separate clone of one repository) answer one key; a session no place holds yet has none.",
+  "//": "PJ-4 (A-D4) — `index.sessions {scope: \"local\"}` as a WINDOW reads it: each row carries the join column `projectKey`, the PJ project whose place holds its cwd by the longest path — computed by the answering daemon from its own grouping, the key `project.list` answers, and the `place` (R6: the folder ③ follows) beside it. Two rosetta projects (a checkout and a separate clone of one repository) answer one key; a session no place holds yet has none.",
   "rows": [
     {
       "sessionId": "ses-9b2f0c7d",
@@ -8,7 +8,10 @@
       "title": "the history catalog across desktops",
       "cwd": "/Users/me/Projects/vibe-field",
       "updatedAt": 1759276790000,
-      "activity": { "firstAt": 1759270000000, "lastAt": 1759276800000 },
+      "activity": {
+        "firstAt": 1759270000000,
+        "lastAt": 1759276800000
+      },
       "streamState": "indexed",
       "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
       "devices": ["01J9ZK3M5Q8XR2V7N4B6C1D0EF"],
@@ -16,7 +19,11 @@
       "family": "github.com/acme/vibe-field",
       "provider": "claude",
       "startedAt": 1759270000000,
-      "projectKey": "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8"
+      "projectKey": "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8",
+      "place": {
+        "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+        "placeId": "pl_4c1e9a0b7d2f6e8a1b3c5d7e"
+      }
     },
     {
       "sessionId": "ses-31c0de55",
@@ -25,7 +32,10 @@
       "title": "a second clone of the same repository",
       "cwd": "/Users/me/research/vf-claude/packages",
       "updatedAt": 1759190000000,
-      "activity": { "firstAt": 1759180000000, "lastAt": 1759189000000 },
+      "activity": {
+        "firstAt": 1759180000000,
+        "lastAt": 1759189000000
+      },
       "streamState": "indexed",
       "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
       "devices": ["01J9ZK3M5Q8XR2V7N4B6C1D0EF"],
@@ -33,7 +43,11 @@
       "family": "github.com/acme/vibe-field",
       "provider": "codex",
       "startedAt": 1759180000000,
-      "projectKey": "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8"
+      "projectKey": "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8",
+      "place": {
+        "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+        "placeId": "pl_31c0de55aa0b7d2f6e8a1b3c"
+      }
     },
     {
       "sessionId": "ses-a07b1f62",
@@ -41,7 +55,10 @@
       "rootSessionId": "ses-a07b1f62",
       "title": "a folder the place scanner has not read yet",
       "cwd": "/Users/me/scratch/new-thing",
-      "activity": { "firstAt": 1759290000000, "lastAt": 1759290100000 },
+      "activity": {
+        "firstAt": 1759290000000,
+        "lastAt": 1759290100000
+      },
       "streamState": "streaming",
       "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
       "devices": ["01J9ZK3M5Q8XR2V7N4B6C1D0EF"],

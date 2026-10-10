@@ -500,6 +500,11 @@ describe("PJ-4 — the join column over the real door (A-D4)", () => {
       "s-notes": keyAt("pl_notes"),
       "s-fork": keyAt("pl_fork"),
     });
+    // R6: the place beside the key
+    expect(listing.rows.find((row) => row.sessionId === "s-app-1")?.place).toEqual({
+      device: world.self,
+      placeId: "pl_app",
+    });
     // the phone is the person's own device: it reads the same column
     const phone = IndexSessionsResult.parse(
       await world.phone.call("index.sessions", { scope: "local", limit: 500 }),
@@ -510,7 +515,10 @@ describe("PJ-4 — the join column over the real door (A-D4)", () => {
       await world.peer.call("index.sessions", { scope: "local", limit: 500 }),
     );
     expect(peer.rows.length).toBe(4);
-    for (const row of peer.rows) expect(row).not.toHaveProperty("projectKey");
+    for (const row of peer.rows) {
+      expect(row).not.toHaveProperty("projectKey");
+      expect(row).not.toHaveProperty("place");
+    }
   }, 30_000);
 });
 
