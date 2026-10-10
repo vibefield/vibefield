@@ -1,8 +1,9 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { IndexSessionsResult, ProjectListResult } from "@vibefield/contracts";
+import { AgentListResult, IndexSessionsResult, ProjectListResult } from "@vibefield/contracts";
 import type { FielddHandle } from "@vibefield/fieldd-supervisor";
 import type { BrowserWindow } from "electron";
+import { readTypedAgentCalls, type StagedTypedAgent } from "./typed-agent";
 
 // HISTORY BY PROJECT's RUNG in `pnpm smoke:godview` (PJ-4, H1 (a): "we map,
 // the room draws"). It rides the History rung, after that rung opened the
@@ -106,6 +107,275 @@ export async function historyByProjectRung(
 }
 
 const VIEW_NOW = `(document.querySelector(".vf-views-line")?.getAttribute("data-view") ?? "absent")`;
+
+/** Choose the project named `name` in ① (opening Temporary's fold at the
+ * foot first, H5) and, with `session`, its newest session: one step per
+ * evaluation, "chosen" once both are. */
+const chooseProject = (name: string, session: boolean): string => `(() => {
+  const room = ${HISTORY_ROOM};
+  if (!room) return "no room";
+  const rows = [...room.querySelectorAll(".ah-project-list-item")];
+  const row = rows.find((candidate) =>
+    (candidate.querySelector(".ah-project-list-item__header strong")?.textContent ?? "").trim() ===
+      ${JSON.stringify(name)});
+  if (!row) {
+    const fold = room.querySelector('.ah-fold[aria-expanded="false"]');
+    if (fold) { fold.click(); return "fold"; }
+    return "no project row";
+  }
+  if (!row.classList.contains("is-selected")) { row.click(); return "project"; }
+  if (!${session}) return "chosen";
+  const first = room.querySelector(".ah-session-list-item");
+  if (!first) return "no session row";
+  if (!first.classList.contains("is-selected")) { (first.querySelector(".ah-session-list-item__hit") ?? first).click(); return "session"; }
+  return "chosen";
+})()`;
+
+/** Every note the line says from now on, in order (a note stands 2.4s; a
+ * loaded host's evaluate can be slower) — jump-rungs.ts's ear, its own globals. */
+const NOTES_ARM = `(() => {
+  window.__vfHistoryNotes = [];
+  if (!window.__vfHistoryNoteEar) {
+    window.__vfHistoryNoteEar = new MutationObserver(() => {
+      const text = (document.querySelector(".vf-line-note")?.textContent ?? "").trim();
+      const heard = window.__vfHistoryNotes;
+      if (text !== "" && heard[heard.length - 1] !== text) heard.push(text);
+    });
+    window.__vfHistoryNoteEar.observe(document.body, { subtree: true, childList: true, characterData: true });
+  }
+  return "ok";
+})()`;
+const NOTES_HEARD = `JSON.stringify(window.__vfHistoryNotes ?? [])`;
+const NOTES_OFF = `(() => { window.__vfHistoryNoteEar?.disconnect(); delete window.__vfHistoryNoteEar; delete window.__vfHistoryNotes; return "ok"; })()`;
+
+async function heardNote(
+  win: BrowserWindow,
+  label: string,
+  starts: readonly string[],
+  timeoutMs: number,
+): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let heard: string[] = [];
+  while (Date.now() < deadline) {
+    heard = JSON.parse(String(await win.webContents.executeJavaScript(NOTES_HEARD))) as string[];
+    const note = heard.find((text) => starts.some((start) => text.startsWith(start)));
+    if (note !== undefined) return note;
+    await sleep(150);
+  }
+  throw new Error(`${label}: the line said ${JSON.stringify(heard)}`);
+}
+
+/** A path as the OS resolves it (macOS's /var is /private/var), or itself. */
+function resolved(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
+export interface HistoryActRungOptions {
+  handle: FielddHandle;
+  staged: StagedTypedAgent | undefined;
+  /** the History-by-project rung's verdict: its project's name */
+  byProject: { checked?: boolean; name?: string } | undefined;
+  /** ⌘2 / ⌘3, the road a person takes (the smoke's `pressViewKey`) */
+  pressViewKey: (view: "godview" | "history") => void;
+}
+
+/**
+ * NEW AGENT FROM HISTORY (PJ-4, H6; PJ-L5 "a place acts"): in the seeded
+ * session's project, ②'s New agent, its menu's typed agent — the stub —
+ * starts in the folder ③ shows. Witnessed three ways: the line says "Started
+ * in …", fieldd lists a NEW run of that agent whose workspace is that folder,
+ * and the stub itself recorded running there. The window moves to Godview,
+ * whose deck placed the pane.
+ */
+export async function historyNewAgentRung(
+  win: BrowserWindow,
+  opts: HistoryActRungOptions,
+): Promise<Record<string, unknown>> {
+  const staged = opts.staged;
+  const name = opts.byProject?.name;
+  if (staged === undefined || opts.byProject?.checked !== true || name === undefined)
+    return { unavailable: "History by project was not witnessed in this run" };
+  const evaluate = async (expression: string): Promise<string> =>
+    String(await win.webContents.executeJavaScript(expression));
+  try {
+    opts.pressViewKey("history");
+    await untilValue(win, "History, the view", VIEW_NOW, 10_000, (value) => value === "history");
+    await untilValue(
+      win,
+      `${name} chosen`,
+      chooseProject(name, false),
+      20_000,
+      (v) => v === "chosen",
+    );
+    // ③'s folder: the one New agent starts in (its title is the whole path)
+    const folder = await untilValue(
+      win,
+      "③'s folder",
+      `(${HISTORY_ROOM}?.querySelector("button.ah-folderpick")?.getAttribute("title") ?? "")`,
+      20_000,
+      (value) => value !== "",
+    );
+    const before = AgentListResult.parse(await opts.handle.client.request("agent.list", {}));
+    const runsBefore = new Set(before.sessions.map((row) => row.runtimeRunId));
+    const callsBefore = readTypedAgentCalls(staged.calls).length;
+    await evaluate(NOTES_ARM);
+    await evaluate(
+      `(${HISTORY_ROOM}?.querySelector('.ah-hostact[data-place="head"][data-act="new-agent"]')?.click(), "ok")`,
+    );
+    // the menu's row for the typed agent (its key is the catalog id, then the persona)
+    const item = await untilValue(
+      win,
+      "New agent's menu, the typed agent's row",
+      `(() => {
+        const items = [...(${HISTORY_ROOM}?.querySelectorAll(".ah-menu [role=menu] .ah-menu__item") ?? [])];
+        const row = items.find((candidate) =>
+          (candidate.getAttribute("data-key") ?? "").startsWith(${JSON.stringify(`${staged.agentId}`)}));
+        if (!row) return "";
+        return JSON.stringify({
+          key: row.getAttribute("data-key"),
+          disabled: row.disabled || row.getAttribute("aria-disabled") === "true",
+          text: (row.textContent ?? "").replace(/s+/g, " ").trim(),
+        });
+      })()`,
+      10_000,
+      (value) => value !== "",
+    );
+    const row = JSON.parse(item) as { key: string; disabled: boolean; text: string };
+    if (row.disabled)
+      throw new Error(`New agent's row for the typed agent is disabled: ${row.text}`);
+    const startsIn = await evaluate(
+      `([...(${HISTORY_ROOM}?.querySelectorAll(".ah-menu [role=menu] .ah-menu__item") ?? [])].find((c) => c.getAttribute("data-key") === "where")?.textContent ?? "").replace(/s+/g, " ").trim()`,
+    );
+    await evaluate(
+      `([...(${HISTORY_ROOM}?.querySelectorAll(".ah-menu [role=menu] .ah-menu__item") ?? [])].find((c) => c.getAttribute("data-key") === ${JSON.stringify(row.key)})?.click(), "ok")`,
+    );
+    const note = await heardNote(win, "New agent", ["Started in ", "Could not start"], 60_000);
+    if (!note.startsWith("Started in ")) throw new Error(`New agent said: ${note}`);
+    // fieldd's own account: a new run of the typed agent, its workspace the folder
+    const want = resolved(folder);
+    const started = Date.now();
+    let run: { runtimeRunId: string; root?: string; source?: string } | undefined;
+    while (Date.now() - started < 30_000) {
+      const after = AgentListResult.parse(await opts.handle.client.request("agent.list", {}));
+      const fresh = after.sessions.find(
+        (candidate) => candidate.kind === staged.agentId && !runsBefore.has(candidate.runtimeRunId),
+      );
+      if (fresh !== undefined) {
+        run = {
+          runtimeRunId: fresh.runtimeRunId,
+          ...(fresh.workspace?.root !== undefined ? { root: fresh.workspace.root } : {}),
+          ...(fresh.workspace?.sourcePath !== undefined
+            ? { source: fresh.workspace.sourcePath }
+            : {}),
+        };
+        break;
+      }
+      await sleep(250);
+    }
+    if (run === undefined)
+      throw new Error("New agent said it started, but fieldd lists no new run");
+    const where = run.root ?? run.source;
+    if (where === undefined || resolved(where) !== want)
+      throw new Error(`the new run's workspace is ${String(where)}, not ③'s folder ${folder}`);
+    // and the stub's own record: a session of it ran in that folder
+    const call = await (async () => {
+      const deadline = Date.now() + 15_000;
+      while (Date.now() < deadline) {
+        const found = readTypedAgentCalls(staged.calls)
+          .slice(callsBefore)
+          .find((candidate) => candidate.argv.includes("--session-id"));
+        if (found !== undefined) return found;
+        await sleep(250);
+      }
+      return undefined;
+    })();
+    if (call === undefined) throw new Error("the stub recorded no session run after New agent");
+    if (call.cwd !== want)
+      throw new Error(`the stub ran in ${String(call.cwd)}, not ③'s folder ${want}`);
+    const view = await untilValue(
+      win,
+      "Godview showing the new pane",
+      VIEW_NOW,
+      10_000,
+      (value) => value === "godview",
+    );
+    return { project: name, folder, startsIn, item: row.text, note, run, stubCwd: call.cwd, view };
+  } finally {
+    await evaluate(NOTES_OFF).catch(() => undefined);
+  }
+}
+
+/**
+ * RESUME ON A GONE FOLDER SAYS WHY (PJ-4, R4; PJ-D9): the seeded session's
+ * folder taken away (renamed aside, and put back after), its row's Resume
+ * pressed: History reads the session again whole and says why on the line —
+ * "Could not resume — folder is gone" (the launcher's words), never a silent
+ * press and never an agent started in a folder that is not there.
+ */
+export async function historyGoneFolderRung(
+  win: BrowserWindow,
+  opts: HistoryActRungOptions,
+): Promise<Record<string, unknown>> {
+  const staged = opts.staged;
+  const name = opts.byProject?.name;
+  if (staged === undefined || opts.byProject?.checked !== true || name === undefined)
+    return { unavailable: "History by project was not witnessed in this run" };
+  const evaluate = async (expression: string): Promise<string> =>
+    String(await win.webContents.executeJavaScript(expression));
+  const listing = IndexSessionsResult.parse(
+    await opts.handle.client.request("index.sessions", { scope: "local", limit: 500 }),
+  );
+  const session = listing.rows.find(
+    (candidate) => candidate.nativeSessionId === staged.history.nativeSessionId,
+  );
+  if (session === undefined) throw new Error("the seeded session is not listed");
+  const rowAct = (act: string) =>
+    `${HISTORY_ROOM}?.querySelector('.ah-session-list-item[data-motion-key=${JSON.stringify(session.sessionId)}] .ah-hostact[data-place="row"][data-act="${act}"]')`;
+  const aside = `${staged.work}.gone-${process.pid}`;
+  let moved = false;
+  try {
+    opts.pressViewKey("history");
+    await untilValue(win, "History, the view", VIEW_NOW, 10_000, (value) => value === "history");
+    await untilValue(
+      win,
+      `${name} chosen`,
+      chooseProject(name, false),
+      20_000,
+      (v) => v === "chosen",
+    );
+    // the seeded session, ended (Jump to's rung ended its run): its row says Resume
+    await untilValue(
+      win,
+      "the seeded session's row offering Resume",
+      `(${rowAct("resume")} ? "resume" : "")`,
+      30_000,
+      (value) => value === "resume",
+    );
+    renameSync(staged.work, aside);
+    moved = true;
+    await evaluate(NOTES_ARM);
+    await evaluate(`(${rowAct("resume")}?.click(), "ok")`);
+    const note = await heardNote(
+      win,
+      "Resume on a gone folder",
+      ["Could not resume", "Resumed"],
+      30_000,
+    );
+    if (!/^Could not resume — (its )?folder is gone$/u.test(note))
+      throw new Error(`Resume on a gone folder said: ${note}`);
+    const view = await evaluate(VIEW_NOW);
+    if (view !== "history") throw new Error(`Resume on a gone folder moved the window to ${view}`);
+    return { project: name, sessionId: session.sessionId, folder: staged.work, note, view };
+  } finally {
+    await evaluate(NOTES_OFF).catch(() => undefined);
+    if (moved && existsSync(aside) && !existsSync(staged.work)) renameSync(aside, staged.work);
+  }
+}
+
 const THEME_NOW = `document.documentElement.classList.contains("dark") ? "dark" : "light"`;
 
 async function untilValue(
@@ -145,38 +415,75 @@ export async function historyByProjectPhotos(
   await untilValue(
     win,
     "the witnessed project and its session chosen for the photographs",
-    `(() => {
-      const room = ${HISTORY_ROOM};
-      if (!room) return "no room";
-      const rows = [...room.querySelectorAll(".ah-project-list-item")];
-      const row = rows.find((candidate) =>
-        (candidate.querySelector(".ah-project-list-item__header strong")?.textContent ?? "").trim() ===
-          ${JSON.stringify(opts.name ?? "")}) ?? rows[0];
-      if (!row) {
-        // PJ-4 (H5): Temporary folds at the list's foot — open it first
-        const fold = room.querySelector('.ah-fold[aria-expanded="false"]');
-        if (fold) { fold.click(); return "fold"; }
-        return "no project row";
-      }
-      if (!row.classList.contains("is-selected")) { row.click(); return "project"; }
-      const session = room.querySelector(".ah-session-list-item");
-      if (!session) return "no session row";
-      if (!session.classList.contains("is-selected")) { (session.querySelector(".ah-session-list-item__hit") ?? session).click(); return "session"; }
-      return "chosen";
-    })()`,
+    chooseProject(opts.name ?? "", true),
     20_000,
     (value) => value === "chosen",
   );
   mkdirSync(opts.shotDir, { recursive: true });
   const shots: string[] = [];
+  const seen: Record<string, unknown> = {};
+  // what each photograph holds open (lane room's finding 2: the host's menus,
+  // chips, sections and row acts, measured in happy-dom, seen in Electron):
+  // the room at rest, ②'s New agent menu, ①'s desktop chip, ②'s agent chip
+  const opens: ReadonlyArray<{ shot: string; trigger: string | null }> = [
+    { shot: "history-by-project", trigger: null },
+    {
+      shot: "history-new-agent",
+      trigger: '.ah-hostact[data-place="head"][data-act="new-agent"]',
+    },
+    { shot: "history-chip-desktop", trigger: 'button.ah-chipselect[data-filter="desktop"]' },
+    { shot: "history-chip-agent", trigger: 'button.ah-chipselect[data-filter="agent"]' },
+  ];
+  const press = (selector: string): Promise<unknown> =>
+    win.webContents.executeJavaScript(
+      `(${HISTORY_ROOM}?.querySelector(${JSON.stringify(selector)})?.click(), "ok")`,
+    );
+  const drawn = `(() => {
+    const room = ${HISTORY_ROOM};
+    if (!room) return "{}";
+    const words = (node) => (node?.textContent ?? "").replace(/s+/g, " ").trim();
+    return JSON.stringify({
+      sections: [...room.querySelectorAll(".ah-section[data-section], .ah-fold[data-section]")].map((node) => node.getAttribute("data-section") + ": " + words(node)),
+      rowActs: [...room.querySelectorAll('.ah-hostact[data-place="row"]')].map((node) => node.getAttribute("data-act")),
+      reasons: [...room.querySelectorAll(".ah-session-list-item__reason")].map(words),
+      chips: [...room.querySelectorAll("button.ah-chipselect")].map(words),
+      folder: room.querySelector("button.ah-folderpick")?.getAttribute("title") ?? null,
+      menu: [...room.querySelectorAll(".ah-menu [role=menu] .ah-menu__item")].map((node) => (node.disabled ? "(off) " : "") + words(node)),
+    });
+  })()`;
   for (const theme of ["light", "dark"] as const) {
     await win.webContents.executeJavaScript(`window.vibefield.theme.set(${JSON.stringify(theme)})`);
     await untilValue(win, `the ${theme} theme`, THEME_NOW, 5_000, (value) => value === theme);
-    await sleep(500);
-    const path = join(opts.shotDir, `history-by-project-${theme}.png`);
-    writeFileSync(path, (await win.webContents.capturePage()).toPNG());
-    shots.push(path);
+    for (const open of opens) {
+      if (open.trigger !== null) {
+        await press(open.trigger);
+        await untilValue(
+          win,
+          `${open.shot}'s menu open`,
+          `(${HISTORY_ROOM}?.querySelector(".ah-menu [role=menu]") ? "open" : "")`,
+          5_000,
+          (value) => value === "open",
+        );
+      }
+      await sleep(500);
+      const path = join(opts.shotDir, `${open.shot}-${theme}.png`);
+      writeFileSync(path, (await win.webContents.capturePage()).toPNG());
+      shots.push(path);
+      if (theme === "light")
+        seen[open.shot] = JSON.parse(String(await win.webContents.executeJavaScript(drawn)));
+      if (open.trigger !== null) {
+        // the trigger again folds it (the room's own toggle)
+        await press(open.trigger);
+        await untilValue(
+          win,
+          `${open.shot}'s menu folded`,
+          `(${HISTORY_ROOM}?.querySelector(".ah-menu") ? "open" : "folded")`,
+          5_000,
+          (value) => value === "folded",
+        );
+      }
+    }
   }
   await win.webContents.executeJavaScript(`window.vibefield.theme.set("auto")`);
-  return { shots };
+  return { shots, seen };
 }

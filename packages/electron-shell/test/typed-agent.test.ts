@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -155,7 +156,7 @@ describe("the stub — the smoke's own stand-in, run as the program it is", () =
     });
     // a version the launch's probe reads (`x.y.z`), and a banner that says what it is
     expect(version).toMatch(/^\d+\.\d+\.\d+\S* \(the godview smoke's typed-agent stub\)\n$/u);
-    const help = execFileSync(staged.stub, ["--help"], { encoding: "utf8" });
+    const help = execFileSync(staged.stub, ["--help"], { encoding: "utf8", cwd: staged.work });
     for (const flag of [
       "--session-id",
       "--settings",
@@ -172,6 +173,8 @@ describe("the stub — the smoke's own stand-in, run as the program it is", () =
     expect(calls.map((call) => call.argv)).toEqual([["--version"], ["--help"]]);
     expect(calls[0]?.envKeys).toContain("VF_TYPED_SECRET");
     expect(calls[0]?.tty).toBe(false);
+    // and the folder it ran in, resolved (PJ-4: New agent lands where History said)
+    expect(calls[1]?.cwd).toBe(realpathSync(staged.work));
     expect(readFileSync(staged.calls, "utf8")).not.toContain(secret);
   });
 

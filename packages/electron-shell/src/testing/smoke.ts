@@ -75,7 +75,12 @@ import { sharedProfilePath } from "../main/smoke-profile";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
 import { labProfileProof } from "./godview-lab-profile";
-import { historyByProjectPhotos, historyByProjectRung } from "./history-project-rungs";
+import {
+  historyByProjectPhotos,
+  historyByProjectRung,
+  historyGoneFolderRung,
+  historyNewAgentRung,
+} from "./history-project-rungs";
 import { jumpToRung } from "./jump-rungs";
 import { LiveSurfaceFixtureRuntime } from "./live-surface-fixture-runtime";
 import {
@@ -9029,6 +9034,21 @@ export async function runSmokeGodview(opts: {
         );
       },
     });
+
+    // HISTORY'S OWN ACTS (PJ-4, H6 and R4) — after Jump to, whose end leaves
+    //      the seeded session ended (its row says Resume): ②'s New agent starts
+    //      the typed stub in ③'s folder (the line, fieldd's run and the stub's
+    //      own record agree on it), then the seeded session's folder is taken
+    //      away and its row's Resume says why ("folder is gone"), the folder
+    //      put back after. Before the warm open, which reloads past both.
+    const historyActs = {
+      handle: opts.handle,
+      staged: opts.typedAgent,
+      byProject: verdict["historyByProject"] as { checked?: boolean; name?: string } | undefined,
+      pressViewKey: (view: "godview" | "history") => pressViewKey(win, view),
+    };
+    verdict["historyNewAgent"] = await historyNewAgentRung(win, historyActs);
+    verdict["historyGoneFolder"] = await historyGoneFolderRung(win, historyActs);
 
     // THE WARM OPEN — the AFTER number, and the row that actually tests GT-D14.
     //
