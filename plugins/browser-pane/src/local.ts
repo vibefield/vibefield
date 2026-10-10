@@ -37,6 +37,7 @@ import {
   type Sight,
 } from "@vibefield/plugin-sdk/desk";
 import { HEAD_RASTER, type HeadState, headKey } from "./head";
+import { SAMPLE_URL } from "./ids";
 import {
   HELD_CONTROLS,
   type HeldPart,
@@ -47,7 +48,7 @@ import {
   wheelToPage,
 } from "./law";
 import type { HeadBitmap } from "./layout";
-import { createPaneFaces, type PaneFaceStats } from "./live";
+import { createPaneFaces, isPageUrl, type PaneFaceStats } from "./live";
 import { PAGE_REMAKE_MS } from "./pass";
 
 /** The pass's doors the local reads (the root pass, once the ground has made it). */
@@ -109,7 +110,9 @@ export interface PaneLocal extends KindLocal {
   act(e: Entity, control: HeldPart): void;
   /** PT-3 — the url `e`'s record read: one that moved under its live page (a peer's, an undo) navigates the page there. */
   follow(e: Entity, url: string): void;
-  /** PT-3 — the panes whose page is at an address the record has not read: the hand writes it, not undoably (ruling 9). */
+  /** PT-3 — the panes whose page WENT, of its own, to a web address the record has not read (from where it stood when the record
+   * last read a new url): the hand writes it, not undoably (ruling 9). A page that has not yet followed the document is not one;
+   * nor is a page's plumbing (its bootstrap `about:blank`, an error page). */
   addressed(): ReadonlyMap<Entity, string>;
   /** PT-3 — the hand's doors (its DOM half binds them as it joins). */
   bind(hand: PaneHandDoors | undefined): void;
@@ -132,6 +135,8 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
   >();
   const pressing = new Map<Entity, HeldPart>();
   const urls = new Map<Entity, string>();
+  /** Where each page stood when its record read a NEW url — what the page does from there is its own navigation. */
+  const stoodAt = new Map<Entity, string | undefined>();
   let hand: PaneHandDoors | undefined;
   const navigate = (e: Entity, command: BrowserNavigationCommand): boolean => {
     const key = live.words(e)?.key;
@@ -258,16 +263,20 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
     // the document's word over the page's: an address that moved under a live page is followed, the page's own never echoed back
     follow(e, url) {
       const was = urls.get(e);
+      if (was === url) return;
       urls.set(e, url);
-      if (was === undefined || was === url) return;
-      if (live.words(e)?.info.address === url) return;
+      const at = live.words(e)?.info.address;
+      stoodAt.set(e, at);
+      if (was === undefined || at === url) return;
       navigate(e, { action: "go", url });
     },
     addressed() {
       const out = new Map<Entity, string>();
       for (const [e, url] of urls) {
         const at = live.words(e)?.info.address;
-        if (at !== undefined && at !== url) out.set(e, at);
+        if (at === undefined || at === url || at === stoodAt.get(e) || !isPageUrl(at, SAMPLE_URL))
+          continue;
+        out.set(e, at);
       }
       return out;
     },
@@ -282,6 +291,7 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
       laidOut.delete(e);
       pressing.delete(e);
       urls.delete(e);
+      stoodAt.delete(e);
     },
     dispose() {
       live.dispose();

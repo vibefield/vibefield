@@ -635,6 +635,46 @@ describe("PT-3 — the pane in use: its hand's input, its controls, the url it f
     expect(t.navigations).toHaveLength(1);
   });
 
+  it("`addressed` is the page's OWN navigation only: never its plumbing (the bootstrap about:blank, an error page), never a url the document moved that the page has not yet followed", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    const NEXT = "http://127.0.0.1:4321/next";
+    const PEER = "http://127.0.0.1:4321/peer";
+    const recordAt = (url: string) => {
+      const ctx = ctxOf({ url }, local);
+      k.record(k.resolve(ctx), ctx);
+    };
+    recordAt(PAGE);
+    const face = t.faces.get(KEY);
+    if (face === undefined) throw new Error("no face");
+    // the page opening: its bootstrap document, then an error page — plumbing, never where the pane is
+    for (const plumbing of ["about:blank", "chrome-error://chromewebdata/"]) {
+      face.say({ state: { is: "live" }, info: { address: plumbing, loading: 0.1 } });
+      local.tick?.(0);
+      expect([...local.addressed()]).toEqual([]);
+    }
+    face.say({ state: { is: "live" }, info: { address: PAGE } });
+    local.tick?.(0);
+    expect([...local.addressed()]).toEqual([]);
+    // a peer's url arrives: the page is told to go — and until it has gone, where it stands is not written back over the peer's
+    recordAt(PEER);
+    expect(t.navigations).toEqual([{ key: KEY, command: { action: "go", url: PEER } }]);
+    expect([...local.addressed()]).toEqual([]);
+    face.say({ state: { is: "live" }, info: { address: PEER } });
+    local.tick?.(0);
+    expect([...local.addressed()]).toEqual([]);
+    // from there, a link: the page's own — addressed (a redraw's record, reading the same url, moves nothing); and back to where
+    // it stood when the peer's url came: its own too
+    face.say({ state: { is: "live" }, info: { address: NEXT } });
+    local.tick?.(0);
+    recordAt(PEER);
+    expect([...local.addressed()]).toEqual([[1, NEXT]]);
+    recordAt(NEXT);
+    face.say({ state: { is: "live" }, info: { address: PEER } });
+    local.tick?.(0);
+    expect([...local.addressed()]).toEqual([[1, PEER]]);
+  });
+
   it("a page's CURSOR that moves asks a frame — never a remake: the record does not read it", () => {
     const t = fakeHost();
     const local = createPaneLocal(t.host);
