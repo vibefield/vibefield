@@ -587,7 +587,10 @@ const RETIRED_MODULE_NAMES = new Set([
   // the browser's page widget (row 9)
   "BrowserPageView",
   "BrowserPageWidget",
-  // the terminal widget and its mirror (row 11)
+  // the terminal widget and its mirror (row 11). *P2 (2026-10-09):* the watch-only
+  // pane returned OFF the canvas, as search's live peek (GV-D8), under the Peek's
+  // own names (`frame/peek-pane/LivePeekPane`, `watch-only`); the canvas's names
+  // below stay retired, and nothing on the canvas mounts a terminal (DK-D19).
   "TerminalMirrorSurface",
   "TerminalMirrorPreview",
   "TerminalMirrorWidget",
