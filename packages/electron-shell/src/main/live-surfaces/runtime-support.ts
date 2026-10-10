@@ -26,6 +26,9 @@ export interface LiveSurfaceRuntimeSupportSnapshot {
   readonly summary: LiveSurfaceRuntimeSummaryV1;
   readonly effectiveDemand: LiveSurfaceDemandV1 | null;
   readonly metrics: LiveSurfaceRuntimeSupportMetrics;
+  /** PT-5a: what a browser page asked for and MAY NOT have, counted by kind (a dialog dismissed, a pop-up sent to its own
+   * pane, a download cancelled…) — a page must never block behind what nobody sees, and the count says it tried. */
+  readonly refused?: Readonly<Record<string, number>>;
 }
 
 export interface LiveSurfaceRuntimeSupportSource {
@@ -74,6 +77,7 @@ export function createLiveSurfaceRuntimeSupportSnapshot(options: {
   readonly summary: LiveSurfaceRuntimeSummaryV1;
   readonly effectiveDemand: LiveSurfaceDemandV1 | null;
   readonly metrics: LiveSurfaceRuntimeSupportMetrics;
+  readonly refused?: Readonly<Record<string, number>>;
 }): LiveSurfaceRuntimeSupportSnapshot {
   return {
     v: 1,
@@ -89,6 +93,16 @@ export function createLiveSurfaceRuntimeSupportSnapshot(options: {
               : { targetRasterSize: { ...options.effectiveDemand.targetRasterSize } }),
           },
     metrics: copyMetrics(options.metrics),
+    ...(options.refused === undefined
+      ? {}
+      : {
+          refused: Object.fromEntries(
+            Object.entries(options.refused).map(([what, n]) => [
+              what,
+              safeCount(n, `refused ${what}`),
+            ]),
+          ),
+        }),
   };
 }
 

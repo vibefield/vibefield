@@ -216,6 +216,13 @@ export const LiveSurfaceBrowserSourceV1 = z
     deviceScaleFactor: z.number().finite().positive().max(8).optional(),
     /** PT-4: the device the page is born on (an `emulate` command moves it under a running page). */
     emulation: LiveSurfaceBrowserEmulationV1.optional(),
+    /**
+     * PT-5a: what the producer does when the page STOPS — its process gone, or unresponsive past the producer's bound.
+     * `restart` (absent: this) — start it again by itself, within its restart budget, as before. `say` — the page is said
+     * to have stopped (`failed`, `producer-crashed` / `frame-stalled`, its address kept) and waits for a `reload`: a page a
+     * person was using has lost what they had in it, and they are told.
+     */
+    whenStopped: z.enum(["restart", "say"]).optional(),
   })
   .passthrough();
 export type LiveSurfaceBrowserSourceV1 = z.infer<typeof LiveSurfaceBrowserSourceV1>;
@@ -423,6 +430,20 @@ export const LiveSurfaceAttachTicketV1 = z
   .passthrough();
 export type LiveSurfaceAttachTicketV1 = z.infer<typeof LiveSurfaceAttachTicketV1>;
 
+/** PT-5a: why a browser page's LOAD failed, in the producer's words (a holder says each in a person's). A certificate is
+ * refused, never bypassed; `blocked` is the surface's own policy (a scheme it does not open). */
+export const LiveSurfaceLoadFailureV1 = z.enum([
+  "name-not-resolved",
+  "offline",
+  "connection-refused",
+  "connection-failed",
+  "timed-out",
+  "certificate",
+  "blocked",
+  "failed",
+]);
+export type LiveSurfaceLoadFailureV1 = z.infer<typeof LiveSurfaceLoadFailureV1>;
+
 /** PT-4: the most a favicon may weigh — a page's icon rides every summary of its state, so it is kept small; one past it
  * is none. Its base64 is four characters for three bytes. */
 export const LIVE_SURFACE_FAVICON_MAX_BYTES = 32 * 1024;
@@ -461,6 +482,9 @@ export const LiveSurfaceBrowserStateV1 = z
       })
       .passthrough()
       .optional(),
+    /** PT-5a: the page's last LOAD FAILED. `url` is still the address that was ASKED for — never the engine's error page —
+     * and there is no `title`; a `reload` asks for it again. Absent once a page commits. */
+    failure: z.object({ reason: LiveSurfaceLoadFailureV1 }).passthrough().optional(),
     /** PT-5a: the last thing the page asked for that it MAY NOT have and a person should be told of — today a download,
      * cancelled. `serial` counts the page's refusals: a holder says it (for a moment) when the serial moves, never twice. */
     refused: z

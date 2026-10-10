@@ -12,6 +12,7 @@ import {
   type LiveSurfaceGeometryV1,
   LiveSurfaceIdV1,
   type LiveSurfaceInputEventV1,
+  type LiveSurfaceLoadFailureV1,
   type LiveSurfaceNavigationCommandV1,
   type LiveSurfacePixelSizeV1,
   type LiveSurfaceRuntimeSummaryV1,
@@ -42,6 +43,8 @@ const DEFAULT_STARTUP_TIMEOUT_MS = 5_000;
 const DEFAULT_RASTER_STABILIZATION_MS = 300;
 const DEFAULT_CPU_FALLBACK_PAINTS = 3;
 const DEFAULT_RESTART_LIMIT = 1;
+/** PT-5a: how long past Electron's own `unresponsive` a page may hang before it is said to have stopped. */
+const DEFAULT_UNRESPONSIVE_MS = 5_000;
 /** How long a page with no renderer attached is kept paused before it hibernates (PT-2: a window reload's gap — the window
  * pool's own grace). */
 const DEFAULT_DETACHED_HIBERNATE_MS = 60_000;
@@ -120,6 +123,8 @@ export interface BrowserSurfaceNativeWindow {
   /** PT-4: an icon fetched THROUGH THE PAGE'S OWN SESSION (its cookies, its guard), held to `maxBytes`; null — not
    * answered, not an image, or past the cap. */
   fetchIcon(url: string, maxBytes: number): Promise<BrowserSurfaceIcon | null>;
+  /** PT-5a: the page stopped answering its input (`true` — Electron's `unresponsive`) or answers again (`false`). */
+  onUnresponsive(listener: (unresponsive: boolean) => void): () => void;
   /** PT-5a: the page asked for something it MAY NOT have, and was answered at once (`BrowserSurfaceRefusal`); a pop-up
    * comes with the address it asked for. */
   onRefused(listener: (what: BrowserSurfaceRefusal, url?: string) => void): () => void;
@@ -154,6 +159,39 @@ export interface BrowserSurfaceNavigationState {
   readonly loading: boolean;
   readonly canGoBack: boolean;
   readonly canGoForward: boolean;
+  /** PT-5a: the main frame's last load FAILED — the engine's net error code (`-102` a refused connection); absent once a
+   * page commits. `url` is then the address that was asked for (Electron's own word: the probe). */
+  readonly failure?: number;
+}
+
+/** PT-5a: a page's state as a producer started again finds it — its address kept, its last load's failure forgotten. */
+function loadingAgain(state: LiveSurfaceBrowserStateV1): LiveSurfaceBrowserStateV1 {
+  const { failure: _failure, ...rest } = state;
+  return { ...rest, loading: true, canGoBack: false, canGoForward: false };
+}
+
+/**
+ * PT-5a — a failed load's reason, from the engine's net error code. Named ones first; a certificate's whole range
+ * (`ERR_CERT_*`, −200 … −219) is one reason — refused, never bypassed; the rest is `failed`.
+ */
+export function loadFailureOf(code: number): LiveSurfaceLoadFailureV1 {
+  if (code === -105 || code === -137) return "name-not-resolved";
+  if (code === -106) return "offline";
+  if (code === -102) return "connection-refused";
+  if (code === -7 || code === -118) return "timed-out";
+  if (code === -100 || code === -101 || code === -104 || code === -109 || code === -15)
+    return "connection-failed";
+  if (code <= -200 && code >= -219) return "certificate";
+  if (
+    code === -10 ||
+    code === -20 ||
+    code === -21 ||
+    code === -27 ||
+    code === -301 ||
+    code === -302
+  )
+    return "blocked";
+  return "failed";
 }
 
 /** CDP's `userAgentMetadata` — the client hints an agent ships with. */
@@ -363,6 +401,9 @@ export interface BrowserLiveSurfaceRuntimeOptions {
   readonly rasterStabilizationMs?: number;
   readonly cpuFallbackPaints?: number;
   readonly restartLimit?: number;
+  /** PT-5a: how long a page may stay unresponsive before a `whenStopped: "say"` source is said to have stopped (5 s past
+   * the engine's own word — Chromium says `unresponsive` only after an input went unanswered for its own delay). */
+  readonly unresponsiveMs?: number;
   /** How long the page is kept PAUSED once no renderer is attached before it hibernates (default 60 s): a renderer that
    * re-attaches within it — a window reload's next document, re-bound by main's custody — finds the SAME page. 0: at once. */
   readonly detachedHibernateMs?: number;
@@ -414,6 +455,7 @@ interface SourceCallbacks {
   readonly removeCursor: () => void;
   readonly removeFavicon: () => void;
   readonly removeRefused: () => void;
+  readonly removeUnresponsive: () => void;
 }
 
 function increment(value: number, name: string): number {
@@ -615,12 +657,15 @@ function clampBrowserState(
   const url = stripControlCharacters(state.url).slice(0, MAX_BROWSER_STATE_URL);
   if (url.length === 0) return undefined;
   const title = stripControlCharacters(state.title).slice(0, MAX_BROWSER_STATE_TITLE);
+  // a failed load: the engine's error page stands in the asked address's entry, and its "title" is that address — none
+  const failed = state.failure !== undefined;
   return {
     url,
-    ...(title.length === 0 ? {} : { title }),
+    ...(title.length === 0 || failed ? {} : { title }),
     loading: state.loading,
     canGoBack: state.canGoBack,
     canGoForward: state.canGoForward,
+    ...(state.failure === undefined ? {} : { failure: { reason: loadFailureOf(state.failure) } }),
   };
 }
 
@@ -901,6 +946,12 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     auth: 0,
   };
   #refused: LiveSurfaceBrowserStateV1["refused"];
+  /** PT-5a: the page's last WEB address — where a producer started again loads it (never back at its first address). */
+  #resumeUrl: string | undefined;
+  /** PT-5a: the page was SAID to have stopped (`whenStopped: "say"`): no demand starts it again — its reload does. */
+  #waitsForReload = false;
+  #unresponsiveTimer: ReturnType<typeof setTimeout> | null = null;
+  readonly #unresponsiveMs: number;
 
   constructor(options: BrowserLiveSurfaceRuntimeOptions) {
     this.surfaceId = LiveSurfaceIdV1.parse(options.surfaceId);
@@ -918,6 +969,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#rasterStabilizationMs = options.rasterStabilizationMs ?? DEFAULT_RASTER_STABILIZATION_MS;
     this.#cpuFallbackPaints = options.cpuFallbackPaints ?? DEFAULT_CPU_FALLBACK_PAINTS;
     this.#restartLimit = options.restartLimit ?? DEFAULT_RESTART_LIMIT;
+    this.#unresponsiveMs = options.unresponsiveMs ?? DEFAULT_UNRESPONSIVE_MS;
     this.#detachedHibernateMs = options.detachedHibernateMs ?? DEFAULT_DETACHED_HIBERNATE_MS;
     this.#onPaintCallbackDurationUs = options.onPaintCallbackDurationUs;
     if (
@@ -1013,6 +1065,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         downstreamReferencesReleased: stats.importedReferencesReleased,
         referencesQuarantined: 0,
       },
+      refused: stats.refused,
     });
   }
 
@@ -1246,6 +1299,25 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       this.emulate(command.emulation);
       return;
     }
+    // PT-5a — ↻ ON A PAGE THAT STOPPED (its process gone, unresponsive past the bound, its first load unanswered): the
+    // producer starts again, where the page last was — or at the address just typed. Its restart budget is the person's
+    // to spend: asked, it tries. Nobody looking (no live demand), it starts when somebody is.
+    if (
+      (command.action === "reload" || command.action === "go") &&
+      !this.#closed &&
+      this.#lifecycle.snapshot.state === "failed"
+    ) {
+      if (command.action === "go") {
+        if (!isAllowedBrowserTopLevelUrl(command.url)) {
+          throw new Error("Browser navigation URL must use HTTP or HTTPS");
+        }
+        this.#resumeUrl = command.url;
+      }
+      this.#waitsForReload = false;
+      this.#restartAttempts = 0;
+      if (this.#effectiveDemand?.mode === "live") this.startProducer();
+      return;
+    }
     const window = this.#window;
     if (
       this.#closed ||
@@ -1399,6 +1471,31 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   }
 
   /**
+   * PT-5a — the page stopped answering (Electron's `unresponsive`) or answers again. A source that says when its page
+   * stops gives it the bound (`unresponsiveMs`) to answer; past it the page is said to have stopped and waits for a reload.
+   */
+  private acceptUnresponsive(
+    window: BrowserSurfaceNativeWindow,
+    epoch: number,
+    unresponsive: boolean,
+  ): void {
+    if (!this.ownsProducer(window, epoch)) return;
+    if (this.#unresponsiveTimer !== null) {
+      clearTimeout(this.#unresponsiveTimer);
+      this.#unresponsiveTimer = null;
+    }
+    if (!unresponsive || this.source.whenStopped !== "say") return;
+    this.#unresponsiveTimer = setTimeout(() => {
+      this.#unresponsiveTimer = null;
+      if (!this.isCurrent(window, epoch)) return;
+      this.#waitsForReload = true;
+      this.failSource(
+        sourceError("frame-stalled", "Browser page stopped responding", "user-action"),
+      );
+    }, this.#unresponsiveMs);
+  }
+
+  /**
    * PT-5a — the page asked for what it may not have (the native window answered it at once): counted; a POP-UP's address
    * is where the SAME pane goes (a desk has no tabs) — through the same top-level policy as any navigation, and only while
    * the page is live; a cancelled DOWNLOAD is said in the page's state, its serial moved, for the head to say for a moment.
@@ -1444,6 +1541,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     const clamped = clampBrowserState(state);
     if (clamped === undefined) return;
     this.#browserState = clamped;
+    if (webOriginOf(clamped.url) !== undefined) this.#resumeUrl = clamped.url;
     this.publishSummary();
   }
 
@@ -1467,10 +1565,16 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // is a paused one, written the moment its last face lets go: silent AT ONCE). Seen live again, it is heard again.
     this.mute(demand.mode !== "live");
     if (demand.mode === "live") {
-      if (state === "created" || state === "hibernated" || state === "failed") {
+      if (
+        state === "created" ||
+        state === "hibernated" ||
+        (state === "failed" && !this.#waitsForReload)
+      ) {
         this.startProducer();
         return;
       }
+      // a page said to have stopped waits for its reload, whoever looks at it
+      if (state === "failed") return;
       if (state === "reconnecting" && this.#window === null) {
         this.scheduleReconnect();
         return;
@@ -1502,6 +1606,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#lifecycle.transition("starting");
     this.resetProducerObservations();
     this.#error = undefined;
+    this.#waitsForReload = false;
     const epoch = this.#lifecycle.snapshot.producerEpoch;
     // A producer started under live demand is born at the demanded layout —
     // the source's own viewport is only the no-opinion fallback (DT-3f).
@@ -1528,6 +1633,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       const removeRefused = window.onRefused((what, url) =>
         this.acceptRefusal(window, epoch, what, url),
       );
+      const removeUnresponsive = window.onUnresponsive((unresponsive) =>
+        this.acceptUnresponsive(window, epoch, unresponsive),
+      );
       this.#callbacks = {
         removePaint,
         removeGone,
@@ -1536,6 +1644,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         removeCursor,
         removeFavicon,
         removeRefused,
+        removeUnresponsive,
       };
       this.#producersStarted += 1;
       this.applyFrameRate();
@@ -1547,10 +1656,12 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         .then(() => {
           if (!this.isCurrent(window, epoch)) return;
           this.#controlTargets?.associate(this.surfaceId, epoch, window.controlContents);
-          return window.loadURL(this.source.initialUrl);
+          return window.loadURL(this.#resumeUrl ?? this.source.initialUrl);
         })
         .catch(() => {
-          if (this.isCurrent(window, epoch)) {
+          // PT-5a: a load the page itself said FAILED (a refused connection, a name with no address…) is not a failed
+          // SOURCE — its window lives, its state says why, and a reload asks again
+          if (this.isCurrent(window, epoch) && this.#browserState?.failure === undefined) {
             this.failSource(
               sourceError("source-not-found", "Browser source could not load", "user-action"),
             );
@@ -1925,6 +2036,12 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   ): void {
     if (!this.ownsProducer(window, epoch) || this.#closed) return;
     const state = this.#lifecycle.snapshot.state;
+    // PT-5a — a source that SAYS when its page stops: no restart behind the person's back; the page waits for a reload
+    if (this.source.whenStopped === "say") {
+      this.#waitsForReload = true;
+      this.failSource(sourceError("producer-crashed", "Browser page stopped", "user-action"));
+      return;
+    }
     if (
       state === "live" &&
       this.#effectiveDemand?.mode === "live" &&
@@ -1979,6 +2096,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         removeRefused: window.onRefused((what, url) =>
           this.acceptRefusal(window, epoch, what, url),
         ),
+        removeUnresponsive: window.onUnresponsive((unresponsive) =>
+          this.acceptUnresponsive(window, epoch, unresponsive),
+        ),
       };
       this.#producersStarted += 1;
       this.applyFrameRate();
@@ -1990,11 +2110,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         .then(() => {
           if (this.isCurrent(window, epoch)) {
             this.#controlTargets?.associate(this.surfaceId, epoch, window.controlContents);
-            return window.loadURL(this.source.initialUrl);
+            return window.loadURL(this.#resumeUrl ?? this.source.initialUrl);
           }
         })
         .catch(() => {
-          if (this.isCurrent(window, epoch)) {
+          if (this.isCurrent(window, epoch) && this.#browserState?.failure === undefined) {
             this.failSource(
               sourceError("source-not-found", "Browser source could not reconnect", "user-action"),
             );
@@ -2014,6 +2134,15 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.destroyWindow();
     if (state !== "failed" && this.#lifecycle.canTransition("failed")) {
       this.#lifecycle.transition("failed");
+    }
+    // PT-5a: a page with no window keeps its address — and has nowhere to go, and loads nothing
+    if (this.#browserState !== undefined) {
+      this.#browserState = {
+        ...this.#browserState,
+        loading: false,
+        canGoBack: false,
+        canGoForward: false,
+      };
     }
     this.#error = error;
     this.publishSummary();
@@ -2037,6 +2166,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     callbacks?.removeCursor();
     callbacks?.removeFavicon();
     callbacks?.removeRefused();
+    callbacks?.removeUnresponsive();
+    if (this.#unresponsiveTimer !== null) {
+      clearTimeout(this.#unresponsiveTimer);
+      this.#unresponsiveTimer = null;
+    }
     this.#cursor = undefined;
     this.#touching = false;
     if (window === null) return;
@@ -2071,6 +2205,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   }
 
   private resetProducerObservations(): void {
+    // PT-5a: a new window's page keeps the last one's address and says it is LOADING, with nowhere to go yet — the last
+    // window's history and its failed load are not this one's
+    if (this.#browserState !== undefined) this.#browserState = loadingAgain(this.#browserState);
     this.#transport = undefined;
     this.#geometry = undefined;
     this.#geometryKey = "";

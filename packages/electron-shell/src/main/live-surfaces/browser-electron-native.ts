@@ -74,6 +74,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   #commandTail: Promise<void> = Promise.resolve();
   /** PT-5a: the bootstrap document has been taken out of the page's history (below) — once a window's life. */
   #bootstrapPruned = false;
+  /** PT-5a: the main frame's last load failed with this net error (cleared when a page commits). */
+  #loadFailure: number | undefined;
   /** PT-5a: who hears what the page asked for and may not have. */
   readonly #refusedListeners = new Set<(what: BrowserSurfaceRefusal, url?: string) => void>();
 
@@ -313,7 +315,27 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         loading: contents.isLoading(),
         canGoBack: contents.navigationHistory.canGoBack(),
         canGoForward: contents.navigationHistory.canGoForward(),
+        ...(this.#loadFailure === undefined ? {} : { failure: this.#loadFailure }),
       });
+    };
+    // PT-5a — A LOAD THAT FAILED (probed): Electron says `did-fail-load` with the net error and the address ASKED for, then
+    // commits its own error page under that address with NO `did-navigate`; `getURL()` stays the asked address. So a failure
+    // stands from `did-fail-load` until the next `did-navigate` (a page that committed). −3 is an aborted load (a stop, a
+    // download, a navigation that replaced it): not a failure.
+    const failed = (
+      _event: Electron.Event,
+      code: number,
+      _description: string,
+      _url: string,
+      isMainFrame: boolean,
+    ): void => {
+      if (!isMainFrame || code === -3) return;
+      this.#loadFailure = code;
+      emit();
+    };
+    const committed = (): void => {
+      this.#loadFailure = undefined;
+      emit();
     };
     // PT-5a — A FRESH PAGE HAS NOWHERE TO GO BACK TO: the bootstrap `about:blank` is an entry of the window's history, so a
     // page's first load said `canGoBack: true` and ‹ went to a blank film (probed; the BAR row's first read). It is pruned
@@ -329,13 +351,15 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       }
       emit();
     };
-    contents.on("did-navigate", emit);
+    contents.on("did-navigate", committed);
+    contents.on("did-fail-load", failed);
     contents.on("did-navigate-in-page", emit);
     contents.on("page-title-updated", emit);
     contents.on("did-start-loading", emit);
     contents.on("did-stop-loading", stopped);
     return () => {
-      contents.off("did-navigate", emit);
+      contents.off("did-navigate", committed);
+      contents.off("did-fail-load", failed);
       contents.off("did-navigate-in-page", emit);
       contents.off("page-title-updated", emit);
       contents.off("did-start-loading", emit);
@@ -431,6 +455,17 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     };
     this.window.webContents.on("paint", handler);
     return () => this.window.webContents.off("paint", handler);
+  }
+
+  onUnresponsive(listener: (unresponsive: boolean) => void): () => void {
+    const hung = (): void => listener(true);
+    const answering = (): void => listener(false);
+    this.window.webContents.on("unresponsive", hung);
+    this.window.webContents.on("responsive", answering);
+    return () => {
+      this.window.webContents.off("unresponsive", hung);
+      this.window.webContents.off("responsive", answering);
+    };
   }
 
   onRenderProcessGone(listener: (reason: string) => void): () => void {

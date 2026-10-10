@@ -4,6 +4,7 @@ import {
   LIVE_SURFACE_FAVICON_MAX_BYTES,
   LIVE_SURFACE_MAX_PIXELS,
   LiveSurfaceBrowserEmulationV1,
+  LiveSurfaceBrowserSourceV1,
   LiveSurfaceBrowserStateV1,
   LiveSurfaceDemandV1,
   LiveSurfaceFrameEnvelopeV1,
@@ -11,6 +12,7 @@ import {
   LiveSurfaceGeometryV1,
   LiveSurfaceHostControlMessageV1,
   LiveSurfaceInputEventV1,
+  LiveSurfaceLoadFailureV1,
   LiveSurfaceNavigationCommandV1,
   LiveSurfacePresentationCapabilitiesV1,
   LiveSurfaceRendererControlMessageV1,
@@ -285,6 +287,49 @@ describe("LSF-1 Live Surfaces contracts", () => {
         LiveSurfaceBrowserStateV1.safeParse({ ...state, refused }).success,
         JSON.stringify(refused),
       ).toBe(false);
+  });
+
+  it("PT-5a: the browser state says a load FAILED and why, in a closed set of reasons; a browser source says whether its page, stopped, is restarted or SAID", () => {
+    const state = {
+      url: "https://example.test/",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+    };
+    for (const reason of LiveSurfaceLoadFailureV1.options)
+      expect(LiveSurfaceBrowserStateV1.parse({ ...state, failure: { reason } })).toMatchObject({
+        failure: { reason },
+      });
+    expect(LiveSurfaceLoadFailureV1.options).toEqual([
+      "name-not-resolved",
+      "offline",
+      "connection-refused",
+      "connection-failed",
+      "timed-out",
+      "certificate",
+      "blocked",
+      "failed",
+    ]);
+    expect(LiveSurfaceBrowserStateV1.parse(state)).not.toHaveProperty("failure");
+    for (const failure of [{}, { reason: "ERR_CONNECTION_REFUSED" }, { reason: -102 }, "failed"])
+      expect(
+        LiveSurfaceBrowserStateV1.safeParse({ ...state, failure }).success,
+        JSON.stringify(failure),
+      ).toBe(false);
+    const source = {
+      kind: "browser",
+      initialUrl: "https://example.test/",
+      profile: { mode: "memory", ref: "t" },
+      logicalViewport: { width: 320, height: 180 },
+    };
+    expect(LiveSurfaceBrowserSourceV1.parse(source)).not.toHaveProperty("whenStopped");
+    for (const whenStopped of ["restart", "say"])
+      expect(LiveSurfaceBrowserSourceV1.parse({ ...source, whenStopped })).toMatchObject({
+        whenStopped,
+      });
+    expect(LiveSurfaceBrowserSourceV1.safeParse({ ...source, whenStopped: "ask" }).success).toBe(
+      false,
+    );
   });
 
   it("PT-4: a browser source says the device its page is seen as — its density, mobile, touch, its agent with its hints, its scheme — at its creation and as an `emulate` command; the state carries the page's favicon, held small", () => {

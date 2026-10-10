@@ -28,6 +28,7 @@ import {
   editingCommandsOf,
   engineAgentOf,
   faviconOf,
+  loadFailureOf,
   virtualKeyCodeOf,
 } from "../src/main/live-surfaces/browser-producer";
 import { browserSurfaceProfileName } from "../src/main/live-surfaces/browser-security";
@@ -91,9 +92,23 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
     readonly controlContents: FakeContents,
   ) {}
 
+  /** PT-5a: the engine's net error the next loads fail with (unset: they load). */
+  failLoad: number | undefined;
+
+  // a failing load as Electron says it (probed): the failure told with the ASKED address, then the promise rejects
   async loadURL(url: string): Promise<void> {
     this.loadedUrls.push(url);
     this.order.push("load");
+    if (this.failLoad === undefined) return;
+    this.emitNavigationState({
+      url,
+      title: url.replace(/^https?:\/\//, ""),
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      failure: this.failLoad,
+    });
+    throw new Error(`ERR (${this.failLoad}) loading '${url}'`);
   }
 
   isDestroyed(): boolean {
@@ -226,6 +241,16 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
 
   crash(): void {
     this.#events.emit("gone", "crashed");
+  }
+
+  onUnresponsive(listener: (unresponsive: boolean) => void): () => void {
+    this.#events.on("unresponsive", listener);
+    return () => this.#events.off("unresponsive", listener);
+  }
+
+  /** PT-5a: the page stopped answering (`true`), or answers again. */
+  hang(unresponsive: boolean): void {
+    this.#events.emit("unresponsive", unresponsive);
   }
 }
 
@@ -1734,7 +1759,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
     expect(renderer.summaries.at(-1)?.browser?.refused).toEqual({ what: "download", serial: 1 });
     window.refuse("download");
     expect(result.runtime.summary.browser?.refused).toEqual({ what: "download", serial: 2 });
-    expect(result.runtime.stats.refused).toEqual({
+    const counted = {
       alert: 2,
       confirm: 1,
       beforeunload: 1,
@@ -1742,11 +1767,226 @@ describe("BrowserLiveSurfaceRuntime", () => {
       download: 2,
       "file-picker": 1,
       auth: 1,
-    });
+    };
+    expect(result.runtime.stats.refused).toEqual(counted);
+    // …and the diagnostics carry the same count (the support snapshot)
+    expect(result.runtime.supportSnapshot().refused).toEqual(counted);
     result.runtime.dispose();
     // a window that is no longer the runtime's says nothing
     window.refuse("download");
     expect(result.runtime.stats.refused.download).toBe(2);
+  });
+
+  it("PT-5a: a LOAD THAT FAILED is said in the page's state — its reason from the engine's code, the ASKED address kept, no title — and is not a failed SOURCE: the window lives, ↻ asks again, and the failure is gone when a page commits", async () => {
+    const result = setup();
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    const window = result.native.windows[0];
+    if (window === undefined) throw new Error("no window");
+    window.failLoad = -102;
+    await flush();
+    await flush();
+    // the first load was refused: the source has NOT failed — its window stands, and the page's state says why
+    expect(window.loadedUrls).toEqual(["https://example.test/app"]);
+    expect(window.destroyed).toBe(false);
+    expect(result.runtime.summary.error).toBeUndefined();
+    expect(result.runtime.summary.state).toBe("starting");
+    expect(result.runtime.summary.browser).toEqual({
+      url: "https://example.test/app",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      failure: { reason: "connection-refused" },
+    });
+    // the engine paints its own error page: the surface is live, and still says the load failed (a holder draws its face)
+    window.paint(sharedPaint(640, 360).paint);
+    expect(result.runtime.summary).toMatchObject({
+      state: "live",
+      browser: { url: "https://example.test/app", failure: { reason: "connection-refused" } },
+    });
+    expect(renderer.summaries.at(-1)?.browser?.failure).toEqual({ reason: "connection-refused" });
+    // ↻ asks for the address again (Electron's reload of its error page asks the failed address — probed)
+    renderer.attachment.navigate?.({ action: "reload" });
+    expect(window.navigations).toEqual(["reload"]);
+    expect(result.native.windows).toHaveLength(1);
+    // the page commits: the failure is gone, its title back
+    window.emitNavigationState(NAV);
+    expect(result.runtime.summary.browser).toEqual({
+      url: "https://example.test/app",
+      title: "App",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+    });
+    // an address typed that fails: a load failure too, never a dropped source
+    window.failLoad = -105;
+    renderer.attachment.navigate?.({ action: "go", url: "https://no-such-host.test/" });
+    await flush();
+    expect(result.runtime.summary).toMatchObject({
+      state: "live",
+      browser: { url: "https://no-such-host.test/", failure: { reason: "name-not-resolved" } },
+    });
+    expect(result.runtime.summary.browser).not.toHaveProperty("title");
+    result.runtime.dispose();
+  });
+
+  it("PT-5a: a failed load's reason, from the engine's net error — the named ones, a certificate's whole range one reason (refused, never bypassed), the rest `failed`", () => {
+    expect(
+      [-105, -137, -106, -102, -7, -118, -100, -101, -104, -109, -15].map((code) =>
+        loadFailureOf(code),
+      ),
+    ).toEqual([
+      "name-not-resolved",
+      "name-not-resolved",
+      "offline",
+      "connection-refused",
+      "timed-out",
+      "timed-out",
+      "connection-failed",
+      "connection-failed",
+      "connection-failed",
+      "connection-failed",
+      "connection-failed",
+    ]);
+    for (const code of [-200, -201, -202, -207, -219])
+      expect(loadFailureOf(code)).toBe("certificate");
+    for (const code of [-10, -20, -21, -27, -301, -302])
+      expect(loadFailureOf(code)).toBe("blocked");
+    for (const code of [-2, -199, -220, -324, -379, -9999])
+      expect(loadFailureOf(code)).toBe("failed");
+  });
+
+  it("PT-5a: a source that SAYS when its page stops — its process gone, no restart behind the person's back: `failed`, `producer-crashed`, the person's to recover, its ADDRESS kept; no demand starts it again; ↻ starts it WHERE THE PAGE WAS; an address typed starts it there", async () => {
+    vi.useFakeTimers();
+    const result = setup({ source: { ...source(), whenStopped: "say" }, restartLimit: 1 });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await vi.advanceTimersByTimeAsync(0);
+    const first = result.native.windows[0];
+    if (first === undefined) throw new Error("no window");
+    first.paint(sharedPaint().paint);
+    first.emitNavigationState({ ...NAV, url: "https://example.test/deeper", canGoBack: true });
+    first.crash();
+    expect(result.runtime.summary).toMatchObject({
+      state: "failed",
+      error: { code: "producer-crashed", recovery: "user-action" },
+      // its address kept; a page with no window has nowhere to go
+      browser: { url: "https://example.test/deeper", loading: false, canGoBack: false },
+    });
+    expect(first.destroyed).toBe(true);
+    // nothing brings it back but the person: not time, not a demand
+    await vi.advanceTimersByTimeAsync(5_000);
+    renderer.attachment.setDemand(demand(2, "paused"));
+    renderer.attachment.setDemand(demand(3, "live", 30, { width: 800, height: 450 }));
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(result.native.windows).toHaveLength(1);
+    expect(result.runtime.stats.producerRestarts).toBe(0);
+    expect(result.runtime.summary.state).toBe("failed");
+    // ↻: started again — where the page was, never back at the source's first address; its state says it is loading
+    renderer.attachment.navigate?.({ action: "reload" });
+    expect(result.native.windows).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result.native.windows[1]?.loadedUrls).toEqual(["https://example.test/deeper"]);
+    expect(result.runtime.summary).toMatchObject({
+      state: "starting",
+      browser: { url: "https://example.test/deeper", loading: true, canGoBack: false },
+    });
+    expect(result.runtime.summary.error).toBeUndefined();
+    // stopped again before its first frame: said again (a `say` source is never retried by itself)
+    result.native.windows[1]?.crash();
+    expect(result.runtime.summary).toMatchObject({
+      state: "failed",
+      error: { code: "producer-crashed", recovery: "user-action" },
+    });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(result.native.windows).toHaveLength(2);
+    // an address typed on a stopped page: never past the top-level policy — and a web one starts the page THERE
+    renderer.attachment.navigate?.({ action: "go", url: "file:///etc/passwd" });
+    expect(result.native.windows).toHaveLength(2);
+    renderer.attachment.navigate?.({ action: "go", url: "https://example.test/typed" });
+    expect(result.native.windows).toHaveLength(3);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result.native.windows[2]?.loadedUrls).toEqual(["https://example.test/typed"]);
+    result.runtime.dispose();
+  });
+
+  it("PT-5a: ↻ on a stopped page nobody is looking at starts nothing — it starts when somebody looks; and a source that does NOT say (the default) is restarted by itself as before, where the page was", async () => {
+    vi.useFakeTimers();
+    const said = setup({ source: { ...source(), whenStopped: "say" } });
+    const renderer = attach(said.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await vi.advanceTimersByTimeAsync(0);
+    said.native.windows[0]?.paint(sharedPaint().paint);
+    renderer.attachment.setDemand(demand(2, "paused"));
+    said.native.windows[0]?.crash();
+    expect(said.runtime.summary.state).toBe("failed");
+    renderer.attachment.navigate?.({ action: "reload" });
+    expect(said.native.windows).toHaveLength(1);
+    renderer.attachment.setDemand(demand(3, "live"));
+    expect(said.native.windows).toHaveLength(2);
+    said.runtime.dispose();
+
+    const plain = setup({ restartLimit: 1 });
+    const other = attach(plain.runtime);
+    other.attachment.setDemand(demand(1, "live"));
+    await vi.advanceTimersByTimeAsync(0);
+    plain.native.windows[0]?.paint(sharedPaint().paint);
+    plain.native.windows[0]?.emitNavigationState({ ...NAV, url: "https://example.test/deeper" });
+    plain.native.windows[0]?.crash();
+    expect(plain.runtime.summary).toMatchObject({
+      state: "reconnecting",
+      error: { code: "producer-crashed", recovery: "automatic" },
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(plain.native.windows).toHaveLength(2);
+    expect(plain.native.windows[1]?.loadedUrls).toEqual(["https://example.test/deeper"]);
+    plain.runtime.dispose();
+  });
+
+  it("PT-5a: a page UNRESPONSIVE past the bound is said to have stopped (`frame-stalled`, the person's to recover) — one that answers again within it is not; a source that does not say is left alone", async () => {
+    vi.useFakeTimers();
+    const result = setup({
+      source: { ...source(), whenStopped: "say" },
+      unresponsiveMs: 400,
+    });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await vi.advanceTimersByTimeAsync(0);
+    const window = result.native.windows[0];
+    if (window === undefined) throw new Error("no window");
+    window.paint(sharedPaint().paint);
+    window.emitNavigationState(NAV);
+    // it hangs, and answers again inside the bound: nothing is said
+    window.hang(true);
+    await vi.advanceTimersByTimeAsync(399);
+    window.hang(false);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(result.runtime.summary.state).toBe("live");
+    // it hangs past the bound: stopped, said, its window gone — and ↻ brings it back
+    window.hang(true);
+    await vi.advanceTimersByTimeAsync(399);
+    expect(result.runtime.summary.state).toBe("live");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(result.runtime.summary).toMatchObject({
+      state: "failed",
+      error: { code: "frame-stalled", recovery: "user-action" },
+      browser: { url: "https://example.test/app" },
+    });
+    expect(window.destroyed).toBe(true);
+    renderer.attachment.navigate?.({ action: "reload" });
+    expect(result.native.windows).toHaveLength(2);
+    result.runtime.dispose();
+
+    const plain = setup({ unresponsiveMs: 400 });
+    const other = attach(plain.runtime);
+    other.attachment.setDemand(demand(1, "live"));
+    await vi.advanceTimersByTimeAsync(0);
+    plain.native.windows[0]?.paint(sharedPaint().paint);
+    plain.native.windows[0]?.hang(true);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(plain.runtime.summary.state).toBe("live");
+    plain.runtime.dispose();
   });
 
   it("PT-4: a PERSISTENT profile lives under its user's profiles root by an opaque name — one ref, one directory; a memory profile, or no root, is Electron's own partition", async () => {

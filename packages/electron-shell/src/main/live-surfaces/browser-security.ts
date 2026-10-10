@@ -47,6 +47,16 @@ export interface GuardedBrowserSurfaceWebContents {
       callback: (username?: string, password?: string) => void,
     ) => void,
   ): this;
+  on(
+    event: "certificate-error",
+    listener: (
+      event: { preventDefault(): void },
+      url: string,
+      error: string,
+      certificate: unknown,
+      callback: (trusted: boolean) => void,
+    ) => void,
+  ): this;
   setWindowOpenHandler(handler: (details: { url: string }) => { action: "deny" }): void;
 }
 
@@ -131,7 +141,9 @@ export function installGuardedBrowserSurfaceSession(target: BrowserSurfaceSessio
  *  - a pop-up (`window.open`, `target=_blank`) opens no window — its address is told (the pane itself goes there);
  *  - a page that asks to stay on its unload (`beforeunload`) LEAVES — no page blocks behind a dialog nobody sees;
  *  - HTTP auth is cancelled — the page gets its own 401;
- *  - a download the page starts is cancelled by its session's guard, and told here by the contents that asked.
+ *  - a download the page starts is cancelled by its session's guard, and told here by the contents that asked;
+ *  - a certificate the engine does not trust is REFUSED, in a line of code and never by its default alone: no page is
+ *    shown over a certificate nobody vouched for (the load fails, and its face says so).
  */
 export function installGuardedBrowserSurfaceContents(
   contents: GuardedBrowserSurfaceWebContents,
@@ -156,6 +168,10 @@ export function installGuardedBrowserSurfaceContents(
     event.preventDefault();
     callback();
     refused("auth");
+  });
+  contents.on("certificate-error", (event, _url, _error, _certificate, callback) => {
+    event.preventDefault();
+    callback(false);
   });
   downloadRefusals.set(contents, () => refused("download"));
 }

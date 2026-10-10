@@ -170,6 +170,19 @@ describe("Browser Live Surface security", () => {
       ["beforeunload", undefined],
       ["auth", undefined],
     ]);
+    // a certificate the engine does not trust: REFUSED in a line of code (the load fails; its face says so), told to no one
+    const untrusted = { preventDefault: vi.fn() };
+    const trust = vi.fn();
+    listeners.get("certificate-error")?.(
+      untrusted as never,
+      "https://expired.example.test/" as never,
+      "net::ERR_CERT_DATE_INVALID" as never,
+      {} as never,
+      trust as never,
+    );
+    expect(untrusted.preventDefault).toHaveBeenCalledOnce();
+    expect(trust).toHaveBeenCalledExactlyOnceWith(false);
+    expect(told).toHaveLength(3);
     // a download: the SESSION's guard cancels it and tells the contents that asked — and no other page of the session
     const download: {
       guard: ((e: { preventDefault(): void }, i?: unknown, c?: unknown) => void) | null;
