@@ -103,6 +103,16 @@ describe("agent.* registry rows (AR-3)", () => {
         locality: "local",
         subscription: false,
       },
+      // TL (docket v9; B-D6 (a)) — the lanes' past, the backend's over the
+      // record: the record's consent (`index.search`, as `index.activity`),
+      // asked where the record lives (`federate`), never a stream
+      {
+        method: "agent.recordedLanes",
+        scope: "index.search",
+        idempotent: true,
+        locality: "federate",
+        subscription: false,
+      },
       {
         method: "agent.subscribe",
         scope: "agent.observe",

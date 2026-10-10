@@ -240,6 +240,22 @@ export const INDEX_TAILNET_LIMITS = {
   MAX_ROWS: 100,
 } as const;
 
+/** TL (docket v9, RULED 2026-10-09 T1/T2/T4/T5) — the record's past for
+ * Godview's timeline: `index.activity` (the record's sessions and turns in a
+ * window, read from rosettad) and `agent.recordedLanes` (the monitor backend's
+ * lanes over it). MAX_WINDOW_MS is T2's bound: the view's day, never more.
+ * SILENCE_MS is T1's cut, the default an ask leaves out: a silence inside a turn
+ * longer than it is not work (the History room's own pause, 15 min); an ask may
+ * name another between the two SILENCE bounds. MAX_SESSIONS bounds an ask that
+ * names its sessions (rosetta's selector ceiling). TS-only: no native reader. */
+export const INDEX_ACTIVITY = {
+  MAX_WINDOW_MS: 24 * 60 * 60_000,
+  SILENCE_MS: 15 * 60_000,
+  MIN_SILENCE_MS: 60_000,
+  MAX_SILENCE_MS: 60 * 60_000,
+  MAX_SESSIONS: 256,
+} as const;
+
 /** SP-3 / AR-8b — `index.openTicket`, the direct plane's door
  * (agent-index.ts `IndexOpenTicket`): the refusal vocabulary a reader branches
  * on — a contract string, never a sentence (`UnavailableDetails`, retryable

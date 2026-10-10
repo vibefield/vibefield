@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AgentProfileId, AgentProviderId } from "./agent-index";
 import { AgentSessionTerminal, AgentStatus, AgentTier } from "./agent-session";
+import { INDEX_ACTIVITY } from "./registries";
 import {
   MeshScope,
   meshRowsFrame,
@@ -625,6 +626,91 @@ export const AgentReportShownParams = z
 export type AgentReportShownParams = z.infer<typeof AgentReportShownParams>;
 export const AgentReportShownResult = z.object({ reported: z.literal(true) }).passthrough();
 export type AgentReportShownResult = z.infer<typeof AgentReportShownResult>;
+
+/** TL (docket v9, RULED 2026-10-09; B-D6 (a)) — `agent.recordedLanes
+ * {sinceMs, untilMs, device?}`: the lanes' past as the monitor backend beside
+ * the runtime derives it from the record (`MonitorBackend.readPast` over
+ * `index.activity`'s reader), for a window whose mounted view asked for it
+ * (capability `history`). Read through to rosettad at each ask and held
+ * nowhere: this is NOT the removed `agent.history` (TL-D8's ledger in fieldd's
+ * fold, retired at MV-D13), and it never rides the model's rows. The window is
+ * at most `INDEX_ACTIVITY.MAX_WINDOW_MS`. */
+export const AgentRecordedLanesParams = z
+  .object({
+    sinceMs: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    untilMs: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    device: z.string().min(1).optional(),
+  })
+  .passthrough()
+  .refine(
+    (params) =>
+      params.untilMs > params.sinceMs &&
+      params.untilMs - params.sinceMs <= INDEX_ACTIVITY.MAX_WINDOW_MS,
+    "a window of at most a day, untilMs after sinceMs",
+  );
+export type AgentRecordedLanesParams = z.infer<typeof AgentRecordedLanesParams>;
+
+/** One stretch of a lane's past (the SDK's `MonitorPastSpan`): `worked` inside
+ * a turn, `quiet` between turns, `unrecorded` across a long silence inside one,
+ * `active` the floor's band (bounds alone). Never blocked, never unseen: the
+ * record says neither. Closed, as the SDK's type is. */
+export const MonitorPastSpan = z
+  .object({
+    kind: z.enum(["worked", "quiet", "unrecorded", "active"]),
+    from: z.number().int(),
+    to: z.number().int(),
+  })
+  .passthrough();
+export type MonitorPastSpan = z.infer<typeof MonitorPastSpan>;
+
+/** A model row's past up to `seamAt` (its `statusSince` when read). */
+export const MonitorLivePast = z
+  .object({
+    id: z.string().min(1),
+    seamAt: z.number().int(),
+    spans: z.array(MonitorPastSpan),
+  })
+  .passthrough();
+export type MonitorLivePast = z.infer<typeof MonitorLivePast>;
+
+/** A run the record holds that the model does not (`past:<provider>:<native id>`).
+ * `device.self` is not carried, as on every row: the reader says it. */
+export const MonitorEndedRow = z
+  .object({
+    id: z.string().min(1),
+    provider: z.object({ id: z.string(), label: z.string() }).passthrough().optional(),
+    project: z
+      .object({
+        name: z.string(),
+        branch: z.string().nullable().optional(),
+        seq: z.number().int().nonnegative().optional(),
+      })
+      .passthrough(),
+    device: MonitorDeviceRef,
+    startedAt: z.number().int(),
+    endedAt: z.number().int(),
+    spans: z.array(MonitorPastSpan),
+  })
+  .passthrough();
+export type MonitorEndedRow = z.infer<typeof MonitorEndedRow>;
+
+/** `agent.recordedLanes`' answer: the SDK's `MonitorPastSnapshot`, field for
+ * field (fieldd pins the two, `agent-monitor.ts`). `state` is the honest word —
+ * `unavailable` with `detail` when the record could not be read (no rosettad,
+ * still starting), `partial` when some of it was not. */
+export const AgentRecordedLanesResult = z
+  .object({
+    sinceMs: z.number().int(),
+    untilMs: z.number().int(),
+    readAt: z.number().int(),
+    fidelity: z.enum(["turns", "bounds"]),
+    state: z.enum(["complete", "partial", "unavailable"]),
+    detail: z.string().optional(),
+    live: z.array(MonitorLivePast),
+    ended: z.array(MonitorEndedRow),
+  })
+  .passthrough();
+export type AgentRecordedLanesResult = z.infer<typeof AgentRecordedLanesResult>;
 
 /** One device's slice of `field.agents.v1` (D4's hybrid). `expiresAt` is the
  * honesty clause: a desktop that dies without clearing its slice leaves rows a

@@ -1,0 +1,28 @@
+{
+  "sinceMs": 1791460800000,
+  "untilMs": 1791547200000,
+  "fidelity": "bounds",
+  "partial": true,
+  "detail": "The agent index's stream is down; these are the sessions it last listed.",
+  "sessions": [
+    {
+      "sessionId": "s-ended",
+      "nativeSessionId": "4f6c1c2e-ended",
+      "kind": "claude-code",
+      "provider": "claude",
+      "projectId": "p1",
+      "cwd": "/Users/me/code/billing-api",
+      "title": "Split the invoice writer",
+      "startedAt": 1791536400000,
+      "activity": { "firstAt": 1791536400000, "lastAt": 1791541800000 }
+    },
+    {
+      "sessionId": "s-unmapped",
+      "nativeSessionId": "n-unmapped",
+      "kind": "an-agent-this-build-has-no-row-for",
+      "startedAt": 1791540000000,
+      "activity": { "firstAt": 1791540000000, "lastAt": 1791543600000 },
+      "aFieldFromANewerPeer": true
+    }
+  ]
+}

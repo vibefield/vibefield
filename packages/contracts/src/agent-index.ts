@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isAbsoluteDesktopPath } from "./paths";
 import { PlaceFactsList, PlaceRef, ProjectKey } from "./project-places";
-import { INDEX_TICKET, INDEX_TIMELINE } from "./registries";
+import { INDEX_ACTIVITY, INDEX_TICKET, INDEX_TIMELINE } from "./registries";
 import { composeRemoteEndpoints, remoteDoorUrl, remoteEndpointSet } from "./remote-endpoints";
 import {
   MeshScope,
@@ -1361,6 +1361,118 @@ export const IndexProjectDayResult = z
   })
   .passthrough();
 export type IndexProjectDayResult = z.infer<typeof IndexProjectDayResult>;
+
+// ── index.activity (TL — Godview's timeline reads the past; docket v9 RULED
+// 2026-10-09: T1 worked and quiet from the record's turns, T2 the view's day,
+// T4 a rosetta route, T5 the floor first, B-D4 per desktop) ──
+//
+// The record's top-level sessions with activity in a window, each with its
+// turns: what Godview's monitor backend derives a lane's past from (worked
+// inside a turn, quiet between, not recorded across a long silence), and what
+// a phone or another desktop reads the same way later — `federate`, so a
+// foreign `device` forwards whole and the owner answers from its own index.
+// ONLY ROSETTA READS TRANSCRIPTS (the 10-03 law): fieldd answers from what
+// rosettad computes and from the catalog it already follows, and never pages
+// `index.timeline` to build spans. Turns ride as control-rate facts (EL2).
+//
+// `fidelity` says how fine the answer is: `turns` when rosettad answered the
+// route, `bounds` when only each session's first and last activity were read
+// (the catalog: T5's floor, and a daemon whose protocol has no route). A
+// session's `activity` is its WHOLE recorded extent, never clipped to the
+// window; its `turns` are those touching the window.
+
+/** One silence inside a turn: no recorded activity from `fromMs` to `toMs`,
+ * longer than the ask's cut. */
+export const IndexActivitySilence = z
+  .object({ fromMs: z.number().finite(), toMs: z.number().finite() })
+  .passthrough();
+export type IndexActivitySilence = z.infer<typeof IndexActivitySilence>;
+
+/** One turn of a session (rosetta's message group): its kind in rosetta's
+ * open vocabulary (`human_turn`, `agent_cycle`, …), its first and last
+ * recorded activity, and its silences longer than the cut. */
+export const IndexActivityTurn = z
+  .object({
+    kind: z.string(),
+    firstAt: z.number().finite(),
+    lastAt: z.number().finite(),
+    silences: z.array(IndexActivitySilence).optional(),
+  })
+  .passthrough();
+export type IndexActivityTurn = z.infer<typeof IndexActivityTurn>;
+
+/** One top-level session with activity in the window. `kind` is rosetta's
+ * agent word (the seam column), `provider` the catalog id it maps to; a
+ * session no catalog row maps carries no `provider`, and a reader that joins
+ * on the runtime's id skips it. */
+export const IndexActivitySession = z
+  .object({
+    sessionId: z.string().min(1),
+    nativeSessionId: z.string(),
+    kind: AgentKind.optional(),
+    provider: AgentProviderId.optional(),
+    projectId: z.string().min(1).optional(),
+    cwd: z.string().optional(),
+    title: z.string().optional(),
+    startedAt: z.number().finite().optional(),
+    activity: z
+      .object({ firstAt: z.number().finite(), lastAt: z.number().finite() })
+      .passthrough()
+      .nullable(),
+    /** absent at `fidelity: "bounds"` */
+    turns: z.array(IndexActivityTurn).optional(),
+  })
+  .passthrough();
+export type IndexActivitySession = z.infer<typeof IndexActivitySession>;
+
+/** `index.activity {sinceMs, untilMs, sessions?, silenceMs?, device?}`: a
+ * window of at most `INDEX_ACTIVITY.MAX_WINDOW_MS`, `sessions` narrowing it to
+ * rosetta's canonical ids, `silenceMs` the cut for a turn's silences (default
+ * `INDEX_ACTIVITY.SILENCE_MS`). */
+export const IndexActivityParams = z
+  .object({
+    sinceMs: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    untilMs: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    sessions: z
+      .array(z.string().min(1).max(1024))
+      .min(1)
+      .max(INDEX_ACTIVITY.MAX_SESSIONS)
+      .optional(),
+    silenceMs: z
+      .number()
+      .int()
+      .min(INDEX_ACTIVITY.MIN_SILENCE_MS)
+      .max(INDEX_ACTIVITY.MAX_SILENCE_MS)
+      .optional(),
+    device: z.string().min(1).optional(),
+  })
+  .passthrough()
+  .refine(
+    (params) =>
+      params.untilMs > params.sinceMs &&
+      params.untilMs - params.sinceMs <= INDEX_ACTIVITY.MAX_WINDOW_MS,
+    "a window of at most a day, untilMs after sinceMs",
+  );
+export type IndexActivityParams = z.infer<typeof IndexActivityParams>;
+
+/** `index.activity`'s answer, newest activity first. `partial`: some of the
+ * record was not read — the catalog's stream is down and its tables are the
+ * last snapshot, a session's rows are not admitted yet — with `detail` saying
+ * which in words. `clipped`: SP-D13's cut for a tailnet caller
+ * (`INDEX_TAILNET_LIMITS.MAX_ROWS` sessions). A daemon that cannot answer at
+ * all refuses UNAVAILABLE {service: "index", state}, never an empty answer. */
+export const IndexActivityResult = z
+  .object({
+    sinceMs: z.number().int(),
+    untilMs: z.number().int(),
+    fidelity: z.enum(["turns", "bounds"]),
+    partial: z.boolean(),
+    detail: z.string().optional(),
+    clipped: z.boolean().optional(),
+    sessions: z.array(IndexActivitySession),
+  })
+  .passthrough();
+export type IndexActivityResult = z.infer<typeof IndexActivityResult>;
 
 // ── the direct plane (SP-3 — the ticket template's SECOND instance;
 // thinking-sync-planes.md §5.4, thinking-desktop-sync-plane.md §6.4; the
