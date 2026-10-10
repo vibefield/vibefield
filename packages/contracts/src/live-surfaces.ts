@@ -390,6 +390,12 @@ export const LiveSurfaceBrowserStateV1 = z
     loading: z.boolean(),
     canGoBack: z.boolean(),
     canGoForward: z.boolean(),
+    /** PT-3: the CSS cursor the page shows where the pointer last was (`pointer` over a link, `text` over a field) — the
+     * producer's `cursor-changed`, as a CSS cursor name; absent until the page has said one. */
+    cursor: z
+      .string()
+      .regex(/^[a-z][a-z-]{0,31}$/)
+      .optional(),
   })
   .passthrough();
 export type LiveSurfaceBrowserStateV1 = z.infer<typeof LiveSurfaceBrowserStateV1>;
@@ -473,6 +479,9 @@ export const LiveSurfaceInputEventV1 = z.discriminatedUnion("kind", [
       /** Absent on `move`; a down/up without one is the primary button. */
       button: LiveSurfacePointerButtonV1.optional(),
       clickCount: z.number().int().min(1).max(3).optional(),
+      /** PT-3: the buttons HELD (DOM's mask — 1 primary, 2 secondary, 4 middle): a move with the primary held is a drag (a
+       * page's text selection); absent — none held. */
+      buttons: z.number().int().min(0).max(31).optional(),
     })
     .passthrough(),
   z
@@ -501,6 +510,15 @@ export const LiveSurfaceInputEventV1 = z.discriminatedUnion("kind", [
       /** Committed text (typing, IME composition end, paste). Long pastes are
        * chunked by the sender; the bound matches the producer's own. */
       text: z.string().min(1).max(16_384),
+    })
+    .passthrough(),
+  z
+    .object({
+      kind: z.literal("compose"),
+      /** PT-3: an IME COMPOSITION as it runs (the preedit — `""` as one starts) and the caret within it (the producer
+       * holds it to the text's length); its end rides `text` (the committed string). Gated as keys are (`keyboard`). */
+      text: z.string().max(16_384),
+      caret: z.number().int().min(0).max(16_384),
     })
     .passthrough(),
 ]);

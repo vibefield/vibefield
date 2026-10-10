@@ -180,7 +180,11 @@ export class LiveSurfaceControlSession {
         // sends. Input without its grant means a renderer that is not running
         // our code — fail the generation closed (EL7).
         const required: LiveSurfacePresentationOperation =
-          message.input.kind === "key" || message.input.kind === "text" ? "keyboard" : "pointer";
+          message.input.kind === "key" ||
+          message.input.kind === "text" ||
+          message.input.kind === "compose"
+            ? "keyboard"
+            : "pointer";
         if (!attachment.operations.includes(required)) {
           this.protocolFault("input arrived without its operation grant");
           return;

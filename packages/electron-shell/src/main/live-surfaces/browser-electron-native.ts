@@ -159,6 +159,17 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     });
   }
 
+  dispatchCompose(text: string, caret: number): Promise<void> {
+    return this.enqueue(async () => {
+      await this.ensureDebugger();
+      await this.window.webContents.debugger.sendCommand("Input.imeSetComposition", {
+        text,
+        selectionStart: caret,
+        selectionEnd: caret,
+      });
+    });
+  }
+
   navigate(action: "back" | "forward" | "reload" | "stop"): void {
     if (this.isDestroyed()) return;
     const contents = this.window.webContents;
@@ -202,6 +213,12 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       contents.off("did-start-loading", emit);
       contents.off("did-stop-loading", emit);
     };
+  }
+
+  onCursor(listener: (cursor: string) => void): () => void {
+    const handler = (_event: Electron.Event, type: string): void => listener(type);
+    this.window.webContents.on("cursor-changed", handler);
+    return () => this.window.webContents.off("cursor-changed", handler);
   }
 
   onPaint(listener: (paint: BrowserSurfacePaint) => void): () => void {

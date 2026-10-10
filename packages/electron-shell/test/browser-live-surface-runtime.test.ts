@@ -47,6 +47,7 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
   readonly mouseInputs: BrowserSurfaceNativeMouseInput[] = [];
   readonly keyInputs: BrowserSurfaceNativeKeyInput[] = [];
   readonly textInputs: string[] = [];
+  readonly compositions: Array<{ text: string; caret: number }> = [];
   readonly loadedUrls: string[] = [];
   readonly navigations: Array<"back" | "forward" | "reload" | "stop"> = [];
   readonly startPainting = vi.fn();
@@ -108,6 +109,10 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
     this.textInputs.push(text);
   }
 
+  async dispatchCompose(text: string, caret: number): Promise<void> {
+    this.compositions.push({ text, caret });
+  }
+
   navigate(action: "back" | "forward" | "reload" | "stop"): void {
     this.navigations.push(action);
   }
@@ -119,6 +124,16 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
 
   emitNavigationState(state: BrowserSurfaceNavigationState): void {
     this.#events.emit("navigation", state);
+  }
+
+  onCursor(listener: (cursor: string) => void): () => void {
+    this.#events.on("cursor", listener);
+    return () => this.#events.off("cursor", listener);
+  }
+
+  /** The page's cursor changed (Electron's `cursor-changed` type). */
+  cursorTo(type: string): void {
+    this.#events.emit("cursor", type);
   }
 
   onPaint(listener: (paint: BrowserSurfacePaint) => void): () => void {
@@ -677,6 +692,63 @@ describe("BrowserLiveSurfaceRuntime", () => {
     expect(browser).toMatchObject({ loading: false, canGoBack: true, canGoForward: false });
     expect(renderer.summaries.at(-1)?.browser?.canGoBack).toBe(true);
 
+    result.runtime.dispose();
+  });
+
+  it("PT-3: carries an IME composition, the buttons a drag holds, the wheel in the page's DEVICE px, and the page's cursor", async () => {
+    const result = setup({ source: { ...source(), deviceScaleFactor: 2 } });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live", 30, { width: 640, height: 360 }));
+    const window = result.native.windows[0];
+    window?.paint(sharedPaint().paint);
+    await flush();
+    const revision = result.runtime.summary.geometry?.revision ?? 0;
+    // a composition as it runs, then one whose caret ran past its text: held to its end (CDP refuses it past)
+    renderer.attachment.dispatchInput?.({ kind: "compose", text: "", caret: 0 }, revision);
+    renderer.attachment.dispatchInput?.({ kind: "compose", text: "にほ", caret: 2 }, revision);
+    renderer.attachment.dispatchInput?.({ kind: "compose", text: "ん", caret: 9 }, revision);
+    // a move with the primary held is a drag; a wheel of 40 of the page's CSS px is 80 device px at its density 2
+    renderer.attachment.dispatchInput?.(
+      { kind: "pointer", action: "move", x: 20, y: 30, buttons: 1 },
+      revision,
+    );
+    renderer.attachment.dispatchInput?.(
+      { kind: "wheel", x: 10, y: 12, deltaX: 3, deltaY: 40 },
+      revision,
+    );
+    await flush();
+    expect(window?.compositions).toEqual([
+      { text: "", caret: 0 },
+      { text: "にほ", caret: 2 },
+      { text: "ん", caret: 1 },
+    ]);
+    expect(window?.mouseInputs).toEqual([
+      { type: "mouseMoved", x: 20, y: 30, button: "none", buttons: 1 },
+      { type: "mouseWheel", x: 10, y: 12, deltaX: 6, deltaY: 80 },
+    ]);
+    // the page's cursor: said with the browser state, once it has one; Chromium's own names as CSS says them
+    window?.cursorTo("pointer");
+    expect(result.runtime.summary.browser).toBeUndefined();
+    window?.emitNavigationState({
+      url: "https://example.test/app",
+      title: "App",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+    });
+    expect(result.runtime.summary.browser?.cursor).toBe("pointer");
+    const published = renderer.summaries.length;
+    window?.cursorTo("pointer");
+    expect(renderer.summaries).toHaveLength(published);
+    window?.cursorTo("text");
+    expect(result.runtime.summary.browser?.cursor).toBe("text");
+    expect(renderer.summaries.length).toBeGreaterThan(published);
+    window?.cursorTo("nodrop");
+    expect(result.runtime.summary.browser?.cursor).toBe("no-drop");
+    window?.cursorTo("ne-panning");
+    expect(result.runtime.summary.browser?.cursor).toBe("all-scroll");
+    window?.cursorTo("custom");
+    expect(result.runtime.summary.browser?.cursor).toBe("default");
     result.runtime.dispose();
   });
 

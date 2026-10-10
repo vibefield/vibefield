@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   LIVE_SURFACE_MAX_PIXELS,
+  LiveSurfaceBrowserStateV1,
   LiveSurfaceDemandV1,
   LiveSurfaceFrameEnvelopeV1,
   LiveSurfaceFrameMetadataV1,
   LiveSurfaceGeometryV1,
   LiveSurfaceHostControlMessageV1,
+  LiveSurfaceInputEventV1,
   LiveSurfacePresentationCapabilitiesV1,
   LiveSurfaceRendererControlMessageV1,
   LiveSurfaceSequenceV1,
@@ -201,6 +203,60 @@ describe("LSF-1 Live Surfaces contracts", () => {
         sourceRef: "enumeration-ref-01",
       }).success,
     ).toBe(true);
+  });
+
+  it("PT-3: the input lane carries an IME composition and the buttons a move holds; the browser state says the page's cursor", () => {
+    // a composition as it runs — its start ("", 0), an update, the caret inside it — and what is refused
+    expect(LiveSurfaceInputEventV1.parse({ kind: "compose", text: "", caret: 0 })).toEqual({
+      kind: "compose",
+      text: "",
+      caret: 0,
+    });
+    expect(
+      LiveSurfaceInputEventV1.parse({ kind: "compose", text: "にほ", caret: 2 }),
+    ).toMatchObject({
+      text: "にほ",
+      caret: 2,
+    });
+    expect(
+      LiveSurfaceInputEventV1.safeParse({ kind: "compose", text: "x", caret: -1 }).success,
+    ).toBe(false);
+    expect(
+      LiveSurfaceInputEventV1.safeParse({ kind: "compose", text: "x".repeat(16_385), caret: 0 })
+        .success,
+    ).toBe(false);
+    expect(LiveSurfaceInputEventV1.safeParse({ kind: "compose", caret: 0 }).success).toBe(false);
+    // a move with the primary held is a drag; a mask out of range is refused
+    expect(
+      LiveSurfaceInputEventV1.parse({ kind: "pointer", action: "move", x: 10, y: 20, buttons: 1 }),
+    ).toMatchObject({
+      buttons: 1,
+    });
+    expect(
+      LiveSurfaceInputEventV1.safeParse({
+        kind: "pointer",
+        action: "move",
+        x: 10,
+        y: 20,
+        buttons: 32,
+      }).success,
+    ).toBe(false);
+    // the cursor a page shows, as a CSS name — and nothing that is not one
+    const state = {
+      url: "https://example.test/",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+    };
+    expect(LiveSurfaceBrowserStateV1.parse({ ...state, cursor: "pointer" })).toMatchObject({
+      cursor: "pointer",
+    });
+    expect(LiveSurfaceBrowserStateV1.parse({ ...state, cursor: "not-allowed" })).toMatchObject({
+      cursor: "not-allowed",
+    });
+    expect(LiveSurfaceBrowserStateV1.parse(state)).not.toHaveProperty("cursor");
+    for (const cursor of ["", "url(x.png)", "Pointer", "a".repeat(33)])
+      expect(LiveSurfaceBrowserStateV1.safeParse({ ...state, cursor }).success, cursor).toBe(false);
   });
 
   it("keeps attach/demand control metadata separate from transferable frames", () => {

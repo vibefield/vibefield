@@ -607,6 +607,14 @@ describe("LiveSurfaceControlSession", () => {
         modifiers: { alt: false, ctrl: false, meta: false, shift: false },
       },
     });
+    // PT-3: a composition rides the keyboard's grant
+    result.port.receive({
+      v: 1,
+      type: "input",
+      attachmentId: "attachment_0123456789abcdef",
+      geometryRevision: 7,
+      input: { kind: "compose", text: "にほ", caret: 2 },
+    });
     result.port.receive({
       v: 1,
       type: "navigate",
@@ -627,6 +635,7 @@ describe("LiveSurfaceControlSession", () => {
         },
         geometryRevision: 7,
       },
+      { input: { kind: "compose", text: "にほ", caret: 2 }, geometryRevision: 7 },
     ]);
     expect(result.authority.navigations).toEqual([{ action: "go", url: "https://example.test/" }]);
   });
@@ -667,6 +676,22 @@ describe("LiveSurfaceControlSession", () => {
     expect(keyboard.session.closed).toBe(true);
     expect(keyboard.protocolFaults).toEqual(["input arrived without its operation grant"]);
     expect(keyboard.authority.inputs).toEqual([]);
+
+    // PT-3: an IME composition is the keyboard's, as text is — without the grant it closes the generation too
+    const composing = setup(undefined, (authority) => {
+      authority.withInputLane = true;
+    });
+    attach(composing);
+    composing.port.receive({
+      v: 1,
+      type: "input",
+      attachmentId: "attachment_0123456789abcdef",
+      geometryRevision: 1,
+      input: { kind: "compose", text: "にほ", caret: 2 },
+    });
+    expect(composing.session.closed).toBe(true);
+    expect(composing.protocolFaults).toEqual(["input arrived without its operation grant"]);
+    expect(composing.authority.inputs).toEqual([]);
 
     const navigation = setup(undefined, (authority) => {
       authority.withInputLane = true;

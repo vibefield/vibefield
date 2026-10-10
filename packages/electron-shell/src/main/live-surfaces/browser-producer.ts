@@ -89,12 +89,16 @@ export interface BrowserSurfaceNativeWindow {
   dispatchMouse(input: BrowserSurfaceNativeMouseInput): Promise<void>;
   dispatchKey(input: BrowserSurfaceNativeKeyInput): Promise<void>;
   dispatchText(text: string): Promise<void>;
+  /** PT-3: an IME composition as it runs — its text and the caret within it (CDP `Input.imeSetComposition`). */
+  dispatchCompose(text: string, caret: number): Promise<void>;
   /** History/loading navigation. `go` rides `loadURL` so the initial-load and
    * chrome-navigation paths share one policy gate. */
   navigate(action: "back" | "forward" | "reload" | "stop"): void;
   /** Committed navigation truth, emitted on every URL/title/loading/history
    * change. The adapter reads the values fresh at emit time. */
   onNavigationState(listener: (state: BrowserSurfaceNavigationState) => void): () => void;
+  /** PT-3: the page's CURSOR as it changes (Electron's `cursor-changed`), as a CSS cursor name. */
+  onCursor(listener: (cursor: string) => void): () => void;
   onPaint(listener: (paint: BrowserSurfacePaint) => void): () => void;
   onRenderProcessGone(listener: (reason: string) => void): () => void;
   onDestroyed(listener: () => void): () => void;
@@ -130,6 +134,8 @@ export interface BrowserSurfaceNativeMouseInput {
   readonly y: number;
   readonly button?: BrowserSurfaceMouseButton;
   readonly clickCount?: number;
+  /** The buttons held (DOM's mask): a move with the primary held is a drag. */
+  readonly buttons?: number;
   readonly deltaX?: number;
   readonly deltaY?: number;
 }
@@ -160,6 +166,7 @@ export type BrowserSurfaceInputRequest =
       readonly y: number;
       readonly button?: Exclude<BrowserSurfaceMouseButton, "none">;
       readonly clickCount?: number;
+      readonly buttons?: number;
     }
   | {
       readonly kind: "wheel";
@@ -173,6 +180,12 @@ export type BrowserSurfaceInputRequest =
       readonly kind: "text";
       readonly geometryRevision: number;
       readonly text: string;
+    }
+  | {
+      readonly kind: "compose";
+      readonly geometryRevision: number;
+      readonly text: string;
+      readonly caret: number;
     }
   | {
       readonly kind: "key";
@@ -236,6 +249,7 @@ interface SourceCallbacks {
   readonly removeGone: () => void;
   readonly removeDestroyed: () => void;
   readonly removeNavigation: () => void;
+  readonly removeCursor: () => void;
 }
 
 function increment(value: number, name: string): number {
@@ -434,6 +448,18 @@ function clampBrowserState(
   };
 }
 
+/**
+ * Electron's `cursor-changed` type → the CSS cursor the page means (PT-3): most are CSS names already; Chromium's own names
+ * map to theirs (`nodrop` → `no-drop`, the panning arrows → `all-scroll`), and one only an image can say (`custom`) reads as
+ * the default.
+ */
+export function cssCursorOf(type: string): string {
+  if (type === "nodrop") return "no-drop";
+  if (type === "custom") return "default";
+  if (type.endsWith("-panning")) return "all-scroll";
+  return /^[a-z][a-z-]{0,31}$/.test(type) ? type : "default";
+}
+
 /** The special keys the wire carries by NAME. CDP acts on most of them only
  * when a Windows virtual key code rides along, and the wire deliberately does
  * not carry one — the code is presentation-neutral producer knowledge, derived
@@ -471,6 +497,7 @@ function browserInputRequest(
       y: input.y,
       ...(input.action === "move" ? {} : { button: input.button ?? "left" }),
       ...(input.clickCount === undefined ? {} : { clickCount: input.clickCount }),
+      ...(input.buttons === undefined ? {} : { buttons: input.buttons }),
     };
   }
   if (input.kind === "wheel") {
@@ -484,6 +511,8 @@ function browserInputRequest(
     };
   }
   if (input.kind === "text") return { kind: "text", geometryRevision, text: input.text };
+  if (input.kind === "compose")
+    return { kind: "compose", geometryRevision, text: input.text, caret: input.caret };
   const virtualKeyCode = KEY_VIRTUAL_CODES[input.key];
   return {
     kind: "key",
@@ -548,6 +577,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   /** Last committed navigation truth. Survives producer restarts on purpose:
    * chrome keeps showing the last known URL through a reconnect gap. */
   #browserState: LiveSurfaceBrowserStateV1 | undefined;
+  /** PT-3: the cursor the page last showed (a CSS name), published with the browser state; reset with its window. */
+  #cursor: string | undefined;
   #error: LiveSurfaceErrorV1 | undefined;
   #lastPublishedSummary = "";
   #cpuPaintStreak = 0;
@@ -613,7 +644,14 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       capabilities: BROWSER_CAPABILITIES,
       ...(this.#transport === undefined ? {} : { transport: this.#transport }),
       ...(this.#geometry === undefined ? {} : { geometry: this.#geometry }),
-      ...(this.#browserState === undefined ? {} : { browser: this.#browserState }),
+      ...(this.#browserState === undefined
+        ? {}
+        : {
+            browser:
+              this.#cursor === undefined
+                ? this.#browserState
+                : { ...this.#browserState, cursor: this.#cursor },
+          }),
       ...(this.#error === undefined ? {} : { error: this.#error }),
     };
   }
@@ -756,6 +794,18 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       await window.dispatchText(request.text);
       return;
     }
+    if (request.kind === "compose") {
+      if (
+        request.text.length > 16_384 ||
+        !Number.isSafeInteger(request.caret) ||
+        request.caret < 0
+      ) {
+        throw new Error("Browser composition is outside the bounded contract");
+      }
+      // the caret within the composition (CDP refuses one past its end)
+      await window.dispatchCompose(request.text, Math.min(request.caret, request.text.length));
+      return;
+    }
     if (request.kind === "key") {
       if (!validKeyToken(request.key) || !validKeyToken(request.code)) {
         throw new Error("Browser key input is outside the bounded contract");
@@ -811,12 +861,15 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       ) {
         throw new Error("Browser wheel input is outside the bounded contract");
       }
+      // The wire's deltas are the page's CSS px (what the finger moved on screen, PT-3 ruling 4); CDP's `mouseWheel`
+      // scrolls by DEVICE px of the page as laid out (LT2's probe) — so the page's own density multiplies them here.
+      const density = this.source.deviceScaleFactor ?? 1;
       await window.dispatchMouse({
         type: "mouseWheel",
         x,
         y,
-        deltaX: request.deltaX,
-        deltaY: request.deltaY,
+        deltaX: request.deltaX * density,
+        deltaY: request.deltaY * density,
       });
       return;
     }
@@ -839,6 +892,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       y,
       button: request.type === "move" ? "none" : (request.button ?? "left"),
       ...(request.clickCount === undefined ? {} : { clickCount: request.clickCount }),
+      ...(request.buttons === undefined ? {} : { buttons: request.buttons }),
     });
   }
 
@@ -866,6 +920,14 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       return;
     }
     window.navigate(command.action);
+  }
+
+  /** PT-3: the page's cursor moved — a summary, so the renderer's face says it (`LiveInfo.cursor`) and wakes its desk. */
+  private acceptCursor(window: BrowserSurfaceNativeWindow, epoch: number, cursor: string): void {
+    if (!this.ownsProducer(window, epoch)) return;
+    this.#cursor = cssCursorOf(cursor);
+    // the same cursor again publishes nothing: a summary is sent only when it changed
+    if (this.#browserState !== undefined) this.publishSummary();
   }
 
   private acceptNavigationState(
@@ -961,7 +1023,14 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       const removeNavigation = window.onNavigationState((state) =>
         this.acceptNavigationState(window, epoch, state),
       );
-      this.#callbacks = { removePaint, removeGone, removeDestroyed, removeNavigation };
+      const removeCursor = window.onCursor((cursor) => this.acceptCursor(window, epoch, cursor));
+      this.#callbacks = {
+        removePaint,
+        removeGone,
+        removeDestroyed,
+        removeNavigation,
+        removeCursor,
+      };
       this.#producersStarted += 1;
       this.applyFrameRate();
       this.#startupTimer = setTimeout(
@@ -1409,6 +1478,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         removeNavigation: window.onNavigationState((state) =>
           this.acceptNavigationState(window, epoch, state),
         ),
+        removeCursor: window.onCursor((cursor) => this.acceptCursor(window, epoch, cursor)),
       };
       this.#producersStarted += 1;
       this.applyFrameRate();
@@ -1465,6 +1535,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     callbacks?.removeGone();
     callbacks?.removeDestroyed();
     callbacks?.removeNavigation();
+    callbacks?.removeCursor();
+    this.#cursor = undefined;
     if (window === null) return;
     this.#controlTargets?.revoke(this.surfaceId, window.controlContents);
     if (!window.isDestroyed()) window.destroy();
