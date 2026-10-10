@@ -8710,3 +8710,66 @@ The plan is `draft/history-finish/build-hf.md` §3c–§3d, with brief `briefs/p
 - No kit mirrors yet: the phone reads the column with PJ-7.
 
 **Next:** phase B on the room branch: colour, marks, sections, row acts, New agent (H6), the folder dropdown, chips, PK3's reader, then H4's acts. Rosetta's branch merges at James's word.
+
+## AR-8 P2 — Live now in Godview: the Peek searches what is running, and its right half watches the live terminal (2026-10-10; `a67be332` — twelve commits `8a999f45`→`a67be332`; lane p2 over main `69b52855`, rebased by the lane onto `172a1452`, fast-forward)
+
+**Why:** James ruled docket v9 on 2026-10-09 (23:03–23:04, every lean):
+- PK1 (a): the scrim is search's own.
+- PK2 (a): the frame's ⌘F circle in Godview's head now, with FIND gone from the bar.
+- PK4 (a): ⌥0–⌥9 retire, and the filters live in search.
+- PK5 (a): History's Live now has its own feed while shown.
+
+On top of One Frame's GV-D3/D8/D9/D10 (10-02) and "go with a" (10-08). Plan: `draft/history-finish/build-hf.md` §3b, §3d, M8, M9, M11; brief `briefs/p2.md`. The MV lead's keep-list: `surveys/mv-lead-2026-10-09.md` §1.
+
+**What landed:**
+- **DESIGN.md first** (§8 the Peek, §10 the keys):
+  - Godview's button and its filter token.
+  - Live now's rows, dropdowns, peek and foot.
+  - PK5's feed.
+  - ⌘F in both views; ⌥0–⌥9 belong to nobody.
+- **The find door** (`frame/find-door.ts`, the line door's module-store shape).
+  - The monitor publishes `{rows, transcripts, select, filters, setDesk, setProfile}` only while Godview is open (`publishesFind`).
+  - Rows come from the `find-agents` join (plus `desk` and this desktop's `floorSessionId`). They are made only while a listener holds them, and passed on only when their content changes, so a closed Peek renders nothing per model publish.
+  - Find's HistoryPort is renamed `transcripts`, leaving `history` to the timeline's capability.
+- **Off Godview's stage:** FindSheet (it stays in puppeteer for puppeteer's own Godview), FIND, the ⌘F capture and its `stopImmediatePropagation`, `findOpen`, the ⌥-digit listener, ProfileTabs, and the device chip (`DeviceFilterChip.tsx` and its specimen are deleted). Puppeteer is unchanged.
+- **Live now** (`use-live-find.ts`): FindSheet's orchestration rewritten on the exported model.
+  - The 120 ms debounce, numbered asks, the 30 s facts refresh, and an unanswered ask keeping its hits.
+  - `createFindRows` + `liveScope` over the door; rows in the kit's order.
+  - K10: a peer's row shows its OS mark and desktop, and says where it runs.
+- **The live peek (M8)** is a watch-only pane, restored off the canvas as the Peek's own: `frame/peek-pane/LivePeekPane.tsx` + `watch-only.ts`.
+  - It makes zero claims, zero resizes and takes zero input under focus, pointer, keys and box changes. The facade narrows ghosttea-react 0.12's `setViewInputPolicy` to read-only.
+  - **Wall R26:** only `field-app/src/frame/[Pp]eek*`, the pane's own folder and field-app's tests may import it. R25's comment carries the dated note; DK-D19 holds and the canvas's names stay retired.
+- **PK4:** the scope row offers All desktops and Every profile when there is a choice. The button wears the filter ("studio · Work"), × clears both, and the bar's tools step aside by the button's measured width. The filter keeps today's lifetime and resets when Godview closes (GV-D5's "as you left it" is on James's list).
+- **PK5:** History's Live now holds `createGodviewMonitorFeed` over `modelBoardOver(fieldd)` only while shown. It closes on a scope change, the popup closing, a view change, or unmount.
+  - A pick follows Jump to's path; a peer's run goes through the find door.
+  - A pick that cannot show its run says "Could not jump — ‹why›" on the line (`sayOnLine`), never only in the log.
+  - K9's words retire.
+- **The MV lead's keep-list:**
+  - M195: the bar renders only when its inputs move.
+  - MV-8b: "Live now", "Live peek" and "Live filters" each have their own ChromeBoundary.
+  - QL-D2: the Peek holds the stage's keys while it is open over Godview.
+  - SB-3: the frame's ⌘F yields while the mounted view holds every key.
+  - keepStage is kept, and the ⌘F letter comes from `keyLegend`.
+- **`capture:godview` was broken on main:** the perf vitest config had no `wgsl()`. Fixed (`MV:` commit).
+- **PK2 shipped as photographed (a).** The circle sits 12 px clear of SYSTEM CONTROL but hangs 8 px below the 40 px bar, with its axis 8.5 px under the bar's controls (M9). (b), at top 0, and (c), a 56 px bar, are with James; either is one rule plus one paragraph.
+
+**Witnesses:**
+- vitest: `peek-live` (15), `live-feed` (2), `peek-live-pane` (12), `peek` (+5, 20), `godview-monitor` (70; ⌥0–⌥9 not taken, the stage binds no key, the door's keys), `godview-remote-door`, `godview-overlay-boundaries` (the door published while open and withdrawn on close), `godview-find-join`, `design-system`, `ui-system-boundaries` (the Live now plate).
+- R26's self-test: three violation fixtures (desk, Godview, a non-Peek frame file).
+- Red-proofs:
+  - a PK5 feed left open;
+  - the pane without the facade (4 rows);
+  - R26 on the live tree (a Godview file importing the pane fails `--enforce`);
+  - a failed pick that is logged only.
+- `smoke:godview` (offscreen):
+  - the Find rung rewritten for the Peek: ⌘F opens on Live now, the live peek reaches `watching`, Esc folds it, focus returns, and the pane types;
+  - the spawn-bloom item reads the profile from the Peek's dropdown;
+  - jump rung 6b: History's Live now lists the running agent, and the pick reveals its pane (panes 6 → 6);
+  - Godview head photos in both themes.
+
+**Validation:** the lane's `gate.sh` on `a67be332`, the landed tree: `verify.log` **EXIT 0**, `smoke.log` EXIT 0, `smoke-godview.log` EXIT 0 (run 4; logs in `/Volumes/SamsungRed/lanes/p2/gate-run4/`). Runs 1–2 were red on R23b, the retired tabs in the spawn-bloom item, and biome; each was fixed. There were no load timeouts.
+
+**Owed:**
+- The paired perf run (`pnpm perf:godview --source-a model`, M40) and a paired capture against the pre-P2 tree. The machine was shared with three lanes. The bar's height is unchanged, but its tools moved 56 px left.
+- The CDP trace of the blur-18 scrim over the live swarm.
+- The live pane's ground uses the token default, not the viewer's terminal appearance.
