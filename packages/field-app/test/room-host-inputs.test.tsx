@@ -13,12 +13,13 @@ import {
   type HistoryRoomHandle,
   type HistoryRoomProps,
   type HostPort,
+  type RoomFilter,
   type RoomFolders,
   type RoomProjectContext,
   type RoomSelection,
 } from "@rosetta/room";
 import { createDemoPorts, createRoomDemo } from "@rosetta/room/fixtures";
-import { act, createRef } from "react";
+import { act, createRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
@@ -748,5 +749,117 @@ describe("R6 — ③'s head as the host's folder list", () => {
       () => opened.at(-1) === "/Users/demo/Projects/vibe-field",
       "the engine on the room's root",
     );
+  });
+});
+
+describe("R7 — filter chips as buttons with popover rows", () => {
+  /** A host that filters ① by a desktop chip, through the ledger's sections. */
+  function ChipHost({ ports }: { readonly ports: ReturnType<typeof createDemoPorts> }) {
+    const [desktop, setDesktop] = useState<"any" | "studio">("any");
+    const chip: RoomFilter = {
+      key: "desktop",
+      label: desktop === "any" ? "any desktop" : "Studio",
+      accessibleLabel: "Filter by desktop",
+      set: desktop !== "any",
+      menu: {
+        label: "Desktops",
+        groups: [
+          {
+            key: "all",
+            items: [
+              {
+                key: "any",
+                label: "Any desktop",
+                checked: desktop === "any",
+                onSelect: () => setDesktop("any"),
+              },
+              {
+                key: "studio",
+                label: "Studio",
+                mark: <i data-os="studio" />,
+                aside: "asleep",
+                checked: desktop === "studio",
+                onSelect: () => setDesktop("studio"),
+              },
+            ],
+          },
+        ],
+      },
+    };
+    return (
+      <HistoryRoom
+        {...ports}
+        storage={null}
+        projectFilters={[chip]}
+        projectSections={desktop === "any" ? undefined : [{ key: "studio", ids: ["p1"] }]}
+      />
+    );
+  }
+
+  it("① leads its bar with the host's chip; its rows choose, and the host filters through the sections", async () => {
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    const el = host;
+    act(() => root?.render(<ChipHost ports={createDemoPorts(createRoomDemo())} />));
+    await until(() => projectRow(el, "p0"), "the ledger");
+    const bar = el.querySelector(".ah-cols > .ah-col:nth-child(1) .ah-listbar")!;
+    expect([...bar.children].map((kid) => kid.className)).toEqual([
+      "ah-chips",
+      "ah-seg ah-sortseg",
+    ]);
+    const chip = bar.querySelector<HTMLButtonElement>(
+      "button.ah-chipselect.ah-chip[data-filter='desktop']",
+    )!;
+    expect(chip.getAttribute("aria-label")).toBe("Filter by desktop");
+    expect(chip.getAttribute("aria-haspopup")).toBe("menu");
+    expect(chip.textContent).toBe("any desktop");
+    expect(chip.hasAttribute("data-set")).toBe(false);
+    act(() => chip.click());
+    const studio = bar.querySelector<HTMLButtonElement>(".ah-menu__item[data-key='studio']")!;
+    expect(studio.querySelector("[data-os='studio']")).not.toBeNull();
+    expect(studio.querySelector(".ah-menu__aside")?.textContent).toBe("asleep");
+    act(() => studio.click());
+    expect(chip.textContent).toBe("Studio");
+    expect(chip.hasAttribute("data-set")).toBe(true);
+    await until(() => projectRow(el, "p0") === null, "p0 filtered out");
+    expect(drawn(ledger(el))).toEqual(["p1"]);
+  });
+
+  it("② draws a bar of the host's chips for a project that has them", async () => {
+    const chip = (key: string, label: string): RoomFilter => ({
+      key,
+      label,
+      accessibleLabel: `Filter by ${key}`,
+      menu: { label, groups: [{ key: "g", items: [{ key: "any", label, checked: true }] }] },
+    });
+    const { el } = await room({
+      sessionFilters: (id) =>
+        id === "p0" ? [chip("desktop", "any desktop"), chip("agent", "any agent")] : null,
+    });
+    act(() => projectRow(el, "p0")?.click());
+    const bar = await until(() => head(el, 2)?.querySelector(".ah-listbar"), "②'s bar");
+    expect([...bar.querySelectorAll(".ah-chip")].map((kid) => kid.textContent)).toEqual([
+      "any desktop",
+      "any agent",
+    ]);
+    expect(bar.nextElementSibling?.classList.contains("ah-veilhost")).toBe(true);
+    act(() => projectRow(el, "p1")?.click());
+    await until(() => head(el, 2)?.querySelector(".ah-listbar") === null, "no bar for p1");
+  });
+
+  it("absent, ①'s bar holds only the rank switch, ② draws no bar, and the room's sheet keeps its native selects", async () => {
+    const { el } = await room({ search: { open: true, onOpenChange: () => undefined } });
+    const bar = el.querySelector(".ah-cols > .ah-col:nth-child(1) .ah-listbar")!;
+    expect([...bar.children].map((kid) => kid.className)).toEqual(["ah-seg ah-sortseg"]);
+    act(() => projectRow(el, "p0")?.click());
+    await until(() => sessionList(el)?.querySelector("[data-motion-key='s0']"), "②'s rows");
+    expect(head(el, 2)?.querySelector(".ah-listbar")).toBeNull();
+    const selects = await until(() => {
+      const found = document.querySelectorAll("select.ah-chipselect");
+      return found.length > 0 ? found : null;
+    }, "the sheet's selects");
+    expect(selects.length).toBeGreaterThan(0);
+    expect(document.querySelector("button.ah-chip")).toBeNull();
   });
 });
