@@ -72,6 +72,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   #remoteLoadStarted = false;
   #debuggerAttached = false;
   #commandTail: Promise<void> = Promise.resolve();
+  /** PT-5a: the bootstrap document has been taken out of the page's history (below) — once a window's life. */
+  #bootstrapPruned = false;
   /** PT-5a: who hears what the page asked for and may not have. */
   readonly #refusedListeners = new Set<(what: BrowserSurfaceRefusal, url?: string) => void>();
 
@@ -313,17 +315,31 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         canGoForward: contents.navigationHistory.canGoForward(),
       });
     };
+    // PT-5a — A FRESH PAGE HAS NOWHERE TO GO BACK TO: the bootstrap `about:blank` is an entry of the window's history, so a
+    // page's first load said `canGoBack: true` and ‹ went to a blank film (probed; the BAR row's first read). It is pruned
+    // once the first remote load has stopped — a load that failed too (its error page stands in the asked address's entry).
+    const stopped = (): void => {
+      if (!this.#bootstrapPruned && this.#remoteLoadStarted && !this.isDestroyed()) {
+        this.#bootstrapPruned = true;
+        try {
+          contents.navigationHistory.clear();
+        } catch {
+          // a history that cannot be pruned now keeps its first entry: ‹ stays lit, as before
+        }
+      }
+      emit();
+    };
     contents.on("did-navigate", emit);
     contents.on("did-navigate-in-page", emit);
     contents.on("page-title-updated", emit);
     contents.on("did-start-loading", emit);
-    contents.on("did-stop-loading", emit);
+    contents.on("did-stop-loading", stopped);
     return () => {
       contents.off("did-navigate", emit);
       contents.off("did-navigate-in-page", emit);
       contents.off("page-title-updated", emit);
       contents.off("did-start-loading", emit);
-      contents.off("did-stop-loading", emit);
+      contents.off("did-stop-loading", stopped);
     };
   }
 
