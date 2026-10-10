@@ -162,6 +162,7 @@ import {
   type PageVisibility,
 } from "./smoke-visibility";
 import { keepFromPerson, smokeWindow, smokeWindowsFocused } from "./smoke-window";
+import { timelinePastRungs } from "./timeline-past-rungs";
 import {
   HISTORY_SEED_WORDS,
   leakedVariables,
@@ -3814,6 +3815,10 @@ interface MonitorFacts {
   swarmRenderer: string;
   /** AR-5: the usage column's tiles; -1 while no column is mounted. */
   usageTiles: number;
+  /** TL: the past the stage lends its view — `absent` · `complete` · `partial`
+   * · `unavailable` — and the ended runs in it. Optional, as `runs` is. */
+  history?: string;
+  endedLanes?: number;
   /** AR-7: the fold's rows, by run, as the stage received them — optional:
    * a stage built before the field existed publishes none, and the typed-agent
    * rows then fail on it by name rather than on a TypeError. */
@@ -9035,6 +9040,27 @@ export async function runSmokeGodview(opts: {
         );
       },
     });
+
+    // THE TIMELINE'S PAST (TL; the MV lead's asks for the combined gate) — after
+    //      Jump to, which ran the seeded conversation HERE and ended it: a run
+    //      of this runtime that the record holds and the model no longer does.
+    //      The timeline chosen, the stage's marker says what it lends its view
+    //      — `history: complete` with that run among `endedLanes` — or, on a
+    //      run with no agent index, that it lends nothing (`absent`: the door's
+    //      NOT_FOUND `no-record`). Read off the marker, never the view's DOM
+    //      (MV-5). No theme change, no typing; the swarm is chosen again after.
+    const jumped = verdict["jumpTo"] as { ended?: unknown } | undefined;
+    const pastRungs = await timelinePastRungs(win, {
+      handle: opts.handle,
+      monitor: monitorWatch,
+      ranHere:
+        jumped?.ended !== undefined && opts.typedAgent !== undefined
+          ? { nativeSessionId: opts.typedAgent.history.nativeSessionId }
+          : undefined,
+    });
+    console.log(`SMOKE_GODVIEW_TIMELINE_PAST ${JSON.stringify(pastRungs)}`);
+    verdict["timelinePast"] = pastRungs.timelinePast;
+    verdict["timelineNoRecord"] = pastRungs.timelineNoRecord;
 
     // HISTORY'S OWN ACTS (PJ-4, H6 and R4) — after Jump to, whose end leaves
     //      the seeded session ended (its row says Resume): ②'s New agent starts
