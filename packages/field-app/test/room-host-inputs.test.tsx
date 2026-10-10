@@ -12,6 +12,7 @@ import {
   HistoryRoom,
   type HistoryRoomHandle,
   type HistoryRoomProps,
+  type RoomProjectContext,
   type RoomSelection,
 } from "@rosetta/room";
 import { createDemoPorts, createRoomDemo } from "@rosetta/room/fixtures";
@@ -350,5 +351,197 @@ describe("R4 — a session row's id slot, its act or reason, and the host's key"
       folder: "/Users/demo/Projects/vibe-field",
     });
     expect("hostKey" in (selections.at(-1) ?? {})).toBe(false);
+  });
+});
+
+const head = (el: HTMLElement, column: number) =>
+  el.querySelector(`.ah-cols > .ah-col:nth-child(${column})`);
+
+describe("R5 — the heads: ②'s acts and card, ④'s acts or reason", () => {
+  it("② draws the host's acts after its own, the primary on the go fill, a menu as the room's popover rows", async () => {
+    const asked: [string, RoomProjectContext][] = [];
+    const chosen: string[] = [];
+    const { el } = await room({
+      projectActs: (id, context) => {
+        asked.push([id, context]);
+        return id !== "p0"
+          ? null
+          : [
+              {
+                key: "pin",
+                label: "Pin this project",
+                content: "P",
+                onPress: () => chosen.push("pin"),
+              },
+              {
+                key: "new",
+                label: "New agent",
+                content: <i data-glyph="start" />,
+                primary: true,
+                menu: {
+                  label: "New agent",
+                  groups: [
+                    {
+                      key: "where",
+                      title: "Starts in",
+                      items: [
+                        {
+                          key: "here",
+                          label: "~/Projects/vibe-field",
+                          checked: true,
+                          onSelect: () => chosen.push("here"),
+                        },
+                      ],
+                    },
+                    {
+                      key: "recipes",
+                      items: [
+                        {
+                          key: "claude",
+                          label: "Claude",
+                          aside: "last used",
+                          checked: false,
+                          onSelect: () => chosen.push("claude"),
+                        },
+                        {
+                          key: "other",
+                          label: "Another model",
+                          detail: "not settable yet",
+                          disabled: true,
+                        },
+                      ],
+                    },
+                  ],
+                },
+              },
+            ];
+      },
+    });
+    act(() => projectRow(el, "p0")?.click());
+    const acts = await until(() => head(el, 2)?.querySelector(".ah-meta__acts"), "②'s head");
+    const kids = [...acts.children];
+    // the room's own first (the figures, the repository), the host's after, in its order
+    expect(
+      kids
+        .slice(-2)
+        .map((kid) => (kid.querySelector("[data-act]") ?? kid).getAttribute("data-act")),
+    ).toEqual(["pin", "new"]);
+    expect(asked.at(-1)).toEqual(["p0", { folder: null }]);
+    const pin = acts.querySelector<HTMLButtonElement>("button[data-act='pin']")!;
+    expect(pin.className).toBe("ah-iconbtn ah-hostact");
+    act(() => pin.click());
+    expect(chosen).toEqual(["pin"]);
+    const trigger = acts.querySelector<HTMLButtonElement>("button[data-act='new']")!;
+    expect(trigger.hasAttribute("data-primary")).toBe(true);
+    expect(trigger.getAttribute("aria-haspopup")).toBe("menu");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(trigger.querySelector("[data-glyph='start']")).not.toBeNull();
+    act(() => trigger.click());
+    const menu = el.querySelector<HTMLElement>(".ah-menu [role='menu']")!;
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(menu.getAttribute("aria-label")).toBe("New agent");
+    expect(menu.querySelector(".ah-menu__title")?.textContent).toBe("Starts in");
+    const items = [...menu.querySelectorAll<HTMLButtonElement>(".ah-menu__item")];
+    expect(items.map((item) => item.getAttribute("role"))).toEqual([
+      "menuitemradio",
+      "menuitemradio",
+      "menuitemradio",
+    ]);
+    expect(items.map((item) => item.getAttribute("aria-checked"))).toEqual([
+      "true",
+      "false",
+      "false",
+    ]);
+    expect(items[2]?.disabled).toBe(true);
+    expect(items[2]?.querySelector(".ah-menu__detail")?.textContent).toBe("not settable yet");
+    expect(items[1]?.querySelector(".ah-menu__aside")?.textContent).toBe("last used");
+    // it opens on the chosen row, and the arrows walk the rows that can be chosen
+    expect(document.activeElement).toBe(items[0]);
+    act(() =>
+      items[0]?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })),
+    );
+    expect(document.activeElement).toBe(items[1]);
+    act(() =>
+      items[1]?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })),
+    );
+    expect(document.activeElement).toBe(items[0]);
+    // a choice is the host's, and closes the rows back onto their control
+    act(() => items[1]?.click());
+    expect(chosen).toEqual(["pin", "claude"]);
+    expect(el.querySelector(".ah-menu")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    // Escape closes too
+    act(() => trigger.click());
+    expect(el.querySelector(".ah-menu")).not.toBeNull();
+    act(() =>
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
+    );
+    expect(el.querySelector(".ah-menu")).toBeNull();
+  });
+
+  it("② draws the host's card under its head, above the list", async () => {
+    const { el } = await room({
+      projectCard: (id) =>
+        id === "p0" ? <p data-card="">These two folders look like one project</p> : null,
+    });
+    act(() => projectRow(el, "p0")?.click());
+    const card = await until(() => head(el, 2)?.querySelector(".ah-hostcard"), "the card");
+    expect(card.querySelector("[data-card]")?.textContent).toBe(
+      "These two folders look like one project",
+    );
+    expect(card.previousElementSibling?.classList.contains("ah-meta")).toBe(true);
+    act(() => projectRow(el, "p1")?.click());
+    await until(() => head(el, 2)?.querySelector(".ah-hostcard") === null, "no card for p1");
+  });
+
+  it("④ draws the host's acts before the activity act, or its reason after the range", async () => {
+    const pressed: string[] = [];
+    const { el, handle } = await room({
+      sessionActs: (session) =>
+        session.id === "s0"
+          ? {
+              acts: [
+                {
+                  key: "jump",
+                  label: "Jump to this session",
+                  content: "Jump to",
+                  onPress: () => pressed.push(session.id),
+                },
+              ],
+            }
+          : session.id === "s1"
+            ? { reason: "asleep · 2 h" }
+            : null,
+    });
+    act(() => handle.current?.openAt({ sessionId: "s0" }));
+    const acts = await until(
+      () => head(el, 4)?.querySelector(".ah-headacts .ah-hostact"),
+      "④'s act",
+    );
+    const row = [...(acts.parentElement?.children ?? [])];
+    expect(row.map((kid) => kid.className)).toEqual([
+      "ah-caption tnum",
+      "ah-hostact",
+      "ah-iconbtn",
+    ]);
+    expect(acts.getAttribute("data-place")).toBe("pill");
+    expect(acts.textContent).toBe("Jump to");
+    act(() => (acts as HTMLButtonElement).click());
+    expect(pressed).toEqual(["s0"]);
+    act(() => handle.current?.openAt({ sessionId: "s1" }));
+    const reason = await until(() => head(el, 4)?.querySelector(".ah-headreason"), "④'s reason");
+    expect(reason.textContent).toBe("asleep · 2 h");
+    expect(reason.previousElementSibling?.className).toBe("ah-caption tnum");
+    expect(head(el, 4)?.querySelector(".ah-hostact")).toBeNull();
+  });
+
+  it("absent, the heads hold only the room's own acts and no card", async () => {
+    const { el, handle } = await room();
+    act(() => handle.current?.openAt({ sessionId: "s0" }));
+    await until(() => head(el, 4)?.querySelector(".ah-headacts .ah-iconbtn"), "④'s activity act");
+    expect(el.querySelector(".ah-hostact, .ah-hostcard, .ah-headreason, .ah-menuhost")).toBeNull();
+    expect(
+      [...(head(el, 4)?.querySelector(".ah-headacts")?.children ?? [])].map((kid) => kid.className),
+    ).toEqual(["ah-caption tnum", "ah-iconbtn"]);
   });
 });
