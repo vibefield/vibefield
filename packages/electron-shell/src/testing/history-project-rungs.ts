@@ -133,13 +133,35 @@ async function untilValue(
  */
 export async function historyByProjectPhotos(
   win: BrowserWindow,
-  opts: { checked: boolean; shotDir: string },
+  opts: { checked: boolean; name?: string | undefined; shotDir: string },
 ): Promise<Record<string, unknown>> {
   if (!opts.checked) return { unavailable: "History by project was not witnessed in this run" };
   const command = process.platform === "darwin" ? "meta" : "control";
   win.webContents.sendInputEvent({ type: "keyDown", keyCode: "3", modifiers: [command] });
   win.webContents.sendInputEvent({ type: "keyUp", keyCode: "3", modifiers: [command] });
   await untilValue(win, "History, the view", VIEW_NOW, 10_000, (value) => value === "history");
+  // the warm open reloaded the renderer since the rung chose the project: the
+  // photographed room chooses it again, and its newest session, as a person does
+  await untilValue(
+    win,
+    "the witnessed project and its session chosen for the photographs",
+    `(() => {
+      const room = ${HISTORY_ROOM};
+      if (!room) return "no room";
+      const rows = [...room.querySelectorAll(".ah-project-list-item")];
+      const row = rows.find((candidate) =>
+        (candidate.querySelector(".ah-project-list-item__header strong")?.textContent ?? "").trim() ===
+          ${JSON.stringify(opts.name ?? "")}) ?? rows[0];
+      if (!row) return "no project row";
+      if (!row.classList.contains("is-selected")) { row.click(); return "project"; }
+      const session = room.querySelector(".ah-session-list-item");
+      if (!session) return "no session row";
+      if (!session.classList.contains("is-selected")) { session.click(); return "session"; }
+      return "chosen";
+    })()`,
+    20_000,
+    (value) => value === "chosen",
+  );
   mkdirSync(opts.shotDir, { recursive: true });
   const shots: string[] = [];
   for (const theme of ["light", "dark"] as const) {

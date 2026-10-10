@@ -9079,8 +9079,12 @@ export async function runSmokeGodview(opts: {
     });
     // HISTORY BY PROJECT, PHOTOGRAPHED (PJ-4) — beside the Peek's, the same
     //      last pass: light then dark, then Auto again
+    const byProject = verdict["historyByProject"] as
+      | { checked?: boolean; name?: string }
+      | undefined;
     verdict["historyByProjectPhotos"] = await historyByProjectPhotos(win, {
-      checked: (verdict["historyByProject"] as { checked?: boolean } | undefined)?.checked === true,
+      checked: byProject?.checked === true,
+      name: byProject?.name,
       shotDir: peekShotDir(),
     });
 
