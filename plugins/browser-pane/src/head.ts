@@ -18,7 +18,8 @@ export interface HeadState {
   /** The address as it is cut ("" = none: the start page's prompt). */
   readonly display: string;
   readonly secure: boolean;
-  /** The favicon printed on the capsule, by id (null: none). PT-1 knows one: the sample's (`"sample"`). */
+  /** The favicon on the capsule, by id (null: none): the sample's (`"sample"`), a page's own once its picture is decoded
+   * (`faviconId(key)` — PT-4), or the GENERIC mark (`"generic"` — a page with none, or one whose picture cannot be read). */
   readonly favicon: string | null;
   readonly loading: boolean;
   readonly canBack: boolean;
@@ -33,12 +34,18 @@ export interface HeadState {
  * (`info` — the host's `LiveInfo`, the producer's committed navigation truth): the address it is at (a redirect's, never the
  * one typed), its lock, loading while it loads, and how far back and forward its history reaches.
  */
-export function headStateOf(url: string, S: PaneShape, info?: LiveInfo): HeadState {
+export function headStateOf(
+  url: string,
+  S: PaneShape,
+  info?: LiveInfo,
+  /** PT-4: a live page's favicon id as the desk state answers it (`PaneLocal.icon`) — null: the host says nothing of one. */
+  icon: string | null = null,
+): HeadState {
   const at = info?.address ?? url;
   return {
     display: displayOf(at),
     secure: isSecure(at),
-    favicon: url === SAMPLE_URL && info === undefined ? "sample" : null,
+    favicon: info === undefined ? (url === SAMPLE_URL ? "sample" : null) : icon,
     loading: info?.loading !== undefined,
     canBack: info?.back === true,
     canForward: info?.forward === true,
@@ -46,9 +53,41 @@ export function headStateOf(url: string, S: PaneShape, info?: LiveInfo): HeadSta
   };
 }
 
+/** A page's favicon as the host's face says it (`LiveInfo.extra.favicon` — VibeField's contract): a key to compare, the
+ * image's type, its bytes. */
+export interface PageFavicon {
+  readonly key: string;
+  readonly type: string;
+  readonly bytes: Uint8Array;
+}
+
+/** The id a head says a page's own favicon by. */
+export const faviconId = (key: string): string => `icon:${key}`;
+/** The id of the generic mark: a page with no favicon the head can print. */
+export const GENERIC_FAVICON = "generic";
+
+/**
+ * What the host's face says of a page's favicon (`info.extra.favicon`): the favicon, `null` — the page has none — or
+ * undefined: the host says nothing of favicons (a still's face, a host before PT-4), and the head prints no mark at all.
+ */
+export function pageFavicon(info: LiveInfo | undefined): PageFavicon | null | undefined {
+  const said = info?.extra?.favicon;
+  if (said === undefined) return undefined;
+  if (typeof said !== "object" || said === null) return null;
+  const { key, type, bytes } = said as Partial<PageFavicon>;
+  return typeof key === "string" && typeof type === "string" && bytes instanceof Uint8Array
+    ? { key, type, bytes }
+    : null;
+}
+
 /** The head's raster as a service a host lends: the pane's head for what it says, drawn at `tpu` texels per world unit. */
 export interface HeadRaster {
   raster(S: PaneShape, state: HeadState, tpu: number): HeadBitmap | undefined;
+  /**
+   * PT-4 — a page's favicon offered for printing: true once its picture is decoded (a head may say `faviconId(key)`);
+   * false while it is being decoded — `ready` is called once it is — and for good when it cannot be read.
+   */
+  picture?(favicon: PageFavicon, ready: () => void): boolean;
 }
 
 /**

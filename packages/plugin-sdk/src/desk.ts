@@ -166,6 +166,30 @@ export interface LiveBrowserSpec {
   readonly deviceScaleFactor: number;
   readonly scheme: "light" | "dark";
   readonly label: string;
+  /** PT-4 — the device the page is seen as. Absent: a pointer device of the host's engine's own agent. */
+  readonly device?: LiveBrowserDevice;
+}
+
+/**
+ * THE DEVICE A PAGE IS SEEN AS (PT-4) — what the page is TOLD beyond its viewport and its density: whether it is laid out as
+ * a phone or a tablet (`mobile`), how many fingers it takes (`touchPoints` — 0 is a pointer device; a press in hand on a page
+ * with any arrives as a TOUCH), and the AGENT it announces. `agent: null` is the host's engine's own — its Chromium by name
+ * and bundled version, said by the host, never a string a plugin writes down.
+ */
+export interface LiveBrowserDevice {
+  readonly mobile: boolean;
+  readonly touchPoints: number;
+  readonly agent: LiveBrowserAgent | null;
+}
+
+/** An agent as a page reads it: `navigator.userAgent`, `navigator.platform`, and the client hints it ships with
+ * (`navigator.userAgentData`: its platform, that platform's version, the device's model). */
+export interface LiveBrowserAgent {
+  readonly userAgent: string;
+  readonly navigatorPlatform: string;
+  readonly platform: string;
+  readonly platformVersion: string;
+  readonly model: string;
 }
 // docs:end live-browser-spec
 
@@ -195,7 +219,50 @@ export function liveBrowserSpec(
     return undefined;
   if (scheme !== "light" && scheme !== "dark") return undefined;
   if (typeof label !== "string") return undefined;
-  return { source, url, viewport: [w, h], deviceScaleFactor, scheme, label };
+  // PT-4: a device named must be one the host can read whole — never half a device
+  const device = spec.device === undefined ? undefined : liveBrowserDevice(spec.device);
+  if (spec.device !== undefined && device === undefined) return undefined;
+  return {
+    source,
+    url,
+    viewport: [w, h],
+    deviceScaleFactor,
+    scheme,
+    label,
+    ...(device === undefined ? {} : { device }),
+  };
+}
+
+/** A word a page is told: a string within `max`, with no control character in it. */
+const told = (v: unknown, max: number): v is string =>
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: the refusal IS of control characters
+  typeof v === "string" && v.length <= max && !/[\u0000-\u001f\u007f]/u.test(v);
+
+/** A `device` read as `LiveBrowserDevice` (the host's side), or undefined when any of it is not what the type says. */
+function liveBrowserDevice(value: unknown): LiveBrowserDevice | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const { mobile, touchPoints, agent } = value as Readonly<Record<string, unknown>>;
+  if (typeof mobile !== "boolean") return undefined;
+  if (
+    typeof touchPoints !== "number" ||
+    !Number.isSafeInteger(touchPoints) ||
+    touchPoints < 0 ||
+    touchPoints > 10
+  )
+    return undefined;
+  if (agent === null) return { mobile, touchPoints, agent: null };
+  if (typeof agent !== "object" || agent === undefined) return undefined;
+  const { userAgent, navigatorPlatform, platform, platformVersion, model } = agent as Readonly<
+    Record<string, unknown>
+  >;
+  if (!told(userAgent, 512) || userAgent.length === 0) return undefined;
+  if (!told(navigatorPlatform, 32) || !told(platform, 64)) return undefined;
+  if (!told(platformVersion, 32) || !told(model, 64)) return undefined;
+  return {
+    mobile,
+    touchPoints,
+    agent: { userAgent, navigatorPlatform, platform, platformVersion, model },
+  };
 }
 
 /**
@@ -217,6 +284,14 @@ export type BrowserNavigationCommand =
 export interface BrowserNavigation {
   /** Send the page `key`'s face holds a navigation — false: nothing sent (no page open for the key, or one the host refuses). */
   navigate(key: string, command: BrowserNavigationCommand): boolean;
+  /**
+   * PT-4 — the face's SPEC moved under its open page (another device, another scheme, another viewport with it): the page is
+   * told, never re-opened. The host lays it out at the spec's viewport and density and tells it its device and its scheme;
+   * the page RELOADS ONCE when what it is told of its device moved (its agent, mobile, touch) — its scheme or its density
+   * alone is told live. The spec's `url` is not read here: an address moves by `navigate`. False: no page open for the key,
+   * or a spec the host cannot read.
+   */
+  respec(key: string, spec: Readonly<Record<string, unknown>>): boolean;
 }
 
 /** The key the host lends a browser kind its pages' navigation under (`KindHost.use(BROWSER_NAVIGATION)`). */

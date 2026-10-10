@@ -32,6 +32,7 @@ import {
   type LiveState,
   type Sight,
 } from "@vibefield/plugin-sdk/desk";
+import { pageFavicon } from "./head";
 import {
   BROWSER,
   type BrowserLaw,
@@ -103,11 +104,19 @@ export interface PaneFaces {
   stats(): PaneFaceStats;
 }
 
-/** What a face says that the record reads, as one string — never its cursor (the desk reads that in a frame, not a record). */
+/** What a face says that the record reads, as one string — never its cursor (the desk reads that in a frame, not a record),
+ * and its favicon by its KEY (PT-4): the bytes are not words to spell at every frame. */
 const wordsOf = (face: LiveFace): string => {
   const s = face.state();
-  const { cursor: _cursor, ...said } = face.info();
-  return JSON.stringify([s.is, s.is === "failed" ? s.reason : null, said]);
+  const info = face.info();
+  const { cursor: _cursor, extra: _extra, ...said } = info;
+  const favicon = pageFavicon(info);
+  return JSON.stringify([
+    s.is,
+    s.is === "failed" ? s.reason : null,
+    said,
+    favicon === undefined ? null : (favicon?.key ?? ""),
+  ]);
 };
 
 export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BROWSER): PaneFaces {

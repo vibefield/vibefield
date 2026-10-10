@@ -7,15 +7,25 @@
 // It is ENGRAVED, as a laser engraves acrylic: back ‹ and forward › (a hairline where there is nowhere to go), reload ↻
 // (✕ while loading), the viewport at the right — the dev browser's size readout, which is also what a resize reads — and
 // the ADDRESS FIELD: a capsule frosted whole, the address cut back out of it to clear glass, so the letters are the mat
-// seen through the pane. One thing is PRINTED, in colour, on the capsule: the page's favicon. A narrow pane (a phone's)
-// carries the capsule alone.
+// seen through the pane. One thing is PRINTED, in colour, on the capsule: the page's favicon — the sample's own, or a live
+// page's (PT-4: its bytes from the host's face, decoded here once a key); a page with none carries the GENERIC mark, a
+// small globe ENGRAVED in the favicon's place. A narrow pane (a phone's) carries the capsule alone.
 //
 // THE SERVICE (PT-1 ruling 8): the plugin's DOM half lends `headRaster()` under `HEAD_RASTER` wherever the platform has
 // an OffscreenCanvas (the product's renderer); the same `drawHead` makes the committed raster a Node still draws
 // (scripts/make-head-still.ts), on a Node canvas.
 
 import { PROMPT } from "./address";
-import { engraveSplit, GUTTER, type HeadRaster, type HeadState, headSize } from "./head";
+import {
+  engraveSplit,
+  faviconId,
+  GENERIC_FAVICON,
+  GUTTER,
+  type HeadRaster,
+  type HeadState,
+  headSize,
+  type PageFavicon,
+} from "./head";
 import { bandLayout, type PaneShape } from "./law";
 import type { HeadBitmap } from "./layout";
 import { sampleFavicon } from "./sample-page";
@@ -35,6 +45,7 @@ export type HeadContext = Pick<
   | "roundRect"
   | "fill"
   | "arc"
+  | "ellipse"
   | "closePath"
   | "measureText"
   | "fillText"
@@ -62,7 +73,8 @@ export interface HeadCanvas {
   height: number;
 }
 
-/** Cut a pane's head into `canvas` (resized to fit) at `tpu` texels per world unit; `favicon` is the print's picture, or null. */
+/** Cut a pane's head into `canvas` (resized to fit) at `tpu` texels per world unit; `favicon` is the print's picture, or null
+ * — and a head that says the GENERIC mark (`st.favicon`) has a globe engraved where the picture would be printed. */
 export function drawHead(
   canvas: HeadCanvas,
   ctx: HeadContext,
@@ -150,8 +162,9 @@ export function drawHead(
   const text = st.display || PROMPT;
   ctx.font = `${st.display ? 600 : 500} ${size}px ${SANS}`;
   ctx.textBaseline = "middle";
-  const icon = favicon ? 2.8 * mm : 0;
-  const gap = favicon ? 1.15 * mm : 0;
+  const generic = favicon === null && st.favicon === GENERIC_FAVICON;
+  const icon = favicon || generic ? 2.8 * mm : 0;
+  const gap = favicon || generic ? 1.15 * mm : 0;
   const lock = st.secure && st.display ? 1.95 * mm : 0;
   const room = right - left - icon - gap - lock;
   let shown = text;
@@ -174,6 +187,22 @@ export function drawHead(
     x += lock;
   }
   const iconAt = x;
+  if (generic) {
+    // the generic mark (PT-4): a globe cut out of the capsule's frost — its rim, a meridian, the equator
+    const gx = iconAt + icon / 2;
+    const r = 1.12 * mm;
+    ctx.lineWidth = 0.22 * mm;
+    ctx.beginPath();
+    ctx.arc(gx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(gx, cy, r * 0.46, r, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(gx - r, cy);
+    ctx.lineTo(gx + r, cy);
+    ctx.stroke();
+  }
   if (icon) x += icon + gap;
   ctx.globalAlpha = st.display ? 1 : 0.6;
   ctx.fillText(shown, x, cy + 0.08 * mm);
@@ -232,14 +261,18 @@ function faviconCanvas(): OffscreenCanvas | null {
  * THE HEAD RASTER the DOM half lends (`HEAD_RASTER`): one reused OffscreenCanvas (read back often), the platform's
  * fonts; undefined where the platform has no OffscreenCanvas (Node — a still draws its committed raster instead).
  */
-export function headRaster(): HeadRaster | undefined {
+export function headRaster(
+  decode: (favicon: PageFavicon) => Promise<CanvasImageSource> = decodeFavicon,
+): HeadRaster | undefined {
   if (typeof OffscreenCanvas === "undefined") return undefined;
   const canvas = new OffscreenCanvas(1, 1);
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (ctx === null) return undefined;
   let sample: OffscreenCanvas | null | undefined;
+  const pictures = createFaviconPictures(decode);
   const icon = (id: string | null): CanvasImageSource | null => {
-    if (id !== "sample") return null;
+    if (id === null) return null;
+    if (id !== "sample") return pictures.byId(id);
     if (sample === undefined) sample = faviconCanvas();
     return sample;
   };
@@ -247,6 +280,90 @@ export function headRaster(): HeadRaster | undefined {
     raster(S, st, tpu) {
       const { width, height } = drawHead(canvas, ctx as HeadContext, S, st, tpu, icon(st.favicon));
       return headBitmap(ctx as HeadContext, width, height);
+    },
+    picture: pictures.offer,
+  };
+}
+
+/** How many pages' pictures are kept decoded (the oldest goes first). */
+export const FAVICON_PICTURES_MAX = 64;
+/** What a page's own favicon's id begins with (head.ts `faviconId`). */
+const FAVICON_ID = faviconId("");
+
+/**
+ * A page's favicon as a picture a canvas draws (PT-4): the platform's own decoder over the bytes — PNG, ICO, JPEG, GIF,
+ * WebP — and, for what that refuses (an SVG), an image element over a `blob:` of them.
+ */
+export async function decodeFavicon(favicon: PageFavicon): Promise<CanvasImageSource> {
+  const blob = new Blob([favicon.bytes as BlobPart], { type: favicon.type });
+  try {
+    return await createImageBitmap(blob);
+  } catch {
+    if (typeof Image === "undefined") throw new Error("the favicon could not be decoded");
+    const url = URL.createObjectURL(blob);
+    try {
+      const image = new Image();
+      image.decoding = "async";
+      image.src = url;
+      await image.decode();
+      return image;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+}
+
+/**
+ * The pages' favicons, decoded once a key (PT-4): `offer` answers whether a favicon's picture is ready to print — starting its
+ * decode the first time it is offered and calling every waiter's `ready` once it is; one that cannot be read is never ready
+ * (its head keeps the generic mark). `byId` is the picture a head's `faviconId(key)` names.
+ */
+export function createFaviconPictures(
+  decode: (favicon: PageFavicon) => Promise<CanvasImageSource>,
+): {
+  offer(favicon: PageFavicon, ready: () => void): boolean;
+  byId(id: string): CanvasImageSource | null;
+} {
+  type Entry =
+    | { readonly is: "decoding"; readonly waiting: Set<() => void> }
+    | { readonly is: "ready"; readonly picture: CanvasImageSource }
+    | { readonly is: "unreadable" };
+  const entries = new Map<string, Entry>();
+  return {
+    offer(favicon, ready) {
+      const had = entries.get(favicon.key);
+      if (had?.is === "ready") return true;
+      if (had?.is === "unreadable") return false;
+      if (had?.is === "decoding") {
+        had.waiting.add(ready);
+        return false;
+      }
+      const waiting = new Set([ready]);
+      const decoding: Entry = { is: "decoding", waiting };
+      entries.set(favicon.key, decoding);
+      // the oldest picture makes room (a Map keeps the order its keys were set in)
+      for (const key of entries.keys()) {
+        if (entries.size <= FAVICON_PICTURES_MAX) break;
+        if (key !== favicon.key) entries.delete(key);
+      }
+      // (a decode that lands after its entry made room for newer ones is dropped: its page offers it again if it is still there)
+      void decode(favicon).then(
+        (picture) => {
+          if (entries.get(favicon.key) !== decoding) return;
+          entries.set(favicon.key, { is: "ready", picture });
+          for (const tell of waiting) tell();
+        },
+        () => {
+          if (entries.get(favicon.key) === decoding) entries.set(favicon.key, { is: "unreadable" });
+        },
+      );
+      return false;
+    },
+    byId(id) {
+      const entry = id.startsWith(FAVICON_ID)
+        ? entries.get(id.slice(FAVICON_ID.length))
+        : undefined;
+      return entry?.is === "ready" ? entry.picture : null;
     },
   };
 }

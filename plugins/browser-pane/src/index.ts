@@ -6,7 +6,15 @@ export * from "./device";
 export * from "./devices";
 export { chordOf, createPaneHand, handOf, type PaneHand, type PaneHandStats } from "./hand";
 export * from "./head";
-export { drawHead, type HeadContext, headBitmap, headRaster } from "./head-canvas";
+export {
+  createFaviconPictures,
+  decodeFavicon,
+  drawHead,
+  FAVICON_PICTURES_MAX,
+  type HeadContext,
+  headBitmap,
+  headRaster,
+} from "./head-canvas";
 export { packRuns, type StillHead, stillHead, stillSplit, unpackHead } from "./head-still";
 export * from "./ids";
 export * from "./kind";

@@ -3,13 +3,19 @@
 // device (labelled `<kind>/live <key>`, from the frame's `visibleRect`) and releases its lease; an UNSEEN face's frame is taken and
 // closed, no redraw; the demand map; the state and the words; close; a remount's service makes its writers on its own device; the
 // capability gate's refusal is a failed face with the words; the mint names the page and the durable key.
+// PT-4 — the page as a device sees it: the spec's device and scheme are the source's emulation at the mint and an `emulate` told
+// down the lane as it goes live and whenever the spec moves (`respec` — the viewport's demand first); the desk's pages share ONE
+// persistent profile; the favicon rides the face's words (`extra.favicon`); a page is called by its title, else its spec's label.
 import type { LiveDemand, LiveTextureOptions, LiveWriter } from "@vibecook/ice/desk/kit";
 import type { LiveSurfaceFrameMetadataV1, LiveSurfaceRuntimeSummaryV1 } from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
   createDeskLiveSources,
+  DESK_PROFILE,
   type DeskLiveDeps,
+  emulationOf,
   fpsBucket,
+  type LiveFavicon,
   liveDemandIntent,
   liveInputEvents,
 } from "../src/surfaces/live/desk-live";
@@ -27,6 +33,44 @@ const PAGE = {
   deviceScaleFactor: 2,
   scheme: "light",
   label: "Browser",
+};
+/** What PAGE's device is in LSF's words: the engine's own (no agent), a pointer device, the spec's scheme. */
+const LAPTOP_TOLD = { deviceScaleFactor: 2, mobile: false, touchPoints: 0, colorScheme: "light" };
+const IPHONE = {
+  mobile: true,
+  touchPoints: 5,
+  agent: {
+    userAgent:
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1",
+    navigatorPlatform: "iPhone",
+    platform: "iOS",
+    platformVersion: "26.0",
+    model: "iPhone",
+  },
+};
+const PHONE_PAGE = {
+  ...PAGE,
+  viewport: [402, 874],
+  deviceScaleFactor: 3,
+  scheme: "dark",
+  device: IPHONE,
+};
+const PHONE_TOLD = {
+  deviceScaleFactor: 3,
+  mobile: true,
+  touchPoints: 5,
+  agent: {
+    userAgent: IPHONE.agent.userAgent,
+    navigatorPlatform: "iPhone",
+    hints: {
+      platform: "iOS",
+      platformVersion: "26.0",
+      architecture: "",
+      model: "iPhone",
+      mobile: true,
+    },
+  },
+  colorScheme: "dark",
 };
 const SEEN: LiveDemand = {
   mode: "live",
@@ -146,19 +190,27 @@ function fakeHandle(key: string, opts: SurfaceAcquireOptions) {
     },
     setDemand(d: SurfaceDemandRequest) {
       h.demands.push(d);
+      h.order.push("demand");
     },
     /** What the face sent down the page's lane, with the revision it was stamped with; and its navigations. */
     inputs: [] as { event: unknown; revision: number | undefined }[],
     navigations: [] as unknown[],
+    /** PT-4: the emulations told down the lane (the `emulate` commands), apart from the chrome's navigations. */
+    emulations: [] as unknown[],
+    /** Every send in the order it went: "demand" and "emulate". */
+    order: [] as string[],
     lane: true,
     sendInput(event: unknown, revision?: number) {
       if (!h.lane) return false;
       h.inputs.push({ event, revision });
       return true;
     },
-    navigate(command: unknown) {
-      if (!h.lane) return false;
-      h.navigations.push(command);
+    navigate(command: { action: string; emulation?: unknown }) {
+      if (!h.lane || state.status !== "live") return false;
+      if (command.action === "emulate") {
+        h.emulations.push(command.emulation);
+        h.order.push("emulate");
+      } else h.navigations.push(command);
       return true;
     },
     retry() {
@@ -270,7 +322,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
     });
   });
 
-  it("mints the page on the WINDOW's client: a browser source in a memory profile of its own, the durable key as reuseKey", async () => {
+  it("mints the page on the WINDOW's client: a browser source in the desk's ONE persistent profile, born on its device, the durable key as reuseKey", async () => {
     const t = setup();
     t.live.open("13918995204487956201-1", PAGE, () => {});
     const grant = await t.handles[0]?.opts.tickets.mint();
@@ -282,9 +334,15 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
           source: {
             kind: "browser",
             initialUrl: "http://127.0.0.1:4321/",
-            profile: { mode: "memory", ref: "desk:13918995204487956201-1" },
+            profile: { mode: "persistent", ref: "desk" },
             logicalViewport: { width: 1280, height: 800 },
             deviceScaleFactor: 2,
+            emulation: {
+              deviceScaleFactor: 2,
+              mobile: false,
+              touchPoints: 0,
+              colorScheme: "light",
+            },
           },
           reuseKey: "13918995204487956201-1",
         },
@@ -415,6 +473,8 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
       loading: 0.5,
       back: true,
       forward: false,
+      // PT-4: the host's word on the page's favicon — it has none
+      extra: { favicon: null },
     });
   });
 
@@ -463,6 +523,9 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         wire: null,
         state: { is: "live" },
         info: {},
+        favicon: null,
+        label: "Browser",
+        emulation: LAPTOP_TOLD,
         arrivals: 0,
         presented: 0,
         dropped: 0,
@@ -495,6 +558,9 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         wire: { revision: 2, mode: "live", targetFps: 30 },
         state: { is: "live" },
         info: { address: "http://127.0.0.1:4321/", title: "Fixture", back: false, forward: false },
+        favicon: null,
+        label: "Fixture",
+        emulation: LAPTOP_TOLD,
         arrivals: 3,
         presented: 1,
         dropped: 1,
@@ -514,6 +580,9 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         wire: null,
         state: { is: "failed", reason: "no object on this board holds this face" },
         info: {},
+        favicon: null,
+        label: "",
+        emulation: null,
         arrivals: 0,
         presented: 0,
         dropped: 0,
@@ -754,5 +823,160 @@ describe("PT-3 — the face in use: its input, the page's cursor, a page navigat
     face.close();
     expect(live.navigation.navigate("13918995204487956201-1", { action: "reload" })).toBe(false);
     expect(live.stats()).toMatchObject({ navigations: 2, navigationsRefused: 2 });
+  });
+});
+
+describe("PT-4 — the page as a device sees it", () => {
+  const KEY = "13918995204487956201-1";
+  const BROWSER = {
+    url: "http://127.0.0.1:4321/",
+    title: "Fixture",
+    loading: false,
+    canGoBack: false,
+    canGoForward: false,
+  };
+
+  it("the spec's device and scheme are the page's EMULATION: its density, mobile, its fingers, its agent with its hints — the engine's own when it names none — and the scheme", () => {
+    expect(emulationOf(PAGE as never)).toEqual(LAPTOP_TOLD);
+    expect(emulationOf(PHONE_PAGE as never)).toEqual(PHONE_TOLD);
+    // a device with no agent of its own: none named — the producer's engine says its own
+    expect(
+      emulationOf({ ...PAGE, device: { mobile: false, touchPoints: 0, agent: null } } as never),
+    ).toEqual(LAPTOP_TOLD);
+    expect(emulationOf({ ...PAGE, scheme: "dark" } as never).colorScheme).toBe("dark");
+    expect(DESK_PROFILE).toBe("desk");
+  });
+
+  it("a page is minted ON its device in the desk's one profile — two faces, one profile — and a mint after a loss is made of the spec as it stands", async () => {
+    const t = setup();
+    t.live.open(KEY, PHONE_PAGE, () => {});
+    t.live.open("k-2", PAGE, () => {});
+    await t.handles[0]?.opts.tickets.mint();
+    await t.handles[1]?.opts.tickets.mint();
+    const sources = t.requests.map((r) => (r.params as { source: Record<string, unknown> }).source);
+    expect(sources[0]).toMatchObject({
+      profile: { mode: "persistent", ref: "desk" },
+      logicalViewport: { width: 402, height: 874 },
+      deviceScaleFactor: 3,
+      emulation: PHONE_TOLD,
+    });
+    expect(sources[1]?.profile).toEqual(sources[0]?.profile);
+    // the spec moved under the page; the lane is lost and minted again: the page is made on the device it has NOW
+    t.handles[0]?.set({ status: "live", presentation: fakePresentation() as never });
+    expect(t.live.navigation.respec(KEY, PAGE)).toBe(true);
+    await t.handles[0]?.opts.tickets.mint();
+    expect(t.requests.at(-1)?.params).toMatchObject({
+      source: { logicalViewport: { width: 1280, height: 800 }, emulation: LAPTOP_TOLD },
+    });
+  });
+
+  it("a lane gone LIVE is told the spec's device once — owed until then, never again while the spec stands", () => {
+    const t = setup();
+    t.live.open(KEY, PHONE_PAGE, () => {});
+    const handle = t.handles[0];
+    if (handle === undefined) throw new Error("no handle");
+    // attaching: the lane takes nothing yet
+    expect(handle.emulations).toEqual([]);
+    handle.set({ status: "live", presentation: fakePresentation() as never });
+    expect(handle.emulations).toEqual([PHONE_TOLD]);
+    // its state and its words move: the device is not told again
+    handle.set({ browser: BROWSER as never });
+    handle.set({ browser: { ...BROWSER, cursor: "pointer" } as never });
+    expect(handle.emulations).toHaveLength(1);
+    expect(t.live.stats()).toMatchObject({ emulations: 1, respecs: 0 });
+    // lost and live again: not told again — a mint after a loss is made of the spec as it stands
+    handle.set({ status: "lost" });
+    handle.set({ status: "live" });
+    expect(handle.emulations).toHaveLength(1);
+  });
+
+  it("a RESPEC under the open page lays it out at the spec's viewport FIRST, then tells it its device — the same spec again tells nothing; a spec it cannot read, or a key with no page, is refused", () => {
+    const { live, handle, face } = attached();
+    face.demand(SEEN);
+    handle.order.length = 0;
+    expect(live.navigation.respec(KEY, PHONE_PAGE)).toBe(true);
+    // the demand ahead of the emulation, down the one port: the kind's ask kept, at the phone's viewport
+    expect(handle.order).toEqual(["demand", "emulate"]);
+    expect(handle.demands.at(-1)).toMatchObject({
+      mode: "live",
+      logicalViewport: { width: 402, height: 874 },
+    });
+    expect(handle.emulations.at(-1)).toEqual(PHONE_TOLD);
+    expect(live.faces()[0]).toMatchObject({
+      emulation: PHONE_TOLD,
+      demand: { viewport: [402, 874] },
+    });
+    // the same spec again, and one whose LABEL alone moved (the page went elsewhere): nothing down the port
+    handle.order.length = 0;
+    expect(live.navigation.respec(KEY, PHONE_PAGE)).toBe(true);
+    expect(live.navigation.respec(KEY, { ...PHONE_PAGE, label: "elsewhere" })).toBe(true);
+    expect(handle.order).toEqual([]);
+    expect(handle.emulations).toHaveLength(2);
+    // the scheme alone (the desk turned light): told, and no demand with it — the viewport stands
+    expect(live.navigation.respec(KEY, { ...PHONE_PAGE, scheme: "light" })).toBe(true);
+    expect(handle.order).toEqual(["emulate"]);
+    expect(handle.emulations.at(-1)).toEqual({ ...PHONE_TOLD, colorScheme: "light" });
+    expect(live.stats()).toMatchObject({ respecs: 4, emulations: 3 });
+    // never the chrome's navigations
+    expect(handle.navigations).toEqual([]);
+    // refused: a spec the host cannot read, a key with no page open
+    expect(live.navigation.respec(KEY, { ...PHONE_PAGE, device: { mobile: true } })).toBe(false);
+    expect(live.navigation.respec("no-such-key", PHONE_PAGE)).toBe(false);
+    expect(handle.emulations).toHaveLength(3);
+    // a face the kind's law has not seen yet: laid out paused at the new viewport, its ask still none
+    const unseen = setup();
+    unseen.live.open(KEY, PAGE, () => {});
+    unseen.handles[0]?.set({ status: "live", presentation: fakePresentation() as never });
+    expect(unseen.live.navigation.respec(KEY, PHONE_PAGE)).toBe(true);
+    expect(unseen.handles[0]?.demands.at(-1)).toEqual({
+      mode: "paused",
+      targetFps: 0,
+      priority: 0,
+      interactive: false,
+      logicalViewport: { width: 402, height: 874 },
+    });
+    expect(unseen.live.faces()[0]?.demand).toBeUndefined();
+  });
+
+  it("the page's FAVICON rides the face's words — its bytes under `extra.favicon`, one object a key; `null` where the page has none; nothing before the page has spoken — and a favicon that moves is an arrival", () => {
+    const { face, handle, arrived, live } = attached();
+    // the page has said nothing yet: the host says nothing of its favicon
+    expect(face.info()).toEqual({});
+    handle.set({ browser: BROWSER as never });
+    expect(face.info().extra).toEqual({ favicon: null });
+    const before = arrived.mock.calls.length;
+    const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
+    const favicon = {
+      key: "0123456789abcdef",
+      mediaType: "image/png",
+      data: btoa(String.fromCharCode(...png)),
+    };
+    handle.set({ browser: { ...BROWSER, favicon } as never });
+    expect(arrived.mock.calls.length).toBe(before + 1);
+    const said = face.info().extra?.favicon as LiveFavicon;
+    expect(said).toEqual({ key: "0123456789abcdef", type: "image/png", bytes: png });
+    // the same key again: the same object — decoded once
+    handle.set({ browser: { ...BROWSER, favicon, cursor: "pointer" } as never });
+    expect(face.info().extra?.favicon).toBe(said);
+    // a row carries its key, never its bytes
+    expect(live.faces()[0]).toMatchObject({ favicon: "0123456789abcdef" });
+    expect(live.faces()[0]?.info).not.toHaveProperty("extra");
+    // the page lost it (a new document): none
+    handle.set({ browser: BROWSER as never });
+    expect(face.info().extra).toEqual({ favicon: null });
+    expect(live.faces()[0]?.favicon).toBeNull();
+  });
+
+  it("a page is CALLED by its title, else by its spec's label — and nothing where no page is open for the key (ruling 5)", () => {
+    const { live, handle } = attached();
+    expect(live.label(KEY)).toBe("Browser");
+    handle.set({ browser: BROWSER as never });
+    expect(live.label(KEY)).toBe("Fixture");
+    // a page with no title: its spec's label, as its kind prints its address — the label a respec brings
+    handle.set({ browser: { ...BROWSER, title: undefined } as never });
+    expect(live.navigation.respec(KEY, { ...PAGE, label: "127.0.0.1:4321" })).toBe(true);
+    expect(live.label(KEY)).toBe("127.0.0.1:4321");
+    expect(live.faces()[0]?.label).toBe("127.0.0.1:4321");
+    expect(live.label("no-such-key")).toBeUndefined();
   });
 });

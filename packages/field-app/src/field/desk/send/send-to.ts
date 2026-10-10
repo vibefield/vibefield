@@ -66,14 +66,23 @@ export function objectProps(engine: CanvasEngine, entity: Entity): Record<string
   return props;
 }
 
-/** The selected objects as the host reads them (§8 "The doors"): type, words, durable props — in selection order. */
+/** The selected objects as the host reads them (§8 "The doors"): type, words, durable props — in selection order — and,
+ * for one showing a live page (PT-4), what the mount's LIVE service calls that page, by the object's durable key. */
 export function sentObjects(desk: MountedDesk, entities: readonly Entity[]): SentObject[] {
   const words = desk.words ?? plainWords;
+  const store = desk.engine.docs.current()?.store;
   const out: SentObject[] = [];
   for (const e of entities) {
     const type = desk.engine.world.get(e, PrefabId)?.id;
     if (typeof type !== "string") continue;
-    out.push({ type, words: words(type), props: objectProps(desk.engine, e) });
+    const key = store?.keyOf(e) as string | undefined;
+    const live = key === undefined ? undefined : desk.live?.label(key);
+    out.push({
+      type,
+      words: words(type),
+      props: objectProps(desk.engine, e),
+      ...(live === undefined ? {} : { live }),
+    });
   }
   return out;
 }

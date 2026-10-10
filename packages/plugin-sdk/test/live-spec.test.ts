@@ -43,4 +43,50 @@ describe("liveBrowserSpec — the host reads a browser face's page", () => {
   it("reads only the fields it names — a spec's extra words never ride along", () => {
     expect(liveBrowserSpec({ ...PAGE, token: "a ticket" })).toEqual(PAGE);
   });
+
+  it("PT-4: reads the DEVICE the page is seen as — a phone's agent with its hints, its fingers; the engine's own as null — and refuses half a device", () => {
+    const phone = {
+      mobile: true,
+      touchPoints: 5,
+      agent: {
+        userAgent:
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) Mobile/15E148 Safari/604.1",
+        navigatorPlatform: "iPhone",
+        platform: "iOS",
+        platformVersion: "26.0",
+        model: "iPhone",
+      },
+    };
+    expect(liveBrowserSpec({ ...PAGE, device: phone })).toEqual({ ...PAGE, device: phone });
+    const laptop = { mobile: false, touchPoints: 0, agent: null };
+    expect(liveBrowserSpec({ ...PAGE, device: laptop })).toEqual({ ...PAGE, device: laptop });
+    // none named: none read (a host takes that as a pointer device of its engine's own)
+    expect(liveBrowserSpec({ ...PAGE })).not.toHaveProperty("device");
+    // its extra words never ride along
+    expect(
+      liveBrowserSpec({
+        ...PAGE,
+        device: { ...phone, agent: { ...phone.agent, secret: 1 }, note: 2 },
+      }),
+    ).toEqual({ ...PAGE, device: phone });
+    for (const device of [
+      null,
+      "phone",
+      { touchPoints: 5, agent: null },
+      { mobile: "yes", touchPoints: 5, agent: null },
+      { mobile: true, agent: null },
+      { mobile: true, touchPoints: -1, agent: null },
+      { mobile: true, touchPoints: 11, agent: null },
+      { mobile: true, touchPoints: 2.5, agent: null },
+      { mobile: true, touchPoints: 5 },
+      { mobile: true, touchPoints: 5, agent: "Mozilla" },
+      { ...phone, agent: { ...phone.agent, userAgent: "" } },
+      { ...phone, agent: { ...phone.agent, userAgent: "a\nb" } },
+      { ...phone, agent: { ...phone.agent, userAgent: "x".repeat(513) } },
+      { ...phone, agent: { ...phone.agent, platform: undefined } },
+      { ...phone, agent: { ...phone.agent, model: 17 } },
+      { ...phone, agent: { ...phone.agent, navigatorPlatform: "p".repeat(33) } },
+    ])
+      expect(liveBrowserSpec({ ...PAGE, device }), JSON.stringify(device)).toBeUndefined();
+  });
 });

@@ -22,10 +22,23 @@ export interface Device {
   readonly density: number;
   readonly mobile: boolean;
   readonly touch: boolean;
-  /** The user agent it announces (null = the engine's own); `platform` for its client hints (PT-4's emulation). */
-  readonly ua: string | null;
-  readonly platform: string | null;
+  /** The AGENT it announces (PT-4 ruling 1) — null: the engine's own, which the HOST says (its Chromium by name and bundled
+   * version; never a string written here). */
+  readonly agent: DeviceAgent | null;
 }
+
+/** An agent as a page reads it: `navigator.userAgent`, `navigator.platform`, and the client hints it ships with
+ * (`navigator.userAgentData` — its platform, that platform's version, the device's model). */
+export interface DeviceAgent {
+  readonly userAgent: string;
+  readonly navigatorPlatform: string;
+  readonly platform: string;
+  readonly platformVersion: string;
+  readonly model: string;
+}
+
+/** A touch device's fingers (`navigator.maxTouchPoints`): an iPhone's and an iPad's five. */
+export const TOUCH_POINTS = 5;
 
 export const DEVICE_IDS = ["laptop", "desktop", "tablet", "phone"] as const;
 export type DeviceId = (typeof DEVICE_IDS)[number];
@@ -54,8 +67,7 @@ export const DEVICES: readonly Device[] = [
     density: 0.2,
     mobile: false,
     touch: false,
-    ua: null,
-    platform: null,
+    agent: null,
   },
   {
     id: "desktop",
@@ -66,8 +78,7 @@ export const DEVICES: readonly Device[] = [
     density: 0.233,
     mobile: false,
     touch: false,
-    ua: null,
-    platform: null,
+    agent: null,
   },
   {
     id: "tablet",
@@ -78,8 +89,13 @@ export const DEVICES: readonly Device[] = [
     density: 0.1924,
     mobile: true,
     touch: true,
-    ua: IPAD_UA,
-    platform: "iPadOS",
+    agent: {
+      userAgent: IPAD_UA,
+      navigatorPlatform: "iPad",
+      platform: "iPadOS",
+      platformVersion: "26.0",
+      model: "iPad",
+    },
   },
   {
     id: "phone",
@@ -90,10 +106,32 @@ export const DEVICES: readonly Device[] = [
     density: IPHONE_17_PRO_DISPLAY_MM / 402,
     mobile: true,
     touch: true,
-    ua: IPHONE_UA,
-    platform: "iOS",
+    agent: {
+      userAgent: IPHONE_UA,
+      navigatorPlatform: "iPhone",
+      platform: "iOS",
+      platformVersion: "26.0",
+      model: "iPhone",
+    },
   },
 ];
+
+/**
+ * THE DEVICE A PAGE IS SEEN AS (PT-4 ruling 1 — the SDK's `LiveBrowserDevice`, said here without an import: this file stays
+ * pure for the manifest's emit): a phone's or a tablet's layout, its fingers, the agent it announces — what the pane's face
+ * tells the host beside its viewport and its density.
+ */
+export const deviceIdentity = (
+  device: Device,
+): {
+  readonly mobile: boolean;
+  readonly touchPoints: number;
+  readonly agent: DeviceAgent | null;
+} => ({
+  mobile: device.mobile,
+  touchPoints: device.touch ? TOUCH_POINTS : 0,
+  agent: device.agent,
+});
 export const deviceById = (id: string): Device | undefined => DEVICES.find((d) => d.id === id);
 export const DEFAULT_DEVICE: Device = DEVICES[0] as Device;
 /** A prop's device, or the default (laptop) for one the pane does not know. */

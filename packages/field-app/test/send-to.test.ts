@@ -106,6 +106,28 @@ describe("the chip's face (§8 'Send to…' — R15 as amended)", () => {
     expect(chipFace([clock], palette)).toEqual({ glyph: null, label: "Clock" });
   });
 
+  it("PT-4: an object showing a LIVE PAGE wears what its page is called — its title, else its address as printed — cut as a note's writing is; a missing face keeps its type's name", () => {
+    const pane = (live: string | undefined, state: ObjectWords["state"] = null): SentObject => ({
+      type: "vibefield.browser-pane",
+      words: words("vibefield.browser-pane", "Browser", state),
+      props: { url: "https://lumen.example/reader" },
+      ...(live === undefined ? {} : { live }),
+    });
+    expect(chipFace([pane("Lumen — Reader")], palette)).toEqual({
+      glyph: null,
+      label: "Lumen — Reader",
+    });
+    expect(chipFace([pane("lumen.example")], palette).label).toBe("lumen.example");
+    expect(
+      chipFace([pane("A very long title that runs past the chip's room")], palette).label,
+    ).toBe("A very long title that r…");
+    // no page shown (the sample's still, a blank pane): its type's name, as any kind
+    expect(chipFace([pane(undefined)], palette).label).toBe("Browser");
+    expect(chipFace([pane("   ")], palette).label).toBe("Browser");
+    // a missing face names its type, whatever a page was called
+    expect(chipFace([pane("Lumen — Reader", "plugin off")], palette).label).toBe("Browser");
+  });
+
   it('several wear `package` and "N objects"', () => {
     expect(chipFace([note({ text: "a" }), clock], palette)).toEqual({
       glyph: "package",
@@ -332,6 +354,27 @@ const seams = {
 };
 
 describe("SEND TO… — the act (send-to.ts)", () => {
+  it("PT-4: an object showing a LIVE page is sent by what the mount's LIVE service calls that page — asked by the object's durable key", () => {
+    const key = deskObjects(ce, "vibefield.comment-pad")[0]?.key;
+    if (typeof key !== "string") throw new Error("the pad has no durable key");
+    const asked: string[] = [];
+    const live = {
+      label: (k: string) => {
+        asked.push(k);
+        return k === key ? "Fixture — the page" : undefined;
+      },
+    } as unknown as NonNullable<MountedDesk["live"]>;
+    ce.ops.setSelection([clockLike]);
+    expect(sendSelection({ ...desk, live }, "bar", seams)).toBe(true);
+    expect(asked).toEqual([key]);
+    expect(taken[0]?.chip).toMatchObject({ glyph: null, label: "Fixture — the page" });
+    // the same object on a mount that lends no live pages: its type's name
+    taken.length = 0;
+    setLineSendPhase("idle");
+    expect(sendSelection(desk, "bar", seams)).toBe(true);
+    expect(taken[0]?.chip.label).toBe("Comment pad");
+  });
+
   it("hands the line ONE chip from the selection's own box (the brackets' 6 off), then the still WITHOUT the marks — the selection never touched", async () => {
     expect(sendSelection(desk, "bar", seams)).toBe(true);
     expect(taken).toHaveLength(1);

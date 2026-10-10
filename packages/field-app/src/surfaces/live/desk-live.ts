@@ -21,6 +21,15 @@
 //    and sends it down the pool's lane — a pointer, a wheel (the page's CSS px), a key, committed text, an IME composition.
 //    The face's words carry the page's CURSOR, and a cursor that moves is an arrival. NAVIGATION goes through the page, by the
 //    face's key (`navigate` — the second service, `BROWSER_NAVIGATION`): never by re-opening it.
+//  - AS A DEVICE SEES IT (PT-4): the spec's device and scheme are the page's EMULATION — on the source at its mint, and told
+//    again (`emulate`, a navigation command) whenever the spec moves under the open page (`respec` — the second service) and
+//    once as the lane goes live (a page re-bound after a reload is the spec's, whatever it was told before; the same told
+//    twice is nothing at the producer). A re-spec lays the page out at the spec's viewport FIRST — the demand goes down the
+//    same port ahead of the emulation — so a page that reloads for its new device loads at that device's size.
+//  - ONE PROFILE (PT-4 ruling 3): every desk page is minted into the SAME persistent profile (`DESK_PROFILE`), as the tabs
+//    of one browser are — main keeps it under the user's data, apart from the app's own session.
+//  - THE FAVICON (PT-4 ruling 4): the page's icon rides LSF's browser state; the face's words carry its bytes under
+//    `extra.favicon` (decoded once a key) — `null` where the page has none, absent before the page has said anything.
 
 import type {
   LiveDemand,
@@ -35,6 +44,8 @@ import type {
 } from "@vibecook/ice/desk/kit";
 import {
   LIVE_SURFACE_FPS_BUCKETS_V1,
+  type LiveSurfaceBrowserEmulationV1,
+  type LiveSurfaceBrowserStateV1,
   type LiveSurfaceDemandV1,
   type LiveSurfaceFpsBucketV1,
   type LiveSurfaceInputEventV1,
@@ -86,6 +97,16 @@ export interface DeskLiveStats {
   /** PT-3: navigations sent to a page by its key, and those refused (no page open for the key). */
   readonly navigations: number;
   readonly navigationsRefused: number;
+  /** PT-4: specs that moved under an open page (`respec`), and emulations told down a page's lane. */
+  readonly respecs: number;
+  readonly emulations: number;
+}
+
+/** A page's favicon as a face's words carry it (`LiveInfo.extra.favicon`): a key to compare, the image's type, its bytes. */
+export interface LiveFavicon {
+  readonly key: string;
+  readonly type: string;
+  readonly bytes: Uint8Array;
 }
 
 /** One open face as a smoke reads it. */
@@ -96,8 +117,14 @@ export interface DeskLiveFaceRow {
   /** What the pool last wrote to the wire for the page — LSF's demand — null before any. */
   readonly wire: LiveSurfaceDemandV1 | null;
   readonly state: LiveState;
-  /** The face's words — the page's address, title, loading line, history reach (what the kind's head reads). */
+  /** The face's words — the page's address, title, loading line, history reach (what the kind's head reads) — less their
+   * `extra` (a favicon's bytes are not a row's to carry: its key is, below). */
   readonly info: LiveInfo;
+  /** PT-4: the favicon's key (null: none); the page's label — its title, else the spec's; the device it was last told. */
+  readonly favicon: string | null;
+  readonly label: string;
+  /** null: a face that never opened a page (refused). */
+  readonly emulation: LiveSurfaceBrowserEmulationV1 | null;
   /** Frames the attachment told of; frames presented into the texture; frames taken and closed unseen. */
   readonly arrivals: number;
   readonly presented: number;
@@ -119,6 +146,9 @@ export interface DeskLiveFaceRow {
 export interface DeskLiveSources extends LiveSources {
   /** PT-3: what the desk lends under `BROWSER_NAVIGATION` — a page navigated by its face's key, never re-opened. */
   readonly navigation: BrowserNavigation;
+  /** PT-4 (ruling 5): what the page behind `key` is called — its title, else its spec's label (the address as its kind
+   * prints it); undefined with no page open for the key. */
+  label(key: string): string | undefined;
   stats(): DeskLiveStats;
   /** The faces open now — a smoke's witness of the law's asks, the source's pace and the texture's life. */
   faces(): readonly DeskLiveFaceRow[];
@@ -329,16 +359,59 @@ const logicalOf = (size: {
 /** The face's page in the pool: apart from any panel's (ruling 4). */
 const poolKey = (key: string): string => `desk:${key}`;
 
-/** LSF's browser source for a page: a memory profile per face, laid out at the page's viewport at its device's density (LSF
- * sizes its frame by the two multiplied, and lays the page out at the viewport). */
-function browserSource(key: string, page: LiveBrowserSpec) {
+/** THE DESK'S BROWSER PROFILE (PT-4 ruling 3): every desk page's — one persistent session, as the tabs of one browser share
+ * theirs. Main keeps it under the user's data by an opaque name (`LAYOUT.BROWSER_PROFILES_DIR`), apart from the shell's. */
+export const DESK_PROFILE = "desk";
+
+/**
+ * THE PAGE AS A DEVICE SEES IT (PT-4 rulings 1–2): the spec's device and scheme in LSF's words — its density, a phone's or a
+ * tablet's layout, its fingers, the agent it announces with its hints (none named: the producer's engine's own), and the
+ * colour scheme the page is told (the kind has already resolved the desk's).
+ */
+export function emulationOf(page: LiveBrowserSpec): LiveSurfaceBrowserEmulationV1 {
+  const agent = page.device?.agent ?? null;
+  return {
+    deviceScaleFactor: page.deviceScaleFactor,
+    mobile: page.device?.mobile ?? false,
+    touchPoints: page.device?.touchPoints ?? 0,
+    ...(agent === null
+      ? {}
+      : {
+          agent: {
+            userAgent: agent.userAgent,
+            navigatorPlatform: agent.navigatorPlatform,
+            hints: {
+              platform: agent.platform,
+              platformVersion: agent.platformVersion,
+              architecture: "",
+              model: agent.model,
+              mobile: page.device?.mobile ?? false,
+            },
+          },
+        }),
+    colorScheme: page.scheme,
+  };
+}
+
+/** LSF's browser source for a page: the desk's one profile, laid out at the page's viewport at its device's density (LSF
+ * sizes its frame by the two multiplied, and lays the page out at the viewport), born on its device. */
+function browserSource(page: LiveBrowserSpec) {
   return {
     kind: "browser" as const,
     initialUrl: page.url,
-    profile: { mode: "memory" as const, ref: poolKey(key) },
+    profile: { mode: "persistent" as const, ref: DESK_PROFILE },
     logicalViewport: { width: page.viewport[0], height: page.viewport[1] },
     deviceScaleFactor: page.deviceScaleFactor,
+    emulation: emulationOf(page),
   };
+}
+
+/** A favicon's bytes out of the state's base64. */
+function faviconOf(icon: NonNullable<LiveSurfaceBrowserStateV1["favicon"]>): LiveFavicon {
+  const raw = atob(icon.data);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
+  return { key: icon.key, type: icon.mediaType, bytes };
 }
 
 export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
@@ -354,9 +427,18 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     inputsUnsent: 0,
     navigations: 0,
     navigationsRefused: 0,
+    respecs: 0,
+    emulations: 0,
   };
-  /** The open pages' lanes by key (a failed face has none): what `navigate` reaches. */
-  const lanes = new Map<string, SurfaceHandle<ProductSurfaceFrame>>();
+  /** The open pages' lanes by key (a failed face has none): what `navigate` and `respec` reach, and what a page is called. */
+  const lanes = new Map<
+    string,
+    {
+      readonly handle: SurfaceHandle<ProductSurfaceFrame>;
+      respec(page: LiveBrowserSpec): void;
+      label(): string;
+    }
+  >();
   const wireOf = (key: string): LiveSurfaceDemandV1 | null =>
     deps
       .pool()
@@ -374,6 +456,9 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         wire: null,
         state: face.state(),
         info: face.info(),
+        favicon: null,
+        label: "",
+        emulation: null,
         arrivals: 0,
         presented: 0,
         dropped: 0,
@@ -394,8 +479,10 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     if (faces.has(key))
       throw new Error(`desk LIVE: the face "${key}" is open twice — one face per key per desk`);
     counts.opened += 1;
-    const page = liveBrowserSpec(spec);
-    if (page === undefined) return refuse(key, "not a page this desk can open");
+    const opened = liveBrowserSpec(spec);
+    if (opened === undefined) return refuse(key, "not a page this desk can open");
+    /** The face's spec as it stands: its open's, then each `respec`'s. A mint after a loss is made of THIS one. */
+    let page = opened;
     const gate = deps.gate(key);
     if ("refused" in gate) return refuse(key, gate.refused);
     const pool = deps.pool();
@@ -418,7 +505,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
             if (client === null)
               throw new Error("no fieldd connection (daemon away or still booting)");
             const raw = await client.request("surface.open", {
-              source: browserSource(key, page),
+              source: browserSource(page),
               reuseKey: key,
             });
             const opened = SurfaceOpenResultV1.parse(raw);
@@ -452,6 +539,24 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       | undefined;
     const tally = { arrivals: 0, presented: 0, dropped: 0, inputs: 0 };
     let lastInput: LiveInput["kind"] | null = null;
+    /** PT-4: the emulation last told down the lane (as one string) — told again only when the spec's moved. */
+    let told: string | undefined;
+    const tellDevice = (): void => {
+      const emulation = emulationOf(page);
+      const now = JSON.stringify(emulation);
+      if (now === told || closed) return;
+      // the lane takes it only while it is live; until then it is owed (the next live state tells it)
+      if (!handle.navigate({ action: "emulate", emulation })) return;
+      told = now;
+      counts.emulations += 1;
+    };
+    /** PT-4: the favicon as the face's words carry it — decoded once a key. */
+    let icon: LiveFavicon | null = null;
+    const iconOf = (favicon: LiveSurfaceBrowserStateV1["favicon"]): LiveFavicon | null => {
+      if (favicon === undefined) icon = null;
+      else if (icon?.key !== favicon.key) icon = faviconOf(favicon);
+      return icon;
+    };
     // close() unsubscribes both listeners at once, so nothing tells after it
     const tell = (): void => arrived();
     const listen = (next: SurfaceHandleState<ProductSurfaceFrame>["presentation"]): void => {
@@ -468,6 +573,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     listen(presentation);
     const offState = handle.onState((state) => {
       if (state.presentation !== presentation) listen(state.presentation);
+      // a lane gone live is told the spec's device (a page re-bound after a reload may have been told another)
+      if (state.status === "live") tellDevice();
       const now = wordsOf(state);
       if (now === words) return;
       words = now;
@@ -516,7 +623,15 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         return true;
       },
       state: () => (closed ? { is: "closed" } : liveStateOf(handle.state, () => handle.retry())),
-      info: () => (closed ? {} : liveInfoOf(handle.state)),
+      info: (): LiveInfo => {
+        if (closed) return {};
+        const state = handle.state;
+        const info = liveInfoOf(state);
+        // the host's word on the page's favicon: its bytes, `null` where it has none — nothing before the page has spoken
+        return state.browser === null
+          ? info
+          : { ...info, extra: { favicon: iconOf(state.browser.favicon) } };
+      },
       demand(d: LiveDemand): void {
         if (closed) return;
         asked = d;
@@ -556,12 +671,16 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       face,
       row: () => {
         const t = writer?.face;
+        const { extra: _extra, ...info } = face.info();
         return {
           key,
           demand: asked,
           wire: wireOf(key),
           state: face.state(),
-          info: face.info(),
+          info,
+          favicon: icon?.key ?? null,
+          label: info.title ?? page.label,
+          emulation: emulationOf(page),
           ...tally,
           lastInput,
           texture:
@@ -571,7 +690,28 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         };
       },
     });
-    lanes.set(key, handle);
+    lanes.set(key, {
+      handle,
+      // PT-4: the spec moved under the open page — laid out at its viewport first where that moved (the demand goes ahead of
+      // the emulation down the one port: a page that reloads for its new device loads at that device's size), then told its
+      // device where that moved; a spec whose label alone moved (the page went elsewhere) sends nothing down the port
+      respec(next) {
+        const resized =
+          next.viewport[0] !== page.viewport[0] || next.viewport[1] !== page.viewport[1];
+        page = next;
+        counts.respecs += 1;
+        if (resized) {
+          const laid: LiveDemand = {
+            ...(asked ?? { mode: "paused", fps: 0, raster: [0, 0], interactive: false }),
+            viewport: next.viewport,
+          };
+          if (asked !== undefined) asked = laid;
+          handle.setDemand(liveDemandIntent(laid));
+        }
+        tellDevice();
+      },
+      label: () => liveInfoOf(handle.state).title ?? page.label,
+    });
     return face;
   };
 
@@ -580,14 +720,22 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     navigation: {
       navigate(key, command) {
         const lane = lanes.get(key);
-        if (lane === undefined || !lane.navigate(command)) {
+        if (lane === undefined || !lane.handle.navigate(command)) {
           counts.navigationsRefused += 1;
           return false;
         }
         counts.navigations += 1;
         return true;
       },
+      respec(key, spec) {
+        const lane = lanes.get(key);
+        const next = liveBrowserSpec(spec);
+        if (lane === undefined || next === undefined) return false;
+        lane.respec(next);
+        return true;
+      },
     },
+    label: (key) => lanes.get(key)?.label(),
     stats: () => ({ ...counts, open: faces.size }),
     faces: () => [...faces.values()].map((f) => f.row()),
     dispose() {

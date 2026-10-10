@@ -9,6 +9,9 @@ import type { ObjectWords } from "../desk-object-words";
 //   `snippets` and its first 24 characters; ANY OTHER KIND its name and no glyph ("Clock") — neither ICE's `TrayEntry`
 //   nor DK-0f's contribution carries one; SEVERAL, `package` and "N objects"; a MISSING FACE its type's name (the
 //   manifest's, else the type id — never its word: the chip names what it carries, the bar says why it is missing).
+//   AN OBJECT SHOWING A LIVE PAGE (PT-4 ruling 5 — a browser pane) wears what its page is CALLED: the page's title, else
+//   its address as its kind prints it (the mount's LIVE service says it, by the object's durable key) — its first 24
+//   characters, as a note's writing is cut.
 //   WHAT IT CARRIES: the objects' names and their durable text (the `text` a note or a pad keeps); the still is the
 //   act's (send-to.ts), attached when the capture resolves.
 
@@ -21,6 +24,8 @@ export interface SentObject {
   readonly words: ObjectWords;
   /** Its durable props (the cells of its groups, merged). */
   readonly props: Readonly<Record<string, unknown>>;
+  /** PT-4: what the live page it shows is called — its title, else its address as printed; absent: it shows none. */
+  readonly live?: string;
 }
 
 /** The palette's colours a note's chip reads (ICE's `PaperPalette`: its papers and pens by name, each a token's CSS). */
@@ -73,6 +78,9 @@ export function chipFace(objects: readonly SentObject[], palette: ChipPalette): 
       ...(ink === undefined ? {} : { ink }),
     };
   }
+  // an object showing a live page wears what its page is called (its title, else its address as printed)
+  if (one.live !== undefined && one.words.state === null)
+    return { glyph: null, label: firstChars(one.live) ?? one.words.title };
   // any other kind — or a missing face, drawn or not — wears its type's human name, no glyph
   return { glyph: null, label: one.words.title };
 }

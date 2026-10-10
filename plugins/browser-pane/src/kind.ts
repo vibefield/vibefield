@@ -29,7 +29,7 @@ import {
 } from "@vibefield/plugin-sdk/desk";
 import { displayOf, PROMPT } from "./address";
 import { nextDevice } from "./device";
-import { deviceOf } from "./devices";
+import { deviceIdentity, deviceOf } from "./devices";
 import { handOf } from "./hand";
 import { bandDensity, bandFor, headKey, headStateOf, rungFor } from "./head";
 import { stillSplit } from "./head-still";
@@ -187,10 +187,12 @@ export function paneOpening(law: BrowserLaw = BROWSER): OpenBinding {
       if (part === "forward") return info?.forward === true ? "pointer" : undefined;
       return (HELD_CONTROLS as readonly string[]).includes(part) ? "pointer" : undefined;
     },
-    // a live page's word is the address it is at (its producer's truth — a redirect's), a still's the one it was given
-    readout: ({ props, entity, local }) =>
-      displayOf((local as PaneLocal | undefined)?.page(entity)?.info.address ?? urlOf(props())) ||
-      PROMPT,
+    // a live page's word is its TITLE when it has one (PT-4 ruling 5 — the address stays on the head's capsule), else the
+    // address it is at (its producer's truth — a redirect's); a still's the address it was given
+    readout: ({ props, entity, local }) => {
+      const info = (local as PaneLocal | undefined)?.page(entity)?.info;
+      return info?.title?.trim() || displayOf(info?.address ?? urlOf(props())) || PROMPT;
+    },
   };
 }
 
@@ -242,6 +244,8 @@ export function browserPaneKind(
             deviceScaleFactor: S.device.dpr,
             scheme,
             label: displayOf(url) || "Browser",
+            // PT-4 — the device the page is seen as: its layout, its fingers, the agent it announces
+            device: deviceIdentity(S.device),
           },
           S,
         );
@@ -253,7 +257,8 @@ export function browserPaneKind(
           local?.laid(ctx.entity, G, openExtent(ctx.rect, S), ctx.view.zoom);
       }
       const words = face === undefined ? undefined : local?.page(ctx.entity);
-      const state = headStateOf(url, S, words?.info);
+      // PT-4 — the page's favicon as the head can print it now (its picture decoded), the generic mark where it has none
+      const state = headStateOf(url, S, words?.info, local?.icon(ctx.entity, words?.info));
       const tpu = bandDensity(S, bandFor(ctx.view.zoom * ctx.view.dpr));
       const laid = local?.head(ctx.entity, S, state, tpu);
       const key = laid?.key ?? headKey(S, state, tpu);

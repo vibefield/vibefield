@@ -36,7 +36,14 @@ import {
   type LiveState,
   type Sight,
 } from "@vibefield/plugin-sdk/desk";
-import { HEAD_RASTER, type HeadState, headKey } from "./head";
+import {
+  faviconId,
+  GENERIC_FAVICON,
+  HEAD_RASTER,
+  type HeadState,
+  headKey,
+  pageFavicon,
+} from "./head";
 import { SAMPLE_URL } from "./ids";
 import {
   HELD_CONTROLS,
@@ -84,8 +91,18 @@ export interface PaneLocal extends KindLocal {
   said(e: Entity): HeadState | undefined;
   /** Heads drawn since the desk was made (a test's witness). */
   stats(): { readonly heads: number };
-  /** PT-2 — `e`'s live face for the page `spec` names (opened at its first ask; undefined: no `LIVE` lent, no durable key). */
+  /** PT-2 — `e`'s live face for the page `spec` names (opened at its first ask; undefined: no `LIVE` lent, no durable key).
+   * PT-4 — a spec that MOVED under its open face (another device, another scheme, another viewport with it) is told to the
+   * page through the host's `respec`, never by re-opening it; its url is not part of that (an address moves by `follow`). */
   face(e: Entity, spec: LiveBrowserSpec, S: PaneShape): LiveFace | undefined;
+  /**
+   * PT-4 — what `e`'s head says of its page's favicon (`HeadState.favicon`): the page's own once the head's service has
+   * decoded its picture (the pane is remade when it has), the generic mark where the page has none or it cannot be read
+   * — and null where the host says nothing of favicons (a still's face).
+   */
+  icon(e: Entity, info: LiveInfo | undefined): string | null;
+  /** PT-4 — specs told to the host under an open face (a test's witness). */
+  readonly respecs: number;
   /** PT-2 — `e`'s face closed: its address is no longer a page. */
   drop(e: Entity): void;
   /** PT-2 — the sight the pass tells, carried on the records of panes with a face. */
@@ -135,6 +152,9 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
   >();
   const pressing = new Map<Entity, HeldPart>();
   const urls = new Map<Entity, string>();
+  /** PT-4 — each open face's spec less its address, as one string: what a `respec` is told when it moves. */
+  const specs = new Map<Entity, string>();
+  let respecs = 0;
   /** Where each page stood when its record read a NEW url — what the page does from there is its own navigation. */
   const stoodAt = new Map<Entity, string | undefined>();
   let hand: PaneHandDoors | undefined;
@@ -178,10 +198,39 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
     },
     said: (e) => saying.get(e),
     stats: () => ({ heads: drawn }),
-    face: (e, spec, S) => live.face(e, spec, S),
+    face(e, spec, S) {
+      const face = live.face(e, spec, S);
+      if (face === undefined) return undefined;
+      // the spec less its address (an address moves by `follow`): the device, the scheme, the viewport, the density, the label
+      const { url: _url, ...shape } = spec;
+      const now = JSON.stringify(shape);
+      const was = specs.get(e);
+      specs.set(e, now);
+      if (was !== undefined && was !== now) {
+        const key = live.words(e)?.key;
+        // (a host older than PT-4 lends a navigation with no `respec`: the page keeps the device it was opened on)
+        if (key !== undefined && nav?.respec?.(key, { ...spec }) === true) respecs += 1;
+      }
+      return face;
+    },
+    icon(e, info) {
+      const favicon = pageFavicon(info);
+      if (favicon === undefined) return null;
+      if (favicon === null) return GENERIC_FAVICON;
+      const printed = host?.use?.(HEAD_RASTER)?.picture?.(favicon, () => {
+        // its picture is decoded: the head is made again, saying it
+        host?.remake?.(e);
+        host?.wake?.();
+      });
+      return printed === true ? faviconId(favicon.key) : GENERIC_FAVICON;
+    },
+    get respecs() {
+      return respecs;
+    },
     drop(e) {
       live.drop(e);
       urls.delete(e);
+      specs.delete(e);
       pressing.delete(e);
     },
     sight: live.sight,
@@ -291,6 +340,7 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
       laidOut.delete(e);
       pressing.delete(e);
       urls.delete(e);
+      specs.delete(e);
       stoodAt.delete(e);
     },
     dispose() {

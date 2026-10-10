@@ -29,12 +29,19 @@ import {
   bandLayout,
   browserPaneKind,
   createPaneLocal,
+  cutOf,
   deviceById,
+  deviceIdentity,
   faceOfPage,
+  faviconId,
+  GENERIC_FAVICON,
+  HEAD_RASTER,
+  type HeadRaster,
   isPageUrl,
   openExtent,
   PAGE_REMAKE_MS,
   PANE_SIZE,
+  type PageFavicon,
   type PaneGeometry,
   type PaneInstance,
   paneDemand,
@@ -123,14 +130,27 @@ function fakeFace(key: string, arrived: () => void) {
 
 /** A host lending `LIVE` (or not), its doors counted; the desk's frames moved by the test. */
 function fakeHost(
-  opts: { live?: boolean; keys?: Record<number, string>; holds?: boolean; nav?: boolean } = {},
+  opts: {
+    live?: boolean;
+    keys?: Record<number, string>;
+    holds?: boolean;
+    /** false: no navigation lent; "navigate-only": one that cannot `respec` (a host before PT-4). */
+    nav?: boolean | "navigate-only";
+    /** PT-4: the head's raster the DOM half lends. */
+    head?: HeadRaster;
+  } = {},
 ) {
   const opened: { key: string; spec: Record<string, unknown> }[] = [];
-  /** PT-3: what the host's second service was asked — a page navigated by its key. */
+  /** PT-3: what the host's second service was asked — a page navigated by its key. PT-4: a spec moved under its page. */
   const navigations: { key: string; command: BrowserNavigationCommand }[] = [];
+  const respecs: { key: string; spec: Record<string, unknown> }[] = [];
   const navigation = {
     navigate(key: string, command: BrowserNavigationCommand) {
       navigations.push({ key, command });
+      return true;
+    },
+    respec(key: string, spec: Readonly<Record<string, unknown>>) {
+      respecs.push({ key, spec: { ...spec } });
       return true;
     },
   };
@@ -153,8 +173,10 @@ function fakeHost(
       opts.live !== false && key.name === LIVE.name
         ? (sources as T)
         : opts.nav !== false && key.name === BROWSER_NAVIGATION.name
-          ? (navigation as T)
-          : undefined,
+          ? ((opts.nav === "navigate-only" ? { navigate: navigation.navigate } : navigation) as T)
+          : opts.head !== undefined && key.name === HEAD_RASTER.name
+            ? (opts.head as T)
+            : undefined,
     keyOf: (e: Entity) => keys[e as number],
     wake: () => {
       n.wake += 1;
@@ -172,6 +194,7 @@ function fakeHost(
     opened,
     faces,
     navigations,
+    respecs,
     n,
     /** A frame drawn: the slot's view tells the sight what it drew of `e`'s page, then the count moves. */
     draw(local: ReturnType<typeof createPaneLocal>, e: Entity, zoom: number, target?: "hand") {
@@ -433,7 +456,7 @@ describe("the pane's live page — its record", () => {
     expect(t.opened).toHaveLength(1);
   });
 
-  it("says the page's own words: the head its address, lock, loading and history; the loading line; the hand's word its address", () => {
+  it("says the page's own words: the head its address, lock, loading and history; the loading line; the hand's word its TITLE — its address when it has none (PT-4 ruling 5)", () => {
     const t = fakeHost();
     const local = createPaneLocal(t.host);
     const G = k.resolve(ctxOf({ url: PAGE }, local));
@@ -459,17 +482,30 @@ describe("the pane's live page — its record", () => {
       canBack: true,
       canForward: false,
     });
-    const word = k.open?.readout;
-    expect(
-      typeof word === "function"
-        ? word({
+    const word = (): unknown => {
+      const readout = k.open?.readout;
+      return typeof readout === "function"
+        ? readout({
             world: undefined as never,
             entity: 1 as Entity,
             props: () => ({ url: PAGE }),
             local,
           })
-        : word,
-    ).toBe("example.org");
+        : readout;
+    };
+    // the page has a title: the hand's word (the address stays on the head's capsule, above)
+    expect(word()).toBe("There");
+    // a page with no title — or one of spaces: its address as printed
+    for (const title of [undefined, "   "]) {
+      t.faces.get("13918995204487956201-1")?.say({
+        info: {
+          address: "https://www.example.org/there",
+          ...(title === undefined ? {} : { title }),
+        },
+      });
+      local.tick?.(0);
+      expect(word(), JSON.stringify(title)).toBe("example.org");
+    }
   });
 });
 
@@ -689,5 +725,231 @@ describe("PT-3 — the pane in use: its hand's input, its controls, the url it f
     expect(t.n.remake).toHaveLength(remakes);
     expect(t.n.redraw).toBe(redraws + 1);
     expect(local.page(1 as Entity)?.info.cursor).toBe("pointer");
+  });
+});
+
+describe("PT-4 — the page as a device sees it: the pane's spec, its respec, its favicon", () => {
+  const k = browserPaneKind();
+  const KEY = "13918995204487956201-1";
+  const phone = deviceById("phone");
+  if (phone === undefined) throw new Error("phone");
+  const phoneCut = cutOf(phone);
+  /** A pane's record under a theme, cut to a device. */
+  const recordOf = (
+    local: unknown,
+    props: Record<string, unknown>,
+    theme: "light" | "dark" = "light",
+    rect = { cx: 100, cy: 80, w: PANE_SIZE.w, h: PANE_SIZE.h },
+  ): PaneInstance => {
+    const ctx = {
+      ...ctxOf(props, local),
+      theme: { name: theme },
+      rect,
+    } as unknown as ObjectContext;
+    return k.record(k.resolve(ctx), ctx) as PaneInstance;
+  };
+  const phoneRect = { cx: 100, cy: 80, w: phoneCut.w, h: phoneCut.h };
+
+  it("its record's spec says the DEVICE it is cut to — its layout, its fingers, its agent — and a laptop's names none", () => {
+    const t = fakeHost();
+    recordOf(createPaneLocal(t.host), { url: PAGE });
+    expect(t.opened[0]?.spec.device).toEqual({ mobile: false, touchPoints: 0, agent: null });
+    const p = fakeHost();
+    recordOf(createPaneLocal(p.host), { url: PAGE, device: "phone" }, "light", phoneRect);
+    expect(p.opened[0]?.spec).toMatchObject({
+      viewport: [402, 874],
+      deviceScaleFactor: 3,
+      device: deviceIdentity(phone),
+    });
+    expect(JSON.stringify(p.opened[0]?.spec.device)).toMatch(/"userAgent":"[^"]*iPhone/);
+  });
+
+  it("a device SWITCHED under the open page is told through the host's respec — the whole spec, by the page's key — never by re-opening it; the same record again tells nothing", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    recordOf(local, { url: PAGE });
+    expect(t.respecs).toEqual([]);
+    // the same record again (a redraw's): nothing told
+    recordOf(local, { url: PAGE });
+    expect(t.respecs).toEqual([]);
+    recordOf(local, { url: PAGE, device: "phone" }, "light", phoneRect);
+    expect(t.respecs).toHaveLength(1);
+    expect(t.respecs[0]?.key).toBe(KEY);
+    expect(t.respecs[0]?.spec).toMatchObject({
+      source: "browser",
+      url: PAGE,
+      viewport: [402, 874],
+      deviceScaleFactor: 3,
+      scheme: "light",
+      device: deviceIdentity(phone),
+    });
+    // back to the laptop: told again
+    recordOf(local, { url: PAGE });
+    expect(t.respecs).toHaveLength(2);
+    expect(t.respecs[1]?.spec).toMatchObject({
+      viewport: [1280, 800],
+      deviceScaleFactor: 2,
+      device: { mobile: false, touchPoints: 0, agent: null },
+    });
+    expect(local.respecs).toBe(2);
+    // one page throughout
+    expect(t.opened).toHaveLength(1);
+    expect(t.faces.get(KEY)?.closed()).toBe(0);
+  });
+
+  it("the SCHEME follows the desk's theme, live — the desk goes dark, the page is told — and a pane fixed `light` stays light under a dark desk", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    recordOf(local, { url: PAGE }, "light");
+    expect(t.opened[0]?.spec.scheme).toBe("light");
+    recordOf(local, { url: PAGE }, "dark");
+    expect(t.respecs.map((r) => r.spec.scheme)).toEqual(["dark"]);
+    recordOf(local, { url: PAGE }, "light");
+    expect(t.respecs.map((r) => r.spec.scheme)).toEqual(["dark", "light"]);
+    // fixed light: opened light under a dark desk, and the desk's turns tell it nothing
+    const f = fakeHost();
+    const fixed = createPaneLocal(f.host);
+    recordOf(fixed, { url: PAGE, scheme: "light" }, "dark");
+    expect(f.opened[0]?.spec.scheme).toBe("light");
+    recordOf(fixed, { url: PAGE, scheme: "light" }, "light");
+    recordOf(fixed, { url: PAGE, scheme: "light" }, "dark");
+    expect(f.respecs).toEqual([]);
+    // fixed dark under a light desk: dark
+    const d = fakeHost();
+    recordOf(createPaneLocal(d.host), { url: PAGE, scheme: "dark" }, "light");
+    expect(d.opened[0]?.spec.scheme).toBe("dark");
+  });
+
+  it("an ADDRESS that moves is never a respec's business (it is followed); a face dropped and opened again is opened on its spec, not told; a host that cannot respec is asked nothing", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    const phoneSpec = { ...spec, viewport: [402, 874], device: deviceIdentity(phone) } as const;
+    local.face(1 as Entity, spec, S);
+    // the url alone: nothing told
+    local.face(1 as Entity, { ...spec, url: "http://127.0.0.1:4321/next" }, S);
+    expect(t.respecs).toEqual([]);
+    local.face(1 as Entity, phoneSpec, S);
+    expect(t.respecs).toHaveLength(1);
+    // dropped (its address no longer a page), opened again on another spec: an open, never a respec
+    local.drop(1 as Entity);
+    local.face(1 as Entity, spec, S);
+    expect(t.opened).toHaveLength(2);
+    expect(t.respecs).toHaveLength(1);
+    // forgotten (the object gone) and back (an undo): the same
+    local.forget?.(1 as Entity);
+    local.face(1 as Entity, phoneSpec, S);
+    expect(t.respecs).toHaveLength(1);
+    // a host before PT-4 — a navigation with no respec — and one lending none: the page keeps the device it was opened on
+    for (const nav of ["navigate-only", false] as const) {
+      const old = fakeHost({ nav });
+      const bare = createPaneLocal(old.host);
+      bare.face(1 as Entity, spec, S);
+      expect(() => bare.face(1 as Entity, phoneSpec, S)).not.toThrow();
+      expect(bare.respecs).toBe(0);
+    }
+  });
+
+  /** A head's raster that PRINTS pictures: each favicon offered, its waiters, and a door to land its decode. */
+  const printer = () => {
+    const offered: string[] = [];
+    const ready = new Set<string>();
+    const waiting = new Map<string, (() => void)[]>();
+    const head: HeadRaster = {
+      raster: () => ({ bytes: new Uint8Array(8 * 6 * 4), width: 8, height: 6, h: 2, at: 4 }),
+      picture(favicon, tell) {
+        offered.push(favicon.key);
+        if (ready.has(favicon.key)) return true;
+        waiting.set(favicon.key, [...(waiting.get(favicon.key) ?? []), tell]);
+        return false;
+      },
+    };
+    return {
+      head,
+      offered,
+      land(key: string) {
+        ready.add(key);
+        for (const tell of waiting.get(key) ?? []) tell();
+        waiting.delete(key);
+      },
+    };
+  };
+  const icon = (key: string): PageFavicon => ({
+    key,
+    type: "image/png",
+    bytes: new Uint8Array([137, 80, 78, 71]),
+  });
+
+  it("its head says the page's FAVICON: nothing where the host says nothing, the GENERIC mark where the page has none or its picture is not ready — and the page's own once it is decoded, the pane remade to say it", () => {
+    const p = printer();
+    const t = fakeHost({ head: p.head });
+    const local = createPaneLocal(t.host);
+    recordOf(local, { url: PAGE });
+    const face = t.faces.get(KEY);
+    if (face === undefined) throw new Error("no face");
+    // the page has not spoken (no `extra.favicon`): no mark
+    face.say({ state: { is: "live" }, info: { address: PAGE } });
+    local.tick?.(0);
+    recordOf(local, { url: PAGE });
+    expect(local.said(1 as Entity)?.favicon).toBeNull();
+    // it has none: the generic mark
+    face.say({ info: { address: PAGE, extra: { favicon: null } } });
+    local.tick?.(1);
+    recordOf(local, { url: PAGE });
+    expect(local.said(1 as Entity)?.favicon).toBe(GENERIC_FAVICON);
+    expect(p.offered).toEqual([]);
+    // it has one: offered to the head's service — the generic mark while it is decoded
+    const remakes = t.n.remake.length;
+    face.say({ info: { address: PAGE, extra: { favicon: icon("0123456789abcdef") } } });
+    local.tick?.(2);
+    expect(t.n.remake).toHaveLength(remakes + 1); // its favicon's key is a word the record reads
+    recordOf(local, { url: PAGE });
+    expect(p.offered).toEqual(["0123456789abcdef"]);
+    expect(local.said(1 as Entity)?.favicon).toBe(GENERIC_FAVICON);
+    // decoded: the pane is remade and the desk woken — and its head says the page's own
+    const wakes = t.n.wake;
+    p.land("0123456789abcdef");
+    expect(t.n.remake).toHaveLength(remakes + 2);
+    expect(t.n.wake).toBe(wakes + 1);
+    recordOf(local, { url: PAGE });
+    expect(local.said(1 as Entity)?.favicon).toBe(faviconId("0123456789abcdef"));
+    // a host whose head prints no pictures (a Node still's): the generic mark
+    const plain = fakeHost();
+    const bare = createPaneLocal(plain.host);
+    expect(bare.icon(1 as Entity, { extra: { favicon: icon("0123456789abcdef") } })).toBe(
+      GENERIC_FAVICON,
+    );
+    expect(bare.icon(1 as Entity, { extra: { favicon: null } })).toBe(GENERIC_FAVICON);
+    expect(bare.icon(1 as Entity, {})).toBeNull();
+    expect(bare.icon(1 as Entity, undefined)).toBeNull();
+  });
+
+  it("a favicon is a word by its KEY: the same key in new bytes remakes nothing (a frame's redraw), another key remakes the pane", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    local.face(1 as Entity, spec, S);
+    const face = t.faces.get(KEY);
+    face?.say({
+      state: { is: "live" },
+      info: { address: PAGE, extra: { favicon: icon("0123456789abcdef") } },
+    });
+    local.tick?.(0);
+    const remakes = t.n.remake.length;
+    const redraws = t.n.redraw;
+    // the host's face answers a NEW object of the same key (its bytes decoded again): not a new word
+    face?.say({ info: { address: PAGE, extra: { favicon: icon("0123456789abcdef") } } });
+    local.tick?.(1);
+    expect(t.n.remake).toHaveLength(remakes);
+    expect(t.n.redraw).toBe(redraws + 1);
+    // another favicon; then none: new words
+    face?.say({ info: { address: PAGE, extra: { favicon: icon("fedcba9876543210") } } });
+    local.tick?.(2);
+    expect(t.n.remake).toHaveLength(remakes + 1);
+    face?.say({ info: { address: PAGE, extra: { favicon: null } } });
+    local.tick?.(3);
+    expect(t.n.remake).toHaveLength(remakes + 2);
+    // the host stops saying anything of favicons: a new word too
+    face?.say({ info: { address: PAGE } });
+    local.tick?.(4);
+    expect(t.n.remake).toHaveLength(remakes + 3);
   });
 });

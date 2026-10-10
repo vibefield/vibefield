@@ -78,6 +78,21 @@ describe("the SDK's /desk door", () => {
     expectTypeOf<{ action: "stop" }>().toMatchTypeOf<door.BrowserNavigationCommand>();
   });
 
+  it("PT-4: the page's second service re-specs a face under its open page; the spec names the device the page is seen as", () => {
+    expectTypeOf<door.BrowserNavigation["respec"]>().toEqualTypeOf<
+      (key: string, spec: Readonly<Record<string, unknown>>) => boolean
+    >();
+    expectTypeOf<door.LiveBrowserSpec["device"]>().toEqualTypeOf<
+      door.LiveBrowserDevice | undefined
+    >();
+    expectTypeOf<door.LiveBrowserDevice["agent"]>().toEqualTypeOf<door.LiveBrowserAgent | null>();
+    expectTypeOf<{
+      mobile: true;
+      touchPoints: 5;
+      agent: null;
+    }>().toMatchTypeOf<door.LiveBrowserDevice>();
+  });
+
   it("hands over the kind contract, the placement keys and the service keys", () => {
     expect(door.defineObject).toBe(iceDesk.defineObject);
     expect(door.isObjectKind).toBe(iceDesk.isObjectKind);
