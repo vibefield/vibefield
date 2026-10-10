@@ -12,6 +12,8 @@ import {
   HistoryRoom,
   type HistoryRoomHandle,
   type HistoryRoomProps,
+  type HostPort,
+  type RoomFolders,
   type RoomProjectContext,
   type RoomSelection,
 } from "@rosetta/room";
@@ -55,9 +57,9 @@ async function until<T>(
 type Inputs = Omit<HistoryRoomProps, "catalog" | "sessions" | "assets" | "host">;
 
 /** The room over its demo ports, with these inputs; settled once its rows are drawn. */
-async function room(inputs: Inputs = {}) {
+async function room(inputs: Inputs = {}, desktop: HostPort | null = null) {
   const demo = createRoomDemo();
-  const ports = createDemoPorts(demo);
+  const ports = { ...createDemoPorts(demo), host: desktop };
   const handle = createRef<HistoryRoomHandle>();
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -543,5 +545,208 @@ describe("R5 — the heads: ②'s acts and card, ④'s acts or reason", () => {
     expect(
       [...(head(el, 4)?.querySelector(".ah-headacts")?.children ?? [])].map((kid) => kid.className),
     ).toEqual(["ah-caption tnum", "ah-iconbtn"]);
+  });
+});
+
+/** A desktop host whose worktree engine records the roots it is asked to open. */
+function desktop(): { host: HostPort; opened: string[] } {
+  const opened: string[] = [];
+  let generation = 0;
+  return {
+    opened,
+    host: {
+      homeDir: "/Users/demo",
+      platform: "darwin",
+      openInBrowser: async () => false,
+      favicon: async () => null,
+      worktree: {
+        open: async (root) => {
+          opened.push(root);
+          generation += 1;
+          return { ok: true, generation };
+        },
+        gitFacts: async () => null,
+        fileAction: async () => ({ ok: true }),
+        ports: () => () => undefined,
+      },
+    },
+  };
+}
+
+describe("R6 — ③'s head as the host's folder list", () => {
+  it("lists every folder by group, checks the shown one by key, follows the session, and never opens one elsewhere", async () => {
+    const shown: (string | null)[] = [];
+    const contexts: RoomProjectContext[] = [];
+    const folders: RoomFolders = {
+      groups: [
+        {
+          key: "mac",
+          title: "This Mac",
+          folders: [
+            {
+              key: "mac:vf",
+              path: "/Users/demo/Projects/vibe-field",
+              mark: <i data-os="mac" />,
+              detail: "main",
+            },
+            {
+              key: "mac:lane",
+              path: "/Users/demo/Projects/vibe-field-lane",
+              depth: 1,
+              detail: "lane-x",
+            },
+          ],
+        },
+        {
+          key: "studio",
+          title: "Studio",
+          folders: [
+            {
+              key: "studio:vf",
+              path: "/Users/demo/Projects/vibe-field",
+              mark: <i data-os="studio" />,
+              caption: "Studio · main",
+              elsewhere: <p data-elsewhere="">Files stay on Studio</p>,
+            },
+          ],
+        },
+      ],
+      initial: "mac:lane",
+      of: (session) => (session.id === "s1" ? "studio:vf" : session.id === "s0" ? "mac:vf" : null),
+      filterAfter: 2,
+      filterPlaceholder: "Filter 3 folders",
+      onShow: (key) => shown.push(key),
+    };
+    const { host: desk, opened } = desktop();
+    const { el } = await room(
+      {
+        folders: (id) => (id === "p0" ? folders : null),
+        projectActs: (_id, context) => {
+          contexts.push(context);
+          return null;
+        },
+      },
+      desk,
+    );
+    act(() => projectRow(el, "p0")?.click());
+    const pick = await until(
+      () => head(el, 3)?.querySelector<HTMLButtonElement>("header button.ah-folderpick"),
+      "③'s dropdown",
+    );
+    // no session yet: the usual place
+    expect(pick.querySelector("strong")?.textContent).toBe("~/Projects/vibe-field-lane");
+    await until(() => shown.at(-1) === "mac:lane", "onShow(mac:lane)");
+    expect(contexts.at(-1)).toEqual({ folder: "mac:lane" });
+    // the guest opens on the shown folder's path
+    act(() =>
+      head(el, 2)
+        ?.querySelector<HTMLButtonElement>("button[aria-label='Toggle the project worktree']")
+        ?.click(),
+    );
+    await until(
+      () => opened.at(-1) === "/Users/demo/Projects/vibe-field-lane",
+      "the engine on the lane",
+    );
+    // the list: every folder by group, the shown one checked, a worktree one step in, a filter past two
+    act(() => pick.click());
+    const rows = [...(head(el, 3)?.querySelectorAll<HTMLButtonElement>(".ah-menu__item") ?? [])];
+    expect(rows.map((row) => row.dataset.key)).toEqual(["mac:vf", "mac:lane", "studio:vf"]);
+    expect(rows.map((row) => row.getAttribute("aria-checked"))).toEqual(["false", "true", "false"]);
+    expect(rows[1]?.dataset.depth).toBe("1");
+    expect(rows[0]?.querySelector(".ah-menu__label")?.textContent).toBe("~/Projects/vibe-field");
+    expect(
+      [...(head(el, 3)?.querySelectorAll(".ah-menu__title") ?? [])].map((t) => t.textContent),
+    ).toEqual(["This Mac", "Studio"]);
+    const filter = head(el, 3)?.querySelector<HTMLInputElement>(".ah-menu__filter");
+    expect(filter?.placeholder).toBe("Filter 3 folders");
+    // the reader's pick
+    act(() => rows[0]?.click());
+    expect(pick.querySelector("strong")?.textContent).toBe("~/Projects/vibe-field");
+    expect(pick.querySelector("[data-os='mac']")).not.toBeNull();
+    await until(() => shown.at(-1) === "mac:vf", "onShow(mac:vf)");
+    await until(
+      () => opened.at(-1) === "/Users/demo/Projects/vibe-field",
+      "the engine on vibe-field",
+    );
+    // choosing a session follows it: s1 ran on Studio — the same spelling, another key, never opened here
+    const openedBefore = opened.length;
+    act(() => sessionRowOf(el, "s1")?.click());
+    await until(() => shown.at(-1) === "studio:vf", "onShow(studio:vf)");
+    expect(pick.querySelector("[data-os='studio']")).not.toBeNull();
+    expect(head(el, 3)?.querySelector("header > .ah-caption")?.textContent).toBe("Studio · main");
+    expect(head(el, 3)?.querySelector(".ah-elsewhere [data-elsewhere]")?.textContent).toBe(
+      "Files stay on Studio",
+    );
+    act(() => pick.click());
+    const checked = [
+      ...(head(el, 3)?.querySelectorAll<HTMLButtonElement>(".ah-menu__item[aria-checked='true']") ??
+        []),
+    ];
+    expect(checked.map((row) => row.dataset.key)).toEqual(["studio:vf"]);
+    act(() =>
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(opened.length).toBe(openedBefore);
+    // and s0 ran here
+    act(() => sessionRowOf(el, "s0")?.click());
+    await until(() => shown.at(-1) === "mac:vf", "onShow(mac:vf) for s0");
+    expect(head(el, 3)?.querySelector(".ah-elsewhere")).toBeNull();
+  });
+
+  it("a filter narrows the list by path", async () => {
+    const { el } = await room({
+      folders: () => ({
+        groups: [
+          {
+            key: "g",
+            folders: [
+              { key: "a", path: "/x/alpha" },
+              { key: "b", path: "/x/beta" },
+              { key: "c", path: "/x/gamma" },
+            ],
+          },
+        ],
+        filterAfter: 2,
+      }),
+    });
+    act(() => projectRow(el, "p0")?.click());
+    const pick = await until(
+      () => head(el, 3)?.querySelector<HTMLButtonElement>("button.ah-folderpick"),
+      "③'s dropdown",
+    );
+    act(() => pick.click());
+    const filter = await until(
+      () => head(el, 3)?.querySelector<HTMLInputElement>(".ah-menu__filter"),
+      "the filter",
+    );
+    expect(document.activeElement).toBe(filter);
+    act(() => {
+      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      set?.call(filter, "bet");
+      filter.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(
+      [...(head(el, 3)?.querySelectorAll<HTMLButtonElement>(".ah-menu__item") ?? [])].map(
+        (row) => row.dataset.key,
+      ),
+    ).toEqual(["b"]);
+  });
+
+  it("absent, ③'s head is the room's own and the guest opens the room's root", async () => {
+    const { host: desk, opened } = desktop();
+    const { el } = await room({}, desk);
+    act(() => projectRow(el, "p0")?.click());
+    await until(() => head(el, 3)?.querySelector("header .ah-colhead"), "③'s head");
+    expect(el.querySelector(".ah-folderpick, .ah-elsewhere")).toBeNull();
+    act(() =>
+      head(el, 2)
+        ?.querySelector<HTMLButtonElement>("button[aria-label='Toggle the project worktree']")
+        ?.click(),
+    );
+    await until(
+      () => opened.at(-1) === "/Users/demo/Projects/vibe-field",
+      "the engine on the room's root",
+    );
   });
 });
