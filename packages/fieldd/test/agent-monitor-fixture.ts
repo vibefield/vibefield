@@ -1,6 +1,7 @@
 import type { AgentMonitorState, MonitorNotification } from "@vibecook/puppeteer-core";
 import type {
   MonitorClock,
+  MonitorHistoryPort,
   MonitorRuntimeSource,
   MonitorScheduler,
 } from "@vibecook/puppeteer-monitor";
@@ -338,6 +339,8 @@ export async function testMonitor(
     terminals?: readonly TerminalInfo[] | undefined;
     profiles?: AgentsProfileSetsListResult | undefined;
     devices?: { id: string; name?: string; platform?: string };
+    /** TL — the record the backend reads its past through */
+    history?: MonitorHistoryPort;
   } = {},
 ): Promise<TestMonitor> {
   const summaries = input.summaries ?? [];
@@ -359,6 +362,7 @@ export async function testMonitor(
     profiles,
     catalog: createAgentCatalogReaders(AGENT_CATALOG),
     identity,
+    ...(input.history !== undefined ? { history: input.history } : {}),
     clock: clock.clock,
     scheduler: scheduler.scheduler,
   });

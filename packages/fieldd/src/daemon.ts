@@ -824,10 +824,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     ...catalogCadences(config.indexCatalog),
     logger,
   });
-  // TL (docket v9, T5) — the record's sessions in a window (index-activity.ts):
-  // `index.activity`'s reader and the monitor backend's history port. The
-  // floor answers from the catalog's bounds; it never pages a transcript.
-  const activity = createActivityReader({ catalog: indexCatalog });
+  // TL (docket v9, T4/T5) — the record's sessions in a window (index-activity.ts):
+  // `index.activity`'s reader and the monitor backend's history port —
+  // rosettad's turns through its route, the catalog's bounds when the route
+  // cannot answer; never a transcript page.
+  const activity = createActivityReader({ catalog: indexCatalog, route: index });
   // DS-6 — the aggregator needs the roster and the peer link, which are built
   // further down; the doors registered before them read it through this ref
   // (every door is reachable only after the API listens, when it is bound).

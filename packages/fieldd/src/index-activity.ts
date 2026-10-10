@@ -19,11 +19,14 @@ import { RpcCallError } from "./native-link";
 // fieldd only reads and translates).
 //
 // ONLY ROSETTA READS TRANSCRIPTS (the 10-03 law). This reader never pages
-// `index.timeline` to build spans. It answers from what fieldd already holds:
-// the catalog's sessions, each with its recorded bounds (`activity {firstAt,
-// lastAt}`), which is T5's floor — `fidelity: "bounds"`, one band per ended
-// run. rosettad's turns (T4, its `/api/activity` route) join at the rosetta
-// pin that carries the route.
+// `index.timeline` to build spans. It asks rosettad's own route (T4,
+// `/api/activity`, protocol 27): every top-level session active in the window
+// with its tree's turns and the silences inside them, which rosetta computes
+// from its own message table — `fidelity: "turns"`. When the route cannot
+// answer (the daemon is not ready, or an older one has no route) it answers
+// from what fieldd already holds: the catalog's sessions, each with its
+// recorded bounds (`activity {firstAt, lastAt}`), which is T5's floor —
+// `fidelity: "bounds"`, one band per ended run — and says `partial`.
 //
 // The catalog's tables are this desktop's own sessions, top-level only (a
 // delegated thread is transcript structure), kept across a lost stream
@@ -112,11 +115,48 @@ export function activityFromCatalog(
   };
 }
 
+/** The route's reader as this module asks it (`IndexService.activity`). */
+export interface ActivityRoute {
+  activity(params: {
+    sinceMs: number;
+    untilMs: number;
+    sessions?: readonly string[] | undefined;
+    silenceMs: number;
+  }): Promise<IndexActivityResult>;
+}
+
 export function createActivityReader(opts: {
   catalog: Pick<IndexCatalog, "ready" | "phase" | "sessions">;
+  /** rosettad's route; absent: the floor alone */
+  route?: ActivityRoute | undefined;
 }): ActivityReader {
   return {
-    read: async (ask) => activityFromCatalog(opts.catalog, ask),
+    async read(ask) {
+      const route = opts.route;
+      if (route === undefined) return activityFromCatalog(opts.catalog, ask);
+      try {
+        return await route.activity({
+          sinceMs: ask.sinceMs,
+          untilMs: ask.untilMs,
+          ...(ask.sessions !== undefined ? { sessions: ask.sessions } : {}),
+          silenceMs: ask.silenceMs ?? INDEX_ACTIVITY.SILENCE_MS,
+        });
+      } catch (error) {
+        // the turns could not be read: the catalog's bounds stand in, said so
+        // (and a catalog that has not read the index refuses in its own turn)
+        if (
+          !(error instanceof RpcCallError) ||
+          (error.kind !== "UNAVAILABLE" && error.kind !== "NOT_FOUND")
+        )
+          throw error;
+        const floor = activityFromCatalog(opts.catalog, ask);
+        return {
+          ...floor,
+          partial: true,
+          detail: "The agent index's turns could not be read; these are its sessions' bounds.",
+        };
+      }
+    },
   };
 }
 

@@ -190,6 +190,101 @@ describe("the floor's reader: the catalog's bounds, never a transcript", () => {
   });
 });
 
+describe("the reader prefers rosettad's route (T4) and gives way to the floor honestly", () => {
+  const ROUTED = {
+    sinceMs: WINDOW.sinceMs,
+    untilMs: WINDOW.untilMs,
+    fidelity: "turns" as const,
+    partial: false,
+    sessions: [],
+  };
+
+  it("answers the route's turns, asking T1's cut when the ask names none", async () => {
+    const asks: unknown[] = [];
+    const reader = createActivityReader({
+      catalog: fakeCatalog([], "connecting", false),
+      route: {
+        activity: async (params) => {
+          asks.push(params);
+          return ROUTED;
+        },
+      },
+    });
+    expect(await reader.read(WINDOW)).toBe(ROUTED);
+    expect(asks).toEqual([{ ...WINDOW, silenceMs: INDEX_ACTIVITY.SILENCE_MS }]);
+  });
+
+  it("a route that cannot answer gives way to the catalog's bounds, said partial; any other refusal stands", async () => {
+    const rows = [catalogRow("now", { firstAt: NOW - HOUR, lastAt: NOW - MIN })];
+    for (const kind of ["UNAVAILABLE", "NOT_FOUND"]) {
+      const reader = createActivityReader({
+        catalog: fakeCatalog(rows),
+        route: {
+          activity: async () => {
+            throw new RpcCallError(kind, "no route", false);
+          },
+        },
+      });
+      const answer = await reader.read(WINDOW);
+      expect(answer).toMatchObject({ fidelity: "bounds", partial: true });
+      expect(answer.detail).toMatch(/turns could not be read/);
+      expect(answer.sessions.map((s) => s.sessionId)).toEqual(["now"]);
+    }
+    const refusing = createActivityReader({
+      catalog: fakeCatalog(rows),
+      route: {
+        activity: async () => {
+          throw new RpcCallError(
+            "PRECONDITION_FAILED",
+            "the agent index refused the window",
+            false,
+          );
+        },
+      },
+    });
+    await expect(refusing.read(WINDOW)).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+  });
+
+  it("the port carries a turn's silences to the backend in its words", async () => {
+    const port = monitorHistoryPort(
+      createActivityReader({
+        catalog: fakeCatalog([]),
+        route: {
+          activity: async () => ({
+            ...ROUTED,
+            sessions: [
+              {
+                sessionId: "s1",
+                nativeSessionId: "nat-s1",
+                provider: "claude",
+                activity: { firstAt: NOW - HOUR, lastAt: NOW },
+                turns: [
+                  {
+                    kind: "human_turn",
+                    firstAt: NOW - HOUR,
+                    lastAt: NOW,
+                    silences: [{ fromMs: NOW - 50 * MIN, toMs: NOW - 20 * MIN }],
+                  },
+                ],
+              },
+            ],
+          }),
+        },
+      }),
+      createAgentCatalogReaders(AGENT_CATALOG),
+    );
+    const answer = await port.read(WINDOW, { silenceMs: INDEX_ACTIVITY.SILENCE_MS });
+    expect(answer.fidelity).toBe("turns");
+    expect(answer.sessions[0]?.turns).toEqual([
+      {
+        firstAt: NOW - HOUR,
+        lastAt: NOW,
+        silences: [{ from: NOW - 50 * MIN, to: NOW - 20 * MIN }],
+      },
+    ]);
+  });
+});
+
 // ── the doors, on a real daemon ─────────────────────────────────────────────
 
 const FAKE = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "fake-rosettad.mjs");
@@ -252,6 +347,8 @@ async function open(url: string, headers?: Record<string, string>): Promise<WsRp
 interface World {
   daemon: FielddDaemon;
   asked(): string[];
+  /** rescript rosettad's `/api/activity` (re-read per request) */
+  activity(script: unknown): void;
   window: WsRpc;
   phone: WsRpc;
   peer: WsRpc;
@@ -286,6 +383,7 @@ beforeAll(async () => {
     projects: join(dataDir, "projects.json"),
     runtimes: join(dataDir, "runtimes.json"),
     log: join(dataDir, "requests.log"),
+    activity: join(dataDir, "activity.json"),
   };
   writeFileSync(files.sessions, JSON.stringify(SESSIONS));
   writeFileSync(
@@ -299,6 +397,7 @@ beforeAll(async () => {
     ]),
   );
   writeFileSync(files.log, "");
+  writeFileSync(files.activity, "{}");
 
   const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
   // the roster vouches for a peer desktop that is asleep (its link never opens)
@@ -315,6 +414,7 @@ beforeAll(async () => {
     FAKE_ROSETTAD_PROJECTS: files.projects,
     FAKE_ROSETTAD_RUNTIMES: files.runtimes,
     FAKE_ROSETTAD_REQUEST_LOG: files.log,
+    FAKE_ROSETTAD_ACTIVITY: files.activity,
   };
   const fakeSpawner = ((_bin: string, args: readonly string[], options: object) =>
     spawn(process.execPath, [FAKE, ...args], {
@@ -350,6 +450,7 @@ beforeAll(async () => {
         .split("\n")
         .filter((line) => line !== "")
         .map((line) => line.slice(line.indexOf(" ") + 1)),
+    activity: (script) => writeFileSync(files.activity, JSON.stringify(script)),
     window,
     phone: await tailnet(daemon, mock, { "Tailscale-User-Login": TEST_LOGIN }, "ios"),
     peer: await tailnet(
@@ -374,11 +475,126 @@ afterAll(async () => {
 
 const day = () => ({ sinceMs: Date.now() - DAY, untilMs: Date.now() });
 
-describe("index.activity — the record's sessions in the view's day (T5's floor)", () => {
+// T4 — rosettad's turns, as its route answers them (the scripted daemon
+// serves the scripted ROOT sessions with these turns)
+const TURNS = {
+  today: [
+    {
+      group_id: "g1",
+      kind: "human_turn",
+      first_at: NOW - 3 * HOUR,
+      last_at: NOW - 2 * HOUR - 30 * MIN,
+      gaps: [{ from_ms: NOW - 3 * HOUR + 5 * MIN, to_ms: NOW - 2 * HOUR - 35 * MIN }],
+    },
+    {
+      group_id: "g2",
+      kind: "agent_cycle",
+      first_at: NOW - 2 * HOUR - 10 * MIN,
+      last_at: NOW - 2 * HOUR,
+      gaps: [],
+    },
+  ],
+  late: [
+    {
+      group_id: "g3",
+      kind: "human_turn",
+      first_at: NOW - 50 * MIN,
+      last_at: NOW - 10 * MIN,
+      gaps: [],
+    },
+  ],
+};
+
+describe("index.activity — rosettad's turns through its route (T4)", () => {
+  beforeAll(() => world.activity({ turns: TURNS }));
+
+  it("answers each session's turns and the silences rosetta found, asked once for the day", async () => {
+    const window = day();
+    const before = world.asked().length;
+    const answer = IndexActivityResult.parse(await world.window.call("index.activity", window));
+    expect(answer.fidelity).toBe("turns");
+    expect(answer.partial).toBe(false);
+    expect(answer.sessions.map((s) => s.sessionId)).toEqual(["late", "today"]);
+    expect(answer.sessions[1]).toMatchObject({
+      nativeSessionId: "nat-today",
+      kind: "claude-code",
+      provider: "claude",
+      cwd: "/work/app",
+      activity: { firstAt: NOW - 3 * HOUR, lastAt: NOW - 2 * HOUR },
+      turns: [
+        {
+          kind: "human_turn",
+          firstAt: NOW - 3 * HOUR,
+          lastAt: NOW - 2 * HOUR - 30 * MIN,
+          silences: [{ fromMs: NOW - 3 * HOUR + 5 * MIN, toMs: NOW - 2 * HOUR - 35 * MIN }],
+        },
+        { kind: "agent_cycle", firstAt: NOW - 2 * HOUR - 10 * MIN, lastAt: NOW - 2 * HOUR },
+      ],
+    });
+    // ONE ask of rosetta's route, T1's cut on it; never a transcript page
+    const asked = world.asked().slice(before);
+    expect(asked).toEqual([
+      `/api/activity?since_ms=${window.sinceMs}&until_ms=${window.untilMs}&gap_ms=${INDEX_ACTIVITY.SILENCE_MS}&limit=1000`,
+    ]);
+  });
+
+  it("carries the asker's silence cut, and a session rosetta withholds makes the answer partial", async () => {
+    const before = world.asked().length;
+    await world.window.call("index.activity", { ...day(), silenceMs: HOUR });
+    expect(world.asked().slice(before)[0]).toContain(`gap_ms=${HOUR}`);
+    world.activity({ turns: TURNS, withheld: ["late"] });
+    const answer = IndexActivityResult.parse(await world.window.call("index.activity", day()));
+    expect(answer.partial).toBe(true);
+    expect(answer.detail).toMatch(/not read every session/);
+    // a withheld session's turns are not "none": its bounds stand in
+    expect(answer.sessions[0]).not.toHaveProperty("turns");
+    world.activity({ turns: TURNS });
+  });
+});
+
+describe("agent.recordedLanes — the backend's lanes from rosettad's turns (T1, T4)", () => {
+  beforeAll(() => world.activity({ turns: TURNS }));
+
+  it("draws worked inside a turn, quiet between turns, and a silence over 15 min not recorded", async () => {
+    const past = AgentRecordedLanesResult.parse(
+      await world.window.call("agent.recordedLanes", day()),
+    );
+    expect(past.fidelity).toBe("turns");
+    expect(past.state).toBe("complete");
+    const today = past.ended.find((lane) => lane.id === "past:claude:nat-today");
+    expect(today?.spans).toEqual([
+      { kind: "worked", from: NOW - 3 * HOUR, to: NOW - 3 * HOUR + 5 * MIN },
+      { kind: "unrecorded", from: NOW - 3 * HOUR + 5 * MIN, to: NOW - 2 * HOUR - 35 * MIN },
+      { kind: "worked", from: NOW - 2 * HOUR - 35 * MIN, to: NOW - 2 * HOUR - 30 * MIN },
+      { kind: "quiet", from: NOW - 2 * HOUR - 30 * MIN, to: NOW - 2 * HOUR - 10 * MIN },
+      { kind: "worked", from: NOW - 2 * HOUR - 10 * MIN, to: NOW - 2 * HOUR },
+    ]);
+    // never blocked, never unseen
+    for (const lane of past.ended)
+      for (const span of lane.spans) expect(["worked", "quiet", "unrecorded"]).toContain(span.kind);
+  });
+
+  it("a withheld session is one active band, and the past says partial", async () => {
+    world.activity({ turns: TURNS, withheld: ["late"] });
+    const past = AgentRecordedLanesResult.parse(
+      await world.window.call("agent.recordedLanes", day()),
+    );
+    expect(past.state).toBe("partial");
+    const late = past.ended.find((lane) => lane.id === "past:claude:nat-late");
+    expect(late?.spans).toEqual([{ kind: "active", from: NOW - 50 * MIN, to: NOW - 10 * MIN }]);
+    world.activity({ turns: TURNS });
+  });
+});
+
+describe("index.activity — the floor when the route cannot answer (T5)", () => {
+  // a daemon without the route: the catalog's bounds stand in, and say so
+  beforeAll(() => world.activity({ status: 404 }));
+
   it("answers today's top-level sessions by their bounds, and never reads a transcript to do it", async () => {
     const answer = IndexActivityResult.parse(await world.window.call("index.activity", day()));
     expect(answer.fidelity).toBe("bounds");
-    expect(answer.partial).toBe(false);
+    expect(answer.partial).toBe(true);
+    expect(answer.detail).toMatch(/turns could not be read/);
     expect(answer.sessions.map((s) => s.sessionId)).toEqual(["late", "today"]);
     expect(answer.sessions[1]).toMatchObject({
       nativeSessionId: "nat-today",
@@ -423,13 +639,15 @@ describe("index.activity — the record's sessions in the view's day (T5's floor
   });
 });
 
-describe("agent.recordedLanes — the backend's lanes over the record (B-D6 (a))", () => {
+describe("agent.recordedLanes — the backend's lanes over the floor (B-D6 (a), T5)", () => {
+  beforeAll(() => world.activity({ status: 404 }));
+
   it("draws each ended run as ONE active band from its first to its last activity, in birth order", async () => {
     const past = AgentRecordedLanesResult.parse(
       await world.window.call("agent.recordedLanes", day()),
     );
     expect(past.fidelity).toBe("bounds");
-    expect(past.state).toBe("complete");
+    expect(past.state).toBe("partial");
     // the floor: no live row's past (it keeps the hatch until turns arrive)
     expect(past.live).toEqual([]);
     expect(past.ended.map((lane) => lane.id)).toEqual([

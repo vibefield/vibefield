@@ -115,6 +115,14 @@
 // golden-shaped default, and `status` — e.g. 503 — to answer every aggregate
 // with). And `/ws/sessions/{id}`: a session socket that opens (a `hello` frame,
 // then a `snapshot`) once the upgrade passes the Origin rule and the credential.
+//
+// TL (protocol 27) — `/api/activity?since_ms&until_ms[&gap_ms][&sessions][&limit]`,
+// bearer-only like the aggregates: the scripted ROOT sessions whose activity
+// touches the window, newest first, each with the turns FAKE_ROSETTAD_ACTIVITY
+// scripts for it (a JSON file re-read per request: `{turns: {<session id>:
+// TurnSpan[]}, withheld?: string[], truncated?: boolean, status?: number}` —
+// `status` answers every ask with it, e.g. 404 for a daemon without the
+// route). A window that holds no time is the route's own 400.
 import {
   appendFileSync,
   existsSync,
@@ -607,6 +615,52 @@ if (mode === "silent") {
           },
         );
       }
+      return;
+    }
+    // TL (protocol 27) — the activity route (see the header)
+    if (req.url !== undefined && /^\/api\/activity(?:\?.*)?$/.test(req.url)) {
+      logRequest(req.url);
+      const script = scripted("FAKE_ROSETTAD_ACTIVITY", {});
+      const source = script !== null && typeof script === "object" ? script : {};
+      if (typeof source.status === "number" && source.status !== 200) {
+        res.statusCode = source.status;
+        res.setHeader("x-rosetta-protocol-version", String(protocol));
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ error: { code: "not_found", message: "scripted" } }));
+        return;
+      }
+      const url = new URL(req.url, "http://127.0.0.1");
+      const since = Number(url.searchParams.get("since_ms"));
+      const until = Number(url.searchParams.get("until_ms") ?? Date.now());
+      const gap = Number(url.searchParams.get("gap_ms") ?? 900_000);
+      if (!Number.isFinite(since) || !(until > since)) {
+        res.statusCode = 400;
+        res.setHeader("x-rosetta-protocol-version", String(protocol));
+        res.end(JSON.stringify({ error: { code: "bad_request", message: "bad window" } }));
+        return;
+      }
+      const named = url.searchParams.get("sessions")?.split(",");
+      const turns = source.turns !== null && typeof source.turns === "object" ? source.turns : {};
+      const withheld = Array.isArray(source.withheld) ? source.withheld : [];
+      const sessions = sessionRows()
+        .filter((row) => row.parent_session_id === null || row.parent_session_id === undefined)
+        .filter((row) => named === undefined || named.includes(row.id))
+        .filter(
+          (row) => row.activity && row.activity.last_at >= since && row.activity.first_at <= until,
+        )
+        .sort((a, b) => b.activity.last_at - a.activity.last_at)
+        .map((row) => ({
+          session: row,
+          turns: withheld.includes(row.id) ? [] : (turns[row.id] ?? []),
+          turns_withheld: withheld.includes(row.id),
+        }));
+      json(res, {
+        since_ms: since,
+        until_ms: until,
+        gap_ms: gap,
+        sessions,
+        truncated: source.truncated === true,
+      });
       return;
     }
     if (req.url === "/api/status") {
