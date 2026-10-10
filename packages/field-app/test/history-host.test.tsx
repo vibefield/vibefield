@@ -604,6 +604,25 @@ describe("R6: ③'s folders", () => {
     expect(text(laptop?.elsewhere)).toBe("Laptop is asleep — its files stay on Laptop");
     // lane room's finding 4: an elsewhere folder ALWAYS carries its caption
     expect(laptop?.caption).toBe("Laptop · main");
+    // a folder's facts: its branch and how many sessions it held, in number
+    expect(laptop?.detail).toBe("main · 4 sessions");
+    const one = hostModelOf(
+      {
+        ...LISTING,
+        projects: [
+          project("p1:one", {
+            places: [place(STUDIO, "pl_one", "/Users/me/one", { sessions: 1 })],
+          }),
+        ],
+      },
+      ROSTER,
+      [],
+      PROVIDERS,
+    );
+    expect(
+      historyHostInputs(one, NO_HOST_STATE, acts).folders?.("p1:one")?.groups[0]?.folders[0]
+        ?.detail,
+    ).toBe("1 session");
     expect(folders?.initial).toBe(`${STUDIO}\u001fpl_vf`);
     expect(folders?.of?.(roomRow("s-done"))).toBe(`${STUDIO}\u001fpl_vf`);
     folders?.onShow?.(`${STUDIO}\u001fpl_wt`);

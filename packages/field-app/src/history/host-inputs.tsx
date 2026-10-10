@@ -243,7 +243,11 @@ function placeDetail(model: HistoryHostModel, place: ProjectPlace): string | und
   const working = workingIn(model, place);
   const parts = [
     place.branch,
-    working > 0 ? `${working} working` : place.sessions > 0 ? `${place.sessions} sessions` : null,
+    working > 0
+      ? `${working} working`
+      : place.sessions > 0
+        ? `${place.sessions} ${place.sessions === 1 ? "session" : "sessions"}`
+        : null,
   ].filter((part): part is string => typeof part === "string" && part !== "");
   return parts.length > 0 ? parts.join(" · ") : undefined;
 }
