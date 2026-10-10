@@ -667,6 +667,9 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         faces.delete(key);
       },
     };
+    /** PT-4 (ruling 5): what the page is called — its title when it has one (never a blank one), else its spec's label. The
+     * face's row and the mount's `label(key)` say the same word. */
+    const called = (): string => liveInfoOf(handle.state).title?.trim() || page.label;
     faces.set(key, {
       face,
       row: () => {
@@ -679,7 +682,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
           state: face.state(),
           info,
           favicon: icon?.key ?? null,
-          label: info.title ?? page.label,
+          label: called(),
           emulation: emulationOf(page),
           ...tally,
           lastInput,
@@ -710,7 +713,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         }
         tellDevice();
       },
-      label: () => liveInfoOf(handle.state).title ?? page.label,
+      label: called,
     });
     return face;
   };

@@ -972,11 +972,15 @@ describe("PT-4 — the page as a device sees it", () => {
     expect(live.label(KEY)).toBe("Browser");
     handle.set({ browser: BROWSER as never });
     expect(live.label(KEY)).toBe("Fixture");
-    // a page with no title: its spec's label, as its kind prints its address — the label a respec brings
-    handle.set({ browser: { ...BROWSER, title: undefined } as never });
+    // the face's row says the same word
+    expect(live.faces()[0]?.label).toBe("Fixture");
+    // a page with no title — or a blank one: its spec's label, as its kind prints its address — the label a respec brings
     expect(live.navigation.respec(KEY, { ...PAGE, label: "127.0.0.1:4321" })).toBe(true);
-    expect(live.label(KEY)).toBe("127.0.0.1:4321");
-    expect(live.faces()[0]?.label).toBe("127.0.0.1:4321");
+    for (const title of [undefined, "", "   "]) {
+      handle.set({ browser: { ...BROWSER, title } as never });
+      expect(live.label(KEY), JSON.stringify(title)).toBe("127.0.0.1:4321");
+      expect(live.faces()[0]?.label, JSON.stringify(title)).toBe("127.0.0.1:4321");
+    }
     expect(live.label("no-such-key")).toBeUndefined();
   });
 });
