@@ -103,9 +103,9 @@ describe("History's live feed (PK5)", () => {
     expect(heard).toBeGreaterThan(0);
     const after = feed.read();
     expect(after).not.toBe(before);
-    expect(after.runs.filter((row) => row.agent !== undefined).map((row) => row.floorSessionId)).toEqual(
-      expect.arrayContaining(["pty-a", "pty-b"]),
-    );
+    expect(
+      after.runs.filter((row) => row.agent !== undefined).map((row) => row.floorSessionId),
+    ).toEqual(expect.arrayContaining(["pty-a", "pty-b"]));
     off();
     expect(board.closed()).toBe(0);
     feed.dispose();

@@ -9,11 +9,7 @@ import type { ViewKeys } from "../frame/views";
 import { HistoryRoomView } from "../history/HistoryRoomView";
 import { FIXTURE_SEARCH_QUERY, historyFixturePorts } from "./history-fixtures";
 import { peekFixturePort } from "./peek-fixtures";
-import {
-  LIVE_FIXTURE_FILTERS,
-  LIVE_FIXTURE_NOW,
-  peekLiveFixtureDoor,
-} from "./peek-live-fixtures";
+import { LIVE_FIXTURE_FILTERS, LIVE_FIXTURE_NOW, peekLiveFixtureDoor } from "./peek-live-fixtures";
 
 // Search — the Peek, in the catalog (DESIGN.md §8 "Search — the Peek";
 // GV-D8/D9/D10, built 2026-10-08): the SHIPPING Peek controller (`Peek.tsx`)
