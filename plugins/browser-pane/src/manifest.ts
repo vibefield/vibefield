@@ -50,8 +50,11 @@ export const browserPaneManifest: PluginManifestV1 = {
         interaction: { selectable: true, movable: true, resizable: true, snap: "both" },
         // the SDK's DESK_OBJECT (test/manifest.test.ts holds it equal): it lies on the desk, by what it provides (K8a)
         provides: [BROWSER_PANE_TYPE, "desk.object"],
-        // one cell: a device switch writes the device beside the size it cuts, one transaction (device.ts)
-        groups: {},
+        // the props in one cell (a device switch writes the device beside the size it cuts, one transaction — device.ts) but
+        // the URL in a cell of its own (PT-3 ruling 9): strata's undo re-asserts a WHOLE cell as it stood before the undone
+        // edit, so an undo of the desk's edit to the props (a finish, a device switch) would take back with it a page's later
+        // navigation — written into the url, never an undo step — and send the page back
+        groups: { page: ["url"] },
         props: {
           url: { kind: "string", default: SAMPLE_URL, maxLength: URL_MAX },
           device: { kind: "enum", options: [...DEVICE_IDS], default: "laptop" },

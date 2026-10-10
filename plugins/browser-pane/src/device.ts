@@ -9,8 +9,9 @@
 // SDK's `/canvas` door — `Position`, `Size` and the widget catalog's read helper (said in the import wall and the note).
 //
 // PT-3 — the held bar's DEVICE tool runs the same switch on the pane in hand, to the next device (one undo step); and the
-// props CELL is handed out from here (`propsCell`) for the hand's one write of its own — a page's navigation into the `url`
-// prop (hand.ts) — so this module stays the pane's only reader of the `/canvas` door.
+// URL's cell is handed out from here (`urlCell` — the url lives in a cell of its own, the manifest's `page` group) for the
+// hand's one write of its own — a page's navigation into the `url` prop (hand.ts) — so this module stays the pane's only
+// reader of the `/canvas` door.
 
 import { getWidgetType, Position, Size, type WidgetType } from "@vibefield/plugin-sdk/canvas";
 import type { Entity, HeldToolApi, MenuActionDef, World } from "@vibefield/plugin-sdk/desk";
@@ -49,6 +50,14 @@ export function switchedRect(
 /** The pane type's props CELL — the component its props live in (the catalog's group `props`); undefined before the type is defined. */
 export const propsCell = (): WidgetType["groups"][number]["component"] | undefined =>
   getWidgetType(BROWSER_PANE_TYPE)?.groups.find((g) => g.name === "props")?.component;
+
+/** The cell the pane's `url` lives in — the catalog's group that holds it (its own: an undo of the desk's edits to the other
+ * props never re-asserts an old address — the manifest's `groups`); undefined before the type is defined. */
+export const urlCell = (): WidgetType["groups"][number]["component"] | undefined => {
+  const type = getWidgetType(BROWSER_PANE_TYPE);
+  const group = type?.propToGroup.url;
+  return group === undefined ? undefined : type?.groups.find((g) => g.name === group)?.component;
+};
 
 /** A switch to `device` of each pane named, in ONE transaction of the act's (one undo step). */
 function switchTo(

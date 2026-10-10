@@ -30,7 +30,7 @@ import {
   writable,
 } from "@vibefield/plugin-sdk/desk";
 import { resolveAddress } from "./address";
-import { propsCell } from "./device";
+import { urlCell } from "./device";
 import { SAMPLE_URL } from "./ids";
 import { bandLayout, type HeldPart } from "./law";
 import { isPageUrl } from "./live";
@@ -98,13 +98,13 @@ function onScreen(
   };
 }
 
-/** The hand's seams a test fills: the props cell its one write lands in (the pane type's, from the catalog, by default). */
+/** The hand's seams a test fills: the cell its one write lands in (the pane type's url cell, from the catalog, by default). */
 export interface PaneHandOptions {
-  readonly cell?: () => ReturnType<typeof propsCell>;
+  readonly cell?: () => ReturnType<typeof urlCell>;
 }
 
 export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): PaneHand {
-  const cellOf = opts.cell ?? propsCell;
+  const cellOf = opts.cell ?? urlCell;
   let dom: ObjectDomHost | undefined;
   /** The pane the editor is lent for, and the lease holding it — the page's or the address's (two leases: ICE's editor keeps a
    * lease it already holds and never asks its value again, so a switch of mode is a hand-over from one lease to the other). */
@@ -181,7 +181,8 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
     write(e, url);
   };
 
-  /** The pane's `url` prop, written NOT undoably (ruling 9): a page's navigation is not a desk edit. */
+  /** The pane's `url` prop, written NOT undoably (ruling 9): a page's navigation is not a desk edit — into the url's own cell, so
+   * an undo of the desk's edits to the pane's other props never re-asserts the address it replaced. */
   const write = (e: Entity, url: string): void => {
     const cell = cellOf();
     const session = writable(h.docs);

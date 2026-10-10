@@ -13,7 +13,11 @@
           "kind": "browserPane"
         },
         "description": "A pane of glass cut to its page: resize it and its page re-lays out; switch its device and it is re-cut to that screen's size",
-        "groups": {},
+        "groups": {
+          "page": [
+            "url"
+          ]
+        },
         "interaction": {
           "movable": true,
           "resizable": true,

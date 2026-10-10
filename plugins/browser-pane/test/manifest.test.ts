@@ -68,7 +68,8 @@ describe("vibefield.browser-pane", () => {
       "desk",
     ]);
     expect(row?.props.url?.kind === "string" ? row.props.url.default : undefined).toBe(SAMPLE_URL);
-    expect(row?.groups).toEqual({});
+    // the url in a cell of its own (PT-3 ruling 9): an undo of the props' cell never re-asserts an old address
+    expect(row?.groups).toEqual({ page: ["url"] });
   });
 
   it("is a laptop's page in size, resized by core's handles down to the smallest viewport at the finest density", () => {
