@@ -191,7 +191,13 @@ describe("the page as a device sees it — its rows", () => {
   });
 
   it("TOUCH: a press in hand arrives as a touch; the wheel still scrolls; the pane stays in hand", () => {
-    const ok: DeviceSeen["touch"] = { pointer: "touch", touches: 1, scrollY: 96, held: true };
+    const ok: DeviceSeen["touch"] = {
+      pointer: "touch",
+      touches: 1,
+      scrollY: 96,
+      held: true,
+      tapped: "/next",
+    };
     expect(judgeTouch(ok)).toEqual([]);
     expect(judgeTouch({ ...ok, pointer: "mouse", touches: 0 })).toEqual([
       'TOUCH: the page\'s last pointer was "mouse", not a touch (0 touchstarts)',
@@ -203,6 +209,13 @@ describe("the page as a device sees it — its rows", () => {
     ]);
     expect(judgeTouch({ ...ok, scrollY: null })[0]).toMatch(/scroll at null/);
     expect(judgeTouch({ ...ok, held: false })).toEqual(["TOUCH: the pane left the hand"]);
+    // the finger sent somewhere the link is not drawn
+    expect(judgeTouch({ ...ok, tapped: "/page" })).toEqual([
+      "TOUCH: a tap on the page's link left it at /page, not /next — the finger did not land where the link is drawn",
+    ]);
+    expect(judgeTouch({ ...ok, tapped: null })[0]).toMatch(
+      /left it at nothing it said, not \/next/,
+    );
   });
 
   it("BACK: a desktop again — the agent it was laid with — no fingers, 1280 × 800 @2, loaded once more; a press is a mouse's", () => {
@@ -252,8 +265,16 @@ describe("the page as a device sees it — its rows", () => {
       light: false,
       loads: 0,
       fixed: { desk: "dark", dark: false },
+      fixedDark: { desk: "light", dark: true },
     };
     expect(judgeScheme(ok)).toEqual([]);
+    // the pane fixed dark followed the desk into the light (the app's theme turns every page; the pane's telling did not hold)
+    expect(judgeScheme({ ...ok, fixedDark: { desk: "light", dark: false } })).toEqual([
+      "SCHEME: a pane fixed dark says prefers-color-scheme: dark is false under a light desk",
+    ]);
+    expect(judgeScheme({ ...ok, fixedDark: { desk: "dark", dark: true } })).toEqual([
+      "SCHEME: the desk was dark, not light, when the pane fixed dark was read — the row proved nothing",
+    ]);
     expect(judgeScheme({ ...ok, dark: false })).toEqual([
       "SCHEME: under a dark desk the page's prefers-color-scheme: dark is false, not true",
     ]);

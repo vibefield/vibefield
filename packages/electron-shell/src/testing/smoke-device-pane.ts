@@ -13,11 +13,13 @@
 //             fingers, 402 × 874 @3 — its head keeps its favicon through the load (a page that names the same icons as the
 //             one before says nothing of them: the first run of these rows lost it there) — and it is LAID OUT as a phone
 //             lays a page: the fixture's `/legacy`, which names no viewport, is 980 px wide there;
-//   TOUCH   — in hand, a press on the page arrives as a TOUCH (its pointer's type, a touchstart), and the wheel still scrolls it;
+//   TOUCH   — in hand, a press on the page arrives as a TOUCH (its pointer's type, a touchstart), the wheel still scrolls it,
+//             and a tap on the page's link LANDS (the page at `/next`): a finger reaches the page where it is drawn;
 //   BACK    — the bar's Laptop act: a desktop's agent again (the one it was laid with), no fingers, 1280 × 800 @2, loaded ONCE
 //             more — and a press in hand is a mouse's;
 //   SCHEME  — the desk turned dark: the page says dark, LIVE (the same document — no load); turned light: light; the pane fixed
-//             `light` stays light under a dark desk;
+//             `light` stays light under a dark desk, and fixed `dark` it is dark under a light one (the app's theme alone
+//             turns every page with it: the fixed panes are what the pane's own telling answers for);
 //   COOKIE  — a value the pane's page stores (`/page?store=…`) is read by a SECOND pane's page on the same origin — its cookie
 //             (the page's own word and the header its load came with) and its storage — and NOT by the app's shell (its
 //             window's session and Electron's default hold no cookie for the origin); the desk's profile stands under the
@@ -135,6 +137,8 @@ export interface DeviceSeen {
     readonly touches: number;
     readonly scrollY: number | null;
     readonly held: boolean;
+    /** where a tap on the page's link left it */
+    readonly tapped: string | null;
   };
   readonly back: {
     readonly saw: PageSaw | null;
@@ -151,6 +155,8 @@ export interface DeviceSeen {
     readonly loads: number;
     /** the pane fixed `light`: the desk's theme then, and the page's scheme under it */
     readonly fixed: { readonly desk: string | null; readonly dark: boolean | null };
+    /** the pane fixed `dark`: the same, under a light desk */
+    readonly fixedDark: { readonly desk: string | null; readonly dark: boolean | null };
   };
   readonly cookie: {
     readonly value: string;
@@ -280,6 +286,10 @@ export function judgeTouch(seen: DeviceSeen["touch"]): string[] {
   if (seen.scrollY === null || seen.scrollY <= 0)
     out.push(`TOUCH: the wheel left the page's scroll at ${seen.scrollY} — it did not scroll`);
   if (!seen.held) out.push("TOUCH: the pane left the hand");
+  if (seen.tapped !== "/next")
+    out.push(
+      `TOUCH: a tap on the page's link left it at ${seen.tapped ?? "nothing it said"}, not /next — the finger did not land where the link is drawn`,
+    );
   return out;
 }
 
@@ -321,6 +331,14 @@ export function judgeScheme(seen: DeviceSeen["scheme"]): string[] {
   if (seen.fixed.dark !== false)
     out.push(
       `SCHEME: a pane fixed light says prefers-color-scheme: dark is ${seen.fixed.dark} under a dark desk`,
+    );
+  if (seen.fixedDark.desk !== "light")
+    out.push(
+      `SCHEME: the desk was ${seen.fixedDark.desk}, not light, when the pane fixed dark was read — the row proved nothing`,
+    );
+  if (seen.fixedDark.dark !== true)
+    out.push(
+      `SCHEME: a pane fixed dark says prefers-color-scheme: dark is ${seen.fixedDark.dark} under a light desk`,
     );
   return out;
 }
@@ -761,14 +779,34 @@ export async function devicePaneRows(d: DeviceRowsDriver): Promise<string[]> {
       await sleep(40);
     }
     await hear("the touch page scrolled", (r) => r.scrollY > 0);
+    const scrolled = await scrollHeld();
+    // a tap on the link, where the page draws it now (its box as the page says it, after the scroll)
+    const linkNow = report()?.parts.link;
+    const viewNow = report()?.view ?? DEVICE_ROWS.phone.view;
+    let tapped: string | null = null;
+    if (linkNow !== undefined) {
+      await press(
+        await onPage(
+          (linkNow.x + linkNow.w / 2) / viewNow[0],
+          (linkNow.y + linkNow.h / 2) / viewNow[1],
+        ),
+      );
+      tapped =
+        (await hear("the phone page's link tapped", (r) => r.path === "/next"))?.path ??
+        report()?.path ??
+        null;
+    }
     const touch: DeviceSeen["touch"] = {
-      pointer: touched?.pointer ?? report()?.pointer ?? null,
-      touches: report()?.touches ?? 0,
-      scrollY: await scrollHeld(),
+      pointer: touched?.pointer ?? null,
+      touches: touched?.touches ?? 0,
+      scrollY: scrolled,
       held: (await held()) === e,
+      tapped,
     };
     said.touch = touch;
     problems.push(...judgeTouch(touch));
+    await js(`globalThis.__vfDesk.writeProps(${e}, { url: ${JSON.stringify(d.fixture.url)} })`);
+    await hear("the fixture's own page after the tap", (r) => r.path === "/page");
     await done();
 
     // ── BACK: the bar's Laptop act — a desktop again, loaded once more; a press in hand is a mouse's ─────────────────
@@ -807,6 +845,17 @@ export async function devicePaneRows(d: DeviceRowsDriver): Promise<string[]> {
         desk: await js<string | null>("globalThis.__vfDesk.theme()"),
         dark: report()?.dark ?? null,
       },
+      fixedDark: await (async () => {
+        await js(`globalThis.__vfDesk.writeProps(${e}, { scheme: "dark" })`);
+        await sleep(400);
+        await h.theme("light");
+        await hear("the pane fixed dark under a light desk", (r) => r.dark === true);
+        await sleep(600);
+        return {
+          desk: await js<string | null>("globalThis.__vfDesk.theme()"),
+          dark: report()?.dark ?? null,
+        };
+      })(),
     };
     said.scheme = scheme;
     problems.push(...judgeScheme(scheme));
