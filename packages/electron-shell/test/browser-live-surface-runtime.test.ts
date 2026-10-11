@@ -3288,6 +3288,39 @@ describe("BrowserLiveSurfaceRuntime", () => {
     expect(result.runtime.stats.refused.download).toBe(2);
   });
 
+  it("PT-5b3 (ruling 7 c): a LIVE page sent by its link or a script to an ATTACHMENT is not loading for good — the engine begins a load, refuses the download, and stops it at once (the probe): the page's state reads `loading: false`, at its own address, in its own document, the refusal said", async () => {
+    const result = setup();
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await flush();
+    const window = result.native.windows[0];
+    if (window === undefined) throw new Error("no window");
+    window.paint(sharedPaint(640, 360).paint);
+    window.emitNavigationState(NAV);
+    expect(result.runtime.summary.browser).toMatchObject({
+      url: NAV.url,
+      loading: false,
+      document: 1,
+    });
+    // its link pressed (or its script's `location.href`): Electron 43 — did-start-loading, will-navigate to the file,
+    // the download cancelled by the session's guard, did-stop-loading 2–6 ms on; `isLoading()` false; nothing commits
+    window.emitNavigationState({ ...NAV, loading: true, document: 1 });
+    expect(result.runtime.summary.browser).toMatchObject({ loading: true });
+    window.refuse("download");
+    window.emitNavigationState({ ...NAV, loading: false, document: 1 });
+    expect(result.runtime.summary.browser).toEqual({
+      url: NAV.url,
+      title: NAV.title,
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      document: 1,
+      refused: { what: "download", serial: 1 },
+    });
+    expect(renderer.summaries.at(-1)?.browser?.loading).toBe(false);
+    result.runtime.dispose();
+  });
+
   it("PT-5a: a LOAD THAT FAILED is said in the page's state — its reason from the engine's code, the ASKED address kept, no title — and is not a failed SOURCE: the window lives, ↻ asks again, and the failure is gone when a page commits", async () => {
     const result = setup();
     const renderer = attach(result.runtime);

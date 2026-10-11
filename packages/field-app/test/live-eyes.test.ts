@@ -4,6 +4,7 @@
 // when its page's grace lapses), back to `true` at the undo, `undefined` with no document to say.
 import {
   Camera,
+  decodeEnvelope,
   defineQuery,
   Not,
   Position,
@@ -13,9 +14,11 @@ import {
   Viewport,
 } from "@vibecook/ice";
 import * as pane from "@vibefield/plugin-browser-pane";
+import * as pad from "@vibefield/plugin-comment-pad";
 import { describe, expect, it } from "vitest";
-import { buildRegistry, createFieldEngine } from "../src/field-engine";
+import { buildRegistry, createFieldEngine, fieldPackScope } from "../src/field-engine";
 import { objectBindingsFrom } from "../src/plugin-host/build-widget";
+import { buildGhostWidgetTypes } from "../src/plugin-host/ghost-stubs";
 import { createLiveEyes, sweepDocumentStills } from "../src/surfaces/live/live-eyes";
 import type { PageStills } from "../src/surfaces/live/page-stills";
 
@@ -152,5 +155,69 @@ describe("PT-5b — the cap's eyes", () => {
     expect(await sweepDocumentStills(ce, "", stills)).toBe(0);
     expect(asked).toHaveLength(1);
     ce.dispose();
+  });
+  it("PT-5b3 (ruling 7 a) — a board opened with the pane's kind OFF (its plugin not registered): the session opens it on faceless stubs for the panes, WRITABLE — and the panes STAND, their keys in `standing()`: the sweep forgets none of their stills", async () => {
+    // the board made where the pane's kind is on
+    const { ce, spawn, panes } = board();
+    spawn(0, 0);
+    spawn(1000, 0);
+    ce.world.sync();
+    const keys = panes()
+      .map((p) => p.key)
+      .sort();
+    expect(keys).toHaveLength(2);
+    const bytes = ce.docs.current()?.exportEnvelope(1);
+    if (bytes === undefined) throw new Error("no document");
+    ce.dispose();
+    // opened where it is OFF — the registry holds another plugin alone — as the session opens it: the ghost stubs its
+    // envelope's header asks for (use-workspace-session.ts), then the bytes
+    const registry = buildRegistry({
+      generation: -1,
+      staged: [],
+      bundled: [
+        {
+          manifest: pad.commentPadManifest,
+          mod: pad.commentPadRenderer,
+          objectBindings: objectBindingsFrom(
+            pad,
+            pad.commentPadManifest.contributes?.objects ?? [],
+          ),
+        },
+      ],
+    });
+    expect([...registry.allWidgets().keys()]).not.toContain(pane.BROWSER_PANE_TYPE);
+    const ghosts = buildGhostWidgetTypes(
+      decodeEnvelope(bytes).header.prefabVersions,
+      fieldPackScope(registry),
+    );
+    expect(ghosts.map((g) => g.type)).toEqual([pane.BROWSER_PANE_TYPE]);
+    const off = createFieldEngine(registry, ghosts);
+    const opened = off.docs.open(bytes);
+    if (!opened.ok) throw new Error(`the board did not open: ${opened.reason}`);
+    expect(opened.session.readOnly).toBe(false);
+    off.world.sync();
+    expect([...(createLiveEyes(off).standing() ?? [])].sort()).toEqual(keys);
+    const asked: string[][] = [];
+    await sweepDocumentStills(off, "doc-off", {
+      sweep: async (_docId, standing) => {
+        asked.push([...standing].sort());
+        return 0;
+      },
+    });
+    expect(asked).toEqual([keys]);
+    off.dispose();
+  });
+  it("PT-5b3 (ruling 7 b) — the grace's timer now OUTLIVES its mount: on an engine that is GONE the eyes say there is no document to ask — `exists` and `standing` undefined, `far` nowhere — and throw nothing; a lapse read on that word forgets nothing (desk-live-stills: `exists` undefined)", () => {
+    const { ce, spawn, panes, eyes } = board();
+    spawn(0, 0);
+    ce.world.sync();
+    const [only] = panes();
+    if (only === undefined) throw new Error("no pane");
+    expect(eyes.exists(only.key)).toBe(true);
+    ce.dispose();
+    expect(() => eyes.exists(only.key)).not.toThrow();
+    expect(eyes.exists(only.key)).toBeUndefined();
+    expect(eyes.standing()).toBeUndefined();
+    expect(eyes.far(only.key)).toBe(Number.POSITIVE_INFINITY);
   });
 });

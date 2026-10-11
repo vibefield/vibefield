@@ -142,6 +142,29 @@ describe("the Electron adapter counts the page's documents (PT-5b3, ruling 4)", 
     expect(w.said.at(-1)?.document).toBe(3);
   });
 
+  it("PT-5b3 (ruling 7 c): a load that went nowhere — a page sent to an attachment, the download refused — is said STOPPED as the engine says it: the state that follows reads `loading: false`, at the page's own address and document", async () => {
+    const w = window();
+    await w.native.loadURL("https://example.test/a");
+    w.at("https://example.test/a");
+    w.contents.emit("did-navigate", {}, "https://example.test/a");
+    w.contents.emit("did-stop-loading");
+    // the page's link to a file: the engine begins a load, refuses the download (the session's guard), and stops
+    w.contents.loading = true;
+    w.contents.emit("did-start-loading");
+    expect(w.said.at(-1)).toMatchObject({
+      url: "https://example.test/a",
+      loading: true,
+      document: 1,
+    });
+    w.contents.loading = false;
+    w.contents.emit("did-stop-loading");
+    expect(w.said.at(-1)).toMatchObject({
+      url: "https://example.test/a",
+      loading: false,
+      document: 1,
+    });
+  });
+
   it("a window made anew counts its own from none", async () => {
     const first = window();
     await first.native.loadURL("https://example.test/a");
