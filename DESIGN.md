@@ -868,7 +868,13 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   **Send, until the agent seam** (thinking-four-views §11, the interim send): aimed at a pane the
   deck is showing, the draft is PASTED into that pane's input — the road ⌘V takes, bracketed, Return
   never pressed for you — and the line's note says "Pasted into vibe-field"; otherwise it goes to the
-  clipboard, and the note says that and why: "Copied — no agent takes a message from here yet". The
+  clipboard, and the note says that and why: "Copied — no agent takes a message from here yet". When
+  the aimed pane cannot take it, the draft is copied all the same and the note names the pane and
+  its reason: "Copied — vibe-field's pane is not on screen" while another view is up, and "Copied —
+  vibe-field's pane is not taking input" while the pane is shown and its input is closed (a terminal
+  still reopening after a change of view, a read-only one), where a paste would be dropped. "Pasted
+  into" is never said for a paste the pane did not take. *Corrected 2026-10-11:* it was said while
+  the pane's input was closed, and the paste was lost. The
   note is the views track's note (solid, 12/500 in secondary ink, rising 4px as it fades in), over
   send with its right edge on send's (so a long sentence never leaves the window) — or, for create's
   outcomes ("Terminal opened in a new pane", or "Terminal opened in the active pane" where it took

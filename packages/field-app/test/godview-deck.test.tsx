@@ -50,6 +50,9 @@ const runtimeOptionsSeen: Array<{ host?: import("@vibecook/ghosttea-react").Ghos
   [];
 /** DS-4e — the palette's remote opener, which no attach may reach any more. */
 const paletteOpens: unknown[][] = [];
+/** FR-2 — each session's routed activation as the runtime would answer it
+ * (`routedActivation`): the line door's paste asks whether its input is open. */
+const routedActivations = new Map<string, { inputAllowed: boolean }>();
 
 vi.mock("@vibecook/ghosttea-react", () => ({
   // QL-2: the deck hands the launch ghosttea's fixed cell metrics.
@@ -73,6 +76,7 @@ vi.mock("@vibecook/ghosttea-react", () => ({
       // peer's replica.
       sessionHasInput: () => false,
       remoteSession: () => undefined,
+      routedActivation: (sessionId: string) => routedActivations.get(sessionId),
       rendererBackend: "test",
       dispose: () => {
         runtime.disposed = true;
@@ -362,6 +366,7 @@ beforeEach(() => {
   pushRoster = null;
   runtimeOptionsSeen.length = 0;
   paletteOpens.length = 0;
+  routedActivations.clear();
   floor = [];
   deviceWarm = () => Promise.resolve({ backend: "test" });
   localStorage.clear();
@@ -1832,6 +1837,75 @@ describe("the line door's reveal, History's Jump to (P3)", () => {
     });
     expect(store.log.filter((entry) => entry.startsWith("mount:"))).toEqual([]);
     expect(store.showing("pane-1")).toBe("user-pty");
+
+    await dispose();
+  });
+});
+
+// FR-2 — the interim send's paste rides the pane's own input, and that input's
+// handler claims the paste event whether or not the runtime sent it: while the
+// routed activation's input is closed ghosttea drops the paste silently and the
+// event still reads as taken. So the door asks the runtime first — a pane that
+// would drop the paste is a `false`, and the line copies and says why instead
+// of "Pasted into …" (the honest-states rule).
+describe("the line door's paste, the interim send (FR-2)", () => {
+  const lineDoor = (): LineViewDoor => {
+    const door = getGodviewLineDoor();
+    if (door === null) throw new Error("the deck published no line door");
+    return door;
+  };
+
+  /** A pane where ghosttea draws it, under the deck's own element: an input
+   * that claims every paste it is handed, as `TerminalSurface`'s does. */
+  const drawPane = (paneId: string): { input: HTMLTextAreaElement; pasted: string[] } => {
+    const deck = container?.querySelector(".vf-deck-zoom");
+    if (deck === null || deck === undefined) throw new Error("the deck drew no zoom host");
+    const pane = document.createElement("div");
+    pane.setAttribute("data-pane-id", paneId);
+    const input = document.createElement("textarea");
+    pane.appendChild(input);
+    deck.appendChild(pane);
+    const pasted: string[] = [];
+    input.addEventListener("paste", (event) => {
+      pasted.push((event as ClipboardEvent).clipboardData?.getData("text/plain") ?? "");
+      event.preventDefault();
+    });
+    return { input, pasted };
+  };
+
+  it("answers false, and hands the pane nothing, while the aimed pane's input is closed", async () => {
+    const store = workspaceProbe({
+      panes: [{ id: "pane-1", session: { id: "agent-pty", cols: 100, rows: 30 } }],
+      activePaneId: "pane-1",
+    });
+    const { dispose } = await mountDeckWithDoor(store);
+    const { input, pasted } = drawPane("pane-1");
+    // the pane is back on screen and its activation is still recovering
+    routedActivations.set("agent-pty", { inputAllowed: false });
+
+    expect(lineDoor().paste("agent-pty", "run the tests")).toBe(false);
+    expect(pasted, "a paste the runtime would drop was handed to the pane").toEqual([]);
+    expect(document.activeElement, "a refused paste took the keyboard").not.toBe(input);
+
+    // …and the same pane takes it once its input is open
+    routedActivations.set("agent-pty", { inputAllowed: true });
+    expect(lineDoor().paste("agent-pty", "run the tests")).toBe(true);
+    expect(pasted).toEqual(["run the tests"]);
+    expect(document.activeElement).toBe(input);
+
+    await dispose();
+  });
+
+  it("answers false for a pane whose session has no routed activation yet", async () => {
+    const store = workspaceProbe({
+      panes: [{ id: "pane-1", session: { id: "agent-pty", cols: 100, rows: 30 } }],
+      activePaneId: "pane-1",
+    });
+    const { dispose } = await mountDeckWithDoor(store);
+    const { pasted } = drawPane("pane-1");
+
+    expect(lineDoor().paste("agent-pty", "run the tests")).toBe(false);
+    expect(pasted).toEqual([]);
 
     await dispose();
   });

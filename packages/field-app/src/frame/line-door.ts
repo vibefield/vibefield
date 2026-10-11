@@ -46,7 +46,8 @@ export interface LineViewDoor {
   newTerminal(): Promise<NewTerminalOutcome>;
   /** Paste `text` into the input of the pane showing `sessionId` — the road ⌘V
    * takes, so the pane brackets it and nothing presses Return. True when the
-   * pane took it. */
+   * pane took it; false, with nothing handed to the pane, while its input is
+   * closed (a paste there would be dropped), and the line copies instead. */
   paste(sessionId: string, text: string): boolean;
   /** AR-8c — whether `place` can mount now: the deck has its door. */
   readonly canPlace: boolean;

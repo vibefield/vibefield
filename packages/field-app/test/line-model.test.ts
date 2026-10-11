@@ -99,6 +99,9 @@ describe("the draft (DESIGN.md §8)", () => {
     expect(sendNote({ kind: "copied-off-screen", name: "rosetta" })).toBe(
       "Copied — rosetta's pane is not on screen",
     );
+    expect(sendNote({ kind: "copied-input-closed", name: "vibe-field" })).toBe(
+      "Copied — vibe-field's pane is not taking input",
+    );
     expect(sendNote({ kind: "copy-refused" })).toBe("Not sent — the clipboard refused it");
   });
 

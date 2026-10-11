@@ -595,9 +595,14 @@ export function Composer({
     } else {
       try {
         await writeClipboard(text);
+        // An aimed pane that did not take it: the deck is off screen, or it is
+        // shown and its door refused (the pane's input is closed).
         outcome =
           aim !== null && pane !== undefined
-            ? { kind: "copied-off-screen", name: aim.name }
+            ? {
+                kind: door?.onScreen === true ? "copied-input-closed" : "copied-off-screen",
+                name: aim.name,
+              }
             : { kind: "copied" };
       } catch {
         outcome = { kind: "copy-refused" };

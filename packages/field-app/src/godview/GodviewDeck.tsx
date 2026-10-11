@@ -1438,7 +1438,15 @@ export function GodviewDeck({
       paste: (sessionId, text) => {
         const pane = workspaceRef.current?.panes.find((entry) => entry.session.id === sessionId);
         const root = zoomHostRef.current;
-        return pane !== undefined && root !== null && pasteIntoPane(root, pane.id, text);
+        // A pane whose routed input is closed (its activation still reopening
+        // after a change of view, say) drops a paste silently, and its handler
+        // claims the event all the same — so the runtime is asked first, and a
+        // paste it would drop is never handed over: the line copies instead.
+        // (`door` is rebuilt per runtime, so this is never a replaced one.)
+        const inputOpen = runtime?.routedActivation(sessionId)?.inputAllowed === true;
+        return (
+          pane !== undefined && root !== null && inputOpen && pasteIntoPane(root, pane.id, text)
+        );
       },
       // AR-8c — History's Resume: the resumed agent's create ticket, adopted
       // into the pool exactly as the launcher's resume adopts one, and placed
