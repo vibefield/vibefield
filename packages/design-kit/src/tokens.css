@@ -69,6 +69,9 @@
   --vf-field-surface: rgb(255 255 255 / 60%);
   --vf-wizard-surface: rgb(255 255 255 / 55%);
   --vf-backdrop-dim: rgb(0 0 0 / 10%);
+  /* §5 the search scrim (the Peek, §8 "Search"; K7): darker than the backdrop
+     dim, under a blur of 18 — the window blurred and dimmed */
+  --vf-search-scrim: rgb(0 0 0 / 16%);
 
   /* §2.5 State & system color */
   --vf-green: #30d158;
@@ -86,6 +89,11 @@
   --vf-ink-attention: #b25e00;
   --vf-ink-danger: #d70015;
   --vf-ink-info: #0a6a93;
+
+  /* §2.9 The project ink: only the HUE is a project's (dealt on the cool half,
+     design-kit project-ink.ts); its lightness and chroma are the theme's. */
+  --vf-project-ink-l: 0.6;
+  --vf-project-ink-c: 0.15;
 
   /* §2.6 Organizational accents — the curated set, assigned per object and used
      as TINT. They group and label; they never signal state (that is §2.5's job,
@@ -240,6 +248,8 @@
   --vf-drop-edge: drop-shadow(20px 0 40px rgb(0 0 0 / 8%));
   --vf-shadow-dialog: 0 42px 100px rgb(0 0 0 / 18%), 0 12px 36px rgb(0 0 0 / 10%);
   --vf-shadow-wizard: 0 8px 30px rgb(0 0 0 / 8%);
+  /* §5 the search popup (the Peek, §8 "Search"; GV-D8) — its ring is the strong hairline */
+  --vf-shadow-search: 0 40px 100px rgb(0 0 0 / 24%), 0 12px 30px rgb(0 0 0 / 10%);
 
   /* §6 Motion */
   --vf-ease-island: cubic-bezier(0.25, 1, 0.3, 1);
@@ -257,6 +267,8 @@
   --vf-ink-attention: var(--vf-orange);
   --vf-ink-danger: var(--vf-red);
   --vf-ink-info: var(--vf-cyan);
+  /* §2.9 the project ink by night: lighter, the same chroma */
+  --vf-project-ink-l: 0.74;
 
   /* §2.1 Ground */
   --vf-canvas-bg: #171717;
@@ -284,6 +296,7 @@
   --vf-field-surface: rgb(255 255 255 / 6%);
   --vf-wizard-surface: rgb(28 28 30 / 55%);
   --vf-backdrop-dim: rgb(0 0 0 / 40%);
+  --vf-search-scrim: rgb(0 0 0 / 46%);
   --vf-shadow-island: 0 8px 30px rgb(0 0 0 / 40%);
   --vf-shadow-sheet: 0 -20px 40px rgb(0 0 0 / 40%);
   --vf-shadow-top-sheet: 0 20px 40px rgb(0 0 0 / 40%);
@@ -293,6 +306,7 @@
   --vf-drop-edge: drop-shadow(20px 0 40px rgb(0 0 0 / 40%));
   --vf-shadow-dialog: 0 48px 120px rgb(0 0 0 / 48%), 0 14px 40px rgb(0 0 0 / 30%);
   --vf-shadow-wizard: 0 8px 30px rgb(0 0 0 / 40%);
+  --vf-shadow-search: 0 40px 100px rgb(0 0 0 / 60%), inset 0 1px 0 rgb(255 255 255 / 6%);
 
   /* §2.8 the face — the paper stays white; the pewter darkens with the room */
   --vf-sticker-shadow: rgb(0 0 0 / 50%);

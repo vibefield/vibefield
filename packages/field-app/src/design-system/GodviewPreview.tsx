@@ -29,11 +29,15 @@ export function GodviewPreview({
   door = null,
   panes,
   initialView = "list",
+  initialProfile = null,
   theme = "light",
 }: {
   door?: MonitorDoor | null;
   panes?: MonitorPaneFacts;
   initialView?: string;
+  /** a profile chosen from the first render — search's Live now chooses it in
+   * the product (GV-D3), and a catalog stage has no search of its own */
+  initialProfile?: string | null;
   /** Godview follows the app's theme (FC-D7) — here, the catalog page's. */
   theme?: GodviewTheme;
 } = {}): ReactElement {
@@ -78,6 +82,7 @@ export function GodviewPreview({
               animations={false}
               door={door}
               {...(panes !== undefined ? { panes } : {})}
+              initialProfile={initialProfile}
               theme={theme}
               tuningOpen={tuningOpen}
               onSelectView={setViewId}

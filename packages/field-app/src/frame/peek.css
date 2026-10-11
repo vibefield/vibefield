@@ -1,0 +1,834 @@
+/* Search — the Peek (DESIGN.md §8 "Search — the Peek"; §5 the search scrim,
+   the search popup's shadow, the line's glass, the solid menu; §6 its motion;
+   §10 its place; One Frame §23 — the round-3 kit `gv3.css` is the drawing).
+   Tokens only; the ready fill is the foreground at 8% (14% under the pointer),
+   as the line mixes it. The dropdowns' menus are menu.css's. */
+
+/* ── THE BUTTON — the frame's, at the head's right end ─────────────────────
+   A 40 glass circle (the line's glass), 16 in at `top-2`, on the lights'
+   axis; the glyph lifted 8 so its key is printed under it (9/600, the ⌘ at
+   8.5/500 in tertiary ink). Above the cover with the line (62); no-drag, as it
+   stands in the window's drag strip. With a filter on (GV-D3, Godview's) the
+   glass grows a token after the circle, right-anchored, so the circle steps
+   left by the token's width and the glass is one pill. */
+.vf-peek-find {
+  position: absolute;
+  z-index: 62;
+  top: 8px;
+  right: 16px;
+  display: flex;
+  min-width: 40px;
+  height: 40px;
+  align-items: center;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--vf-chrome-solid) 88%, transparent);
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline),
+    var(--vf-shadow-island);
+}
+
+.dark .vf-peek-find {
+  background: color-mix(in srgb, var(--vf-chrome-solid) 94%, transparent);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island),
+    inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+.vf-peek-button {
+  position: relative;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  color: var(--vf-text-secondary);
+  background: none;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.vf-peek-button:hover,
+.vf-peek-button[aria-expanded="true"] {
+  color: var(--vf-text-primary);
+}
+
+/* the filter the button wears: "studio · Work ×", 13/500 in primary ink */
+.vf-peek-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding-right: 7px;
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.vf-peek-token-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.vf-peek-token-part > svg {
+  flex: none;
+  color: var(--vf-text-secondary);
+}
+
+.vf-peek-token-sep {
+  width: 1px;
+  height: 14px;
+  margin: 0 2px;
+  background: var(--vf-hairline-strong);
+}
+
+.vf-peek-token-clear {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 13px;
+  color: var(--vf-text-tertiary);
+  background: none;
+  cursor: pointer;
+}
+
+.vf-peek-token-clear:hover {
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-peek-token-clear:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+.vf-peek-button:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+.vf-peek-button > .vf-glyph {
+  margin-top: -8px;
+}
+
+/* A key printed on the control it presses (FC-D17): under the button's glyph,
+   under close's. */
+.vf-peek-key {
+  position: absolute;
+  right: 0;
+  bottom: 6px;
+  left: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0;
+  color: var(--vf-text-secondary);
+  background: none;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+
+.vf-peek-key span {
+  color: var(--vf-text-tertiary);
+  font-size: 8.5px;
+  font-weight: 500;
+}
+
+/* ── THE LAYER — the scrim, and the popup over it ──────────────────────────
+   Above the frame (62) and below Settings (65), the palette (70) and the veil
+   (80) — none of which is ever open with it. In the product it is drawn on the
+   document's body, outside the field, so the field (the view AND the frame)
+   can recede under it; a catalog plate draws it in the plate. */
+.vf-peek {
+  position: absolute;
+  z-index: 64;
+  inset: 0;
+  pointer-events: none;
+  -webkit-app-region: no-drag;
+}
+
+/* The scrim (§5): the window blurred 18 and dimmed — black 16% by day, 46% by
+   night — fading in over 240ms; its fade out the same, then hidden. */
+.vf-peek-scrim {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+  background: var(--vf-search-scrim);
+  backdrop-filter: blur(18px) saturate(0.9);
+  transition:
+    opacity 240ms ease,
+    visibility 0s linear 240ms;
+}
+
+.vf-peek[data-open="true"] .vf-peek-scrim {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    opacity 240ms ease,
+    visibility 0s linear;
+}
+
+/* The popup (GV-D8): solid — rows to be read (FC-D14) — corners 24, ringed by
+   the strong hairline, the search popup's shadow; centred, popping in over
+   260ms on the island curve from 2% above at 0.97. Its size is the
+   controller's (K6: it clamps to the window), projected inline. */
+.vf-peek-pop {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  max-width: calc(100% - 48px);
+  max-height: calc(100% - 192px);
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 24px;
+  color: var(--vf-text-primary);
+  background: var(--vf-chrome-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-search);
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
+  animation: vf-peek-pop 260ms var(--vf-ease-island);
+  user-select: text;
+}
+
+@keyframes vf-peek-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.97);
+  }
+}
+
+/* ── the field: 64 tall, the words at 20, close at its end ── */
+.vf-peek-field {
+  display: flex;
+  height: 64px;
+  flex: none;
+  align-items: center;
+  gap: 14px;
+  padding: 0 14px 0 22px;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-peek-field input {
+  min-width: 0;
+  height: 100%;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  outline: none;
+  color: var(--vf-text-primary);
+  background: transparent;
+  caret-color: var(--vf-select);
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.vf-peek-field input::placeholder {
+  color: var(--vf-text-tertiary);
+}
+
+/* close — a 40 circle, esc printed under its glyph */
+.vf-peek-esc {
+  position: relative;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  color: var(--vf-text-secondary);
+  background: none;
+  cursor: pointer;
+}
+
+.vf-peek-esc > .vf-glyph {
+  margin-top: -9px;
+}
+
+.vf-peek-esc .vf-peek-key {
+  bottom: 7px;
+}
+
+.vf-peek-esc:hover {
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-peek-esc:focus-visible,
+.vf-peek-seg button:focus-visible,
+.vf-peek-dd:focus-visible,
+.vf-peek-open:focus-visible,
+.vf-peek-widen:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+/* ── the scope row: Live now · Everything, then that scope's dropdowns ── */
+.vf-peek-scope {
+  display: flex;
+  height: 48px;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px 0 16px;
+  border-top: 1px solid var(--vf-hairline);
+  border-bottom: 1px solid var(--vf-hairline);
+}
+
+.vf-peek-seg {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-peek-seg button {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--vf-text-secondary);
+  background: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.vf-peek-seg button[aria-checked="true"] {
+  color: var(--vf-text-primary);
+  background: var(--vf-chrome-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline),
+    0 1px 3px rgb(0 0 0 / 8%);
+}
+
+.vf-peek-dds {
+  display: flex;
+  min-width: 0;
+  gap: 6px;
+}
+
+.vf-peek-dd-place {
+  position: relative;
+  min-width: 0;
+}
+
+.vf-peek-dd {
+  display: inline-flex;
+  max-width: 100%;
+  height: 30px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 15px;
+  color: var(--vf-text-primary);
+  background: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.vf-peek-dd:hover,
+.vf-peek-dd[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-peek-dd-lead {
+  display: inline-flex;
+  flex: none;
+  color: var(--vf-text-secondary);
+}
+
+/* "All desktops" wears every desktop's mark */
+.vf-peek-marks {
+  display: inline-flex;
+  gap: 3px;
+}
+
+/* a menu row's mark and its word (a desktop's agents, a profile that waits) */
+.vf-peek-menu-lead {
+  display: inline-flex;
+  flex: none;
+  margin-right: 8px;
+  color: var(--vf-text-secondary);
+}
+
+.vf-peek-menu-note {
+  flex: none;
+  margin-left: auto;
+  padding-left: 12px;
+  color: var(--vf-text-tertiary);
+  font-size: 11.5px;
+  font-style: normal;
+}
+
+.vf-peek-menu [data-quiet] .vf-menu-label {
+  color: var(--vf-text-tertiary);
+}
+
+.vf-peek-dd-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vf-peek-dd-turn {
+  flex: none;
+  color: var(--vf-text-tertiary);
+}
+
+/* a dropdown's menu: solid (§5), 4 under it */
+.vf-peek-menu {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  max-height: 280px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+/* ── the body: the list (380) and the peek beside it ── */
+.vf-peek-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.vf-peek-body > * {
+  min-height: 0;
+  flex: 1;
+}
+
+.vf-peek-list {
+  display: grid;
+  min-height: 0;
+  align-content: start;
+  gap: 2px;
+  padding: 8px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.vf-peek-split {
+  display: grid;
+  grid-template-columns: 380px minmax(0, 1fr);
+}
+
+/* K6: a window too narrow for both — the peek folds and the list fills */
+.vf-peek-split[data-folded="true"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.vf-peek-split > .vf-peek-list {
+  border-right: 1px solid var(--vf-hairline);
+}
+
+.vf-peek-split[data-folded="true"] > .vf-peek-list {
+  border-right: 0;
+}
+
+/* a row is a session; the lines that matched sit under its title */
+.vf-peek-row {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+.vf-peek-row[data-hot="true"] {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-peek-row-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+/* the state dot's column: a past session has none, so it stays empty — and
+   the sub-line and the lines keep its 17. A live run's dot: working green,
+   waiting orange (§2.5), idle and a shell faint. */
+.vf-peek-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 4px;
+  visibility: hidden;
+}
+
+.vf-peek-dot[data-state] {
+  background: var(--vf-text-faint);
+  visibility: visible;
+}
+
+.vf-peek-dot[data-state="working"] {
+  background: var(--vf-green);
+}
+
+.vf-peek-dot[data-state="blocked"] {
+  background: var(--vf-orange);
+}
+
+.vf-peek-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vf-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-peek-when {
+  flex: none;
+  margin-left: auto;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.vf-peek-sub {
+  min-width: 0;
+  padding-left: 17px;
+  overflow: hidden;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* where a run on another desktop runs (K10): its OS mark and its name */
+.vf-peek-os {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  color: var(--vf-text-secondary);
+  font-size: 11.5px;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
+.vf-peek-ev {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px;
+  padding-left: 17px;
+}
+
+.vf-peek-who {
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.vf-peek-tx {
+  overflow: hidden;
+  color: var(--vf-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* K1 — a match is neutral, everywhere: the text's own ink at 600 on an 11%
+   wash of it — never orange (waiting, here) and never the select blue */
+.vf-peek-pop mark {
+  padding: 0 1px;
+  border-radius: 3px;
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-text-primary) 11%, transparent);
+  font-weight: 600;
+}
+
+/* ── the peek (K8): the session's matched lines, under its facts ── */
+.vf-peek-past {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+}
+
+.vf-peek-past-head {
+  display: grid;
+  flex: none;
+  gap: 4px;
+  padding: 8px 12px 10px;
+  border-bottom: 1px solid var(--vf-hairline);
+}
+
+.vf-peek-past-head b {
+  color: var(--vf-text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.vf-peek-past-head small {
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.vf-peek-past-lines {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  align-content: start;
+  gap: 6px;
+  padding: 0 4px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.vf-peek-past-line {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+}
+
+/* the line Open lands on */
+.vf-peek-past-line[data-lands="true"] {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-peek-past-line p,
+.vf-peek-past-summary {
+  margin: 0;
+  color: var(--vf-text-primary);
+  font-size: 13.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.vf-peek-past-summary {
+  padding: 8px;
+  color: var(--vf-text-secondary);
+}
+
+/* ── the live peek (GV-D8): the run's own pane, resting ── */
+.vf-peek-live {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  padding: 14px;
+}
+
+.vf-peek-livepane {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--vf-godview-light-terminal-bg);
+  box-shadow: 0 0 0 1px var(--vf-hairline);
+}
+
+.dark .vf-peek-livepane {
+  background: var(--vf-godview-dark-terminal-bg);
+}
+
+/* two of the watch-only layers are the DOM's: `inert` on the box (the
+   component's), and no pointer of its own here — it consumes no gesture */
+.vf-peek-livepane-surface {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.vf-peek-livepane-words,
+.vf-peek-live-words p {
+  margin: auto;
+  padding: 0 24px;
+  color: var(--vf-text-tertiary);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.vf-peek-live-words {
+  display: grid;
+  flex: 1;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+}
+
+.vf-peek-live-words .vf-peek-os {
+  margin-left: 0;
+  font-size: 13px;
+}
+
+/* ── empty, honestly ── */
+.vf-peek-none {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 56px 20px;
+  color: var(--vf-text-tertiary);
+  font-size: 13.5px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.vf-peek-none p {
+  max-width: 460px;
+  margin: 0;
+}
+
+.vf-peek-widen {
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 16px;
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.vf-peek-widen:hover {
+  background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);
+}
+
+/* ── the foot: one sentence, and Open with ↵ printed on it ── */
+.vf-peek-foot {
+  display: flex;
+  height: 52px;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px 0 22px;
+  border-top: 1px solid var(--vf-hairline);
+}
+
+.vf-peek-said {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-peek-open {
+  display: inline-flex;
+  height: 32px;
+  flex: none;
+  align-items: center;
+  gap: 9px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 16px;
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.vf-peek-open:hover {
+  background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);
+}
+
+.vf-peek-open-key {
+  padding: 0;
+  color: var(--vf-text-tertiary);
+  background: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ── THE RECEDE — the view and the frame, under the scrim (§6) ─────────────
+   Whatever wears `data-peek-recede` recedes to 0.98 about 50% 46% over 420ms
+   on the island curve while the Peek is open: in the product what you see —
+   the cover's still and the frame's chrome, the cover with it (`field.tsx`'s
+   `.field-recede`) — and never the desk's own box (DK-15); in a catalog plate
+   the staged view. At rest it carries NO transform, so it makes no stacking
+   context (BootRoot's 2026-07-22 lesson: a resting transform buried the head
+   under the drag strip). */
+[data-peek-recede] {
+  transform-origin: 50% 46%;
+  transition: transform 420ms var(--vf-ease-island);
+}
+
+[data-peek-recede="true"] {
+  transform: scale(0.98);
+}
+
+/* M6: no pop and no recede — the scrim and the popup fade in over 120ms */
+@media (prefers-reduced-motion: reduce) {
+  [data-peek-recede="true"] {
+    transform: none;
+  }
+
+  .vf-peek-scrim,
+  .vf-peek[data-open="true"] .vf-peek-scrim {
+    transition-duration: 120ms, 0s;
+  }
+
+  .vf-peek-pop {
+    animation: vf-peek-fade 120ms ease;
+  }
+}
+
+@keyframes vf-peek-fade {
+  from {
+    opacity: 0;
+  }
+}

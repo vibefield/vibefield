@@ -38,12 +38,14 @@ export interface FrameActGroup {
 
 /** The groups in the palette's order: Views · On this view · App.
  * `historyWaits` is why History's create (Resume) waits — the line's own
- * reading of what History lends it (`resumeWaits`, AR-8c); absent, History's
- * create waits for a session to be chosen. */
+ * reading of what History lends it (`historyCreateWaits`, AR-8c); absent,
+ * History's create waits for a session to be chosen. `historyLive`: the chosen
+ * session runs here, so the create is Jump to (P3) — the same door's word. */
 export function frameActGroups(
   view: FrameView,
   keys: ViewKeys,
   historyWaits: string | null = "choose a session first",
+  historyLive = false,
 ): FrameActGroup[] {
   const views: FrameAct[] = FRAME_VIEWS.map((cell) => ({
     id: `view-${cell.view}`,
@@ -54,7 +56,7 @@ export function frameActGroups(
     run: { kind: "view", view: cell.view },
   }));
   // The line's create, as the line names and keys it in this view (FC-D3).
-  const create = createActOf(view, keys);
+  const create = createActOf(view, keys, view === "history" && historyLive);
   const onView: FrameAct[] = [
     {
       id: "create",

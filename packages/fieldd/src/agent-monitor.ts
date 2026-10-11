@@ -2,6 +2,7 @@ import {
   createMonitorBackend,
   type MonitorBackend,
   type MonitorClock,
+  type MonitorHistoryPort,
   type MonitorHostFacts,
   type MonitorHostPort,
   type MonitorHostProfileSet,
@@ -18,6 +19,7 @@ import type {
   MonitorDeviceRef,
   MonitorModelChange,
   MonitorModelSnapshot,
+  MonitorPastSnapshot,
 } from "@vibecook/puppeteer-view-sdk/model";
 import type {
   AgentCatalogReaders,
@@ -54,7 +56,16 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 // states. The model this emits is cut per audience by the board
 // (`agent-field.ts`) and carried by the one door (`agent.subscribe`); the
 // backend holds live state only — in memory for the daemon's lifetime, never a
-// ledger on disk and never a history door (MV-D22; TL-D8 stands).
+// ledger on disk (MV-D22; TL-D8's reversal stands).
+//
+// *Amended 2026-10-09 (docket v9, RULED by James: T4 (a), T5 (a), B-D6 (a)):*
+// this said "and never a history door". The backend now READS the past through
+// a host port (`history`: `index-activity.ts`, over rosettad's record) and
+// answers it at a window's ask (`readPast`, the door `agent.recordedLanes`).
+// It still records nothing and holds nothing: each ask is read through to
+// rosettad and derived afresh, and only rosetta reads transcripts. It is not
+// the removed `agent.history` (TL-D8's ledger in the fold, MV-D13), and the
+// past never rides the model's rows.
 
 /** The fold, as the backend's host reads it: the rows now, and every publish. */
 export interface AgentMonitorFold {
@@ -95,6 +106,9 @@ export interface AgentMonitorServiceOptions {
   /** the catalog's label for a persona's provider (AC-D4: ours, never the adapter's) */
   catalog: Pick<AgentCatalogReaders, "entry">;
   identity: ProjectIdentityStore;
+  /** TL — the record, read at each `readPast` (`index-activity.ts`); absent:
+   * the past is `unavailable` and views draw runtime state alone */
+  history?: MonitorHistoryPort | undefined;
   /** test seams; the backend's own clock (Date.now + setTimeout) and one-macrotask scheduler by default */
   clock?: MonitorClock | undefined;
   scheduler?: MonitorScheduler | undefined;
@@ -132,6 +146,10 @@ export interface AgentMonitorService {
   openScreen(screenId: string): () => void;
   /** What a screen shows in its active pane; false when no such screen is open. */
   reportShown(screenId: string, ids: readonly string[]): boolean;
+  /** TL — the lanes' past for a window, read through to the record and joined
+   * with the model now (`agent.recordedLanes`); never rejects. Undefined when
+   * this desktop has no record source (no history port). */
+  readPast(window: { sinceMs: number; untilMs: number }): Promise<MonitorPastSnapshot | undefined>;
   dispose(): void;
 }
 
@@ -388,6 +406,7 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
     runs: runtimeRunSource(opts.runtime),
     host,
     identity: opts.identity,
+    ...(opts.history !== undefined ? { history: opts.history } : {}),
     // Windows route their own verbs through their doors (`mountLocal`, the
     // birth path); a command reaching this sink is a wiring fault, said once.
     sink: {
@@ -478,6 +497,7 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
       backend.reportShown(screenId, ids);
       return true;
     },
+    readPast: (window) => backend.readPast(window),
     dispose() {
       if (disposed) return;
       disposed = true;

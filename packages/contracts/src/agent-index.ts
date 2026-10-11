@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isAbsoluteDesktopPath } from "./paths";
-import { PlaceFactsList } from "./project-places";
-import { INDEX_TICKET, INDEX_TIMELINE } from "./registries";
+import { PlaceFactsList, PlaceRef, ProjectKey } from "./project-places";
+import { INDEX_ACTIVITY, INDEX_TICKET, INDEX_TIMELINE } from "./registries";
 import { composeRemoteEndpoints, remoteDoorUrl, remoteEndpointSet } from "./remote-endpoints";
 import {
   MeshScope,
@@ -679,6 +679,19 @@ export const IndexSession = z
     family: z.string().min(1).optional(),
     provider: AgentProviderId.optional(),
     startedAt: z.number().finite().optional(),
+    // PJ-4 (A-D4, the lead's decision 2026-10-09; `thinking-project-places.md`
+    // PJ-L1, DS-L4) — the JOIN COLUMN: the PJ project whose place holds the
+    // session's cwd by the longest path, the key `project.list` answers it
+    // under. Computed by the ANSWERING daemon from its own grouping at the
+    // moment it answers (beside `family`, DS-D9's column), never replicated,
+    // so a window maps the room's rows to projects without grouping anything.
+    // Absent on a lookup's rows, for a cwd no place holds yet (a project the
+    // place scanner has not read: the room's unassigned bucket says so), and
+    // in an answer to a peer daemon (it groups its own, DS-L4).
+    projectKey: ProjectKey.optional(),
+    /** PJ-4 (R6) — the place that holds the cwd by that same longest path,
+     * beside its key: the folder ③ follows when the session is chosen. */
+    place: PlaceRef.optional(),
   })
   .passthrough();
 export type IndexSession = z.infer<typeof IndexSession>;
@@ -834,6 +847,23 @@ export const IndexSearchHit = z
     snippet: z.string(),
     /** DS-6 — the desktop whose index answered it (a mesh search's hits) */
     device: z.string().min(1).optional(),
+    // The Peek (GV-D8, 2026-10-08) — the ROOT's facts a row says under its
+    // title ("folder · agent") and a filter narrows by, folded from the root
+    // row fieldd already holds for the attribution: never the hit's own
+    // session's, and absent whenever the root is (or the root's row says
+    // nothing). Display only — no act rides on them.
+    /** the folder the root session ran in, as the index recorded it */
+    cwd: z.string().optional(),
+    /** rosetta's opaque project id for the root (`IndexSession.projectId`) */
+    projectId: z.string().min(1).optional(),
+    /** the catalog agent the root's runtime kind maps to — absent when no
+     * catalog row maps it (`IndexSession.provider`) */
+    provider: AgentProviderId.optional(),
+    /** PJ-4 — the root's PJ project (`IndexSession.projectKey`, the join
+     * column): what the Peek's "Every project" narrows by. Absent where the
+     * listing's column would be (no place holds the folder yet; a peer
+     * daemon's answer) */
+    projectKey: ProjectKey.optional(),
   })
   .passthrough();
 export type IndexSearchHit = z.infer<typeof IndexSearchHit>;
@@ -1060,6 +1090,10 @@ export const IndexThread = z
       .passthrough()
       .nullable(),
     streamState: z.string(),
+    /** PJ-4 (A-D4) — its ROOT's project key (`IndexSession.projectKey`): a
+     * thread hangs under its root, whatever folder it worked in, as rosetta
+     * folds a child's figures into its root's. Absent while the root's is. */
+    projectKey: ProjectKey.optional(),
   })
   .passthrough();
 export type IndexThread = z.infer<typeof IndexThread>;
@@ -1327,6 +1361,165 @@ export const IndexProjectDayResult = z
   })
   .passthrough();
 export type IndexProjectDayResult = z.infer<typeof IndexProjectDayResult>;
+
+// ── index.activity (TL — Godview's timeline reads the past; docket v9 RULED
+// 2026-10-09: T1 worked and quiet from the record's turns, T2 the view's day,
+// T4 a rosetta route, T5 the floor first, B-D4 per desktop) ──
+//
+// The record's top-level sessions with activity in a window, each with its
+// turns: what Godview's monitor backend derives a lane's past from (worked
+// inside a turn, quiet between, not recorded across a long silence), and what
+// a phone or another desktop reads the same way later — `federate`, so a
+// foreign `device` forwards whole and the owner answers from its own index.
+// ONLY ROSETTA READS TRANSCRIPTS (the 10-03 law): fieldd answers from what
+// rosettad computes and from the catalog it already follows, and never pages
+// `index.timeline` to build spans. Turns ride as control-rate facts (EL2).
+//
+// `fidelity` says how fine the answer is: `turns` when rosettad answered the
+// route, `bounds` when only each session's first and last activity were read
+// (the catalog: T5's floor, and a daemon whose protocol has no route). A
+// session's `activity` is its WHOLE recorded extent, never clipped to the
+// window; its `turns` are those touching the window.
+
+/** One silence inside a turn: no recorded activity from `fromMs` to `toMs`,
+ * longer than the ask's cut. */
+export const IndexActivitySilence = z
+  .object({ fromMs: z.number().finite(), toMs: z.number().finite() })
+  .passthrough();
+export type IndexActivitySilence = z.infer<typeof IndexActivitySilence>;
+
+/** One turn of a session (rosetta's message group): its kind in rosetta's
+ * open vocabulary (`human_turn`, `agent_cycle`, …), its first and last
+ * recorded activity, and its silences longer than the cut. */
+export const IndexActivityTurn = z
+  .object({
+    kind: z.string(),
+    firstAt: z.number().finite(),
+    lastAt: z.number().finite(),
+    silences: z.array(IndexActivitySilence).optional(),
+  })
+  .passthrough();
+export type IndexActivityTurn = z.infer<typeof IndexActivityTurn>;
+
+/** One top-level session with activity in the window. `kind` is rosetta's
+ * agent word (the seam column), `provider` the catalog id it maps to; a
+ * session no catalog row maps carries no `provider`, and a reader that joins
+ * on the runtime's id skips it. */
+export const IndexActivitySession = z
+  .object({
+    sessionId: z.string().min(1),
+    nativeSessionId: z.string(),
+    kind: AgentKind.optional(),
+    provider: AgentProviderId.optional(),
+    projectId: z.string().min(1).optional(),
+    cwd: z.string().optional(),
+    title: z.string().optional(),
+    startedAt: z.number().finite().optional(),
+    activity: z
+      .object({ firstAt: z.number().finite(), lastAt: z.number().finite() })
+      .passthrough()
+      .nullable(),
+    /** absent at `fidelity: "bounds"` */
+    turns: z.array(IndexActivityTurn).optional(),
+  })
+  .passthrough();
+export type IndexActivitySession = z.infer<typeof IndexActivitySession>;
+
+/** `index.activity {sinceMs, untilMs, sessions?, silenceMs?, device?}`: a
+ * window of at most `INDEX_ACTIVITY.MAX_WINDOW_MS`, `sessions` narrowing it to
+ * rosetta's canonical ids, `silenceMs` the cut for a turn's silences (default
+ * `INDEX_ACTIVITY.SILENCE_MS`). */
+export const IndexActivityParams = z
+  .object({
+    sinceMs: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    untilMs: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    sessions: z
+      .array(z.string().min(1).max(1024))
+      .min(1)
+      .max(INDEX_ACTIVITY.MAX_SESSIONS)
+      .optional(),
+    silenceMs: z
+      .number()
+      .int()
+      .min(INDEX_ACTIVITY.MIN_SILENCE_MS)
+      .max(INDEX_ACTIVITY.MAX_SILENCE_MS)
+      .optional(),
+    device: z.string().min(1).optional(),
+  })
+  .passthrough()
+  .refine(
+    (params) =>
+      params.untilMs > params.sinceMs &&
+      params.untilMs - params.sinceMs <= INDEX_ACTIVITY.MAX_WINDOW_MS,
+    "a window of at most a day, untilMs after sinceMs",
+  );
+export type IndexActivityParams = z.infer<typeof IndexActivityParams>;
+
+/** `index.activity`'s answer, newest activity first. `partial`: some of the
+ * record was not read — the catalog's stream is down and its tables are the
+ * last snapshot, a session's rows are not admitted yet — with `detail` saying
+ * which in words. `clipped`: SP-D13's cut for a tailnet caller
+ * (`INDEX_TAILNET_LIMITS.MAX_ROWS` sessions). A daemon that cannot answer at
+ * all refuses UNAVAILABLE {service: "index", state}, never an empty answer. */
+export const IndexActivityResult = z
+  .object({
+    sinceMs: z.number().int(),
+    untilMs: z.number().int(),
+    fidelity: z.enum(["turns", "bounds"]),
+    partial: z.boolean(),
+    detail: z.string().optional(),
+    clipped: z.boolean().optional(),
+    sessions: z.array(IndexActivitySession),
+  })
+  .passthrough();
+export type IndexActivityResult = z.infer<typeof IndexActivityResult>;
+
+// rosetta's `/api/activity` (protocol 27, the T4 route), as fieldd READS it —
+// snake_case, `.passthrough()` at every level, never what a door hands on:
+// fieldd answers `IndexActivityResult` in VibeField's spelling. The gaps are
+// rosetta's own cut (between activity instants, longer than the ask's
+// `gap_ms`), so fieldd reads no transcript to find a silence.
+
+/** rosetta `TurnGap` (protocol 27), as fieldd reads it. */
+export const IndexTurnGapRow = z
+  .object({ from_ms: z.number().finite(), to_ms: z.number().finite() })
+  .passthrough();
+export type IndexTurnGapRow = z.infer<typeof IndexTurnGapRow>;
+
+/** rosetta `TurnSpan`: one message group's activity in the window. `kind` is
+ * rosetta's `GroupKind`, read open (a newer kind rides through). */
+export const IndexTurnSpanRow = z
+  .object({
+    group_id: z.string(),
+    kind: z.string(),
+    first_at: z.number().finite(),
+    last_at: z.number().finite(),
+    gaps: z.array(IndexTurnGapRow),
+  })
+  .passthrough();
+export type IndexTurnSpanRow = z.infer<typeof IndexTurnSpanRow>;
+
+/** rosetta `ActivitySession`: the session's row and its tree's turns. */
+export const IndexActivitySessionRow = z
+  .object({
+    session: IndexSessionRow,
+    turns: z.array(IndexTurnSpanRow),
+    turns_withheld: z.boolean(),
+  })
+  .passthrough();
+export type IndexActivitySessionRow = z.infer<typeof IndexActivitySessionRow>;
+
+/** rosetta `ActivityResponse` — the body of `GET /api/activity` (protocol 27). */
+export const IndexActivityResponse = z
+  .object({
+    since_ms: z.number().finite(),
+    until_ms: z.number().finite(),
+    gap_ms: z.number().finite(),
+    sessions: z.array(IndexActivitySessionRow),
+    truncated: z.boolean(),
+  })
+  .passthrough();
+export type IndexActivityResponse = z.infer<typeof IndexActivityResponse>;
 
 // ── the direct plane (SP-3 — the ticket template's SECOND instance;
 // thinking-sync-planes.md §5.4, thinking-desktop-sync-plane.md §6.4; the

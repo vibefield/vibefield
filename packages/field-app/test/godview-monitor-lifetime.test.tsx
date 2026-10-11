@@ -70,7 +70,7 @@ vi.mock("../src/godview/GodviewDeck", async () => {
     // AR-5's two ports. The real deck builds them over its fieldd client
     // (`monitor/doors.ts`); here they answer honestly and reach nothing, which
     // is what a door with no daemon behind it should do.
-    history: {
+    transcripts: {
       status: async () => status,
       facts: async () => [],
       search: async () => ({ status, answered: false, hits: [], clipped: false }),

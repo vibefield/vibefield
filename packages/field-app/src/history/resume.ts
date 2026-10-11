@@ -117,11 +117,22 @@ export function readingOf(
   };
 }
 
-/** What `agent.resume` came to: the create ticket of the agent it started, or
- * the refusal in the launcher's words. */
+/** What `agent.resume` came to: the create ticket of the agent it started, the
+ * one-run law's refusal (a run already continues the conversation — Jump to's,
+ * P3), or another refusal in the launcher's words. */
 export type ResumeAnswer =
   | { readonly state: "started"; readonly terminal: unknown }
+  | { readonly state: "running" }
   | { readonly state: "refused"; readonly reason: string };
+
+/** fieldd's refusal of a second run on one conversation (AR-4b's one-run law). */
+function conversationRunning(cause: unknown): boolean {
+  const details =
+    typeof cause === "object" && cause !== null
+      ? (cause as { details?: Record<string, unknown> }).details
+      : undefined;
+  return details?.["state"] === "terminal-alive";
+}
 
 /** Continue the conversation (`agent.resume`, the native form, one logical
  * call — an outcome-unknown is asked once more with its key). */
@@ -139,6 +150,7 @@ export async function resumeNative(
     });
     return { state: "started", terminal: AgentSpawnResult.parse(answered).terminal };
   } catch (cause) {
+    if (conversationRunning(cause)) return { state: "running" };
     return { state: "refused", reason: refusalReason(cause) };
   }
 }

@@ -17,6 +17,8 @@ import type {
 } from "@vibefield/contracts";
 import {
   ProjectChangesDelta,
+  ProjectFiguresDayResult,
+  ProjectFiguresResult,
   ProjectGetParams,
   ProjectGetResult,
   ProjectListParams,
@@ -34,6 +36,7 @@ import {
   type ProjectIntentWriter,
   type ProjectView,
   parseProjectAsk,
+  readsProjects,
 } from "../src/projects/project-doors";
 import { ProjectGroups, type ProjectGroupsChange } from "../src/projects/project-groups";
 
@@ -619,6 +622,639 @@ describe("project.subscribe", () => {
     expect(stale.open).toHaveProperty("snapshot");
     sub.dispose();
     doors.dispose();
+  });
+});
+
+describe("PJ-4 — the join column (A-D4): every catalog session carries its project's key", () => {
+  const keyed = (w: ReturnType<typeof world>) =>
+    new Map(
+      w.doors.keyed(w.sessions.rows()).map((row) => [row.sessionId, row.projectKey] as const),
+    );
+
+  it("tags each of this desktop's rows with the key project.sessions files it under", () => {
+    const w = world();
+    w.groups.regroupNow();
+    const page = ProjectListResult.parse(w.doors.list({}, WINDOW_VIEW, 100));
+    const keys = keyed(w);
+    // the join is the doors' own: every session project.sessions answers
+    // under a key carries exactly that key — the window groups nothing
+    for (const project of page.rows) {
+      const filed = ProjectSessionsResult.parse(
+        w.doors.sessions({ key: project.key, devices: ["dev-a"] }, WINDOW_VIEW, 100),
+      );
+      for (const row of filed.rows)
+        expect(keys.get(row.sessionId), row.sessionId).toBe(project.key);
+    }
+    const byName = new Map(page.rows.map((row) => [row.name, row.key]));
+    expect(Object.fromEntries(keys)).toEqual({
+      s1: byName.get("app"),
+      // the nested checkout's session: its own place, the same project
+      s2: byName.get("app"),
+      s3: byName.get("notes"),
+      s4: byName.get("Home"),
+      s5: byName.get("app"),
+    });
+  });
+
+  it("R6: carries the place that holds the cwd beside the key — the folder ③ follows", () => {
+    const w = world();
+    w.groups.regroupNow();
+    const places = new Map(
+      w.doors.keyed(w.sessions.rows()).map((row) => [row.sessionId, row.place] as const),
+    );
+    expect(places.get("s1")).toEqual({ device: "dev-a", placeId: "pl-app" });
+    // the nested checkout's session: its own place, though the same project
+    expect(places.get("s2")).toEqual({ device: "dev-a", placeId: "pl-app-docs" });
+    expect(places.get("s4")).toEqual({ device: "dev-a", placeId: "pl-home" });
+    const [forged] = w.doors.keyed([
+      { ...session("dev-a", "x9", "/Volumes/Elsewhere", 5), place: { device: "x", placeId: "y" } },
+    ]);
+    expect(forged).not.toHaveProperty("place");
+  });
+
+  it("H4: a project's pin and hide ride its summary from its record — absent when not", () => {
+    const w = world();
+    const app = () =>
+      ProjectListResult.parse(w.doors.list({}, WINDOW_VIEW, 100)).rows.find((row) =>
+        row.places.some((p) => p.ref.placeId === "pl-app"),
+      );
+    w.groups.regroupNow();
+    expect(app()).not.toHaveProperty("pinned");
+    expect(app()).not.toHaveProperty("hidden");
+    const groups = new ProjectGroups({
+      deviceId: () => "dev-a",
+      local: { projects: w.projects, sessions: w.sessions },
+      peers: () => w.peers,
+      intents: () => ({
+        records: [
+          { id: "rec1", anchors: ["place:pl-app"], pinned: true, hidden: true, createdAt: 1 },
+        ],
+      }),
+    });
+    const doors = new ProjectDoors({
+      groups,
+      deviceId: () => "dev-a",
+      localSessions: () => w.sessions.rows(),
+      peerSessions: () => w.peers,
+      sources: () => [],
+    });
+    groups.regroupNow();
+    const pinned = ProjectListResult.parse(doors.list({}, WINDOW_VIEW, 100)).rows.find(
+      (row) => row.key === "r:rec1",
+    );
+    expect(pinned).toMatchObject({ pinned: true, hidden: true });
+  });
+
+  it("leaves the column off a row no place holds, and never trusts one a row arrived with", () => {
+    const w = world();
+    w.groups.regroupNow();
+    const [stray, forged] = w.doors.keyed([
+      session("dev-a", "x1", "/Volumes/Elsewhere/thing", 5),
+      { ...session("dev-a", "x2", "/Users/me/notes/a", 5), projectKey: "r:forged" },
+    ]);
+    expect(stray).not.toHaveProperty("projectKey");
+    expect(forged?.projectKey).toBe(keyed(w).get("s3"));
+    // no cwd, no key
+    expect(w.doors.keyed([{ ...session("dev-a", "x3", "", 5) }])[0]).not.toHaveProperty(
+      "projectKey",
+    );
+  });
+
+  it("reads a peer's row by ITS places, never this desktop's same-spelled folder", () => {
+    const w = world();
+    w.groups.regroupNow();
+    const app = appOf(w)!.key;
+    const [t1, spoofed] = w.doors.keyed([
+      session("dev-b", "t1", "/home/me/src/app", 60),
+      // dev-b has no place at this desktop's /Users/me/app spelling
+      session("dev-b", "t9", "/Users/me/app/src", 60),
+    ]);
+    expect(t1?.projectKey).toBe(app);
+    expect(spoofed).not.toHaveProperty("projectKey");
+  });
+
+  it("answers rows without the column before this boot's first grouping — never a refusal", () => {
+    const w = world();
+    const rows = w.doors.keyed(w.sessions.rows());
+    expect(rows).toHaveLength(5);
+    for (const row of rows) expect(row).not.toHaveProperty("projectKey");
+    expect(w.doors.keyOf("dev-a", "/Users/me/app")).toBeUndefined();
+  });
+
+  it("files a delegated thread under its ROOT's project, whatever folder it worked in", () => {
+    const w = world();
+    w.groups.regroupNow();
+    const threads = w.doors.keyedThreads(
+      [
+        { sessionId: "c1", rootSessionId: "s1", cwd: "/Users/me/notes" },
+        { sessionId: "c2", rootSessionId: "gone" },
+      ],
+      (id) => w.sessions.get(id),
+    );
+    expect(threads[0]?.projectKey).toBe(appOf(w)!.key);
+    expect(threads[1]).not.toHaveProperty("projectKey");
+  });
+
+  it("is a reader's column: never answered to a peer daemon (DS-L4)", () => {
+    expect(readsProjects(WINDOW)).toBe(true);
+    expect(readsProjects(PHONE)).toBe(true);
+    expect(readsProjects(ctx({ kind: "peer-fieldd", deviceId: "dev-b" }))).toBe(false);
+    expect(readsProjects(ctx({ kind: "plugin", id: "p", scopes: ["index.search"] }))).toBe(false);
+  });
+
+  it("a ping names the catalog tables that moved — only when nothing else did", async () => {
+    const w = world();
+    w.groups.regroupNow();
+    const frames: unknown[] = [];
+    const sub = w.doors.subscribe({}, (payload) => frames.push(payload));
+    sub.start();
+    const waitFor = async (n: number) => {
+      const deadline = Date.now() + 3_000;
+      while (frames.length < n) {
+        if (Date.now() > deadline) throw new Error("timed out");
+        await new Promise((r) => setTimeout(r, 5));
+      }
+    };
+    // this desktop's threads alone: the room keeps its roots
+    w.doors.catalogChanged("dev-a", "threads");
+    await waitFor(1);
+    expect(ProjectChangesDelta.parse(frames[0]).tables).toEqual(["threads"]);
+    // two tables in one ping
+    w.doors.catalogChanged("dev-a", "threads");
+    w.doors.catalogChanged("dev-a", "sessions");
+    await waitFor(2);
+    expect(ProjectChangesDelta.parse(frames[1]).tables).toEqual(["sessions", "threads"]);
+    // a desktop's standing (no table) — everything is asked again
+    w.doors.catalogChanged("dev-b");
+    await waitFor(3);
+    expect(ProjectChangesDelta.parse(frames[2]).tables).toBeUndefined();
+    // a new grouping beside a threads move — everything again
+    w.doors.catalogChanged("dev-a", "threads");
+    w.projects.upsert([
+      {
+        device: "dev-a",
+        projectId: "r-notes",
+        name: "notes",
+        rootPaths: [],
+        sessionCount: 0,
+        places: [place("pl-notes", "/Users/me/notes", repo())],
+      },
+    ]);
+    w.groups.regroupNow();
+    await waitFor(4);
+    expect(ProjectChangesDelta.parse(frames[3]).tables).toBeUndefined();
+    sub.dispose();
+  });
+});
+
+// ── PJ-4: the merged figures (H2 (a), A-D3) ─────────────────────────────────
+
+/** One session's recorded usage in one hour, as a desktop's rosetta holds it. */
+interface Usage {
+  device: string;
+  projectId: string;
+  sessionId: string;
+  day: string;
+  hour: number;
+  model: string;
+  tokens: number;
+  cost: number | null;
+}
+
+const USAGE: Usage[] = [
+  {
+    device: "dev-a",
+    projectId: "r-app",
+    sessionId: "s1",
+    day: "2026-10-01",
+    hour: 9,
+    model: "opus",
+    tokens: 100,
+    cost: 10,
+  },
+  {
+    device: "dev-a",
+    projectId: "r-app",
+    sessionId: "s2",
+    day: "2026-10-01",
+    hour: 10,
+    model: "opus",
+    tokens: 50,
+    cost: 5,
+  },
+  {
+    device: "dev-a",
+    projectId: "r-app",
+    sessionId: "s5",
+    day: "2026-10-02",
+    hour: 9,
+    model: "opus",
+    tokens: 20,
+    cost: null,
+  },
+  {
+    device: "dev-a",
+    projectId: "r-notes",
+    sessionId: "s3",
+    day: "2026-10-01",
+    hour: 9,
+    model: "codex",
+    tokens: 70,
+    cost: 7,
+  },
+  {
+    device: "dev-a",
+    projectId: "r-home",
+    sessionId: "s4",
+    day: "2026-10-02",
+    hour: 11,
+    model: "opus",
+    tokens: 5,
+    cost: 1,
+  },
+  // dev-b's rosetta minted the SAME id for its checkout (A4.1: a shared path)
+  {
+    device: "dev-b",
+    projectId: "r-app",
+    sessionId: "t1",
+    day: "2026-10-01",
+    hour: 9,
+    model: "opus",
+    tokens: 40,
+    cost: 4,
+  },
+  {
+    device: "dev-b",
+    projectId: "r-app",
+    sessionId: "t2",
+    day: "2026-10-02",
+    hour: 12,
+    model: "opus",
+    tokens: 30,
+    cost: 3,
+  },
+];
+
+/** rosetta's own aggregates over one desktop's usage — what `index.project`
+ * and `index.projectDay` answer (the six figures, money summed as SQL does). */
+function rosettaOver(usage: readonly Usage[], device: string) {
+  const figures = (rows: readonly Usage[]) => ({
+    tokens: rows.reduce((n, r) => n + r.tokens, 0),
+    costMicroUsd: rows.every((r) => r.cost === null)
+      ? null
+      : rows.reduce((n, r) => n + (r.cost ?? 0), 0),
+    billedMicroUsd: null,
+    unpricedTokens: rows.reduce((n, r) => n + (r.cost === null ? r.tokens : 0), 0),
+    unrecordedOutput: 0,
+    reportedCostAdjustmentMicroUsd: 0,
+  });
+  const by = <K extends string | number>(rows: readonly Usage[], key: (r: Usage) => K) => {
+    const out = new Map<K, Usage[]>();
+    for (const row of rows) out.set(key(row), [...(out.get(key(row)) ?? []), row]);
+    return [...out.entries()];
+  };
+  const asked: Array<{ method: string; params: Record<string, unknown> }> = [];
+  return {
+    asked,
+    project: async (params: { projectId: string; sinceMs?: number; offsetMinutes?: number }) => {
+      asked.push({ method: "index.project", params });
+      const rows = usage.filter((r) => r.device === device && r.projectId === params.projectId);
+      return {
+        projectId: params.projectId,
+        heatmap: by(rows, (r) => r.day).map(([day, held]) => ({ day, ...figures(held) })),
+        usage: {
+          models: by(rows, (r) => `${r.day} ${r.model}`).map(([, held]) => ({
+            day: held[0]!.day,
+            model: held[0]!.model,
+            ...figures(held),
+          })),
+          hours: by(rows, (r) => r.hour).map(([hour, held]) => ({ hour, ...figures(held) })),
+        },
+        contribution: by(rows, (r) => r.sessionId).map(([sessionId, held]) => ({
+          sessionId,
+          projectId: params.projectId,
+          commits: 0,
+          edits: 0,
+          loc: 0,
+          messages: held.length,
+          ...figures(held),
+        })),
+        clipped: false,
+      };
+    },
+    projectDay: async (params: { projectId: string; day: string; offsetMinutes?: number }) => {
+      asked.push({ method: "index.projectDay", params });
+      const rows = usage.filter(
+        (r) => r.device === device && r.projectId === params.projectId && r.day === params.day,
+      );
+      return {
+        projectId: params.projectId,
+        day: params.day,
+        models: by(rows, (r) => `${r.hour} ${r.model}`).map(([, held]) => ({
+          hour: held[0]!.hour,
+          model: held[0]!.model,
+          tokens: held.reduce((n, r) => n + r.tokens, 0),
+        })),
+      };
+    },
+  };
+}
+
+function figuresWorld(
+  opts: {
+    usage?: readonly Usage[];
+    extraSessions?: IndexCatalogSession[];
+    sharedConversation?: boolean;
+    peerAsleep?: boolean;
+  } = {},
+) {
+  const w = world();
+  const usage = opts.usage ?? USAGE;
+  const filing = new Map(usage.map((u) => [`${u.device} ${u.sessionId}`, u.projectId]));
+  // rosetta files each session under its project
+  w.sessions.upsert(
+    [...w.sessions.rows(), ...(opts.extraSessions ?? [])].map((row) => ({
+      ...row,
+      projectId: filing.get(`dev-a ${row.sessionId}`) ?? row.projectId,
+    })),
+  );
+  const peer = w.peers[0]!;
+  peer.sessions = peer.sessions.map((row) => ({
+    ...row,
+    projectId: filing.get(`dev-b ${row.sessionId}`),
+    // t2 shares s5's native id in world(); a distinct conversation unless asked
+    ...(row.sessionId === "t2" && opts.sharedConversation !== true
+      ? { nativeSessionId: "n-t2" }
+      : {}),
+  }));
+  const local = rosettaOver(usage, "dev-a");
+  const remote = rosettaOver(usage, "dev-b");
+  const peerAsks: Array<{ device: string; method: string; params: unknown }> = [];
+  const doors = new ProjectDoors({
+    groups: w.groups,
+    deviceId: () => "dev-a",
+    localSessions: () => w.sessions.rows(),
+    peerSessions: () => w.peers,
+    sources: () => [],
+    figures: {
+      local: { project: local.project, projectDay: local.projectDay },
+      peer: async (device, method, params) => {
+        peerAsks.push({ device, method, params });
+        if (opts.peerAsleep === true)
+          return {
+            answered: false,
+            source: { device, state: "asleep", tookMs: 0, detail: "this desktop is asleep" },
+          };
+        const ask = params as { projectId: string; day?: string };
+        const value =
+          method === "index.project"
+            ? await remote.project(ask)
+            : await remote.projectDay(ask as { projectId: string; day: string });
+        return { answered: true, value, tookMs: 3 };
+      },
+    },
+  });
+  w.groups.regroupNow();
+  const keyOfPlace = (placeId: string) =>
+    w.groups.current()!.result.projects.find((p) => p.places.some((pl) => pl.placeId === placeId))!
+      .key;
+  /** the project's sessions' recorded tokens, straight from the usage */
+  const lifetime = (sessions: string[]) =>
+    usage
+      .filter((u) => sessions.includes(`${u.device} ${u.sessionId}`))
+      .reduce((n, u) => n + u.tokens, 0);
+  return { w, doors, local, peerAsks, keyOfPlace, lifetime };
+}
+
+const WINDOW_ASK = { sinceMs: 1_000, offsetMinutes: -420 };
+
+describe("PJ-4 — project.figures: one merged figure, honest when partial (H2)", () => {
+  it("asks every (desktop, rosetta project) the project's sessions are filed under — both, never a bare id — and sums what is additive", async () => {
+    const f = figuresWorld();
+    const key = f.keyOfPlace("pl-app");
+    const answer = ProjectFiguresResult.parse(await f.doors.figures({ key, ...WINDOW_ASK }));
+    // A4.1: dev-b's rosetta minted the same id; both desktops are asked for it
+    expect(f.local.asked).toEqual([
+      { method: "index.project", params: { projectId: "r-app", ...WINDOW_ASK } },
+    ]);
+    expect(f.peerAsks).toEqual([
+      { device: "dev-b", method: "index.project", params: { projectId: "r-app", ...WINDOW_ASK } },
+    ]);
+    expect(answer.heatmap).toEqual([
+      {
+        day: "2026-10-01",
+        tokens: 190,
+        costMicroUsd: 19,
+        billedMicroUsd: null,
+        unpricedTokens: 0,
+        unrecordedOutput: 0,
+        reportedCostAdjustmentMicroUsd: 0,
+      },
+      {
+        // an unpriced part is not zero: SQL's sum, the unpriced tokens counted
+        day: "2026-10-02",
+        tokens: 50,
+        costMicroUsd: 3,
+        billedMicroUsd: null,
+        unpricedTokens: 20,
+        unrecordedOutput: 0,
+        reportedCostAdjustmentMicroUsd: 0,
+      },
+    ]);
+    expect(answer.usage.hours.map((h) => [h.hour, h.tokens])).toEqual([
+      [9, 160],
+      [10, 50],
+      [12, 30],
+    ]);
+    expect(answer.usage.models.map((m) => [m.day, m.model, m.tokens])).toEqual([
+      ["2026-10-01", "opus", 190],
+      ["2026-10-02", "opus", 50],
+    ]);
+    expect(answer.contribution.map((c) => [c.device, c.sessionId, c.tokens])).toEqual([
+      ["dev-b", "t1", 40],
+      ["dev-b", "t2", 30],
+      ["dev-a", "s1", 100],
+      ["dev-a", "s2", 50],
+      ["dev-a", "s5", 20],
+    ]);
+    expect(answer.sources).toEqual([
+      { device: "dev-b", state: "answered", tookMs: 3, projects: 1, split: 0 },
+      expect.objectContaining({ device: "dev-a", state: "answered", projects: 1, split: 0 }),
+    ]);
+    expect(answer).toMatchObject({ key, partial: false, lifetimePartial: false, clipped: false });
+  });
+
+  it("an asleep desktop is named; its figures are missing, and both kinds say partial", async () => {
+    const f = figuresWorld({ peerAsleep: true });
+    const answer = ProjectFiguresResult.parse(
+      await f.doors.figures({ key: f.keyOfPlace("pl-app"), ...WINDOW_ASK }),
+    );
+    expect(answer.sources[0]).toEqual({
+      device: "dev-b",
+      state: "asleep",
+      tookMs: 0,
+      detail: "this desktop is asleep",
+      projects: 1,
+      split: 0,
+    });
+    expect(answer.heatmap.map((d) => [d.day, d.tokens])).toEqual([
+      ["2026-10-01", 150],
+      ["2026-10-02", 20],
+    ]);
+    expect(answer.contribution.map((c) => c.sessionId)).toEqual(["s1", "s2", "s5"]);
+    expect(answer).toMatchObject({ partial: true, lifetimePartial: true });
+  });
+
+  it("a rosetta project held in PART: its days are left out, its rows kept for the project's own sessions — the lifetime total stays exact", async () => {
+    // a session rosetta files under the app's checkout, in a folder the notes'
+    // place holds: r-app is split between the two projects
+    const f = figuresWorld({
+      usage: [
+        ...USAGE,
+        {
+          device: "dev-a",
+          projectId: "r-app",
+          sessionId: "s7",
+          day: "2026-10-03",
+          hour: 9,
+          model: "opus",
+          tokens: 1000,
+          cost: 100,
+        },
+      ],
+      extraSessions: [session("dev-a", "s7", "/Users/me/notes/x", 70)],
+    });
+    const app = ProjectFiguresResult.parse(
+      await f.doors.figures({ key: f.keyOfPlace("pl-app"), ...WINDOW_ASK }),
+    );
+    // the app's days: dev-b's whole checkout only — dev-a's r-app cannot be cut
+    expect(app.heatmap.map((d) => [d.day, d.tokens])).toEqual([
+      ["2026-10-01", 40],
+      ["2026-10-02", 30],
+    ]);
+    expect(app.usage.hours.map((h) => [h.hour, h.tokens])).toEqual([
+      [9, 40],
+      [12, 30],
+    ]);
+    // …its rows are its own sessions', and their sum is exactly theirs
+    expect(app.contribution.map((c) => c.sessionId)).toEqual(["t1", "t2", "s1", "s2", "s5"]);
+    expect(app.contribution.reduce((n, c) => n + c.tokens, 0)).toBe(
+      f.lifetime(["dev-a s1", "dev-a s2", "dev-a s5", "dev-b t1", "dev-b t2"]),
+    );
+    expect(app.sources.find((s) => s.device === "dev-a")).toMatchObject({
+      state: "answered",
+      projects: 1,
+      split: 1,
+    });
+    expect(app).toMatchObject({ partial: true, lifetimePartial: false });
+    // the notes: its own rosetta project whole, and its part of r-app
+    const notes = ProjectFiguresResult.parse(
+      await f.doors.figures({ key: f.keyOfPlace("pl-notes"), ...WINDOW_ASK }),
+    );
+    expect(notes.heatmap.map((d) => [d.day, d.tokens])).toEqual([["2026-10-01", 70]]);
+    // the plan's order: the desktop, then the rosetta id
+    expect(notes.contribution.map((c) => [c.sessionId, c.tokens])).toEqual([
+      ["s7", 1000],
+      ["s3", 70],
+    ]);
+    expect(notes.contribution.reduce((n, c) => n + c.tokens, 0)).toBe(
+      f.lifetime(["dev-a s3", "dev-a s7"]),
+    );
+    expect(notes.sources).toEqual([
+      expect.objectContaining({ device: "dev-a", projects: 2, split: 1 }),
+    ]);
+    expect(notes).toMatchObject({ partial: true, lifetimePartial: false });
+  });
+
+  it("one conversation two desktops recorded keeps ONE row; its days, counted twice, say partial", async () => {
+    const f = figuresWorld({ sharedConversation: true });
+    const answer = ProjectFiguresResult.parse(
+      await f.doors.figures({ key: f.keyOfPlace("pl-app"), ...WINDOW_ASK }),
+    );
+    // DS-D10: the copy of the desktop listed first speaks (the project's order)
+    expect(answer.contribution.map((c) => c.sessionId)).toEqual(["t1", "t2", "s1", "s2"]);
+    expect(answer).toMatchObject({ partial: true, lifetimePartial: false });
+  });
+
+  it("a tailnet caller's rows are cut at its bound, and the lifetime says so", async () => {
+    const f = figuresWorld();
+    const answer = ProjectFiguresResult.parse(
+      await f.doors.figures({ key: f.keyOfPlace("pl-app"), ...WINDOW_ASK }, 2),
+    );
+    expect(answer.contribution).toHaveLength(2);
+    expect(answer).toMatchObject({ clipped: true, lifetimePartial: true, partial: false });
+  });
+
+  it("follows a key that regrouped, as every read does", async () => {
+    const f = figuresWorld();
+    const notesKey = f.keyOfPlace("pl-notes");
+    // the notes' folder becomes a clone of the app's repository: it joins
+    f.w.projects.upsert([
+      {
+        device: "dev-a",
+        projectId: "r-notes",
+        name: "notes",
+        rootPaths: [],
+        sessionCount: 0,
+        places: [place("pl-notes", "/Users/me/notes", repo())],
+      },
+    ]);
+    f.w.groups.regroupNow();
+    const answer = ProjectFiguresResult.parse(
+      await f.doors.figures({ key: notesKey, ...WINDOW_ASK }),
+    );
+    expect(answer.movedTo).toBe(f.keyOfPlace("pl-app"));
+    expect(answer.contribution.map((c) => c.sessionId)).toContain("s3");
+  });
+});
+
+describe("PJ-4 — project.figuresDay: one day's hours over the same parts", () => {
+  it("sums the whole parts' hours by model, across desktops", async () => {
+    const f = figuresWorld();
+    const day = ProjectFiguresDayResult.parse(
+      await f.doors.figuresDay({
+        key: f.keyOfPlace("pl-app"),
+        day: "2026-10-01",
+        offsetMinutes: -420,
+      }),
+    );
+    expect(day.models).toEqual([
+      { hour: 9, model: "opus", tokens: 140 },
+      { hour: 10, model: "opus", tokens: 50 },
+    ]);
+    expect(f.peerAsks).toEqual([
+      {
+        device: "dev-b",
+        method: "index.projectDay",
+        params: { projectId: "r-app", day: "2026-10-01", offsetMinutes: -420 },
+      },
+    ]);
+    expect(day.partial).toBe(false);
+  });
+
+  it("never asks a part held in part, and says the day is partial", async () => {
+    const f = figuresWorld({
+      usage: [
+        ...USAGE,
+        {
+          device: "dev-a",
+          projectId: "r-app",
+          sessionId: "s7",
+          day: "2026-10-01",
+          hour: 9,
+          model: "opus",
+          tokens: 1000,
+          cost: 100,
+        },
+      ],
+      extraSessions: [session("dev-a", "s7", "/Users/me/notes/x", 70)],
+    });
+    const day = ProjectFiguresDayResult.parse(
+      await f.doors.figuresDay({ key: f.keyOfPlace("pl-app"), day: "2026-10-01" }),
+    );
+    expect(f.local.asked).toEqual([]);
+    expect(day.models).toEqual([{ hour: 9, model: "opus", tokens: 40 }]);
+    expect(day.partial).toBe(true);
   });
 });
 

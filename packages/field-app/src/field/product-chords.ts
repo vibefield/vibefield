@@ -24,6 +24,12 @@ import { isSettingsChord } from "./me-menu-wiring";
 // over ghostty's new_tab, which the deck has no tabs for either. The line
 // claims it only while the window is in Godview; the table names it so
 // Settings can say which Ghostty default it keeps from a pane.
+//
+// ⌘F (the Peek, GV-D8/D10, 2026-10-08) is search's, printed under the frame's
+// button: the Peek claims it while History or Godview is the view (Godview's
+// own Find left with P2, 2026-10-09). So Ghostty's start_search reaches a pane
+// in neither — the row says WHEN, so Settings says it honestly rather than as
+// an always.
 
 type ChordKey = Pick<
   KeyboardEvent,
@@ -57,12 +63,22 @@ export function isNewTerminalChord(event: ChordKey, keys: ViewKeys): boolean {
   return event.key === "t" || event.key === "T";
 }
 
+/** ⌘F (Ctrl+F off the Mac): search — the Peek. Never with ⇧ or ⌥, and never
+ * the other platform's modifier. */
+export function isSearchChord(event: ChordKey, keys: ViewKeys): boolean {
+  const command =
+    keys === "mac" ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+  if (!command || event.altKey || event.shiftKey) return false;
+  return event.key === "f" || event.key === "F";
+}
+
 export interface ProductChord {
   readonly id:
     | "palette"
     | "settings"
     | "clipboard-tray"
     | "new-terminal"
+    | "search"
     | "view-canvas"
     | "view-godview"
     | "view-history"
@@ -71,6 +87,8 @@ export interface ProductChord {
    * same keys can be recognized as the one it overrides. */
   readonly trigger: string;
   readonly label: string;
+  /** When VibeField keeps the chord, if not always — said beside the label. */
+  readonly when?: string;
   readonly matches: (event: ChordKey) => boolean;
 }
 
@@ -88,6 +106,13 @@ export const PRODUCT_CHORDS: readonly ProductChord[] = [
     trigger: "super+t",
     label: "New terminal",
     matches: (event) => isNewTerminalChord(event, viewKeysOf(getHost().platform)),
+  },
+  {
+    id: "search",
+    trigger: "super+f",
+    label: "Search",
+    when: "while History or Godview is the view",
+    matches: (event) => isSearchChord(event, viewKeysOf(getHost().platform)),
   },
   // The four views, in the track's order. Off the Mac they are Ctrl+1–4; the
   // trigger keeps ghostty's macOS spelling, which is what names the default

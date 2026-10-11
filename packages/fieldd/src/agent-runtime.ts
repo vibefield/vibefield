@@ -512,6 +512,19 @@ function isDirectory(path: string): boolean {
 
 /** The `agents.*`/`agent.*` doors' service, the runtime's owner and the fold.
  * Auditing is the caller's (the daemon wraps the mutations in `audit.required`). */
+/** TL — one run this runtime ran, as its session record keeps it (`recordedRuns`). */
+export interface RecordedRun {
+  /** the catalog id (= puppeteer's provider id, AC-D2) */
+  provider: string;
+  nativeSessionId: string;
+  runtimeRunId: string;
+  /** epoch ms */
+  createdAt?: number;
+  profileSet?: string;
+  projectKey?: string;
+  title?: string;
+}
+
 export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   /** puppeteer's runtime — typed as the open surface, not the built-in
    * family's: the composed providers are the built-ins plus whatever the
@@ -861,6 +874,45 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       });
       return [];
     }
+  }
+
+  /** TL (TIMELINE SHAPES v2, item 7) — the runs THIS runtime ran, alive or
+   * long gone, as the VERIFIED session records keep them: the provider and the
+   * native session id the record joins on (AR-D3), with the run's birth, the
+   * profile set it ran under, the key its project's colour was dealt by (the
+   * fold's own rule: the workspace's root, else its source path, else the
+   * run's cwd) and its title. Only these are ever a lane of the past: a session
+   * rosetta holds that no record names (an agent started in another terminal
+   * app) is none. A record that never learned its native id joins nothing and
+   * is left out. Read at each ask of the past, never kept. */
+  recordedRuns(): RecordedRun[] {
+    let records: AgentSessionRecord[];
+    try {
+      records = this.records.list();
+    } catch (error) {
+      this.logger.warn("fieldd.agents.records_unreadable", "Session records could not be listed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+    const runs: RecordedRun[] = [];
+    for (const record of records) {
+      const nativeSessionId = record.continuation?.nativeSessionId;
+      if (nativeSessionId === undefined || nativeSessionId === "") continue;
+      const createdAt = Date.parse(record.createdAt);
+      const projectKey =
+        record.workspace?.root || record.workspace?.sourcePath || record.cwd || undefined;
+      runs.push({
+        provider: record.continuation?.providerId ?? record.provider,
+        nativeSessionId,
+        runtimeRunId: record.runtimeRunId,
+        ...(Number.isFinite(createdAt) ? { createdAt } : {}),
+        ...(record.profileSet !== undefined ? { profileSet: record.profileSet } : {}),
+        ...(projectKey !== undefined ? { projectKey } : {}),
+        ...(record.title !== undefined && record.title !== "" ? { title: record.title } : {}),
+      });
+    }
+    return runs;
   }
 
   /** QL — the newest session record per agent (any `spawnedBy`: a spawn, a

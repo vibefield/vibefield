@@ -1,4 +1,4 @@
-import type { MonitorAgentRow } from "@vibecook/puppeteer-view-sdk/model";
+import type { MonitorAgentRow, MonitorPastSnapshot } from "@vibecook/puppeteer-view-sdk/model";
 import {
   AGENT_FIELD,
   type AgentDeskBlocker,
@@ -11,6 +11,7 @@ import {
   type AgentListResult,
   AgentModelDeskRow,
   type AgentModelLocalFacts,
+  type AgentRecordedLanesResult,
   type AgentSessionSummary,
   type AgentSessionTerminal,
   type AgentSubscribeParams,
@@ -404,6 +405,33 @@ function wireMonitorRow(row: MonitorAgentRow): WireMonitorRow {
 /** The model's row for THIS desktop's own window: whole. */
 export function windowMonitorRow(row: MonitorAgentRow): WireMonitorRow {
   return wireMonitorRow(row);
+}
+
+/** TL — the backend's past (`readPast`) as `agent.recordedLanes` answers it,
+ * cut as the model's rows are: `device.self` never travels, and a PEER reads
+ * no colour sequence (M16 — desktop-local, it would collide with the reader's
+ * own). The snapshot is the SDK's, field for field (the contract mirrors it). */
+export function wireRecordedLanes(
+  past: MonitorPastSnapshot,
+  audience: "window" | "peer",
+): AgentRecordedLanesResult {
+  const spans = (list: MonitorPastSnapshot["live"][number]["spans"]) =>
+    list.map(({ kind, from, to }) => ({ kind, from, to }));
+  return {
+    ...past,
+    live: past.live.map((lane) => ({ ...lane, spans: spans(lane.spans) })),
+    ended: past.ended.map((lane) => {
+      const { self: _self, ...device } = lane.device;
+      const { seq: _seq, ...peerProject } = lane.project;
+      return {
+        ...lane,
+        ...(lane.provider !== undefined ? { provider: { ...lane.provider } } : {}),
+        device,
+        project: audience === "peer" ? peerProject : { ...lane.project },
+        spans: spans(lane.spans),
+      };
+    }),
+  };
 }
 
 /** The model's row for a PEER: no colour sequence (M16), every text bounded

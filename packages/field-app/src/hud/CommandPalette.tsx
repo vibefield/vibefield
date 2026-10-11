@@ -12,7 +12,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { resumeWaits, useHistoryLineDoor } from "../frame/line-door";
+import { historyCreateWaits, useHistoryLineDoor } from "../frame/line-door";
 import { type FrameActRun, frameActGroups } from "../frame/palette-acts";
 import type { ViewKeys } from "../frame/views";
 import { invoke as invokeCommand, isCommandBound } from "../plugin-host/command-registry";
@@ -279,9 +279,15 @@ export function CommandPalette({
   }, [open, onClose]);
 
   // The frame's acts, as this view has them — History's Resume waiting for
-  // what History lends the line (AR-8c), exactly as the line's create does.
-  const historyWaits = resumeWaits(useHistoryLineDoor());
-  const acts = useMemo(() => frameActGroups(view, keys, historyWaits), [view, keys, historyWaits]);
+  // what History lends the line (AR-8c), and Jump to while the chosen session
+  // runs here (P3), exactly as the line's create does.
+  const historyDoor = useHistoryLineDoor();
+  const historyWaits = historyCreateWaits(historyDoor);
+  const historyLive = historyDoor?.live === true;
+  const acts = useMemo(
+    () => frameActGroups(view, keys, historyWaits, historyLive),
+    [view, keys, historyWaits, historyLive],
+  );
 
   // All palette-placement commands of enabled plugins (§8.3), each plugin's
   // under its own name. null snapshot → none (honest: fieldd has not told us

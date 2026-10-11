@@ -139,3 +139,22 @@ export const PlaceFactsList = z.unknown().transform((raw): PlaceFacts[] =>
       })
     : [],
 );
+
+/** A project's key: `r:<record id>` once a record binds, else a provisional
+ * `p1:` key (opaque; fieldd `projects/normalize.ts`). Readers compare it,
+ * never parse it. Here, beside the facts it groups, so the catalog's rows can
+ * carry it as a join column (PJ-4, `IndexSession.projectKey`) without the
+ * history's shapes importing the doors'. */
+export const ProjectKey = z.string().min(1).max(256).regex(/^\S+$/);
+export type ProjectKey = z.infer<typeof ProjectKey>;
+
+/** A place as a reader names it: the device that owns it and its opaque id
+ * (`PlaceFacts.placeId`) — never its path (P1). Here beside the key, so the
+ * catalog's rows can carry it as a join column (PJ-4, `IndexSession.place`). */
+export const PlaceRef = z
+  .object({
+    device: z.string().min(1).max(256),
+    placeId: z.string().min(1).max(256),
+  })
+  .passthrough();
+export type PlaceRef = z.infer<typeof PlaceRef>;

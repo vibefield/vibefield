@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AgentProfileId, AgentProviderId } from "./agent-index";
 import { AgentSessionTerminal, AgentStatus, AgentTier } from "./agent-session";
+import { INDEX_ACTIVITY } from "./registries";
 import {
   MeshScope,
   meshRowsFrame,
@@ -625,6 +626,103 @@ export const AgentReportShownParams = z
 export type AgentReportShownParams = z.infer<typeof AgentReportShownParams>;
 export const AgentReportShownResult = z.object({ reported: z.literal(true) }).passthrough();
 export type AgentReportShownResult = z.infer<typeof AgentReportShownResult>;
+
+/** TL (docket v9, RULED 2026-10-09; B-D6 (a)) — `agent.recordedLanes
+ * {sinceMs, untilMs, device?}`: the lanes' past as the monitor backend beside
+ * the runtime derives it from the record (`MonitorBackend.readPast` over
+ * `index.activity`'s reader), for a window whose mounted view asked for it
+ * (capability `history`). Read through to rosettad at each ask and held
+ * nowhere: this is NOT the removed `agent.history` (TL-D8's ledger in fieldd's
+ * fold, retired at MV-D13), and it never rides the model's rows. The window is
+ * at most `INDEX_ACTIVITY.MAX_WINDOW_MS`. */
+export const AgentRecordedLanesParams = z
+  .object({
+    sinceMs: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    untilMs: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    device: z.string().min(1).optional(),
+  })
+  .passthrough()
+  .refine(
+    (params) =>
+      params.untilMs > params.sinceMs &&
+      params.untilMs - params.sinceMs <= INDEX_ACTIVITY.MAX_WINDOW_MS,
+    "a window of at most a day, untilMs after sinceMs",
+  );
+export type AgentRecordedLanesParams = z.infer<typeof AgentRecordedLanesParams>;
+
+/** One stretch of a lane's past (the SDK's `MonitorPastSpan`, TIMELINE SHAPES
+ * v2): `worked` inside a turn, `quiet` between turns, `unrecorded` across a long
+ * silence inside one, `bounds` a session's bounds alone (the floor, or one
+ * session whose turns were not read — drawn flat and faint, never counted).
+ * Never blocked, never unseen: the record says neither. Closed, as the SDK's
+ * type is. */
+export const MonitorPastSpan = z
+  .object({
+    kind: z.enum(["worked", "quiet", "unrecorded", "bounds"]),
+    from: z.number().int(),
+    to: z.number().int(),
+  })
+  .passthrough();
+export type MonitorPastSpan = z.infer<typeof MonitorPastSpan>;
+
+/** A model row's past up to `seamAt` (its `statusSince` when read). */
+export const MonitorLivePast = z
+  .object({
+    id: z.string().min(1),
+    seamAt: z.number().int(),
+    spans: z.array(MonitorPastSpan),
+  })
+  .passthrough();
+export type MonitorLivePast = z.infer<typeof MonitorLivePast>;
+
+/** A run THIS runtime ran that the model no longer holds (`past:<provider>:<native
+ * id>`; a session this runtime never ran is no lane, v2 item 7). `device.self` is
+ * not carried, as on every row: the reader says it, and the reader computes
+ * `receded` from its own filters with `profileSet`. Never openable in v1: no
+ * command takes a `past:` id. */
+export const MonitorEndedRow = z
+  .object({
+    id: z.string().min(1),
+    provider: z.object({ id: z.string(), label: z.string() }).passthrough().optional(),
+    /** the run's title, else the record's */
+    title: z.string().optional(),
+    /** the Agent Profile SET the run was born under */
+    profileSet: z.string().optional(),
+    project: z
+      .object({
+        name: z.string(),
+        branch: z.string().nullable().optional(),
+        seq: z.number().int().nonnegative().optional(),
+      })
+      .passthrough(),
+    device: MonitorDeviceRef,
+    startedAt: z.number().int(),
+    endedAt: z.number().int(),
+    spans: z.array(MonitorPastSpan),
+  })
+  .passthrough();
+export type MonitorEndedRow = z.infer<typeof MonitorEndedRow>;
+
+/** `agent.recordedLanes`' answer: the SDK's `MonitorPastSnapshot`, field for
+ * field (fieldd pins the two, `agent-monitor.ts`). `state` is the honest word —
+ * `unavailable` with `detail` when a record should be here and cannot be read
+ * now (rosettad starting, a peer asleep), `partial` when some of it was not.
+ * A desktop that keeps no record at all refuses the door NOT_FOUND {state:
+ * "no-record"}: its window lends no past and draws today's floor. No cap, no
+ * `truncated`: dropped sessions are `partial` with a detail. */
+export const AgentRecordedLanesResult = z
+  .object({
+    sinceMs: z.number().int(),
+    untilMs: z.number().int(),
+    readAt: z.number().int(),
+    fidelity: z.enum(["turns", "bounds"]),
+    state: z.enum(["complete", "partial", "unavailable"]),
+    detail: z.string().optional(),
+    live: z.array(MonitorLivePast),
+    ended: z.array(MonitorEndedRow),
+  })
+  .passthrough();
+export type AgentRecordedLanesResult = z.infer<typeof AgentRecordedLanesResult>;
 
 /** One device's slice of `field.agents.v1` (D4's hybrid). `expiresAt` is the
  * honesty clause: a desktop that dies without clearing its slice leaves rows a

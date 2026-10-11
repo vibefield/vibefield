@@ -1,18 +1,26 @@
-import type { MonitorTheme, StageGeometry, ViewReport } from "@vibecook/puppeteer-view-sdk";
-import { frameScheduler, keepStage, MonitorViewHost } from "@vibecook/puppeteer-view-sdk/host";
+import type {
+  MonitorCapabilities,
+  MonitorTheme,
+  StageGeometry,
+  ViewReport,
+} from "@vibecook/puppeteer-view-sdk";
+import {
+  frameScheduler,
+  keepStage,
+  MonitorViewHost,
+  viewWantsHistory,
+} from "@vibecook/puppeteer-view-sdk/host";
+import type { MonitorEndedRow } from "@vibecook/puppeteer-view-sdk/model";
 import { ProfileGlyph } from "@vibecook/puppeteer-view-sdk/react";
 import {
   type AccountUsagePort,
   BarControl,
   ChromeBoundary,
-  type FindAgent,
-  FindSheet,
   type HistoryPort,
   InstrumentBar,
   MONITOR_STAGE_CLASS,
   MONITOR_VIEWS,
   type MonitorParameters,
-  ProfileTabs,
   UsageColumn,
   useMonitorPalette,
 } from "@vibecook/puppeteer-views";
@@ -29,13 +37,19 @@ import {
   useSyncExternalStore,
 } from "react";
 import { emitGodviewMonitorMarker, type GodviewMonitorRunFacts } from "../development-console";
-import { DeviceFilterChip } from "./DeviceFilterChip";
+import {
+  type GodviewFindDoor,
+  type LiveFilters,
+  type LiveFindAgent,
+  publishGodviewFindDoor,
+} from "../frame/find-door";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import { monitorAgentCounts } from "./monitor/agents";
 import { type ChromeRun, NO_RUNS, useChromeKey } from "./monitor/chrome-facts";
-import type { DeviceChoice } from "./monitor/device-filter";
+import { choiceNote, type DeviceChoice } from "./monitor/device-filter";
 import { useMonitorFeed } from "./monitor/GodviewAgentsProvider";
-import { launcherOwnsKeyEvent, setMonitorHoldsKeys } from "./monitor/launcher-keys";
+import { setMonitorHoldsKeys } from "./monitor/launcher-keys";
+import { useMonitorHistory } from "./monitor/monitor-history";
 import { chosenProfile, showsProfileTabs } from "./monitor/profile-tabs";
 import type { MonitorDoor, MonitorFeedState } from "./monitor/remote-door";
 import type { MonitorViewEntry } from "./monitor/types";
@@ -175,9 +189,36 @@ const EMPTY_STAGE: StageGeometry = Object.freeze({
   obstacles: Object.freeze([]),
 });
 
-/** With no deck there is no daemon to ask: the sheet says HISTORY OFF, the
- * column stays empty, and neither invents an answer. */
-const NO_HISTORY: HistoryPort = {
+/** What makes Live now's rows the same: every fact the find model reads or
+ * the Peek draws — never a token count or an evidence tick (M19). */
+function liveRowsKey(rows: readonly LiveFindAgent[]): string {
+  return rows
+    .map((row) =>
+      [
+        row.id,
+        row.status,
+        row.project,
+        row.detail,
+        row.agent?.provider.id ?? "",
+        row.agent?.provider.label ?? "",
+        row.agent?.model ?? "",
+        row.agent?.branch ?? "",
+        row.agent?.account ?? "",
+        row.agent?.nativeSessionId ?? "",
+        row.agent?.monitor?.statusSince ?? "",
+        row.agent?.monitor?.session?.startedAt ?? "",
+        row.floorSessionId ?? "",
+        row.desk.id,
+        row.desk.name,
+        row.desk.os,
+      ].join("\u0001"),
+    )
+    .join("\n");
+}
+
+/** With no deck there is no daemon to ask: search's Live now says the
+ * transcript search is off, and invents no answer. */
+const NO_TRANSCRIPTS: HistoryPort = {
   status: async () => ({
     reachable: false,
     detail: "no deck",
@@ -265,6 +306,13 @@ export interface GodviewMonitorProps {
    * Off, a ported view's loop holds still, as the stage's CSS loops do under
    * the attribute the stage writes from the same value. */
   animations?: boolean;
+  /** P2 — whether this stage lends the frame's Peek its Live now
+   * (`find-door.ts`): the window's own Godview does; a catalog's stages, of
+   * which a page mounts several, do not. */
+  publishesFind?: boolean;
+  /** The catalog's: a profile chosen from the first render (a stage whose
+   * search is not the window's has no other way to be filtered). */
+  initialProfile?: string | null;
   onSelectView?: (viewId: string) => void;
   onToggleTuning?: () => void;
 }
@@ -279,6 +327,8 @@ export function GodviewMonitor({
   panes,
   reserveWindowControls = false,
   animations = true,
+  publishesFind = false,
+  initialProfile = null,
   onSelectView,
   onToggleTuning,
 }: GodviewMonitorProps): ReactElement {
@@ -294,17 +344,16 @@ export function GodviewMonitor({
   const palette = useMonitorPalette(godviewRootRef);
   const reducedMotion = usePrefersReducedMotion();
 
-  // AR-S5 — THE PROFILE TABS (the agents-settings record's T3). The feed is
-  // the one Settings reads, held only while this stage is (PF6). A chosen tab
-  // keeps its profile's sessions and recedes every other one, the counters
-  // count what it shows. Terminal creation is independent of the chosen tab:
-  // a new terminal's profile is the spawn bloom's to choose (SB-3), never the
-  // tab's.
+  // AR-S5 — THE PROFILE FILTER (the agents-settings record's T3; GV-D3 moved
+  // its tabs into search's Live now, P2). The feed is the one Settings reads,
+  // held only while this stage is (PF6). A chosen profile keeps its sessions
+  // and recedes every other one. Terminal creation is independent of it: a new
+  // terminal's profile is the spawn bloom's to choose (SB-3), never the filter's.
   const [profileSets, setProfileSets] = useState<readonly AgentProfileSet[]>([]);
   /** Whether the feed has answered at all: until it has, the spawn menu's
    * desktop is `reading` — an empty list is an answer, and not the same one. */
   const [profileSetsRead, setProfileSetsRead] = useState(false);
-  const [profileTab, setProfileTab] = useState<string | null>(null);
+  const [profileTab, setProfileTab] = useState<string | null>(initialProfile);
   const profilesPort = door?.profiles;
   useEffect(() => {
     setProfileSetsRead(false);
@@ -322,15 +371,18 @@ export function GodviewMonitor({
   const chosenId = chosen?.id;
 
   // DS-3 — THE DEVICE FILTER: one desktop's rows, or every desktop's (the
-  // default). A desktop that leaves the board falls back to all. The chip is
-  // drawn only when there is a choice to make — two desktops or more — and
-  // while its menu is open the stage holds the keys (QL-D2, as the find sheet
-  // does), so a launcher in the focused pane never takes its ⎋.
+  // default). A desktop that leaves the board falls back to all. It is chosen
+  // in search's Live now since P2 (GV-D3), which offers it only when there is
+  // a choice to make — two desktops or more.
   const [deviceChoice, setDeviceChoice] = useState<string | null>(null);
+  /** P2 — whether the Peek listens for Live now's rows (the find door's
+   * `subscribeRows`): the find join is made only while it does. */
+  const [findWanted, setFindWanted] = useState(false);
   // MV-3b — THE WINDOW on the replica (`useMonitorAgents`): the backend's rows
   // through this window's one door, joined with the deck's panes, the chosen
-  // tab and the chosen desktop; list and rain as SDK views on the window's cut
-  // of it (MV-4…MV-6); Find alone adapts its local chrome facts (M19).
+  // profile and the chosen desktop; list and rain as SDK views on the window's
+  // cut of it (MV-4…MV-6); Live now's rows alone adapt its local chrome facts
+  // (M19).
   const {
     viewReplica,
     commands,
@@ -345,6 +397,7 @@ export function GodviewMonitor({
     devices,
     deviceChosen,
     tabs,
+    here,
   } = useMonitorAgents({
     palette,
     door,
@@ -354,17 +407,8 @@ export function GodviewMonitor({
     hasProfiles: profilesPort !== undefined,
     chosenProfile: chosenId,
     device: deviceChoice,
+    find: findWanted,
   });
-  const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
-  // Held only while the chip is DRAWN and says its menu is open: the chip is
-  // drawn for two desktops or more, and one unmounted with its menu open used
-  // to leave the keys held until Godview closed (2026-10-01).
-  const deviceMenuHolds = deviceMenuOpen && devices.length > 1;
-  useEffect(() => {
-    if (!deviceMenuHolds) return;
-    setMonitorHoldsKeys(true);
-    return () => setMonitorHoldsKeys(false);
-  }, [deviceMenuHolds]);
   const chromeRef = useRef<HTMLDivElement>(null);
   const usagePort = door?.usage;
   const [usageState, setUsageState] = useState<MonitorFeedState>({ state: "no-door" });
@@ -398,24 +442,42 @@ export function GodviewMonitor({
     () => ({ sources, devices, usageState }),
     [sources, devices, usageState],
   );
-  const [findOpen, setFindOpen] = useState(false);
-  // QL-D2's other half: while the find sheet is up, its Escape is the sheet's,
-  // not a fresh pane's launcher's (`launcher-keys.ts`).
-  useEffect(() => {
-    if (!findOpen) return;
-    setMonitorHoldsKeys(true);
-    return () => setMonitorHoldsKeys(false);
-  }, [findOpen]);
   // MV-5 (W5) — what the mounted view says about itself (`commands.report`):
   // what it paints with, where its simulation runs, and whether it holds the
   // keys. Never read off its DOM; the slot clears it when the view changes.
   const [viewReport, setViewReport] = useState<ViewReport>(NO_REPORT);
-  /** Read by the capture listeners at event time: a report lands between renders. */
+  /** Read by the Peek's ⌘F at event time (SB-3): a report lands between renders. */
   const viewHoldsKeysRef = useRef(false);
   const onReport = useCallback((report: ViewReport): void => {
     viewHoldsKeysRef.current = report.keysHeld === true;
     setViewReport(report);
   }, []);
+  // TL (docket v9; B-D6 (a); TIMELINE SHAPES v2) — the record's past for the
+  // mounted view whose manifest declares `history`, the backend's through this
+  // window's door, read only while that view is mounted (PF6: this stage
+  // unmounts with Godview). An ended lane does exactly what a live row does
+  // under each filter (the MV lead's ruling, 2026-10-10): the scope row's
+  // desktop NARROWS — lanes elsewhere leave before the past is lent — and the
+  // profile tab RECEDES, where a run whose profile is unknown recedes.
+  const wantsHistory = viewWantsHistory(view.view);
+  const pastReceded = useCallback(
+    (lane: MonitorEndedRow): boolean =>
+      chosenId !== undefined && !(lane.device.self && lane.profileSet === chosenId),
+    [chosenId],
+  );
+  const history = useMonitorHistory({
+    port: door?.pastLanes,
+    wants: wantsHistory,
+    rows: agents,
+    here,
+    palette,
+    receded: pastReceded,
+    desk: deviceChosen,
+  });
+  const viewCapabilities = useMemo<MonitorCapabilities>(
+    () => (history === undefined ? capabilities : { ...capabilities, history }),
+    [capabilities, history],
+  );
   /** AR-5: what the swarm paints with — `starting` while its physics runs and its device has not answered. */
   const swarmRenderer =
     viewReport.renderer ?? (viewReport.physics !== undefined ? "starting" : "none");
@@ -447,8 +509,8 @@ export function GodviewMonitor({
     () => monitorRunFacts(chrome?.runs() ?? NO_RUNS, drawnRuns),
     [chrome, markerKey, drawnRuns],
   );
-  /** A tab with no sessions under it says so over the stage; with no sessions
-   * at all the view's own empty state speaks instead. */
+  /** A profile chosen with no sessions under it says so over the stage; with
+   * no sessions at all the view's own empty state speaks instead. */
   const emptyUnder =
     chosen !== undefined && agents.length > 0 && shown.length === 0 ? chosen : undefined;
 
@@ -542,10 +604,9 @@ export function GodviewMonitor({
   }, []);
 
   // SB-3 — while the view holds the keys (the spawn bloom held open, or opened
-  // for the keys: its `report`, MV-D8) the monitor holds them, as it does while
-  // the find sheet is up (QL-D2's other half): the deck's launchers stand aside,
-  // and the stage's own chords below yield. A HOLD's bloom needs no hold: its ⎋
-  // is the swarm field's own, heard with the focus on the field.
+  // for the keys: its `report`, MV-D8) the monitor holds them (QL-D2's other
+  // half): the deck's launchers stand aside. A HOLD's bloom needs no hold: its
+  // ⎋ is the swarm field's own, heard with the focus on the field.
   useEffect(() => {
     if (!viewHoldsKeys) return;
     setMonitorHoldsKeys(true);
@@ -591,9 +652,10 @@ export function GodviewMonitor({
       swarmPhysics,
       swarmRenderer,
       usageTiles,
-      findSheet: findOpen ? "open" : "closed",
       profileTab: chosenId ?? "all",
       shownAgents: shown.length,
+      history: history?.state ?? "absent",
+      endedLanes: history?.ended.length ?? 0,
       runs,
     });
   }, [
@@ -603,72 +665,115 @@ export function GodviewMonitor({
     swarmPhysics,
     swarmRenderer,
     usageTiles,
-    findOpen,
     chosenId,
     shown,
+    history,
     runs,
   ]);
 
-  const closeFind = useCallback((): void => setFindOpen(false), []);
+  // The stage binds no key of its own any more. FC-D18 (ruled 2026-10-01)
+  // removed the counters' ⌘1–⌘3 (⌘1–⌘4 are the frame's views, One Frame FR-1);
+  // P2 moved ⌘F to the frame's Peek (a product chord, `product-chords.ts`), and
+  // docket PK4 (a, 2026-10-09) retired ⌥0–⌥9 with the profile tabs they chose:
+  // the profiles are chosen in search's Live now (GV-D3), so ⌥ and every digit
+  // reach the pane — a fresh pane's launcher keeps its own ⌥n (QL-D2).
 
-  // FC-D18 (ruled 2026-10-01): the counters and their ⌘1–⌘3 are removed —
-  // ⌘1–⌘4 are the frame's views now (One Frame FR-1), and a third digit family
-  // would throw a missed ⌥ out of Godview. Blocked agents still show where they
-  // are: an orange body in the swarm, a list row naming what it waits on. The
-  // bar's counters group is hidden by godview.css until the views package
-  // draws it only for a host that passes counts (the ask, One Frame §21).
+  // P2 — WHAT THE PEEK READS (`find-door.ts`): the live runs this stage shows
+  // (its desktop and its profile, GV-D3 — they filter the view and search's
+  // Live now alike), rosetta's words through the deck's door, the view's own
+  // select (what the find sheet's pick did), the two filters, which the scope
+  // row sets, and the stage's two key facts. The rows are computed ONLY while
+  // the Peek listens (open on Live now) and handed on only when their content
+  // moves (MV's after-MV list: "Find re-renders on every publish"): the door
+  // itself is the same object while its filters are, so a closed Peek renders
+  // nothing for a model publish.
+  const rowListeners = useRef(new Set<() => void>());
+  const liveRowsRef = useRef<readonly LiveFindAgent[] | null>(null);
+  const shownKey = findWanted ? shown.map((row) => row.id).join("\n") : "";
+  const liveRowsNow = useMemo<readonly LiveFindAgent[] | null>(() => {
+    if (!findWanted) return null;
+    const ids = new Set(shownKey === "" ? [] : shownKey.split("\n"));
+    return findAgents.filter((row) => ids.has(row.id));
+  }, [findWanted, findAgents, shownKey]);
+  const liveRows = useHeldWhileSame(
+    liveRowsNow,
+    liveRowsNow === null ? "\u0000none" : liveRowsKey(liveRowsNow),
+  );
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (!event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
-      // SB-3: a view that holds the keys (a spawn bloom with the keyboard) holds every key
-      if (viewHoldsKeysRef.current) return;
-      // ⌘F summons Find (AR-5, D6): the sheet over the stage, the reference's chord.
-      if (event.code === "KeyF") {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        setFindOpen((current) => !current);
-      }
+    liveRowsRef.current = liveRows;
+    for (const listener of [...rowListeners.current]) listener();
+  }, [liveRows]);
+  const readRows = useCallback(() => liveRowsRef.current, []);
+  const subscribeRows = useCallback((listener: () => void) => {
+    rowListeners.current.add(listener);
+    if (rowListeners.current.size === 1) setFindWanted(true);
+    return () => {
+      rowListeners.current.delete(listener);
+      if (rowListeners.current.size === 0) setFindWanted(false);
     };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, []);
-
-  // AR-S5 — ⌥0 is All, ⌥1…⌥n the tabs, while the strip is drawn: captured
-  // like the chords above, and only for the digits that have a tab, so ⌥ and
-  // any other digit still reach the pane. QL-D2: a key routed into a pane
-  // whose launcher holds the keys is the launcher's (⌥n launches there), so
-  // the strip yields and leaves that event untouched — and only that one: with
-  // the focus anywhere else the strip keeps its digits.
-  const tabKey = profileSets.map((set) => set.id).join(" ");
-  useEffect(() => {
-    if (!showTabs) return;
-    const ids: (string | null)[] = [null, ...tabKey.split(" ")];
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (!event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
-      if (launcherOwnsKeyEvent(event)) return;
-      // SB-3: nor does it take ⌥-digits from a view that holds the keys
-      if (viewHoldsKeysRef.current) return;
-      const digit = /^Digit([0-9])$/.exec(event.code);
-      if (digit === null) return;
-      const index = Number(digit[1]);
-      if (index >= ids.length) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      setProfileTab(ids[index] ?? null);
+  // QL-D2: the Peek over the stage holds the keys while it is open, as the
+  // find sheet did — its Escape is the Peek's, never a fresh pane's launcher's
+  const holdKeys = useCallback(() => {
+    setMonitorHoldsKeys(true);
+    let held = true;
+    return () => {
+      if (!held) return;
+      held = false;
+      setMonitorHoldsKeys(false);
     };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [showTabs, tabKey]);
+  }, []);
+  // SB-3: read at event time — a view's report lands between renders
+  const readViewHoldsKeys = useCallback(() => viewHoldsKeysRef.current, []);
+  const liveFilters = useHeldWhileSame<LiveFilters>(
+    {
+      desks:
+        devices.length > 1
+          ? devices.map((device) => ({
+              id: device.id,
+              name: device.name,
+              os: device.os,
+              here: device.here,
+              note: choiceNote(device),
+              quiet: device.state !== "live",
+            }))
+          : [],
+      desk: deviceChosen,
+      profiles: showTabs ? tabs : [],
+      profile: chosenId ?? null,
+    },
+    JSON.stringify([devices, deviceChosen, showTabs ? tabs : null, chosenId ?? null]),
+  );
+  const transcripts = door?.transcripts ?? NO_TRANSCRIPTS;
+  const findDoor = useMemo<GodviewFindDoor>(
+    () => ({
+      rows: readRows,
+      subscribeRows,
+      transcripts,
+      select: (rowId) => commands.select(rowId),
+      filters: liveFilters,
+      setDesk: setDeviceChoice,
+      setProfile: setProfileTab,
+      holdKeys,
+      viewHoldsKeys: readViewHoldsKeys,
+    }),
+    [readRows, subscribeRows, transcripts, commands, liveFilters, holdKeys, readViewHoldsKeys],
+  );
+  useEffect(() => {
+    if (!publishesFind) return;
+    publishGodviewFindDoor(findDoor);
+  }, [publishesFind, findDoor]);
+  useEffect(() => {
+    if (!publishesFind) return;
+    return () => publishGodviewFindDoor(null);
+  }, [publishesFind]);
 
   // M195 — the bar's inputs, each the same object while what it says is the
-  // same, so `MonitorBar` renders for a count, a desktop, a tab, the view, the
-  // theme, Find or System control — never for a publish that moved none.
+  // same, so `MonitorBar` renders for a count, the view, the theme or System
+  // control — never for a publish that moved none.
   const { idle, working, blocked } = counts;
   const barCounts = useMemo(() => ({ idle, working, blocked }), [idle, working, blocked]);
-  const barDevices = useHeldWhileSame(devices, JSON.stringify(devices));
-  const barTabs = useHeldWhileSame(tabs, JSON.stringify(tabs));
   const selectView = useCallback((viewId: string) => onSelectView?.(viewId), [onSelectView]);
-  const toggleFind = useCallback(() => setFindOpen((current) => !current), []);
   const toggleTuning = useCallback(() => onToggleTuning?.(), [onToggleTuning]);
   const barLeading = useMemo(
     () => (
@@ -683,53 +788,22 @@ export function GodviewMonitor({
     ),
     [reserveWindowControls, notice],
   );
-  const barCentre = useMemo(
-    () =>
-      showTabs || barDevices.length > 1 ? (
-        <>
-          {barDevices.length > 1 ? (
-            <DeviceFilterChip
-              devices={barDevices}
-              selected={deviceChosen}
-              onSelect={setDeviceChoice}
-              onOpenChange={setDeviceMenuOpen}
-            />
-          ) : null}
-          {showTabs ? (
-            <ProfileTabs
-              tabs={barTabs}
-              selected={chosenId ?? null}
-              onSelect={setProfileTab}
-              shortcuts
-            />
-          ) : null}
-        </>
-      ) : undefined,
-    [showTabs, barDevices, deviceChosen, barTabs, chosenId],
-  );
+  // GV-D3 (P2): the desktops and the profiles left the bar's centre for
+  // search's scope row, and PK2 (a) took FIND off its end: the frame's search
+  // button stands at the head's right end (DESIGN.md §8 "Search — the Peek"),
+  // beside System control.
   const barTrailing = useMemo(
     () => (
-      <>
-        <BarControl
-          mark="find"
-          label="FIND"
-          shortcut="⌘F"
-          ariaLabel="Find an agent by what was said"
-          {...(findOpen ? { controls: "vf-find-sheet" } : {})}
-          on={findOpen}
-          onClick={toggleFind}
-        />
-        <BarControl
-          mark="tune"
-          label="SYSTEM CONTROL"
-          ariaLabel="System control"
-          controls="vf-godview-tweak-panel"
-          on={tuningOpen}
-          onClick={toggleTuning}
-        />
-      </>
+      <BarControl
+        mark="tune"
+        label="SYSTEM CONTROL"
+        ariaLabel="System control"
+        controls="vf-godview-tweak-panel"
+        on={tuningOpen}
+        onClick={toggleTuning}
+      />
     ),
-    [findOpen, tuningOpen, toggleFind, toggleTuning],
+    [tuningOpen, toggleTuning],
   );
 
   return (
@@ -744,24 +818,7 @@ export function GodviewMonitor({
           theme={theme}
           onThemeChange={noThemeSwitch}
           leading={barLeading}
-          {...(barCentre !== undefined ? { centre: barCentre } : {})}
           trailing={barTrailing}
-        />
-      </ChromeBoundary>
-
-      {/* Find tries again for the agents it searches, as Godview's does (M192);
-          the bar above and the profile notice read only the window's own
-          state, so they stay unavailable until the monitor mounts again. */}
-      <ChromeBoundary name="Find" retryKey={findAgents}>
-        <FindSheet
-          open={findOpen}
-          agents={findAgents}
-          history={door?.history ?? NO_HISTORY}
-          onClose={closeFind}
-          onSelect={(agent: FindAgent) => {
-            commands.select(agent.id);
-            setFindOpen(false);
-          }}
         />
       </ChromeBoundary>
 
@@ -780,7 +837,7 @@ export function GodviewMonitor({
           stage={stageGeometry}
           theme={monitorTheme}
           parameters={parameters}
-          capabilities={capabilities}
+          capabilities={viewCapabilities}
           commands={commands}
           onReport={onReport}
           scheduler={frameScheduler}
@@ -798,7 +855,9 @@ export function GodviewMonitor({
                 />
               </span>
               <b>No sessions under {emptyUnder.label}</b>
-              <span>This tab shows sessions using this profile.</span>
+              <span>
+                Only this profile's sessions show — the search button's × shows them all again.
+              </span>
             </div>
           </ChromeBoundary>
         ) : null}

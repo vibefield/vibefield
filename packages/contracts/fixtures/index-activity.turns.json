@@ -1,0 +1,32 @@
+{
+  "sinceMs": 1791460800000,
+  "untilMs": 1791547200000,
+  "fidelity": "turns",
+  "partial": false,
+  "sessions": [
+    {
+      "sessionId": "s-live",
+      "nativeSessionId": "9a1d-live",
+      "kind": "claude-code",
+      "provider": "claude",
+      "projectId": "p1",
+      "cwd": "/Users/me/code/billing-api",
+      "startedAt": 1791536400000,
+      "activity": { "firstAt": 1791536400000, "lastAt": 1791547200000 },
+      "turns": [
+        {
+          "kind": "human_turn",
+          "firstAt": 1791536400000,
+          "lastAt": 1791540000000,
+          "silences": [{ "fromMs": 1791537000000, "toMs": 1791539400000 }]
+        },
+        { "kind": "human_turn", "firstAt": 1791545400000, "lastAt": 1791547200000 },
+        {
+          "kind": "a_group_kind_from_a_newer_rosetta",
+          "firstAt": 1791546000000,
+          "lastAt": 1791546100000
+        }
+      ]
+    }
+  ]
+}

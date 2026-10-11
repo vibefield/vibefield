@@ -1,0 +1,10 @@
+{
+  "sinceMs": 1791460800000,
+  "untilMs": 1791547200000,
+  "readAt": 1791547200000,
+  "fidelity": "bounds",
+  "state": "unavailable",
+  "detail": "The agent index is starting.",
+  "live": [],
+  "ended": []
+}

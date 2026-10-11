@@ -15,6 +15,7 @@ import { useSettingsChord } from "../src/field/me-menu-wiring";
 import {
   isClipboardTrayChord,
   isCommandPaletteChord,
+  isSearchChord,
   listenForProductChord,
   PRODUCT_CHORDS,
 } from "../src/field/product-chords";
@@ -60,6 +61,8 @@ describe("the product chords (GT-D21)", () => {
       "super+shift+v",
       // One Frame FR-2 (§11): Godview's New terminal, over ghostty's new_tab
       "super+t",
+      // the Peek (GV-D10, 2026-10-08): search, over ghostty's start_search
+      "super+f",
       // One Frame FR-1 (FC-D4): the four views, over ghostty's goto_tab
       "super+1",
       "super+2",
@@ -106,6 +109,36 @@ describe("the product chords (GT-D21)", () => {
         repeat: false,
       }),
     ).toBe(false);
+  });
+
+  it("⌘F is search's — Ctrl+F off the Mac — never with ⇧ or ⌥, never the other platform's modifier, and SAYS when it is kept (K4)", () => {
+    const key = (init: Partial<KeyboardEvent>) => ({
+      key: "f",
+      metaKey: false,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      repeat: false,
+      ...init,
+    });
+    expect(isSearchChord(key({ metaKey: true }), "mac")).toBe(true);
+    expect(isSearchChord(key({ key: "F", metaKey: true }), "mac")).toBe(true);
+    expect(isSearchChord(key({ ctrlKey: true }), "mac")).toBe(false);
+    expect(isSearchChord(key({ metaKey: true, shiftKey: true }), "mac")).toBe(false);
+    expect(isSearchChord(key({ metaKey: true, altKey: true }), "mac")).toBe(false);
+    expect(isSearchChord(key({ ctrlKey: true }), "other")).toBe(true);
+    expect(isSearchChord(key({ metaKey: true }), "other")).toBe(false);
+    expect(isSearchChord(key({ key: "g", metaKey: true }), "mac")).toBe(false);
+    const search = PRODUCT_CHORDS.find((chord) => chord.id === "search");
+    expect(search).toMatchObject({
+      trigger: "super+f",
+      label: "Search",
+      when: "while History or Godview is the view",
+    });
+    // the chords kept always say no when
+    expect(PRODUCT_CHORDS.filter((chord) => chord.when !== undefined).map((c) => c.id)).toEqual([
+      "search",
+    ]);
   });
 
   it("hears ⌘K over a focused pane, and the pane never sees it", () => {

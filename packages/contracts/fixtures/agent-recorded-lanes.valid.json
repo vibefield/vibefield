@@ -1,0 +1,69 @@
+{
+  "sinceMs": 1791460800000,
+  "untilMs": 1791547200000,
+  "readAt": 1791547200000,
+  "fidelity": "turns",
+  "state": "complete",
+  "live": [
+    {
+      "id": "pty-7",
+      "seamAt": 1791546600000,
+      "spans": [
+        {
+          "kind": "worked",
+          "from": 1791536400000,
+          "to": 1791537000000
+        },
+        {
+          "kind": "unrecorded",
+          "from": 1791537000000,
+          "to": 1791539400000
+        },
+        {
+          "kind": "worked",
+          "from": 1791539400000,
+          "to": 1791540000000
+        },
+        {
+          "kind": "quiet",
+          "from": 1791540000000,
+          "to": 1791545400000
+        },
+        {
+          "kind": "worked",
+          "from": 1791545400000,
+          "to": 1791546600000
+        }
+      ]
+    }
+  ],
+  "ended": [
+    {
+      "id": "past:claude:4f6c1c2e-ended",
+      "provider": {
+        "id": "claude",
+        "label": "Claude Code"
+      },
+      "title": "Split the invoice writer",
+      "profileSet": "native",
+      "project": {
+        "name": "billing-api",
+        "seq": 3
+      },
+      "device": {
+        "id": "01JDESK",
+        "name": "Studio",
+        "os": "mac"
+      },
+      "startedAt": 1791536400000,
+      "endedAt": 1791541800000,
+      "spans": [
+        {
+          "kind": "worked",
+          "from": 1791536400000,
+          "to": 1791541800000
+        }
+      ]
+    }
+  ]
+}

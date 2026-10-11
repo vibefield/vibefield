@@ -287,12 +287,24 @@ export interface GodviewMonitorFacts {
    * reported, whatever its state); `-1` while no column is mounted. A count,
    * not a judgement: an empty batch is the ordinary answer of a fresh daemon. */
   usageTiles: number;
-  /** AR-5: `open` · `closed` — the find sheet, the chord's witness. */
-  findSheet: string;
-  /** AR-S5: the chosen profile tab's id — `all` while All is chosen or no
-   * strip is drawn — and how many rows it leaves on the stage unreceded. */
+  /** AR-S5: the chosen profile's id — `all` while every profile is shown or
+   * there is no choice to make — and how many rows it leaves on the stage
+   * unreceded. (P2: the profiles are chosen in search's Live now, GV-D3; the
+   * find sheet's `findSheet` left with the sheet — the Peek is the frame's.) */
   profileTab: string;
   shownAgents: number;
+  /**
+   * TL: the record's past as this stage lends it to the mounted view
+   * (`capabilities.history`) — the lent object's own state, or `absent` while
+   * nothing is lent: the view declares no `history`, the first answer has not
+   * come, or this desktop keeps no record (the door's NOT_FOUND `no-record`).
+   * `endedLanes` counts the ended runs in it, after the scope row's desktop
+   * narrowed them; 0 while nothing is lent. Read off what the host lends, never
+   * off the view's DOM (MV-5's rule): a view that drew nothing for a lent past
+   * and a host that lent none are different failures.
+   */
+  history: "absent" | "complete" | "partial" | "unavailable";
+  endedLanes: number;
   /**
    * AR-7: the fold's rows, one per run, as this stage received them — every
    * row, drawn or not. The counts above say how many; this says WHICH, and

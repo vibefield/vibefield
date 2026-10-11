@@ -10,6 +10,7 @@ import { hostProfileSetFrom, hostRunFromSummary, isUrgentChange } from "../src/a
 import { managedSummary as summary } from "./agent-field-summary";
 import {
   floorTerminal,
+  NOW0,
   nativeSet,
   profileSetsFrame,
   stateOf,
@@ -331,6 +332,95 @@ describe("the hosted backend — the model's rows for the fold's fixtures", () =
       { profileId: "claude-native", providerLabel: catalog.entry("claude")?.label, loggedIn: true },
     ]);
     expect(set.isDefault).toBe(true);
+  });
+});
+
+describe("the hosted backend — the record's past (TL, B-D6 (a))", () => {
+  it("joins a fold run with the record by its provider and native id: its past up to statusSince, our gone run ended, a stranger's session none", async () => {
+    const MIN = 60_000;
+    const asked: unknown[] = [];
+    const monitor = await testMonitor({
+      summaries: [working],
+      history: {
+        async read(window, options) {
+          asked.push({ window, silenceMs: options.silenceMs });
+          return {
+            fidelity: "turns",
+            partial: false,
+            sessions: [
+              {
+                // the fold's run: `kind` is puppeteer's provider id, `sessionId` the native id
+                provider: { id: "claude", label: "Claude Code" },
+                nativeSessionId: "run-working-native",
+                firstAt: T0 - 60 * MIN,
+                lastAt: T0 + 5 * MIN,
+                turns: [{ firstAt: T0 - 60 * MIN, lastAt: T0 - 30 * MIN }],
+              },
+              {
+                provider: { id: "claude", label: "Claude Code" },
+                nativeSessionId: "gone-native",
+                firstAt: T0 - 120 * MIN,
+                lastAt: T0 - 90 * MIN,
+                projectKey: "/w/gone",
+                turns: [{ firstAt: T0 - 120 * MIN, lastAt: T0 - 90 * MIN }],
+              },
+              {
+                // a session this runtime never ran (another terminal app): no lane
+                provider: { id: "claude", label: "Claude Code" },
+                nativeSessionId: "stranger-native",
+                firstAt: T0 - 20 * MIN,
+                lastAt: T0 + 5 * MIN,
+                turns: [{ firstAt: T0 - 20 * MIN, lastAt: T0 + 5 * MIN }],
+              },
+            ],
+            runs: [
+              {
+                provider: { id: "claude", label: "Claude Code" },
+                nativeSessionId: "gone-native",
+                runtimeRunId: "run-gone",
+                projectKey: "/w/gone",
+                title: "Ship the gone thing",
+              },
+            ],
+          };
+        },
+      },
+    });
+    const row = monitor.row("run-working");
+    const window = { sinceMs: NOW0 - 24 * 60 * MIN, untilMs: NOW0 };
+    const past = (await monitor.service.readPast(window))!;
+    expect(asked).toEqual([{ window, silenceMs: 15 * MIN }]);
+    expect(past.live).toEqual([
+      {
+        id: row.id,
+        seamAt: row.statusSince,
+        spans: [
+          { kind: "worked", from: T0 - 60 * MIN, to: T0 - 30 * MIN },
+          { kind: "quiet", from: T0 - 30 * MIN, to: row.statusSince },
+        ],
+      },
+    ]);
+    expect(past.ended).toMatchObject([
+      {
+        id: "past:claude:gone-native",
+        title: "Ship the gone thing",
+        project: { name: "gone" },
+        device: { id: "this-device", self: true },
+        spans: [{ kind: "worked", from: T0 - 120 * MIN, to: T0 - 90 * MIN }],
+      },
+    ]);
+    // read, never dealt: the gone run's key was never dealt here, so no sequence and no write
+    expect(past.ended[0]?.project).not.toHaveProperty("seq");
+    expect(monitor.identity.entries().has("/w/gone")).toBe(false);
+    monitor.service.dispose();
+  });
+
+  it("with no record source there is no past to lend at all (v2 item 9)", async () => {
+    const monitor = await testMonitor({ summaries: [working] });
+    await expect(
+      monitor.service.readPast({ sinceMs: NOW0 - 60_000, untilMs: NOW0 }),
+    ).resolves.toBeUndefined();
+    monitor.service.dispose();
   });
 });
 

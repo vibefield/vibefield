@@ -1,5 +1,17 @@
 import { z } from "zod";
-import { AgentProviderId, IndexCatalogSession, IndexCatalogSource } from "./agent-index";
+import {
+  AgentProviderId,
+  IndexCalendarDay,
+  IndexCatalogSession,
+  IndexCatalogSource,
+  IndexContribution,
+  IndexHeatmapDay,
+  IndexHourTotal,
+  IndexModelDay,
+  IndexModelHour,
+  IndexSearchSource,
+} from "./agent-index";
+import { PlaceRef, ProjectKey } from "./project-places";
 import { PROJECT_DOORS } from "./registries";
 import { RowsSubscribeParams, rowsDelta, rowsOpen } from "./rows";
 
@@ -16,6 +28,8 @@ import { RowsSubscribeParams, rowsDelta, rowsOpen } from "./rows";
 //                     answers the project it moved into and says `movedTo`
 //   project.sessions  a project's sessions, each joined to its place by the
 //                     longest cwd prefix (§9)
+//   project.figures   PJ-4 — a project's merged figures over every desktop and
+//   project.figuresDay  rosetta project its sessions are filed under (H2)
 //   project.subscribe invalidation pings (`rows`, always empty) carrying the
 //                     key moves as `regrouped {from, to}`
 //   project.intent    an ACT (rename, pin, hide, link, split, dismiss) —
@@ -79,22 +93,6 @@ function refusePaths(value: unknown, ctx: z.RefinementCtx): void {
       path: field.split("."),
     });
 }
-
-/** A place as a reader names it: the device that owns it and its opaque id
- * (`PlaceFacts.placeId`) — never its path (P1). */
-export const PlaceRef = z
-  .object({
-    device: z.string().min(1).max(256),
-    placeId: z.string().min(1).max(256),
-  })
-  .passthrough();
-export type PlaceRef = z.infer<typeof PlaceRef>;
-
-/** A project's key: `r:<record id>` once a record binds, else a provisional
- * `p1:` key (opaque; fieldd `projects/normalize.ts`). Readers compare it,
- * never parse it. */
-export const ProjectKey = z.string().min(1).max(256).regex(/^\S+$/);
-export type ProjectKey = z.infer<typeof ProjectKey>;
 
 /** An anchor as a REQUEST names one (`project.get {anchor}`): a first
  * commit, an identity remote's key, or a place — and never a local-path
@@ -181,6 +179,11 @@ export const ProjectSummary = z
     asOf: z.record(z.string(), z.string().min(1)),
     /** the grouping rule that made it (`GROUPING_VERSION`) */
     groupingVersion: z.number().int().nonnegative(),
+    /** PJ-4 (H4) — the person pinned it (its record's `pinned`); absent: not */
+    pinned: z.boolean().optional(),
+    /** PJ-4 (H4) — the person hid it (its record's `hidden`): listed, folded
+     * under "Hidden" at the list's foot, never dropped; absent: not */
+    hidden: z.boolean().optional(),
   })
   .passthrough();
 export type ProjectSummary = z.infer<typeof ProjectSummary>;
@@ -310,6 +313,118 @@ export const ProjectSessionsResult = z
   .passthrough();
 export type ProjectSessionsResult = z.infer<typeof ProjectSessionsResult>;
 
+// ── project.figures / project.figuresDay ───────────────────────────────────
+//
+// PJ-4 (H2 (a), James 2026-10-09; the survey's A-D3 (a) + (ii); build-pj23.md
+// D11 deferred it here) — ONE merged figure for a project, honest when
+// partial. A project's sessions are filed under rosetta projects on each
+// desktop (rosetta aggregates only per project, its own `/heatmap`, `/usage`,
+// `/contribution`, `/usage/day`); fieldd fans `index.project` /
+// `index.projectDay` out to every (desktop, rosetta project) that holds one of
+// the project's sessions — keyed by BOTH, never a bare rosetta id (two
+// desktops that share a path mint the same one, A4.1) — through `federate`
+// for a peer, and sums what is additive: tokens and costs by day, by model and
+// day, by hour, by model and hour. The contribution rows (one per root
+// session, its subagents folded in) are concatenated, each with the desktop
+// that recorded it.
+//
+// What is EXACT and what is PARTIAL:
+//  - a rosetta project the project holds WHOLE (every session it files on
+//    that desktop is this project's) gives all its figures;
+//  - one it holds in PART — a worktree or folder split into another project
+//    (PJ-L3's split, or a nested place another project holds) — cannot be
+//    cut by day: its daily figures are LEFT OUT and the answer says `partial`
+//    (A-D3 (ii); RO ask (i), a `sessions=` scope on rosetta's routes, when it
+//    bites), while its contribution rows are kept for this project's sessions
+//    only, so the lifetime totals — sums over the project's sessions' rows —
+//    stay exact;
+//  - a desktop that did not answer (asleep, silent, not ready: DS-L8, PJ-L6)
+//    is named in `sources` with its standing, and both kinds of figure are
+//    partial;
+//  - one conversation two desktops both recorded (DS-D10's restored-machine
+//    case) keeps ONE contribution row, and its days — counted on both — make
+//    the daily figures partial.
+
+/** `project.figures` — a project's panels in one answer: the heatmap since
+ * `sinceMs`, its decomposition, every session's contribution. The window and
+ * timezone are `index.project`'s (`offsetMinutes` −840…840). */
+export const ProjectFiguresParams = z
+  .object({
+    key: ProjectKey,
+    sinceMs: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+    offsetMinutes: z.number().int().min(-840).max(840).optional(),
+  })
+  .passthrough()
+  .superRefine(refusePaths);
+export type ProjectFiguresParams = z.infer<typeof ProjectFiguresParams>;
+
+/** One session's contribution, with the desktop whose index recorded it. */
+export const ProjectContribution = IndexContribution.extend({
+  device: z.string().min(1),
+}).passthrough();
+export type ProjectContribution = z.infer<typeof ProjectContribution>;
+
+/** How one desktop took part in a merged figure — search's standing
+ * (`answered` · `building` · `asleep` · `timeout` · `incompatible`), plus how
+ * many of its rosetta projects were asked and how many of those this project
+ * holds only in part (their daily figures are left out). */
+export const ProjectFiguresSource = IndexSearchSource.extend({
+  projects: z.number().int().nonnegative(),
+  split: z.number().int().nonnegative(),
+}).passthrough();
+export type ProjectFiguresSource = z.infer<typeof ProjectFiguresSource>;
+
+export const ProjectFiguresResult = z
+  .object({
+    /** the project answered — the asked key, or the one it moved into */
+    key: ProjectKey,
+    movedTo: ProjectKey.optional(),
+    heatmap: z.array(IndexHeatmapDay),
+    usage: z
+      .object({ models: z.array(IndexModelDay), hours: z.array(IndexHourTotal) })
+      .passthrough(),
+    contribution: z.array(ProjectContribution),
+    /** every desktop the project has a place on, and how it took part */
+    sources: z.array(ProjectFiguresSource),
+    /** the DAILY figures (heatmap, usage) are not the whole: a desktop did
+     * not answer, a rosetta project is held in part, or one conversation was
+     * recorded twice */
+    partial: z.boolean(),
+    /** the LIFETIME figures (the contribution rows) are not the whole: a
+     * desktop did not answer, or the rows were cut (`clipped`). A split never
+     * makes them partial */
+    lifetimePartial: z.boolean(),
+    /** SP-D13 — a tailnet caller's rows cut at its bound */
+    clipped: z.boolean(),
+  })
+  .passthrough();
+export type ProjectFiguresResult = z.infer<typeof ProjectFiguresResult>;
+
+/** `project.figuresDay` — one day of a project's hours by model (the
+ * heatmap's drill-down), summed over the same parts. */
+export const ProjectFiguresDayParams = z
+  .object({
+    key: ProjectKey,
+    day: IndexCalendarDay,
+    offsetMinutes: z.number().int().min(-840).max(840).optional(),
+  })
+  .passthrough()
+  .superRefine(refusePaths);
+export type ProjectFiguresDayParams = z.infer<typeof ProjectFiguresDayParams>;
+
+export const ProjectFiguresDayResult = z
+  .object({
+    key: ProjectKey,
+    movedTo: ProjectKey.optional(),
+    day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    models: z.array(IndexModelHour),
+    sources: z.array(ProjectFiguresSource),
+    /** as `project.figures`' daily `partial` */
+    partial: z.boolean(),
+  })
+  .passthrough();
+export type ProjectFiguresDayResult = z.infer<typeof ProjectFiguresDayResult>;
+
 // ── project.subscribe ─────────────────────────────────────────────────────
 
 /** `project.subscribe` — invalidation pings for a visible projects page: a
@@ -330,6 +445,14 @@ export const ProjectChangesDelta = rowsDelta(z.never())
     regrouped: z.array(ProjectRegrouped).optional(),
     /** which desktops' catalogs moved, as a hint */
     devices: z.array(z.string().min(1)).optional(),
+    /** PJ-4 — which catalog tables moved (`INDEX_CATALOG_TABLES`' names, an
+     * open vocabulary), as a hint, when NOTHING ELSE did
+     * since `since`: a page that holds a table no ping names keeps it (the
+     * History room re-pages its threads only when `threads` moved, AR-8 L1).
+     * Absent when the grouping's answer moved too, or a desktop's standing —
+     * a reader then re-asks everything it shows. A table this reader does not
+     * know is read as "everything moved". */
+    tables: z.array(z.string().min(1)).optional(),
   })
   .passthrough();
 export type ProjectChangesDelta = z.infer<typeof ProjectChangesDelta>;

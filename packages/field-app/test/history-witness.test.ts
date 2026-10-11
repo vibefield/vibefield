@@ -267,7 +267,9 @@ async function realDesktop(
   shell.connect();
   cleanup.push(() => shell.close());
   const minted = (await shell.request("system.mintWindowToken", {
-    scopes: ["index.read", "index.search", "index.manage"],
+    // PJ-4 — History lists fieldd's projects: the window's `project.read`
+    // (the product's window token carries it, electron-shell bootstrap.ts)
+    scopes: ["index.read", "index.search", "index.manage", "project.read"],
     label: "window-history-witness",
     rendererParticipant: {
       participantId: "renderer:hxw:1",
@@ -321,7 +323,7 @@ describe.skipIf(
   REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BIN) || !existsSync(GROUNDTRUTH),
 )("AR-8c — a real session streams in the room's ports; fieldd's door carries none of it", () => {
   it("the catalog lists it over the index doors, the ticket's grant streams its body from rosettad, and no fieldd frame holds a byte of it", async () => {
-    const { window } = await realDesktop();
+    const { daemon, window } = await realDesktop();
     const sid = await until(
       async () =>
         IndexSessionsResult.parse(
@@ -353,6 +355,54 @@ describe.skipIf(
     );
     expect(row.id).toBe(sid);
     expect(row.runtime_id).toBe("claude-code");
+    // PJ-4 (A-D4, H1) — fieldd joins the session to its PJ project and the
+    // room lists that project under the same key: the window groups nothing.
+    // A source run has no files worker (workspace/launch.ts: UNCONFIGURED), so
+    // the session's place is published through the scanner's own write path
+    // (the catalog's `setPlaces`, as the PJ-3 phone witness does); the
+    // grouping, the join, the doors, the pings and the room's re-read are all
+    // the real ones.
+    const rosettaProject = await until(
+      () =>
+        daemon.indexCatalog.projects.rows().find((project) => project.rootPaths.length > 0) ?? null,
+      "the session's rosetta project in the catalog",
+      30_000,
+    );
+    daemon.indexCatalog.setPlaces(
+      new Map([
+        [
+          rosettaProject.projectId,
+          [
+            {
+              placeId: "pl_witness",
+              path: rosettaProject.rootPaths[0] as string,
+              aliases: [],
+              kind: "project",
+              caseless: true,
+              exists: true,
+              mounted: true,
+              git: false,
+              remotes: [],
+              samples: [],
+              hits: [],
+              observedAt: Date.now(),
+            },
+          ],
+        ],
+      ]),
+    );
+    daemon.projects.regroupNow();
+    const filed = await until(
+      () => {
+        const now = meta as MetaState | null;
+        const mine = now?.sessions.find((session) => session.id === sid);
+        const project = now?.projects.find((p) => p.id === mine?.project_id);
+        return mine?.project_id != null && project !== undefined ? project : null;
+      },
+      "the session filed under a listed project",
+      60_000,
+    );
+    expect(filed.id).toMatch(/^(p1|r):/);
     const status = await ports.catalog.status();
     expect(status.ingest?.phase).toBeDefined();
 
@@ -394,11 +444,16 @@ describe.skipIf(
     // …because fieldd answered lists, facts and a ticket — never a transcript read
     const asked = new Set(doorCalls);
     expect([...asked].sort()).toEqual(
-      expect.arrayContaining(["index.changes.subscribe", "index.openTicket", "index.sessions"]),
+      expect.arrayContaining([
+        "index.openTicket",
+        "index.sessions",
+        "project.list",
+        "project.subscribe",
+      ]),
     );
     for (const method of asked) {
       expect(method).toMatch(
-        /^index\.(changes\.subscribe|projects|sessions|threads|status|openTicket|project|projectDay)$/,
+        /^(index\.(sessions|threads|status|openTicket)|project\.(list|subscribe|figures|figuresDay))$/,
       );
     }
     console.log(
@@ -816,7 +871,7 @@ describe.skipIf(REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BI
       expect([...asked]).toEqual(expect.arrayContaining(["index.threads", "index.openTicket"]));
       for (const method of asked) {
         expect(method).toMatch(
-          /^index\.(changes\.subscribe|projects|sessions|threads|status|openTicket|search)$/,
+          /^(index\.(sessions|threads|status|openTicket|search)|project\.(list|subscribe|figures|figuresDay))$/,
         );
       }
       console.log(

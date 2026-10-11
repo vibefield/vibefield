@@ -97,8 +97,8 @@ export function typedAgentStubSource(calls: string): string {
   return `#!/usr/bin/env node
 "use strict";
 // The godview smoke's typed-agent stub: a stand-in written by the smoke, never
-// an agent. It records every run of itself — its arguments and the NAMES of
-// its environment, never a value — and, run as a managed session, waits at
+// an agent. It records every run of itself — its arguments, its folder and the
+// NAMES of its environment, never a value — and, run as a managed session, waits at
 // its prompt until \`exit\` or the end of its input.
 const { appendFileSync } = require("node:fs");
 const { isatty } = require("node:tty");
@@ -109,6 +109,7 @@ appendFileSync(
     argv,
     envKeys: Object.keys(process.env).sort(),
     tty: isatty(0) && isatty(1),
+    cwd: process.cwd(),
     pid: process.pid,
     ppid: process.ppid,
   }) + "\\n",
@@ -145,6 +146,9 @@ export interface TypedAgentCall {
   envKeys: string[];
   /** its input and output were a terminal */
   tty: boolean;
+  /** the folder it ran in (resolved, as the OS reports it) — PJ-4's New
+   * agent lands in the folder History named */
+  cwd?: string;
   pid: number;
   ppid: number;
 }

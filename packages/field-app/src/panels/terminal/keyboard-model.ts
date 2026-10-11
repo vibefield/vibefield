@@ -488,6 +488,16 @@ const PLATFORM_WORDS: Partial<Record<PlatformAction, { text: string; runs: boole
   reload_config: { text: "Reloads the config", runs: true },
 };
 
+/** A kept chord's sentence on the page: what VibeField does with it and,
+ * for a chord kept only sometimes (the Peek's ⌘F), when — Ghostty's default
+ * never runs on it then. Honest about the when, never an always. */
+export function reservedWords(chord: ProductChord, defaultAction: string | null): string {
+  const ghostty = actionLabel(defaultAction ?? "").toLowerCase();
+  return chord.when === undefined
+    ? `VibeField: ${chord.label} — Ghostty's ${ghostty} never runs on this chord.`
+    : `VibeField: ${chord.label}, ${chord.when} — Ghostty's ${ghostty} never runs on this chord then.`;
+}
+
 /** How a row's route reads on the page. */
 export function routeWords(row: KeyboardRow): { text: string; runs: boolean } {
   if (row.action === null) return { text: "Unbound", runs: false };

@@ -166,11 +166,11 @@ describe("UI system ownership boundaries", () => {
     expect(fixture).not.toContain("getHost");
   });
 
-  it("starts History's layer at the head band's foot and ends it at the reserve, so the room's sheet and dialogs never cover the band (the search interim, 2026-10-04)", () => {
-    // The room's search sheet is top-attached to the layer it portals into, and
-    // its dialogs centre in it: the band 0–52 is the head's and keeps only the
-    // window's lights (DESIGN.md §8 "History"). vitest loads no CSS, so the rule
-    // is held here and its geometry by the catalog's photographs.
+  it("starts History's layer at the head band's foot and ends it at the reserve, so the room's dialogs never cover the band (2026-10-04; the Peek's button, 2026-10-08)", () => {
+    // The room's dialogs centre in the layer they portal into: the band 0–52 is
+    // the head's and keeps the window's lights and the frame's search button
+    // (DESIGN.md §8 "History"). vitest loads no CSS, so the rule is held here
+    // and its geometry by the catalog's photographs.
     const css = source("history/history-room-view.css");
     const rule = css.match(/^\.vf-history-layers \{([^}]*)\}/m)?.[1] ?? "";
     expect(rule).toContain("inset: var(--vf-history-head) 0 var(--vf-history-reserve) 0;");
@@ -226,6 +226,82 @@ describe("UI system ownership boundaries", () => {
     const view = source("history/HistoryRoomView.tsx");
     expect(view).toMatch(/<HistoryRoom\s/u);
     expect(view).not.toMatch(/className="(?:ah-|tr-)/);
+  });
+
+  it("keeps the Peek's fixture an ADAPTER — the shipping controller over a port drawn from the room's demo, never its markup (2026-10-08)", () => {
+    // The catalog stands in for what the frame supplies — the Peek's port, the
+    // open surface, the place a pick opens — and draws the plate's view by the
+    // product's own recede rule. Never the Peek's classes, never a stylesheet,
+    // never the product's doors or fieldd's client.
+    const preview = source("design-system/PeekPreview.tsx");
+    const fixtures = source("design-system/peek-fixtures.ts");
+    // P2: Live now's plate — the same controller in Godview over the door the
+    // monitor publishes, as a fixture holds it; never the live pane's terminals
+    const live = source("design-system/peek-live-fixtures.ts");
+    expect(preview).toContain("peekLiveFixtureDoor");
+    expect(preview).not.toContain("LivePeekPane");
+    expect(preview).toMatch(/<Peek\s/u);
+    expect(preview).toMatch(/<HistoryRoomView\s/u);
+    expect(preview).toContain("peekFixturePort");
+    expect(preview).toContain("data-peek-recede");
+    expect(fixtures).toContain('from "@rosetta/room/fixtures"');
+    for (const file of [preview, fixtures, live]) {
+      expect(file).not.toMatch(/className="(?:vf-peek|ah-|tr-|vf-history)/);
+      expect(file).not.toContain("<style");
+      expect(file).not.toContain("getHost");
+      expect(file).not.toContain("useFielddClient");
+      expect(file).not.toContain("peekPortOver");
+      expect(file).not.toContain("openHistoryAt");
+    }
+  });
+
+  it("recedes the field under the Peek and holds it out of reach — at rest no transform, so no stacking context (2026-10-08)", () => {
+    // DESIGN.md §6: the view AND the frame recede to 0.98 about 50% 46% over
+    // 420ms on the island curve while the Peek stands; its scrim and popup are
+    // drawn on the document's body, outside the field. A resting transform
+    // would bury the head under the drag strip (BootRoot, 2026-07-22).
+    const field = source("field.tsx");
+    expect(field).toContain(
+      '<div className="field-recede" data-peek-recede={searching ? "true" : "false"}>',
+    );
+    expect(field).toContain("inert={searching}");
+    // What recedes is what you see — the still and the chrome, the cover with
+    // it — and never the desk's own box (DK-15): the keyed scene comes BEFORE
+    // the recede's box and outside it; the still and the chrome inside it; the
+    // field's wrapper carries no recede of its own.
+    const wrap = field.slice(field.indexOf('className="field-wrap"'));
+    const at = (needle: string): number => wrap.indexOf(needle);
+    expect(wrap.slice(0, at('className="field-scene"'))).not.toContain("data-peek-recede");
+    expect(at('className="field-scene"')).toBeGreaterThan(-1);
+    expect(at('className="field-scene"')).toBeLessThan(at('className="field-recede"'));
+    expect(at("<CoverStill")).toBeGreaterThan(at('className="field-recede"'));
+    expect(at("<ChromeLayer")).toBeGreaterThan(at("<CoverStill"));
+    // At rest the box is only a box: no transform, z-index, opacity, filter,
+    // isolation, containment or will-change — so no stacking context, and the
+    // chrome stacks as the field's own children did — and it takes no pointer
+    // while its children take theirs back at NO specificity (a child's own
+    // `pointer-events` still rules).
+    const base = source("styles/base.css");
+    const box = base.match(/^\.field-recede \{([^}]*)\}/m)?.[1] ?? "";
+    expect(box).toContain("position: absolute;");
+    expect(box).toContain("inset: 0;");
+    expect(box).toContain("pointer-events: none;");
+    expect(box).not.toMatch(/transform|z-index|opacity|filter|isolation|contain|will-change/);
+    expect(base).toMatch(/^:where\(\.field-recede\) > \* \{\s*pointer-events: auto;\s*\}/m);
+    const css = source("frame/peek.css");
+    const resting = css.match(/^\[data-peek-recede\] \{([^}]*)\}/m)?.[1] ?? "";
+    expect(resting).toContain("transform-origin: 50% 46%;");
+    expect(resting).toContain("transition: transform 420ms var(--vf-ease-island);");
+    expect(resting).not.toMatch(/transform:/);
+    const receding = css.match(/^\[data-peek-recede="true"\] \{([^}]*)\}/m)?.[1] ?? "";
+    expect(receding).toContain("transform: scale(0.98);");
+    // the scrim and the popup: the search tokens, the popup's corners and ring
+    expect(css).toContain("background: var(--vf-search-scrim);");
+    expect(css).toContain("backdrop-filter: blur(18px) saturate(0.9);");
+    expect(css).toContain("var(--vf-shadow-search)");
+    expect(css).toContain("animation: vf-peek-pop 260ms var(--vf-ease-island);");
+    const peek = source("frame/Peek.tsx");
+    expect(peek).toContain("container === undefined ? document.body : container");
   });
 
   it("keeps the head's fixture an ADAPTER — the doors' facts, never the head's markup (FR-3)", () => {
@@ -392,7 +468,6 @@ describe("UI system ownership boundaries", () => {
     const paneFrame = source("design-system/PaneFramePreview.tsx");
     const paneLauncher = source("design-system/PaneLauncherPreview.tsx");
     const switchScene = source("design-system/SwitchPreview.tsx");
-    const deviceFilter = source("design-system/DeviceFilterPreview.tsx");
     const viewFrame = source("design-system/ViewFramePreview.tsx");
     const line = source("design-system/ComposerLinePreview.tsx");
     const head = source("design-system/HeadPreview.tsx");
@@ -403,7 +478,8 @@ describe("UI system ownership boundaries", () => {
     const bar = source("design-system/SelectionBarPreview.tsx");
     const pegboard = source("design-system/PegboardPreview.tsx");
     const peers = source("design-system/PeersPreview.tsx");
-    const catalog = `${peers}\n${pegboard}\n${bar}\n${history}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
+    const peek = source("design-system/PeekPreview.tsx");
+    const catalog = `${peers}\n${pegboard}\n${bar}\n${history}\n${peek}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -444,9 +520,6 @@ describe("UI system ownership boundaries", () => {
       "PaneFrameChrome",
       "PaneLauncherPreview",
       "PaneLauncherChrome",
-      // DS-3 — the device filter's shipping chip, on fixtures, never a copy
-      "DeviceFilterPreview",
-      "DeviceFilterChip",
       // One Frame FR-1 — the view frame: the track, the cover, History's room
       "ViewFramePreview",
       "ViewsTrackView",
@@ -456,9 +529,10 @@ describe("UI system ownership boundaries", () => {
       "HistoryPreview",
       "HistoryRoomView",
       "HistoryResumePlate",
-      // …and its search until the Peek lands — a search held, the room's own
-      // sheet a press on the pill away (the search interim, 2026-10-04)
-      "HistorySearchPlate",
+      // …and its search, the frame's Peek (2026-10-08): the shipping
+      // controller over a fixture port drawn from the same room demo
+      "PeekPlate",
+      "Peek",
       // …and the two faces before the room, as they ship (2026-10-04)
       "HistoryOpeningState",
       "HistoryOpenFailedState",
@@ -528,7 +602,10 @@ describe("UI system ownership boundaries", () => {
     // (AR-8c): the room, a choice with Resume live, unavailable, consent.
     expect(page).toMatch(/<HistoryPreview state="room"/u);
     expect(page).toMatch(/<HistoryResumePlate\s/u);
-    expect(page).toMatch(/<HistorySearchPlate\s/u);
+    // …and a choice that runs here, the line's create saying Jump to (P3)
+    expect(page).toMatch(/<HistoryResumePlate live\s/u);
+    expect(page).toMatch(/<PeekPlate state="closed"/u);
+    expect(page).toMatch(/<PeekPlate state="open"/u);
     expect(page).toMatch(/<HistoryPreview state="unavailable"/u);
     expect(page).toMatch(/<HistoryPreview state="consent"/u);
     // …and the faces before the room (2026-10-04): opening, could not open.
@@ -590,6 +667,8 @@ describe("UI system ownership boundaries", () => {
       "frame/ViewCover.tsx",
       "history/HistoryRoomView.tsx",
       "history/HistoryView.tsx",
+      "frame/Peek.tsx",
+      "frame/PeekView.tsx",
       "frame/Composer.tsx",
       "frame/ComposerLine.tsx",
       "frame/Head.tsx",
@@ -630,6 +709,7 @@ describe("UI system ownership boundaries", () => {
       "frame/head.css",
       "frame/menu.css",
       "frame/status-line.css",
+      "frame/peek.css",
       "field/desk/bar/selection-bar.css",
       "field/desk/pegboard/pegboard.css",
       "field/desk/peers/peers.css",

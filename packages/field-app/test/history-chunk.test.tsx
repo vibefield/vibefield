@@ -8,8 +8,9 @@
  * asks, and while the chunk is on its way the view is the cover's glass with
  * the room's edges saying "Opening History", the line's door already lent;
  * once it lands the room takes the face's place, and from then on it stays.
- * The room's search (the search interim, 2026-10-04) rides the same boundary:
- * no launcher and no key before the room is here, the sheet once it is.
+ * A place the frame's Peek asks for before the room is here (`open-at.ts`,
+ * 2026-10-08) is where the room opens once it lands; the room draws no search
+ * of its own, and no key walks a stepper (the interim's ⌘G retired, K3).
  * (The loader, the boundary and the prefetch: `history-chunk-loader.test.tsx`.)
  */
 import { readFileSync } from "node:fs";
@@ -26,6 +27,7 @@ import { resetGodviewLineDoorForTest, resetHistoryLineDoorForTest } from "../src
 import { ViewFrame } from "../src/frame/ViewFrame";
 import { resetActiveViewForTest } from "../src/frame/view-state";
 import { HistoryView } from "../src/history/HistoryView";
+import { openHistoryAt, resetHistoryOpenAtForTest } from "../src/history/open-at";
 import { type FieldHost, setHost } from "../src/host";
 import { type RendererLogger, setRendererLogger } from "../src/logging";
 
@@ -61,6 +63,7 @@ beforeEach(() => {
   resetActiveViewForTest();
   resetGodviewLineDoorForTest();
   resetHistoryLineDoorForTest();
+  resetHistoryOpenAtForTest();
   publish = null;
   setRendererLogger({
     child: () => ({ error: () => undefined, info: () => undefined }) as unknown as RendererLogger,
@@ -93,22 +96,24 @@ afterEach(() => {
 
 /** fieldd, scripted: the index's doors as AR-8b answers them. */
 function fieldd() {
-  const projects = fixture("index-projects.mesh.json") as { rows: unknown[]; sources: unknown[] };
+  // PJ-4 — History lists fieldd's projects, each session filed by its key
+  const projects = fixture("project-list.valid.json") as { rows: unknown[]; sources: unknown[] };
+  const keyed = fixture("index-sessions.keyed.json") as { rows: unknown[]; sources: unknown[] };
   return {
     status: "ready",
     onStatusChange: () => () => undefined,
     async request(method: string) {
       switch (method) {
-        case "index.projects":
-          return { rows: [projects.rows[0]], sources: projects.sources };
+        case "project.list":
+          return { rows: [projects.rows[0]], sources: projects.sources, groupingVersion: 2 };
         case "index.sessions":
-          return fixture("index-sessions.mesh.json");
+          return { rows: [keyed.rows[0]], sources: keyed.sources };
         case "index.threads":
           return { rows: [] };
         case "index.status":
           return fixture("index-status.valid.json");
-        case "index.project":
-          return { ...fixture("index-project.valid.json"), projectId: "p-4f1c2a9e" };
+        case "project.figures":
+          return fixture("project-figures.valid.json");
         default:
           throw Object.assign(new Error(`${method} is not scripted`), { kind: "NOT_FOUND" });
       }
@@ -123,25 +128,19 @@ function fieldd() {
   };
 }
 
-let surfaceNow: FrameSurface | null = null;
-
 function mount(): void {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
   const client = fieldd();
-  // FieldView's place: the frame's one owner of the open surface, which holds
-  // History's search sheet too while the interim stands.
+  // FieldView's place: the frame's one owner of the open surface.
   function Owner(): ReactElement {
     const [surface, setSurface] = useState<FrameSurface | null>(null);
-    surfaceNow = surface;
     return (
       <FielddProvider client={client as unknown as FielddClient}>
         <ViewFrame
           godview={<div data-testid="godview-content" />}
-          history={(active) => (
-            <HistoryView active={active} surface={surface} onSurfaceChange={setSurface} />
-          )}
+          history={(active) => <HistoryView active={active} />}
           surface={surface}
           onSurfaceChange={setSurface}
         />
@@ -212,10 +211,10 @@ describe("History's room, its own chunk (2026-10-04)", () => {
     const create = host?.querySelector<HTMLButtonElement>(".vf-line-create");
     expect(create?.getAttribute("aria-disabled")).toBe("true");
     expect(create?.title).toContain("choose a session first");
-    // The search interim rides the room's chunk: until it lands there is no
-    // launcher to press, and ⌘G finds no room to walk, so it is left alone.
-    expect(historySlot()?.querySelector(".ah-launcher")).toBeNull();
-    expect(commandG()).toBe(false);
+    // The Peek asks for a place before the room is here (a pick made while
+    // the chunk is on its way): the door holds it for the room.
+    const chosen = (fixture("index-sessions.keyed.json").rows as Array<{ sessionId: string }>)[0];
+    act(() => openHistoryAt({ sessionId: chosen?.sessionId ?? "", timelineId: null }));
 
     // The chunk lands: the room takes the face's place, on the same glass.
     room.open();
@@ -228,28 +227,19 @@ describe("History's room, its own chunk (2026-10-04)", () => {
     expect(historySlot()?.querySelector("[data-face]")).toBeNull();
     expect(historySlot()?.textContent).not.toContain("Opening History");
 
-    // …and with it the room's search: the strip's pill opens the sheet in the
-    // room's layer, on the frame's one value, and Esc closes it.
-    const launcher = await until(
-      () => historySlot()?.querySelector<HTMLButtonElement>(".ah-launcher__open"),
-      "the room's search launcher",
-    );
-    act(() => launcher.click());
-    const sheet = await until(
-      () => historySlot()?.querySelector<HTMLElement>('.vf-history-layers [role="dialog"]'),
-      "the room's search sheet",
-    );
-    expect(surfaceNow).toBe("history-search");
-    act(() => {
-      (sheet.querySelector("input") ?? sheet).dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
-      );
-    });
+    // …and opens where the Peek asked: the session is the room's choice, its
+    // transcript in place of the empty one.
     await until(
-      () => (historySlot()?.querySelector('[role="dialog"]') ? null : true),
-      "the sheet closed by Esc",
+      () =>
+        historySlot()?.querySelector(".ah-col--measure")?.textContent?.includes("No session open")
+          ? null
+          : true,
+      "the room opened at the place asked before it landed",
     );
-    expect(surfaceNow).toBeNull();
+    // The room draws no search of its own — the frame's Peek is History's —
+    // and nothing walks a stepper any more (K3): ⌘G is left alone.
+    expect(historySlot()?.querySelector(".ah-launcher")).toBeNull();
+    expect(commandG()).toBe(false);
 
     // And it stays: out and back says nothing again and asks for nothing.
     to("godview");

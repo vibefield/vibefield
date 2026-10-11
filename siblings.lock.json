@@ -3,7 +3,7 @@
   "siblings": {
     "puppeteer": {
       "path": "../puppeteer",
-      "sha": "594d222b117b433849e72d96e17ea5b8e02b0f04",
+      "sha": "c20a07dd71b83b531972793b07189b722535e096",
       "packages": {
         "@vibecook/puppeteer-runtime": "packages/runtime",
         "@vibecook/puppeteer-builtin-providers": "packages/builtin-providers",
@@ -17,7 +17,7 @@
     "rosetta": {
       "path": "../rosetta-pin",
       "repository": "https://github.com/vibefield/rosetta.git",
-      "sha": "eab2f579d55e02ee270fecee43d51216bc38b30a",
+      "sha": "2a91bf00ad1dc2268f7298ca39d36360765939a5",
       "packages": {
         "@rosetta/protocol": "clients/ts",
         "@rosetta/room": "clients/room"

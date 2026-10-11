@@ -1,5 +1,6 @@
 import type { AccountUsagePort, HistoryPort } from "@vibecook/puppeteer-views";
 import type { AgentProfileSet, DeviceInfo } from "@vibefield/contracts";
+import type { RecordedLanesPort } from "./monitor-history";
 
 export type MonitorFeedState =
   | { state: "no-door" | "loading" | "ready" }
@@ -54,10 +55,13 @@ export interface MonitorDoor {
    * terminal) in the ACTIVE pane. AR-4 — with `replacing`, in the pane that
    * is showing the PTY the session took the place of. */
   mountLocal(sessionId: string, options?: LocalMountOptions): Promise<LocalMountOutcome>;
-  /** AR-5 — the transcript history the find sheet asks (`index.status` /
+  /** AR-5 — rosetta's words, as Find asks them (`index.status` /
    * `index.sessions` / `index.search`), adapted to the views' port. The views
-   * never dial rosettad (AR-D14): the daemon's origin stays in fieldd. */
-  history: HistoryPort;
+   * never dial rosettad (AR-D14): the daemon's origin stays in fieldd.
+   * *P2 (2026-10-09):* the find sheet left; the frame's Peek asks it, through
+   * the find door. Named `transcripts` since — `history` was Find's, and is
+   * not `MonitorCapabilities.history` (the timeline's turn spans, lane tl). */
+  transcripts: HistoryPort;
   /** AR-5 — the account-usage readings the usage column draws
    * (`agents.usage` + its subscription), adapted to the views' port. */
   usage: MonitorUsagePort;
@@ -74,6 +78,11 @@ export interface MonitorDoor {
    * from before the backend, the catalog) draws the stage with no rows and
    * says so (`no-door`). */
   model?: ModelBoardPort;
+  /** TL (B-D6 (a)) — the lanes' past as the backend derives it from the
+   * record (`agent.recordedLanes`), read only while a mounted view asks
+   * (capability `history`, PF6). Optional: a door without it lends no past,
+   * and the views draw runtime state alone. */
+  pastLanes?: RecordedLanesPort;
 }
 
 /** MV-3 — the model board's two verbs (`doors.ts` `modelBoardOver`). The

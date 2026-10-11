@@ -86,6 +86,7 @@ import {
   historyPortOver,
   modelBoardOver,
   profileSetsPortOver,
+  recordedLanesPortOver,
   usagePortOver,
 } from "./monitor/doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
@@ -1127,13 +1128,16 @@ export function GodviewDeck({
       // AR-5 — the find sheet's daemon questions and the usage column's feed,
       // adapted from fieldd's doors to the views' ports (`monitor/doors.ts`).
       // The views never dial rosettad; the daemon's origin stays in fieldd.
-      history: historyPortOver(doorClient),
+      transcripts: historyPortOver(doorClient),
       usage: usagePortOver(doorClient),
       // The profile tabs filter existing sessions; terminal birth is independent.
       profiles: profileSetsPortOver(doorClient),
       // MV-3 (MV-D18) — the model board and the screen's report: the monitor's
       // rows are the backend's, through this window's one door (`model-replica.ts`).
       model: modelBoardOver(doorClient),
+      // TL (B-D6 (a)) — the lanes' past, the backend's, asked only while a
+      // mounted view asks for it (`monitor-history.ts`, PF6)
+      pastLanes: recordedLanesPortOver(doorClient),
       // DS-4e (2026-10-01; `thinking-desktop-sync-plane.md` §6.3) — ANOTHER
       // desktop's session, mounted in the pane the user is in through the
       // SAME routed host a local pane rides: never ghosttea's remote palette,
@@ -1307,6 +1311,7 @@ export function GodviewDeck({
   // `createTerminal` — what the swarm's hold does, without a spot to land on —
   // and the interim send pastes into a pane through the pane's own input. The
   // rows are the panes this deck shows, named as the swarm names their bodies.
+  // History lands here too: its Resume places, its Jump to reveals (P3).
   // Published on change only; the deck going away takes the door with it.
   const linePanesKey = JSON.stringify(
     linePanesOf(workspace?.panes ?? [], paneAgents.agents, workspace?.activePaneId, (id) =>
@@ -1334,6 +1339,21 @@ export function GodviewDeck({
         if (door === null) return { state: "refused", reason: "the deck has no connection yet" };
         const born = adoptCreatedTerminal(terminal);
         return newTerminalOutcome(await door.mountLocal(born.sessionId));
+      },
+      // P3 — History's Jump to: the pane already showing the running session
+      // becomes the active one (never a second mount of it); a session no pane
+      // shows is mounted in the active pane through the door's serialized mount.
+      // A mount in flight lands first, since a replacement borrows the focus.
+      reveal: async (sessionId) => {
+        if (door === null) return { state: "refused", reason: "the deck has no connection yet" };
+        await mountQueue.current;
+        const context = workspaceRef.current;
+        if (context?.panes.some((pane) => pane.session.id === sessionId) !== true)
+          return newTerminalOutcome(await door.mountLocal(sessionId));
+        if (context.activeSession?.id !== sessionId) context.activateSession(sessionId);
+        return (await settled(() => workspaceRef.current?.activeSession?.id === sessionId, 500))
+          ? { state: "opened" }
+          : { state: "refused", reason: "the pane showing it could not be made the active one" };
       },
     });
   }, [linePanesKey, active, door]);

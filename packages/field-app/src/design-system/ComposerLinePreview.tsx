@@ -92,7 +92,8 @@ export const FIXTURE_CLIPBOARD: readonly AtMini[] = [
 ];
 
 /** What Godview lends the line, in fixture: three panes on screen, a new
- * terminal that opens, a paste that lands, a resumed session that mounts. */
+ * terminal that opens, a paste that lands, a resumed session that mounts, a
+ * running one shown. */
 export const FIXTURE_LINE_DOOR: LineViewDoor = {
   panes: FIXTURE_PANES,
   onScreen: true,
@@ -100,6 +101,7 @@ export const FIXTURE_LINE_DOOR: LineViewDoor = {
   paste: () => true,
   canPlace: true,
   place: async () => ({ state: "opened" }),
+  reveal: async () => ({ state: "opened" }),
 };
 
 /** The fixture clipboard as a store the live line reads, newest first. */

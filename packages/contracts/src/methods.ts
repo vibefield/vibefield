@@ -1709,6 +1709,22 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "federate",
   }),
+  // TL (docket v9, RULED 2026-10-09: T4, T5, B-D4, B-D5) — the record's
+  // sessions and turns in a window of at most a day (agent-index.ts
+  // `IndexActivityParams`): what Godview's monitor backend derives a lane's
+  // past from. The history's content, so `index.search`; `federate` and shaped
+  // per desktop — a foreign `device` forwards whole and the owner answers from
+  // its own index, so a peer asleep is the forwarder's honest refusal, never an
+  // empty day — built for this desktop first, phone-readable later (SP-D13's
+  // bound at the door). Answered from rosettad's turns where its route is, else
+  // from the catalog's bounds (T5's floor); never by paging `index.timeline`.
+  defineMethod({
+    surface: "product",
+    method: "index.activity",
+    scope: "index.search",
+    idempotent: true,
+    locality: "federate",
+  }),
   defineMethod({
     surface: "product",
     method: "index.enroll",
@@ -1819,6 +1835,28 @@ export const METHODS: MethodDef[] = [
   defineMethod({
     surface: "product",
     method: "project.sessions",
+    scope: "project.read",
+    idempotent: true,
+    locality: "federate",
+  }),
+  // PJ-4 (H2 (a), 2026-10-09; A-D3) — a project's MERGED figures: fieldd fans
+  // `index.project` / `index.projectDay` out to every (desktop, rosetta
+  // project) the project's sessions are filed under — a peer through its own
+  // `federate` door — sums what is additive and says which desktops answered
+  // and what is partial (project-doors.ts). Reads of this desktop's aggregate
+  // like the four above: `project.read`, `federate`, refused to a peer daemon
+  // by the handler (DS-L4); a tailnet caller's contribution rows are cut at
+  // INDEX_TAILNET_LIMITS.MAX_ROWS with `clipped`.
+  defineMethod({
+    surface: "product",
+    method: "project.figures",
+    scope: "project.read",
+    idempotent: true,
+    locality: "federate",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "project.figuresDay",
     scope: "project.read",
     idempotent: true,
     locality: "federate",
@@ -2343,6 +2381,20 @@ export const METHODS: MethodDef[] = [
     scope: "agent.observe",
     idempotent: true,
     locality: "local",
+  }),
+  // TL (docket v9, RULED 2026-10-09; B-D6 (a)) — `agent.recordedLanes`: the
+  // lanes' past as the monitor backend derives it from the record (agent-field.ts
+  // `AgentRecordedLanesParams`), asked by a window only while a mounted view
+  // asks (PF6). Read through to rosettad at each ask and held nowhere — NOT the
+  // removed `agent.history` (TL-D8's ledger, MV-D13). The record's content, so
+  // `index.search`, as `index.activity`; `federate`, so another desktop's lanes
+  // are asked of THEIR backend (built for this desktop first).
+  defineMethod({
+    surface: "product",
+    method: "agent.recordedLanes",
+    scope: "index.search",
+    idempotent: true,
+    locality: "federate",
   }),
   // MF-1 — the row is unchanged; its PARAMS are now `AgentSubscribeParams`
   // (agent-field.ts): absent or `{projection: "full"}` is today's subscription

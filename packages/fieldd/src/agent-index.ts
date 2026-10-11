@@ -24,6 +24,8 @@ import {
   AgentKind,
   createAgentCatalogReaders,
   INDEX_RECENT_DEFAULT_LIMIT,
+  IndexActivityResponse,
+  type IndexActivityResult,
   IndexContributionResponse,
   IndexDayUsageResponse,
   type IndexDiscoveriesResult,
@@ -526,6 +528,11 @@ const SEARCH_BODY_KEYS = Object.keys(IndexSearchResponse.shape);
 /** the same, for `/api/projects` (QL) */
 const PROJECTS_BODY_KEYS = Object.keys(IndexProjectsResponse.shape);
 const TIMELINE_BODY_KEYS = Object.keys(IndexTimelinePageResponse.shape);
+/** the same, for `/api/activity` (TL, protocol 27) */
+const ACTIVITY_BODY_KEYS = Object.keys(IndexActivityResponse.shape);
+/** TL — `/api/activity`'s own ceiling (rosetta's MAX_LIMIT): a day's sessions
+ * on one desktop, newest first; past it the answer says it was cut. */
+const ACTIVITY_SESSION_LIMIT = 1_000;
 
 /** QL — one of `index.recent`'s cached join tables, stamped with the daemon
  * generation it was read from and when. */
@@ -1148,7 +1155,11 @@ export class IndexService {
       (id) => !roots.has(id) && !known.has(id),
     );
     if (!(await this.resolveSessions(unknownSessions, known, deadlineMs))) clipped = true;
-    const hits: IndexSearchHit[] = [];
+    const attributed: Array<{
+      hit: (typeof parsed.data.hits)[number];
+      rootId: string | undefined;
+      root: IndexSessionRow | undefined;
+    }> = [];
     for (const hit of parsed.data.hits) {
       let rootId: string | undefined = roots.has(hit.session_id) ? hit.session_id : undefined;
       if (rootId === undefined) {
@@ -1166,8 +1177,20 @@ export class IndexService {
         }
       }
       const root = rootId === undefined ? undefined : (roots.get(rootId) ?? known.get(rootId));
+      attributed.push({ hit, rootId, root });
+    }
+    // The Peek (GV-D8, 2026-10-08) — a row says where its root ran and which
+    // agent ran it: the root row's own columns, and its runtime's kind through
+    // the catalog. Display only, so a runtime table that cannot be read costs
+    // the agent's name, never the answer.
+    const providers = await this.rootProviders(
+      attributed.flatMap((entry) => (entry.root === undefined ? [] : [entry.root])),
+    );
+    const hits = attributed.map(({ hit, rootId, root }): IndexSearchHit => {
       const at = hit.at;
-      hits.push({
+      const provider =
+        typeof root?.runtime_id === "string" ? providers.get(root.runtime_id) : undefined;
+      return {
         sessionId: hit.session_id,
         ...(rootId !== undefined ? { rootSessionId: rootId } : {}),
         ...(root !== undefined && root.native_session_id !== ""
@@ -1178,9 +1201,40 @@ export class IndexService {
         kind: hit.kind,
         ...(typeof at === "number" ? { at } : {}),
         snippet: hit.snippet,
-      });
-    }
+        ...(root?.cwd ? { cwd: root.cwd } : {}),
+        ...(root?.project_id ? { projectId: root.project_id } : {}),
+        ...(provider !== undefined ? { provider } : {}),
+      };
+    });
     return { answered: true, state, hits, clipped };
+  }
+
+  /** The catalog agent each root's runtime maps to, by runtime id — read from
+   * the runtime table `index.recent` already caches for this daemon
+   * generation. A table that cannot be read is no agents at all: the hits
+   * still answer, each without its agent's name. */
+  private async rootProviders(
+    roots: readonly IndexSessionRow[],
+  ): Promise<ReadonlyMap<string, string>> {
+    if (roots.length === 0) return new Map();
+    let table: ReadonlyMap<string, RecentRuntime>;
+    try {
+      table = await this.recentRuntimeTable(roots);
+    } catch (error) {
+      this.logger.warn("fieldd.index.search_agents_unread", "Search hits ride without agents", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return new Map();
+    }
+    const providers = new Map<string, string>();
+    for (const root of roots) {
+      const runtimeId = root.runtime_id;
+      if (typeof runtimeId !== "string" || providers.has(runtimeId)) continue;
+      const runtime = table.get(runtimeId);
+      const provider = runtime === undefined ? undefined : this.catalog.idForKind(runtime.kind);
+      if (provider !== undefined) providers.set(runtimeId, provider);
+    }
+    return providers;
   }
 
   // ── QL — the empty pane launcher's list ────────────────────────────────
@@ -1426,6 +1480,111 @@ export class IndexService {
         model: model.model,
         tokens: model.tokens,
       })),
+    };
+  }
+
+  /** TL (docket v9, T4) — `index.activity` from rosettad's own record: every
+   * top-level session active in the window with its tree's turns
+   * (`GET /api/activity`, protocol 27), the gaps inside a turn longer than
+   * `silenceMs` already cut by rosetta, which alone reads transcripts. The
+   * agent is joined through the runtime table as `index.session`'s is; a
+   * session the daemon withholds before publication, or a cut at the route's
+   * limit, makes the answer `partial`, in words. A body fieldd cannot vouch
+   * for is `malformed`; a 404 is a daemon without the route (its caller falls
+   * back to the catalog's bounds). */
+  async activity(params: {
+    sinceMs: number;
+    untilMs: number;
+    sessions?: readonly string[] | undefined;
+    silenceMs: number;
+  }): Promise<IndexActivityResult> {
+    this.requireReady();
+    const query = [
+      `since_ms=${params.sinceMs}`,
+      `until_ms=${params.untilMs}`,
+      `gap_ms=${params.silenceMs}`,
+      `limit=${ACTIVITY_SESSION_LIMIT}`,
+      ...(params.sessions !== undefined && params.sessions.length > 0
+        ? [`sessions=${params.sessions.map(encodeURIComponent).join(",")}`]
+        : []),
+    ].join("&");
+    const body = await this.getBody(`/api/activity?${query}`, {
+      onStatus: (status) =>
+        status === 404
+          ? new RpcCallError("NOT_FOUND", "the agent index answers no activity route", false, {
+              service: "index",
+              state: "no-route",
+            })
+          : status === 400
+            ? new RpcCallError("PRECONDITION_FAILED", "the agent index refused the window", false)
+            : undefined,
+    });
+    const parsed = IndexActivityResponse.safeParse(body);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      this.logger.warn(
+        "fieldd.index.activity_malformed",
+        "The index answered activity fieldd cannot read",
+        { issue: issue === undefined ? "?" : `${issue.path.join(".")}: ${issue.message}` },
+      );
+      throw new RpcCallError("UNAVAILABLE", "the agent index answered malformed activity", true, {
+        service: "index",
+        state: "malformed",
+      });
+    }
+    this.noteUnknownFields("activity", body, ACTIVITY_BODY_KEYS);
+    const answer = parsed.data;
+    const runtimes = await this.recentRuntimeTable(answer.sessions.map((entry) => entry.session));
+    const withheld = answer.sessions.some((entry) => entry.turns_withheld);
+    const detail = answer.truncated
+      ? "The agent index listed only the newest sessions of this window."
+      : withheld
+        ? "The agent index has not read every session of this window yet."
+        : undefined;
+    return {
+      sinceMs: params.sinceMs,
+      untilMs: params.untilMs,
+      fidelity: "turns",
+      partial: answer.truncated || withheld,
+      ...(detail !== undefined ? { detail } : {}),
+      sessions: answer.sessions.map((entry) => {
+        const row = entry.session;
+        const runtime =
+          typeof row.runtime_id === "string" ? runtimes.get(row.runtime_id) : undefined;
+        const provider = runtime === undefined ? undefined : this.catalog.idForKind(runtime.kind);
+        const projected = projectSession(row);
+        return {
+          sessionId: projected.sessionId,
+          nativeSessionId: projected.nativeSessionId,
+          ...(runtime !== undefined ? { kind: runtime.kind } : {}),
+          ...(provider !== undefined ? { provider } : {}),
+          ...(typeof row.project_id === "string" && row.project_id !== ""
+            ? { projectId: row.project_id }
+            : {}),
+          ...(projected.cwd !== undefined ? { cwd: projected.cwd } : {}),
+          ...(projected.title !== undefined ? { title: projected.title } : {}),
+          ...(typeof row.started_at === "number" ? { startedAt: row.started_at } : {}),
+          activity: projected.activity,
+          // a withheld session's turns are not "none": its bounds stand in
+          ...(entry.turns_withheld
+            ? {}
+            : {
+                turns: entry.turns.map((turn) => ({
+                  kind: turn.kind,
+                  firstAt: turn.first_at,
+                  lastAt: turn.last_at,
+                  ...(turn.gaps.length > 0
+                    ? {
+                        silences: turn.gaps.map((gap) => ({
+                          fromMs: gap.from_ms,
+                          toMs: gap.to_ms,
+                        })),
+                      }
+                    : {}),
+                })),
+              }),
+        };
+      }),
     };
   }
 

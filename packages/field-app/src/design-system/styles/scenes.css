@@ -243,6 +243,13 @@
   height: 520px;
 }
 
+/* The Peek's plates (2026-10-08): the plate is the window — the view fills it
+   and recedes by the product's own rule. */
+.vf-ds-peek-view {
+  position: absolute;
+  inset: 0;
+}
+
 /* One Frame FR-4 — the corner's plates (the page's "Your face" plates): the
    window's bottom-left — the line at its own place, your face where the
    corner holds it (16 from the left, 24 from the foot), its menu open above
@@ -652,31 +659,6 @@
   pointer-events: auto;
   transition: none;
   inset: auto;
-}
-
-/* DS-3 — the device filter's chip in its states (`DeviceFilterPreview.tsx`):
-   the shipping chip inside a Godview root of the catalog's own, as the swarm
-   bodies are. These rules only undo the overlay geometry and leave the menu
-   room to open. */
-.vf-ds-device-filter-catalog.vf-godview {
-  position: relative;
-  z-index: auto;
-  width: 100%;
-  height: 260px;
-  min-height: 0;
-  overflow: visible;
-  background: var(--monitor-bg);
-  opacity: 1;
-  transform: none;
-  visibility: visible;
-  pointer-events: auto;
-  transition: none;
-  inset: auto;
-}
-
-.vf-ds-device-filter-gap {
-  width: 260px;
-  flex: none;
 }
 
 .vf-ds-swarm-bodies-toolbar {

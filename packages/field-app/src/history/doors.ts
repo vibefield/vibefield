@@ -35,10 +35,7 @@ import type {
 import {
   AGENT_CATALOG_READERS,
   INDEX_MESH,
-  type IndexCatalogProject,
-  IndexProjectDayResult,
-  IndexProjectResult,
-  IndexProjectsResult,
+  type IndexCatalogSource,
   IndexSearchResult,
   type IndexSession,
   IndexSessionsResult,
@@ -46,9 +43,18 @@ import {
   type IndexThread,
   type IndexThreadDelegation,
   IndexThreadsResult,
+  PROJECT_DOORS,
+  ProjectChangesDelta,
+  ProjectFiguresDayResult,
+  ProjectFiguresResult,
+  ProjectListResult,
+  type ProjectRegrouped,
+  type ProjectSummary,
 } from "@vibefield/contracts";
 import { WorkspaceClient, type WorkspaceClientOptions } from "../workspace/client";
 import { type AssetSourceOptions, assetSourceOver, type HistoryAssetSource } from "./asset-source";
+import type { HistoryListing } from "./host-model";
+import { type HistorySections, historySectionsOf } from "./sections";
 import { type HistorySessionPort, type SessionPortOptions, sessionPortOver } from "./session-port";
 
 // THE HISTORY ROOM'S PORTS (AR-8c; thinking-ar-history-room.md §2 — AR-D36,
@@ -63,6 +69,21 @@ import { type HistorySessionPort, type SessionPortOptions, sessionPortOver } fro
 //     `asset-source.ts`); fieldd carries no transcript byte.
 // VibeField records nothing here and keeps nothing: the room draws rosetta's
 // record and its own live stream.
+//
+// PJ-4 (H1 (a), James 2026-10-09 — "we map, the room draws"): History lists
+// PROJECTS — VibeField's, the places fieldd groups (PJ-L1) — in the room's own
+// shapes: a `ProjectRow` is a `project.list` row (its id the PJ key), and every
+// session's `project_id` is the key fieldd joined it to (`projectKey`, A-D4),
+// so the room's list, its sessions, its ranking and its search scope follow
+// the projects with no room change and no grouping here. The figures are the
+// project's merged ones (`project.figures`, H2), the pings `project.subscribe`
+// (whose `regrouped` re-keys the room's selection, `onRegrouped`). THE DEVICE
+// GUARD (V6, A4.2): the room is device-unaware (A-D9), so nothing of another
+// desktop reaches it — no session row whose desktop is not this one, no path
+// of a place on another desktop as a project's root — or the room would open
+// or resume THIS Mac's same-spelled folder for it. Until the room can say
+// where a session ran (PJ-4's second half), History is this desktop's places
+// and sessions (H3 (a)), and a project with no place here is not listed.
 //
 // AR-L1 holds at the seam: the adapters speak contract shapes in and rosetta's
 // row shapes out (the package's own types, re-exported), and no agent id is
@@ -87,8 +108,9 @@ export interface HistoryDoorClient {
  * read, its daemon starting) — the room keeps what it showed meanwhile. */
 export const HISTORY_RETRY_MIN_MS = 500;
 export const HISTORY_RETRY_MAX_MS = 10_000;
-/** How long one `index.project` answer serves both of the room's asks for the
- * same window — the panel's figures and its usage are ONE door (AR-D39 (a)). */
+/** How long one `project.figures` answer serves both of the room's asks for
+ * the same window — the panel's figures and its usage are ONE door (AR-D39
+ * (a)). */
 export const PROJECT_FIGURES_SHARE_MS = 10_000;
 /** A listing longer than this many pages is refused rather than walked. */
 export const HISTORY_LISTING_MAX_PAGES = 200;
@@ -147,13 +169,46 @@ export function runtimeKindOf(provider: string | undefined): string {
   );
 }
 
-/** One project of the catalog (DS-6's row) as rosetta's `ProjectRow`. */
-export function projectRowOf(row: IndexCatalogProject): ProjectRow {
+/** The device guard (V6, A4.2): whether a row is THIS desktop's — its own
+ * `device`, or none named (a listing scoped to this desktop names it). With no
+ * desktop known yet, a row that names one is not trusted. */
+export function isThisDesktops(
+  row: { readonly device?: string | undefined },
+  self: string | null,
+): boolean {
+  return row.device === undefined || (self !== null && row.device === self);
+}
+
+/** The repository the room may open: the project's identity remote, by the
+ * normalized key fieldd groups on (`remote:github.com/acme/app` — a spelling
+ * the room opens as `https://…`, R9), never a remote that is a local path. */
+function repositoryOf(project: ProjectSummary): string | null {
+  const remote = project.anchors.find(
+    (anchor) => anchor.startsWith("remote:") && !anchor.startsWith("remote:local:"),
+  );
+  return remote === undefined ? null : remote.slice("remote:".length);
+}
+
+/** One PJ project (`project.list`) as rosetta's `ProjectRow` (H1): its key is
+ * the room's id; its name is fieldd's (§4.3 — yours, the repository's, the
+ * folder's; "Home", "Temporary"), with the parent folder that tells two alike
+ * apart; its roots are THIS desktop's places only (the device guard — a
+ * remote place's path would open this Mac's same-spelled folder), newest
+ * first as fieldd lists them; its repository the identity remote's key. */
+export function projectRowOf(project: ProjectSummary, self: string | null): ProjectRow {
   return {
-    id: row.projectId,
-    name: row.name,
-    root_paths: [...row.rootPaths],
-    git_repo: row.gitRepo ?? null,
+    id: project.key,
+    name:
+      project.disambiguation !== undefined
+        ? `${project.name} · ${project.disambiguation}`
+        : project.name,
+    root_paths:
+      self === null
+        ? []
+        : project.places.flatMap((place) =>
+            place.ref.device === self && place.path !== undefined ? [place.path] : [],
+          ),
+    git_repo: repositoryOf(project),
   };
 }
 
@@ -163,9 +218,11 @@ export function projectRowOf(row: IndexCatalogProject): ProjectRow {
  * no parent and no delegation; a column the listing does not carry is the
  * honest null (`summary`, `cwd`, …) or, where rosetta's row requires a number,
  * the nearest fact the catalog does carry: a session's start is its first
- * recorded activity when the catalog has no start, and its freshness its last. */
+ * recorded activity when the catalog has no start, and its freshness its last.
+ * PJ-4: its project is the PJ key fieldd joined it to (`projectKey`, A-D4) —
+ * none yet (a folder no place holds) is rosetta's own unassigned bucket. */
 export function sessionRowOf(row: IndexSession): SessionRow {
-  return roomRowOf(row, {
+  return roomRowOf(row, row.projectKey ?? null, {
     parent_session_id: null,
     delegation: null,
     root_session_id: row.rootSessionId,
@@ -177,9 +234,11 @@ export function sessionRowOf(row: IndexSession): SessionRow {
  * where it hangs — its parent and the root it rolls up to — its role (a word
  * the room does not draw is a subagent: a child it is) and its delegation, in
  * rosetta's spelling again, the native evidence the room places its subthread
- * by. A colour outside rosetta's eight is no colour. */
-export function threadRowOf(row: IndexThread): SessionRow {
-  return roomRowOf(row, {
+ * by. A colour outside rosetta's eight is no colour. PJ-4: its project is its
+ * ROOT's (fieldd tags it so; `rootKey` is the root's key as the roots were
+ * read, for a thread read a moment before its root was keyed). */
+export function threadRowOf(row: IndexThread, rootKey?: string | null): SessionRow {
+  return roomRowOf(row, row.projectKey ?? rootKey ?? null, {
     parent_session_id: row.parentSessionId,
     delegation: row.delegation === null ? null : delegationOf(row.delegation),
     root_session_id: row.rootSessionId,
@@ -202,9 +261,10 @@ function delegationOf(delegation: IndexThreadDelegation): SessionDelegation {
   };
 }
 
-/** The columns a root and a thread share, and where the row hangs. */
+/** The columns a root and a thread share, its project, and where it hangs. */
 function roomRowOf(
   row: IndexSession | IndexThread,
+  project: string | null,
   place: Pick<SessionRow, "parent_session_id" | "delegation" | "root_session_id" | "role">,
 ): SessionRow {
   const startedAt = row.startedAt ?? row.activity?.firstAt ?? row.updatedAt ?? 0;
@@ -212,7 +272,7 @@ function roomRowOf(
     id: row.sessionId,
     native_session_id: row.nativeSessionId,
     runtime_id: runtimeKindOf(row.provider),
-    project_id: row.projectId ?? null,
+    project_id: project,
     cwd: row.cwd ?? null,
     ...place,
     title: row.title ?? null,
@@ -232,13 +292,24 @@ function roomRowOf(
 /** The room's whole topology from the catalog's listings — the roots and,
  * since AR-8 (L1), the delegated threads beside them, which the room builds
  * its subthreads and its search grouping from: the runtimes are one per agent
- * kind the sessions are filed under (see `runtimeKindOf`). */
+ * kind the sessions are filed under (see `runtimeKindOf`).
+ *
+ * PJ-4: the projects are fieldd's (`project.list`) with a place on THIS
+ * desktop, and only this desktop's sessions pass (the device guard, H3 (a));
+ * `self` is this desktop's id as the listings name it (their `sources`), and
+ * with none known nothing that names a desktop is handed over. */
 export function metaStateOf(
-  projects: readonly IndexCatalogProject[],
+  projects: readonly ProjectSummary[],
   sessions: readonly IndexSession[],
   threads: readonly IndexThread[] = [],
+  self: string | null = null,
 ): MetaState {
-  const sessionRows = [...sessions.map(sessionRowOf), ...threads.map(threadRowOf)];
+  const roots = sessions.filter((row) => isThisDesktops(row, self));
+  const rootKeys = new Map(roots.map((row) => [row.sessionId, row.projectKey ?? null]));
+  const sessionRows = [
+    ...roots.map(sessionRowOf),
+    ...threads.map((row) => threadRowOf(row, rootKeys.get(row.rootSessionId))),
+  ];
   const kinds = [...new Set(sessionRows.map((row) => row.runtime_id))].sort();
   return {
     runtimes: kinds.map(
@@ -254,9 +325,18 @@ export function metaStateOf(
         discovered_at: 0,
       }),
     ),
-    projects: projects.map(projectRowOf),
+    projects: projects
+      .filter(
+        (project) => self !== null && project.places.some((place) => place.ref.device === self),
+      )
+      .map((project) => projectRowOf(project, self)),
     sessions: sessionRows,
   };
+}
+
+/** This desktop's id as a listing names it (its `self` source), or null. */
+export function selfOf(sources: readonly IndexCatalogSource[] | undefined): string | null {
+  return sources?.find((source) => source.self)?.device ?? null;
 }
 
 /** `index.status` as the room's `CatalogStatus` — or null when the index is
@@ -321,8 +401,10 @@ function figures(row: {
   };
 }
 
-/** `index.project`'s heatmap and contribution: the room's `projectStats`. */
-export function projectStatsOf(result: IndexProjectResult): ProjectStats {
+/** `project.figures`' heatmap and contribution (H2: summed over every
+ * desktop and rosetta project the project's sessions are filed under): the
+ * room's `projectStats`. */
+export function projectStatsOf(result: ProjectFiguresResult): ProjectStats {
   return {
     heat: result.heatmap.map((day): HeatmapDay => ({ day: day.day, ...figures(day) })),
     contribution: result.contribution.map(
@@ -339,8 +421,8 @@ export function projectStatsOf(result: IndexProjectResult): ProjectStats {
   };
 }
 
-/** `index.project`'s usage: the room's `usage`. */
-export function usageOf(result: IndexProjectResult): UsageResponse {
+/** `project.figures`' usage: the room's `usage`. */
+export function usageOf(result: ProjectFiguresResult): UsageResponse {
   return {
     models: result.usage.models.map(
       (row): ModelDay => ({ day: row.day, model: row.model, ...figures(row) }),
@@ -349,8 +431,8 @@ export function usageOf(result: IndexProjectResult): UsageResponse {
   };
 }
 
-/** `index.projectDay`: the room's `dayUsage`. */
-export function dayUsageOf(result: IndexProjectDayResult): DayUsageResponse {
+/** `project.figuresDay`: the room's `dayUsage`. */
+export function dayUsageOf(result: ProjectFiguresDayResult): DayUsageResponse {
   return {
     day: result.day,
     models: result.models.map((row) => ({ hour: row.hour, model: row.model, tokens: row.tokens })),
@@ -429,7 +511,7 @@ function withSignal<T>(answer: Promise<T>, signal: AbortSignal | undefined): Pro
 
 /* ── the catalog port ───────────────────────────────────────────────────── */
 
-/** The two parts of the room's meta a read fetches: the roots (`index.projects`
+/** The two parts of the room's meta a read fetches: the roots (`project.list`
  * + `index.sessions`) and the delegated threads (`index.threads`). */
 interface MetaParts {
   readonly roots: boolean;
@@ -438,9 +520,9 @@ interface MetaParts {
 const ALL_PARTS: MetaParts = { roots: true, threads: true };
 const NO_PARTS: MetaParts = { roots: false, threads: false };
 
-/** The parts a change ping says moved, read from its `tables` hint (AR-8 L1):
- * a ping that names no table — a phase moved — or one this build does not know
- * moves both. */
+/** The parts a change ping says moved, read from its `tables` hint (AR-8 L1;
+ * `project.subscribe` carries it since PJ-4): a ping that names no table — the
+ * grouping or a standing moved — or one this build does not know moves both. */
 export function pingParts(payload: unknown): MetaParts {
   const tables =
     typeof payload === "object" && payload !== null
@@ -457,12 +539,49 @@ export function pingParts(payload: unknown): MetaParts {
   return { roots, threads };
 }
 
+/** The root sessions a new listing files under another project than the
+ * last one did (a regroup moved them). */
+function refiledSessions(before: MetaState, after: MetaState): Set<string> {
+  const was = new Map(
+    before.sessions
+      .filter((row) => row.parent_session_id === null)
+      .map((row) => [row.id, row.project_id] as const),
+  );
+  const out = new Set<string>();
+  for (const row of after.sessions) {
+    if (row.parent_session_id !== null) continue;
+    const previous = was.get(row.id);
+    if (previous !== undefined && previous !== row.project_id) out.add(row.id);
+  }
+  return out;
+}
+
 export interface CatalogPortOptions {
   readonly now?: () => number;
 }
 
+/** A regroup the room has been handed (PJ-4): the key moves the pings
+ * carried (`regrouped`, D9) and the sessions now filed under another key — a
+ * selection on one of them is re-keyed by the host (`openAt`), since the room
+ * lets go of a project id it no longer holds. */
+export interface HistoryRegroup {
+  readonly moves: readonly ProjectRegrouped[];
+  readonly sessions: ReadonlySet<string>;
+}
+
 /** The catalog port, and what its host asks of it beyond the room. */
 export interface HistoryCatalogPort extends CatalogPort {
+  /** PJ-4 — after the room has been handed a regrouped listing. */
+  onRegrouped(listener: (regroup: HistoryRegroup) => void): () => void;
+  /** PJ-4 (H5) — Home and Temporary as the last listing read them, or null
+   * before the first: what the room's sections draw (R3). */
+  sections(): HistorySections | null;
+  /** PJ-4 — the listing the room was last handed, as fieldd answered it (the
+   * projects, this desktop's keyed sessions, every desktop's standing): what
+   * the host's inputs are drawn from (`host-model.ts`). Null before the first. */
+  listing(): HistoryListing | null;
+  /** After the room has been handed a new listing. */
+  onListing(listener: (listing: HistoryListing) => void): () => void;
   /** Whether the History view is showing. While it is not, the catalog's
    * pings are noted and the listing is read again when it shows. */
   setActive(active: boolean): void;
@@ -489,10 +608,14 @@ export function catalogPortOver(
   const currentWords = (): string | null => said.connection ?? said.status ?? said.listing;
   /** The newest topology a listing answered — for search's filters. */
   let lastMeta: MetaState | null = null;
+  let lastSections: HistorySections | null = null;
+  let lastListing: HistoryListing | null = null;
+  const listingListeners = new Set<(listing: HistoryListing) => void>();
   const wordsListeners = new Set<() => void>();
   const activeListeners = new Set<() => void>();
   const connectionListeners = new Set<() => void>();
-  const figures = new Map<string, { at: number; answer: Promise<IndexProjectResult> }>();
+  const regroupListeners = new Set<(regroup: HistoryRegroup) => void>();
+  const figures = new Map<string, { at: number; answer: Promise<ProjectFiguresResult> }>();
   const feeds = new Set<{ close(): void }>();
   let disposed = false;
 
@@ -505,85 +628,196 @@ export function catalogPortOver(
     for (const listener of [...connectionListeners]) listener();
   };
 
-  /** Page a whole listing (`index.projects` or `index.sessions`), this
-   * desktop's own (`scope: "local"`, one desktop first — PJ's grouping is the
-   * second slice), at the door's own page ceiling. `index.threads` is this
-   * desktop's by construction and is asked with no scope. */
+  /** Page a whole listing at the door's own page ceiling: `project.list`
+   * (every project this desktop groups), `index.sessions` (this desktop's own,
+   * `scope: "local"` — H3 (a)), `index.threads` (this desktop's by
+   * construction). The last page's `sources` say which desktop is this one. */
   async function listAll<T>(
     method: string,
-    parse: (answer: unknown) => { rows: T[]; cursor?: string | undefined },
-    scope: { scope?: "local" } = { scope: "local" },
-  ): Promise<T[]> {
+    parse: (answer: unknown) => {
+      rows: T[];
+      cursor?: string | undefined;
+      sources?: IndexCatalogSource[] | undefined;
+    },
+    params: Record<string, unknown>,
+    limit: number,
+  ): Promise<{ rows: T[]; sources: IndexCatalogSource[] | undefined }> {
     const rows: T[] = [];
     let cursor: string | undefined;
     for (let page = 0; page < HISTORY_LISTING_MAX_PAGES; page += 1) {
       const answer = parse(
         await client.request(method, {
-          ...scope,
-          limit: INDEX_MESH.PAGE_MAX_LIMIT,
+          ...params,
+          limit,
           ...(cursor !== undefined ? { cursor } : {}),
         }),
       );
       rows.push(...answer.rows);
       cursor = answer.cursor;
-      if (cursor === undefined) return rows;
+      if (cursor === undefined) return { rows, sources: answer.sources };
     }
     throw new Error(`${method} answered more than ${HISTORY_LISTING_MAX_PAGES} pages`);
   }
 
-  /** What the last read answered: the roots (both listings) and the threads,
-   * each read again only when a ping names its tables (AR-8 L1 — a root's
-   * rename does not re-page every subagent this desktop ever ran). */
+  /** What the last read answered: the roots (the projects and this desktop's
+   * sessions, with which desktop is this one) and the threads, each read again
+   * only when a ping names its tables (AR-8 L1 — a root's rename does not
+   * re-page every subagent this desktop ever ran). */
   let held: {
-    roots: { projects: IndexCatalogProject[]; sessions: IndexSession[] } | null;
+    roots: {
+      projects: ProjectSummary[];
+      sessions: IndexSession[];
+      sources: IndexCatalogSource[];
+      self: string | null;
+    } | null;
     threads: IndexThread[] | null;
   } = { roots: null, threads: null };
 
   async function readRoots(): Promise<{
-    projects: IndexCatalogProject[];
+    projects: ProjectSummary[];
     sessions: IndexSession[];
+    sources: IndexCatalogSource[];
+    self: string | null;
   }> {
     const [projects, sessions] = await Promise.all([
-      listAll("index.projects", (answer) => IndexProjectsResult.parse(answer)),
-      listAll("index.sessions", (answer) => IndexSessionsResult.parse(answer)),
+      listAll(
+        "project.list",
+        (answer) => ProjectListResult.parse(answer),
+        {},
+        PROJECT_DOORS.PAGE_MAX_LIMIT,
+      ),
+      listAll(
+        "index.sessions",
+        (answer) => IndexSessionsResult.parse(answer),
+        { scope: "local" },
+        INDEX_MESH.PAGE_MAX_LIMIT,
+      ),
     ]);
-    return { projects, sessions };
+    return {
+      projects: projects.rows,
+      sessions: sessions.rows,
+      // every desktop's standing for the projects (DS-L8), else the listing's
+      sources: projects.sources ?? sessions.sources ?? [],
+      self: selfOf(sessions.sources) ?? selfOf(projects.sources),
+    };
   }
 
   async function readMeta(want: MetaParts): Promise<MetaState> {
     const [roots, threads] = await Promise.all([
       want.roots || held.roots === null ? readRoots() : held.roots,
       want.threads || held.threads === null
-        ? listAll("index.threads", (answer) => IndexThreadsResult.parse(answer), {})
+        ? listAll(
+            "index.threads",
+            (answer) => IndexThreadsResult.parse(answer),
+            {},
+            INDEX_MESH.PAGE_MAX_LIMIT,
+          ).then((answer) => answer.rows)
         : held.threads,
     ]);
     held = { roots, threads };
-    return metaStateOf(roots.projects, roots.sessions, threads);
+    const meta = metaStateOf(roots.projects, roots.sessions, threads, roots.self);
+    lastSections = historySectionsOf(roots.projects, roots.sessions, roots.self, now());
+    lastListing = {
+      projects: roots.projects,
+      sessions: roots.sessions,
+      sources: roots.sources,
+      self: roots.self,
+      sections: lastSections,
+    };
+    return meta;
   }
 
-  /** One `index.project` flight per project and window, shared by the panel's
-   * figures and its usage; a failure is never kept. */
-  function projectFigures(projectId: string, window: FigureWindow): Promise<IndexProjectResult> {
+  /** One `project.figures` flight per project and window, shared by the
+   * panel's figures and its usage; a failure is never kept. */
+  function projectFigures(key: string, window: FigureWindow): Promise<ProjectFiguresResult> {
     const sinceMs = Math.max(0, Math.floor(window.sinceMs));
     const offsetMinutes = Math.max(-840, Math.min(840, Math.round(window.offsetMinutes)));
-    const key = `${projectId}\u0000${sinceMs}\u0000${offsetMinutes}`;
+    const shared = `${key}\u0000${sinceMs}\u0000${offsetMinutes}`;
     const at = now();
-    const held = figures.get(key);
+    const held = figures.get(shared);
     if (held !== undefined && at - held.at < PROJECT_FIGURES_SHARE_MS) return held.answer;
     for (const [stale, entry] of figures) {
       if (at - entry.at >= PROJECT_FIGURES_SHARE_MS) figures.delete(stale);
     }
     const answer = client
-      .request("index.project", { projectId, sinceMs, offsetMinutes })
-      .then((value) => IndexProjectResult.parse(value));
-    figures.set(key, { at, answer });
+      .request("project.figures", { key, sinceMs, offsetMinutes })
+      .then((value) => ProjectFiguresResult.parse(value));
+    figures.set(shared, { at, answer });
     answer.catch(() => {
-      if (figures.get(key)?.answer === answer) figures.delete(key);
+      if (figures.get(shared)?.answer === answer) figures.delete(shared);
     });
     return answer;
   }
 
+  /** PJ-4 — ONE feed for the port, however many read it (History's room and
+   * the Peek's reader both subscribe: the reader opens its own `subscribeMeta`,
+   * lane room's finding). The first reader opens the feed; a later one is
+   * handed what it holds now (its status, then its listing as a snapshot) and
+   * hears every change with the rest; the last to close closes it. A feed that
+   * closed for good (a refusal that will not change) is not shared: the next
+   * reader opens a fresh one, as each reader did before. */
+  interface SharedFeed {
+    feed: { close(): void };
+    status: SubscriptionStatus | null;
+    meta: MetaState | null;
+    error: { code: "internal"; message: string } | null;
+  }
+  let shared: SharedFeed | null = null;
+  const readers = new Set<MetaSubscriptionHandlers>();
+  const fanout: MetaSubscriptionHandlers = {
+    onStatus: (status) => {
+      if (shared !== null) shared.status = status;
+      for (const reader of [...readers]) reader.onStatus?.(status);
+    },
+    onChange: (meta, kind) => {
+      if (shared !== null) shared.meta = meta;
+      for (const reader of [...readers]) reader.onChange?.(meta, kind);
+    },
+    onError: (error) => {
+      if (shared !== null) shared.error = { code: "internal", message: error.message };
+      for (const reader of [...readers]) reader.onError?.(error);
+    },
+  };
+
   function subscribeMeta(handlers: MetaSubscriptionHandlers): { close(): void } {
+    if (shared !== null && shared.status === "closed") {
+      shared.feed.close();
+      shared = null;
+    }
+    readers.add(handlers);
+    if (shared === null) {
+      const opening: SharedFeed = {
+        feed: { close: () => undefined },
+        status: null,
+        meta: null,
+        error: null,
+      };
+      shared = opening;
+      opening.feed = openFeed(fanout);
+    } else {
+      const held = shared;
+      queueMicrotask(() => {
+        if (!readers.has(handlers)) return;
+        if (held.status !== null) handlers.onStatus?.(held.status);
+        if (held.meta !== null) handlers.onChange?.(held.meta, "snapshot");
+        if (held.error !== null) handlers.onError?.(held.error);
+      });
+    }
+    let closed = false;
+    return {
+      close() {
+        if (closed) return;
+        closed = true;
+        readers.delete(handlers);
+        if (readers.size === 0 && shared !== null) {
+          shared.feed.close();
+          shared = null;
+        }
+      },
+    };
+  }
+
+  function openFeed(handlers: MetaSubscriptionHandlers): { close(): void } {
     let closed = false;
     let loaded = false;
     let status: SubscriptionStatus | null = null;
@@ -592,6 +826,8 @@ export function catalogPortOver(
     let stale: MetaParts = NO_PARTS;
     let running = false;
     let noted = false;
+    /** PJ-4 — the key moves heard since the room was last handed a listing */
+    let moves: ProjectRegrouped[] = [];
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let retryDelay = HISTORY_RETRY_MIN_MS;
     let unsubscribe: (() => void) | null = null;
@@ -651,9 +887,12 @@ export function catalogPortOver(
           const want = stale;
           pending = null;
           stale = NO_PARTS;
+          const heard = moves;
+          moves = [];
           try {
             const meta = await readMeta(want);
             if (closed) return;
+            const before = lastMeta;
             lastMeta = meta;
             retryDelay = HISTORY_RETRY_MIN_MS;
             say("listing", null);
@@ -661,8 +900,19 @@ export function catalogPortOver(
             loaded = true;
             handlers.onChange?.(meta, source);
             setStatus("live");
+            const listing = lastListing;
+            if (listing !== null) for (const listener of [...listingListeners]) listener(listing);
+            // PJ-4 — the room lets go of a project id it no longer holds, so
+            // a regroup that re-filed sessions tells the host which, after
+            // the room has the listing that files them anew
+            const refiled = before === null ? new Set<string>() : refiledSessions(before, meta);
+            if (heard.length > 0 || refiled.size > 0)
+              for (const listener of [...regroupListeners])
+                listener({ moves: heard, sessions: refiled });
           } catch (cause) {
             if (closed) return;
+            // the moves are kept for the read that does land
+            moves = [...heard, ...moves];
             fail(cause, () => request(kind, want));
           }
         }
@@ -671,21 +921,27 @@ export function catalogPortOver(
       }
     };
 
+    // PJ-4 — the projects' pings (`project.subscribe`): every catalog move on
+    // any desktop and every regroup, the tables hint when only tables moved,
+    // and the key moves (`regrouped`) the room's selection follows
+    const onPing = (payload: unknown, kind?: "snapshot" | "delta"): void => {
+      if (kind === "snapshot") {
+        request("snapshot");
+        return;
+      }
+      const delta = ProjectChangesDelta.safeParse(payload);
+      if (delta.success && delta.data.regrouped !== undefined) moves.push(...delta.data.regrouped);
+      request("mutation", pingParts(payload));
+    };
     const openPings = (): void => {
       void client
-        .subscribe(
-          "index.changes.subscribe",
-          { scope: "local" },
-          (payload, kind) =>
-            kind === "snapshot" ? request("snapshot") : request("mutation", pingParts(payload)),
-          {
-            onReplayFailed: (cause) => {
-              if (closed) return;
-              unsubscribe = null;
-              fail(cause, openPings);
-            },
+        .subscribe("project.subscribe", {}, onPing, {
+          onReplayFailed: (cause) => {
+            if (closed) return;
+            unsubscribe = null;
+            fail(cause, openPings);
           },
-        )
+        })
         .then((subscription) => {
           if (closed) {
             subscription.unsubscribe();
@@ -772,20 +1028,22 @@ export function catalogPortOver(
 
     unavailable: currentWords,
 
-    async projectStats(projectId, window, signal) {
-      return projectStatsOf(await withSignal(projectFigures(projectId, window), signal));
+    // PJ-4 (H2) — the room's project id IS the PJ key: its figures are the
+    // project's merged ones, every desktop and rosetta project it holds
+    async projectStats(key, window, signal) {
+      return projectStatsOf(await withSignal(projectFigures(key, window), signal));
     },
 
-    async usage(projectId, window, signal) {
-      return usageOf(await withSignal(projectFigures(projectId, window), signal));
+    async usage(key, window, signal) {
+      return usageOf(await withSignal(projectFigures(key, window), signal));
     },
 
-    async dayUsage(projectId, day, offsetMinutes, signal) {
+    async dayUsage(key, day, offsetMinutes, signal) {
       return dayUsageOf(
-        IndexProjectDayResult.parse(
+        ProjectFiguresDayResult.parse(
           await withSignal(
-            client.request("index.projectDay", {
-              projectId,
+            client.request("project.figuresDay", {
+              key,
               day,
               offsetMinutes: Math.max(-840, Math.min(840, Math.round(offsetMinutes))),
             }),
@@ -846,6 +1104,24 @@ export function catalogPortOver(
       for (const listener of [...activeListeners]) listener();
     },
 
+    onRegrouped(listener) {
+      regroupListeners.add(listener);
+      return () => {
+        regroupListeners.delete(listener);
+      };
+    },
+
+    sections: () => lastSections,
+
+    listing: () => lastListing,
+
+    onListing(listener) {
+      listingListeners.add(listener);
+      return () => {
+        listingListeners.delete(listener);
+      };
+    },
+
     words: currentWords,
 
     onWordsChange(listener) {
@@ -859,8 +1135,12 @@ export function catalogPortOver(
       if (disposed) return;
       disposed = true;
       for (const feed of [...feeds]) feed.close();
+      readers.clear();
+      shared = null;
       wordsListeners.clear();
       connectionListeners.clear();
+      regroupListeners.clear();
+      listingListeners.clear();
       figures.clear();
     },
   };

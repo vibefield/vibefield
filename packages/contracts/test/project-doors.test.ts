@@ -28,7 +28,7 @@ const fixture = (name: string): Record<string, unknown> =>
 const REF = { device: "dev-a", placeId: "pl_1" };
 
 describe("PJ-3 — the project doors in the registry (D8)", () => {
-  it("declares the four reads on project.read and the act on settings.manage", () => {
+  it("declares the reads on project.read and the act on settings.manage", () => {
     const rows = METHODS.filter((m) => m.method.startsWith("project.")).map((m) => ({
       method: m.method,
       scope: m.scope,
@@ -54,6 +54,21 @@ describe("PJ-3 — the project doors in the registry (D8)", () => {
       },
       {
         method: "project.sessions",
+        scope: "project.read",
+        idempotent: true,
+        locality: "federate",
+        subscription: false,
+      },
+      // PJ-4 — the merged figures: reads of the same aggregate
+      {
+        method: "project.figures",
+        scope: "project.read",
+        idempotent: true,
+        locality: "federate",
+        subscription: false,
+      },
+      {
+        method: "project.figuresDay",
         scope: "project.read",
         idempotent: true,
         locality: "federate",

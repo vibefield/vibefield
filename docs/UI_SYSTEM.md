@@ -89,6 +89,12 @@ The catalog currently mounts these shipping views directly:
   draw — both notches whole on Canvas, both slivers over Godview, the notch a sliver grows into
   (over History), the clipboard's drawer open over Godview, and Artifacts' drawer holding the Hub
   through the plugin's own fixture door (`ArtifactsDrawer`)
+- search, the frame's Peek (GV-D8, 2026-10-08): the shipping controller (`Peek`) over a fixture
+  port answering from the room package's demo (`peek-fixtures.ts`) — the frame's button at rest
+  over History before anything is read, and the popup holding words over the shipping History view
+  drawn from the same demo, so a pick lands that room on the line; the plate is the window, the
+  scrim and the popup drawn in it and the view receding by the product's own rule. The search
+  interim's plate (the room's own sheet) retired with it
 - the desk's selection bar (DK-11): `SelectionBarView` over fixture selections, a plate per state —
   one object with its kind's own act (drawn by the bar's one path renderer), two ("Send 2 to…"),
   taped ("Lift the tape"), a missing face ("Clock · plugin off"), an act with no glyph and a name

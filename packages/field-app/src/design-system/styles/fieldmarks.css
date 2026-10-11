@@ -1,4 +1,7 @@
-/* AFTER HOURS is a committed illustration surface, not a new product chrome palette. */
+/* AFTER HOURS is a committed illustration surface, not a new product chrome palette.
+   Its `ah-` prefix is also rosetta's room's (History's `.ah-section`, `.ah-empty`):
+   a class the two share is scoped to this surface with `:where(.ah)` — no added
+   weight — so the catalog's History plates draw the room's own (PJ-4). */
 .ah {
   --ah-black: #171815;
   --ah-ink: #171815;
@@ -323,7 +326,7 @@
   font-style: normal;
   font-size: 24px;
 }
-.ah-section {
+:where(.ah) .ah-section {
   padding: 66px 0;
   border-bottom: 1px solid var(--ah-rule);
   scroll-margin-top: 90px;
@@ -890,17 +893,17 @@
   border: 1px solid var(--ah-rule);
   padding: 10px;
 }
-.ah-empty {
+:where(.ah) .ah-empty {
   grid-column: 1 / -1;
   padding: 40px 22px;
   border: 1px solid var(--ah-rule);
 }
-.ah-empty h4 {
+:where(.ah) .ah-empty h4 {
   font:
     30px Impact,
     sans-serif;
 }
-.ah-empty p {
+:where(.ah) .ah-empty p {
   margin: 12px 0 20px;
 }
 .ah-control-specimen {
@@ -1170,7 +1173,7 @@
     right: 12px;
     bottom: 9px;
   }
-  .ah-section {
+  :where(.ah) .ah-section {
     padding-block: 42px;
   }
   .ah-section-heading {
@@ -1316,7 +1319,7 @@
   .ah-notes,
   .ah-footer,
   .ah-identities,
-  .ah-section:has(.ah-crew-grid) {
+  :where(.ah) .ah-section:has(.ah-crew-grid) {
     display: none;
   }
   .ah-atlas {

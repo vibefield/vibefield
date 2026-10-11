@@ -1,3 +1,4 @@
+import { wgsl } from "@vibefield/plugin-build/wgsl";
 import { defineConfig } from "vitest/config";
 
 // THE MV-0 INSTRUMENTS' RUNNER (`perf/**`), outside `pnpm test` and `pnpm verify`
@@ -12,6 +13,10 @@ import { defineConfig } from "vitest/config";
 //   deleted: regenerate at the pre-MV ref, M24; the recorded oracle is the
 //   differential's ground truth)
 export default defineConfig({
+  // WGSL as the suite loads it (`vitest.config.ts`): the model streams import
+  // the product's plugins, and a plugin's `.wgsl` is not JavaScript (found by
+  // P2's capture, 2026-10-09 — comment-pad's `pad.wgsl` failed the parse)
+  plugins: [wgsl()],
   esbuild: { jsx: "automatic", jsxImportSource: "react" },
   resolve: { dedupe: ["react", "react-dom"] },
   test: {

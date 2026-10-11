@@ -56,6 +56,7 @@ function door(overrides: Partial<LineViewDoor> = {}): LineViewDoor {
     paste: vi.fn(() => true),
     canPlace: true,
     place: vi.fn(async () => ({ state: "opened" as const })),
+    reveal: vi.fn(async () => ({ state: "opened" as const })),
     ...overrides,
   };
 }

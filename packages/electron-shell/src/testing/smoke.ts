@@ -76,6 +76,13 @@ import { sharedProfilePath } from "../main/smoke-profile";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
 import { labProfileProof } from "./godview-lab-profile";
+import {
+  historyByProjectPhotos,
+  historyByProjectRung,
+  historyGoneFolderRung,
+  historyNewAgentRung,
+} from "./history-project-rungs";
+import { jumpToRung } from "./jump-rungs";
 import { startLiveFixture } from "./live-fixture";
 import { LiveSurfaceFixtureRuntime } from "./live-surface-fixture-runtime";
 import {
@@ -96,6 +103,15 @@ import {
   type LiveSurfaceLabRendererResult,
 } from "./live-surface-lab-contract";
 import { type LoopbackExchange, recordLoopback } from "./loopback-network";
+import {
+  LIVE_NOW,
+  type LiveNowFacts,
+  PEEK_SEED_WORD,
+  peekGeometryRung,
+  peekPhotosRung,
+  peekSeededHitRung,
+  peekShotDir,
+} from "./peek-rungs";
 import {
   type CountVector,
   countVector,
@@ -155,6 +171,7 @@ import {
   type PageVisibility,
 } from "./smoke-visibility";
 import { keepFromPerson, smokeWindow, smokeWindowsFocused } from "./smoke-window";
+import { timelinePastRungs } from "./timeline-past-rungs";
 import {
   HISTORY_SEED_WORDS,
   leakedVariables,
@@ -4181,8 +4198,10 @@ interface MonitorFacts {
   swarmRenderer: string;
   /** AR-5: the usage column's tiles; -1 while no column is mounted. */
   usageTiles: number;
-  /** AR-5: `open` · `closed`. */
-  findSheet: string;
+  /** TL: the past the stage lends its view — `absent` · `complete` · `partial`
+   * · `unavailable` — and the ended runs in it. Optional, as `runs` is. */
+  history?: string;
+  endedLanes?: number;
   /** AR-7: the fold's rows, by run, as the stage received them — optional:
    * a stage built before the field existed publishes none, and the typed-agent
    * rows then fail on it by name rather than on a TypeError. */
@@ -4529,6 +4548,23 @@ async function waitForShellMarker(
     await sleep(25);
   }
   throw new Error(`the routed pane did not create ${path}`);
+}
+
+/** P2 — Live now as the window draws it, until `accept` holds. */
+async function untilLiveNow(
+  win: BrowserWindow,
+  accept: (now: LiveNowFacts) => boolean,
+  what: string,
+  timeoutMs: number,
+): Promise<LiveNowFacts> {
+  const deadline = Date.now() + timeoutMs;
+  let seen: LiveNowFacts | null = null;
+  while (Date.now() < deadline) {
+    seen = JSON.parse(String(await win.webContents.executeJavaScript(LIVE_NOW))) as LiveNowFacts;
+    if (accept(seen)) return seen;
+    await sleep(150);
+  }
+  throw new Error(`${what} did not happen within ${timeoutMs}ms (${JSON.stringify(seen)})`);
 }
 
 /** What has DOM focus, for a failure message. Diagnostic only — no assertion
@@ -4893,13 +4929,20 @@ async function openSeededSession(
         if (words.includes(${JSON.stringify(HISTORY_SEED_WORDS)})) return "rendered";
         const row = room.querySelector(".ah-session-list-item");
         if (row) {
-          if (!row.classList.contains("is-selected")) row.click();
+          if (!row.classList.contains("is-selected")) (row.querySelector(".ah-session-list-item__hit") ?? row).click();
           return "row";
         }
         const project = room.querySelector(".ah-project-list-item");
         if (project) {
-          if (!project.classList.contains("is-selected")) project.click();
+          // a project row with a host act (H4) is a box: its covering button chooses
+          if (!project.classList.contains("is-selected")) (project.querySelector(".ah-project-list-item__hit") ?? project).click();
           return "project";
+        }
+        // PJ-4 (H5): Temporary is one folded line at the list's foot — open it
+        const fold = room.querySelector('.ah-fold[aria-expanded="false"]');
+        if (fold) {
+          fold.click();
+          return "fold";
         }
         return "waiting: " + words.trim().slice(0, 160);
       })()`,
@@ -6286,14 +6329,48 @@ async function spawnBloomRows(ctx: {
     if (typeof id !== "string") {
       throw new Error(`agents.profileSets.create answered no set: ${JSON.stringify(answer)}`);
     }
+    // P2 (GV-D3): the profiles are offered in search's Live now — the
+    // scope row's dropdown, the bar's tabs retired (PK4). ⌘F opens it, the
+    // dropdown lists the new profile, and two Escapes fold the menu and the
+    // popup (the keyboard goes back to the pane the next items type in).
+    pressChord(win, "f");
     await waitForRendererFact(
       win,
-      `the profile tabs to offer ${BLOOM_PROFILE_LABEL}`,
-      30_000,
-      `document.querySelector('[data-profile-tab=${JSON.stringify(id)}]') !== null`,
-      `JSON.stringify([...document.querySelectorAll("[data-profile-tab]")].map((tab) => tab.getAttribute("data-profile-tab")))`,
+      "⌘F to open the Peek on Live now (the spawn bloom's profile witness)",
+      15_000,
+      `document.querySelector('.vf-peek-pop[role="dialog"]')?.getAttribute("data-scope") === "live"`,
     );
-    say(1, "profile-made", { set: id, label: BLOOM_PROFILE_LABEL });
+    const PROFILE_ROWS = `JSON.stringify([...document.querySelectorAll('.vf-peek-pop .vf-peek-menu [role="menuitemradio"] .vf-menu-label')].map((row) => row.textContent))`;
+    const deadline = Date.now() + 30_000;
+    let offered: string[] = [];
+    while (Date.now() < deadline) {
+      // the dropdown is drawn once a profile besides This Mac exists; opened, it lists them
+      await evaluate(`(() => {
+        const dd = document.querySelector('.vf-peek-pop [data-peek-dd="profile"] .vf-peek-dd');
+        if (dd && dd.getAttribute("aria-expanded") !== "true") dd.click();
+        return "ok";
+      })()`);
+      offered = JSON.parse(await evaluate<string>(PROFILE_ROWS)) as string[];
+      if (offered.includes(BLOOM_PROFILE_LABEL)) break;
+      await sleep(200);
+    }
+    if (!offered.includes(BLOOM_PROFILE_LABEL)) {
+      throw new Error(
+        `search's profile filter did not offer ${BLOOM_PROFILE_LABEL} within 30000ms — ${JSON.stringify(offered)}`,
+      );
+    }
+    for (let press = 0; press < 2; press += 1) {
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await sleep(150);
+    }
+    await waitForRendererFact(
+      win,
+      "Escape to fold the Peek after the profile witness",
+      10_000,
+      `document.querySelector('.vf-peek-pop[role="dialog"]') === null`,
+    );
+    say(1, "profile-made", { set: id, label: BLOOM_PROFILE_LABEL, offered });
     return { id, label: BLOOM_PROFILE_LABEL };
   });
 
@@ -7029,40 +7106,53 @@ export async function runSmokeGodview(opts: {
         `${paneFrame.narrow} pane(s) took the narrow tier in a full-width deck — the readout is hidden for nobody`,
       );
     }
-    // AR-5 (D6): ⌘F summons the find sheet over the stage, Escape dismisses it.
-    // The chord is pressed the way the zoom chord is — into Chromium's input
-    // pipeline, never OS injection — and both edges are read off the marker,
-    // with the sheet's own element checked while it says open. Focus is read
-    // before and after: the sheet takes it on open, and a sheet that kept it
-    // on close would leave the user's cursor nowhere — which the very next
-    // row (typing into the pane) would then fail on for the wrong reason.
+    // P2 (2026-10-09; DESIGN.md §8 "Search — the Peek"): ⌘F opens the
+    // frame's Peek over Godview, ON LIVE NOW — puppeteer's Find sheet left
+    // VibeField with the bar's FIND — and a live row is listed: the smoke's
+    // own free shell, whose pane the live peek WATCHES (the watch-only pane:
+    // no focus, no geometry claim). The chord is pressed into Chromium's input
+    // pipeline, never OS injection, and every edge is read off the DOM. Focus
+    // is read before and after: the popup takes it on open, Escape folds it
+    // and gives it back — which the very next row (typing into the pane) would
+    // otherwise fail on for the wrong reason.
     const focusBeforeFind = await focusReport(win);
     pressChord(win, "f");
-    const findOpened = await monitorWatch.until(
-      (facts) => facts.findSheet === "open",
-      "the find sheet to open on ⌘F",
-      10_000,
+    const liveNow = await untilLiveNow(
+      win,
+      (now) => now.open && now.scope === "live" && now.rows.length > 0,
+      "the Peek to open on Live now with a live row (⌘F in Godview)",
+      15_000,
     );
-    verdict["findSheet"] = findOpened.findSheet;
-    const findSheetMounted = (await win.webContents.executeJavaScript(
-      `document.querySelector("#vf-find-sheet") !== null`,
-    )) as boolean;
-    if (!findSheetMounted) {
-      throw new Error("the marker says the find sheet is open and the DOM has no sheet");
+    verdict["peekLiveNow"] = liveNow;
+    if (liveNow.inBar) {
+      throw new Error("the instrument bar still carries FIND — search is the frame's button now");
+    }
+    const watched = await untilLiveNow(
+      win,
+      (now) => now.livePeek === "watching" || now.livePeek === "unavailable",
+      "the live peek to watch the hot row's pane",
+      15_000,
+    );
+    verdict["livePeek"] = watched.livePeek;
+    if (watched.livePeek !== "watching") {
+      throw new Error(
+        `the live peek did not watch the free shell's pane (${JSON.stringify(watched)})`,
+      );
     }
     win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
     win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
-    const findClosed = await monitorWatch.until(
-      (facts) => facts.findSheet === "closed",
-      "the find sheet to close on Escape",
+    const liveClosed = await untilLiveNow(
+      win,
+      (now) => !now.open,
+      "Escape to fold the Peek",
       10_000,
     );
-    verdict["findSheetAfterEscape"] = findClosed.findSheet;
+    verdict["peekAfterEscape"] = liveClosed.open ? "open" : "folded";
     const focusAfterFind = await focusReport(win);
     verdict["focusAroundFind"] = `${focusBeforeFind} → ${focusAfterFind}`;
     if (focusAfterFind !== focusBeforeFind) {
       throw new Error(
-        `the find sheet did not give focus back (before ⌘F: ${focusBeforeFind}; after Escape: ${focusAfterFind})`,
+        `the Peek did not give focus back (before ⌘F: ${focusBeforeFind}; after Escape: ${focusAfterFind})`,
       );
     }
     // Focus is necessary, not sufficient. The pane's input is a routed
@@ -8381,6 +8471,28 @@ export async function runSmokeGodview(opts: {
     verdict["historySession"] = await openSeededSession(win, opts.handle, opts.typedAgent, {
       room: HISTORY_ROOM,
     });
+    // HISTORY BY PROJECT (PJ-4, H1): the seeded session filed by the real
+    //      fieldd under its PJ project, and the room listing that project by
+    //      fieldd's name — the row the opened session sits in, chosen
+    verdict["historyByProject"] = await historyByProjectRung(win, {
+      handle: opts.handle,
+      seeded: (verdict["historySession"] as { opened?: boolean }).opened === true,
+      nativeSessionId: opts.typedAgent?.history.nativeSessionId,
+    });
+    // THE PEEK (GV-D8/D10, 2026-10-08; DESIGN.md §8 "Search — the Peek"): ⌘F,
+    //      a product chord while History is the view, opens the frame's popup
+    //      centred at 900 × 560 over the scrim with the field — cover and frame
+    //      — receded to 0.98 and out of reach; Esc folds it and the field rests
+    //      with no transform at all. Then the real hit: a word only the seeded
+    //      reply says, found by the real rosettad as Everything asks, searched
+    //      by ⌘F and opened by ↵ — the room lands at the line. (Its photographs
+    //      are the smoke's last rung.)
+    verdict["peek"] = await peekGeometryRung(win);
+    verdict["peekSeededHit"] = await peekSeededHitRung(win, {
+      handle: opts.handle,
+      seeded: (verdict["historySession"] as { opened?: boolean }).opened === true,
+      word: PEEK_SEED_WORD,
+    });
     pressViewKey(win, "godview");
     await untilRenderer(
       win,
@@ -9286,6 +9398,68 @@ export async function runSmokeGodview(opts: {
     }
     verdict["lineKeys"] = lineKeys;
 
+    // JUMP TO (P3; DESIGN.md §8 "History") — the seeded conversation, started by
+    //      History's own Resume (the typed stub), is shown again from History by
+    //      Jump to: the agent's pane made the active one in Godview, never
+    //      mounted twice; fieldd refuses a second run of it; its PTY ended,
+    //      History says Resume again. After 11h, because its end leaves the
+    //      active pane showing an ENDED session, which no row that types into a
+    //      shell could use; the warm open below restores past it (it expects a
+    //      killed pane already) and the Peek's photographs never type in a pane.
+    verdict["jumpTo"] = await jumpToRung(win, {
+      handle: opts.handle,
+      staged: opts.typedAgent,
+      seeded: (verdict["historySession"] as { opened?: boolean } | undefined)?.opened === true,
+      deck,
+      pressViewKey: (view) => pressViewKey(win, view),
+      split: async () => {
+        const before = await deckSettled(deck, 1_000, 30_000);
+        await focusDeck(win);
+        pressChord(win, SPLIT_CHORD.key, SPLIT_CHORD.shift);
+        await deck.until(
+          (facts) => facts.panes === before.panes + 1,
+          `${SPLIT_CHORD.label} to split the agent's pane`,
+          45_000,
+        );
+      },
+    });
+
+    // THE TIMELINE'S PAST (TL; the MV lead's asks for the combined gate) — after
+    //      Jump to, which ran the seeded conversation HERE and ended it: a run
+    //      of this runtime that the record holds and the model no longer does.
+    //      The timeline chosen, the stage's marker says what it lends its view
+    //      — `history: complete` with that run among `endedLanes` — or, on a
+    //      run with no agent index, that it lends nothing (`absent`: the door's
+    //      NOT_FOUND `no-record`). Read off the marker, never the view's DOM
+    //      (MV-5). No theme change, no typing; the swarm is chosen again after.
+    const jumped = verdict["jumpTo"] as { ended?: unknown } | undefined;
+    const pastRungs = await timelinePastRungs(win, {
+      handle: opts.handle,
+      monitor: monitorWatch,
+      ranHere:
+        jumped?.ended !== undefined && opts.typedAgent !== undefined
+          ? { nativeSessionId: opts.typedAgent.history.nativeSessionId }
+          : undefined,
+    });
+    console.log(`SMOKE_GODVIEW_TIMELINE_PAST ${JSON.stringify(pastRungs)}`);
+    verdict["timelinePast"] = pastRungs.timelinePast;
+    verdict["timelineNoRecord"] = pastRungs.timelineNoRecord;
+
+    // HISTORY'S OWN ACTS (PJ-4, H6 and R4) — after Jump to, whose end leaves
+    //      the seeded session ended (its row says Resume): ②'s New agent starts
+    //      the typed stub in ③'s folder (the line, fieldd's run and the stub's
+    //      own record agree on it), then the seeded session's folder is taken
+    //      away and its row's Resume says why ("folder is gone"), the folder
+    //      put back after. Before the warm open, which reloads past both.
+    const historyActs = {
+      handle: opts.handle,
+      staged: opts.typedAgent,
+      byProject: verdict["historyByProject"] as { checked?: boolean; name?: string } | undefined,
+      pressViewKey: (view: "godview" | "history") => pressViewKey(win, view),
+    };
+    verdict["historyNewAgent"] = await historyNewAgentRung(win, historyActs);
+    verdict["historyGoneFolder"] = await historyGoneFolderRung(win, historyActs);
+
     // THE WARM OPEN — the AFTER number, and the row that actually tests GT-D14.
     //
     // A renderer reload resets the page's module state, so the next open is a
@@ -9330,6 +9504,25 @@ export async function runSmokeGodview(opts: {
         unmeasured: error instanceof Error ? error.message : String(error),
       };
     }
+
+    // THE PEEK, PHOTOGRAPHED (P1 §6) — last: the popup holding the seeded word
+    //      in History, light then dark, then Auto again; its theme round trip
+    //      disturbed a later rung's typing when it ran mid-smoke (peek-rungs.ts).
+    verdict["peekPhotos"] = await peekPhotosRung(win, {
+      seeded: (verdict["historySession"] as { opened?: boolean } | undefined)?.opened === true,
+      word: PEEK_SEED_WORD,
+      shotDir: peekShotDir(),
+    });
+    // HISTORY BY PROJECT, PHOTOGRAPHED (PJ-4) — beside the Peek's, the same
+    //      last pass: light then dark, then Auto again
+    const byProject = verdict["historyByProject"] as
+      | { checked?: boolean; name?: string }
+      | undefined;
+    verdict["historyByProjectPhotos"] = await historyByProjectPhotos(win, {
+      checked: byProject?.checked === true,
+      name: byProject?.name,
+      shotDir: peekShotDir(),
+    });
 
     verdict["ok"] = true;
   } catch (error) {

@@ -1,0 +1,36 @@
+{
+  "//": "PJ-4 (A-D4) — `index.threads` as a window reads it: a delegated thread carries its ROOT's project key (`projectKey`), whatever folder it worked in — a child hangs under its root, as rosetta folds its figures into the root's. A thread whose root no place holds yet has none.",
+  "rows": [
+    {
+      "sessionId": "ses-5d1e88a0",
+      "nativeSessionId": "a3f0c2d9e1b7",
+      "parentSessionId": "ses-9b2f0c7d",
+      "rootSessionId": "ses-9b2f0c7d",
+      "role": "subagent",
+      "delegation": {
+        "parentToolNativeId": "toolu_01Hx7Qd2",
+        "configuredModel": "claude-haiku-4-5"
+      },
+      "kind": "claude-code",
+      "provider": "claude",
+      "projectId": "p-4f1c2a9e",
+      "title": "map the catalog's readers",
+      "cwd": "/Users/me/Projects/vibe-field/packages/fieldd",
+      "startedAt": 1759270600000,
+      "updatedAt": 1759270900000,
+      "activity": { "firstAt": 1759270600000, "lastAt": 1759270880000 },
+      "streamState": "indexed",
+      "projectKey": "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8"
+    },
+    {
+      "sessionId": "ses-e2a4c6b8",
+      "nativeSessionId": "d4e5f6a7b8c9",
+      "parentSessionId": "ses-a07b1f62",
+      "rootSessionId": "ses-a07b1f62",
+      "role": "subagent",
+      "delegation": null,
+      "activity": null,
+      "streamState": "pending"
+    }
+  ]
+}

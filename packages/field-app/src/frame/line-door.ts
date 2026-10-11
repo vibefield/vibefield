@@ -51,6 +51,10 @@ export interface LineViewDoor {
    * by the deck and mounted in the ACTIVE pane — the pane the swarm's open uses
    * (GT-D17; the session it showed is detached, never killed). */
   place(terminal: unknown): Promise<NewTerminalOutcome>;
+  /** P3 — History's Jump to lands here: the pane showing floor session
+   * `sessionId` becomes the active one, or, when no pane shows it, it is
+   * mounted in the active pane through the door's serialized mount (AR-4b). */
+  reveal(sessionId: string): Promise<NewTerminalOutcome>;
 }
 
 let godview: LineViewDoor | null = null;
@@ -93,9 +97,9 @@ export function resetGodviewLineDoorForTest(): void {
   listeners.clear();
 }
 
-/** Wait (bounded) for a deck that can place — History's Resume asks the frame
- * for Godview, whose deck mounts on its first open and publishes its door a
- * moment later. Null when none came in `timeoutMs`. */
+/** Wait (bounded) for a deck that can place — History's Resume (and Jump to)
+ * asks the frame for Godview, whose deck mounts on its first open and
+ * publishes its door a moment later. Null when none came in `timeoutMs`. */
 export function whenGodviewCanPlace(timeoutMs: number): Promise<LineViewDoor | null> {
   const ready = (): LineViewDoor | null => (godview?.canPlace === true ? godview : null);
   const now = ready();
@@ -116,13 +120,24 @@ export function whenGodviewCanPlace(timeoutMs: number): Promise<LineViewDoor | n
 }
 
 // ── WHAT HISTORY LENDS THE LINE (AR-8c; DESIGN.md §8 "History — Resume") ────
-// History's create is Resume: it continues the session the room has chosen.
-// The room is rosetta's and reports its selection to History's controller,
-// which publishes this door; the line reads it the way it reads Godview's.
+// History's create is Resume: it continues the session the room has chosen —
+// or, while that session runs on this desktop, Jump to (P3): it shows the pane
+// the run is in. The room is rosetta's and reports its selection to History's
+// controller, which publishes this door; the line reads it the way it reads
+// Godview's.
 
-/** What a Resume came to, said on the line. */
+/** What a Resume came to, said on the line. `running`: the session runs here,
+ * so nothing was resumed — Jump to is the act (P3). */
 export type ResumeOutcome =
   | { readonly state: "resumed" }
+  | { readonly state: "running" }
+  | { readonly state: "refused"; readonly reason: string };
+
+/** What a Jump to came to. `ended`: the session stopped running before the
+ * press, so nothing was shown — Resume is the act again. */
+export type JumpOutcome =
+  | { readonly state: "jumped" }
+  | { readonly state: "ended" }
   | { readonly state: "refused"; readonly reason: string };
 
 export interface HistoryLineDoor {
@@ -131,9 +146,15 @@ export interface HistoryLineDoor {
   /** Why Resume waits for the chosen session — the launcher's own words (its
    * folder is gone, an agent that cannot resume here) — or null. */
   readonly waits: string | null;
+  /** P3 — the chosen session runs on this desktop, by the last `agent.list`
+   * answer (kept while a new one is on its way): the create is Jump to. */
+  readonly live: boolean;
   /** Resume the chosen session in its own agent, in the pane the swarm's open
    * uses, and show it (the frame moves to Godview). */
   resume(): Promise<ResumeOutcome>;
+  /** P3 — show the pane the chosen session runs in (the frame moves to
+   * Godview, whose deck reveals it). */
+  jump(): Promise<JumpOutcome>;
 }
 
 let history: HistoryLineDoor | null = null;
@@ -164,19 +185,96 @@ export function useHistoryLineDoor(): HistoryLineDoor | null {
 
 /** The words a Resume is said in, as a new terminal's are (above). */
 export function resumeNote(outcome: ResumeOutcome): string {
-  return outcome.state === "resumed"
-    ? "Resumed in the active pane"
-    : `Could not resume — ${outcome.reason}`;
+  switch (outcome.state) {
+    case "resumed":
+      return "Resumed in the active pane";
+    case "running":
+      return "This session is running — Jump to it";
+    case "refused":
+      return `Could not resume — ${outcome.reason}`;
+  }
 }
 
-/** Why History's create waits, or null when Resume can be pressed. */
-export function resumeWaits(door: HistoryLineDoor | null): string | null {
+/** The words a Jump to is said in (P3). */
+export function jumpNote(outcome: JumpOutcome): string {
+  switch (outcome.state) {
+    case "jumped":
+      return "Jumped to its pane";
+    case "ended":
+      return "This session has ended — Resume it";
+    case "refused":
+      return `Could not jump — ${outcome.reason}`;
+  }
+}
+
+/** Why History's create waits, or null when it can be pressed. Jump to never
+ * waits on the launcher's reading: a running session is shown even where it
+ * could not be resumed. */
+export function historyCreateWaits(door: HistoryLineDoor | null): string | null {
   if (door === null || door.chosen === null) return "choose a session first";
-  return door.waits;
+  return door.live ? null : door.waits;
 }
 
 /** Test seam. */
 export function resetHistoryLineDoorForTest(): void {
   history = null;
   historyListeners.clear();
+  historySaid = null;
+  saidListeners.clear();
+}
+
+// PJ-4 — WHAT HISTORY'S OWN ACTS CAME TO. The room now holds acts of its own
+// (a session row's Resume or Jump to, ②'s New agent, a project's acts — the
+// host's inputs, R4/R5, H4), pressed in the room, not on the line; their
+// outcome is said on the line all the same, where the create's is, in the
+// same words. A fresh `seq` per thing said, so the same words twice are said
+// twice.
+let historySaid: { readonly seq: number; readonly text: string } | null = null;
+let saidSeq = 0;
+const saidListeners = new Set<() => void>();
+
+/** History's side: say this on the line. */
+export function sayOnHistoryLine(text: string): void {
+  saidSeq += 1;
+  historySaid = { seq: saidSeq, text };
+  for (const fn of [...saidListeners]) fn();
+}
+
+function subscribeSaid(fn: () => void): () => void {
+  saidListeners.add(fn);
+  return () => {
+    saidListeners.delete(fn);
+  };
+}
+
+function getHistorySaid(): { readonly seq: number; readonly text: string } | null {
+  return historySaid;
+}
+
+/** The line's side: the newest thing History's acts said, or null. */
+export function useHistorySaid(): { readonly seq: number; readonly text: string } | null {
+  return useSyncExternalStore(subscribeSaid, getHistorySaid, getHistorySaid);
+}
+
+// ── WHAT THE FRAME SAYS ON THE LINE (P2) ────────────────────────────────────
+// The line's note is where an act's outcome is said (its create's, Jump to's).
+// An act started elsewhere in the frame — a live row the Peek opened, whose
+// popup folded at the pick — says its outcome there too, in the same words, so
+// a run that could not be shown is never only a log line (the honest-states
+// rule). The line's controller hears; anyone in the frame may speak.
+
+const lineHearers = new Set<(text: string) => void>();
+
+/** Say `text` in the line's note. False when no line is mounted to hear it. */
+export function sayOnLine(text: string): boolean {
+  for (const hear of lineHearers) hear(text);
+  return lineHearers.size > 0;
+}
+
+/** The line's side: hear what the frame says. */
+export function hearLineSays(hear: (text: string) => void): () => void {
+  lineHearers.add(hear);
+  return () => {
+    lineHearers.delete(hear);
+  };
 }

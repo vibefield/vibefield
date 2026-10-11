@@ -9,6 +9,7 @@ import {
   KEYBOARD_GROUP_ORDER,
   type KeyboardRow,
   keyboardRows,
+  reservedWords,
   routeWords,
   splitBinding,
   triggerFromKeyEvent,
@@ -275,9 +276,7 @@ function ShortcutRow({
           className="vf-ts-shortcut-route"
           data-tone={row.reserved !== null ? "vibefield" : words.runs ? "runs" : "idle"}
         >
-          {row.reserved !== null
-            ? `VibeField: ${row.reserved.label} — Ghostty's ${actionLabel(row.defaultAction ?? "").toLowerCase()} never runs on this chord.`
-            : words.text}
+          {row.reserved !== null ? reservedWords(row.reserved, row.defaultAction) : words.text}
         </div>
       </div>
       <div className="vf-ts-shortcut-acts">

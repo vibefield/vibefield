@@ -95,6 +95,14 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         idempotent: true,
         locality: "federate",
       },
+      // TL (docket v9, T4/T5) — the record's sessions and turns in a window:
+      // content, so index.search; per desktop, so federate
+      {
+        method: "index.activity",
+        scope: "index.search",
+        idempotent: true,
+        locality: "federate",
+      },
       { method: "index.enroll", scope: "index.manage", idempotent: true, locality: "local" },
       { method: "index.retire", scope: "index.manage", idempotent: true, locality: "local" },
       // SP-3 — the direct plane's door, declared (it answers
@@ -314,6 +322,8 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
       "index.session",
       "index.project",
       "index.projectDay",
+      // TL — the timeline's past, asked of the desktop that recorded it
+      "index.activity",
       // SP-6 — the tail is a stream; the page door `index.timeline` is NOT
       // here: it stays `local` like `index.recent` (the phone dials each
       // desktop; DS-7 may federate it with the ticket)
@@ -382,6 +392,9 @@ describe("SP-D13 — the phone's own history, bounded", () => {
   it("every door on index.search is reachable from the phone's OWN preset, and each subscription among them declares its frames", () => {
     const doors = METHODS.filter((m) => m.surface === "product" && m.scope === "index.search");
     expect(doors.map((m) => m.method).sort()).toEqual([
+      // TL — the lanes' past (the backend's) and the record's turns under it
+      "agent.recordedLanes",
+      "index.activity",
       "index.catalog.subscribe",
       "index.changes.subscribe",
       // AR-8b — the History room's three reads

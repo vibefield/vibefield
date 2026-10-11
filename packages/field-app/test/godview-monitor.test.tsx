@@ -49,11 +49,17 @@ import {
   monitorParameterDefaults,
   monitorViewFor,
 } from "@vibecook/puppeteer-views";
-import type { AgentPersona, AgentProfileSet, TerminalInfo } from "@vibefield/contracts";
+import {
+  type AgentPersona,
+  type AgentProfileSet,
+  AgentRecordedLanesResult,
+  type TerminalInfo,
+} from "@vibefield/contracts";
 import { act, Profiler } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
+import { getGodviewFindDoor, resetGodviewFindDoorForTest } from "../src/frame/find-door";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import { usagePortOver } from "../src/godview/monitor/doors";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
@@ -61,7 +67,8 @@ import {
   GodviewAgentsProvider,
   useMonitorFeed,
 } from "../src/godview/monitor/GodviewAgentsProvider";
-import { monitorHoldsKeys, takeLauncherKeys } from "../src/godview/monitor/launcher-keys";
+import { monitorHoldsKeys } from "../src/godview/monitor/launcher-keys";
+import type { RecordedLanesPort } from "../src/godview/monitor/monitor-history";
 import type { MonitorDoor, ProfileSetsPort } from "../src/godview/monitor/remote-door";
 import { HERE_DEVICE_ID } from "../src/godview/monitor/spawn-menu";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
@@ -98,6 +105,22 @@ vi.mock("@vibecook/puppeteer-views", async (importOriginal) => {
     InstrumentBar: (props: Parameters<typeof actual.InstrumentBar>[0]) => {
       bar.renders += 1;
       return <actual.InstrumentBar {...props} />;
+    },
+  };
+});
+
+/** TL — every `capabilities` object the stage hands the view host, in render
+ * order; the host itself is the SDK's, passed through. The SDK's slot keeps a
+ * view's capabilities while their members are the same objects, so only the
+ * prop shows whether the STAGE rebuilt what it lends. */
+const viewHost = vi.hoisted(() => ({ handed: [] as unknown[] }));
+vi.mock("@vibecook/puppeteer-view-sdk/host", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@vibecook/puppeteer-view-sdk/host")>();
+  return {
+    ...actual,
+    MonitorViewHost: (props: Parameters<typeof actual.MonitorViewHost>[0]) => {
+      viewHost.handed.push(props.capabilities);
+      return <actual.MonitorViewHost {...props} />;
     },
   };
 });
@@ -254,7 +277,7 @@ function fakeDoor(rows: readonly AgentSessionSummary[] = ROWS): FakeDoor {
     },
     createTerminal: vi.fn(async () => ({ state: "mounted" as const, sessionId: "born-1" })),
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),
-    history: unreachableHistory(),
+    transcripts: unreachableHistory(),
     usage: emptyUsage(),
   };
 }
@@ -270,6 +293,7 @@ let clearedIntervals: number[] = [];
 
 beforeEach(() => {
   markers = [];
+  viewHost.handed.length = 0;
   openedIntervals = [];
   clearedIntervals = [];
   localStorage.clear();
@@ -301,6 +325,7 @@ afterEach(() => {
   container = null;
   board?.dispose();
   board = null;
+  resetGodviewFindDoorForTest();
   for (const name of Object.keys(TOKENS)) document.documentElement.style.removeProperty(name);
   vi.restoreAllMocks();
   // `restoreAllMocks` does not undo `stubGlobal`, and the inset row below stubs
@@ -327,6 +352,7 @@ async function mountMonitor(
           parameters={monitorParameterDefaults(view.parameterGroups)}
           door={door}
           panes={panes}
+          publishesFind
         />
       </GodviewAgentsProvider>,
     );
@@ -352,6 +378,7 @@ async function renderMonitor(
           parameters={monitorParameterDefaults(view.parameterGroups)}
           door={door}
           panes={panes}
+          publishesFind
         />
       </GodviewAgentsProvider>,
     );
@@ -484,7 +511,7 @@ describe("the monitor stage", () => {
     await act(async () => {
       root?.render(
         <GodviewAgentsProvider door={door}>
-          <GodviewMonitor view={entry} parameters={{}} door={door} panes={PANES} />
+          <GodviewMonitor view={entry} parameters={{}} door={door} panes={PANES} publishesFind />
         </GodviewAgentsProvider>,
       );
     });
@@ -1284,11 +1311,9 @@ describe("the monitor stage", () => {
     expect(bar?.querySelector(".vf-godview-header-notice")).not.toBeNull();
     expect(bar?.querySelector('select[aria-label="Agent provider"]')).toBeNull();
     expect(bar?.querySelector(".vf-godview-spawn")).toBeNull();
-    expect(
-      bar?.querySelector('button[aria-label="Find an agent by what was said"]'),
-    ).not.toBeNull();
-    // AR-5b: `aria-controls` names an element that exists — the sheet returns
-    // null while closed, so the control names it only while it is open
+    // P2 (PK2 (a)): FIND left the bar — search is the frame's button at the
+    // head's right end, and System control is the bar's last tool
+    expect(bar?.querySelector('button[aria-label="Find an agent by what was said"]')).toBeNull();
     expect(bar?.querySelector('button[aria-controls="vf-find-sheet"]')).toBeNull();
     expect(bar?.querySelector('button[aria-controls="vf-godview-tweak-panel"]')).not.toBeNull();
     // The bar owns the view marks and the theme switch, in that order: the
@@ -1357,11 +1382,13 @@ describe("the monitor stage", () => {
   });
 });
 
-// ---- AR-S5 — the profile tabs -------------------------------------------------
+// ---- AR-S5 — the profile filter ------------------------------------------------
 //
-// The strip is the package's (`ProfileTabs`); what is VibeField's is what a tab
-// DOES: which rows it keeps, what the counters count, what the chords pick,
-// where a spawn lands, and the one sentence over an empty tab. The rows here
+// Chosen in search's Live now since P2 (GV-D3), through the door the stage
+// publishes (`find-door.ts`) — the bar's strip and its ⌥0–⌥9 retired (PK4).
+// What is VibeField's is what a choice DOES: which rows it keeps, what the
+// counters count, where a spawn lands, and the one sentence over an empty
+// profile. The rows here
 // say their profile the way fieldd does (`profileSet`), and the feed is the
 // door's port, as the deck builds it over `agents.profileSets.subscribe`.
 
@@ -1446,10 +1473,12 @@ function tabDoor(sets: readonly AgentProfileSet[] = TAB_SETS): TabDoor {
   });
 }
 
-const tabButton = (host: HTMLElement, id: string): HTMLButtonElement | null =>
-  host.querySelector<HTMLButtonElement>(`[data-profile-tab="${id}"]`);
-const chosenTab = (host: HTMLElement): string | null | undefined =>
-  host.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute("data-profile-tab");
+/** GV-D3 (P2): a profile is chosen in search's Live now, through the door the
+ * stage publishes — the scope row's dropdown calls exactly this. */
+const chooseProfile = async (id: string): Promise<void> => {
+  await act(async () => getGodviewFindDoor()?.setProfile(id === "all" ? null : id));
+};
+const chosenTab = (_host?: HTMLElement): string => getGodviewFindDoor()?.filters.profile ?? "all";
 const counters = (host: HTMLElement): string[] =>
   [...host.querySelectorAll('[aria-label="Agent status"] .vf-godview-bar-num')].map(
     (node) => node.textContent ?? "",
@@ -1460,29 +1489,66 @@ const listRows = (host: HTMLElement): { project: string; receded: boolean }[] =>
     receded: row.classList.contains("is-receded"),
   }));
 
-describe("the profile tabs (AR-S5)", () => {
-  it("draws no strip while This Mac is the only profile, and All first once a profile exists", async () => {
+/** A view that says, through its `report`, that it holds the keys — the spawn bloom's word since MV-5 (MV-D8). */
+async function mountReporting(door: MonitorDoor): Promise<{
+  host: HTMLElement;
+  holdKeys(held: boolean): Promise<void>;
+}> {
+  const recording = createRecordingView("keys-probe");
+  const entry: MonitorViewEntry = {
+    id: "keys-probe",
+    label: "KEYS",
+    parameterGroups: [],
+    mark: recording.view.manifest.mark,
+    view: recording.view,
+  };
+  syncBoard(PANES);
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  await act(async () => {
+    root?.render(
+      <GodviewAgentsProvider door={door}>
+        <GodviewMonitor view={entry} parameters={{}} door={door} panes={PANES} publishesFind />
+      </GodviewAgentsProvider>,
+    );
+  });
+  await settle();
+  const host = container;
+  return {
+    host,
+    holdKeys: async (held) => {
+      await act(async () => recording.commands[0]?.report({ keysHeld: held }));
+    },
+  };
+}
+
+describe("the profile filter (AR-S5; in search's Live now since P2, GV-D3)", () => {
+  it("offers no profile while This Mac is the only one, and every profile once one exists — never in the bar", async () => {
     const door = tabDoor([NATIVE_SET]);
     const host = await mountMonitor("list", door);
-    expect(host.querySelector('[role="tablist"]')).toBeNull();
+    expect(getGodviewFindDoor()?.filters.profiles).toEqual([]);
     await act(async () => door.pushSets(TAB_SETS));
-    const tabs = [...host.querySelectorAll('[role="tab"]')].map((tab) =>
-      tab.getAttribute("data-profile-tab"),
-    );
-    expect(tabs).toEqual(["all", "native", "work", "empty"]);
+    expect(getGodviewFindDoor()?.filters.profiles.map((profile) => profile.id)).toEqual([
+      "native",
+      "work",
+      "empty",
+    ]);
     expect(chosenTab(host)).toBe("all");
     // the one dot: Codex is blocked under Work
-    expect(tabButton(host, "work")?.getAttribute("aria-label")).toBe("Work, a session is blocked");
-    expect(tabButton(host, "native")?.getAttribute("aria-label")).toBe("This Mac");
-    // centred between two spacers, before the view marks
+    const work = getGodviewFindDoor()?.filters.profiles.find((profile) => profile.id === "work");
+    expect(work?.blocked).toBe(true);
+    // the bar carries no strip and no chip any more: one spacer, no tabs
     const bar = host.querySelector(".vf-godview-header");
-    expect(bar?.querySelectorAll(":scope > .vf-godview-bar-spacer").length).toBe(2);
+    expect(bar?.querySelector('[role="tablist"]')).toBeNull();
+    expect(bar?.querySelector(".vf-device-filter")).toBeNull();
+    expect(bar?.querySelectorAll(":scope > .vf-godview-bar-spacer").length).toBe(1);
   });
 
   it("keeps the chosen profile's sessions, recedes every other row in place, and counts what it shows", async () => {
     const host = await mountMonitor("list", tabDoor());
     const everything = counters(host);
-    await act(async () => tabButton(host, "work")?.click());
+    await chooseProfile("work");
     expect(chosenTab(host)).toBe("work");
     expect(counters(host)).toEqual(["1", "1", "0"]);
     const rows = listRows(host);
@@ -1496,155 +1562,63 @@ describe("the profile tabs (AR-S5)", () => {
     expect(latest().profileTab).toBe("work");
     expect(latest().shownAgents).toBe(2);
 
-    await act(async () => tabButton(host, "all")?.click());
+    await chooseProfile("all");
     expect(counters(host)).toEqual(everything);
     expect(listRows(host).some((row) => row.receded)).toBe(false);
     expect(latest().profileTab).toBe("all");
   });
 
-  it("chooses with ⌥0…⌥n, and lets any digit without a tab through", async () => {
+  it("binds ⌥0–⌥9 no more (docket PK4 (a)): every ⌥digit reaches the pane, and chooses nothing", async () => {
     const host = await mountMonitor("list", tabDoor());
-    const press = (code: string): KeyboardEvent => {
-      const event = new KeyboardEvent("keydown", {
-        code,
-        altKey: true,
-        bubbles: true,
-        cancelable: true,
-      });
-      window.dispatchEvent(event);
-      return event;
-    };
-    await act(async () => {
-      press("Digit2");
-    });
-    expect(chosenTab(host)).toBe("work");
-    await act(async () => {
-      press("Digit1");
-    });
-    expect(chosenTab(host)).toBe("native");
-    await act(async () => {
-      press("Digit0");
-    });
-    expect(chosenTab(host)).toBe("all");
-    let passed: KeyboardEvent | undefined;
-    await act(async () => {
-      passed = press("Digit7");
-    });
-    expect(passed?.defaultPrevented).toBe(false);
-    expect(chosenTab(host)).toBe("all");
-  });
-
-  it("yields ⌥0…⌥n to the empty pane launcher only for keys routed into its pane (QL-D2)", async () => {
-    const host = await mountMonitor("list", tabDoor());
-    // the pane whose launcher owns the keys, with its terminal's textarea
     const pane = document.createElement("div");
     const textarea = document.createElement("textarea");
     pane.append(textarea);
     document.body.append(pane);
-    const press = (code: string, at: EventTarget): KeyboardEvent => {
-      const event = new KeyboardEvent("keydown", {
-        code,
-        altKey: true,
-        bubbles: true,
-        cancelable: true,
-      });
-      at.dispatchEvent(event);
-      return event;
-    };
-    const giveBack = takeLauncherKeys((target) => pane.contains(target));
-    let passed: KeyboardEvent | undefined;
     try {
-      await act(async () => {
-        passed = press("Digit2", textarea);
-      });
-      // untouched: the launcher's own listener decides what ⌥2 means there
-      expect(passed?.defaultPrevented).toBe(false);
-      expect(chosenTab(host)).toBe("all");
-      // the focus in the monitor (or anywhere outside that pane): the strip's
-      await act(async () => {
-        passed = press("Digit2", host);
-      });
-      expect(passed?.defaultPrevented).toBe(true);
-      expect(chosenTab(host)).toBe("work");
-      await act(async () => {
-        passed = press("Digit0", window);
-      });
-      expect(passed?.defaultPrevented).toBe(true);
-      expect(chosenTab(host)).toBe("all");
+      for (const at of [window, host, textarea] as EventTarget[]) {
+        for (let digit = 0; digit <= 9; digit += 1) {
+          const event = new KeyboardEvent("keydown", {
+            code: `Digit${digit}`,
+            key: String(digit),
+            altKey: true,
+            bubbles: true,
+            cancelable: true,
+          });
+          await act(async () => {
+            at.dispatchEvent(event);
+          });
+          expect(event.defaultPrevented, `⌥${digit} was taken`).toBe(false);
+          expect(chosenTab(host)).toBe("all");
+        }
+      }
     } finally {
-      giveBack();
       pane.remove();
     }
-    await act(async () => {
-      passed = press("Digit2", window);
-    });
-    expect(passed?.defaultPrevented).toBe(true);
-    expect(chosenTab(host)).toBe("work");
   });
 
-  /** A view that says, through its `report`, that it holds the keys — the spawn bloom's word since MV-5 (MV-D8). */
-  async function mountReporting(door: MonitorDoor): Promise<{
-    host: HTMLElement;
-    holdKeys(held: boolean): Promise<void>;
-  }> {
-    const recording = createRecordingView("keys-probe");
-    const entry: MonitorViewEntry = {
-      id: "keys-probe",
-      label: "KEYS",
-      parameterGroups: [],
-      mark: recording.view.manifest.mark,
-      view: recording.view,
-    };
-    syncBoard(PANES);
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-    await act(async () => {
-      root?.render(
-        <GodviewAgentsProvider door={door}>
-          <GodviewMonitor view={entry} parameters={{}} door={door} panes={PANES} />
-        </GodviewAgentsProvider>,
-      );
-    });
-    await settle();
-    const host = container;
-    return {
-      host,
-      holdKeys: async (held) => {
-        await act(async () => recording.commands[0]?.report({ keysHeld: held }));
-      },
-    };
-  }
-
-  it("yields every key to a view that holds the keys — ⌥2 switches no tab, ⌘F opens no sheet (SB-3)", async () => {
-    // The spawn bloom held open, or opened for the keys, says so in its report
-    // (MV-D8); the stage reads that word, never the bloom's DOM (W5).
+  it("takes neither ⌥2 nor ⌘F, whether a view holds the keys or not — the stage binds no key (P2)", async () => {
+    // ⌘F is the frame's Peek (a product chord, peek.test.tsx), ⌥0–⌥9 retired
+    // (PK4): the stage hears neither, and mounts no sheet of its own.
     const { host, holdKeys } = await mountReporting(tabDoor());
     const press = (init: KeyboardEventInit): KeyboardEvent => {
       const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
       window.dispatchEvent(event);
       return event;
     };
-    let passed: KeyboardEvent | undefined;
-    await holdKeys(true);
-    await act(async () => {
-      passed = press({ code: "Digit2", key: "2", altKey: true });
-    });
-    expect(passed?.defaultPrevented).toBe(false);
-    expect(chosenTab(host)).toBe("all");
-    await act(async () => {
-      passed = press({ code: "KeyF", key: "f", metaKey: true });
-    });
-    expect(passed?.defaultPrevented).toBe(false);
-    // the find sheet did not open (it would be drawn, and hold the keys itself)
-    expect(host.querySelector(".vf-find-sheet")).toBeNull();
-    // once the view lets them go, the same key is the strip's, as before
-    await holdKeys(false);
-    await act(async () => {
-      passed = press({ code: "Digit2", key: "2", altKey: true });
-    });
-    expect(passed?.defaultPrevented).toBe(true);
-    expect(chosenTab(host)).toBe("work");
+    for (const held of [true, false]) {
+      await holdKeys(held);
+      let passed: KeyboardEvent | undefined;
+      await act(async () => {
+        passed = press({ code: "Digit2", key: "2", altKey: true });
+      });
+      expect(passed?.defaultPrevented).toBe(false);
+      await act(async () => {
+        passed = press({ code: "KeyF", key: "f", metaKey: true });
+      });
+      expect(passed?.defaultPrevented).toBe(false);
+      expect(host.querySelector(".vf-find-sheet")).toBeNull();
+      expect(chosenTab(host)).toBe("all");
+    }
   });
 
   it("holds the keys while the view holds them, so the deck's launchers stand aside (SB-3)", async () => {
@@ -1662,17 +1636,13 @@ describe("the profile tabs (AR-S5)", () => {
     expect(monitorHoldsKeys()).toBe(false);
   });
 
-  it("holds the keys over a fresh pane's launcher while the find sheet is up (QL-D2's other half)", async () => {
+  it("holds no keys for ⌘F: the sheet that held them left with P2", async () => {
     await mountMonitor("list", tabDoor());
-    const find = (): void => {
+    await act(async () => {
       window.dispatchEvent(
         new KeyboardEvent("keydown", { code: "KeyF", key: "f", metaKey: true, bubbles: true }),
       );
-    };
-    expect(monitorHoldsKeys()).toBe(false);
-    await act(async () => find());
-    expect(monitorHoldsKeys()).toBe(true);
-    await act(async () => find());
+    });
     expect(monitorHoldsKeys()).toBe(false);
   });
 
@@ -1688,11 +1658,11 @@ describe("the profile tabs (AR-S5)", () => {
       profileSets: new Map([["work-shell", "work"]]),
     };
     const host = await mountMonitor("list", tabDoor(), panes);
-    await act(async () => tabButton(host, "work")?.click());
+    await chooseProfile("work");
     const rows = listRows(host);
     expect(rows.find((row) => row.project === "work-shell")?.receded).toBe(false);
     expect(rows.find((row) => row.project === "bare-shell")?.receded).toBe(true);
-    await act(async () => tabButton(host, "native")?.click());
+    await chooseProfile("native");
     expect(listRows(host).find((row) => row.project === "work-shell")?.receded).toBe(true);
   });
 
@@ -1705,7 +1675,7 @@ describe("the profile tabs (AR-S5)", () => {
     }));
     const host = await mountMonitor("list", door);
     for (const id of ["all", "work", "native", "empty"]) {
-      await act(async () => tabButton(host, id)?.click());
+      await chooseProfile(id);
       // ＋ TERMINAL opens the spawn bloom's tree (SB-D11); the tab chooses nothing
       await act(async () => host.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
       await act(async () =>
@@ -1720,10 +1690,12 @@ describe("the profile tabs (AR-S5)", () => {
   it("says so over the stage when a tab has no sessions, and a profile deleted while chosen falls back to All", async () => {
     const door = tabDoor();
     const host = await mountMonitor("list", door);
-    await act(async () => tabButton(host, "empty")?.click());
+    await chooseProfile("empty");
     const empty = host.querySelector(".vf-monitor-profile-empty");
     expect(empty?.textContent).toContain("No sessions under Empty");
-    expect(empty?.textContent).toContain("This tab shows sessions using this profile.");
+    expect(empty?.textContent).toContain(
+      "Only this profile's sessions show — the search button's × shows them all again.",
+    );
     expect(empty?.querySelector('[data-profile-glyph="flask"]')).not.toBeNull();
     expect(host.querySelector(".vf-monitor-list")?.classList.contains("is-all-receded")).toBe(true);
     expect(counters(host)).toEqual(["0", "0", "0"]);
@@ -1732,6 +1704,78 @@ describe("the profile tabs (AR-S5)", () => {
     expect(chosenTab(host)).toBe("all");
     expect(host.querySelector(".vf-monitor-profile-empty")).toBeNull();
     expect(listRows(host).some((row) => row.receded)).toBe(false);
+  });
+});
+
+// ---- P2 — the find door: Live now's rows, the stage's keys --------------------
+
+describe("the find door (P2): Live now's rows made only while the Peek listens, held by content", () => {
+  const blockedClaude = (): AgentSessionSummary =>
+    managedSummary({
+      runtimeRunId: "run-claude",
+      kind: "claude",
+      label: "Claude",
+      status: "blocked",
+      blocker: { kind: "permission", tool: "Bash" },
+      profileSet: "work",
+      cwd: "/project/vibe-field",
+    });
+
+  it("makes no rows for a closed Peek, the same rows while nothing they say moved, new rows when one does — and keeps the door itself across publishes", async () => {
+    const door = tabDoor();
+    await mountMonitor("list", door);
+    const find = getGodviewFindDoor();
+    if (find === null) throw new Error("the stage published no find door");
+    // nobody listens: the find join is not made
+    expect(find.rows()).toBeNull();
+    let heard = 0;
+    let stop: (() => void) | undefined;
+    await act(async () => {
+      stop = find.subscribeRows(() => {
+        heard += 1;
+      });
+    });
+    await settle();
+    const first = getGodviewFindDoor()?.rows() ?? null;
+    expect(first?.filter((row) => row.agent !== undefined).map((row) => row.project)).toEqual(
+      expect.arrayContaining(["vibe-field", "voyager", "jabali"]),
+    );
+    expect(heard).toBeGreaterThan(0);
+    // the same rows published again: the same array, nobody told
+    const told = heard;
+    await act(async () => door.push(TAB_ROWS));
+    await settle();
+    expect(getGodviewFindDoor()?.rows()).toBe(first);
+    expect(heard).toBe(told);
+    // a status moves: new rows, told — and the door is the same object throughout
+    await act(async () => door.push([blockedClaude(), ...TAB_ROWS.slice(1)]));
+    await settle();
+    const next = getGodviewFindDoor()?.rows() ?? null;
+    expect(next).not.toBe(first);
+    expect(next?.find((row) => row.project === "vibe-field")?.status).toBe("blocked");
+    expect(heard).toBeGreaterThan(told);
+    expect(getGodviewFindDoor()).toBe(find);
+    // the last listener gone: no rows again
+    await act(async () => stop?.());
+    await settle();
+    expect(getGodviewFindDoor()?.rows()).toBeNull();
+  });
+
+  it("holds the keys for the Peek over the stage (QL-D2), and says when the mounted view holds them (SB-3)", async () => {
+    const { holdKeys } = await mountReporting(tabDoor());
+    const find = getGodviewFindDoor();
+    if (find === null) throw new Error("the stage published no find door");
+    expect(monitorHoldsKeys()).toBe(false);
+    const release = find.holdKeys();
+    expect(monitorHoldsKeys()).toBe(true);
+    release();
+    release();
+    expect(monitorHoldsKeys()).toBe(false);
+    expect(find.viewHoldsKeys()).toBe(false);
+    await holdKeys(true);
+    expect(getGodviewFindDoor()?.viewHoldsKeys()).toBe(true);
+    await holdKeys(false);
+    expect(getGodviewFindDoor()?.viewHoldsKeys()).toBe(false);
   });
 });
 
@@ -1783,6 +1827,7 @@ async function renderProbe(door: MonitorDoor | null, panes: MonitorPaneFacts): P
           parameters={monitorParameterDefaults(PROBE_VIEW.parameterGroups)}
           door={door}
           panes={panes}
+          publishesFind
         />
       </GodviewAgentsProvider>,
     );
@@ -2008,6 +2053,199 @@ describe("the spawn menu and the create it asks for (SB-3)", () => {
   });
 });
 
+// ---- TL — the record's past on the stage ----------------------------------------
+//
+// `godview-monitor-history.test.tsx` holds the hook: when it reads, what it
+// keeps, how it narrows and recedes. These rows hold what only the mounted
+// STAGE can show: the two facts its marker states of the past it lends
+// (`history`, `endedLanes`) — read off the lent object, never off the view's
+// DOM (MV-5's rule), so a smoke can tell a host that lent nothing from a view
+// that drew nothing.
+
+const pastProbeView = createRecordingView("past-probe", {
+  manifest: { capabilities: { optional: ["history"] } },
+});
+const PAST_PROBE: MonitorViewEntry = {
+  id: "past-probe",
+  label: "PAST",
+  mark: pastProbeView.view.manifest.mark,
+  parameterGroups: [],
+  view: pastProbeView.view,
+};
+
+const PAST_AT = Date.UTC(2026, 9, 9, 12);
+const PAST_HOUR = 60 * 60_000;
+const pastLane = (id: string, hoursAgo: number) => ({
+  id,
+  provider: { id: "claude", label: "Claude Code" },
+  project: { name: "billing-api", seq: 3 },
+  device: { id: "this-device", name: "This Mac", os: "mac" },
+  startedAt: PAST_AT - (hoursAgo + 1) * PAST_HOUR,
+  endedAt: PAST_AT - hoursAgo * PAST_HOUR,
+  spans: [
+    {
+      kind: "bounds",
+      from: PAST_AT - (hoursAgo + 1) * PAST_HOUR,
+      to: PAST_AT - hoursAgo * PAST_HOUR,
+    },
+  ],
+});
+/** Two runs that ended in the day, as `agent.recordedLanes` answers them. */
+const PAST = AgentRecordedLanesResult.parse({
+  sinceMs: PAST_AT - 24 * PAST_HOUR,
+  untilMs: PAST_AT,
+  readAt: PAST_AT,
+  fidelity: "bounds",
+  state: "complete",
+  live: [],
+  ended: [pastLane("past:claude:nat-early", 3), pastLane("past:claude:nat-late", 1)],
+});
+
+/** A door's `pastLanes` answering what the row hands it, its asks counted. */
+function pastPort(
+  answer: () => Promise<AgentRecordedLanesResult>,
+): RecordedLanesPort & { asks: number } {
+  const port = {
+    asks: 0,
+    read: () => {
+      port.asks += 1;
+      return answer();
+    },
+  };
+  return port;
+}
+
+async function mountPastProbe(door: MonitorDoor): Promise<HTMLElement> {
+  syncBoard(PANES);
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  await act(async () => {
+    root?.render(
+      <GodviewAgentsProvider door={door}>
+        <GodviewMonitor view={PAST_PROBE} parameters={{}} door={door} panes={PANES} />
+      </GodviewAgentsProvider>,
+    );
+  });
+  await settle();
+  return container;
+}
+
+describe("the record's past on the stage (TL): what the marker says of it", () => {
+  it("says `absent` and no ended lanes for a view that declares no history, and never asks the door", async () => {
+    const port = pastPort(async () => PAST);
+    await mountProbe(Object.assign(fakeDoor(), { pastLanes: port }));
+    expect(port.asks).toBe(0);
+    expect(latest()).toMatchObject({ viewId: "probe", history: "absent", endedLanes: 0 });
+    expect(probed?.capabilities.history).toBeUndefined();
+  });
+
+  it("says `absent` until the door answers, then the lent past's own state and how many runs ended in it", async () => {
+    let release: (answer: AgentRecordedLanesResult) => void = () => undefined;
+    const waiting = new Promise<AgentRecordedLanesResult>((resolve) => {
+      release = resolve;
+    });
+    const port = pastPort(() => waiting);
+    await mountPastProbe(Object.assign(fakeDoor(), { pastLanes: port }));
+    expect(port.asks).toBe(1);
+    expect(latest()).toMatchObject({ viewId: "past-probe", history: "absent", endedLanes: 0 });
+    await act(async () => release(PAST));
+    await settle();
+    expect(latest()).toMatchObject({ viewId: "past-probe", history: "complete", endedLanes: 2 });
+    // the marker counts what the view was lent, not what it drew
+    expect(pastProbeView.lastInput?.capabilities.history?.ended.map((lane) => lane.id)).toEqual([
+      "past:claude:nat-early",
+      "past:claude:nat-late",
+    ]);
+  });
+
+  it("a desktop that keeps no record (the door's NOT_FOUND `no-record`) stays `absent`", async () => {
+    const port = pastPort(() =>
+      Promise.reject({
+        rpc: {
+          data: { kind: "NOT_FOUND", details: { service: "agent.monitor", state: "no-record" } },
+        },
+      }),
+    );
+    await mountPastProbe(Object.assign(fakeDoor(), { pastLanes: port }));
+    expect(port.asks).toBe(1);
+    expect(latest()).toMatchObject({ viewId: "past-probe", history: "absent", endedLanes: 0 });
+    expect(pastProbeView.lastInput?.capabilities.history).toBeUndefined();
+  });
+
+  it("a record that cannot be read now says `unavailable` with no lanes; one read in part says `partial` with its lanes", async () => {
+    const starting = pastPort(async () => ({
+      ...PAST,
+      state: "unavailable" as const,
+      detail: "The agent index is starting",
+      ended: [],
+    }));
+    await mountPastProbe(Object.assign(fakeDoor(), { pastLanes: starting }));
+    expect(latest()).toMatchObject({ history: "unavailable", endedLanes: 0 });
+    act(() => root?.unmount());
+    container?.remove();
+    const inPart = pastPort(async () => ({
+      ...PAST,
+      state: "partial" as const,
+      detail: "The agent index's turns could not be read; these are its sessions' bounds.",
+    }));
+    await mountPastProbe(Object.assign(fakeDoor(), { pastLanes: inPart }));
+    expect(latest()).toMatchObject({ history: "partial", endedLanes: 2 });
+  });
+});
+
+// ---- TL — one capabilities object across model publishes ------------------------
+//
+// The view redraws for a new `capabilities.history` (TIMELINE SHAPES v2 item 5),
+// so a host that rebuilt what it lends on each model publish would cost every
+// frame. The hook's own identity rows (`godview-monitor-history.test.tsx`: a
+// re-read that moves nothing, the narrowing memo) cannot see the stage's half:
+// `useMonitorAgents`' capabilities memo, which holds the spawn menu while the
+// rows under it move, and the stage's memo that joins the past to it. Read at
+// the prop the stage hands the view host (`viewHost.handed`), and again at the
+// view's own input.
+
+describe("the record's past on the stage (TL): one capabilities object across model publishes", () => {
+  it("hands the view host the SAME capabilities — the spawn menu and the past with it — across two publishes that move the rows and not the past", async () => {
+    const port = pastPort(async () => PAST);
+    const door = Object.assign(tabDoor(), { pastLanes: port });
+    await mountPastProbe(door);
+    const lent = viewHost.handed.at(-1) as MonitorViewInput["capabilities"];
+    // both halves are lent: the memo under test is not the empty object's
+    expect(lent.spawn?.devices[0]?.state).toBe("ready");
+    expect(lent.history?.ended).toHaveLength(2);
+    expect(pastProbeView.lastInput?.capabilities).toBe(lent);
+    const claudeSaying = (reply: string): AgentSessionSummary =>
+      managedSummary({
+        runtimeRunId: "run-claude",
+        kind: "claude",
+        label: "Claude",
+        status: "working",
+        profileSet: "work",
+        cwd: "/project/vibe-field",
+        lastAssistantText: reply,
+      });
+    const renders = viewHost.handed.length;
+    const updates = pastProbeView.updates;
+    const modelBefore = pastProbeView.lastInput?.model;
+    for (const reply of ["one", "two"]) {
+      await act(async () => door.push([claudeSaying(reply), ...TAB_ROWS.slice(1)]));
+      await settle();
+    }
+    // the publishes rendered the stage and reached the view, whose model moved…
+    const handed = viewHost.handed.slice(renders);
+    expect(handed.length).toBeGreaterThanOrEqual(2);
+    expect(pastProbeView.updates - updates).toBeGreaterThanOrEqual(2);
+    expect(pastProbeView.lastInput?.model).not.toBe(modelBefore);
+    // …and every render handed the host the object it had: nothing rebuilt
+    expect(handed.every((capabilities) => capabilities === lent)).toBe(true);
+    expect(pastProbeView.lastInput?.capabilities).toBe(lent);
+    expect(pastProbeView.lastInput?.capabilities.history).toBe(lent.history);
+    // and the door was read once: a publish is not an ask
+    expect(port.asks).toBe(1);
+  });
+});
+
 // ---- SB-3 — the spawn bloom, driven ---------------------------------------------
 //
 // happy-dom is the one place the bloom can be driven at pointer level (the views
@@ -2229,7 +2467,7 @@ describe("the spawn bloom, driven (SB-3)", () => {
     expect(ackText(host)).toBe("terminal opened in the active pane");
   });
 
-  it("keeps ⌥2 from the profile tabs while a keys bloom has the keyboard", async () => {
+  it("chooses no profile on ⌥2 while a keys bloom has the keyboard (the stage binds no ⌥digit)", async () => {
     const door = bloomDoor();
     const { host } = await mountBloom(door);
     expect(chosenTab(host)).toBe("all");
@@ -2250,8 +2488,7 @@ describe("the spawn bloom, driven (SB-3)", () => {
       (document.activeElement ?? menu)?.dispatchEvent(alt2);
       await wait(20);
     });
-    // the strip's capture listener yielded it: whatever the bloom made of it,
-    // the chosen tab is still All
+    // whatever the bloom made of it, the chosen profile is still every profile
     expect(chosenTab(host)).toBe("all");
   });
 

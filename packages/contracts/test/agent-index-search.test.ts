@@ -120,6 +120,38 @@ describe("the doors' own answers (the projections a renderer reads)", () => {
     expect(orphan.nativeSessionId).toBeUndefined();
     expect(orphan.title).toBeUndefined();
   });
+
+  it("the Peek's Everything answer carries each hit's ROOT facts — folder, project, agent — and none where the root is unknown", () => {
+    const result = IndexSearchResult.parse(fixture("index-search-result.everything.json"));
+    expect(result.answered).toBe(true);
+    expect(result.clipped).toBe(true);
+    const [first, second, outside, orphan] = result.hits;
+    expect(first).toMatchObject({
+      rootSessionId: "ses-7c1e",
+      cwd: "/Users/james/Projects/rosetta",
+      projectId: "p-4f1c2a9e",
+      provider: "codex",
+    });
+    // two lines of one root carry the same root's facts
+    expect(second).toMatchObject({ rootSessionId: "ses-7c1e", projectId: "p-4f1c2a9e" });
+    // a root outside any project: a folder and an agent, no project id
+    expect(outside?.projectId).toBeUndefined();
+    expect(outside).toMatchObject({ cwd: "/Users/james/scratch", provider: "claude" });
+    // no root, so no root facts — never the hit's own session's in their place
+    expect(orphan?.rootSessionId).toBeUndefined();
+    expect(orphan?.cwd).toBeUndefined();
+    expect(orphan?.projectId).toBeUndefined();
+    expect(orphan?.provider).toBeUndefined();
+  });
+
+  it("the root facts are optional and bounded like the session listing's columns", () => {
+    const hit = { sessionId: "s1", timelineId: "t1", kind: "user", snippet: "[x]" };
+    expect(IndexSearchHit.safeParse({ ...hit, projectId: "" }).success).toBe(false);
+    expect(IndexSearchHit.safeParse({ ...hit, provider: "not a provider id" }).success).toBe(false);
+    expect(IndexSearchHit.safeParse({ ...hit, cwd: "/w/one", provider: "claude" }).success).toBe(
+      true,
+    );
+  });
 });
 
 describe("the params the doors admit", () => {

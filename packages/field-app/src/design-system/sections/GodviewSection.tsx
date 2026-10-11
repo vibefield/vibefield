@@ -1,6 +1,5 @@
 import { type ReactElement, useMemo } from "react";
 import { Section, Specimen } from "../catalog-ui";
-import { DeviceFilterPreview } from "../DeviceFilterPreview";
 import { GodviewPreview } from "../GodviewPreview";
 import { meshBoardDoor } from "../godview-mesh-fixtures";
 import { profileTabsDoor } from "../godview-profiles-fixtures";
@@ -8,6 +7,7 @@ import { spendDoor } from "../godview-spend-fixtures";
 import { timelineDoor } from "../godview-timeline-fixtures";
 import { PaneFramePreview } from "../PaneFramePreview";
 import { PaneLauncherPreview } from "../PaneLauncherPreview";
+import { PeekPlate } from "../PeekPreview";
 import { SpawnBloomPreview } from "../SpawnBloomPreview";
 import { SwarmBodiesPreview } from "../SwarmBodiesPreview";
 
@@ -48,13 +48,20 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
         </div>
       </Specimen>
       <Specimen
-        title="Profile tabs — a profile's sessions on the stage, the others receded"
-        source="@vibecook/puppeteer-views/bar/ProfileTabs.tsx"
+        title="Profile filter — Work's sessions on the stage, the others receded (chosen in search's Live now, GV-D3)"
+        source="godview/GodviewMonitor.tsx"
         bleed
       >
         <div data-godview-profiles-catalog="">
-          <GodviewPreview door={profilesDoor} theme={theme} />
+          <GodviewPreview door={profilesDoor} theme={theme} initialProfile="work" />
         </div>
+      </Specimen>
+      <Specimen
+        title="Search in Godview — Live now over the monitor's runs, waiting first; the desktops and profiles in its scope row (GV-D3, P2)"
+        source="frame/Peek.tsx"
+        bleed
+      >
+        <PeekPlate state="live" />
       </Specimen>
       <Specimen
         title="Mesh board — every self desktop's agents on one stage, an asleep one greyed"
@@ -64,13 +71,6 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
         <div data-godview-mesh-catalog="">
           <GodviewPreview door={meshDoor} theme={theme} />
         </div>
-      </Specimen>
-      <Specimen
-        title="Device filter — open on every desktop, and at rest on one"
-        source="godview/DeviceFilterChip.tsx"
-        bleed
-      >
-        <DeviceFilterPreview />
       </Specimen>
       <Specimen
         title="Spawn bloom — hold empty ground, reach a profile, let go"

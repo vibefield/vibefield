@@ -1,5 +1,4 @@
 import { AGENT_CATALOG, type AgentSessionSummary, type DeviceInfo } from "@vibefield/contracts";
-import type { DeviceChoice } from "../godview/monitor/device-filter";
 import type { MonitorDoor } from "../godview/monitor/remote-door";
 import { type CatalogPeer, catalogModelBoard } from "./godview-model-fixture";
 import { profileTabRows, THIS_MAC } from "./godview-profiles-fixtures";
@@ -173,7 +172,7 @@ export function meshBoardDoor(): MonitorDoor {
     attach: async () => ({ state: "no-pane" }),
     createTerminal: async () => ({ state: "no-pane" }),
     mountLocal: async () => ({ state: "no-pane" }),
-    history: {
+    transcripts: {
       status: async () => ({
         reachable: false,
         detail: "no index in the catalog",
@@ -193,11 +192,3 @@ export function meshBoardDoor(): MonitorDoor {
     },
   };
 }
-
-/** The chip's choices as the stage would build them from the door above. */
-export const MESH_DEVICE_CHOICES: readonly DeviceChoice[] = [
-  { id: HERE, name: "MacBook Pro", os: "macos", here: true, state: "live", agents: 6 },
-  { id: STUDIO, name: "studio", os: "linux", here: false, state: "live", agents: 2 },
-  { id: AIR, name: "air", os: "macos", here: false, state: "asleep", agents: 1 },
-  { id: TOWER, name: "tower", os: "windows", here: false, state: "stale", agents: 0 },
-];

@@ -294,6 +294,50 @@ and the chrome.
 glass in the window's own pixels over the lit mat):* the label reads **9.2:1** by day and **11.3:1**
 by night (three runs: 9.1–9.2 and 11.3). The arrow's white edge is `--vf-presence-edge`.
 
+### 2.9 The project ink — the cool half (PJ-L7)
+
+**One project, one ink, everywhere** (PJ-L7, PJ-D5 (a) ruled 2026-10-07; P3: a record freezes the
+ink of its first act). fieldd deals every project a number, `ink`, in `[0, 997)`
+(`PROJECT_GROUPING.INK_DEALS`): a record keeps the one it was dealt, a record-less project's comes
+from its strongest anchor. That number is the project's colour on every surface — History, Godview,
+the swarm, the phone — and this entry is the one map from it to a hue. It supersedes the per-device
+and per-room deals (D-i13, AR5-D3; the History room's own 333° wheel and puppeteer's
+`project-tint.ts`, which withhold only the band around the selection, read here as the old way).
+
+- **The hue is OKLCH's, and only the cool half is the projects'.** State keeps the warm half and
+  green — the wheel from **350° through 0° to 180°** is withheld, where §2.5's red (28°), orange
+  (67°), yellow (95°) and green (147°) sit, with 38° clear of red and 33° of green at the band's
+  edges — and so is **238°–265°**, the band around `--vf-select` (251°), so no project reads as the
+  selection. What is left are two arcs, **180°–238°** (cyan to blue, 58°) and **265°–350°**
+  (violet to pink, 85°): 143° in all. *The one overlap, said:* `--vf-cyan` (231°, info and links)
+  and its ink (`--vf-ink-info`, 235°) sit inside the first arc. They mean information, never a
+  state a person must answer, and an ink is drawn as a mark, never as text or a link (below), so
+  the record's bands stand as ruled.
+- **The deal walks the golden ratio across the arcs:** `hue(i) = arcs((0.12 + i·φ) mod 1 · 143°)`,
+  φ = 0.6180339887…, where `arcs(x)` lays x along 180°→238° and then 265°→350° — the PJ page's own
+  `projectHue`, so neighbouring numbers never sit side by side and the page's drawing and the
+  product's agree.
+- **Lightness and chroma are the theme's,** so no project is louder than another and each is the
+  same hue in light and dark: `--vf-project-ink-l` **0.60** by day and **0.74** by night,
+  `--vf-project-ink-c` **0.15** in both (puppeteer's and the History room's `--tint-l`/`--tint-c`,
+  the same numbers). At 0.15 some hues leave sRGB (405 of the 997 by day, 564 by night): a hue
+  keeps its hue and lightness and gives up chroma until it fits (down to 0.10 by day, 0.13 by
+  night), the way the engine maps an `oklch()` it cannot show — and the hex form the canvases take
+  (`projectInkHex`) does the same.
+- **Contrast** (measured over all 997, both themes): **3.3–4.3:1** against white and the inset fill
+  by day, **5.6–9.7:1** against `#1C1C1E`, `#2C2C2E` and black by night — every ink clears 3:1, the
+  floor for a mark that must be seen. It does not clear 4.5:1 by day, so **an ink is never text**.
+- **How it is drawn:** as the **folder mark** (`folder`, §13), filled with the ink at a quarter and
+  stroked in it — never a round dot, which reads as state (PJ-L7). Godview's swarm and timeline wake
+  still wear puppeteer's own deal (§2.6's exception) until they take this ink (PJ-5). A device
+  never gets an ink (§2.8, PJ-D24): a desktop is its OS mark.
+- **Where it lives in code:** the design kit's `projectInk(ink)` answers the CSS colour,
+  `oklch(var(--vf-project-ink-l) var(--vf-project-ink-c) <hue>)`, so it follows the theme on its
+  own; `projectInkHue(ink)` the hue, and `projectInkHex(ink, theme)` the sRGB hex for a surface
+  that cannot resolve CSS (a WebGPU canvas). History hands the room `projectInk(ink)` as each
+  project's colour (A-D2) once the room takes a host colour (PJ-4's second half, the room's R1);
+  until then the room still deals its own.
+
 ---
 
 ## 3. Typography
@@ -350,6 +394,7 @@ dark, or hard. The exact recipes (do not eyeball new ones):
 | Edge tray (enters from the left; 2026-09-23) | `20px 0 40px rgba(0,0,0,0.08)` · dark `0.4` — the side panel's shadow cast the other way; as `drop-shadow()` where the silhouette is a path (`--vf-drop-edge`, and `--vf-drop-island` for the island recipe) |
 | Drag proxy (above everything) | `drop-shadow(0 24px 48px rgba(0,0,0,0.35))` |
 | Tray tile | `drop-shadow(0 10px 18px rgba(0,0,0,0.16))` |
+| Search popup (the Peek, §8 "Search"; GV-D8, built 2026-10-08) | `0 40px 100px rgba(0,0,0,0.24), 0 12px 30px rgba(0,0,0,0.10)` · dark `0 40px 100px rgba(0,0,0,0.6)` and a 6% top light (`inset 0 1px 0` white/6) — ringed by the strong hairline |
 
 **One exception to "chrome is glass" (2026-09-23, James — the notch):** the edge tray's notch
 and its drawer (§8, edge trays) are OPAQUE solid chrome (`--vf-chrome-solid`, the theme's
@@ -366,6 +411,7 @@ claim it.
 | Sheet | surface `/90` + `backdrop-blur-3xl` | open tray, large panels, the fields explorer grown from the head's pill (FR-3) |
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | put-back affordance, HUD toasts |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
+| Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek only (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1) |
 
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
@@ -516,6 +562,17 @@ fading in over 160ms and the rows rising nearest-first as before (§8); folding 
 face, which never moves, stays lifted while it is open. Reduced motion (M6): no growth anywhere —
 the sliver becomes the notch at once, its glyph and count fading in over 120ms, and the Me menu
 fades in whole over 120ms.
+
+**Search (the Peek; One Frame §23, GV-D8; built 2026-10-08).** The popup pops in over **260ms on
+the island curve** from 2% above its place at 0.97 (`translate(-50%, -48%) scale(0.97)`), fading in
+with it; the scrim fades in over 240ms plain `ease`; the view **and the frame** recede to
+`scale(0.98)` about 50% 46% of the window over **420ms on the island curve** (M5's recede; the
+window is already covered, so nothing new freezes). What recedes is what you see — **the cover,
+the still under it and the frame's chrome, together** in one box the size of the window — and
+**never the desk's own box** (DK-15, above: no transform reaches the desk while a cover stands);
+at rest that box carries no transform, so it stacks and takes the pointer as if it were not there. Folding, the popup goes at once — what you picked is already opening
+behind it — the scrim fades out over the same 240ms and the window comes forward over the same
+420ms. Reduced motion (M6): no pop and no recede — the scrim and the popup fade in over 120ms.
 
 ---
 
@@ -696,9 +753,11 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     **Canvas — Objects** (`plus`, B): the objects rise behind the line and the plus turns 135° into
     ✕ over 600ms on the island curve; **Godview — New terminal** (`start`, ⌘T): a fresh shell in the
     active pane, which shows its launcher; **History — Resume** (`resume`): waiting, faint by ink as
-    the Assistant's cell is, until a session is chosen. Between views the glyph cross-fades in place,
-    200ms `ease` (One Frame §12); the tooltip says the act and its key ("Objects  B", "New terminal
-    ⌘T", "Resume this session — choose a session first"), open it says "Close  Esc";
+    the Assistant's cell is, until a session is chosen — and **Jump to** (`jump`) while the chosen
+    session runs on this desktop (§8 "History", 2026-10-08). Between views the glyph cross-fades in
+    place, 200ms `ease` (One Frame §12), and so does History's between Resume and Jump to; the
+    tooltip says the act and its key ("Objects  B", "New terminal ⌘T", "Resume this session —
+    choose a session first", "Jump to this session"), open it says "Close  Esc";
   - **the rule** — 1 × 18 in the strong hairline, 8 after create and 6 before the draft;
   - **the draft** — an editor, not a field: 14px body (§3 — the page drew 15, off the ramp, F15) in
     primary ink, padded 10, one line that keeps the caret in view (typing past one line is the
@@ -836,7 +895,8 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     act, **its key at the row's end**: **Views** — Canvas ⌘1 · Godview ⌘2 · History ⌘3 ·
     Assistant ⌘4, which waits ("not built yet"); **On this view** — the line's create (Objects B
     on Canvas, New terminal ⌘T in Godview, Resume this session in History, waiting until a session
-    is chosen) and on Canvas the four zoom acts; **App** — Settings… ⌘,; then each enabled
+    is chosen — Jump to this session while it runs here, by the line's own reading) and on Canvas
+    the four zoom acts; **App** — Settings… ⌘,; then each enabled
     plugin's palette commands under the plugin's name, one no live handler answers drawn
     "unavailable" and never run. Eyebrows 10px mono capitals in tertiary ink; rows 36, a 16 glyph
     in a 24 column in secondary ink (the zoom acts carry none), 13/500, the hot row in the ready
@@ -1585,12 +1645,15 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   presses a control the view shows, its legend is printed on that control, under the glyph in
   readable ink (never an outlined box or a corner digit), as the views track prints ⌘1–⌘4 (§8).
   View loops stop under reduced motion or the stage's animations switch. Each piece of host
-  chrome has its own boundary — the bar, Find, the usage column, the profile notice, the claims,
+  chrome has its own boundary — the bar, the usage column, the profile notice, the claims,
   System control, the deck and its edge, each pane's frame, the frames and the launchers: one that
   throws says "‹name› unavailable" where it stood (a deck piece in the deck's unavailable face),
   the monitor and its view stay mounted, and it is tried again only for a fact it is handed, at
-  most once a window (1 s, doubling to 30 s while it keeps failing); Find's fact is the agents it
-  searches. The bar and the profile notice read only the window's own state, so they stay
+  most once a window (1 s, doubling to 30 s while it keeps failing). (Find stood in this list until
+  P2, 2026-10-09: the sheet left VibeField for the frame's Peek — whose Live now rows, live peek and
+  scope-row filters each stand behind a boundary of their own, tried again for the rows, the run
+  and the filters they draw, each the same object while its content is.) The bar and the profile notice
+  read only the window's own state, so they stay
   unavailable until the monitor mounts again (M192). It never
   leaves a silent blank. The deck builds the monitor's door, so a deck that fails whole leaves the
   monitor on no door (GT-D17). *(Made true 2026-10-07, MV-8b: the deck, System control and the
@@ -1602,28 +1665,58 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   in birth order and never move (TL-D4). A lane is 24–36px (18px for a bare terminal, kept in a
   quiet group under the agents, TL-D7). It opens on the last hour, following now (TL-D5), with
   presets 15M · 1H · 4H · 12H. Pinch or ⌘-scroll zooms at the pointer (240ms, island) and a drag pans.
-  **Runtime only (MV-6, MV-D13, 2026-10-03):** a lane begins at its row's birth, claims no state
-  before `statusSince`, and draws its current state from there to now. It keeps no previous spans.
-  A row leaving the model leaves the timeline. **Each lane is one wake**, drawn in the current
-  state's width; earlier time is an unrecorded thread, never a guessed state.
-  - Work: 2 × 22% of the lane height, clamped 8–15px, in the project's colour (§2.6's
-    exception), with a soft glow (the outline's own blur, 5px light at 24% · 6px dark at 62%) and a
-    1px sheen along it.
+  **Runtime only where no record is lent (MV-6, MV-D13, 2026-10-03):** a lane begins at its row's
+  birth, claims no state before `statusSince`, and draws its current state from there to now; a
+  row leaving the model leaves the timeline. That is still the whole drawing on the phone, in
+  puppeteer's own Godview and on a desktop with no record.
+  **The record's past (TL · TLV, 2026-10-10; docket v9, T1–T6).** Where the host lends `history`,
+  a lane also draws what rosettad's record says of the last 24 hours. It is read at each ask;
+  the view keeps nothing and nothing here records. *(Corrected 2026-10-10: this paragraph said
+  the timeline was runtime only everywhere and kept no previous spans.)*
+  **Each lane is one wake**: the record's stretches, then the current state, each in its own
+  width. Time no stretch covers is a dotted thread, never a guessed state. Blocked and unseen are
+  drawn only from the runtime: the record does not say them.
+  - Work, now or recorded: 2 × 22% of the lane height, clamped 8–15px, in the project's colour
+    (§2.6's exception), with a 1px sheen along it. A live lane adds a soft glow (the outline's own
+    blur, 5px light at 24% · 6px dark at 62%).
   - Blocked and unseen: a 4.4–7.6px thread in `--vf-orange` and the swarm's blue.
-  - Idle: a 1.7px hairline in text-faint.
-  - Time the record does not hold: a dotted text-faint thread, never a state.
+  - Idle, and recorded quiet: a 1.7px hairline in text-faint.
+  - Time the record does not hold: a dotted text-faint thread (1.2px dots, 3.4px apart), never a
+    state. A silence longer than 15 minutes is not recorded.
+  - Session bounds alone (the record holds a run's start and end, nothing between): a flat
+    4.4–7.6px band in the project's colour at 50%. It is never work's swell, and the map never
+    counts it.
+  - The seam: where the record runs unbroken into the current state, a 1px cut across the wake in
+    the ground colour at 70%. A gap there is already the dotted thread.
+  **A run that ended keeps its lane** (TL-D6, restored 2026-10-10 and fed from the record). It
+  stays in its birth slot at 45%, wake and name, until it scrolls out past the left edge. A
+  2 × 12px tick in text-muted marks its last recorded activity. It has no glow and, past that
+  tick, no body. It is named by its session's title, else by what ran it and its project. A
+  receding filter (the profile tab) takes it to 30% of that; a narrowing one (the scope row's
+  desktop) removes it, as each does a live row. It is lit and read, never opened. Only a run this
+  runtime ran is a lane.
   **At the head** sit the swarm's bodies, lit as the swarm lights them, the swarm's wave ringing out of
   one you owe (1.1s, island, the view's only loop). Beside each body is a readout: the current
   state's length, then its word. Names float over the wakes' far end; there is no rail. **Pointing
-  at a lane (or ↑ ↓) lights it and quiets the rest to 30%.** Looking back can show only the
-  current span where it covers that moment; before it the body claims no recorded state. The clock
-  chip turns to the outlined head time, and NOW glides back (600ms, island). Closed-span readouts
-  and retained ended lanes are retired with the history book; these controls do not record a day.
+  at a lane (or ↑ ↓) lights it and quiets the rest to 30%.** Looking back shows the current span
+  where it covers that moment. Before it, a lane with a record says what the record says: a
+  worked stretch as work reads (`4:39` · `working · of 12m`), `quiet`, or `–` · `detail not
+  recorded` on bounds alone; any other time is `–` · `not recorded`. Those last two wear a hollow
+  body (a 1px dashed text-faint ring). Past its last activity an ended lane reads `last active
+  27m ago`, or `last active 14:32` when looking back. The clock chip turns to the outlined head
+  time, and NOW glides back (600ms, island). *(Corrected 2026-10-10: closed-span readouts and
+  ended lanes were retired with the history book at MV-6. They are back, read from the record;
+  these controls still record nothing.)*
+  **When the record is partial or cannot be read now**, one sentence under SINCE says so in the
+  record's own words, and a narrow head says `RECORD PARTIAL` or `NO RECORD NOW`. A whole record
+  says nothing.
   **The map of the day** is its own 46px strip above the axis (TL-D17). Its right end lines up with
   the head while following now.
-  - It is drawn as Pulse (TL-D15): only the current spans summed into one ridge, smoothed by an ~8px
+  - It is drawn as Pulse (TL-D15): the current spans, and with a record its worked stretches on
+    live and ended lanes (T6), summed into one ridge, smoothed by an ~8px
     gaussian. Work stacks above a line in each project's colour, its height the number of agents
     working, drawn and never printed (FC-D18). Waits hang below in orange, then blue.
+    Waits come only from the rows; bounds alone count nothing.
   - Only the window in view keeps its colour; the rest of the day is grayed.
   - The head is a 2px line with a knob, filled while following now and hollow while looking back.
   - **Pressing the map puts the head there, and dragging moves the head** across the known spans
@@ -1633,9 +1726,10 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   opened (TL-D3), text-faint for idle. Never red; now is ink. One click opens the agent in the pane
   you are in (the views' `select`).
   **Reduced motion:** no wave, no glide, no zoom tween; positions jump.
-  **There is no history book.** MV-D13 superseded TL-D8's status ledger: `agent.history` and
-  fieldd's status recorder are removed. A future history capability must READ
-  rosettad's record; neither a view nor its backend may begin recording one.
+  **There is no history book; the timeline reads a record it does not keep.** MV-D13 superseded
+  TL-D8's status ledger: `agent.history` and fieldd's status recorder are removed. The `history`
+  capability (2026-10-10) READS rosettad's record through the backend at each ask; neither a view
+  nor its backend may begin recording one.
 - **Godview's spend view is where the money went** (SV · MV-7 — James ruled 2026-10-07, M177: the
   runtime-only view as built, puppeteer `feat/sv-live` `d1890e0`; SV-D15…D19 are ruled later).
   A fifth monitor view (`SPEND`, after the timeline), painted into a canvas like the timeline:
@@ -1674,6 +1768,10 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     the room's own sheet — and the room's layer, where its dialogs and that sheet land, **starts at
     the head band's foot (52)** as it ends at the reserve, so neither ever covers the band: the band
     keeps only the lights, and a file shown full screen ends under it too.
+    *Corrected 2026-10-08 (the Peek, P1):* the Peek has landed (§8 "Search — the Peek") and the
+    room's sheet left with it. The band holds the window's lights and, at its right end, **the
+    frame's search button** (GV-D10); the room's layer still starts at the band's foot, so no dialog
+    ever covers the band or the button.
   - **Its create is Resume** (`resume`, §13): waiting, faint by ink, until the room has a session
     chosen ("Resume this session — choose a session first"), and waiting with the empty pane
     launcher's own words for one it would not resume ("its folder is gone", "not offered here", "not
@@ -1682,6 +1780,31 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     and the window moves to Godview to show it; the note says **"Resumed in the active pane"**, or
     **"Could not resume — …"** in the launcher's words, and then the window stays in History. Jump to,
     for a session still running, is owed.
+    *Corrected 2026-10-08 (P3):* Jump to is built — the next entry.
+  - **Its create is Jump to while the session runs here** (`jump`, §13; AR-D43, K11 — built
+    2026-10-08, P3; the room's own row footer, PJ-D9 (a), waits for PJ-4's slot). Whether the
+    chosen session runs is read by **one plain `agent.list`** — no subscription, so a closed Godview
+    still asks nothing (PF6) — joined on the room's native id: a run continuing that conversation,
+    not stamped ended, with its terminal on this desktop's floor. It is asked again when the choice
+    changes, when History shows again, and at every press (the board's feed is Godview's, and the
+    index's pings move with transcripts, not with runs, so the line listens to neither). While an
+    answer is on its way **the create keeps what it said** — Resume or Jump to, its glyph and its
+    words — so a new choice never flickers through Resume on its way to Jump to (a press asks
+    afresh, so what is kept only ever names the act). Live, the glyph cross-fades to
+    `jump` (200ms `ease`, as between views) and the act is **"Jump to this session"**, which never
+    waits on the launcher's reading: a running session is shown even where it could not be resumed.
+    Pressed, the window moves to Godview and the pane showing that session becomes the active one —
+    or, when no pane shows it, it is put in the active pane, as a resumed one is; the note says
+    **"Jumped to its pane"**, or **"Could not jump — …"** in the deck's words. A session running on
+    another desktop is not running *here* (reaching it is the mesh's, DS-4): the create stays
+    Resume and says nothing new. The palette's row is the line's: the same reading, the same act.
+  - **Resume refuses a running session.** A Resume pressed while the session runs here (the line's
+    reading was older than the press) asks nothing of `agent.resume`: the note says **"This session
+    is running — Jump to it"**, and the create becomes Jump to. Fieldd's own refusal of a second run
+    on one conversation (AR-4b's one-run law, `terminal-alive`) is said in the same words. A Jump to
+    pressed after the session ended says **"This session has ended — Resume it"**, and the create
+    becomes Resume. *Before P3* nothing double-ran either: fieldd refused the second run, and the
+    line said "Could not resume — it is already running" with no way to the pane that was.
   - **Its honest states are said inside the frame** (§9; the tolerant reader). An index that cannot
     answer keeps the room's own **"rosettad is not answering"** (or "Connecting to rosettad") with
     fieldd's own words under it — "The agent index is starting", "The agent index is failed: …",
@@ -1697,6 +1820,80 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     says rosetta's own words ("the recorded file is no longer available"); "Recorded files can't
     open here yet — no file door on the desktop" is said only when rosettad refuses the grant the
     file read (a daemon from before the scope, or a grant minted without it).
+  - **It lists your projects** (PJ-4, H1–H6 ruled (a) 2026-10-09; "we map, the room draws"): the
+    room's projects are fieldd's (`project.list`: places grouped by evidence, PJ-L1), each session
+    filed under the key fieldd joined it to, and what the room draws beyond its own rows is
+    VibeField's, handed through the room's host inputs (rosetta `host-inputs.ts`) and drawn in the
+    room's vocabulary. Until transcripts travel (DS-7) the list is THIS desktop's places and
+    sessions (H3): a project with no folder here is not listed, and nothing of another desktop is
+    handed to the room as if it were here.
+    - **A project's colour is its ink** (§2.9), never the room's dealt tint.
+    - **A project row** leads its path line with one OS mark per desktop it lives on (§6.0 of the
+      record, PJ-D24: Simple Icons' marks, 11 px, in the path line's ink), left-aligned in the
+      listing's order, this desktop's first; an asleep desktop's mark is in the tertiary ink.
+      Under the path, in the room's second-line type, what the others hold: **"4 sessions on
+      Studio"** (and "(asleep)" after one that is). Its time slot says **"n live"** while its
+      sessions run here.
+    - **The list's order:** **Live now** first (a project with a session running here, by P3's
+      reading: one plain `agent.list` per listing, asked only while History shows), then
+      **Pinned**, then the projects in the room's own order (each desktop's **Home** among them, a
+      row like any other, J11), then **Temporary** as ONE folded line at the foot — "Temporary ·
+      6" (its sessions of the last 14 days) and **Show** — and under it, folded the same way,
+      **Hidden**. An empty section draws nothing, and a fold never says "0": with nothing from the
+      last 14 days the line reads "Temporary · older than 14 days · 3", and a Temporary holding no
+      session here is an ordinary row, with nothing to fold away.
+    - **In a project:** **Live now** first, then the room's days; in Temporary, the sessions older
+      than 14 days fold behind **"Older than 14 days · n · Show older"** (PJ-L4).
+    - **A session row** (PJ-D9) carries, in its id slot, this desktop's mark and the folder's path,
+      cut whole folders from the left to fit (FitPath: `…/project100/vibe-field`, never a name cut
+      mid-word; the whole path is its title); and at its end **Resume** (the `resume` glyph and the
+      word) or, while it runs here, **Jump to** (`jump`) — or, quiet in the reason's place, why
+      neither, in the empty pane launcher's own words: "folder is gone", "not installed", "not
+      offered here", "can’t resume" — and "its volume is not connected". ④'s head carries the same act as a pill, or the same reason after the range. Pressed,
+      each does what the line's create does, and the note on the line says what came of it.
+    - **New agent** is ②'s head's one primary — the `start` glyph on the room's primary fill — and
+      opens the room's rows: **Starts in** names the folder ③ shows (its mark, its path, its
+      branch, "1 agent is already working there"; or, dimmed, why it cannot start there: another
+      desktop's folder waits for routed acts, DS-2), then **Agent** — each agent this desktop
+      offers, one row per persona (its name at the row's end, "its own" for the agent's own
+      sign-in), the most recently used first — then **Model and effort**, one dimmed row: "Model
+      and effort can't be set from here yet (PJ-6)". A row starts the agent in that folder and the
+      window moves to Godview to show its pane; the note says **"Started in ~/…"**.
+    - **③'s head is the folder list** (PJ-D22): every folder of the project under its desktop's
+      mark and name ("here", "asleep"), a linked worktree one step in, the shown one checked; past
+      nine a filter heads it. A folder on another desktop is never opened here: ③ says **"Files
+      stay on Studio"** (or that Studio is asleep), and its caption names the desktop and the
+      branch ("Studio · main"); a folder that is gone or unmounted says so in the same place. New
+      agent follows the folder ③ shows (PJ-D8).
+    - **The chips** (R7): over the list, **any desktop ▾** — every desktop with its mark, "here" or
+      "asleep", and how many of these projects live on it (one with none is dimmed, so a choice
+      never empties the list); over a project's sessions, **any agent ▾** — the agents its
+      sessions ran under, with their counts.
+    - **The project's acts sit where they act** (H4 (a), as James ruled it on docket v9: a `···`
+      in the project's head; rename on the name itself; split on a folder's row in the folder
+      dropdown; pin and hide also on list rows, with a Hidden foot — built on ROOM API v3
+      2026-10-10; desktop windows only — P2). Temporary has none of them: it is not a project.
+      - **A `···` in ②'s head,** after New agent, opens **Pin to the top** / **Unpin** and
+        **Hide** / **Show again** ("It folds under Hidden, at the list's foot") for the project
+        the column shows. Rename and split are not in it: each has its own place, below.
+      - **Pin and hide also on ①'s row:** the same quiet `···` at the row's end, before its
+        time, opens the same two rows — the ruling's "also": a project is pinned or hidden from
+        the list without being opened. A hidden project folds under **Hidden** at the list's
+        foot, its row's act saying **Show again**.
+      - **Split on ③'s folder row:** each folder of a project with more than one, a desktop's
+        Home excepted (J11), carries **Not part of this project** beside it — quiet until the row
+        is under the pointer, → reaches it from the row; pressed, the folder leaves the project
+        and the list closes, the folder ③ shows unchanged.
+      - **Rename on ②'s name itself:** pressed, the name is a field; Enter keeps a changed name,
+        Escape or leaving it keeps the old. A refusal stays in the field and says why under it —
+        **"Could not rename — the project changed while you looked — try again"**, in fieldd's
+        intent's own words — and a rename that took says **"Renamed to …"** on the line.
+    - **②'s card slot** carries the **suggestions** (PJ-D16): "vibe-field shares old history with
+      **vf-docs**" with **Not the same** and **One project**.
+    - **The card's look** (VibeField's own, inside the room's card slot; the suggestions are its
+      one card since rename moved to ②'s name): corners 12, the hairline, padded 10 12, its words
+      at 12.5/400 in secondary ink, its buttons 26 tall, corners 13, 12/500 — the ready fill, the
+      one primary inverted on the foreground like the room's go.
   - **Its first open says "Opening History"** (2026-10-04): the room — its code and its sheet — is
     its own chunk, on neither the first paint nor the canvas's. It loads when the window is first
     idle after the canvas has drawn, or at the first ⌘3 if that comes sooner. While it arrives the
@@ -1709,29 +1906,162 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     that cannot open says so in the same place, never a blank: **"History could not open"** over
     what failed, in its own words, and a quiet **Retry** (the splash's rule: the plain reason, then
     Retry).
-  - **Until the Peek lands, its search is the room's own sheet** (the search interim, ruled by James
-    2026-10-04; AR-D41 stands — the Peek is the one search, and this sheet leaves when it lands). The
-    room's strip, under the head band, holds the room's launcher — the pill that says what it searches
-    ("Search 11 sessions across 4 agents") — and **no key is spent on opening it**: ⌘K is the
-    palette's (§7), so the pill prints no key and opens with a press. It grows into the room's
-    top-attached sheet in the room's layer: its top on the head band's foot, its foot well above the
-    reserve, centred and never nearer a side than 84, so the slivers stay clear. While it stands the
-    sheet is **one of the frame's open surfaces** (`history-search`, §10): the palette, a drawer, the
-    Me menu, Settings or a change of view folds it, and opening it folds them — so **Esc** closes the
-    sheet, and nothing of the frame's is open to take that Esc first. A hit opens its session and
-    lands the transcript on the message; the stepper it leaves in the transcript's head walks the
-    session's other matches, and VibeField binds the two keys that stepper names: **⌘G** the next
-    match and **⇧⌘G** the previous (Ctrl G and Ctrl Shift G off the Mac), heard on the window's
-    capture phase while History is the view and nothing of the frame's is open. With no match to walk
-    the key is left alone. The empty transcript says **"Pick a session, or search above."** — the
-    room's own sentence named ⌘K, a key VibeField does not give it (RO-14). Recent searches keep
-    under `vf.history.` with the room's other preferences.
+  - **Its search is the Peek** (§8 "Search — the Peek"; built 2026-10-08, P1). The search interim
+    (ruled by James 2026-10-04) retired with its landing, as AR-D41 said it would: the room's strip
+    no longer holds its launcher pill and the room's own sheet is never drawn — VibeField passes the
+    room no `search` — and the `history-search` surface left the frame's value with them. The frame's
+    button at the band's right end and **⌘F** open the Peek on **Everything** (GV-D9), and a past row
+    opens the room **at the line** through the room's own `openAt`: the session, in its project, the
+    transcript landed on the message. **⌘G / ⇧⌘G retired with the interim** (K3): they walked the
+    stepper a hit from the room's sheet left, and the room's `openAt` clears that stepper, so nothing
+    is left to step. The empty transcript says **"Pick a session, or search with ⌘F."** (Ctrl+F off
+    the Mac) — the key the button prints (K2). No recent searches are kept: the room's sheet kept
+    them, and the Peek draws none.
+    *The interim, for the record (2026-10-04 to 2026-10-08):* the room's strip held its launcher
+    ("Search 11 sessions across 4 agents"), which printed no key (⌘K is the palette's) and grew into
+    the room's top-attached sheet in the room's layer, one of the frame's open surfaces
+    (`history-search`); a hit landed the transcript on the message, and ⌘G / ⇧⌘G walked the
+    session's other matches; the empty transcript said "Pick a session, or search above."
   - History follows the app's **theme** (the room reads the page's `.dark` and the kit's `--vf-*`);
     it has no toggle of its own. Under **reduced motion** the room's own transitions collapse — the
     floor the room asks of its host, scoped to the view. Its **preferences** (dealt project tints,
-    the fold, recent searches) keep under `vf.history.` in the window's storage, where a refusal
+    the fold) keep under `vf.history.` in the window's storage, where a refusal
     costs only the memory. ⌘3 out and back keeps the room as it was: its scroll, its choice, its
     open stream.
+- **Search — the Peek** (One Frame §23, round 3; GV-D8 the Peek, GV-D9 the view's own scope,
+  GV-D10 the frame's button, GV-D3 the filters inside search — ruled 2026-10-02; built for History
+  2026-10-08, P1): ONE search for every view that searches, the frame's and never a view's — "the
+  search designs are the same and consistent on both views … a bigger and centered popup in the
+  middle of the screen with background all blurred and dimmed" (James, 2 Oct). It is History's
+  and, since P2 (2026-10-09; docket v9 PK2/PK4/PK5, all (a)), Godview's: puppeteer's Find sheet
+  left VibeField with the bar's FIND, and Live now is the Peek's.
+  - **The button** is the frame's: a 40 glass circle (the line's glass, §5) at the head's right end —
+    16 in, `top-2`, on the lights' axis — holding `search` 15 in secondary ink (primary under the
+    pointer), lifted 8 so **its key is printed under it**, as the views track prints its keys: ⌘F at
+    9/600 in secondary ink, the ⌘ at 8.5/500 in tertiary (Ctrl F off the Mac). It stands above the
+    cover with the line, the edges and the corner (62), in the views that search — History and
+    Godview. **⌘F** (Ctrl+F) opens the popup, or puts the caret back in its field while it is open:
+    a product chord (§10). **In Godview** (PK2 (a), until the Stories head, GV-D1, is built) it
+    stands in the same place, over the instrument bar's right end: the bar's tools end one head gap
+    (12) short of it, so System control sits beside it and never under it, and the bar steps aside
+    by the button's own measure as its glass widens. The button is 40 tall at `top-2` and the bar
+    40 tall from the window's top, so it hangs 8 below the bar's foot, over the stage's edge.
+    **With a filter on** (Godview's, GV-D3) the glass grows a token after the circle naming it —
+    the desktop's OS mark and name, a hairline, the profile's glyph and name ("studio · Work"), at
+    13/500 in primary ink — and a 26 × that clears both: a filtered view never looks unfiltered.
+  - **The popup — Peek, 900 × 560**, centred in the window: solid (`--vf-chrome-solid`, FC-D14 —
+    rows to be read), corners 24, ringed by the strong hairline, with its own shadow (§5, *Search
+    popup*). It pops in on the island curve (§6). **The scrim** (§5, *Search scrim*) blurs and dims
+    the whole window under it; **the view recedes** to 0.98 about 50% 46%, and the frame recedes with
+    it (the line, the edges, the corner, the button) — the cover, the still under it and the chrome
+    together, never the desk's own box (DK-15; §6) — only the window's lights stay sharp, as the OS
+    draws them. Nothing under the scrim holds the keyboard while it stands (the field is inert), and
+    the keyboard goes back where it was when the popup folds on its own. A click on the scrim closes
+    the popup.
+  - **Top to foot.** **The field**: 64 tall, `search` 18 in tertiary ink 22 in, the words at 20/400
+    (−0.01em) in primary ink with the select caret, and at its end **close** — a 40 circle, `close`
+    12 lifted 9, **esc printed under it** (9/600, secondary), the ready fill under the pointer. In
+    Everything it says "Search your whole agentic past…". **The scope row**, 48 tall between two
+    hairlines: a **Live now · Everything** segment — the ready fill as its track, padding 3, corners
+    12; each half 28 tall at 12.5/500 in secondary ink, the chosen one solid in primary ink with the
+    hairline and a 1px shadow — then that scope's dropdowns, 30 tall, corners 15, a 13 glyph in
+    secondary ink, the name at 12.5/500 and a turned `chevron` 11 in tertiary (the ready fill under
+    the pointer). Everything's are **Every project · Prompts and replies · Any agent**; Live now's,
+    in Godview, are the view's own filters (GV-D3) — **All desktops** (every desktop's OS mark; a
+    desktop's mark and name, `here` beside this one, its agents or its standing beside each, a
+    desktop not answering quiet) and **Every profile** (the person glyph; a profile's own glyph,
+    filled for the default, `waiting` beside one a session under it waits in) — each offered only
+    when there is a choice to make (two desktops; a profile besides This Mac), and they **filter the
+    view too**: the stage shows what search's Live now shows. History's Live now has none. Each
+    opens a solid menu (§5) 4 under it, and a filter that is on names itself on its dropdown. In
+    Godview the placeholder says "Words said in a live session, a folder, an agent…". **The body**:
+    the list, 380 wide, and the peek beside it, a hairline between them. **The foot**, 52 tall over
+    a hairline: one count sentence at 12/400 in tertiary ink, and **Open** — 32 tall, corners 16,
+    12.5/600 on the ready fill (14% under the pointer) — with **↵ printed on it** in tertiary ink: a
+    live row's says **Open in the terminals**; a past row's **Open at the line** in History and
+    **Open in History** in Godview.
+  - **A row is a session** — the root a reader lands in; the lines that matched are its evidence,
+    never rows of their own. Its head: the title at 14/600, then the time at 12 `tabular-nums` in
+    tertiary ink at the right end (the clock inside today, the day and the clock inside the year, the
+    day and the year beyond it). Under it, indented 17 (the state dot's column, empty for a past
+    session): **folder · agent** at 12 in tertiary ink — the folder it ran in, by its last name, and
+    the agent by the catalog's label. Then up to three matched lines, newest first: a 40 column
+    saying who said it — **you**, **agent**, or the kind as itself (11/500, tertiary) — and the line
+    at 13/1.45 in secondary ink, cut at a word with its first match among its first words, then
+    ellipsised. Padding 10 12, corners 14, 2 apart; the hot row in the ready fill. **A live row**
+    (Live now, P2) is the same shape: the 8 dot in the state's colour (§2.5 — working green,
+    waiting orange, idle and a shell faint), the session's title (the transcript's, else its folder)
+    and, where a past row says its time, its state — **waiting · working · idle · a shell**; under
+    it folder · agent ("shell" for a bare terminal), and **a run on another desktop says where it
+    runs** (K10): its OS mark and the desktop's name at 11.5/500 in secondary ink. With words, the
+    runs whose facts or transcript hold every word (puppeteer's find model: the live runs joined to
+    rosetta's words), by how many lines matched, then waiting → working → idle → shell; without
+    words, every live session in that order, the bare shells last.
+  - **A match is neutral, everywhere** (K1): the text's own primary ink at 600 on an 11% wash of it,
+    corners 3 — never orange, which means "waiting on you" here (§2.5), and never the select blue.
+    The peek too: the round-3 kit's orange line marker was a leftover.
+  - **The live peek** (GV-D8, P2): what opening a live row would show — **the run's own pane,
+    resting**: its terminal, watched, at corners 14 on the terminal's ground with a hairline, 14 in.
+    It watches by construction (the canvas mirror's five layers, which DK-17 retired from the canvas,
+    restored here): a runtime that refuses every geometry and input verb, `inert`, no pointer, no
+    focus, read-only — so it makes **no geometry claim** (the pane keeps the PTY's size; the peek
+    draws what fits), takes no focus and types nothing. A run on another desktop cannot be watched
+    from here (no mirror until DS-4's): the peek says where it runs and that Open brings its
+    terminal into the active pane.
+  - **The peek** (K8, until the docket's PK3 rules): what opening the row would show. Today, that
+    session's matched lines — every hit the index answered for it, in reading order, each led by
+    who said it and marked as above, at 13.5/1.55 in primary ink — under the session's title at
+    15/600 and its folder · agent · time at 12 in tertiary ink over a hairline; the line ↵ lands on
+    sits in the ready fill. One component draws it, so an upstream reader or a timeline excerpt
+    replaces it whole.
+    *Corrected 2026-10-09 (PK3, built in PJ-4):* under the same head, the peek is now the room's own
+    **read-only reader** (rosetta's `TranscriptReader`) at the matched line, the words typed marked
+    — the session as opening it shows it, with no acts and nothing written back. A match stays
+    neutral (K1) through the reader's own tokens: the text's own ink at 600 on an 11% wash of it,
+    and the matched line keeps the reader's quiet edge in the tertiary ink. It reads the window's
+    History ports (the room's one meta feed and its session leases); while its code arrives, and if
+    it cannot draw, the matched lines above stand in. **Every project** names your projects as
+    History lists them (fieldd's, with a folder on this desktop), and narrows by the project each
+    hit's session is filed under.
+  - **Honest, empty or not.** With no words typed, Everything lists your latest sessions and the foot
+    says "Your latest sessions · every word you type must match". With words, it says how many
+    sessions and lines matched, and that it is the first page only when the index stopped at its
+    limit. With nothing matching: **"Nothing in your past holds every word of “q”. Try fewer words,
+    or a phrase in quotes."** — rosetta matches a quoted phrase whole, and while a quote is still
+    open nothing is asked: the foot says "Close the quote to search for the phrase". An index that
+    cannot answer says so in the foot in fieldd's words, and the list keeps what it last showed —
+    never "no matches" for a question nobody answered. **Live now**'s foot: "3 live sessions,
+    waiting first" before a word (or "Nothing runs right now"); with words "2 sessions · 3 lines
+    matched", with "searching" while the newest ask is out, "the words were not searched" when the
+    index did not answer (the last answer's lines stand), "the first page only — narrow the
+    search" when it clipped; the index's own state after it when it is not ready ("transcript search
+    off — …", "indexing · 40%"). Nothing live holding the words: **"No live session holds every word
+    of “q”."** with a press, **Search everything for “q”**. **Live now in History** (docket PK5
+    (a), 2026-10-09) is live while it shows: the Peek opens the monitor's own feed (the model board,
+    over this window's fieldd client) when Live now comes to show and closes it when it stops — a
+    change of scope, the popup's close, unmount — so Godview itself still asks nothing while closed
+    (PF6). Until it answers the foot says "Asking what runs…"; refused, "What runs could not be
+    read — ‹fieldd's words›". (K9's "searched in Godview" retired with it.)
+  - **Keys** (the kit's): ⌘F opens the popup or refocuses its field, on the view's own scope —
+    **Live now in Godview, Everything in History** (GV-D9); **Esc** closes an open menu, then the
+    popup, before anything else hears it; **↑ ↓** move the hot row; **↵** opens it; a click opens a
+    row. **One surface at a time**: the popup is one of the frame's open surfaces, `search`
+    (§10) — the palette, a drawer, the Me menu, Settings or a change of view fold it, and it folds
+    them; ⌘K over it opens the palette, ⌘F over the palette opens it.
+  - **Open in the terminals** (P2). A live row — ↵, a click or Open — folds the popup and, in
+    Godview, does what the view's own select does: this desktop's run mounted in the active pane, a
+    peer's attached there. From History it takes Jump to's path (P3): the frame moves to Godview and
+    the deck reveals the pane showing the run (activated, or mounted in the active pane); a peer's
+    run is selected through Godview as it opens. A run that could not be shown is SAID, on the
+    line's note in Jump to's words ("Could not jump — ‹why›"): the popup folded at the pick.
+  - **Open at the line.** A past row — ↵, a click or Open — folds the popup and opens History at the
+    line: the room's own `openAt` with the hit's session and message, the session in its project and
+    the transcript landed on the message (§8 "History"). Everything reads this desktop's index (K5);
+    other desktops' history waits for DS-7, since the room cannot open a peer's session yet.
+  - **A narrow window** (K6): the popup clamps to the window — 24 clear of each side, and 96 clear
+    of the window's top and foot (the line's 72, and 24), so it never covers the head or the line.
+    Below a 680 popup — a window narrower than 728 — the list and a useful peek no longer both fit:
+    **the peek folds and the list fills the popup**.
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the
@@ -1857,7 +2187,8 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   covers over the desk). A covered view ends its content at 692, the **reserve** of 88 above the
   window's foot, and keeps 8px clear at each edge for the notches' slivers; its own ground runs
   under the line, and only the canvas runs content
-  under it. Above the frame stand only Settings, the palette and the loading veil (and, until
+  under it. Above the frame stand only Settings, the palette, the Peek's scrim and popup (64, §8
+  "Search — the Peek", 2026-10-08) and the loading veil (and, until
   FR-4 opens it above the line, the open Me menu, which grows over the track's left end — *since
   FR-4 it stands with the frame, above the line, and nothing of the frame's is under it*).
   **The active view has ONE owner** — the window's, held in main beside the menu that names it,
@@ -1870,7 +2201,14 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   never printed (FR-5): **B** toggles Objects on Canvas — never while typing (the draft, a note, any
   field) and never under a cover; **⌘T** (Ctrl+T) is Godview's New terminal, a product chord taken
   on the capture phase in Godview so a focused pane never sees it (ghostty's new_tab); and **@ is
-  never a shortcut** — it is typed in the draft. **The head's keys** (DK-D24; One Frame §6) are
+  never a shortcut** — it is typed in the draft. **Search's key** (§8 "Search — the Peek",
+  2026-10-08) is PRINTED under the frame's search button: **⌘F** (Ctrl+F) opens the Peek, a product
+  chord taken on the capture phase while History or Godview is the view (Godview's own Find left
+  with P2, 2026-10-09) — so Settings → Terminal → Keyboard says Ghostty's find never reaches a pane
+  while History or Godview is the view. **⌥0–⌥9 are nobody's** (docket PK4 (a), 2026-10-09): they
+  chose Godview's profile tabs, and the tabs left the bar for search's scope row (GV-D3), so ⌥ and
+  every digit reach the pane — a fresh pane's launcher keeps its own ⌥n there (QL-D2); nothing
+  prints them. **The head's keys** (DK-D24; One Frame §6) are
   the zoom's, SAID in its menu and the palette, never printed: **⌘+** (⌘= or ⌘+, the keypad's too)
   zooms in, **⌘−** out, **⌘0** to actual size and **⇧1** to fit — Ctrl+Plus, Ctrl+Minus, Ctrl+0
   and Shift+1 off the Mac. They are Canvas's, not the product's chords: heard on the window's
@@ -1897,7 +2235,9 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   surfaces** — `objects · @ · fields · zoom · palette · me · clipboard · artifacts`, one value, so
   any one opening folds every other (F11); Settings still folds them and is folded by them.
   *Until the Peek lands (2026-10-04, the search interim), History's room's sheet is a ninth,
-  `history-search` (§8 "History").* **The
+  `history-search` (§8 "History").* *Since 2026-10-08 (the Peek, P1) **`search`**, the Peek's popup,
+  is one of them (§8 "Search — the Peek") and `history-search` left with the room's sheet; beside
+  the desk's selection menu (DK-11, §10 "The mat's places") the one owner holds ten.* **The
   app's theme has ONE owner, main's** (FC-D5): Light · Dark · Auto, one value per device kept by the
   shell, Auto following the OS through Electron's `nativeTheme`, and the owner projects what it
   resolves to back into `nativeTheme` — so the window's native chrome, its menus and the page's
@@ -1925,7 +2265,8 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   has no bar (R7). **The bar's grown menu is one of the frame's open surfaces** — the one owner's
   ninth, `objects · @ · fields · zoom · palette · me · clipboard · artifacts · selection menu` — so
   opening it folds the rest, any of them opening folds it, and its Esc is taken before the desk's
-  Esc ladder (R5). **The status line** (§8) is the head's: centred under it at y 56, or under the
+  Esc ladder (R5). *With the Peek (2026-10-08, P1) the one owner holds ten: these and `search`,
+  the Peek's popup (§8 "Search — the Peek").* **The status line** (§8) is the head's: centred under it at y 56, or under the
   tools in hand at y 112 while an object is held (R12).
 - **Review ritual**: UI PRs cite the sections they follow, include a screenshot in both
   themes, and answer the §0 bar question. Deviations from a token/recipe/easing are a
@@ -2061,7 +2402,8 @@ button (FC-D1 ruled type @).
 **`jump`** (2026-10-03, One Frame §13; Session Glyphs' jump-T3) goes to a session that is running — a
 live row in History, a link in running text: `terminal`'s window with its wall opened on the left for
 the arrow going in, since a box with an arrow leaving it is already `outward`; its Hardware record is
-the page's T4. **The desk's seven** (2026-10-03, Chrome on the Mat §5; MC-D8 ruled 2026-10-02) are
+the page's T4. Since 2026-10-08 (P3) it is also History's create while the chosen session runs here
+(§8, the line; §8 "History"), cross-fading with `resume` in the create's one place. **The desk's seven** (2026-10-03, Chrome on the Mat §5; MC-D8 ruled 2026-10-02) are
 ICE's selection glyphs redrawn in the Instrument construction for the desk's chrome (§8):
 `duplicate` · `tape` · `lift` · `trash` on the selection bar — `tape` and `lift` are one padlock, shut
 and opened — and `pen` · `eraser` · `today`, the modes and the act the held kinds declare; their

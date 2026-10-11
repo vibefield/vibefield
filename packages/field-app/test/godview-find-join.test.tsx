@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 /**
- * MV-3d (M35, M47) — THE FIND SHEET'S JOIN.
+ * MV-3d (M35, M47) — FIND'S JOIN (the find sheet's until P2; since then the
+ * rows the monitor lends the frame's Peek for Live now, `find-door.ts`).
  *
  * The find sheet joins rosetta's hits by each run's provider-native session id
  * and scopes and dates them by the mirror's clocks — facts the model does not
@@ -25,7 +26,6 @@ import { agentViewFixture } from "@vibecook/puppeteer-view-sdk/testing";
 import type { FindAgent } from "@vibecook/puppeteer-views";
 import {
   buildFindRows,
-  FindSheet,
   type HistoryPort,
   lastActiveMs,
   liveScope,
@@ -73,21 +73,15 @@ afterEach(() => {
   errors = [];
 });
 
-/** The stage's own path to the sheet: the window's rows and joins
- * (`useMonitorAgents`), the sheet mounted closed, as `GodviewMonitor` mounts it. */
-function Probe({ door }: { door: MonitorDoor }): ReactElement {
+/** The stage's own path to Live now's rows: the window's rows and joins
+ * (`useMonitorAgents`), read on every render as `GodviewMonitor` reads them
+ * (and the find model run over them, as the Peek runs it — `liveScope`). */
+function Probe({ door }: { door: MonitorDoor }): ReactElement | null {
   const palette = useMonitorPalette();
   const { findAgents } = useMonitorAgents({ palette, door, panes: { sessionIds: [] } });
   latest = findAgents;
-  return (
-    <FindSheet
-      open={false}
-      agents={findAgents}
-      history={nothing}
-      onClose={() => undefined}
-      onSelect={() => undefined}
-    />
-  );
+  liveScope(findAgents);
+  return null;
 }
 
 async function settle(): Promise<void> {
@@ -108,7 +102,7 @@ describe("M47 — the find sheet never reads the views' monitor", () => {
       attach: async () => ({ state: "no-pane" }),
       createTerminal: async () => ({ state: "no-pane" }),
       mountLocal: async () => ({ state: "no-pane" }),
-      history: nothing,
+      transcripts: nothing,
       usage: {
         snapshot: async () => ({ refreshedAt: CHECKED_AT, entries: [] }),
         subscribe: () => () => undefined,
@@ -235,6 +229,40 @@ describe("the join's rules (`createFindAgents`)", () => {
         (row) => row.agent.id,
       ),
     ).toEqual([peer.id]);
+  });
+
+  it("says where each run runs, and names this desktop's floor session — never a peer's (P2)", () => {
+    const project = createFindAgents();
+    const own = modelRow("row-a", {
+      device: { id: "here", name: "MacBook Pro", os: "mac", self: true },
+    });
+    const peer = modelRow("peer", {
+      device: { id: "away", name: "Loft", os: "linux", self: false },
+    });
+    const sessions = new Map([
+      [own.id, "pty-a"],
+      [peer.id, "pty-peer"],
+    ]);
+    const [ownRow, peerRow] = project(
+      [own, peer],
+      new Map([[own.id, "run-a"]]),
+      [spokenRun],
+      sessions,
+    );
+    expect(ownRow?.desk).toEqual({ id: "here", name: "MacBook Pro", os: "macos", self: true });
+    expect(ownRow?.floorSessionId).toBe("pty-a");
+    expect(peerRow?.desk).toEqual({ id: "away", name: "Loft", os: "linux", self: false });
+    expect(peerRow?.floorSessionId).toBeUndefined();
+    // a floor session that moves (a resume into a new PTY) is a new row
+    const moved = project(
+      [own, peer],
+      new Map([[own.id, "run-a"]]),
+      [spokenRun],
+      new Map([[own.id, "pty-b"]]),
+    );
+    expect(moved[0]).not.toBe(ownRow);
+    expect(moved[0]?.floorSessionId).toBe("pty-b");
+    expect(moved[1]).toBe(peerRow);
   });
 
   it("reuses unchanged rows and lists, preserving input order and local-only joins", () => {

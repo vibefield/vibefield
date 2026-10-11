@@ -1,3 +1,4 @@
+import type { ReaderAddress, RoomPorts } from "@rosetta/room";
 import {
   Component,
   type ComponentType,
@@ -142,5 +143,50 @@ export function HistoryRoomMount({
         <Room {...room} />
       </Suspense>
     </HistoryRoomBoundary>
+  );
+}
+
+/** PK3 — the room's reader through the room's own chunk (one dynamic import:
+ * the reader is the room's code), for the Peek's past picture. One lazy
+ * component for the window. */
+const PEEK_READER = lazy(async () => ({ default: (await HISTORY_ROOM.load()).PeekReaderView }));
+
+/** Holds a reader that cannot load or draw in `fallback`'s place: the Peek
+ * keeps the matched lines rather than a hole. */
+class PeekReaderBoundary extends Component<
+  { fallback: ReactNode; children: ReactNode },
+  { failed: boolean }
+> {
+  override state = { failed: false };
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+  override componentDidCatch(error: unknown): void {
+    getRendererLogger()
+      .child({ component: "history" })
+      .error("renderer.history.reader_failed", "the Peek's reader could not draw", error);
+  }
+  override render(): ReactNode {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+/** The Peek's past picture (PK3): the room's reader at `at`, `fallback` (the
+ * session's matched lines) while the chunk arrives or if it cannot. */
+export function PeekReaderMount({
+  ports,
+  at,
+  fallback,
+}: {
+  ports: RoomPorts;
+  at: ReaderAddress;
+  fallback: ReactNode;
+}): ReactElement {
+  return (
+    <PeekReaderBoundary fallback={fallback}>
+      <Suspense fallback={fallback}>
+        <PEEK_READER ports={ports} at={at} />
+      </Suspense>
+    </PeekReaderBoundary>
   );
 }

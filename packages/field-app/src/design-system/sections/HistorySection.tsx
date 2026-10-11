@@ -1,16 +1,18 @@
 import type { ReactElement } from "react";
 import { HistoryOpenFailedState, HistoryOpeningState } from "../../history/HistoryOpening";
 import { Section, Specimen } from "../catalog-ui";
-import { HistoryPreview, HistoryResumePlate, HistorySearchPlate } from "../HistoryPreview";
+import { HistoryPreview, HistoryResumePlate } from "../HistoryPreview";
+import { PeekPlate } from "../PeekPreview";
 
 // History (AR-8c; DESIGN.md §8 "History"): rosetta's room as the frame holds
 // it, on the package's fixture ports — the shipping view in every state the
 // host owns: the room on the cover's glass, a session chosen with the line's
-// Resume live, the index not answering, and nothing enrolled yet — and the
+// Resume live, one running here with its Jump to (P3), the index not
+// answering, and nothing enrolled yet — and the
 // two faces before the room (2026-10-04, the room's own chunk): opening, and
-// a room that could not open. Until the Peek lands each holds the room's own
-// search as the product does, and one plate holds a search (the search
-// interim, 2026-10-04).
+// a room that could not open. Its search is the frame's Peek (2026-10-08;
+// §8 "Search — the Peek"): the shipping controller over a fixture port drawn
+// from the same demo — the button at rest, and the popup holding words.
 
 /** A chunk refusal in the loader's own words, real-shaped. */
 const FIXTURE_OPEN_FAILURE =
@@ -30,6 +32,15 @@ export function HistorySection(): ReactElement {
         </div>
       </Specimen>
       <Specimen
+        title="History by project — fieldd's projects, each session filed by its key (PJ-4)"
+        source="history/doors.ts"
+        bleed
+      >
+        <div className="vf-ds-history-plate" data-state="projects">
+          <HistoryPreview state="projects" />
+        </div>
+      </Specimen>
+      <Specimen
         title="A session chosen — the line's Resume, live for it"
         source="history/HistoryView.tsx"
         bleed
@@ -39,14 +50,29 @@ export function HistorySection(): ReactElement {
         </div>
       </Specimen>
       <Specimen
-        title="Search, until the Peek lands — a search held; press the pill for the room's sheet"
-        source="history/search.ts"
+        title="The chosen session runs here — the line's create says Jump to"
+        source="history/HistoryView.tsx"
         bleed
       >
-        <div className="vf-ds-history-plate" data-state="search">
-          <HistorySearchPlate />
+        <div className="vf-ds-history-plate" data-state="running">
+          <HistoryResumePlate live />
         </div>
       </Specimen>
+      <Specimen
+        title="Search — the frame's button at the head's right end, ⌘F printed under it (History before anything is read)"
+        source="frame/Peek.tsx"
+        bleed
+      >
+        <PeekPlate state="closed" />
+      </Specimen>
+      <Specimen
+        title="The Peek — “plus” held: the list, and the peek beside it; a pick opens the room at the line"
+        source="frame/PeekView.tsx"
+        bleed
+      >
+        <PeekPlate state="open" />
+      </Specimen>
+
       <Specimen
         title="rosettad is not answering — the index's state, inside the frame"
         source="history/doors.ts"

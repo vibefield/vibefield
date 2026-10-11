@@ -544,7 +544,36 @@ const RULES = [
     applies: (p) => SOURCE_EXT.test(p),
     importTest: (s, p) => retiredImport(s, p),
   },
+  {
+    id: "R26",
+    // P2 (2026-10-09; the History lead's ruling (a) on the live peek): the watch-only
+    // terminal pane DK-17 retired from the canvas (`0afeed47`, DK-D19: nothing of the
+    // terminal on the canvas) returned as the Peek's own — GV-D8 draws the live session's
+    // real pane inside search's popup — under the Peek's names
+    // (`frame/peek-pane/LivePeekPane`, `watch-only`). A new name alone would read as
+    // routing around R25; this row makes it a narrower door: only the Peek
+    // (`field-app/src/frame/peek*`, `frame/Peek*`) and the pane's own module and tests
+    // may import it — never the desk, the canvas, Godview or anything else.
+    enforce: true,
+    description:
+      "the Peek's watch-only pane (frame/peek-pane/*) is imported only by the Peek (field-app src/frame/[Pp]eek*), its own module and field-app's tests",
+    applies: (p) => SOURCE_EXT.test(p),
+    importTest: (s, p) => peekPaneImport(s) && !peekPaneMayImport(p),
+  },
 ];
+
+// P2 (R26) — the Peek's watch-only pane, by its directory or its module names.
+function peekPaneImport(spec) {
+  if (/(?:^|\/)peek-pane(?:\/|$)/.test(spec)) return true;
+  const last = (spec.split("/").pop() ?? "").replace(/\.(?:[cm]?[jt]sx?)$/, "");
+  return last === "LivePeekPane";
+}
+// Who may: the Peek (`src/frame/peek*` / `Peek*`), the pane's own directory, field-app's tests.
+function peekPaneMayImport(rel) {
+  if (under(rel, "packages/field-app/src/frame/peek-pane")) return true;
+  if (/^packages\/field-app\/src\/frame\/[Pp]eek[^/]*$/.test(rel)) return true;
+  return isTestPath(rel) && under(rel, "packages/field-app");
+}
 
 // DK-17 (R25) — the retire table's deletions as import specifiers.
 const RETIRED_PACKAGES = {
@@ -587,7 +616,9 @@ const RETIRED_MODULE_NAMES = new Set([
   // the browser's page widget (row 9)
   "BrowserPageView",
   "BrowserPageWidget",
-  // the terminal widget and its mirror (row 11)
+  // the terminal widget and its mirror (row 11). *2026-10-09 (P2):* a watch-only pane
+  // returned as the Peek's own (GV-D8), off the canvas, under the Peek's names and walled
+  // to `frame/peek*` (R26); DK-D19 holds — the canvas's names below stay retired.
   "TerminalMirrorSurface",
   "TerminalMirrorPreview",
   "TerminalMirrorWidget",
@@ -1101,6 +1132,23 @@ function runSelfTest() {
       file: "packages/field-app/src/uses-note.ts",
       body: 'import { notePlugin } from "@vibefield/plugin-note";\n',
     },
+    // P2 (R26) — the Peek's watch-only pane, reached from anywhere but the Peek: the desk,
+    // Godview's deck, History, the canvas — by its directory or its module's name.
+    {
+      id: "R26",
+      file: "packages/field-app/src/field/desk/uses-peek-pane.tsx",
+      body: 'import { LivePeekPane } from "../../frame/peek-pane/LivePeekPane";\nexport const p = LivePeekPane;\n',
+    },
+    {
+      id: "R26",
+      file: "packages/field-app/src/godview/uses-peek-pane.tsx",
+      body: 'import { watchOnlyRuntime } from "../frame/peek-pane/watch-only";\nexport const w = watchOnlyRuntime;\n',
+    },
+    {
+      id: "R26",
+      file: "packages/field-app/src/frame/uses-pane.tsx",
+      body: 'import { LivePeekPane } from "./peek-pane/LivePeekPane";\nexport const p = LivePeekPane;\n',
+    },
   ];
   const cleans = [
     // react + a DECLARED entry import + plain code: proves R1/R2/R9 don't
@@ -1263,6 +1311,20 @@ function runSelfTest() {
       file: "packages/fieldd/src/clean-monitor-door.ts",
       body: 'import { createMonitorBackend } from "@vibecook/puppeteer-monitor";\nimport type { MonitorAgentRow } from "@vibecook/puppeteer-view-sdk/model";\nexport const b = createMonitorBackend;\nexport type Row = MonitorAgentRow;\n',
     },
+    // P2 (R26): the Peek mounts its pane, the pane's module reaches its facade, the
+    // pane's tests reach both.
+    {
+      file: "packages/field-app/src/frame/PeekClean.tsx",
+      body: 'import { LivePeekPane } from "./peek-pane/LivePeekPane";\nexport const p = LivePeekPane;\n',
+    },
+    {
+      file: "packages/field-app/src/frame/peek-pane/clean-pane.tsx",
+      body: 'import { watchOnlyRuntime } from "./watch-only";\nexport const w = watchOnlyRuntime;\n',
+    },
+    {
+      file: "packages/field-app/test/peek-pane-clean.test.tsx",
+      body: 'import { LivePeekPane } from "../src/frame/peek-pane/LivePeekPane";\nexport const p = LivePeekPane;\n',
+    },
     {
       file: "packages/field-app/src/clean-model-door.ts",
       body: 'import { createMonitorReplica } from "@vibecook/puppeteer-monitor/replica";\nimport type { FrameScheduler } from "@vibecook/puppeteer-view-sdk/model";\nimport { frameScheduler } from "@vibecook/puppeteer-view-sdk/host";\nexport const r = createMonitorReplica;\nexport type F = FrameScheduler;\nexport const f = frameScheduler;\n',
@@ -1343,6 +1405,9 @@ function runSelfTest() {
     const r25Gated = found.some((v) => v.id === "R25" && ENFORCE_BY_ID.get(v.id) === true);
     console.log(`  ${r25Gated ? "PASS" : "FAIL"}  R25 detected and GATED (DK-17)`);
     if (!r25Gated) ok = false;
+    const r26Gated = found.some((v) => v.id === "R26" && ENFORCE_BY_ID.get(v.id) === true);
+    console.log(`  ${r26Gated ? "PASS" : "FAIL"}  R26 detected and GATED (P2)`);
+    if (!r26Gated) ok = false;
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

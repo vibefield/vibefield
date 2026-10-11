@@ -327,10 +327,18 @@ export function FieldView({
     [dark, effectiveAppearance],
   );
 
+  // The Peek (search, the frame's; DESIGN.md §8 "Search — the Peek", §6): its
+  // scrim and popup are drawn outside this wrapper, which is out of reach while
+  // they stand (a modal: nothing under the scrim may hold the keyboard). What
+  // you see recedes under them — the cover's still and the frame's chrome, in
+  // `.field-recede` below — and the desk's own box never does (DK-15).
+  const searching = surface === "search";
+
   return (
     <div
       className="field-wrap"
       data-doc-transition={hudMotion}
+      inert={searching}
       {...(appearanceOverride.appearance === null
         ? {}
         : { "data-appearance-override-revision": appearanceOverride.revision })}
@@ -372,19 +380,29 @@ export function FieldView({
           />
         )}
       </div>
-      {/* THE STILL UNDER THE COVERS (DK-15; DESIGN.md §8): over the desk and
-          under every piece of chrome; outside the keyed scene, so a remount
-          under a standing cover keeps it. */}
-      <CoverStill ce={ce} covered={covered} view={view} dark={dark} />
-      <ChromeLayer
-        ce={ce}
-        manager={manager}
-        hudMotion={hudMotion}
-        docState={docState}
-        surface={surface}
-        onSurfaceChange={setSurface}
-        chrome={chrome}
-      />
+      {/* THE RECEDE UNDER THE PEEK (GV-D8 × DK-15; DESIGN.md §6, §8 "Search —
+          the Peek"): what you see over the desk — its still under a cover and
+          the frame's chrome, the cover with it — in ONE full-window box that
+          recedes to 0.98 about the window's 50% 46% while the Peek stands
+          (`data-peek-recede`, frame/peek.css). The desk's own box stays outside
+          it, so no transform reaches the desk under a cover. At rest the box
+          carries no transform (no stacking context) and takes no pointer; its
+          children keep theirs (styles/base.css). */}
+      <div className="field-recede" data-peek-recede={searching ? "true" : "false"}>
+        {/* THE STILL UNDER THE COVERS (DK-15; DESIGN.md §8): over the desk and
+            under every piece of chrome; outside the keyed scene, so a remount
+            under a standing cover keeps it. */}
+        <CoverStill ce={ce} covered={covered} view={view} dark={dark} />
+        <ChromeLayer
+          ce={ce}
+          manager={manager}
+          hudMotion={hudMotion}
+          docState={docState}
+          surface={surface}
+          onSurfaceChange={setSurface}
+          chrome={chrome}
+        />
+      </div>
     </div>
   );
 }

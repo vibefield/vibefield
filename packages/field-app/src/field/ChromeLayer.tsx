@@ -20,6 +20,7 @@ import type { LineActs } from "../frame/Composer";
 import { type FrameSurface, foldSurface } from "../frame/frame-surface";
 import { Head } from "../frame/Head";
 import { canvasHead } from "../frame/head-canvas";
+import { FramePeek } from "../frame/Peek";
 import type { FrameActRun } from "../frame/palette-acts";
 import { StatusLine } from "../frame/StatusLine";
 import { ViewFrame } from "../frame/ViewFrame";
@@ -27,6 +28,7 @@ import { requestView, subscribeMenuZoom, useActiveView } from "../frame/view-sta
 import { viewKeysOf } from "../frame/views";
 import { runZoom } from "../frame/zoom";
 import { GodviewOverlay } from "../godview";
+import { openHistoryLiveFeed } from "../godview/monitor/live-feed";
 import { HistoryView } from "../history/HistoryView";
 import { prefetchHistoryRoomWhenIdle } from "../history/room-chunk";
 import { getHost } from "../host";
@@ -116,15 +118,10 @@ export function ChromeLayer({
   const head = useMemo(() => canvasHead(ce), [ce]);
   const lineActs = useRef<LineActs | null>(null);
   // History's view in the frame's cover (AR-8c): rosetta's room over this
-  // window's fieldd client, told whether it is the view showing — and, until
-  // the Peek lands, handed the frame's one value, which holds the room's search
-  // sheet as one of the frame's surfaces (the search interim, 2026-10-04).
-  const historyView = useCallback(
-    (active: boolean) => (
-      <HistoryView active={active} surface={surface} onSurfaceChange={onSurfaceChange} />
-    ),
-    [surface, onSurfaceChange],
-  );
+  // window's fieldd client, told whether it is the view showing. Its search is
+  // the frame's Peek (below) since 2026-10-08, so the room is handed nothing of
+  // the frame's open surface any more.
+  const historyView = useCallback((active: boolean) => <HistoryView active={active} />, []);
   // The room is its own chunk (DESIGN.md §8 "History"): fetched when the window
   // is next idle after the chrome has mounted — after the canvas has drawn,
   // never on its path — so the first ⌘3 finds it here. Code only: the room
@@ -275,7 +272,9 @@ export function ChromeLayer({
 
   return (
     <>
-      {/* Chrome overlays sit OUTSIDE the recede wrapper — they never scale. */}
+      {/* Chrome overlays sit OUTSIDE the scene's recede (a sheet's) — they never
+          scale with the desk. Under the Peek they recede with the cover and the
+          still, in field.tsx's `.field-recede` (DESIGN.md §6). */}
       {/* THE HEAD (One Frame FR-3, DESIGN.md §8 "The head"): the field's name
           pill with the crumbs folded in, which grows the fields explorer, and
           the zoom readout — alone at the right since FR-4 took the theme into
@@ -289,6 +288,21 @@ export function ChromeLayer({
         surface={surface}
         onSurfaceChange={onSurfaceChange}
         menuZoom={subscribeMenuZoom}
+      />
+
+      {/* SEARCH — THE PEEK (GV-D8/D9/D10, 2026-10-08; DESIGN.md §8 "Search — the
+          Peek"): the frame's button at the head's right end, above the cover
+          in the views that search (History, and Godview since P2), ⌘F printed
+          under it; its scrim and popup are drawn on the document's body,
+          outside the field, so the view and the frame recede under them. One
+          of the frame's open surfaces (`search`). History's Live now reads a
+          feed of its own, opened only while it shows (docket PK5). */}
+      <FramePeek
+        view={view}
+        keys={keys}
+        surface={surface}
+        onSurfaceChange={onSurfaceChange}
+        openLiveFeed={openHistoryLiveFeed}
       />
 
       {/* THE EDGES (SNAP-3; One Frame FR-4, DESIGN.md §8 edge trays, §10): the

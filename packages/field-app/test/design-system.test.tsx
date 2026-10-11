@@ -32,8 +32,8 @@ let container: HTMLDivElement | null = null;
 // or queries it whole. Alone that render takes 1.3–1.7 s and a test's body at most 0.9 s; inside the full `pnpm test` on a
 // shared machine (load 111–310, 2026-10-05) the render took up to 31.5 s (mean 7–8 s) and a body up to 5.0 s — past
 // vitest's 10 s hook and 5 s test defaults, so every gate failed here. 60 s gives the worst render measured about twice
-// its time; a render that hangs still fails. The suite's other page-scale files budget 30–60 s (doc-manager,
-// history-search).
+// its time; a render that hangs still fails. The suite's other page-scale files budget 30–60 s (doc-manager, and
+// history-search until the Peek retired it, 2026-10-08).
 const PAGE_BUDGET_MS = 60_000;
 
 beforeEach(async () => {
@@ -301,19 +301,42 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(plate("hx")?.querySelector(".vf-line-create")?.getAttribute("aria-disabled")).toBe(
       "true",
     );
-    // History's search until the Peek lands (the search interim, 2026-10-04):
-    // every History plate holds the room's search as the product does — the
-    // strip's pill, no key printed, the empty transcript in VibeField's words —
-    // and one plate holds a search, the room's sheet a press away.
+    // History's search is the frame's Peek (2026-10-08): no History plate
+    // draws the room's own search, the empty transcript names ⌘F (K2), and the
+    // Peek's plates mount the shipping controller — the button at rest, and
+    // the popup drawn open in the plate, never taking the page's focus.
     const history = (state: string): Element | null =>
       container?.querySelector(`.vf-ds-history-plate[data-state="${state}"]`) ?? null;
-    expect(history("room")?.querySelector(".ah-launcher__open")).not.toBeNull();
-    expect(container?.querySelector(".vf-ds-history-plate .ah-launcher kbd")).toBeNull();
+    expect(container?.querySelector(".vf-ds-history-plate .ah-launcher")).toBeNull();
     expect(history("room")?.querySelector(".ah-col--measure")?.textContent).toContain(
-      "Pick a session, or search above.",
+      "Pick a session, or search with ⌘F.",
     );
-    expect(history("search")?.querySelector(".ah-launcher__open")?.textContent).toBe("plus");
-    expect(history("search")?.querySelector('[role="dialog"]')).toBeNull();
+    // PJ-4 — History by project's plate (its rows: history-projects-plate.test.tsx)
+    expect(history("projects")?.querySelector(".vf-history .ah-frame")).not.toBeNull();
+    expect(
+      [...(container?.querySelectorAll(".vf-ds-peek-plate") ?? [])].map((plate) =>
+        plate.getAttribute("data-state"),
+      ),
+    ).toEqual(["peek-live", "peek-closed", "peek-open"]);
+    expect(history("peek-closed")?.querySelector(".vf-peek-button kbd")?.textContent).toBe("⌘F");
+    expect(history("peek-closed")?.querySelector(".vf-peek-pop")).toBeNull();
+    // P2 — Godview's Live now, the same controller over the monitor's door as a
+    // fixture holds it: waiting first, a shell last, the scope row's filters
+    const live = history("peek-live");
+    expect(
+      [...(live?.querySelectorAll('.vf-peek-row[data-kind="live"] .vf-peek-dot') ?? [])].map(
+        (dot) => dot.getAttribute("data-state"),
+      ),
+    ).toEqual(["blocked", "working", "shell"]);
+    expect(live?.querySelector(".vf-peek-row .vf-peek-os")?.textContent).toBe("studio");
+    expect(
+      [...(live?.querySelectorAll(".vf-peek-dd-label") ?? [])].map((label) => label.textContent),
+    ).toEqual(["All desktops", "Every profile"]);
+    expect(
+      history("peek-open")?.querySelector<HTMLInputElement>(".vf-peek-pop .vf-peek-field input")
+        ?.value,
+    ).toBe("plus");
+    expect(document.activeElement?.closest(".vf-peek-pop")).toBeFalsy();
     // DK-12 — the tools in hand: a plate per specimen, the shipping bar in its hand's role, its tools in their order
     const hands = [...(container?.querySelectorAll(".vf-ds-bar-plate") ?? [])].filter((p) =>
       p.getAttribute("data-state")?.startsWith("In hand"),
@@ -468,8 +491,9 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     const bloom = container?.querySelector<HTMLElement>("[data-spawn-bloom-catalog]");
     if (!bloom) throw new Error("Spawn bloom catalog not found");
     // The SHIPPING swarm view: happy-dom has no WebGPU, so it draws its honest
-    // line and its keyboard list — the fixture's three agents — and the profile
-    // tabs the fixture's managed profiles call for.
+    // line and its keyboard list — the fixture's three agents; the profiles
+    // its managed profiles call for are chosen in search's Live now (GV-D3,
+    // P2), so the bar draws no tabs.
     expect(bloom.querySelector(".vf-monitor-swarm")?.textContent).toContain("WEBGPU UNAVAILABLE");
     expect(
       bloom.querySelector("[data-monitor-view-slot]")?.getAttribute("data-monitor-view-renderer"),
@@ -477,8 +501,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(
       bloom.querySelectorAll(".vf-monitor-swarm-list li button:not([data-swarm-new-terminal])"),
     ).toHaveLength(3);
-    expect(bloom.querySelector('[data-profile-tab="work"]')).not.toBeNull();
-    expect(bloom.querySelector('[data-profile-tab="demo"]')).not.toBeNull();
+    expect(bloom.querySelector("[data-profile-tab]")).toBeNull();
 
     // The hidden list's keys door is there, beside the bodies.
     expect(bloom.querySelector("[data-swarm-new-terminal]")).not.toBeNull();

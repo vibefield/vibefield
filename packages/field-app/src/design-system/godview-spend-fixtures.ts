@@ -144,7 +144,7 @@ export function spendDoor(originMs: number = Date.now()): MonitorDoor {
     attach: async () => ({ state: "no-pane" }),
     createTerminal: async () => ({ state: "no-pane" }),
     mountLocal: async () => ({ state: "no-pane" }),
-    history: NO_HISTORY,
+    transcripts: NO_HISTORY,
     usage: NO_USAGE,
   };
 }

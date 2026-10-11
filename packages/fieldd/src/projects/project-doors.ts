@@ -6,6 +6,10 @@ import {
   type PlaceRef,
   PROJECT_DOORS,
   type ProjectEdge,
+  type ProjectFiguresDayParams,
+  type ProjectFiguresDayResult,
+  type ProjectFiguresParams,
+  type ProjectFiguresResult,
   type ProjectGetParams,
   type ProjectGetResult,
   type ProjectIntentParams,
@@ -30,6 +34,13 @@ import { RpcCallError } from "../native-link";
 import type { GroupedPlace, GroupedProject } from "./grouping";
 import type { KeyMove } from "./key-journal";
 import { slashPath } from "./place-kind";
+import {
+  type FiguresAsk,
+  type FiguresPart,
+  type FiguresPlan,
+  projectFigures,
+  projectFiguresDay,
+} from "./project-figures";
 import { type ProjectGroups, type ProjectGroupsSnapshot, placeResolver } from "./project-groups";
 
 // PJ-3 — THE `project.*` DOORS (`thinking-project-places.md` §9; PJ-D15 (a);
@@ -90,6 +101,15 @@ export function admitProjectReader(ctx: CallerContext, method: string): ProjectV
     false,
     { method, principal: principal.kind },
   );
+}
+
+/** PJ-4 (A-D4) — whether the projects answer this caller at all (D8's rule,
+ * without the refusal): the catalog's listings carry the join column
+ * (`projectKey`) only for a caller the projects would answer — never a peer
+ * daemon, which groups its own (DS-L4). */
+export function readsProjects(ctx: CallerContext): boolean {
+  const kind = ctx.principal.kind;
+  return kind === "local-token" || kind === "shell-main" || kind === "tailnet";
 }
 
 /** P2 (a) — only a desktop window (or the shell) makes an act. */
@@ -158,6 +178,9 @@ export interface ProjectDoorsOptions {
   sources: () => IndexCatalogSource[];
   /** PJ-2's records; null until they are wired (the act answers UNAVAILABLE) */
   records?: () => ProjectIntentWriter | null;
+  /** PJ-4 — where a project's merged figures are asked (this desktop's index,
+   * a peer's door); absent, the figures doors answer UNAVAILABLE */
+  figures?: Omit<FiguresAsk, "self">;
   now?: () => number;
   /** the pings' floor (default PROJECT_DOORS.CHANGES_MIN_INTERVAL_MS) */
   changesMinIntervalMs?: number;
@@ -179,6 +202,17 @@ interface Indexed {
   readonly sorted: ReadonlyArray<{ project: GroupedProject; sort: SortKey }>;
   /** a device's longest-path rule over its places, built on first use */
   readonly resolvers: Map<string, (cwd: string) => string | undefined>;
+}
+
+/** One bump of the doors' revision, as a ping hears it: the key moves a new
+ * grouping made, the desktop whose catalog moved, and — for a catalog move —
+ * which table (PJ-4: a ping that only threads moved says so). `grouping` is
+ * true for a new grouping, whose answer every page re-asks. */
+interface DoorsChange {
+  readonly moves: readonly KeyMove[];
+  readonly device?: string;
+  readonly table?: string;
+  readonly grouping: boolean;
 }
 
 /** The subscribe log keeps this many key moves for a resuming reader. */
@@ -208,9 +242,7 @@ export class ProjectDoors {
   readonly #moveLog: Array<{ revision: number; move: ProjectRegrouped }> = [];
   /** the newest revision whose key moves the log no longer holds */
   #trimmedThrough = 0;
-  readonly #subscribers = new Set<
-    (change: { moves: readonly KeyMove[]; device?: string }) => void
-  >();
+  readonly #subscribers = new Set<(change: DoorsChange) => void>();
   #indexed: Indexed | null = null;
   readonly #off: () => void;
 
@@ -218,7 +250,9 @@ export class ProjectDoors {
     this.#opts = opts;
     this.#now = opts.now ?? Date.now;
     this.#floorMs = opts.changesMinIntervalMs ?? PROJECT_DOORS.CHANGES_MIN_INTERVAL_MS;
-    this.#off = opts.groups.onChange((change) => this.#bump(change.moves));
+    this.#off = opts.groups.onChange((change) =>
+      this.#bump({ moves: change.moves, grouping: true }),
+    );
   }
 
   dispose(): void {
@@ -227,9 +261,76 @@ export class ProjectDoors {
   }
 
   /** A desktop's catalog moved (IndexMesh's `change`): its sessions, or its
-   * standing — a visible page re-asks. */
-  catalogChanged(device?: string): void {
-    this.#bump([], device);
+   * standing — a visible page re-asks. PJ-4: `table` names which of its
+   * tables moved (absent: its standing, or a table the event did not name),
+   * so a ping can say when only this desktop's threads did. */
+  catalogChanged(device?: string, table?: string): void {
+    this.#bump({
+      moves: [],
+      grouping: false,
+      ...(device !== undefined ? { device } : {}),
+      ...(table !== undefined ? { table } : {}),
+    });
+  }
+
+  // ── PJ-4: the join column (A-D4) ──
+
+  /** The key of the project whose place holds `cwd` on `device` by the
+   * longest path — the rule `project.sessions` reads a session's place by —
+   * or undefined: before this boot's first grouping, for no cwd, or for a cwd
+   * no place holds yet. Never a refusal: a listing keyed by it answers without
+   * the column rather than not at all. */
+  keyOf(device: string, cwd: string | undefined): string | undefined {
+    return this.#joined(device, cwd)?.key;
+  }
+
+  /** The project's key and the place's ref a cwd joins (the longest path). */
+  #joined(device: string, cwd: string | undefined): { key: string; place: PlaceRef } | undefined {
+    if (cwd === undefined || cwd.length === 0 || this.#opts.groups.current() === null)
+      return undefined;
+    const indexed = this.#require();
+    const placeId = this.#resolverFor(indexed, device)(cwd);
+    const held = placeId === undefined ? undefined : indexed.places.get(placeId);
+    return held === undefined ? undefined : { key: held.project.key, place: refOf(held.place) };
+  }
+
+  /** A listing's rows (`index.sessions`) with the join column: each row's own
+   * desktop (this one's when it names none) and its cwd. A key already on a
+   * row is never trusted — a peer's copy carries none, and this grouping is
+   * the only one this desktop answers with (DS-L4). */
+  keyed<Row extends { device?: string | undefined; cwd?: string | undefined }>(
+    rows: readonly Row[],
+  ): Array<Row & { projectKey?: string; place?: PlaceRef }> {
+    const self = this.#opts.deviceId();
+    return rows.map((row) => {
+      const {
+        projectKey: _stale,
+        place: _stalePlace,
+        ...rest
+      } = row as Row & { projectKey?: unknown; place?: unknown };
+      const joined = this.#joined(row.device ?? self, row.cwd);
+      return {
+        ...(rest as Row),
+        ...(joined !== undefined ? { projectKey: joined.key, place: joined.place } : {}),
+      };
+    });
+  }
+
+  /** This desktop's delegated threads (`index.threads`) with their ROOT's
+   * key: a child hangs under its root, whatever folder it worked in. */
+  keyedThreads<Row extends { rootSessionId: string }>(
+    rows: readonly Row[],
+    rootOf: (sessionId: string) => { cwd?: string | undefined } | undefined,
+  ): Array<Row & { projectKey?: string }> {
+    const self = this.#opts.deviceId();
+    const byRoot = new Map<string, string | undefined>();
+    return rows.map((row) => {
+      const { projectKey: _stale, ...rest } = row as Row & { projectKey?: unknown };
+      if (!byRoot.has(row.rootSessionId))
+        byRoot.set(row.rootSessionId, this.keyOf(self, rootOf(row.rootSessionId)?.cwd));
+      const key = byRoot.get(row.rootSessionId);
+      return { ...(rest as Row), ...(key !== undefined ? { projectKey: key } : {}) };
+    });
   }
 
   // ── the reads ──
@@ -402,6 +503,13 @@ export class ProjectDoors {
     let lastAt = Number.NEGATIVE_INFINITY;
     let disposed = false;
     const devices = new Set<string>();
+    // PJ-4 — the catalog tables that moved since the last ping; `null` once
+    // anything else did (a grouping, a standing), which every page re-asks
+    const tables: { names: Set<string> | null } = { names: new Set() };
+    const clear = () => {
+      devices.clear();
+      tables.names = new Set();
+    };
     const flush = () => {
       timer = null;
       if (disposed || this.#revision === sent) return;
@@ -410,13 +518,14 @@ export class ProjectDoors {
         // moves this reader never heard fell out of the log: a reset, and the
         // keys it holds resolve through `project.get`'s `movedTo`
         sent = this.#revision;
-        devices.clear();
+        clear();
         emit({ epoch: this.#epoch, revision: sent, rows: [] }, "snapshot");
         return;
       }
       const regrouped = this.#moveLog
         .filter((entry) => entry.revision > sent)
         .map((entry) => entry.move);
+      const named = tables.names;
       emit(
         {
           epoch: this.#epoch,
@@ -426,19 +535,22 @@ export class ProjectDoors {
           removed: [],
           ...(regrouped.length > 0 ? { regrouped } : {}),
           ...(devices.size > 0 ? { devices: [...devices] } : {}),
+          ...(named !== null && named.size > 0 ? { tables: [...named].sort() } : {}),
         },
         "delta",
       );
       sent = this.#revision;
-      devices.clear();
+      clear();
     };
     const schedule = () => {
       if (disposed || timer !== null) return;
       timer = setTimeout(flush, Math.max(0, lastAt + floor - this.#now()));
       timer.unref?.();
     };
-    const onChange = (change: { moves: readonly KeyMove[]; device?: string }) => {
+    const onChange = (change: DoorsChange) => {
       if (change.device !== undefined) devices.add(change.device);
+      if (change.grouping || change.table === undefined) tables.names = null;
+      else tables.names?.add(change.table);
       schedule();
     };
     return {
@@ -453,6 +565,95 @@ export class ProjectDoors {
         if (timer !== null) clearTimeout(timer);
       },
     };
+  }
+
+  // ── PJ-4: the merged figures (H2 (a), A-D3) ──
+
+  /** What a project's figures are asked of: every (desktop, rosetta project)
+   * that files one of its sessions — keyed by BOTH (A4.1) — and whether the
+   * project holds it WHOLE (every session it files on that desktop joins one
+   * of this project's places by the longest path, the rule `project.sessions`
+   * reads). A session with no rosetta project (rosetta's unassigned bucket)
+   * has no figures door. A key that regrouped plans the project it moved
+   * into (`movedTo`), as every read does. */
+  figuresPlan(key: string): FiguresPlan {
+    const indexed = this.#require();
+    const { project, movedTo } = this.#resolveKey(indexed, key);
+    const self = this.#opts.deviceId();
+    const parts = new Map<
+      string,
+      { part: FiguresPart & { sessions: Set<string> }; others: number }
+    >();
+    const conversations = new Map<string, string>();
+    for (const device of project.devices) {
+      const placeOf = this.#resolverFor(indexed, device);
+      const rows =
+        device === self
+          ? this.#opts.localSessions()
+          : (this.#opts.peerSessions().find((peer) => peer.device === device)?.sessions ?? []);
+      for (const row of rows) {
+        if (row.projectId === undefined) continue;
+        const id = `${device}\u0000${row.projectId}`;
+        const held = parts.get(id) ?? {
+          part: { device, projectId: row.projectId, whole: true, sessions: new Set<string>() },
+          others: 0,
+        };
+        parts.set(id, held);
+        const placeId =
+          typeof row.cwd === "string" && row.cwd.length > 0 ? placeOf(row.cwd) : undefined;
+        if (placeId !== undefined && indexed.places.get(placeId)?.project === project) {
+          held.part.sessions.add(row.sessionId);
+          if (row.kind !== undefined && row.nativeSessionId !== "")
+            conversations.set(
+              `${device}\u0000${row.sessionId}`,
+              `${row.kind}\u0000${row.nativeSessionId}`,
+            );
+        } else held.others += 1;
+      }
+    }
+    const order = (a: FiguresPart, b: FiguresPart): number =>
+      project.devices.indexOf(a.device) - project.devices.indexOf(b.device) ||
+      (a.projectId < b.projectId ? -1 : a.projectId > b.projectId ? 1 : 0);
+    return {
+      key: project.key,
+      ...(movedTo !== undefined ? { movedTo } : {}),
+      devices: [...project.devices],
+      parts: [...parts.values()]
+        .filter(({ part }) => part.sessions.size > 0)
+        .map(({ part, others }): FiguresPart => ({ ...part, whole: others === 0 }))
+        .sort(order),
+      conversations,
+    };
+  }
+
+  /** `project.figures` — the merged panels (contracts' project.figures). */
+  async figures(
+    params: ProjectFiguresParams,
+    maxContributionRows?: number,
+  ): Promise<ProjectFiguresResult> {
+    const plan = this.figuresPlan(params.key);
+    return await projectFigures(
+      plan,
+      { sinceMs: params.sinceMs, offsetMinutes: params.offsetMinutes },
+      this.#figuresAsk(),
+      maxContributionRows,
+    );
+  }
+
+  /** `project.figuresDay` — one day's hours over the whole parts. */
+  async figuresDay(params: ProjectFiguresDayParams): Promise<ProjectFiguresDayResult> {
+    const plan = this.figuresPlan(params.key);
+    return await projectFiguresDay(plan, params.day, params.offsetMinutes, this.#figuresAsk());
+  }
+
+  #figuresAsk(): FiguresAsk {
+    const figures = this.#opts.figures;
+    if (figures === undefined)
+      throw new RpcCallError("UNAVAILABLE", "this desktop reads no figures", false, {
+        service: PROJECT_DOORS.SERVICE,
+        state: "figures-unwired",
+      });
+    return { ...figures, self: this.#opts.deviceId() };
   }
 
   // ── the act ──
@@ -655,6 +856,9 @@ export class ProjectDoors {
         : [...project.anchors],
       asOf,
       groupingVersion: indexed.snapshot.result.groupingVersion,
+      // PJ-4 (H4) — the person's pin and hide, from the project's record
+      ...(project.pinned === true ? { pinned: true } : {}),
+      ...(project.hidden === true ? { hidden: true } : {}),
     };
   }
 
@@ -677,15 +881,14 @@ export class ProjectDoors {
 
   /** Every change a page must hear: a new grouping (with its key moves) or a
    * desktop's catalog. */
-  #bump(moves: readonly KeyMove[], device?: string): void {
+  #bump(change: DoorsChange): void {
     this.#revision += 1;
-    for (const move of moves)
+    for (const move of change.moves)
       this.#moveLog.push({ revision: this.#revision, move: { from: move.from, to: move.to } });
     while (this.#moveLog.length > MOVE_LOG_MAX) {
       const dropped = this.#moveLog.shift();
       if (dropped !== undefined) this.#trimmedThrough = dropped.revision;
     }
-    const change = { moves, ...(device !== undefined ? { device } : {}) };
     for (const subscriber of this.#subscribers) subscriber(change);
   }
 }

@@ -116,6 +116,16 @@ describe("the draft (DESIGN.md §8)", () => {
       key: null,
     });
   });
+
+  it("makes History's create Jump to while the chosen session runs here, and only History's (P3)", () => {
+    expect(createActOf("history", "mac", true)).toEqual({
+      glyph: "jump",
+      name: "Jump to this session",
+      key: null,
+    });
+    expect(createActOf("godview", "mac", true).glyph).toBe("start");
+    expect(createActOf("canvas", "mac", true).glyph).toBe("plus");
+  });
 });
 
 describe("the line's one owner (FR-4)", () => {

@@ -61,6 +61,8 @@ export interface ComposerLineViewProps {
   createHeld?: boolean;
   /** Why the create act waits, said in its tooltip; null when it can act. */
   createWaits?: string | null;
+  /** History's chosen session runs here: its create is Jump to (P3). */
+  createLive?: boolean;
   /** Who the draft goes to — the chip that leads it. */
   aim?: LineAim | null;
   /** What the editor is drawn with. The editor is the person's while they
@@ -83,7 +85,7 @@ export interface ComposerLineViewProps {
   onRemoveAim?: () => void;
 }
 
-const CREATE_GLYPHS = ["plus", "start", "resume"] as const;
+const CREATE_GLYPHS = ["plus", "start", "resume", "jump"] as const;
 
 /** @'s list, as the editor names the menu it controls while it is open. */
 const AT_MENU_ID = "vf-line-at-menu";
@@ -205,6 +207,7 @@ export function ComposerLineView({
   objectsOpen = false,
   createHeld = false,
   createWaits = null,
+  createLive = false,
   aim = null,
   seed = [],
   revision = 0,
@@ -219,7 +222,7 @@ export function ComposerLineView({
   onSend,
   onRemoveAim,
 }: ComposerLineViewProps): ReactElement {
-  const act = createActOf(view, keys);
+  const act = createActOf(view, keys, createLive);
   const open = view === "canvas" && objectsOpen;
   const held = view === "canvas" && !open && createHeld;
   const waits = open ? null : createWaits;

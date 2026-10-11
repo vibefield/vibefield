@@ -29,6 +29,8 @@ import {
   AgentModelDeskRow,
   AgentModelMeshFrame,
   AgentModelMeshOpen,
+  AgentRecordedLanesParams,
+  AgentRecordedLanesResult,
   AgentReportShownParams,
   MonitorAgentRow,
 } from "../src/agent-field";
@@ -40,6 +42,9 @@ import {
   AgentsProfilesVerifyResult,
   AgentsReleasesResult,
   AgentsUpdateResult,
+  IndexActivityParams,
+  IndexActivityResponse,
+  IndexActivityResult,
   IndexCatalogDelta,
   IndexCatalogOpen,
   IndexCatalogProject,
@@ -144,9 +149,12 @@ import {
 import { PluginRegistrySnapshot } from "../src/plugin-registry";
 import { PluginManifestV1 } from "../src/plugins";
 import {
-  PlaceRef,
   ProjectChangesDelta,
   ProjectChangesOpen,
+  ProjectFiguresDayParams,
+  ProjectFiguresDayResult,
+  ProjectFiguresParams,
+  ProjectFiguresResult,
   ProjectGetParams,
   ProjectGetResult,
   ProjectIntentParams,
@@ -159,7 +167,7 @@ import {
   ProjectSubscribeParams,
   ProjectSummary,
 } from "../src/project-doors";
-import { PlaceFacts } from "../src/project-places";
+import { PlaceFacts, PlaceRef } from "../src/project-places";
 import { RemoteEndpointSet } from "../src/remote-endpoints";
 import {
   ScreenshotCaptureResult,
@@ -381,6 +389,15 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "index-session-subscribe-params": IndexSessionSubscribeParams,
   "index-session-tail-open": IndexSessionTailOpen,
   "index-session-tail-delta": IndexSessionTailDelta,
+  // TL (docket v9, T4/T5) — the record's sessions and turns in a window: the
+  // ask, the floor's answer (bounds alone, partial while the stream is down, a
+  // session no catalog row maps, a field from a newer peer) and the route's
+  // (turns with a silence, a group kind from a newer rosetta).
+  "index-activity-params": IndexActivityParams,
+  "index-activity": IndexActivityResult,
+  // T4 — rosetta's own body for `/api/activity` (protocol 27), transcribed
+  // from the checkout's wire golden, which fieldd parses
+  "index-activity-response": IndexActivityResponse,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,
@@ -464,6 +481,12 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // with the model's row whole and the chrome's facts (`local`) beside it.
   "agent-model-desk-row": AgentModelDeskRow,
   "agent-report-shown": AgentReportShownParams,
+  // TL (B-D6 (a)) — the lanes' past as the backend derives it (the SDK's
+  // `MonitorPastSnapshot`): the ask; a live row's past with a silence across
+  // a turn and an ended lane; the floor's one active band, partial; and the
+  // honest unavailable.
+  "agent-recorded-lanes-params": AgentRecordedLanesParams,
+  "agent-recorded-lanes": AgentRecordedLanesResult,
   // Both arms of the interrupt's union: the refusal carries the FLOOR's own
   // word, never a sentence composed at the door.
   "agent-interrupt": AgentInterruptResult,
@@ -561,6 +584,13 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "project-intent-params": ProjectIntentParams,
   "project-intent": ProjectIntentResult,
   "project-refusal": ProjectRefusal,
+  // PJ-4 (H2) — a project's merged figures: one desktop answered, one asleep,
+  // one rosetta project held in part (its days left out, its rows kept for
+  // this project's sessions), and one day's hours over the same parts.
+  "project-figures-params": ProjectFiguresParams,
+  "project-figures": ProjectFiguresResult,
+  "project-figures-day-params": ProjectFiguresDayParams,
+  "project-figures-day": ProjectFiguresDayResult,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.
