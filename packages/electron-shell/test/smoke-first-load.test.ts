@@ -1,11 +1,12 @@
 /**
  * PT-5b2 — a page's first load, in the product (testing/smoke-first-load.ts): the judges its rows hold the product to —
  * FIRST-REDIRECT, FIRST-CLICK, NO-DOCUMENT, STARTING and TAPS — each passing what the product does (the numbers of a green
- * run) and failing, in words with its numbers, what it should not.
+ * run) and failing, in words with its numbers, what it should not. PT-5b3: SWITCH-STARTING and TAPS-COLD; NO-DOCUMENT
+ * counts what its page was refused.
  */
 import { describe, expect, it } from "vitest";
+import { FIXTURE_BUSY_MS, FIXTURE_HOLD_MS } from "../src/testing/live-fixture";
 import {
-  FIRST_FLAG,
   FIRST_ROWS,
   type FirstFace,
   type FirstLoadSeen,
@@ -13,7 +14,9 @@ import {
   judgeNoDocument,
   judgeRedirect,
   judgeStarting,
+  judgeSwitch,
   judgeTaps,
+  judgeTapsCold,
   runOf,
 } from "../src/testing/smoke-first-load";
 import type { PageSeen } from "../src/testing/smoke-last-still";
@@ -25,6 +28,7 @@ const face = (over: Partial<FirstFace> = {}): FirstFace => ({
   address: `${O}/next`,
   loading: false,
   presented: 1,
+  refused: 0,
   ...over,
 });
 /** A failed face's page area as a green run read it: the film, the words' ink on it. */
@@ -57,11 +61,10 @@ const failed = (reason: string, address: string): FirstFace =>
   face({ state: "failed", reason, address, presented: 0 });
 const NO_DOCUMENT: FirstLoadSeen["noDocument"] = {
   asked: [0, 1, 2],
-  face: failed("no-document", `${O}/file.bin?p=n`),
-  raised: 0,
+  face: { ...failed("no-document", `${O}/file.bin?p=n`), refused: 1 },
   page: WORDS,
   tool: "Reload",
-  again: failed("no-document", `${O}/file.bin?p=n`),
+  again: { ...failed("no-document", `${O}/file.bin?p=n`), refused: 2 },
 };
 const STARTING: FirstLoadSeen["starting"] = {
   sent: {
@@ -132,7 +135,7 @@ describe("a page's first load, in the product — its rows", () => {
     ]);
   });
 
-  it("NO-DOCUMENT: an address that is no page SAYS so in its page's area — never starting for good — raises no window, and ↻ asks again", () => {
+  it("NO-DOCUMENT: an address that is no page SAYS so in its page's area — never starting for good — its download REFUSED and counted, and ↻ asks again", () => {
     expect(judgeNoDocument(NO_DOCUMENT)).toEqual([]);
     // the lane before PT-5b2: the source failed ("could not load"); or, read off nothing, starting for good
     expect(
@@ -150,6 +153,7 @@ describe("a page's first load, in the product — its rows", () => {
       }),
     ).toEqual([
       "NO-DOCUMENT: the pane whose address is an attachment is starting (no reason), not failed: no-document — a load that ended with nothing is never said",
+      "NO-DOCUMENT: the pane's page was refused 0 downloads, not the one its address is — the attachment was not refused (or was never asked for)",
       "NO-DOCUMENT: the pane's page area holds 0 pixels of the words' ink, not 40 — the face says nothing",
       "NO-DOCUMENT: ↻ asked for the address 0 times, not once more",
       "NO-DOCUMENT: asked again, the pane is without a face (no reason) — not failed: no-document as before",
@@ -158,8 +162,10 @@ describe("a page's first load, in the product — its rows", () => {
       judgeNoDocument({
         ...NO_DOCUMENT,
         asked: [3, 3, 3],
-        face: failed("load-failed: Browser source could not load", `${O}/elsewhere`),
-        raised: 1,
+        face: {
+          ...failed("load-failed: Browser source could not load", `${O}/elsewhere`),
+          refused: 1,
+        },
         page: { ...WORDS, film: 100_000, hue: 900_000 },
         tool: "Stop",
       }),
@@ -167,13 +173,24 @@ describe("a page's first load, in the product — its rows", () => {
       "NO-DOCUMENT: the attachment was asked for 0 times when the pane was laid, not once — the row proved nothing",
       "NO-DOCUMENT: the pane whose address is an attachment is failed (load-failed: Browser source could not load), not failed: no-document — a load that ended with nothing is never said",
       `NO-DOCUMENT: the face says it is at ${O}/elsewhere, not the address it was asked for`,
-      "NO-DOCUMENT: the app has 1 windows it did not have before the pane",
       "NO-DOCUMENT: the pane's page area is 9.6% film, not 60% — something is drawn as its page",
       'NO-DOCUMENT: in hand ↻ reads "Stop", not Reload',
       "NO-DOCUMENT: ↻ asked for the address 0 times, not once more",
     ]);
     expect(judgeNoDocument({ ...NO_DOCUMENT, page: null })).toEqual([
       "NO-DOCUMENT: the pane's page area could not be read",
+    ]);
+    // PT-5b3 — what the row's "no window raised" could not see: a download that was NOT refused is no refusal counted —
+    // at the pane's laying, or at ↻
+    expect(
+      judgeNoDocument({ ...NO_DOCUMENT, face: { ...NO_DOCUMENT.face, refused: 0 } as FirstFace }),
+    ).toEqual([
+      "NO-DOCUMENT: the pane's page was refused 0 downloads, not the one its address is — the attachment was not refused (or was never asked for)",
+    ]);
+    expect(
+      judgeNoDocument({ ...NO_DOCUMENT, again: { ...NO_DOCUMENT.again, refused: 1 } as FirstFace }),
+    ).toEqual([
+      "NO-DOCUMENT: asked again, the pane's page was refused 1 downloads in all, not two",
     ]);
   });
 
@@ -228,6 +245,113 @@ describe("a page's first load, in the product — its rows", () => {
       "TAPS: the page's view is not said, not a phone's 402 wide — the row proved nothing",
     ]);
   });
+
+  it("SWITCH-STARTING (PT-5b3): a pane whose first address has not answered, its device switched to another of the same density, stays starting at its address — its address asked for once more — and, the gate opened, is live as that device", () => {
+    const waiting = face({
+      state: "starting",
+      address: `${O}/gate?p=w`,
+      loading: true,
+      presented: 0,
+    });
+    const seen: FirstLoadSeen["switched"] = {
+      before: waiting,
+      offered: true,
+      after: waiting,
+      asked: [1, 2],
+      waiting: 1,
+      opened: face({ address: `${O}/gate?p=w` }),
+      touchPoints: 5,
+      agent:
+        "Mozilla/5.0 (iPad; CPU OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1",
+      askedOpened: 2,
+      told: 1,
+    };
+    expect(judgeSwitch(seen)).toEqual([]);
+    // the lane before PT-5b3: the engine's own reload — of the window's blank — and the page said there was none
+    expect(
+      judgeSwitch({
+        ...seen,
+        after: failed("no-document", `${O}/gate?p=w`),
+        asked: [1, 1],
+        waiting: 0,
+        opened: failed("no-document", `${O}/gate?p=w`),
+        touchPoints: null,
+        agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        askedOpened: 1,
+      }),
+    ).toEqual([
+      "SWITCH-STARTING: its device switched, the pane is failed (no-document, loading false), not starting — a page whose address had only not answered yet was reloaded as its window's blank",
+      "SWITCH-STARTING: its address was asked for 1 times in all, not twice — once, and once more on the device it was switched to",
+      "SWITCH-STARTING: 0 loads wait at the gate, not the one that replaced the first",
+      `SWITCH-STARTING: the gate opened, the pane is failed at ${O}/gate?p=w (no-document, 0 frames) — not live at its address`,
+      "SWITCH-STARTING: the page says it has no word of its touch points — it was not loaded as the tablet it was switched to",
+      'SWITCH-STARTING: the load the gate answered came as "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/" — not as the tablet: the page was asked for as the device before',
+      "SWITCH-STARTING: once live its address had been asked for 1 times, not twice — the page loaded again after the gate opened",
+    ]);
+    // WHAT THE FIRST RUN OF THIS ROW FOUND: the engine holds a device's commands while a load is pending — told on the
+    // same window, the pane waited (rightly `starting`), was answered as the device BEFORE, and loaded again once live
+    expect(judgeSwitch({ ...seen, asked: [1, 1], askedOpened: 2 })).toEqual([
+      "SWITCH-STARTING: its address was asked for 1 times in all, not twice — once, and once more on the device it was switched to",
+    ]);
+    // the address asked for twice over; loaded as the device before; a third load once live; no switch told at all
+    expect(
+      judgeSwitch({ ...seen, asked: [1, 3], waiting: 2, touchPoints: 0, askedOpened: 3, told: 0 }),
+    ).toEqual([
+      "SWITCH-STARTING: its address was asked for 3 times in all, not twice — once, and once more on the device it was switched to",
+      "SWITCH-STARTING: 2 loads wait at the gate, not the one that replaced the first",
+      "SWITCH-STARTING: the page says it has 0 touch points — it was not loaded as the tablet it was switched to",
+      "SWITCH-STARTING: once live its address had been asked for 3 times, not twice — the page loaded again after the gate opened",
+      "SWITCH-STARTING: the desk told its pages 0 device switches, not the one — the row proved nothing",
+    ]);
+    // rows that proved nothing: a pane that was live already; no act on the bar; the pane gone elsewhere
+    expect(
+      judgeSwitch({
+        ...seen,
+        before: face({ address: `${O}/gate?p=w` }),
+        offered: false,
+        after: { ...waiting, address: `${O}/elsewhere` },
+      }),
+    ).toEqual([
+      "SWITCH-STARTING: before the switch the pane was live (1 frames, its address asked for 1 times), not starting at the shut gate — the row proved nothing",
+      "SWITCH-STARTING: the bar offered no act for the tablet — the row proved nothing",
+      `SWITCH-STARTING: its device switched, the pane says it is at ${O}/elsewhere, not its address`,
+    ]);
+  });
+
+  it("TAPS-COLD (PT-5b3): two quick taps sent while a phone's page is held busy, its scale never read, are heard once it is free — start, end, start, end — never dropped", () => {
+    const seen: FirstLoadSeen["tapsCold"] = {
+      view: [402, 874],
+      held: 1,
+      sentWithinMs: 128,
+      hold: [5_210, 5_210 + FIXTURE_HOLD_MS],
+      log: ["start", "end", "start", "end"],
+      at: [6_712, 6_713, 6_715, 6_716],
+    };
+    expect(judgeTapsCold(seen)).toEqual([]);
+    // the lane before PT-5b3: the read not answered inside 200 ms, no scale known for the document — not sent
+    expect(judgeTapsCold({ ...seen, log: [], at: [] })).toEqual([
+      "TAPS-COLD: the page, held busy with its scale never read, heard nothing for two taps, not start, end, start, end — a press on a page too busy to say its scale was dropped, not delivered late",
+    ]);
+    expect(judgeTapsCold({ ...seen, log: ["start", "end"], at: [6_712, 6_713] })).toEqual([
+      "TAPS-COLD: the page, held busy with its scale never read, heard start, end for two taps, not start, end, start, end — a press on a page too busy to say its scale was dropped, not delivered late",
+    ]);
+    // rows that proved nothing: a page never held (or held short); taps sent after the hold; touches heard inside it
+    expect(judgeTapsCold({ ...seen, held: 0, hold: null })).toEqual([
+      `TAPS-COLD: the page said it was held 0 times and kept its thread 0 ms, not once for ${FIXTURE_HOLD_MS} — the row proved nothing`,
+    ]);
+    expect(judgeTapsCold({ ...seen, hold: [5_210, 5_400] })).toEqual([
+      `TAPS-COLD: the page said it was held 1 times and kept its thread 190 ms, not once for ${FIXTURE_HOLD_MS} — the row proved nothing`,
+    ]);
+    expect(judgeTapsCold({ ...seen, sentWithinMs: FIXTURE_HOLD_MS + 40 })).toEqual([
+      `TAPS-COLD: the taps were sent ${FIXTURE_HOLD_MS + 40} ms after the page said it was held — past its ${FIXTURE_HOLD_MS} ms hold: the row proved nothing`,
+    ]);
+    expect(judgeTapsCold({ ...seen, at: [5_300, 5_301, 5_340, 5_341] })).toEqual([
+      `TAPS-COLD: the page heard its first touch at 5300 ms, before its hold ended (${5_210 + FIXTURE_HOLD_MS}) — the taps did not arrive while it was held: the row proved nothing`,
+    ]);
+    expect(judgeTapsCold({ ...seen, view: [1280, 800] })).toEqual([
+      "TAPS-COLD: the page's view is 1280 × 800, not a phone's 402 wide — the row proved nothing",
+    ]);
+  });
 });
 
 describe("a page's first load, in the product — what the rows read by", () => {
@@ -237,12 +361,11 @@ describe("a page's first load, in the product — what the rows read by", () => 
     expect(runOf(["live", "failed", "live"])).toEqual(["live", "failed", "live"]);
   });
 
-  it("the rows' numbers: the flag, the words' floor, two taps closer together than the page is busy", () => {
-    expect(FIRST_FLAG).toBe("--first-load");
-    expect(FIRST_ROWS.ink).toBe(40);
-    expect(FIRST_ROWS.film).toBe(0.6);
-    expect(FIRST_ROWS.typed).toBe("/page?typed=1");
-    // the second tap falls inside the first touch's busy stretch (the fixture's 350 ms)
-    expect(FIRST_ROWS.tap.held + FIRST_ROWS.tap.between).toBeLessThan(200);
+  it("the two taps are quick AGAINST THE FIXTURE'S OWN TIMES: the second press falls inside the stretch `/busy` keeps its thread at the first touch, and both taps fit well inside `/cold`'s hold", () => {
+    const { held, between } = FIRST_ROWS.tap;
+    // TAPS: the first touch keeps the page FIXTURE_BUSY_MS — the second press must arrive while it is kept
+    expect(held + between).toBeLessThan(FIXTURE_BUSY_MS);
+    // TAPS-COLD: press, release, press, release — sent inside the hold with half of it to spare
+    expect(held + between + held).toBeLessThan(FIXTURE_HOLD_MS / 2);
   });
 });

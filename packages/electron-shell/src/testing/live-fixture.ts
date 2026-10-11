@@ -49,6 +49,13 @@
 //   /busy        — the page for a phone that keeps its thread BUSY `FIXTURE_BUSY_MS` at each `touchstart`, and logs every
 //                  touchstart and touchend it hears (`touchLog`, said with each ask): two quick taps must read
 //                  start, end, start, end (TAPS — the hand's events in the order they were sent).
+// PT-5b3 — and what the second grade's rows need:
+//   /cold        — the page for a phone that logs its touches (and WHEN: `touchAt`) and keeps its thread free at them;
+//                  it is busy only on the smoke's word. `hold(path, ms)`: the next ask of a page at `path` is answered
+//                  `hold: ms` — the page says it began (`/held`, a beacon), keeps its thread `ms`, and says when the
+//                  hold began and ended (`held`): a page just loaded and hydrating, its scale never read (TAPS-COLD).
+//   ?tidy=1      — on any page: once loaded and painted, its script takes `tidy` out of its address with
+//                  `history.replaceState` — a move WITHIN the document — and paints nothing more (TIDY).
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { type AddressInfo, createServer as createTcpServer } from "node:net";
@@ -63,6 +70,8 @@ export const FIXTURE_ASK_MS = 250;
  * each touchstart (ms — longer than a tap and than the bound a press waits for its page's scale). */
 export const FIXTURE_REDIRECT_MS = 250;
 export const FIXTURE_BUSY_MS = 350;
+/** PT-5b3 — how long `/cold` is held busy on the smoke's word (ms): long enough for two taps sent once it says so. */
+export const FIXTURE_HOLD_MS = 1_500;
 
 /** PT-4 — the page's title (`/next`'s says where it is). */
 export const FIXTURE_TITLE = "Portals fixture";
@@ -138,6 +147,8 @@ export interface LiveFixture {
   reportAt(path: string): FixtureReport | null;
   /** PT-4 — the Cookie header the last load of `path` (its path and query) came with ("" for none), or null: never loaded. */
   cookieSeen(path: string): string | null;
+  /** PT-5b3 — the User-Agent header the last load of `path` (its path and query) came with, or null: never loaded. */
+  agentSeen(path: string): string | null;
   /** PT-4 — how many times the favicon was served. */
   icons(): number;
   /** PT-5a — `/slow`'s asks: how many came, how many were answered, how many were given up before the answer. */
@@ -152,6 +163,9 @@ export interface LiveFixture {
   /** PT-5b2 — how many times a path was asked for (its pathname: `/loading`, `/redirecting`, `/nothing`, `/busy`,
    * `/hang.png`, `/file.bin` — any). */
   asked(path: string): number;
+  /** PT-5b3 — the next ask of a page whose path begins with `path` is answered `hold: ms`: the page keeps its thread
+   * that long (and says so: `/held` is asked for as the hold begins; its `held` says when it began and ended). Once. */
+  hold(path: string, ms: number): void;
   /** PT-5a — an address whose connection is REFUSED (a port nobody listens on) until `open()` serves the page there. */
   refusing(): Promise<FixtureRefusing>;
   close(): Promise<void>;
@@ -227,8 +241,11 @@ export interface FixtureReport {
   readonly title: string;
   /** PT-5a — `/acts` alone: what came of what it asked for. */
   readonly acts?: FixtureActs;
-  /** PT-5b2 — `/busy` alone: every touchstart ("start") and touchend ("end") it heard, in order. */
+  /** PT-5b2 — `/busy` (and PT-5b3's `/cold`) alone: every touchstart ("start") and touchend ("end") it heard, in order. */
   readonly touchLog?: readonly string[];
+  /** PT-5b3 — when each of those was heard, and when the page's hold began and ended (its own clock, ms; null: never held). */
+  readonly touchAt?: readonly number[];
+  readonly held?: readonly [number, number] | null;
 }
 
 /** A part's box in the page's view, CSS px. */
@@ -342,9 +359,27 @@ export function fixtureHtml(path: "/page" | "/next" | "/legacy" = "/page"): stri
     stored: stored(),
     title: document.title,
     touchLog: window.__touchLog || [],
+    touchAt: window.__touchAt || [],
+    held: window.__held || null,
   }));
+  // PT-5b3 — HELD on the server's word: the page says it began (a beacon: it leaves though the thread is kept), keeps its
+  // thread for as long as it was told, and says when the hold began and ended
+  const hold = (ms) => {
+    if (!(ms > 0)) return;
+    navigator.sendBeacon("/held");
+    const began = performance.now();
+    while (performance.now() < began + ms) {}
+    window.__held = [Math.round(began), Math.round(performance.now())];
+  };
   const ask = () => fetch("/beacon?token=" + token + "&report=" + report(), { cache: "no-store" })
-    .then((r) => r.json()).then((a) => pace(a.play === true)).catch(() => {});
+    .then((r) => r.json()).then((a) => { pace(a.play === true); hold(a.hold); }).catch(() => {});
+  // PT-5b3 — ?tidy=1: once loaded and painted the page takes "tidy" out of its own address — within the document
+  const asked = new URLSearchParams(location.search);
+  if (asked.get("tidy")) addEventListener("load", () => requestAnimationFrame(() => requestAnimationFrame(() => {
+    asked.delete("tidy");
+    const rest = asked.toString();
+    history.replaceState(null, "", location.pathname + (rest ? "?" + rest : ""));
+  })));
   ask();
   setInterval(ask, ${FIXTURE_ASK_MS});
 </script>
@@ -371,21 +406,34 @@ export function redirectingHtml(): string {
 </body></html>`;
 }
 
-/** PT-5b2 — `/busy`: the page, keeping its thread busy at each touchstart and logging every touch it hears. */
-export const busyHtml = (): string =>
-  fixtureHtml("/page").replace(
-    "</body></html>",
-    `<script>
+/** The script that logs a page's touches — each one's kind and when — keeping its thread `busyMs` at each touchstart. */
+const touchLogScript = (busyMs: number): string => `<script>
   window.__touchLog = [];
+  window.__touchAt = [];
   addEventListener("touchstart", () => {
     window.__touchLog.push("start");
-    const until = performance.now() + ${FIXTURE_BUSY_MS};
-    while (performance.now() < until) {}
+    window.__touchAt.push(Math.round(performance.now()));${
+      busyMs > 0
+        ? `
+    const until = performance.now() + ${busyMs};
+    while (performance.now() < until) {}`
+        : ""
+    }
   }, { capture: true, passive: true });
-  addEventListener("touchend", () => { window.__touchLog.push("end"); }, { capture: true, passive: true });
+  addEventListener("touchend", () => {
+    window.__touchLog.push("end");
+    window.__touchAt.push(Math.round(performance.now()));
+  }, { capture: true, passive: true });
 </script>
-</body></html>`,
-  );
+</body></html>`;
+
+/** PT-5b2 — `/busy`: the page, keeping its thread busy at each touchstart and logging every touch it hears. */
+export const busyHtml = (): string =>
+  fixtureHtml("/page").replace("</body></html>", touchLogScript(FIXTURE_BUSY_MS));
+
+/** PT-5b3 — `/cold`: the page, logging every touch it hears and when — its thread kept only on the smoke's word (`hold`). */
+export const coldHtml = (): string =>
+  fixtureHtml("/page").replace("</body></html>", touchLogScript(0));
 
 /**
  * PT-5a — `/acts`: what a page may ask for, each a control at a known place (a row of boxes on the fixture's ground, the
@@ -523,7 +571,10 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   /** PT-5b2: how many times each pathname was asked for; and the answers that never come (`/hang.png`). */
   const asks = new Map<string, number>();
   const hung = new Set<ServerResponse>();
+  /** PT-5b3: the hold owed to the next ask of a page at this path. */
+  let holding: { readonly path: string; readonly ms: number } | null = null;
   const cookies = new Map<string, string>();
+  const agents = new Map<string, string>();
   const tokens: string[] = [];
   const html = (res: ServerResponse, body: string): void => {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
@@ -532,6 +583,8 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   const handle = (req: IncomingMessage, res: ServerResponse): void => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     asks.set(url.pathname, (asks.get(url.pathname) ?? 0) + 1);
+    if (url.pathname !== "/beacon" && url.pathname !== "/held")
+      agents.set(url.pathname + url.search, String(req.headers["user-agent"] ?? ""));
     if (url.pathname === "/hang.png") {
       // never answered: whoever waits on it never finishes loading (closed with the fixture)
       hung.add(res);
@@ -541,7 +594,8 @@ export async function startLiveFixture(): Promise<LiveFixture> {
     if (
       url.pathname === "/loading" ||
       url.pathname === "/redirecting" ||
-      url.pathname === "/busy"
+      url.pathname === "/busy" ||
+      url.pathname === "/cold"
     ) {
       cookies.set(url.pathname + url.search, req.headers.cookie ?? "");
       html(
@@ -550,8 +604,16 @@ export async function startLiveFixture(): Promise<LiveFixture> {
           ? loadingHtml()
           : url.pathname === "/busy"
             ? busyHtml()
-            : redirectingHtml(),
+            : url.pathname === "/cold"
+              ? coldHtml()
+              : redirectingHtml(),
       );
+      return;
+    }
+    if (url.pathname === "/held") {
+      // (a page's word that its hold began: counted with every ask — `asked("/held")`)
+      res.writeHead(204, { "cache-control": "no-store" });
+      res.end();
       return;
     }
     if (url.pathname === "/nothing") {
@@ -644,8 +706,19 @@ export async function startLiveFixture(): Promise<LiveFixture> {
           /* a report the page did not finish: the last one stands */
         }
       }
+      // PT-5b3: a hold owed to the page at this path is told with this answer, once
+      let hold = 0;
+      if (
+        holding !== null &&
+        last !== null &&
+        last.token === token &&
+        last.path.startsWith(holding.path)
+      ) {
+        hold = holding.ms;
+        holding = null;
+      }
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
-      res.end(JSON.stringify({ play: playing }));
+      res.end(JSON.stringify({ play: playing, ...(hold > 0 ? { hold } : {}) }));
       return;
     }
     res.writeHead(404);
@@ -667,10 +740,14 @@ export async function startLiveFixture(): Promise<LiveFixture> {
     served: (path) => (path === "/page" ? loads : nexts),
     reportAt: (path) => lastAt.get(path) ?? null,
     cookieSeen: (path) => cookies.get(path) ?? null,
+    agentSeen: (path) => agents.get(path) ?? null,
     icons: () => icons,
     slow: () => ({ ...slow }),
     files: () => files,
     asked: (path) => asks.get(path) ?? 0,
+    hold: (path, ms) => {
+      holding = { path, ms };
+    },
     gate: (open) => {
       gateOpen = open;
       if (open) for (const answer of [...atGate]) answer();

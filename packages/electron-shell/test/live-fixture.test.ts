@@ -16,6 +16,7 @@ import {
   FIXTURE_BUSY_MS,
   FIXTURE_COOKIE,
   FIXTURE_GATE_MS,
+  FIXTURE_HOLD_MS,
   FIXTURE_HUE,
   FIXTURE_ICON_HUE,
   FIXTURE_PARTS,
@@ -399,7 +400,6 @@ describe("the live pane's fixture page", () => {
 
   it("PT-5b2: pages whose FIRST LOAD does not end as a plain load — `/loading` (the page, with a subresource that never arrives: its `load` never fires), `/redirecting` (the same, and a script that sends it on), `/nothing` (an empty answer), each counted; `/hang.png` is never answered", async () => {
     fixture = await startLiveFixture();
-    expect(FIXTURE_REDIRECT_MS).toBeGreaterThanOrEqual(100);
     // /loading: the fixture's own page (its ground, its link to /next) with an image that hangs
     const loading = await (await fetch(`${fixture.origin}/loading?p=c`)).text();
     expect(loading).toContain("#1d6fd8");
@@ -437,7 +437,6 @@ describe("the live pane's fixture page", () => {
 
   it("PT-5b2: `/busy` is the page that keeps its thread BUSY at each touch — it logs every touchstart and touchend it hears, in order, and says the log with each ask", async () => {
     fixture = await startLiveFixture();
-    expect(FIXTURE_BUSY_MS).toBeGreaterThanOrEqual(250);
     const busy = await (await fetch(`${fixture.origin}/busy?p=t`)).text();
     // a page made for phones (it names its viewport), in the fixture's ground
     expect(busy).toContain('<meta name="viewport" content="width=device-width, initial-scale=1">');
@@ -480,5 +479,117 @@ describe("the live pane's fixture page", () => {
     );
     expect(fixture.reportAt("/busy?p=t")?.touchLog).toEqual(["start", "end"]);
     expect(fixture.asked("/busy")).toBe(1);
+  });
+  it("PT-5b3: `/cold` is the phone's page that logs its touches — and WHEN — with its thread free; it is HELD only on the smoke's word: `hold(path, ms)` answers the next ask of a page at that path, once, and the page says the hold began, keeps its thread that long, and says when it ended", async () => {
+    fixture = await startLiveFixture();
+    const cold = await (await fetch(`${fixture.origin}/cold?p=k`)).text();
+    expect(cold).toContain('<meta name="viewport" content="width=device-width, initial-scale=1">');
+    expect(cold).toContain("#1d6fd8");
+    expect(fixture.asked("/cold")).toBe(1);
+    // its own touch script, RUN on a clock that moves 10 ms a read: every touch logged with its time, the thread not kept
+    const script = /<script>\s*(window\.__touchLog = \[\];[\s\S]*?)<\/script>/.exec(cold)?.[1];
+    if (script === undefined) throw new Error("the cold page carries no touch script");
+    const heard = new Map<string, () => void>();
+    const page = { __touchLog: [] as string[], __touchAt: [] as number[] };
+    let clock = 1_000;
+    const performance = {
+      now: () => {
+        clock += 10;
+        return clock;
+      },
+    };
+    new Function("window", "addEventListener", "performance", script)(
+      page,
+      (type: string, listener: () => void) => heard.set(type, listener),
+      performance,
+    );
+    for (const type of ["touchstart", "touchend", "touchstart", "touchend"]) heard.get(type)?.();
+    expect(page.__touchLog).toEqual(["start", "end", "start", "end"]);
+    expect(page.__touchAt).toEqual([1_010, 1_020, 1_030, 1_040]);
+    // THE HOLD, on the server: owed to the next ask of a page at the path — never another page's — and told once
+    const ask = async (token: string, path: string): Promise<{ play: boolean; hold?: number }> =>
+      (await (
+        await fetch(
+          `${fixture?.origin}/beacon?token=${token}&report=${encodeURIComponent(JSON.stringify({ path }))}`,
+        )
+      ).json()) as { play: boolean; hold?: number };
+    expect(await ask("c1", "/cold?p=k")).toEqual({ play: false });
+    fixture.hold("/cold", FIXTURE_HOLD_MS);
+    expect(await ask("p1", "/page")).toEqual({ play: false });
+    expect(await ask("c1", "/cold?p=k")).toEqual({ play: false, hold: FIXTURE_HOLD_MS });
+    expect(await ask("c1", "/cold?p=k")).toEqual({ play: false });
+    // THE HOLD, in the page — its own function, run: nothing for no hold; told one, it says so, keeps its thread, and
+    // says when the hold began and ended
+    const source = /const hold = \(ms\) => \{[\s\S]*?\n {2}\};/.exec(cold)?.[0];
+    if (source === undefined) throw new Error("the page carries no hold");
+    const beacons: string[] = [];
+    const held: { __held?: [number, number] } = {};
+    const hold = new Function("navigator", "performance", "window", `${source}; return hold;`)(
+      { sendBeacon: (url: string) => beacons.push(url) },
+      performance,
+      held,
+    ) as (ms?: number) => void;
+    hold(undefined);
+    hold(0);
+    expect(beacons).toEqual([]);
+    expect(held.__held).toBeUndefined();
+    const began = clock;
+    hold(300);
+    expect(beacons).toEqual(["/held"]);
+    expect(clock - began).toBeGreaterThanOrEqual(300);
+    expect(held.__held?.[0]).toBe(began + 10);
+    expect((held.__held?.[1] ?? 0) - (held.__held?.[0] ?? 0)).toBeGreaterThanOrEqual(300);
+    // …and its word that it began is counted
+    expect((await fetch(`${fixture.origin}/held`, { method: "POST" })).status).toBe(204);
+    expect(fixture.asked("/held")).toBe(1);
+    // every page says its touches' times and its hold with its report
+    expect(fixtureHtml("/page")).toContain("touchAt: window.__touchAt || []");
+    expect(fixtureHtml("/page")).toContain("held: window.__held || null");
+  });
+
+  it("PT-5b3: `?tidy=1` — once loaded and painted the page takes `tidy` out of its own address with `history.replaceState` (a move WITHIN the document), keeping the rest of its query; a page not asked to tidy leaves its address alone", () => {
+    const source = /const asked = new URLSearchParams\(location\.search\);[\s\S]*?\}\)\)\);/.exec(
+      fixtureHtml("/page"),
+    )?.[0];
+    if (source === undefined) throw new Error("the page carries no tidy");
+    const run = (search: string) => {
+      const listeners = new Map<string, () => void>();
+      const frames: (() => void)[] = [];
+      const replaced: unknown[][] = [];
+      new Function(
+        "location",
+        "addEventListener",
+        "requestAnimationFrame",
+        "history",
+        "URLSearchParams",
+        source,
+      )(
+        { search, pathname: "/gate" },
+        (type: string, listener: () => void) => listeners.set(type, listener),
+        (frame: () => void) => frames.push(frame),
+        { replaceState: (...args: unknown[]) => replaced.push(args) },
+        URLSearchParams,
+      );
+      return { listeners, frames, replaced };
+    };
+    const tidy = run("?p=t&tidy=1");
+    // nothing before its load, nor before it has painted (two frames on)
+    expect(tidy.replaced).toEqual([]);
+    tidy.listeners.get("load")?.();
+    expect(tidy.replaced).toEqual([]);
+    tidy.frames.shift()?.();
+    expect(tidy.replaced).toEqual([]);
+    tidy.frames.shift()?.();
+    expect(tidy.replaced).toEqual([[null, "", "/gate?p=t"]]);
+    // alone in its query: the bare path
+    const bare = run("?tidy=1");
+    bare.listeners.get("load")?.();
+    bare.frames.shift()?.();
+    bare.frames.shift()?.();
+    expect(bare.replaced).toEqual([[null, "", "/gate"]]);
+    // not asked: it waits for nothing and replaces nothing
+    const plain = run("?p=t");
+    expect(plain.listeners.size).toBe(0);
+    expect(plain.replaced).toEqual([]);
   });
 });

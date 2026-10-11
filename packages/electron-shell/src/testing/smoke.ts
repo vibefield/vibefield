@@ -2030,7 +2030,7 @@ async function stillRows(
 }
 
 /** PT-5b2's rows on the smoke's fixture (testing/smoke-first-load.ts): PT-2's driver, and main's own word on the desk's
- * pages (its offscreen WebContents by their address) and on the app's windows (by what they are). */
+ * pages (its offscreen WebContents by their address). */
 async function firstRows(
   win: BrowserWindow,
   shotDir: string | undefined,
@@ -2061,10 +2061,6 @@ async function firstRows(
           .getAllWebContents()
           .filter((c) => !c.isDestroyed() && c.isOffscreen() && c.getURL().startsWith(prefix))
           .map((c) => ({ id: c.id, url: c.getURL(), muted: c.isAudioMuted() })),
-      windowIds: () =>
-        BrowserWindow.getAllWindows()
-          .filter((w) => !w.isDestroyed() && !w.webContents.isOffscreen())
-          .map((w) => w.id),
     };
     return await firstLoadRows(driver);
   } catch (error) {

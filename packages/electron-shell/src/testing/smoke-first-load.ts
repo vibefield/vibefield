@@ -1,26 +1,35 @@
 // PT-5b2 — A PAGE'S FIRST LOAD, IN THE PRODUCT (smoke:canvas; the PORTALS brief PT-5b2 §2 — what PT-5b's grade found: no
 // fixture page had ever navigated before its first load finished, and a page still starting could be neither sent anywhere
 // nor stopped). Browser panes laid on clear ground, pointed at the smoke's own fixture (testing/live-fixture.ts), judged by
-// the desk's own word (each face's row), the page's (its report with each ask), main's (its offscreen WebContents, its
-// windows) and the desk's pixels where a failed face says why — never a hash:
+// the desk's own word (each face's row), the page's (its report with each ask), main's (its offscreen WebContents) and
+// the desk's pixels where a failed face says why — never a hash:
 //   FIRST-REDIRECT — a pane whose page's script sends it on BEFORE its first load finished (`/redirecting`: a subresource
 //                    that never arrives): it is `live` at the redirect's end — never `failed` on the way — and main holds
 //                    its one window still;
 //   FIRST-CLICK    — a pane on a page that never finishes loading (`/loading`), in hand: a press on its link goes to the
 //                    next page, live — the same window;
 //   NO-DOCUMENT    — a pane whose address is an attachment (`/file.bin`): no page — its face says so in a person's words
-//                    on its film, no window is raised, and ↻ asks for the address again;
+//                    on its film, the page was REFUSED its download (the face's refusal count, one more — PT-5b3: a
+//                    save panel is no window, so a count of windows could not see one), and ↻ asks for the address again;
 //   STARTING       — a pane on the fixture's SHUT gate (its first address has not answered): an address typed over it
 //                    goes there; another such pane's ↻ reads Stop, and pressed it stops — the face says so, the gate's
 //                    load given up — then, the gate open, ↻ loads it;
 //   TAPS           — a phone's page that keeps its thread busy at each touch (`/busy`): two quick taps are heard start,
 //                    end, start, end — the hand's events in the order they were sent, whatever is awaited on the way.
+// PT-5b3 (what PT-5b2's grade found in those fixes):
+//   SWITCH-STARTING — a pane on the shut gate (its first address has not answered), its device switched to another of the
+//                    SAME density (the laptop's to the tablet's): it stays `starting` at its address — never "no page at
+//                    this address" — the gate asked for it once more; opened, it is live, seen as the device it was
+//                    switched to;
+//   TAPS-COLD      — a phone's page HELD busy with its scale never read (`/cold`, held on the smoke's word — a page just
+//                    loaded and hydrating): two quick taps sent inside the hold are heard once it ends — start, end,
+//                    start, end — never dropped for want of a scale.
 // Then the panes are removed and the board is as found. `--first-load` beside `--smoke-canvas` runs these rows alone
 // after the boot's (the author's loop).
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { FixtureReport } from "./live-fixture";
+import { FIXTURE_HOLD_MS, type FixtureReport } from "./live-fixture";
 import { PANE, type PaneHands, paneHands } from "./smoke-browser-pane";
 import { type MainPage, PAGE_PIXELS, type PageSeen, pageAtRest } from "./smoke-last-still";
 import type { LiveRowsDriver } from "./smoke-live-pane";
@@ -43,6 +52,8 @@ export const FIRST_ROWS = {
   typed: "/page?typed=1",
   /** TAPS: the gaps of two quick taps (ms) — a press to its release, a release to the next press */
   tap: { held: 15, between: 50 },
+  /** SWITCH-STARTING: the device the pane is switched to — another of the laptop's density, told as another device */
+  switchTo: "tablet",
 } as const;
 
 /** A face's row as these rows read it. */
@@ -53,6 +64,8 @@ export interface FirstFace {
   readonly address: string | null;
   readonly loading: boolean;
   readonly presented: number;
+  /** PT-5b3: the serial of the last thing its page asked for and was refused (a download; 0: nothing) */
+  readonly refused: number;
 }
 
 /** What the rows saw — the SMOKE_CANVAS_FIRST line, and what the judges read. */
@@ -68,7 +81,8 @@ export interface FirstLoadSeen {
     readonly windows: readonly number[];
   };
   readonly click: {
-    /** the page said it was still loading when its link was pressed, and its hanging image was asked for */
+    /** the page said it was still loading when its link was pressed, and its hanging image was asked for — counted
+     * since ITS pane was laid (PT-5b3: `/redirecting` carries the same image) */
     readonly loading: boolean;
     readonly hung: number;
     readonly served: number;
@@ -80,8 +94,6 @@ export interface FirstLoadSeen {
     /** `/file.bin` asked before, after the pane was laid, after ↻ */
     readonly asked: readonly [number, number, number];
     readonly face: FirstFace | null;
-    /** the app's windows (a page's own offscreen one is none) that were not there before the pane was laid */
-    readonly raised: number;
     readonly page: PageSeen | null;
     /** what ↻ reads in hand, and the face once the address was asked again */
     readonly tool: string | null;
@@ -111,6 +123,36 @@ export interface FirstLoadSeen {
     /** the page's view as it says it, and every touch it heard, in order */
     readonly view: readonly [number, number] | null;
     readonly log: readonly string[];
+  };
+  /** PT-5b3 (ruling 2) — SWITCH-STARTING. */
+  readonly switched: {
+    /** the pane on the shut gate: its face, and whether the bar offered the device's act */
+    readonly before: FirstFace | null;
+    readonly offered: boolean;
+    /** its device switched, the gate shut yet: its face; how many times its address was asked for before the switch and
+     * in all; the loads waiting at the gate */
+    readonly after: FirstFace | null;
+    readonly asked: readonly [number, number];
+    readonly waiting: number;
+    /** the gate opened: its face; how its page says it is seen (`navigator.maxTouchPoints`; null: it never spoke); the
+     * agent the request the gate ANSWERED came with; how many times its address was asked for in all by then; and the
+     * device switches the desk told its pages meanwhile */
+    readonly opened: FirstFace | null;
+    readonly touchPoints: number | null;
+    readonly agent: string | null;
+    readonly askedOpened: number;
+    readonly told: number;
+  };
+  /** PT-5b3 (ruling 6) — TAPS-COLD. */
+  readonly tapsCold: {
+    readonly view: readonly [number, number] | null;
+    /** how many times the page said its hold began; how long after the smoke heard so the second tap had been sent */
+    readonly held: number;
+    readonly sentWithinMs: number;
+    /** the page's own word: when its hold began and ended, every touch it heard, and when (its clock, ms) */
+    readonly hold: readonly [number, number] | null;
+    readonly log: readonly string[];
+    readonly at: readonly number[];
   };
 }
 
@@ -190,7 +232,7 @@ function words(row: string, what: string, page: PageSeen | null): string[] {
   return out;
 }
 
-/** NO-DOCUMENT: an address that is no page says so — never `starting` for good — raises no window, and ↻ asks again. */
+/** NO-DOCUMENT: an address that is no page says so — never `starting` for good — its download refused, and ↻ asks again. */
 export function judgeNoDocument(seen: FirstLoadSeen["noDocument"]): string[] {
   const out: string[] = [];
   if (seen.asked[1] - seen.asked[0] !== 1)
@@ -204,8 +246,12 @@ export function judgeNoDocument(seen: FirstLoadSeen["noDocument"]): string[] {
     );
   if (f !== null && f.address?.includes("/file.bin") !== true)
     out.push(`NO-DOCUMENT: the face says it is at ${f.address}, not the address it was asked for`);
-  if (seen.raised !== 0)
-    out.push(`NO-DOCUMENT: the app has ${seen.raised} windows it did not have before the pane`);
+  // PT-5b3: what the page asked for and MAY NOT have — its download, cancelled by the session's guard and counted (a save
+  // panel is no window of the app's: a count of windows could not have seen one)
+  if (f !== null && f.refused !== 1)
+    out.push(
+      `NO-DOCUMENT: the pane's page was refused ${f.refused} downloads, not the one its address is — the attachment was not refused (or was never asked for)`,
+    );
   out.push(...words("NO-DOCUMENT", "the pane's page area", seen.page));
   if (seen.tool !== "Reload")
     out.push(`NO-DOCUMENT: in hand ↻ reads ${JSON.stringify(seen.tool)}, not Reload`);
@@ -220,6 +266,10 @@ export function judgeNoDocument(seen: FirstLoadSeen["noDocument"]): string[] {
   )
     out.push(
       `NO-DOCUMENT: asked again, the pane is ${seen.again?.state ?? "without a face"} (${seen.again?.reason ?? "no reason"}) — not failed: no-document as before`,
+    );
+  else if (seen.again.refused !== 2)
+    out.push(
+      `NO-DOCUMENT: asked again, the pane's page was refused ${seen.again.refused} downloads in all, not two`,
     );
   return out;
 }
@@ -292,14 +342,98 @@ export function judgeTaps(seen: FirstLoadSeen["taps"]): string[] {
   return out;
 }
 
+/** SWITCH-STARTING (PT-5b3): a device switch on a pane whose first address has not answered asks for the ADDRESS again. */
+export function judgeSwitch(seen: FirstLoadSeen["switched"]): string[] {
+  const out: string[] = [];
+  const b = seen.before;
+  if (b === null || b.state !== "starting" || b.presented !== 0 || seen.asked[0] !== 1)
+    out.push(
+      `SWITCH-STARTING: before the switch the pane was ${b?.state ?? "without a face"} (${b?.presented ?? 0} frames, its address asked for ${seen.asked[0]} times), not starting at the shut gate — the row proved nothing`,
+    );
+  if (!seen.offered)
+    out.push(
+      `SWITCH-STARTING: the bar offered no act for the ${FIRST_ROWS.switchTo} — the row proved nothing`,
+    );
+  const a = seen.after;
+  if (a === null || a.state !== "starting" || !a.loading)
+    out.push(
+      `SWITCH-STARTING: its device switched, the pane is ${a?.state ?? "without a face"} (${a?.reason ?? "no reason"}, loading ${a?.loading ?? false}), not starting — a page whose address had only not answered yet was reloaded as its window's blank`,
+    );
+  if (a !== null && a.address?.includes("/gate?p=w") !== true)
+    out.push(
+      `SWITCH-STARTING: its device switched, the pane says it is at ${a.address}, not its address`,
+    );
+  if (seen.asked[1] !== 2)
+    out.push(
+      `SWITCH-STARTING: its address was asked for ${seen.asked[1]} times in all, not twice — once, and once more on the device it was switched to`,
+    );
+  if (seen.waiting !== 1)
+    out.push(
+      `SWITCH-STARTING: ${seen.waiting} loads wait at the gate, not the one that replaced the first`,
+    );
+  const o = seen.opened;
+  if (
+    o === null ||
+    o.state !== "live" ||
+    o.presented < 1 ||
+    o.address?.includes("/gate?p=w") !== true
+  )
+    out.push(
+      `SWITCH-STARTING: the gate opened, the pane is ${o?.state ?? "without a face"} at ${o?.address ?? "no address"} (${o?.reason ?? "no reason"}, ${o?.presented ?? 0} frames) — not live at its address`,
+    );
+  if (seen.touchPoints === null || seen.touchPoints < 1)
+    out.push(
+      `SWITCH-STARTING: the page says it has ${seen.touchPoints ?? "no word of its"} touch points — it was not loaded as the ${FIRST_ROWS.switchTo} it was switched to`,
+    );
+  // the request the gate ANSWERED was the one asked as the device switched to — and no load followed it
+  if (seen.agent === null || !/iPad/u.test(seen.agent))
+    out.push(
+      `SWITCH-STARTING: the load the gate answered came as ${seen.agent === null ? "nothing it kept" : JSON.stringify(seen.agent.slice(0, 60))} — not as the ${FIRST_ROWS.switchTo}: the page was asked for as the device before`,
+    );
+  if (seen.askedOpened !== 2)
+    out.push(
+      `SWITCH-STARTING: once live its address had been asked for ${seen.askedOpened} times, not twice — the page loaded again after the gate opened`,
+    );
+  if (seen.told !== 1)
+    out.push(
+      `SWITCH-STARTING: the desk told its pages ${seen.told} device switches, not the one — the row proved nothing`,
+    );
+  return out;
+}
+
+/** TAPS-COLD (PT-5b3): a press on a page too busy to say its scale WAITS — both taps are heard once the page is free. */
+export function judgeTapsCold(seen: FirstLoadSeen["tapsCold"]): string[] {
+  const out: string[] = [];
+  if (seen.view?.[0] !== PANE.phoneViewport[0])
+    out.push(
+      `TAPS-COLD: the page's view is ${seen.view === null ? "not said" : seen.view.join(" × ")}, not a phone's ${PANE.phoneViewport[0]} wide — the row proved nothing`,
+    );
+  const kept = seen.hold === null ? 0 : seen.hold[1] - seen.hold[0];
+  if (seen.held !== 1 || seen.hold === null || kept < FIXTURE_HOLD_MS)
+    out.push(
+      `TAPS-COLD: the page said it was held ${seen.held} times and kept its thread ${kept} ms, not once for ${FIXTURE_HOLD_MS} — the row proved nothing`,
+    );
+  else if (seen.sentWithinMs >= FIXTURE_HOLD_MS)
+    out.push(
+      `TAPS-COLD: the taps were sent ${seen.sentWithinMs} ms after the page said it was held — past its ${FIXTURE_HOLD_MS} ms hold: the row proved nothing`,
+    );
+  if (seen.log.join(",") !== "start,end,start,end")
+    out.push(
+      `TAPS-COLD: the page, held busy with its scale never read, heard ${seen.log.length === 0 ? "nothing" : seen.log.join(", ")} for two taps, not start, end, start, end — a press on a page too busy to say its scale was dropped, not delivered late`,
+    );
+  else if (seen.hold !== null && (seen.at[0] ?? Number.NEGATIVE_INFINITY) < seen.hold[1])
+    out.push(
+      `TAPS-COLD: the page heard its first touch at ${seen.at[0]} ms, before its hold ended (${seen.hold[1]}) — the taps did not arrive while it was held: the row proved nothing`,
+    );
+  return out;
+}
+
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** The rows' driver: PT-2's, and main's own word on the desk's pages and on the app's windows. */
+/** The rows' driver: PT-2's, and main's own word on the desk's pages. */
 export interface FirstLoadDriver extends LiveRowsDriver {
   /** Main's offscreen WebContents whose address begins with `prefix`. */
   pages(prefix: string): readonly MainPage[];
-  /** The ids of the app's windows a person could see — never a page's own offscreen one. */
-  windowIds(): readonly number[];
 }
 
 /** A face's row by its key, off the door, as these rows read it. */
@@ -307,7 +441,7 @@ const FACE = (key: string): string => `(() => {
   const f = (globalThis.__vfDesk.live()?.faces ?? []).find((x) => x.key === ${JSON.stringify(key)});
   return f === undefined ? null : {
     state: f.state.is, reason: f.state.reason ?? null, address: f.info?.address ?? null,
-    loading: f.info?.loading !== undefined, presented: f.presented,
+    loading: f.info?.loading !== undefined, presented: f.presented, refused: f.refused ?? 0,
   };
 })()`;
 
@@ -519,6 +653,7 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
     await shoot("pt-5b2-first-redirect.png");
 
     // ── FIRST-CLICK: a link pressed while the page still loads ────────────────────────────────────────────────────────
+    const hung0 = d.fixture.asked("/hang.png");
     const loading = await lay("/loading?p=c", x0 + step, y0);
     await frame([loading]);
     await waitFor(
@@ -563,7 +698,7 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
     await sleep(500);
     const click: FirstLoadSeen["click"] = {
       loading: loadingSaid,
-      hung: d.fixture.asked("/hang.png"),
+      hung: d.fixture.asked("/hang.png") - hung0,
       served: d.fixture.served("/next") - nexts1,
       states: clicked.states,
       face: await face(loading),
@@ -576,7 +711,6 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
 
     // ── NO-DOCUMENT: an address that is an attachment ────────────────────────────────────────────────────────────────
     const files0 = d.fixture.asked("/file.bin");
-    const windows0 = d.windowIds();
     const file = await lay("/file.bin?p=n", x0 + 2 * step, y0);
     await frame([file]);
     const ended = await waitFor(
@@ -587,7 +721,7 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
     );
     await sleep(900);
     const files1 = d.fixture.asked("/file.bin");
-    const raised = d.windowIds().filter((id) => !windows0.includes(id)).length;
+    const fileFace = (await face(file)) ?? ended;
     const filePage = await pageOf(file);
     await shoot("pt-5b2-no-document.png");
     await pickUp(file);
@@ -603,13 +737,13 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
       "the attachment's pane says it again",
       FIRST_ROWS.withinMs,
       () => face(file),
-      (f) => f !== null && f.state === "failed" && !f.loading,
+      (f) =>
+        f !== null && f.state === "failed" && !f.loading && f.refused > (fileFace?.refused ?? 0),
     );
     await done();
     const noDocument: FirstLoadSeen["noDocument"] = {
       asked: [files0, files1, d.fixture.asked("/file.bin")],
-      face: ended,
-      raised,
+      face: fileFace,
       page: filePage,
       tool: fileTool,
       again,
@@ -768,6 +902,160 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
     };
     said.taps = taps;
     problems.push(...judgeTaps(taps));
+    await done();
+
+    // ── SWITCH-STARTING (PT-5b3): a pane on the shut gate, its device switched to another of the same density ─────────
+    d.fixture.gate(false);
+    const y2 = y0 + 2 * (FIRST_ROWS.laid.h + FIRST_ROWS.gap) + 600;
+    const gate0 = d.fixture.asked("/gate");
+    const waiter = await lay("/gate?p=w", x0, y2);
+    await frame([waiter]);
+    await waitFor(
+      "the pane's load waiting at the gate",
+      FIRST_ROWS.withinMs,
+      () => d.fixture.gated().waiting,
+      (n) => n >= 1,
+    );
+    await sleep(600);
+    const switchBefore = await face(waiter);
+    const askedBefore = d.fixture.asked("/gate") - gate0;
+    const told0 =
+      (await js<Record<string, number>>("globalThis.__vfDesk.live()?.stats ?? {}")).emulations ?? 0;
+    // the bar's own act, on the pane at rest
+    await select(waiter);
+    const act = `[data-selection-bar] .vf-bar-row [data-act="act:device-${FIRST_ROWS.switchTo}"]`;
+    const offered = await h
+      .until(
+        `the bar's ${FIRST_ROWS.switchTo} act`,
+        10_000,
+        `document.querySelector(${JSON.stringify(act)}) !== null && document.querySelector("[data-selection-bar]")?.getAttribute("data-shown") === "true"`,
+      )
+      .then(
+        () => true,
+        () => false,
+      );
+    if (offered) {
+      await sleep(300);
+      await h.pressSelector(act);
+    }
+    // its address asked for again (the load before given up) — or, were the blank reloaded, the page says there is none
+    await waitFor(
+      "the gate asked for the pane's address once more",
+      10_000,
+      async () => ({ asked: d.fixture.asked("/gate") - gate0, f: await face(waiter) }),
+      (v) => v.asked >= 2 || v.f?.state === "failed",
+    );
+    await sleep(1_200);
+    const switchAfter = await face(waiter);
+    const askedAfter = d.fixture.asked("/gate") - gate0;
+    const waitingAfter = d.fixture.gated().waiting;
+    await shoot("pt-5b3-switch-starting.png");
+    d.fixture.gate(true);
+    const switchOpened = await waitFor(
+      "the switched pane live",
+      FIRST_ROWS.withinMs,
+      () => face(waiter),
+      (f) => f !== null && f.state === "live" && f.presented >= 1,
+    );
+    const switchWord = await waitFor(
+      "the switched pane's page's word",
+      10_000,
+      () => at(waiter),
+      (r) => r !== null,
+    );
+    await h.key("Escape");
+    const switched: FirstLoadSeen["switched"] = {
+      before: switchBefore,
+      offered,
+      after: switchAfter,
+      asked: [askedBefore, askedAfter],
+      waiting: waitingAfter,
+      opened: switchOpened,
+      touchPoints: switchWord?.touchPoints ?? null,
+      agent: d.fixture.agentSeen("/gate?p=w"),
+      askedOpened: d.fixture.asked("/gate") - gate0,
+      told:
+        ((await js<Record<string, number>>("globalThis.__vfDesk.live()?.stats ?? {}")).emulations ??
+          0) - told0,
+    };
+    said.switched = switched;
+    problems.push(...judgeSwitch(switched));
+
+    // ── TAPS-COLD (PT-5b3): a phone's page held busy with its scale never read — two quick taps inside the hold ───────
+    const cold = await lay("/cold?p=k", x0 + step, y2, {
+      w: PANE.phoneCut.w,
+      h: PANE.phoneCut.h,
+      props: { device: "phone" },
+    });
+    await frame([cold]);
+    await waitFor(
+      "the cold phone's page live",
+      FIRST_ROWS.withinMs,
+      () => face(cold),
+      (f) => f !== null && f.state === "live" && f.presented >= 1,
+    );
+    const coldWord = await waitFor(
+      "the cold phone's page's word",
+      FIRST_ROWS.withinMs,
+      () => at(cold),
+      (r) => r !== null,
+    );
+    await pickUp(cold);
+    const coldFrame = await heldFrame();
+    let sentWithinMs = Number.POSITIVE_INFINITY;
+    const held0 = d.fixture.asked("/held");
+    if (coldFrame !== null && coldWord !== null) {
+      const view = coldWord.view;
+      const p = pageOnWindow(coldFrame, view, await h.deskAt(), view[0] * 0.85, view[1] * 0.3);
+      const point = { x: Math.round(p.x), y: Math.round(p.y) };
+      // the pointer over the page BEFORE the hold: a hover is nothing a finger does, and asks the page nothing
+      h.move(point.x, point.y);
+      await sleep(300);
+      d.fixture.hold("/cold", FIXTURE_HOLD_MS);
+      await waitFor(
+        "the page's word that its hold began",
+        10_000,
+        () => d.fixture.asked("/held") - held0,
+        (n) => n >= 1,
+      );
+      const heldAt = Date.now();
+      for (let tap = 0; tap < 2; tap += 1) {
+        win.webContents.sendInputEvent({
+          type: "mouseDown",
+          ...point,
+          button: "left",
+          clickCount: 1,
+        });
+        await sleep(FIRST_ROWS.tap.held);
+        win.webContents.sendInputEvent({
+          type: "mouseUp",
+          ...point,
+          button: "left",
+          clickCount: 1,
+        });
+        if (tap === 0) await sleep(FIRST_ROWS.tap.between);
+      }
+      sentWithinMs = Date.now() - heldAt;
+      // the page speaks again once its thread is free; then a little longer: a touch that arrives late is counted too
+      await waitFor(
+        "the cold page's word of its touches",
+        FIXTURE_HOLD_MS + 10_000,
+        () => at(cold),
+        (r) => r !== null && r.held != null && (r.touchLog ?? []).length >= 4,
+      );
+      await sleep(1_200);
+    }
+    const coldSaid = at(cold);
+    const tapsCold: FirstLoadSeen["tapsCold"] = {
+      view: coldSaid?.view ?? null,
+      held: d.fixture.asked("/held") - held0,
+      sentWithinMs,
+      hold: coldSaid?.held ?? null,
+      log: coldSaid?.touchLog ?? [],
+      at: coldSaid?.touchAt ?? [],
+    };
+    said.tapsCold = tapsCold;
+    problems.push(...judgeTapsCold(tapsCold));
     await done();
   } catch (error) {
     // a step that cannot go on ends the rows — never what the rows before it found (they are said with it)
