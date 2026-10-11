@@ -33,19 +33,27 @@ Three surface families, one physics:
 
 ### 1.1 Godview visual source
 
+*Status 2026-10-11: ruled, not built. Until it lands, Godview keeps the 40px instrument bar and the search button stands over its right end (PK2 (a)).*
+
+*Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
+
 Godview is the deliberate control-room exception to the iOS-widget chrome around it. Its
 visual source of truth is `p008/chopsticks/apps/godview`: a flat 40px instrument bar, compact
 monospace controls, a gridded agent stage, stark monochrome status bodies, a parchment terminal
 deck in light mode, a graphite terminal deck in dark mode, and the reference scanline/vignette
 treatment. VibeField keeps its own host mechanics, honest mock label, and renderer-native terminal
 alpha, but does not reinterpret that reference through rounded cards, colorful agent fills, or
-floating pills — with ONE named exception, the terminal deck's sheet edge (§8, 2026-09-28,
-James). The scoped `--vf-godview-*` tokens are the exact reference palette. VibeField
+floating pills — with the exceptions James named: the terminal deck's sheet edge (§8, 2026-09-28)
+and, since round 3 (2026-10-02), Godview's head (GV-D1) and the wrapper around its terminals
+(GV-D7, GV-D11, GV-D12). The scoped `--vf-godview-*` tokens are the exact reference palette. VibeField
 composites those status-body colors at 72% by default so they remain legible glass over the field;
 the temporary system-control panel exposes that alpha for live tuning.
 **Since One Frame (FR-1, 2026-10-03) Godview is a view, not an overlay:** it is drawn inside the
-cover BELOW the frame (§10), reached by ⌘2 or its cell in the views track (§8), and keeps this
-instrument bar as its head for now — without the blocked · working · idle counters (FC-D18).
+cover BELOW the frame (§10), reached by ⌘2 or its cell in the views track (§8). **Its head is the
+frame's, not the reference's instrument bar** (GV-D1, ruled 2026-10-02; §8 "Godview's head —
+Stories"): the 40px bar, its counters (FC-D18) and its ☼◐ switch (FC-D7) are gone from VibeField.
+puppeteer's own Godview keeps the bar. *(Corrected 2026-10-11: this paragraph said Godview "keeps
+this instrument bar as its head for now".)*
 **Since FR-4 (2026-10-03) Godview follows the app's theme (FC-D7):** its ☼◐ switch and its own
 remembered light are gone, and the parchment or graphite deck is whichever the app's one theme
 control (§8, the Me menu) resolves to — unless Settings → Terminal → Look holds the one override,
@@ -199,6 +207,42 @@ thinner than `--vf-godview-launcher-clearing-floor` 92% of the ground: a viewer 
 stage thins the sheet, and at the sheet's glass the prompt beneath would read through the
 launcher's rows. At the default opaque backdrop the floor changes nothing. A launch (QL-2, §8)
 covers its pane with the same paint and the same floor while it waits.
+
+*Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
+**The wrapper's values, as ruled** (One Frame §23.2 and §23.3 — GV-D7 the Lip and GV-D12 the
+groove, ruled 2026-10-02 and locked as drawn; to be built, N12 (a), 2026-10-11; §8, the deck). The
+numbers are the ruled drawing's own. The rows and tokens above stay what ships: the build projects
+the values below into `tokens.css` in the commit that draws them, and where one takes a shipped
+token's place it says so here.
+
+| Ruled role | Light | Dark |
+|---|---|---|
+| deck frame — the sheet's ground: the terminal's ground mixed toward the terminal's own ink | 11% ink | 9% ink |
+| well edge | `rgba(0,0,0,0.17)` | `rgba(0,0,0,0.42)` |
+| well rim | `rgba(255,255,255,0.6)` | `rgba(255,255,255,0.06)` |
+| well shade | `rgba(0,0,0,0.09)` | `rgba(0,0,0,0.28)` |
+
+They are keyed per Godview mode, as the deck's shadow is: `--vf-godview-light-deck-frame-ink` and
+`-well-edge` · `-well-rim` · `-well-shade`, and their `-dark-` twins. The frame is painted at the
+stage's glass, as the sheet's ground is today. Their geometry:
+**The Lip** — `--vf-godview-deck-lip` **30px**, where 14 stands: the lip grown into the drag bar,
+still never less than the radius. **The groove** (the grip) — `--vf-godview-deck-grip-width` /
+`-height` **40 × 6**, where 72 × 4 stand, corners 3 (`-grip-radius`): a slot pressed into the frame,
+not a bar laid on it — filled with the well's edge, the well's shade inside its top
+(`inset 0 1px 1.5px`) and the well's rim under it (`0 1px 0`). **Its pill**
+(`--vf-godview-deck-grip-pill`) — 22 tall, padded 0 12, corners 11, clear at rest; under the pointer
+the pill is the terminal's ink at 7% and the groove takes 30% of that ink into its edge colour;
+held, the pill is 10% and the groove the full ink; 120ms on `ease`; under the keyboard's focus a
+1px outline in text main, 1 off the pill. **Its hit** is the whole lip and 6 above it; in the
+maximized title bar (§8) it is `--vf-godview-deck-grip-hit` **168** wide, the bar's full height.
+**The two controls** (minimize and maximize, §8) — `--vf-godview-deck-control-width` / `-height` /
+`-radius` **30 × 24**, corners 8, 4 apart, the last one 10 from the lip's right end (8 in the title
+bar): a 14 glyph (§13) in the terminal's ink at 64%; under the pointer the full ink on a 10% fill
+of it, 120ms on `ease`. **The well** the panes sit in — `--vf-godview-deck-well-radius` **10**
+(a selected pane's 8, the 1 gap, the 1 edge), the panes 1 in from it and clipped at 9; drawn OVER
+the panes, the edge as a 1px inner ring and the shade as `inset 0 2px 4px`; under its foot, the rim
+as `0 1px 0`. **The monitor's field** ends `--vf-godview-deck-field-gap` **12px** above the deck's
+edge and is never shorter than `--vf-godview-deck-field-floor` **220px** (§8).
 
 ### 2.8 Identity — the face
 
@@ -492,6 +536,19 @@ One more plain curve, with its reason: a **retract** goes back along the way it 
 (0.42, 0, 1, 1) — with its fade on `ease` (the spawn bloom's buds, 180ms, §8; the prototype's
 stylesheet said 200ms, its constants table 180, and the table is the authority) — it accelerates
 home, the pop's reverse (M4). Leaving things never wait out an entrance's reveal delay.
+
+*Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
+**The terminals rise and fall** (Godview's deck, §8; One Frame §22 "Shared mechanics" and §23 —
+GV-D5, GV-D6, GV-D7 and GV-D11, ruled 2026-10-02): two durations, no new curve. The deck **rises**
+— called up from away, or maximized by its button — over **480ms on the island curve**: it is a thing that
+travels. It **falls** — minimized, or restored from maximized — over **300ms on the retract curve**
+above: it goes back the way it came, accelerating home (M4). Each is a `transform` on a sheet that
+is already at its end size (rising) or still at its old one (falling), never an animated edge (§8,
+one resize per change), and a CSS transition (M3). Beside them, on plain `ease`: the view's bodies
+fade out under a maximized deck, and back, in 260ms (the drawing's number, 20 past the table's
+range); the sheet's top corners and shadow go and return in 160ms; the two readouts (§8, §9) come
+in 120ms and leave in 160ms, their veil 160ms both ways; the title bar's own search steps out in
+120ms. Under reduced motion the deck is at its end at once.
 
 Loops are for an indicator waiting on a fact it cannot predict, never for decoration (QL-2's
 launch, §8): a **breath** — `ease-in-out`, alternate, 1.1s, scale 1 → 1.06 — and a repeating
@@ -917,6 +974,47 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   - *Since FR-4 (2026-10-03) the right cluster is GONE:* the theme went into the Me menu (FC-D5,
     F3) and Artifacts behind the right notch (FC-D10, F10), so the head's right slot is the zoom
     readout alone, 16 in, and the pill gives up only the wider of the lights' 96 and that slot.
+- *Status 2026-10-11: ruled, not built. Until it lands, Godview keeps the 40px instrument bar and the search button stands over its right end (PK2 (a)).*
+  **Godview's head — Stories** (One Frame §23, round 3; GV-D1 ruled 2026-10-02; MV-D16 marks only,
+  ruled 2026-10-03; N12 (a) and N13 (a) ruled 2026-10-11): the monitor's views switch in a row of
+  glass circles on the frame's head row (the head, above) — every circle 40 at `top-2`, centred on
+  y 28, 12 apart, **the row centred on the window**. It is the monitor host's chrome, drawn in the
+  frame's language.
+  - **A circle** is the line's glass (§5) with its hairline, the island shadow and the line's
+    lift. It holds its view's **mark** from the view's manifest (MV-D6): filled, in a 22 box
+    centred, in secondary ink; primary on the current view and under the pointer. **Marks only**
+    (MV-D16): never a still, never a second running view.
+  - **The current view's ring is the circle's own edge**: 2 in primary ink inside its 40, in
+    place of the hairline. Nothing grows, shifts or clips. Under the pointer or the keyboard's
+    focus, another circle's edge is 1.5 in tertiary ink. The edge changes in 120ms.
+  - **Its name is said under it** while the pointer or the focus is on it: a solid label
+    (`--vf-chrome-solid`, FC-D14) 24 tall, 8 under the circle and centred on it, corners 12,
+    padded 0 10, ringed by the strong hairline, with the island shadow. The name is 12/500 in
+    primary ink; after it come **the keys the view takes while it is focused**, 11/400 in tertiary
+    ink (M177: this label is where a view's focus keys are said, as the bar's tooltip was). It
+    appears in 140ms, 3 down into place, and never covers the next circle's ring. The circles
+    have no keys of their own.
+  - **The row never crowds the head's ends.** It keeps one head gap (12) from the lights' slot
+    (96) and from the search button (§8 "Search — the Peek"), also while a filter's token widens
+    that glass. It shows as many WHOLE circles as fit, nine at most. Past that it **pages by
+    whole circles**, three at a time, in 320ms on the island curve, with a 28 glass chevron on the
+    same axis outside each end that has more. 700ms after the pointer leaves the head it comes
+    back to the page that holds the current view.
+  - **There is no "Add a view" circle** (N13 (a)): nothing adds a view yet, and a control that
+    opens nothing is not drawn. It returns with that flow, last in the row.
+  - **The stage runs under the head**, to the window's top. A view keeps its words and controls
+    clear of the head's reserve, **56** (the head's foot at 48, plus 8), through the stage's top
+    inset (§8 "The monitor view owns its drawing").
+  - **Maximized** (GV-D11) nothing of the head stands over the terminals' title bar: the row and
+    its chevrons fade in 200ms and take no pointer.
+  - **Reduced motion:** the row pages and the label appears at once.
+  - **The window still drags by the app's strip** across the head's row; every circle and
+    chevron is a control and never drags it.
+  - **What left with the bar:** the counters (FC-D18) and the ☼◐ switch (FC-D7), hidden since
+    One Frame; the spacer for the window's lights, which the frame's head row already clears; and
+    **System control**, now an act in the palette's "On this view" group while the view is
+    Godview, with no key — its panel is §1.1's temporary one, unchanged, and open to whoever
+    could open it before.
 - **The Me menu** (UA-D19, ratified 2026-09-22 — Where You Sit II, design 2B): the owner's
   face replaces the Settings gear at the bottom-left (`bottom-4 left-4`; Godview stays beside
   it, `hud.panel` above both — *Godview's button retired 2026-10-03, FR-1: its cell in the views
@@ -1491,8 +1589,8 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   CONFLICT names both sides ("Use the file's version" · "Save mine over it") — never a
   silent clobber. This-window settings on the same page apply as they change; the scope tag
   is what tells the two apart.
-- **Godview's terminal deck is a sheet over the monitor** (2026-09-28, James — §1.1's one
-  named departure from the reference). The deck is one card whose top edge is a tab: rounded
+- **Godview's terminal deck is a sheet over the monitor** (2026-09-28, James — the first of
+  §1.1's named departures from the reference). The deck is one card whose top edge is a tab: rounded
   top corners, §2.3's hairline as a ring, and the Sheet shadow (§2.7's row) cast UP onto the
   monitor, so the stage reads as lying beneath it. **The card's ground is always the terminal's
   own background** (James, 2026-09-28): `--vf-godview-terminal-bg`, projected from the same
@@ -1533,6 +1631,148 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   so no reflow of history). The position is
   the viewer's (`localStorage`), re-clamped to each window, never a shared setting. No
   transition on the edge: every frame of an animated edge would be a PTY resize.
+  *Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
+  **Round 3 redraws the wrapper around these panes, and nothing inside it** (One Frame §22 "Shared
+  mechanics", §23 and §23.1–§23.3; GV-D2 — "keep the current terminal pane design as is … what i
+  want you to redesign is the wrapper", James, 2 Oct; GV-D4, GV-D5, GV-D6, GV-D7, GV-D11 and GV-D12
+  ruled 2026-10-02; to be built, N12 (a), ruled 2026-10-11). Everything above that status line is
+  what ships. The items below are the ruling, and each says which shipped sentence, if any, it
+  replaces on the day it lands. The numbers are the ruled drawing's, in its 1180 × 780 window; the
+  values are §2.7's. Three questions are open with James and are written as open: N14, N15, N16.
+  - **The deck has one state — `away · up · maximized`.** Godview's overlay owns it and alone
+    publishes it; the stage draws the state it is handed, so the catalog and Settings' miniature
+    can hand it any of the three without speaking for the window. It is published through a door
+    of the frame's own. The door carries the three-valued state for Godview's own readers and for
+    the shell (the window's lights); the frame's readers — the Peek's button and the Stories head
+    — read only whether it is maximized. It reads **`up` from the START of a drag out of
+    maximized**, not from its release, so the head is back as the bar leaves the window's top.
+  - **The Lip** (GV-D7): the lip grown into the drag bar — **30** tall, on the sheet's own ground
+    in the terminal's ink; nothing floats. **The groove** (GV-D12 — James's pick over the lean: "i
+    like the groove one") stands in its middle, in its pill: a 40 × 6 slot pressed into the frame,
+    the well's own depth in miniature, where the 72 × 4 bar is today. At its right end, 10 in and
+    4 apart, **minimize, then maximize** — the order windows keep them — each 30 × 24 with its
+    glyph at 14 (§13). The whole lip drags the edge, and 6 above it so it can be caught from the
+    monitor, but never its buttons: `row-resize` over it, `grabbing` while held. It stays the
+    `role="separator"` it is; its keys are below.
+  - **The well** (GV-D7 — "make the inner pane part feel like wrapped, maybe a inner border",
+    James, 2 Oct): the sheet stops being the terminal's ground exactly. Its ground is the **frame
+    tone** — the terminal's ground mixed toward the terminal's ink, 11% by day and 9% by night
+    (§2.7) — at the stage's glass, with the ring and the shadow cast up that the sheet has today.
+    The panes sit in a **well** set into it: 8 in from each side of the window (the 8 a covered
+    view keeps clear, §10), from the lip's foot to 692, corners 10, the panes 1 in from its edge
+    and clipped at 9; drawn OVER the panes, a 1px inner edge and a soft shade at its top; under
+    its foot, a rim of light — set in, not drawn on. The panes, their frames and the launcher are
+    the shipped ones, untouched (GV-D2). *Replaces* "**The card's ground is always the terminal's
+    own background**" (James, 2026-09-28) and its "lip, gaps and panes are one surface": the lip
+    and the sheet around the well become the frame, a shade off the panes, on purpose.
+  - **Rest:** the edge rests **300** from the window's top in the drawing's 780-tall window —
+    where the sheet's top corners clear the edges' slivers (332–428) — so the lip is 300–330 and
+    the panes 330–692. **What rest is on a window of another height — always 300, or the same
+    share — is N15, open with James;** nothing here decides it, and the shipped rest
+    (`Monitor height`, 35%, 170px floor) stands until he rules.
+  - **A drag has three outcomes.** Held, the edge follows the pointer and the terminals resize
+    with it, rows only, as today — but it is no longer stopped at 120: it goes on down (the drawing
+    stops it 24 short of 692). Let go, where the edge is decides: **it stays**, and the place is
+    remembered as today — the viewer's (`localStorage`, the saved edge keeping its key),
+    re-clamped to each window, never a shared setting; **less than 120 left** between the edge
+    and 692 **→ away** (minimized); **the edge above 104 → maximized**. **A fling decides without
+    the distance:** let go moving faster than **1.4 px/ms**, the terminals go away if the edge was
+    moving down and maximize if it was moving up. *Replaces* "The deck keeps at least 120px": 120
+    is still the least a deck that is UP keeps, and becomes the line past which letting go puts
+    it away.
+  - **Two readouts while the edge is held** (James, 29 Sep: a readout is huge bold words in open
+    space — the bloom's words, below): past either line the stage says what letting go would do,
+    as a verb and a noun — ***Minimize* the terminals** while less than 120 is left, ***Maximize*
+    the terminals** while the edge is above 104, and nothing between (§9). 800 at 64px/1,
+    −0.04em, in Godview's text main (§2.7), the verb at 40% and the noun full, haloed in the
+    monitor's ground (40 and 18), over a **veil** of that ground at 62%. *Minimize* is written on the
+    monitor, centred between y 60 and the edge, its veil over the monitor down to 26 above the
+    edge — both under the sheet. *Maximize* is written over the terminals, centred between the
+    edge and 692, its veil over the sheet from the edge down. In over 120ms, out over 160ms (§6),
+    and gone when the edge is let go.
+  - **Keys and the double-click.** On the focused edge **↑ ↓ move it 24, with ⇧ 96; Home takes it
+    to the 104 line, End to 120 left** (572 in the drawing). Keys move the edge between those two
+    and nowhere else: **they never minimize and never maximize.** **A double-click** on the lip,
+    never on a button, puts the edge back at rest and forgets the remembered place. Each of these
+    is one layout, with no travel. On the maximized bar's grip a double-click restores the
+    terminals to rest (a fall, §6), and the same keys take them out of maximized: to the 104
+    line, or with End to 120 left. *Replaces* today's upper bound, the bar's bottom edge, for
+    Home and for ↑; the lower bound is today's, 120 left.
+  - **Minimized** (GV-D6 — "Nothing, fully away"): the minimize button, an edge let go with less
+    than 120 left, or a fling down puts the terminals **fully away**: no tab, no sliver, nothing
+    at the foot. **Every session keeps running** — a pane is a viewport, never the session — and
+    the button's title says so (§9). Away, the deck takes no pointer, no focus and no key. The
+    monitor has the window: its field ends at 692, the covers' reserve (FC-D15). (The drawing runs
+    the field on to the window's foot, round the line and the face; a field under the line is the
+    head's work, with its obstacles.)
+  - **Called up** (GV-D5, GV-D6): **any session brings the terminals back** — a body, a list row,
+    a rain column, a timeline lane, a spend row, a search result: whatever selects a session — and
+    so do the line's create (New terminal, ⌘T) and the
+    swarm's hold (the bloom's birth). They rise from under the window's foot (§6) **as they were
+    left**: the same panes, the same edge, every session where it was. A call while they are up
+    moves nothing. **Godview opens on the monitor alone at launch, then as you left it** (GV-D5):
+    within a run — the view left and come back to, or the window reloaded — the deck is in the
+    state it was left in, away, up at its edge, or maximized; a launch starts away. *Replaces* the
+    deck that is always there, mounted with a pane as Godview opens. **What the FIRST call after
+    a launch brings back — last run's panes with the called session, or the called session alone
+    — is N14, open with James.** **⌘W on the last pane** asks for Canvas today; **whether it
+    should instead minimize the terminals and stay in Godview is N16, open with James.**
+  - **A session with no pane** (GV-D4): it opens **beside the focused pane, up to three panes**;
+    with three or more showing it **takes the focused pane's place** (the session it displaces
+    keeps running); a session already in a pane is focused where it is, never mounted twice. A
+    new terminal — ⌘T, the bloom's birth — is placed by the same rule. The cap is this rule's
+    alone: **⌘D still splits without limit.** *Replaces* "the active pane" wherever a door says it
+    today — the line's New terminal, History's Resume and Jump to, the Peek's Open in the
+    terminals, each in its own entry of this section: those sentences and their notes stand until
+    this lands.
+  - **One resize per change.** *Replaces* "No transition on the edge: every frame of an animated
+    edge would be a PTY resize" — whose reason stands, and is the reason for this. A move the
+    product makes is ONE resize of the terminals. **Rising** — called up, or maximized by its
+    button — the deck is laid out at its END size first and travels there by `transform` (480ms,
+    island, §6). An edge let go above 104, or flung up, is maximized AT ONCE, in that one layout
+    with no travel: the edge was already in the hand.
+    **Falling** — minimized, or restored — it travels at the size it HAS (300ms, the retract
+    curve) and is laid out on arrival; minimized, it is not laid out again at all. Only a
+    person's drag resizes as it goes, rows only. The monitor's field is resized once per change
+    too, to its end size — never once per frame of the travel.
+  - **The monitor makes room.** *Replaces* "upward the monitor does NOT shrink — its tuned height
+    … is its minimum": the field **ends 12 above the deck's edge** wherever the edge is, growing
+    as the edge falls and shrinking as it rises, and is **never shorter than 220** — measured as
+    the drawing measures it, from the window's top, where the ruled head lets the stage begin (§8
+    "Godview's head — Stories"). With the edge higher than that allows, the sheet slides OVER the
+    field, the bodies still moving beneath, as it slides over the whole monitor today. At rest
+    the field ends at 288. Maximized, the view's bodies rest: its stage fades out (260ms) and the
+    cover's glass stays under the sheet; they come back as the deck leaves maximized.
+  - **Maximized — the bar is the window's title bar** (GV-D11 — "it looks kind of awkward having
+    the search button there blocking the terminal from becoming fullscreen and having the big gap
+    at top", James, 2 Oct). The maximize button, an edge let go above 104, or a fling up: the
+    terminals take the window from its **top, 0**, and nothing of the head stays over them. The
+    sheet loses its top corners, its ring and its shadow (160ms); **the Lip's 30 bar is the title
+    bar**; the panes run from 30 to 692 in the same well, 8 in at each side.
+    **The lights move onto the bar's axis:** `12 · 9` while maximized (the bar's centre, y 15),
+    back at `18 · 22` (the head's axis, y 28) after, in one step. The OS draws and moves them; the
+    window says only the deck's state, by name, and the shell owns the two positions — so a change
+    of view puts them back in the same step. **The grip** — the groove in its pill — keeps the
+    bar's middle, in a **168-wide hit** the bar's full height: it drags the TERMINALS. **The rest
+    of the bar moves the WINDOW**, as a title bar does: the bar is a window-drag region, and that
+    hit and the buttons are holes in it (`no-drag`) — the grip drags the terminals, the buttons
+    click. **The app's own drag strip** (§10's top 52) **is left as it is.** The terminals' pane
+    area declares `no-drag`, so the panes' first rows under the bar — y 30 to 52, inside the
+    strip — take their clicks and never move the window. The 8 gutters beside the well stay
+    window-drag: that is frame, not pane.
+    At its right end, 8 in: **search · a hairline · minimize · restore.** Search is the frame's
+    button at the bar's height (§8 "Search — the Peek"); the hairline is 1 × 14, the terminal's
+    ink at 16%; **restore** — the square behind a square — stands where maximize stood, and the
+    terminals fall back to where their edge was left. **On Windows and Linux** there are no
+    lights: the bar is drawn the same, with nothing at its left.
+    **Dragging the grip out turns it back into the sheet AT ONCE** — from the start of the drag,
+    not its release. The state reads `up` from that start, so the bar stops being a window-drag
+    region at once; the corners and the shadow return, the monitor and the head above it, the
+    lights go back on the head's axis, and the bar's own search steps out as the head's returns,
+    so search is never in two places. Let go, the three outcomes above decide.
+    The pane frame's own fullscreen (its two diagonal arrows, ⌘⇧↵) stays the pane's, and macOS
+    full screen stays the green light's. Until the Stories head lands, the instrument bar is
+    hidden while the deck is maximized.
 - **A launch in an empty pane is one element from the click to the first frame** (QL-2, 2026-09-29 —
   James picked look C · Cells from the Minimal Pane Frame's pass 4). The click (or ⌥n, or ↵ on a
   past session) answers in its own frame: the launcher shrinks to 0.94 toward the clicked mark
@@ -1639,20 +1879,22 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   shared token sheet defines the easings and the sans. A new shared name changes the contract
   first; a view never copies a curve or reads an undeclared host token.
   Stage insets replace host padding rules, including the timeline's former extra 11px (MV-6).
-  **The bar reads the manifest:** each view supplies its filled mark and its focus keys; the host
-  has no view mark table. The declared keys print in the control's tooltip — ruled 2026-10-07
-  (James, M177): the bar's tooltip is where a view's focus keys are said. Where a declared key
+  *Status 2026-10-11: ruled, not built. Until it lands, Godview keeps the 40px instrument bar and the search button stands over its right end (PK2 (a)).*
+  **The head reads the manifest:** each view supplies its filled mark and its focus keys; the host
+  has no view mark table. The declared keys are said in the circle's label, after the view's name
+  — ruled 2026-10-07 (James, M177) for the bar's tooltip, and carried to the label when the
+  Stories head replaced the bar (§8 "Godview's head — Stories"). Where a declared key
   presses a control the view shows, its legend is printed on that control, under the glyph in
   readable ink (never an outlined box or a corner digit), as the views track prints ⌘1–⌘4 (§8).
   View loops stop under reduced motion or the stage's animations switch. Each piece of host
-  chrome has its own boundary — the bar, the usage column, the profile notice, the claims,
+  chrome has its own boundary — the head, the usage column, the profile notice, the claims,
   System control, the deck and its edge, each pane's frame, the frames and the launchers: one that
   throws says "‹name› unavailable" where it stood (a deck piece in the deck's unavailable face),
   the monitor and its view stay mounted, and it is tried again only for a fact it is handed, at
   most once a window (1 s, doubling to 30 s while it keeps failing). (Find stood in this list until
   P2, 2026-10-09: the sheet left VibeField for the frame's Peek — whose Live now rows, live peek and
   scope-row filters each stand behind a boundary of their own, tried again for the rows, the run
-  and the filters they draw, each the same object while its content is.) The bar and the profile notice
+  and the filters they draw, each the same object while its content is.) The head and the profile notice
   read only the window's own state, so they stay
   unavailable until the monitor mounts again (M192). It never
   leaves a silent blank. The deck builds the monitor's door, so a deck that fails whole leaves the
@@ -1941,14 +2183,29 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     9/600 in secondary ink, the ⌘ at 8.5/500 in tertiary (Ctrl F off the Mac). It stands above the
     cover with the line, the edges and the corner (62), in the views that search — History and
     Godview. **⌘F** (Ctrl+F) opens the popup, or puts the caret back in its field while it is open:
-    a product chord (§10). **In Godview** (PK2 (a), until the Stories head, GV-D1, is built) it
-    stands in the same place, over the instrument bar's right end: the bar's tools end one head gap
-    (12) short of it, so System control sits beside it and never under it, and the bar steps aside
-    by the button's own measure as its glass widens. The button is 40 tall at `top-2` and the bar
-    40 tall from the window's top, so it hangs 8 below the bar's foot, over the stage's edge.
+    a product chord (§10).
     **With a filter on** (Godview's, GV-D3) the glass grows a token after the circle naming it —
     the desktop's OS mark and name, a hairline, the profile's glyph and name ("studio · Work"), at
     13/500 in primary ink — and a 26 × that clears both: a filtered view never looks unfiltered.
+    *Status 2026-10-11: ruled, not built. Until it lands, Godview keeps the 40px instrument bar and the search button stands over its right end (PK2 (a)).*
+    **In Godview** it stands in the same place, on the head's own row: the Stories row (§8
+    "Godview's head — Stories") is centred on the window and keeps one head gap (12) from it, also
+    as its glass widens. *(Corrected 2026-10-11: until the Stories head it stood over the
+    instrument bar's right end and hung 8 below the bar's foot, PK2 (a).)*
+  - *Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
+    **The button in the terminals' title bar** (GV-D11, ruled 2026-10-02; One Frame §23.1): while
+    Godview's terminals are maximized (§8, the deck) the head's circle is not drawn — nothing of
+    the head stands over the terminals — and the same button stands in their title bar, first of
+    the controls at its right end, before the hairline. It is folded to the bar: **24 tall**,
+    corners 8, padded 0 8 0 7, `search` 13 with **⌘F printed BESIDE the glyph**, 6 from it, since
+    a 24 bar has no room under one (10.5/600, the ⌘ at 500 and 72%; Ctrl F off the Mac) — in the
+    terminal's ink at 64%, the full ink on a 10% fill of it under the pointer, as the bar's other
+    controls are (§2.7). It is the frame's ONE button standing in another place, never a second
+    one and never the deck's: the same act, the same `search` surface (§10), the same return of
+    the keyboard, and the popup opens over the terminals. ⌘F is unchanged. **A filter that is on
+    is not named in the bar:** maximized there is no view for it to filter, and the popup shows
+    it. As the grip is dragged out of maximized the bar's button steps out (120ms) and the head's
+    returns (200ms), so search is never in two places.
   - **The popup — Peek, 900 × 560**, centred in the window: solid (`--vf-chrome-solid`, FC-D14 —
     rows to be read), corners 24, ringed by the strong hairline, with its own shadow (§5, *Search
     popup*). It pops in on the island curve (§6). **The scrim** (§5, *Search scrim*) blurs and dims
@@ -2140,6 +2397,17 @@ numbers and provenance — "syncing history…", "external terminal — state on
 and what to do next; they don't apologize and they're never vague. No filler, no lorem:
 demo content is real-shaped (AAPL, San Francisco, 64°).
 
+*Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
+**The terminals' wrapper says the window's own words** (Godview, §8, the deck; One Frame §23.2 —
+"for close button, replace it with a minimize - button … for fill button, replace it with a
+maximize button", James, 2 Oct; ruled 2026-10-02). **The two readouts** while the edge is held are
+a verb and its noun, saying what letting go would do: **Minimize the terminals** · **Maximize the
+terminals**. Round 2's "Put away" and "Fill the window", and the buttons' first names, close and
+fill, are retired. **The three titles:** **Minimize — every session keeps running** (it says the
+one thing the gesture could leave in doubt) · **Maximize** · **Restore**. Their accessible names
+carry the noun: "Minimize the terminals", "Maximize the terminals", "Restore the terminals to
+their place". "Fullscreen" stays the pane's word (§8).
+
 ---
 
 ## 10. Implementation & governance
@@ -2247,6 +2515,20 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   longer Electron's page-zoom roles: each item sends its act to the window's head, which answers
   on Canvas as its keys do, and the three are disabled under a cover — so nothing in the menu bar
   or its keys zooms the whole window any more (One Frame FR-3's finding).
+  *Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
+  **The head band's one exception — Godview's terminals, maximized** (GV-D11, ruled 2026-10-02;
+  §8, the deck). While the deck is maximized the band holds the terminals' title bar and nothing
+  of the head: the bar is the window's top 0–30, its controls centred on ITS axis, y 15, where the
+  lights then stand (`12 · 9`, from `18 · 22`). The head's controls are not drawn — Godview's row
+  (§8 "Godview's head — Stories") fades out, and the search button stands in the bar (§8 "Search —
+  the Peek"). The window drags by the bar, with the grip's 168 hit and the bar's buttons as holes
+  in it (`no-drag`). The app's strip stays the top 52: the terminals' pane area is `no-drag`, so
+  the panes' rows inside the strip (y 30–52) take their clicks and never move the window, while
+  the 8 gutters beside the well still do. The other four places do not change — the line, the
+  edges and the corner stand above the cover as in every view, and the panes still end at 692.
+  The bar is the deck's own chrome, on its own object (the fifth place), standing where the head
+  stands in every other state: not a second head, and the y 28 axis is the head's again the
+  moment the grip is dragged out.
 - **The mat's places** (Chrome on the Mat §4; One Frame §7; MC-D4 ruled 2026-10-01; ICE I20, I21;
   R5, R7, R12; built on the desk by DK-11…DK-13): on Canvas the desk's chrome stands in the frame's
   fifth place, **on its own object** (FR-1). **The bar follows its object** — over the selection's
@@ -2431,6 +2713,19 @@ the desk's chrome draws it from this set by this table, never by a guess:
 **`missing`** (2026-10-03, R2) is the desk's missing face as a mark — a card with two of its 45°
 hatches — for a name the set does not hold; an act that declares no glyph at all shows its label
 instead (R3).
+
+*Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
+**`minimize` · `maximize` · `restore`** (One Frame §23.2, ruled 2026-10-02; to be built, N12 (a),
+2026-10-11) are the three glyphs of the wrapper around Godview's terminals (§8, the deck): a rule,
+a square, and the square behind a square — the window's own pair in the order windows keep them,
+`restore` standing in `maximize`'s place while the terminals are maximized. **Instrument**
+construction, drawn at 14 in the Lip's controls. The ruled drawing's own paths are stand-ins
+(strokes of 1.7 and 1.9, 1-unit corners) and are not the set's: the three are **redrawn to this
+section's law** — one 2-unit stroke, round caps and joins, 3-unit corners — at the drawing's
+12-unit extent about 12,12. **They are not in the set yet:** the 60 above (Instrument 50) holds
+until the commit that draws them, which adds the three names to the list and its counts. They are
+the wrapper's alone — never the pane frame's fullscreen (its two diagonal arrows), never the
+window's lights.
 
 **Where it lives.** The drawings are `tooling/glyphs/drawings.mjs` (both constructions for every
 name); `build.mjs` emits the kit's `packages/design-kit/src/glyphs/data.ts` and the phone's
