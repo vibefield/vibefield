@@ -208,41 +208,50 @@ stage thins the sheet, and at the sheet's glass the prompt beneath would read th
 launcher's rows. At the default opaque backdrop the floor changes nothing. A launch (QL-2, §8)
 covers its pane with the same paint and the same floor while it waits.
 
-*Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
-**The wrapper's values, as ruled** (One Frame §23.2 and §23.3 — GV-D7 the Lip and GV-D12 the
-groove, ruled 2026-10-02 and locked as drawn; to be built, N12 (a), 2026-10-11; §8, the deck). The
-numbers are the ruled drawing's own. The rows and tokens above stay what ships: the build projects
-the values below into `tokens.css` in the commit that draws them, and where one takes a shipped
-token's place it says so here.
+**The wrapper's tokens** (round 3 — One Frame §23.2 and §23.3, GV-D7, GV-D11 and GV-D12; in
+`tokens.css` since 2026-10-11, projected AHEAD of the rules that draw them — nothing reads them
+until the Lip lands, and what each will draw is the ruled block below). The numbers are the ruled
+drawing's own (`kit/gv3.css`, `kit/gv3.js`), keyed per Godview mode as the deck's shadow is:
 
-| Ruled role | Light | Dark |
+| Role | Light | Dark |
 |---|---|---|
-| deck frame — the sheet's ground: the terminal's ground mixed toward the terminal's own ink | 11% ink | 9% ink |
-| well edge | `rgba(0,0,0,0.17)` | `rgba(0,0,0,0.42)` |
-| well rim | `rgba(255,255,255,0.6)` | `rgba(255,255,255,0.06)` |
-| well shade | `rgba(0,0,0,0.09)` | `rgba(0,0,0,0.28)` |
+| deck frame — how far the sheet's ground is mixed from the terminal's ground toward the terminal's own ink | `--vf-godview-light-deck-frame-ink` 11% | `--vf-godview-dark-deck-frame-ink` 9% |
+| well edge | `--vf-godview-light-well-edge` `rgba(0,0,0,0.17)` | `--vf-godview-dark-well-edge` `rgba(0,0,0,0.42)` |
+| well rim | `--vf-godview-light-well-rim` `rgba(255,255,255,0.6)` | `--vf-godview-dark-well-rim` `rgba(255,255,255,0.06)` |
+| well shade | `--vf-godview-light-well-shade` `rgba(0,0,0,0.09)` | `--vf-godview-dark-well-shade` `rgba(0,0,0,0.28)` |
 
-They are keyed per Godview mode, as the deck's shadow is: `--vf-godview-light-deck-frame-ink` and
-`-well-edge` · `-well-rim` · `-well-shade`, and their `-dark-` twins. The frame is painted at the
-stage's glass, as the sheet's ground is today. Their geometry:
+Their geometry: the well's corners `--vf-godview-deck-well-radius` 10px; the groove's corners
+`--vf-godview-deck-grip-radius` 3px; its pill `--vf-godview-deck-grip-pill` 22px tall (its corners
+half that, 11) with `--vf-godview-deck-grip-pill-pad` 12px at each side; the grip's hit in the
+maximized title bar `--vf-godview-deck-grip-hit` 168px; the two controls
+`--vf-godview-deck-control-width` / `--vf-godview-deck-control-height` /
+`--vf-godview-deck-control-radius` 30px / 24px / 8px; the monitor's field
+`--vf-godview-deck-field-gap` 12px and `--vf-godview-deck-field-floor` 220px.
+
+*Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
+**How the wrapper is drawn, as ruled** (One Frame §23.2 and §23.3 — GV-D7 the Lip and GV-D12 the
+groove, ruled 2026-10-02 and locked as drawn; to be built, N12 (a), 2026-10-11; §8, the deck). The
+rows and the sheet's geometry above stay what ships. Two ruled values take a shipped token's place
+and are NOT projected yet: the lip's 30 and the groove's 40 × 6 — `--vf-godview-deck-lip` and
+`--vf-godview-deck-grip-width` / `-height` hold 14 and 72 × 4 in `tokens.css` until the commit that
+draws the Lip. The frame is painted at the stage's glass, as the sheet's ground is today.
 **The Lip** — `--vf-godview-deck-lip` **30px**, where 14 stands: the lip grown into the drag bar,
 still never less than the radius. **The groove** (the grip) — `--vf-godview-deck-grip-width` /
 `-height` **40 × 6**, where 72 × 4 stand, corners 3 (`-grip-radius`): a slot pressed into the frame,
 not a bar laid on it — filled with the well's edge, the well's shade inside its top
-(`inset 0 1px 1.5px`) and the well's rim under it (`0 1px 0`). **Its pill**
-(`--vf-godview-deck-grip-pill`) — 22 tall, padded 0 12, corners 11, clear at rest; under the pointer
-the pill is the terminal's ink at 7% and the groove takes 30% of that ink into its edge colour;
-held, the pill is 10% and the groove the full ink; 120ms on `ease`; under the keyboard's focus a
-1px outline in text main, 1 off the pill. **Its hit** is the whole lip and 6 above it; in the
-maximized title bar (§8) it is `--vf-godview-deck-grip-hit` **168** wide, the bar's full height.
-**The two controls** (minimize and maximize, §8) — `--vf-godview-deck-control-width` / `-height` /
-`-radius` **30 × 24**, corners 8, 4 apart, the last one 10 from the lip's right end (8 in the title
-bar): a 14 glyph (§13) in the terminal's ink at 64%; under the pointer the full ink on a 10% fill
-of it, 120ms on `ease`. **The well** the panes sit in — `--vf-godview-deck-well-radius` **10**
-(a selected pane's 8, the 1 gap, the 1 edge), the panes 1 in from it and clipped at 9; drawn OVER
-the panes, the edge as a 1px inner ring and the shade as `inset 0 2px 4px`; under its foot, the rim
-as `0 1px 0`. **The monitor's field** ends `--vf-godview-deck-field-gap` **12px** above the deck's
-edge and is never shorter than `--vf-godview-deck-field-floor` **220px** (§8).
+(`inset 0 1px 1.5px`) and the well's rim under it (`0 1px 0`). **Its pill** (`-grip-pill`, padded
+0 by `-grip-pill-pad`) — clear at rest; under the pointer the pill is the terminal's ink at 7% and
+the groove takes 30% of that ink into its edge colour; held, the pill is 10% and the groove the
+full ink; 120ms on `ease`; under the keyboard's focus a 1px outline in text main, 1 off the pill.
+**Its hit** is the whole lip and 6 above it; in the maximized title bar (§8) it is `-grip-hit`
+wide, the bar's full height.
+**The two controls** (minimize and maximize, §8) — `-control-width` × `-control-height`, corners
+`-control-radius`, 4 apart, the last one 10 from the lip's right end (8 in the title bar): a 14
+glyph (§13) in the terminal's ink at 64%; under the pointer the full ink on a 10% fill of it, 120ms
+on `ease`. **The well** the panes sit in — corners `-well-radius` (a selected pane's 8, the 1 gap,
+the 1 edge), the panes 1 in from it and clipped at 9; drawn OVER the panes, the edge as a 1px inner
+ring and the shade as `inset 0 2px 4px`; under its foot, the rim as `0 1px 0`. **The monitor's
+field** ends `-field-gap` above the deck's edge and is never shorter than `-field-floor` (§8).
 
 ### 2.8 Identity — the face
 
@@ -2650,14 +2659,15 @@ design kit or the production design system. Packaged icon masters remain governe
 **Chosen 2026-09-24 (James, from the Field Glyphs page; `tooling/glyphs/picks.json` is the record).**
 Every functional icon the chrome draws — the HUD's round buttons, the file pill, the Settings rail,
 the agent rows, the edge trays, the plugins' toolbars, the phone's composer and keypad, the swarm's
-marks, the desk's bar and the tools in hand — is one of **60 named glyphs** in one **24-unit box**,
+marks, the desk's bar, the tools in hand and the wrapper around Godview's terminals — is one of
+**63 named glyphs** in one **24-unit box**,
 optical centre at 12,12, live area 2 to 22, drawn in `currentColor` and nothing else. The host says
 the size and the colour, the way it says them for text (§2.4); a glyph never carries state (§2.5,
 I-5) and never a colour of its own. Two constructions, one set:
 
 | Construction | Glyphs | Law |
 |---|---|---|
-| **Instrument** (50) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
+| **Instrument** (53) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
 | **Hardware** (10) | close · check · search · rename (pencil) · return · backspace · more (ellipsis) · arrow · general (sliders) · keyboard | one solid silhouette as a single `evenodd` path — bodies and their holes, no masks, no filters — so the same geometry is a template asset on iOS |
 
 **Sizes** are the host's, by CSS: 12 (captions) · 13–16 (row controls) · 18 (the Settings rail, the
@@ -2667,7 +2677,7 @@ weight, scaled, never nine. **One drawing per meaning:** a chevron is drawn poin
 *turned* (90 down, 180 left, 270 up); the four cursor keys are one arrow turned; redo is undo
 *flipped*. The set, by group — actions: plus · close · check · search · pencil · undo · reset ·
 outward · link · return · backspace · ellipsis · start · resume · jump · duplicate · tape · lift · trash ·
-pen · eraser · today; navigation: chevron · arrow; places and objects:
+pen · eraser · today · minimize · maximize · restore; navigation: chevron · arrow; places and objects:
 gear · person · sliders · canvas · agents · profiles · plugin · mesh · terminal · pulse · code · sun ·
 moon · clipboard · package · capture · panes · history · sidepanel · bug · globe · folder · keyboard ·
 mic · scantext · snippets · prompt; signals: message · key · question · exclaim · flame · missing;
@@ -2714,18 +2724,19 @@ the desk's chrome draws it from this set by this table, never by a guess:
 hatches — for a name the set does not hold; an act that declares no glyph at all shows its label
 instead (R3).
 
-*Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
-**`minimize` · `maximize` · `restore`** (One Frame §23.2, ruled 2026-10-02; to be built, N12 (a),
-2026-10-11) are the three glyphs of the wrapper around Godview's terminals (§8, the deck): a rule,
-a square, and the square behind a square — the window's own pair in the order windows keep them,
-`restore` standing in `maximize`'s place while the terminals are maximized. **Instrument**
-construction, drawn at 14 in the Lip's controls. The ruled drawing's own paths are stand-ins
-(strokes of 1.7 and 1.9, 1-unit corners) and are not the set's: the three are **redrawn to this
-section's law** — one 2-unit stroke, round caps and joins, 3-unit corners — at the drawing's
-12-unit extent about 12,12. **They are not in the set yet:** the 60 above (Instrument 50) holds
-until the commit that draws them, which adds the three names to the list and its counts. They are
-the wrapper's alone — never the pane frame's fullscreen (its two diagonal arrows), never the
-window's lights.
+**`minimize` · `maximize` · `restore`** (2026-10-11; One Frame §23.2, ruled 2026-10-02) are the
+three glyphs of the wrapper around Godview's terminals (§8, the deck): a rule, a square, and the
+square behind a square — the window's own pair in the order windows keep them, `restore` standing
+in `maximize`'s place while the terminals are maximized. **Instrument** construction, for the Lip's
+controls at 14. The ruled drawing's own paths were stand-ins (strokes of 1.7 and 1.9, 1-unit
+corners) and are not the set's: the three are **drawn to this section's law** — one 2-unit stroke,
+round caps and joins, 3-unit corners — at the drawing's 12-unit extent about 12,12 (6 to 18): the
+rule along y 12; the square 12 by 12; `restore` an 8 by 8 square at the lower left and
+the top and right of the one behind it, 4 up and 4 right, its two ends a stroke's width clear of
+the square in front. Their Hardware records are drawn, not shipped. **In the set, and drawn by no
+control yet:** the Lip's two buttons and the title bar's `restore` are ruled, not built (§8, the
+deck), so today only the catalog shows the three. They are the wrapper's alone — never the pane
+frame's fullscreen (its two diagonal arrows), never the window's lights.
 
 **Where it lives.** The drawings are `tooling/glyphs/drawings.mjs` (both constructions for every
 name); `build.mjs` emits the kit's `packages/design-kit/src/glyphs/data.ts` and the phone's

@@ -46,7 +46,7 @@ const COLOUR_LITERAL = /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|oklch)\(|\b(?:black|whi
 
 describe("the glyph set", () => {
   it("has every name drawn, in one box, in currentColor and nothing else", () => {
-    expect(GLYPH_NAMES.length).toBe(60);
+    expect(GLYPH_NAMES.length).toBe(63);
     for (const name of GLYPH_NAMES) {
       const svg = glyphSvg(name);
       expect(svg, name).toMatch(
@@ -89,6 +89,75 @@ describe("the glyph set", () => {
         expect(svg, name).not.toMatch(/stroke-width="(?!2")/);
       }
     }
+  });
+
+  it("draws the wrapper's three — minimize, maximize, restore — to the law, in a 12-unit extent about 12,12 (round 3)", () => {
+    // DESIGN.md §13: the three glyphs of the wrapper around Godview's terminals
+    // are Instrument, redrawn from the ruled page's stand-ins (strokes of 1.7
+    // and 1.9, 1-unit corners) to the set's law: one 2-unit stroke (held for
+    // every Instrument glyph above), 3-unit corners, and the page's 12-unit
+    // extent centred on 12,12 — so the three weigh the same in a 30 × 24 control.
+    const numbers = (text: string): number[] => (text.match(/-?\d*\.?\d+/g) ?? []).map(Number);
+    /** The corners a drawing's strokes pass through, and every corner radius. */
+    const walk = (name: "minimize" | "maximize" | "restore") => {
+      const glyph = GLYPHS[name];
+      if (glyph.kind !== "instrument") throw new Error(`${name} is not Instrument`);
+      expect(glyph.fills, name).toEqual([]);
+      expect(glyph.transform, name).toBeUndefined();
+      const xs: number[] = [];
+      const ys: number[] = [];
+      const radii: number[] = [];
+      for (const [tag, attrs] of glyph.strokes) {
+        if (tag === "rect") {
+          const [x, y, w, h] = ["x", "y", "width", "height"].map((key) => Number(attrs[key]));
+          xs.push(x as number, (x as number) + (w as number));
+          ys.push(y as number, (y as number) + (h as number));
+          radii.push(Number(attrs["rx"]));
+          continue;
+        }
+        expect(tag, name).toBe("path");
+        let x = 0;
+        let y = 0;
+        for (const [, command, rest] of (attrs["d"] ?? "").matchAll(/([A-Za-z])([^A-Za-z]*)/g)) {
+          const n = numbers(rest ?? "");
+          if (command === "M") [x, y] = [n[0] as number, n[1] as number];
+          else if (command === "h") x += n[0] as number;
+          else if (command === "v") y += n[0] as number;
+          else if (command === "a") {
+            // a quarter corner: its end is all the box needs, its radius the law
+            expect(n[0], name).toBe(n[1]);
+            radii.push(n[0] as number);
+            x += n[5] as number;
+            y += n[6] as number;
+          } else throw new Error(`${name}: a command this walk does not read, ${command}`);
+          xs.push(x);
+          ys.push(y);
+        }
+      }
+      return {
+        x: [Math.min(...xs), Math.max(...xs)],
+        y: [Math.min(...ys), Math.max(...ys)],
+        radii,
+      };
+    };
+    for (const name of ["minimize", "maximize", "restore"] as const) {
+      expect(GLYPH_NAMES, name).toContain(name);
+      expect(GLYPHS[name].kind, name).toBe("instrument");
+      expect(GLYPH_META[name].group, name).toBe("actions");
+    }
+    // a rule: 12 wide on the box's own middle line
+    expect(walk("minimize")).toEqual({ x: [6, 18], y: [12, 12], radii: [] });
+    // a square, and the square behind a square: 12 by 12 about 12,12, every corner 3
+    for (const name of ["maximize", "restore"] as const) {
+      const box = walk(name);
+      expect(box.x, name).toEqual([6, 18]);
+      expect(box.y, name).toEqual([6, 18]);
+      expect(box.radii.length, name).toBeGreaterThan(0);
+      expect(new Set(box.radii), name).toEqual(new Set([3]));
+    }
+    // restore is two marks — the square in front, and what shows of the one behind
+    expect(GLYPHS.restore.kind === "instrument" && GLYPHS.restore.strokes.length).toBe(2);
+    expect(GLYPHS.maximize.kind === "instrument" && GLYPHS.maximize.strokes.length).toBe(1);
   });
 
   it("renders decorative by default, named when labelled, turned and flipped on request", async () => {

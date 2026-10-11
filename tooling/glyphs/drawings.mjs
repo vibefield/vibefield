@@ -330,6 +330,37 @@ export const DRAWINGS = {
       d: `${rectPath(3.5, 5, 17, 16, 2.5)}${rectPath(5.5, 10, 13, 9, 1)}${circlePath(12, 14.5, 2)}${rectPath(7.4, 2.5, 2.2, 4.5, 1.1)}${rectPath(14.4, 2.5, 2.2, 4.5, 1.1)}`,
     },
   },
+  // Godview round 3 (One Frame §23.2, ruled 2026-10-02): the wrapper around the
+  // terminals wears the window's own pair, in the order windows keep them. The
+  // page's paths were stand-ins (strokes of 1.7 and 1.9, 1-unit corners); these
+  // are the set's law at the page's extent — 12 units about 12,12, so the three
+  // weigh the same at 14 in a 30 × 24 control. Hardware records drawn, not shipped.
+  minimize: {
+    label: "Minimize",
+    group: "actions",
+    role: "Godview's terminals, put away — every session keeps running; the first of the Lip's two controls",
+    instrument: { s: P("M6 12h12") },
+    hardware: { d: "M5 10.5h14v3H5Z" },
+  },
+  maximize: {
+    label: "Maximize",
+    group: "actions",
+    role: "Godview's terminals take the window; the second of the Lip's two controls",
+    instrument: { s: R(6, 6, 12, 12, 3) },
+    // a frame: the square solid, its middle knocked out
+    hardware: { d: `${rectPath(5, 5, 14, 14, 3)}${rectPath(8, 8, 8, 8, 1)}` },
+  },
+  restore: {
+    label: "Restore",
+    group: "actions",
+    role: "Maximized terminals back to their place: the square behind a square, standing where maximize stood",
+    // the square in front, and the top and right of the one behind it — its
+    // ends a stroke's width clear of the front square
+    instrument: { s: `${R(6, 10, 8, 8, 3)}${P("M10 6h5a3 3 0 0 1 3 3v5")}` },
+    hardware: {
+      d: `${rectPath(5, 9, 10, 10, 2.5)}${rectPath(7.8, 11.8, 4.4, 4.4, 0.6)}M9.5 5h7a2.5 2.5 0 0 1 2.5 2.5v7h-2.8V7.8H9.5Z`,
+    },
+  },
   chevron: {
     label: "Chevron",
     group: "navigation",

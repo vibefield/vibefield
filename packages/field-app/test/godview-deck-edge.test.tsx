@@ -367,3 +367,44 @@ describe("the deck sheet's stylesheet", () => {
     }
   });
 });
+
+describe("the wrapper's tokens (round 3 — DESIGN.md first, then tokens.css)", () => {
+  const tokens = readFileSync(join(PACKAGE_ROOT, "../design-kit/src/tokens.css"), "utf8");
+  const design = readFileSync(join(PACKAGE_ROOT, "../../DESIGN.md"), "utf8");
+  /** The ruled drawing's own numbers (One Frame's `kit/gv3.css` and `gv3.js`):
+   * the frame tone and the well per Godview mode, then the geometry. */
+  const WRAPPER_TOKENS: readonly (readonly [name: string, value: string])[] = [
+    ["--vf-godview-light-deck-frame-ink", "11%"],
+    ["--vf-godview-dark-deck-frame-ink", "9%"],
+    ["--vf-godview-light-well-edge", "rgb(0 0 0 / 17%)"],
+    ["--vf-godview-dark-well-edge", "rgb(0 0 0 / 42%)"],
+    ["--vf-godview-light-well-rim", "rgb(255 255 255 / 60%)"],
+    ["--vf-godview-dark-well-rim", "rgb(255 255 255 / 6%)"],
+    ["--vf-godview-light-well-shade", "rgb(0 0 0 / 9%)"],
+    ["--vf-godview-dark-well-shade", "rgb(0 0 0 / 28%)"],
+    ["--vf-godview-deck-well-radius", "10px"],
+    ["--vf-godview-deck-grip-radius", "3px"],
+    ["--vf-godview-deck-grip-pill", "22px"],
+    ["--vf-godview-deck-grip-pill-pad", "12px"],
+    ["--vf-godview-deck-grip-hit", "168px"],
+    ["--vf-godview-deck-control-width", "30px"],
+    ["--vf-godview-deck-control-height", "24px"],
+    ["--vf-godview-deck-control-radius", "8px"],
+    ["--vf-godview-deck-field-gap", "12px"],
+    ["--vf-godview-deck-field-floor", "220px"],
+  ];
+
+  it("each stands in tokens.css once, at the ruled drawing's value", () => {
+    for (const [name, value] of WRAPPER_TOKENS) {
+      const found = [...tokens.matchAll(new RegExp(`^\\s*${name}:\\s*([^;]+);`, "gm"))];
+      expect(found.length, name).toBe(1);
+      expect(found[0]?.[1], name).toBe(value);
+    }
+  });
+
+  it("DESIGN.md names each by its whole name, so a token is never one the doc does not hold", () => {
+    for (const [name] of WRAPPER_TOKENS) {
+      expect(design, name).toContain(`\`${name}\``);
+    }
+  });
+});

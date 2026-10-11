@@ -20,7 +20,7 @@ export interface GlyphMeta {
   readonly role: string;
 }
 
-export const GLYPH_NAMES = ["plus","close","check","search","pencil","undo","reset","outward","link","return","backspace","ellipsis","start","resume","jump","duplicate","tape","lift","trash","pen","eraser","today","chevron","arrow","gear","person","sliders","canvas","agents","profiles","plugin","mesh","terminal","pulse","code","sun","moon","clipboard","package","capture","panes","history","sidepanel","bug","globe","folder","keyboard","mic","scantext","snippets","prompt","message","key","question","exclaim","flame","missing","document","layers","sparkle"] as const;
+export const GLYPH_NAMES = ["plus","close","check","search","pencil","undo","reset","outward","link","return","backspace","ellipsis","start","resume","jump","duplicate","tape","lift","trash","pen","eraser","today","minimize","maximize","restore","chevron","arrow","gear","person","sliders","canvas","agents","profiles","plugin","mesh","terminal","pulse","code","sun","moon","clipboard","package","capture","panes","history","sidepanel","bug","globe","folder","keyboard","mic","scantext","snippets","prompt","message","key","question","exclaim","flame","missing","document","layers","sparkle"] as const;
 export type GlyphName = (typeof GLYPH_NAMES)[number];
 
 export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
@@ -46,6 +46,9 @@ export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
   pen: {"label":"Pen","group":"actions","role":"A held kind's pen as a mode (the calendar's): on is the inverted solid"},
   eraser: {"label":"Eraser","group":"actions","role":"A held kind's eraser as a mode (the whiteboard's): on is the inverted solid"},
   today: {"label":"Today","group":"actions","role":"The held calendar's Today: back to this month"},
+  minimize: {"label":"Minimize","group":"actions","role":"Godview's terminals, put away — every session keeps running; the first of the Lip's two controls"},
+  maximize: {"label":"Maximize","group":"actions","role":"Godview's terminals take the window; the second of the Lip's two controls"},
+  restore: {"label":"Restore","group":"actions","role":"Maximized terminals back to their place: the square behind a square, standing where maximize stood"},
   chevron: {"label":"Chevron","group":"navigation","role":"Right: a row that opens, the separator, forward. Turned: back, browse, a menu"},
   arrow: {"label":"Arrow","group":"navigation","role":"Send (up), and the four cursor keys on the rail and the keypad"},
   gear: {"label":"Settings","group":"objects","role":"Settings… in the Me menu; the Settings head tile without an account door"},
@@ -109,6 +112,9 @@ export const GLYPHS: Readonly<Record<GlyphName, GlyphDrawing>> = {
   pen: {"kind":"instrument","strokes":[["path",{"d":"M5 19l1.2-4.2L15.6 5.4a2 2 0 0 1 2.8 0l.2.2a2 2 0 0 1 0 2.8L9.2 17.8z"}],["path",{"d":"M13.5 7.5l3 3"}]],"fills":[]},
   eraser: {"kind":"instrument","strokes":[["path",{"d":"M4.5 15.5l7-7a2 2 0 0 1 2.8 0l4.2 4.2a2 2 0 0 1 0 2.8l-4 4H9.3l-4.8-4z"}],["path",{"d":"M9 19.5h11"}]],"fills":[]},
   today: {"kind":"instrument","strokes":[["rect",{"x":"4.5","y":"6","width":"15","height":"13.5","rx":"2.5"}],["path",{"d":"M4.5 10.5h15M8.5 4v3.5M15.5 4v3.5"}]],"fills":[["circle",{"cx":"12","cy":"15","r":"1.6"}]]},
+  minimize: {"kind":"instrument","strokes":[["path",{"d":"M6 12h12"}]],"fills":[]},
+  maximize: {"kind":"instrument","strokes":[["rect",{"x":"6","y":"6","width":"12","height":"12","rx":"3"}]],"fills":[]},
+  restore: {"kind":"instrument","strokes":[["rect",{"x":"6","y":"10","width":"8","height":"8","rx":"3"}],["path",{"d":"M10 6h5a3 3 0 0 1 3 3v5"}]],"fills":[]},
   chevron: {"kind":"instrument","strokes":[["path",{"d":"M9.5 6l6 6-6 6"}]],"fills":[]},
   arrow: { kind: "hardware", d: "M12 3l7.5 8.5h-4.8V21h-5.4V11.5H4.5Z" },
   gear: {"kind":"instrument","strokes":[["path",{"d":"M10.4 4.78L10.83 2.47L13.17 2.47L13.6 4.78A7.4 7.4 0 0 1 15.98 5.76L17.91 4.44L19.56 6.09L18.24 8.02A7.4 7.4 0 0 1 19.22 10.4L21.53 10.83L21.53 13.17L19.22 13.6A7.4 7.4 0 0 1 18.24 15.98L19.56 17.91L17.91 19.56L15.98 18.24A7.4 7.4 0 0 1 13.6 19.22L13.17 21.53L10.83 21.53L10.4 19.22A7.4 7.4 0 0 1 8.02 18.24L6.09 19.56L4.44 17.91L5.76 15.98A7.4 7.4 0 0 1 4.78 13.6L2.47 13.17L2.47 10.83L4.78 10.4A7.4 7.4 0 0 1 5.76 8.02L4.44 6.09L6.09 4.44L8.02 5.76A7.4 7.4 0 0 1 10.4 4.78Z"}],["circle",{"cx":"12","cy":"12","r":"2.75"}]],"fills":[]},

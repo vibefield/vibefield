@@ -153,8 +153,16 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(container?.textContent).toContain("Spend — where the money went");
     expect(container?.querySelector("[data-godview-spend-catalog] .vf-godview")).not.toBeNull();
     expect(container?.textContent).toContain("The interface, accounted for");
-    // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 60.
-    expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(60);
+    // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 63 —
+    // the wrapper's three (round 3) among them, drawn by the shipping component.
+    expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(63);
+    for (const name of ["minimize", "maximize", "restore"]) {
+      const tile = [...(container?.querySelectorAll("#glyphs .vf-ds-glyph") ?? [])].find(
+        (figure) => figure.querySelector("code")?.textContent === name,
+      );
+      expect(tile?.querySelector("svg.vf-glyph"), name).not.toBeNull();
+      expect(tile?.querySelector("small")?.textContent, name).toBe("instrument");
+    }
     // One Frame FR-1: the view frame on fixtures — the shipping track and cover
     // over a field, and a plate per state the page's Chrome & Composer plates
     // show for the frame (the last the keys as Windows prints them).
