@@ -459,10 +459,27 @@ function cpuPaint(width = 64, height = 48) {
   };
 }
 
-/** A few turns of the microtask queue (PT-5b2: an input takes its turn on its page's chain — a turn or two more than
- * when each was sent on its own). */
+/** Two turns of the microtask queue. */
 async function flush(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+/**
+ * The hand's events DELIVERED (PT-5b2's chain): each event takes its turn on the page's chain behind the one before it —
+ * the tail's turn, its scale's read where it needs one, its dispatch (and on `phone()`'s window a turn more, on its one
+ * queue) — so a row that sends several reads what reached the page only after as many turns as they take. Enough turns
+ * for every event that CAN go to have gone; an event waiting on a read the row holds goes nowhere, and that is what the
+ * rows that hold one read.
+ */
+async function delivered(): Promise<void> {
   for (let i = 0; i < 48; i += 1) await Promise.resolve();
+}
+
+/** A window's BIRTH ends (PT-5b3, ruling 1): once the layout the row held answers — its device told, its layout laid, its
+ * address asked for — a few turns of the fake's promises. */
+async function birthEnds(): Promise<void> {
+  for (let i = 0; i < 8; i += 1) await Promise.resolve();
 }
 
 afterEach(() => {
@@ -813,7 +830,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       revision,
     );
     renderer.attachment.dispatchInput?.({ kind: "text", text: "hello" }, revision);
-    await flush();
+    await delivered();
     expect(window?.mouseInputs).toEqual([
       { type: "mousePressed", x: 160, y: 90, button: "left", clickCount: 1 },
       { type: "mouseWheel", x: 10, y: 12, deltaX: 0, deltaY: 40 },
@@ -897,7 +914,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       { kind: "wheel", x: 10, y: 12, deltaX: 3, deltaY: 40 },
       revision,
     );
-    await flush();
+    await delivered();
     expect(window?.compositions).toEqual([
       { text: "", caret: 0 },
       { text: "にほ", caret: 2 },
@@ -972,7 +989,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
     key("Enter", "down", { shift: true });
     key("Enter", "down", { meta: true });
     key("a", "down");
-    await flush();
+    await delivered();
     expect(
       window?.keyInputs.map((k) => [k.type, k.key, k.text ?? null, k.unmodifiedText ?? null]),
     ).toEqual([
@@ -2203,7 +2220,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
           if (bootstrapRejected) w.reject(aborted());
           else w.resolve();
         }
-        await flush();
+        await birthEnds();
       };
     };
     // (a source that names its device: its birth tells the device first, so the layout the row holds is asked a turn later)
@@ -2327,6 +2344,8 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(woken.emulations.at(-1)?.touchPoints).toBe(5);
       expect(woken.order.lastIndexOf("emulate")).toBeLessThan(woken.order.indexOf("load"));
       expect(woken.order.filter((step) => step === "load")).toHaveLength(1);
+      // (the remake is for a load under way on a BORN window: before the birth the window is told — none is made anew)
+      expect(p.result.runtime.stats.windowsRemade).toBe(0);
       p.result.runtime.dispose();
     });
 
@@ -2380,6 +2399,9 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(p.window.navigations).toEqual([]);
       expect(p.window.loadedUrls).toEqual([FIRST]);
       expect(p.result.runtime.summary.browser).toEqual(said);
+      // (told on its own window: none is made anew)
+      expect(p.result.native.windows).toHaveLength(1);
+      expect(p.result.runtime.stats.windowsRemade).toBe(0);
       p.renderer.attachment.navigate?.({ action: "reload" });
       await flush();
       expect(p.window.loadedUrls).toEqual([FIRST, FIRST]);
@@ -2394,8 +2416,49 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(q.window.navigations).toEqual(["stop"]);
       expect(q.window.loadedUrls).toEqual([FIRST]);
       expect(q.result.runtime.summary.browser?.failure).toEqual({ reason: "stopped" });
+      expect(q.result.native.windows).toHaveLength(1);
       p.result.runtime.dispose();
       q.result.runtime.dispose();
+    });
+
+    it("ruling 2's neighbour — a page whose DOCUMENT STANDS, a navigation of it pending, its device switched (the same density): no window is made anew — its own window is told, and reloaded by the engine once its commands are answered (the engine holds them until the navigation commits)", async () => {
+      const result = setup({ source: laptopSource() });
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(demand(1, "live"));
+      await flush();
+      await flush();
+      const window = result.native.windows[0];
+      if (window === undefined) throw new Error("no window");
+      window.paint(sharedPaint().paint);
+      window.emitNavigationState({ ...NAV });
+      await flush();
+      // a navigation of the page that stands: asked, not committed — and the engine answers none of the device's
+      // commands until it commits (the probe)
+      renderer.attachment.navigate?.({ action: "go", url: ELSEWHERE });
+      let commit: () => void = () => {};
+      const tell = window.setEmulation.bind(window);
+      window.setEmulation = async (emulation) => {
+        await new Promise<void>((resolve) => {
+          commit = resolve;
+        });
+        return tell(emulation);
+      };
+      await result.runtime.navigate({ action: "emulate", emulation: TOUCH_LAPTOP });
+      await flush();
+      expect(result.native.windows).toHaveLength(1);
+      expect(result.runtime.stats.windowsRemade).toBe(0);
+      expect(window.navigations).toEqual([]);
+      // the navigation commits; the device's commands are answered; THEN the engine's reload, once, in the same window
+      window.emitNavigationState({ ...NAV, url: ELSEWHERE });
+      commit();
+      await flush();
+      await flush();
+      await flush();
+      expect(window.emulations.at(-1)?.touchPoints).toBe(5);
+      expect(window.navigations).toEqual(["reload"]);
+      expect(result.native.windows).toHaveLength(1);
+      expect(result.runtime.stats.windowsRemade).toBe(0);
+      result.runtime.dispose();
     });
 
     it("ruling 3 — a first load that ENDED with nothing before any paint of the window was heard meets the startup deadline: the page is not started again behind the person, nor failed as a source", async () => {
@@ -2533,7 +2596,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
         );
       window.scale = 0.5;
       pointer("down", 10);
-      await flush();
+      await delivered();
       expect(window.touchInputs.map((t) => t.type)).toEqual(["touchStart"]);
       expect(window.scaleReads).toBe(1);
       // the page answers the touch by moving its address WITHIN the document (a router's pushState) — and is busy: its
@@ -2544,14 +2607,14 @@ describe("BrowserLiveSurfaceRuntime", () => {
         return new Promise<number>(() => {});
       };
       pointer("move", 20);
-      await flush();
+      await delivered();
       expect(window.scaleReads).toBe(1);
       expect(window.touchInputs.map((t) => t.type)).toEqual(["touchStart", "touchMove"]);
       expect(window.touchInputs.at(-1)?.touchPoints[0]).toMatchObject({ x: 40, y: 20 });
       // ANOTHER document commits: what was read is nothing of it — the next move reads
       window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
       pointer("move", 30);
-      await flush();
+      await delivered();
       expect(window.scaleReads).toBe(2);
       result.runtime.dispose();
     });
@@ -2642,7 +2705,6 @@ describe("BrowserLiveSurfaceRuntime", () => {
         throw new Error("Cannot find context with specified id");
       });
     };
-    const settle = (): Promise<void> => flush();
     return {
       result,
       renderer,
@@ -2654,7 +2716,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       busy,
       refusing,
       answers,
-      settle,
+      delivered,
     };
   };
 
@@ -2667,17 +2729,17 @@ describe("BrowserLiveSurfaceRuntime", () => {
       // a first tap: the scale is read, and serves a moment
       p.pointer("down", 10);
       p.pointer("up", 10);
-      await p.settle();
+      await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
       // the page is busy: the next read takes a while. A second tap within the moment — its press, then its release
       // BEFORE the press's read has answered
       p.busy();
       p.pointer("down", 20);
       p.pointer("up", 20);
-      await p.settle();
+      await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
       p.answers[0]?.(0.5);
-      await p.settle();
+      await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd", "touchStart", "touchEnd"]);
       p.result.runtime.dispose();
     });
@@ -2691,11 +2753,11 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.send({ kind: "key", action: "down", key: "a", code: "KeyA", modifiers: NONE });
       p.send({ kind: "text", text: "a" });
       p.pointer("up", 10);
-      await p.settle();
+      await p.delivered();
       // nothing overtakes the press, which waits on its page
       expect(p.heard).toEqual([]);
       p.answers[0]?.(1);
-      await p.settle();
+      await p.delivered();
       expect(p.heard).toEqual(["touchStart", "keyDown a", "text a", "touchEnd"]);
       // a key the window refuses (its command rejects): counted dropped — and the events behind it still arrive, in order
       const dropped = p.result.runtime.stats.inputDropped;
@@ -2705,7 +2767,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       };
       p.send({ kind: "key", action: "down", key: "b", code: "KeyB", modifiers: NONE });
       p.send({ kind: "text", text: "c" });
-      await p.settle();
+      await p.delivered();
       p.window.dispatchKey = key;
       expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
       expect(p.heard.at(-1)).toBe("text c");
@@ -2728,13 +2790,13 @@ describe("BrowserLiveSurfaceRuntime", () => {
       // a tap: its press takes its turn (and waits on its page), its release queues behind it — both sent under `revision`
       p.pointer("down", 20);
       p.pointer("up", 20);
-      await p.settle();
+      await p.delivered();
       // …and while they wait the page's raster moves (the pane put down: its rest rung) — a frame of another size lands
       p.window.paint(sharedPaint(603, 1311).paint);
-      await p.settle();
+      await p.delivered();
       expect(p.result.runtime.summary.geometry?.revision).not.toBe(p.revision);
       p.answers[0]?.(0.5);
-      await p.settle();
+      await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
       expect(p.result.runtime.stats.inputDropped).toBe(dropped);
       p.result.runtime.dispose();
@@ -2746,17 +2808,17 @@ describe("BrowserLiveSurfaceRuntime", () => {
         emulation: { ...PHONE, mobile: false, touchPoints: 0 },
       });
       p.window.paint(sharedPaint(603, 1311).paint);
-      await p.settle();
+      await p.delivered();
       const now = p.result.runtime.summary.geometry?.revision ?? 0;
       expect(now).not.toBe(p.revision);
       const dropped = p.result.runtime.stats.inputDropped;
       p.pointer("down", 20);
       p.pointer("up", 20);
-      await p.settle();
+      await p.delivered();
       expect(p.heard).toEqual([]);
       expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
       p.pointer("move", 30, now);
-      await p.settle();
+      await p.delivered();
       expect(p.heard).toEqual(["mouseMoved"]);
       expect(p.window.mouseInputs.at(-1)).toMatchObject({ type: "mouseMoved", button: "none" });
       p.result.runtime.dispose();
@@ -2768,13 +2830,13 @@ describe("BrowserLiveSurfaceRuntime", () => {
         emulation: { ...PHONE, mobile: false, touchPoints: 0 },
       });
       p.pointer("down", 20);
-      await p.settle();
+      await p.delivered();
       expect(p.heard).toEqual(["mousePressed"]);
       // the raster moves under the button (a frame of another size): the release still names the revision it was sent under
       p.window.paint(sharedPaint(603, 1311).paint);
-      await p.settle();
+      await p.delivered();
       p.pointer("up", 22);
-      await p.settle();
+      await p.delivered();
       expect(p.heard).toEqual(["mousePressed", "mouseReleased"]);
       expect(p.window.mouseInputs.at(-1)).toMatchObject({
         type: "mouseReleased",
@@ -2785,17 +2847,17 @@ describe("BrowserLiveSurfaceRuntime", () => {
       // a button down, and the pane goes out of view: the page is PAUSED when its release arrives
       const now = p.result.runtime.summary.geometry?.revision ?? 0;
       p.pointer("down", 40, now);
-      await p.settle();
+      await p.delivered();
       p.renderer.attachment.setDemand(demand(2, "paused", 0));
-      await p.settle();
+      await p.delivered();
       expect(p.result.runtime.summary.state).toBe("paused");
       p.pointer("up", 40, now);
-      await p.settle();
+      await p.delivered();
       expect(p.heard).toEqual(["mousePressed", "mouseReleased", "mousePressed", "mouseReleased"]);
       // …and a press there is refused, as ever: nobody is looking
       const dropped = p.result.runtime.stats.inputDropped;
       p.pointer("down", 40, now);
-      await p.settle();
+      await p.delivered();
       expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
       expect(p.heard).toHaveLength(4);
       p.result.runtime.dispose();
@@ -2807,14 +2869,14 @@ describe("BrowserLiveSurfaceRuntime", () => {
       const p = await phone();
       p.window.scale = 0.5;
       p.pointer("down", 20);
-      await p.settle();
+      await p.delivered();
       expect(p.heard).toEqual(["touchStart"]);
       expect(p.window.scaleReads).toBe(1);
       p.window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
       p.busy();
       const unread = p.result.runtime.stats.inputScaleUnread;
       p.pointer("up", 20);
-      await p.settle();
+      await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
       expect(types(p)).toEqual(["touchStart", "touchEnd"]);
       expect(p.window.touchInputs.at(-1)?.touchPoints).toEqual([]);
@@ -2822,7 +2884,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(p.result.runtime.stats.inputScaleUnread).toBe(unread);
       // a hover after it is nothing a finger does: the page is told of no move
       p.pointer("move", 30);
-      await p.settle();
+      await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
       expect(p.window.scaleReads).toBe(1);
       p.result.runtime.dispose();
@@ -2834,12 +2896,12 @@ describe("BrowserLiveSurfaceRuntime", () => {
       const p = await phone(mobileMouse());
       p.window.scale = 0.5;
       p.pointer("down", 20);
-      await p.settle();
+      await p.delivered();
       expect(p.window.mouseInputs.at(-1)).toMatchObject({ type: "mousePressed", x: 40, y: 20 });
       p.busy();
       vi.setSystemTime(2_010_000);
       p.pointer("up", 30);
-      await p.settle();
+      await p.delivered();
       expect(p.heard).toEqual(["mousePressed", "mouseReleased"]);
       expect(p.window.mouseInputs.at(-1)).toMatchObject({ type: "mouseReleased", x: 60, y: 20 });
       expect(p.window.scaleReads).toBe(1);
@@ -2874,6 +2936,81 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.result.runtime.dispose();
     });
 
+    /**
+     * A laptop's page, live, its window's inputs kept as they reach it — and ITS RESTART: the renderer crashed, a window
+     * made again for it (the producer's own reconnect), that window's first frame painted.
+     */
+    const crashing = async () => {
+      vi.useFakeTimers();
+      const result = setup();
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(demand(1, "live"));
+      await vi.advanceTimersByTimeAsync(0);
+      const first = result.native.windows[0];
+      if (first === undefined) throw new Error("no window");
+      first.paint(sharedPaint().paint);
+      await vi.advanceTimersByTimeAsync(0);
+      const key = (k: string, revision: number): void =>
+        renderer.attachment.dispatchInput?.(
+          { kind: "key", action: "down", key: k, code: `Key${k.toUpperCase()}`, modifiers: NONE },
+          revision,
+        );
+      const press = (revision: number): void =>
+        renderer.attachment.dispatchInput?.(
+          { kind: "pointer", action: "down", x: 10, y: 10, button: "left", clickCount: 1 },
+          revision,
+        );
+      const restart = async () => {
+        first.crash();
+        await vi.advanceTimersByTimeAsync(0);
+        const second = result.native.windows[1];
+        if (second === undefined) throw new Error("no window was made again");
+        second.paint(sharedPaint().paint);
+        await vi.advanceTimersByTimeAsync(0);
+        return second;
+      };
+      return { result, renderer, first, key, press, restart };
+    };
+
+    it("ruling 5 — a turn pending on a window that has GONE ends with it: a key the crashed page never answered does not hold the page that replaced it — a key sent to the new page arrives", async () => {
+      const p = await crashing();
+      // the page never answers this key (its renderer is about to go)
+      p.first.dispatchKey = () => new Promise<void>(() => {});
+      p.key("a", p.result.runtime.summary.geometry?.revision ?? 0);
+      await vi.advanceTimersByTimeAsync(0);
+      const second = await p.restart();
+      expect(p.result.runtime.summary.state).toBe("live");
+      p.key("b", p.result.runtime.summary.geometry?.revision ?? 0);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(second.keyInputs.map((k) => k.key)).toEqual(["b"]);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 5 — an event is FOR THE WINDOW that stood when it was sent: a press queued behind a key the crashed page was slow to take is never delivered to the page that replaced it — refused at its turn, counted", async () => {
+      const p = await crashing();
+      // the crashed page's key is answered only when the row says — after the page that replaces it is live
+      let answer: () => void = () => {};
+      p.first.dispatchKey = () =>
+        new Promise<void>((resolve) => {
+          answer = resolve;
+        });
+      const revision = p.result.runtime.summary.geometry?.revision ?? 0;
+      p.key("a", revision);
+      // a press sent to the same page, judged at its arrival against the geometry it was sent under: it stands — and
+      // waits its turn behind the key
+      p.press(revision);
+      await vi.advanceTimersByTimeAsync(0);
+      const dropped = p.result.runtime.stats.inputDropped;
+      const second = await p.restart();
+      answer();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(second.mouseInputs).toEqual([]);
+      expect(p.first.mouseInputs).toEqual([]);
+      // (counted: the key, whose window went from under it, and the press, refused at its turn)
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 2);
+      p.result.runtime.dispose();
+    });
+
     it("ruling 6 — a read the page REFUSES (between two documents): the scale known for this document is used; with NONE known the press is not sent — counted — and its release is nothing", async () => {
       vi.useFakeTimers({ toFake: ["Date"] });
       vi.setSystemTime(2_000_000);
@@ -2881,13 +3018,13 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.window.scale = 0.5;
       p.pointer("down", 10);
       p.pointer("up", 10);
-      await p.settle();
+      await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
       // the page refuses the next read: what was read for this document stands
       p.refusing();
       p.pointer("down", 20);
       p.pointer("up", 20);
-      await p.settle();
+      await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd", "touchStart", "touchEnd"]);
       expect(p.window.touchInputs.at(-2)?.touchPoints[0]).toMatchObject({ x: 40, y: 20 });
       // ANOTHER document, and the page refuses: at a guess the point would be another element's
@@ -2896,7 +3033,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       const dropped = p.result.runtime.stats.inputDropped;
       p.pointer("down", 20);
       p.pointer("up", 20);
-      await p.settle();
+      await p.delivered();
       expect(p.heard).toHaveLength(4);
       expect(p.result.runtime.stats.inputScaleUnread).toBe(unread + 1);
       expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
@@ -2924,8 +3061,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
     send({ kind: "pointer", action: "down", x: 10, y: 20, button: "right", clickCount: 1 });
     send({ kind: "pointer", action: "up", x: 10, y: 20, button: "right", clickCount: 1 });
     send({ kind: "wheel", x: 100, y: 200, deltaX: 0, deltaY: 120 });
-    await flush();
-    await flush();
+    await delivered();
     expect(window?.touchInputs).toEqual([
       { type: "touchStart", touchPoints: [{ x: 100, y: 200, id: 0 }] },
       { type: "touchMove", touchPoints: [{ x: 100, y: 150, id: 0 }] },
@@ -2951,7 +3087,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       { kind: "pointer", action: "down", x: 10, y: 20, button: "left", clickCount: 1 },
       laptop.runtime.summary.geometry?.revision ?? 0,
     );
-    await flush();
+    await delivered();
     expect(laptop.native.windows[0]?.touchInputs).toEqual([]);
     expect(laptop.native.windows[0]?.mouseInputs).toHaveLength(1);
     laptop.runtime.dispose();
