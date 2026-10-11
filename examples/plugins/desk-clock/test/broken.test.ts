@@ -26,9 +26,13 @@ import {
   clock,
   clockBroken,
   clockFaulty,
+  clockFragile,
   clockShaders,
   deskClockManifest,
   FAULTY_CLOCK_TYPE,
+  FRAGILE_CLOCK_ROW,
+  FRAGILE_CLOCK_TYPE,
+  FRAGILE_HELD_MS,
 } from "../src";
 
 const [BROKEN_ROW, FAULTY_ROW] = BROKEN_CLOCK_ROWS;
@@ -119,6 +123,55 @@ describe("the fault fixture breaks exactly as it says (ICE's broken.test, throug
     expect(() => kind.record(G, ctx)).toThrow("faulty: its record throws on purpose (call 3)");
     expect(() => kind.hit(G, 100, 80)).toThrow("faulty: its hit throws on purpose");
     expect(brokenClockKind({ name: "whole" }).hit(G, 100, 80)).toBe("content");
+  });
+
+  it("PT-5a: the FRAGILE clock breaks IN HAND — its record stands at rest and for its first while in hand, then throws on every call; put down, it stands again; and it keeps the clock's opening (it is picked up to break)", () => {
+    let t = 1_000;
+    const kind = brokenClockKind({ name: "fragile", heldAfterMs: 400 }, {}, () => t);
+    const rest = {
+      entity: 1,
+      rect: { cx: 100, cy: 80, w: 150, h: 150 },
+      props: { zone: "+00:00" },
+      flux: { lift: 0, hover: 0, ring: 0, fade: 1 },
+      look: undefined,
+      theme: {},
+      lamp: { dir: [0, 0, 1], height: 1 },
+      view: { camX: 0, camY: 0, zoom: 1, width: 1200, height: 800, dpr: 2 },
+      grid: {},
+      dt: 0,
+    };
+    const held = { ...rest, held: { e: 1, open: true, grow: 1, snap: false } } as never;
+    const G = kind.resolve(rest as never);
+    // at rest: any number of records, any time
+    for (let i = 0; i < 5; i += 1) expect(() => kind.record(G, rest as never)).not.toThrow();
+    t += 10_000;
+    expect(() => kind.record(G, rest as never)).not.toThrow();
+    // picked up: it stands for its while…
+    expect(() => kind.record(G, held)).not.toThrow();
+    t += 399;
+    expect(() => kind.record(G, held)).not.toThrow();
+    // …then every record throws (three strikes are three frames)
+    t += 1;
+    for (let i = 0; i < 3; i += 1)
+      expect(() => kind.record(G, held)).toThrow("fragile: its record throws on purpose (in hand)");
+    // put down: it stands again, and its while starts afresh at the next pick-up
+    expect(() => kind.record(G, rest as never)).not.toThrow();
+    expect(() => kind.record(G, held)).not.toThrow();
+    // the fixture as a host registers it: its own type, its row, the clock's opening kept
+    expect(clockFragile.kind.name).toBe(FRAGILE_CLOCK_TYPE);
+    // the clock's own opening (its tools in hand), kept
+    expect(clockFragile.kind.open?.tools).toBe(clock.kind.open?.tools);
+    expect(clockFragile.kind.open).toBeDefined();
+    expect([
+      FRAGILE_CLOCK_ROW.type,
+      FRAGILE_CLOCK_ROW.binding.kind,
+      FRAGILE_CLOCK_ROW.title,
+    ]).toEqual([FRAGILE_CLOCK_TYPE, "clockFragile", "Fragile clock"]);
+    expect(FRAGILE_CLOCK_ROW.tray).toBeUndefined();
+    expect(FRAGILE_CLOCK_ROW.props).toEqual(CLOCK_ROW?.props);
+    expect(FRAGILE_HELD_MS).toBe(400);
+    // never among the rows the two older fixtures' hosts declare, never in the clock's manifest
+    expect(BROKEN_CLOCK_ROWS.map((r) => r.type)).not.toContain(FRAGILE_CLOCK_TYPE);
   });
 
   it("each is an object of its own beside the clock — its own type, a kind named by it, the clock's props, never opened, never on the tray", () => {

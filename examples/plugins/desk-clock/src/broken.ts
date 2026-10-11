@@ -2,7 +2,8 @@
 // desk clock broken ON PURPOSE, the ways a plugin's kind breaks: its WGSL does not compile (the desk refuses
 // the kind at create, boots without it and draws its objects as the MISSING face, `status().faults` naming
 // it), its `record` throws from a given call on (three strikes and the desk quarantines it), its `hit` throws
-// (each pick a strike, and the pick misses it). Each broken kind has its own type — and, the host's rule, a
+// (each pick a strike, and the pick misses it) — and (PT-5a) its `record` throws once it has been IN HAND a while: a kind
+// that goes missing while its object is held, which the host must put down (ICE M24 LT3). Each broken kind has its own type — and, the host's rule, a
 // registry name that IS that type — so it stands beside the clock on one desk; it is the clock in every
 // other respect, through the SDK's `/desk` door alone.
 //
@@ -42,6 +43,11 @@ export interface ClockBreak {
   readonly recordFrom?: number;
   /** Its `hit` throws, every pick. */
   readonly hit?: boolean;
+  /**
+   * PT-5a — its `record` throws once its object has been IN HAND this long (ms; the clock of `brokenClockKind`'s `now`): a
+   * kind that breaks while held. It KEEPS the clock's opening — it is picked up to break.
+   */
+  readonly heldAfterMs?: number;
 }
 
 /** The clock's program with one more module that names what nothing declares: a compiler refuses the whole of it. */
@@ -59,16 +65,21 @@ export function brokenClockShaders(text?: ShaderText): ComposeOptions {
   };
 }
 
-/** A clock kind broken as `how` says — the clock's own kind in every other respect (it never opens: a fixture is looked at, not set). */
+/** A clock kind broken as `how` says — the clock's own kind in every other respect (it never opens: a fixture is looked at, not
+ * set — but for one that breaks IN HAND, which is picked up to break). */
 export function brokenClockKind(
   how: ClockBreak,
   opts: ClockKindOptions = {},
+  now: () => number = () => performance.now(),
 ): ObjectKind<ClockGeometry, ClockInstance, ClockLook> {
   const base = clockKind(opts);
   let records = 0;
-  const { open: _open, ...rest } = base;
+  /** When its object was first recorded in hand (one object: a fixture). */
+  let heldAt: number | undefined;
+  const { open, ...rest } = base;
   return {
     ...rest,
+    ...(how.heldAfterMs === undefined || open === undefined ? {} : { open }),
     name: how.name,
     ...(how.wgsl === true
       ? {
@@ -80,6 +91,14 @@ export function brokenClockKind(
       records += 1;
       if (how.recordFrom !== undefined && records >= how.recordFrom)
         throw new Error(`${how.name}: its record throws on purpose (call ${records})`);
+      if (how.heldAfterMs !== undefined) {
+        if (ctx.held === undefined) heldAt = undefined;
+        else {
+          heldAt ??= now();
+          if (now() - heldAt >= how.heldAfterMs)
+            throw new Error(`${how.name}: its record throws on purpose (in hand)`);
+        }
+      }
       return base.record(G, ctx);
     },
     hit:
@@ -106,10 +125,27 @@ export const clockFaulty: ObjectBinding<ClockGeometry, ClockInstance, ClockLook>
   kind: brokenClockKind({ name: FAULTY_CLOCK_TYPE, recordFrom: 3, hit: true }),
 };
 
+/** PT-5a — the type of a clock that breaks IN HAND: its record throws once it has been held `FRAGILE_HELD_MS`. */
+export const FRAGILE_CLOCK_TYPE = `${CLOCK_TYPE}.fragile`;
+/** How long the fragile clock is held before it breaks (ms): long enough to be SEEN in hand, short of its pick-up's end. */
+export const FRAGILE_HELD_MS = 400;
+
+/** A clock the desk strikes out WHILE IT IS HELD (PT-5a; ICE M24 LT3): picked up, its record throws 0.4 s on — three strikes,
+ * its kind missing — and the host puts it down: on the desk again, wearing the missing face, never held forever. */
+export const clockFragile: ObjectBinding<ClockGeometry, ClockInstance, ClockLook> = {
+  kind: brokenClockKind({ name: FRAGILE_CLOCK_TYPE, heldAfterMs: FRAGILE_HELD_MS }),
+};
+
+const TITLES: Readonly<Record<string, string>> = {
+  [BROKEN_CLOCK_TYPE]: "Broken clock",
+  [FAULTY_CLOCK_TYPE]: "Faulty clock",
+  [FRAGILE_CLOCK_TYPE]: "Fragile clock",
+};
+
 /** The durable half each broken clock shares with the clock: its props, its size, how it is moved. */
 const clockLike = (type: string, binding: string): ObjectContribution => ({
   type,
-  title: type === BROKEN_CLOCK_TYPE ? "Broken clock" : "Faulty clock",
+  title: TITLES[type] ?? "Broken clock",
   description:
     "The desk clock broken on purpose — a fault fixture (petition I24), never on a first board",
   schemaVersion: 1,
@@ -132,3 +168,6 @@ export const BROKEN_CLOCK_ROWS: readonly ObjectContribution[] = [
   clockLike(BROKEN_CLOCK_TYPE, "clockBroken"),
   clockLike(FAULTY_CLOCK_TYPE, "clockFaulty"),
 ];
+
+/** PT-5a — the row of the clock that breaks in hand: declared beside the two by a host that witnesses the put-down. */
+export const FRAGILE_CLOCK_ROW: ObjectContribution = clockLike(FRAGILE_CLOCK_TYPE, "clockFragile");
