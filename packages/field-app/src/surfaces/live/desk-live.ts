@@ -996,9 +996,18 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
      * frame landed since; the still's timer; a still read and waiting for the device; the reads begun (the last one wins). */
     let still: { readonly takenAt: number; readonly address: string } | undefined;
     let liveShown = false;
-    /** PT-5b2 (ruling 1) — the address the page said when the frame NOW IN THE TEXTURE was consumed: what its pixels are
-     * of. A url that moves with no frame since leaves the texture "of the address before". */
+    /**
+     * PT-5b2 (ruling 1), PT-5b3 (ruling 4) — WHAT THE FRAME NOW IN THE TEXTURE IS OF. Its DOCUMENT: the one the frame
+     * says (its producer's stamp, at its paint), else the one that stood when it ARRIVED — never the one that stands when
+     * it is consumed (a frame of a list, drawn after the page committed an item, was stamped the item's). And, for a
+     * producer that counts no documents, the ADDRESS the page said when it arrived. A document that moves with no frame
+     * since leaves the texture "of the document before"; an address that moves WITHIN a document (a hash, a script's
+     * `replaceState`) does not — the pixels are of this document still.
+     */
+    let frameDoc: number | undefined;
     let frameOf: string | undefined;
+    /** What stood when the newest frame ARRIVED: the page's document (none: its producer counts none) and its address. */
+    let arrivedAt: { readonly document: number | undefined; readonly address: string } | undefined;
     let stillAt = Number.NEGATIVE_INFINITY;
     let fresh = false;
     let stillTimer: unknown = null;
@@ -1031,8 +1040,15 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     let headed: string | undefined;
     let saidAt = handle.state.browser?.url;
     const paneAddress = (): string => headed ?? addressNow();
-    /** PT-5b2 (ruling 1): the texture's pixels are of the address the page is at now. */
-    const ofNow = (): boolean => frameOf !== undefined && sameAddress(frameOf, addressNow());
+    /** PT-5b3 (ruling 4): the DOCUMENT the page is at — the producer's serial; undefined: it counts none. */
+    const documentNow = (): number | undefined => handle.state.browser?.document;
+    /** The texture's pixels are of the DOCUMENT the page is at now — by the serial where the frame and the page both
+     * say one; else by the address, as before PT-5b3 (a producer that counts none). */
+    const ofNow = (): boolean => {
+      const now = documentNow();
+      if (frameDoc !== undefined && now !== undefined) return frameDoc === now;
+      return frameOf !== undefined && sameAddress(frameOf, addressNow());
+    };
     const dropWaiting = (): void => {
       waiting?.bitmap.close();
       waiting = undefined;
@@ -1125,10 +1141,11 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     /**
      * PT-5b — THE STILL, TAKEN from what the face's writer holds (its texture read back: still-taker.ts) and kept on the
      * shelf with the address it is a photograph of. Only a LIVE frame not yet photographed is: a quiet page writes nothing,
-     * a still is never taken of a still, and a failed page's frames are not shown, so not kept. PT-5b2 (ruling 1) — the
-     * address is the one ITS PIXELS are of: a texture of the address before (the url moved, no frame since) is not
-     * photographed under the new one, and nothing is taken while the page says it is loading — on every path (a put-down,
-     * a rest, the timer). Refused so, the frame stays owed.
+     * a still is never taken of a still, and a failed page's frames are not shown, so not kept. PT-5b2 (ruling 1), PT-5b3
+     * (ruling 4) — only a texture of the DOCUMENT the page is at: one of the document before (the document moved, no
+     * frame since) is not photographed, and nothing is taken while the page says it is loading — on every path (a
+     * put-down, a rest, the timer). Refused so, the frame stays owed. It is filed under the address NOW: an address that
+     * moved within the document is this document's.
      */
     const takeStill = (): Promise<boolean> => {
       const stills = deps.stills;
@@ -1146,13 +1163,12 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         // (a failed page's frames are not `liveShown`: the failure said so, and no frame of it is taken since)
         !liveShown ||
         !fresh ||
-        frameOf === undefined ||
         !ofNow() ||
         handle.state.browser?.loading === true
       )
         return Promise.resolve(false);
       fresh = false;
-      const address = frameOf;
+      const address = addressNow();
       const logical: readonly [number, number] = [w.face.logical[0], w.face.logical[1]];
       const at = now();
       // PT-5b2 (ruling 5) — the thirty seconds run from the take's BEGINNING: a frame that lands while the texture is read
@@ -1215,6 +1231,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         presentation?.onFrame(() => {
           tally.arrivals += 1;
           frameOwed = true;
+          // PT-5b3 (ruling 4): what the page said when this frame ARRIVED (the newest: it is the one taken)
+          arrivedAt = { document: documentNow(), address: addressNow() };
           tell();
         }) ?? null;
     };
@@ -1286,7 +1304,9 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
           }
           return changed;
         }
+        let said: number | undefined;
         const r = p.presentLatestVia((frame, metadata) => {
+          said = metadata.document;
           const rect = metadata.geometry.visibleRect;
           const size = metadata.geometry.logicalSize;
           if (writer === undefined || writerDevice !== device) {
@@ -1309,7 +1329,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         veiled = false;
         still = undefined;
         liveShown = true;
-        frameOf = addressNow();
+        frameDoc = said ?? arrivedAt?.document;
+        frameOf = arrivedAt?.address ?? addressNow();
         fresh = true;
         // (a still being read is void from here: were this page put to rest before the read ends, its texture is the page
         // as it was — never the shelf's older photograph laid over it)
@@ -1560,18 +1581,19 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         allowed = false;
         rested = true;
         counts.rests += 1;
-        // what its texture holds is a photograph now, and says so
+        // what its texture holds is a photograph now, and says so — where it is of the document the page is at (PT-5b2
+        // ruling 1, PT-5b3 ruling 4): under the address NOW (an address tidied within the document is its own). A
+        // texture of the document BEFORE is nothing of this page: its film. And a pane SENT elsewhere that has not said
+        // so yet is not shown the page it is leaving as where it is headed (`stillStands`).
         if (liveShown) {
-          liveShown = false;
-          // (PT-5b2, ruling 1: a photograph of the address ITS PIXELS are of — the pane gone elsewhere since, its film)
-          still = {
-            takenAt: Number.isFinite(stillAt) ? stillAt : now(),
-            address: frameOf ?? addressNow(),
-          };
-          shown = undefined;
-          wordsOwed = true;
-          tell();
-          stillStands();
+          if (ofNow()) {
+            liveShown = false;
+            still = { takenAt: Number.isFinite(stillAt) ? stillAt : now(), address: addressNow() };
+            shown = undefined;
+            wordsOwed = true;
+            tell();
+            stillStands();
+          } else letGo();
         }
         lane.send();
       },

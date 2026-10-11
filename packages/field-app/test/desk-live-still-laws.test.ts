@@ -8,10 +8,28 @@
 //    is counted taken when it is kept, not before.
 //  - ruling 9: a frame in flight when a seen page is put to rest does not unsay its still; a still's own size is held to
 //    1600 px before a texture is made of it.
+// PT-5b3 — what PT-5b2's grade found in those fixes (ruling 4): "the address its pixels are of" was wider than its case.
+//    A texture is "of the document before" when the DOCUMENT moved with no frame since — the producer's serial
+//    (`browser.document`: it moves at a commit, never at a move within a document). An address that moved WITHIN one
+//    document (a hash, a script's `replaceState`) leaves the texture of this document: it is photographed under the
+//    address NOW, a rest shows it, seen again it stands. A frame says the document it is of (its producer's stamp), else
+//    it is the document that stood when it ARRIVED — never the one that stands when it is consumed. A producer that
+//    counts no documents is read by the address, as before.
 import { describe, expect, it, vi } from "vitest";
 import { PAGE_STILL_EVERY_MS, PAGE_STILL_SETTLE_MS } from "../src/surfaces/live/desk-live";
 import { PAGE_STILL_MAX_PX } from "../src/surfaces/live/page-stills";
-import { browserAt, DOC, HELD, KEY, PAGE, SEEN, stage, stillOf, UNSEEN } from "./desk-live-fixture";
+import {
+  browserAt,
+  DOC,
+  documentOf,
+  HELD,
+  KEY,
+  PAGE,
+  SEEN,
+  stage,
+  stillOf,
+  UNSEEN,
+} from "./desk-live-fixture";
 
 const NEXT = "http://127.0.0.1:4321/next";
 /** The address the shelf's still of the first pane says it is a photograph of — null: none kept. */
@@ -250,5 +268,156 @@ describe("PT-5b2 — the smaller laws of a still (ruling 9)", () => {
     const b = t.open(KEY, false);
     await t.live.settled();
     expect(b.face.texture()).toBeDefined();
+  });
+});
+
+describe("PT-5b3 — a still is of a DOCUMENT, and the engine says which (ruling 4)", () => {
+  /** The page's address after a script tidied it (`replaceState`: another path, the SAME document). */
+  const TIDIED = "http://127.0.0.1:4321/tidied";
+  const tidied = () => browserAt(TIDIED, { document: documentOf(PAGE.url) }) as never;
+
+  it("an address that moves WITHIN one document (a hash, a script's replaceState: no load, no frame) does not cost the pane its photograph: a PUT-DOWN files it under the address NOW — and so does the at-rest timer", async () => {
+    const s = stage();
+    const { face, frame, handle } = s.open();
+    face.demand(HELD);
+    expect(frame()).toBe(true);
+    handle.set({ browser: tidied() });
+    face.take();
+    face.demand(SEEN);
+    await s.live.settled();
+    expect(s.shelf.takeStill).toHaveBeenCalledTimes(1);
+    expect(keptOf(s)).toBe(TIDIED);
+    // a hash alone, at rest in view: the timer's take, under the address now
+    const t = stage();
+    const b = t.open();
+    b.face.demand(SEEN);
+    expect(b.frame()).toBe(true);
+    b.handle.set({ browser: browserAt(`${PAGE.url}#section`) as never });
+    b.face.take();
+    t.clock.advance(PAGE_STILL_SETTLE_MS);
+    await t.live.settled();
+    expect(keptOf(t)).toBe(`${PAGE.url}#section`);
+  });
+
+  it("…and put to REST the pane shows its PICTURE, under the address now — not its film; seen again after being out of view its texture stands", async () => {
+    const s = stage();
+    s.live.cap(1);
+    const a = s.open();
+    a.face.demand(SEEN);
+    await s.pump();
+    expect(a.frame()).toBe(true);
+    a.handle.set({ browser: tidied() });
+    a.face.take();
+    const b = s.open("13918995204487956201-2", true, "created");
+    b.face.demand(HELD);
+    await s.pump();
+    await s.live.settled();
+    expect(a.wire()).toBe("hibernated");
+    expect(keptOf(s)).toBe(TIDIED);
+    expect(a.face.texture()).toBeDefined();
+    expect(a.face.info().extra?.still).toBeDefined();
+    expect(a.face.state()).toEqual({ is: "paused" });
+    // out of view, its address tidied, and seen again: the texture is of this document — it stands
+    const t = stage();
+    const c = t.open();
+    c.face.demand(SEEN);
+    expect(c.frame()).toBe(true);
+    c.face.demand(UNSEEN);
+    c.handle.set({ browser: tidied() });
+    c.face.take();
+    c.face.demand(SEEN);
+    expect(c.face.texture()).toBeDefined();
+  });
+
+  it("ANOTHER DOCUMENT at the same address (a reload that committed, no frame since) makes the texture the document before's: nothing is photographed of it, and seen again it is let go", async () => {
+    const s = stage();
+    const { face, frame, handle } = s.open();
+    face.demand(HELD);
+    expect(frame()).toBe(true);
+    handle.set({
+      browser: browserAt(PAGE.url, { document: documentOf(PAGE.url) + 1_000 }) as never,
+    });
+    face.take();
+    face.demand(SEEN);
+    await s.live.settled();
+    expect(s.shelf.takeStill).not.toHaveBeenCalled();
+    expect(keptOf(s)).toBeNull();
+    face.demand(UNSEEN);
+    face.demand(SEEN);
+    expect(face.texture()).toBeUndefined();
+  });
+
+  it("a frame is of the document that stood when it ARRIVED — never the one that stands when it is consumed; and where its producer stamps it, of the document it SAYS", async () => {
+    const s = stage();
+    const { face, frame, handle, presentation } = s.open();
+    face.demand(HELD);
+    expect(frame()).toBe(true);
+    // a frame of the page as it was arrives — and before it is drawn the page commits elsewhere (never `loading`: a
+    // navigation told in one state)
+    presentation.land();
+    handle.set({ browser: browserAt(NEXT) as never });
+    expect(face.take()).toBe(true);
+    face.demand(SEEN);
+    await s.live.settled();
+    expect(keptOf(s)).toBeNull();
+    // a frame that SAYS its document (the producer's stamp, at its paint) is that document's, whatever the state said
+    // when it arrived: the new page's first frame, landed a moment before the summary that names its document
+    const t = stage();
+    const b = t.open();
+    b.face.demand(HELD);
+    expect(b.frame()).toBe(true);
+    b.presentation.land(documentOf(NEXT));
+    b.handle.set({ browser: browserAt(NEXT) as never });
+    expect(b.face.take()).toBe(true);
+    b.face.demand(SEEN);
+    await t.live.settled();
+    expect(keptOf(t)).toBe(NEXT);
+  });
+
+  it("a producer that counts NO documents is read by the address, as before: an address that moved with no frame since is the address before's — a hash too (it cannot be told from a page that went elsewhere)", async () => {
+    const none = (url: string) => browserAt(url, { document: undefined }) as never;
+    const s = stage();
+    const { face, frame, handle } = s.open();
+    handle.set({ browser: none(PAGE.url) });
+    face.demand(HELD);
+    expect(frame()).toBe(true);
+    handle.set({ browser: none(NEXT) });
+    face.take();
+    face.demand(SEEN);
+    await s.live.settled();
+    expect(keptOf(s)).toBeNull();
+    // …and its new page's frame is photographed under its own address
+    face.demand(HELD);
+    frame();
+    face.demand(SEEN);
+    await s.live.settled();
+    expect(keptOf(s)).toBe(NEXT);
+    const t = stage();
+    const b = t.open();
+    b.handle.set({ browser: none(PAGE.url) });
+    b.face.demand(HELD);
+    expect(b.frame()).toBe(true);
+    b.handle.set({ browser: none(`${PAGE.url}#section`) });
+    b.face.take();
+    b.face.demand(SEEN);
+    await t.live.settled();
+    expect(keptOf(t)).toBeNull();
+  });
+
+  it("a pane SENT elsewhere and put to rest before its page has said so does not show the page it is leaving as a still of where it is headed: its film", async () => {
+    const s = stage();
+    s.live.cap(1);
+    const a = s.open();
+    a.face.demand(SEEN);
+    await s.pump();
+    expect(a.frame()).toBe(true);
+    expect(s.live.navigation.navigate(KEY, { action: "go", url: NEXT })).toBe(true);
+    const b = s.open("13918995204487956201-2", true, "created");
+    b.face.demand(HELD);
+    await s.pump();
+    await s.live.settled();
+    expect(a.wire()).toBe("hibernated");
+    expect(a.face.texture()).toBeUndefined();
+    expect(a.face.info().extra?.still).toBeUndefined();
   });
 });

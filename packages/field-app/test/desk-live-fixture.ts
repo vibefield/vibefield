@@ -109,7 +109,7 @@ export function fakePresentation(
   logicalSize?: { width: number; height: number },
 ) {
   const listeners = new Set<() => void>();
-  const pending: { close: ReturnType<typeof vi.fn> }[] = [];
+  const pending: { close: ReturnType<typeof vi.fn>; document?: number }[] = [];
   const closed: unknown[] = [];
   const p = {
     closed: false,
@@ -122,18 +122,23 @@ export function fakePresentation(
       const frame = pending.pop();
       for (const older of pending.splice(0)) older.close();
       if (frame === undefined) return { kind: "idle" as const };
+      // (PT-5b3: a frame says the document it is of where its producer stamps it — `land(document)`)
+      const said = {
+        ...metadata(logicalSize),
+        ...(frame.document === undefined ? {} : { document: frame.document }),
+      };
       try {
-        const ok = consumer(frame, metadata(logicalSize));
+        const ok = consumer(frame, said);
         return ok
-          ? { kind: "consumed" as const, metadata: metadata(logicalSize) }
+          ? { kind: "consumed" as const, metadata: said }
           : { kind: "dropped" as const, reason: "consumer-rejected" as const };
       } finally {
         frame.close(); // the lease, released on every path
         closed.push(frame);
       }
     },
-    land() {
-      const frame = { close: vi.fn() };
+    land(document?: number) {
+      const frame = { close: vi.fn(), ...(document === undefined ? {} : { document }) };
       pending.push(frame);
       for (const l of [...listeners]) l();
       return frame;
@@ -409,6 +414,23 @@ export const stillOf = (over: Partial<PageStill> = {}): PageStill => ({
   ...over,
 });
 
+/**
+ * PT-5b3 (ruling 4): the DOCUMENT a fixture page is at, counted as a producer counts — an address, less its fragment,
+ * that was never said before is another document. A row that moves an address WITHIN a document (a script's
+ * `replaceState` to another path) names the document itself (`browserAt(url, { document })`); a producer that counts
+ * none says `{ document: undefined }`.
+ */
+const documents = new Map<string, number>();
+export const documentOf = (url: string): number => {
+  const at = url.split("#")[0] ?? url;
+  let serial = documents.get(at);
+  if (serial === undefined) {
+    serial = documents.size + 1;
+    documents.set(at, serial);
+  }
+  return serial;
+};
+
 /** A page's browser state as LSF says it. */
 export const browserAt = (url: string, over: Record<string, unknown> = {}) => ({
   url,
@@ -416,6 +438,7 @@ export const browserAt = (url: string, over: Record<string, unknown> = {}) => ({
   loading: false,
   canGoBack: false,
   canGoForward: false,
+  document: documentOf(url),
   ...over,
 });
 
