@@ -9225,18 +9225,29 @@ export async function runSmokeGodview(opts: {
     //      run with no agent index, that it lends nothing (`absent`: the door's
     //      NOT_FOUND `no-record`). Read off the marker, never the view's DOM
     //      (MV-5). No theme change, no typing; the swarm is chosen again after.
+    //      And with the past lent (TV-8, RULED 2026-10-11): History's room put
+    //      off the run's session first, the pointer resting on the ended lane
+    //      makes the timeline's root say it opens, and a press there — trusted
+    //      input into this window's page — leaves Godview for History with the
+    //      room on that run's session, its reply rendered; then ⌘2, so the
+    //      rungs below find Godview and the session chosen as Jump to left them.
     const jumped = verdict["jumpTo"] as { ended?: unknown } | undefined;
     const pastRungs = await timelinePastRungs(win, {
       handle: opts.handle,
       monitor: monitorWatch,
       ranHere:
         jumped?.ended !== undefined && opts.typedAgent !== undefined
-          ? { nativeSessionId: opts.typedAgent.history.nativeSessionId }
+          ? {
+              nativeSessionId: opts.typedAgent.history.nativeSessionId,
+              said: HISTORY_SEED_WORDS,
+            }
           : undefined,
+      pressViewKey: (view) => pressViewKey(win, view),
     });
     console.log(`SMOKE_GODVIEW_TIMELINE_PAST ${JSON.stringify(pastRungs)}`);
     verdict["timelinePast"] = pastRungs.timelinePast;
     verdict["timelineNoRecord"] = pastRungs.timelineNoRecord;
+    verdict["timelineOpensEnded"] = pastRungs.timelineOpensEnded;
 
     // HISTORY'S OWN ACTS (PJ-4, H6 and R4) — after Jump to, whose end leaves
     //      the seeded session ended (its row says Resume): ②'s New agent starts
