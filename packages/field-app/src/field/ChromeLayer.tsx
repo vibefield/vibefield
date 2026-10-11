@@ -23,6 +23,7 @@ import { canvasHead } from "../frame/head-canvas";
 import { FramePeek } from "../frame/Peek";
 import type { FrameActRun } from "../frame/palette-acts";
 import { StatusLine } from "../frame/StatusLine";
+import { runSystemControl } from "../frame/system-control-door";
 import { ViewFrame } from "../frame/ViewFrame";
 import { requestView, subscribeMenuZoom, useActiveView } from "../frame/view-state";
 import { viewKeysOf } from "../frame/views";
@@ -219,6 +220,9 @@ export function ChromeLayer({
           return;
         case "zoom":
           runZoom(head, run.act);
+          return;
+        case "system-control":
+          runSystemControl();
           return;
         case "settings":
           openSettings("general");

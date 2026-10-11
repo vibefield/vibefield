@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { publishSystemControlDoor } from "../frame/system-control-door";
 import { useActiveView } from "../frame/view-state";
 import { getHost } from "../host";
 import { prewarmTerminalPool, terminalPoolConfigured } from "../terminal/pool";
@@ -128,6 +129,15 @@ export function GodviewOverlay(): ReactElement | null {
       godviewColdOpen.mark("open");
       setEverOpened(true);
     } else setTuningOpen(false);
+  }, [open]);
+
+  // GV-D1 — System control is the palette's act now (the instrument bar that
+  // held its control left VibeField): while Godview is the window's view it
+  // lends the frame the one verb that toggles the panel, and takes it back.
+  useEffect(() => {
+    if (!open) return;
+    publishSystemControlDoor({ toggle: () => setTuningOpen((current) => !current) });
+    return () => publishSystemControlDoor(null);
   }, [open]);
 
   // THE PREWARM (GT-D14). At idle after this overlay has mounted — which is

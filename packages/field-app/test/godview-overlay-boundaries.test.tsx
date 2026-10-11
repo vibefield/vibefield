@@ -24,6 +24,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
 import { getGodviewDeck, resetGodviewDeckDoorForTest } from "../src/frame/deck-door";
 import { getGodviewFindDoor, resetGodviewFindDoorForTest } from "../src/frame/find-door";
+import {
+  getSystemControlDoor,
+  resetSystemControlDoorForTest,
+  runSystemControl,
+} from "../src/frame/system-control-door";
 import { resetActiveViewForTest } from "../src/frame/view-state";
 import type { MonitorDoor } from "../src/godview/monitor/remote-door";
 import { type FieldHost, setHost } from "../src/host";
@@ -176,6 +181,17 @@ function monitorParts(host: HTMLElement) {
   };
 }
 
+/** System control, toggled as the palette's act toggles it: the frame's run of
+ * the door the overlay lends (`ChromeLayer`'s `runFrameAct`). */
+async function toggleSystemControl(): Promise<void> {
+  let ran = false;
+  await act(async () => {
+    ran = runSystemControl();
+  });
+  expect(ran, "Godview lends the palette no System control").toBe(true);
+  await settle();
+}
+
 /** The SAME elements, by identity, and still in the document: nothing above the
  * failed piece remounted. */
 function expectSameMonitor(host: HTMLElement, before: ReturnType<typeof monitorParts>): void {
@@ -209,6 +225,7 @@ beforeEach(() => {
   resetActiveViewForTest();
   resetGodviewFindDoorForTest();
   resetGodviewDeckDoorForTest();
+  resetSystemControlDoorForTest();
   publishView = null;
   const quiet = () => undefined;
   setRendererLogger({
@@ -315,6 +332,37 @@ describe("the overlay's chrome cannot take down the monitor (M49)", () => {
     await act(async () => toggle?.click());
     await settle();
     expect(document.getElementById("vf-godview-tweak-panel")).not.toBeNull();
+  });
+
+  it("lends the palette System control while Godview shows — the one verb, the same panel — and withdraws it when it closes (GV-D1)", async () => {
+    const host = await mountOverlay();
+    const door = getSystemControlDoor();
+    expect(door).not.toBeNull();
+    expect(document.getElementById("vf-godview-tweak-panel")).toBeNull();
+    expect(host.querySelector(".vf-godview")?.getAttribute("data-godview-tuning-open")).toBe(
+      "false",
+    );
+    await toggleSystemControl();
+    const panel = document.getElementById("vf-godview-tweak-panel");
+    expect(panel?.textContent).toContain("SYSTEM CONTROL");
+    expect(host.querySelector(".vf-godview")?.getAttribute("data-godview-tuning-open")).toBe(
+      "true",
+    );
+    // the door is the same object while Godview is open: a toggle republishes nothing
+    expect(getSystemControlDoor()).toBe(door);
+    await toggleSystemControl();
+    expect(document.getElementById("vf-godview-tweak-panel")).toBeNull();
+    // another view: the door goes, and a panel left open closes with Godview
+    await toggleSystemControl();
+    expect(document.getElementById("vf-godview-tweak-panel")).not.toBeNull();
+    await setView("canvas");
+    expect(getSystemControlDoor()).toBeNull();
+    // with no door the frame's run is a no, never a throw
+    expect(runSystemControl()).toBe(false);
+    expect(document.getElementById("vf-godview-tweak-panel")).toBeNull();
+    await setView("godview");
+    expect(getSystemControlDoor()).not.toBeNull();
+    expect(document.getElementById("vf-godview-tweak-panel")).toBeNull();
   });
 
   it("lends the frame's Peek its Live now while Godview shows, and withdraws it when it closes (P2 — Find left the stage)", async () => {

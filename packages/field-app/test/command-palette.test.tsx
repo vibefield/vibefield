@@ -14,6 +14,10 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FrameActRun } from "../src/frame/palette-acts";
+import {
+  publishSystemControlDoor,
+  resetSystemControlDoorForTest,
+} from "../src/frame/system-control-door";
 import type { ViewKeys } from "../src/frame/views";
 import { CommandPalette } from "../src/hud/CommandPalette";
 
@@ -50,6 +54,7 @@ afterEach(() => {
   root = null;
   host = null;
   dispose = null;
+  resetSystemControlDoorForTest();
 });
 
 function mount(options: { view?: FrameView; keys?: ViewKeys } = {}) {
@@ -139,13 +144,41 @@ describe("the palette (One Frame §7)", () => {
     ]);
   });
 
-  it("follows the view: Godview's New terminal, and no zoom off Canvas", () => {
+  it("follows the view: Godview's New terminal and System control, and no zoom off Canvas", () => {
+    publishSystemControlDoor({ toggle: () => undefined });
     mount({ view: "godview" });
     const onView = reading();
     expect(onView.slice(onView.indexOf("# On this view"), onView.indexOf("# App"))).toEqual([
       "# On this view",
       "New terminal ⌘T",
+      // no key: the row ends on its name (GV-D1)
+      "System control",
     ]);
+  });
+
+  it("runs Godview's System control through the frame's door, and waits while Godview has not lent it (GV-D1)", () => {
+    // no door: Godview has not published its verb yet, and the act says so
+    const waiting = mount({ view: "godview" });
+    const row = (): HTMLButtonElement => $('[data-row="system-control"]') as HTMLButtonElement;
+    expect(row().getAttribute("aria-disabled")).toBe("true");
+    expect(row().textContent).toContain("Godview is still opening");
+    act(() => row().click());
+    expect(waiting.onAct).not.toHaveBeenCalled();
+    expect(waiting.onClose).not.toHaveBeenCalled();
+    // the door arrives: the same palette lists it runnable, with no glyph and no key
+    act(() => publishSystemControlDoor({ toggle: () => undefined }));
+    expect(row().getAttribute("aria-disabled")).not.toBe("true");
+    expect(row().textContent).toBe("System control");
+    expect(row().querySelector(".vf-menu-key")).toBeNull();
+    expect(row().querySelector(".vf-glyph")).toBeNull();
+    act(() => row().click());
+    expect(waiting.onAct).toHaveBeenCalledWith({ kind: "system-control" });
+    expect(waiting.onClose).toHaveBeenCalled();
+    // typed, it answers to its name
+    type("system");
+    expect($$("[data-row]").map((node) => node.getAttribute("data-row"))).toContain(
+      "system-control",
+    );
   });
 
   it("draws a waiting act and never runs it: the Assistant says it is not built yet", () => {

@@ -14,6 +14,7 @@ import {
 } from "react";
 import { historyCreateWaits, useHistoryLineDoor } from "../frame/line-door";
 import { type FrameActRun, frameActGroups } from "../frame/palette-acts";
+import { useSystemControlDoor } from "../frame/system-control-door";
 import type { ViewKeys } from "../frame/views";
 import { invoke as invokeCommand, isCommandBound } from "../plugin-host/command-registry";
 import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
@@ -284,9 +285,12 @@ export function CommandPalette({
   const historyDoor = useHistoryLineDoor();
   const historyWaits = historyCreateWaits(historyDoor);
   const historyLive = historyDoor?.live === true;
+  // GV-D1: Godview's System control runs through the door Godview publishes
+  // while it is open; until the door is there the act waits, and says so.
+  const systemControlWaits = useSystemControlDoor() === null ? "Godview is still opening" : null;
   const acts = useMemo(
-    () => frameActGroups(view, keys, historyWaits, historyLive),
-    [view, keys, historyWaits, historyLive],
+    () => frameActGroups(view, keys, historyWaits, historyLive, systemControlWaits),
+    [view, keys, historyWaits, historyLive, systemControlWaits],
   );
 
   // All palette-placement commands of enabled plugins (§8.3), each plugin's
