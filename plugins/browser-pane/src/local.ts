@@ -207,14 +207,27 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
    * bytes on the device, mips and all) or let go; evicted, the pass lets it go (it is laid again from its record when the
    * pane is next drawn — and charged again).
    */
+  /** PT-5b2 (ruling 7): the notice rows charged, by pane — a row is named by its face's key, and must be found again when
+   * the face is gone (the pane deleted, its address no page any more): it goes WITH ITS PANE, as the face's row does. */
+  const noticeRows = new Map<Entity, string>();
+  const releaseNotice = (e: Entity): void => {
+    const row = noticeRows.get(e);
+    if (row === undefined) return;
+    noticeRows.delete(e);
+    host?.budget?.release(BROWSER_PANE_KIND, row);
+  };
   const chargeNotice = (entity: number, bytes: number): void => {
-    const key = live.words(entity as Entity)?.key;
+    const e = entity as Entity;
+    if (bytes <= 0) return releaseNotice(e);
+    const key = live.words(e)?.key;
     if (key === undefined || host?.budget === undefined) return;
-    if (bytes <= 0) host.budget.release(BROWSER_PANE_KIND, noticeBudgetKey(key));
-    else
-      host.budget.charge(BROWSER_PANE_KIND, noticeBudgetKey(key), bytes, () => {
-        doors()?.unnotice?.(entity);
-      });
+    const row = noticeBudgetKey(key);
+    noticeRows.set(e, row);
+    host.budget.charge(BROWSER_PANE_KIND, row, bytes, () => {
+      // (the ledger has dropped the row itself)
+      noticeRows.delete(e);
+      doors()?.unnotice?.(entity);
+    });
   };
   let notices = 0;
   const heads = new Map<Entity, { readonly key: string; readonly bitmap: HeadBitmap }>();
@@ -309,6 +322,7 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
       specs.delete(e);
       pressing.delete(e);
       noticed.delete(e);
+      releaseNotice(e);
     },
     sight: live.sight,
     // PT-5b — the kind's word on a raster it charged (`live <key>`, `notice <key>`): kept while its pane is seen or held
@@ -426,8 +440,10 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
       specs.delete(e);
       stoodAt.delete(e);
       noticed.delete(e);
+      releaseNotice(e);
     },
     dispose() {
+      for (const e of [...noticeRows.keys()]) releaseNotice(e);
       live.dispose();
       heads.clear();
       saying.clear();

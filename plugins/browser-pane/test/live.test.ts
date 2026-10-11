@@ -1616,4 +1616,57 @@ describe("PT-5b — memory charged (ruling 4; design-019 §7)", () => {
     t.pass.noticed?.(2, 100);
     expect(t.ledger.size).toBe(0);
   });
+
+  it("PT-5b2 (ruling 7) — the notice's row GOES WITH ITS PANE: a failed pane deleted, or its address no page any more, lets its notice's row of the budget go — as its face's row does", () => {
+    const head: HeadRaster = {
+      raster: () => undefined,
+      notice: () => ({
+        bytes: new Uint8Array(60 * 24 * 4),
+        width: 60,
+        height: 24,
+        block: [640, 336, 300, 96],
+      }),
+    };
+    /** The kind's rows of the budget, said in one line. */
+    const rowsOf = (t: ReturnType<typeof fakeHost>): string => [...t.ledger.keys()].join(" · ");
+    /** A failed pane whose notice the pass has laid: its row is in the ledger. */
+    const failed = () => {
+      const t = fakeHost({ head, pass: true });
+      const local = createPaneLocal(t.host);
+      const ctx = ctxOf({ url: PAGE }, local);
+      k.record(k.resolve(ctx), ctx);
+      const face = t.faces.get(KEY);
+      if (face === undefined) throw new Error("no face");
+      face.say({
+        state: { is: "failed", reason: "offline", retry: () => {} },
+        info: { address: PAGE },
+      });
+      local.tick?.(0);
+      k.record(k.resolve(ctx), ctx);
+      t.pass.noticed?.(1, 7_680);
+      expect(t.ledger.has(NOTICE_ROW)).toBe(true);
+      return { t, local };
+    };
+    // the pane is DELETED (the pass's own `forget` disposes its surface, notice and all, and tells nobody)
+    const a = failed();
+    a.local.forget?.(1 as Entity);
+    expect(rowsOf(a.t)).toBe("");
+    expect(a.t.said).toContain(`release ${NOTICE_ROW}`);
+    // its address stops being a page (the sample's, typed over it): its face closes — and the notice's row with it,
+    // whenever the pass says its texture went
+    const b = failed();
+    b.local.drop(1 as Entity);
+    expect(rowsOf(b.t)).toBe("");
+    b.t.pass.noticed?.(1, 0);
+    expect(rowsOf(b.t)).toBe("");
+    // a notice let go by the pass AFTER its face is gone still finds its row (the face's key was the row's name)
+    const c = failed();
+    c.t.faces.get(KEY)?.close?.();
+    c.local.forget?.(1 as Entity);
+    expect(c.t.ledger.has(NOTICE_ROW)).toBe(false);
+    // the kind's local going (its plugin turned off, the mount gone) leaves no row behind either
+    const d = failed();
+    d.local.dispose?.();
+    expect(rowsOf(d.t)).toBe("");
+  });
 });
