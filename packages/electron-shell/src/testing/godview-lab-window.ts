@@ -6,7 +6,12 @@ import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
 import type { PageMetrics } from "./godview-lab-measures";
 import { type LabProfile, labProfileProof } from "./godview-lab-profile";
-import { type LabDeckState, labDeckReady } from "./godview-lab-readiness";
+import {
+  type LabDeckState,
+  labDeckReady,
+  labDeckSeen,
+  labDeckTimeout,
+} from "./godview-lab-readiness";
 import { REACT_COMMIT_HOOK_SOURCE } from "./react-commit-hook";
 
 // THE GODVIEW LAB'S WINDOW (MV-3c; build-mv M31, M32) — what the perf lab and
@@ -99,13 +104,22 @@ export class MarkerTail<T> {
     return this.#latest;
   }
 
-  async until(predicate: (value: T) => boolean, what: string, timeoutMs: number): Promise<T> {
+  /** `seen`, when given, is what a timeout adds to its error: the latest
+   * value in the caller's words (null when the marker never came). */
+  async until(
+    predicate: (value: T) => boolean,
+    what: string,
+    timeoutMs: number,
+    seen?: (latest: T | null) => string,
+  ): Promise<T> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
       const latest = this.#latest;
       if (latest !== null && predicate(latest)) return latest;
       if (Date.now() >= deadline)
-        throw new Error(`timed out after ${timeoutMs}ms waiting for ${what}`);
+        throw new Error(
+          `timed out after ${timeoutMs}ms waiting for ${what}${seen ? ` — ${seen(latest)}` : ""}`,
+        );
       await new Promise<void>((resolve) => {
         const waiter = (): void => {
           this.#waiters.delete(waiter);
@@ -367,15 +381,21 @@ export async function openLabWindow(opts: {
 
 /** Perf and capture measure a fresh single-window host, so wait before replay
  * shifts its clock. The worker lifecycle probe opens auxiliary realms and has
- * its own worker-readiness contract; it does not measure a terminal workload. */
+ * its own worker-readiness contract; it does not measure a terminal workload.
+ * A wait that fails says what it saw — the deck's last state (bounded) and the
+ * readiness conditions that state still lacked: a launch was lost to this wait
+ * on 2026-10-10 with a bare "timed out" and no reason to read. */
 export async function waitForLabDeck(lab: LabWindow): Promise<void> {
   await lab.deck.until(
     (state) => {
-      if (state.error !== undefined) throw new Error(`Terminal deck: ${state.error}`);
+      if (state.error !== undefined) {
+        throw new Error(`Terminal deck: ${state.error} — the deck said ${labDeckSeen(state)}`);
+      }
       return labDeckReady(state);
     },
     "the terminal deck to open a pane with an observed roster and WebGPU",
     60_000,
+    labDeckTimeout,
   );
 }
 

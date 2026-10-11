@@ -167,6 +167,14 @@ export function assertLabProfileProof(state, context, { expectedId, seen } = {})
   return state.id;
 }
 
+/** A lab line as a runner echoes it: clipped to 160 characters, except a
+ * failure's. That line is the launch's only account of itself (a deck wait
+ * that timed out carries the deck's last state in it), so it is echoed up to
+ * 1,200; the launch's own log keeps every line whole. */
+export function echoedLabLine(line) {
+  return line.slice(0, line.includes('"kind":"failed"') ? 1_200 : 160);
+}
+
 /**
  * One launch of the product in the lab's mode, with a fresh Chromium profile
  * and the switches that keep an occluded window awake. Wait for output pipes
@@ -207,7 +215,7 @@ export async function launchLab({ root, env, reportPath, logPath, echo, prefix }
       let spawnError;
       child.stdout.on("data", (chunk) => {
         for (const line of String(chunk).split("\n")) {
-          if (line.startsWith(echo)) log(`  ${prefix}: ${line.slice(0, 160)}`);
+          if (line.startsWith(echo)) log(`  ${prefix}: ${echoedLabLine(line)}`);
         }
         lines.push(String(chunk));
       });

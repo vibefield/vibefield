@@ -63,6 +63,12 @@ did around its cells).
   `VF_GODVIEW_PERF_WARMUP=0` still skips it. Each report carries `warmedViews`; the `warmed`
   line, the summary's `instruments` and its header name them per arm, and the header says so
   when the arms did not warm the same views.
+- **The wait for the deck says what it saw.** A launch whose deck never came ready failed with a
+  bare "timed out after 60000ms waiting for the terminal deck…" (one was lost so on 2026-10-10).
+  The error now carries the last `GODVIEW_DECK` state read — JSON, the readiness facts first,
+  at most 600 characters — and the readiness conditions that state still lacked, or that no
+  marker came at all. The runners echo a `failed` line up to 1,200 characters (other lab lines
+  stay clipped at 160), so the reason reaches the run's own log. Perf and capture share the wait.
 The ordinary `pnpm smoke:godview` and `pnpm smoke:terminal-direct` runners also own fresh
 profiles and verify the app and window paths before navigation. After building, use
 `node scripts/smoke-godview.mjs` for the same smoke without rebuilding; direct Electron
