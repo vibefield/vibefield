@@ -1148,6 +1148,9 @@ export async function lastStillRows(d: LastStillDriver): Promise<string[]> {
       () => d.pages(`${origin}/gate`),
       (ps) => ps.every((p) => p.muted),
     );
+    // (a page made for the pane at rest under its paused ask would be born about now — a window, then its load: main's
+    // pages are counted once it could have come, not before)
+    await sleep(1_500);
     const unseenPages = d.pages(`${origin}/gate`);
     const restedUnseen = restedPane === undefined ? null : await face(restedPane);
     const unseenCount = restedPane === undefined ? 0 : pagesAt(restedPane).length;

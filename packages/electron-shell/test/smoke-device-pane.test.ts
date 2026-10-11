@@ -412,6 +412,7 @@ describe("the device rows' instruments", () => {
       dpr: 3,
       last: { px: 1900, of: 2000 },
       third: { px: 0, of: 8000 },
+      told: { px: 1880, of: 2000 },
       scrollY: 390,
       pointer: "touch",
       tapped: "/next",
@@ -423,6 +424,14 @@ describe("the device rows' instruments", () => {
     expect(judgeLegacy({ ...whole, last: { px: 0, of: 2000 }, scrollY: 0 })).toEqual([
       "LEGACY: the page's right-edge marker fills 0.0% of the pane's last strip (0 of 2000 px), not 70% — the page is not shown whole",
       "LEGACY: the wheel left the document's scroll at 0 — it panned the view, or did nothing",
+    ]);
+    // …and the way it comes back: a page that LOADS whole (a new document takes its own scale) and loses it the first
+    // time its layout is laid again under it — told its scheme, live
+    expect(judgeLegacy({ ...whole, told: { px: 0, of: 2000 } })).toEqual([
+      "LEGACY: told its scheme (its layout laid again under it), the page's marker fills 0.0% of the pane's last strip (0 of 2000 px), not 70% — its scale was forced: the page is not shown whole any more",
+    ]);
+    expect(judgeLegacy({ ...whole, told: { px: 0, of: 0 } })).toEqual([
+      "LEGACY: the page's last strip could not be read once its scheme was told",
     ]);
     // PT-4's second: a window born at the laptop's density paints the phone's page at two thirds — the marker stands two
     // thirds across — and the window is the one the laptop was laid in

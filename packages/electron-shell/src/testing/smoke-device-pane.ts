@@ -158,6 +158,8 @@ export interface DeviceSeen {
     /** the marker's-hue pixels in the page's LAST strip, and in a strip two thirds across — each of so many */
     readonly last: { readonly px: number; readonly of: number };
     readonly third: { readonly px: number; readonly of: number };
+    /** the last strip again once the page was TOLD ITS SCHEME under it (told live: its layout laid again, no reload) */
+    readonly told: { readonly px: number; readonly of: number };
     /** the document's scroll after the wheel; the type of its last pointer; where a tap on its link left the page */
     readonly scrollY: number | null;
     readonly pointer: string | null;
@@ -334,6 +336,12 @@ export function judgeLegacy(seen: DeviceSeen["legacy"]): string[] {
   else if (share(seen.last) < DEVICE_ROWS.edge.whole)
     out.push(
       `LEGACY: the page's right-edge marker fills ${(share(seen.last) * 100).toFixed(1)}% of the pane's last strip (${seen.last.px} of ${seen.last.of} px), not ${DEVICE_ROWS.edge.whole * 100}% — the page is not shown whole`,
+    );
+  if (seen.told.of === 0)
+    out.push("LEGACY: the page's last strip could not be read once its scheme was told");
+  else if (share(seen.told) < DEVICE_ROWS.edge.whole)
+    out.push(
+      `LEGACY: told its scheme (its layout laid again under it), the page's marker fills ${(share(seen.told) * 100).toFixed(1)}% of the pane's last strip (${seen.told.px} of ${seen.told.of} px), not ${DEVICE_ROWS.edge.whole * 100}% — its scale was forced: the page is not shown whole any more`,
     );
   if (share(seen.third) > DEVICE_ROWS.edge.elsewhere)
     out.push(
@@ -958,6 +966,20 @@ export async function devicePaneRows(d: DeviceRowsDriver): Promise<string[]> {
           )) ?? { px: 0, of: 0 });
     const last = await strip(DEVICE_ROWS.edgeStrip.last);
     const third = await strip(DEVICE_ROWS.edgeStrip.third);
+    // ruling 5b's witness: the page TOLD ITS SCHEME under it — told live, its layout laid again and no reload — is shown
+    // whole still (its scale forced to the view's at that layout, it showed its top-left corner: the marker gone)
+    await h.theme("dark");
+    await hear("the legacy page dark", (r) => r.dark === true, legacyAt);
+    await sleep(900);
+    const toldStrip = await strip(DEVICE_ROWS.edgeStrip.last);
+    await shoot("pt-5b-legacy-told-its-scheme.png");
+    await h.theme("light");
+    await hear("the legacy page light", (r) => r.dark === false, legacyAt);
+    await sleep(600);
+    // a press on the page's ground is a TOUCH — heard while the page stands (its word comes every quarter second: read
+    // only after the link's tap, it raced the page's leaving for /next)
+    await press(await onPage(0.85, 0.3));
+    const wideTouched = await hear("the legacy page touched", (r) => r.pointer !== "", legacyAt);
     // the wheel over it scrolls the DOCUMENT (forced to the view's scale it panned the view inside the layout instead)
     const over = await onPage(0.5, 0.4);
     move(over.x, over.y);
@@ -985,7 +1007,7 @@ export async function devicePaneRows(d: DeviceRowsDriver): Promise<string[]> {
     const wideLink = legacyAt()?.parts.link;
     const wideView = legacyAt()?.view ?? [DEVICE_ROWS.legacyWidth, 2131];
     let wideTapped: string | null = null;
-    let widePointer: string | null = null;
+    const widePointer = wideTouched?.pointer ?? legacyAt()?.pointer ?? null;
     if (wideLink !== undefined && frameNow !== null) {
       const before = d.fixture.served("/next");
       const point = pageOnWindow(
@@ -999,13 +1021,13 @@ export async function devicePaneRows(d: DeviceRowsDriver): Promise<string[]> {
       const landed = await hear("the legacy page's link tapped", (r) => r.path === "/next");
       wideTapped =
         landed?.path ?? (d.fixture.served("/next") > before ? "/next" : (report()?.path ?? null));
-      widePointer = legacyAt()?.pointer ?? null;
     }
     const legacyRow: DeviceSeen["legacy"] = {
       view: wide?.view ?? legacyAt()?.view ?? null,
       dpr: wide?.dpr ?? null,
       last,
       third,
+      told: toldStrip,
       scrollY: legacyScroll,
       pointer: widePointer,
       tapped: wideTapped,
