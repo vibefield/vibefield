@@ -81,6 +81,12 @@ export interface BrowserSurfacePaint {
   /** Electron 43 has been observed delivering `null` despite its optional-only d.ts. */
   readonly texture?: BrowserSurfacePaintTexture | null;
   readonly image: BrowserSurfacePaintImage;
+  /**
+   * PT-5b: a paint of the window's BOOTSTRAP document — its blank `about:blank`, which stands until the page's own first
+   * document commits (for as long as the page's server takes to answer). It says the window is up; it is nothing of the
+   * page, and is shown to nobody.
+   */
+  readonly bootstrap?: boolean;
 }
 
 export interface BrowserSurfaceNativeWindow {
@@ -447,6 +453,8 @@ export interface BrowserLiveSurfaceRuntimeStats {
   readonly emulationReloads: number;
   /** PT-5b: windows made ANEW because the page's device moved to another density (ruling 5a). */
   readonly windowsRemade: number;
+  /** PT-5b: paints of a window's bootstrap document — taken as the window being up, shown to nobody. */
+  readonly bootstrapPaints: number;
   /** PT-5a: what the page asked for and was refused, counted by kind (the diagnostics' count — ruling 7). */
   readonly refused: Readonly<Record<BrowserSurfaceRefusal, number>>;
   readonly effectiveDemand: LiveSurfaceDemandV1 | null;
@@ -947,6 +955,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #emulations = 0;
   #emulationReloads = 0;
   #windowsRemade = 0;
+  #bootstrapPaints = 0;
   /** PT-5b (ruling 5a): the density the page's window was BORN at — an offscreen window's density is its own for life. */
   #windowDensity: number | undefined;
   /** PT-5b (ruling 5c): a `mobile` page's visual-viewport scale as last read, and when (ms) — see `pointScale`. */
@@ -1055,6 +1064,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       emulations: this.#emulations,
       emulationReloads: this.#emulationReloads,
       windowsRemade: this.#windowsRemade,
+      bootstrapPaints: this.#bootstrapPaints,
       refused: { ...this.#refusals },
       effectiveDemand: this.#effectiveDemand === null ? null : copyDemand(this.#effectiveDemand),
     };
@@ -1643,8 +1653,21 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     state: BrowserSurfaceNavigationState,
   ): void {
     if (!this.ownsProducer(window, epoch)) return;
-    const clamped = clampBrowserState(state);
-    if (clamped === undefined) return;
+    const said = clampBrowserState(state);
+    if (said === undefined) return;
+    // PT-5b — WHILE A WINDOW'S FIRST LOAD IS PENDING the engine's committed address is still its bootstrap's (`about:blank`):
+    // plumbing, never where the page is. The page is headed where it was sent — it says THAT, loading, with no title yet.
+    // (Before: a page slow to answer said it was at `about:blank` — on its head, and to the desk, which took its still for
+    // another address's and let it go.)
+    const plumbing = webOriginOf(said.url) === undefined && said.failure === undefined;
+    const clamped: LiveSurfaceBrowserStateV1 = plumbing
+      ? {
+          url: this.#resumeUrl ?? this.source.initialUrl,
+          loading: said.loading,
+          canGoBack: false,
+          canGoForward: false,
+        }
+      : said;
     // PT-5b: another document takes its own scale — the next point reads it
     if (this.#browserState?.url !== clamped.url || clamped.loading)
       this.#pointScale = { ...this.#pointScale, at: Number.NEGATIVE_INFINITY };
@@ -1701,6 +1724,17 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     }
     if (demand.mode === "paused") {
       if (state === "live") this.pauseProducer();
+      return;
+    }
+    // PT-5b — a page put to REST while it is still STARTING (its server slow to answer) is let go AT ONCE: it would be
+    // discarded at its first frame anyway, and meanwhile it held a slot of the desk's cap for as long as its load took.
+    // (A page asked `paused` while starting still loads on — its pane is only out of view, and finds it loaded.)
+    if (state === "starting" && this.#window !== null) {
+      this.clearSourceTimers();
+      for (const step of ["live", "paused", "hibernated"] as const)
+        this.#lifecycle.transition(step);
+      this.destroyWindow();
+      this.publishSummary();
       return;
     }
     if (state === "live") this.pauseProducer();
@@ -1800,6 +1834,18 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     try {
       if (!this.isCurrent(window, epoch) || !this.#lifecycle.acceptsFrames) {
         paint.texture?.release();
+        return;
+      }
+      // PT-5b — THE WINDOW'S OWN FIRST DOCUMENT IS NOT THE PAGE: a paint of the bootstrap blank is offered to nobody (before:
+      // a pane whose page was slow to answer showed a blank white frame, "live", in place of its film — or of its still).
+      // It says the window is up — the startup deadline is met — and the page is still STARTING: its first frame is its own.
+      if (paint.bootstrap === true) {
+        paint.texture?.release();
+        this.#bootstrapPaints += 1;
+        if (this.#startupTimer !== null) {
+          clearTimeout(this.#startupTimer);
+          this.#startupTimer = null;
+        }
         return;
       }
       const texture = paint.texture;

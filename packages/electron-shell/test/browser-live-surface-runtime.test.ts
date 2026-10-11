@@ -1683,6 +1683,131 @@ describe("BrowserLiveSurfaceRuntime", () => {
     result.runtime.dispose();
   });
 
+  it("PT-5b: the window's own FIRST document is not the page — a paint of the bootstrap blank is offered to nobody and released; it meets the startup deadline, the page stays STARTING, and its first frame is its own", async () => {
+    vi.useFakeTimers();
+    try {
+      const result = setup({ startupTimeoutMs: 1_000 });
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(demand(1, "live"));
+      await vi.advanceTimersByTimeAsync(0);
+      const window = result.native.windows[0];
+      if (window === undefined) throw new Error("no window");
+      // the page's server is slow to answer: the window paints its blank bootstrap meanwhile
+      const blank = sharedPaint(320, 180);
+      window.paint({ ...blank.paint, bootstrap: true });
+      window.paint({ ...sharedPaint(320, 180).paint, bootstrap: true });
+      expect(blank.release).toHaveBeenCalledTimes(1);
+      expect(renderer.textureFrames).toHaveLength(0);
+      expect(renderer.cpuFrames).toHaveLength(0);
+      expect(result.runtime.summary.state).toBe("starting");
+      expect(result.runtime.summary.geometry).toBeUndefined();
+      expect(result.runtime.stats.bootstrapPaints).toBe(2);
+      // the window is up: the startup deadline does not fail a page that is only slow
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(result.runtime.summary.state).toBe("starting");
+      expect(result.native.windows).toHaveLength(1);
+      // the page's own first frame: live, and offered
+      window.paint(sharedPaint(320, 180).paint);
+      expect(result.runtime.summary.state).toBe("live");
+      expect(renderer.textureFrames).toHaveLength(1);
+      result.runtime.dispose();
+      // a window that never paints at all is still failed by the deadline (and retried within its budget)
+      const dead = setup({ startupTimeoutMs: 1_000, restartLimit: 0 });
+      const waiting = attach(dead.runtime);
+      waiting.attachment.setDemand(demand(1, "live"));
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(dead.runtime.summary.state).toBe("failed");
+      dead.runtime.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("PT-5b: while a window's first load is pending the engine's committed address is its bootstrap's — plumbing: the page says where it is HEADED (the address it was sent to, or where it last was), loading, with no title", async () => {
+    const result = setup();
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await flush();
+    const first = result.native.windows[0];
+    if (first === undefined) throw new Error("no window");
+    // a pending load as Electron says it: `getURL()` is still the bootstrap's
+    first.emitNavigationState({
+      url: "about:blank",
+      title: "about:blank",
+      loading: true,
+      canGoBack: true,
+      canGoForward: false,
+    });
+    expect(result.runtime.summary.browser).toEqual({
+      url: "https://example.test/app",
+      loading: true,
+      canGoBack: false,
+      canGoForward: false,
+    });
+    // the page commits, goes on, is put to rest and woken: its new window's pending load says where it WAS
+    first.paint(sharedPaint().paint);
+    first.emitNavigationState({ ...NAV, url: "https://example.test/deeper", title: "Deeper" });
+    renderer.attachment.setDemand(demand(2, "hibernated"));
+    renderer.attachment.setDemand(demand(3, "live"));
+    await flush();
+    const second = result.native.windows[1];
+    second?.emitNavigationState({
+      url: "about:blank",
+      title: "",
+      loading: true,
+      canGoBack: false,
+      canGoForward: false,
+    });
+    expect(result.runtime.summary.browser).toEqual({
+      url: "https://example.test/deeper",
+      loading: true,
+      canGoBack: false,
+      canGoForward: false,
+    });
+    // a load that FAILED is said with the address asked for, as PT-5a's — never mistaken for plumbing
+    second?.emitNavigationState({
+      url: "https://example.test/deeper",
+      title: "",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      failure: -106,
+    });
+    expect(result.runtime.summary.browser).toMatchObject({
+      url: "https://example.test/deeper",
+      failure: { reason: "offline" },
+    });
+    result.runtime.dispose();
+  });
+
+  it("PT-5b: a page put to REST while it is still starting is let go AT ONCE — its window gone, one summary, its address kept; asked `paused` while starting it loads on", async () => {
+    const result = setup();
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await flush();
+    const first = result.native.windows[0];
+    expect(result.runtime.summary.state).toBe("starting");
+    // out of view while it loads: it loads on (its pane finds it loaded)
+    renderer.attachment.setDemand(demand(2, "paused"));
+    expect(result.runtime.summary.state).toBe("starting");
+    expect(first?.destroyed).toBe(false);
+    // put to rest: gone at once — it holds no slot while its server takes its time
+    const said = renderer.summaries.length;
+    renderer.attachment.setDemand(demand(3, "hibernated"));
+    expect(first?.destroyed).toBe(true);
+    expect(result.runtime.summary.state).toBe("hibernated");
+    expect(renderer.summaries.slice(said).map((summary) => summary.state)).toEqual(["hibernated"]);
+    // a late paint of the window that went is nothing
+    first?.paint(sharedPaint().paint);
+    expect(result.runtime.summary.state).toBe("hibernated");
+    // woken: a new window, at its address
+    renderer.attachment.setDemand(demand(4, "live"));
+    await flush();
+    expect(result.native.windows).toHaveLength(2);
+    expect(result.native.windows[1]?.loadedUrls).toEqual(["https://example.test/app"]);
+    result.runtime.dispose();
+  });
+
   it("PT-5b: a page SENT SOMEWHERE while nobody looks — with no window (at rest, or never made) it is born there when it is next asked for, and says so at once; paused, it goes there at once in its own window; every other verb still waits for a page that is live", async () => {
     const result = setup();
     const renderer = attach(result.runtime);

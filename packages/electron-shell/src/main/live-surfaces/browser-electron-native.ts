@@ -78,6 +78,12 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   #loadFailure: number | undefined;
   /** PT-5a: who hears what the page asked for and may not have. */
   readonly #refusedListeners = new Set<(what: BrowserSurfaceRefusal, url?: string) => void>();
+  /**
+   * PT-5b: a document of the PAGE's stands in the window — its first load committed (or failed: the engine's error page
+   * stands in the asked address's place). Until then the window shows its bootstrap `about:blank`, for as long as the
+   * page's server takes to answer: a blank that is nothing of the page (its paints are marked — `bootstrap`).
+   */
+  #pageDocument = false;
 
   constructor(
     readonly window: BrowserWindow,
@@ -88,6 +94,12 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     window.webContents.debugger.on("message", (_event, method, params, sessionId) =>
       this.heard(method, params as Readonly<Record<string, unknown>>, sessionId),
     );
+    window.webContents.on("did-navigate", (_event, url) => {
+      if (this.#remoteLoadStarted && url !== "about:blank") this.#pageDocument = true;
+    });
+    window.webContents.on("did-fail-load", (_event, code, _description, _url, isMainFrame) => {
+      if (this.#remoteLoadStarted && isMainFrame && code !== -3) this.#pageDocument = true;
+    });
   }
 
   /** PT-5a: the page asked for what it may not have — told to the producer (the guards have already answered the page). */
@@ -453,6 +465,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       const texture = details.texture ?? undefined;
       listener({
         ...(texture === undefined ? {} : { texture }),
+        // PT-5b: the page's own document has not committed yet — this is the window's blank first one
+        ...(this.#pageDocument ? {} : { bootstrap: true }),
         image: {
           getSize: () => image.getSize(),
           toBitmap: (targetSize) => {
