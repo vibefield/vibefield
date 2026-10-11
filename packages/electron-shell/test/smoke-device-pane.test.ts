@@ -7,11 +7,18 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { browserSurfaceProfileName } from "../src/main/live-surfaces/browser-security";
-import { FIXTURE_HUE, FIXTURE_ICON_HUE, type FixtureReport } from "../src/testing/live-fixture";
+import {
+  FIXTURE_EDGE,
+  FIXTURE_HUE,
+  FIXTURE_ICON_HUE,
+  type FixtureReport,
+} from "../src/testing/live-fixture";
 import {
   DESK_PROFILE_DIR,
   DEVICE_ROWS,
   type DeviceSeen,
+  EDGE_CLASSIFY,
+  EDGE_HUE_DEG,
   headBand,
   ICON_CLASSIFY,
   ICON_HUE_DEG,
@@ -19,11 +26,13 @@ import {
   judgeCookie,
   judgeFavicon,
   judgeLaptop,
+  judgeLegacy,
   judgePhone,
   judgeScheme,
   judgeTitle,
   judgeTouch,
   type PageSaw,
+  pageStrip,
   sawOf,
 } from "../src/testing/smoke-device-pane";
 
@@ -395,6 +404,118 @@ describe("the device rows' instruments", () => {
     expect(phone.y).toBe(50);
     expect(phone.width).toBe(300);
     expect(phone.height).toBe(Math.round(700 - 874 * (300 / 402)));
+  });
+
+  it("LEGACY (PT-5b ruling 5): the phone's page that names no viewport — 980 wide AND shown whole (its marker in the pane's last strip, nowhere two thirds across), the wheel scrolling the document, a tap landing, in a window of the phone's own", () => {
+    const whole: DeviceSeen["legacy"] = {
+      view: [980, 2130],
+      dpr: 3,
+      last: { px: 1900, of: 2000 },
+      third: { px: 0, of: 8000 },
+      scrollY: 390,
+      pointer: "touch",
+      tapped: "/next",
+      windows: { laptop: 7, phone: 11 },
+    };
+    expect(judgeLegacy(whole)).toEqual([]);
+    // PT-4's first failure: the scale forced to the view's — the page's top-left corner shown, no marker in sight, and
+    // the wheel panning the view inside the layout (the document's scroll left at 0)
+    expect(judgeLegacy({ ...whole, last: { px: 0, of: 2000 }, scrollY: 0 })).toEqual([
+      "LEGACY: the page's right-edge marker fills 0.0% of the pane's last strip (0 of 2000 px), not 70% — the page is not shown whole",
+      "LEGACY: the wheel left the document's scroll at 0 — it panned the view, or did nothing",
+    ]);
+    // PT-4's second: a window born at the laptop's density paints the phone's page at two thirds — the marker stands two
+    // thirds across — and the window is the one the laptop was laid in
+    expect(
+      judgeLegacy({
+        ...whole,
+        last: { px: 0, of: 2000 },
+        third: { px: 2600, of: 8000 },
+        windows: { laptop: 7, phone: 7 },
+      }),
+    ).toEqual([
+      "LEGACY: the page's right-edge marker fills 0.0% of the pane's last strip (0 of 2000 px), not 70% — the page is not shown whole",
+      "LEGACY: the marker's hue is 32.5% of a strip two thirds across the pane — the page is painted at another scale than its view's",
+      "LEGACY: the phone's page is in the window the laptop's was laid in (7) — a window born at @2 paints a phone's page at two thirds",
+    ]);
+    // the third: the page whole, and the hand's points not carried into its own px — the tap lands beside the link
+    expect(judgeLegacy({ ...whole, tapped: "/legacy" })).toEqual([
+      "LEGACY: a tap on the page's link left it at /legacy, not /next — the finger did not land where the link is drawn",
+    ]);
+    // a page laid out as a desktop lays it, at the laptop's density, pressed by a mouse, its windows unread
+    expect(
+      judgeLegacy({
+        ...whole,
+        view: [402, 874],
+        dpr: 2,
+        pointer: "mouse",
+        windows: { laptop: null, phone: 11 },
+      }),
+    ).toEqual([
+      "LEGACY: the page that names no viewport is laid out 402 × 874, not 980 px wide",
+      "LEGACY: the page's density is 2, not the phone's 3",
+      `LEGACY: the page's last pointer was "mouse", not a touch`,
+      "LEGACY: the page's own window could not be found (as a laptop: null, as a phone: 11)",
+    ]);
+    expect(judgeLegacy({ ...whole, view: null, last: { px: 0, of: 0 }, scrollY: null })).toEqual([
+      "LEGACY: the page that names no viewport is laid out not at all, not 980 px wide",
+      "LEGACY: the page's last strip could not be read",
+      "LEGACY: the wheel left the document's scroll at null — it panned the view, or did nothing",
+    ]);
+  });
+
+  it("the marker's classifier finds its orange-red — at its own light and a photograph's dimmer one — and never the page's ground, its runner, its icon, the mat or a grey", () => {
+    const classify = new Function(`return ${EDGE_CLASSIFY};`)() as (
+      r: number,
+      g: number,
+      b: number,
+    ) => number;
+    const { r, g, b } = FIXTURE_EDGE.hue;
+    expect(EDGE_HUE_DEG).toBeGreaterThan(8);
+    expect(EDGE_HUE_DEG).toBeLessThan(18);
+    expect(classify(r, g, b)).toBe(1);
+    // through the pane's glass (a veil of its light) and at a still's dimmer light
+    expect(classify(Math.round(r * 0.86), Math.round(g * 0.86), Math.round(b * 0.86))).toBe(1);
+    expect(classify(244, 84, 44)).toBe(1);
+    expect(classify(FIXTURE_HUE.r, FIXTURE_HUE.g, FIXTURE_HUE.b)).toBe(0);
+    expect(classify(FIXTURE_ICON_HUE.r, FIXTURE_ICON_HUE.g, FIXTURE_ICON_HUE.b)).toBe(0);
+    expect(classify(255, 211, 77)).toBe(0);
+    expect(classify(46, 125, 90)).toBe(0);
+    expect(classify(255, 255, 255)).toBe(0);
+    expect(classify(128, 128, 128)).toBe(0);
+    expect(classify(0, 0, 0)).toBe(0);
+    // a dark red is not it (too dim), nor a yellow or a pure magenta either side of its span
+    expect(classify(120, 30, 10)).toBe(0);
+    expect(classify(255, 180, 24)).toBe(0);
+    expect(classify(255, 24, 120)).toBe(0);
+    // the marker is the page's last 4%, and the strips read it where a page shown whole has it — and where one painted at
+    // two thirds would (0.96 × ⅔ … ⅔)
+    expect(FIXTURE_EDGE.share).toBe(0.04);
+    const [from, to] = DEVICE_ROWS.edgeStrip.last;
+    expect(from).toBeGreaterThan(1 - FIXTURE_EDGE.share);
+    expect(to).toBeLessThan(1);
+    const [a, z] = DEVICE_ROWS.edgeStrip.third;
+    expect(a).toBeLessThan((1 - FIXTURE_EDGE.share) * (2 / 3));
+    expect(z).toBeGreaterThan(2 / 3);
+  });
+
+  it("a strip of the page of a pane in hand: the page stands at the extent's foot, as wide as it — shares of its width and height", () => {
+    // a phone's page 402 × 874 drawn 300 wide: 652.24 tall, its foot at the extent's (cy + hy = 750)
+    const f = { cx: 600, cy: 400, hx: 150, hy: 350 };
+    const tall = (874 * 300) / 402;
+    expect(pageStrip(f, [402, 874], [0, 1], [0, 1])).toEqual({
+      x: 450,
+      y: Math.round(750 - tall),
+      width: 300,
+      height: Math.round(tall),
+    });
+    const last = pageStrip(f, [402, 874], [0.972, 0.992], [0.04, 0.5]);
+    expect(last.x).toBe(Math.round(450 + 0.972 * 300));
+    expect(last.width).toBe(6);
+    expect(last.y).toBe(Math.round(750 - tall + 0.04 * tall));
+    expect(last.height).toBe(Math.round(0.46 * tall));
+    // never an empty rect
+    expect(pageStrip(f, [402, 874], [0.5, 0.5], [0.5, 0.5])).toMatchObject({ width: 1, height: 1 });
   });
 
   it("reads how a page is seen out of its report — nothing from a page that says none of it", () => {

@@ -206,9 +206,13 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         screenWidth: integerDimension(logicalViewport.width),
         screenHeight: integerDimension(logicalViewport.height),
       });
-      await this.window.webContents.debugger.sendCommand("Emulation.setPageScaleFactor", {
-        pageScaleFactor: effective.pageScaleFactor,
-      });
+      // PT-5b (ruling 5b): never forced on a `mobile` page — a phone's page lays itself out at its OWN width (one that
+      // names no viewport: 980 px) and is shown whole at its own scale; forced to 1 it showed its top-left corner (PT-4)
+      if (!mobile) {
+        await this.window.webContents.debugger.sendCommand("Emulation.setPageScaleFactor", {
+          pageScaleFactor: effective.pageScaleFactor,
+        });
+      }
       const contentWidth = integerDimension(effective.width / this.options.deviceScaleFactor);
       const contentHeight = integerDimension(effective.height / this.options.deviceScaleFactor);
       this.window.setContentSize(contentWidth, contentHeight, false);
@@ -245,6 +249,19 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
             : [{ name: "prefers-color-scheme", value: emulation.colorScheme }],
       });
     });
+  }
+
+  /** PT-5b (ruling 5c): the page's visual-viewport scale now (1 where the engine says none). */
+  visualScale(): Promise<number> {
+    let scale = 1;
+    return this.enqueue(async () => {
+      await this.ensureDebugger();
+      const metrics = (await this.window.webContents.debugger.sendCommand(
+        "Page.getLayoutMetrics",
+      )) as { cssVisualViewport?: { scale?: number } } | undefined;
+      const said = metrics?.cssVisualViewport?.scale;
+      if (typeof said === "number" && Number.isFinite(said) && said > 0) scale = said;
+    }).then(() => scale);
   }
 
   dispatchTouch(input: BrowserSurfaceNativeTouchInput): Promise<void> {

@@ -20,7 +20,9 @@
 // each load came with (`cookieSeen`). It names its VIEWPORT (`width=device-width, initial-scale=1`) as a page made for
 // phones does: a phone's page with none is laid out 980 px wide (the PT-4 smoke's first PHONE row said so) — and `/legacy`
 // is that page, by its own address: the same page naming NO viewport, which a phone lays out 980 wide and a desktop at
-// its window's width (the witness of a phone's LAYOUT, beside its agent's word).
+// its window's width (the witness of a phone's LAYOUT, beside its agent's word). PT-5b — `/legacy` alone carries a MARKER
+// down its right edge (`FIXTURE_EDGE` — a hue of its own, the last 4% of the page's width): a page shown WHOLE has it at
+// its pane's right edge; one shown at another scale has it elsewhere, or nowhere.
 // PT-5a — and a page's HONEST LIFE:
 //   /acts     — a page of what a page MAY ASK FOR, each a control the smoke presses where the page says it stands: a
 //               `target=_blank` link and a `window.open` (POPUP), a button that calls `alert`, `confirm` and `prompt`
@@ -48,6 +50,9 @@ export const FIXTURE_ASK_MS = 250;
 export const FIXTURE_TITLE = "Portals fixture";
 /** PT-4 — the favicon's one flat colour: a magenta far from the ground's blue, the runner's yellow and the mat's green. */
 export const FIXTURE_ICON_HUE = { r: 226, g: 30, b: 160 } as const;
+/** PT-5b — `/legacy`'s right-edge marker: its one flat colour (an orange-red far from the ground's blue, the runner's
+ * yellow, the icon's magenta and the mat's green) and its width as a share of the page's. */
+export const FIXTURE_EDGE = { hue: { r: 255, g: 72, b: 24 }, share: 0.04 } as const;
 /** PT-4 — the cookie (and the storage key) `/page?store=<v>` keeps `<v>` under. */
 export const FIXTURE_COOKIE = "pt4";
 /** PT-5a — how late `/slow` answers (ms): long enough to read the bar's Stop and press it. */
@@ -247,8 +252,9 @@ export function fixtureHtml(path: "/page" | "/next" | "/legacy" = "/page"): stri
   #words { position: absolute; left: 8%; top: ${px(wordAt.y - 16, 800).replace("%", "vh")}; margin: 0; color: #ffffff;
     font: 600 28px/32px sans-serif; white-space: nowrap; }
   #tall { height: 400vh; }
+  #edge { position: absolute; right: 0; top: 0; width: ${FIXTURE_EDGE.share * 100}%; height: 400vh; background: ${hex(FIXTURE_EDGE.hue)}; }
 </style></head>
-<body>
+<body>${path === "/legacy" ? '\n<div id="edge"></div>' : ""}
 <div class="head"></div>
 <div class="bar" style="top:32vh;width:64%"></div>
 <div class="bar" style="top:40vh;width:58%"></div>

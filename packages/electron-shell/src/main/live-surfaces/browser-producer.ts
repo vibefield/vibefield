@@ -49,6 +49,9 @@ const DEFAULT_UNRESPONSIVE_MS = 5_000;
  * pool's own grace). */
 const DEFAULT_DETACHED_HIBERNATE_MS = 60_000;
 const CPU_FALLBACK_MAX_FPS = 10;
+/** PT-5b (ruling 5c): how long a `mobile` page's visual-viewport scale, once read, serves a move, a hover or a wheel
+ * (a press always reads it afresh). */
+const POINT_SCALE_MS = 250;
 const CPU_FALLBACK_MAX_PIXELS = 1280 * 720;
 
 const BROWSER_CAPABILITIES = {
@@ -123,6 +126,12 @@ export interface BrowserSurfaceNativeWindow {
   /** PT-4: an icon fetched THROUGH THE PAGE'S OWN SESSION (its cookies, its guard), held to `maxBytes`; null — not
    * answered, not an image, or past the cap. */
   fetchIcon(url: string, maxBytes: number): Promise<BrowserSurfaceIcon | null>;
+  /**
+   * PT-5b (ruling 5c): the page's VISUAL-VIEWPORT scale now (CDP `Page.getLayoutMetrics().cssVisualViewport.scale`) — how
+   * many view px a page's CSS px takes on screen: 1 for a page laid out at the view's width; under 1 for a `mobile` page
+   * that lays itself out wider (one that names no viewport: 980 px into a phone's 402 — 0.41) and is shown whole.
+   */
+  visualScale(): Promise<number>;
   /** PT-5a: the page stopped answering its input (`true` — Electron's `unresponsive`) or answers again (`false`). */
   onUnresponsive(listener: (unresponsive: boolean) => void): () => void;
   /** PT-5a: the page asked for something it MAY NOT have, and was answered at once (`BrowserSurfaceRefusal`); a pop-up
@@ -436,6 +445,8 @@ export interface BrowserLiveSurfaceRuntimeStats {
   /** PT-4: emulations applied that differed from the one before; reloads they asked (the page's told device moved). */
   readonly emulations: number;
   readonly emulationReloads: number;
+  /** PT-5b: windows made ANEW because the page's device moved to another density (ruling 5a). */
+  readonly windowsRemade: number;
   /** PT-5a: what the page asked for and was refused, counted by kind (the diagnostics' count — ruling 7). */
   readonly refused: Readonly<Record<BrowserSurfaceRefusal, number>>;
   readonly effectiveDemand: LiveSurfaceDemandV1 | null;
@@ -935,6 +946,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #navigationDropped = 0;
   #emulations = 0;
   #emulationReloads = 0;
+  #windowsRemade = 0;
+  /** PT-5b (ruling 5a): the density the page's window was BORN at — an offscreen window's density is its own for life. */
+  #windowDensity: number | undefined;
+  /** PT-5b (ruling 5c): a `mobile` page's visual-viewport scale as last read, and when (ms) — see `pointScale`. */
+  #pointScale = { value: 1, at: Number.NEGATIVE_INFINITY };
   /** PT-5a: the page's refusals by kind, and the last one a person is told of (its serial counts them for the page's life). */
   readonly #refusals: Record<BrowserSurfaceRefusal, number> = {
     alert: 0,
@@ -1038,6 +1054,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       navigationDropped: this.#navigationDropped,
       emulations: this.#emulations,
       emulationReloads: this.#emulationReloads,
+      windowsRemade: this.#windowsRemade,
       refused: { ...this.#refusals },
       effectiveDemand: this.#effectiveDemand === null ? null : copyDemand(this.#effectiveDemand),
     };
@@ -1222,8 +1239,16 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // CDP Input coordinates are CSS pixels in the main-frame viewport. The
     // presentation adapter has already supplied Browser logical coordinates;
     // backing-raster pixels and visibleRect offsets are presentation-only.
-    const x = request.x;
-    const y = request.y;
+    // PT-5b (ruling 5c): the VIEW's — a `mobile` page shown whole at its own scale takes them over that scale
+    const scale = await this.pointScale(
+      window,
+      request.kind === "mouse" && request.type === "down",
+    );
+    if (window.isDestroyed() || this.#window !== window) {
+      throw new Error("Browser surface is not available for input");
+    }
+    const x = request.x / scale;
+    const y = request.y / scale;
     if (request.kind === "wheel") {
       if (
         !Number.isFinite(request.deltaX) ||
@@ -1236,6 +1261,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       // The wire's deltas are the page's CSS px (what the finger moved on screen, PT-3 ruling 4), and CDP's `mouseWheel`
       // takes CSS px too — never device px: the PT-3 smoke's WHEEL row measured a page at density 2 scrolled by twice the
       // finger's travel when its density multiplied them here (LT2's probe said device px; the page said otherwise).
+      // PT-5b: WHERE the wheel is — the page's px, as a press's — but never how far: the engine takes a wheel's travel in
+      // the VIEW's px and scrolls the document by it over the page's scale itself (the LEGACY row: a travel divided here
+      // too scrolled a page shown at 0.41 by 1/0.41² of the finger's)
       await window.dispatchMouse({
         type: "mouseWheel",
         x,
@@ -1319,12 +1347,37 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       return;
     }
     const window = this.#window;
-    if (
-      this.#closed ||
-      window === null ||
-      window.isDestroyed() ||
-      this.#lifecycle.snapshot.state !== "live"
-    ) {
+    const state = this.#lifecycle.snapshot.state;
+    // PT-5b — A PAGE SENT SOMEWHERE WHILE NOBODY LOOKS (the document's word: a peer's navigation, an undo, an address
+    // typed in another window): a page with NO WINDOW (at rest — hibernated — or never made) is BORN THERE when it is next
+    // asked for, and says so now (its address is its pane's: a still of where it was is not shown for it); a page PAUSED
+    // goes there at once, unseen and silent. Before PT-5b both were refused, and the page stood where it was for good.
+    if (command.action === "go" && !this.#closed && state !== "live") {
+      if (!isAllowedBrowserTopLevelUrl(command.url)) {
+        throw new Error("Browser navigation URL must use HTTP or HTTPS");
+      }
+      if (state === "hibernated" || state === "created") {
+        this.#resumeUrl = command.url;
+        if (this.#browserState !== undefined) {
+          this.#browserState = {
+            url: command.url,
+            loading: false,
+            canGoBack: false,
+            canGoForward: false,
+            ...(this.#browserState.refused === undefined
+              ? {}
+              : { refused: this.#browserState.refused }),
+          };
+          this.publishSummary();
+        }
+        return;
+      }
+      if (state === "paused" && window !== null && !window.isDestroyed()) {
+        await window.loadURL(command.url);
+        return;
+      }
+    }
+    if (this.#closed || window === null || window.isDestroyed() || state !== "live") {
       throw new Error("Browser surface is not available for navigation");
     }
     if (command.action === "go") {
@@ -1410,6 +1463,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#emulations += 1;
     const window = this.#window;
     if (window === null || window.isDestroyed()) return;
+    // PT-5b (ruling 5a) — the device moved to ANOTHER DENSITY: the page's window is made anew at it
+    if (this.#windowDensity !== undefined && this.density() !== this.#windowDensity) {
+      this.remakeWindow();
+      return;
+    }
     const epoch = this.#lifecycle.snapshot.producerEpoch;
     const told = toldKey(was) !== toldKey(next);
     if (this.#rasterTimer !== null) {
@@ -1433,6 +1491,53 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         } else window.invalidate();
       })
       .catch(() => undefined);
+  }
+
+  /**
+   * PT-5b (ruling 5a) — A PAGE'S WINDOW IS BORN AT ITS DEVICE'S DENSITY. An offscreen window's density is its own for life;
+   * told another by emulation alone, the engine paints a page that lays itself out by a phone's rules (one that names no
+   * viewport) at the RATIO of the two (PT-4's probe 6: a pane laid as a laptop, @2, switched to the phone, @3, painted at
+   * ⅔). So a device switch that changes the density makes the window ANEW at the new one, at the page's address (where it
+   * last was) — its history, its scroll and whatever was typed into it are the cost; ruled acceptable: a device switch
+   * starts the page anew (it already reloaded once). Asked for LIVE the page starts again at once; nobody asking for it
+   * live, its window goes and it is made at its device's density when it is next asked for — no window is born under an
+   * ask that is not live. Nothing is said between: one summary, `starting` or `hibernated`.
+   */
+  private remakeWindow(): void {
+    this.#windowsRemade += 1;
+    this.clearSourceTimers();
+    // to rest by the table's own steps, silently
+    for (const step of ["live", "paused", "hibernated"] as const) {
+      if (this.#lifecycle.snapshot.state !== step && this.#lifecycle.canTransition(step))
+        this.#lifecycle.transition(step);
+    }
+    this.destroyWindow();
+    if (this.#effectiveDemand?.mode === "live") this.startProducer();
+    else this.publishSummary();
+  }
+
+  /**
+   * PT-5b (ruling 5c) — WHERE THE HAND'S POINT IS ON THE PAGE. The hand sends the VIEW's points (the displayed frame's
+   * logical px) and CDP takes the page's CSS px: the same thing wherever the page is laid out at the view's width — every
+   * page but a `mobile` one that lays itself out wider and is shown whole, scaled into the view (never forced to 1 on a
+   * `mobile` page: ruling 5b). There the page's px are the view's OVER its visual-viewport scale. The scale is READ AT
+   * EACH PRESS (a press must land where the page is drawn NOW), and for a move, a hover or a wheel when what was read is
+   * older than `POINT_SCALE_MS`; a new document's is read afresh. A page that is not `mobile` is asked nothing: 1.
+   */
+  private async pointScale(window: BrowserSurfaceNativeWindow, press: boolean): Promise<number> {
+    if (!this.mobile()) return 1;
+    const now = Date.now();
+    if (!press && now - this.#pointScale.at < POINT_SCALE_MS) return this.#pointScale.value;
+    let read = 1;
+    try {
+      read = await window.visualScale();
+    } catch {
+      // (a page between two documents answers nothing: the last scale read stands, 1 with none)
+      return this.#pointScale.value;
+    }
+    const value = Number.isFinite(read) && read > 0 ? Math.min(Math.max(read, 0.05), 20) : 1;
+    this.#pointScale = { value, at: now };
+    return value;
   }
 
   /**
@@ -1540,6 +1645,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     if (!this.ownsProducer(window, epoch)) return;
     const clamped = clampBrowserState(state);
     if (clamped === undefined) return;
+    // PT-5b: another document takes its own scale — the next point reads it
+    if (this.#browserState?.url !== clamped.url || clamped.loading)
+      this.#pointScale = { ...this.#pointScale, at: Number.NEGATIVE_INFINITY };
     this.#browserState = clamped;
     if (webOriginOf(clamped.url) !== undefined) this.#resumeUrl = clamped.url;
     this.publishSummary();
@@ -1618,6 +1726,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       window = this.#native.createWindow(this.windowOptions(viewport, initialRaster));
       this.#viewport = viewport;
       this.#window = window;
+      this.#windowDensity = this.density();
       const removePaint = window.onPaint((paint) => this.acceptPaint(window, epoch, paint));
       const removeGone = window.onRenderProcessGone((reason) =>
         this.handleProducerGone(window, epoch, reason),
@@ -2080,6 +2189,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       const window = this.#native.createWindow(this.windowOptions(viewport, initialRaster));
       this.#window = window;
       this.#viewport = viewport;
+      this.#windowDensity = this.density();
       this.#callbacks = {
         removePaint: window.onPaint((paint) => this.acceptPaint(window, epoch, paint)),
         removeGone: window.onRenderProcessGone((reason) =>
@@ -2153,8 +2263,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     const callbacks = this.#callbacks;
     this.#window = null;
     this.#callbacks = null;
-    // the next window is born with its sound
+    // the next window is born with its sound (it is made only under a LIVE ask — every caller of `startProducer` and
+    // `createReconnectingProducer` says so: a page woken is born as its ask says), at its own density, its scale unread
     this.#muted = false;
+    this.#windowDensity = undefined;
+    this.#pointScale = { value: 1, at: Number.NEGATIVE_INFINITY };
     if (this.#startupTimer !== null) {
       clearTimeout(this.#startupTimer);
       this.#startupTimer = null;

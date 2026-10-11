@@ -1837,6 +1837,11 @@ async function deviceRows(
         return { dir, entries: existsSync(dir) ? readdirSync(dir).length : 0 };
       },
       chrome: process.versions.chrome ?? "",
+      pageId: (prefix) =>
+        webContents
+          .getAllWebContents()
+          .find((c) => !c.isDestroyed() && c.isOffscreen() && c.getURL().startsWith(prefix))?.id ??
+        null,
     };
     return await devicePaneRows(driver);
   } catch (error) {

@@ -15,6 +15,10 @@
 //             lays a page: the fixture's `/legacy`, which names no viewport, is 980 px wide there;
 //   TOUCH   — in hand, a press on the page arrives as a TOUCH (its pointer's type, a touchstart), the wheel still scrolls it,
 //             and a tap on the page's link LANDS (the page at `/next`): a finger reaches the page where it is drawn;
+//   LEGACY  — PT-5b (ruling 5): the phone's page that names NO viewport (`/legacy`), in hand: laid out 980 px wide AND SHOWN
+//             WHOLE — its right-edge marker's hue fills the last of the pane's page, and is nowhere two thirds across
+//             (where a window of another density painted it) — the wheel scrolls the DOCUMENT, and a tap on its link
+//             LANDS: the hand's points reach a page drawn at 0.41 where it is drawn;
 //   BACK    — the bar's Laptop act: a desktop's agent again (the one it was laid with), no fingers, 1280 × 800 @2, loaded ONCE
 //             more — and a press in hand is a mouse's;
 //   SCHEME  — the desk turned dark: the page says dark, LIVE (the same document — no load); turned light: light; the pane fixed
@@ -32,6 +36,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   FIXTURE_COOKIE,
+  FIXTURE_EDGE,
   FIXTURE_ICON_HUE,
   FIXTURE_TITLE,
   type FixtureReport,
@@ -61,6 +66,11 @@ export const DEVICE_ROWS = {
   /** TOUCH's wheel: its travel on the screen (CSS px, in steps) */
   wheelPx: 160,
   wheelSteps: 4,
+  /** LEGACY (PT-5b): a pixel of the marker — its hue within this many degrees, this saturated, this bright; the share of
+   * the page's LAST strip it must fill where the page is shown whole, and the most of it a strip two thirds across may
+   * hold; the strips, as shares of the page's width (the marker is its last 4%) and of its height */
+  edge: { deg: 14, minSat: 0.55, minMax: 150, whole: 0.7, elsewhere: 0.05 },
+  edgeStrip: { last: [0.972, 0.992], third: [0.6, 0.68], rows: [0.04, 0.5] },
   /** where the second pane's page stands, and the first's once it stores */
   readPath: "/page?read=1",
   storePath: (value: string): string => `/page?store=${value}`,
@@ -139,6 +149,22 @@ export interface DeviceSeen {
     readonly held: boolean;
     /** where a tap on the page's link left it */
     readonly tapped: string | null;
+  };
+  /** PT-5b (ruling 5) — the phone's page that names no viewport, in hand. */
+  readonly legacy: {
+    /** its view as it says it (980 wide), and its density */
+    readonly view: readonly [number, number] | null;
+    readonly dpr: number | null;
+    /** the marker's-hue pixels in the page's LAST strip, and in a strip two thirds across — each of so many */
+    readonly last: { readonly px: number; readonly of: number };
+    readonly third: { readonly px: number; readonly of: number };
+    /** the document's scroll after the wheel; the type of its last pointer; where a tap on its link left the page */
+    readonly scrollY: number | null;
+    readonly pointer: string | null;
+    readonly tapped: string | null;
+    /** the page's own window (main's offscreen WebContents, by its id) as the pane was laid — a laptop, @2 — and now, a
+     * phone, @3: another one — a window's density is its own for life, so the switch made the page's window anew */
+    readonly windows: { readonly laptop: number | null; readonly phone: number | null };
   };
   readonly back: {
     readonly saw: PageSaw | null;
@@ -293,6 +319,47 @@ export function judgeTouch(seen: DeviceSeen["touch"]): string[] {
   return out;
 }
 
+/** LEGACY (PT-5b ruling 5): laid out 980 wide and SHOWN WHOLE — the marker at the pane's right edge and nowhere else — the
+ * wheel scrolls the document, a tap on its link lands. */
+export function judgeLegacy(seen: DeviceSeen["legacy"]): string[] {
+  const out: string[] = [];
+  if (seen.view?.[0] !== DEVICE_ROWS.legacyWidth)
+    out.push(
+      `LEGACY: the page that names no viewport is laid out ${seen.view === null ? "not at all" : seen.view.join(" × ")}, not ${DEVICE_ROWS.legacyWidth} px wide`,
+    );
+  if (seen.dpr !== DEVICE_ROWS.phone.dpr)
+    out.push(`LEGACY: the page's density is ${seen.dpr}, not the phone's ${DEVICE_ROWS.phone.dpr}`);
+  const share = (s: { px: number; of: number }): number => (s.of === 0 ? 0 : s.px / s.of);
+  if (seen.last.of === 0) out.push("LEGACY: the page's last strip could not be read");
+  else if (share(seen.last) < DEVICE_ROWS.edge.whole)
+    out.push(
+      `LEGACY: the page's right-edge marker fills ${(share(seen.last) * 100).toFixed(1)}% of the pane's last strip (${seen.last.px} of ${seen.last.of} px), not ${DEVICE_ROWS.edge.whole * 100}% — the page is not shown whole`,
+    );
+  if (share(seen.third) > DEVICE_ROWS.edge.elsewhere)
+    out.push(
+      `LEGACY: the marker's hue is ${(share(seen.third) * 100).toFixed(1)}% of a strip two thirds across the pane — the page is painted at another scale than its view's`,
+    );
+  if (seen.scrollY === null || seen.scrollY <= 0)
+    out.push(
+      `LEGACY: the wheel left the document's scroll at ${seen.scrollY} — it panned the view, or did nothing`,
+    );
+  if (seen.pointer !== "touch")
+    out.push(`LEGACY: the page's last pointer was ${JSON.stringify(seen.pointer)}, not a touch`);
+  if (seen.tapped !== "/next")
+    out.push(
+      `LEGACY: a tap on the page's link left it at ${seen.tapped ?? "nothing it said"}, not /next — the finger did not land where the link is drawn`,
+    );
+  if (seen.windows.laptop === null || seen.windows.phone === null)
+    out.push(
+      `LEGACY: the page's own window could not be found (as a laptop: ${seen.windows.laptop}, as a phone: ${seen.windows.phone})`,
+    );
+  else if (seen.windows.laptop === seen.windows.phone)
+    out.push(
+      `LEGACY: the phone's page is in the window the laptop's was laid in (${seen.windows.phone}) — a window born at @2 paints a phone's page at two thirds`,
+    );
+  return out;
+}
+
 /** BACK: a desktop again — the agent it was laid with — no fingers, 1280 × 800 @2, loaded ONCE more; a press is a mouse's. */
 export function judgeBack(seen: DeviceSeen["back"], laid: DeviceSeen["laptop"]): string[] {
   const out = desktop("BACK", seen.saw, laid.chrome);
@@ -393,6 +460,8 @@ export interface DeviceRowsDriver extends LiveRowsDriver {
   profile(name: string): { readonly dir: string; readonly entries: number };
   /** The bundled Chromium's version as the host reads it (`process.versions.chrome`). */
   readonly chrome: string;
+  /** PT-5b: the id of main's offscreen WebContents whose address begins with `prefix` — a page's own window — or null. */
+  pageId?(prefix: string): number | null;
 }
 
 /** A face's row by its key, off the door. */
@@ -417,6 +486,64 @@ export const ICON_CLASSIFY = `((r, g, b) => {
   const off = Math.abs(h - ${ICON_HUE_DEG.toFixed(2)});
   return Math.min(off, 360 - off) <= ${DEVICE_ROWS.icon.deg} ? 1 : 0;
 })`;
+
+/** The marker's hue angle (degrees). */
+export const EDGE_HUE_DEG = ((): number => {
+  const { r, g, b } = FIXTURE_EDGE.hue;
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+})();
+
+/** The pixel classifier, as source: 1 the marker's hue, 0 anything else. */
+export const EDGE_CLASSIFY = `((r, g, b) => {
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  if (max < ${DEVICE_ROWS.edge.minMax} || d === 0 || d / max < ${DEVICE_ROWS.edge.minSat}) return 0;
+  const h = ((max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60 + 360) % 360;
+  const off = Math.abs(h - ${EDGE_HUE_DEG.toFixed(2)});
+  return Math.min(off, 360 - off) <= ${DEVICE_ROWS.edge.deg} ? 1 : 0;
+})`;
+
+/** A region of the desk captured without the marks: how many of its pixels are the marker's hue. */
+const EDGE_HUE = (rect: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}): string => `(async () => {
+  const shot = await globalThis.__vfDesk.capture({ rect: ${JSON.stringify(rect)}, marks: false });
+  if (shot === undefined) return null;
+  const w = shot.width, h = shot.height;
+  const c = new OffscreenCanvas(w, h); const x = c.getContext("2d"); x.drawImage(shot, 0, 0, w, h); shot.close();
+  const b = x.getImageData(0, 0, w, h).data;
+  const classify = ${EDGE_CLASSIFY};
+  let px = 0;
+  for (let i = 0; i < b.length; i += 4) px += classify(b[i], b[i + 1], b[i + 2]);
+  return { px, of: w * h };
+})()`;
+
+/**
+ * A strip of the PAGE of a pane in hand, desk CSS px: the open extent is the page and the head — as wide as the page, ending
+ * at its foot — so the page stands at the extent's foot, its height its view's by the extent's scale. `cols` and `rows`:
+ * shares of the page's width and of its height.
+ */
+export function pageStrip(
+  f: Pick<HeldFrameSeen, "cx" | "cy" | "hx" | "hy">,
+  view: readonly [number, number],
+  cols: readonly [number, number],
+  rows: readonly [number, number],
+): { readonly x: number; readonly y: number; readonly width: number; readonly height: number } {
+  const w = 2 * f.hx;
+  const tall = (view[1] * w) / view[0];
+  const top = f.cy + f.hy - tall;
+  return {
+    x: Math.round(f.cx - f.hx + cols[0] * w),
+    y: Math.round(top + rows[0] * tall),
+    width: Math.max(1, Math.round((cols[1] - cols[0]) * w)),
+    height: Math.max(1, Math.round((rows[1] - rows[0]) * tall)),
+  };
+}
 
 /** A region of the desk captured without the marks: how many of its pixels are the favicon's hue. */
 const ICON_HUE = (rect: {
@@ -681,6 +808,8 @@ export async function devicePaneRows(d: DeviceRowsDriver): Promise<string[]> {
     );
     if (first === null) throw new Error("the fixture page never spoke");
     const laptop: DeviceSeen["laptop"] = { saw: sawOf(first), chrome: d.chrome };
+    // PT-5b: the page's own window as it was laid (LEGACY reads it against the phone's)
+    const laptopWindow = d.pageId?.(d.fixture.origin) ?? null;
     said.laptop = laptop;
     problems.push(...judgeLaptop(laptop));
 
@@ -805,6 +934,85 @@ export async function devicePaneRows(d: DeviceRowsDriver): Promise<string[]> {
     };
     said.touch = touch;
     problems.push(...judgeTouch(touch));
+
+    // ── LEGACY (PT-5b ruling 5): the page that names no viewport, on the phone, in hand — 980 wide AND shown whole ────
+    const legacyAt = (): FixtureReport | null => d.fixture.reportAt(DEVICE_ROWS.legacyPath);
+    const legacyWas = legacyAt()?.token;
+    await js(
+      `globalThis.__vfDesk.writeProps(${e}, { url: ${JSON.stringify(d.fixture.origin + DEVICE_ROWS.legacyPath)} })`,
+    );
+    const wide = await hear(
+      "the page that names no viewport, in hand",
+      (r) => r.token !== legacyWas && r.view !== undefined,
+      legacyAt,
+    );
+    // its frame drawn at the hand's raster, then read where it is drawn
+    await sleep(1200);
+    await shoot("pt-5b-legacy-in-hand.png");
+    const frameNow = await heldFrame();
+    const strip = async (cols: readonly [number, number]): Promise<{ px: number; of: number }> =>
+      frameNow === null
+        ? { px: 0, of: 0 }
+        : ((await js<{ px: number; of: number } | null>(
+            EDGE_HUE(pageStrip(frameNow, DEVICE_ROWS.phone.view, cols, DEVICE_ROWS.edgeStrip.rows)),
+          )) ?? { px: 0, of: 0 });
+    const last = await strip(DEVICE_ROWS.edgeStrip.last);
+    const third = await strip(DEVICE_ROWS.edgeStrip.third);
+    // the wheel over it scrolls the DOCUMENT (forced to the view's scale it panned the view inside the layout instead)
+    const over = await onPage(0.5, 0.4);
+    move(over.x, over.y);
+    await sleep(150);
+    for (let i = 0; i < DEVICE_ROWS.wheelSteps; i += 1) {
+      win.webContents.sendInputEvent({
+        type: "mouseWheel",
+        x: Math.round(over.x),
+        y: Math.round(over.y),
+        deltaX: 0,
+        deltaY: -DEVICE_ROWS.wheelPx / DEVICE_ROWS.wheelSteps,
+        canScroll: true,
+      });
+      await sleep(40);
+    }
+    await hear("the legacy page scrolled", (r) => r.scrollY > 0, legacyAt);
+    let legacyScroll = legacyAt()?.scrollY ?? null;
+    for (let i = 0; i < 10; i += 1) {
+      await sleep(600);
+      const now = legacyAt()?.scrollY ?? null;
+      if (now === legacyScroll) break;
+      legacyScroll = now;
+    }
+    // a tap on its link, where the page draws it now: its box in the page's own px (980 across), through the view
+    const wideLink = legacyAt()?.parts.link;
+    const wideView = legacyAt()?.view ?? [DEVICE_ROWS.legacyWidth, 2131];
+    let wideTapped: string | null = null;
+    let widePointer: string | null = null;
+    if (wideLink !== undefined && frameNow !== null) {
+      const before = d.fixture.served("/next");
+      const point = pageOnWindow(
+        frameNow,
+        wideView,
+        await h.deskAt(),
+        wideLink.x + wideLink.w / 2,
+        wideLink.y + wideLink.h / 2,
+      );
+      await press(point);
+      const landed = await hear("the legacy page's link tapped", (r) => r.path === "/next");
+      wideTapped =
+        landed?.path ?? (d.fixture.served("/next") > before ? "/next" : (report()?.path ?? null));
+      widePointer = legacyAt()?.pointer ?? null;
+    }
+    const legacyRow: DeviceSeen["legacy"] = {
+      view: wide?.view ?? legacyAt()?.view ?? null,
+      dpr: wide?.dpr ?? null,
+      last,
+      third,
+      scrollY: legacyScroll,
+      pointer: widePointer,
+      tapped: wideTapped,
+      windows: { laptop: laptopWindow, phone: d.pageId?.(d.fixture.origin) ?? null },
+    };
+    said.legacy = legacyRow;
+    problems.push(...judgeLegacy(legacyRow));
     await js(`globalThis.__vfDesk.writeProps(${e}, { url: ${JSON.stringify(d.fixture.url)} })`);
     await hear("the fixture's own page after the tap", (r) => r.path === "/page");
     await done();

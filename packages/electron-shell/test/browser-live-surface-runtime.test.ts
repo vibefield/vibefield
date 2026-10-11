@@ -151,6 +151,14 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
     this.order.push("emulate");
   }
 
+  /** PT-5b: the page's visual-viewport scale as the engine says it (a test sets it), and how many times it was read. */
+  scale = 1;
+  scaleReads = 0;
+  async visualScale(): Promise<number> {
+    this.scaleReads += 1;
+    return this.scale;
+  }
+
   async dispatchTouch(input: BrowserSurfaceNativeTouchInput): Promise<void> {
     this.touchInputs.push(input);
   }
@@ -1431,7 +1439,10 @@ describe("BrowserLiveSurfaceRuntime", () => {
     plain.runtime.dispose();
   });
 
-  it("PT-4: the device SWITCH under a running page — told at once, laid out again, and RELOADED ONCE when what the page is told of its device moved; a scheme or a density alone is told live; the same again is nothing", async () => {
+  /** A tablet as the laptop's window sees it: a touch device laid out mobile, at the laptop's own density. */
+  const TABLET: LiveSurfaceBrowserEmulationV1 = { ...PHONE, deviceScaleFactor: 2 };
+
+  it("PT-4: the device SWITCH under a running page — told at once, laid out again, and RELOADED ONCE when what the page is told of its device moved; a scheme alone is told live; the same again is nothing", async () => {
     const result = setup({ source: { ...source(), deviceScaleFactor: 2, emulation: LAPTOP } });
     const renderer = attach(result.runtime);
     renderer.attachment.setDemand(demand(1, "live", 30, undefined, { width: 320, height: 180 }));
@@ -1450,8 +1461,8 @@ describe("BrowserLiveSurfaceRuntime", () => {
     expect(window.order).toEqual([]);
     expect(result.runtime.stats.emulations).toBe(0);
 
-    // a phone: told, laid out mobile at the phone's density, reloaded once
-    await result.runtime.navigate({ action: "emulate", emulation: PHONE });
+    // a tablet (the laptop's density): told, laid out mobile, reloaded once — in the SAME window
+    await result.runtime.navigate({ action: "emulate", emulation: TABLET });
     await flush();
     await flush();
     expect(window.order).toEqual(["emulate", "raster", "reload"]);
@@ -1460,17 +1471,21 @@ describe("BrowserLiveSurfaceRuntime", () => {
       touchPoints: 5,
       colorScheme: "dark",
     });
-    expect([window.rasterDensities.at(-1), window.rasterMobile.at(-1)]).toEqual([3, true]);
-    expect(window.backingRasters.at(-1)).toEqual({ width: 960, height: 540 });
+    expect([window.rasterDensities.at(-1), window.rasterMobile.at(-1)]).toEqual([2, true]);
+    expect(window.backingRasters.at(-1)).toEqual({ width: 640, height: 360 });
     expect(window.navigations).toEqual(["reload"]);
-    expect(result.runtime.stats).toMatchObject({ emulations: 1, emulationReloads: 1 });
+    expect(result.runtime.stats).toMatchObject({
+      emulations: 1,
+      emulationReloads: 1,
+      windowsRemade: 0,
+    });
 
-    // the phone's SCHEME alone: told live — no reload, a frame asked
+    // the tablet's SCHEME alone: told live — no reload, a frame asked
     window.order.length = 0;
     const invalidated = window.invalidate.mock.calls.length;
     await result.runtime.navigate({
       action: "emulate",
-      emulation: { ...PHONE, colorScheme: "light" },
+      emulation: { ...TABLET, colorScheme: "light" },
     });
     await flush();
     await flush();
@@ -1478,26 +1493,115 @@ describe("BrowserLiveSurfaceRuntime", () => {
     expect(window.emulations.at(-1)?.colorScheme).toBe("light");
     expect(window.navigations).toEqual(["reload"]);
     expect(window.invalidate.mock.calls.length).toBe(invalidated + 1);
-    // its DENSITY alone: told live too
-    await result.runtime.navigate({
-      action: "emulate",
-      emulation: { ...PHONE, colorScheme: "light", deviceScaleFactor: 2 },
-    });
-    await flush();
-    await flush();
-    expect(window.rasterDensities.at(-1)).toBe(2);
-    expect(window.navigations).toEqual(["reload"]);
     // back to the laptop: its agent is the engine's again — told, and reloaded once more
     await result.runtime.navigate({ action: "emulate", emulation: LAPTOP });
     await flush();
     await flush();
     expect(window.emulations.at(-1)).toEqual({ ...ENGINE, touchPoints: 0, colorScheme: "light" });
     expect(window.navigations).toEqual(["reload", "reload"]);
-    expect(result.runtime.stats).toMatchObject({ emulations: 4, emulationReloads: 2 });
+    expect(result.runtime.stats).toMatchObject({ emulations: 3, emulationReloads: 2 });
+    expect(result.native.windows).toHaveLength(1);
     result.runtime.dispose();
     await expect(result.runtime.navigate({ action: "emulate", emulation: PHONE })).rejects.toThrow(
       /not available/,
     );
+  });
+
+  it("PT-5b (ruling 5a): a device switch that changes the DENSITY makes the page's window ANEW at the new one — born on the device, at the page's address — with ONE summary (`starting`), never a reload of the old window", async () => {
+    const result = setup({ source: { ...source(), deviceScaleFactor: 2, emulation: LAPTOP } });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live", 30, undefined, { width: 320, height: 180 }));
+    await flush();
+    await flush();
+    const first = result.native.windows[0];
+    if (first === undefined) throw new Error("no window");
+    expect(first.options.deviceScaleFactor).toBe(2);
+    first.paint(sharedPaint().paint);
+    // the page went somewhere of its own: that is where it is
+    first.emitNavigationState({ ...NAV, url: "https://example.test/deeper", canGoBack: true });
+    const epoch = result.runtime.summary.producerEpoch;
+    const said = renderer.summaries.length;
+
+    // the phone: another density (@3) — the laptop's window cannot show it (an offscreen window's density is its own)
+    await result.runtime.navigate({ action: "emulate", emulation: PHONE });
+    await flush();
+    await flush();
+    expect(first.destroyed).toBe(true);
+    expect(first.navigations).toEqual([]);
+    const second = result.native.windows[1];
+    if (second === undefined) throw new Error("no second window");
+    expect(result.native.windows).toHaveLength(2);
+    expect(second.options.deviceScaleFactor).toBe(3);
+    // born on the phone: told before it is laid out, laid out mobile at @3, then loaded — where the page WAS
+    expect(second.order).toEqual(["emulate", "raster", "load"]);
+    expect(second.emulations.at(-1)).toMatchObject({ userAgent: IPHONE_UA, touchPoints: 5 });
+    expect([second.rasterDensities.at(-1), second.rasterMobile.at(-1)]).toEqual([3, true]);
+    expect(second.loadedUrls).toEqual(["https://example.test/deeper"]);
+    // one summary: starting, a new epoch — nothing said of the steps between (no page "paused", none "hibernated")
+    expect(renderer.summaries.slice(said).map((summary) => summary.state)).toEqual(["starting"]);
+    expect(result.runtime.summary.producerEpoch).toBeGreaterThan(epoch);
+    // its history is the cost: the new window's page has nowhere to go back to, and says it is loading
+    expect(result.runtime.summary.browser).toMatchObject({
+      url: "https://example.test/deeper",
+      loading: true,
+      canGoBack: false,
+    });
+    expect(result.runtime.stats).toMatchObject({
+      emulations: 1,
+      emulationReloads: 0,
+      windowsRemade: 1,
+    });
+    // born under a live ask: with its sound
+    expect(second.mutes).toEqual([]);
+    // the phone's scheme alone, its density standing: told live in the new window
+    second.paint(sharedPaint().paint);
+    second.emitNavigationState({ ...NAV, url: "https://example.test/deeper" });
+    await result.runtime.navigate({
+      action: "emulate",
+      emulation: { ...PHONE, colorScheme: "light" },
+    });
+    await flush();
+    await flush();
+    expect(result.native.windows).toHaveLength(2);
+    expect(second.navigations).toEqual([]);
+    // back to the laptop (@2): made anew again
+    await result.runtime.navigate({ action: "emulate", emulation: LAPTOP });
+    await flush();
+    await flush();
+    expect(result.native.windows).toHaveLength(3);
+    expect(result.native.windows[2]?.options.deviceScaleFactor).toBe(2);
+    expect(result.runtime.stats.windowsRemade).toBe(2);
+    result.runtime.dispose();
+  });
+
+  it("PT-5b (ruling 5a): a density moved under a page NOBODY LOOKS AT makes no window — the old one goes, and the page is born at its device's density, with its sound, when it is next asked for live", async () => {
+    const result = setup({ source: { ...source(), deviceScaleFactor: 2, emulation: LAPTOP } });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await flush();
+    await flush();
+    const first = result.native.windows[0];
+    first?.paint(sharedPaint().paint);
+    first?.emitNavigationState(NAV);
+    renderer.attachment.setDemand(demand(2, "paused"));
+    expect(result.runtime.summary.state).toBe("paused");
+    await result.runtime.navigate({ action: "emulate", emulation: PHONE });
+    await flush();
+    await flush();
+    expect(first?.destroyed).toBe(true);
+    expect(result.native.windows).toHaveLength(1);
+    expect(result.runtime.summary.state).toBe("hibernated");
+    expect(result.runtime.stats.windowsRemade).toBe(1);
+    // asked for live: born on the phone at @3 — and heard
+    renderer.attachment.setDemand(demand(3, "live"));
+    await flush();
+    await flush();
+    const second = result.native.windows[1];
+    expect(second?.options.deviceScaleFactor).toBe(3);
+    expect(second?.order).toEqual(["emulate", "raster", "load"]);
+    expect(second?.mutes).toEqual([]);
+    expect(second?.loadedUrls).toEqual([NAV.url]);
+    result.runtime.dispose();
   });
 
   it("PT-4: a page still to load is told its device and NOT reloaded; a page asleep is born on it when it wakes", async () => {
@@ -1508,7 +1612,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
     await flush();
     const first = result.native.windows[0];
     // no navigation truth yet — the page has not loaded: told, never reloaded
-    await result.runtime.navigate({ action: "emulate", emulation: PHONE });
+    await result.runtime.navigate({ action: "emulate", emulation: TABLET });
     await flush();
     await flush();
     expect(first?.emulations).toHaveLength(2);
@@ -1517,16 +1621,204 @@ describe("BrowserLiveSurfaceRuntime", () => {
     first?.paint(sharedPaint().paint);
     renderer.attachment.setDemand(demand(2, "hibernated"));
     expect(result.runtime.summary.state).toBe("hibernated");
-    await result.runtime.navigate({ action: "emulate", emulation: LAPTOP });
+    await result.runtime.navigate({ action: "emulate", emulation: PHONE });
     expect(result.runtime.stats.emulations).toBe(2);
+    // (no window stands: none is made anew — and none is made for a page asleep)
+    expect(result.runtime.stats.windowsRemade).toBe(0);
+    expect(result.native.windows).toHaveLength(1);
     renderer.attachment.setDemand(demand(3, "live"));
     await flush();
     await flush();
     const second = result.native.windows[1];
-    expect(second?.emulations).toEqual([{ ...ENGINE, touchPoints: 0, colorScheme: "light" }]);
-    expect(second?.options.deviceScaleFactor).toBe(2);
+    expect(second?.emulations.at(-1)).toMatchObject({ userAgent: IPHONE_UA, touchPoints: 5 });
+    expect(second?.options.deviceScaleFactor).toBe(3);
     expect(second?.order).toEqual(["emulate", "raster", "load"]);
     result.runtime.dispose();
+  });
+
+  it("PT-5b (ruling 3): a window is made ONLY under a live ask — a page at rest asked `paused` makes none; woken live it is born with its sound; and a page whose ask falls to paused while its window is still STARTING is silenced before its first frame", async () => {
+    const result = setup();
+    const renderer = attach(result.runtime);
+    // never asked for live: nothing is made of it, whatever else it is asked
+    renderer.attachment.setDemand(demand(1, "paused"));
+    renderer.attachment.setDemand(demand(2, "hibernated"));
+    await flush();
+    expect(result.native.windows).toHaveLength(0);
+    expect(result.runtime.summary.state).toBe("created");
+    // alive, then put to rest
+    renderer.attachment.setDemand(demand(3, "live"));
+    await flush();
+    const first = result.native.windows[0];
+    first?.paint(sharedPaint().paint);
+    renderer.attachment.setDemand(demand(4, "hibernated"));
+    expect(result.runtime.summary.state).toBe("hibernated");
+    expect(first?.destroyed).toBe(true);
+    // at rest, asked `paused` (its pane unseen; a parked desk): no window — there is none to be born silent
+    renderer.attachment.setDemand(demand(5, "paused"));
+    await flush();
+    expect(result.native.windows).toHaveLength(1);
+    expect(result.runtime.summary.state).toBe("hibernated");
+    // woken by a live ask: born with its sound (never muted)
+    renderer.attachment.setDemand(demand(6, "live"));
+    await flush();
+    const second = result.native.windows[1];
+    expect(second).toBeDefined();
+    expect(second?.muted).toBe(false);
+    expect(second?.mutes).toEqual([]);
+    // …and its ask falls to paused before its first frame: silenced at once, while it is still starting
+    renderer.attachment.setDemand(demand(7, "paused"));
+    expect(result.runtime.summary.state).toBe("starting");
+    expect(second?.mutes).toEqual([true]);
+    // its first frame lands: it pauses as it was asked, silent still
+    second?.paint(sharedPaint().paint);
+    expect(result.runtime.summary.state).toBe("paused");
+    expect(second?.muted).toBe(true);
+    // rested again from there, then woken: the NEXT window is born with its sound — the last one's silence is not its own
+    renderer.attachment.setDemand(demand(8, "hibernated"));
+    renderer.attachment.setDemand(demand(9, "live"));
+    await flush();
+    const third = result.native.windows[2];
+    expect(third?.mutes).toEqual([]);
+    expect(third?.muted).toBe(false);
+    result.runtime.dispose();
+  });
+
+  it("PT-5b: a page SENT SOMEWHERE while nobody looks — with no window (at rest, or never made) it is born there when it is next asked for, and says so at once; paused, it goes there at once in its own window; every other verb still waits for a page that is live", async () => {
+    const result = setup();
+    const renderer = attach(result.runtime);
+    // never made: where it is sent is where it will be born
+    await result.runtime.navigate({ action: "go", url: "https://example.test/first" });
+    expect(result.native.windows).toHaveLength(0);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await flush();
+    const first = result.native.windows[0];
+    expect(first?.loadedUrls).toEqual(["https://example.test/first"]);
+    first?.paint(sharedPaint().paint);
+    first?.emitNavigationState({ ...NAV, url: "https://example.test/first", title: "First" });
+    // PAUSED (alive, unseen): it goes there at once — the same window, nothing made
+    renderer.attachment.setDemand(demand(2, "paused"));
+    await result.runtime.navigate({ action: "go", url: "https://example.test/second" });
+    expect(first?.loadedUrls).toEqual([
+      "https://example.test/first",
+      "https://example.test/second",
+    ]);
+    expect(result.native.windows).toHaveLength(1);
+    // (a paused page takes no other verb: there is nobody to press ‹)
+    await expect(result.runtime.navigate({ action: "back" })).rejects.toThrow(/not available/);
+    await expect(result.runtime.navigate({ action: "reload" })).rejects.toThrow(/not available/);
+    first?.emitNavigationState({ ...NAV, url: "https://example.test/second", title: "Second" });
+    // AT REST (hibernated: no window): its address is its pane's at once — no title, no history, nothing loading
+    renderer.attachment.setDemand(demand(3, "hibernated"));
+    expect(result.runtime.summary.state).toBe("hibernated");
+    const said = renderer.summaries.length;
+    await result.runtime.navigate({ action: "go", url: "https://example.test/third" });
+    expect(result.native.windows).toHaveLength(1);
+    expect(renderer.summaries.slice(said).map((summary) => summary.state)).toEqual(["hibernated"]);
+    expect(result.runtime.summary.browser).toEqual({
+      url: "https://example.test/third",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+    });
+    // woken: born THERE
+    renderer.attachment.setDemand(demand(4, "live"));
+    await flush();
+    expect(result.native.windows[1]?.loadedUrls).toEqual(["https://example.test/third"]);
+    // an address the desk does not open is refused, at rest as anywhere
+    renderer.attachment.setDemand(demand(5, "hibernated"));
+    result.native.windows[1]?.paint(sharedPaint().paint);
+    renderer.attachment.setDemand(demand(6, "hibernated"));
+    await expect(
+      result.runtime.navigate({ action: "go", url: "file:///etc/passwd" }),
+    ).rejects.toThrow(/HTTP or HTTPS/);
+    result.runtime.dispose();
+  });
+
+  it("PT-5b (ruling 5c): on a `mobile` page shown whole at its own scale the hand's points are the VIEW's — sent as the page's CSS px, the view's OVER the visual-viewport scale: read at each PRESS, kept a moment for its moves and the wheel (whose travel passes as it is), read afresh for a new document; a page that is not mobile is asked nothing", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(1_000_000);
+    const result = setup({ source: phoneSource() });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live", 30, { width: 1206, height: 2622 }));
+    await flush();
+    await flush();
+    const window = result.native.windows[0];
+    if (window === undefined) throw new Error("no window");
+    window.paint(sharedPaint(1206, 2622).paint);
+    await flush();
+    const revision = result.runtime.summary.geometry?.revision ?? 0;
+    const send = async (
+      input: Parameters<NonNullable<typeof renderer.attachment.dispatchInput>>[0],
+    ): Promise<void> => {
+      renderer.attachment.dispatchInput?.(input, revision);
+      await flush();
+      await flush();
+    };
+    // a page that names no viewport: laid out 980 px wide, shown whole in the phone's 402 — a scale of 0.41
+    window.scale = 402 / 980;
+    await send({ kind: "pointer", action: "down", x: 201, y: 100, button: "left", clickCount: 1 });
+    expect(window.scaleReads).toBe(1);
+    const [finger] = window.touchInputs[0]?.touchPoints ?? [];
+    expect(finger?.x).toBeCloseTo(490, 6);
+    expect(finger?.y).toBeCloseTo(100 / (402 / 980), 6);
+    // its move, a moment later: the scale read at the press serves it
+    await send({ kind: "pointer", action: "move", x: 402, y: 100, buttons: 1 });
+    expect(window.scaleReads).toBe(1);
+    expect(window.touchInputs[1]?.touchPoints[0]?.x).toBeCloseTo(980, 6);
+    await send({ kind: "pointer", action: "up", x: 402, y: 100, button: "left", clickCount: 1 });
+    // the wheel: WHERE it is — the page's px — and never how far: its travel is the view's, as the hand gave it (the engine
+    // scrolls the document by it over the page's scale itself)
+    await send({ kind: "wheel", x: 201, y: 437, deltaX: 0, deltaY: 82 });
+    expect(window.scaleReads).toBe(1);
+    const wheel = window.mouseInputs.at(-1);
+    expect(wheel?.x).toBeCloseTo(490, 6);
+    expect(wheel?.deltaY).toBe(82);
+    // the page zoomed itself (a double tap): the NEXT PRESS reads it — never the scale of a moment ago
+    window.scale = 1;
+    await send({ kind: "pointer", action: "down", x: 201, y: 100, button: "left", clickCount: 1 });
+    expect(window.scaleReads).toBe(2);
+    expect(window.touchInputs.at(-1)?.touchPoints[0]).toEqual({ x: 201, y: 100, id: 0 });
+    await send({ kind: "pointer", action: "up", x: 201, y: 100, button: "left", clickCount: 1 });
+    // a wheel long after: what was read is old — read again
+    window.scale = 0.5;
+    vi.setSystemTime(1_000_300);
+    await send({ kind: "wheel", x: 100, y: 100, deltaX: 0, deltaY: 10 });
+    expect(window.scaleReads).toBe(3);
+    expect(window.mouseInputs.at(-1)).toMatchObject({ x: 200, y: 200, deltaY: 10 });
+    // another document takes its own scale: the next wheel reads it afresh, however soon
+    window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
+    window.scale = 1;
+    await send({ kind: "wheel", x: 100, y: 100, deltaX: 0, deltaY: 10 });
+    expect(window.scaleReads).toBe(4);
+    expect(window.mouseInputs.at(-1)).toMatchObject({ x: 100, y: 100, deltaY: 10 });
+    // a scale the engine cannot say (between two documents) leaves the last one standing; a number that is none is 1
+    window.scale = Number.NaN;
+    await send({ kind: "pointer", action: "down", x: 50, y: 50, button: "left", clickCount: 1 });
+    expect(window.touchInputs.at(-1)?.touchPoints[0]).toEqual({ x: 50, y: 50, id: 0 });
+    result.runtime.dispose();
+
+    // a laptop's page: laid out at the view's width, its scale forced — nothing is read, the points pass as they are
+    const laptop = setup({
+      source: { ...source(), emulation: { ...LAPTOP, deviceScaleFactor: 1 } },
+    });
+    const desk = attach(laptop.runtime);
+    desk.attachment.setDemand(demand(1, "live", 30, { width: 640, height: 360 }));
+    await flush();
+    await flush();
+    const plain = laptop.native.windows[0];
+    if (plain === undefined) throw new Error("no window");
+    plain.paint(sharedPaint().paint);
+    await flush();
+    plain.scale = 0.5;
+    desk.attachment.dispatchInput?.(
+      { kind: "pointer", action: "down", x: 10, y: 20, button: "left", clickCount: 1 },
+      laptop.runtime.summary.geometry?.revision ?? 0,
+    );
+    await flush();
+    await flush();
+    expect(plain.scaleReads).toBe(0);
+    expect(plain.mouseInputs.at(-1)).toMatchObject({ x: 10, y: 20 });
+    laptop.runtime.dispose();
   });
 
   it("PT-4: a press on a touch device's page is a TOUCH — its moves while it is down, its release its end; a hover and another button are nothing; the wheel stays the page's scroll", async () => {

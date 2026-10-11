@@ -181,6 +181,11 @@ describe("the live pane's fixture page", () => {
     expect(legacy).toContain(`<title>${FIXTURE_TITLE} — legacy</title>`);
     expect(legacy).toContain('<link rel="icon" type="image/png" href="/icon.png">');
     expect(legacy).toMatch(/\.head \{[^}]*width: 56%/);
+    // PT-5b: `/legacy` alone carries the right-edge marker — its own hue, the page's last 4%, down its whole height
+    expect(legacy).toContain('<div id="edge"></div>');
+    expect(legacy).toMatch(/#edge \{[^}]*right: 0;[^}]*width: 4%;[^}]*background: #ff4818/);
+    expect(fixtureHtml("/page")).not.toContain('<div id="edge">');
+    expect(fixtureHtml("/next")).not.toContain('<div id="edge">');
     expect((await fetch(`${fixture.origin}/legacy`)).status).toBe(200);
     expect([fixture.served("/page"), fixture.served("/next")]).toEqual([0, 0]);
     expect(fixtureHtml("/next")).toContain(`<title>${FIXTURE_TITLE} — next</title>`);
