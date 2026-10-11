@@ -134,6 +134,15 @@ import {
 import { coverRows } from "./smoke-covers";
 import { removeSmokeRoot, SMOKE_RUN_ENV, stopRunDaemons } from "./smoke-daemons";
 import { deskRigRows } from "./smoke-desk-rig";
+import {
+  gateOpen,
+  type LineSendEvidence,
+  latestGate,
+  lineSendEvidenceLine,
+  markerFile,
+  newLineSendEvidence,
+  shellMarkerFailure,
+} from "./smoke-line-send";
 import { faultRows, peersRows } from "./smoke-peers";
 import { pegboardRows } from "./smoke-pegboard";
 import { restRows } from "./smoke-rest";
@@ -4177,7 +4186,8 @@ async function waitForShellMarker(
     }
     await sleep(25);
   }
-  throw new Error(`the routed pane did not create ${path}`);
+  // "never created" and "created empty" are different failures (smoke-line-send.ts)
+  throw new Error(shellMarkerFailure(path, markerFile(path), marker));
 }
 
 /** P2 — Live now as the window draws it, until `accept` holds. */
@@ -8960,10 +8970,40 @@ export async function runSmokeGodview(opts: {
     // runs GPU-less — no desk, so no board can rise here (smoke:canvas's BOARD rows hold the board itself). What B moves
     // here is the LINE's own: the frame's Objects surface, read off the line's create (`aria-expanded`, its ✕)
     const objectsNow = `(document.querySelector(".vf-line-create")?.getAttribute("aria-expanded") === "true" ? "open" : "shut")`;
+    // THE SEND'S WAITS AND ITS EVIDENCE (testing/smoke-line-send.ts). The rung hands a pane four
+    // inputs — b, its Backspace, the line's send (a paste), the pane's Return — straight after ⌘2
+    // back from the canvas, when the pane's frames leg is replaced (two red runs' cell logs show
+    // it) and its routed input is closed while the activation recovers; ghosttea drops input
+    // silently while it is. It was the one shell-marker rung with no wait and no retry, and it
+    // ended "the routed pane did not create /tmp/fr2….txt" six times. So it waits for the aimed
+    // session's input to be open before its first key and before the pane's Return (the `direct`
+    // watch, by the session's OWN latest marker — the watch's latest may speak of another pane),
+    // samples that gate before each of the four, and prints all of it once, when it fails (the
+    // catch below). No retry: a retyped line would hide an input the pane dropped.
+    let sendEvidence: LineSendEvidence | null = null;
+    const gateOf = (session: string): DirectTerminalFacts | null =>
+      latestGate(direct.history(), session);
+    const untilInputOpen = async (session: string, before: string): Promise<number> => {
+      const began = Date.now();
+      await direct.until(
+        () => gateOpen(gateOf(session)),
+        `the aimed pane's input to be open before ${before}`,
+        15_000,
+      );
+      return Date.now() - began;
+    };
     win.webContents.on("console-message", hearLine);
     try {
       await focusDeck(win);
       await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
+      const aimedSession = deck.current()?.activeSessionId;
+      if (aimedSession === undefined) {
+        throw new Error("the deck names no active session for the line's keys to be typed into");
+      }
+      const evidence = newLineSendEvidence(aimedSession);
+      sendEvidence = evidence;
+      evidence.waitedMs.inputBeforeB = await untilInputOpen(aimedSession, "b");
+      evidence.inputAllowed.b = gateOf(aimedSession)?.inputAllowed ?? null;
       pressKey("b");
       await sleep(1_500);
       const paneHeardB = await chordProbeHeard(win);
@@ -8979,12 +9019,31 @@ export async function runSmokeGodview(opts: {
       const afterB = (await win.webContents.executeJavaScript(VIEW_NOW)) as string;
       if (afterB !== "godview")
         throw new Error(`B from a focused pane moved the window: ${afterB}`);
+      evidence.inputAllowed.Backspace = gateOf(aimedSession)?.inputAllowed ?? null;
       pressKey("Backspace");
-      lineKeys["B"] = "godview, a pane focused: the pane typed it; the line took nothing";
+      // THE BACKSPACE IS HEARD BEFORE THE DRAFT TAKES FOCUS. A key and an evaluate travel separate
+      // channels with no order between them: the focus move below could land first, the Backspace
+      // then goes to the line's empty draft (where a synthesized one deletes nothing), and the b
+      // stays at the shell's prompt, where the sent line becomes `becho …`. The probe hears every
+      // key the pane is handed, so the rung waits for it to have heard this one.
+      evidence.backspaceHeardBeforeDraft = false;
+      const backspaceAt = Date.now();
+      await untilRenderer(
+        win,
+        "the focused pane hearing Backspace",
+        `(window.__vfChordProbe ?? []).includes("Backspace") ? "ok" : JSON.stringify(window.__vfChordProbe ?? [])`,
+        5_000,
+      );
+      evidence.backspaceHeardBeforeDraft = true;
+      evidence.waitedMs.backspaceHeard = Date.now() - backspaceAt;
+      lineKeys["B"] =
+        "godview, a pane focused: the pane typed it; the line took nothing (the pane's input open " +
+        `after ${evidence.waitedMs.inputBeforeB}ms; its Backspace heard after ${evidence.waitedMs.backspaceHeard}ms)`;
 
       if (process.platform !== "win32") {
         const nonce = `fr2${Math.random().toString(36).slice(2, 10)}`;
         const sentPath = `/tmp/${nonce}.txt`;
+        evidence.path = sentPath;
         const placed = (await win.webContents.executeJavaScript(
           `(() => { const field = document.querySelector(".vf-line-input"); if (!field) return "no draft";
             field.focus(); return document.activeElement === field ? "ok" : "focus refused"; })()`,
@@ -9006,6 +9065,7 @@ export async function runSmokeGodview(opts: {
           5_000,
         );
         await typeChars(`echo ${nonce} > ${sentPath}`);
+        evidence.inputAllowed.send = gateOf(aimedSession)?.inputAllowed ?? null;
         pressKey("Return");
         const said = await untilRendererValue(
           win,
@@ -9019,11 +9079,16 @@ export async function runSmokeGodview(opts: {
         if (existsSync(sentPath)) {
           throw new Error("the send pressed Return for the pane — the shell ran it unasked");
         }
+        evidence.waitedMs.inputBeforeReturn = await untilInputOpen(aimedSession, "its Return");
+        evidence.inputAllowed.Return = gateOf(aimedSession)?.inputAllowed ?? null;
         pressKey("Return");
         await waitForShellMarker(sentPath, 10_000, nonce);
         lineKeys["send"] =
-          `aimed at ${aimedAt}: ${said}; the shell ran it on the pane's own Return`;
+          `aimed at ${aimedAt}: ${said}; the shell ran it on the pane's own Return (the pane's ` +
+          `input open after ${evidence.waitedMs.inputBeforeReturn}ms)`;
       }
+      // the send's rung is over: what fails below is ⌘T's or the canvas's, and prints none of this
+      sendEvidence = null;
 
       await focusDeck(win);
       await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
@@ -9093,6 +9158,34 @@ export async function runSmokeGodview(opts: {
         "nothing focused: Objects rose behind the line; B again put it away";
       pressViewKey(win, "godview");
       await deck.until((facts) => facts.active, "⌘2 back to the deck", 30_000);
+    } catch (cause) {
+      // THE SEND'S ONE LINE OF EVIDENCE, printed only when its rung fails. How it reads (the
+      // line-send diagnosis, §6):
+      //   the file exists with 0 bytes · input open at the Backspace · the Backspace not heard
+      //     before the draft — the Backspace lost its race with the draft's focus, and the shell
+      //     ran `becho …` (cause B). The rung waits for the probe now and cannot go on unheard,
+      //     so `backspaceHeardBeforeDraft: false` means that wait timed out: the pane was never
+      //     handed the key, and the send had not begun (no file);
+      //   the file exists with 0 bytes · input CLOSED at the Backspace — the pane dropped the
+      //     Backspace and the b stayed at the prompt (cause A, the routed input gate);
+      //   no file · input CLOSED at the send or at the Return — the pane dropped the paste or the
+      //     Return (cause A). The line's door asks the gate first now, so a send into a closed
+      //     input fails before the file is looked for, as "the send did not paste: Copied — …";
+      //   no file · input open at all four — neither cause: the next look is the cell's own debug
+      //     line `field_native.tp.input.dropped` (run with FIELD_NATIVE_ALLOW_LOG_FILTER=1).
+      // A sample is the session's latest marker as main had heard it: it can trail the renderer
+      // by a console message, and `gateNow` is the same reading at the moment of the failure.
+      if (sendEvidence !== null) {
+        console.log(
+          lineSendEvidenceLine(
+            sendEvidence,
+            cause,
+            sendEvidence.path === null ? null : markerFile(sendEvidence.path),
+            gateOf(sendEvidence.session),
+          ),
+        );
+      }
+      throw cause;
     } finally {
       win.webContents.off("console-message", hearLine);
     }
