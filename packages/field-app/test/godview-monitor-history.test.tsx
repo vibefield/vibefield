@@ -17,6 +17,8 @@
  * - Ended lanes are coloured and receded by the window's rules (v2 item 11),
  *   and a recording view (the SDK's own test view, never the timeline) receives
  *   the past through MonitorViewHost.
+ * - This desktop's mark follows this desktop's id: an answer read before the id
+ *   is known marks its lanes when the id arrives, with no new read, once.
  */
 
 import type { MonitorHistory } from "@vibecook/puppeteer-view-sdk";
@@ -122,6 +124,8 @@ interface ProbeProps {
   rows: Rows;
   receded?: (lane: MonitorEndedRow) => boolean;
   desk?: string | null;
+  /** this desktop's id; null: not known yet (neither the roster nor the board has said). Absent: HERE */
+  here?: string | null;
 }
 
 let root: Root | undefined;
@@ -136,7 +140,7 @@ function Probe(initial: ProbeProps) {
     port: props.port,
     wants: props.wants,
     rows: props.rows,
-    here: HERE,
+    here: props.here === null ? undefined : (props.here ?? HERE),
     palette: PALETTE,
     receded: props.receded ?? NEVER_RECEDES,
     desk: props.desk ?? null,
@@ -307,6 +311,83 @@ describe("an ended lane does what a live row does under each filter (the MV lead
     const all = last()!;
     await update({ port, wants: true, rows: ROWS, desk: "01JPEER" });
     expect(last()).toBe(all);
+  });
+});
+
+describe("this desktop's mark follows this desktop's id (LANDED §TL's owed row: `here` known after the answer)", () => {
+  /** the profile tab's rule, which reads the mark: only this desktop's runs under Work stay lit */
+  const underWork = (lane: MonitorEndedRow): boolean =>
+    !(lane.device.self && lane.profileSet === "work");
+  const marks = () => last()!.ended.map((lane) => [lane.id, lane.device.self, lane.receded]);
+
+  it("an answer read while `here` is unknown marks no lane; when `here` arrives its lanes are marked at once, with no new read", async () => {
+    const port = fakePort();
+    await mount({ port, wants: true, rows: ROWS, here: null, receded: underWork });
+    await port.answer();
+    // nobody has said which desktop is here: no lane is this desktop's, so every lane recedes under the tab
+    expect(marks()).toEqual([
+      ["past:claude:nat-today", false, true],
+      ["past:claude:nat-peer", false, true],
+    ]);
+    await update({ port, wants: true, rows: ROWS, here: HERE, receded: underWork });
+    expect(marks()).toEqual([
+      ["past:claude:nat-today", true, false],
+      ["past:claude:nat-peer", false, true],
+    ]);
+    await advance(10 * HISTORY_REFRESH_MIN_MS);
+    expect(port.asks).toHaveLength(1);
+  });
+
+  it("the mark is said once: publishes after it, and a re-read that moves nothing, keep the SAME object", async () => {
+    const port = fakePort();
+    await mount({ port, wants: true, rows: ROWS, here: null });
+    await port.answer();
+    const unmarked = last()!;
+    await update({ port, wants: true, rows: ROWS, here: HERE });
+    const marked = last()!;
+    expect(marked).not.toBe(unmarked);
+    expect(marked.ended[0]!.device.self).toBe(true);
+    // publishes that move nothing the hook reads
+    await update({ port, wants: true, rows: [...ROWS], here: HERE });
+    await update({ port, wants: true, rows: [...ROWS], here: HERE });
+    expect(last()).toBe(marked);
+    // a run leaves → a re-read whose answer differs only in readAt: nothing in the lent past moved
+    await update({ port, wants: true, rows: [ROWS[1]!], here: HERE });
+    await advance(HISTORY_LEFT_DEBOUNCE_MS);
+    expect(port.asks).toHaveLength(2);
+    await port.answer({ ...ANSWER, readAt: NOW + 1_000 });
+    expect(last()).toBe(marked);
+  });
+
+  it("`here` arriving marks nothing when no lane is this desktop's: the SAME object", async () => {
+    const port = fakePort();
+    await mount({ port, wants: true, rows: ROWS, here: null });
+    await port.answer({ ...ANSWER, ended: ANSWER.ended.slice(1) });
+    const before = last()!;
+    await update({ port, wants: true, rows: ROWS, here: HERE });
+    expect(last()).toBe(before);
+  });
+
+  it("a past kept over a failed re-read keeps the marks `here` gave it", async () => {
+    const port = fakePort();
+    await mount({ port, wants: true, rows: ROWS, here: null });
+    await port.answer();
+    await update({ port, wants: true, rows: ROWS, here: HERE });
+    await update({ port, wants: true, rows: [ROWS[1]!], here: HERE });
+    await advance(HISTORY_LEFT_DEBOUNCE_MS);
+    await port.answer(new Error("UNAVAILABLE"));
+    expect(last()!.state).toBe("partial");
+    expect(last()!.ended.map((lane) => lane.device.self)).toEqual([true, false]);
+  });
+
+  it("`here` known before the answer: the lanes are marked as they are first lent, and one object is lent", async () => {
+    const port = fakePort();
+    await mount({ port, wants: true, rows: ROWS });
+    const before = seen.length;
+    await port.answer();
+    const lent = seen.slice(before).filter((history) => history !== undefined);
+    expect(new Set(lent).size).toBe(1);
+    expect(last()!.ended.map((lane) => lane.device.self)).toEqual([true, false]);
   });
 });
 

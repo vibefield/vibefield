@@ -2239,6 +2239,47 @@ describe("the record's past on the stage (TL): what the marker says of it", () =
   });
 });
 
+// ---- TL — this desktop's mark on the stage ---------------------------------------
+//
+// The hook's rows (`godview-monitor-history.test.tsx`) hand it `here` as a prop.
+// What only the stage can show is that `here` REALLY can come after the past:
+// it is the roster's own row, else the board's first desktop
+// (`useMonitorAgents`), each learned by an ask of its own, and nothing orders
+// them before `agent.recordedLanes`' answer.
+
+describe("the record's past on the stage (TL): this desktop's mark when its id comes after the past", () => {
+  it("the past answers before the board opens: its lanes are unmarked, and marked the moment the board says which desktop is here — one read", async () => {
+    let openBoard: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      openBoard = resolve;
+    });
+    const base = fakeDoor();
+    const port = pastPort(async () => PAST);
+    const door: MonitorDoor = {
+      ...base,
+      pastLanes: port,
+      // no roster on this door, and the board's open waits: nothing has said which desktop is here
+      model: {
+        ...base.model!,
+        subscribe: async (onFrame, opts) => {
+          await held;
+          return base.model!.subscribe(onFrame, opts);
+        },
+      },
+    };
+    await mountPastProbe(door);
+    const selves = () =>
+      pastProbeView.lastInput?.capabilities.history?.ended.map((lane) => lane.device.self);
+    expect(latest()).toMatchObject({ history: "complete", endedLanes: 2 });
+    expect(selves()).toEqual([false, false]);
+    await act(async () => openBoard());
+    await settle();
+    // both runs ended on this desktop (`PAST`'s lanes are `this-device`'s, the board's own id)
+    expect(selves()).toEqual([true, true]);
+    expect(port.asks).toBe(1);
+  });
+});
+
 // ---- TL — one capabilities object across model publishes ------------------------
 //
 // The view redraws for a new `capabilities.history` (TIMELINE SHAPES v2 item 5),
