@@ -1635,7 +1635,11 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   grip in the lip (`role="separator"`, ↑/↓ 24px, ⇧ ×4, Home/End, double-click to rest) drags it.
   Downward the monitor grows and the swarm's field grows with it; upward the monitor does NOT
   shrink — its tuned height (`Monitor height`, 35%, 170px floor) is its minimum — and the sheet
-  slides OVER it, up to the bar's bottom edge, the bodies still moving beneath. The deck keeps
+  slides OVER it, up to **the head's reserve, 56 from the window's top** (§8 "Godview's head —
+  Stories": the head's foot at 48, plus 8), the bodies still moving beneath. *(2026-10-11: until
+  then it rose to the bar's bottom edge, 40. The reach is a place in the window, so it is the
+  same 56 with the bar above the monitor and without it — and a lip at 56 is clear of the app's
+  drag strip, the window's top 52, §10.)* The deck keeps
   at least 120px — above the cover's reserve, inside the cover. Terminals resize live (rows only,
   so no reflow of history). The position is
   the viewer's (`localStorage`), re-clamped to each window, never a shared setting. No

@@ -6,8 +6,8 @@
  * The layout is the stylesheet's (`godview.css` reads one custom property), so
  * this fixture emulates that one rule in the only place happy-dom lays anything
  * out — `getBoundingClientRect` — and holds the edge to the contract:
- *   1. the bounds: up to the monitor's top (the monitor never shrinks), down
- *      until the deck would drop under its minimum
+ *   1. the bounds: up to the head's reserve, 56 from the window's top (the
+ *      monitor never shrinks), down until the deck would drop under its minimum
  *   2. a drag writes the shift onto the stage's root and nothing else, and the
  *      viewer's position is remembered (and only by the live overlay)
  *   3. the keyboard and a double-click move it the same way
@@ -27,6 +27,7 @@ import { DEFAULT_DECK_APPEARANCE } from "../src/godview/deck-appearance";
 import {
   clampDeckShift,
   DECK_EDGE_STORAGE_KEY,
+  DECK_HEAD_RESERVE,
   DECK_MIN_HEIGHT,
   DECK_SHIFT_PROPERTY,
   deckEdgeBounds,
@@ -48,6 +49,9 @@ const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BAR = 40;
 const REST_MONITOR = 280;
 let windowHeight = 800;
+/** Where the monitor's stage begins below the window's top: the bar's 40 today,
+ * 0 once the head takes no band (the Stories head). */
+let monitorTop = BAR;
 
 function appliedShift(element: Element): number {
   const root = element.closest<HTMLElement>(".vf-godview");
@@ -73,7 +77,7 @@ function rect(top: number, height: number): DOMRect {
 function layout(this: Element): DOMRect {
   if (this.classList.contains("vf-godview")) return rect(0, windowHeight);
   if (this.classList.contains("vf-godview-monitor-stage")) {
-    return rect(BAR, REST_MONITOR + Math.max(0, appliedShift(this)));
+    return rect(monitorTop, REST_MONITOR + Math.max(0, appliedShift(this)));
   }
   return rect(0, 0);
 }
@@ -107,6 +111,7 @@ let host: HTMLElement;
 
 beforeEach(() => {
   windowHeight = 800;
+  monitorTop = BAR;
   localStorage.clear();
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(layout);
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
@@ -180,13 +185,46 @@ function key(name: string, shiftKey = false): void {
 
 // room = 800 − 40 = 760 → the lowest edge: 760 − 280 − 120
 const MAX = 800 - BAR - REST_MONITOR - DECK_MIN_HEIGHT;
-const MIN = -REST_MONITOR;
+// the highest: the sheet's top at the head's reserve, 56 from the window's top —
+// at rest it stands at 40 + 280, so it rises by 264 (until 2026-10-11, by 280:
+// to the bar's foot)
+const MIN = DECK_HEAD_RESERVE - (BAR + REST_MONITOR);
+/** Where the sheet's top stands in the window, from the shift on the root. */
+const sheetTop = (): number =>
+  monitorTop + REST_MONITOR + (shiftOnRoot() === "" ? 0 : Number.parseFloat(shiftOnRoot()));
 
 describe("the deck edge's arithmetic", () => {
-  it("rises to the monitor's top and falls until the deck's minimum", () => {
-    expect(deckEdgeBounds({ restMonitor: 280, room: 760 })).toEqual({ min: -280, max: 360 });
+  it("rises to the head's reserve — 56 from the window's top — and falls until the deck's minimum", () => {
+    expect(DECK_HEAD_RESERVE).toBe(56);
+    // under the bar (the monitor begins at 40): rest is 320, the reach 56
+    expect(deckEdgeBounds({ monitorTop: 40, restMonitor: 280, room: 760 })).toEqual({
+      min: -264,
+      max: 360,
+    });
+    // with no band above the monitor (it begins at 0): rest is 280, the reach the SAME 56
+    expect(deckEdgeBounds({ monitorTop: 0, restMonitor: 280, room: 800 })).toEqual({
+      min: -224,
+      max: 400,
+    });
+    for (const geometry of [
+      { monitorTop: 40, restMonitor: 280, room: 760 },
+      { monitorTop: 0, restMonitor: 280, room: 800 },
+      { monitorTop: 40, restMonitor: 170, room: 760 },
+    ]) {
+      const { min } = deckEdgeBounds(geometry);
+      expect(geometry.monitorTop + geometry.restMonitor + min, JSON.stringify(geometry)).toBe(56);
+    }
     // A window too short for the minimum keeps the resting layout.
-    expect(deckEdgeBounds({ restMonitor: 280, room: 300 })).toEqual({ min: -280, max: 0 });
+    expect(deckEdgeBounds({ monitorTop: 40, restMonitor: 280, room: 300 })).toEqual({
+      min: -264,
+      max: 0,
+    });
+    // …and a monitor so short that rest already stands above the reserve keeps
+    // it too: the reserve never pushes the edge DOWN from rest
+    expect(deckEdgeBounds({ monitorTop: 0, restMonitor: 40, room: 400 })).toEqual({
+      min: 0,
+      max: 240,
+    });
   });
 
   it("clamps, rounds and refuses a non-number", () => {
@@ -234,12 +272,57 @@ describe("the deck edge, mounted", () => {
     expect(localStorage.getItem(DECK_EDGE_STORAGE_KEY)).toBe("-100");
   });
 
-  it("stops at the monitor's top going up and at the deck's minimum going down", () => {
+  it("stops at the head's reserve going up and at the deck's minimum going down", () => {
     mount();
     dragBy(-5_000);
     expect(shiftOnRoot()).toBe(`${MIN}px`);
+    expect(sheetTop()).toBe(56);
     dragBy(10_000);
     expect(shiftOnRoot()).toBe(`${MAX}px`);
+  });
+
+  it("reaches the same 56 from the window's top when no bar stands above the monitor", () => {
+    // The head's owner removes the 40 bar and lets the stage begin at the
+    // window's top. The reach is a place in the WINDOW, so it does not move.
+    monitorTop = 0;
+    mount();
+    expect(separator()?.getAttribute("aria-valuemin")).toBe(String(56 - REST_MONITOR));
+    dragBy(-5_000);
+    expect(sheetTop()).toBe(56);
+    key("End");
+    key("Home");
+    expect(sheetTop()).toBe(56);
+    key("ArrowUp", true);
+    expect(sheetTop()).toBe(56);
+  });
+
+  it("clamps a remembered edge that stood above the reserve, at mount", () => {
+    // Left at the bar's foot before 2026-10-11 (−280); the memory is kept, the
+    // edge stands at the reserve.
+    localStorage.setItem(DECK_EDGE_STORAGE_KEY, String(-REST_MONITOR));
+    mount();
+    expect(shiftOnRoot()).toBe(`${MIN}px`);
+    expect(sheetTop()).toBe(56);
+    expect(localStorage.getItem(DECK_EDGE_STORAGE_KEY)).toBe(String(-REST_MONITOR));
+  });
+
+  it("keeps the lip clear of the app's drag strip at its highest, with the bar and without", () => {
+    // The strip is the window's top 52 (`styles/base.css`, `.app-drag`): inside
+    // it the OS moves the window and the page gets no pointer, so a lip that
+    // rose into it could not be taken back.
+    const base = readFileSync(join(PACKAGE_ROOT, "src/styles/base.css"), "utf8");
+    const strip = Number.parseFloat(
+      base.match(/^\.app-drag \{[^}]*?\bheight: (\d+)px;/m)?.[1] ?? "NaN",
+    );
+    expect(strip).toBe(52);
+    for (const top of [BAR, 0]) {
+      monitorTop = top;
+      mount();
+      key("Home");
+      expect(sheetTop(), `monitor at ${top}`).toBeGreaterThanOrEqual(strip);
+      act(() => root?.unmount());
+      root = null;
+    }
   });
 
   it("stands where it was left on the next mount", () => {

@@ -5,7 +5,8 @@
 //   shift > 0 — the edge moved DOWN: the monitor grows by `shift` and the swarm's
 //               field grows with it (the view re-measures its own section).
 //   shift < 0 — the edge moved UP: the monitor keeps its tuned height (its
-//               minimum) and the sheet slides OVER it by `-shift`.
+//               minimum) and the sheet slides OVER it by `-shift`, as far as
+//               the head's reserve (`DECK_HEAD_RESERVE`, a place in the window).
 //
 // `godview.css` turns the one number into both halves — the monitor's
 // `max(0px, shift)` growth and the deck's `min(0px, shift)` overlap — so the
@@ -21,12 +22,27 @@ export const DECK_EDGE_STORAGE_KEY = "vf-godview-deck-edge-v1";
 /** The deck never gets shorter than this — the lip plus a few rows (§8). */
 export const DECK_MIN_HEIGHT = 120;
 
+/** The sheet's top never stands above this, measured from the WINDOW's top:
+ * the head's reserve (DESIGN.md §8 "Godview's head — Stories": "56 (the head's
+ * foot at 48, plus 8)"). A place in the window, not a distance from the
+ * monitor: the reach is the same 56 whether the monitor begins under the 40
+ * bar or, once the head takes no band, at the window's top — where "the
+ * monitor's top" would be y 0, inside the app's 52 drag strip, a lip the
+ * pointer could not take back.
+ *
+ * AN INTERIM (2026-10-11): the slice that maximizes the terminals restates the
+ * reach as the ruled fill line (104, §8 "A drag has three outcomes"). */
+export const DECK_HEAD_RESERVE = 56;
+
 /** One arrow press; ⇧ multiplies it (§8). */
 export const DECK_EDGE_STEP = 24;
 export const DECK_EDGE_STEP_LARGE = DECK_EDGE_STEP * 4;
 
 /** What the bounds are computed from, measured off the live stage. */
 export interface DeckEdgeGeometry {
+  /** Where the monitor begins below the stage's top — the window's top, in the
+   * product: 40 under the instrument bar, 0 once the head takes no band. */
+  monitorTop: number;
   /** The monitor's height with the edge at rest — its tuned height, and the
    * floor it never goes under. */
   restMonitor: number;
@@ -36,7 +52,10 @@ export interface DeckEdgeGeometry {
 }
 
 export interface DeckEdgeBounds {
-  /** The highest the edge goes: the monitor's top, right under the bar. */
+  /** The highest the edge goes: the head's reserve, `DECK_HEAD_RESERVE` from
+   * the window's top (until 2026-10-11 the monitor's top, right under the
+   * bar). Never below rest — a monitor so short that rest already stands above
+   * the reserve keeps the resting layout. */
   min: number;
   /** The lowest: where the deck would drop below its minimum height. Never
    * above rest — a window too short for the minimum keeps the resting layout
@@ -48,7 +67,9 @@ export function deckEdgeBounds(
   geometry: DeckEdgeGeometry,
   minDeck: number = DECK_MIN_HEIGHT,
 ): DeckEdgeBounds {
-  const min = -Math.max(0, geometry.restMonitor);
+  // At rest the sheet's top stands the monitor's top and its tuned height
+  // below the window's; it may rise by what that leaves above the reserve.
+  const min = Math.min(0, DECK_HEAD_RESERVE - (geometry.monitorTop + geometry.restMonitor));
   const max = Math.max(0, geometry.room - geometry.restMonitor - minDeck);
   return { min, max };
 }
@@ -73,6 +94,7 @@ export function measureDeckEdge(
   const rootRect = root.getBoundingClientRect();
   const monitorRect = monitor.getBoundingClientRect();
   return {
+    monitorTop: monitorRect.top - rootRect.top,
     restMonitor: monitorRect.height - Math.max(0, appliedShift),
     room: rootRect.bottom - monitorRect.top,
   };
