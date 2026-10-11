@@ -359,6 +359,59 @@ describe("LSF-1 Live Surfaces contracts", () => {
     );
   });
 
+  it("PT-5b3 (ruling 4): the browser state says WHICH DOCUMENT the page is at — `document`, a positive integer, absent until one has committed (or from a producer that counts none) — and a frame may say the document it is of", () => {
+    const state = {
+      url: "https://example.test/",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+    };
+    expect(LiveSurfaceBrowserStateV1.parse(state)).not.toHaveProperty("document");
+    for (const document of [1, 2, 7_000_000])
+      expect(LiveSurfaceBrowserStateV1.parse({ ...state, document })).toMatchObject({ document });
+    for (const document of [0, -1, 1.5, "2", null, Number.MAX_SAFE_INTEGER + 2])
+      expect(
+        LiveSurfaceBrowserStateV1.safeParse({ ...state, document }).success,
+        JSON.stringify(document),
+      ).toBe(false);
+    const frame = {
+      v: 1,
+      surfaceId: "surface_0123456789abcdef",
+      producerEpoch: 1,
+      sequence: "1",
+      geometry: {
+        revision: 1,
+        codedSize: { width: 640, height: 360 },
+        visibleRect: { x: 0, y: 0, width: 640, height: 360 },
+        logicalSize: { width: 320, height: 180 },
+        orientation: 0,
+      },
+      hostReceivedAtUs: "1",
+      colorSpace: "srgb",
+      alphaMode: "premultiplied",
+      transport: "shared-texture",
+      pixelFormat: "bgra",
+    };
+    expect(LiveSurfaceFrameMetadataV1.parse(frame)).not.toHaveProperty("document");
+    expect(LiveSurfaceFrameMetadataV1.parse({ ...frame, document: 3 })).toMatchObject({
+      document: 3,
+    });
+    for (const document of [0, -3, 2.5, "3"])
+      expect(
+        LiveSurfaceFrameMetadataV1.safeParse({ ...frame, document }).success,
+        JSON.stringify(document),
+      ).toBe(false);
+    // …and on the CPU's frames the same
+    expect(
+      LiveSurfaceFrameMetadataV1.parse({
+        ...frame,
+        transport: "cpu-bgra",
+        degradedMode: "cpu-bitmap",
+        document: 4,
+      }),
+    ).toMatchObject({ document: 4 });
+  });
+
   it("PT-4: a browser source says the device its page is seen as — its density, mobile, touch, its agent with its hints, its scheme — at its creation and as an `emulate` command; the state carries the page's favicon, held small", () => {
     const phone = {
       deviceScaleFactor: 3,

@@ -84,6 +84,14 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * page's server takes to answer: a blank that is nothing of the page (its paints are marked — `bootstrap`).
    */
   #pageDocument = false;
+  /**
+   * PT-5b3 (ruling 4) — THE PAGE'S DOCUMENTS, COUNTED as the engine commits them: one more at each `did-navigate` of the
+   * page's own (never the blank's) and at each main-frame load that FAILED (the engine's error page then stands in the
+   * asked address's place, with no `did-navigate` — PT-5a's probe); never at a move WITHIN a document
+   * (`did-navigate-in-page`: a hash, `pushState`, `replaceState`), a load that only began, or one that was aborted. Said
+   * with every navigation state: whoever asks "is this another document?" asks this, not the address.
+   */
+  #documents = 0;
 
   constructor(
     readonly window: BrowserWindow,
@@ -94,11 +102,16 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     window.webContents.debugger.on("message", (_event, method, params, sessionId) =>
       this.heard(method, params as Readonly<Record<string, unknown>>, sessionId),
     );
+    // (registered before any navigation listener: the count has moved when a state is said)
+    const committed = (): void => {
+      this.#pageDocument = true;
+      this.#documents += 1;
+    };
     window.webContents.on("did-navigate", (_event, url) => {
-      if (this.#remoteLoadStarted && url !== "about:blank") this.#pageDocument = true;
+      if (this.#remoteLoadStarted && url !== "about:blank") committed();
     });
     window.webContents.on("did-fail-load", (_event, code, _description, _url, isMainFrame) => {
-      if (this.#remoteLoadStarted && isMainFrame && code !== -3) this.#pageDocument = true;
+      if (this.#remoteLoadStarted && isMainFrame && code !== -3) committed();
     });
   }
 
@@ -344,6 +357,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         loading: contents.isLoading(),
         canGoBack: contents.navigationHistory.canGoBack(),
         canGoForward: contents.navigationHistory.canGoForward(),
+        document: this.#documents,
         ...(this.#loadFailure === undefined ? {} : { failure: this.#loadFailure }),
       });
     };

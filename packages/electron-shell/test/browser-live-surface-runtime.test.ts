@@ -215,8 +215,26 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
     return () => this.#events.off("navigation", listener);
   }
 
-  emitNavigationState(state: BrowserSurfaceNavigationState): void {
-    this.#events.emit("navigation", state);
+  /**
+   * PT-5b3 (ruling 4): the fake COUNTS DOCUMENTS as the native does. A state that names `document` says it outright (a
+   * row that moves an address WITHIN a document — `pushState`, `replaceState` — names the same one). Else a state whose
+   * address, less its fragment, is another than the last said — or whose failure is (an error page standing where a
+   * page did; a page committing where one stood) — is another document; the bootstrap blank is none.
+   */
+  documents = 0;
+  #documentAt: string | undefined;
+  #documentFailure: number | undefined;
+  emitNavigationState(
+    state: Omit<BrowserSurfaceNavigationState, "document"> & { readonly document?: number },
+  ): void {
+    if (state.document !== undefined) this.documents = state.document;
+    else if (state.url !== "about:blank") {
+      const at = state.url.split("#")[0];
+      if (at !== this.#documentAt || state.failure !== this.#documentFailure) this.documents += 1;
+      this.#documentAt = at;
+      this.#documentFailure = state.failure;
+    }
+    this.#events.emit("navigation", { ...state, document: this.documents });
   }
 
   onCursor(listener: (cursor: string) => void): () => void {
@@ -1760,11 +1778,13 @@ describe("BrowserLiveSurfaceRuntime", () => {
       canGoBack: false,
       canGoForward: false,
     });
+    // (PT-5b3: the document it last stood at — the new window has committed none of its own yet)
     expect(result.runtime.summary.browser).toEqual({
       url: "https://example.test/deeper",
       loading: true,
       canGoBack: false,
       canGoForward: false,
+      document: 1,
     });
     // a load that FAILED is said with the address asked for, as PT-5a's — never mistaken for plumbing
     second?.emitNavigationState({
@@ -1841,11 +1861,13 @@ describe("BrowserLiveSurfaceRuntime", () => {
     await result.runtime.navigate({ action: "go", url: "https://example.test/third" });
     expect(result.native.windows).toHaveLength(1);
     expect(renderer.summaries.slice(said).map((summary) => summary.state)).toEqual(["hibernated"]);
+    // (PT-5b3: the last document it stood at was its second)
     expect(result.runtime.summary.browser).toEqual({
       url: "https://example.test/third",
       loading: false,
       canGoBack: false,
       canGoForward: false,
+      document: 2,
     });
     // woken: born THERE
     renderer.attachment.setDemand(demand(4, "live"));
@@ -2381,6 +2403,133 @@ describe("BrowserLiveSurfaceRuntime", () => {
     });
   });
 
+  describe("PT-5b3 (ruling 4) — ONE notion of another document: the engine's serial, said with the page's state and with every frame", () => {
+    it("a commit moves the serial — a move WITHIN a document does not, a failed load's error page does; a window made anew goes on counting; every frame says the document it is of", async () => {
+      const result = setup();
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(demand(1, "live"));
+      await flush();
+      const window = result.native.windows[0];
+      if (window === undefined) throw new Error("no window");
+      const said = (): number | undefined => result.runtime.summary.browser?.document;
+      const stamped = (): unknown => renderer.textureFrames.at(-1)?.metadata.document;
+      // no document of the page yet: none is said
+      window.emitNavigationState({ ...NAV, url: "about:blank", title: "", loading: true });
+      expect(result.runtime.summary.browser).not.toHaveProperty("document");
+      window.emitNavigationState({ ...NAV });
+      expect(said()).toBe(1);
+      window.paint(sharedPaint().paint);
+      await flush();
+      expect(stamped()).toBe(1);
+      // its address moves within the document — a hash; a script's replaceState to another path
+      window.emitNavigationState({ ...NAV, url: `${NAV.url}#section` });
+      expect(result.runtime.summary.browser).toMatchObject({
+        url: `${NAV.url}#section`,
+        document: 1,
+      });
+      window.emitNavigationState({ ...NAV, url: "https://example.test/tidied", document: 1 });
+      expect(result.runtime.summary.browser).toMatchObject({
+        url: "https://example.test/tidied",
+        document: 1,
+      });
+      window.paint(sharedPaint().paint);
+      expect(stamped()).toBe(1);
+      // a load that begins is not yet another document; its commit is
+      window.emitNavigationState({
+        ...NAV,
+        url: "https://example.test/tidied",
+        loading: true,
+        document: 1,
+      });
+      expect(said()).toBe(1);
+      window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
+      expect(said()).toBe(2);
+      window.paint(sharedPaint().paint);
+      expect(stamped()).toBe(2);
+      // a failed load: the engine's error page stands in the asked address's place
+      window.emitNavigationState({ ...NAV, url: "https://dead.test/", failure: -102 });
+      expect(result.runtime.summary.browser).toMatchObject({
+        failure: { reason: "connection-refused" },
+        document: 3,
+      });
+      // put to rest and woken: a window made anew — its first document is ANOTHER, never the first again
+      renderer.attachment.setDemand(demand(2, "hibernated", 0));
+      await flush();
+      expect(said()).toBe(3);
+      renderer.attachment.setDemand(demand(3, "live"));
+      await flush();
+      const woken = result.native.windows[1];
+      if (woken === undefined) throw new Error("no second window");
+      woken.emitNavigationState({ ...NAV, url: "about:blank", title: "", loading: true });
+      expect(said()).toBe(3);
+      woken.emitNavigationState({ ...NAV, url: "https://dead.test/" });
+      expect(woken.documents).toBe(1);
+      expect(said()).toBe(4);
+      woken.paint(sharedPaint().paint);
+      await flush();
+      expect(stamped()).toBe(4);
+      result.runtime.dispose();
+    });
+
+    it("the CPU's frames say their document too", async () => {
+      const result = setup({ cpuFallbackPaints: 1 });
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(demand(1, "live"));
+      await flush();
+      const window = result.native.windows[0];
+      window?.emitNavigationState({ ...NAV });
+      window?.emitNavigationState({ ...NAV, url: "https://example.test/next" });
+      window?.paint(cpuPaint().paint);
+      await flush();
+      expect(renderer.cpuFrames.at(-1)?.metadata.document).toBe(2);
+      result.runtime.dispose();
+    });
+
+    it("the scale read for a document is ITS OWN: an address that moves within the document keeps it — a finger's move behind it goes at that scale, unread — and a commit forgets it", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(2_000_000);
+      const result = setup({ source: phoneSource() });
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(demand(1, "live", 30, { width: 1206, height: 2622 }));
+      await flush();
+      await flush();
+      const window = result.native.windows[0];
+      if (window === undefined) throw new Error("no window");
+      window.emitNavigationState({ ...NAV });
+      window.paint(sharedPaint(1206, 2622).paint);
+      await flush();
+      const revision = result.runtime.summary.geometry?.revision ?? 0;
+      const pointer = (action: "down" | "up" | "move", x: number): void =>
+        renderer.attachment.dispatchInput?.(
+          { kind: "pointer", action, x, y: 10, button: "left", clickCount: 1, buttons: 1 },
+          revision,
+        );
+      window.scale = 0.5;
+      pointer("down", 10);
+      await flush();
+      expect(window.touchInputs.map((t) => t.type)).toEqual(["touchStart"]);
+      expect(window.scaleReads).toBe(1);
+      // the page answers the touch by moving its address WITHIN the document (a router's pushState) — and is busy: its
+      // scale would not be said for a while
+      window.emitNavigationState({ ...NAV, url: "https://example.test/app/route", document: 1 });
+      window.visualScale = () => {
+        window.scaleReads += 1;
+        return new Promise<number>(() => {});
+      };
+      pointer("move", 20);
+      await flush();
+      expect(window.scaleReads).toBe(1);
+      expect(window.touchInputs.map((t) => t.type)).toEqual(["touchStart", "touchMove"]);
+      expect(window.touchInputs.at(-1)?.touchPoints[0]).toMatchObject({ x: 40, y: 20 });
+      // ANOTHER document commits: what was read is nothing of it — the next move reads
+      window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
+      pointer("move", 30);
+      await flush();
+      expect(window.scaleReads).toBe(2);
+      result.runtime.dispose();
+    });
+  });
+
   describe("PT-5b2 (ruling 4) — the hand's events reach the page in the order they were sent, whatever is awaited on the way", () => {
     const NONE = { shift: false, alt: false, ctrl: false, meta: false };
     /** A phone's page, live, its window's inputs kept in ONE list as they reach it. */
@@ -2799,12 +2948,14 @@ describe("BrowserLiveSurfaceRuntime", () => {
     expect(window.destroyed).toBe(false);
     expect(result.runtime.summary.error).toBeUndefined();
     expect(result.runtime.summary.state).toBe("starting");
+    // (PT-5b3: the engine's error page stands in the asked address's place — a document, the window's first)
     expect(result.runtime.summary.browser).toEqual({
       url: "https://example.test/app",
       loading: false,
       canGoBack: false,
       canGoForward: false,
       failure: { reason: "connection-refused" },
+      document: 1,
     });
     // the engine paints its own error page: the surface is live, and still says the load failed (a holder draws its face)
     window.paint(sharedPaint(640, 360).paint);
@@ -2825,6 +2976,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       loading: false,
       canGoBack: false,
       canGoForward: false,
+      document: 2,
     });
     // an address typed that fails: a load failure too, never a dropped source
     window.failLoad = -105;

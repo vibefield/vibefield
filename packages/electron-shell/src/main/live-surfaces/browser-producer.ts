@@ -185,6 +185,10 @@ export interface BrowserSurfaceNavigationState {
   readonly loading: boolean;
   readonly canGoBack: boolean;
   readonly canGoForward: boolean;
+  /** PT-5b3 (ruling 4): how many DOCUMENTS of the page this window has committed (0: none yet) — one more at a
+   * navigation's commit and at a failed load's error page; never at a move within a document (a hash, `pushState`,
+   * `replaceState`), a load that only began, or one that was aborted. */
+  readonly document: number;
   /** PT-5a: the main frame's last load FAILED — the engine's net error code (`-102` a refused connection); absent once a
    * page commits. `url` is then the address that was asked for (Electron's own word: the probe). */
   readonly failure?: number;
@@ -987,6 +991,15 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * own agent, and then again. A `stop` there stops nothing.) Its birth then asks for the address ONCE.
    */
   #born = false;
+  /**
+   * PT-5b3 (ruling 4) — WHICH DOCUMENT THE PAGE IS AT, counted for the surface's life: the window's own count (the
+   * native's: one more at each commit, never at a move within a document) over what the windows before it had reached
+   * (`#documentBase` — a window made anew begins another document, never the first again). 0: none has committed. It is
+   * said with the page's state (`browser.document`) and stamped on every frame at its paint: whoever asks "is this
+   * another document?" — whose pixels a texture holds, whose scale was read — asks THIS, never the address.
+   */
+  #document = 0;
+  #documentBase = 0;
   /** PT-5b2 (ruling 4) — ONE CHAIN a page: the hand's events take their turn here, in the order they were sent. */
   #inputTail: Promise<void> = Promise.resolve();
   #bootstrapPaints = 0;
@@ -1065,6 +1078,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         : {
             browser: {
               ...this.#browserState,
+              ...(this.#document === 0 ? {} : { document: this.#document }),
               ...(this.#cursor === undefined ? {} : { cursor: this.#cursor }),
               ...(this.#favicon !== undefined &&
               this.#faviconOrigin !== undefined &&
@@ -1901,6 +1915,10 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     if (!this.ownsProducer(window, epoch)) return;
     const said = clampBrowserState(state);
     if (said === undefined) return;
+    // PT-5b3 (ruling 4): the document the page is at now, counted over the windows before this one
+    const document = this.#documentBase + state.document;
+    const another = document !== this.#document;
+    this.#document = document;
     // PT-5b — WHILE A WINDOW'S FIRST LOAD IS PENDING the engine's committed address is still its bootstrap's (`about:blank`):
     // plumbing, never where the page is. The page is headed where it was sent — it says THAT, loading, with no title yet.
     // (Before: a page slow to answer said it was at `about:blank` — on its head, and to the desk, which took its still for
@@ -1930,13 +1948,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
             : { refused: this.#browserState.refused }),
         }
       : said;
-    // PT-5b: another document takes its own scale — the next point reads it
-    // (PT-5b2: ANOTHER DOCUMENT is an address that moved, or a load that begins — a reload is one too; what was read
-    // for the document before is nothing of this one. While a document still loads, what was read of it is old.)
-    if (
-      this.#browserState?.url !== clamped.url ||
-      (clamped.loading && this.#browserState?.loading !== true)
-    )
+    // PT-5b: another document takes its own scale — the next point reads it. PT-5b3 (ruling 4): ANOTHER DOCUMENT is the
+    // engine's own word — a commit — and nothing else: an address that moves WITHIN a document (a hash, a router's
+    // `pushState`) keeps what was read for it (before, the address moving forgot it — and a release behind a busy page
+    // was then withheld for want of a scale). While a document still loads, what was read of it is old.
+    if (another)
       this.#pointScale = {
         value: 1,
         at: Number.NEGATIVE_INFINITY,
@@ -2174,6 +2190,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       colorSpace: frameColorSpace(info.colorSpace),
       alphaMode: "premultiplied",
       transport: "shared-texture",
+      ...(this.#document === 0 ? {} : { document: this.#document }),
     };
     this.publishSummary();
     const targets = this.liveAttachments();
@@ -2272,6 +2289,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         alphaMode: "premultiplied",
         transport: "cpu-bgra",
         degradedMode: "cpu-bitmap",
+        ...(this.#document === 0 ? {} : { document: this.#document }),
       },
       pixels,
     };
@@ -2574,6 +2592,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#heardLoading = false;
     this.#stopAsked = false;
     this.#born = false;
+    this.#documentBase = this.#document;
     this.#pointScale = {
       value: 1,
       at: Number.NEGATIVE_INFINITY,

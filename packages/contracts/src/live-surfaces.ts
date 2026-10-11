@@ -348,6 +348,10 @@ const LiveSurfaceFrameMetadataFieldsV1 = {
     .optional(),
   colorSpace: LiveSurfaceColorSpaceV1,
   alphaMode: LiveSurfaceAlphaModeV1,
+  /** PT-5b3: a browser's frame says the DOCUMENT it is of — the producer's `browser.document` at its paint. Absent: a
+   * producer that counts none; a holder then takes the document that stood when the frame ARRIVED, never the one that
+   * stands when it is consumed. */
+  document: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
 } as const;
 
 /** Transport capability and degradation state are one coherent observation. */
@@ -493,6 +497,12 @@ export const LiveSurfaceBrowserStateV1 = z
       })
       .passthrough()
       .optional(),
+    /** PT-5b3 — WHICH DOCUMENT the page is at: a serial that moves when a document COMMITS (a navigation's commit; the
+     * engine's error page standing in a failed address's place) and never at a move within one (a hash, `pushState`,
+     * `replaceState`). It counts for the surface's life: a window made anew begins another. Whoever asks "is this
+     * another document?" — whose pixels a texture holds, whose scale was read — asks this. Absent: no document of the
+     * page has committed yet, or the producer counts none: a holder then reads it by the address, as before. */
+    document: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
     /** PT-5a: the page's last LOAD FAILED. `url` is still the address that was ASKED for — never the engine's error page —
      * and there is no `title`; a `reload` asks for it again. Absent once a page commits. */
     failure: z.object({ reason: LiveSurfaceLoadFailureV1 }).passthrough().optional(),
