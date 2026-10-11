@@ -17,7 +17,13 @@
  *   (the door's own words as the detail), and no session is recorded.
  * - One ask at a time per lane; a newer pick wins over an older ask's answer.
  * - `openEndedLane` is one function for the window's life: it reads what the
- *   hook lends at the moment it is called.
+ *   hook lends at the moment it is called. It exists before any past does.
+ * - The view side's contract (puppeteer `dce6adb`): the view reads the
+ *   command's presence once, at mount, and calls it synchronously from its own
+ *   pointerup, keydown or click, catching nothing. So it returns at once and
+ *   NEVER throws, whatever the id is; an id that is not an ended lane's is a
+ *   view's bug — logged, with nothing said and nothing moved.
+ * - A receded lane is lent like any other, and opens like any other.
  */
 
 import type { MonitorEndedRow } from "@vibecook/puppeteer-view-sdk/model";
@@ -45,7 +51,7 @@ import {
 } from "../src/godview/monitor/open-ended-lane";
 import { getHistoryOpenAt, resetHistoryOpenAtForTest } from "../src/history/open-at";
 import { type FieldHost, setHost } from "../src/host";
-import type { RendererLogger } from "../src/logging";
+import { getRendererLogger, type RendererLogger, setRendererLogger } from "../src/logging";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -140,14 +146,8 @@ function frameIn(view: FrameView): void {
   publishView?.({ view } as FrameViewState);
 }
 
-beforeEach(() => {
-  vi.useFakeTimers({ now: NOW, toFake: ["setTimeout", "clearTimeout", "Date"] });
-  resetActiveViewForTest();
-  resetHistoryOpenAtForTest();
-  resetStatusLineForTest();
-  resetOpenEndedLaneForTest();
-  viewAsked = [];
-  publishView = null;
+/** The shell, answering a view request with `set`. */
+function hostWith(set: (next: FrameView) => Promise<FrameViewState>): void {
   setHost({
     logger: {} as RendererLogger,
     getConnection: () => Promise.resolve({ port: 1, token: "t" }),
@@ -155,10 +155,7 @@ beforeEach(() => {
     completeClose: () => undefined,
     platform: "darwin",
     view: {
-      set: (next) => {
-        viewAsked.push({ view: next, place: getHistoryOpenAt() });
-        return Promise.resolve({ view: next });
-      },
+      set,
       onState: (handler) => {
         publishView = handler;
         return () => {
@@ -167,6 +164,20 @@ beforeEach(() => {
       },
     },
   } as FieldHost);
+}
+
+beforeEach(() => {
+  vi.useFakeTimers({ now: NOW, toFake: ["setTimeout", "clearTimeout", "Date"] });
+  resetActiveViewForTest();
+  resetHistoryOpenAtForTest();
+  resetStatusLineForTest();
+  resetOpenEndedLaneForTest();
+  viewAsked = [];
+  publishView = null;
+  hostWith((next) => {
+    viewAsked.push({ view: next, place: getHistoryOpenAt() });
+    return Promise.resolve({ view: next });
+  });
   // the frame's own readers attach the mirror in the product; here the test does
   stopView = subscribeActiveView(() => undefined);
   frameIn("godview");
@@ -419,6 +430,146 @@ describe("one ask at a time", () => {
   });
 });
 
+// ── the view side's contract ─────────────────────────────────────────────────
+
+describe("called from a view's own handler, which catches nothing: it returns at once and never throws", () => {
+  /** every `warn` and `error` the function logged, as `level event` */
+  let logged: string[] = [];
+  let loggerBefore: RendererLogger;
+
+  beforeEach(() => {
+    logged = [];
+    loggerBefore = getRendererLogger();
+    const recording: RendererLogger = {
+      child: () => recording,
+      trace() {},
+      debug() {},
+      info() {},
+      warn: (event) => void logged.push(`warn ${event}`),
+      error: (event) => void logged.push(`error ${event}`),
+      fatal() {},
+      isLevelEnabled: () => true,
+    };
+    setRendererLogger(recording);
+  });
+
+  afterEach(() => {
+    setRendererLogger(loggerBefore);
+  });
+
+  /** what a view could hand the command that is not an ended lane's id (`past:…`) */
+  const NOT_A_LANE: ReadonlyArray<readonly [string, unknown]> = [
+    ["an empty string", ""],
+    ["a live row's id", "run-1"],
+    ["undefined", undefined],
+    ["null", null],
+    ["a number", 7],
+    ["an object", { id: TODAY.id }],
+  ];
+
+  it.each(NOT_A_LANE)(
+    "%s, with a past lent: nothing thrown, asked, said or opened — the view's bug is logged",
+    (_name, id) => {
+      const port = fakeSessions();
+      lendEndedLanes({ ended: [TODAY], port });
+      expect(() => openEndedLane(id as string)).not.toThrow();
+      expect(port.asks).toEqual([]);
+      expect(statusLineSaid()).toEqual([]);
+      expect(getHistoryOpenAt()).toBeNull();
+      expect(viewAsked).toEqual([]);
+      expect(logged).toEqual(["warn renderer.godview.ended_lane_not_a_lane"]);
+    },
+  );
+
+  it.each(NOT_A_LANE)("%s, before any past is lent: the same", (_name, id) => {
+    expect(() => openEndedLane(id as string)).not.toThrow();
+    expect(statusLineSaid()).toEqual([]);
+    expect(getHistoryOpenAt()).toBeNull();
+    expect(logged).toEqual(["warn renderer.godview.ended_lane_not_a_lane"]);
+  });
+
+  it("an id that is not a lane's takes no lane's turn: the ask in flight still answers", async () => {
+    const port = fakeSessions();
+    lendEndedLanes({ ended: [TODAY], port });
+    openEndedLane(TODAY.id);
+    openEndedLane("run-1");
+    openEndedLane("");
+    await port.answer([row("ses-today", "nat-today")]);
+    expect(getHistoryOpenAt()).toEqual({ sessionId: "ses-today", timelineId: null });
+  });
+
+  it("an ended lane's id the timeline does not lend — before any past, and with one — is said, never thrown", () => {
+    expect(() => openEndedLane("past:claude:nat-before-any-past")).not.toThrow();
+    expect(statusLineSaid()).toEqual([GONE]);
+    resetStatusLineForTest();
+    lendEndedLanes({ ended: [TODAY], port: fakeSessions() });
+    expect(() => openEndedLane("past:claude:nat-left-the-day")).not.toThrow();
+    expect(statusLineSaid()).toEqual([GONE]);
+  });
+
+  it("it returns before the door answers: the press itself opens nothing and asks no view", () => {
+    const port = fakeSessions();
+    lendEndedLanes({ ended: [TODAY], port });
+    expect(openEndedLane(TODAY.id)).toBeUndefined();
+    expect(port.asks).toEqual([["nat-today"]]);
+    expect(getHistoryOpenAt()).toBeNull();
+    expect(viewAsked).toEqual([]);
+  });
+
+  it("a fault inside reaches no caller: a log that throws after the refusal was said", () => {
+    const broken = {
+      child: () => {
+        throw new Error("the log is down");
+      },
+    } as unknown as RendererLogger;
+    setRendererLogger(broken);
+    expect(() => openEndedLane("past:claude:nat-left-the-day")).not.toThrow();
+    expect(getStatusNotice()).toEqual(GONE);
+    expect(() => openEndedLane("run-1")).not.toThrow();
+  });
+
+  it("a fault inside reaches no caller: lent lanes that cannot be read are logged, and nothing is said of a run nobody could look up", () => {
+    const unreadable = new Proxy([] as MonitorEndedRow[], {
+      get: () => {
+        throw new Error("the lanes cannot be read");
+      },
+    });
+    lendEndedLanes({ ended: unreadable, port: fakeSessions() });
+    expect(() => openEndedLane(TODAY.id)).not.toThrow();
+    expect(logged).toEqual(["error renderer.godview.ended_lane_fault"]);
+    expect(getHistoryOpenAt()).toBeNull();
+  });
+
+  it("a door that answers something that is not rows could not be read: said, and the lane is free again", async () => {
+    const port = fakeSessions();
+    lendEndedLanes({ ended: [TODAY], port });
+    openEndedLane(TODAY.id);
+    await port.answer("not rows" as unknown as RecordedSessionRow[]);
+    expect(getStatusNotice()).toEqual(UNREAD);
+    expect(getHistoryOpenAt()).toBeNull();
+    openEndedLane(TODAY.id);
+    expect(port.asks).toHaveLength(2);
+    await port.answer([null] as unknown as RecordedSessionRow[]);
+    expect(statusLineSaid()).toEqual([UNREAD]);
+    expect(getHistoryOpenAt()).toBeNull();
+  });
+
+  it("a shell that throws at the view request after the answer: logged, never an unhandled rejection, and the lane is free again", async () => {
+    hostWith(() => {
+      throw new Error("the shell is gone");
+    });
+    const port = fakeSessions();
+    lendEndedLanes({ ended: [TODAY], port });
+    openEndedLane(TODAY.id);
+    await port.answer([row("ses-today", "nat-today")]);
+    // the place was opened before the view was asked for, as the Peek's pick does it
+    expect(getHistoryOpenAt()).toEqual({ sessionId: "ses-today", timelineId: null });
+    expect(logged).toEqual(["error renderer.godview.ended_lane_fault"]);
+    openEndedLane(TODAY.id);
+    expect(port.asks).toHaveLength(2);
+  });
+});
+
 // ── the hook lends an opening what it lends the view ─────────────────────────
 
 const ANSWER = AgentRecordedLanesResult.parse({
@@ -480,6 +631,7 @@ interface ProbeProps {
   port: RecordedLanesPort;
   rows: Rows;
   desk?: string | null;
+  receded?: (lane: MonitorEndedRow) => boolean;
 }
 
 const PALETTE = fixturePalette("dark");
@@ -500,7 +652,7 @@ describe("the hook lends an opening the lanes it lends the view", () => {
       rows: props.rows,
       here: HERE,
       palette: PALETTE,
-      receded: NEVER_RECEDES,
+      receded: props.receded ?? NEVER_RECEDES,
       desk: props.desk ?? null,
       now: () => Date.now(),
     });
@@ -558,6 +710,19 @@ describe("the hook lends an opening the lanes it lends the view", () => {
     expect(statusLineSaid()).toEqual([GONE]);
     openEndedLane("past:claude:nat-today");
     expect(port.lookups.asks).toEqual([["nat-today"]]);
+  });
+
+  it("a receded lane (the host is showing another profile or desktop) is lent too: pressed, it opens like any other", async () => {
+    const port = fakePastDoor();
+    const everyLaneRecedes = (_lane: MonitorEndedRow): boolean => true;
+    await mount({ port, rows: ROWS, receded: everyLaneRecedes });
+    await port.answerRead();
+    openEndedLane("past:codex:nat-peer");
+    expect(port.lookups.asks).toEqual([["nat-peer"]]);
+    await port.lookups.answer([row("ses-peer", "nat-peer")]);
+    expect(getHistoryOpenAt()).toEqual({ sessionId: "ses-peer", timelineId: null });
+    expect(viewAsked).toHaveLength(1);
+    expect(statusLineSaid()).toEqual([]);
   });
 
   it("the stage closes: nothing is lent any more", async () => {

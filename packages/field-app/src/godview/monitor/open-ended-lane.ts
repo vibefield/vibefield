@@ -20,6 +20,13 @@ import { getRendererLogger } from "../../logging";
 // Honest states: a pick that cannot open is SAID on the status line (DESIGN.md
 // §8 "The status line"), each sentence once, in the Peek's pattern for a pick
 // that could not be shown ("Could not jump — ‹why›") — and logged.
+//
+// The view side's contract (puppeteer `dce6adb`): a view reads the command's
+// PRESENCE once, when it mounts — so the function exists from the first render,
+// before any past does, and is never swapped — and calls it synchronously from
+// its own pointerup, keydown or click, catching nothing. So it returns at once
+// and NEVER throws, whatever it is handed: a fault in here is logged and stops
+// here, before the answer and after it.
 
 /** One of the index's rows for a native session id, as an opening reads it
  * (`IndexSession`'s join columns). */
@@ -113,6 +120,7 @@ function wordsOf(cause: unknown): string | undefined {
   return words.trim() === "" ? undefined : words.trim();
 }
 
+/** Said first, then logged: the sentence stands even where the log does not. */
 function refuse(why: Refusal, lane: string, detail?: string): void {
   const notice: StatusNotice = {
     id: `ended-lane:${why}`,
@@ -129,13 +137,37 @@ function refuse(why: Refusal, lane: string, detail?: string): void {
     });
 }
 
-/**
- * Open an ended lane's session in History (the view contract's `openEnded`).
- * Stable: one function, reading what the hook lends when it is called. One ask
- * at a time: the same lane again while its ask is in flight is not a second
- * ask, and a newer pick wins — an older ask's late answer opens nothing.
- */
-export function openEndedLane(id: string): void {
+/** A fault in here, logged — and where the log is what failed, there is nowhere
+ * left to say it: the caller still must not hear it. */
+function fault(lane: unknown, cause: unknown): void {
+  try {
+    getRendererLogger()
+      .child({ component: "godview" })
+      .error("renderer.godview.ended_lane_fault", "opening an ended lane failed", cause, {
+        lane: String(lane),
+      });
+  } catch {
+    // nothing may leave
+  }
+}
+
+/** One pick, as far as its ask (`openEndedLane` is the door a view calls). */
+function pick(id: string): void {
+  if (typeof id !== "string" || !id.startsWith(ENDED_LANE_PREFIX)) {
+    // Not an ended lane's id by the SDK's own grammar (`past:…`, "never a model
+    // row's id"): no ended lane was pressed, so there is no run to say anything
+    // of on the line — "no longer in the timeline" would be false of a live
+    // row. A view that sends one has a bug: logged, and nothing moves, not the
+    // ask in flight either.
+    getRendererLogger()
+      .child({ component: "godview" })
+      .warn(
+        "renderer.godview.ended_lane_not_a_lane",
+        "openEndedLane was handed an id that is not an ended lane's",
+        { id: typeof id === "string" ? id : typeof id },
+      );
+    return;
+  }
   if (asking === id) return;
   asked += 1;
   const mine = asked;
@@ -154,25 +186,51 @@ export function openEndedLane(id: string): void {
   const { port } = lent;
   asking = id;
   // inside a promise, so a door that throws before it answers refuses like one that rejects
-  new Promise<readonly RecordedSessionRow[]>((resolve) => resolve(port.sessions([native]))).then(
-    (rows) => {
-      if (mine !== asked) return;
-      asking = null;
-      const session = sessionFor(rows, native, provider);
-      if (session === undefined) {
-        refuse("unrecorded", id);
-        return;
-      }
-      // the Peek's past pick, call for call (`FramePeek.openPast`)
-      openHistoryAt({ sessionId: session.sessionId });
-      if (getActiveView() !== "history") void requestView("history");
-    },
-    (cause: unknown) => {
-      if (mine !== asked) return;
-      asking = null;
-      refuse("unread", id, wordsOf(cause));
-    },
-  );
+  new Promise<readonly RecordedSessionRow[]>((resolve) => resolve(port.sessions([native])))
+    .then(
+      (rows) => {
+        if (mine !== asked) return;
+        asking = null;
+        let session: RecordedSessionRow | undefined;
+        try {
+          session = sessionFor(rows, native, provider);
+        } catch {
+          // an answer that cannot be read as rows is a door that could not be read
+          refuse("unread", id);
+          return;
+        }
+        if (session === undefined) {
+          refuse("unrecorded", id);
+          return;
+        }
+        // the Peek's past pick, call for call (`FramePeek.openPast`)
+        openHistoryAt({ sessionId: session.sessionId });
+        if (getActiveView() !== "history") void requestView("history");
+      },
+      (cause: unknown) => {
+        if (mine !== asked) return;
+        asking = null;
+        refuse("unread", id, wordsOf(cause));
+      },
+    )
+    // after the answer too: a rejection nobody handles is nobody's to catch
+    .catch((cause: unknown) => fault(id, cause));
+}
+
+/**
+ * Open an ended lane's session in History (the view contract's `openEnded`).
+ * Stable: one function from the first render, reading what the hook lends when
+ * it is called. It returns at once and never throws (the caller is a view's own
+ * handler). One ask at a time: the same lane again while its ask is in flight
+ * is not a second ask, and a newer pick wins — an older ask's late answer opens
+ * nothing.
+ */
+export function openEndedLane(id: string): void {
+  try {
+    pick(id);
+  } catch (cause) {
+    fault(id, cause);
+  }
 }
 
 /** Test seam: nothing lent, no ask in flight. */
