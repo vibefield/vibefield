@@ -1,4 +1,5 @@
 import type { MonitorEndedRow } from "@vibecook/puppeteer-view-sdk/model";
+import { AgentProviderId } from "@vibefield/contracts";
 import { type StatusNotice, sayStatus } from "../../frame/status-line";
 import { getActiveView, requestView } from "../../frame/view-state";
 import { openHistoryAt } from "../../history/open-at";
@@ -10,6 +11,11 @@ import { getRendererLogger } from "../../logging";
 // this asks the index which session the lane's native id is (`index.sessions`'
 // lookup, through the door the past was read by) and opens History there as
 // the Peek's past pick does (`FramePeek.openPast`): the place, then the view.
+//
+// The answer opens only while the person is still in Godview. They clicked,
+// then went elsewhere: History must not pull them back, and a refusal is not
+// said to someone who is no longer looking. Such an answer is dropped, with a
+// debug line and no notice.
 //
 // A module store beside the hook (find-door.ts's shape, for the same reason):
 // `useMonitorHistory` lends here what it lends the view — the same ended
@@ -61,7 +67,7 @@ const SAYS = {
   gone: "Could not open — this run is no longer in the timeline",
   /** the index's door refused the lookup */
   unread: "Could not open — the record cannot be read now",
-  /** the index holds no session for the lane's native id, or the lane names none */
+  /** the index holds no session for the lane's native id, or the lane's id carries none */
   unrecorded: "Could not open — no session is recorded for this run",
 } as const;
 type Refusal = keyof typeof SAYS;
@@ -81,12 +87,26 @@ export function lendEndedLanes(next: EndedLanesLent): () => void {
   };
 }
 
+/** The provider an ended lane's id names, for a lane that does not name one
+ * itself. `AgentProviderId`'s grammar (`^[A-Za-z0-9][A-Za-z0-9._-]*$`, the
+ * contract's, mirrored from puppeteer's) holds no colon, so the provider part
+ * ends at the FIRST colon after the prefix, exactly — nothing is guessed. A
+ * part that is no provider id is none. */
+function providerIn(id: string): string | undefined {
+  const end = id.indexOf(":", ENDED_LANE_PREFIX.length);
+  if (end < 0) return undefined;
+  const part = id.slice(ENDED_LANE_PREFIX.length, end);
+  return AgentProviderId.safeParse(part).success ? part : undefined;
+}
+
 /** What the index is asked about a lane: its native session id, read off its id
- * by the lane's OWN provider — a native id may hold a colon, so the id is never
- * split. Undefined when the lane does not name what ran it, or its id is not
- * that provider's. */
+ * by the lane's OWN provider when it names one — and an id that is not that
+ * provider's is not read — else by the provider its id names (`providerIn`).
+ * Whatever follows the provider's colon is the native id, colons and all: the
+ * id is never split on a later one. Undefined when nothing follows it, or no
+ * provider can be read. */
 function recordOf(lane: MonitorEndedRow): { native: string; provider: string } | undefined {
-  const provider = lane.provider?.id;
+  const provider = lane.provider?.id ?? providerIn(lane.id);
   if (provider === undefined) return undefined;
   const head = `${ENDED_LANE_PREFIX}${provider}:`;
   return lane.id.startsWith(head) && lane.id.length > head.length
@@ -151,6 +171,20 @@ function fault(lane: unknown, cause: unknown): void {
   }
 }
 
+/** The person went elsewhere while the door was asked: the answer is theirs no
+ * longer. Read when the answer lands — whichever monitor view Godview shows. */
+function leftGodview(lane: string): boolean {
+  if (getActiveView() === "godview") return false;
+  getRendererLogger()
+    .child({ component: "godview" })
+    .debug(
+      "renderer.godview.ended_lane_left",
+      "an ended lane's answer came after Godview was left",
+      { lane },
+    );
+  return true;
+}
+
 /** One pick, as far as its ask (`openEndedLane` is the door a view calls). */
 function pick(id: string): void {
   if (typeof id !== "string" || !id.startsWith(ENDED_LANE_PREFIX)) {
@@ -191,6 +225,7 @@ function pick(id: string): void {
       (rows) => {
         if (mine !== asked) return;
         asking = null;
+        if (leftGodview(id)) return;
         let session: RecordedSessionRow | undefined;
         try {
           session = sessionFor(rows, native, provider);
@@ -203,13 +238,15 @@ function pick(id: string): void {
           refuse("unrecorded", id);
           return;
         }
-        // the Peek's past pick, call for call (`FramePeek.openPast`)
+        // the Peek's past pick from Godview, call for call (`FramePeek.openPast`):
+        // the place, then the view — the frame is in Godview here, so it is always asked
         openHistoryAt({ sessionId: session.sessionId });
-        if (getActiveView() !== "history") void requestView("history");
+        void requestView("history");
       },
       (cause: unknown) => {
         if (mine !== asked) return;
         asking = null;
+        if (leftGodview(id)) return;
         refuse("unread", id, wordsOf(cause));
       },
     )
@@ -223,7 +260,7 @@ function pick(id: string): void {
  * it is called. It returns at once and never throws (the caller is a view's own
  * handler). One ask at a time: the same lane again while its ask is in flight
  * is not a second ask, and a newer pick wins — an older ask's late answer opens
- * nothing.
+ * nothing. Nor does an answer that lands after the person left Godview.
  */
 export function openEndedLane(id: string): void {
   try {

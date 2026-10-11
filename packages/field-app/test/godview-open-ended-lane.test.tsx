@@ -7,12 +7,17 @@
  * The claims:
  * - The native session id is read off the lane the hook LENDS — its own
  *   provider strips the prefix — so a native id that holds a colon survives. A
- *   lane the timeline no longer lends is a refusal, said.
+ *   lane that names no provider is read by the id's own grammar: a provider id
+ *   holds no colon, so it ends at the first one. A lane the timeline no longer
+ *   lends is a refusal, said.
  * - The index's lookup (`index.sessions`) is asked for that one id. Of several
  *   rows the lane's own provider's is kept when a row names one, else the
  *   thread's root; a row naming another provider is not this run's.
- * - The open is the Peek's past pick, call for call: the place first
- *   (`openHistoryAt`), then the History view when the frame is elsewhere.
+ * - The open is the Peek's past pick from Godview, call for call: the place
+ *   first (`openHistoryAt`), then the History view.
+ * - An answer that lands after the person left Godview opens nothing and says
+ *   nothing: they clicked, then went elsewhere, and History must not pull them
+ *   back.
  * - A refusal is said on the status line, once: the record cannot be read now
  *   (the door's own words as the detail), and no session is recorded.
  * - One ask at a time per lane; a newer pick wins over an older ask's answer.
@@ -90,6 +95,8 @@ const OTHER = lane("past:codex:nat-other", "codex");
 /** a native id that holds colons: nothing in the id says where the provider ends */
 const COLONS = lane("past:codex:rollout:2026-10-09T12:00:nat", "codex");
 const UNNAMED = lane("past:claude:nat-unnamed");
+/** no provider on the row, and a native id that holds colons */
+const UNNAMED_COLONS = lane("past:codex:rollout:2026-10-09T12:00:nat");
 
 function row(sessionId: string, native: string, more: Partial<RecordedSessionRow> = {}) {
   return { sessionId, nativeSessionId: native, rootSessionId: sessionId, ...more };
@@ -215,10 +222,55 @@ describe("the native session id is read off the lent lane, never split out of th
     expect(getHistoryOpenAt()).toBeNull();
   });
 
-  it("a lane that does not name what ran it names no session: said, and nothing is guessed out of its id", () => {
+  it("a lane that names no provider is read by the id's own grammar — a provider id holds no colon, so it ends at the FIRST one — and a native id that holds colons is asked whole", async () => {
+    const port = fakeSessions();
+    lendEndedLanes({ ended: [UNNAMED_COLONS], port });
+    openEndedLane(UNNAMED_COLONS.id);
+    expect(port.asks).toEqual([["rollout:2026-10-09T12:00:nat"]]);
+    // the provider read off the id is the one a row's is held to
+    await port.answer([
+      row("ses-claude", "rollout:2026-10-09T12:00:nat", { provider: "claude" }),
+      row("ses-codex", "rollout:2026-10-09T12:00:nat", { provider: "codex" }),
+    ]);
+    expect(getHistoryOpenAt()).toEqual({ sessionId: "ses-codex", timelineId: null });
+    expect(statusLineSaid()).toEqual([]);
+  });
+
+  it("a lane that names no provider is asked about, and `no session is recorded` is said only when the index has none", async () => {
     const port = fakeSessions();
     lendEndedLanes({ ended: [UNNAMED], port });
     openEndedLane(UNNAMED.id);
+    expect(port.asks).toEqual([["nat-unnamed"]]);
+    expect(statusLineSaid()).toEqual([]);
+    await port.answer([]);
+    expect(getStatusNotice()).toEqual(UNRECORDED);
+    expect(getHistoryOpenAt()).toBeNull();
+  });
+
+  it.each([
+    ["nothing after the provider's colon", "past:codex:"],
+    ["no colon after the provider", "past:codex"],
+    ["no provider before the colon", "past::nat"],
+    ["a provider part that is no provider id", "past:not a provider:nat"],
+  ])(
+    "a lane that names no provider and whose id carries no native session (%s) is refused, not asked",
+    (_name, id) => {
+      const port = fakeSessions();
+      lendEndedLanes({ ended: [lane(id)], port });
+      openEndedLane(id);
+      expect(port.asks).toEqual([]);
+      expect(getStatusNotice()).toEqual(UNRECORDED);
+      expect(getHistoryOpenAt()).toBeNull();
+    },
+  );
+
+  it.each([
+    ["an id that is another provider's", "past:claude:nat"],
+    ["nothing after its provider's colon", "past:codex:"],
+  ])("a lane that names its provider is read by it alone (%s): refused, not asked", (_name, id) => {
+    const port = fakeSessions();
+    lendEndedLanes({ ended: [lane(id, "codex")], port });
+    openEndedLane(id);
     expect(port.asks).toEqual([]);
     expect(getStatusNotice()).toEqual(UNRECORDED);
     expect(getHistoryOpenAt()).toBeNull();
@@ -272,7 +324,7 @@ describe("which of the index's rows the lane opens", () => {
   });
 });
 
-describe("the open is the Peek's past pick, call for call (`FramePeek.openPast`)", () => {
+describe("the open is the Peek's past pick from Godview, call for call (`FramePeek.openPast`)", () => {
   it("from Godview: the place first, then the History view — the same two calls in the same order", async () => {
     const port = fakeSessions();
     lendEndedLanes({ ended: [TODAY], port });
@@ -287,16 +339,6 @@ describe("the open is the Peek's past pick, call for call (`FramePeek.openPast`)
     ]);
   });
 
-  it("the frame is already in History when the answer comes: the place is opened and no view is asked", async () => {
-    const port = fakeSessions();
-    lendEndedLanes({ ended: [TODAY], port });
-    openEndedLane(TODAY.id);
-    frameIn("history");
-    await port.answer([row("ses-today", "nat-today")]);
-    expect(getHistoryOpenAt()).toEqual({ sessionId: "ses-today", timelineId: null });
-    expect(viewAsked).toEqual([]);
-  });
-
   it("each open is a fresh place, so the same lane opened twice opens the room twice", async () => {
     const port = fakeSessions();
     lendEndedLanes({ ended: [TODAY], port });
@@ -307,6 +349,81 @@ describe("the open is the Peek's past pick, call for call (`FramePeek.openPast`)
     await port.answer([row("ses-today", "nat-today")]);
     expect(getHistoryOpenAt()).toEqual(first);
     expect(getHistoryOpenAt()).not.toBe(first);
+  });
+});
+
+describe("an answer that lands after the person left Godview opens nothing: they clicked, then went elsewhere", () => {
+  it.each([
+    ["History", "history"],
+    ["the canvas", "canvas"],
+  ] as const)(
+    "the frame is in %s when the row answers: no place, no view asked, no notice",
+    async (_name, view) => {
+      const port = fakeSessions();
+      lendEndedLanes({ ended: [TODAY], port });
+      openEndedLane(TODAY.id);
+      frameIn(view);
+      await port.answer([row("ses-today", "nat-today")]);
+      expect(getHistoryOpenAt()).toBeNull();
+      expect(viewAsked).toEqual([]);
+      expect(statusLineSaid()).toEqual([]);
+    },
+  );
+
+  it("the same for a refusal, and for an answer with no row: nothing is said to someone who went elsewhere", async () => {
+    const port = fakeSessions();
+    lendEndedLanes({ ended: [TODAY], port });
+    openEndedLane(TODAY.id);
+    frameIn("history");
+    await port.refuse(new Error("the agent index is starting"));
+    expect(statusLineSaid()).toEqual([]);
+    frameIn("godview");
+    openEndedLane(TODAY.id);
+    frameIn("canvas");
+    await port.answer([]);
+    expect(statusLineSaid()).toEqual([]);
+    expect(getHistoryOpenAt()).toBeNull();
+    expect(viewAsked).toEqual([]);
+  });
+
+  it("the view is read when the answer lands: back in Godview by then, it opens as ever", async () => {
+    const port = fakeSessions();
+    lendEndedLanes({ ended: [TODAY], port });
+    openEndedLane(TODAY.id);
+    frameIn("canvas");
+    frameIn("godview");
+    await port.answer([row("ses-today", "nat-today")]);
+    expect(getHistoryOpenAt()).toEqual({ sessionId: "ses-today", timelineId: null });
+    expect(viewAsked).toHaveLength(1);
+  });
+
+  it("a dropped answer frees the lane and is logged at debug, never said", async () => {
+    const before = getRendererLogger();
+    const debugged: string[] = [];
+    const recording: RendererLogger = {
+      child: () => recording,
+      trace() {},
+      debug: (event) => void debugged.push(event),
+      info() {},
+      warn() {},
+      error() {},
+      fatal() {},
+      isLevelEnabled: () => true,
+    };
+    setRendererLogger(recording);
+    try {
+      const port = fakeSessions();
+      lendEndedLanes({ ended: [TODAY], port });
+      openEndedLane(TODAY.id);
+      frameIn("history");
+      await port.answer([row("ses-today", "nat-today")]);
+      expect(debugged).toEqual(["renderer.godview.ended_lane_left"]);
+      frameIn("godview");
+      openEndedLane(TODAY.id);
+      expect(port.asks).toHaveLength(2);
+    } finally {
+      setRendererLogger(before);
+    }
   });
 });
 
