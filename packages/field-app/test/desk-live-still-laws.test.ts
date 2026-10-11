@@ -412,6 +412,9 @@ describe("PT-5b3 — a still is of a DOCUMENT, and the engine says which (ruling
     await s.pump();
     expect(a.frame()).toBe(true);
     expect(s.live.navigation.navigate(KEY, { action: "go", url: NEXT })).toBe(true);
+    // (its producer has not answered the rest yet — the summary that follows would let the still go by itself: this is
+    // the rest's OWN check, at the moment it makes the photograph)
+    a.deaf();
     const b = s.open("13918995204487956201-2", true, "created");
     b.face.demand(HELD);
     await s.pump();
