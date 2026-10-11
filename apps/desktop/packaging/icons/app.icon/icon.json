@@ -2,13 +2,13 @@
   "fill-specializations" : [
     {
       "value" : {
-        "automatic-gradient" : "extended-gray:1.00000,1.00000"
+        "solid" : "extended-gray:1.00000,1.00000"
       }
     },
     {
       "appearance" : "dark",
       "value" : {
-        "automatic-gradient" : "extended-gray:1.00000,1.00000"
+        "solid" : "extended-gray:0.00000,1.00000"
       }
     }
   ],
@@ -17,10 +17,22 @@
       "layers" : [
         {
           "glass" : false,
-          "image-name" : "vibefield-appicon2.svg",
-          "name" : "vibefield-appicon2",
+          "image-name-specializations" : [
+            {
+              "value" : "mark-light.svg"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "mark-dark.svg"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : "mark-dark.svg"
+            }
+          ],
+          "name" : "mark",
           "position" : {
-            "scale" : 2.17,
+            "scale" : 1,
             "translation-in-points" : [
               0,
               0
@@ -29,11 +41,11 @@
         }
       ],
       "shadow" : {
-        "kind" : "neutral",
+        "kind" : "none",
         "opacity" : 0.5
       },
       "translucency" : {
-        "enabled" : true,
+        "enabled" : false,
         "value" : 0.5
       }
     }
