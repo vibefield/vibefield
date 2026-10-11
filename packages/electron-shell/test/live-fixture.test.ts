@@ -4,16 +4,22 @@
  * its link to `/next`, its field, its word, its height past its view, and its report of what it saw, the latest kept.
  * PT-4 — the page as a device sees it: it says its agent, its hints, its fingers, its density, its scheme and its last
  * pointer's type; its title and its one-colour favicon; a value kept in a cookie and its storage, each page's word by its address.
+ * PT-5a — a page's honest life: `/acts` (what a page may ask for, and what came of each), `/slow` (answered late, a load
+ * given up counted), `/file.bin` (a download), and an address that REFUSES its connection until it is opened.
  */
 import { inflateSync } from "node:zlib";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  actsHtml,
+  FIXTURE_ACT_IDS,
   FIXTURE_ASK_MS,
   FIXTURE_COOKIE,
   FIXTURE_HUE,
   FIXTURE_ICON_HUE,
   FIXTURE_PARTS,
+  FIXTURE_SLOW_MS,
   FIXTURE_TITLE,
+  FIXTURE_TONE,
   fixtureHtml,
   fixtureIcon,
   type LiveFixture,
@@ -233,5 +239,106 @@ describe("the live pane's fixture page", () => {
     expect(fixture.cookieSeen("/page?store=v1")).toBe("");
     expect(fixture.cookieSeen("/page?read=1")).toBe("pt4=v1");
     expect(fixture.served("/page")).toBe(2);
+  });
+  it("PT-5a: /acts is a page of what a page MAY ASK FOR — a `target=_blank` link, `window.open`, `alert` / `confirm` / `prompt`, a file input, a tone, a download, a slow link, a field — each a control with its id, and its word says what came of each", async () => {
+    const html = actsHtml();
+    for (const id of FIXTURE_ACT_IDS) expect(html, id).toContain(`id="${id}"`);
+    expect(FIXTURE_ACT_IDS).toEqual([
+      "popup",
+      "open",
+      "alert",
+      "file",
+      "tone",
+      "download",
+      "slow",
+      "field",
+    ]);
+    expect(html).toMatch(/<a class="act" id="popup"[^>]* href="\/next" target="_blank">/);
+    expect(html).toMatch(/window\.open\("\/next\?opened=1"\)/);
+    // the alert's count moves only AFTER it returns; confirm's answer and prompt's are kept (a prompt that throws, said)
+    expect(html).toMatch(/alert\("[^"]+"\);\s*alerts \+= 1;\s*confirmed = confirm\(/);
+    expect(html).toMatch(/try \{ prompted = prompt\([^)]*\); \} catch \{ prompted = "threw"; \}/);
+    expect(html).toMatch(/<input class="act" id="file"[^>]* type="file">/);
+    expect(html).toMatch(/addEventListener\("cancel", \(\) => \{ cancels \+= 1; \}\)/);
+    expect(html).toMatch(/<a class="act" id="download"[^>]* href="\/file\.bin" download>/);
+    expect(html).toMatch(/<a class="act" id="slow"[^>]* href="\/slow">/);
+    // the tone: what the engine counts as audible, and no speaker says
+    expect(FIXTURE_TONE).toEqual({ hz: 30, gain: 0.004 });
+    expect(20 * Math.log10(FIXTURE_TONE.gain / Math.SQRT2)).toBeGreaterThan(-72);
+    expect(FIXTURE_TONE.hz).toBeLessThan(40);
+    expect(html).toContain(`osc.frequency.value = ${FIXTURE_TONE.hz};`);
+    expect(html).toContain(`gain.gain.value = ${FIXTURE_TONE.gain};`);
+    // it names the favicon, follows the smoke's pace, and says what came of each with every ask
+    expect(html).toContain('<link rel="icon" type="image/png" href="/icon.png">');
+    expect(html).toMatch(/if \(play && timer === null\) timer = setInterval/);
+    expect(html).toMatch(/acts: \{\s*alerts, confirmed, prompted, cancels, changes, opened,/);
+    fixture = await startLiveFixture();
+    const served = await fetch(`${fixture.origin}/acts`);
+    expect(served.status).toBe(200);
+    expect(await served.text()).toBe(html);
+    // its word is kept by its address, `acts` with it
+    const acts = {
+      alerts: 1,
+      confirmed: false,
+      prompted: null,
+      cancels: 0,
+      changes: 0,
+      tone: "",
+      opened: "unasked",
+      parts: {},
+    };
+    const word = encodeURIComponent(JSON.stringify({ path: "/acts", acts }));
+    await fetch(`${fixture.origin}/beacon?token=t9&report=${word}`);
+    expect(fixture.reportAt("/acts")?.acts).toEqual(acts);
+  });
+
+  it("PT-5a: /file.bin is a DOWNLOAD — served as an attachment, counted", async () => {
+    fixture = await startLiveFixture();
+    expect(fixture.files()).toBe(0);
+    const file = await fetch(`${fixture.origin}/file.bin`);
+    expect(file.headers.get("content-disposition")).toMatch(/^attachment;/);
+    expect(file.headers.get("content-type")).toBe("application/octet-stream");
+    expect((await file.arrayBuffer()).byteLength).toBe(64);
+    expect(fixture.files()).toBe(1);
+  });
+
+  it("PT-5a: /slow answers LATE — a load given up before then is counted as given up, never as answered", async () => {
+    expect(FIXTURE_SLOW_MS).toBeGreaterThanOrEqual(5_000);
+    fixture = await startLiveFixture();
+    expect(fixture.slow()).toEqual({ asked: 0, answered: 0, aborted: 0 });
+    const stop = new AbortController();
+    const asked = fetch(`${fixture.origin}/slow`, { signal: stop.signal }).catch(
+      (e: Error) => e.name,
+    );
+    for (let i = 0; i < 50 && fixture.slow().asked === 0; i += 1)
+      await new Promise((r) => setTimeout(r, 20));
+    expect(fixture.slow()).toEqual({ asked: 1, answered: 0, aborted: 0 });
+    stop.abort();
+    expect(await asked).toBe("AbortError");
+    for (let i = 0; i < 50 && fixture.slow().aborted === 0; i += 1)
+      await new Promise((r) => setTimeout(r, 20));
+    expect(fixture.slow()).toEqual({ asked: 1, answered: 0, aborted: 1 });
+  });
+
+  it("PT-5a: an address that REFUSES its connection — a port nobody listens on — until it is opened; then the page is there, its word kept by its path", async () => {
+    fixture = await startLiveFixture();
+    const refusing = await fixture.refusing();
+    expect(refusing.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/revived$/);
+    expect(refusing.url).toBe(`http://${refusing.host}/revived`);
+    expect(refusing.host).not.toBe(new URL(fixture.origin).host);
+    const failed = await fetch(refusing.url).then(
+      () => "answered",
+      (e: Error & { cause?: { code?: string } }) => e.cause?.code ?? e.message,
+    );
+    expect(failed).toBe("ECONNREFUSED");
+    await refusing.open();
+    const page = await fetch(refusing.url);
+    expect(page.status).toBe(200);
+    expect(await page.text()).toContain("#1d6fd8");
+    // the same fixture behind it: a word said there is the fixture's
+    await fetch(
+      `http://${refusing.host}/beacon?token=r1&report=${encodeURIComponent(JSON.stringify({ path: "/revived" }))}`,
+    );
+    expect(fixture.reportAt("/revived")?.token).toBe("r1");
   });
 });

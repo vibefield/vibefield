@@ -14,7 +14,8 @@
 //     writes a `schemaVersion` 1 manifest back over it, which fieldd refuses (§18.5).
 //   faults — the clock declaring DK-7's fault fixture beside its own row (`BROKEN_CLOCK_ROWS`), its renderer
 //     exporting `clockBroken` and `clockFaulty` beside `clock` — the clock's own id, as the types are its
-//     own; `VF_SMOKE_KIND_FAULTS=1` runs smoke:canvas's fault rows.
+//     own; `VF_SMOKE_KIND_FAULTS=1` runs smoke:canvas's fault rows. PT-5a: and the clock that breaks IN HAND
+//     (`FRAGILE_CLOCK_ROW`, `clockFragile`) — the PUT-DOWN row's.
 // Each variant's renderer is built by plugin-build itself (the bundle a dev would ship). The command's exit
 // code is this script's; the temporary root goes either way.
 
@@ -66,7 +67,7 @@ registerHooks({
 
 const clockDir = join(repo, "examples/plugins/desk-clock");
 const clockSrc = join(clockDir, "src");
-const { BROKEN_CLOCK_ROWS, deskClockManifest } = await import(
+const { BROKEN_CLOCK_ROWS, FRAGILE_CLOCK_ROW, deskClockManifest } = await import(
   pathToFileURL(join(clockSrc, "index.ts")).href
 );
 const { buildPlugin } = await import(
@@ -194,20 +195,25 @@ if (mode === "restart") {
       ...deskClockManifest,
       contributes: {
         ...deskClockManifest.contributes,
-        objects: [...deskClockManifest.contributes.objects, ...BROKEN_CLOCK_ROWS],
+        objects: [
+          ...deskClockManifest.contributes.objects,
+          ...BROKEN_CLOCK_ROWS,
+          FRAGILE_CLOCK_ROW,
+        ],
       },
     },
     [
       "// DK-9's FAULT fixture (packaging/stage-kind-fixtures.mjs): the desk clock with DK-7's broken kinds",
       "// beside it — staged for ONE smoke through FIELDD_PLUGIN_DEV_ROOTS, never under examples/plugins.",
       `export { clock, default } from ${at("renderer.ts")};`,
-      `export { clockBroken, clockFaulty } from ${at("broken.ts")};`,
+      `export { clockBroken, clockFaulty, clockFragile } from ${at("broken.ts")};`,
       "",
     ].join("\n"),
   );
   Object.assign(fixtures, {
     clock: deskClockManifest.id,
     broken: BROKEN_CLOCK_ROWS.map((row) => row.type),
+    fragile: FRAGILE_CLOCK_ROW.type,
   });
 }
 

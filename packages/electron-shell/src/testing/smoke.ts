@@ -122,9 +122,11 @@ import { coverRows } from "./smoke-covers";
 import { removeSmokeRoot, SMOKE_RUN_ENV, stopRunDaemons } from "./smoke-daemons";
 import { deskRigRows } from "./smoke-desk-rig";
 import { DEVICE_FLAG, type DeviceRowsDriver, devicePaneRows } from "./smoke-device-pane";
+import { HONEST_FLAG, type HonestRowsDriver, honestPaneRows } from "./smoke-honest-pane";
 import { LIVE_FLAG, type LiveRowsDriver, livePaneRows } from "./smoke-live-pane";
 import { faultRows, peersRows } from "./smoke-peers";
 import { pegboardRows } from "./smoke-pegboard";
+import { putDownRow } from "./smoke-put-down";
 import { restRows } from "./smoke-rest";
 import { selectionBarRows } from "./smoke-selection-bar";
 import { sendToRows } from "./smoke-send-to";
@@ -1123,6 +1125,10 @@ export async function runSmokeCanvas(opts: {
         problems.push(
           ...(await deviceRows(win, shotDir, opts.viteUrl, opts.liveSurfaces, opts.root)),
         );
+      } else if (process.argv.includes(HONEST_FLAG)) {
+        // PT-5a — the page's honest life, its rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs
+        // --smoke-canvas --honest-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
+        problems.push(...(await honestRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
       } else if (process.argv.includes(PANE_FLAG)) {
         // PT-1 — the browser pane's rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs
         // --smoke-canvas --browser-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
@@ -1304,6 +1310,11 @@ export async function runSmokeCanvas(opts: {
         problems.push(
           ...(await deviceRows(win, shotDir, opts.viteUrl, opts.liveSurfaces, opts.root)),
         );
+        // PT-5a (PORTALS): the page's honest life — the bar's tools saying their state, what a page may not do (a pop-up, a
+        // dialog, a file picker, a download), the caret's cost, the favicon's bytes once, who hears a page, the parked desk,
+        // a load that fails and a page that stops, each recovered (testing/smoke-honest-pane.ts). After PT-4's (each lays
+        // its own pane and deletes it) and before the refusal's
+        problems.push(...(await honestRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
         // DK-9: last — it leaves the desk on its card
         problems.push(...(await deskRefusalRow(win, opts.viteUrl)));
       }
@@ -1830,6 +1841,63 @@ async function deviceRows(
     return await devicePaneRows(driver);
   } catch (error) {
     return [`PT-4 DEVICE: ${error instanceof Error ? error.message : String(error)}`];
+  } finally {
+    await fixture.close();
+  }
+}
+
+/** PT-5a's rows on the smoke's fixture (testing/smoke-honest-pane.ts): PT-2's driver, and main's own word on a PAGE — found
+ * among the app's offscreen WebContents by the address it shows: whether it is muted and audible, its renderer process
+ * killed (the test's hook: Electron's `forcefullyCrashRenderer`) — and on the app's WINDOWS (a page's own offscreen one
+ * among them: a pop-up or a dialog's window would be one more). */
+async function honestRows(
+  win: BrowserWindow,
+  shotDir: string | undefined,
+  viteUrl: string,
+  liveSurfaces: (() => { readonly runtimes: number; readonly owners: number } | null) | undefined,
+): Promise<string[]> {
+  const fixture = await startLiveFixture();
+  const pageAt = (prefix: string): WebContents | null =>
+    webContents
+      .getAllWebContents()
+      .find((c) => !c.isDestroyed() && c.isOffscreen() && c.getURL().startsWith(prefix)) ?? null;
+  try {
+    const driver: HonestRowsDriver = {
+      win,
+      shotDir,
+      say: (line) => console.log(line),
+      fixture,
+      custody: () => liveSurfaces?.() ?? null,
+      reload: async () => {
+        const ready = waitForConsole(win, "DESK_READY ", 60_000);
+        await loadRenderer(win, "smoke-canvas", viteUrl, { presenceRelay: "1", deskFaults: "1" });
+        try {
+          await ready;
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      pageSound: (prefix) => {
+        const page = pageAt(prefix);
+        return page === null
+          ? null
+          : { muted: page.isAudioMuted(), audible: page.isCurrentlyAudible() };
+      },
+      killPage: (prefix) => {
+        const page = pageAt(prefix);
+        if (page === null) return false;
+        page.forcefullyCrashRenderer();
+        return true;
+      },
+      windows: () => ({
+        count: BrowserWindow.getAllWindows().length,
+        focused: BrowserWindow.getFocusedWindow()?.id ?? null,
+      }),
+    };
+    return await honestPaneRows(driver);
+  } catch (error) {
+    return [`PT-5a HONEST: ${error instanceof Error ? error.message : String(error)}`];
   } finally {
     await fixture.close();
   }
@@ -2551,6 +2619,8 @@ interface KindFixtures {
   readonly fresh?: string;
   readonly freshType?: string;
   readonly broken?: readonly string[];
+  /** PT-5a — the type of the clock that breaks IN HAND (the PUT-DOWN row's). */
+  readonly fragile?: string;
 }
 
 function kindFixtures(): KindFixtures | null {
@@ -3338,6 +3408,21 @@ async function kindFaultRows(
       `the frame rate fell through the quarantine (${rateBefore} → ${rateAfter} frames a second)`,
     );
   }
+  // PT-5a (ruling 6; ICE M24 LT3) — PUT-DOWN, last: a kind struck out while its object is IN HAND is put down by the host
+  if (fixtures.fragile === undefined)
+    problems.push(
+      `the fault fixture named no clock that breaks in hand (${JSON.stringify(fixtures)})`,
+    );
+  else
+    problems.push(
+      ...(await putDownRow({
+        win,
+        shotDir,
+        say: (line) => console.log(line),
+        type: fixtures.fragile,
+        title: "Fragile clock",
+      })),
+    );
   return problems;
 }
 

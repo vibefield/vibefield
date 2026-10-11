@@ -21,9 +21,21 @@
 // phones does: a phone's page with none is laid out 980 px wide (the PT-4 smoke's first PHONE row said so) — and `/legacy`
 // is that page, by its own address: the same page naming NO viewport, which a phone lays out 980 wide and a desktop at
 // its window's width (the witness of a phone's LAYOUT, beside its agent's word).
+// PT-5a — and a page's HONEST LIFE:
+//   /acts     — a page of what a page MAY ASK FOR, each a control the smoke presses where the page says it stands: a
+//               `target=_blank` link and a `window.open` (POPUP), a button that calls `alert`, `confirm` and `prompt`
+//               (ALERT), an `<input type=file>` that counts its `cancel` and `change` (PICKER), a button that plays a
+//               TONE (HEARD — 30 Hz, a whisper: what the engine counts as audible and no speaker says), a link to a
+//               DOWNLOAD (`/file.bin`), a link to `/slow` (BAR's Stop), and a text field (CARET). It says what came of
+//               each with every ask (`acts`), names the favicon, and has a runner of its own that follows the smoke's pace
+//               (PARKED: an animating page);
+//   /slow     — the page, answered `FIXTURE_SLOW_MS` late; a load stopped before then is counted as given up;
+//   /file.bin — bytes served as an attachment: a download;
+//   refusing() — ANOTHER address on a port nobody listens on (a connection REFUSED), which `open()` then serves the page
+//               at (`/revived`): the FAIL row's address, and what Try again finds.
 
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import type { AddressInfo } from "node:net";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { type AddressInfo, createServer as createTcpServer } from "node:net";
 import { crc32, deflateSync } from "node:zlib";
 
 /** The fixture's ground: a saturated blue, far from the mat's green and the sample page's warm whites. */
@@ -38,6 +50,23 @@ export const FIXTURE_TITLE = "Portals fixture";
 export const FIXTURE_ICON_HUE = { r: 226, g: 30, b: 160 } as const;
 /** PT-4 — the cookie (and the storage key) `/page?store=<v>` keeps `<v>` under. */
 export const FIXTURE_COOKIE = "pt4";
+/** PT-5a — how late `/slow` answers (ms): long enough to read the bar's Stop and press it. */
+export const FIXTURE_SLOW_MS = 8_000;
+/** PT-5a — the tone `/acts` plays: its pitch (Hz) and its gain — over the engine's silence threshold (about −72 dBFS) and
+ * under anything a speaker says (30 Hz at −51 dBFS: a shared machine hears nothing). */
+export const FIXTURE_TONE = { hz: 30, gain: 0.004 } as const;
+/** PT-5a — `/acts`'s controls by id, in the order they stand (the page says each one's box with every ask). */
+export const FIXTURE_ACT_IDS = [
+  "popup",
+  "open",
+  "alert",
+  "file",
+  "tone",
+  "download",
+  "slow",
+  "field",
+] as const;
+export type FixtureActId = (typeof FIXTURE_ACT_IDS)[number];
 
 /** PT-4 — the favicon's bytes: a 32 × 32 PNG of `FIXTURE_ICON_HUE`, opaque (made here: signature, IHDR, one IDAT, IEND). */
 export function fixtureIcon(size = 32): Buffer {
@@ -86,7 +115,41 @@ export interface LiveFixture {
   cookieSeen(path: string): string | null;
   /** PT-4 — how many times the favicon was served. */
   icons(): number;
+  /** PT-5a — `/slow`'s asks: how many came, how many were answered, how many were given up before the answer. */
+  slow(): { readonly asked: number; readonly answered: number; readonly aborted: number };
+  /** PT-5a — how many times the download (`/file.bin`) was asked for. */
+  files(): number;
+  /** PT-5a — an address whose connection is REFUSED (a port nobody listens on) until `open()` serves the page there. */
+  refusing(): Promise<FixtureRefusing>;
   close(): Promise<void>;
+}
+
+/** PT-5a — an address that refuses its connection until it is opened. */
+export interface FixtureRefusing {
+  /** `http://127.0.0.1:<port>/revived` */
+  readonly url: string;
+  /** `127.0.0.1:<port>` — the address as a head prints it. */
+  readonly host: string;
+  /** The page served there from now on (its word kept by its path, `/revived`, as every page's is). */
+  open(): Promise<void>;
+}
+
+/** PT-5a — what came of each thing `/acts` asked for. */
+export interface FixtureActs {
+  /** `alert` calls that RETURNED (a page blocked behind a dialog never counts one). */
+  readonly alerts: number;
+  /** What `confirm` answered (null before it was asked), and `prompt` ("unasked" before; null: cancelled; "threw"). */
+  readonly confirmed: boolean | null;
+  readonly prompted: string | null;
+  /** The file input's `cancel` and `change` events. */
+  readonly cancels: number;
+  readonly changes: number;
+  /** The tone's audio context ("" before it was pressed, then "running" / "suspended"). */
+  readonly tone: string;
+  /** What `window.open` answered ("unasked" before; "null": no window). */
+  readonly opened: string;
+  /** Where each control stands in the page's view now (CSS px). */
+  readonly parts: Readonly<Record<FixtureActId, FixtureRect>>;
 }
 
 /** PT-3 — what the page saw at its last ask. */
@@ -129,6 +192,8 @@ export interface FixtureReport {
   readonly cookie: string;
   readonly stored: string;
   readonly title: string;
+  /** PT-5a — `/acts` alone: what came of what it asked for. */
+  readonly acts?: FixtureActs;
 }
 
 /** A part's box in the page's view, CSS px. */
@@ -249,6 +314,123 @@ export function fixtureHtml(path: "/page" | "/next" | "/legacy" = "/page"): stri
 </body></html>`;
 }
 
+/**
+ * PT-5a — `/acts`: what a page may ask for, each a control at a known place (a row of boxes on the fixture's ground, the
+ * page's own word for where each stands), and what came of it said with every ask. Its report is the page's whole word
+ * (`FixtureReport`) with `acts` beside it; the parts the other rows press (`link`, `field`, `word`) are its own field and
+ * its pop-up link.
+ */
+export function actsHtml(): string {
+  const box = (i: number): string => {
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    return `left:${8 + col * 22}%;top:${12 + row * 12}vh;width:18%;height:6vh;line-height:6vh`;
+  };
+  const at = (id: FixtureActId): string => box(FIXTURE_ACT_IDS.indexOf(id));
+  return `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${FIXTURE_TITLE} — acts</title><link rel="icon" type="image/png" href="/icon.png">
+<style>
+  html, body { margin: 0; background: ${hex(FIXTURE_HUE)}; }
+  html { scrollbar-width: none; }
+  .act { position: absolute; box-sizing: border-box; margin: 0; padding: 0 8px; border: 0; border-radius: 6px;
+    background: #e9f0fb; color: #10213f; font: 600 16px sans-serif; text-align: center; text-decoration: none;
+    white-space: nowrap; overflow: hidden; cursor: pointer; }
+  input.act { cursor: text; text-align: left; }
+  #runner { position: absolute; left: 0; top: 62vh; width: 12%; height: 18vh; background: #ffd34d; border-radius: 6px; }
+</style></head>
+<body>
+<a class="act" id="popup" style="${at("popup")}" href="/next" target="_blank">new window</a>
+<button class="act" id="open" style="${at("open")}">window.open</button>
+<button class="act" id="alert" style="${at("alert")}">alert</button>
+<input class="act" id="file" style="${at("file")}" type="file">
+<button class="act" id="tone" style="${at("tone")}">tone</button>
+<a class="act" id="download" style="${at("download")}" href="/file.bin" download>download</a>
+<a class="act" id="slow" style="${at("slow")}" href="/slow">slow page</a>
+<input class="act" id="field" style="${at("field")}" type="text" autocomplete="off" spellcheck="false">
+<div id="runner"></div>
+<script>
+  const token = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
+  const ids = ${JSON.stringify(FIXTURE_ACT_IDS)};
+  const el = (id) => document.getElementById(id);
+  let alerts = 0, confirmed = null, prompted = "unasked", cancels = 0, changes = 0, opened = "unasked", audio = null;
+  let pointer = "", touches = 0, x = 0, timer = null;
+  el("alert").addEventListener("click", () => {
+    alert("PT-5a: a page that alerts");
+    alerts += 1;
+    confirmed = confirm("PT-5a: a page that asks");
+    try { prompted = prompt("PT-5a: a page that prompts"); } catch { prompted = "threw"; }
+  });
+  el("file").addEventListener("cancel", () => { cancels += 1; });
+  el("file").addEventListener("change", () => { changes += 1; });
+  el("open").addEventListener("click", () => {
+    const w = window.open("/next?opened=1");
+    opened = w === null ? "null" : "window";
+    // said at once, and past this page's unload (the pane itself may be sent where the window was asked for)
+    navigator.sendBeacon("/beacon?token=" + token + "&report=" + report());
+  });
+  el("tone").addEventListener("click", () => {
+    if (audio === null) {
+      audio = new AudioContext();
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.frequency.value = ${FIXTURE_TONE.hz};
+      gain.gain.value = ${FIXTURE_TONE.gain};
+      osc.connect(gain).connect(audio.destination);
+      osc.start();
+    }
+    audio.resume();
+  });
+  for (const type of ["pointerdown", "pointermove", "pointerup"])
+    addEventListener(type, (e) => { pointer = e.pointerType; }, true);
+  addEventListener("touchstart", () => { touches += 1; }, { capture: true, passive: true });
+  const runner = el("runner");
+  const pace = (play) => {
+    if (play && timer === null) timer = setInterval(() => { x = (x + 1.3) % 88; runner.style.left = x + "%"; }, 33);
+    if (!play && timer !== null) { clearInterval(timer); timer = null; }
+  };
+  const box = (id) => {
+    const r = el(id).getBoundingClientRect();
+    return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
+  };
+  const hints = () => navigator.userAgentData
+    ? { platform: navigator.userAgentData.platform, mobile: navigator.userAgentData.mobile,
+        brands: navigator.userAgentData.brands.map((b) => b.brand) }
+    : null;
+  const report = () => encodeURIComponent(JSON.stringify({
+    path: location.pathname + location.search,
+    scrollY: Math.round(window.scrollY),
+    sel: String(window.getSelection() || ""),
+    field: el("field").value,
+    focused: (document.activeElement && document.activeElement.id) || "",
+    submitted: 0,
+    view: [innerWidth, innerHeight],
+    parts: { link: box("popup"), field: box("field"), word: box("runner") },
+    ua: navigator.userAgent,
+    platform: navigator.platform,
+    uaData: hints(),
+    touchPoints: navigator.maxTouchPoints,
+    dpr: devicePixelRatio,
+    dark: matchMedia("(prefers-color-scheme: dark)").matches,
+    pointer,
+    touches,
+    cookie: document.cookie,
+    stored: "",
+    title: document.title,
+    acts: {
+      alerts, confirmed, prompted, cancels, changes, opened,
+      tone: audio === null ? "" : audio.state,
+      parts: Object.fromEntries(ids.map((id) => [id, box(id)])),
+    },
+  }));
+  const ask = () => fetch("/beacon?token=" + token + "&report=" + report(), { cache: "no-store" })
+    .then((r) => r.json()).then((a) => pace(a.play === true)).catch(() => {});
+  ask();
+  setInterval(ask, ${FIXTURE_ASK_MS});
+</script>
+</body></html>`;
+}
+
 /** The fixture server, on an ephemeral loopback port; the page starts still. */
 export async function startLiveFixture(): Promise<LiveFixture> {
   let loads = 0;
@@ -256,11 +438,50 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   let playing = false;
   let last: FixtureReport | null = null;
   let icons = 0;
+  let files = 0;
+  const slow = { asked: 0, answered: 0, aborted: 0 };
+  /** PT-5a: the servers opened on once-refusing ports, closed with the fixture. */
+  const revived: Server[] = [];
   const lastAt = new Map<string, FixtureReport>();
   const cookies = new Map<string, string>();
   const tokens: string[] = [];
-  const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+  const html = (res: ServerResponse, body: string): void => {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+    res.end(body);
+  };
+  const handle = (req: IncomingMessage, res: ServerResponse): void => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    if (url.pathname === "/acts" || url.pathname === "/revived") {
+      cookies.set(url.pathname + url.search, req.headers.cookie ?? "");
+      html(res, url.pathname === "/acts" ? actsHtml() : fixtureHtml("/next"));
+      return;
+    }
+    if (url.pathname === "/slow") {
+      // answered late; a load stopped before then (the bar's Stop) closes its request, and is counted as given up
+      slow.asked += 1;
+      let done = false;
+      const timer = setTimeout(() => {
+        done = true;
+        slow.answered += 1;
+        html(res, fixtureHtml("/next"));
+      }, FIXTURE_SLOW_MS);
+      res.on("close", () => {
+        if (done) return;
+        clearTimeout(timer);
+        slow.aborted += 1;
+      });
+      return;
+    }
+    if (url.pathname === "/file.bin") {
+      files += 1;
+      res.writeHead(200, {
+        "content-type": "application/octet-stream",
+        "content-disposition": 'attachment; filename="pt-5a.bin"',
+        "cache-control": "no-store",
+      });
+      res.end(Buffer.alloc(64, 7));
+      return;
+    }
     if (url.pathname === "/icon.png") {
       icons += 1;
       res.writeHead(200, { "content-type": "image/png", "cache-control": "no-store" });
@@ -297,7 +518,8 @@ export async function startLiveFixture(): Promise<LiveFixture> {
     }
     res.writeHead(404);
     res.end();
-  });
+  };
+  const server = createServer(handle);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
   const origin = `http://127.0.0.1:${port}`;
@@ -314,10 +536,34 @@ export async function startLiveFixture(): Promise<LiveFixture> {
     reportAt: (path) => lastAt.get(path) ?? null,
     cookieSeen: (path) => cookies.get(path) ?? null,
     icons: () => icons,
-    close: () =>
-      new Promise<void>((resolve) => {
-        server.closeAllConnections?.();
-        server.close(() => resolve());
-      }),
+    slow: () => ({ ...slow }),
+    files: () => files,
+    async refusing() {
+      // a port the system just gave and took back: nobody listens there, so a connection to it is REFUSED
+      const probe = createTcpServer();
+      await new Promise<void>((resolve) => probe.listen(0, "127.0.0.1", resolve));
+      const refused = (probe.address() as AddressInfo).port;
+      await new Promise<void>((resolve) => probe.close(() => resolve()));
+      const host = `127.0.0.1:${refused}`;
+      return {
+        url: `http://${host}/revived`,
+        host,
+        async open() {
+          const again = createServer(handle);
+          revived.push(again);
+          await new Promise<void>((resolve, reject) => {
+            again.once("error", reject);
+            again.listen(refused, "127.0.0.1", resolve);
+          });
+        },
+      };
+    },
+    close: async () => {
+      for (const s of [server, ...revived])
+        await new Promise<void>((resolve) => {
+          s.closeAllConnections?.();
+          s.close(() => resolve());
+        });
+    },
   };
 }
