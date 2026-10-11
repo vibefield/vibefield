@@ -25,6 +25,8 @@ import {
   judgeStopped,
   NOTICE_CLASSIFY,
   noticeCapsule,
+  type WindowsSeen,
+  windowsRaised,
 } from "../src/testing/smoke-honest-pane";
 
 const HOST = "127.0.0.1:57263";
@@ -45,14 +47,22 @@ const POPUP: HonestSeen["popup"] = {
   opened: "null",
   openedPath: "/next?opened=1",
   windows: [2, 2],
+  raised: 0,
   faces: [1, 1],
   panes: [1, 1],
 };
-const ALERT: HonestSeen["alert"] = { alerts: 1, confirmed: false, prompted: null, windows: [2, 2] };
+const ALERT: HonestSeen["alert"] = {
+  alerts: 1,
+  confirmed: false,
+  prompted: null,
+  windows: [2, 2],
+  raised: 0,
+};
 const PICKER: HonestSeen["picker"] = {
   cancels: 1,
   changes: 0,
   windows: [2, 2],
+  raised: 0,
   focused: [null, null],
 };
 const DOWNLOAD: HonestSeen["download"] = {
@@ -170,6 +180,7 @@ describe("the page's honest life — its rows", () => {
         opened: "window",
         openedPath: "/acts",
         windows: [2, 3],
+        raised: 1,
         faces: [1, 2],
         panes: [1, 2],
       }),
@@ -177,22 +188,37 @@ describe("the page's honest life — its rows", () => {
       "POPUP: the target=_blank link left the pane's page at /acts, not /next — the same pane did not go there",
       'POPUP: window.open answered "window", not null — a page was given a window',
       "POPUP: window.open left the pane's page at /acts, not /next?opened=1",
-      "POPUP: the app has 3 windows, not the 2 before",
+      "POPUP: the app has 1 windows it did not have before (2 then, 3 now)",
       "POPUP: 2 pages live on the desk, not the 1 before",
       "POPUP: 2 panes on the board, not the 1 before",
     ]);
+    // PT-5b — a window that only LEFT meanwhile (an earlier row set's page, its grace run out) is no window raised…
+    expect(judgePopup({ ...POPUP, windows: [5, 4], raised: 0 })).toEqual([]);
+    // …and a count that stands does not hide one that came beside it
+    expect(judgePopup({ ...POPUP, windows: [5, 5], raised: 1 })).toEqual([
+      "POPUP: the app has 1 windows it did not have before (5 then, 5 now)",
+    ]);
+  });
+
+  it("PT-5b: the windows RAISED are those that were not there before — by what they are, never by their count", () => {
+    const seen = (ids: number[]): WindowsSeen => ({ count: ids.length, focused: null, ids });
+    expect(windowsRaised(seen([1, 2, 3]), seen([1, 2, 3]))).toBe(0);
+    expect(windowsRaised(seen([1, 2, 3]), seen([1, 3]))).toBe(0);
+    expect(windowsRaised(seen([1, 2, 3]), seen([1, 3, 9]))).toBe(1);
+    expect(windowsRaised(seen([]), seen([4, 5]))).toBe(2);
   });
 
   it("ALERT: the page's word AFTER its dialogs arrives — the alert returned, the confirm false, the prompt null — and no window was raised", () => {
     expect(judgeAlert(ALERT)).toEqual([]);
     expect(
-      judgeAlert({ alerts: 0, confirmed: null, prompted: "unasked", windows: [2, 3] }),
+      judgeAlert({ alerts: 0, confirmed: null, prompted: "unasked", windows: [2, 3], raised: 1 }),
     ).toEqual([
       "ALERT: the page's word after its alert never came — it is blocked behind a dialog",
       "ALERT: confirm answered null, not false (cancelled)",
       'ALERT: prompt answered "unasked", not null (cancelled)',
-      "ALERT: the app has 3 windows, not the 2 before the dialogs",
+      "ALERT: the app has 1 windows it did not have before the dialogs (2 then, 3 now)",
     ]);
+    expect(judgeAlert({ ...ALERT, windows: [5, 4] })).toEqual([]);
     expect(judgeAlert({ ...ALERT, confirmed: true })).toEqual([
       "ALERT: confirm answered true, not false (cancelled)",
     ]);
@@ -206,12 +232,15 @@ describe("the page's honest life — its rows", () => {
   it("PICKER: the input hears cancel and nothing is chosen; the app's windows and its focused window are as they were", () => {
     expect(judgePicker(PICKER)).toEqual([]);
     expect(judgePicker({ ...PICKER, focused: [7, 7] })).toEqual([]);
-    expect(judgePicker({ cancels: 0, changes: 1, windows: [2, 3], focused: [7, null] })).toEqual([
+    expect(
+      judgePicker({ cancels: 0, changes: 1, windows: [2, 3], raised: 1, focused: [7, null] }),
+    ).toEqual([
       "PICKER: the file input never heard `cancel` — its picker was not answered (a panel may be up)",
       "PICKER: the file input changed 1 times",
-      "PICKER: the app has 3 windows, not the 2 before",
+      "PICKER: the app has 1 windows it did not have before (2 then, 3 now)",
       "PICKER: the focused window is null, not 7 as before the press",
     ]);
+    expect(judgePicker({ ...PICKER, windows: [5, 4] })).toEqual([]);
   });
 
   it("DOWNLOAD: cancelled and SAID — the head says it for its moment, then its address again", () => {

@@ -85,11 +85,19 @@ export interface ToolSeen {
   readonly label: string | null;
 }
 
-/** The app's windows as main counts them. */
+/** The app's windows as main counts them — and WHICH they are (their ids): a row that says "no window more" reads the
+ * windows that were not there before, never the count alone. (PT-5b: an earlier row set's page, kept by the pool's grace
+ * for a minute after its pane went, is a window too — its leaving in the middle of POPUP made a count of 5 a 4, and the
+ * row red, with no window raised; and a count that stands may hide one that left beside one that came.) */
 export interface WindowsSeen {
   readonly count: number;
   readonly focused: number | null;
+  readonly ids: readonly number[];
 }
+
+/** The windows in `after` that `before` did not have. */
+export const windowsRaised = (before: WindowsSeen, after: WindowsSeen): number =>
+  after.ids.filter((id) => !before.ids.includes(id)).length;
 
 /** A page's sound as main reads its WebContents. */
 export interface SoundSeen {
@@ -141,7 +149,9 @@ export interface HonestSeen {
     readonly blank: string | null;
     readonly opened: string | null;
     readonly openedPath: string | null;
+    /** the app's windows before and after (their count), and how many of those after were not there before */
     readonly windows: readonly [number, number];
+    readonly raised: number;
     readonly faces: readonly [number, number];
     readonly panes: readonly [number, number];
   };
@@ -151,11 +161,13 @@ export interface HonestSeen {
     /** undefined: the page said nothing of its prompt */
     readonly prompted: string | null | undefined;
     readonly windows: readonly [number, number];
+    readonly raised: number;
   };
   readonly picker: {
     readonly cancels: number;
     readonly changes: number;
     readonly windows: readonly [number, number];
+    readonly raised: number;
     readonly focused: readonly [number | null, number | null];
   };
   readonly download: {
@@ -284,8 +296,10 @@ export function judgePopup(seen: HonestSeen["popup"]): string[] {
     );
   if (seen.openedPath !== "/next?opened=1")
     out.push(`POPUP: window.open left the pane's page at ${seen.openedPath}, not /next?opened=1`);
-  if (seen.windows[1] !== seen.windows[0])
-    out.push(`POPUP: the app has ${seen.windows[1]} windows, not the ${seen.windows[0]} before`);
+  if (seen.raised !== 0)
+    out.push(
+      `POPUP: the app has ${seen.raised} windows it did not have before (${seen.windows[0]} then, ${seen.windows[1]} now)`,
+    );
   if (seen.faces[1] !== seen.faces[0])
     out.push(`POPUP: ${seen.faces[1]} pages live on the desk, not the ${seen.faces[0]} before`);
   if (seen.panes[1] !== seen.panes[0])
@@ -302,9 +316,9 @@ export function judgeAlert(seen: HonestSeen["alert"]): string[] {
     out.push(`ALERT: confirm answered ${seen.confirmed}, not false (cancelled)`);
   if (seen.prompted !== null)
     out.push(`ALERT: prompt answered ${JSON.stringify(seen.prompted)}, not null (cancelled)`);
-  if (seen.windows[1] !== seen.windows[0])
+  if (seen.raised !== 0)
     out.push(
-      `ALERT: the app has ${seen.windows[1]} windows, not the ${seen.windows[0]} before the dialogs`,
+      `ALERT: the app has ${seen.raised} windows it did not have before the dialogs (${seen.windows[0]} then, ${seen.windows[1]} now)`,
     );
   return out;
 }
@@ -317,8 +331,10 @@ export function judgePicker(seen: HonestSeen["picker"]): string[] {
       "PICKER: the file input never heard `cancel` — its picker was not answered (a panel may be up)",
     );
   if (seen.changes !== 0) out.push(`PICKER: the file input changed ${seen.changes} times`);
-  if (seen.windows[1] !== seen.windows[0])
-    out.push(`PICKER: the app has ${seen.windows[1]} windows, not the ${seen.windows[0]} before`);
+  if (seen.raised !== 0)
+    out.push(
+      `PICKER: the app has ${seen.raised} windows it did not have before (${seen.windows[0]} then, ${seen.windows[1]} now)`,
+    );
   if (seen.focused[1] !== seen.focused[0])
     out.push(
       `PICKER: the focused window is ${seen.focused[1]}, not ${seen.focused[0]} as before the press`,
@@ -995,11 +1011,13 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
       "the pane where window.open asked",
       (r) => r.path === "/next?opened=1",
     );
+    const windows1 = d.windows();
     const popup: HonestSeen["popup"] = {
       blank: blank?.path ?? report()?.path ?? null,
       opened: acts()?.opened ?? null,
       openedPath: opened?.path ?? report()?.path ?? null,
-      windows: [windows0.count, d.windows().count],
+      windows: [windows0.count, windows1.count],
+      raised: windowsRaised(windows0, windows1),
       faces: [faces0, await faces()],
       panes: [panes0, await census()],
     };
@@ -1013,11 +1031,13 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
     await press(await onAct("alert"));
     await hear("the page past its alert", (r) => (r.acts?.alerts ?? 0) > alerts0, atActs, 10_000);
     const now = acts();
+    const windowsA1 = d.windows();
     const alert: HonestSeen["alert"] = {
       alerts: (now?.alerts ?? 0) - alerts0,
       confirmed: now?.confirmed ?? null,
       prompted: now === null ? undefined : now.prompted,
-      windows: [windowsA.count, d.windows().count],
+      windows: [windowsA.count, windowsA1.count],
+      raised: windowsRaised(windowsA, windowsA1),
     };
     said.alert = alert;
     problems.push(...judgeAlert(alert));
@@ -1038,6 +1058,7 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
       cancels: (acts()?.cancels ?? 0) - cancels0,
       changes: acts()?.changes ?? 0,
       windows: [windowsP.count, windowsP1.count],
+      raised: windowsRaised(windowsP, windowsP1),
       focused: [windowsP.focused, windowsP1.focused],
     };
     said.picker = picker;

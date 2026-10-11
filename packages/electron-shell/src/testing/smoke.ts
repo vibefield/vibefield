@@ -1907,10 +1907,14 @@ async function honestRows(
         page.forcefullyCrashRenderer();
         return true;
       },
-      windows: () => ({
-        count: BrowserWindow.getAllWindows().length,
-        focused: BrowserWindow.getFocusedWindow()?.id ?? null,
-      }),
+      windows: () => {
+        const all = BrowserWindow.getAllWindows();
+        return {
+          count: all.length,
+          focused: BrowserWindow.getFocusedWindow()?.id ?? null,
+          ids: all.map((w) => w.id),
+        };
+      },
     };
     return await honestPaneRows(driver);
   } catch (error) {
