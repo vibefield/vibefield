@@ -114,7 +114,7 @@ export const GLYPHS: Readonly<Record<GlyphName, GlyphDrawing>> = {
   today: {"kind":"instrument","strokes":[["rect",{"x":"4.5","y":"6","width":"15","height":"13.5","rx":"2.5"}],["path",{"d":"M4.5 10.5h15M8.5 4v3.5M15.5 4v3.5"}]],"fills":[["circle",{"cx":"12","cy":"15","r":"1.6"}]]},
   minimize: {"kind":"instrument","strokes":[["path",{"d":"M6 12h12"}]],"fills":[]},
   maximize: {"kind":"instrument","strokes":[["rect",{"x":"6","y":"6","width":"12","height":"12","rx":"3"}]],"fills":[]},
-  restore: {"kind":"instrument","strokes":[["rect",{"x":"6","y":"10","width":"8","height":"8","rx":"3"}],["path",{"d":"M10 6h5a3 3 0 0 1 3 3v5"}]],"fills":[]},
+  restore: {"kind":"instrument","strokes":[["rect",{"x":"6","y":"10","width":"8","height":"8","rx":"2"}],["path",{"d":"M10 6h6a2 2 0 0 1 2 2v6"}]],"fills":[]},
   chevron: {"kind":"instrument","strokes":[["path",{"d":"M9.5 6l6 6-6 6"}]],"fills":[]},
   arrow: { kind: "hardware", d: "M12 3l7.5 8.5h-4.8V21h-5.4V11.5H4.5Z" },
   gear: {"kind":"instrument","strokes":[["path",{"d":"M10.4 4.78L10.83 2.47L13.17 2.47L13.6 4.78A7.4 7.4 0 0 1 15.98 5.76L17.91 4.44L19.56 6.09L18.24 8.02A7.4 7.4 0 0 1 19.22 10.4L21.53 10.83L21.53 13.17L19.22 13.6A7.4 7.4 0 0 1 18.24 15.98L19.56 17.91L17.91 19.56L15.98 18.24A7.4 7.4 0 0 1 13.6 19.22L13.17 21.53L10.83 21.53L10.4 19.22A7.4 7.4 0 0 1 8.02 18.24L6.09 19.56L4.44 17.91L5.76 15.98A7.4 7.4 0 0 1 4.78 13.6L2.47 13.17L2.47 10.83L4.78 10.4A7.4 7.4 0 0 1 5.76 8.02L4.44 6.09L6.09 4.44L8.02 5.76A7.4 7.4 0 0 1 10.4 4.78Z"}],["circle",{"cx":"12","cy":"12","r":"2.75"}]],"fills":[]},

@@ -355,8 +355,11 @@ export const DRAWINGS = {
     group: "actions",
     role: "Maximized terminals back to their place: the square behind a square, standing where maximize stood",
     // the square in front, and the top and right of the one behind it — its
-    // ends a stroke's width clear of the front square
-    instrument: { s: `${R(6, 10, 8, 8, 3)}${P("M10 6h5a3 3 0 0 1 3 3v5")}` },
+    // ends a stroke's width clear of the front square. Its squares are 8 units,
+    // so the law's corner is kept IN PROPORTION: 3 on a 12-unit square is a
+    // quarter of the side, and a quarter of 8 is 2 (ruled 2026-10-11 — at 3
+    // the front square read, at 14, as a ring with a hook).
+    instrument: { s: `${R(6, 10, 8, 8, 2)}${P("M10 6h6a2 2 0 0 1 2 2v6")}` },
     hardware: {
       d: `${rectPath(5, 9, 10, 10, 2.5)}${rectPath(7.8, 11.8, 4.4, 4.4, 0.6)}M9.5 5h7a2.5 2.5 0 0 1 2.5 2.5v7h-2.8V7.8H9.5Z`,
     },

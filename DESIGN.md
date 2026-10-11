@@ -2746,7 +2746,9 @@ corners) and are not the set's: the three are **drawn to this section's law** �
 round caps and joins, 3-unit corners — at the drawing's 12-unit extent about 12,12 (6 to 18): the
 rule along y 12; the square 12 by 12; `restore` an 8 by 8 square at the lower left and
 the top and right of the one behind it, 4 up and 4 right, its two ends a stroke's width clear of
-the square in front. Their Hardware records are drawn, not shipped. **In the set, and drawn by no
+the square in front. **`restore`'s two squares are 8 units and keep the law's corner in
+proportion, 2 units** — 3 is a quarter of `maximize`'s 12-unit side, and at 3 an 8-unit square
+read, at 14, as a ring with a hook (ruled 2026-10-11). Their Hardware records are drawn, not shipped. **In the set, and drawn by no
 control yet:** the Lip's two buttons and the title bar's `restore` are ruled, not built (§8, the
 deck), so today only the catalog shows the three. They are the wrapper's alone — never the pane
 frame's fullscreen (its two diagonal arrows), never the window's lights.

@@ -95,8 +95,12 @@ describe("the glyph set", () => {
     // DESIGN.md §13: the three glyphs of the wrapper around Godview's terminals
     // are Instrument, redrawn from the ruled page's stand-ins (strokes of 1.7
     // and 1.9, 1-unit corners) to the set's law: one 2-unit stroke (held for
-    // every Instrument glyph above), 3-unit corners, and the page's 12-unit
+    // every Instrument glyph above), the law's corner, and the page's 12-unit
     // extent centred on 12,12 — so the three weigh the same in a 30 × 24 control.
+    // The corner is the law's IN PROPORTION (ruled 2026-10-11): 3 units on the
+    // 12-unit square is a quarter of its side, so `restore`'s 8-unit squares
+    // take 2. At 3 an 8-unit square has 2 units of straight side and reads, at
+    // 14, as a ring with a hook.
     const numbers = (text: string): number[] => (text.match(/-?\d*\.?\d+/g) ?? []).map(Number);
     /** The corners a drawing's strokes pass through, and every corner radius. */
     const walk = (name: "minimize" | "maximize" | "restore") => {
@@ -147,13 +151,24 @@ describe("the glyph set", () => {
     }
     // a rule: 12 wide on the box's own middle line
     expect(walk("minimize")).toEqual({ x: [6, 18], y: [12, 12], radii: [] });
-    // a square, and the square behind a square: 12 by 12 about 12,12, every corner 3
-    for (const name of ["maximize", "restore"] as const) {
+    // a square, and the square behind a square: each 12 by 12 about 12,12, its
+    // every corner a quarter of its square's side — 3 on maximize's 12, 2 on
+    // restore's 8, the square in front and the arc of the one behind alike
+    for (const [name, side, corner] of [
+      ["maximize", 12, 3],
+      ["restore", 8, 2],
+    ] as const) {
       const box = walk(name);
       expect(box.x, name).toEqual([6, 18]);
       expect(box.y, name).toEqual([6, 18]);
       expect(box.radii.length, name).toBeGreaterThan(0);
-      expect(new Set(box.radii), name).toEqual(new Set([3]));
+      expect(new Set(box.radii), name).toEqual(new Set([corner]));
+      expect(corner / side, name).toBe(0.25);
+      const glyph = GLYPHS[name];
+      const squares =
+        glyph.kind === "instrument" ? glyph.strokes.filter(([tag]) => tag === "rect") : [];
+      expect(squares, name).toHaveLength(1);
+      expect(squares[0]?.[1], name).toMatchObject({ width: String(side), height: String(side) });
     }
     // restore is two marks — the square in front, and what shows of the one behind
     expect(GLYPHS.restore.kind === "instrument" && GLYPHS.restore.strokes.length).toBe(2);
