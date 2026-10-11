@@ -11,6 +11,7 @@ import { setBoardStatus } from "./board-status";
 import { DocStillShelf } from "./doc-stills";
 import { registryBeforeTheDesk } from "./field/desk/pre-desk";
 import { getRendererLogger } from "./logging";
+import { type PageStills, pageStills } from "./surfaces/live/page-stills";
 
 // B4 DocManager (thinking-b4-doc-ux §1): the renderer-spine lifecycle owner for
 // canvas docs — launch decision, doc switching, create/rename, and the loading
@@ -211,8 +212,16 @@ export class DocManager {
 
   constructor(
     private readonly client: FielddClient,
-    private readonly opts: { timeoutMs?: number } = {},
+    private readonly opts: {
+      timeoutMs?: number;
+      /** PT-5b — who forgets a deleted board's page stills (the page's own keeper, unless a test says). */
+      pageStills?: () => Pick<PageStills, "forgetDocument">;
+    } = {},
   ) {}
+
+  private pageStills(): Pick<PageStills, "forgetDocument"> {
+    return (this.opts.pageStills ?? pageStills)();
+  }
 
   // ---- store ----
 
@@ -404,6 +413,20 @@ export class DocManager {
       else await this.createDoc();
     }
     await this.stills.forget(docId);
+    // PT-5b: the last stills of its panes' pages go with it (this device's shelf; never said to anything else)
+    try {
+      await this.pageStills().forgetDocument(docId);
+    } catch (error) {
+      getRendererLogger()
+        .child({ component: "docs.stills", docId })
+        .warn(
+          "renderer.docs.page_stills_forget_failed",
+          "A deleted board's page stills were not forgotten",
+          {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+    }
   }
 
   /** The open refused this board as from before the desk (ruling 7): the library marks it. */

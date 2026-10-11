@@ -28,6 +28,7 @@ import { createDeskBlobStore, deskBlobs } from "../src/field/desk/desk-blobs";
 import { deskCensus } from "../src/field/desk/desk-door";
 import { SEED_TYPES } from "../src/field/desk/desk-seed";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
+import { pageStills } from "../src/surfaces/live/page-stills";
 
 let cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
@@ -554,7 +555,7 @@ describe("the explorer's stills (DK-4, DK-D27)", () => {
     expect(manager.getState().thumbnailUrls[first.docId]).toBe("blob:the-closing-still");
   });
 
-  it("DK-5: Delete takes a board's still away — off the explorer and off the shelf", async () => {
+  it("DK-5: Delete takes a board's still away — off the explorer and off the shelf — and (PT-5b) the last stills of its panes' pages with it", async () => {
     const { daemon } = await stack();
     const manager = managerFor(daemon);
     await manager.boot();
@@ -570,10 +571,28 @@ describe("the explorer's stills (DK-4, DK-D27)", () => {
     expect(manager.getState().thumbnailUrls[kept]).toBe("blob:the-kept-still");
     expect(await deskBlobs().kept(stillKey(kept))).toBeDefined();
 
+    // PT-5b: the last stills of its panes' pages are on the same shelf — and another board's beside them
+    const page = {
+      address: "https://example.org/",
+      logical: [1280, 800] as const,
+      size: [1600, 1000] as const,
+      type: "image/webp",
+      image: new Uint8Array([1, 2, 3]),
+      takenAt: 1,
+    };
+    const other = manager.getState().pending?.docId ?? "";
+    await pageStills().keep(kept, "13918995204487956201-1", page);
+    await pageStills().keep(kept, "13918995204487956201-2", page);
+    await pageStills().keep(other, "13918995204487956201-1", page);
+
     await manager.deleteDoc(kept);
     expect(manager.getState().docs.map((d) => d.docId)).not.toContain(kept);
     expect(manager.getState().thumbnailUrls[kept]).toBeUndefined();
     expect(revoked).toHaveBeenCalledWith("blob:the-kept-still");
     expect(await deskBlobs().kept(stillKey(kept))).toBeUndefined();
+    // …and its panes' page stills went with it — not the other board's
+    expect(await pageStills().kept(kept, "13918995204487956201-1")).toBeUndefined();
+    expect(await pageStills().kept(kept, "13918995204487956201-2")).toBeUndefined();
+    expect(await pageStills().kept(other, "13918995204487956201-1")).toBeDefined();
   }, 30_000);
 });

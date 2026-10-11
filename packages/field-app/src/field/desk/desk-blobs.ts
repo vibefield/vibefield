@@ -14,6 +14,10 @@ import { getRendererLogger } from "../../logging";
 // the explorer's stills, one per document id, in `vibefield-desk-blobs/keyed/<key>` (+ `.type`). A
 // still is retaken every time its board settles, so keying it by content would keep every one it ever
 // was; keyed, a board holds one picture, and a new one takes its place.
+//
+// THE SHELF'S INDEX (PT-5b): `list(prefix)` — what the shelf keeps under names that begin so, each with its bytes' count and
+// when it was last written. No index FILE: the directory is the truth (a list reads it), so nothing can fall out of step
+// with what is kept. Its first user is the pages' last stills (surfaces/live/page-stills.ts), which are BOUNDED by it.
 
 const DIR = "vibefield-desk-blobs";
 const KEYED = "keyed";
@@ -23,6 +27,15 @@ const KEY = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const UNTYPED = "application/octet-stream";
 
 export type DeskBlobPersistence = "opfs" | "memory";
+
+/** One thing the keyed shelf keeps, as its index says it (PT-5b). */
+export interface KeptEntry {
+  readonly key: string;
+  /** How many bytes it is. */
+  readonly bytes: number;
+  /** When it was last written, ms since the epoch (0 where the file system does not say). */
+  readonly modified: number;
+}
 
 export interface DeskBlobStore extends BlobStore {
   /** Where the bytes outlive the page: `opfs`, or `memory` where the origin has no file system (a
@@ -38,6 +51,9 @@ export interface DeskBlobStore extends BlobStore {
   /** Forget what the shelf keeps under `key`: its bytes and its type, in memory and in the file
    * system (DK-5 — a deleted board's still). Nothing kept is nothing to forget. */
   forget(key: string): Promise<void>;
+  /** PT-5b — the shelf's index: everything kept under a key that begins with `prefix` (this page's and former launches'),
+   * read off the directory itself. A prefix that is not the start of a plain name throws. */
+  list(prefix: string): Promise<readonly KeptEntry[]>;
 }
 
 type DirectorySource = () => Promise<FileSystemDirectoryHandle | undefined>;
@@ -51,7 +67,8 @@ const opfsRoot: DirectorySource = async () => {
 
 export function createDeskBlobStore(opts: { root?: DirectorySource } = {}): DeskBlobStore {
   const memory = new Map<string, StoredBlob>();
-  const shelf = new Map<string, StoredBlob>();
+  /** What the shelf holds in memory only (no file system, or a write that failed), with when it was kept. */
+  const shelf = new Map<string, StoredBlob & { readonly modified: number }>();
   const log = getRendererLogger().child({ component: "desk.blobs" });
   let directory: Promise<FileSystemDirectoryHandle | undefined> | null = null;
   let keyedDirectory: Promise<FileSystemDirectoryHandle | undefined> | null = null;
@@ -186,11 +203,42 @@ export function createDeskBlobStore(opts: { root?: DirectorySource } = {}): Desk
           });
         }
       }
-      shelf.set(name, { bytes: bytes.slice(), type });
+      shelf.set(name, { bytes: bytes.slice(), type, modified: Date.now() });
     },
     async kept(key) {
       const name = keyOf(key);
-      return shelf.get(name) ?? (await readFrom(await keyedDir(), name));
+      const held = shelf.get(name);
+      if (held !== undefined) return { bytes: held.bytes, type: held.type };
+      return readFrom(await keyedDir(), name);
+    },
+    async list(prefix) {
+      if (!KEY.test(prefix))
+        throw new Error(`desk blobs: "${prefix}" begins no key the shelf can name`);
+      const found = new Map<string, KeptEntry>();
+      const at = await keyedDir();
+      if (at !== undefined) {
+        try {
+          for await (const [name, handle] of (
+            at as unknown as {
+              entries(): AsyncIterable<[string, FileSystemHandle]>;
+            }
+          ).entries()) {
+            if (!name.startsWith(prefix) || name.endsWith(".type") || handle.kind !== "file")
+              continue;
+            const file = await (handle as FileSystemFileHandle).getFile();
+            found.set(name, { key: name, bytes: file.size, modified: file.lastModified ?? 0 });
+          }
+        } catch (error) {
+          log.warn("renderer.desk.blob_list_failed", "The keyed shelf could not be listed", {
+            error: String(error),
+          });
+        }
+      }
+      // what is held in memory only is newer than what a file of the same name says
+      for (const [name, held] of shelf)
+        if (name.startsWith(prefix))
+          found.set(name, { key: name, bytes: held.bytes.byteLength, modified: held.modified });
+      return [...found.values()];
     },
     async forget(key) {
       const name = keyOf(key);
