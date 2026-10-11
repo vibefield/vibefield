@@ -1762,6 +1762,12 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     pane's place, **"… is in the active pane"** for one only focused. *Replaced* "the active
     pane" wherever a door said it — the line's New terminal, History's Resume and Jump to, the
     Peek's Open in the terminals, each rewritten in its own entry of this section.
+    **Each door's turn ends** (2026-10-11): the deck places one session at a time (AR-4b), and a
+    door's turn waits on a read of the floor it places from — this desktop's, or the peer's whose
+    session it is — bounded at **10 s**. One that never answers fails its own door in words,
+    **"the floor did not answer in 10 s"**, or by the desktop's name, **"studio did not answer in
+    10 s"**, and the next door's turn comes; until then a read that never answered held every
+    placement behind it, History's New agent among them.
   - **One resize per change.** *Replaces* "No transition on the edge: every frame of an animated
     edge would be a PTY resize" — whose reason stands, and is the reason for this. A move the
     product makes is ONE resize of the terminals. **Rising** — called up, or maximized by its

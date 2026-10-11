@@ -91,7 +91,7 @@ vi.mock("@vibecook/ghosttea-react", () => ({
       finishPerformanceMeasurement: () => deviceWarm(),
       // TP-S1: a pane is born through fieldd and MOUNTED from the floor's own
       // summary, so the fixture's floor has to be able to answer for it.
-      listSessions: () => Promise.resolve(floor.map((row) => ({ id: row.sessionId }))),
+      listSessions: () => listSessions(),
       createSession: (options: unknown) => Promise.resolve({ id: `s-${JSON.stringify(options)}` }),
       // GT-D17's two verbs, as the door calls them. `openRemoteSession` answers
       // with a REPLICA — a local session id standing for a peer's — which is
@@ -199,12 +199,20 @@ const DECK_STORAGE_KEY = "vf-godview-deck-v1";
 let markers: GodviewDeckFacts[] = [];
 /** What `terminal.list` answers. Set per test; the restore gate reads it. */
 let floor: Array<{ sessionId: string }> = [];
+/** What the runtime's `listSessions` answers: the floor, unless a case holds it
+ * (2026-10-11 — one that never answers must not hold every mount behind it). */
+let listSessions: () => Promise<Array<{ id: string }>> = () =>
+  Promise.resolve(floor.map((row) => ({ id: row.sessionId })));
 let requests: string[] = [];
 /** DS-4e — every request with its params, in order. */
 let calls: Array<[string, unknown]> = [];
 /** DS-4e — ANOTHER desktop's floor, as its daemon answers `terminal.sessions
  * {device}` through this window's (the owner's exact summaries), by device. */
 let ownerFloors: Record<string, unknown[]> = {};
+/** How that daemon answers `terminal.sessions {device}`: `ownerFloors`, unless a
+ * case holds it (an owner that never answers). */
+let ownerSessions: (device: string) => Promise<unknown> = (device) =>
+  Promise.resolve({ sessions: ownerFloors[device] ?? [] });
 /** DS-4e — what a mint forwarded to the owner answers (this daemon re-homed
  * the owner's doors onto a loopback pair before the window sees them). */
 let ownerMint: (device: string, sessionId: string) => Promise<unknown> = () =>
@@ -262,9 +270,7 @@ const fieldd = {
     // DS-4e — a call routed to ANOTHER desktop: its daemon's answers
     const device = (params as { device?: unknown } | undefined)?.device;
     if (typeof device === "string") {
-      if (method === "terminal.sessions") {
-        return Promise.resolve({ sessions: ownerFloors[device] ?? [] });
-      }
+      if (method === "terminal.sessions") return ownerSessions(device);
       if (method === "terminal.openTicket") {
         return ownerMint(device, (params as { sessionId: string }).sessionId);
       }
@@ -368,6 +374,8 @@ beforeEach(() => {
   paletteOpens.length = 0;
   routedActivations.clear();
   floor = [];
+  listSessions = () => Promise.resolve(floor.map((row) => ({ id: row.sessionId })));
+  ownerSessions = (device) => Promise.resolve({ sessions: ownerFloors[device] ?? [] });
   deviceWarm = () => Promise.resolve({ backend: "test" });
   localStorage.clear();
   resetDeckAppearanceForTest();
@@ -1546,6 +1554,53 @@ describe("the door's local mount, and the pane a replacement belongs in (AR-4 ·
 
     await dispose();
   });
+
+  it("a floor that never answers fails its own mount in words, and the mount queued behind it still runs (2026-10-11)", async () => {
+    // Two `smoke:godview` reds: History's New agent placed its run through the
+    // line door, behind a mount whose floor read never came back, and the
+    // queue (one mount at a time) never moved again. The read is bounded now:
+    // the stuck entry settles as FAILED, the next runs — the queue is never
+    // released early, only its entries end.
+    const store = workspaceProbe({
+      panes: [{ id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } }],
+      activePaneId: "pane-1",
+    });
+    const { door, dispose } = await mountDeckWithDoor(store);
+    const lineDoor = getGodviewLineDoor();
+    if (lineDoor === null) throw new Error("the deck published no line door");
+    listSessions = () => new Promise(() => undefined);
+    // the agent History started: its create ticket, as `agent.spawn` answers it
+    const terminal = {
+      sessionId: "born-agent",
+      session: bornSummary("born-agent"),
+      ...routedTicket("born-agent"),
+    };
+    const STILL_WAITING = { state: "still waiting" } as const;
+    vi.useFakeTimers();
+    try {
+      // a session this window did not create and no pane shows: the floor is asked
+      const stuck = door.mountLocal("unlisted-pty");
+      const placed = lineDoor.place(terminal);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(await Promise.race([stuck, Promise.resolve(STILL_WAITING)])).toEqual({
+        state: "failed",
+        reason: "the floor did not answer in 10 s",
+      });
+      // …and History's place, queued behind it, lands: beside the focused pane
+      expect(await Promise.race([placed, Promise.resolve(STILL_WAITING)])).toEqual({
+        state: "opened",
+        placement: "beside",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    // nothing of the stuck mount reached the workspace; the place's split did
+    expect(store.log).toEqual(["add:born-agent"]);
+
+    await dispose();
+  });
 });
 
 // GV-D4 (James, 2026-10-02; DESIGN.md §8, the deck: "A session with no pane").
@@ -2049,6 +2104,42 @@ describe("the remote attach rides the routed host (DS-4e)", () => {
       ),
     ).toEqual({ state: "failed", reason: "studio does not list that session" });
     expect(store.showing("pane-1")).toBe("user-pty");
+    await dispose();
+  });
+
+  it("an owner that never answers is refused in its NAME once the bound passes, and the mount queued behind it runs (2026-10-11)", async () => {
+    ownerSessions = () => new Promise(() => undefined);
+    floor = [{ sessionId: "listed-pty" }];
+    const store = workspaceProbe({
+      panes: [{ id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } }],
+      activePaneId: "pane-1",
+    });
+    const { door, dispose } = await mountDeckWithDoor(store);
+    const STILL_WAITING = { state: "still waiting" } as const;
+    vi.useFakeTimers();
+    try {
+      const attached = door.attach({
+        deviceId: STUDIO,
+        deviceName: "studio",
+        remoteSessionId: "pane-r",
+      });
+      const next = door.mountLocal("listed-pty");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(await Promise.race([attached, Promise.resolve(STILL_WAITING)])).toEqual({
+        state: "failed",
+        reason: "studio did not answer in 10 s",
+      });
+      expect(await Promise.race([next, Promise.resolve(STILL_WAITING)])).toEqual({
+        state: "mounted",
+        sessionId: "listed-pty",
+        placement: "beside",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(store.paneOf("pane-r")).toBeUndefined();
     await dispose();
   });
 

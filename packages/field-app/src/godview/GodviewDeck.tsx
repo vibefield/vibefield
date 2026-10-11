@@ -48,6 +48,7 @@ import {
   adoptCreatedTerminal,
   adoptRemoteTerminalSession,
   createTerminalSession,
+  floorReadWithin,
   openDormantTransport,
   readRemoteTerminalSession,
   refreshTerminalRoster,
@@ -385,7 +386,10 @@ export function GodviewDeck({
       new Map(current).set(next, current.get(previous) ?? previous),
     );
   }, []);
-  /** AR-4b — the door's mounts, one at a time (see `mountLocal`). */
+  /** AR-4b — the door's mounts, one at a time (see `mountLocal`). Each entry
+   * settles: the floor reads inside one are bounded (`floorReadWithin`,
+   * 2026-10-11), so an entry that cannot finish fails in words and the next
+   * runs — the queue is never released early. */
   const mountQueue = useRef<Promise<unknown>>(Promise.resolve());
   /** The deck's own wrapper — the element pane zoom writes its phase onto. It
    * has to be the deck's rather than the stage's: the stage is shared with the
@@ -1320,7 +1324,13 @@ export function GodviewDeck({
           ? request.deviceName
           : "that desktop";
       try {
-        const summary = await readRemoteTerminalSession(request.deviceId, request.remoteSessionId);
+        // bounded (2026-10-11): this read holds the door's one-at-a-time
+        // mounts, so an owner that never answers fails this attach in its
+        // name ("studio did not answer in 10 s") and the next mount runs
+        const summary = await floorReadWithin(
+          readRemoteTerminalSession(request.deviceId, request.remoteSessionId),
+          named,
+        );
         if (summary === null)
           return { state: "failed", reason: `${named} does not list that session` };
         adoptRemoteTerminalSession(request.deviceId, summary);
