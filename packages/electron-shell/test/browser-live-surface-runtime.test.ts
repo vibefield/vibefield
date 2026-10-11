@@ -2986,28 +2986,37 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.result.runtime.dispose();
     });
 
-    it("ruling 5 — an event is FOR THE WINDOW that stood when it was sent: a press queued behind a key the crashed page was slow to take is never delivered to the page that replaced it — refused at its turn, counted", async () => {
+    it("ruling 5 — an event is FOR THE WINDOW that stood when it was sent: a press and a key queued behind a key the crashed page was slow to take are never delivered to the page that replaced it — nor asked of the window that is gone — refused at their turn, counted", async () => {
       const p = await crashing();
-      // the crashed page's key is answered only when the row says — after the page that replaces it is live
+      // the crashed page's first key is answered only when the row says — after the page that replaces it is live; what
+      // its window is asked after that, it records
       let answer: () => void = () => {};
-      p.first.dispatchKey = () =>
-        new Promise<void>((resolve) => {
-          answer = resolve;
-        });
+      const asked: string[] = [];
+      p.first.dispatchKey = (input) => {
+        asked.push(input.key);
+        return asked.length > 1
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => {
+              answer = resolve;
+            });
+      };
       const revision = p.result.runtime.summary.geometry?.revision ?? 0;
       p.key("a", revision);
-      // a press sent to the same page, judged at its arrival against the geometry it was sent under: it stands — and
-      // waits its turn behind the key
+      // a press and a key sent to the same page, judged at their arrival against the geometry they were sent under: they
+      // stand — and wait their turn behind the key
       p.press(revision);
+      p.key("z", revision);
       await vi.advanceTimersByTimeAsync(0);
       const dropped = p.result.runtime.stats.inputDropped;
       const second = await p.restart();
       answer();
       await vi.advanceTimersByTimeAsync(0);
       expect(second.mouseInputs).toEqual([]);
+      expect(second.keyInputs).toEqual([]);
       expect(p.first.mouseInputs).toEqual([]);
-      // (counted: the key, whose window went from under it, and the press, refused at its turn)
-      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 2);
+      expect(asked).toEqual(["a"]);
+      // (counted: the key whose window went from under it, and the press and the key refused at their turn)
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 3);
       p.result.runtime.dispose();
     });
 
