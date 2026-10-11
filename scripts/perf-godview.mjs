@@ -284,6 +284,8 @@ async function main() {
     window: { mode: windowMode, fps, scale },
     clock,
     warmupRecipe: WARMUP_RECIPE,
+    // the ceiling every launch started under: the proof audit's quiet line
+    loadMax,
     loads,
     startedAt: stamp,
     cells: [],
@@ -307,7 +309,7 @@ async function main() {
       WARMUP_RECIPE,
       Object.fromEntries(Object.entries(instruments).map(([arm, held]) => [arm, held.warmedViews])),
     ),
-    `- load average at launches: ${loads.map((l) => `${l.arm}${l.round} ${l.load.toFixed(0)}`).join(" · ")}`,
+    `- load average at launches (each waited below ${loadMax}; the proof audit reads each launch's end): ${loads.map((l) => `${l.arm}${l.round} ${l.load.toFixed(0)}`).join(" · ")}`,
     "- estimator: medians; paired diff T = median(B−A), z = |T| / (1.858·MAD/√R); tails are weather",
     paired
       ? "- null arm: T₀ = median(A′−A), the same build twice in the same session; `reading` names an effect past z > 4 and the metric's floor (M40, literally: 2 % of A for the totals and components, components also ≥ 1 ms/s), and `noisy` when the null arm itself clears that (a reading aid — the verdict is the lead's, L14)"

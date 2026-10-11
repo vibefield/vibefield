@@ -69,6 +69,14 @@ did around its cells).
   at most 600 characters — and the readiness conditions that state still lacked, or that no
   marker came at all. The runners echo a `failed` line up to 1,200 characters (other lab lines
   stay clipped at 160), so the reason reaches the run's own log. Perf and capture share the wait.
+- **The proof audit reads the load at each launch's end.** It printed only `loadRange`, the
+  runner's reading BEFORE each launch, and a launch that starts under the ceiling can end far
+  over it (0e020306's A r5: 12 before, 108 as it ended). Its account now also carries
+  `endLoadRange` (each report's own `loadavg[0]` as its launch ended), the `quietLine` and whose
+  it is, and `endedOverQuiet` — every launch that ended over the line, with arm, round, start and
+  end load — and it prints one plain line per such launch. The quiet line is `--quiet <n>` when
+  given, else the run's own `--load-max` (the runner now records it as `summary.loadMax`), else
+  15. It names; it does not refuse: the exit code and the verdict are as they were.
 The ordinary `pnpm smoke:godview` and `pnpm smoke:terminal-direct` runners also own fresh
 profiles and verify the app and window paths before navigation. After building, use
 `node scripts/smoke-godview.mjs` for the same smoke without rebuilding; direct Electron
@@ -165,7 +173,7 @@ pnpm perf:godview --synthetic-b root:2
 # captures: one current checkout = A/A; choose --source-a fold only for an old A
 pnpm capture:godview [--a <A checkout>] [--b <B checkout>] [--out <dir>]
 # the proof audit: a run measured what it says, read off its files before any grade (MV-8b)
-node scripts/perf-godview-proof.mjs <run dir>
+node scripts/perf-godview-proof.mjs <run dir> [--quiet <n>]
 # a NOISY R7's one repeat: the fresh R7 AND every sample pooled (R14) must pass (M155)
 node scripts/perf-godview-pool.mjs <first run dir> <repeat run dir> [--out <file>]
 ```

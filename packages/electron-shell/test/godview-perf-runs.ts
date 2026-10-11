@@ -151,6 +151,8 @@ export async function writeRun(dir: string, options: RunOptions = {}): Promise<u
         synthetic: {},
         warmupRecipe: "n=10,duration=1500,seed=9,markerQuietMs=50",
         warmedViews: [...VIEWS],
+        // the one-minute load as the launch ended, then the five and the fifteen
+        loadavg: [5, 4, 4],
         cells: VIEWS.map((view) => labCell(view, task, render)),
       };
       runs[arm]?.push(report);
@@ -184,6 +186,7 @@ export async function writeRun(dir: string, options: RunOptions = {}): Promise<u
     window: { mode: "offscreen", fps: 60, scale: 2 },
     clock: "corpus",
     warmupRecipe: "n=10,duration=1500,seed=9,markerQuietMs=50",
+    loadMax: 60,
     loads,
     startedAt: "2026-10-07T00-00-00-000Z",
     cells,

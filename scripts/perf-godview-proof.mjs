@@ -21,7 +21,16 @@
 //   · the monitor's membership is the corpus the recipe declares, in every
 //     report (M147–M151).
 //
-//   node scripts/perf-godview-proof.mjs <run dir>
+// And it READS, without refusing (MV lab debts, 2026-10-11): the load at each
+// launch's two ends — before it, as the runner recorded (`loadRange`), and as
+// it ended, off each report's own `loadavg` (`endLoadRange`) — and names every
+// launch that ended over the quiet line (`endedOverQuiet`: arm, round, start
+// and end load), one plain line each after the account. The quiet line is
+// `--quiet <n>` when given, else the run's own `--load-max` where its summary
+// recorded one, else 15. Naming is all it does: the exit code and the verdict
+// do not move for a loud launch.
+//
+//   node scripts/perf-godview-proof.mjs <run dir> [--quiet <n>]
 //
 // Exit 0 with a one-line JSON account on stdout, or 1 with every problem found.
 // Ported from the continuation's check-live-proof.py (vf modes) and the
@@ -74,6 +83,71 @@ export function declaredMembership(recipe, viewId) {
 }
 
 const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
+
+/** The quiet line when neither the caller nor the run names one. */
+export const DEFAULT_QUIET = 15;
+
+/**
+ * The line a launch's end load is held to, and whose it is: the caller's
+ * `--quiet` when given; else the run's own `--load-max` — the ceiling every
+ * launch STARTED under — where its summary recorded one (runs before
+ * 2026-10-11 did not); else 15.
+ */
+export function quietLine(summary, asked) {
+  if (Number.isFinite(asked)) return { quietLine: asked, quietLineFrom: "--quiet" };
+  if (Number.isFinite(summary?.loadMax)) {
+    return { quietLine: summary.loadMax, quietLineFrom: "the run's --load-max" };
+  }
+  return { quietLine: DEFAULT_QUIET, quietLineFrom: "default" };
+}
+
+/**
+ * THE LOAD AT EACH LAUNCH'S TWO ENDS (MV lab debts). `summary.loads` is the
+ * runner's reading BEFORE each launch, the only load this audit printed, and a
+ * launch that started under the ceiling can end far over it: 0e020306's A r5
+ * started at 12 and ended at 108. Every lab report holds `loadavg` as its
+ * launch ended (`loadavg[0]`, the one-minute load). `launches` are the
+ * reports' `{arm, round, loadavg}`. Returns the range of the end loads, how
+ * many launches had none to read, and every launch that ended over `quiet`, in
+ * launch order, with its start and end. NAMED, never refused: this audit
+ * validates the instrument, and what a loud launch did to a reading is the
+ * lead's to weigh (L14).
+ */
+export function launchLoads(summary, launches, quiet) {
+  const key = (arm, round) => `${arm} r${round}`;
+  const starts = new Map(
+    (summary?.loads ?? []).map((entry, index) => [key(entry.arm, entry.round), { index, entry }]),
+  );
+  const read = launches
+    .map(({ arm, round, loadavg }) => {
+      const start = starts.get(key(arm, round));
+      const end = Array.isArray(loadavg) ? loadavg[0] : undefined;
+      return {
+        order: start?.index ?? Number.POSITIVE_INFINITY,
+        arm,
+        round,
+        startLoad: Number.isFinite(start?.entry.load) ? start.entry.load : null,
+        endLoad: Number.isFinite(end) ? end : null,
+      };
+    })
+    .sort((a, b) => a.order - b.order)
+    .map(({ order: _order, ...launch }) => launch);
+  const ends = read.map((launch) => launch.endLoad).filter((load) => load !== null);
+  return {
+    endLoadRange: ends.length > 0 ? [Math.min(...ends), Math.max(...ends)] : null,
+    endLoadUnread: read.length - ends.length,
+    endedOverQuiet: read.filter((launch) => launch.endLoad !== null && launch.endLoad > quiet),
+  };
+}
+
+/** One plain line per launch that ended over the quiet line, as the audit prints them. */
+export function overQuietLines(account) {
+  const load = (value) => (value === null ? "unread" : value.toFixed(2));
+  return account.endedOverQuiet.map(
+    ({ arm, round, startLoad, endLoad }) =>
+      `${arm} r${round} ended over the quiet line (${account.quietLine}): load ${load(startLoad)} before the launch, ${load(endLoad)} at its end`,
+  );
+}
 
 /** One cell's own checks, by its arm's source; each problem is pushed to `fail`. */
 function auditCell(cell, source, where, fail) {
@@ -137,10 +211,11 @@ function auditCell(cell, source, where, fail) {
 
 /**
  * Audit one run directory. Returns the account (arms, rounds, reports, cells,
- * profiles, the recorded verdict, the launch loads) or throws with every
- * problem found, one per line.
+ * profiles, the recorded verdict, the load at each launch's two ends and the
+ * launches that ended over the quiet line) or throws with every problem
+ * found, one per line. `quiet` is the caller's `--quiet`, when given.
  */
-export function auditProof(directory) {
+export function auditProof(directory, { quiet } = {}) {
   const dir = resolve(directory);
   const problems = [];
   const fail = (message) => problems.push(message);
@@ -173,6 +248,7 @@ export function auditProof(directory) {
   for (const name of present) if (!expected.includes(name)) fail(`${name}: not a declared launch`);
 
   const seen = new Set();
+  const launches = [];
   let cells = 0;
   for (const arm of arms) {
     const source = summary.arms[arm].source;
@@ -180,6 +256,7 @@ export function auditProof(directory) {
       const name = reportFile(arm, round);
       if (!present.includes(name)) continue;
       const report = readJson(join(dir, name));
+      launches.push({ arm, round, loadavg: report.loadavg });
       if (report.arm !== arm) fail(`${name}: names arm ${report.arm}`);
       if (!(report.endedAt > report.startedAt)) fail(`${name}: the launch record never ended`);
       if (report.source !== source) fail(`${name}: read ${report.source}, its arm says ${source}`);
@@ -219,6 +296,7 @@ export function auditProof(directory) {
   }
   if (problems.length > 0) refuse();
   const loads = (summary.loads ?? []).map((entry) => entry.load);
+  const line = quietLine(summary, quiet);
   return {
     dir,
     arms,
@@ -228,18 +306,25 @@ export function auditProof(directory) {
     profiles: seen.size,
     verdict: summary.gate.verdict,
     loadRange: loads.length > 0 ? [Math.min(...loads), Math.max(...loads)] : null,
+    ...line,
+    ...launchLoads(summary, launches, line.quietLine),
   };
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [directory] = process.argv.slice(2);
-  if (directory === undefined) {
-    process.stderr.write("usage: node scripts/perf-godview-proof.mjs <run dir>\n");
+  const argv = process.argv.slice(2);
+  const asked = argv.includes("--quiet") ? Number(argv[argv.indexOf("--quiet") + 1]) : undefined;
+  const [directory] = argv.filter(
+    (arg, index) => !arg.startsWith("--") && argv[index - 1] !== "--quiet",
+  );
+  if (directory === undefined || (asked !== undefined && !Number.isFinite(asked))) {
+    process.stderr.write("usage: node scripts/perf-godview-proof.mjs <run dir> [--quiet <n>]\n");
     process.exit(2);
   }
   try {
-    const account = auditProof(directory);
+    const account = auditProof(directory, { quiet: asked });
     process.stdout.write(`${JSON.stringify(account)}\n`);
+    for (const line of overQuietLines(account)) process.stdout.write(`${line}\n`);
     process.stdout.write("PROOF OK — instrument validation, not a performance grade\n");
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
