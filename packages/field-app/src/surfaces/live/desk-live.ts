@@ -963,9 +963,10 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     let frameOwed = false;
     let wordsOwed = false;
     let words = wordsOf(handle.state);
-    /** PT-5a — the texture holds what no face may show (the engine's own error page; a page from before its failed load, or
+    /** PT-5a — the face shows nothing of its page (the engine's own error page; a page from before its failed load, or
      * before it stopped): hidden — the kind draws its film — until a frame of the page that follows lands, or (PT-5b) the
-     * shelf's still of the address that FAILED is laid in its place. */
+     * shelf's still of the address that FAILED is laid in its place. PT-5b: a hidden face HOLDS no texture either (it is
+     * let go at the failure: what a face holds is what the desk's budget counts), so this is the row's word and no guard. */
     let veiled = failing(handle.state);
     /** The last demand the kind sent: paused (unseen) until it says otherwise. */
     let asked: LiveDemand | undefined;
@@ -1196,10 +1197,11 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       if (state.status === "live") tellDevice();
       const fails = failing(state);
       if (fails && !wasFailing) {
-        // PT-5a: the page's frames are not shown — PT-5b: but the shelf's still of the address that FAILED is, under the words
+        // PT-5a: the page's frames are not shown — PT-5b: nor HELD (the texture is let go; a still read for the address
+        // before is dropped), but the shelf's still of the address that FAILED is shown, under the words
         veiled = true;
-        liveShown = false;
-        still = undefined;
+        letGo();
+        dropWaiting();
         void showStill();
       }
       wasFailing = fails;
@@ -1223,7 +1225,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
 
     const face: LiveFace = {
       key,
-      texture: (): LiveTexture | undefined => (veiled ? undefined : writer?.face),
+      texture: (): LiveTexture | undefined => writer?.face,
       take(): boolean {
         if (closed) return false;
         // a still read before the device came is laid now
@@ -1311,7 +1313,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
                   ? {}
                   : { refused: refusalOf(state.browser.refused) }),
               }),
-          ...(still === undefined || veiled ? {} : { still: stillOf(still.takenAt, now()) }),
+          ...(still === undefined ? {} : { still: stillOf(still.takenAt, now()) }),
         };
         return Object.keys(extra).length === 0 ? info : { ...info, extra };
       },
@@ -1334,7 +1336,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         if (closed) return;
         // PT-5a: nothing is sent to a page whose frames are not shown (a press must never land on what nobody sees) —
         // PT-5b: nor through a still (`shown` is none while one stands)
-        const at = veiled ? undefined : shown;
+        const at = shown;
         const events = at === undefined ? [] : liveInputEvents(e, at.logical);
         if (at === undefined || events.length === 0) {
           counts.inputsUnsent += 1;
@@ -1424,7 +1426,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
           faviconBytes: handle.faviconArrivals ?? 0,
           alive: alive(),
           rested,
-          still: still === undefined || veiled ? null : still.takenAt,
+          still: still?.takenAt ?? null,
           stillAt: Number.isFinite(stillAt) ? stillAt : null,
         };
       },
@@ -1518,7 +1520,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         rested = true;
         counts.rests += 1;
         // what its texture holds is a photograph now, and says so
-        if (liveShown && writer !== undefined && !veiled) {
+        if (liveShown) {
           liveShown = false;
           still = { takenAt: Number.isFinite(stillAt) ? stillAt : now(), address: addressNow() };
           shown = undefined;

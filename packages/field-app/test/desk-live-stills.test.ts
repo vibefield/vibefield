@@ -319,14 +319,21 @@ describe("PT-5b — the still is SHOWN through the one path, and never passed of
     says(handle, "failed", {
       error: { code: "producer-crashed", message: "Browser page stopped", recovery: "user-action" },
     });
-    // at once: the frame from before the failure is hidden (the shelf did not keep THAT one)
+    // at once: the frame from before the failure is hidden (the shelf did not keep THAT one) — and not HELD: the texture
+    // is let go, so nothing a face may not show is counted to nobody
     expect(face.texture()).toBeUndefined();
+    expect(s.writers).toHaveLength(1);
+    expect(s.writers[0]?.destroyed).toBe(1);
+    expect(s.live.faces()[0]).toMatchObject({ veiled: true, texture: undefined });
     await s.live.settled();
     expect(face.texture()).toBeDefined();
     expect(liveBrowserFailure((face.state() as { reason: string }).reason)).toBe("stopped");
     expect(face.info().extra?.still).toMatchObject({ takenAt: expect.any(Number) });
-    // what the texture holds is the SHELF's picture, laid through the same writer
-    expect(s.writers[0]?.presented.at(-1)).toMatchObject({ frame: s.shelf.bitmaps[0] });
+    // what the texture holds is the SHELF's picture, laid through the face's writer (a new one: the still's own size)
+    expect(s.writers).toHaveLength(2);
+    expect(s.writers[1]?.presented).toEqual([
+      { frame: s.shelf.bitmaps[0], rect: undefined, logical: [1280, 800] },
+    ]);
     expect(s.live.faces()[0]).toMatchObject({ veiled: false });
     // nothing is sent through a still: there is no page under it
     face.input?.({ kind: "wheel", x: 10, y: 10, dx: 0, dy: 40 });
@@ -396,6 +403,23 @@ describe("PT-5b — the still is SHOWN through the one path, and never passed of
     expect(face.take()).toBe(true);
     expect(face.texture()).toBeDefined();
     expect(face.info().extra?.still).toBeDefined();
+    // a still read for the pane's address and waiting for the device is DROPPED when the page fails elsewhere meanwhile
+    const lost = { value: undefined as GPUDevice | undefined };
+    const v = stage({ device: () => lost.value });
+    v.shelf.shelf.set(`${DOC}/${KEY}`, stillOf());
+    const w = v.open(KEY, false);
+    await v.live.settled();
+    w.handle.set({
+      status: "live",
+      presentation: fakePresentation("live") as never,
+      browser: browserAt(OTHER, { failure: { reason: "name-not-resolved" } }) as never,
+    });
+    await v.live.settled();
+    lost.value = v.device;
+    w.face.take();
+    expect(w.face.texture()).toBeUndefined();
+    expect(v.writers).toHaveLength(0);
+    expect(v.shelf.bitmaps[0]?.close).toHaveBeenCalledTimes(1);
     // the other order: the page's frame lands while the still is still being read
     const t = stage();
     t.shelf.shelf.set(`${DOC}/${KEY}`, stillOf());

@@ -867,7 +867,11 @@ describe("PT-5a — a page's failures are said (ruling 3)", () => {
     presentation.land();
     expect(face.take()).toBe(true);
     expect(face.texture()).toBeDefined();
-    expect(writers[0]?.presented).toHaveLength(2);
+    // (PT-5b: the texture that held the old page was let go at the failure — the page that follows has its own)
+    expect(writers).toHaveLength(2);
+    expect(writers[0]?.destroyed).toBe(1);
+    expect(writers[0]?.presented).toHaveLength(1);
+    expect(writers[1]?.presented).toHaveLength(1);
     expect(live.faces()[0]).toMatchObject({ veiled: false });
     face.input?.({ kind: "wheel", x: 10, y: 10, dx: 0, dy: 40 });
     expect(handle.inputs).toHaveLength(2);
