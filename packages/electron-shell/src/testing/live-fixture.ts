@@ -35,6 +35,10 @@
 //   /file.bin — bytes served as an attachment: a download;
 //   refusing() — ANOTHER address on a port nobody listens on (a connection REFUSED), which `open()` then serves the page
 //               at (`/revived`): the FAIL row's address, and what Try again finds.
+// PT-5b — and a page the smoke HOLDS AT ITS DOOR:
+//   /gate     — the page (its own address by its query: `/gate?p=a`), answered at once while the gate is open and held
+//               while it is shut (`gate(false)`) until it opens — never longer than `FIXTURE_GATE_MS`: the STILL row's
+//               page, whose reload after a rest waits there while its pane shows its still.
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { type AddressInfo, createServer as createTcpServer } from "node:net";
@@ -57,6 +61,8 @@ export const FIXTURE_EDGE = { hue: { r: 255, g: 72, b: 24 }, share: 0.04 } as co
 export const FIXTURE_COOKIE = "pt4";
 /** PT-5a — how late `/slow` answers (ms): long enough to read the bar's Stop and press it. */
 export const FIXTURE_SLOW_MS = 8_000;
+/** PT-5b — the longest `/gate` holds a load while its gate is shut (ms): a row that forgot to open it still ends. */
+export const FIXTURE_GATE_MS = 45_000;
 /** PT-5a — the tone `/acts` plays: its pitch (Hz) and its gain — over the engine's silence threshold (about −72 dBFS) and
  * under anything a speaker says (30 Hz at −51 dBFS: a shared machine hears nothing). */
 export const FIXTURE_TONE = { hz: 30, gain: 0.004 } as const;
@@ -124,6 +130,11 @@ export interface LiveFixture {
   slow(): { readonly asked: number; readonly answered: number; readonly aborted: number };
   /** PT-5a — how many times the download (`/file.bin`) was asked for. */
   files(): number;
+  /** PT-5b — `/gate`'s door: shut (`false`: its loads wait) or open (`true`: every load waiting is answered, and each
+   * new one at once). Open at the start. */
+  gate(open: boolean): void;
+  /** PT-5b — `/gate`'s loads: how many were asked, how many answered, how many wait at the shut gate now. */
+  gated(): { readonly asked: number; readonly answered: number; readonly waiting: number };
   /** PT-5a — an address whose connection is REFUSED (a port nobody listens on) until `open()` serves the page there. */
   refusing(): Promise<FixtureRefusing>;
   close(): Promise<void>;
@@ -446,6 +457,10 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   let icons = 0;
   let files = 0;
   const slow = { asked: 0, answered: 0, aborted: 0 };
+  /** PT-5b: `/gate` — its door, its counts, and the loads waiting at it. */
+  let gateOpen = true;
+  const gated = { asked: 0, answered: 0 };
+  const atGate = new Set<() => void>();
   /** PT-5a: the servers opened on once-refusing ports, closed with the fixture. */
   const revived: Server[] = [];
   const lastAt = new Map<string, FixtureReport>();
@@ -476,6 +491,30 @@ export async function startLiveFixture(): Promise<LiveFixture> {
         clearTimeout(timer);
         slow.aborted += 1;
       });
+      return;
+    }
+    if (url.pathname === "/gate") {
+      // the page, held while the gate is shut (never past the cap); a load given up meanwhile is forgotten
+      gated.asked += 1;
+      cookies.set(url.pathname + url.search, req.headers.cookie ?? "");
+      let done = false;
+      const answer = (): void => {
+        if (done) return;
+        done = true;
+        clearTimeout(cap);
+        atGate.delete(answer);
+        gated.answered += 1;
+        html(res, fixtureHtml("/page"));
+      };
+      const cap = setTimeout(answer, FIXTURE_GATE_MS);
+      res.on("close", () => {
+        if (done) return;
+        done = true;
+        clearTimeout(cap);
+        atGate.delete(answer);
+      });
+      if (gateOpen) answer();
+      else atGate.add(answer);
       return;
     }
     if (url.pathname === "/file.bin") {
@@ -544,6 +583,11 @@ export async function startLiveFixture(): Promise<LiveFixture> {
     icons: () => icons,
     slow: () => ({ ...slow }),
     files: () => files,
+    gate: (open) => {
+      gateOpen = open;
+      if (open) for (const answer of [...atGate]) answer();
+    },
+    gated: () => ({ ...gated, waiting: atGate.size }),
     async refusing() {
       // a port the system just gave and took back: nobody listens there, so a connection to it is REFUSED
       const probe = createTcpServer();
@@ -565,6 +609,8 @@ export async function startLiveFixture(): Promise<LiveFixture> {
       };
     },
     close: async () => {
+      gateOpen = true;
+      for (const answer of [...atGate]) answer();
       for (const s of [server, ...revived])
         await new Promise<void>((resolve) => {
           s.closeAllConnections?.();

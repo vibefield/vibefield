@@ -311,6 +311,20 @@ export interface VfDeskDoor {
   } | null>;
   pageStills(): Promise<{ readonly bytes: number; readonly stills: number }>;
   /**
+   * PT-5b (ruling 4) — the desk's RASTER BUDGET as its ledger counts it (ICE's `memory()`): the cap, what is charged, the
+   * evictions so far, and by OWNER — a kind's name — its bytes and its rows. A live pane's face is a row of it under its
+   * kind's name (`live <key>`), a failed pane's notice another. Null on a handle with no ledger (a test's).
+   */
+  budget(): {
+    readonly cap: number;
+    readonly used: number;
+    readonly entries: number;
+    readonly evictions: number;
+    readonly byOwner: Readonly<
+      Record<string, { readonly bytes: number; readonly entries: number }>
+    >;
+  } | null;
+  /**
    * PT-1 — a kind's DESK STATE on this desk (`handle.local(name)` — what its `ObjectKind.local` made), or undefined: no such
    * kind, or none kept. A read: a smoke asks a kind's own witness of it (the browser pane's `said(e)` — what its head says).
    */
@@ -373,6 +387,16 @@ export interface VfDeskDoor {
    * payload that carried one left, or null before — installed with the relay. Since desk.7 a spawned pointer's first
    * world point is its own, so a peer's first cursor is never the origin a frame-late world point left behind. */
   presenceFirst?(): { readonly x: number; readonly y: number } | null;
+  /**
+   * PT-5b (ruling 6) — the smokes' DOCUMENT relay, installed only on a page loaded with `?docRelay=1` (two windows of one
+   * shell hold no board together — fieldd's rooms are other desktops' — so the smoke plays the mesh, as it does for
+   * presence): the document WHOLE (`docSnapshot` — what a peer joining takes; null with none open), the LOCAL commits
+   * since the last ask (`docTap` — strata's outbound: a local commit each, so nothing applied is ever handed back), and
+   * updates handed in as the lane hands a peer's (`docApply` → `session.applyRemote`; answers how many it took). Base64.
+   */
+  docSnapshot?(): string | null;
+  docTap?(): readonly string[];
+  docApply?(payloads: readonly string[]): number;
   /** DK-16 — the smokes' GPU faults, installed only on a page loaded with `?deskFaults=1`, on the layer's OWN device:
    * "lose" destroys it, as a GPU reset loses it — the desk goes `failed` ("the device was lost: …") and the stage's card
    * offers its Reload; "error" raises one uncaptured validation error — the desk goes `degraded` and draws on, the status
@@ -534,6 +558,18 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
       };
     },
     pageStills: () => pageStills().usage(),
+    budget: () => {
+      const said = (handle as Partial<DeskLayerHandle>).memory?.();
+      return said === undefined
+        ? null
+        : {
+            cap: said.cap,
+            used: said.used,
+            entries: said.entries,
+            evictions: said.evictions,
+            byOwner: said.byOwner,
+          };
+    },
     writeProps: (entity, patch) => {
       const session = engine.docs.current();
       const e = entity as Entity;
@@ -601,6 +637,7 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
       said: presenceSaid(engine),
     }),
     ...(presenceRelayAsked() ? presenceRelay(engine) : {}),
+    ...(docRelayAsked() ? docRelay(engine) : {}),
     ...(deskFaultsAsked() ? { gpuFault: (kind) => gpuFault(desk.device?.() ?? null, kind) } : {}),
   };
   const scope = globalThis as Record<string, unknown>;
@@ -689,6 +726,49 @@ function presenceRelay(
     presenceFirst() {
       follow();
       return first;
+    },
+  };
+}
+
+/** The smokes' URL door for the document relay (`?docRelay=1`). */
+export const DOC_RELAY = "docRelay";
+
+function docRelayAsked(): boolean {
+  return (
+    typeof location !== "undefined" && new URLSearchParams(location.search).get(DOC_RELAY) === "1"
+  );
+}
+
+/** The relay's three doors over this engine's document — the session followed as it opens and re-opens. */
+function docRelay(engine: CanvasEngine): Pick<VfDeskDoor, "docSnapshot" | "docTap" | "docApply"> {
+  let tapped: ReturnType<CanvasEngine["docs"]["current"]>;
+  let off: (() => void) | null = null;
+  const sent: string[] = [];
+  const follow = (): void => {
+    const session = engine.docs.current();
+    if (session === tapped) return;
+    off?.();
+    tapped = session;
+    // strata's outbound: one payload a sealed LOCAL commit — an applied remote update fires nothing here
+    off = session?.store.subscribeOutbound((payload) => sent.push(toBase64(payload))) ?? null;
+  };
+  follow();
+  return {
+    docSnapshot() {
+      follow();
+      const session = engine.docs.current();
+      return session === undefined ? null : toBase64(session.exportSnapshot());
+    },
+    docTap() {
+      follow();
+      return sent.splice(0, sent.length);
+    },
+    docApply(payloads) {
+      follow();
+      const session = engine.docs.current();
+      if (session === undefined) return 0;
+      for (const payload of payloads) session.applyRemote(fromBase64(payload));
+      return payloads.length;
     },
   };
 }

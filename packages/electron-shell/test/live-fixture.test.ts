@@ -14,6 +14,7 @@ import {
   FIXTURE_ACT_IDS,
   FIXTURE_ASK_MS,
   FIXTURE_COOKIE,
+  FIXTURE_GATE_MS,
   FIXTURE_HUE,
   FIXTURE_ICON_HUE,
   FIXTURE_PARTS,
@@ -345,5 +346,52 @@ describe("the live pane's fixture page", () => {
       `http://${refusing.host}/beacon?token=r1&report=${encodeURIComponent(JSON.stringify({ path: "/revived" }))}`,
     );
     expect(fixture.reportAt("/revived")?.token).toBe("r1");
+  });
+  it("PT-5b: /gate is the page HELD AT ITS DOOR — answered at once while the gate is open, held while it is shut until it opens; a load given up meanwhile is forgotten; its word is kept by its own address", async () => {
+    expect(FIXTURE_GATE_MS).toBeGreaterThanOrEqual(30_000);
+    fixture = await startLiveFixture();
+    expect(fixture.gated()).toEqual({ asked: 0, answered: 0, waiting: 0 });
+    // open: the page, at once — the fixture's own (its ground, its link to /next)
+    const open = await fetch(`${fixture.origin}/gate?p=a`);
+    expect(open.status).toBe(200);
+    const body = await open.text();
+    expect(body).toContain("#1d6fd8");
+    expect(body).toContain('href="/next"');
+    expect(fixture.gated()).toEqual({ asked: 1, answered: 1, waiting: 0 });
+    // shut: a load waits there
+    fixture.gate(false);
+    let answered = false;
+    const held = fetch(`${fixture.origin}/gate?p=b`).then((r) => {
+      answered = true;
+      return r.status;
+    });
+    for (let i = 0; i < 50 && fixture.gated().waiting === 0; i += 1)
+      await new Promise((r) => setTimeout(r, 20));
+    expect(fixture.gated()).toEqual({ asked: 2, answered: 1, waiting: 1 });
+    await new Promise((r) => setTimeout(r, 120));
+    expect(answered).toBe(false);
+    // one given up while it waits is forgotten, never answered
+    const stop = new AbortController();
+    const gone = fetch(`${fixture.origin}/gate?p=c`, { signal: stop.signal }).catch(
+      (e: Error) => e.name,
+    );
+    for (let i = 0; i < 50 && fixture.gated().waiting < 2; i += 1)
+      await new Promise((r) => setTimeout(r, 20));
+    stop.abort();
+    expect(await gone).toBe("AbortError");
+    for (let i = 0; i < 50 && fixture.gated().waiting > 1; i += 1)
+      await new Promise((r) => setTimeout(r, 20));
+    expect(fixture.gated()).toEqual({ asked: 3, answered: 1, waiting: 1 });
+    // opened: the one that waited is answered, and the next at once
+    fixture.gate(true);
+    expect(await held).toBe(200);
+    expect(fixture.gated()).toEqual({ asked: 3, answered: 2, waiting: 0 });
+    expect((await fetch(`${fixture.origin}/gate?p=d`)).status).toBe(200);
+    // the page's word is kept by its own address (its path and query)
+    await fetch(
+      `${fixture.origin}/beacon?token=g1&report=${encodeURIComponent(JSON.stringify({ path: "/gate?p=a" }))}`,
+    );
+    expect(fixture.reportAt("/gate?p=a")?.token).toBe("g1");
+    expect(fixture.reportAt("/gate?p=b")).toBeNull();
   });
 });

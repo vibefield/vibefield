@@ -123,6 +123,7 @@ import { removeSmokeRoot, SMOKE_RUN_ENV, stopRunDaemons } from "./smoke-daemons"
 import { deskRigRows } from "./smoke-desk-rig";
 import { DEVICE_FLAG, type DeviceRowsDriver, devicePaneRows } from "./smoke-device-pane";
 import { HONEST_FLAG, type HonestRowsDriver, honestPaneRows } from "./smoke-honest-pane";
+import { type LastStillDriver, lastStillRows, STILL_FLAG } from "./smoke-last-still";
 import { LIVE_FLAG, type LiveRowsDriver, livePaneRows } from "./smoke-live-pane";
 import { faultRows, peersRows } from "./smoke-peers";
 import { pegboardRows } from "./smoke-pegboard";
@@ -1129,6 +1130,10 @@ export async function runSmokeCanvas(opts: {
         // PT-5a — the page's honest life, its rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs
         // --smoke-canvas --honest-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
         problems.push(...(await honestRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
+      } else if (process.argv.includes(STILL_FLAG)) {
+        // PT-5b — the last still and the many, its rows ALONE after the boot's (the author's loop: `node
+        // packaging/run-smoke.mjs --smoke-canvas --last-still` on smoke:canvas's build); smoke:canvas runs them below
+        problems.push(...(await stillRows(win, shotDir, opts)));
       } else if (process.argv.includes(PANE_FLAG)) {
         // PT-1 — the browser pane's rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs
         // --smoke-canvas --browser-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
@@ -1315,6 +1320,13 @@ export async function runSmokeCanvas(opts: {
         // a load that fails and a page that stops, each recovered (testing/smoke-honest-pane.ts). After PT-4's (each lays
         // its own pane and deletes it) and before the refusal's
         problems.push(...(await honestRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
+        // PT-5b (PORTALS): the last still and the many — panes on the fixture under a lowered cap: two alive and the third
+        // on its still, the held one never rested, a page woken heard and none born silent, the faces rows of the budget,
+        // a deleted pane's still forgotten with its grace, a still shown across a reload until the page's first frame, a
+        // second window following the first through the document, and the app's memory with one page, six, and six beside
+        // fourteen at rest (testing/smoke-last-still.ts). After PT-5a's (each lays its own panes and removes them) and
+        // before the refusal's
+        problems.push(...(await stillRows(win, shotDir, opts)));
         // DK-9: last — it leaves the desk on its card
         problems.push(...(await deskRefusalRow(win, opts.viteUrl)));
       }
@@ -1903,6 +1915,77 @@ async function honestRows(
     return await honestPaneRows(driver);
   } catch (error) {
     return [`PT-5a HONEST: ${error instanceof Error ? error.message : String(error)}`];
+  } finally {
+    await fixture.close();
+  }
+}
+
+/** PT-5b's rows on the smoke's fixture (testing/smoke-last-still.ts): PT-2's driver — its reload loading the renderer with
+ * the DOCUMENT relay beside the smokes' other doors — main's own word on the desk's PAGES (its offscreen WebContents by
+ * their address, their sound) and on the app's MEMORY (every process's working set, summed), and a SECOND WINDOW on a
+ * board of its own, loaded with the document relay too (the smoke plays the mesh between the two). */
+async function stillRows(
+  win: BrowserWindow,
+  shotDir: string | undefined,
+  opts: {
+    readonly viteUrl: string;
+    readonly preloadPath: string;
+    readonly registry: WindowRegistry;
+    readonly liveSurfaces?:
+      | (() => { readonly runtimes: number; readonly owners: number } | null)
+      | undefined;
+    /** What main does for each window of the run (its live-surface host among it): the second window needs it too. */
+    readonly onWindow?: ((window: BrowserWindow) => void) | undefined;
+  },
+): Promise<string[]> {
+  const fixture = await startLiveFixture();
+  const doors = { presenceRelay: "1", deskFaults: "1", docRelay: "1" };
+  try {
+    const driver: LastStillDriver = {
+      win,
+      shotDir,
+      say: (line) => console.log(line),
+      fixture,
+      custody: () => opts.liveSurfaces?.() ?? null,
+      reload: async () => {
+        const ready = waitForConsole(win, "DESK_READY ", 60_000);
+        await loadRenderer(win, "smoke-canvas", opts.viteUrl, doors);
+        try {
+          await ready;
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      pages: (prefix) =>
+        webContents
+          .getAllWebContents()
+          .filter((c) => !c.isDestroyed() && c.isOffscreen() && c.getURL().startsWith(prefix))
+          .map((c) => ({ id: c.id, url: c.getURL(), muted: c.isAudioMuted() })),
+      memory: () => {
+        const metrics = app.getAppMetrics();
+        const kb = metrics.reduce((sum, m) => sum + m.memory.workingSetSize, 0);
+        return { mb: Math.round(kb / 1024), processes: metrics.length };
+      },
+      openPeer: async () => {
+        const peer = smokeWindow({
+          mode: "smoke-canvas",
+          preloadPath: opts.preloadPath,
+          show: true,
+        });
+        opts.registry.adoptAuxiliary(peer);
+        // (its own live-surface host: its pane's page is a page of ITS window's)
+        opts.onWindow?.(peer);
+        const ready = waitForConsole(peer, "DESK_READY ", 60_000);
+        await loadRenderer(peer, "smoke-canvas", opts.viteUrl, { docRelay: "1" });
+        await ready;
+        await sleep(800);
+        return peer;
+      },
+    };
+    return await lastStillRows(driver);
+  } catch (error) {
+    return [`PT-5b STILL: ${error instanceof Error ? error.message : String(error)}`];
   } finally {
     await fixture.close();
   }

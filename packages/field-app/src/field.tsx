@@ -1,4 +1,4 @@
-import { Camera, type CanvasEngine } from "@vibecook/ice";
+import { Camera, type CanvasEngine, type Entity } from "@vibecook/ice";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   type CSSProperties,
@@ -245,6 +245,22 @@ export function FieldView({
             ...(opts.props === undefined ? {} : { props: opts.props }),
           }),
         ),
+      // PT-5b — and three more a smoke's rows need of a desk of many panes, each an op the product's own chrome
+      // performs: an object deleted (selected, then ⌫'s own op — one undo step), the view framed on some objects (the
+      // head's "Zoom to fit" over a selection), the view panned to a world point
+      removeWidget: (entity: string): boolean => {
+        const e = Number(entity) as Entity;
+        if (!Number.isFinite(e) || !ce.world.isAlive(e)) return false;
+        ce.ops.setSelection([e]);
+        ce.ops.deleteSelection();
+        return true;
+      },
+      frame: (entities: readonly string[]): void => {
+        ce.ops.zoomToFit(entities.map((entity) => Number(entity) as Entity));
+      },
+      panTo: (x: number, y: number): void => {
+        ce.ops.panTo(x, y);
+      },
     };
     const scope = globalThis as Record<string, unknown>;
     scope["__vfFieldSmoke"] = door;

@@ -197,13 +197,15 @@ export interface DeskLiveFaceRow {
   /** PT-3: inputs this face sent, and the last one's kind — a smoke's witness that a page in hand was told. */
   readonly inputs: number;
   readonly lastInput: LiveInput["kind"] | null;
-  /** The face's texture: its size, its present count, its generation (a remade texture is a new epoch). */
+  /** The face's texture: its size, its present count, its generation (a remade texture is a new epoch) — and (PT-5b) the
+   * bytes it holds on the device, every level counted: what its kind charges the desk's budget. */
   readonly texture:
     | {
         readonly width: number;
         readonly height: number;
         readonly revision: number;
         readonly epoch: number;
+        readonly bytes: number;
       }
     | undefined;
   /** PT-5a: the texture is HIDDEN (`texture()` answers none) — it holds what no face may show (the engine's own error page,
@@ -1409,7 +1411,13 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
           texture:
             t === undefined
               ? undefined
-              : { width: t.width, height: t.height, revision: t.revision, epoch: t.epoch },
+              : {
+                  width: t.width,
+                  height: t.height,
+                  revision: t.revision,
+                  epoch: t.epoch,
+                  bytes: t.bytes,
+                },
           veiled,
           refused: handle.state.browser?.refused?.serial ?? 0,
           faviconBytes: handle.faviconArrivals ?? 0,

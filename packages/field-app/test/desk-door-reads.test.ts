@@ -408,6 +408,110 @@ describe("the desk door's reads (DK-8)", () => {
     }
   });
 
+  it("PT-5b (ruling 6): installs the DOCUMENT relay only on a page asked for it (`?docRelay=1`) — a peer joins by the document whole, follows it by its local commits, and what it applies it never hands back", async () => {
+    const make = () => {
+      const ce = createFieldEngine(buildRegistry());
+      ce.docs.create();
+      return ce;
+    };
+    const a = make();
+    const b = make();
+    const install = (ce: ReturnType<typeof make>) => {
+      const undo = installDeskDoor(
+        { engine: ce, handle: {} as never, generation: 1, mount: 0, theme: "light" },
+        () => false,
+      );
+      const door = (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk as VfDeskDoor;
+      return { door, undo };
+    };
+    const g = globalThis as { location?: { search: string } };
+    const before = g.location;
+    try {
+      g.location = { search: "" };
+      const plain = install(a);
+      expect(plain.door.docSnapshot).toBeUndefined();
+      expect(plain.door.docTap).toBeUndefined();
+      expect(plain.door.docApply).toBeUndefined();
+      plain.undo();
+      g.location = { search: "?docRelay=1" };
+      const doorA = install(a).door;
+      const doorB = install(b).door;
+      // A's board holds a pad; B joins by A's document whole: the SAME object, by its durable key
+      a.ops.spawnWidget(COMMENT_PAD_TYPE, { x: 40, y: 40, w: 220, h: 280, props: {} });
+      a.world.sync();
+      const padA = deskObjects(a, COMMENT_PAD_TYPE)[0];
+      if (padA === undefined || padA.key === null) throw new Error("no durable pad in A");
+      expect(deskObjects(b, COMMENT_PAD_TYPE)).toEqual([]);
+      const whole = doorA.docSnapshot?.() ?? null;
+      expect(typeof whole).toBe("string");
+      expect(doorB.docApply?.([whole as string])).toBe(1);
+      b.world.sync();
+      const padB = deskObjects(b, COMMENT_PAD_TYPE)[0];
+      expect(padB?.key).toBe(padA.key);
+      // what A sent out while it was laid is spent; A writes its pad's line: ONE local commit, handed to B as a lane's push
+      doorA.docTap?.();
+      doorB.docTap?.();
+      expect(doorA.writeProps(padA.entity, { text: "a line" })).toBe(true);
+      const sent = doorA.docTap?.() ?? [];
+      expect(sent).toHaveLength(1);
+      expect(doorA.docTap?.()).toEqual([]);
+      expect(doorB.docApply?.(sent)).toBe(1);
+      b.world.sync();
+      expect(deskObjects(b, COMMENT_PAD_TYPE)[0]?.props.text).toBe("a line");
+      // B applied it and wrote nothing of its own: nothing is handed back (no echo for the mesh to carry round)
+      expect(doorB.docTap?.()).toEqual([]);
+      // with no document open the relay answers none
+      b.docs.close();
+      expect(doorB.docSnapshot?.()).toBeNull();
+      expect(doorB.docApply?.(sent)).toBe(0);
+    } finally {
+      if (before === undefined) delete g.location;
+      else g.location = before;
+      a.dispose();
+      b.dispose();
+    }
+  });
+
+  it("PT-5b (ruling 4): reads the desk's RASTER BUDGET as its ledger counts it — the cap, what is charged, by owner — and nothing on a handle with no ledger", () => {
+    const ce = createFieldEngine(buildRegistry());
+    ce.docs.create();
+    const stats = {
+      cap: 268_435_456,
+      used: 20_480_000,
+      resident: 0,
+      room: 268_435_456,
+      entries: 2,
+      evictions: 1,
+      byOwner: { "vibefield.browser-pane": { bytes: 20_480_000, entries: 2 } },
+    };
+    const undo = installDeskDoor(
+      {
+        engine: ce,
+        handle: { memory: () => stats } as never,
+        generation: 1,
+        mount: 0,
+        theme: "light",
+      },
+      () => false,
+    );
+    const door = (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk;
+    expect(door?.budget()).toEqual({
+      cap: 268_435_456,
+      used: 20_480_000,
+      entries: 2,
+      evictions: 1,
+      byOwner: { "vibefield.browser-pane": { bytes: 20_480_000, entries: 2 } },
+    });
+    undo();
+    const bare = installDeskDoor(
+      { engine: ce, handle: {} as never, generation: 1, mount: 0, theme: "light" },
+      () => false,
+    );
+    expect((globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk?.budget()).toBeNull();
+    bare();
+    ce.dispose();
+  });
+
   it("DK-17b (ICE I45): the relay says the point this window's presence FIRST sent out — its pointer's own, never (0, 0)", async () => {
     const ce = createFieldEngine(buildRegistry());
     ce.docs.create();

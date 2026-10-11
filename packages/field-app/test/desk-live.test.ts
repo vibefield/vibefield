@@ -297,7 +297,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         dropped: 1,
         inputs: 0,
         lastInput: null,
-        texture: { width: 2560, height: 1600, revision: 1, epoch: 0 },
+        texture: { width: 2560, height: 1600, revision: 1, epoch: 0, bytes: 0 },
         veiled: false,
         refused: 0,
         faviconBytes: 0,
