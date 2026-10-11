@@ -1,6 +1,7 @@
 import { BrowserWindow, screen } from "electron";
 import { APP_ENTRY_URL } from "./app-protocol";
-import { isSmokeLike, keepsFramesWhenCovered, type ShellMode } from "./modes";
+import { keepsFramesWhenCovered, type ShellMode } from "./modes";
+import { HEAD_LIGHTS, hasInsetLights } from "./window-lights";
 import { assertSecurePreferences, mainWindowPreferences, webPreferences } from "./window-policy";
 
 // Runtime window construction (ESR §5.2.2–5.2.3): ALL BrowserWindow creation
@@ -9,7 +10,9 @@ import { assertSecurePreferences, mainWindowPreferences, webPreferences } from "
 
 /** darwin outside test modes: fill the primary work area with inset traffic
  * lights. Applied HERE per window — never via a global browser-window-created
- * listener that would mutate every future window indiscriminately (§5.2.3). */
+ * listener that would mutate every future window indiscriminately (§5.2.3).
+ * The lights are built on the head's axis; `window-lights.ts` owns that
+ * position and the one they take while Godview's deck is maximized. */
 export function createMainWindow(opts: {
   mode: ShellMode;
   preloadPath: string;
@@ -18,11 +21,11 @@ export function createMainWindow(opts: {
    * Godview perf lab and capture, M31/M32); every other window leaves it unset */
   offscreen?: { deviceScaleFactor: number } | undefined;
 }): BrowserWindow {
-  const fillWorkArea = process.platform === "darwin" && !isSmokeLike(opts.mode);
+  const fillWorkArea = hasInsetLights(process.platform, opts.mode);
   const win = new BrowserWindow({
     titleBarStyle: fillWorkArea ? "hiddenInset" : "default",
     // conditional spread: exactOptionalPropertyTypes forbids an explicit undefined
-    ...(fillWorkArea ? { trafficLightPosition: { x: 18, y: 22 } } : {}),
+    ...(fillWorkArea ? { trafficLightPosition: { ...HEAD_LIGHTS } } : {}),
     width: 1180,
     height: 780,
     show: opts.show,

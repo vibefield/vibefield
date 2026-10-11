@@ -1,6 +1,7 @@
 import {
   FrameViewSetRequest,
   FrameViewState as FrameViewStateSchema,
+  GodviewDeckSetRequest,
   IPC_CHANNELS,
   RendererReplaceRequest,
   RendererReplaceResult,
@@ -13,6 +14,7 @@ import {
   type UsersListSnapshot,
   UsersSwitchParams,
   UsersUpdateParams,
+  WindowLightsState as WindowLightsStateSchema,
 } from "@vibefield/contracts";
 import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
@@ -24,6 +26,7 @@ import { createScreenshotPreviewDoor } from "./screenshot-preview";
 import type { StillResolution } from "./still-protocol";
 import type { ThemeOwner } from "./theme";
 import type { ViewRegistry } from "./view";
+import type { LightsRegistry } from "./window-lights";
 import type { WindowRegistry } from "./window-policy";
 
 // The closed IPC surface, main side (ESR §6.2–6.3): handlers wiring pure policy
@@ -257,6 +260,32 @@ export function registerThemeSet(
     const request = ThemeSetRequest.parse(raw);
     theme.watch(event.sender);
     return ThemeStateSchema.parse(theme.set(request.preference));
+  });
+}
+
+/** The deck door (Godview round 3 — GV-D6, GV-D11). Godview's deck says its
+ * state BY NAME — away, up, maximized, or none — and main's owner
+ * (`window-lights.ts`) answers with what it holds: the word, and where the
+ * window's lights stand for it. No position crosses in either direction; the
+ * two positions are main's, composed with the view main already owns. Same
+ * registered-sender gate as the others: a window this shell did not make moves
+ * no window's lights and lends nobody's ⌘W. */
+export function registerDeckSet(
+  registry: WindowRegistry,
+  lights: LightsRegistry,
+  logger?: Logger,
+): void {
+  ipcMain.handle(IPC_CHANNELS.deckSet, async (event, raw: unknown) => {
+    if (!registry.owns(event.sender)) {
+      logger?.warn(
+        "desktop.ipc.deck_set_refused",
+        "Electron refused a deck state from an unregistered sender",
+        { webContentsId: event.sender.id },
+      );
+      throw new Error("deck set refused: unregistered sender");
+    }
+    const request = GodviewDeckSetRequest.parse(raw);
+    return WindowLightsStateSchema.parse(lights.ensure(event.sender).say(request.deck));
   });
 }
 

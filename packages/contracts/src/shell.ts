@@ -211,6 +211,37 @@ export type ThemeState = z.infer<typeof ThemeState>;
 export const ThemeSetRequest = z.object({ preference: ThemePreference }).passthrough();
 export type ThemeSetRequest = z.infer<typeof ThemeSetRequest>;
 
+/** Godview's terminal deck, as the page names it (Godview round 3 — GV-D6,
+ * GV-D11): fully away, up as a sheet over the monitor, or maximized, where its
+ * bar is the window's title bar. Three names and no geometry: where the deck's
+ * edge stands is the page's business and never crosses. */
+export const GodviewDeckState = z.enum(["away", "up", "maximized"]);
+export type GodviewDeckState = z.infer<typeof GodviewDeckState>;
+
+/** renderer → main: THIS window's deck, said by name — or `null`, the page
+ * saying it has none to speak of (Godview is not its view, or its deck is not
+ * mounted). Never a position: main owns the window's lights and the two places
+ * they stand, and composes this fact with the view it already owns
+ * ({@link FrameViewState}), so a change of view moves them with no word from
+ * the page. The same fact decides whether ⌘W is lent to the deck's panes. */
+export const GodviewDeckSetRequest = z.object({ deck: GodviewDeckState.nullable() }).passthrough();
+export type GodviewDeckSetRequest = z.infer<typeof GodviewDeckSetRequest>;
+
+/** Where a window's lights (macOS's close · minimize · zoom) stand, by name:
+ * on the HEAD's axis, where a window is built with them; on the deck's BAR,
+ * while Godview's deck is maximized and that bar is the title bar; or NONE —
+ * the window has no inset lights (not a Mac, or a default title bar), and main
+ * moved nothing. */
+export const WindowLights = z.enum(["head", "bar", "none"]);
+export type WindowLights = z.infer<typeof WindowLights>;
+
+/** main → renderer: the answer to {@link GodviewDeckSetRequest} — the deck as
+ * main now holds it for this window, and where its lights stand for it. */
+export const WindowLightsState = z
+  .object({ deck: GodviewDeckState.nullable(), lights: WindowLights })
+  .passthrough();
+export type WindowLightsState = z.infer<typeof WindowLightsState>;
+
 /** Why a window asks main to replace its renderer (DK-9), by name. One reason today:
  * a plugin's KINDS changed in a way this realm cannot take — an update's new code or
  * schema, or a type a board's ghost stub defined faceless (field-app window-kinds.ts). */

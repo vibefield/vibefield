@@ -3,6 +3,7 @@ import type {
   FrameView,
   FrameViewState,
   FrameZoomAct,
+  GodviewDeckState,
   ScreenshotCaptureResult,
   ScreenshotPreviewResult,
   ShellCommand,
@@ -10,6 +11,7 @@ import type {
   ThemePreference,
   ThemeState,
   WindowConnection,
+  WindowLightsState,
 } from "@vibefield/contracts";
 import type {
   CrashArtifactListV1,
@@ -104,6 +106,11 @@ declare global {
       theme: {
         set(preference: ThemePreference): Promise<ThemeState>;
         onState(handler: (state: ThemeState) => void): () => void;
+      };
+      /** Godview round 3 — the deck's state said by name; main owns the
+       * window's lights (GV-D11) and lends ⌘W by the same word. */
+      deck: {
+        set(deck: GodviewDeckState | null): Promise<WindowLightsState>;
       };
       /** SNAP-D3 — the native screenshot helper through main; the answer is
        * the contract's own result (still on disk + clipboard, cancel, or a

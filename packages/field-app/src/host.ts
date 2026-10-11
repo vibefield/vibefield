@@ -12,6 +12,7 @@ import type {
   FrameView,
   FrameViewState,
   FrameZoomAct,
+  GodviewDeckState,
   RendererParticipantIdentity,
   ScreenshotCaptureResult,
   ScreenshotPreviewResult,
@@ -19,6 +20,7 @@ import type {
   ShellPlatform,
   ThemePreference,
   ThemeState,
+  WindowLightsState,
   WindowTerminalBootstrap,
 } from "@vibefield/contracts";
 import type {
@@ -95,6 +97,19 @@ export interface FieldThemeHost {
   onState(handler: (state: ThemeState) => void): () => void;
 }
 
+/** Godview's deck, said to the HOST by name (Godview round 3 — GV-D6, GV-D11):
+ * away, up, maximized, or `null` for none. The host owns what follows from it
+ * and the page never sends a position: main places the window's lights — on
+ * the deck's bar only while Godview is the view AND the deck says maximized,
+ * back on the head's axis in the same step as a change of view — and lends ⌘W
+ * to the panes only while the deck is not away. The answer is the word the
+ * host now holds and where the lights stand for it; `lights: "none"` is a
+ * window with no inset lights (not a Mac, a default title bar), where the bar
+ * is drawn the same with nothing at its left. */
+export interface FieldDeckHost {
+  set(deck: GodviewDeckState | null): Promise<WindowLightsState>;
+}
+
 /** The Live Surfaces seam (DT-2a). The renderer host claims the main-world port
  * handoff once per renderer generation — before product or plugin activation,
  * because the ports ARE the capability and a later listener must not see them —
@@ -166,6 +181,9 @@ export interface FieldHost {
    * `theme.ts` keeps a stand-in there (the OS's theme, and a choice for the
    * page's life). */
   readonly theme?: FieldThemeHost;
+  /** Optional like `view`: a browser harness has no window whose lights could
+   * move and no menu to lend ⌘W, so the deck's publisher says nothing there. */
+  readonly deck?: FieldDeckHost;
   readonly liveSurfaces?: FieldLiveSurfacesHost;
   /** The profile write seam (UA-3). `users.json` is SUPERVISOR-owned, not
    * fieldd's (UA-D10), so the one door to it is main — which is why this is a

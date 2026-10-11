@@ -1443,6 +1443,13 @@ export const IPC_CHANNELS = {
   /** renderer → main invoke: ThemeSetRequest — the Me menu's Theme, Settings →
    * Appearance and the Setup Assistant choosing a theme; answers ThemeState */
   themeSet: "vibefield:theme:set",
+  /** renderer → main invoke: GodviewDeckSetRequest — Godview's deck saying its
+   * state by name (away · up · maximized, or none), never a position; answers
+   * WindowLightsState. Main owns the window's lights and moves them onto the
+   * deck's bar only while the view is Godview AND the deck says maximized
+   * (Godview round 3, GV-D11); the close item lends ⌘W to the panes by the
+   * same fact (GV-D6: a deck that is away has no pane to answer it). */
+  deckSet: "vibefield:deck:set",
   /** renderer → main invoke: UsersUpdateParams → UserRecord — the Account
    * page's profile write. Main owns users.json (UA-D10); fieldd never writes
    * it, which is what keeps the boundary lint honest. */

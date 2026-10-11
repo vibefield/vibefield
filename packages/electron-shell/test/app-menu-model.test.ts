@@ -1,4 +1,4 @@
-import type { FrameView, FrameZoomAct } from "@vibefield/contracts";
+import type { FrameView, FrameZoomAct, GodviewDeckState } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import {
   type AppMenuItem,
@@ -26,6 +26,17 @@ const find = (items: readonly AppMenuItem[], id: string): AppMenuItem | undefine
 
 const PLATFORMS: readonly MenuPlatform[] = ["darwin", "other"];
 const VIEWS: readonly FrameView[] = ["canvas", "godview", "history", "assistant"];
+/** What a page may have said of its deck: nothing yet (the key absent), that it
+ * has none, or one of the three names (contracts `GodviewDeckState`). */
+const DECKS: readonly (GodviewDeckState | null | undefined)[] = [
+  undefined,
+  null,
+  "away",
+  "up",
+  "maximized",
+];
+const menuState = (view: FrameView, deck: GodviewDeckState | null | undefined) =>
+  deck === undefined ? { view } : { view, deck };
 const noActions = {};
 const asked: FrameView[] = [];
 const actions = {
@@ -170,6 +181,60 @@ describe("buildAppMenu", () => {
   );
 
   it.each(PLATFORMS)(
+    "lends ⌘W by the deck's own word: while it is up or maximized, and while nothing was said (%s)",
+    (platform) => {
+      // Godview round 3 (GV-D6): the deck can be AWAY, and then no pane is there
+      // to answer ⌘W. The page says its deck's state by name (the deck door) and
+      // the lend reads that fact. Until a page says anything — every build
+      // before the deck's state slices — there is no fact, and the lend is
+      // exactly what it was: whenever Godview is the view.
+      const asBefore = find(
+        buildAppMenu(platform, { view: "godview" }, actions),
+        CLOSE_WINDOW_ITEM_ID,
+      );
+      for (const deck of [undefined, null, "up", "maximized"] as const) {
+        const item = find(
+          buildAppMenu(platform, menuState("godview", deck), actions),
+          CLOSE_WINDOW_ITEM_ID,
+        );
+        expect(item, String(deck)).toEqual(asBefore);
+        expect(item?.role, String(deck)).toBeUndefined();
+        expect(item?.accelerator, String(deck)).toBeUndefined();
+        expect(item?.click, String(deck)).toBe(actions.closeWindow);
+      }
+    },
+  );
+
+  it.each(PLATFORMS)(
+    "takes ⌘W back while the deck is away — the window's, as in a view with no panes (%s)",
+    (platform) => {
+      const away = find(
+        buildAppMenu(platform, { view: "godview", deck: "away" }, actions),
+        CLOSE_WINDOW_ITEM_ID,
+      );
+      // Not a behaviour of its own: the very item History and the canvas carry.
+      expect(away).toEqual(
+        find(buildAppMenu(platform, { view: "history" }, actions), CLOSE_WINDOW_ITEM_ID),
+      );
+      expect(away).toMatchObject({ role: "close", accelerator: "CommandOrControl+W" });
+      expect(away?.click).toBeUndefined();
+    },
+  );
+
+  it.each(PLATFORMS)("lends nothing by a deck's word outside Godview (%s)", (platform) => {
+    // Main keeps what the page last said. A change of view must not wait for
+    // the page to take its word back before ⌘W is the window's again.
+    for (const view of ["canvas", "history"] as const) {
+      for (const deck of DECKS) {
+        expect(
+          find(buildAppMenu(platform, menuState(view, deck), actions), CLOSE_WINDOW_ITEM_ID),
+          `${view} · ${String(deck)}`,
+        ).toEqual({ id: CLOSE_WINDOW_ITEM_ID, role: "close", accelerator: "CommandOrControl+W" });
+      }
+    }
+  });
+
+  it.each(PLATFORMS)(
     "keeps Close Window present-but-disabled when nothing can close it (%s)",
     (platform) => {
       // Same law as Godview's disabled face: an absent item reads as a missing
@@ -194,12 +259,14 @@ describe("buildAppMenu", () => {
     // sheds its role while the overlay is open, so a role-keyed count would read
     // zero there and stop watching for the very duplicate it exists to catch.
     for (const view of VIEWS) {
-      const items = flatten(buildAppMenu(platform, { view }, actions));
-      expect(items.filter((item) => item.id === CLOSE_WINDOW_ITEM_ID)).toHaveLength(1);
-      // and nothing ELSE may carry a close role, in either state
-      expect(
-        items.filter((item) => item.role === "close" && item.id !== CLOSE_WINDOW_ITEM_ID),
-      ).toHaveLength(0);
+      for (const deck of DECKS) {
+        const items = flatten(buildAppMenu(platform, menuState(view, deck), actions));
+        expect(items.filter((item) => item.id === CLOSE_WINDOW_ITEM_ID)).toHaveLength(1);
+        // and nothing ELSE may carry a close role, in either state
+        expect(
+          items.filter((item) => item.role === "close" && item.id !== CLOSE_WINDOW_ITEM_ID),
+        ).toHaveLength(0);
+      }
     }
   });
 

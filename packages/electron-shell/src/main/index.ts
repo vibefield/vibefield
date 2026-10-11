@@ -49,6 +49,7 @@ import {
 } from "electron";
 import { applyDevelopmentDockIcon } from "./app-branding";
 import { installAppMenu } from "./app-menu";
+import type { AppMenuState } from "./app-menu-model";
 import { installAppProtocol } from "./app-protocol";
 import { ArtifactPreviewCapture, isArtifactPreviewSession } from "./artifact-preview-capture";
 import { runAuditedSupportExport } from "./audited-support-export";
@@ -60,6 +61,7 @@ import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot } from "./fieldd";
 import { FielddDaemonBootFence, FielddHandleCoordinator } from "./fieldd-handle-coordinator";
 import {
+  registerDeckSet,
   registerRendererReplace,
   registerScreenshotCapture,
   registerScreenshotPreview,
@@ -127,6 +129,7 @@ import type { TrayLinkState, TraySnapshot } from "./tray-model";
 import { createElectronTrayRuntime } from "./tray-native";
 import { applyProfileUpdate, dealOwedFace } from "./users-profile";
 import { ViewRegistry } from "./view";
+import { hasInsetLights, LightsRegistry } from "./window-lights";
 import { WindowRegistry } from "./window-policy";
 import { createMainWindow, loadRenderer } from "./windows";
 
@@ -198,6 +201,9 @@ let crashArtifacts: CrashArtifactManager | null = null;
 let supportBundles: SupportBundleService | null = null;
 let trayController: TrayController | null = null;
 let viewStates: ViewRegistry | null = null;
+// Godview round 3 — each window's lights and the deck word they follow
+// (GV-D11); null outside the windowed modes.
+let windowLights: LightsRegistry | null = null;
 // FR-4 — the app's one theme (FC-D5), main's; null outside the windowed modes.
 let themeOwner: ThemeOwner | null = null;
 // SNAP-D1 — the one screenshot tool per shell boot; null before the windowed
@@ -234,6 +240,8 @@ function disposeShellState(): void {
   trayController = null;
   viewStates?.dispose();
   viewStates = null;
+  windowLights?.dispose();
+  windowLights = null;
   themeOwner?.dispose();
   themeOwner = null;
   // A live helper dies with the shell: an overlay must never outlive the app
@@ -1228,12 +1236,31 @@ async function main(
   // frame's four), the menu names it, the renderer mirrors it. `redrawMenu` is
   // assigned below for the modes that have a menu; the states exist in every
   // windowed mode because the renderer needs its truth either way.
-  let redrawMenu: (state: { view: FrameView }) => void = () => undefined;
-  viewStates = new ViewRegistry({
+  let redrawMenu: (state: AppMenuState) => void = () => undefined;
+  const views = new ViewRegistry({
     logger: logger.child({ component: "view" }),
-    onChanged: (state) => redrawMenu({ view: state.view }),
+    onChanged: (state, target) => {
+      // The lights first: they follow the view inside this very step, so ⌘1
+      // from a maximized deck puts them back with no word from the page.
+      windowLights?.viewChanged(target);
+      redrawMenu({ view: state.view, deck: windowLights?.peek(target).deck ?? null });
+    },
   });
+  viewStates = views;
   registerViewSet(registry, viewStates, logger.child({ component: "ipc.view" }));
+  // Godview round 3 (GV-D11, GV-D6): the page says its deck's state by name and
+  // main owns what follows — where the window's lights stand, composed with the
+  // view above, and whether ⌘W is lent to the panes. The lights exist only on a
+  // Mac outside the harness modes; the word is held in every windowed mode,
+  // because the menu's close item reads it on every platform.
+  windowLights = new LightsRegistry({
+    inset: hasInsetLights(process.platform, MODE),
+    view: (target) => views.peek(target).view,
+    windowOf: (target) => BrowserWindow.fromWebContents(target),
+    logger: logger.child({ component: "window.lights" }),
+    onChanged: (state, target) => redrawMenu({ view: views.peek(target).view, deck: state.deck }),
+  });
+  registerDeckSet(registry, windowLights, logger.child({ component: "ipc.deck" }));
   // DK-9: a window replaces its renderer at its own asking (a plugin's kinds changed)
   registerRendererReplace(registry, logger.child({ component: "ipc.renderer" }));
 

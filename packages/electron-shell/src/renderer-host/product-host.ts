@@ -124,6 +124,9 @@ export function mountProductHost(
         set: (preference) => window.vibefield.theme.set(preference),
         onState: (handler) => window.vibefield.theme.onState(handler),
       },
+      deck: {
+        set: (deck) => window.vibefield.deck.set(deck),
+      },
       // DT-2a: the claimed transport reaches the product instead of only being
       // parked here. The promise is handed over as-is — the pool behind the seam
       // awaits it — while the LIFETIME stays this adapter's: pagehide above
