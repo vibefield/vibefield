@@ -146,6 +146,22 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(container?.textContent).toContain("Infinite canvas and visual tuning workbench");
     expect(container?.textContent).toContain("Field chrome playground");
     expect(container?.textContent).toContain("Godview stage");
+    // GV-D1: every Godview stage wears the head — the shipping view, mounted
+    // by the shipping monitor, never a copy — with the registry's five circles
+    // and nothing of the instrument bar it replaced.
+    const stages = [...(container?.querySelectorAll(".vf-ds-godview-frame > .vf-godview") ?? [])];
+    expect(stages.length).toBeGreaterThanOrEqual(5);
+    for (const stage of stages) {
+      expect(stage.classList.contains("theme-light")).toBe(true);
+      expect(
+        [
+          ...stage.querySelectorAll(
+            '.vf-stories-slot .vf-stories [role="group"][aria-label="Monitor view"] button',
+          ),
+        ].map((button) => button.getAttribute("aria-label")),
+      ).toEqual(["SWARM view", "LIST view", "RAIN view", "TIMELINE view", "SPEND view"]);
+      expect(stage.querySelector(".vf-godview-header")).toBeNull();
+    }
     expect(container?.textContent).toContain(
       "Swarm bodies — every drawn state, on the package's own fixtures",
     );
@@ -398,6 +414,32 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(place?.dataset.open).toBe("true");
 
     expect(container?.querySelector(".vf-godview .vf-monitor-list")).not.toBeNull();
+    // GV-D1: the head in the other theme too — the page is dark, so the frame's
+    // tokens the head is drawn in are the night's (`.dark .vf-stories`), and
+    // every stage that follows the page is Godview's dark.
+    const darkStages = [
+      ...(container?.querySelectorAll(".vf-ds-godview-frame > .vf-godview.theme-dark") ?? []),
+    ];
+    expect(darkStages.length).toBeGreaterThanOrEqual(5);
+    for (const stage of darkStages) {
+      expect(stage.closest(".dark")).toBe(document.documentElement);
+      expect(stage.querySelectorAll(".vf-stories .vf-story").length).toBe(5);
+    }
+    // System control is the palette's act in the product; the stage specimen
+    // stages the catalog's own button for the shipping panel.
+    const control = container?.querySelector<HTMLButtonElement>(
+      '.vf-ds-godview-controls button[aria-controls="vf-godview-tweak-panel"]',
+    );
+    expect(control?.textContent).toBe("System control");
+    expect(control?.getAttribute("aria-expanded")).toBe("false");
+    expect(document.getElementById("vf-godview-tweak-panel")).toBeNull();
+    await act(async () => control?.click());
+    expect(control?.getAttribute("aria-expanded")).toBe("true");
+    expect(document.getElementById("vf-godview-tweak-panel")?.textContent).toContain(
+      "SYSTEM CONTROL",
+    );
+    await act(async () => control?.click());
+    expect(document.getElementById("vf-godview-tweak-panel")).toBeNull();
     // The swarm's bodies (AR-5): the views package's own fixtures on the
     // SHIPPING view, through the view host since MV-5. A happy-dom window has
     // no WebGPU, so the view says so — the same honest line the product draws,

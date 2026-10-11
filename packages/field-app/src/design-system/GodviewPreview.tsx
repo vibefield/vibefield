@@ -1,4 +1,5 @@
 import { monitorParameterDefaults, monitorViewFor } from "@vibecook/puppeteer-views";
+import { UiButton } from "@vibefield/design-kit/primitives";
 import { type CSSProperties, type ReactElement, type ReactNode, useMemo, useState } from "react";
 import { useDeckAppearance } from "../godview/deck-appearance";
 import { godviewTerminalGroundStyle } from "../godview/deck-theme";
@@ -26,7 +27,11 @@ import type { MonitorPaneFacts } from "../godview/monitor/useMonitorAgents";
  * as a fixture keeps them (the spawn bloom's births, SB-3), and `initialView`
  * opens another view — the swarm, where a host has WebGPU to draw it. `deck` is
  * what the stage holds in its well — a fixture's panes (the Lip's specimen,
- * round 3) in place of the unavailable deck. */
+ * round 3) in place of the unavailable deck. The monitor's head (GV-D1) is the
+ * monitor's own, so every stage here wears it. `systemControl` stages the one
+ * thing the head does not hold: in the product System control is the palette's
+ * act (it left with the instrument bar), and a catalog stage has no palette, so
+ * the specimen offers the catalog's own button for the shipping panel. */
 export function GodviewPreview({
   door = null,
   panes,
@@ -34,6 +39,7 @@ export function GodviewPreview({
   initialProfile = null,
   theme = "light",
   deck,
+  systemControl = false,
 }: {
   door?: MonitorDoor | null;
   panes?: MonitorPaneFacts;
@@ -45,6 +51,8 @@ export function GodviewPreview({
   theme?: GodviewTheme;
   /** the deck the stage holds; absent, the honest unavailable deck */
   deck?: ReactNode;
+  /** Stage the catalog's own button for the System control panel. */
+  systemControl?: boolean;
 } = {}): ReactElement {
   const [viewId, setViewId] = useState(initialView);
   const [tuningOpen, setTuningOpen] = useState(false);
@@ -72,6 +80,17 @@ export function GodviewPreview({
     // daemon, so the field is `no-door` — nobody has been asked — and the
     // monitor draws the honest empty stage rather than invented rows.
     <GodviewAgentsProvider door={door}>
+      {systemControl ? (
+        <div className="vf-ds-godview-controls">
+          <UiButton
+            aria-controls="vf-godview-tweak-panel"
+            aria-expanded={tuningOpen}
+            onClick={() => setTuningOpen((current) => !current)}
+          >
+            System control
+          </UiButton>
+        </div>
+      ) : null}
       <div className="vf-ds-godview-frame">
         <GodviewStage
           open
@@ -89,9 +108,7 @@ export function GodviewPreview({
               {...(panes !== undefined ? { panes } : {})}
               initialProfile={initialProfile}
               theme={theme}
-              tuningOpen={tuningOpen}
               onSelectView={setViewId}
-              onToggleTuning={() => setTuningOpen((current) => !current)}
             />
           }
           tuningPanel={

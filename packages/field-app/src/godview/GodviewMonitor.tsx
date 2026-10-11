@@ -15,10 +15,8 @@ import type { MonitorEndedRow } from "@vibecook/puppeteer-view-sdk/model";
 import { ProfileGlyph } from "@vibecook/puppeteer-view-sdk/react";
 import {
   type AccountUsagePort,
-  BarControl,
   ChromeBoundary,
   type HistoryPort,
-  InstrumentBar,
   MONITOR_STAGE_CLASS,
   MONITOR_VIEWS,
   type MonitorParameters,
@@ -44,8 +42,9 @@ import {
   type LiveFindAgent,
   publishGodviewFindDoor,
 } from "../frame/find-door";
+import { GodviewHeadView } from "./GodviewHeadView";
 import type { GodviewTheme } from "./GodviewTuningPanel";
-import { monitorAgentCounts } from "./monitor/agents";
+import { HEAD_RESERVE } from "./head-row";
 import { type ChromeRun, NO_RUNS, useChromeKey } from "./monitor/chrome-facts";
 import { choiceNote, type DeviceChoice } from "./monitor/device-filter";
 import { useMonitorFeed } from "./monitor/GodviewAgentsProvider";
@@ -239,24 +238,15 @@ const NO_USAGE: AccountUsagePort = {
   subscribe: () => () => undefined,
 };
 
-/** The counters select nothing any more (FC-D18): the bar still asks for an
- * answer, and its group is hidden (godview.css) until the views package draws
- * counters only for a host that passes counts. */
-const noStatusCycle = (): void => undefined;
-
-/** Godview follows the app's theme (FC-D7): the bar's ☼◐ switch changes
- * nothing. The views package draws it whatever a host passes, so it is hidden
- * (godview.css) until the package draws it only for a host that hands it a
- * handler — the ask on record, beside the counters'. */
-const noThemeSwitch = (): void => undefined;
-
-/** M195 — the bar renders only when one of its own inputs moves. The monitor
+/** M195 — the head renders only when one of its own inputs moves. The monitor
  * renders on every model publish (about once a frame while agents work), and
- * every control on the bar is a tip with its own handlers: rendered inline it
- * was rebuilt with each publish, and each view the registry adds (spend) cost
- * one more tip per frame. Its inputs below keep their identity while what they
- * say is the same, so the memo holds. */
-const MonitorBar = memo(InstrumentBar);
+ * every circle of the head has its own handlers: rendered inline it would be
+ * rebuilt with each publish, and each view the registry adds would cost one
+ * more circle per frame (the bar it replaced, GV-D1, was measured doing so).
+ * Its inputs — the registry's views, the view's id, the deck's state and one
+ * stable select — keep their identity while what they say is the same, so the
+ * memo holds; the theme reaches it as tokens, never as a render. */
+const MonitorHead = memo(GodviewHeadView);
 
 /** `value`, or the one held while `key` says nothing in it changed: a stable
  * identity for a value the window rebuilds on every publish. */
@@ -293,16 +283,12 @@ export interface GodviewMonitorProps {
   view: MonitorViewEntry;
   parameters: MonitorParameters;
   theme?: GodviewTheme;
-  notice?: string | null;
-  tuningOpen?: boolean;
   /** The deck's verbs (GT-D17, AR-3), or null while there is no deck. The
    * stage passes it to the source and never calls it — a view is still a pure
    * function of its props, and this component is not a view. */
   door?: MonitorDoor | null;
   /** The deck's pane facts, read-only. */
   panes?: MonitorPaneFacts;
-  /** The product shell overlays native macOS controls on the leading edge. */
-  reserveWindowControls?: boolean;
   /** MV-W4 — the stage's animations switch, the value its owner hands
    * `GodviewStage` (GT-3p: the lab's kill switch; the catalog's still stage).
    * Off, a ported view's loop holds still, as the stage's CSS loops do under
@@ -316,23 +302,18 @@ export interface GodviewMonitorProps {
    * search is not the window's has no other way to be filtered). */
   initialProfile?: string | null;
   onSelectView?: (viewId: string) => void;
-  onToggleTuning?: () => void;
 }
 
 export function GodviewMonitor({
   view,
   parameters,
   theme = "light",
-  notice = null,
-  tuningOpen = false,
   door = null,
   panes,
-  reserveWindowControls = false,
   animations = true,
   publishesFind = false,
   initialProfile = null,
   onSelectView,
-  onToggleTuning,
 }: GodviewMonitorProps): ReactElement {
   const stageRef = useRef<HTMLElement>(null);
   // The palette reads THIS stage's Godview root, never the document's first:
@@ -500,7 +481,6 @@ export function GodviewMonitor({
   const viewHoldsKeys = viewReport.keysHeld === true;
   /** The usage column's tiles, counted off the chrome slot (AR-5); -1 unmounted. */
   const [usageTiles, setUsageTiles] = useState(-1);
-  const counts = useMemo(() => monitorAgentCounts(shown), [shown]);
   // AR-7 — this desktop's runs for the marker, handed on as the SAME object
   // until a fact the marker states moves: a working agent's row moves several
   // times a second, and a token count is no news to this line (the identity
@@ -565,6 +545,17 @@ export function GodviewMonitor({
   // floor's own refusal sentence can run long enough to wrap, and a viewer's
   // text scale moves all of it. A hardcoded band would be right on this
   // machine and wrong on the next.
+  //
+  // GV-D1 — THE HEAD'S RESERVE. The stage runs under the head to the window's
+  // top, so the top inset is never less than the reserve (56: the head's foot
+  // at 48, plus 8 — DESIGN.md §8 "Godview's head — Stories"): a silent strip
+  // publishes the reserve where it published 0, and a strip with something to
+  // say stands below the reserve (godview.css), so its bottom is past it. The
+  // flow views read the inset; the swarm reads `obstacles` and never the inset
+  // (the SDK: insets are advisory, obstacles are the chrome's rectangles), so
+  // the reserve is its first obstacle — the band across the stage's top that
+  // holds the head's row, the window's lights and the search button — and its
+  // bodies keep below the head as they kept below the bar.
   useEffect(() => {
     const stage = stageRef.current;
     const chrome = chromeRef.current;
@@ -574,8 +565,8 @@ export function GodviewMonitor({
       const stageRect = stage.getBoundingClientRect();
       const chromeRect = chrome.getBoundingClientRect();
       const chromeRight = Math.round(chromeRect.right - stageRect.left);
-      // A strip with nothing to say takes no room: it publishes 0, and the
-      // view's own band then measures from the stage's top exactly as before.
+      // A strip with nothing to say takes no room of its own: it publishes the
+      // head's reserve, and the view's own band then measures from there.
       // The GAP is not published — the list's own stylesheet adds its band to
       // the inset, and the timeline starts at it (M63) — so no new spacing
       // number is invented here (docs/UI_SYSTEM.md: a visual constant belongs
@@ -585,12 +576,15 @@ export function GodviewMonitor({
       // strip always carries its `aria-live` acknowledgement span, empty or
       // not, so counting children would reserve a band for a silent strip.
       const claimsRect = claims.getBoundingClientRect();
-      const bottom = claimsRect.height === 0 ? 0 : Math.round(claimsRect.bottom - stageRect.top);
+      const bottom =
+        claimsRect.height === 0
+          ? HEAD_RESERVE
+          : Math.max(HEAD_RESERVE, Math.round(claimsRect.bottom - stageRect.top));
       // the same measurement as the view host's stage (MV-D19): the chrome's
       // right edge as the left inset, the strip's bottom as the top one, both
       // elements as obstacles — unrounded, the rectangles the swarm measured
       // off these two elements itself before it ported, so its bodies steer
-      // exactly as they did
+      // exactly as they did — after the head's reserve, the stage's own width
       const rect = (box: DOMRect) => ({
         x: box.left - stageRect.left,
         y: box.top - stageRect.top,
@@ -601,7 +595,11 @@ export function GodviewMonitor({
         width: Math.round(stageRect.width),
         height: Math.round(stageRect.height),
         insets: { top: bottom, right: 0, bottom: 0, left: chromeRight },
-        obstacles: [rect(chromeRect), ...(claimsRect.height === 0 ? [] : [rect(claimsRect)])],
+        obstacles: [
+          { x: 0, y: 0, width: stageRect.width, height: HEAD_RESERVE },
+          rect(chromeRect),
+          ...(claimsRect.height === 0 ? [] : [rect(claimsRect)]),
+        ],
       };
       // M176 item 1: every tick measures a fresh object; one that measures the
       // same keeps the stage held (the SDK's own rule), so it renders nothing
@@ -782,59 +780,34 @@ export function GodviewMonitor({
     return () => publishGodviewFindDoor(null);
   }, [publishesFind]);
 
-  // M195 — the bar's inputs, each the same object while what it says is the
-  // same, so `MonitorBar` renders for a count, the view, the theme or System
-  // control — never for a publish that moved none.
-  const { idle, working, blocked } = counts;
-  const barCounts = useMemo(() => ({ idle, working, blocked }), [idle, working, blocked]);
+  // M195 — the head's one handler, the same function while its owner's is, so
+  // `MonitorHead` renders for the view or the deck's state — never for a
+  // publish that moved neither. GV-D1: what the bar held beside the views is
+  // gone or moved — the counters (FC-D18) and the ☼◐ switch (FC-D7), the
+  // spacer for the window's lights (the frame's head row clears them), the
+  // bridge notice's empty slot, and System control, now an act in the palette
+  // (`frame/system-control-door.ts`). The frame's search button stands at the
+  // row's right end (DESIGN.md §8 "Search — the Peek").
   const selectView = useCallback((viewId: string) => onSelectView?.(viewId), [onSelectView]);
-  const toggleTuning = useCallback(() => onToggleTuning?.(), [onToggleTuning]);
-  const barLeading = useMemo(
-    () => (
-      <>
-        {reserveWindowControls ? (
-          <span className="vf-godview-native-controls-space" aria-hidden="true" />
-        ) : null}
-        <span className="vf-godview-header-notice" aria-live="polite">
-          {notice ?? ""}
-        </span>
-      </>
-    ),
-    [reserveWindowControls, notice],
-  );
-  // GV-D3 (P2): the desktops and the profiles left the bar's centre for
-  // search's scope row, and PK2 (a) took FIND off its end: the frame's search
-  // button stands at the head's right end (DESIGN.md §8 "Search — the Peek"),
-  // beside System control.
-  const barTrailing = useMemo(
-    () => (
-      <BarControl
-        mark="tune"
-        label="SYSTEM CONTROL"
-        ariaLabel="System control"
-        controls="vf-godview-tweak-panel"
-        on={tuningOpen}
-        onClick={toggleTuning}
-      />
-    ),
-    [tuningOpen, toggleTuning],
-  );
 
   return (
     <>
-      <ChromeBoundary name="Monitor controls">
-        <MonitorBar
-          counts={barCounts}
-          onSelectStatus={noStatusCycle}
-          views={MONITOR_VIEWS}
-          viewId={view.id}
-          onSelectView={selectView}
-          theme={theme}
-          onThemeChange={noThemeSwitch}
-          leading={barLeading}
-          trailing={barTrailing}
-        />
-      </ChromeBoundary>
+      {/* The head's slot: the frame's head row, over the stage (godview-head.css).
+          A head that fails says so here, where the row stood. */}
+      <div className="vf-stories-slot">
+        <ChromeBoundary name="Monitor views">
+          <MonitorHead
+            views={MONITOR_VIEWS}
+            viewId={view.id}
+            // GV-D11 — THE ONE LINE TO HOOK TO THE DECK'S DOOR. The head steps
+            // away while the terminals are maximized; their owner will publish
+            // away · up · maximized from `frame/deck-door.ts`, which is not on
+            // main yet. Until it lands the head is told they are up.
+            deck="up"
+            onSelectView={selectView}
+          />
+        </ChromeBoundary>
+      </div>
 
       <section
         ref={stageRef}

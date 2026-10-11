@@ -10,7 +10,6 @@ import {
 } from "react";
 import { publishSystemControlDoor } from "../frame/system-control-door";
 import { useActiveView } from "../frame/view-state";
-import { getHost } from "../host";
 import { prewarmTerminalPool, terminalPoolConfigured } from "../terminal/pool";
 import { godviewColdOpen } from "./cold-open";
 import { useDeckAppearance } from "./deck-appearance";
@@ -72,13 +71,12 @@ function whenIdle(task: () => void, timeoutMs: number): () => void {
   return () => window.clearTimeout(timer);
 }
 
-/** RETIRED shape kept for the docs trail: the bridge badge died with the
- * bridge at TP-S3e (per-activation health is the routed runtime's, surfaced by
- * the deck's own faces). */
-function bridgeNotice(): string | null {
-  return null;
-}
-/* the old ladder, for reference:
+/* RETIRED, kept for the docs trail: the bridge badge died with the bridge at
+   TP-S3e (per-activation health is the routed runtime's, surfaced by the deck's
+   own faces), and `bridgeNotice()` answered null from then on. Its slot was the
+   instrument bar's and left with the bar (GV-D1): when a plane-down notice
+   returns it is one held notice on the frame's status line.
+   the old ladder, for reference:
   if (status.state === "bridge-down") return "TERMINAL BRIDGE DOWN · REBUILDING";
   return "TERMINAL BRIDGE UNAVAILABLE · RECONNECTING";
 */
@@ -227,7 +225,6 @@ export function GodviewOverlay(): ReactElement | null {
 
   if (!everOpened) return null;
 
-  const notice = bridgeNotice();
   const terminalAvailable = terminalPoolConfigured();
   const stage = monitor.stageParameters;
   const screenStyle = {
@@ -265,17 +262,13 @@ export function GodviewOverlay(): ReactElement | null {
               view={monitor.view}
               parameters={monitor.parameters}
               theme={theme}
-              notice={notice}
-              tuningOpen={tuningOpen}
               door={remoteDoor}
               panes={monitorPanes}
-              reserveWindowControls={getHost().platform === "darwin"}
               // MV-W4: the same switch, for a ported view's own loop
               animations={labSwitches.animations}
               // P2: the window's Godview lends the frame's Peek its Live now
               publishesFind
               onSelectView={monitor.selectView}
-              onToggleTuning={() => setTuningOpen((current) => !current)}
             />
           ) : undefined
         }

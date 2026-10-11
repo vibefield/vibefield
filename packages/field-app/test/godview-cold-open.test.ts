@@ -198,6 +198,9 @@ describe("the ambient-animation audit (GT-D15.1)", () => {
   const css = [
     readFileSync(join(godviewRoot, "godview.css"), "utf8"),
     readFileSync(join(godviewRoot, "deck-zoom.css"), "utf8"),
+    // GV-D1: the head's own sheet rides `GodviewHeadView`, mounted with the
+    // monitor — its label arrives by an entry transition, never a keyframe
+    readFileSync(join(godviewRoot, "godview-head.css"), "utf8"),
     ...packageSheets,
     ...ownSheets,
   ].join("\n");

@@ -1,15 +1,14 @@
-import type { AgentVisualStatus } from "./agent-status";
-import type { MonitorAgent } from "./types";
-
 // MV-3b — what is left of the seam's ASSEMBLY. Until MV-3 this module built
 // every monitor row from the fold's rows, the deck's panes, the floor's roster
 // and the mesh board (`assembleMonitorAgents`): the run's id, its project and
 // colour, its status and detail line, recency, the pane join, the usage
 // ledger's history, the visual-id carry-forward. The backend beside the runtime
 // computes all of that once now (`@vibecook/puppeteer-monitor`, hosted by
-// fieldd — MV-D22), and the window's replica applies it. The views and these
-// counts read the model directly. The retired MV-3 differential established
-// parity before the old assembly and its oracle went away in MV-8.
+// fieldd — MV-D22), and the window's replica applies it. The views read the
+// model directly. The retired MV-3 differential established parity before the
+// old assembly and its oracle went away in MV-8. (The counters' counts,
+// `monitorAgentCounts`, stood here until the instrument bar that drew them
+// left VibeField — GV-D1; the counters themselves were removed at FC-D18.)
 
 /**
  * A LIVE PTY ON THE FLOOR THAT NO PANE IS SHOWING (GT-6b), as the deck reads it
@@ -30,15 +29,4 @@ export interface MonitorFloorRecord {
   /** SB-3 — where a create in flight asked for it, when this row is its first
    * appearance (a new shell can reach the stage through the roster first). */
   spawnHint?: { x: number; y: number };
-}
-
-/** Agent-backed only: the counters count agents, not bare terminals. */
-export function monitorAgentCounts(
-  agents: readonly MonitorAgent[],
-): Record<AgentVisualStatus, number> {
-  const counts: Record<AgentVisualStatus, number> = { idle: 0, working: 0, blocked: 0 };
-  for (const agent of agents) {
-    if (agent.kind === "agent") counts[agent.status] += 1;
-  }
-  return counts;
 }

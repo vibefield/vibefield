@@ -102,7 +102,7 @@ describe("UI system ownership boundaries", () => {
     ].join("\n");
 
     expect(catalogCss).not.toMatch(
-      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|palette-|settings-dialog\b|loading-veil\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history\b|history-|line\b|line-|at-|head\b|head-|menu\b|menu-|ah-|tr-|bar\b|bar-|status-line)/m,
+      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|palette-|settings-dialog\b|loading-veil\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history\b|history-|line\b|line-|at-|head\b|head-|menu\b|menu-|ah-|tr-|bar\b|bar-|status-line|stories\b|stories-|story\b|story-)/m,
     );
   });
 
@@ -323,6 +323,54 @@ describe("UI system ownership boundaries", () => {
     expect(palette).toContain("CommandPaletteView");
     expect(palette).toContain("frameActGroups");
     expect(palette).not.toMatch(/className="vf-(?:palette|menu|command-palette)/);
+  });
+
+  it("keeps Godview's head the monitor's own — the catalog mounts the monitor, never the head's markup or CSS (GV-D1)", () => {
+    // The head is the monitor host's chrome: `GodviewMonitor` mounts the
+    // shipping `GodviewHeadView` in its slot, and the catalog shows it by
+    // mounting the monitor on its fixture doors (`GodviewPreview`). No catalog
+    // module writes one of the head's classes, imports its view to rebuild it,
+    // or restyles it; the one thing the catalog stages is its own button for
+    // the System control panel, which the product reaches from the palette.
+    const monitor = source("godview/GodviewMonitor.tsx");
+    expect(monitor).toMatch(/const MonitorHead = memo\(GodviewHeadView\);/);
+    expect(monitor).toMatch(
+      /<div className="vf-stories-slot">\s*<ChromeBoundary name="Monitor views">\s*<MonitorHead\s/u,
+    );
+    expect(monitor).not.toContain("InstrumentBar");
+    expect(monitor).not.toContain("BarControl");
+    expect(source("godview/GodviewHeadView.tsx")).toContain('import "./godview-head.css";');
+    // System control left with the bar for the palette: the frame runs it
+    // through the door the overlay publishes, never a prop through the frame.
+    expect(source("field/ChromeLayer.tsx")).toMatch(
+      /case "system-control":\s*runSystemControl\(\);/,
+    );
+    expect(source("godview/GodviewOverlay.tsx")).toContain("publishSystemControlDoor(");
+    expect(monitor).not.toContain("tuningOpen");
+    expect(monitor).not.toContain("onToggleTuning");
+    const preview = source("design-system/GodviewPreview.tsx");
+    expect(preview).toMatch(/<GodviewMonitor\s/u);
+    expect(preview).not.toContain("GodviewHeadView");
+    const catalogCss = [
+      source("design-system/styles/catalog-shell.css"),
+      source("design-system/styles/foundations.css"),
+      source("design-system/styles/scenes.css"),
+      source("design-system/styles/tweaks.css"),
+    ].join("\n");
+    expect(catalogCss).not.toMatch(/vf-stor(?:y|ies)/);
+    const walk = (relativeDir: string): string[] =>
+      readdirSync(join(PACKAGE_ROOT, "src", relativeDir), { withFileTypes: true }).flatMap(
+        (entry) =>
+          entry.isDirectory()
+            ? walk(`${relativeDir}/${entry.name}`)
+            : /\.tsx?$/.test(entry.name)
+              ? [`${relativeDir}/${entry.name}`]
+              : [],
+      );
+    for (const module of walk("design-system")) {
+      expect(source(module), module).not.toMatch(/vf-stor(?:y|ies)/);
+      expect(source(module), module).not.toMatch(/from "[^"]*\/GodviewHeadView"/);
+    }
   });
 
   it("keeps the corner's fixture an ADAPTER — the account's and the theme's facts, never the menu's markup (FR-4)", () => {
@@ -662,6 +710,7 @@ describe("UI system ownership boundaries", () => {
       "hud/LoadingVeil.tsx",
       "boot/onboarding/wizard-ui.tsx",
       "godview/GodviewMonitor.tsx",
+      "godview/GodviewHeadView.tsx",
       "frame/ViewFrame.tsx",
       "frame/ViewsTrack.tsx",
       "frame/ViewCover.tsx",
@@ -701,6 +750,7 @@ describe("UI system ownership boundaries", () => {
       "panels/settings.css",
       "panels/terminal/terminal-settings.css",
       "godview/deck-zoom.css",
+      "godview/godview-head.css",
       "frame/view-frame.css",
       "history/history-room-view.css",
       "history/history-room-glass.css",

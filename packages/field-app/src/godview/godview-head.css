@@ -6,6 +6,16 @@
    only. No keyframe: the label arrives by an entry transition, as Godview runs
    none (GT-D15.1's audit). The row's arithmetic is `head-row.ts`. */
 
+/* ── THE COLUMN — the head takes no band of it ─────────────────────────────
+   The head is a row of glass circles over the stage, never a band of the
+   stage's column, so the stage begins at the window's top and the shared stage
+   rule (`godview.css`, `.vf-godview-monitor-stage`) gives the monitor the 40px
+   the instrument bar held: the deck's edge rests where it rested. The rule's
+   own sheet sets this nowhere (one owner: the head's). */
+.vf-godview {
+  --vf-godview-head-height: 0px;
+}
+
 /* ── THE SLOT — the frame's head row, over the stage ───────────────────────
    `GodviewMonitor` mounts the head here, behind its boundary. A band of no
    height across the window's top, so the stage runs under it to the window's

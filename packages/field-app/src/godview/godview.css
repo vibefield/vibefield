@@ -151,7 +151,6 @@
    its ground on a canvas. Deleted rather than left to be quietly outranked.
    MV-5 (M59, W5): minus the SWARM too — its crossfade is the view's own now
    (`swarm.css`, under its root class), and no host rule names a view's class. */
-.vf-godview-header,
 .vf-godview-monitor-stage,
 .vf-godview-terminal-deck,
 .vf-godview-terminal-deck .ghostty-window,
@@ -161,14 +160,6 @@
     color 240ms ease,
     border-color 240ms ease,
     background-color 240ms ease;
-}
-
-/* The shell's native traffic lights start at x=18 (windows.ts). Combined
-   with the shared bar's 15px padding and 8px gap, reserve the same ~96px
-   leading region as the product HUD. Only the macOS host mounts this slot. */
-.vf-godview-native-controls-space {
-  flex: 0 0 72px;
-  align-self: stretch;
 }
 
 .vf-monitor-feed-retry {
@@ -437,11 +428,13 @@
    THE DECK'S TOP AT REST IS THE INVARIANT (round 3, agreed with the head's
    owner): it stands 40 + the tuned height below the stage's top, whatever
    stands above the monitor. So the basis gives back what the head does not
-   take of that 40 — `40px − --vf-godview-head-height`. The variable is set
-   NOWHERE in this sheet: its default, in the `var()` below, is the bar's 40,
-   so the term is 0 and nothing moves; the head's owner sets it to 0px on the
-   stage's root when the bar goes, and the stage is then exactly 40 taller with
-   the deck's top where it was. */
+   take of that 40 — `40px − --vf-godview-head-height`. Its default, in the
+   `var()` below, is the bar's 40, so a stage with no head (the Settings
+   miniature, a catalog plate) moves nothing; since the Stories head the head's
+   own sheet sets it to 0px on the stage's root (`godview-head.css`), in the same
+   commit that took the bar out of the column, so the stage is exactly 40 taller
+   with the deck's top where it was. Never one without the other: the variable at 0 with the bar
+   still in the column puts the deck 40 lower. */
 .vf-godview-monitor-stage {
   position: relative;
   width: 100%;
@@ -468,14 +461,18 @@
    this class the slot deleted the strip's old rule under the same name and
    wrote none for the slot, so the column laid out in flow — below the
    clipped swarm, and across the whole width over the list, whose left
-   padding then pushed every row off the stage (the review's blocker). */
+   padding then pushed every row off the stage (the review's blocker).
+   GV-D1: the stage begins at the window's top, under the head, so the column
+   and the strip beside it begin at the head's reserve (56: the head's foot at
+   48, plus 8) — clear of the head's row, the window's lights and the app's
+   drag strip — where they began 11 under the bar. */
 .vf-monitor-chrome {
   position: absolute;
   z-index: 7;
-  top: 11px;
+  top: var(--vf-godview-head-reserve);
   left: 13px;
   width: 46px;
-  height: calc(100% - 17px);
+  height: calc(100% - var(--vf-godview-head-reserve) - 6px);
   color: var(--text-main);
 }
 
@@ -487,26 +484,26 @@
    "1 SESSIONS" in the same corner.
 
    No new spacing number is invented: the strip's measured bottom is the one
-   number this host hands over (0 when the strip is empty — which reproduces the
-   package's rule exactly), and a view's own band stands past it. The rain and
-   the swarm keep their full bleed: the swarm steers its bodies around the
-   chrome's rectangles (the stage's obstacles), and the rain is a canvas the
-   column already crosses. DESIGN.md §9: two claims that overlap are one
-   unreadable claim.
+   number this host hands over (the head's reserve when the strip is empty,
+   GV-D1 — it was 0 under the bar), and a view's own band stands past it. The
+   rain and the swarm keep their full bleed: the swarm steers its bodies around
+   the chrome's rectangles (the stage's obstacles — the head's reserve the
+   first of them), and the rain is a canvas the column already crosses.
+   DESIGN.md §9: two claims that overlap are one unreadable claim.
    TL (2026-10-02): the timeline lays out in flow (its map strip is a row at
    its top), so it starts below the strip as the list does.
 
    MV-4 / MV-6 (M58, M63, W5): both flow views — the list and the timeline —
    are SDK views and clear the strip THEMSELVES: the view host hands them the
-   strip's measured bottom as `stage.insets.top` (`GodviewMonitor`, 0 for a
-   silent strip), and no host rule names them. The list starts its own 11px
-   band past it; the timeline starts AT it, as puppeteer's Godview draws it —
-   11px higher than the host rule that stood here put it, since that rule added
-   the list's band to the timeline too (named in MV-6). */
+   strip's measured bottom as `stage.insets.top` (`GodviewMonitor`; the head's
+   reserve for a silent strip), and no host rule names them. The list starts
+   its own 11px band past it; the timeline starts AT it, as puppeteer's Godview
+   draws it — 11px higher than the host rule that stood here put it, since that
+   rule added the list's band to the timeline too (named in MV-6). */
 .vf-monitor-claims {
   position: absolute;
   z-index: 7;
-  top: 11px;
+  top: var(--vf-godview-head-reserve);
   left: 72px;
   width: min(300px, calc(100% - 96px));
   display: flex;
@@ -599,7 +596,7 @@
    hairline as a ring (the ring's sides and foot fall outside the stage and are
    clipped by it, so only the top edge and its curves draw), and §5's Sheet
    shadow cast up onto the stage beneath. Above the monitor's chrome (7) and
-   its popups (9), under the bar (20) and the CRT layers (30).
+   its popups (9), under the CRT layers (30) and the head (31).
 
    The ground is the FRAME (GV-D7, James 2026-10-02: "make the inner pane part
    feel like wrapped"): the terminal's ground — `--vf-godview-terminal-bg`,
@@ -1045,8 +1042,8 @@
 }
 
 /* AR-S5 — a profile tab with no sessions under it says so over the stage, in
-   the bar's own type (the agents-settings record's T3): the profile's glyph in
-   a dashed ring, its name, one sentence. The bodies behind it step back to 7%
+   the instrument's type (the agents-settings record's T3): the profile's glyph
+   in a dashed ring, its name, one sentence. The bodies behind it step back to 7%
    (`@vibecook/puppeteer-views` monitor/recede.ts), so the words read. */
 .vf-monitor-profile-empty {
   position: absolute;
@@ -1131,31 +1128,4 @@
 
 .vf-cover .vf-godview-deck-well {
   margin-bottom: 88px;
-}
-
-/* PK2 (a), 2026-10-09 (DESIGN.md §8 "Search — the Peek"): the frame's search
-   button stands at the head's right end in Godview as in History — 16 in, at
-   top 8 — so the bar's tools end one head gap (12) short of it: System control
-   sits beside the button and never under it. The button's width is the Peek's
-   own measure (`--vf-peek-find-width`, the circle's 40 until a filter token
-   widens its glass), so the tools step aside as the token grows. */
-.vf-cover .vf-godview-header {
-  padding-right: calc(16px + var(--vf-peek-find-width, 40px) + 12px);
-}
-
-/* FC-D18: the counters are removed (`GodviewMonitor` retired their ⌘1–⌘3 and
-   their cycling). The views package's bar draws its counters group whatever a
-   host passes, so the host hides it until the package draws it only for counts
-   it is handed — the ask on record (One Frame §21). */
-.vf-godview-header [role="group"][aria-label="Agent status"] {
-  display: none;
-}
-
-/* FC-D7: Godview follows the app's theme (One Frame FR-4), so its ☼◐ switch is
-   gone. The views package's bar draws it whatever a host passes, so the host
-   hides it — with the tooltip host the package wraps it in — until the package
-   draws it only for a host that hands it a handler (the ask on record, beside
-   the counters'). */
-.vf-godview-header .vf-godview-bar-tip-host:has(> .vf-godview-theme-switch) {
-  display: none;
 }

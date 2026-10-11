@@ -26,8 +26,12 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
       title="A deliberate change of register"
       description="Godview is the instrument-stage exception: compact monospace controls, flat geometry, stark status bodies, and a parchment or graphite terminal deck. The swarm's bodies below are the views package's own fixtures drawn by the shipping renderer, so its state grammar is read as the pixels Godview paints."
     >
-      <Specimen title="Godview stage" source="godview/GodviewStage.tsx" bleed>
-        <GodviewPreview theme={theme} />
+      <Specimen
+        title="Godview stage — the head's circles switch the monitor's views (GV-D1); System control is the palette's act in the product"
+        source="godview/GodviewStage.tsx · godview/GodviewHeadView.tsx"
+        bleed
+      >
+        <GodviewPreview theme={theme} systemControl />
       </Specimen>
       <Specimen
         title="Timeline — the swarm through time: five runs from their births to now, runtime only"

@@ -37,6 +37,7 @@ import {
   type MonitorCreateAnswer,
   type MonitorViewCommands,
   type MonitorViewInput,
+  type StageGeometry,
 } from "@vibecook/puppeteer-view-sdk";
 import { createRecordingView, type RecordingView } from "@vibecook/puppeteer-view-sdk/testing";
 import {
@@ -49,6 +50,14 @@ import {
   monitorParameterDefaults,
   monitorViewFor,
 } from "@vibecook/puppeteer-views";
+import {
+  FRAME_HEADER_FLOATS,
+  FRAME_STRIDE,
+  frameFloatsFor,
+  type SwarmAgentSpec,
+  type SwarmObstacleRect,
+  SwarmPhysics,
+} from "@vibecook/puppeteer-views/physics";
 import {
   type AgentPersona,
   type AgentProfileSet,
@@ -95,16 +104,18 @@ vi.mock("../src/godview/os-marks", async (importOriginal) => {
   };
 });
 
-/** M195 — every render of the instrument bar the monitor asks for, counted; the
- * bar itself is the package's, passed through. */
-const bar = vi.hoisted(() => ({ renders: 0 }));
-vi.mock("@vibecook/puppeteer-views", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@vibecook/puppeteer-views")>();
+/** M195 — every render of the head the monitor asks for, counted; the head
+ * itself is the shipping view, passed through unless a row makes it throw
+ * (M49: its boundary). */
+const head = vi.hoisted(() => ({ renders: 0, throws: false }));
+vi.mock("../src/godview/GodviewHeadView", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/godview/GodviewHeadView")>();
   return {
     ...actual,
-    InstrumentBar: (props: Parameters<typeof actual.InstrumentBar>[0]) => {
-      bar.renders += 1;
-      return <actual.InstrumentBar {...props} />;
+    GodviewHeadView: (props: Parameters<typeof actual.GodviewHeadView>[0]) => {
+      head.renders += 1;
+      if (head.throws) throw new Error("the head lost a view's mark");
+      return <actual.GodviewHeadView {...props} />;
     },
   };
 });
@@ -294,6 +305,7 @@ let clearedIntervals: number[] = [];
 beforeEach(() => {
   markers = [];
   viewHost.handed.length = 0;
+  head.throws = false;
   openedIntervals = [];
   clearedIntervals = [];
   localStorage.clear();
@@ -395,7 +407,7 @@ const ackText = (host: HTMLElement): string =>
 const swarmRows = (host: HTMLElement): HTMLButtonElement[] => [
   ...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-swarm-list li button"),
 ];
-/** The view buttons on the package's instrument bar, and the one that is on. */
+/** The view circles on the head (GV-D1), and the one that is on. */
 const viewButtons = (host: HTMLElement): HTMLButtonElement[] => [
   ...host.querySelectorAll<HTMLButtonElement>(
     '[role="group"][aria-label="Monitor view"] button[aria-pressed]',
@@ -410,11 +422,13 @@ describe("the monitor stage", () => {
   // ---- the claims strip and the flow views (GT-6a) --------------------------
   //
   // The strip is VibeField's own chrome (AR-3's counts, GT-5c's degraded
-  // sentence) and it is pinned 11px down the stage. `list.css` pins the
+  // sentence) and it was pinned 11px down the stage. `list.css` pins the
   // package's toolbar 11px down too, because the reference host has no claims
   // to make room for — so the two printed over each other on James's
   // 2026-09-13 pass. The fix publishes the strip's measured bottom and the
-  // flow view's band starts from there; these rows hold that seam. Since MV-4
+  // flow view's band starts from there; these rows hold that seam. Since GV-D1
+  // the stage begins at the window's top, under the head, and the strip at the
+  // head's reserve (56): a view's top inset is never less than the reserve. Since MV-4
   // the list reads it as the stage's top inset (M58) — the view host hands it
   // the measurement and the list's own stylesheet adds its band — so the rows
   // read the list's own property; the variable stays for the timeline.
@@ -447,18 +461,19 @@ describe("the monitor stage", () => {
     // The strip has something to say here — otherwise this row would prove
     // nothing about a collision that only happens when it does.
     expect(claims?.textContent ?? "").toContain("managed agent");
-    stage!.getBoundingClientRect = () => rect(44, 400);
-    claims!.getBoundingClientRect = () => rect(55, 64);
+    stage!.getBoundingClientRect = () => rect(0, 440);
+    claims!.getBoundingClientRect = () => rect(56, 65);
     act(() => {
       for (const publish of fire) publish();
     });
     await settle();
-    // 64 − 44: the strip's bottom in the stage's own coordinates. The band
-    // under it is the list's own (its stylesheet's 11px past the inset), so
-    // this number is a measurement and not a spacing decision. It reaches the
-    // list as `stage.insets.top` — no host rule names the list (W5).
+    // 65 − 0: the strip's bottom in the stage's own coordinates — the strip
+    // stands at the head's reserve (GV-D1). The band under it is the list's own
+    // (its stylesheet's 11px past the inset), so this number is a measurement
+    // and not a spacing decision. It reaches the list as `stage.insets.top` —
+    // no host rule names the list (W5).
     const list = host.querySelector<HTMLElement>(".vf-monitor-list");
-    expect(list?.style.getPropertyValue("--mv-list-inset-top")).toBe("20px");
+    expect(list?.style.getPropertyValue("--mv-list-inset-top")).toBe("65px");
     // no host variable on the stage at all: a view reads geometry from its
     // input, never a property the host writes (L18, MV-D19)
     expect(stage?.getAttribute("style")).toBeNull();
@@ -474,26 +489,24 @@ describe("the monitor stage", () => {
     const stage = host.querySelector<HTMLElement>(".vf-godview-monitor-stage");
     const claims = host.querySelector<HTMLElement>(".vf-monitor-claims");
     expect(claims?.textContent ?? "").toContain("managed agent");
-    stage!.getBoundingClientRect = () => rect(44, 400);
-    claims!.getBoundingClientRect = () => rect(55, 64);
+    stage!.getBoundingClientRect = () => rect(0, 440);
+    claims!.getBoundingClientRect = () => rect(56, 65);
     act(() => {
       for (const publish of fire) publish();
     });
     await settle();
     const timeline = host.querySelector<HTMLElement>(".vf-monitor-timeline");
     expect(timeline?.closest(".mv-timeline")).not.toBeNull();
-    expect(timeline?.style.getPropertyValue("--mv-timeline-inset-top")).toBe("20px");
+    expect(timeline?.style.getPropertyValue("--mv-timeline-inset-top")).toBe("65px");
     // the timeline's own stylesheet starts it at the inset; nothing of the
-    // host's pads it (the old rule computed 20px + 11px)
+    // host's pads it (the old rule computed the strip's bottom + 11px)
     expect(timeline?.style.paddingTop ?? "").toBe("");
   });
 
-  it("hands a view the chrome's rectangles as the stage's obstacles, unrounded, as the swarm measured them (MV-D19)", async () => {
-    // Before MV-5 the swarm read the chrome's elements off the host's DOM and
-    // steered its bodies around their rects, in its own coordinates. Now the
-    // host measures and hands them over: the usage column and the claims strip,
-    // in the stage's coordinates (the view's root fills the stage), with the
-    // fractions a layout gives — so the bodies steer exactly as they did.
+  /** The stage a view is handed once the monitor has measured its chrome: the
+   * stage at the window's top, 8 in (the cover's edge), the usage column and a
+   * speaking claims strip at the head's reserve. */
+  async function measuredStage(): Promise<StageGeometry | undefined> {
     const fire = driveObservers();
     const recording = createRecordingView("obstacle-probe");
     const entry: MonitorViewEntry = {
@@ -529,23 +542,96 @@ describe("the monitor stage", () => {
         right: left + width,
         bottom: top + height,
       }) as DOMRect;
-    stage!.getBoundingClientRect = () => box(10, 44, 900, 356);
-    chrome!.getBoundingClientRect = () => box(18.5, 52.25, 54, 340);
-    claims!.getBoundingClientRect = () => box(82, 55, 300, 9.5);
+    stage!.getBoundingClientRect = () => box(8, 0, 900, 396);
+    chrome!.getBoundingClientRect = () => box(21.5, 56.25, 46, 334);
+    claims!.getBoundingClientRect = () => box(80, 56, 300, 9.5);
     act(() => {
       for (const publish of fire) publish();
     });
     await settle();
-    expect(recording.lastInput?.stage).toEqual({
+    return recording.lastInput?.stage;
+  }
+
+  it("hands a view the chrome's rectangles as the stage's obstacles, unrounded, as the swarm measured them — the head's reserve first (MV-D19, GV-D1)", async () => {
+    // Before MV-5 the swarm read the chrome's elements off the host's DOM and
+    // steered its bodies around their rects, in its own coordinates. Now the
+    // host measures and hands them over: the usage column and the claims strip,
+    // in the stage's coordinates (the view's root fills the stage), with the
+    // fractions a layout gives — so the bodies steer exactly as they did.
+    // GV-D1: the stage runs under the head, and the swarm reads obstacles and
+    // never the top inset, so the head's reserve — the band across the stage's
+    // top, its own width and 56 tall — is the first of them: its bodies keep
+    // below the head as they kept below the bar.
+    expect(await measuredStage()).toEqual({
       width: 900,
-      height: 356,
+      height: 396,
       // the insets stay whole pixels: the list's band arithmetic (M58)
-      insets: { top: 21, right: 0, bottom: 0, left: 63 },
+      insets: { top: 66, right: 0, bottom: 0, left: 60 },
       obstacles: [
-        { x: 8.5, y: 8.25, width: 54, height: 340 },
-        { x: 72, y: 11, width: 300, height: 9.5 },
+        { x: 0, y: 0, width: 900, height: 56 },
+        { x: 13.5, y: 56.25, width: 46, height: 334 },
+        { x: 72, y: 56, width: 300, height: 9.5 },
       ],
     });
+  });
+
+  it("keeps the swarm's bodies below the head's reserve: on the stage as handed, every body settles under y 56, where without the reserve the same crowd stands in it (GV-D1)", async () => {
+    // The swarm steers by `stage.obstacles` alone (the SDK: insets are
+    // advisory), so the 56 a flow view reads as its top inset reaches the swarm
+    // only as this rectangle. Its own physics is driven here — the package's
+    // world, as the view's driver hosts it — on exactly the stage the monitor
+    // handed over: a crowd too big for the room under the reserve, and one body
+    // born inside the reserve (a hold's spawn hint, as the bloom places one).
+    const stage = await measuredStage();
+    expect(stage?.obstacles[0]).toEqual({ x: 0, y: 0, width: 900, height: 56 });
+    const crowd: SwarmAgentSpec[] = [
+      { id: "born-in-the-reserve", radius: 34, spawnHint: { x: 450, y: 20 } },
+      ...Array.from({ length: 22 }, (_, index) => ({ id: `body-${index}`, radius: 44 })),
+    ];
+    const settleCrowd = (
+      obstacles: readonly SwarmObstacleRect[],
+    ): { id: string; top: number }[] => {
+      let seed = 7;
+      const physics = new SwarmPhysics({
+        // the swarm's own defaults (`swarm-parameters.ts`)
+        parameters: { gravityPull: 0.0002, restitution: 0, frictionAir: 0.2, physicsHz: 30 },
+        bounds: { width: stage?.width ?? 0, height: stage?.height ?? 0 },
+        obstacles,
+        agents: crowd,
+        random: () => {
+          seed = (seed * 1664525 + 1013904223) % 4294967296;
+          return seed / 4294967296;
+        },
+      });
+      // twenty seconds at the swarm's own rate: long past settling
+      let now = 0;
+      physics.seed(now);
+      for (let frame = 0; frame < 600; frame += 1) {
+        now += 1000 / 30;
+        physics.advance(now);
+      }
+      const ids = physics.ids();
+      const frame = new Float32Array(frameFloatsFor(ids.length));
+      physics.writeFrame(frame);
+      const tops = ids.map((id, index) => {
+        const at = FRAME_HEADER_FLOATS + index * FRAME_STRIDE;
+        return { id, top: (frame[at + 1] ?? 0) - (frame[at + 2] ?? 0) };
+      });
+      physics.dispose();
+      return tops;
+    };
+    const held = settleCrowd(stage?.obstacles ?? []);
+    expect(held.length).toBe(crowd.length);
+    for (const body of held) {
+      expect(
+        body.top,
+        `${body.id} stands at ${body.top}, inside the head's reserve`,
+      ).toBeGreaterThanOrEqual(56);
+    }
+    // …and it is the reserve that holds them: the same crowd on the same stage
+    // without that one rectangle stands inside the top 56
+    const loose = settleCrowd(stage?.obstacles.slice(1) ?? []);
+    expect(loose.some((body) => body.top < 56)).toBe(true);
   });
 
   it("keeps the stage it holds when a tick measures the same: the monitor renders nothing, and a real resize still reaches the view (M176 item 1)", async () => {
@@ -584,11 +670,11 @@ describe("the monitor stage", () => {
     const box = (left: number, top: number, w: number, height: number): DOMRect =>
       ({ left, top, width: w, height, right: left + w, bottom: top + height }) as DOMRect;
     host.querySelector<HTMLElement>(".vf-godview-monitor-stage")!.getBoundingClientRect = () =>
-      box(10, 44, width, 356);
+      box(8, 0, width, 396);
     host.querySelector<HTMLElement>(".vf-monitor-chrome")!.getBoundingClientRect = () =>
-      box(18, 52, 54, 340);
+      box(21, 56, 46, 334);
     host.querySelector<HTMLElement>(".vf-monitor-claims")!.getBoundingClientRect = () =>
-      box(82, 55, 300, 9);
+      box(80, 56, 300, 9);
     const tick = async (): Promise<void> => {
       act(() => {
         for (const publish of fire) publish();
@@ -617,7 +703,7 @@ describe("the monitor stage", () => {
     expect(recording.updates).toBeGreaterThan(updates);
   });
 
-  it("gives a silent strip no room at all, so the package's own band stands", async () => {
+  it("gives a silent strip no room of its own: the top inset is the head's reserve, and the package's own band stands past it (GV-D1)", async () => {
     const fire = driveObservers();
     // No door: nobody has been asked yet, so there is no claim to make and
     // `remoteUnavailableClaim` stays quiet on `no-door` (GT-5c).
@@ -629,28 +715,33 @@ describe("the monitor stage", () => {
     // child count. The fed rect has none.
     expect(claims?.textContent).toBe("");
     expect(claims?.childElementCount).toBeGreaterThan(0);
-    stage!.getBoundingClientRect = () => rect(44, 400);
-    claims!.getBoundingClientRect = () => rect(55, 55);
+    stage!.getBoundingClientRect = () => rect(0, 440);
+    claims!.getBoundingClientRect = () => rect(56, 56);
     act(() => {
       for (const publish of fire) publish();
     });
     await settle();
+    // 56: the head's foot at 48, plus 8 — where it was 0 under the bar
     expect(
       host
         .querySelector<HTMLElement>(".vf-monitor-list")
         ?.style.getPropertyValue("--mv-list-inset-top"),
-    ).toBe("0px");
+    ).toBe("56px");
   });
 
-  it("renders the bar only when one of its own inputs moves: twenty publishes that move none render it not once, and a count that moves does (M195)", async () => {
+  it("renders the head only when one of its own inputs moves: twenty publishes render it not once, nor does a status that moves, and the view changing does (M195)", async () => {
     // The monitor renders on every model publish (about once a frame while
-    // agents work). The bar is a row of tips, each with its own handlers, so
-    // rendered inline it was rebuilt with every publish, and each view the
-    // registry gained cost one more tip per frame (spend: ab2's timeline n10
-    // React render, +0.71 ms/s).
-    const recording = createRecordingView("bar-quiet");
+    // agents work). The bar the head replaced was a row of tips, each with its
+    // own handlers, so rendered inline it was rebuilt with every publish, and
+    // each view the registry gained cost one more tip per frame (spend: ab2's
+    // timeline n10 React render, +0.71 ms/s). The head is a row of circles with
+    // their own handlers, held the same way: its inputs are the registry's
+    // views, the view's id, the deck's state and one stable select. The bar
+    // also rendered for a count; the head holds no counter (FC-D18), so a
+    // status that moves is nothing to it either.
+    const recording = createRecordingView("head-quiet");
     const entry: MonitorViewEntry = {
-      id: "bar-quiet",
+      id: "head-quiet",
       label: "QUIET",
       parameterGroups: [],
       mark: recording.view.manifest.mark,
@@ -679,9 +770,10 @@ describe("the monitor stage", () => {
         createdAt: "2026-09-12T10:00:00.000Z",
         ...overrides,
       });
-    const renders = bar.renders;
+    expect(head.renders).toBeGreaterThan(0);
+    const renders = head.renders;
     const updates = recording.updates;
-    // twenty publishes that move a reply: the window's rows move, the bar's inputs do not
+    // twenty publishes that move a reply: the window's rows move, the head's inputs do not
     for (let n = 0; n < 20; n += 1) {
       await act(async () =>
         door.push([claude({ lastAssistantText: `reply ${n}` }), ...ROWS.slice(1)]),
@@ -689,11 +781,28 @@ describe("the monitor stage", () => {
       await settle();
     }
     expect(recording.updates - updates).toBeGreaterThanOrEqual(20);
-    expect(bar.renders - renders).toBe(0);
-    // a count that moves is the bar's: it renders
+    expect(head.renders - renders).toBe(0);
+    // a status that moves was the bar's counters'; the head has none
     await act(async () => door.push([claude({ status: "idle" }), ...ROWS.slice(1)]));
     await settle();
-    expect(bar.renders).toBeGreaterThan(renders);
+    expect(head.renders - renders).toBe(0);
+    // the view changing is the head's: it renders, and the ring moves with it
+    const list = monitorViewFor("list");
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={door}>
+          <GodviewMonitor
+            view={list}
+            parameters={monitorParameterDefaults(list.parameterGroups)}
+            door={door}
+            panes={PANES}
+          />
+        </GodviewAgentsProvider>,
+      );
+    });
+    await settle();
+    expect(head.renders).toBeGreaterThan(renders);
+    expect(pressedView(container)).toBe("LIST view");
   });
 
   it("names no ported view in a host stylesheet (W5), and defines every skin name the views read (L18)", () => {
@@ -786,7 +895,7 @@ describe("the monitor stage", () => {
     expect(pressedView(host)).toBe("SWARM view");
   });
 
-  it("draws each manifest's mark and exposes its keys through the shipping bar (MV-D6, MV-D8)", async () => {
+  it("draws each manifest's mark and says its keys through the shipping head (MV-D6, MV-D8, GV-D1)", async () => {
     const host = await mountMonitor("list");
     const group = host.querySelector('[role="group"][aria-label="Monitor view"]');
     for (const entry of MONITOR_VIEWS) {
@@ -798,16 +907,18 @@ describe("the monitor stage", () => {
       expect(mark?.classList.contains("is-filled")).toBe(true);
     }
     const swarm = monitorViewFor("swarm");
-    const tipHost = group
-      ?.querySelector(`[aria-label="${swarm.label} view"]`)
-      ?.closest(".vf-godview-bar-tip-host");
-    expect(tipHost).not.toBeNull();
+    // the circle's label is where a view's focus keys are said (M177), as the
+    // bar's tooltip was
     await act(async () => {
-      const control = tipHost?.querySelector<HTMLButtonElement>("button");
+      const control = group?.querySelector<HTMLButtonElement>(
+        `button[aria-label="${swarm.label} view"]`,
+      );
       expect(control).not.toBeNull();
       control?.focus();
     });
-    const keys = tipHost?.querySelector('[role="tooltip"] kbd');
+    const said = host.querySelector('.vf-stories [role="tooltip"]');
+    expect(said?.firstChild?.textContent).toBe("Swarm");
+    const keys = said?.querySelector("kbd");
     expect(keys?.textContent).toBe("⎋ ↵ → ←");
     expect(keys?.getAttribute("aria-label")).toBe(
       `while focused: ${swarm.view.manifest.keys?.map((key) => `${key.key}, ${key.label}`).join("; ")}`,
@@ -1343,24 +1454,32 @@ describe("the monitor stage", () => {
     expect(ackText(host)).toContain("no pane");
   });
 
-  it("wears the package's instrument bar, with VibeField's own tools in its slots (AR-5)", async () => {
-    // The header is the package's now. What is still OURS rides the two slots
-    // it offers: the bridge notice leading and the two trailing sheets.
-    // A test that only counted
-    // the bar's own controls would pass for a bar with our tools dropped.
+  it("wears the head where the instrument bar stood, and nothing the bar held beside the views (GV-D1)", async () => {
+    // The head is the monitor host's own chrome since GV-D1: a row of circles
+    // in the head's slot, over the stage. The package's instrument bar is not
+    // mounted at all, and what it held beside the views is gone or moved: the
+    // counters (FC-D18), the ☼◐ switch (FC-D7), the spacer for the window's
+    // lights, the bridge notice's empty slot, and System control — the
+    // palette's act now, never a button here.
     const host = await mountMonitor("list", fakeDoor());
-    const bar = host.querySelector(".vf-godview-header");
-    expect(bar, "the instrument bar never mounted").not.toBeNull();
-    expect(bar?.querySelector(".vf-godview-header-notice")).not.toBeNull();
-    expect(bar?.querySelector('select[aria-label="Agent provider"]')).toBeNull();
-    expect(bar?.querySelector(".vf-godview-spawn")).toBeNull();
-    // P2 (PK2 (a)): FIND left the bar — search is the frame's button at the
-    // head's right end, and System control is the bar's last tool
-    expect(bar?.querySelector('button[aria-label="Find an agent by what was said"]')).toBeNull();
-    expect(bar?.querySelector('button[aria-controls="vf-find-sheet"]')).toBeNull();
-    expect(bar?.querySelector('button[aria-controls="vf-godview-tweak-panel"]')).not.toBeNull();
-    // The bar owns the view marks and the theme switch, in that order: the
-    // registry's five, spend after the timeline since MV-7.
+    expect(host.querySelector(".vf-godview-header")).toBeNull();
+    const slot = host.querySelector(".vf-stories-slot");
+    expect(slot?.querySelector(".vf-stories"), "the head never mounted").not.toBeNull();
+    // the slot stands before the stage, as the bar did: the stage is its sibling
+    expect(slot?.nextElementSibling?.classList.contains("vf-godview-monitor-stage")).toBe(true);
+    expect(host.querySelector('[role="group"][aria-label="Agent status"]')).toBeNull();
+    expect(host.querySelector('[role="switch"]')).toBeNull();
+    expect(host.querySelector(".vf-godview-native-controls-space")).toBeNull();
+    expect(host.querySelector(".vf-godview-header-notice")).toBeNull();
+    expect(host.querySelector('button[aria-label="System control"]')).toBeNull();
+    expect(host.querySelector('button[aria-controls="vf-godview-tweak-panel"]')).toBeNull();
+    expect(host.querySelector('select[aria-label="Agent provider"]')).toBeNull();
+    expect(host.querySelector(".vf-godview-spawn")).toBeNull();
+    // P2 (PK2 (a)): search is the frame's button at the head's right end
+    expect(host.querySelector('button[aria-label="Find an agent by what was said"]')).toBeNull();
+    expect(host.querySelector('button[aria-controls="vf-find-sheet"]')).toBeNull();
+    // The head holds the view circles and nothing else: the registry's five,
+    // spend after the timeline since MV-7.
     expect(viewButtons(host).map((button) => button.getAttribute("aria-label"))).toEqual([
       "SWARM view",
       "LIST view",
@@ -1368,11 +1487,56 @@ describe("the monitor stage", () => {
       "TIMELINE view",
       "SPEND view",
     ]);
+    expect(slot?.querySelectorAll("button").length).toBe(5);
     expect(pressedView(host)).toBe("LIST view");
-    expect(bar?.querySelector('[role="switch"]')?.getAttribute("aria-checked")).toBe("false");
+    // the deck is "up" until the deck's door lands (GV-D11): the head stands
+    expect(slot?.querySelector(".vf-stories")?.getAttribute("data-deck")).toBe("up");
   });
 
-  it("chooses the view with the bar's marks; its theme switch is retired (FC-D7)", async () => {
+  it("a head that throws says Monitor views unavailable where the row stood; the stage and its view stay (M49, M192)", async () => {
+    head.throws = true;
+    const recording = createRecordingView("head-survivor");
+    const entry: MonitorViewEntry = {
+      id: recording.view.manifest.id,
+      label: recording.view.manifest.label,
+      mark: recording.view.manifest.mark,
+      parameterGroups: [],
+      view: recording.view,
+    };
+    const door = fakeDoor();
+    syncBoard(PANES);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    const uncaught = vi.fn();
+    root = createRoot(container, { onUncaughtError: uncaught, onCaughtError: vi.fn() });
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={door}>
+          <GodviewMonitor view={entry} parameters={{}} door={door} panes={PANES} />
+        </GodviewAgentsProvider>,
+      );
+    });
+    await settle();
+    expect(uncaught).not.toHaveBeenCalled();
+    const status = container.querySelector('.vf-stories-slot > span[role="status"]');
+    expect(status?.textContent).toBe("Monitor views unavailable");
+    expect(container.querySelector(".vf-stories")).toBeNull();
+    // the monitor's stage, its chrome and its view are all there
+    expect(container.querySelector(".vf-godview-monitor-stage")).not.toBeNull();
+    expect(container.querySelector(".vf-monitor-claims")).not.toBeNull();
+    expect([recording.mounts, recording.unmounts]).toEqual([1, 0]);
+    // it reads only the window's own state, so no publish tries it again (M192)
+    head.throws = false;
+    const tries = head.renders;
+    await act(async () =>
+      door.push([managedSummary({ runtimeRunId: "after-the-head", cwd: "/project/after" })]),
+    );
+    await settle();
+    expect(head.renders).toBe(tries);
+    expect(container.querySelector('.vf-stories-slot > span[role="status"]')).not.toBeNull();
+  });
+
+  it("chooses the view with the head's circles; there is no theme switch (FC-D7)", async () => {
     const selected: string[] = [];
     const view = monitorViewFor("swarm");
     container = document.createElement("div");
@@ -1398,19 +1562,16 @@ describe("the monitor stage", () => {
     await act(async () => list?.click());
     expect(selected).toEqual(["list"]);
 
-    // Godview follows the app's theme (One Frame FR-4): the views package still
-    // draws its ☼◐ switch, pressing it changes nothing, and the host hides it —
-    // with the tooltip host around it — until the package draws it only for a
-    // host that hands it a handler (the ask on record).
-    const themeSwitch = (): HTMLButtonElement | null =>
-      container?.querySelector<HTMLButtonElement>('[role="switch"]') ?? null;
-    const before = themeSwitch()?.getAttribute("aria-checked");
-    await act(async () => themeSwitch()?.click());
-    expect(themeSwitch()?.getAttribute("aria-checked")).toBe(before);
+    // Godview follows the app's theme (One Frame FR-4). The ☼◐ switch was the
+    // package's bar's, hidden by a host rule while the bar stood; the bar left
+    // VibeField (GV-D1), so there is no switch to hide and no rule hiding one.
+    expect(container?.querySelector('[role="switch"]')).toBeNull();
     const css = readFileSync(join(process.cwd(), "src/godview/godview.css"), "utf8");
-    expect(css).toMatch(
-      /\.vf-godview-header \.vf-godview-bar-tip-host:has\(> \.vf-godview-theme-switch\) \{\s*display: none;/,
-    );
+    expect(css).not.toContain("vf-godview-header");
+    expect(css).not.toContain("vf-godview-theme-switch");
+    expect(css).not.toContain("vf-godview-bar-");
+    expect(css).not.toContain("vf-godview-native-controls-space");
+    expect(css).not.toContain('aria-label="Agent status"');
   });
 
   it("with NO door: no invented rows and terminal creation explains the missing connection", async () => {
@@ -1522,10 +1683,6 @@ const chooseProfile = async (id: string): Promise<void> => {
   await act(async () => getGodviewFindDoor()?.setProfile(id === "all" ? null : id));
 };
 const chosenTab = (_host?: HTMLElement): string => getGodviewFindDoor()?.filters.profile ?? "all";
-const counters = (host: HTMLElement): string[] =>
-  [...host.querySelectorAll('[aria-label="Agent status"] .vf-godview-bar-num')].map(
-    (node) => node.textContent ?? "",
-  );
 const listRows = (host: HTMLElement): { project: string; receded: boolean }[] =>
   [...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-list-row")].map((row) => ({
     project: row.querySelector("strong")?.textContent ?? "",
@@ -1567,7 +1724,7 @@ async function mountReporting(door: MonitorDoor): Promise<{
 }
 
 describe("the profile filter (AR-S5; in search's Live now since P2, GV-D3)", () => {
-  it("offers no profile while This Mac is the only one, and every profile once one exists — never in the bar", async () => {
+  it("offers no profile while This Mac is the only one, and every profile once one exists — never in the head", async () => {
     const door = tabDoor([NATIVE_SET]);
     const host = await mountMonitor("list", door);
     expect(getGodviewFindDoor()?.filters.profiles).toEqual([]);
@@ -1581,19 +1738,21 @@ describe("the profile filter (AR-S5; in search's Live now since P2, GV-D3)", () 
     // the one dot: Codex is blocked under Work
     const work = getGodviewFindDoor()?.filters.profiles.find((profile) => profile.id === "work");
     expect(work?.blocked).toBe(true);
-    // the bar carries no strip and no chip any more: one spacer, no tabs
-    const bar = host.querySelector(".vf-godview-header");
-    expect(bar?.querySelector('[role="tablist"]')).toBeNull();
-    expect(bar?.querySelector(".vf-device-filter")).toBeNull();
-    expect(bar?.querySelectorAll(":scope > .vf-godview-bar-spacer").length).toBe(1);
+    // the head carries no strip and no chip: the view circles, and nothing else
+    const slot = host.querySelector(".vf-stories-slot");
+    expect(slot).not.toBeNull();
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
+    expect(host.querySelector(".vf-device-filter")).toBeNull();
+    expect(slot?.querySelectorAll("button").length).toBe(viewButtons(host).length);
   });
 
-  it("keeps the chosen profile's sessions, recedes every other row in place, and counts what it shows", async () => {
+  it("keeps the chosen profile's sessions, recedes every other row in place, and the marker counts what it shows", async () => {
+    // (The bar's counters counted the shown rows too, until the bar left
+    // VibeField — GV-D1; the marker is the count that is left.)
     const host = await mountMonitor("list", tabDoor());
-    const everything = counters(host);
+    const everything = latest().shownAgents;
     await chooseProfile("work");
     expect(chosenTab(host)).toBe("work");
-    expect(counters(host)).toEqual(["1", "1", "0"]);
     const rows = listRows(host);
     expect(rows.filter((row) => !row.receded).map((row) => row.project)).toEqual([
       "voyager",
@@ -1606,7 +1765,8 @@ describe("the profile filter (AR-S5; in search's Live now since P2, GV-D3)", () 
     expect(latest().shownAgents).toBe(2);
 
     await chooseProfile("all");
-    expect(counters(host)).toEqual(everything);
+    expect(latest().shownAgents).toBe(everything);
+    expect(everything).toBeGreaterThan(2);
     expect(listRows(host).some((row) => row.receded)).toBe(false);
     expect(latest().profileTab).toBe("all");
   });
@@ -1741,7 +1901,7 @@ describe("the profile filter (AR-S5; in search's Live now since P2, GV-D3)", () 
     );
     expect(empty?.querySelector('[data-profile-glyph="flask"]')).not.toBeNull();
     expect(host.querySelector(".vf-monitor-list")?.classList.contains("is-all-receded")).toBe(true);
-    expect(counters(host)).toEqual(["0", "0", "0"]);
+    expect(latest().shownAgents).toBe(0);
 
     await act(async () => door.pushSets([NATIVE_SET, WORK_SET]));
     expect(chosenTab(host)).toBe("all");
@@ -2978,7 +3138,7 @@ describe("a chrome read cannot take down the monitor", () => {
     expect(caught.mock.calls.some(([error]) => error === failure)).toBe(true);
     expect(uncaught).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Usage unavailable");
-    expect(container.querySelector(".vf-godview-header")).not.toBeNull();
+    expect(container.querySelector(".vf-stories")).not.toBeNull();
     expect(recording.mounts).toBe(1);
     expect(recording.unmounts).toBe(0);
     const stage = recording.roots[0];
@@ -3185,7 +3345,7 @@ describe("a chrome read cannot take down the monitor", () => {
     expect(status?.textContent).toBe("Agent counts unavailable");
     expect(container.querySelector(".vf-monitor-claims")).toBe(strip);
     expect(strip?.querySelector(".vf-monitor-ack")).not.toBeNull();
-    expect(container.querySelector(".vf-godview-header")).not.toBeNull();
+    expect(container.querySelector(".vf-stories")).not.toBeNull();
     expect([recording.mounts, recording.unmounts]).toEqual([1, 0]);
 
     // The failure changes the strip's size, and the stage republishes its
