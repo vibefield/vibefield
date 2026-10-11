@@ -132,7 +132,8 @@ export interface SurfacePoolDeps<TFrame extends LiveSurfaceClosableFrame> {
     | LiveSurfaceRendererTransport<TFrame>
     | Promise<LiveSurfaceRendererTransport<TFrame>>;
   readonly now?: () => number;
-  readonly graceMs?: number;
+  /** How long a key nobody holds is kept — a number, or read each time a grace is armed (PT-5b: a test's shorter one). */
+  readonly graceMs?: number | (() => number);
   readonly timers?: SurfacePoolTimers;
 }
 
@@ -403,7 +404,7 @@ class SurfaceAttachmentPool<TFrame extends LiveSurfaceClosableFrame>
   readonly #entries = new Map<string, PoolEntry<TFrame>>();
   readonly #transport: Promise<LiveSurfaceRendererTransport<TFrame>>;
   readonly #now: () => number;
-  readonly #graceMs: number;
+  readonly #graceMs: () => number;
   readonly #timers: SurfacePoolTimers;
   #disposed = false;
   #mints = 0;
@@ -412,7 +413,8 @@ class SurfaceAttachmentPool<TFrame extends LiveSurfaceClosableFrame>
   constructor(deps: SurfacePoolDeps<TFrame>) {
     this.#transport = Promise.resolve(deps.transport);
     this.#now = deps.now ?? (() => Date.now());
-    this.#graceMs = deps.graceMs ?? SURFACE_POOL_GRACE_MS;
+    const grace = deps.graceMs ?? SURFACE_POOL_GRACE_MS;
+    this.#graceMs = typeof grace === "function" ? grace : () => grace;
     this.#timers = deps.timers ?? DEFAULT_TIMERS;
   }
 
@@ -685,13 +687,14 @@ class SurfaceAttachmentPool<TFrame extends LiveSurfaceClosableFrame>
 
   #armGrace(entry: PoolEntry<TFrame>): void {
     if (entry.cancelGrace !== null || this.#disposed) return;
-    entry.graceDeadlineAt = this.#now() + this.#graceMs;
+    const graceMs = this.#graceMs();
+    entry.graceDeadlineAt = this.#now() + graceMs;
     entry.cancelGrace = this.#timers.arm(() => {
       entry.cancelGrace = null;
       entry.graceDeadlineAt = null;
       if (entry.holders.size > 0) return;
       this.#dropEntry(entry);
-    }, this.#graceMs);
+    }, graceMs);
   }
 
   #cancelGrace(entry: PoolEntry<TFrame>): void {

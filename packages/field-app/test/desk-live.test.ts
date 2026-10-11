@@ -1,315 +1,33 @@
 // PT-2 — THE DESK'S LIVE SERVICE (surfaces/live/desk-live.ts): ICE's `LIVE` contract over the window's LSF pool, with a FAKE pool,
-// presentation and writer — an arrival is one `arrived()`; `take()` presents the newest frame once into ICE's writer on the desk's
-// device (labelled `<kind>/live <key>`, from the frame's `visibleRect`) and releases its lease; an UNSEEN face's frame is taken and
-// closed, no redraw; the demand map; the state and the words; close; a remount's service makes its writers on its own device; the
-// capability gate's refusal is a failed face with the words; the mint names the page and the durable key.
+// presentation and writer (desk-live-fixture.ts) — an arrival is one `arrived()`; `take()` presents the newest frame once into ICE's
+// writer on the desk's device (labelled `<kind>/live <key>`, from the frame's `visibleRect`) and releases its lease; an UNSEEN face's
+// frame is taken and closed, no redraw; the demand map; the state and the words; close; a remount's service makes its writers on its
+// own device; the capability gate's refusal is a failed face with the words; the mint names the page and the durable key.
 // PT-4 — the page as a device sees it: the spec's device and scheme are the source's emulation at the mint and an `emulate` told
 // down the lane as it goes live and whenever the spec moves (`respec` — the viewport's demand first); the desk's pages share ONE
 // persistent profile; the favicon rides the face's words (`extra.favicon`); a page is called by its title, else its spec's label.
-import type { LiveTextureOptions, LiveWriter } from "@vibecook/ice/desk";
-import type { LiveDemand } from "@vibecook/ice/desk/kit";
-import type { LiveSurfaceFrameMetadataV1, LiveSurfaceRuntimeSummaryV1 } from "@vibefield/contracts";
+// (PT-5b's stills and its cap: desk-live-stills.test.ts, desk-live-cap.test.ts.)
 import { liveBrowserFailure } from "@vibefield/plugin-sdk/desk";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  createDeskLiveSources,
   DESK_PROFILE,
-  type DeskLiveDeps,
   emulationOf,
   fpsBucket,
   type LiveFavicon,
   liveDemandIntent,
   liveInputEvents,
 } from "../src/surfaces/live/desk-live";
-import type {
-  SurfaceAcquireOptions,
-  SurfaceDemandRequest,
-  SurfaceHandleState,
-} from "../src/surfaces/pool";
-
-const PAGE = {
-  source: "browser",
-  url: "http://127.0.0.1:4321/",
-  viewport: [1280, 800],
-  deviceScaleFactor: 2,
-  scheme: "light",
-  label: "Browser",
-};
-/** What PAGE's device is in LSF's words: the engine's own (no agent), a pointer device, the spec's scheme. */
-const LAPTOP_TOLD = { deviceScaleFactor: 2, mobile: false, touchPoints: 0, colorScheme: "light" };
-const IPHONE = {
-  mobile: true,
-  touchPoints: 5,
-  agent: {
-    userAgent:
-      "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1",
-    navigatorPlatform: "iPhone",
-    platform: "iOS",
-    platformVersion: "26.0",
-    model: "iPhone",
-  },
-};
-const PHONE_PAGE = {
-  ...PAGE,
-  viewport: [402, 874],
-  deviceScaleFactor: 3,
-  scheme: "dark",
-  device: IPHONE,
-};
-const PHONE_TOLD = {
-  deviceScaleFactor: 3,
-  mobile: true,
-  touchPoints: 5,
-  agent: {
-    userAgent: IPHONE.agent.userAgent,
-    navigatorPlatform: "iPhone",
-    hints: {
-      platform: "iOS",
-      platformVersion: "26.0",
-      architecture: "",
-      model: "iPhone",
-      mobile: true,
-    },
-  },
-  colorScheme: "dark",
-};
-const SEEN: LiveDemand = {
-  mode: "live",
-  fps: 30,
-  raster: [1280, 800],
-  viewport: [1280, 800],
-  interactive: false,
-};
-const UNSEEN: LiveDemand = {
-  mode: "paused",
-  fps: 0,
-  raster: [0, 0],
-  viewport: [1280, 800],
-  interactive: false,
-};
-
-function metadata(
-  logicalSize: { width: number; height: number } = { width: 1280, height: 800 },
-): LiveSurfaceFrameMetadataV1 {
-  return {
-    v: 1,
-    surfaceId: "surface_0123456789abcdef",
-    producerEpoch: 1,
-    sequence: "1",
-    geometry: {
-      revision: 1,
-      codedSize: { width: 2600, height: 1620 },
-      visibleRect: { x: 4, y: 2, width: 2560, height: 1600 },
-      logicalSize,
-      orientation: 0,
-    },
-    hostReceivedAtUs: "1",
-    pixelFormat: "bgra",
-    colorSpace: "srgb",
-    alphaMode: "opaque",
-    transport: "shared-texture",
-  };
-}
-
-/** A presentation as the pool hands it: frames LAND (`land`), a consumer takes the newest, its lease always released. */
-function fakePresentation(
-  summaryState: LiveSurfaceRuntimeSummaryV1["state"] = "live",
-  logicalSize?: { width: number; height: number },
-) {
-  const listeners = new Set<() => void>();
-  const pending: { close: ReturnType<typeof vi.fn> }[] = [];
-  const closed: unknown[] = [];
-  const p = {
-    closed: false,
-    summary: { state: summaryState, transport: "shared-texture" } as LiveSurfaceRuntimeSummaryV1,
-    onFrame(listener: () => void) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    presentLatestVia(consumer: (frame: unknown, metadata: LiveSurfaceFrameMetadataV1) => boolean) {
-      const frame = pending.pop();
-      for (const older of pending.splice(0)) older.close();
-      if (frame === undefined) return { kind: "idle" as const };
-      try {
-        const ok = consumer(frame, metadata(logicalSize));
-        return ok
-          ? { kind: "consumed" as const, metadata: metadata(logicalSize) }
-          : { kind: "dropped" as const, reason: "consumer-rejected" as const };
-      } finally {
-        frame.close(); // the lease, released on every path
-        closed.push(frame);
-      }
-    },
-    land() {
-      const frame = { close: vi.fn() };
-      pending.push(frame);
-      for (const l of [...listeners]) l();
-      return frame;
-    },
-    listeners: () => listeners.size,
-    closed_: closed,
-  };
-  return p;
-}
-
-/** A pool handle under the test's hand: its state set, its demand and release recorded. */
-function fakeHandle(key: string, opts: SurfaceAcquireOptions) {
-  const listeners = new Set<(s: SurfaceHandleState<never>) => void>();
-  let state = {
-    status: "attaching",
-    presentation: null,
-    browser: null,
-    error: null,
-  } as unknown as SurfaceHandleState<never>;
-  const h = {
-    key,
-    opts,
-    demands: [] as SurfaceDemandRequest[],
-    /** What the pool's snapshot says it last wrote to the wire for this key. */
-    wire: null as unknown,
-    released: 0,
-    retried: 0,
-    get state() {
-      return state;
-    },
-    get presentation() {
-      return state.presentation;
-    },
-    get status() {
-      return state.status;
-    },
-    get browser() {
-      return state.browser;
-    },
-    get error() {
-      return state.error;
-    },
-    onState(listener: (s: SurfaceHandleState<never>) => void) {
-      listeners.add(listener);
-      listener(state);
-      return () => listeners.delete(listener);
-    },
-    setDemand(d: SurfaceDemandRequest) {
-      h.demands.push(d);
-      h.order.push("demand");
-    },
-    /** What the face sent down the page's lane, with the revision it was stamped with; and its navigations. */
-    inputs: [] as { event: unknown; revision: number | undefined }[],
-    navigations: [] as unknown[],
-    /** PT-4: the emulations told down the lane (the `emulate` commands), apart from the chrome's navigations. */
-    emulations: [] as unknown[],
-    /** Every send in the order it went: "demand" and "emulate". */
-    order: [] as string[],
-    lane: true,
-    sendInput(event: unknown, revision?: number) {
-      if (!h.lane) return false;
-      h.inputs.push({ event, revision });
-      return true;
-    },
-    navigate(command: { action: string; emulation?: unknown }) {
-      if (!h.lane || state.status !== "live") return false;
-      if (command.action === "emulate") {
-        h.emulations.push(command.emulation);
-        h.order.push("emulate");
-      } else h.navigations.push(command);
-      return true;
-    },
-    retry() {
-      h.retried += 1;
-    },
-    /** PT-5a: how many times a favicon's bytes arrived on the page's attachment (the pool's word). */
-    faviconArrivals: 0,
-    release() {
-      h.released += 1;
-    },
-    set(next: Partial<SurfaceHandleState<never>>) {
-      state = { ...state, ...next } as SurfaceHandleState<never>;
-      for (const l of [...listeners]) l(state);
-    },
-  };
-  return h;
-}
-
-function setup(over: Partial<DeskLiveDeps> = {}) {
-  const handles: ReturnType<typeof fakeHandle>[] = [];
-  const writers: {
-    device: unknown;
-    o: LiveTextureOptions;
-    presented: unknown[];
-    destroyed: number;
-  }[] = [];
-  const device = { id: "desk-device" } as unknown as GPUDevice;
-  const requests: { method: string; params: unknown }[] = [];
-  const deps: DeskLiveDeps = {
-    pool: () =>
-      ({
-        disposed: false,
-        acquire(key: string, opts: SurfaceAcquireOptions) {
-          const h = fakeHandle(key, opts);
-          handles.push(h);
-          return h as never;
-        },
-        snapshot: () =>
-          ({ entries: handles.map((h) => ({ key: h.key, demand: h.wire })) }) as never,
-        dispose: () => {},
-      }) as never,
-    mintClient: () => ({
-      async request(method: string, params?: unknown) {
-        requests.push({ method, params });
-        return {
-          surfaceId: "surface_0123456789abcdef",
-          ticket: { v: 1, token: "abcdefghijklmnopqrstuvwxyz_0123456789-ABCDE" },
-        };
-      },
-    }),
-    gate: () => ({ type: "vibefield.browser-pane" }),
-    device: () => device,
-    writer: (d, o) => {
-      const w = { device: d, o, presented: [] as unknown[], destroyed: 0 };
-      writers.push(w);
-      const face = {
-        width: o.width,
-        height: o.height,
-        format: "rgba8unorm-srgb" as const,
-        revision: 0,
-        epoch: 0,
-        logical: [o.width, o.height] as readonly [number, number],
-        view: () => ({}) as never,
-        prepare: () => {},
-        bytes: 0,
-      };
-      const writer: LiveWriter = {
-        face,
-        present: (frame, rect, logical) => {
-          face.revision += 1;
-          w.presented.push({ frame, rect, logical });
-        },
-        presentBytes: () => {},
-        presentTexture: () => {},
-        resize: () => {},
-        destroy: () => {
-          w.destroyed += 1;
-        },
-      };
-      return writer;
-    },
-    ...over,
-  };
-  const live = createDeskLiveSources(deps);
-  return { live, handles, writers, device, requests };
-}
-
-/** A face opened and attached live, its presentation in hand. */
-function attached(over: Partial<DeskLiveDeps> = {}) {
-  const t = setup(over);
-  const arrived = vi.fn();
-  const face = t.live.open("13918995204487956201-1", PAGE, arrived);
-  const handle = t.handles[0];
-  if (handle === undefined) throw new Error("no handle");
-  const presentation = fakePresentation();
-  handle.set({ status: "live", presentation: presentation as never });
-  return { ...t, face, handle, presentation, arrived };
-}
+import {
+  attached,
+  fakePresentation,
+  LAPTOP_TOLD,
+  PAGE,
+  PHONE_PAGE,
+  PHONE_TOLD,
+  SEEN,
+  setup,
+  UNSEEN,
+} from "./desk-live-fixture";
 
 describe("the desk's LIVE service — a face over the window's pool", () => {
   it("opens the page's pool key apart from any panel's, paused at the page's viewport until the kind's law has seen it", () => {
@@ -541,6 +259,10 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         veiled: false,
         refused: 0,
         faviconBytes: 0,
+        alive: true,
+        rested: false,
+        still: null,
+        stillAt: null,
       },
     ]);
     face.demand(UNSEEN);
@@ -579,6 +301,10 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         veiled: false,
         refused: 0,
         faviconBytes: 0,
+        alive: true,
+        rested: false,
+        still: null,
+        stillAt: null,
       },
     ]);
     expect(live.stats()).toMatchObject({ presented: 1, dropped: 1, writers: 1 });
@@ -604,6 +330,10 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         veiled: false,
         refused: 0,
         faviconBytes: 0,
+        alive: false,
+        rested: false,
+        still: null,
+        stillAt: null,
       },
     ]);
   });

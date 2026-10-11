@@ -40,6 +40,19 @@
 //    `extra.favicon` (decoded once a key) — `null` where the page has none, absent before the page has said anything.
 //    PT-5a (ruling 8): its bytes cross the page's port ONCE a key — main's control session posts them with the first
 //    summary that names the key and the key alone after; the pool's attachment keeps them, so the state read here is whole.
+//  - THE LAST STILL (PT-5b rulings 1, 2): a page's pixels are the HOST's (PA-22) and stay on this device — the service reads
+//    the face's own texture back (still-taker.ts), keeps the picture on the byte store's shelf under the document and the
+//    object (page-stills.ts: never in the document, never synced, never said to a log), and lays it into the face's writer
+//    wherever no live frame of the page has landed: at open, when its page is at rest, and — where the address that FAILED
+//    is the still's — under a failure's words. A still is of ONE address: another's is not shown. It is never passed off as
+//    the page: `info().extra.still` says so, with its age, until the page's next frame lands in its place. TAKEN when a held
+//    pane is put down, before a page is put to rest, and at rest at most once every 30 s a pane where a frame arrived since.
+//  - SIX PAGES ALIVE AT MOST (PT-5b ruling 3; live-cap.ts is the policy): a page is made alive only when the cap lets it —
+//    until then, and when it is put to rest, its pane shows its still. A rest takes the page's still first, then asks it
+//    `hibernated` (its WebContents gone, its address kept by its producer); a page let go of (a deleted pane's, kept by the
+//    pool's grace) is alive and counted, and rested first when its slot is wanted.
+//  - ITS TEXTURE LET GO (PT-5b ruling 4): the kind charges each face's bytes to the desk's budget; when the budget evicts
+//    one the kind says so (`BROWSER_NAVIGATION.evict`) and the writer is destroyed — the film, or its still when next seen.
 
 import type { LiveTextureOptions, LiveWriter } from "@vibecook/ice/desk";
 import type {
@@ -65,16 +78,21 @@ import {
   type LiveBrowserFailure,
   type LiveBrowserRefusal,
   type LiveBrowserSpec,
+  type LiveBrowserStill,
   liveBrowserFailureReason,
   liveBrowserSpec,
 } from "@vibefield/plugin-sdk/desk";
-import type {
-  ProductSurfaceFrame,
-  SurfaceDemandIntent,
-  SurfaceHandle,
-  SurfaceHandleState,
-  SurfacePool,
+import {
+  type ProductSurfaceFrame,
+  SURFACE_POOL_GRACE_MS,
+  type SurfaceDemandIntent,
+  type SurfaceHandle,
+  type SurfaceHandleState,
+  type SurfacePool,
 } from "../pool";
+import { type CapFace, capPlan, LIVE_PAGES_MAX } from "./live-cap";
+import type { PageStill, PageStills } from "./page-stills";
+import type { StillDecoder, StillTaker } from "./still-taker";
 
 /** What the gate answers for a face's key: the object's type (its kind's name — the texture's label), or why it may not open. */
 export type LiveGateAnswer = { readonly type: string } | { readonly refused: string };
@@ -90,6 +108,26 @@ export interface DeskLiveDeps {
   readonly device: () => GPUDevice | undefined;
   /** ICE's writer — `createLiveTexture` — the HOST's. */
   readonly writer: (device: GPUDevice, o: LiveTextureOptions) => LiveWriter;
+  /** PT-5b — THE LAST STILL: the open document's id (a still is kept under it and the object's key; undefined: none is
+   * kept or shown), the shelf, and the host's two hands on a page's pixels — the texture read back and encoded, a kept
+   * still decoded. Any of them absent: no stills (the film, as before). */
+  readonly docId?: () => string | undefined;
+  readonly stills?: Pick<PageStills, "keep" | "kept" | "forget">;
+  readonly takeStill?: StillTaker;
+  readonly decodeStill?: StillDecoder;
+  /** PT-5b — THE CAP's eyes: how far the pane `key` lies from the view's centre (any unit; absent: unknown), and whether
+   * the document still holds the object (`false`: deleted — its still is forgotten when its page's grace lapses;
+   * `undefined`: not known, nothing is forgotten). */
+  readonly far?: (key: string) => number;
+  readonly exists?: (key: string) => boolean | undefined;
+  /** How long the pool keeps a page nobody holds (a deleted pane's still is forgotten then) — the pool's own, by default. */
+  readonly graceMs?: () => number;
+  /** The clock and the timers (a test's own). */
+  readonly now?: () => number;
+  readonly timers?: {
+    set(fn: () => void, ms: number): unknown;
+    clear(handle: unknown): void;
+  };
 }
 
 /** What the service counts — a smoke reads it through the desk door. */
@@ -115,6 +153,18 @@ export interface DeskLiveStats {
   /** PT-5a: times the desk parked, and whether it is parked now. */
   readonly parks: number;
   readonly parked: boolean;
+  /** PT-5b: the most pages alive at once, and how many are now (the open faces' and those let go that the pool's grace
+   * still keeps); pages put to rest and pages woken by the service. */
+  readonly cap: number;
+  readonly alive: number;
+  readonly rests: number;
+  readonly wakes: number;
+  /** PT-5b: stills taken (and kept), stills laid into a face's texture, stills of deleted panes forgotten; textures let
+   * go at the budget's word. */
+  readonly stillsTaken: number;
+  readonly stillsShown: number;
+  readonly stillsForgotten: number;
+  readonly evictions: number;
 }
 
 /** A page's favicon as a face's words carry it (`LiveInfo.extra.favicon`): a key to compare, the image's type, its bytes. */
@@ -163,6 +213,13 @@ export interface DeskLiveFaceRow {
   readonly refused: number;
   /** PT-5a (ruling 8): how many times a favicon's BYTES arrived on the page's attachment — once a key, whatever the summaries. */
   readonly faviconBytes: number;
+  /** PT-5b: its page is ALIVE as the cap counts it; the service put it to REST. */
+  readonly alive: boolean;
+  readonly rested: boolean;
+  /** PT-5b: the texture holds a STILL taken then (ms; null: a frame of the page, or nothing); and when this page's still
+   * was last taken or read by this service (null: never). */
+  readonly still: number | null;
+  readonly stillAt: number | null;
 }
 
 export interface DeskLiveSources extends LiveSources {
@@ -179,6 +236,10 @@ export interface DeskLiveSources extends LiveSources {
    * page asked for what its face LAST asked). The same word twice is nothing.
    */
   park(parked: boolean): void;
+  /** PT-5b (ruling 3) — the most pages alive at once: read, or (the TEST door) lowered or raised — the plan is made again. */
+  cap(next?: number): number;
+  /** PT-5b — whatever the service has in flight (a still being taken, kept or laid; a page being put to rest) is done. */
+  settled(): Promise<void>;
   /** Every face closed (the mount is going). */
   dispose(): void;
 }
@@ -438,7 +499,8 @@ const logicalOf = (size: {
     : undefined;
 
 /** The face's page in the pool: apart from any panel's (ruling 4). */
-const poolKey = (key: string): string => `desk:${key}`;
+const POOL_PREFIX = "desk:";
+const poolKey = (key: string): string => `${POOL_PREFIX}${key}`;
 
 /** THE DESK'S BROWSER PROFILE (PT-4 ruling 3): every desk page's — one persistent session, as the tabs of one browser share
  * theirs. Main keeps it under the user's data by an opaque name (`LAYOUT.BROWSER_PROFILES_DIR`), apart from the shell's. */
@@ -507,9 +569,92 @@ function faviconOf(icon: NonNullable<LiveSurfaceBrowserStateV1["favicon"]>): Liv
 /** What a parked desk asks of a page: paused — no frames, and (LSF's rule) no sound — its layout kept. */
 const PARKED = { mode: "paused", fps: 0, raster: [0, 0], interactive: false } as const;
 
+/** PT-5b: what a page AT REST is asked — hibernated: its WebContents gone, its address kept by its producer. */
+const restIntent = (viewport?: readonly [number, number]): SurfaceDemandIntent => ({
+  mode: "hibernated",
+  targetFps: 0,
+  priority: 0,
+  interactive: false,
+  ...(viewport === undefined
+    ? {}
+    : { logicalViewport: { width: viewport[0], height: viewport[1] } }),
+});
+
+/** PT-5b: at rest in view a page's still is retaken at most this often, and only when a frame arrived since the last. */
+export const PAGE_STILL_EVERY_MS = 30_000;
+/** …and no sooner than this after the first frame since the last (nor while the page says it is loading). */
+export const PAGE_STILL_SETTLE_MS = 1_500;
+/** A page is put to rest whether or not its still could be taken in this long (a device lost under the read). */
+export const PAGE_STILL_TAKE_MAX_MS = 1_500;
+/** A lane still being attached holds a slot against the seen pages for this long at most (its page may be alive already). */
+export const LIVE_ATTACH_HOLD_MS = 3_000;
+/** A let-go page asked to rest is taken to have rested after this long, whatever it says. */
+const GHOST_REST_WAIT_MS = 2_000;
+
+/** PT-5b: two addresses as ONE page's — the same once the platform has normalised each (a bare origin's slash, a host's case). */
+export function sameAddress(a: string, b: string): boolean {
+  if (a === b) return true;
+  try {
+    return new URL(a).href === new URL(b).href;
+  } catch {
+    return false;
+  }
+}
+
+/** PT-5b: is the page alive by its producer's own word (a WebContents: starting, live, paused, reconnecting)? */
+const aliveBySummary = (state: SurfaceHandleState<ProductSurfaceFrame>): boolean => {
+  if (state.status !== "live") return false;
+  const s = state.presentation?.summary.state;
+  return s === "starting" || s === "live" || s === "paused" || s === "reconnecting";
+};
+
+/** A still as a face's words say it. */
+const stillOf = (takenAt: number, at: number): LiveBrowserStill => ({
+  takenAt,
+  age: Math.max(0, at - takenAt),
+});
+
+/** A page that is let go and at rest is never minted again by the service's own hand. */
+const NO_MINT = {
+  mint: (): Promise<never> => Promise.reject(new Error("a page at rest is not minted")),
+  async close(): Promise<void> {},
+};
+
+/** One open page as the service holds it: what the mount's verbs and the cap's plan reach. */
+interface Lane {
+  readonly key: string;
+  readonly handle: SurfaceHandle<ProductSurfaceFrame>;
+  /** When its lane was asked for (a lane still attaching holds a slot for `LIVE_ATTACH_HOLD_MS` from then). */
+  readonly openedAt: number;
+  respec(page: LiveBrowserSpec): void;
+  label(): string;
+  /** What goes down the wire now: the kind's ask, held by the park and by the cap. */
+  send(): void;
+  /** PT-5b — the cap's read of it, and its words: woken, adopted as it stands, put to rest (its still taken first). */
+  capFace(): CapFace;
+  adoptable(): boolean;
+  wake(): void;
+  /** True: its ask had been held back, and goes down the wire now. */
+  adopt(): boolean;
+  rest(): Promise<void>;
+  /** PT-5b — its texture let go (the budget's word): the film, or its still when it is next seen. */
+  evict(): boolean;
+  /** PT-5b — the pane was sent to another address (`go`): a still of the one it left is not shown. */
+  went(url: string): void;
+}
+
 export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
   /** PT-5a: the desk's loop is parked — every page is held paused until it runs again. */
   let parked = false;
+  /** PT-5b: the most pages alive at once (the policy's one constant, unless the test door lowered it). */
+  let cap = LIVE_PAGES_MAX;
+  let disposed = false;
+  const now = deps.now ?? Date.now;
+  const timers = deps.timers ?? {
+    set: (fn: () => void, ms: number): unknown => setTimeout(fn, ms),
+    clear: (h: unknown): void => clearTimeout(h as ReturnType<typeof setTimeout>),
+  };
+  const graceMs = deps.graceMs ?? (() => SURFACE_POOL_GRACE_MS);
   const faces = new Map<string, { face: LiveFace; row: () => DeskLiveFaceRow }>();
   const counts = {
     opened: 0,
@@ -525,22 +670,195 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     respecs: 0,
     parks: 0,
     emulations: 0,
+    rests: 0,
+    wakes: 0,
+    stillsTaken: 0,
+    stillsShown: 0,
+    stillsForgotten: 0,
+    evictions: 0,
   };
   /** The open pages' lanes by key (a failed face has none): what `navigate` and `respec` reach, and what a page is called. */
-  const lanes = new Map<
-    string,
-    {
-      readonly handle: SurfaceHandle<ProductSurfaceFrame>;
-      respec(page: LiveBrowserSpec): void;
-      label(): string;
-      park(parked: boolean): void;
-    }
-  >();
+  const lanes = new Map<string, Lane>();
+  /** PT-5b: what is in flight — a still being taken, kept, read or shown; a page being put to rest (a test's wait). */
+  const inflight = new Set<Promise<unknown>>();
+  const track = <T>(work: Promise<T>): Promise<T> => {
+    inflight.add(work);
+    const done = (): void => {
+      inflight.delete(work);
+    };
+    work.then(done, done);
+    return work;
+  };
+  /** PT-5b: deleted panes' stills, each forgotten when its page's grace lapses (an undo within it cancels). */
+  const forgetting = new Map<string, unknown>();
+  /**
+   * PT-5b — THE PAGES LET GO: a face that closes lets its lane go, and the pool's grace keeps the page (a deleted pane's, an
+   * undo away; another mount's) — ALIVE, so counted. What this service knows of each it let go (when it was last seen,
+   * whether it was alive), those it has put to rest since, and those being put to rest now.
+   */
+  const gone = new Map<string, { readonly seenAt: number; readonly alive: boolean }>();
+  const ghostsRested = new Set<string>();
+  const ghostsResting = new Set<string>();
   const wireOf = (key: string): LiveSurfaceDemandV1 | null =>
     deps
       .pool()
       ?.snapshot()
       .entries.find((entry) => entry.key === poolKey(key))?.demand ?? null;
+
+  /** The let-go pages the pool still keeps, as the cap reads them. */
+  const ghosts = (): CapFace[] => {
+    const rows: CapFace[] = [];
+    const kept = new Set<string>();
+    for (const entry of deps.pool()?.snapshot().entries ?? []) {
+      if (!entry.key.startsWith(POOL_PREFIX)) continue;
+      const key = entry.key.slice(POOL_PREFIX.length);
+      kept.add(key);
+      if (lanes.has(key)) continue;
+      const seenAt = gone.get(key)?.seenAt ?? Number.NEGATIVE_INFINITY;
+      const row = { key, want: "unseen", seenAt, far: Number.POSITIVE_INFINITY } as const;
+      if (ghostsResting.has(key)) {
+        rows.push({ ...row, alive: true, fixed: true });
+        continue;
+      }
+      // held by nobody, its lane attached: a page in its grace — alive unless this service knows better
+      if (entry.holders !== 0 || entry.status !== "live") continue;
+      if (ghostsRested.has(key) || gone.get(key)?.alive === false) continue;
+      rows.push({ ...row, alive: true });
+    }
+    for (const key of [...gone.keys()]) if (!kept.has(key)) gone.delete(key);
+    for (const key of [...ghostsRested]) if (!kept.has(key)) ghostsRested.delete(key);
+    return rows;
+  };
+  /** A let-go page PUT TO REST (its slot is wanted): asked hibernated through a lane of the service's own, let go again
+   * once it says so. Its still is the last one taken while its pane stood (nothing is read of a page nobody shows). */
+  const restGhost = (key: string): Promise<void> => {
+    const pool = deps.pool();
+    if (pool === null || ghostsResting.has(key)) return Promise.resolve();
+    let handle: SurfaceHandle<ProductSurfaceFrame>;
+    try {
+      handle = pool.acquire(poolKey(key), { initialDemand: restIntent(), tickets: NO_MINT });
+    } catch {
+      return Promise.resolve();
+    }
+    ghostsResting.add(key);
+    return new Promise<void>((resolve) => {
+      let over = false;
+      let off: (() => void) | undefined;
+      let timer: unknown = null;
+      const done = (): void => {
+        if (over) return;
+        over = true;
+        if (timer !== null) timers.clear(timer);
+        off?.();
+        handle.release();
+        ghostsResting.delete(key);
+        // (a pane back on the desk meanwhile — an undo — is a lane's again, and no ghost)
+        if (!lanes.has(key)) ghostsRested.add(key);
+        counts.rests += 1;
+        resolve();
+      };
+      timer = timers.set(done, GHOST_REST_WAIT_MS);
+      off = handle.onState((state) => {
+        if (state.status !== "attaching" && !aliveBySummary(state)) done();
+      });
+      if (over) off();
+    });
+  };
+
+  /** One timer for the plan made again by itself: a lane's attach hold lapsing. */
+  let planTimer: unknown = null;
+  let planDue = Number.POSITIVE_INFINITY;
+  const planAt = (due: number): void => {
+    if (!Number.isFinite(due) || (planTimer !== null && due >= planDue)) return;
+    if (planTimer !== null) timers.clear(planTimer);
+    planDue = due;
+    planTimer = timers.set(
+      () => {
+        planTimer = null;
+        planDue = Number.POSITIVE_INFINITY;
+        replan();
+      },
+      Math.max(0, due - now()) + 20,
+    );
+  };
+
+  /**
+   * PT-5b — THE CAP, DONE (live-cap.ts is its policy): read every page, plan, and do what can be done NOW — a page alive
+   * as it stands is the service's; a wake into a free slot (the held page's whatever it costs); a rest is begun (its still
+   * first) and the wake it makes room for follows when the page it rests is gone. A parked desk plans nothing (its kinds
+   * cannot ask). `asking`: the lanes whose ask moved — each one's wire is written once, whatever the plan said; `all`:
+   * every lane's.
+   */
+  function replan(opts: { readonly asking?: readonly Lane[]; readonly all?: boolean } = {}): void {
+    if (disposed) return;
+    const touched = new Set<Lane>(opts.all === true ? lanes.values() : (opts.asking ?? []));
+    if (!parked) {
+      const all = [...lanes.values()];
+      const rows = [...all.map((lane) => lane.capFace()), ...ghosts()];
+      const plan = capPlan(rows, cap);
+      const going = new Set(plan.rest);
+      for (const lane of all) {
+        if (!lane.adoptable() || going.has(lane.key)) continue;
+        // (its wire moves only where the cap had held its ask back)
+        if (lane.adopt()) touched.add(lane);
+      }
+      const want = new Map(rows.map((row) => [row.key, row.want]));
+      let room = cap - rows.filter((row) => row.alive).length;
+      for (const key of plan.wake) {
+        const lane = lanes.get(key);
+        if (lane === undefined) continue;
+        if (want.get(key) !== "held") {
+          // its slot is being made: the rest's end plans again
+          if (room <= 0) continue;
+          room -= 1;
+        }
+        lane.wake();
+        touched.add(lane);
+      }
+      for (const key of plan.rest) {
+        const lane = lanes.get(key);
+        const rested = lane === undefined ? restGhost(key) : lane.rest();
+        void track(rested.then(() => replan()));
+      }
+      // a page waits on a lane that has not said: asked again when that lane's hold lapses
+      if (plan.waiting.length > 0)
+        planAt(
+          Math.min(
+            ...all
+              .filter((lane) => lane.capFace().unknown === true)
+              .map((lane) => lane.openedAt + LIVE_ATTACH_HOLD_MS),
+          ),
+        );
+    }
+    // a parked desk's pages stay paused whatever is asked: nothing is written but the park's own word
+    if (!parked || opts.all === true) for (const lane of touched) lane.send();
+  }
+
+  /** The lanes whose ask moved this tick and waits for its end (see `ask`). */
+  const asking = new Set<Lane>();
+  let askQueued = false;
+  /**
+   * A pane's ask MOVED. Where every page can be alive (no more lanes than the cap) — and always for the page in the hand —
+   * the plan is made at once. Else once, at the end of the tick: a desk zoomed out over twenty panes asks for them one by
+   * one in one tick, and it is the six NEAREST the view's centre that are woken, not the first six that asked.
+   */
+  const ask = (lane: Lane, urgent: boolean): void => {
+    if (urgent || lanes.size <= cap) {
+      replan({ asking: [lane] });
+      return;
+    }
+    asking.add(lane);
+    if (askQueued) return;
+    askQueued = true;
+    void track(
+      Promise.resolve().then(() => {
+        askQueued = false;
+        const all = [...asking];
+        asking.clear();
+        replan({ asking: all });
+      }),
+    );
+  };
 
   const refuse = (key: string, reason: string): LiveFace => {
     counts.refused += 1;
@@ -565,6 +883,10 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         veiled: false,
         refused: 0,
         faviconBytes: 0,
+        alive: false,
+        rested: false,
+        still: null,
+        stillAt: null,
       }),
     });
     return face;
@@ -579,6 +901,12 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     if (faces.has(key))
       throw new Error(`desk LIVE: the face "${key}" is open twice — one face per key per desk`);
     counts.opened += 1;
+    // PT-5b: the pane is on the desk again (an undo within its page's grace): its still is not forgotten
+    const owed = forgetting.get(key);
+    if (owed !== undefined) {
+      timers.clear(owed);
+      forgetting.delete(key);
+    }
     const opened = liveBrowserSpec(spec);
     if (opened === undefined) return refuse(key, "not a page this desk can open");
     /** The face's spec as it stands: its open's, then each `respec`'s. A mint after a loss is made of THIS one. */
@@ -591,7 +919,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     let handle: SurfaceHandle<ProductSurfaceFrame>;
     try {
       handle = pool.acquire(poolKey(key), {
-        // paused until the kind's law has seen the face: the page is made and laid out at its viewport, painting nothing yet
+        // paused until the kind's law has seen the face AND the cap lets its page be alive: nothing is made of it yet
         initialDemand: liveDemandIntent({
           mode: "paused",
           fps: 0,
@@ -621,6 +949,10 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     } catch (error) {
       return refuse(key, error instanceof Error ? error.message : String(error));
     }
+    // the page is a lane's again: what the service knew of it while it was let go is over
+    gone.delete(key);
+    ghostsRested.delete(key);
+    const openedAt = now();
 
     let closed = false;
     let presentation = handle.presentation;
@@ -630,7 +962,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     let wordsOwed = false;
     let words = wordsOf(handle.state);
     /** PT-5a — the texture holds what no face may show (the engine's own error page; a page from before its failed load, or
-     * before it stopped): hidden — the kind draws its film — until a frame of the page that follows lands. */
+     * before it stopped): hidden — the kind draws its film — until a frame of the page that follows lands, or (PT-5b) the
+     * shelf's still of the address that FAILED is laid in its place. */
     let veiled = failing(handle.state);
     /** The last demand the kind sent: paused (unseen) until it says otherwise. */
     let asked: LiveDemand | undefined;
@@ -642,15 +975,31 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       | undefined;
     const tally = { arrivals: 0, presented: 0, dropped: 0, inputs: 0 };
     let lastInput: LiveInput["kind"] | null = null;
+    /** PT-5b — THE CAP: the service lets this page be alive (it woke it, or took it as it stood); it put it to rest (its
+     * wire is `hibernated`); it is putting it to rest now (its still being taken); when its pane was last seen. */
+    let allowed = false;
+    let rested = false;
+    let resting = false;
+    let seenAt = Number.NEGATIVE_INFINITY;
+    /** PT-5b — THE STILL: the texture's content is a STILL (the shelf's, or the page as it was put to rest) and when it was
+     * taken; the texture holds a LIVE frame of the page as it is; when this page's still was last taken, and whether a
+     * frame landed since; the still's timer; a still read and waiting for the device; the reads begun (the last one wins). */
+    let still: { readonly takenAt: number; readonly address: string } | undefined;
+    let liveShown = false;
+    let stillAt = Number.NEGATIVE_INFINITY;
+    let fresh = false;
+    let stillTimer: unknown = null;
+    let waiting: { readonly bitmap: ImageBitmap; readonly kept: PageStill } | undefined;
+    let showing = 0;
     /** PT-4: the emulation last told down the lane (as one string) — told again only when the spec's moved. */
     let told: string | undefined;
     const tellDevice = (): void => {
       const emulation = emulationOf(page);
-      const now = JSON.stringify(emulation);
-      if (now === told || closed) return;
+      const next = JSON.stringify(emulation);
+      if (next === told || closed) return;
       // the lane takes it only while it is live; until then it is owed (the next live state tells it)
       if (!handle.navigate({ action: "emulate", emulation })) return;
-      told = now;
+      told = next;
       counts.emulations += 1;
     };
     /** PT-4: the favicon as the face's words carry it — decoded once a key. */
@@ -662,6 +1011,167 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     };
     // close() unsubscribes both listeners at once, so nothing tells after it
     const tell = (): void => arrived();
+    /** The address the page is at (its producer's word), else the one its pane names — what a still is a photograph of. */
+    const addressNow = (): string => handle.state.browser?.url ?? page.url;
+    /** Where the pane was last SENT (`go`), until its page says an address of its own again; and the address a still is
+     * shown for: where the pane is headed, else where its page is. */
+    let headed: string | undefined;
+    let saidAt = handle.state.browser?.url;
+    const paneAddress = (): string => headed ?? addressNow();
+    const dropWaiting = (): void => {
+      waiting?.bitmap.close();
+      waiting = undefined;
+    };
+    /** The face's texture LET GO — the film: the budget evicted it, or it held a still of an address the pane has left. */
+    const letGo = (): boolean => {
+      if (closed || writer === undefined) return false;
+      writer.destroy();
+      writer = undefined;
+      writerDevice = undefined;
+      shown = undefined;
+      still = undefined;
+      liveShown = false;
+      showing += 1;
+      dropWaiting();
+      wordsOwed = true;
+      tell();
+      return true;
+    };
+    /** A still is a photograph of ONE address: the pane gone elsewhere under it (the document's word, or the page's), it
+     * is not shown. */
+    const stillStands = (): void => {
+      if (still !== undefined && !sameAddress(still.address, paneAddress())) letGo();
+    };
+
+    /** PT-5b — a still read off the shelf is laid into the face's own writer: the one path a live frame takes. False: no
+     * device yet (it waits; the next `take` lays it). */
+    const layStill = (): boolean => {
+      const w = waiting;
+      const device = deps.device();
+      if (w === undefined || device === undefined || closed) return false;
+      waiting = undefined;
+      try {
+        if (writer === undefined || writerDevice !== device) {
+          writer?.destroy();
+          writer = deps.writer(device, { label, width: w.bitmap.width, height: w.bitmap.height });
+          writerDevice = device;
+          counts.writers += 1;
+        }
+        writer.present(w.bitmap, undefined, w.kept.logical);
+      } finally {
+        w.bitmap.close();
+      }
+      still = { takenAt: w.kept.takenAt, address: w.kept.address };
+      stillAt = Math.max(stillAt, w.kept.takenAt);
+      liveShown = false;
+      // a still takes no press (there is no page under it); and it is what the shelf KEPT, so it is not hidden
+      shown = undefined;
+      veiled = false;
+      counts.stillsShown += 1;
+      return true;
+    };
+    /** Does the face want its still now: its page failed (the still of THAT address stands under the words), or no live
+     * frame of the page as it is has landed in its texture. */
+    const wantsStill = (): boolean => failing(handle.state) || !liveShown;
+    /**
+     * PT-5b — THE STILL, SHOWN: where the shelf keeps one OF THE ADDRESS THE PANE IS AT (a still is a photograph of one
+     * address — the document may have moved the pane while this device was away: then the film, and the next take replaces
+     * it) and no live frame has landed. Never over a live frame; never passed off as one (`info().extra.still`).
+     */
+    const showStill = (): Promise<void> => {
+      const stills = deps.stills;
+      const decode = deps.decodeStill;
+      const docId = deps.docId?.();
+      if (closed || stills === undefined || decode === undefined || docId === undefined)
+        return Promise.resolve();
+      showing += 1;
+      const turn = showing;
+      const mine = (kept: PageStill): boolean =>
+        !closed && turn === showing && wantsStill() && sameAddress(kept.address, paneAddress());
+      return track(
+        (async () => {
+          const kept = await stills.kept(docId, key);
+          if (kept === undefined || !mine(kept)) return;
+          const bitmap = await decode(kept);
+          if (bitmap === undefined) return;
+          if (!mine(kept)) {
+            bitmap.close();
+            return;
+          }
+          dropWaiting();
+          waiting = { bitmap, kept };
+          if (layStill()) wordsOwed = true;
+          tell();
+        })().catch(() => undefined),
+      );
+    };
+    /**
+     * PT-5b — THE STILL, TAKEN from what the face's writer holds (its texture read back: still-taker.ts) and kept on the
+     * shelf with the address it is a photograph of. Only a LIVE frame not yet photographed is: a quiet page writes nothing,
+     * a still is never taken of a still, and a failed page's frames are not shown, so not kept.
+     */
+    const takeStill = (): Promise<boolean> => {
+      const stills = deps.stills;
+      const take = deps.takeStill;
+      const docId = deps.docId?.();
+      const device = writerDevice;
+      const w = writer;
+      if (
+        closed ||
+        stills === undefined ||
+        take === undefined ||
+        docId === undefined ||
+        w === undefined ||
+        device === undefined ||
+        !liveShown ||
+        !fresh ||
+        veiled ||
+        failing(handle.state)
+      )
+        return Promise.resolve(false);
+      fresh = false;
+      const address = addressNow();
+      const logical: readonly [number, number] = [w.face.logical[0], w.face.logical[1]];
+      const at = now();
+      return track(
+        (async () => {
+          const taken = await take(device, w.face);
+          if (taken === undefined) {
+            fresh = true;
+            return false;
+          }
+          stillAt = at;
+          counts.stillsTaken += 1;
+          await stills.keep(docId, key, {
+            address,
+            logical,
+            size: taken.size,
+            type: taken.type,
+            image: taken.image,
+            takenAt: at,
+          });
+          return true;
+        })().catch(() => false),
+      );
+    };
+    /** At rest in view: a still at most once every `PAGE_STILL_EVERY_MS`, a little after the first frame since the last. */
+    const armStill = (): void => {
+      if (stillTimer !== null || deps.stills === undefined || deps.takeStill === undefined) return;
+      const due = Math.max(stillAt + PAGE_STILL_EVERY_MS, now() + PAGE_STILL_SETTLE_MS);
+      stillTimer = timers.set(
+        () => {
+          stillTimer = null;
+          if (closed || !fresh) return;
+          // a page still loading is not yet what it will show: asked again in a moment
+          if (handle.state.browser?.loading === true) return armStill();
+          // in the hand its put-down takes it — the best pixels it will have
+          if (asked?.mode === "live" && asked.interactive) return;
+          void takeStill();
+        },
+        Math.max(0, due - now()),
+      );
+    };
+
     const listen = (next: SurfaceHandleState<ProductSurfaceFrame>["presentation"]): void => {
       if (next === presentation && offFrame !== null) return;
       offFrame?.();
@@ -674,14 +1184,38 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         }) ?? null;
     };
     listen(presentation);
+    let wasFailing = failing(handle.state);
+    /** What the cap reads of the lane, as one word: a move of it is a plan made again. */
+    const capWord = (state: SurfaceHandleState<ProductSurfaceFrame>): string =>
+      `${state.status} ${aliveBySummary(state)} ${state.presentation?.summary.state === "failed"}`;
+    let capWas = capWord(handle.state);
     const offState = handle.onState((state) => {
       if (state.presentation !== presentation) listen(state.presentation);
       // a lane gone live is told the spec's device (a page re-bound after a reload may have been told another)
       if (state.status === "live") tellDevice();
-      if (failing(state)) veiled = true;
-      const now = wordsOf(state);
-      if (now === words) return;
-      words = now;
+      const fails = failing(state);
+      if (fails && !wasFailing) {
+        // PT-5a: the page's frames are not shown — PT-5b: but the shelf's still of the address that FAILED is, under the words
+        veiled = true;
+        liveShown = false;
+        still = undefined;
+        void showStill();
+      }
+      wasFailing = fails;
+      if (state.browser?.url !== saidAt) {
+        saidAt = state.browser?.url;
+        headed = undefined;
+      }
+      stillStands();
+      // PT-5b: a lane attached, a page that came alive or went (stopped, hibernated, lost) — the cap's count moved
+      const word = capWord(state);
+      if (word !== capWas) {
+        capWas = word;
+        if (!closed && lanes.has(key)) replan();
+      }
+      const said = wordsOf(state);
+      if (said === words) return;
+      words = said;
       wordsOwed = true;
       tell();
     });
@@ -691,6 +1225,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       texture: (): LiveTexture | undefined => (veiled ? undefined : writer?.face),
       take(): boolean {
         if (closed) return false;
+        // a still read before the device came is laid now
+        if (waiting !== undefined && layStill()) wordsOwed = true;
         const changed = wordsOwed;
         wordsOwed = false;
         if (!frameOwed) return changed;
@@ -730,48 +1266,71 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         if (r.kind !== "consumed") return changed;
         counts.presented += 1;
         tally.presented += 1;
-        // a frame of the page as it is now: the face shows its texture again
+        // a frame of the page as it is now: the face shows its texture again — and (PT-5b) it is no still any more: the
+        // words say so with this frame, and a still on its way is dropped
         veiled = false;
+        still = undefined;
+        liveShown = true;
+        fresh = true;
+        showing += 1;
+        dropWaiting();
+        armStill();
         return true;
       },
-      state: () =>
-        closed
-          ? { is: "closed" }
-          : liveStateOf(handle.state, {
-              mint: () => handle.retry(),
-              reload: () => {
-                handle.navigate({ action: "reload" });
-              },
-            }),
+      state: (): LiveState => {
+        if (closed) return { is: "closed" };
+        const state = liveStateOf(handle.state, {
+          mint: () => handle.retry(),
+          reload: () => {
+            handle.navigate({ action: "reload" });
+          },
+        });
+        // PT-5b: a page the cap has not let be alive yet is not starting — nothing is being made of it: it rests
+        return state.is === "starting" &&
+          !allowed &&
+          handle.state.presentation?.summary.state === "created"
+          ? { is: "paused" }
+          : state;
+      },
       info: (): LiveInfo => {
         if (closed) return {};
         const state = handle.state;
         const info = liveInfoOf(state);
         // the host's word on the page's favicon: its bytes, `null` where it has none — nothing before the page has spoken;
-        // and (PT-5a) the last thing the page asked for and may not have, to be said
-        return state.browser === null
-          ? info
-          : {
-              ...info,
-              extra: {
+        // (PT-5a) the last thing the page asked for and may not have, to be said; and (PT-5b) that the texture is a STILL —
+        // a photograph of the page, with its age: never passed off as the page
+        const extra = {
+          ...(state.browser === null
+            ? {}
+            : {
                 favicon: iconOf(state.browser.favicon),
                 ...(state.browser.refused === undefined
                   ? {}
                   : { refused: refusalOf(state.browser.refused) }),
-              },
-            };
+              }),
+          ...(still === undefined || veiled ? {} : { still: stillOf(still.takenAt, now()) }),
+        };
+        return Object.keys(extra).length === 0 ? info : { ...info, extra };
       },
       demand(d: LiveDemand): void {
         if (closed) return;
+        const was = asked;
         asked = d;
         counts.demands += 1;
-        // a parked desk's pages stay paused whatever is asked: the ask is kept, and given back at the unpark
-        if (!parked) handle.setDemand(liveDemandIntent(d));
+        if (d.mode === "live") seenAt = now();
+        // PT-5b — PUT DOWN: the best pixels the page will have are in its texture now
+        if (was?.mode === "live" && was.interactive && !(d.mode === "live" && d.interactive))
+          void takeStill();
+        // the cap may wake it, make it wait, or rest another for it
+        ask(lane, d.mode === "live" && d.interactive);
+        // seen with nothing of the page to show: its still, where the shelf keeps one
+        if (d.mode === "live" && !liveShown && still === undefined) void showStill();
       },
       // in the DISPLAYED frame's logical px, stamped with that frame's geometry revision; nothing displayed yet: nothing sent
       input(e: LiveInput): void {
         if (closed) return;
-        // PT-5a: nothing is sent to a page whose frames are not shown (a press must never land on what nobody sees)
+        // PT-5a: nothing is sent to a page whose frames are not shown (a press must never land on what nobody sees) —
+        // PT-5b: nor through a still (`shown` is none while one stands)
         const at = veiled ? undefined : shown;
         const events = at === undefined ? [] : liveInputEvents(e, at.logical);
         if (at === undefined || events.length === 0) {
@@ -787,20 +1346,50 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       },
       close(): void {
         if (closed) return;
+        // what the cap knows of the page it lets go of (the pool's grace keeps it)
+        gone.set(key, { seenAt, alive: alive() });
         closed = true;
         lanes.delete(key);
         offState();
         offFrame?.();
         offFrame = null;
+        if (stillTimer !== null) timers.clear(stillTimer);
+        stillTimer = null;
+        dropWaiting();
         handle.release();
         writer?.destroy();
         writer = undefined;
         faces.delete(key);
+        // PT-5b — a DELETED pane's still is forgotten when its page's grace lapses (an undo within it finds page and
+        // still); a pane that only left this mount keeps its own
+        const stills = deps.stills;
+        const docId = deps.docId?.();
+        if (stills !== undefined && docId !== undefined && deps.exists?.(key) === false) {
+          forgetting.set(
+            key,
+            timers.set(() => {
+              forgetting.delete(key);
+              if (deps.exists?.(key) !== false || deps.docId?.() !== docId) return;
+              counts.stillsForgotten += 1;
+              void track(stills.forget(docId, key).catch(() => undefined));
+            }, graceMs()),
+          );
+        }
+        // its lane's slot may be another's now
+        replan();
       },
     };
     /** PT-4 (ruling 5): what the page is called — its title when it has one (never a blank one), else its spec's label. The
      * face's row and the mount's `label(key)` say the same word. */
     const called = (): string => liveInfoOf(handle.state).title?.trim() || page.label;
+    /** A page that failed or whose lane is lost has no WebContents — and the plan has nothing to do for it (its ↻ has). */
+    const stopped = (): boolean =>
+      handle.state.status === "lost" || handle.state.presentation?.summary.state === "failed";
+    /** Alive: the service lets it be — or it is alive as it stands (a page re-bound; one whose window is still going). */
+    const alive = (): boolean => !stopped() && (allowed || aliveBySummary(handle.state));
+    const want = (): CapFace["want"] =>
+      asked === undefined || asked.mode !== "live" ? "unseen" : asked.interactive ? "held" : "seen";
+    const RANK = { unseen: 0, seen: 1, held: 2 } as const;
     faces.set(key, {
       face,
       row: () => {
@@ -824,11 +1413,17 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
           veiled,
           refused: handle.state.browser?.refused?.serial ?? 0,
           faviconBytes: handle.faviconArrivals ?? 0,
+          alive: alive(),
+          rested,
+          still: still === undefined || veiled ? null : still.takenAt,
+          stillAt: Number.isFinite(stillAt) ? stillAt : null,
         };
       },
     });
-    lanes.set(key, {
+    const lane: Lane = {
+      key,
       handle,
+      openedAt,
       // PT-4: the spec moved under the open page — laid out at its viewport first where that moved (the demand goes ahead of
       // the emulation down the one port: a page that reloads for its new device loads at that device's size), then told its
       // device where that moved; a spec whose label alone moved (the page went elsewhere) sends nothing down the port
@@ -838,26 +1433,107 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         page = next;
         counts.respecs += 1;
         if (resized) {
-          const laid: LiveDemand = {
-            ...(asked ?? { mode: "paused", fps: 0, raster: [0, 0], interactive: false }),
-            viewport: next.viewport,
-          };
-          if (asked !== undefined) asked = laid;
-          handle.setDemand(liveDemandIntent(laid));
+          if (asked !== undefined) asked = { ...asked, viewport: next.viewport };
+          lane.send();
         }
         tellDevice();
       },
       label: called,
-      park(now) {
+      send() {
+        if (closed) return;
+        const viewport = asked?.viewport ?? page.viewport;
+        // a page the cap put to rest stays hibernated; a parked desk's pages are paused; a page seen that the cap makes
+        // wait is paused as it was made (nothing is made of it); else the kind's own ask
         handle.setDemand(
-          liveDemandIntent(
-            now
-              ? { ...PARKED, viewport: asked?.viewport ?? page.viewport }
-              : (asked ?? { ...PARKED, viewport: page.viewport }),
-          ),
+          !allowed && rested
+            ? restIntent(viewport)
+            : liveDemandIntent(
+                parked || asked === undefined || (!allowed && asked.mode === "live")
+                  ? { ...PARKED, viewport }
+                  : asked,
+              ),
         );
       },
-    });
+      capFace: () => {
+        const state = handle.state;
+        return {
+          key,
+          want: want(),
+          alive: alive(),
+          seenAt,
+          far: deps.far?.(key) ?? Number.POSITIVE_INFINITY,
+          // being put to rest (its still being taken, its window going), or stopped: nothing is planned for it
+          ...(resting || stopped() || (!allowed && rested && aliveBySummary(state))
+            ? { fixed: true }
+            : {}),
+          ...(!allowed && state.status === "attaching" && now() - openedAt < LIVE_ATTACH_HOLD_MS
+            ? { unknown: true }
+            : {}),
+        };
+      },
+      adoptable: () =>
+        !allowed && !rested && !resting && !stopped() && aliveBySummary(handle.state),
+      wake() {
+        if (allowed) return;
+        allowed = true;
+        rested = false;
+        counts.wakes += 1;
+      },
+      adopt() {
+        allowed = true;
+        rested = false;
+        return asked?.mode === "live";
+      },
+      // PUT TO REST: its still taken first (what its texture holds is the page as it was), then its page hibernated — its
+      // WebContents gone, its address kept by its producer. Coming back is a LOAD: its history, its scroll and whatever
+      // was typed into it are what a rest costs.
+      async rest() {
+        if (closed || resting) return;
+        resting = true;
+        const was = RANK[want()];
+        let bound: unknown = null;
+        try {
+          await Promise.race([
+            takeStill(),
+            new Promise<void>((resolve) => {
+              bound = timers.set(resolve, PAGE_STILL_TAKE_MAX_MS);
+            }),
+          ]);
+        } finally {
+          if (bound !== null) timers.clear(bound);
+          resting = false;
+        }
+        // picked up, or seen, while its still was taken: it stays (the plan is made again)
+        if (closed || RANK[want()] > was) return;
+        allowed = false;
+        rested = true;
+        counts.rests += 1;
+        // what its texture holds is a photograph now, and says so
+        if (liveShown && writer !== undefined && !veiled) {
+          liveShown = false;
+          still = { takenAt: Number.isFinite(stillAt) ? stillAt : now(), address: addressNow() };
+          shown = undefined;
+          wordsOwed = true;
+          tell();
+        }
+        lane.send();
+      },
+      evict() {
+        if (!letGo()) return false;
+        counts.evictions += 1;
+        return true;
+      },
+      went(url) {
+        // where the pane is headed — until its page says an address of its own
+        headed = url;
+        stillStands();
+      },
+    };
+    lanes.set(key, lane);
+    // PT-5b: a still the shelf keeps of this page's address is shown at once — before its page's first frame
+    void showStill();
+    // a page re-bound alive (this window's reload) holds its slot from the start
+    if (lane.adoptable()) replan();
     return face;
   };
 
@@ -871,6 +1547,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
           return false;
         }
         counts.navigations += 1;
+        if (command.action === "go") lane.went(command.url);
         return true;
       },
       respec(key, spec) {
@@ -880,19 +1557,46 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         lane.respec(next);
         return true;
       },
+      evict: (key) => lanes.get(key)?.evict() === true,
     },
     label: (key) => lanes.get(key)?.label(),
     park(now) {
       if (now === parked) return;
       parked = now;
       if (now) counts.parks += 1;
-      for (const lane of lanes.values()) lane.park(now);
+      // parked: every page paused; running again: the plan (what moved meanwhile), then each page its face's last ask
+      replan({ all: true });
     },
-    stats: () => ({ ...counts, open: faces.size, parked }),
+    cap(next) {
+      const wanted = next === undefined ? cap : Math.floor(next);
+      if (Number.isFinite(wanted) && wanted >= 1 && wanted !== cap) {
+        cap = wanted;
+        replan();
+      }
+      return cap;
+    },
+    async settled() {
+      while (inflight.size > 0) await Promise.allSettled([...inflight]);
+    },
+    stats: () => ({
+      ...counts,
+      open: faces.size,
+      parked,
+      cap,
+      alive:
+        [...lanes.values()].filter((lane) => lane.capFace().alive).length +
+        ghosts().filter((row) => row.alive).length,
+    }),
     faces: () => [...faces.values()].map((f) => f.row()),
     dispose() {
+      disposed = true;
       for (const { face } of [...faces.values()]) face.close();
       faces.clear();
+      // (a deleted pane's still whose grace had not lapsed stays: the shelf's bound, and its document's delete, hold it)
+      for (const owed of forgetting.values()) timers.clear(owed);
+      forgetting.clear();
+      if (planTimer !== null) timers.clear(planTimer);
+      planTimer = null;
     },
   };
 }

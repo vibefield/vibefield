@@ -21,6 +21,9 @@ import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
 import { deskObjects, installDeskDoor, type VfDeskDoor } from "../src/field/desk/desk-door";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 import { createDeskLiveSources } from "../src/surfaces/live/desk-live";
+import { LIVE_PAGES_MAX } from "../src/surfaces/live/live-cap";
+import { pageStills } from "../src/surfaces/live/page-stills";
+import { SURFACE_POOL_GRACE_MS } from "../src/surfaces/pool";
 
 afterEach(() => {
   setBoardStatus({ state: "booting" });
@@ -143,6 +146,83 @@ describe("the desk door's reads (DK-8)", () => {
     });
     expect(door?.live()?.stats).toMatchObject({ opened: 1, refused: 1, open: 1 });
     undo();
+    ce.dispose();
+  });
+
+  it("PT-5b: the TEST doors on the live pages — the cap read and set, the grace shortened and given back, the service's work awaited; and a pane's LAST STILL as the shelf keeps it, never its pixels", async () => {
+    const ce = createFieldEngine(buildRegistry());
+    ce.docs.create();
+    const live = createDeskLiveSources({
+      pool: () => null,
+      mintClient: () => null,
+      gate: () => ({ type: "vibefield.browser-pane" }),
+      device: () => undefined,
+      writer: () => {
+        throw new Error("no frame reaches a writer here");
+      },
+    });
+    const undo = installDeskDoor(
+      {
+        engine: ce,
+        handle: {} as never,
+        generation: 1,
+        mount: 0,
+        theme: "light",
+        live,
+        docId: "doc-door",
+      },
+      () => false,
+    );
+    const door = (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk;
+    if (door === undefined) throw new Error("no door");
+    // the cap: six, lowered to two, a number that is none left alone
+    expect(door.liveCap()).toBe(LIVE_PAGES_MAX);
+    expect(door.liveCap(2)).toBe(2);
+    expect(live.stats().cap).toBe(2);
+    expect(door.liveCap(0)).toBe(2);
+    // the grace: the pool's own, a test's shorter one, the pool's own again
+    expect(door.liveGrace()).toBe(SURFACE_POOL_GRACE_MS);
+    expect(door.liveGrace(1_200)).toBe(1_200);
+    expect(door.liveGrace()).toBe(1_200);
+    expect(door.liveGrace(null)).toBe(SURFACE_POOL_GRACE_MS);
+    await expect(door.liveSettled()).resolves.toBeUndefined();
+    // a pane's last still: what it is a photograph of, its sizes, its type, how many bytes and when — not the picture
+    expect(await door.pageStill("k-1")).toBeNull();
+    const image = new Uint8Array([9, 8, 7, 6, 5]);
+    await pageStills().keep("doc-door", "k-1", {
+      address: "http://127.0.0.1:1/page",
+      logical: [1280, 800],
+      size: [1600, 1000],
+      type: "image/webp",
+      image,
+      takenAt: 4_242,
+    });
+    const said = await door.pageStill("k-1");
+    expect(said).toEqual({
+      address: "http://127.0.0.1:1/page",
+      logical: [1280, 800],
+      size: [1600, 1000],
+      type: "image/webp",
+      bytes: 5,
+      takenAt: 4_242,
+      keptAt: expect.any(Number),
+    });
+    expect(JSON.stringify(said)).not.toContain("9,8,7");
+    expect(Object.keys(said ?? {})).not.toContain("image");
+    expect(await door.pageStills()).toMatchObject({ stills: 1 });
+    // another document's desk reads none of it
+    await pageStills().forget("doc-door", "k-1");
+    expect(await door.pageStill("k-1")).toBeNull();
+    undo();
+    // a mount with no live service, no document: nothing to lower, nothing kept
+    const bare = installDeskDoor(
+      { engine: ce, handle: {} as never, generation: 1, mount: 0, theme: "light" },
+      () => false,
+    );
+    const none = (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk;
+    expect(none?.liveCap(3)).toBeNull();
+    expect(await none?.pageStill("k-1")).toBeNull();
+    bare();
     ce.dispose();
   });
 

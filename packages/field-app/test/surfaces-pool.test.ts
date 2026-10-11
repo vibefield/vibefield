@@ -22,11 +22,14 @@ import { describe, expect, it } from "vitest";
 import {
   coalesceSurfaceDemand,
   createSurfacePool,
+  SURFACE_POOL_GRACE_MS,
   type SurfaceDemandRequest,
   type SurfaceHandleState,
   type SurfacePoolTimers,
   type SurfaceTicketSource,
+  setSurfaceGraceForTest,
   surfaceDemandIntentsEqual,
+  surfaceGraceMs,
 } from "../src/surfaces/pool";
 
 const SURFACE_ID = "surface_0123456789abcdef";
@@ -697,6 +700,50 @@ describe("surface pool", () => {
 // the winner's viewport travels WHOLE, because a source has one layout and a
 // width from one holder crossed with a height from another names a layout
 // nobody asked for.
+describe("PT-5b — the pool's grace as a test may shorten it", () => {
+  it("a grace given as a function is read each time a grace is ARMED — one already armed keeps its own", async () => {
+    const host = await fakeSurfaceHost();
+    const clock = fakeClock();
+    const tickets = ticketSource();
+    let grace = GRACE_MS;
+    const pool = createSurfacePool<LiveSurfaceClosableFrame>({
+      transport: Promise.resolve(host.transport),
+      now: () => clock.now(),
+      graceMs: () => grace,
+      timers: clock.timers,
+    });
+    const a = pool.acquire("a", { tickets, initialDemand: LIVE_30 });
+    await settle();
+    a.release();
+    expect(pool.snapshot().entries[0]?.graceDeadlineAt).toBe(clock.now() + GRACE_MS);
+    // the grace is shortened: b's is the short one, a's stays as it was armed
+    grace = 1_000;
+    const b = pool.acquire("b", { tickets, initialDemand: LIVE_30 });
+    await settle();
+    b.release();
+    expect(pool.snapshot().entries.find((e) => e.key === "b")?.graceDeadlineAt).toBe(
+      clock.now() + 1_000,
+    );
+    clock.advance(1_000);
+    await settle();
+    expect(pool.snapshot().entries.map((e) => e.key)).toEqual(["a"]);
+    clock.advance(GRACE_MS - 1_000);
+    await settle();
+    expect(pool.snapshot().entries).toEqual([]);
+  });
+
+  it("the window's pool reads the test door's grace: shortened, then the pool's own again; a number that is none is the pool's own", () => {
+    expect(surfaceGraceMs()).toBe(SURFACE_POOL_GRACE_MS);
+    expect(setSurfaceGraceForTest(1_500)).toBe(1_500);
+    expect(surfaceGraceMs()).toBe(1_500);
+    expect(setSurfaceGraceForTest(Number.NaN)).toBe(SURFACE_POOL_GRACE_MS);
+    expect(setSurfaceGraceForTest(-1)).toBe(SURFACE_POOL_GRACE_MS);
+    expect(setSurfaceGraceForTest(0)).toBe(0);
+    expect(setSurfaceGraceForTest(null)).toBe(SURFACE_POOL_GRACE_MS);
+    expect(SURFACE_POOL_GRACE_MS).toBe(60_000);
+  });
+});
+
 describe("coalesceSurfaceDemand · logical viewport", () => {
   const live = (viewport?: { width: number; height: number }) => ({
     mode: "live" as const,

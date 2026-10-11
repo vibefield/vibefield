@@ -28,8 +28,11 @@ import { currentWindowClient } from "../plugin-host/plugin-client";
 import { getPluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
 import type { WindowKinds } from "../plugin-host/window-kinds";
 import { createDeskLiveSources, type DeskLiveSources } from "../surfaces/live/desk-live";
+import { createLiveEyes } from "../surfaces/live/live-eyes";
 import { createLiveGate } from "../surfaces/live/live-gate";
-import { getSurfacePool } from "../surfaces/pool";
+import { pageStills } from "../surfaces/live/page-stills";
+import { createStillDecoder, createStillTaker } from "../surfaces/live/still-taker";
+import { getSurfacePool, surfaceGraceMs } from "../surfaces/pool";
 import { useAppTheme } from "../theme";
 import { DeskUnavailableView } from "./desk/DeskUnavailableView";
 import { deskCensus, installDeskDoor, type MountedDesk, publishDesk } from "./desk/desk-door";
@@ -82,6 +85,8 @@ export interface CanvasStageProps {
   kinds?: WindowKinds;
   /** PT-2 — the window's plugin registry: the live pages' gate reads an object's plugin and its grants (none: no LIVE lent). */
   registry?: PluginRegistry<WidgetType>;
+  /** PT-5b — the document this stage shows: a page's last still is kept under it, on this device (none: no stills). */
+  docId?: string;
 }
 
 const NO_KINDS_CHANGE = (): (() => void) => () => undefined;
@@ -93,7 +98,11 @@ export function CanvasStage({
   refused = null,
   kinds,
   registry,
+  docId,
 }: CanvasStageProps): ReactElement {
+  // (a stage is one document's — keyed by its generation: a ref, so the mount's service is not made again by it)
+  const docIdRef = useRef(docId);
+  docIdRef.current = docId;
   const theme = useAppTheme().resolved;
   const themeRef = useRef(theme);
   /** The theme the mounted layer wears — made in it, or last re-dressed to it. */
@@ -148,6 +157,7 @@ export function CanvasStage({
     const gpu = deskGpu(mount, typeof location === "undefined" ? "" : location.search);
     // PT-2 — THE DESK'S LIVE PAGES, one service per mount: its writers on THIS mount's device (`onDevice`), its pages in the
     // window's LSF pool (whose grace keeps a page attached across a remount), its gate the window's registry — by the object
+    const eyes = createLiveEyes(ce);
     const live =
       registry === undefined
         ? undefined
@@ -163,6 +173,15 @@ export function CanvasStage({
             gate: createLiveGate({ engine: ce, registry }),
             device: () => deviceRef.current ?? undefined,
             writer: createLiveTexture,
+            // PT-5b — the last still (kept on this device's shelf under the document and the object; the host's two hands
+            // on a page's pixels) and the cap's eyes (how near the view's centre a pane lies; whether its object stands)
+            docId: () => docIdRef.current,
+            stills: pageStills(),
+            takeStill: createStillTaker(),
+            decodeStill: createStillDecoder(),
+            far: eyes.far,
+            exists: eyes.exists,
+            graceMs: surfaceGraceMs,
           });
     const factory = fieldDeskLayer({
       engine: ce,
@@ -257,6 +276,7 @@ export function CanvasStage({
       off: mountedOff,
       device: () => deviceRef.current,
       ...(live === undefined ? {} : { live }),
+      ...(docIdRef.current === undefined ? {} : { docId: docIdRef.current }),
     };
     deskRef.current = desk;
     const unpublish = publishDesk(desk);

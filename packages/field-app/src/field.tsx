@@ -352,6 +352,7 @@ export function FieldView({
             refused={refused ? BEFORE_THE_DESK : null}
             {...(kinds === undefined ? {} : { kinds })}
             registry={registry}
+            {...(docState.pending === null ? {} : { docId: docState.pending.docId })}
           />
         )}
       </div>

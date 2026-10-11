@@ -290,6 +290,12 @@ export interface BrowserNavigation {
    * or a spec the host cannot read.
    */
   respec(key: string, spec: Readonly<Record<string, unknown>>): boolean;
+  /**
+   * PT-5b — the desk's budget EVICTED the face's texture (the kind charged its bytes, `KindHost.budget`; design-019 §7):
+   * the host lets the texture go. The face's `texture()` is none until its page's next frame — or its still, laid again
+   * when the pane is next seen. False: no page open for the key, or nothing to let go. Absent on a host older than PT-5b.
+   */
+  evict?(key: string): boolean;
 }
 
 /** The key the host lends a browser kind its pages' navigation under (`KindHost.use(BROWSER_NAVIGATION)`). */
@@ -349,6 +355,19 @@ export function liveBrowserFailure(reason: string): LiveBrowserFailure {
 export interface LiveBrowserRefusal {
   readonly what: "download";
   readonly serial: number;
+}
+
+/**
+ * THE TEXTURE IS A STILL (PT-5b) — `LiveInfo.extra.still` on a browser face: what its texture holds is a PHOTOGRAPH of the
+ * page — the last one this device kept of the address the pane is at — and not the page: laid by the host before the page's
+ * first frame, while its page is at rest (a desk keeps only so many pages alive), or under a failure's words where the
+ * address that failed is the still's. `takenAt`: when it was taken (ms, this device's clock); `age`: how long ago, as the
+ * words were read. Absent: the texture is the page's own frame. A kind draws a still as a photograph — dimmer, a rest mark
+ * on its head — and never as the page; it takes no press. A still never leaves the device it was taken on.
+ */
+export interface LiveBrowserStill {
+  readonly takenAt: number;
+  readonly age: number;
 }
 // docs:end live-browser-failure
 

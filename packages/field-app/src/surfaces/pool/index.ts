@@ -15,6 +15,8 @@ export {
   disposeSurfacePool,
   getSurfacePool,
   type ProductSurfaceFrame,
+  setSurfaceGraceForTest,
+  surfaceGraceMs,
 } from "./host-pool";
 export {
   createSurfacePool,

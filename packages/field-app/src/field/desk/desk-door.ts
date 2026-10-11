@@ -34,6 +34,8 @@ import type {
   DeskLiveSources,
   DeskLiveStats,
 } from "../../surfaces/live/desk-live";
+import { pageStills } from "../../surfaces/live/page-stills";
+import { setSurfaceGraceForTest, surfaceGraceMs } from "../../surfaces/pool";
 import { type BarStats, readBarStats } from "./bar/bar-stats";
 import { type CoverRecord, coverCaptures, coverRecords } from "./cover-still";
 import { DESK_FACE_URLS, deskText } from "./desk-assets";
@@ -71,6 +73,8 @@ export interface MountedDesk {
   readonly device?: () => GPUDevice | null;
   /** PT-2 — the mount's live pages (the service lent under ICE's `LIVE`); absent where none is lent. */
   readonly live?: DeskLiveSources;
+  /** PT-5b — the document the mount shows (a page's last still is kept under it); absent: none is kept. */
+  readonly docId?: string;
 }
 
 /** What the chrome says of a type when the mount names no words: the type, drawn. */
@@ -277,6 +281,36 @@ export interface VfDeskDoor {
    */
   live(): { readonly stats: DeskLiveStats; readonly faces: readonly DeskLiveFaceRow[] } | null;
   /**
+   * PT-5b — the TEST door on the live pages' cap (ruling 3: six pages alive at most): read it, or set it — the plan is
+   * made again (lowered: pages are put to rest, the unseen first; raised: waiting pages come alive). Null where no live
+   * service is lent.
+   */
+  liveCap(next?: number): number | null;
+  /**
+   * PT-5b — the TEST door on the grace a page nobody holds is kept for (the window's pool's own: 60 s — a deleted pane's
+   * page, and its still, go when it lapses): a shorter one from now on, or — null — the pool's own again. Answers the
+   * grace in force.
+   */
+  liveGrace(ms?: number | null): number;
+  /** PT-5b — whatever the live service has in flight (a still being taken, kept or laid; a page being put to rest) is done. */
+  liveSettled(): Promise<void>;
+  /**
+   * PT-5b — a pane's LAST STILL as this device's shelf keeps it, by the object's durable key: the address it is a
+   * photograph of, its page's logical size, its own size, its type and how many bytes, when it was taken and when the
+   * shelf last wrote it. NEVER its pixels — a page's pixels may be private: a still is said to no log, no diagnostic and
+   * no door. Null: none kept (or no document). And what the shelf keeps of page stills in all.
+   */
+  pageStill(key: string): Promise<{
+    readonly address: string;
+    readonly logical: readonly [number, number];
+    readonly size: readonly [number, number];
+    readonly type: string;
+    readonly bytes: number;
+    readonly takenAt: number;
+    readonly keptAt: number | null;
+  } | null>;
+  pageStills(): Promise<{ readonly bytes: number; readonly stills: number }>;
+  /**
    * PT-1 — a kind's DESK STATE on this desk (`handle.local(name)` — what its `ObjectKind.local` made), or undefined: no such
    * kind, or none kept. A read: a smoke asks a kind's own witness of it (the browser pane's `said(e)` — what its head says).
    */
@@ -480,6 +514,26 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
     objects: (type) => deskObjects(engine, type),
     live: () =>
       desk.live === undefined ? null : { stats: desk.live.stats(), faces: desk.live.faces() },
+    liveCap: (next) => desk.live?.cap(next) ?? null,
+    liveGrace: (ms) => (ms === undefined ? surfaceGraceMs() : setSurfaceGraceForTest(ms)),
+    liveSettled: async () => {
+      await desk.live?.settled();
+    },
+    async pageStill(key) {
+      if (desk.docId === undefined) return null;
+      const kept = await pageStills().kept(desk.docId, key);
+      if (kept === undefined) return null;
+      return {
+        address: kept.address,
+        logical: kept.logical,
+        size: kept.size,
+        type: kept.type,
+        bytes: kept.image.byteLength,
+        takenAt: kept.takenAt,
+        keptAt: (await pageStills().keptAt(desk.docId, key)) ?? null,
+      };
+    },
+    pageStills: () => pageStills().usage(),
     writeProps: (entity, patch) => {
       const session = engine.docs.current();
       const e = entity as Entity;

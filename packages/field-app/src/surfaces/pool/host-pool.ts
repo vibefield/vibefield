@@ -13,7 +13,7 @@
 // honestly (UNAVAILABLE, never a blank).
 
 import type { FieldHost } from "../../host";
-import { createSurfacePool, type SurfacePool } from "./surface-pool";
+import { createSurfacePool, SURFACE_POOL_GRACE_MS, type SurfacePool } from "./surface-pool";
 
 /**
  * The product's frame type.
@@ -28,6 +28,19 @@ export type ProductSurfaceFrame = VideoFrame;
 
 const POOLS = new WeakMap<FieldHost, SurfacePool<ProductSurfaceFrame>>();
 
+/** A TEST's shorter grace (PT-5b: the product smoke's FORGOT row — a deleted pane's page, and its still with it, go when
+ * the grace lapses); null: the pool's own. */
+let graceForTest: number | null = null;
+
+/** How long the window's pool keeps a surface nobody holds — read each time a grace is armed. */
+export const surfaceGraceMs = (): number => graceForTest ?? SURFACE_POOL_GRACE_MS;
+
+/** The test door on the grace: a shorter one from now on (a grace already armed keeps its own), or — null — the pool's own. */
+export function setSurfaceGraceForTest(ms: number | null): number {
+  graceForTest = ms !== null && Number.isFinite(ms) && ms >= 0 ? ms : null;
+  return surfaceGraceMs();
+}
+
 /**
  * The window's surface pool, or null on a host that has no live surfaces.
  *
@@ -40,7 +53,10 @@ export function getSurfacePool(host: FieldHost): SurfacePool<ProductSurfaceFrame
   if (liveSurfaces === undefined) return null;
   const existing = POOLS.get(host);
   if (existing !== undefined && !existing.disposed) return existing;
-  const pool = createSurfacePool<ProductSurfaceFrame>({ transport: liveSurfaces.transport });
+  const pool = createSurfacePool<ProductSurfaceFrame>({
+    transport: liveSurfaces.transport,
+    graceMs: surfaceGraceMs,
+  });
   POOLS.set(host, pool);
   return pool;
 }
