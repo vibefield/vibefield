@@ -8,6 +8,7 @@ import {
   frameScheduler,
   keepStage,
   MonitorViewHost,
+  type ViewSlotCommands,
   viewWantsHistory,
 } from "@vibecook/puppeteer-view-sdk/host";
 import type { MonitorEndedRow } from "@vibecook/puppeteer-view-sdk/model";
@@ -50,6 +51,7 @@ import { choiceNote, type DeviceChoice } from "./monitor/device-filter";
 import { useMonitorFeed } from "./monitor/GodviewAgentsProvider";
 import { setMonitorHoldsKeys } from "./monitor/launcher-keys";
 import { useMonitorHistory } from "./monitor/monitor-history";
+import { openEndedLane } from "./monitor/open-ended-lane";
 import { chosenProfile, showsProfileTabs } from "./monitor/profile-tabs";
 import type { MonitorDoor, MonitorFeedState } from "./monitor/remote-door";
 import type { MonitorViewEntry } from "./monitor/types";
@@ -478,6 +480,18 @@ export function GodviewMonitor({
     () => (history === undefined ? capabilities : { ...capabilities, history }),
     [capabilities, history],
   );
+  // TV-8 (RULED 2026-10-11) — the view host's commands with the host's own
+  // fourth: an ended lane opens its session in History. `openEndedLane` is the
+  // module's one function (`open-ended-lane.ts`), handed over as itself — never
+  // wrapped, never a placeholder — and from the FIRST render, before any past
+  // is lent: a view reads the command's PRESENCE as it mounts, and what it
+  // opens is read when it is called. Keyed on the window's commands alone,
+  // which are one object for the stage's life, so no publish rebuilds this
+  // (M195) and the past's coming and going never moves it.
+  const viewCommands = useMemo<ViewSlotCommands>(
+    () => ({ ...commands, openEnded: openEndedLane }),
+    [commands],
+  );
   /** AR-5: what the swarm paints with — `starting` while its physics runs and its device has not answered. */
   const swarmRenderer =
     viewReport.renderer ?? (viewReport.physics !== undefined ? "starting" : "none");
@@ -838,7 +852,7 @@ export function GodviewMonitor({
           theme={monitorTheme}
           parameters={parameters}
           capabilities={viewCapabilities}
-          commands={commands}
+          commands={viewCommands}
           onReport={onReport}
           scheduler={frameScheduler}
           className="vf-monitor-view-slot"
