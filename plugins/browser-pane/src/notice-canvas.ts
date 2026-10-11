@@ -1,10 +1,11 @@
 // THE NOTICE, DRAWN (PT-5a ruling 3) — a failed page's words, rasterised by Canvas 2D as the head's engraving is (the desk's
 // text stack: the platform's shaping and fonts), and lent through the same service (`HEAD_RASTER.notice`, head-canvas.ts).
-// The raster is the words' LIGHT over black, opaque sRGB rgba8 at the notice's texels: the pass lays it as the pane's page
-// and the shader adds it to the FILM (browser.wgsl — a notice is the film with words on it, never a lit page).
+// The raster is the words' LIGHT over black, opaque sRGB rgba8 — PT-5b: of the words' BLOCK alone (notice.ts `noticeBlock`),
+// at the notice's scale: the pass lays it as the pane's NOTICE texture and the shader adds its light over what the page
+// shows there (browser.wgsl — the film, or the page's last still dimmed under the words).
 
 import type { HeadCanvas, HeadContext } from "./head-canvas";
-import { type NoticeSpec, noticeLayout } from "./notice";
+import { type NoticeSpec, noticeBlock, noticeLayout } from "./notice";
 
 const SANS = `-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif`;
 
@@ -35,35 +36,52 @@ export function wrapTwo(
   return [first, second];
 }
 
-/** Draw a notice into `canvas` (resized to its texels): the words' light over black. */
+/** Draw a notice into `canvas` (resized to its BLOCK's texels — PT-5b: the words' block alone, never the page's whole
+ * area): the words' light over black. Answers the canvas's size and the block of the page (CSS px) it covers. */
 export function drawNotice(
   canvas: HeadCanvas,
   ctx: NoticeContext,
   n: NoticeSpec,
-): { readonly width: number; readonly height: number } {
-  const [width, height] = n.texels;
+): {
+  readonly width: number;
+  readonly height: number;
+  readonly block: readonly [number, number, number, number];
+} {
+  const L = noticeLayout(n.viewport);
+  // the lines as they will be set, measured in the page's CSS px BEFORE the canvas is sized (sizing it clears its state)
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const measure = (s: string): number => ctx.measureText(s).width;
+  ctx.font = `600 ${L.unit}px ${SANS}`;
+  const headline = wrapTwo(measure, n.words.headline, L.width)[0] ?? "";
+  let widest = Math.min(measure(headline), L.width);
+  ctx.font = `400 ${L.small}px ${SANS}`;
+  const detail = wrapTwo(measure, n.words.detail, L.width);
+  for (const text of detail) widest = Math.max(widest, Math.min(measure(text), L.width));
+  const block = noticeBlock(n.viewport, widest, n.retry !== null);
+  const width = Math.max(1, Math.round(2 * block[2] * n.scale));
+  const height = Math.max(1, Math.round(2 * block[3] * n.scale));
   if (canvas.width !== width || canvas.height !== height) {
     canvas.width = width;
     canvas.height = height;
   }
-  const L = noticeLayout(n.viewport);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalCompositeOperation = "source-over";
   ctx.globalAlpha = 1;
   ctx.fillStyle = "black";
   ctx.fillRect(0, 0, width, height);
-  // the page's CSS px from here
-  ctx.setTransform(width / n.viewport[0], 0, 0, height / n.viewport[1], 0, 0);
+  // the page's CSS px from here, the block's corner at the canvas's
+  const sx = width / (2 * block[2]);
+  const sy = height / (2 * block[3]);
+  ctx.setTransform(sx, 0, 0, sy, -(block[0] - block[2]) * sx, -(block[1] - block[3]) * sy);
   ctx.fillStyle = n.ink;
   ctx.strokeStyle = n.ink;
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
   ctx.font = `600 ${L.unit}px ${SANS}`;
-  const measure = (s: string): number => ctx.measureText(s).width;
-  ctx.fillText(wrapTwo(measure, n.words.headline, L.width)[0] ?? "", L.cx, L.headline, L.width);
+  ctx.fillText(headline, L.cx, L.headline, L.width);
   ctx.globalAlpha = 0.64;
   ctx.font = `400 ${L.small}px ${SANS}`;
-  wrapTwo(measure, n.words.detail, L.width).forEach((text, i) => {
+  detail.forEach((text, i) => {
     ctx.fillText(text, L.cx, L.detail + i * L.line, L.width);
   });
   if (n.retry !== null) {
@@ -81,7 +99,7 @@ export function drawNotice(
   ctx.globalAlpha = 1;
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  return { width, height };
+  return { width, height, block };
 }
 
 /** A drawn notice read back as the pass lays it: opaque sRGB rgba8 rows from the top. */

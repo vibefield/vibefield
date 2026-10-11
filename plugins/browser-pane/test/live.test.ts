@@ -27,6 +27,8 @@ import {
 import { productPalette } from "@vibefield/plugin-sdk/testing";
 import { describe, expect, it } from "vitest";
 import {
+  BROWSER,
+  BROWSER_PANE_KIND,
   bandLayout,
   browserPaneKind,
   createPaneLocal,
@@ -38,17 +40,22 @@ import {
   GENERIC_FAVICON,
   HEAD_RASTER,
   type HeadRaster,
+  headKey,
+  headStateOf,
   isPageUrl,
+  liveBudgetKey,
   NOTICE_WORDS,
   type NoticeSpec,
+  noticeBudgetKey,
   noticeLayout,
-  noticeTexels,
+  noticeScale,
   openExtent,
   PAGE_REMAKE_MS,
   PANE_SIZE,
   type PageFavicon,
   type PaneGeometry,
   type PaneInstance,
+  pageStill,
   paneDemand,
   paneLook,
   paneValues,
@@ -83,7 +90,7 @@ function fakeFace(key: string, arrived: () => void) {
         logical: [1280, 800],
         view: () => ({}) as never,
         prepare: () => {},
-        bytes: 0,
+        bytes: 2560 * 1600 * 4,
       };
     Object.assign(texture, { revision: texture.revision + 1, ...t });
   };
@@ -91,6 +98,8 @@ function fakeFace(key: string, arrived: () => void) {
     hold(): void;
     land(t?: Partial<LiveTexture>): void;
     say(next: { state?: LiveState; info?: LiveInfo }): void;
+    /** PT-5b: the host let the texture go (the budget's eviction; a failed page's frames hidden). */
+    gone(): void;
     demands: LiveDemand[];
     inputs: LiveInput[];
     closed(): number;
@@ -129,6 +138,11 @@ function fakeFace(key: string, arrived: () => void) {
       owed = true;
       arrived();
     },
+    gone() {
+      texture = undefined;
+      owed = true;
+      arrived();
+    },
     demands,
     inputs,
     closed: () => closed,
@@ -146,8 +160,29 @@ function fakeHost(
     nav?: boolean | "navigate-only";
     /** PT-4: the head's raster the DOM half lends. */
     head?: HeadRaster;
+    /** PT-5b: false — a desk with no raster budget; `evict: false` — a host whose navigation cannot let a texture go;
+     * `pass` — the root pass's doors are there (the notice's bytes are the pass's to say). */
+    budget?: boolean;
+    evict?: boolean;
+    pass?: boolean;
   } = {},
 ) {
+  /** PT-5b: the root pass's doors as the local reads them — who it told to hear of a notice's texture, what it let go. */
+  const pass = {
+    pending: () => 0,
+    onPending: (_fn: (() => void) | undefined) => {},
+    forget: (_entity: number) => {},
+    made: (_entity: number) => 0,
+    noticed: undefined as ((entity: number, bytes: number) => void) | undefined,
+    onNotice(fn: ((entity: number, bytes: number) => void) | undefined) {
+      pass.noticed = fn;
+    },
+    unnoticed: [] as number[],
+    unnotice(entity: number) {
+      pass.unnoticed.push(entity);
+      return true;
+    },
+  };
   const opened: { key: string; spec: Record<string, unknown> }[] = [];
   /** PT-3: what the host's second service was asked — a page navigated by its key. PT-4: a spec moved under its page. */
   const navigations: { key: string; command: BrowserNavigationCommand }[] = [];
@@ -161,6 +196,45 @@ function fakeHost(
       respecs.push({ key, spec: { ...spec } });
       return true;
     },
+    ...(opts.evict === false
+      ? {}
+      : {
+          evict(key: string) {
+            evicted.push(key);
+            faces.get(key)?.gone();
+            return true;
+          },
+        }),
+  };
+  /** PT-5b: the textures the host was asked to let go; the desk's budget as a ledger the test reads — each row's bytes,
+   * what was charged, touched and released in order, and `evict(owner key)` as the ledger's own eviction does it. */
+  const evicted: string[] = [];
+  const ledger = new Map<string, { bytes: number; evict: () => void }>();
+  const said: string[] = [];
+  const budget = {
+    cap: 1 << 28,
+    room: () => 1 << 28,
+    charge(owner: string, key: string, bytes: number, evict: () => void) {
+      said.push(`charge ${owner} ${key} ${bytes}`);
+      ledger.set(`${owner} ${key}`, { bytes, evict });
+    },
+    reside() {},
+    touch(owner: string, key: string) {
+      said.push(`touch ${owner} ${key}`);
+    },
+    release(owner: string, key: string) {
+      said.push(`release ${owner} ${key}`);
+      ledger.delete(`${owner} ${key}`);
+    },
+    forget: () => 0,
+    trim: () => 0,
+    stats: () => ({}) as never,
+  };
+  /** The ledger evicts a row: it is dropped, then its owner's eviction runs (engine/budget.ts `trim`). */
+  const evict = (row: string): void => {
+    const had = ledger.get(row);
+    ledger.delete(row);
+    had?.evict();
   };
   const faces = new Map<string, ReturnType<typeof fakeFace>>();
   const n = { wake: 0, redraw: 0, remake: [] as Entity[] };
@@ -176,7 +250,7 @@ function fakeHost(
   };
   const keys = opts.keys ?? { 1: "13918995204487956201-1" };
   const host: KindHost = {
-    pass: () => undefined,
+    pass: () => (opts.pass === true ? (pass as never) : undefined),
     use: <T>(key: { name: string }) =>
       opts.live !== false && key.name === LIVE.name
         ? (sources as T)
@@ -196,6 +270,7 @@ function fakeHost(
       n.remake.push(e);
     },
     frames: () => frames,
+    ...(opts.budget === false ? {} : { budget }),
   };
   return {
     host,
@@ -204,6 +279,11 @@ function fakeHost(
     navigations,
     respecs,
     n,
+    evicted,
+    ledger,
+    said,
+    evict,
+    pass,
     /** A frame drawn: the slot's view tells the sight what it drew of `e`'s page, then the count moves. */
     draw(local: ReturnType<typeof createPaneLocal>, e: Entity, zoom: number, target?: "hand") {
       const S = shapeOf(PANE_SIZE);
@@ -526,6 +606,8 @@ describe("the pane's live page — its record", () => {
 describe("PT-5a — a failed page's face (ruling 3)", () => {
   const k = browserPaneKind();
   const KEY = "13918995204487956201-1";
+  /** The block of the page (CSS px) the fake raster says its notice covers. */
+  const BLOCK = [640, 336, 300, 96] as const;
   /** A head raster that draws a notice as its spec, counted. */
   const noticing = () => {
     const drawn: NoticeSpec[] = [];
@@ -533,14 +615,20 @@ describe("PT-5a — a failed page's face (ruling 3)", () => {
       raster: () => undefined,
       notice: (spec) => {
         drawn.push(spec);
-        return new Uint8Array(spec.texels[0] * spec.texels[1] * 4);
+        return { bytes: new Uint8Array(60 * 24 * 4), width: 60, height: 24, block: BLOCK };
       },
     };
     return { head, drawn };
   };
   /** The pane recorded, its face saying `state` (and `info`), recorded again. */
-  const failing = (state: LiveState, opts: { head?: HeadRaster; held?: boolean } = {}) => {
-    const t = fakeHost(opts.head === undefined ? {} : { head: opts.head });
+  const failing = (
+    state: LiveState,
+    opts: { head?: HeadRaster; held?: boolean; extra?: LiveInfo["extra"]; pass?: boolean } = {},
+  ) => {
+    const t = fakeHost({
+      ...(opts.head === undefined ? {} : { head: opts.head }),
+      ...(opts.pass === true ? { pass: true } : {}),
+    });
     const local = createPaneLocal(t.host);
     const ctx = {
       ...ctxOf({ url: PAGE }, local),
@@ -550,14 +638,50 @@ describe("PT-5a — a failed page's face (ruling 3)", () => {
     const face = t.faces.get(KEY);
     if (face === undefined) throw new Error("no face");
     face.land({ logical: [1280, 800] });
-    face.say({ state, info: { address: PAGE, back: false, forward: false } });
+    face.say({
+      state,
+      info: {
+        address: PAGE,
+        back: false,
+        forward: false,
+        ...(opts.extra === undefined ? {} : { extra: opts.extra }),
+      },
+    });
     local.tick?.(0);
     const G = k.resolve(ctx) as PaneGeometry;
     const r = k.record(G, ctx) as PaneInstance;
     return { t, local, face, ctx, G, r };
   };
 
-  it("a failed page is the FILM with its NOTICE on it — never its texture (the last frame, the engine's own error page): the words by the host's word, Try again where there is something to try, drawn once", () => {
+  it("PT-5b — a failed face OVER A STILL: where the host shows the page's last still (it is of the address that failed) the still is drawn under the words, DIMMED FURTHER than a photograph — and no rest mark: a failed page is not at rest", () => {
+    const n = noticing();
+    const { r, face, local } = failing(
+      { is: "failed", reason: "stopped", retry: () => {} },
+      { head: n.head, extra: { still: { takenAt: 1_000, age: 250 } } },
+    );
+    // the page's slot keeps what the host shows — its texture, the still — and the words are their own texture over it
+    expect(r.page?.key).toMatch(/^live\|/);
+    expect(r.live?.face).toBe(face);
+    expect(r.notice?.block).toEqual(BLOCK);
+    expect(r.brightness).toBe(BROWSER.display.stillUnder);
+    expect(BROWSER.display.stillUnder).toBe(0.16);
+    expect(BROWSER.display.stillUnder).toBeLessThan(BROWSER.display.still);
+    const v = paneValues(r);
+    expect(v.screen[3]).toBe(1);
+    expect(v.screen2[1]).toBe(0.16);
+    expect(v.notice2[3]).toBe(1);
+    expect(local.said(1 as Entity)?.rest).toBeUndefined();
+    // with no raster lent, the still stands dimmed all the same (the words are the raster's)
+    const bare = failing(
+      { is: "failed", reason: "stopped", retry: () => {} },
+      { extra: { still: { takenAt: 1_000, age: 250 } } },
+    );
+    expect(bare.r.page?.key).toMatch(/^live\|/);
+    expect(bare.r.brightness).toBe(0.16);
+    expect(bare.r.notice).toBeUndefined();
+  });
+
+  it("a failed page is the FILM with its NOTICE on it — never its texture (the last frame, the engine's own error page): the words by the host's word, Try again where there is something to try, drawn once; PT-5b — the notice is its OWN texture, the words' block alone", () => {
     const n = noticing();
     const retry = (): void => {};
     const { t, local, face, ctx, G, r } = failing(
@@ -566,23 +690,41 @@ describe("PT-5a — a failed page's face (ruling 3)", () => {
     );
     // the state's move remade the pane
     expect(t.n.remake).toContain(1);
-    // its texture is there — and is NOT the page
+    // its texture is there (a host that hid nothing) — and is NOT shown: no still is said, so the page is the film
     expect(face.texture()).toBeDefined();
-    expect(r.page?.notice).toBeInstanceOf(Uint8Array);
-    expect(r.page?.key).toMatch(/^notice\|/);
-    expect([r.page?.width, r.page?.height]).toEqual(noticeTexels(G.shape.viewport));
+    expect(r.page).toBeNull();
+    expect(r.brightness).toBe(1);
+    expect(r.notice?.bytes).toBeInstanceOf(Uint8Array);
+    expect(r.notice?.key).toMatch(/^notice\|/);
+    expect(r.notice).toMatchObject({
+      width: 60,
+      height: 24,
+      block: BLOCK,
+      viewport: G.shape.viewport,
+    });
     expect(n.drawn).toEqual([
       {
         viewport: G.shape.viewport,
-        texels: noticeTexels(G.shape.viewport),
+        scale: noticeScale(G.shape.viewport),
         words: NOTICE_WORDS["connection-refused"],
         retry: RETRY_LABEL,
         ink: "rgb(230 232 234)",
       },
     ]);
-    // the record tells the shader: the film, the words added as light
-    expect(paneValues(r).screen2[0]).toBe(1);
-    expect(paneValues(r).screen[3]).toBe(1);
+    // the record tells the shader: no page (the film), and a notice — where its block lies on the face, its texture's shape
+    const v = paneValues(r);
+    expect(v.screen[3]).toBe(0);
+    expect(v.notice2).toEqual([60, 24, 5, 1]);
+    const [pu, pv, phx, phy] = G.shape.page;
+    const [W, H] = G.shape.viewport;
+    const [nu, nv, nhx, nhy] = v.notice as [number, number, number, number];
+    expect(nu).toBeCloseTo(pu + (BLOCK[0] / W - 0.5) * 2 * phx, 9);
+    expect(nv).toBeCloseTo(pv + (BLOCK[1] / H - 0.5) * 2 * phy, 9);
+    expect(nhx).toBeCloseTo((BLOCK[2] / W) * 2 * phx, 9);
+    expect(nhy).toBeCloseTo((BLOCK[3] / H) * 2 * phy, 9);
+    // (the block lies within the page)
+    expect(Math.abs(nu - pu) + nhx).toBeLessThanOrEqual(phx + 1e-9);
+    expect(Math.abs(nv - pv) + nhy).toBeLessThanOrEqual(phy + 1e-9);
     // it keeps its face (its sight is told: a page tried again must be asked for) and the asked address on its head
     expect(r.live?.face).toBe(face);
     expect(local.said(1 as Entity)).toMatchObject({ display: "127.0.0.1:4321" });
@@ -600,8 +742,9 @@ describe("PT-5a — a failed page's face (ruling 3)", () => {
     local.tick?.(0);
     const back = k.record(k.resolve(ctx), ctx) as PaneInstance;
     expect(back.page?.key).toMatch(/^live\|/);
-    expect(back.page?.notice).toBeUndefined();
-    expect(paneValues(back).screen2[0]).toBe(0);
+    expect(back.notice).toBeUndefined();
+    expect(paneValues(back).notice2[3]).toBe(0);
+    expect(paneValues(back).screen[3]).toBe(1);
     expect((k.resolve(ctx) as PaneGeometry).notice).toBeUndefined();
   });
 
@@ -1222,5 +1365,242 @@ describe("PT-4 — the page as a device sees it: the pane's spec, its respec, it
     face?.say({ info: { address: PAGE } });
     local.tick?.(4);
     expect(t.n.remake).toHaveLength(remakes + 3);
+  });
+});
+
+describe("PT-5b — a pane that shows a PHOTOGRAPH of its page (ruling 2)", () => {
+  const k = browserPaneKind();
+  const KEY = "13918995204487956201-1";
+  const still = (age: number) => ({ still: { takenAt: 1_000, age } });
+
+  it("what the host says of a still is read off the face's words — when it was taken and how long ago — or nothing", () => {
+    expect(pageStill({ extra: { still: { takenAt: 5, age: 9 } } })).toEqual({ takenAt: 5, age: 9 });
+    // an age that is none is none; a still with no time is no still
+    expect(pageStill({ extra: { still: { takenAt: 5 } } })).toEqual({ takenAt: 5, age: 0 });
+    expect(pageStill({ extra: { still: { takenAt: 5, age: -1 } } })).toEqual({
+      takenAt: 5,
+      age: 0,
+    });
+    for (const said of [undefined, null, true, "still", {}, { age: 4 }, { takenAt: Number.NaN }])
+      expect(pageStill({ extra: { still: said } }), JSON.stringify(said)).toBeUndefined();
+    expect(pageStill({})).toBeUndefined();
+    expect(pageStill(undefined)).toBeUndefined();
+  });
+
+  it("a head AT REST is another raster than the page's own — and one that is not keeps its key as it was cut", () => {
+    const at = { address: PAGE, back: false, forward: false };
+    const plain = headStateOf(PAGE, S, at, null);
+    const rest = headStateOf(PAGE, S, at, null, undefined, true);
+    expect(plain.rest).toBeUndefined();
+    expect(rest.rest).toBe(true);
+    expect("rest" in plain).toBe(false);
+    expect(headKey(S, rest, 2)).not.toBe(headKey(S, plain, 2));
+    expect(headKey(S, rest, 2)).toBe(`${headKey(S, plain, 2)}|rest`);
+    expect(headKey(S, headStateOf(PAGE, S, at, null, undefined, false), 2)).toBe(
+      headKey(S, plain, 2),
+    );
+  });
+
+  it("a STILL is drawn as a photograph — a step dimmer than the page — its head carrying the REST MARK; THAT it is a still remakes the pane, its age never; with the page's first frame it is the page again", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    const ctx = ctxOf({ url: PAGE }, local);
+    const record = (): PaneInstance => k.record(k.resolve(ctx), ctx) as PaneInstance;
+    record();
+    const face = t.faces.get(KEY);
+    if (face === undefined) throw new Error("no face");
+    // the host lays the page's last still before its first frame, and says so
+    face.land({ width: 1600, height: 1000, logical: [1280, 800] });
+    face.say({ state: { is: "starting" }, info: { extra: still(100) } });
+    local.tick?.(0);
+    expect(t.n.remake).toEqual([1]);
+    const r = record();
+    expect(r.page?.key).toBe("live|0|1600x1000");
+    expect(r.brightness).toBe(BROWSER.display.still);
+    expect(BROWSER.display.still).toBe(0.7);
+    expect(paneValues(r).screen2[1]).toBe(0.7);
+    expect(paneValues(r).screen[3]).toBe(1);
+    expect(r.notice).toBeUndefined();
+    expect(local.said(1 as Entity)?.rest).toBe(true);
+    expect(r.head.key).toMatch(/\|rest$/);
+    // its age is read as the words are: older, and nothing is remade
+    face.say({ info: { extra: still(31_000) } });
+    local.tick?.(16);
+    expect(t.n.remake).toEqual([1]);
+    expect(local.faces().remakes).toBe(1);
+    // a rested page (its producer hibernated): `paused` with its still — the same photograph, the same mark
+    face.say({ state: { is: "paused" }, info: { address: PAGE, extra: still(31_000) } });
+    local.tick?.(32);
+    const rested = record();
+    expect(rested.brightness).toBe(0.7);
+    expect(local.said(1 as Entity)?.rest).toBe(true);
+    // the page's first frame: the words carry no still — the page, at its own light, its head its own
+    face.land({ epoch: 1, width: 2560, height: 1600 });
+    face.say({ state: { is: "live" }, info: { address: PAGE } });
+    local.tick?.(48);
+    expect(t.n.remake.length).toBeGreaterThan(2);
+    const live = record();
+    expect(live.brightness).toBe(1);
+    expect(paneValues(live).screen2[1]).toBe(1);
+    expect(local.said(1 as Entity)?.rest).toBeUndefined();
+    expect(live.head.key).not.toMatch(/rest/);
+  });
+
+  it("with no still said and no frame: the film, as before — the page at its own light when its frame lands", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    const ctx = ctxOf({ url: PAGE }, local);
+    const before = k.record(k.resolve(ctx), ctx) as PaneInstance;
+    expect(before.page).toBeNull();
+    expect(before.brightness).toBe(1);
+    expect(local.said(1 as Entity)?.rest).toBeUndefined();
+  });
+});
+
+describe("PT-5b — memory charged (ruling 4; design-019 §7)", () => {
+  const k = browserPaneKind();
+  const KEY = "13918995204487956201-1";
+  const LIVE_ROW = `${BROWSER_PANE_KIND} ${liveBudgetKey(KEY)}`;
+  const NOTICE_ROW = `${BROWSER_PANE_KIND} ${noticeBudgetKey(KEY)}`;
+
+  it("a face's texture is a ROW of the desk's budget under the kind's name — its bytes: charged when it lands, touched at each frame, charged again at a new texture, released when the face has none or closes", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    local.face(1 as Entity, spec, S);
+    const face = t.faces.get(KEY);
+    if (face === undefined) throw new Error("no face");
+    expect(t.said).toEqual([]);
+    face.land();
+    local.tick?.(0);
+    expect(t.said).toEqual([`charge ${LIVE_ROW} ${2560 * 1600 * 4}`]);
+    expect(t.ledger.get(LIVE_ROW)?.bytes).toBe(16_384_000);
+    // a frame in the same texture: used, not charged again
+    face.land();
+    local.tick?.(16);
+    expect(t.said.at(-1)).toBe(`touch ${LIVE_ROW}`);
+    expect(local.faces().charges).toBe(1);
+    // a new texture (the rest rung: half the size): its bytes
+    face.land({ epoch: 1, width: 1280, height: 800, bytes: 1280 * 800 * 4 });
+    local.tick?.(32);
+    expect(t.said.at(-1)).toBe(`charge ${LIVE_ROW} ${1280 * 800 * 4}`);
+    expect(t.ledger.get(LIVE_ROW)?.bytes).toBe(4_096_000);
+    // the host hides it (the page failed with no still): the row goes
+    face.gone();
+    local.tick?.(48);
+    expect(t.said.at(-1)).toBe(`release ${LIVE_ROW}`);
+    expect(t.ledger.size).toBe(0);
+    // back, then the pane's address stops being a page: its face closes, its row with it
+    face.land();
+    local.tick?.(64);
+    expect(t.ledger.has(LIVE_ROW)).toBe(true);
+    local.drop(1 as Entity);
+    expect(t.ledger.size).toBe(0);
+    expect(t.said.at(-1)).toBe(`release ${LIVE_ROW}`);
+    // what the host already holds at the open (a page re-attached, a still laid) is charged at the open's take
+    const held = fakeHost({ holds: true });
+    createPaneLocal(held.host).face(1 as Entity, spec, S);
+    expect(held.said).toEqual([`charge ${LIVE_ROW} 16384000`]);
+    // a desk with no budget: nothing asked of it, nothing thrown
+    const none = fakeHost({ budget: false, holds: true });
+    const bare = createPaneLocal(none.host);
+    bare.face(1 as Entity, spec, S);
+    none.faces.get(KEY)?.land();
+    bare.tick?.(0);
+    expect(none.said).toEqual([]);
+  });
+
+  it("KEPT while its pane is seen or held — never evicted then; unseen, it may go: the host is asked to let the texture go, the pane is remade to its film, and its next frame is charged again", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    local.face(1 as Entity, spec, S);
+    const face = t.faces.get(KEY);
+    if (face === undefined) throw new Error("no face");
+    face.land();
+    // seen at rest
+    t.draw(local, 1 as Entity, 1);
+    local.tick?.(0);
+    expect(local.keeps?.(liveBudgetKey(KEY))).toBe(true);
+    expect(local.keeps?.(noticeBudgetKey(KEY))).toBe(true);
+    // in the hand
+    t.draw(local, 1 as Entity, 2, "hand");
+    local.tick?.(16);
+    expect(local.keeps?.(liveBudgetKey(KEY))).toBe(true);
+    // panned away
+    t.skip();
+    local.tick?.(32);
+    expect(face.demands.at(-1)?.mode).toBe("paused");
+    expect(local.keeps?.(liveBudgetKey(KEY))).toBe(false);
+    expect(local.keeps?.(noticeBudgetKey(KEY))).toBe(false);
+    // a key that is no pane's, a word that is no key
+    expect(local.keeps?.(liveBudgetKey("nobody"))).toBe(false);
+    expect(local.keeps?.("live")).toBe(false);
+    // the ledger evicts the row: the host lets the texture go — the face says so, the pane is remade (its film)
+    const remakes = t.n.remake.length;
+    t.evict(LIVE_ROW);
+    expect(t.evicted).toEqual([KEY]);
+    expect(face.texture()).toBeUndefined();
+    local.tick?.(48);
+    expect(t.n.remake.length).toBe(remakes + 1);
+    const ctx = ctxOf({ url: PAGE }, local);
+    expect((k.record(k.resolve(ctx), ctx) as PaneInstance).page).toBeNull();
+    expect(local.faces()).toMatchObject({ evictions: 1 });
+    // nothing is released twice (the ledger dropped the row itself)
+    expect(t.said.filter((line) => line.startsWith("release"))).toEqual([]);
+    // seen again, the host lays its still (or its page's next frame lands): charged again
+    face.land({ epoch: 2 });
+    local.tick?.(64);
+    expect(t.ledger.has(LIVE_ROW)).toBe(true);
+    expect(local.faces().charges).toBe(2);
+    // a host that cannot let a texture go (older than PT-5b): the eviction asks nothing and throws nothing
+    const old = fakeHost({ evict: false });
+    const elder = createPaneLocal(old.host);
+    elder.face(1 as Entity, spec, S);
+    old.faces.get(KEY)?.land();
+    elder.tick?.(0);
+    expect(() => old.evict(LIVE_ROW)).not.toThrow();
+    expect(old.evicted).toEqual([]);
+    expect(old.faces.get(KEY)?.texture()).toBeDefined();
+  });
+
+  it("a failed pane's NOTICE is charged too — its texture's bytes as the pass says them; evicted, the pass lets it go (it is laid again when the pane is next drawn); released when the page says nothing any more", () => {
+    const head: HeadRaster = {
+      raster: () => undefined,
+      notice: () => ({
+        bytes: new Uint8Array(60 * 24 * 4),
+        width: 60,
+        height: 24,
+        block: [640, 336, 300, 96],
+      }),
+    };
+    const t = fakeHost({ head, pass: true });
+    const local = createPaneLocal(t.host);
+    const ctx = ctxOf({ url: PAGE }, local);
+    k.record(k.resolve(ctx), ctx);
+    const face = t.faces.get(KEY);
+    if (face === undefined) throw new Error("no face");
+    face.say({
+      state: { is: "failed", reason: "offline", retry: () => {} },
+      info: { address: PAGE },
+    });
+    local.tick?.(0);
+    k.record(k.resolve(ctx), ctx);
+    // the local hears of the notice's texture from the pass (its bytes on the device, mips and all)
+    expect(t.pass.noticed).toBeTypeOf("function");
+    t.pass.noticed?.(1, 7_680);
+    expect(t.said.at(-1)).toBe(`charge ${NOTICE_ROW} 7680`);
+    expect(t.ledger.get(NOTICE_ROW)?.bytes).toBe(7_680);
+    // evicted: the pass lets its texture go
+    t.evict(NOTICE_ROW);
+    expect(t.pass.unnoticed).toEqual([1]);
+    // drawn again, the pass lays it again and says so: charged again
+    t.pass.noticed?.(1, 7_680);
+    expect(t.ledger.has(NOTICE_ROW)).toBe(true);
+    // the page recovers: the pass lets the notice go and says none
+    t.pass.noticed?.(1, 0);
+    expect(t.said.at(-1)).toBe(`release ${NOTICE_ROW}`);
+    expect(t.ledger.has(NOTICE_ROW)).toBe(false);
+    // a pane with no face (no durable key) charges nothing
+    t.pass.noticed?.(2, 100);
+    expect(t.ledger.size).toBe(0);
   });
 });

@@ -6,6 +6,7 @@
 import type { LiveInfo } from "@vibefield/plugin-sdk/desk";
 import { describe, expect, it } from "vitest";
 import {
+  bandLayout,
   createFaviconPictures,
   cutOf,
   DEVICES,
@@ -266,5 +267,80 @@ describe("PT-4 — the generic mark: a globe engraved in the favicon's place", (
   it("a head whose page's own favicon is said but whose picture is not in hand prints nothing rather than another's mark", () => {
     const pending = cut(headStateOf(PAGE, S, info, faviconId("0123456789abcdef")));
     expect(pending.calls.filter((c) => c.name === "ellipse" || c.name === "drawImage")).toEqual([]);
+  });
+});
+
+describe("PT-5b — the rest mark: two short bars cut at the capsule's leading end", () => {
+  /** A 2D context that only RECORDS what it is asked, the text's letters measured 5 apiece. */
+  const recorder = () => {
+    const calls: { name: string; args: unknown[]; op: string }[] = [];
+    const state: Record<string, unknown> = { globalCompositeOperation: "source-over" };
+    const ctx = new Proxy(state, {
+      get(target, name: string) {
+        if (name in target) return target[name];
+        if (name === "measureText") return (t: string) => ({ width: t.length * 5 });
+        return (...args: unknown[]) => {
+          calls.push({ name, args, op: String(target.globalCompositeOperation) });
+        };
+      },
+      set(target, name: string, value) {
+        target[name] = value;
+        return true;
+      },
+    }) as unknown as HeadContext;
+    return { ctx, calls };
+  };
+  /** A head cut: the upright strokes CUT OUT of its frost (a move, then a line straight down from it), and where its text is. */
+  const cut = (shape: typeof S, st: HeadState) => {
+    const r = recorder();
+    drawHead({ width: 0, height: 0 }, r.ctx, shape, st, 2, null);
+    const bars: { x: number; y0: number; y1: number }[] = [];
+    r.calls.forEach((c, i) => {
+      const next = r.calls[i + 1];
+      if (c.name !== "moveTo" || next?.name !== "lineTo" || c.op !== "destination-out") return;
+      const [x, y0] = c.args as [number, number];
+      const [x1, y1] = next.args as [number, number];
+      if (x === x1 && y1 > y0) bars.push({ x, y0, y1 });
+    });
+    const text = r.calls.find((c) => c.name === "fillText" && c.op === "destination-out");
+    return { bars, textAt: text?.args[1] as number, said: text?.args[0] as string };
+  };
+  const info: LiveInfo = { address: PAGE };
+  const phone = deviceById("phone");
+  if (phone === undefined) throw new Error("no phone");
+  const NARROW = shapeOf(cutOf(phone), phone);
+
+  it("a head at rest carries two upright bars cut out of the capsule's frost at its leading end — inside the capsule, the address standing clear of them; a head that is not carries none", () => {
+    for (const shape of [S, NARROW]) {
+      const L = bandLayout(shape);
+      const [cx, cy, chx, chy] = L.address;
+      const plain = cut(shape, headStateOf(PAGE, shape, info));
+      const rest = cut(shape, headStateOf(PAGE, shape, info, null, undefined, true));
+      const tag = L.compact ? "a phone's head" : "a laptop's head";
+      expect(plain.bars, tag).toEqual([]);
+      expect(rest.bars, tag).toHaveLength(2);
+      const [a, b] = rest.bars as [(typeof rest.bars)[number], (typeof rest.bars)[number]];
+      // two bars of one height, side by side, centred on the capsule's middle line
+      expect(b.x, tag).toBeGreaterThan(a.x);
+      expect([b.y0, b.y1], tag).toEqual([a.y0, a.y1]);
+      expect((a.y0 + a.y1) / 2, tag).toBeCloseTo(cy, 9);
+      // inside the capsule, at its leading end
+      expect(a.x, tag).toBeGreaterThan(cx - chx);
+      expect(b.x, tag).toBeLessThan(cx - chx + 2 * chy + (b.x - a.x));
+      expect(a.y0, tag).toBeGreaterThan(cy - chy);
+      expect(a.y1, tag).toBeLessThan(cy + chy);
+      // the address says what it said, clear of the mark
+      expect(rest.said, tag).toBe(plain.said);
+      expect(rest.textAt, tag).toBeGreaterThan(b.x);
+      expect(rest.textAt, tag).toBeGreaterThanOrEqual(plain.textAt);
+    }
+    // a phone's head has no ↻ to carry a mark: the capsule alone carries it
+    expect(bandLayout(NARROW).reload).toBeNull();
+  });
+
+  it("while the capsule SAYS something else (a download refused) it carries no mark: the words alone", () => {
+    const saying = cut(S, { ...headStateOf(PAGE, S, info, null, "Download blocked", true) });
+    expect(saying.said).toBe("Download blocked");
+    expect(saying.bars).toEqual([]);
   });
 });

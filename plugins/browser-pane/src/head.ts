@@ -7,12 +7,17 @@
 // The raster holds both: its upper half the engraving's coverage (alpha), its lower half the colour print
 // (premultiplied), a two-texel gutter between — `engraveSplit` says where each half's rows are.
 
-import { type LiveBrowserRefusal, type LiveInfo, serviceKey } from "@vibefield/plugin-sdk/desk";
+import {
+  type LiveBrowserRefusal,
+  type LiveBrowserStill,
+  type LiveInfo,
+  serviceKey,
+} from "@vibefield/plugin-sdk/desk";
 import { displayOf, isSecure } from "./address";
 import { SAMPLE_URL } from "./ids";
 import type { PaneShape } from "./law";
 import type { HeadBitmap } from "./layout";
-import type { NoticeSpec } from "./notice";
+import type { NoticeBitmap, NoticeSpec } from "./notice";
 
 /** What the head says. */
 export interface HeadState {
@@ -29,6 +34,8 @@ export interface HeadState {
   readonly viewport: readonly [number, number];
   /** PT-5a — what the capsule says INSTEAD of its address, for a moment (a download refused): alone, no lock, no favicon. */
   readonly saying?: string;
+  /** PT-5b — the pane shows a PHOTOGRAPH of its page (its last still), not the page: the capsule carries the rest mark. */
+  readonly rest?: true;
 }
 
 /**
@@ -45,6 +52,8 @@ export function headStateOf(
   icon: string | null = null,
   /** PT-5a: what the capsule says instead of the address for a moment (`PaneLocal.saying`). */
   saying?: string,
+  /** PT-5b: the page shown is its last still (`pageStill`) — the head carries the rest mark. */
+  rest = false,
 ): HeadState {
   const at = info?.address ?? url;
   return {
@@ -56,6 +65,7 @@ export function headStateOf(
     canForward: info?.forward === true,
     viewport: S.viewport,
     ...(saying === undefined ? {} : { saying }),
+    ...(rest ? { rest: true as const } : {}),
   };
 }
 
@@ -79,6 +89,19 @@ export function pageRefusal(info: LiveInfo | undefined): LiveBrowserRefusal | un
     serial > 0
     ? { what, serial }
     : undefined;
+}
+
+/**
+ * PT-5b — what the host's face says of its texture being a STILL (`info.extra.still` — the SDK's `LiveBrowserStill`): a
+ * photograph of the page, when it was taken and how long ago — or undefined: the texture is the page's own frame (or the
+ * host says nothing of stills). The pane draws a still as a photograph, never as the page.
+ */
+export function pageStill(info: LiveInfo | undefined): LiveBrowserStill | undefined {
+  const said = info?.extra?.still;
+  if (typeof said !== "object" || said === null) return undefined;
+  const { takenAt, age } = said as Partial<LiveBrowserStill>;
+  if (typeof takenAt !== "number" || !Number.isFinite(takenAt)) return undefined;
+  return { takenAt, age: typeof age === "number" && age >= 0 ? age : 0 };
 }
 
 /** A page's favicon as the host's face says it (`LiveInfo.extra.favicon` — VibeField's contract): a key to compare, the
@@ -117,10 +140,11 @@ export interface HeadRaster {
    */
   picture?(favicon: PageFavicon, ready: () => void): boolean;
   /**
-   * PT-5a — a failed page's NOTICE (notice.ts): its words' light over black, opaque sRGB rgba8 rows from the top, at the
-   * spec's texels. Undefined where the service cannot draw one — the film then carries no words.
+   * PT-5a — a failed page's NOTICE (notice.ts): its words' light over black, opaque sRGB rgba8 rows from the top — PT-5b:
+   * the words' BLOCK alone (where it lies on the page is the raster's to say: it measured the lines), at the spec's
+   * scale. Undefined where the service cannot draw one — the page then carries no words.
    */
-  notice?(spec: NoticeSpec): Uint8Array<ArrayBuffer> | undefined;
+  notice?(spec: NoticeSpec): NoticeBitmap | undefined;
 }
 
 /**
@@ -156,6 +180,7 @@ export const headKey = (S: PaneShape, st: HeadState, tpu: number): string => {
     st.viewport.join("x"),
     // (only when it says something: the committed heads' keys stand as they were cut)
     ...(st.saying === undefined ? [] : [`say:${st.saying}`]),
+    ...(st.rest === true ? ["rest"] : []),
   ].join("|");
 };
 

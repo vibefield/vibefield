@@ -33,7 +33,7 @@ import { displayOf, PROMPT } from "./address";
 import { nextDevice } from "./device";
 import { deviceIdentity, deviceOf } from "./devices";
 import { handOf } from "./hand";
-import { bandDensity, bandFor, headKey, headStateOf, rungFor } from "./head";
+import { bandDensity, bandFor, headKey, headStateOf, pageStill, rungFor } from "./head";
 import { stillSplit } from "./head-still";
 import { BROWSER_PANE_KIND, PANE_SCHEMES, type PaneScheme, SAMPLE_URL } from "./ids";
 import {
@@ -279,14 +279,21 @@ export function browserPaneKind(
           local?.laid(ctx.entity, G, openExtent(ctx.rect, S), ctx.view.zoom);
       }
       const words = face === undefined ? undefined : local?.page(ctx.entity);
+      // PT-5a (ruling 3) — A FAILED PAGE; PT-5b (ruling 2) — and whether what the host shows of the page is its last
+      // STILL: a photograph, never passed off as the page
+      const failed = words?.state.is === "failed" ? words.state : undefined;
+      const still = pageStill(words?.info);
       // PT-4 — the page's favicon as the head can print it now (its picture decoded), the generic mark where it has none;
-      // PT-5a — and what the capsule says for a moment instead of its address (a download refused)
+      // PT-5a — what the capsule says for a moment instead of its address (a download refused); PT-5b — the REST MARK on
+      // the capsule of a pane that shows a photograph (never a failed one's: nothing says a rested page failed, and a
+      // failed page is not at rest)
       const state = headStateOf(
         url,
         S,
         words?.info,
         local?.icon(ctx.entity, words?.info),
         face === undefined ? undefined : local?.saying(ctx.entity),
+        still !== undefined && failed === undefined,
       );
       const tpu = bandDensity(S, bandFor(ctx.view.zoom * ctx.view.dpr));
       const laid = local?.head(ctx.entity, S, state, tpu);
@@ -304,10 +311,10 @@ export function browserPaneKind(
             ? { key, still: key, split }
             : { key };
       const t = face?.texture();
-      // PT-5a (ruling 3) — A FAILED PAGE: the film, and on it why in a person's words (the lent raster draws them — none
-      // lent, the film alone), with "Try again" where there is something to try. Never the page's last frame, never the
-      // engine's own error page.
-      const failed = words?.state.is === "failed" ? words.state : undefined;
+      // A FAILED PAGE says why in a person's words (the lent raster draws them — none lent, no words), with "Try again"
+      // where there is something to try — over the FILM, or (PT-5b) over the page's last still where the host shows one
+      // (the still is of the address that failed), dimmed further. Never the page's last frame, never the engine's own
+      // error page: the host hides both.
       const [nr, ng, nb] = look.notice;
       const notice =
         failed === undefined
@@ -322,19 +329,24 @@ export function browserPaneKind(
         geometry: G,
         finish: paneFinish(look, stringProp(ctx.props, "finish", "low-iron")),
         look,
-        // a live page's texture once its first frame lands (the film before), the sample's still, or the film — a failed
-        // page's notice on its film
+        // what the host shows of a live page — its frame, or its last still — the film where it shows nothing (before the
+        // first frame with no still; a failed page with none of the address that failed); else the sample's still, or the film
         page:
           face === undefined
             ? pagePlan(url, S, scheme)
+            : t === undefined || (failed !== undefined && still === undefined)
+              ? null
+              : livePlan(t, S.viewport, scheme),
+        // PT-5b — a photograph of the page is a step dimmer than the page; under a failure's words dimmer still
+        brightness:
+          still === undefined
+            ? 1
             : failed !== undefined
-              ? (notice ?? null)
-              : t === undefined
-                ? null
-                : livePlan(t, S.viewport, scheme),
-        brightness: 1,
+              ? law.display.stillUnder
+              : law.display.still,
         loading: words?.info.loading ?? -1,
         head,
+        ...(notice === undefined ? {} : { notice }),
         ...(face === undefined || local === undefined
           ? {}
           : { live: { e: ctx.entity, face, sight: local.sight } }),

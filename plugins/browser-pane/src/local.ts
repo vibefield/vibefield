@@ -45,7 +45,7 @@ import {
   pageFavicon,
   REFUSAL_WORDS,
 } from "./head";
-import { SAMPLE_URL } from "./ids";
+import { BROWSER_PANE_KIND, SAMPLE_URL } from "./ids";
 import {
   HELD_CONTROLS,
   type HeldPart,
@@ -55,9 +55,9 @@ import {
   type PaneShape,
   wheelToPage,
 } from "./law";
-import type { HeadBitmap, PagePlan } from "./layout";
-import { createPaneFaces, isPageUrl, type PaneFaceStats } from "./live";
-import { failureWords, noticeKey, noticeTexels, RETRY_LABEL } from "./notice";
+import type { HeadBitmap, NoticePlan } from "./layout";
+import { createPaneFaces, isPageUrl, noticeBudgetKey, type PaneFaceStats } from "./live";
+import { failureWords, noticeKey, noticeScale, RETRY_LABEL } from "./notice";
 import { PAGE_REMAKE_MS } from "./pass";
 
 /** The pass's doors the local reads (the root pass, once the ground has made it). */
@@ -66,6 +66,9 @@ interface PaneDoors {
   onPending(fn: (() => void) | undefined): void;
   forget(entity: number): void;
   made(entity: number): number;
+  /** PT-5b — told a pane's notice texture was made (its bytes) or let go (0); and a notice let go at the budget's word. */
+  onNotice?(fn: ((entity: number, bytes: number) => void) | undefined): void;
+  unnotice?(entity: number): boolean;
 }
 
 /** The pane's open extent on the desk: its centre and size (law.ts `openExtent`). */
@@ -136,15 +139,16 @@ export interface PaneLocal extends KindLocal {
   /** PT-3 — the hand's doors (its DOM half binds them as it joins). */
   bind(hand: PaneHandDoors | undefined): void;
   /**
-   * PT-5a — a FAILED page's notice as the pass lays it (its page's plan: the words' light, drawn by the lent raster — once
-   * a reason, a size and an ink), or undefined: no raster lent on this desk — the film carries no words.
+   * PT-5a — a FAILED page's notice as the pass lays it (the words' light, drawn by the lent raster — once a reason, a size
+   * and an ink; PT-5b: the words' BLOCK alone, its own texture), or undefined: no raster lent on this desk — the page
+   * carries no words.
    */
   notice(
     e: Entity,
     S: PaneShape,
     state: Extract<LiveState, { is: "failed" }>,
     ink: string,
-  ): PagePlan | undefined;
+  ): NoticePlan | undefined;
   /** PT-5a — what `e`'s head says for a moment instead of its address (a download refused), or undefined. */
   saying(e: Entity): string | undefined;
   /** PT-5a — notices drawn since the desk was made (a test's witness). */
@@ -159,8 +163,10 @@ const doorsOf = (host: KindHost | undefined): PaneDoors | undefined => {
 };
 
 export function createPaneLocal(host: KindHost | undefined): PaneLocal {
-  const live = createPaneFaces(host);
   const nav = host?.use?.(BROWSER_NAVIGATION);
+  // PT-5b — a face's texture the desk's budget evicted is the HOST's to let go (a host older than PT-5b lends no `evict`:
+  // its texture stands, uncharged until its next frame)
+  const live = createPaneFaces(host, undefined, { evict: (key) => nav?.evict?.(key) });
   /** PT-3 — each pane's layout in hand, its press (on its page, or on a control until its release), and the url its record read. */
   const laidOut = new Map<
     Entity,
@@ -195,7 +201,21 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
     else if (control === "address") hand?.address(e);
   };
   /** PT-5a — each failed pane's notice, by what it is drawn from. */
-  const noticed = new Map<Entity, PagePlan>();
+  const noticed = new Map<Entity, NoticePlan>();
+  /**
+   * PT-5b (ruling 4) — a failed pane's NOTICE charged to the desk's budget: the pass says when its texture is made (its
+   * bytes on the device, mips and all) or let go; evicted, the pass lets it go (it is laid again from its record when the
+   * pane is next drawn — and charged again).
+   */
+  const chargeNotice = (entity: number, bytes: number): void => {
+    const key = live.words(entity as Entity)?.key;
+    if (key === undefined || host?.budget === undefined) return;
+    if (bytes <= 0) host.budget.release(BROWSER_PANE_KIND, noticeBudgetKey(key));
+    else
+      host.budget.charge(BROWSER_PANE_KIND, noticeBudgetKey(key), bytes, () => {
+        doors()?.unnotice?.(entity);
+      });
+  };
   let notices = 0;
   const heads = new Map<Entity, { readonly key: string; readonly bitmap: HeadBitmap }>();
   const saying = new Map<Entity, HeadState>();
@@ -206,6 +226,7 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
     const d = doorsOf(host);
     if (d !== undefined && d !== wired) {
       d.onPending(() => host?.wake?.());
+      d.onNotice?.(chargeNotice);
       wired = d;
     }
     return d;
@@ -257,10 +278,10 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
       return respecs;
     },
     notice(e, S, state, ink) {
-      const texels = noticeTexels(S.viewport);
+      doors();
       const spec = {
         viewport: S.viewport,
-        texels,
+        scale: noticeScale(S.viewport),
         words: failureWords(state.reason),
         retry: state.retry === undefined ? null : RETRY_LABEL,
         ink,
@@ -268,16 +289,9 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
       const key = noticeKey(spec);
       const had = noticed.get(e);
       if (had?.key === key) return had;
-      const bytes = host?.use?.(HEAD_RASTER)?.notice?.(spec);
-      if (bytes === undefined) return undefined;
-      const plan: PagePlan = {
-        key,
-        viewport: S.viewport,
-        scheme: "dark",
-        width: texels[0],
-        height: texels[1],
-        notice: bytes,
-      };
+      const drawn = host?.use?.(HEAD_RASTER)?.notice?.(spec);
+      if (drawn === undefined) return undefined;
+      const plan: NoticePlan = { key, viewport: S.viewport, ...drawn };
       noticed.set(e, plan);
       notices += 1;
       return plan;
@@ -297,6 +311,12 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
       noticed.delete(e);
     },
     sight: live.sight,
+    // PT-5b — the kind's word on a raster it charged (`live <key>`, `notice <key>`): kept while its pane is seen or held
+    keeps(key) {
+      const at = key.indexOf(" ");
+      const e = at < 0 ? undefined : live.entityOf(key.slice(at + 1));
+      return e !== undefined && live.shown(e);
+    },
     page: (e) => live.words(e),
     faces: () => live.stats(),
     // the faces' takes and asks answer nothing of their own: a landed frame asks a redraw, new words a remake of its pane
@@ -417,6 +437,7 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
       noticed.clear();
       hand = undefined;
       wired?.onPending(undefined);
+      wired?.onNotice?.(undefined);
       wired = undefined;
     },
   };

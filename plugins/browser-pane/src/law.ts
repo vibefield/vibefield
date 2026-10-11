@@ -112,9 +112,11 @@ const BROWSER_SPEC = {
   /**
    * The page's panel: the share of the light on an unlit panel it scatters (a black page in the sun still shows the
    * dapple, faintly), its level by night (bright to the eye adapted to the Moon — the phone's), by day (the byte is the
-   * drawn byte).
+   * drawn byte). PT-5b — a PHOTOGRAPH of the page (its last still, the host's — never passed off as the page) is a step
+   * dimmer: `still` of its light (a white page's byte 255 reads 217), in both schemes and by day and by night; under a
+   * failure's words dimmer still (`stillUnder`: 255 reads 111 — the words' light is added over it and must read).
    */
-  display: { scatter: 0.006, night: 0.8, day: 1 },
+  display: { scatter: 0.006, night: 0.8, day: 1, still: 0.7, stillUnder: 0.16 },
   /**
    * The GLOW by night: the eye's veiling glare round a bright page (its shape blurred at two widths, mm, with their
    * weights — the phone's law); the page's light on the mat round the pane (a pool this wide, mm, at this strength); the

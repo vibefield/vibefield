@@ -32,12 +32,14 @@ export const Pane = defineStruct("Pane", [
   ["cap", "vec4f"], // the address capsule: centre u, v, half extents
   ["tint", "vec4f"], // the glass's edge colour (sRGB — what a long path through it shows), the path it is measured over (world)
   ["screen", "vec4f"], // the page's texture: texels wide, high; its last level; on (0…1: a page in hand)
-  ["screen2", "vec4f"], // a NOTICE (0/1 — the film with the page's texture added as words' light); brightness; the glow's level; loading (0…1, < 0 = not loading)
+  ["screen2", "vec4f"], // unused; brightness (1: the page — less: a photograph of it, PT-5b); the glow's level; loading (0…1, < 0 = not loading)
   ["ink", "vec4f"], // the head's raster: on (0/1), the engraving's share of its rows, where the print's rows start (both 0…1), unused
   ["hover", "vec4f"], // a control under the pointer (in use — PT-3): its centre u, v, radius, presence (pressed > 1)
   ["light", "vec4f"], // toward the lamp (unit), the page's shadow alpha
   ["slope", "vec4f"], // the shadow's ground offset per unit of height xy, the foot's height, unused
   ["bounds", "vec4f"], // the quad: x0 y0 x1 y1 (world)
+  ["notice", "vec4f"], // a failed page's NOTICE (PT-5b — its own texture, the words' block alone): centre u, v, half extents
+  ["notice2", "vec4f"], // its texture: texels wide, high; its last level; on (0/1)
 ] as const);
 
 export const PaneUniforms = defineStruct("PaneUniforms", [
@@ -100,11 +102,22 @@ export interface PagePlan {
   /** The texture's texels (`pageTexels` — a CSS px a texel, under the cap). */
   readonly width: number;
   readonly height: number;
-  /**
-   * PT-5a — a failed page's NOTICE: the bytes the pass lays as the page (the words' light over black — notice-canvas.ts),
-   * drawn as the FILM with those words on it. Absent: the sample's still (the pass generates it) or a live page's texture.
-   */
-  readonly notice?: Uint8Array<ArrayBuffer> | undefined;
+}
+
+/**
+ * A failed page's NOTICE (PT-5a ruling 3; PT-5b ruling 2 — its OWN texture in the pane's pass): the words' light over
+ * black (notice-canvas.ts), of the words' BLOCK alone — the pass lays it as the pane's notice texture and the shader adds
+ * its light over what the page shows there: the film, or the page's last still dimmed under it.
+ */
+export interface NoticePlan {
+  /** What the raster depends on (notice.ts `noticeKey`) — a new key is a new raster. */
+  readonly key: string;
+  readonly bytes: Uint8Array<ArrayBuffer>;
+  readonly width: number;
+  readonly height: number;
+  /** The page's CSS viewport, and the block of it the texels cover (CSS px: centre x, y, half extents). */
+  readonly viewport: readonly [number, number];
+  readonly block: readonly [number, number, number, number];
 }
 
 /** A head raster's bitmap: its engraving (alpha) and print (premultiplied RGBA) halves, rows top-down (head.ts `engraveSplit`). */
@@ -134,10 +147,13 @@ export interface PaneInstance {
   readonly geometry: PaneGeometry;
   readonly finish: PaneFinish;
   readonly look: PaneLookValues;
-  /** The page shown (null: none — the dark film), its brightness, loading (< 0 = not). */
+  /** The page shown (null: none — the dark film), its brightness (1: the page; less: a PHOTOGRAPH of it — PT-5b, the
+   * host's last still, never passed off as the page), loading (< 0 = not). */
   readonly page: PagePlan | null;
   readonly brightness: number;
   readonly loading: number;
+  /** PT-5a/PT-5b — a failed page's words, over what the page shows (the film, or its still dimmed further). */
+  readonly notice?: NoticePlan | undefined;
   readonly head: HeadPlan;
   /** A control under the pointer (in use — PT-3): its centre (the pane's frame), radius, presence. */
   readonly hover?:
@@ -200,17 +216,31 @@ export function paneValues(p: PaneInstance) {
       page === null
         ? [1, 1, 0, 0]
         : [page.width, page.height, levelsOf(page.width, page.height) - 1, 1],
-    screen2: [
-      page?.notice === undefined ? 0 : 1,
-      p.brightness,
-      glowLevel(page?.width ?? 1),
-      p.loading,
-    ],
+    screen2: [0, p.brightness, glowLevel(page?.width ?? 1), p.loading],
     ink: inked ? [1, split.h / split.height, split.at / split.height, 0] : [0, 0, 0, 0],
     hover: h ? [h.u, h.v, h.r, h.presence] : [0, 0, 1, 0],
     light: [G.light[0], G.light[1], G.light[2], G.shadowAlpha],
     slope: [G.slope[0], G.slope[1], G.bottom, 0],
     bounds: [G.bounds.x0, G.bounds.y0, G.bounds.x1, G.bounds.y1],
+    ...noticeValues(p),
+  };
+}
+
+/** Where a notice lies in the pane's frame (the page's CSS px → its place on the face), and its texture's shape. */
+function noticeValues(p: PaneInstance): { notice: number[]; notice2: number[] } {
+  const n = p.notice;
+  if (n === undefined) return { notice: [0, 0, 1, 1], notice2: [1, 1, 0, 0] };
+  const [pu, pv, phx, phy] = p.geometry.shape.page;
+  const [W, H] = n.viewport;
+  const [cx, cy, hx, hy] = n.block;
+  return {
+    notice: [
+      pu + (cx / W - 0.5) * 2 * phx,
+      pv + (cy / H - 0.5) * 2 * phy,
+      (hx / W) * 2 * phx,
+      (hy / H) * 2 * phy,
+    ],
+    notice2: [n.width, n.height, levelsOf(n.width, n.height) - 1, 1],
   };
 }
 

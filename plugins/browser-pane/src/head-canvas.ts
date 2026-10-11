@@ -7,7 +7,8 @@
 // It is ENGRAVED, as a laser engraves acrylic: back ‹ and forward › (a hairline where there is nowhere to go), reload ↻
 // (✕ while loading), the viewport at the right — the dev browser's size readout, which is also what a resize reads — and
 // the ADDRESS FIELD: a capsule frosted whole, the address cut back out of it to clear glass, so the letters are the mat
-// seen through the pane. One thing is PRINTED, in colour, on the capsule: the page's favicon — the sample's own, or a live
+// seen through the pane (PT-5b: and, where the page shown is a photograph of it, the REST MARK — two short bars cut at
+// the capsule's leading end). One thing is PRINTED, in colour, on the capsule: the page's favicon — the sample's own, or a live
 // page's (PT-4: its bytes from the host's face, decoded here once a key); a page with none carries the GENERIC mark, a
 // small globe ENGRAVED in the favicon's place. A narrow pane (a phone's) carries the capsule alone.
 //
@@ -157,7 +158,22 @@ export function drawHead(
 
   // the address, cut back out of the capsule to clear glass: [lock] [favicon's place] address, centred clear of the reload
   const reserve = L.reload ? L.glyph * 1.25 : 0;
-  const left = cx - chx + 1.7 * mm;
+  // PT-5b — AT REST (the page shown is a photograph of it): two short bars cut at the capsule's leading end — on every
+  // pane, a phone's too (its head carries the capsule alone); never while the capsule says something else
+  const rest = st.rest === true && st.saying === undefined;
+  if (rest) {
+    const rx = cx - chx + 2.0 * mm;
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.lineWidth = 0.44 * mm;
+    ctx.beginPath();
+    ctx.moveTo(rx, cy - 0.82 * mm);
+    ctx.lineTo(rx, cy + 0.82 * mm);
+    ctx.moveTo(rx + 1.0 * mm, cy - 0.82 * mm);
+    ctx.lineTo(rx + 1.0 * mm, cy + 0.82 * mm);
+    ctx.stroke();
+    ctx.globalCompositeOperation = "source-over";
+  }
+  const left = cx - chx + 1.7 * mm + (rest ? 2.3 * mm : 0);
   const right = cx + chx - 1.7 * mm - reserve;
   const size = 2.5 * mm;
   // PT-5a: for a moment the capsule SAYS something instead (a download refused) — alone: no lock, no favicon
@@ -273,7 +289,7 @@ export function headRaster(
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (ctx === null) return undefined;
   let sample: OffscreenCanvas | null | undefined;
-  /** The notices' own canvas (a page's size — made the first time a page fails, never the heads' small one resized). */
+  /** The notices' own canvas (a notice's block — made the first time a page fails, never the heads' small one resized). */
   let notices:
     | { readonly canvas: OffscreenCanvas; readonly ctx: OffscreenCanvasRenderingContext2D }
     | null
@@ -298,8 +314,17 @@ export function headRaster(
         notices = cx === null ? null : { canvas: c, ctx: cx };
       }
       if (notices === null) return undefined;
-      const { width, height } = drawNotice(notices.canvas, notices.ctx as NoticeContext, spec);
-      return noticeBytes(notices.ctx as NoticeContext, width, height);
+      const { width, height, block } = drawNotice(
+        notices.canvas,
+        notices.ctx as NoticeContext,
+        spec,
+      );
+      return {
+        bytes: noticeBytes(notices.ctx as NoticeContext, width, height),
+        width,
+        height,
+        block,
+      };
     },
   };
 }

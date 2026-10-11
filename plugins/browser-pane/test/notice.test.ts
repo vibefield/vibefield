@@ -2,7 +2,8 @@
 // `LIVE_BROWSER_FAILURES` — every one in a person's words, never the host's detail, never an engine's error code), where
 // its lines and its "Try again" capsule lie on a phone's page, a laptop's and the smallest a pane is cut to (the hit test
 // reads the capsule back from the same layout the raster draws it by), the texels it is drawn at, and its drawing — the
-// words' LIGHT over black, the capsule only where there is something to try.
+// words' LIGHT over black, the capsule only where there is something to try. PT-5b (ruling 2) — the raster is the words'
+// BLOCK alone (`noticeBlock`), never the page's whole area: what lies under it is the host's (the film, or a still).
 import { LIVE_BROWSER_FAILURES, liveBrowserFailureReason } from "@vibefield/plugin-sdk/desk";
 import { describe, expect, it } from "vitest";
 import {
@@ -14,10 +15,11 @@ import {
   NOTICE_WORDS,
   type NoticeContext,
   type NoticeSpec,
+  noticeBlock,
   noticeBytes,
   noticeKey,
   noticeLayout,
-  noticeTexels,
+  noticeScale,
   PAGE_TEXELS_MAX,
   PANE_SIZE,
   pageRefusal,
@@ -103,17 +105,54 @@ describe("PT-5a — where the notice lies, and what a press on it is", () => {
     }
   });
 
-  it("is drawn at two texels a CSS px — words read in hand — under the still's cap", () => {
-    expect(noticeTexels(PHONE)).toEqual([804, 1748]);
-    expect(noticeTexels(LAPTOP)).toEqual([2048, 1280]);
-    expect(Math.max(...noticeTexels([2560, 1440]))).toBe(PAGE_TEXELS_MAX);
-    expect(noticeTexels([0, 0])).toEqual([1, 1]);
+  it("is drawn at two texels a CSS px — words read in hand — fewer on a page so large that two would pass the still's cap", () => {
+    expect(noticeScale(PHONE)).toBe(2);
+    expect(noticeScale(LAPTOP)).toBe(PAGE_TEXELS_MAX / 1280);
+    expect(noticeScale([2560, 1440])).toBe(PAGE_TEXELS_MAX / 2560);
+    expect(noticeScale([0, 0])).toBe(2);
+  });
+
+  it("PT-5b — its BLOCK is the words' own: as wide as its widest line or its capsule and a margin, from above the headline to under the capsule, held on the page — never the page's whole area", () => {
+    for (const viewport of [PHONE, LAPTOP, MIN_VIEWPORT]) {
+      const L = noticeLayout(viewport);
+      const [W, H] = viewport;
+      const widest = Math.min(L.width, 320);
+      const [cx, cy, hx, hy] = noticeBlock(viewport, widest, true);
+      const tag = viewport.join("×");
+      // centred on the lines, wide enough for the widest of them and for the capsule
+      expect(cx, tag).toBe(L.cx);
+      expect(2 * hx, tag).toBeGreaterThanOrEqual(Math.min(widest, W));
+      expect(hx, tag).toBeGreaterThanOrEqual(Math.min(L.retry[2], W / 2));
+      // on the page
+      expect(cx - hx, tag).toBeGreaterThanOrEqual(0);
+      expect(cx + hx, tag).toBeLessThanOrEqual(W);
+      expect(cy - hy, tag).toBeGreaterThanOrEqual(0);
+      expect(cy + hy, tag).toBeLessThanOrEqual(H);
+      // it holds the headline (its ascenders), both lines of detail and the capsule whole
+      expect(cy - hy, tag).toBeLessThanOrEqual(L.headline - L.unit);
+      expect(cy + hy, tag).toBeGreaterThanOrEqual(L.retry[1] + L.retry[3]);
+      expect(retryAt(viewport, L.retry[0], L.retry[1]), tag).toBe(true);
+      // with nothing to try it ends under the detail's second line — shorter
+      const [, , , bare] = noticeBlock(viewport, widest, false);
+      expect(bare, tag).toBeLessThan(hy);
+      expect(cy - hy + 2 * bare, tag).toBeGreaterThanOrEqual(L.detail + L.line);
+    }
+    // a laptop's notice, its widest line 420 px: the block is a small part of the page — and so are its bytes
+    const [, , hx, hy] = noticeBlock(LAPTOP, 420, true);
+    const scale = noticeScale(LAPTOP);
+    const bytes = Math.round(2 * hx * scale) * Math.round(2 * hy * scale) * 4;
+    expect(2 * hx).toBeLessThan(LAPTOP[0] / 2);
+    expect(bytes).toBeLessThan(1_000_000);
+    // (the page's whole area at the same scale, as PT-5a laid it: 10 MB)
+    expect(2048 * 1280 * 4).toBe(10_485_760);
+    // a line as wide as the page: the block is the page's width, no wider
+    expect(noticeBlock(PHONE, 5_000, true)[2]).toBe(PHONE[0] / 2);
   });
 
   it("a notice's key moves with everything it is drawn from — its words, whether there is something to try, its size, its ink", () => {
     const spec: NoticeSpec = {
       viewport: LAPTOP,
-      texels: noticeTexels(LAPTOP),
+      scale: noticeScale(LAPTOP),
       words: NOTICE_WORDS.stopped,
       retry: RETRY_LABEL,
       ink: "rgb(230 232 234)",
@@ -122,7 +161,8 @@ describe("PT-5a — where the notice lies, and what a press on it is", () => {
       spec,
       { ...spec, words: NOTICE_WORDS.offline },
       { ...spec, retry: null },
-      { ...spec, viewport: PHONE, texels: noticeTexels(PHONE) },
+      { ...spec, viewport: PHONE, scale: noticeScale(PHONE) },
+      { ...spec, scale: 1 },
       { ...spec, ink: "rgb(255 255 255)" },
     ].map(noticeKey);
     expect(new Set(keys).size).toBe(keys.length);
@@ -169,30 +209,46 @@ describe("PT-5a — the notice, drawn", () => {
   };
   const spec = (over: Partial<NoticeSpec> = {}): NoticeSpec => ({
     viewport: PHONE,
-    texels: noticeTexels(PHONE),
+    scale: noticeScale(PHONE),
     words: NOTICE_WORDS["connection-refused"],
     retry: RETRY_LABEL,
     ink: "rgb(230 232 234)",
     ...over,
   });
 
-  it("the words' LIGHT over black: the canvas at the notice's texels, black first, then the headline, the detail dimmer, the capsule and its word — each where the layout says, in the page's CSS px", () => {
+  it("the words' LIGHT over black: the canvas at the BLOCK's texels (the words' own — as wide as the widest line it measured), black first, then the headline, the detail dimmer, the capsule and its word — each where the layout says, in the page's CSS px", () => {
     const r = recorder();
     const canvas = { width: 0, height: 0 };
     const n = spec();
-    expect(drawNotice(canvas, r.ctx, n)).toEqual({ width: 804, height: 1748 });
-    expect(canvas).toEqual({ width: 804, height: 1748 });
     const L = noticeLayout(PHONE);
+    // the recorder's text is half an em a letter: the detail (44 letters at the small size) is the widest line
+    const widest = 44 * L.small * 0.5;
+    const block = noticeBlock(PHONE, widest, true);
+    const [width, height] = [Math.round(2 * block[2] * 2), Math.round(2 * block[3] * 2)];
+    expect(drawNotice(canvas, r.ctx, n)).toEqual({ width, height, block });
+    expect(canvas).toEqual({ width, height });
+    // far less than the page's whole area (PT-5a laid 804 × 1748)
+    expect(width * height).toBeLessThan((804 * 1748) / 4);
     // black over the whole raster, before anything is said
     const black = r.calls.find((c) => c.name === "fillRect");
-    expect(black?.args).toEqual([0, 0, 804, 1748]);
+    expect(black?.args).toEqual([0, 0, width, height]);
     expect(black?.fill).toBe("black");
     expect(r.calls.findIndex((c) => c.name === "fillRect")).toBeLessThan(
       r.calls.findIndex((c) => c.name === "fillText"),
     );
-    // the page's CSS px: two texels each
+    // the page's CSS px, the block's corner at the canvas's: two texels each (to the rounding of the canvas's size)
     const scale = r.calls.filter((c) => c.name === "setTransform").at(-1);
-    expect(scale?.args).toEqual([2, 0, 0, 2, 0, 0]);
+    const [sx, sy] = [width / (2 * block[2]), height / (2 * block[3])];
+    expect(scale?.args).toEqual([
+      sx,
+      0,
+      0,
+      sy,
+      -(block[0] - block[2]) * sx,
+      -(block[1] - block[3]) * sy,
+    ]);
+    expect(sx).toBeCloseTo(2, 1);
+    expect(sy).toBeCloseTo(2, 1);
     const texts = r.calls.filter((c) => c.name === "fillText");
     expect(texts.map((c) => c.args[0])).toEqual([
       "This site refused to connect",
@@ -226,7 +282,7 @@ describe("PT-5a — the notice, drawn", () => {
         retry: null,
         words: NOTICE_WORDS.certificate,
         viewport: MIN_VIEWPORT,
-        texels: noticeTexels(MIN_VIEWPORT),
+        scale: noticeScale(MIN_VIEWPORT),
       }),
     );
     expect(r.calls.filter((c) => c.name === "roundRect" || c.name === "stroke")).toEqual([]);

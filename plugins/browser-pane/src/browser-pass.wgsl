@@ -1,7 +1,7 @@
 // The pane pass's ENTRY (the prototype's shaders/browser/browser-pass.wgsl, on the kit) — one quad per pane over the world
 // rect `resolvePane` measured (the pane as its eye sees it, its shadow, its glow), one `shade_pane` per covered fragment,
-// premultiplied, through the slot's presence and its portal chain. The page is the pane's own texture and the head's
-// engraving its own raster (group 1), so a pane is one draw. `fs_light` is the second program over the same quad, drawn
+// premultiplied, through the slot's presence and its portal chain. The page is the pane's own texture, the head's
+// engraving its own raster and a failed page's words their own (group 1), so a pane is one draw. `fs_light` is the second program over the same quad, drawn
 // first with a lighting blend (what is there × (1 + light)): the arris's caustic by day, the page's light on the mat and
 // the edges' halo by night. Group 0 is the slot's: its ONE view block (`u` — the kit's `MatPass.view`, never written),
 // the pass's knobs, its records' persistent store and draw list, the gobo, the noise and the samplers.
@@ -22,6 +22,7 @@ override LIT_ELSEWHERE: bool = false;
 @group(0) @binding(9) var<storage, read> order: array<u32>;   // the draw list: paint index → the record's slot
 @group(1) @binding(0) var page_tex: texture_2d<f32>;      // the pane's page (rgba8unorm-srgb, its mips)
 @group(1) @binding(1) var ink_tex: texture_2d<f32>;       // the head's raster (rgba8, premultiplied)
+@group(1) @binding(2) var notice_tex: texture_2d<f32>;    // a failed page's words (rgba8unorm-srgb, their block alone, its mips)
 
 struct VSOut {
   @builtin(position) clip: vec4f,
@@ -55,7 +56,7 @@ fn fs(in: VSOut) -> @location(0) vec4f {
   let dpr = mat_dpr(u);
   let px = 1.0 / (mat_zoom(u) * dpr);
   let s = in.clip.xy * px + u.cam.xy;   // device px → world
-  let c = shade_pane(P, u, k, s, px, in.clip.xy, gobo_tex, gobo_samp, noise_tex, noise_samp, page_tex, page_samp, ink_tex, ink_samp, LIT_ELSEWHERE);
+  let c = shade_pane(P, u, k, s, px, in.clip.xy, gobo_tex, gobo_samp, noise_tex, noise_samp, page_tex, page_samp, ink_tex, ink_samp, notice_tex, LIT_ELSEWHERE);
   if (c.a < 0.002 && max(c.r, max(c.g, c.b)) < 0.002) { discard; }
   return c * (u.view.w * portal_cover(in.clip.xy / dpr, u.portals, u.clips, dpr));
 }

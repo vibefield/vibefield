@@ -6,6 +6,11 @@
 //
 // The film is the pane's own dark film in both schemes (theme.ts `panelOff`), so the words are one light ink over it
 // (`notice`), added as light: by day and by night they read as a page's light does.
+//
+// PT-5b — the notice's raster is the words' BLOCK alone (`noticeBlock`: as wide as its widest line, as tall as its lines
+// and its capsule — never the page's whole area), its own texture in the pane's pass: what lies under it is what the
+// HOST shows of the page — the film, or the page's last still dimmed under the words (the still is of the address that
+// failed) — which the pane never touches (PA-22).
 
 import { type LiveBrowserFailure, liveBrowserFailure } from "@vibefield/plugin-sdk/desk";
 import { PAGE_TEXELS_MAX } from "./sample-page";
@@ -130,16 +135,47 @@ export function retryAt(viewport: readonly [number, number], x: number, y: numbe
   return Math.abs(x - cx) <= hx + slop && Math.abs(y - cy) <= hy + slop;
 }
 
-/** The texels a notice is drawn at: two a CSS px (words, read in hand at the reading size), under the still's cap. */
-export function noticeTexels(viewport: readonly [number, number]): readonly [number, number] {
-  const s = Math.min(2, PAGE_TEXELS_MAX / Math.max(viewport[0], viewport[1], 1));
-  return [Math.max(1, Math.round(viewport[0] * s)), Math.max(1, Math.round(viewport[1] * s))];
+/** The texels a notice is drawn at, a CSS px: two (words, read in hand at the reading size) — fewer on a page so large
+ * that two would pass the still's cap along its long side. */
+export const noticeScale = (viewport: readonly [number, number]): number =>
+  Math.min(2, PAGE_TEXELS_MAX / Math.max(viewport[0], viewport[1], 1));
+
+/**
+ * PT-5b — the notice's BLOCK: the rect of the page (CSS px — its centre and half extents) its words and its capsule lie
+ * in, and all its raster covers. As wide as its widest line (`widest` — the raster measured it) or its capsule, a margin
+ * round; from above the headline to under the capsule (the last line of detail where there is nothing to try); held on
+ * the page.
+ */
+export function noticeBlock(
+  viewport: readonly [number, number],
+  widest: number,
+  retry: boolean,
+): readonly [number, number, number, number] {
+  const L = noticeLayout(viewport);
+  const pad = L.small * 0.6;
+  const hx = Math.min(viewport[0] / 2, Math.max(widest / 2, retry ? L.retry[2] : 0) + pad);
+  const top = Math.max(0, L.headline - L.unit * 1.1 - pad * 0.5);
+  const foot = retry
+    ? L.retry[1] + L.retry[3] + pad
+    : L.detail + L.line + L.small * 0.5 + pad * 0.5;
+  const bottom = Math.min(viewport[1], Math.max(foot, top + 1));
+  return [L.cx, (top + bottom) / 2, hx, (bottom - top) / 2];
+}
+
+/** A notice as its raster drew it: opaque sRGB rgba8 rows from the top (the words' light over black), and the block of
+ * the page (CSS px: centre, half extents) those texels cover. */
+export interface NoticeBitmap {
+  readonly bytes: Uint8Array<ArrayBuffer>;
+  readonly width: number;
+  readonly height: number;
+  readonly block: readonly [number, number, number, number];
 }
 
 /** What a notice's raster is drawn from — a new key is a new raster. */
 export interface NoticeSpec {
   readonly viewport: readonly [number, number];
-  readonly texels: readonly [number, number];
+  /** Texels a CSS px (`noticeScale`). */
+  readonly scale: number;
   readonly words: NoticeWords;
   /** The capsule's label, or null: nothing to try again. */
   readonly retry: string | null;
@@ -151,7 +187,7 @@ export const noticeKey = (n: NoticeSpec): string =>
   [
     "notice",
     n.viewport.join("x"),
-    n.texels.join("x"),
+    `@${n.scale}`,
     n.words.headline,
     n.words.detail,
     n.retry ?? "",

@@ -19,6 +19,14 @@
 //  - IN USE (PT-3): the face is SENT what the hand gives it (`send` — the local's `held`, the hand's lease) and the page's
 //    CURSOR is its word (`LiveInfo.cursor`): a cursor that moves asks a frame (`redraw` — the desk's cursor is read in a frame),
 //    never a remake — the record does not read it.
+//  - A STILL (PT-5b): the host may lay the page's last still into the face's texture (before its first frame, while its page
+//    is at rest, under a failure's words) and says so (`LiveInfo.extra.still` — head.ts `pageStill`): that it IS one is a
+//    word the record reads (the photograph's dim, the head's rest mark), so its coming and going remakes the pane — its
+//    age never does.
+//  - MEMORY (PT-5b ruling 4; design-019 §7): each face's texture is CHARGED to the desk's raster budget under the kind's
+//    name (`live <key>`, its `bytes` — charged again when the texture or its size moves, touched at each frame that lands),
+//    KEPT while its pane is seen or held (`keeps`), and at the budget's eviction the host is asked to let it go
+//    (`evict` — `BROWSER_NAVIGATION.evict`): the pane shows its film, or its still when it is next seen.
 
 import {
   createSight,
@@ -33,7 +41,8 @@ import {
   type LiveState,
   type Sight,
 } from "@vibefield/plugin-sdk/desk";
-import { pageFavicon, pageRefusal, REFUSAL_SAY_MS } from "./head";
+import { pageFavicon, pageRefusal, pageStill, REFUSAL_SAY_MS } from "./head";
+import { BROWSER_PANE_KIND } from "./ids";
 import {
   BROWSER,
   type BrowserLaw,
@@ -61,6 +70,10 @@ export interface PaneFaceStats {
   /** Demands sent (change-only), and new viewports held back while a size moved. */
   readonly demands: number;
   readonly held: number;
+  /** PT-5b — charges made to the desk's budget for a face's texture (a new texture, a new size), and textures the budget
+   * evicted. */
+  readonly charges: number;
+  readonly evictions: number;
 }
 
 /** One pane's face as the local keeps it. */
@@ -80,6 +93,18 @@ interface FaceEntry {
   refusal: number;
   sayUntil: number;
   said: LiveBrowserRefusal["what"] | undefined;
+  /** PT-5b — the bytes charged to the desk's budget for its texture (0: none charged), and the texture they were for. */
+  charged: number;
+  chargedFor: unknown;
+}
+
+/** The budget's key for a face's texture, and for a pane's notice (the kind's two rows a pane). */
+export const liveBudgetKey = (key: string): string => `live ${key}`;
+export const noticeBudgetKey = (key: string): string => `notice ${key}`;
+
+/** What the faces ask of the kind's local (its second service is the local's): a texture the budget evicted is let go. */
+export interface PaneFaceDoors {
+  evict?(key: string): void;
 }
 
 export interface PaneFaces {
@@ -107,6 +132,9 @@ export interface PaneFaces {
   send(e: Entity, input: LiveInput): boolean;
   /** PT-5a — what `e`'s head says for a moment: something its page asked for and was refused, while the moment lasts. */
   saying(e: Entity): LiveBrowserRefusal["what"] | undefined;
+  /** PT-5b — the pane a durable key's face is open for, and whether it is seen or held now (what `keeps` answers by). */
+  entityOf(key: string): Entity | undefined;
+  shown(e: Entity): boolean;
   forget(e: Entity): void;
   dispose(): void;
   stats(): PaneFaceStats;
@@ -124,13 +152,22 @@ const wordsOf = (face: LiveFace): string => {
     s.is === "failed" ? s.reason : null,
     said,
     favicon === undefined ? null : (favicon?.key ?? ""),
+    // PT-5b: THAT the texture is a still (never its age — it would remake the pane at every read)
+    pageStill(info) !== undefined,
   ]);
 };
 
-export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BROWSER): PaneFaces {
+export function createPaneFaces(
+  host: KindHost | undefined,
+  law: BrowserLaw = BROWSER,
+  doors: PaneFaceDoors = {},
+): PaneFaces {
   const live = host?.use?.(LIVE);
+  const budget = host?.budget;
   const sight = createSight(host?.frames);
   const faces = new Map<Entity, FaceEntry>();
+  /** The pane each durable key's face is open for (the budget speaks in keys). */
+  const byKey = new Map<string, Entity>();
   /** Panes whose face said something arrived since the last tick (arrivals coalesce: one take each). */
   const woken = new Set<Entity>();
   /** Panes whose shape moved since their last demand: the law is asked again with the sight it has. */
@@ -147,11 +184,46 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
     demands: 0,
     held: 0,
     sent: 0,
+    charges: 0,
+    evictions: 0,
+  };
+
+  /**
+   * PT-5b — THE FACE'S TEXTURE CHARGED to the desk's budget: its bytes under the kind's name, charged again when the
+   * texture or its size moves, touched when a frame lands in it, released when the face has none. Evicted, the host is
+   * asked to let it go.
+   */
+  const account = (f: FaceEntry): void => {
+    if (budget === undefined) return;
+    const name = liveBudgetKey(f.key);
+    const t = f.face.texture();
+    if (t === undefined) {
+      if (f.charged !== 0) budget.release(BROWSER_PANE_KIND, name);
+      f.charged = 0;
+      f.chargedFor = undefined;
+      return;
+    }
+    if (f.chargedFor === t && f.charged === t.bytes) {
+      budget.touch(BROWSER_PANE_KIND, name);
+      return;
+    }
+    f.charged = t.bytes;
+    f.chargedFor = t;
+    counts.charges += 1;
+    budget.charge(BROWSER_PANE_KIND, name, t.bytes, () => {
+      // the ledger has dropped the row: the host lets the texture go (its face says so, and the pane is remade)
+      f.charged = 0;
+      f.chargedFor = undefined;
+      counts.evictions += 1;
+      doors.evict?.(f.key);
+    });
   };
 
   const close = (e: Entity): void => {
     const f = faces.get(e);
     if (f === undefined) return;
+    if (f.charged !== 0) budget?.release(BROWSER_PANE_KIND, liveBudgetKey(f.key));
+    if (byKey.get(f.key) === e) byKey.delete(f.key);
     f.face.close();
     faces.delete(e);
     woken.delete(e);
@@ -179,6 +251,7 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
     f.texture = t;
     f.epoch = t?.epoch ?? -1;
     f.words = words;
+    account(f);
     if (!remade) return "redraw";
     host?.remake?.(e);
     counts.remakes += 1;
@@ -217,8 +290,11 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
         refusal: 0,
         sayUntil: Number.NEGATIVE_INFINITY,
         said: undefined,
+        charged: 0,
+        chargedFor: undefined,
       };
       faces.set(e, f);
+      byKey.set(key, e);
       counts.opened += 1;
       // what the host already holds lands in the frame that opens it: the record being made reads it
       if (face.take()) {
@@ -227,6 +303,7 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
         f.texture = t;
         f.epoch = t?.epoch ?? -1;
         f.words = wordsOf(face);
+        account(f);
       }
       // a refusal the page's words already carry is an old one's: never said at the open
       f.refusal = pageRefusal(face.info())?.serial ?? 0;
@@ -311,6 +388,12 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
       const f = faces.get(e);
       return f !== undefined && clock < f.sayUntil ? f.said : undefined;
     },
+    entityOf: (key) => byKey.get(key),
+    // seen or held: the sight's last fact, or — before its first step — the law's last ask
+    shown(e) {
+      const s = sight.of(e);
+      return s?.seen === true || s?.held === true || faces.get(e)?.demand?.mode === "live";
+    },
     words(e) {
       const f = faces.get(e);
       return f === undefined
@@ -335,6 +418,7 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
       woken.clear();
       relaw.clear();
       speaking.clear();
+      byKey.clear();
     },
     stats: () => ({ ...counts }),
   };

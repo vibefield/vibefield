@@ -26,6 +26,12 @@
 // night the glow's coarse level too) into the frame's encoder — once per revision, whatever the slots — and the face's SIGHT
 // told what this slot drew of the page (`Sight.saw`: the page's world size → device px through the slot's view). Before its
 // first frame the page is the film.
+//
+// PT-5b — A FAILED PAGE'S NOTICE is its own texture (the words' block alone — a third binding of the surface's group, made
+// the first time a pane's page fails and let go when it recovers): the page's slot keeps what the HOST shows (the film, or
+// the page's last still, which the pane never touches), and the shader adds the words' light over it. The kind's local
+// is told its bytes (`onNotice`) — it charges them to the desk's budget, and `unnotice` lets the texture go at an eviction
+// (it is laid again from its record when the pane is next drawn).
 
 import {
   bindGroup,
@@ -51,6 +57,7 @@ import {
   glowLevel,
   type HeadBitmap,
   MAX_PANES,
+  type NoticePlan,
   Pane,
   type PaneInstance,
   type PaneLookValues,
@@ -84,6 +91,9 @@ export class PaneSurface {
   readonly page: PageTexture;
   /** PT-2 — the live face's texture shown as the page while it has one (the host's: never destroyed here). */
   live: LiveTexture | undefined;
+  /** PT-5b — a failed page's notice (none while its page has not failed), and what it says. */
+  notice: PageTexture | undefined;
+  noticeKey: string | null = null;
   ink: GPUTexture;
   inkWidth = 1;
   inkHeight = 1;
@@ -96,6 +106,7 @@ export class PaneSurface {
   private boundPage: GPUTexture | LiveTexture | null = null;
   private boundEpoch = -1;
   private boundInk: GPUTexture | null = null;
+  private boundNotice: GPUTexture | null = null;
   private readonly device: GPUDevice;
   private readonly layout: GPUBindGroupLayout;
 
@@ -137,16 +148,35 @@ export class PaneSurface {
     );
   }
 
-  /** The pane's group 1: its page (the live face's texture while it has one) and its head. */
+  /** PT-5b — the notice's texture laid (made the first time): raw sRGB rgba8 rows, the words' block. */
+  setNotice(n: NoticePlan): void {
+    this.notice ??= new PageTexture(this.device);
+    this.notice.presentBytes(n.bytes, n.width, n.height);
+    this.noticeKey = n.key;
+  }
+
+  /** The notice let go (the page recovered; the budget's eviction): true when there was one. */
+  dropNotice(): boolean {
+    const had = this.notice;
+    this.notice = undefined;
+    this.noticeKey = null;
+    had?.dispose();
+    return had !== undefined;
+  }
+
+  /** The pane's group 1: its page (the live face's texture while it has one), its head and its notice (none: the page's
+   * own texture stands in its slot — the shader reads it only where a record says there is a notice). */
   get group(): GPUBindGroup {
     const live = this.live;
     const page = live ?? this.page.texture;
     const epoch = live?.epoch ?? -1;
+    const notice = (this.notice ?? this.page).texture;
     if (
       !this.group_ ||
       this.boundPage !== page ||
       this.boundEpoch !== epoch ||
-      this.boundInk !== this.ink
+      this.boundInk !== this.ink ||
+      this.boundNotice !== notice
     ) {
       this.group_ = this.device.createBindGroup({
         label: "browser-pane/surface",
@@ -157,21 +187,25 @@ export class PaneSurface {
             resource: live === undefined ? this.page.texture.createView() : live.view(),
           },
           { binding: 1, resource: this.ink.createView() },
+          { binding: 2, resource: notice.createView() },
         ],
       });
       this.boundPage = page;
       this.boundEpoch = epoch;
       this.boundInk = this.ink;
+      this.boundNotice = notice;
     }
     return this.group_;
   }
 
   get bytes(): number {
-    return this.page.bytes + this.inkWidth * this.inkHeight * 4;
+    return this.page.bytes + this.inkWidth * this.inkHeight * 4 + (this.notice?.bytes ?? 0);
   }
 
   dispose(): void {
     this.page.dispose();
+    this.notice?.dispose();
+    this.notice = undefined;
     this.ink.destroy();
   }
 }
@@ -193,6 +227,8 @@ interface PaneShared {
   /** Pages deferred (a page whose content moved again too soon) — the local makes the desk come back for them. */
   readonly pending: Set<string>;
   onPending: (() => void) | undefined;
+  /** PT-5b — who is told a pane's notice texture was made (its bytes on the device) or let go (0): the kind's local. */
+  onNotice: ((entity: number, bytes: number) => void) | undefined;
 }
 
 /** The pass's counters (a test's and a rig's witness). */
@@ -203,6 +239,9 @@ export interface PaneStats {
   readonly heads: number;
   readonly deferred: number;
   readonly mips: number;
+  /** PT-5b — notices laid (a failed page's words, their own texture), and the bytes the notices standing hold. */
+  readonly notices: number;
+  readonly noticeBytes: number;
   /** Surfaces held now. */
   readonly surfaces: number;
 }
@@ -224,7 +263,7 @@ export class PanePass implements KindPass<PaneInstance> {
   private target: NonNullable<SlotContext["target"]> = "frame";
   /** This frame's surfaces in paint order. */
   private drawn: PaneSurface[] = [];
-  private counts = { pages: 0, texels: 0, heads: 0, deferred: 0, mips: 0 };
+  private counts = { pages: 0, texels: 0, heads: 0, deferred: 0, mips: 0, notices: 0 };
   /** The pane's numbers (law.ts `BROWSER`) — a host tunes its own copy. */
   law: BrowserLaw = BROWSER;
   private readonly device: GPUDevice;
@@ -281,6 +320,7 @@ export class PanePass implements KindPass<PaneInstance> {
       [
         { binding: 0, stages: ["fragment"], texture: "float" },
         { binding: 1, stages: ["fragment"], texture: "float" },
+        { binding: 2, stages: ["fragment"], texture: "float" },
       ],
       "browser-pane/surface",
     );
@@ -337,6 +377,7 @@ export class PanePass implements KindPass<PaneInstance> {
       surfaces: new Map(),
       pending: new Set(),
       onPending: undefined,
+      onNotice: undefined,
     };
     return new PanePass(device, shared, mat, true);
   }
@@ -412,31 +453,30 @@ export class PanePass implements KindPass<PaneInstance> {
       2 * S.page[2] * s.view.zoom * s.view.dpr,
       2 * S.page[3] * s.view.zoom * s.view.dpr,
     ];
+    this.say(key, surface, r, encoder, px);
     if (live !== undefined) {
       // the sight is told every page this slot PREPARED — within its reach, it may lie past the box: the sight believes
       // only one that meets it (ICE I50)
       live.sight.saw(live.e, s, pageRect(r.geometry));
-      // PT-5a — a FAILED page's notice is laid as a still is (below): the face's texture is not shown (its sight is told
-      // all the same — a page tried again must be asked for)
-      if (r.page?.notice === undefined) {
-        const t = live.face.texture();
-        surface.live = t;
-        this.lay(surface, r);
-        if (t === undefined) return;
-        const depth = liveDepth(t, px);
-        t.prepare(
-          encoder,
-          s.light.night > 0 ? Math.max(depth, Math.ceil(glowLevel(t.width))) : depth,
-        );
-        return;
-      }
+      // what the HOST shows of the page: its frame, its last still (PT-5b — a failed page's too, under its words), or
+      // nothing (the film — a failed page's frames are never shown: the host hides them)
+      const t = live.face.texture();
+      surface.live = t;
+      this.lay(surface, r);
+      if (t === undefined) return;
+      const depth = liveDepth(t, px);
+      t.prepare(
+        encoder,
+        s.light.night > 0 ? Math.max(depth, Math.ceil(glowLevel(t.width))) : depth,
+      );
+      return;
     }
     surface.live = undefined;
     const plan = r.page;
     if (plan !== null && plan.key !== surface.pageKey) {
       if (surface.pageKey === null || now - surface.madeAt >= PAGE_REMAKE_MS) {
         surface.page.presentBytes(
-          plan.notice ?? samplePage(plan.viewport, plan.scheme, [plan.width, plan.height]),
+          samplePage(plan.viewport, plan.scheme, [plan.width, plan.height]),
           plan.width,
           plan.height,
         );
@@ -467,6 +507,40 @@ export class PanePass implements KindPass<PaneInstance> {
     );
     const upTo = s.light.night > 0 ? Math.max(lod + 1, glowLevel(page.width)) : lod + 1;
     this.counts = { ...this.counts, mips: this.counts.mips + page.prepare(encoder, upTo) };
+  }
+
+  /**
+   * PT-5b — a failed page's NOTICE: its own texture, laid when what it says moved (the local is told its bytes), its mips
+   * made as deep as this slot reads its block; let go when the record carries none any more (the page recovered).
+   */
+  private say(
+    key: string,
+    surface: PaneSurface,
+    r: PaneInstance,
+    encoder: GPUCommandEncoder,
+    px: readonly [number, number],
+  ): void {
+    const n = r.notice;
+    const entity = key.startsWith("k") ? Number(key.slice(1)) : undefined;
+    if (n === undefined) {
+      if (surface.dropNotice() && entity !== undefined) this.shared.onNotice?.(entity, 0);
+      return;
+    }
+    if (surface.noticeKey !== n.key || surface.notice === undefined) {
+      surface.setNotice(n);
+      this.counts = { ...this.counts, notices: this.counts.notices + 1 };
+      if (entity !== undefined) this.shared.onNotice?.(entity, surface.notice?.bytes ?? 0);
+    }
+    const texture = surface.notice;
+    if (texture === undefined) return;
+    // the block's device px on this slot's screen: its share of the page's
+    const bw = (px[0] * 2 * n.block[2]) / n.viewport[0];
+    const bh = (px[1] * 2 * n.block[3]) / n.viewport[1];
+    const lod = Math.max(
+      Math.log2(Math.max(texture.width / Math.max(bw, 1e-3), texture.height / Math.max(bh, 1e-3))),
+      0,
+    );
+    this.counts = { ...this.counts, mips: this.counts.mips + texture.prepare(encoder, lod + 1) };
   }
 
   /** The head's raster laid when what it says moved: the record's (the service drew it), or the committed one its key names. */
@@ -529,7 +603,9 @@ export class PanePass implements KindPass<PaneInstance> {
 
   /** The surfaces' counters (a test's witness). */
   stats(): PaneStats {
-    return { ...this.counts, surfaces: this.shared.surfaces.size };
+    let noticeBytes = 0;
+    for (const surface of this.shared.surfaces.values()) noticeBytes += surface.notice?.bytes ?? 0;
+    return { ...this.counts, surfaces: this.shared.surfaces.size, noticeBytes };
   }
 
   /** Pages deferred and not yet made. */
@@ -540,6 +616,16 @@ export class PanePass implements KindPass<PaneInstance> {
   /** Who is told when a page is deferred (the kind's local: it brings the desk back to make it). */
   onPending(fn: (() => void) | undefined): void {
     this.shared.onPending = fn;
+  }
+
+  /** PT-5b — who is told a pane's notice texture was made (its bytes) or let go (0): the kind's local charges the budget. */
+  onNotice(fn: ((entity: number, bytes: number) => void) | undefined): void {
+    this.shared.onNotice = fn;
+  }
+
+  /** PT-5b — a pane's notice texture let go at the budget's word: laid again from its record when the pane is next drawn. */
+  unnotice(entity: number): boolean {
+    return this.shared.surfaces.get(`k${Math.abs(entity)}`)?.dropNotice() === true;
   }
 
   /** Pages made for a pane since its surface was made — what has LANDED on it (the kind's local's `landed`). */
@@ -583,6 +669,7 @@ export class PanePass implements KindPass<PaneInstance> {
       this.shared.surfaces.clear();
       this.shared.pending.clear();
       this.shared.onPending = undefined;
+      this.shared.onNotice = undefined;
     }
   }
 }

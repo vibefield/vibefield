@@ -265,6 +265,12 @@ fn bw_page_lod(P: Pane, u: MatUniforms) -> f32 {
   let ratio = max(P.screen.x / max(device.x, 1.0e-3), P.screen.y / max(device.y, 1.0e-3));
   return clamp(log2(max(ratio, 1.0e-6)), 0.0, P.screen.z);
 }
+// The level a notice's texture is read at: its texels over the device pixels its block spans on this slot's screen.
+fn bw_notice_lod(P: Pane, u: MatUniforms) -> f32 {
+  let device = 2.0 * P.notice.zw * mat_zoom(u) * mat_dpr(u);
+  let ratio = max(P.notice2.x / max(device.x, 1.0e-3), P.notice2.y / max(device.y, 1.0e-3));
+  return clamp(log2(max(ratio, 1.0e-6)), 0.0, P.notice2.z);
+}
 // The page's light at a point of the face (linear), at the level the frame is read at.
 fn bw_screen(P: Pane, q: vec2f, lod: f32, tex: texture_2d<f32>, samp: sampler) -> vec3f {
   if (P.screen.w <= 0.0) { return vec3f(0.0); }
@@ -324,7 +330,8 @@ fn bw_head(P: Pane, u: MatUniforms, k: PaneUniforms, q: vec2f, n: vec3f, V: vec3
 // ---- one pane at a desk point `s`: premultiplied colour. `px` is world units per DEVICE px at the desk; `frag` the framebuffer pixel.
 fn shade_pane(P: Pane, u: MatUniforms, k: PaneUniforms, s: vec2f, px: f32, frag: vec2f,
               gobo_tex: texture_2d<f32>, gobo_samp: sampler, noise_tex: texture_2d<f32>, noise_samp: sampler,
-              page_tex: texture_2d<f32>, page_samp: sampler, ink_tex: texture_2d<f32>, ink_samp: sampler, lit: bool) -> vec4f {
+              page_tex: texture_2d<f32>, page_samp: sampler, ink_tex: texture_2d<f32>, ink_samp: sampler,
+              notice_tex: texture_2d<f32>, lit: bool) -> vec4f {
   let night = clamp(u.night.x, 0.0, 1.0);
   let bn = textureSampleLevel(noise_tex, noise_samp, frag * u.noise.z + u.noise.xy, 0.0).rgb;
   let E = P.eye.xyz;
@@ -430,6 +437,14 @@ fn shade_pane(P: Pane, u: MatUniforms, k: PaneUniforms, s: vec2f, px: f32, frag:
       // THE PAGE: an opaque film under the glass — its panel lit through the chain (a black page in the sun shows the
       // dapple, faintly), its light its own; by day the byte, by night bright to the adapted eye
       var em = bw_screen(P, q, bw_page_lod(P, u), page_tex, page_samp);
+      // a NOTICE (PT-5a — a failed page's words; PT-5b — their own texture, the words' block alone): the words' light over
+      // what the page shows there — the film, or the page's last still dimmed under them
+      if (P.notice2.w > 0.0) {
+        let nuv = (q - P.notice.xy) / P.notice.zw * 0.5 + 0.5;
+        if (nuv.x >= 0.0 && nuv.x <= 1.0 && nuv.y >= 0.0 && nuv.y <= 1.0) {
+          em = em + textureSampleLevel(notice_tex, page_samp, nuv, bw_notice_lod(P, u)).rgb;
+        }
+      }
       // loading: a line of light along the page's head, as far as the load has come
       if (P.screen2.w >= 0.0) {
         let head = P.page.y - P.page.w;
@@ -439,8 +454,8 @@ fn shade_pane(P: Pane, u: MatUniforms, k: PaneUniforms, s: vec2f, px: f32, frag:
       }
       let panel = srgb_to_linear(k.panelOff.rgb) * (0.5 + 0.5 * gobo);
       let off = srgb_to_linear(bw_chain(u, clamp(k.panelOff.rgb * bw_lambert(n, L, k), vec3f(0.0), vec3f(1.0)), gobo, bn.y));
-      // a NOTICE (PT-5a — a failed page's words) is the FILM with the words' light on it, never a lit page
-      var page = select(off, mix(panel, u.eigengrau.xyz, night), P.screen.w > 0.0 && P.screen2.x <= 0.0);
+      // no page (the film — a failed page's words are light on it, never a lit page), or the page's panel
+      var page = select(off, mix(panel, u.eigengrau.xyz, night), P.screen.w > 0.0);
       page = page + vec3f(k.glass2.y * gobo * (1.0 - night));
       page = page + em * mix(k.glass2.w, k.glass2.z, night);
       page = page + F * k.glass2.x * mirror + glint;
