@@ -2091,6 +2091,20 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     pressed after the session ended says **"This session has ended — Resume it"**, and the create
     becomes Resume. *Before P3* nothing double-ran either: fieldd refused the second run, and the
     line said "Could not resume — it is already running" with no way to the pane that was.
+  - **An act never ends in silence** (2026-10-11; two `smoke:godview` reds where New agent started
+    a run, moved the window to Godview and said nothing for 60 s). Once the window has moved to show
+    what an act started, the deck mounts it in its turn (AR-4b: one mount at a time), and the act
+    waits **20 s** for that turn — the same bound it gave the deck to open. Past it the note says
+    so: **"Could not start — it started, but no pane took it in 20 s"**, **"Could not resume — it
+    resumed, but no pane took it in 20 s"**, **"Could not jump — no pane showed it in 20 s"** (and
+    a live row the Peek opened from History says the last). Nothing is stopped: the run goes on,
+    and a pane that lands after the note still lands. A start or resume whose pane could not be
+    made is said with the reason in the parentheses — "it started, but no pane took it (‹why›)",
+    an answer this build cannot read as **"fieldd's answer could not be read"** — and an act that
+    throws anywhere is still refused in its own verb's words, "Could not start — ‹why›"; each is
+    logged too (`renderer.history.unplaced`, `renderer.history.act_failed`). The deck's own turns
+    end too (§8, the deck, "A session with no pane": a read of a floor that never answers fails
+    its own door in 10 s), so an act's turn queued behind one still comes inside its 20 s.
   - **Its honest states are said inside the frame** (§9; the tolerant reader). An index that cannot
     answer keeps the room's own **"rosettad is not answering"** (or "Connecting to rosettad") with
     fieldd's own words under it — "The agent index is starting", "The agent index is failed: …",
@@ -2144,7 +2158,9 @@ its hot-point glow and rim left with the card (above); its last two rows are the
       offers, one row per persona (its name at the row's end, "its own" for the agent's own
       sign-in), the most recently used first — then **Model and effort**, one dimmed row: "Model
       and effort can't be set from here yet (PJ-6)". A row starts the agent in that folder and the
-      window moves to Godview to show its pane; the note says **"Started in ~/…"**.
+      window moves to Godview to show its pane; the note says **"Started in ~/…"**, or **"Could
+      not start — …"** in fieldd's words — or, for a run that started and no pane showed, why
+      (above, "An act never ends in silence").
     - **③'s head is the folder list** (PJ-D22): every folder of the project under its desktop's
       mark and name ("here", "asleep"), a linked worktree one step in, the shown one checked; past
       nine a filter heads it. A folder on another desktop is never opened here: ③ says **"Files

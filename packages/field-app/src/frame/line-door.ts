@@ -106,6 +106,36 @@ export function resetGodviewLineDoorForTest(): void {
   listeners.clear();
 }
 
+/** What the deck answered an act (`place`, `reveal`) within its bound, or
+ * `late`: nothing yet. Its mounts wait their turn (AR-4b), and a turn that
+ * never ends is said by the act that waited on it, never waited on without
+ * end (2026-10-11 — New agent's run started and the line said nothing). */
+export type DeckAnswer = NewTerminalOutcome | { readonly state: "late" };
+
+/** The deck's answer, or `late` once `timeoutMs` pass. A throw is the act's. */
+export async function deckAnswerWithin(
+  answer: Promise<NewTerminalOutcome>,
+  timeoutMs: number,
+): Promise<DeckAnswer> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      answer,
+      new Promise<DeckAnswer>((resolve) => {
+        timer = setTimeout(() => resolve({ state: "late" }), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+/** How a `late` is said (DESIGN.md §8 "History"): "no pane took it in 20 s"
+ * for a pane placed, "no pane showed it in 20 s" for one revealed. */
+export function lateReason(verb: "took" | "showed", timeoutMs: number): string {
+  return `no pane ${verb} it in ${Math.round(timeoutMs / 1_000)} s`;
+}
+
 /** Wait (bounded) for a deck that can place — History's Resume (and Jump to)
  * asks the frame for Godview, whose deck mounts on its first open and
  * publishes its door a moment later. Null when none came in `timeoutMs`. */

@@ -1,6 +1,6 @@
 import type { FrameView } from "@vibefield/contracts";
 import { type GodviewFindDoor, getGodviewFindDoor, whenGodviewFindDoor } from "./find-door";
-import { type LineViewDoor, whenGodviewCanPlace } from "./line-door";
+import { deckAnswerWithin, type LineViewDoor, lateReason, whenGodviewCanPlace } from "./line-door";
 import type { PeekLiveRow } from "./peek-live";
 import { requestView } from "./view-state";
 
@@ -52,8 +52,17 @@ export async function openLiveRow(
   if (row.floorSessionId !== null) {
     const deck = await doors.whenGodviewCanPlace(LIVE_OPEN_WAIT_MS);
     if (deck === null) return { state: "refused", reason: "the deck did not open to show it" };
-    const shown = await deck.reveal(row.floorSessionId);
-    return shown.state === "opened" ? { state: "shown" } : shown;
+    // Jump to's bound too (2026-10-11): the deck mounts in turn (AR-4b), and a
+    // turn that never ends is said, never waited on
+    try {
+      const shown = await deckAnswerWithin(deck.reveal(row.floorSessionId), LIVE_OPEN_WAIT_MS);
+      if (shown.state === "opened") return { state: "shown" };
+      if (shown.state === "late")
+        return { state: "refused", reason: lateReason("showed", LIVE_OPEN_WAIT_MS) };
+      return shown;
+    } catch (cause) {
+      return { state: "refused", reason: cause instanceof Error ? cause.message : String(cause) };
+    }
   }
   const door = await doors.whenGodviewFindDoor(LIVE_OPEN_WAIT_MS);
   if (door === null) return { state: "refused", reason: "Godview did not open to show it" };

@@ -14,7 +14,9 @@
  *   · R6 ③'s folders: by desktop, another desktop's never opened here;
  *   · R7 the chips; H4 each act's intent;
  *   · Resume refusing a gone folder with the reason, and a session another
- *     desktop holds (the host key).
+ *     desktop holds (the host key);
+ *   · an act never ending in silence (2026-10-11): a deck that never answers,
+ *     an answer that cannot be read and a throw are each refused in words.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -30,11 +32,15 @@ import {
 import { projectInk } from "@vibefield/design-kit/project-ink";
 import { isValidElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import type { LineViewDoor } from "../src/frame/line-door";
 import {
   deviceOfHostKey,
+  HISTORY_DECK_WAIT_MS,
   type HistoryActsDeps,
   hostKeyOf,
+  jumpTarget,
   newAgent,
+  newAgentNote,
   projectIntent,
   resumeTarget,
   spawnParamsOf,
@@ -446,16 +452,36 @@ const deck = () => {
   };
 };
 
-const depsOf = (
-  client: ReturnType<typeof resumeClient>,
-  door: ReturnType<typeof deck>["door"],
-): HistoryActsDeps => ({
+const depsOf = (client: ReturnType<typeof resumeClient>, door: LineViewDoor): HistoryActsDeps => ({
   client,
   self: () => STUDIO,
   nameOf: (device) => (device === LAPTOP ? "Laptop" : "Studio"),
   deck: async () => door,
   showView: () => undefined,
 });
+
+/** `client`, with `method` answered by `answer` instead. */
+const answering = (
+  client: ReturnType<typeof resumeClient>,
+  method: string,
+  answer: () => Record<string, unknown>,
+): ReturnType<typeof resumeClient> => ({
+  calls: client.calls,
+  async request(asked: string, params: Record<string, unknown>) {
+    if (asked !== method) return await client.request(asked, params);
+    client.calls.push({ method: asked, params });
+    return answer();
+  },
+});
+
+/** What `pending` has come to by now, or STILL_WAITING — so an act that never
+ * ends is an assertion's red, not a test's timeout. */
+const STILL_WAITING = { state: "still waiting" } as const;
+const settledBy = <T,>(pending: Promise<T>): Promise<T | typeof STILL_WAITING> =>
+  Promise.race([pending, Promise.resolve(STILL_WAITING)]);
+
+/** A deck whose mount queue never answers: what both 10-11 reds met. */
+const neverAnswers = (): Promise<never> => new Promise(() => undefined);
 
 describe("the acts", () => {
   const TARGET = {
@@ -520,6 +546,124 @@ describe("the acts", () => {
       profileId: "claude:9a3d",
     });
     expect(place).toHaveBeenCalledTimes(1);
+  });
+
+  // 2026-10-11 — two `smoke:godview` reds: New agent started a run, moved the
+  // window to Godview, and the line said nothing for 60 s. An act's wait on the
+  // deck is bounded (the deck's mounts wait their turn, AR-4b), and every end
+  // after the spawn is said in words and logged.
+  it("New agent whose pane the deck never answers for is refused in words once the bound passes", async () => {
+    const client = resumeClient(true);
+    const { door } = deck();
+    const unplaced = vi.fn();
+    vi.useFakeTimers();
+    try {
+      const pending = newAgent(
+        { ...depsOf(client, { ...door, place: neverAnswers }), unplaced },
+        {
+          provider: "claude",
+          cwd: "/Users/me/Projects/vibe-field",
+          where: "~/Projects/vibe-field",
+        },
+      );
+      await vi.advanceTimersByTimeAsync(HISTORY_DECK_WAIT_MS + 1_000);
+      const outcome = await settledBy(pending);
+      expect(outcome).toEqual({
+        state: "refused",
+        reason: "it started, but no pane took it in 20 s",
+      });
+      expect(
+        newAgentNote({ state: "refused", reason: "it started, but no pane took it in 20 s" }),
+      ).toBe("Could not start — it started, but no pane took it in 20 s");
+      expect(unplaced).toHaveBeenCalledExactlyOnceWith("spawn", "no pane took it in 20 s");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("New agent whose answer cannot be read is refused in words — the run started, so it says so", async () => {
+    // `agent.spawn` answered, but not with a create ticket this build reads
+    const client = answering(resumeClient(true), "agent.spawn", () => ({}));
+    const { door, place } = deck();
+    const unplaced = vi.fn();
+    await expect(
+      newAgent(
+        { ...depsOf(client, door), unplaced },
+        {
+          provider: "claude",
+          cwd: "/Users/me/Projects/vibe-field",
+          where: "~/Projects/vibe-field",
+        },
+      ),
+    ).resolves.toEqual({
+      state: "refused",
+      reason: "it started, but no pane took it (fieldd's answer could not be read)",
+    });
+    expect(place).not.toHaveBeenCalled();
+    expect(unplaced).toHaveBeenCalledExactlyOnceWith(
+      "spawn",
+      expect.stringContaining("invalid_type"),
+    );
+  });
+
+  it("New agent whose deck throws as it places is refused in the throw's words", async () => {
+    const client = resumeClient(true);
+    const { door } = deck();
+    const unplaced = vi.fn();
+    const outcome = await newAgent(
+      {
+        ...depsOf(client, {
+          ...door,
+          place: async () => {
+            throw new Error("the routed terminal runtime has no fieldd client");
+          },
+        }),
+        unplaced,
+      },
+      { provider: "claude", cwd: "/w", where: "~/w" },
+    );
+    expect(outcome).toEqual({
+      state: "refused",
+      reason: "it started, but no pane took it (the routed terminal runtime has no fieldd client)",
+    });
+    expect(unplaced).toHaveBeenCalledExactlyOnceWith(
+      "spawn",
+      "the routed terminal runtime has no fieldd client",
+    );
+  });
+
+  it("Resume and Jump to whose pane the deck never answers for are refused in their own words", async () => {
+    vi.useFakeTimers();
+    try {
+      const { door } = deck();
+      const unplaced = vi.fn();
+      const resumed = resumeTarget(
+        { ...depsOf(resumeClient(true), { ...door, place: neverAnswers }), unplaced },
+        TARGET,
+      );
+      // a run continuing the chosen conversation here, so Jump to has a pane to show
+      const running = answering(resumeClient(true), "agent.list", () => ({
+        sessions: [{ ...SUMMARY, sessionId: TARGET.nativeSessionId }],
+      }));
+      const jumped = jumpTarget(
+        { ...depsOf(running, { ...door, reveal: neverAnswers }), unplaced },
+        TARGET,
+      );
+      await vi.advanceTimersByTimeAsync(HISTORY_DECK_WAIT_MS + 1_000);
+      expect(await settledBy(resumed)).toEqual({
+        state: "refused",
+        reason: "it resumed, but no pane took it in 20 s",
+      });
+      expect(await settledBy(jumped)).toEqual({
+        state: "refused",
+        reason: "no pane showed it in 20 s",
+      });
+      expect(unplaced).toHaveBeenCalledTimes(2);
+      expect(unplaced).toHaveBeenCalledWith("resume", "no pane took it in 20 s");
+      expect(unplaced).toHaveBeenCalledWith("jump", "no pane showed it in 20 s");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

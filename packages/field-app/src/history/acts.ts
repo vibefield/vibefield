@@ -2,8 +2,10 @@ import { AgentSpawnResult, type ProjectIntentParams } from "@vibefield/contracts
 import type { KeyedCallClient } from "../forwarded-call";
 import { requestResolvingOutcome } from "../forwarded-call";
 import {
+  deckAnswerWithin,
   type JumpOutcome,
   type LineViewDoor,
+  lateReason,
   type ResumeOutcome,
   whenGodviewCanPlace,
 } from "../frame/line-door";
@@ -22,10 +24,32 @@ import { type ResumeReading, readResume, resumeNative } from "./resume";
 // and its deck places the session as the swarm's open does (GV-D4: beside the
 // focused pane, or in its place with three showing), as the line's Resume
 // always has.
+//
+// An act never ends in silence (2026-10-11; two `smoke:godview` reds where New
+// agent started a run, moved the window and said nothing for 60 s). Once fieldd
+// has answered, everything that follows is inside the act's own try, and the
+// deck's place or reveal is raced against a bound: its mounts wait their turn
+// (AR-4b), and a turn that never ends is said ("no pane took it in 20 s") and
+// logged (`unplaced`), as a throw is, in its own words.
 
 /** How long an act waits for Godview's deck — mounted on Godview's first
- * open — to be able to place what it started. */
+ * open — to be able to place what it started, and then for the deck to place
+ * or show it. Twice the deck's own bound on each read of a floor
+ * (`TERMINAL_FLOOR_READ_TIMEOUT_MS`), so a mount stuck ahead of the act's own
+ * fails as its read ends and the act's still lands inside the bound. */
 export const HISTORY_DECK_WAIT_MS = 20_000;
+
+/** What a throw in an act's work comes to, in words: an answer this build
+ * cannot read is said as such, never as a schema's dump. */
+export function thrownReason(cause: unknown): string {
+  if (!(cause instanceof Error)) return String(cause);
+  return cause.name === "ZodError" ? "fieldd's answer could not be read" : cause.message;
+}
+
+/** A throw as the log has it: its own message, whole. */
+function thrownMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
+}
 
 /** A session as an act names it: the room's selection, or a row's session. */
 export interface SessionTarget {
@@ -103,19 +127,30 @@ export async function resumeTarget(
   const answer = await resumeNative(deps.client, read.facts);
   if (answer.state === "running") return answer;
   if (answer.state === "refused") return answer;
-  const deck = await deckOf(deps);
-  if (deck === null) {
-    deps.unplaced?.("resume");
-    return { state: "refused", reason: "it resumed, but the deck did not open to show it" };
+  // it resumed: every end from here is what came of showing it
+  try {
+    const deck = await deckOf(deps);
+    if (deck === null) {
+      deps.unplaced?.("resume");
+      return { state: "refused", reason: "it resumed, but the deck did not open to show it" };
+    }
+    const placed = await deckAnswerWithin(deck.place(answer.terminal), HISTORY_DECK_WAIT_MS);
+    if (placed.state === "opened")
+      return {
+        state: "resumed",
+        ...(placed.placement !== undefined ? { placement: placed.placement } : {}),
+      };
+    if (placed.state === "late") {
+      const late = lateReason("took", HISTORY_DECK_WAIT_MS);
+      deps.unplaced?.("resume", late);
+      return { state: "refused", reason: `it resumed, but ${late}` };
+    }
+    deps.unplaced?.("resume", placed.reason);
+    return { state: "refused", reason: `it resumed, but no pane took it (${placed.reason})` };
+  } catch (cause) {
+    deps.unplaced?.("resume", thrownMessage(cause));
+    return { state: "refused", reason: `it resumed, but no pane took it (${thrownReason(cause)})` };
   }
-  const placed = await deck.place(answer.terminal);
-  if (placed.state === "opened")
-    return {
-      state: "resumed",
-      ...(placed.placement !== undefined ? { placement: placed.placement } : {}),
-    };
-  deps.unplaced?.("resume", placed.reason);
-  return { state: "refused", reason: `it resumed, but no pane took it (${placed.reason})` };
 }
 
 /** Show the pane `target` runs in (P3's Jump to; a row's or ④'s). */
@@ -127,12 +162,22 @@ export async function jumpTarget(
   if (elsewhere !== null) return { state: "refused", reason: elsewhere };
   const run = await readLiveRun(deps.client, target.nativeSessionId);
   if (run === null) return { state: "ended" };
-  const deck = await deckOf(deps);
-  if (deck === null) return { state: "refused", reason: "the deck did not open to show it" };
-  const shown = await deck.reveal(run.floorSessionId);
-  if (shown.state === "opened") return { state: "jumped" };
-  deps.unplaced?.("jump", shown.reason);
-  return { state: "refused", reason: shown.reason };
+  try {
+    const deck = await deckOf(deps);
+    if (deck === null) {
+      deps.unplaced?.("jump");
+      return { state: "refused", reason: "the deck did not open to show it" };
+    }
+    const shown = await deckAnswerWithin(deck.reveal(run.floorSessionId), HISTORY_DECK_WAIT_MS);
+    if (shown.state === "opened") return { state: "jumped" };
+    const reason =
+      shown.state === "late" ? lateReason("showed", HISTORY_DECK_WAIT_MS) : shown.reason;
+    deps.unplaced?.("jump", reason);
+    return { state: "refused", reason };
+  } catch (cause) {
+    deps.unplaced?.("jump", thrownMessage(cause));
+    return { state: "refused", reason: thrownReason(cause) };
+  }
 }
 
 /** What a New agent came to. */
@@ -162,15 +207,29 @@ export async function newAgent(deps: HistoryActsDeps, ask: NewAgentAsk): Promise
   } catch (cause) {
     return { state: "refused", reason: refusalReason(cause) };
   }
-  const deck = await deckOf(deps);
-  if (deck === null) {
-    deps.unplaced?.("spawn");
-    return { state: "refused", reason: "it started, but the deck did not open to show it" };
+  // it started: every end from here is what came of showing it
+  try {
+    const deck = await deckOf(deps);
+    if (deck === null) {
+      deps.unplaced?.("spawn");
+      return { state: "refused", reason: "it started, but the deck did not open to show it" };
+    }
+    const placed = await deckAnswerWithin(
+      deck.place(AgentSpawnResult.parse(answered).terminal),
+      HISTORY_DECK_WAIT_MS,
+    );
+    if (placed.state === "opened") return { state: "started", where: ask.where };
+    if (placed.state === "late") {
+      const late = lateReason("took", HISTORY_DECK_WAIT_MS);
+      deps.unplaced?.("spawn", late);
+      return { state: "refused", reason: `it started, but ${late}` };
+    }
+    deps.unplaced?.("spawn", placed.reason);
+    return { state: "refused", reason: `it started, but no pane took it (${placed.reason})` };
+  } catch (cause) {
+    deps.unplaced?.("spawn", thrownMessage(cause));
+    return { state: "refused", reason: `it started, but no pane took it (${thrownReason(cause)})` };
   }
-  const placed = await deck.place(AgentSpawnResult.parse(answered).terminal);
-  if (placed.state === "opened") return { state: "started", where: ask.where };
-  deps.unplaced?.("spawn", placed.reason);
-  return { state: "refused", reason: `it started, but no pane took it (${placed.reason})` };
 }
 
 /** `agent.spawn`'s params for an ask: exactly the three things it takes. */

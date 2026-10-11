@@ -330,13 +330,12 @@ export async function historyNewAgentRung(
         .request("agent.list", {})
         .then((answer) => AgentListResult.parse(answer))
         .catch(() => null);
-      const fresh =
-        after?.sessions
-          .filter(
-            (candidate) =>
-              candidate.kind === staged.agentId && !runsBefore.has(candidate.runtimeRunId),
-          )
-          .map((candidate) => candidate.runtimeRunId) ?? null;
+      const freshRuns =
+        after?.sessions.filter(
+          (candidate) =>
+            candidate.kind === staged.agentId && !runsBefore.has(candidate.runtimeRunId),
+        ) ?? null;
+      const fresh = freshRuns?.map((candidate) => candidate.runtimeRunId) ?? null;
       const view = await evaluate(VIEW_NOW).catch(() => "unread");
       const listed =
         fresh === null
@@ -344,8 +343,28 @@ export async function historyNewAgentRung(
           : fresh.length === 0
             ? "fieldd lists no new run of the agent"
             : `fieldd lists a new run of it (${fresh.join(", ")})`;
+      // whether the deck placed it (2026-10-11): a pane's frame names its session
+      // (`data-vf-pane-frame`), and the new run's floor session is its terminal's
+      const floors = (freshRuns ?? []).flatMap((candidate) =>
+        candidate.terminal?.runtimeSessionId !== undefined
+          ? [candidate.terminal.runtimeSessionId]
+          : [],
+      );
+      const panes = await evaluate(
+        `JSON.stringify([...document.querySelectorAll(".vf-godview-terminal-deck [data-vf-pane-frame]")].map((frame) => frame.getAttribute("data-vf-pane-frame")))`,
+      )
+        .then((answer) => JSON.parse(answer) as string[])
+        .catch(() => null);
+      const shown =
+        floors.length === 0
+          ? "no new run names a floor session to look for in the deck"
+          : panes === null
+            ? "the deck's panes could not be read"
+            : floors.some((floor) => panes.includes(floor))
+              ? `a deck pane shows its session (${floors.join(", ")})`
+              : `no deck pane shows its session ${floors.join(", ")} (the deck shows ${JSON.stringify(panes)})`;
       throw new Error(
-        `${error instanceof Error ? error.message : String(error)} — after the press ${listed}, and the window shows ${view}`,
+        `${error instanceof Error ? error.message : String(error)} — after the press ${listed}, ${shown}, and the window shows ${view}`,
       );
     });
     if (!note.startsWith("Started in ")) throw new Error(`New agent said: ${note}`);
