@@ -1640,6 +1640,14 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   so no reflow of history). The position is
   the viewer's (`localStorage`), re-clamped to each window, never a shared setting. No
   transition on the edge: every frame of an animated edge would be a PTY resize.
+  **The deck has one state — `away · up · maximized`** (round 3, GV-D5, GV-D6 and GV-D11; the
+  seam built 2026-10-11, and **only `up` is ever said** until the terminals can be put away or
+  maximized, below). Godview's overlay owns it and alone publishes it; the stage draws the state
+  it is handed, on its root, so the catalog and Settings' miniature can be handed any of the
+  three without speaking for the window. It is published through a door of the frame's own, and
+  withdrawn while Godview is not the window's view. The door carries the three-valued state for
+  Godview's own readers and for the shell (the window's lights); the frame's readers — the
+  Peek's button and the Stories head — read only whether it is maximized. Nothing reads it yet.
   *Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
   **Round 3 redraws the wrapper around these panes, and nothing inside it** (One Frame §22 "Shared
   mechanics", §23 and §23.1–§23.3; GV-D2 — "keep the current terminal pane design as is … what i
@@ -1648,13 +1656,6 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   what ships. The items below are the ruling, and each says which shipped sentence, if any, it
   replaces on the day it lands. The numbers are the ruled drawing's, in its 1180 × 780 window; the
   values are §2.7's. Three questions are open with James and are written as open: N14, N15, N16.
-  - **The deck has one state — `away · up · maximized`.** Godview's overlay owns it and alone
-    publishes it; the stage draws the state it is handed, so the catalog and Settings' miniature
-    can hand it any of the three without speaking for the window. It is published through a door
-    of the frame's own. The door carries the three-valued state for Godview's own readers and for
-    the shell (the window's lights); the frame's readers — the Peek's button and the Stories head
-    — read only whether it is maximized. It reads **`up` from the START of a drag out of
-    maximized**, not from its release, so the head is back as the bar leaves the window's top.
   - **The Lip** (GV-D7): the lip grown into the drag bar — **30** tall, on the sheet's own ground
     in the terminal's ink; nothing floats. **The groove** (GV-D12 — James's pick over the lean: "i
     like the groove one") stands in its middle, in its pill: a 40 × 6 slot pressed into the frame,
