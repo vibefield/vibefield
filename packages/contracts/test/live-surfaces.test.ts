@@ -332,6 +332,9 @@ describe("LSF-1 Live Surfaces contracts", () => {
       "timed-out",
       "certificate",
       "blocked",
+      // PT-5b2 (ruling 6): a load that ENDED with no document of the page standing — the address is no page; it was stopped
+      "no-document",
+      "stopped",
       "failed",
     ]);
     expect(LiveSurfaceBrowserStateV1.parse(state)).not.toHaveProperty("failure");

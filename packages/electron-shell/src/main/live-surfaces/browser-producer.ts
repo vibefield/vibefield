@@ -969,6 +969,15 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #emulationReloads = 0;
   #windowsRemade = 0;
   #inputScaleUnread = 0;
+  /**
+   * PT-5b2 (rulings 3, 6) — THE PAGE'S FIRST LOAD, as the engine's events say it (never the `loadURL` promise alone): a
+   * DOCUMENT of the page stands in the window (it committed, or the engine's error page stands in a failed address's
+   * place); the window was heard LOADING (its remote load is under way — a stop-loading before that is the bootstrap's);
+   * and the person asked the load to STOP while nothing of the page stood.
+   */
+  #documentStands = false;
+  #heardLoading = false;
+  #stopAsked = false;
   /** PT-5b2 (ruling 4) — ONE CHAIN a page: the hand's events take their turn here, in the order they were sent. */
   #inputTail: Promise<void> = Promise.resolve();
   #bootstrapPaints = 0;
@@ -1418,21 +1427,97 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         return;
       }
       if (state === "paused" && window !== null && !window.isDestroyed()) {
-        await window.loadURL(command.url);
+        this.load(window, command.url);
         return;
       }
     }
-    if (this.#closed || window === null || window.isDestroyed() || state !== "live") {
+    // PT-5b2 (ruling 3) — A PAGE THAT IS STARTING has a window: it can be sent elsewhere, stopped, and loaded again. (Before:
+    // all three were refused until its first frame — and since PT-5b a page is `starting` for as long as its first address
+    // takes to answer: a pane on a slow host could be neither stopped nor sent anywhere.)
+    if (
+      this.#closed ||
+      window === null ||
+      window.isDestroyed() ||
+      (state !== "live" && state !== "starting")
+    ) {
       throw new Error("Browser surface is not available for navigation");
     }
     if (command.action === "go") {
       if (!isAllowedBrowserTopLevelUrl(command.url)) {
         throw new Error("Browser navigation URL must use HTTP or HTTPS");
       }
-      await window.loadURL(command.url);
+      // (the load it replaces is not a failure: Electron rejects it ERR_ABORTED, and nothing is read off that)
+      if (!this.#documentStands) this.headed(command.url);
+      this.load(window, command.url);
+      return;
+    }
+    if (!this.#documentStands) {
+      // NO DOCUMENT OF THE PAGE STANDS — the window shows its bootstrap blank. A STOP is asked of the engine and
+      // remembered: when the load ends with nothing, THAT is what is said. A RELOAD is a load of the address the page was
+      // sent to — the engine's own reload would reload the blank (the probe). There is no history to go through.
+      if (command.action === "stop") {
+        this.#stopAsked = true;
+        window.navigate("stop");
+      } else if (command.action === "reload") {
+        const url = this.#resumeUrl ?? this.source.initialUrl;
+        this.headed(url);
+        this.load(window, url);
+      }
       return;
     }
     window.navigate(command.action);
+  }
+
+  /**
+   * PT-5b2 (ruling 6) — A LOAD IS ASKED, AND ITS PROMISE SAYS NOTHING OF THE SOURCE. Electron settles `loadURL` at
+   * `did-finish-load` and REJECTS it for anything else — a script's redirect or a link clicked before `load`
+   * (ERR_ABORTED −3, the page standing fine where it went), an attachment or an empty answer (ERR_FAILED −2), a refused
+   * connection. A page's load failures are the engine's EVENTS (a main-frame `did-fail-load` → `browser.failure`), a
+   * window that never comes up is the startup deadline's, and an aborted load is nothing by itself: the navigation that
+   * took its place speaks for the page. A rejection that is not an abort is one more word that the load ENDED (see
+   * `loadEnded` — an engine that says nothing else).
+   */
+  private load(window: BrowserSurfaceNativeWindow, url: string): void {
+    const epoch = this.#lifecycle.snapshot.producerEpoch;
+    void window.loadURL(url).catch((error: unknown) => {
+      const said = error as { code?: unknown; errno?: unknown } | null;
+      if (said?.errno === -3 || said?.code === "ERR_ABORTED") return;
+      if (this.isCurrent(window, epoch)) this.loadEnded();
+    });
+  }
+
+  /** The page is HEADED to `url` with nothing of it standing yet: it says so — loading, no title, no failure. */
+  private headed(url: string): void {
+    this.#resumeUrl = url;
+    this.#stopAsked = false;
+    this.#browserState = {
+      url,
+      loading: true,
+      canGoBack: false,
+      canGoForward: false,
+      ...(this.#browserState?.refused === undefined ? {} : { refused: this.#browserState.refused }),
+    };
+    this.publishSummary();
+  }
+
+  /**
+   * PT-5b2 (ruling 6) — A LOAD THAT ENDED WITH NO DOCUMENT OF THE PAGE AND NOTHING UNDER WAY: the address answered with
+   * no page (an attachment — cancelled by the session's guard — or an empty answer), or the person stopped it before
+   * anything arrived. The window stands, at its blank; the page SAYS so — a failure of the address it was asked for, in
+   * the contract's words — and a reload asks again. Never `starting` for good, never a blank passed off as live.
+   */
+  private loadEnded(): void {
+    if (this.#documentStands || this.#browserState?.failure !== undefined) return;
+    this.#browserState = {
+      url: this.#resumeUrl ?? this.source.initialUrl,
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      ...(this.#browserState?.refused === undefined ? {} : { refused: this.#browserState.refused }),
+      failure: { reason: this.#stopAsked ? "stopped" : "no-document" },
+    };
+    this.#stopAsked = false;
+    this.publishSummary();
   }
 
   /** The page's density: its device's as emulated, else its source's. */
@@ -1732,12 +1817,28 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // (Before: a page slow to answer said it was at `about:blank` — on its head, and to the desk, which took its still for
     // another address's and let it go.)
     const plumbing = webOriginOf(said.url) === undefined && said.failure === undefined;
+    if (!plumbing) {
+      // a document of the page stands (or the engine's error page, in a failed address's place)
+      this.#documentStands = true;
+      this.#stopAsked = false;
+    } else if (!this.#documentStands) {
+      // PT-5b2 (ruling 6): the window is at its blank, and the engine says the load is under way — or that it STOPPED
+      // with nothing committed and nothing failed (an attachment, a 204, a stop: the probe). That is the load's END.
+      if (said.loading) this.#heardLoading = true;
+      else if (this.#heardLoading) {
+        this.loadEnded();
+        return;
+      }
+    }
     const clamped: LiveSurfaceBrowserStateV1 = plumbing
       ? {
           url: this.#resumeUrl ?? this.source.initialUrl,
           loading: said.loading,
           canGoBack: false,
           canGoForward: false,
+          ...(this.#browserState?.refused === undefined
+            ? {}
+            : { refused: this.#browserState.refused }),
         }
       : said;
     // PT-5b: another document takes its own scale — the next point reads it
@@ -1879,21 +1980,23 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         () => this.handleStartupTimeout(window, epoch),
         this.#startupTimeoutMs,
       );
-      void this.bornOn(window, initialRaster, viewport)
-        .then(() => {
+      void this.bornOn(window, initialRaster, viewport).then(
+        () => {
           if (!this.isCurrent(window, epoch)) return;
           this.#controlTargets?.associate(this.surfaceId, epoch, window.controlContents);
-          return window.loadURL(this.#resumeUrl ?? this.source.initialUrl);
-        })
-        .catch(() => {
-          // PT-5a: a load the page itself said FAILED (a refused connection, a name with no address…) is not a failed
-          // SOURCE — its window lives, its state says why, and a reload asks again
-          if (this.isCurrent(window, epoch) && this.#browserState?.failure === undefined) {
+          // PT-5a: a load the page itself said FAILED is not a failed SOURCE — its window lives, its state says why, and
+          // a reload asks again. PT-5b2 (ruling 6): and NOTHING of the source is read off this load's promise (`load`)
+          this.load(window, this.#resumeUrl ?? this.source.initialUrl);
+        },
+        () => {
+          // the window could not be laid out or told its device: THAT is the source's
+          if (this.isCurrent(window, epoch)) {
             this.failSource(
               sourceError("source-not-found", "Browser source could not load", "user-action"),
             );
           }
-        });
+        },
+      );
       this.publishSummary();
     } catch {
       this.failSource(
@@ -1932,6 +2035,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         }
         return;
       }
+      // (a paint of the page's own: a document of it stands — the native marks every paint before that `bootstrap`)
+      this.#documentStands = true;
       const texture = paint.texture;
       if (texture != null && texture.textureInfo.widgetType !== "frame") {
         texture.release();
@@ -2346,20 +2451,20 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         () => this.handleStartupTimeout(window, epoch),
         this.#startupTimeoutMs,
       );
-      void this.bornOn(window, initialRaster, viewport)
-        .then(() => {
+      void this.bornOn(window, initialRaster, viewport).then(
+        () => {
+          if (!this.isCurrent(window, epoch)) return;
+          this.#controlTargets?.associate(this.surfaceId, epoch, window.controlContents);
+          this.load(window, this.#resumeUrl ?? this.source.initialUrl);
+        },
+        () => {
           if (this.isCurrent(window, epoch)) {
-            this.#controlTargets?.associate(this.surfaceId, epoch, window.controlContents);
-            return window.loadURL(this.#resumeUrl ?? this.source.initialUrl);
-          }
-        })
-        .catch(() => {
-          if (this.isCurrent(window, epoch) && this.#browserState?.failure === undefined) {
             this.failSource(
               sourceError("source-not-found", "Browser source could not reconnect", "user-action"),
             );
           }
-        });
+        },
+      );
     } catch {
       this.failSource(
         sourceError("security-rejected", "Browser source could not reconnect safely", "permanent"),
@@ -2397,6 +2502,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // `createReconnectingProducer` says so: a page woken is born as its ask says), at its own density, its scale unread
     this.#muted = false;
     this.#windowDensity = undefined;
+    this.#documentStands = false;
+    this.#heardLoading = false;
+    this.#stopAsked = false;
     this.#pointScale = {
       value: 1,
       at: Number.NEGATIVE_INFINITY,

@@ -431,7 +431,10 @@ export const LiveSurfaceAttachTicketV1 = z
 export type LiveSurfaceAttachTicketV1 = z.infer<typeof LiveSurfaceAttachTicketV1>;
 
 /** PT-5a: why a browser page's LOAD failed, in the producer's words (a holder says each in a person's). A certificate is
- * refused, never bypassed; `blocked` is the surface's own policy (a scheme it does not open). */
+ * refused, never bypassed; `blocked` is the surface's own policy (a scheme it does not open). PT-5b2 (ruling 6) — and a
+ * load that ENDED with no document of the page standing and nothing under way: `no-document` (the address answered with
+ * no page — an attachment, an empty answer; the engine says only that the load stopped) and `stopped` (the person
+ * stopped it before anything of the page arrived). Its `url` is the address that was asked for, as for every failure. */
 export const LiveSurfaceLoadFailureV1 = z.enum([
   "name-not-resolved",
   "offline",
@@ -440,6 +443,8 @@ export const LiveSurfaceLoadFailureV1 = z.enum([
   "timed-out",
   "certificate",
   "blocked",
+  "no-document",
+  "stopped",
   "failed",
 ]);
 export type LiveSurfaceLoadFailureV1 = z.infer<typeof LiveSurfaceLoadFailureV1>;

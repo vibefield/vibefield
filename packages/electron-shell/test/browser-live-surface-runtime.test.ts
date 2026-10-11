@@ -1948,6 +1948,191 @@ describe("BrowserLiveSurfaceRuntime", () => {
     laptop.runtime.dispose();
   });
 
+  describe("PT-5b2 (rulings 3, 6) — a page's FIRST LOAD: superseded, ended with nothing, sent elsewhere, stopped", () => {
+    const FIRST = "https://example.test/app";
+    /** What Electron 43 rejects `loadURL` with (the scratch probe): a navigation that replaced the load; a load that ended
+     * with no document (an attachment, a 204, a stop with nothing answered). */
+    const aborted = (): Error =>
+      Object.assign(new Error("ERR_ABORTED (-3) loading"), { code: "ERR_ABORTED", errno: -3 });
+    const nothing = (): Error =>
+      Object.assign(new Error("ERR_FAILED (-2) loading"), { code: "ERR_FAILED", errno: -2 });
+    /** A page asked for live whose first `loadURL` settles when the row says: `resolve`, or `reject(with)`. */
+    const starting = async () => {
+      const result = setup();
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(demand(1, "live"));
+      const window = result.native.windows[0];
+      if (window === undefined) throw new Error("no window yet");
+      const loads: { url: string; resolve(): void; reject(error: Error): void }[] = [];
+      window.loadURL = (url: string) => {
+        window.loadedUrls.push(url);
+        return new Promise<void>((resolve, reject) => {
+          loads.push({ url, resolve, reject });
+        });
+      };
+      await flush();
+      // the window is up: its blank bootstrap paints (the startup deadline is met), the page's server has not answered
+      window.paint({ ...sharedPaint(320, 180).paint, bootstrap: true });
+      const blank = (loading: boolean): void =>
+        window.emitNavigationState({
+          url: "about:blank",
+          title: "about:blank",
+          loading,
+          canGoBack: false,
+          canGoForward: false,
+        });
+      blank(true);
+      return { result, renderer, window, loads, blank };
+    };
+
+    it("a first load that another navigation SUPERSEDES is not a failed page (Electron rejects it ERR_ABORTED: a script's redirect, a link clicked while the page still loads)", async () => {
+      const p = await starting();
+      // the page's document commits and paints; before its load FINISHES a script sends it elsewhere
+      p.window.emitNavigationState({ ...NAV, url: FIRST, loading: true });
+      p.window.paint(sharedPaint().paint);
+      await flush();
+      expect(p.result.runtime.summary.state).toBe("live");
+      p.window.emitNavigationState({ ...NAV, url: "https://example.test/b", loading: true });
+      p.loads[0]?.reject(aborted());
+      await flush();
+      expect(p.result.runtime.summary.state).toBe("live");
+      expect(p.result.runtime.summary.error).toBeUndefined();
+      expect(p.window.isDestroyed()).toBe(false);
+      expect(p.result.runtime.summary.browser).toMatchObject({ url: "https://example.test/b" });
+      expect(p.result.runtime.summary.browser?.failure).toBeUndefined();
+      // …and one whose superseding navigation itself FAILS is said by the engine's own event: the address it went to
+      const q = await starting();
+      q.window.emitNavigationState({ ...NAV, url: FIRST, loading: true });
+      q.window.paint(sharedPaint().paint);
+      q.window.emitNavigationState({
+        ...NAV,
+        url: "https://dead.test/gone",
+        loading: false,
+        failure: -102,
+      });
+      q.loads[0]?.reject(aborted());
+      await flush();
+      expect(q.result.runtime.summary.state).toBe("live");
+      expect(q.window.isDestroyed()).toBe(false);
+      expect(q.result.runtime.summary.browser).toMatchObject({
+        url: "https://dead.test/gone",
+        failure: { reason: "connection-refused" },
+      });
+      p.result.runtime.dispose();
+      q.result.runtime.dispose();
+    });
+
+    it("a first load that ENDS with no document of the page and nothing under way (an attachment, a 204) is SAID — `no-document`, the address kept, its window standing — never `starting` for good, never a failed source; ↻ asks for the address again", async () => {
+      const p = await starting();
+      // the engine: the load stops, nothing committed, nothing failed — and `loadURL` rejects ERR_FAILED
+      p.blank(false);
+      p.loads[0]?.reject(nothing());
+      await flush();
+      expect(p.result.runtime.summary.error).toBeUndefined();
+      expect(p.result.runtime.summary.state).toBe("starting");
+      expect(p.window.isDestroyed()).toBe(false);
+      expect(p.result.runtime.summary.browser).toEqual({
+        url: FIRST,
+        loading: false,
+        canGoBack: false,
+        canGoForward: false,
+        failure: { reason: "no-document" },
+      });
+      // ↻: the address is asked for again — by a load of it, never the engine's own reload (it reloads the blank)
+      p.renderer.attachment.navigate?.({ action: "reload" });
+      await flush();
+      expect(p.window.loadedUrls).toEqual([FIRST, FIRST]);
+      expect(p.window.navigations).toEqual([]);
+      expect(p.result.runtime.summary.browser).toMatchObject({ url: FIRST, loading: true });
+      expect(p.result.runtime.summary.browser?.failure).toBeUndefined();
+      expect(p.result.runtime.stats.navigationDropped).toBe(0);
+      // the promise's word ALONE (an engine that says nothing more) reads the same, once
+      const q = await starting();
+      q.loads[0]?.reject(nothing());
+      await flush();
+      expect(q.result.runtime.summary.state).toBe("starting");
+      expect(q.result.runtime.summary.browser?.failure).toEqual({ reason: "no-document" });
+      expect(q.window.isDestroyed()).toBe(false);
+      p.result.runtime.dispose();
+      q.result.runtime.dispose();
+    });
+
+    it("a page still STARTING can be SENT ELSEWHERE: it loads there in its own window and says where it is headed — the first load it supersedes is nothing", async () => {
+      const p = await starting();
+      expect(p.result.runtime.summary.state).toBe("starting");
+      p.renderer.attachment.navigate?.({ action: "go", url: "https://example.test/elsewhere" });
+      await flush();
+      expect(p.window.loadedUrls).toEqual([FIRST, "https://example.test/elsewhere"]);
+      expect(p.result.runtime.stats.navigationDropped).toBe(0);
+      expect(p.result.runtime.summary.browser).toMatchObject({
+        url: "https://example.test/elsewhere",
+        loading: true,
+      });
+      // the first load, replaced: Electron rejects it — nothing is said of it
+      p.loads[0]?.reject(aborted());
+      await flush();
+      expect(p.result.runtime.summary.state).toBe("starting");
+      expect(p.result.runtime.summary.browser?.failure).toBeUndefined();
+      expect(p.result.native.windows).toHaveLength(1);
+      // an address the desk does not open is refused, as ever
+      p.renderer.attachment.navigate?.({ action: "go", url: "file:///etc/passwd" });
+      await flush();
+      expect(p.result.runtime.stats.navigationDropped).toBe(1);
+      // the page it was sent to arrives
+      p.window.emitNavigationState({ ...NAV, url: "https://example.test/elsewhere" });
+      p.window.paint(sharedPaint().paint);
+      p.loads[1]?.resolve();
+      await flush();
+      expect(p.result.runtime.summary.state).toBe("live");
+      p.result.runtime.dispose();
+    });
+
+    it("a page still STARTING can be STOPPED: with no document of the page standing it SAYS so — `stopped`, its address kept, ↻ loads it again — and with its document standing a stop is only a stop", async () => {
+      const p = await starting();
+      p.renderer.attachment.navigate?.({ action: "stop" });
+      await flush();
+      expect(p.window.navigations).toEqual(["stop"]);
+      expect(p.result.runtime.stats.navigationDropped).toBe(0);
+      // the engine: the load stops with nothing committed (and `loadURL` rejects)
+      p.blank(false);
+      p.loads[0]?.reject(nothing());
+      await flush();
+      expect(p.result.runtime.summary.state).toBe("starting");
+      expect(p.result.runtime.summary.browser).toMatchObject({
+        url: FIRST,
+        loading: false,
+        failure: { reason: "stopped" },
+      });
+      // ↻ with nothing standing: a load of the address
+      p.renderer.attachment.navigate?.({ action: "reload" });
+      await flush();
+      expect(p.window.loadedUrls).toEqual([FIRST, FIRST]);
+      expect(p.window.navigations).toEqual(["stop"]);
+      expect(p.result.runtime.summary.browser?.failure).toBeUndefined();
+      // …this load answers with nothing by itself (it is no page): THAT is said — the stop before it is over
+      p.blank(true);
+      p.blank(false);
+      await flush();
+      expect(p.result.runtime.summary.browser?.failure).toEqual({ reason: "no-document" });
+      // a page whose document STANDS (a subresource still arriving): stopped, it is the page as far as it came
+      const q = await starting();
+      q.window.emitNavigationState({ ...NAV, url: FIRST, loading: true });
+      q.renderer.attachment.navigate?.({ action: "stop" });
+      await flush();
+      expect(q.window.navigations).toEqual(["stop"]);
+      q.window.emitNavigationState({ ...NAV, url: FIRST, loading: false });
+      q.loads[0]?.reject(aborted());
+      await flush();
+      expect(q.result.runtime.summary.browser?.failure).toBeUndefined();
+      // …and its ↻ is the engine's own reload
+      q.renderer.attachment.navigate?.({ action: "reload" });
+      await flush();
+      expect(q.window.navigations).toEqual(["stop", "reload"]);
+      p.result.runtime.dispose();
+      q.result.runtime.dispose();
+    });
+  });
+
   describe("PT-5b2 (ruling 4) — the hand's events reach the page in the order they were sent, whatever is awaited on the way", () => {
     const NONE = { shift: false, alt: false, ctrl: false, meta: false };
     /** A phone's page, live, its window's inputs kept in ONE list as they reach it. */

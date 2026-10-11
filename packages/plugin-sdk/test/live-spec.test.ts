@@ -107,6 +107,8 @@ describe("PT-5a — why a browser face failed: the host's word, read by the kind
       "timed-out",
       "certificate",
       "blocked",
+      "no-document",
+      "load-stopped",
       "load-failed",
       "stopped",
       "unresponsive",

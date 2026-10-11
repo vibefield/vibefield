@@ -64,6 +64,15 @@ describe("PT-5a — what a failed page's film says", () => {
     expect(failureWords("connection-refused").headline).toBe("This site refused to connect");
     expect(failureWords("certificate").detail).toMatch(/was not opened/);
     expect(failureWords("stopped: Browser page stopped").headline).toBe("This page stopped");
+    // PT-5b2 (ruling 6): an address that is no page, and a load the person stopped before anything of the page arrived
+    expect(failureWords("no-document")).toEqual({
+      headline: "There’s no page at this address",
+      detail: "It answered with something a pane can’t show — a file, or nothing at all.",
+    });
+    expect(failureWords("load-stopped")).toEqual({
+      headline: "This page was stopped",
+      detail: "It hadn’t loaded yet. Try again to load it.",
+    });
   });
 });
 

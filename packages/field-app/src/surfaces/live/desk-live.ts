@@ -336,8 +336,14 @@ export function liveStateOf(
       if (failure !== undefined)
         return {
           is: "failed",
+          // (the contract's `failed` and `stopped` are a LOAD's: the SDK says them `load-failed` and `load-stopped` — its
+          // own `stopped` is a page whose process is gone)
           reason: liveBrowserFailureReason(
-            failure.reason === "failed" ? "load-failed" : failure.reason,
+            failure.reason === "failed"
+              ? "load-failed"
+              : failure.reason === "stopped"
+                ? "load-stopped"
+                : failure.reason,
           ),
           retry: retries.reload,
         };

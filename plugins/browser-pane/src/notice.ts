@@ -54,6 +54,14 @@ export const NOTICE_WORDS: Readonly<Record<LiveBrowserFailure, NoticeWords>> = {
     headline: "This address can’t be opened here",
     detail: "A pane opens web pages: http and https addresses.",
   },
+  "no-document": {
+    headline: "There’s no page at this address",
+    detail: "It answered with something a pane can’t show — a file, or nothing at all.",
+  },
+  "load-stopped": {
+    headline: "This page was stopped",
+    detail: "It hadn’t loaded yet. Try again to load it.",
+  },
   "load-failed": {
     headline: "This page couldn’t be loaded",
     detail: "Something went wrong on the way.",

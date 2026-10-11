@@ -310,6 +310,9 @@ export const BROWSER_NAVIGATION = serviceKey<BrowserNavigation>("vibefield.brows
  *  - the page's LOAD failed — `LiveInfo.address` is still the address that was ASKED for, never the engine's error page:
  *    `name-not-resolved`, `offline`, `connection-refused`, `connection-failed`, `timed-out`, `certificate` (refused, never
  *    bypassed), `blocked` (an address the desk does not open), `load-failed` (any other). `retry` asks for it again;
+ *  - the load ENDED WITH NO PAGE (PT-5b2) — nothing of the page stands, and the face is not `starting` for good:
+ *    `no-document` (the address answered with something a pane cannot show — a file to download, an empty answer),
+ *    `load-stopped` (the person stopped it before anything of the page arrived). `retry` asks for the address again;
  *  - the page STOPPED: `stopped` (its process is gone), `unresponsive` (it stopped answering, and was closed). `retry`
  *    loads it again, where it was;
  *  - `lost`: the desk lost its hold of the page. `retry` opens it again;
@@ -325,6 +328,8 @@ export const LIVE_BROWSER_FAILURES = [
   "timed-out",
   "certificate",
   "blocked",
+  "no-document",
+  "load-stopped",
   "load-failed",
   "stopped",
   "unresponsive",

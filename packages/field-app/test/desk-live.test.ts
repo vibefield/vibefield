@@ -783,6 +783,10 @@ describe("PT-5a — a page's failures are said (ruling 3)", () => {
       ["timed-out", "timed-out"],
       ["certificate", "certificate"],
       ["blocked", "blocked"],
+      // PT-5b2 (ruling 6): a load that ended with no document of the page — the address is no page; the person stopped it
+      // (the SDK's `stopped` is a page whose process is gone: a load stopped is its own word)
+      ["no-document", "no-document"],
+      ["stopped", "load-stopped"],
       ["failed", "load-failed"],
     ] as const) {
       handle.set({ browser: { ...NAV, failure: { reason } } as never });
