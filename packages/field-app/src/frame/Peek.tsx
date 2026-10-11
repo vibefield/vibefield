@@ -554,7 +554,7 @@ export function Peek({
   );
 
   // PK2: the button's width, published for the views whose own head shares its
-  // band (Godview's bar ends one gap short of it, godview.css) — the circle's
+  // band (Godview's Stories row keeps one head gap from it, godview-head.css) — the circle's
   // 40, or wider while a filter token rides it. The window's own Peek only: a
   // catalog plate binds nothing on its page.
   useLayoutEffect(() => {

@@ -428,6 +428,15 @@ describe("the head, mounted (GodviewHeadView)", () => {
     expect(holes.slice(0, 9).every(Boolean)).toBe(true);
     expect(holes.slice(9).some(Boolean)).toBe(false);
     expect(chevron("More views")?.classList.contains("no-drag")).toBe(true);
+    // a chevron with nothing behind it is not there (drawn at 0, no pointer), so it is no hole
+    // either: its box lets the strip drag the window
+    expect(chevron("Earlier views")?.disabled).toBe(true);
+    expect(chevron("Earlier views")?.classList.contains("no-drag")).toBe(false);
+    // turned to the far end, the two swap
+    act(() => chevron("More views")?.click());
+    act(() => chevron("More views")?.click());
+    expect(chevron("More views")?.disabled).toBe(true);
+    expect(chevron("More views")?.classList.contains("no-drag")).toBe(false);
     expect(chevron("Earlier views")?.classList.contains("no-drag")).toBe(true);
     // the head itself and its row are not holes: the app's strip drags the window across them
     expect(head().classList.contains("no-drag")).toBe(false);

@@ -1,6 +1,7 @@
 // THE DECK'S EDGE (DESIGN.md §8, 2026-09-28): where the terminal sheet's top
 // edge stands, as ONE signed number — the SHIFT, in CSS pixels, from the edge's
-// resting place (the monitor's tuned height below the bar).
+// resting place (the monitor's tuned height below the head's band, which since
+// the Stories head takes no height: the stage runs under the head).
 //
 //   shift > 0 — the edge moved DOWN: the monitor grows by `shift` and the swarm's
 //               field grows with it (the view re-measures its own section).

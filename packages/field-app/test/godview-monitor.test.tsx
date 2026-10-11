@@ -68,6 +68,7 @@ import { act, Profiler } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
+import { publishGodviewDeck, resetGodviewDeckDoorForTest } from "../src/frame/deck-door";
 import { getGodviewFindDoor, resetGodviewFindDoorForTest } from "../src/frame/find-door";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import { usagePortOver } from "../src/godview/monitor/doors";
@@ -338,6 +339,7 @@ afterEach(() => {
   board?.dispose();
   board = null;
   resetGodviewFindDoorForTest();
+  resetGodviewDeckDoorForTest();
   for (const name of Object.keys(TOKENS)) document.documentElement.style.removeProperty(name);
   vi.restoreAllMocks();
   // `restoreAllMocks` does not undo `stubGlobal`, and the inset row below stubs
@@ -1489,7 +1491,14 @@ describe("the monitor stage", () => {
     ]);
     expect(slot?.querySelectorAll("button").length).toBe(5);
     expect(pressedView(host)).toBe("LIST view");
-    // the deck is "up" until the deck's door lands (GV-D11): the head stands
+    // GV-D11: the head reads the deck's door — no state said, or "up" or "away", it stands;
+    // "maximized", it steps away; and back
+    expect(slot?.querySelector(".vf-stories")?.getAttribute("data-deck")).toBe("up");
+    act(() => publishGodviewDeck("away"));
+    expect(slot?.querySelector(".vf-stories")?.getAttribute("data-deck")).toBe("up");
+    act(() => publishGodviewDeck("maximized"));
+    expect(slot?.querySelector(".vf-stories")?.getAttribute("data-deck")).toBe("maximized");
+    act(() => publishGodviewDeck("up"));
     expect(slot?.querySelector(".vf-stories")?.getAttribute("data-deck")).toBe("up");
   });
 

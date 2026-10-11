@@ -165,8 +165,11 @@ export function GodviewHeadView({
   // Every circle and chevron in view is a control in the window's drag strip,
   // so it is a hole in it (`no-drag`, as the frame's other head controls are).
   // Not maximized, where nothing of the head is over the terminals' title bar;
-  // and not a circle off the page, which nothing can press.
+  // not a circle off the page, which nothing can press; and not a chevron with
+  // nothing behind it, which is not there (drawn at 0, taking no pointer).
   const hole = maximized ? "" : " no-drag";
+  const startHole = offset > 0 ? hole : "";
+  const endHole = offset < last ? hole : "";
 
   return (
     <div
@@ -185,7 +188,7 @@ export function GodviewHeadView({
         {paged ? (
           <button
             type="button"
-            className={`vf-stories-chev${hole}`}
+            className={`vf-stories-chev${startHole}`}
             data-end="start"
             aria-label="Earlier views"
             disabled={offset <= 0}
@@ -232,7 +235,7 @@ export function GodviewHeadView({
         {paged ? (
           <button
             type="button"
-            className={`vf-stories-chev${hole}`}
+            className={`vf-stories-chev${endHole}`}
             data-end="end"
             aria-label="More views"
             disabled={offset >= last}

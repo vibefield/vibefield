@@ -36,6 +36,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { emitGodviewMonitorMarker, type GodviewMonitorRunFacts } from "../development-console";
+import { useGodviewDeckMaximized } from "../frame/deck-door";
 import {
   type GodviewFindDoor,
   type LiveFilters,
@@ -789,6 +790,7 @@ export function GodviewMonitor({
   // (`frame/system-control-door.ts`). The frame's search button stands at the
   // row's right end (DESIGN.md §8 "Search — the Peek").
   const selectView = useCallback((viewId: string) => onSelectView?.(viewId), [onSelectView]);
+  const deckMaximized = useGodviewDeckMaximized();
 
   return (
     <>
@@ -799,11 +801,11 @@ export function GodviewMonitor({
           <MonitorHead
             views={MONITOR_VIEWS}
             viewId={view.id}
-            // GV-D11 — THE ONE LINE TO HOOK TO THE DECK'S DOOR. The head steps
-            // away while the terminals are maximized; their owner will publish
-            // away · up · maximized from `frame/deck-door.ts`, which is not on
-            // main yet. Until it lands the head is told they are up.
-            deck="up"
+            // GV-D11 — the head steps away while the terminals are maximized.
+            // Their owner publishes away · up · maximized (`frame/deck-door.ts`);
+            // the head reads only whether they fill the window, so it renders
+            // for that flip and never for away ⇄ up.
+            deck={deckMaximized ? "maximized" : "up"}
             onSelectView={selectView}
           />
         </ChromeBoundary>
