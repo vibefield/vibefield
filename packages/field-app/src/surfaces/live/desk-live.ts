@@ -1173,19 +1173,20 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       const at = now();
       // PT-5b2 (ruling 5) — the thirty seconds run from the take's BEGINNING: a frame that lands while the texture is read
       // back and encoded arms the timer from here (before: from the still before — a second take 1.5 s after, for exactly
-      // the pages that paint most). A take that fails — it answers no picture, it rejects, its keep fails — gives the
-      // moment back, and its frame is owed again; a still is counted taken when it is KEPT.
-      const before = stillAt;
+      // the pages that paint most). A still is counted taken when it is KEPT.
       stillAt = at;
+      // PT-5b3 (ruling 7) — A TAKE THAT FAILED HAS A CLOCK OF ITS OWN: it answered no picture, it rejected, or its keep
+      // failed — its frame is owed, and asked for again ONCE, thirty seconds after this take BEGAN, frame or no frame (a
+      // put-down and a rest still ask at once). Before, the moment was given back: a quiet page was asked again by
+      // nothing until its next frame, and a page that paints under a failure that lasts (a shelf that cannot be written:
+      // a full disk) was read back and encoded every 1.5 s.
       const failed = (): false => {
-        if (stillAt === at) stillAt = before;
         fresh = true;
-        // (a frame that landed meanwhile armed the timer from the take that failed: armed again, from the still before)
         if (stillTimer !== null) {
           timers.clear(stillTimer);
           stillTimer = null;
-          armStill();
         }
+        armStill();
         return false;
       };
       return track(

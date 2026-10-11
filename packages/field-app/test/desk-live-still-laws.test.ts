@@ -187,12 +187,14 @@ describe("PT-5b2 — one still a pane every 30 s, whatever lands while it is tak
     frame();
     face.demand(SEEN);
     expect(takes).toHaveLength(1);
+    const began = s.clock.now();
     // the read is under way: nothing is counted yet
     expect(s.live.stats().stillsTaken).toBe(0);
     takes[0]?.fail();
     await s.live.settled();
     expect(s.live.stats().stillsTaken).toBe(0);
-    expect(s.live.faces()[0]?.stillAt).toBeNull();
+    // (PT-5b3: the moment it was asked stands — the clock of the take that failed runs from it)
+    expect(s.live.faces()[0]?.stillAt).toBe(began);
     // owed: the next put-down takes it, with no frame between
     face.demand(HELD);
     face.demand(SEEN);
@@ -211,6 +213,78 @@ describe("PT-5b2 — one still a pane every 30 s, whatever lands while it is tak
     expect(s.live.stats().stillsTaken).toBe(1);
     expect(keptOf(s)).toBe(PAGE.url);
     expect(s.live.faces()[0]?.stillAt).toBe(s.clock.now());
+  });
+});
+
+describe("PT-5b3 — a take that FAILED has a clock of its own (ruling 7)", () => {
+  const slow = () => {
+    const takes: { finish(): void; fail(): void }[] = [];
+    const s = stage({
+      takeStill: ((_d: GPUDevice, face: { width: number; height: number }) =>
+        new Promise((resolve, reject) => {
+          takes.push({
+            finish: () =>
+              resolve({
+                type: "image/webp",
+                image: new Uint8Array([7]),
+                size: [face.width, face.height] as const,
+              }),
+            fail: () => reject(new Error("the device was lost under the read")),
+          });
+        })) as never,
+    });
+    return { s, takes };
+  };
+
+  it("a QUIET page whose take failed is asked again ONCE, thirty seconds after that take BEGAN — with no frame since (before: by nothing, until its next frame, a put-down or a rest)", async () => {
+    const { s, takes } = slow();
+    const { face, frame } = s.open();
+    face.demand(SEEN);
+    expect(frame()).toBe(true);
+    s.clock.advance(PAGE_STILL_SETTLE_MS);
+    expect(takes).toHaveLength(1);
+    const began = s.clock.now();
+    takes[0]?.fail();
+    await s.live.settled();
+    s.clock.advance(began + PAGE_STILL_EVERY_MS - s.clock.now() - 1);
+    expect(takes).toHaveLength(1);
+    s.clock.advance(1);
+    expect(takes).toHaveLength(2);
+    // that one answers: kept, counted — and nothing more is asked of a page that paints nothing
+    takes[1]?.finish();
+    await s.live.settled();
+    expect(s.live.stats().stillsTaken).toBe(1);
+    s.clock.advance(5 * PAGE_STILL_EVERY_MS);
+    expect(takes).toHaveLength(2);
+  });
+
+  it("a page that PAINTS under a failure that lasts (a shelf that cannot be written — a full disk) is read back once each thirty seconds, never each 1.5 s: each failed take asked again once, thirty seconds after IT began", async () => {
+    const { s, takes } = slow();
+    const { face, frame } = s.open();
+    face.demand(SEEN);
+    expect(frame()).toBe(true);
+    s.clock.advance(PAGE_STILL_SETTLE_MS);
+    expect(takes).toHaveLength(1);
+    let began = s.clock.now();
+    for (let failure = 1; failure <= 3; failure += 1) {
+      takes[failure - 1]?.fail();
+      await s.live.settled();
+      // the page paints every second meanwhile: none of its frames asks for a still before the clock
+      while (s.clock.now() < began + PAGE_STILL_EVERY_MS - 1_000) {
+        s.clock.advance(1_000);
+        frame();
+      }
+      expect(takes).toHaveLength(failure);
+      s.clock.advance(began + PAGE_STILL_EVERY_MS - s.clock.now());
+      expect(takes).toHaveLength(failure + 1);
+      began = s.clock.now();
+    }
+    // a PUT-DOWN still asks at once — its frame is the best the page will have
+    takes[3]?.fail();
+    await s.live.settled();
+    face.demand(HELD);
+    face.demand(SEEN);
+    expect(takes).toHaveLength(5);
   });
 });
 
