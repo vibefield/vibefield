@@ -38,6 +38,7 @@ import {
   emitGodviewColdOpenMarker,
   emitGodviewDeckMarker,
   emitGodviewDirectTerminalMarker,
+  type GodviewDeckFacts,
 } from "../development-console";
 import { type LinePane, publishGodviewLineDoor } from "../frame/line-door";
 import { requestView } from "../frame/view-state";
@@ -77,6 +78,7 @@ import {
   savedPaneSessionIds,
 } from "./deck-restore";
 import { godviewTerminalEffects, godviewTerminalTheme, terminalGround } from "./deck-theme";
+import { getDeckWrapperFacts, subscribeDeckWrapperFacts } from "./deck-wrapper-witness";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import { linePanesOf, newTerminalOutcome, pasteIntoPane } from "./line-panes";
 import type { MonitorFloorRecord } from "./monitor/agents";
@@ -1877,12 +1879,31 @@ export function GodviewDeck({
   // Whatever the deck currently is, said out loud once per change. The canvas
   // smoke's CANVAS_READY precedent: the headless harness reads renderer console
   // output because there is no other way to ask a page what it drew.
+  //
+  // Round 3: the line also carries the WRAPPER's facts — its state, its top and
+  // the count of the body's box changes — which the window's stage measures
+  // (`deck-wrapper-witness.ts`). They move with the edge, not with this
+  // component, so the deck keeps its last word and says it again with the new
+  // facts when they change: one line per change, and no render of the deck.
+  const lastDeckWord = useRef<GodviewDeckFacts | null>(null);
+  const sayDeck = useCallback((word: GodviewDeckFacts): void => {
+    lastDeckWord.current = word;
+    const wrapper = getDeckWrapperFacts();
+    emitGodviewDeckMarker(wrapper === null ? word : { ...word, wrapper });
+  }, []);
+  useEffect(
+    () =>
+      subscribeDeckWrapperFacts(() => {
+        if (lastDeckWord.current !== null) sayDeck(lastDeckWord.current);
+      }),
+    [sayDeck],
+  );
   useEffect(() => {
     const panes = workspace?.panes ?? [];
     const exited = panes
       .filter((pane) => (pane.session as { exited?: boolean }).exited === true)
       .map((pane) => pane.session.id);
-    emitGodviewDeckMarker({
+    sayDeck({
       active,
       panes: panes.length,
       sessions: workspace?.sessions.length ?? 0,
@@ -1922,6 +1943,7 @@ export function GodviewDeck({
         : {}),
     });
   }, [
+    sayDeck,
     active,
     workspace,
     runtime,

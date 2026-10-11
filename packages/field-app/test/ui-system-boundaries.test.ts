@@ -774,6 +774,30 @@ describe("UI system ownership boundaries", () => {
     expect(preview).not.toContain('"data-vf-narrow"');
   });
 
+  it("keeps the Lip's specimen an ADAPTER: the shipping stage holding shipping frames, never the wrapper's markup or rules (round 3)", () => {
+    // The wrapper — the Lip, the groove in its pill, the well — is drawn by
+    // `GodviewStage` and `godview.css` alone. The specimen hands that stage a
+    // deck fixture, as the overlay hands it the deck: panes wearing the views
+    // package's frame, on the terminal's ground at the viewer's opacity.
+    const section = source("design-system/sections/GodviewSection.tsx");
+    expect(section).toContain("Deck — the Lip: the groove and the well");
+    expect(section).toMatch(/<GodviewPreview\s[^>]*deck=\{<PaneFrameDeck\s/);
+    expect(source("design-system/GodviewPreview.tsx")).toMatch(/<GodviewStage\s/);
+    const fixture = source("design-system/PaneFramePreview.tsx");
+    expect(fixture).toMatch(/export function PaneFrameDeck\(/);
+    expect(fixture).toContain("DEFAULT_DECK_APPEARANCE.opacity");
+    // no catalog module spells a class of the wrapper's, and no catalog sheet a rule for one
+    const modules = readdirSync(join(PACKAGE_ROOT, "src", "design-system"), { recursive: true })
+      .map(String)
+      .filter((name) => /\.(?:tsx?|css)$/.test(name));
+    expect(modules.length).toBeGreaterThan(20);
+    for (const name of modules) {
+      expect(source(`design-system/${name}`), name).not.toMatch(
+        /vf-godview-(?:deck-(?:lip|grip|groove|well)|terminal-deck)/,
+      );
+    }
+  });
+
   it("keeps the empty pane launcher's styling in the views package, and its specimen an ADAPTER (QL-1)", () => {
     // The launcher — the field, the legend, the list — is the design's drawing
     // and ships in `@vibecook/puppeteer-views` with its own stylesheet, entering

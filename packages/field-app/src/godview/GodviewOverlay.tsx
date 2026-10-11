@@ -224,7 +224,8 @@ export function GodviewOverlay(): ReactElement | null {
     ...godviewTuningStyle(tuning),
     // The backdrop is the cover's 72% tint over the desk's still (DK-15) —
     // godview.css's own, no longer the viewer's (GT-7's setting retired).
-    // The deck sheet wears the terminal's own ground (DESIGN.md §8).
+    // The deck sheet is the frame: the terminal's own ground mixed toward the
+    // terminal's own ink, so the root is handed both (DESIGN.md §8, GV-D7).
     ...godviewTerminalGroundStyle(appearance, theme),
     "--vf-monitor-stage-height": `${monitor.stageHeight}%`,
     "--vf-scanline-density": `${stage[SCANLINE_DENSITY_KEY] ?? 2}px`,

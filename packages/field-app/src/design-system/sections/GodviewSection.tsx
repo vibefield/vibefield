@@ -5,7 +5,7 @@ import { meshBoardDoor } from "../godview-mesh-fixtures";
 import { profileTabsDoor } from "../godview-profiles-fixtures";
 import { spendDoor } from "../godview-spend-fixtures";
 import { timelineDoor } from "../godview-timeline-fixtures";
-import { PaneFramePreview } from "../PaneFramePreview";
+import { PaneFrameDeck, PaneFramePreview } from "../PaneFramePreview";
 import { PaneLauncherPreview } from "../PaneLauncherPreview";
 import { PeekPlate } from "../PeekPreview";
 import { SpawnBloomPreview } from "../SpawnBloomPreview";
@@ -88,6 +88,15 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
       >
         <div data-spawn-bloom-list-catalog="">
           <SpawnBloomPreview view="list" />
+        </div>
+      </Specimen>
+      <Specimen
+        title="Deck — the Lip: the groove and the well"
+        source="godview/GodviewStage.tsx · godview/GodviewDeckEdge.tsx"
+        bleed
+      >
+        <div data-godview-lip-catalog="">
+          <GodviewPreview theme={theme} deck={<PaneFrameDeck theme={theme} />} />
         </div>
       </Specimen>
       <Specimen

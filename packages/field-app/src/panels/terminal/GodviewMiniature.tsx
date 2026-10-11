@@ -152,6 +152,19 @@ const AGENT_FRAME = paneFrameModel({
 const AGENT_COLOR = "oklch(var(--tint-l) var(--tint-c) 150)";
 
 const LINE_HEIGHT = 19;
+/** What the stage's wrapper takes of the deck before a pane begins (DESIGN.md
+ * §2.7, §8 — the miniature draws `GodviewStage`, so these are godview.css's
+ * numbers, held to the tokens by `godview-deck-edge.test.tsx`): the Lip
+ * (`--vf-godview-deck-lip`), the well's foot (8), and the 1 the panes stand in
+ * from the well's edge, above and below. */
+const DECK_LIP = 30;
+const WELL_FOOT = 8;
+const WELL_EDGE = 1;
+/** The pane frame's bands, with the terminal's 2 of origin inside each (the
+ * views package's `deck-frame.css`: the grid lands at 26 from the top, 32 from
+ * the foot). */
+const FRAME_TOP = 24 + 2;
+const FRAME_FOOT = 30 + 2;
 const SIZES = {
   window: { monitor: 100, deck: 250 },
   thumb: { monitor: 100, deck: 212, width: 600 },
@@ -336,7 +349,11 @@ export function GodviewMiniature({
   // The CRT the user tuned in Godview's system controls, read once — the
   // preview draws Godview as it is, and never writes Godview's settings.
   const stage = useMemo(() => storedStageParameters(), []);
-  const rows = Math.floor((size.deck - 24 - 30 - 4) / LINE_HEIGHT);
+  // The rows a pane really has: the deck less the Lip and the well, then the
+  // frame's bands. (Until round 3 this took no lip off at all: it asked for
+  // ten rows of a pane with room for nine.)
+  const paneHeight = size.deck - DECK_LIP - WELL_FOOT - 2 * WELL_EDGE;
+  const rows = Math.max(1, Math.floor((paneHeight - FRAME_TOP - FRAME_FOOT) / LINE_HEIGHT));
   const height = size.monitor + size.deck;
   const stack = appearance.shaderEffects;
   const reduced =

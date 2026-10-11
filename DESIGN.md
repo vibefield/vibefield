@@ -35,7 +35,7 @@ Three surface families, one physics:
 
 *Status 2026-10-11: ruled, not built. Until it lands, Godview keeps the 40px instrument bar and the search button stands over its right end (PK2 (a)).*
 
-*Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
+*Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12). Not built: the Lip's two buttons, the terminals away and maximized, the edge's new outcomes and where a session opens (GV-D4, GV-D5, GV-D6, GV-D11). Until those land the terminals are always up, and their edge moves as §8's shipped text says.*
 
 Godview is the deliberate control-room exception to the iOS-widget chrome around it. Its
 visual source of truth is `p008/chopsticks/apps/godview`: a flat 40px instrument bar, compact
@@ -199,19 +199,25 @@ the general chrome palette.
 
 The deck sheet's shadow is §5's *Sheet* recipe, keyed to Godview's OWN mode switch rather than
 the app's theme (Godview can be dark over a light field). Its geometry: top corners
-`--vf-godview-deck-radius` 12px; the lip (the band the grip sits in) `--vf-godview-deck-lip`
-14px — never less than the radius, so no pane corner meets the curve; the grip
-`--vf-godview-deck-grip` 72×4, fully round — the island's pull bar (§8), longer and thinner: it names a full-width edge (James, 2026-09-28: 36 read too short).
-The empty pane launcher's clearing (QL-1, pass 3 §22) is the sheet's own paint, but never
-thinner than `--vf-godview-launcher-clearing-floor` 92% of the ground: a viewer who thins the
-stage thins the sheet, and at the sheet's glass the prompt beneath would read through the
-launcher's rows. At the default opaque backdrop the floor changes nothing. A launch (QL-2, §8)
-covers its pane with the same paint and the same floor while it waits.
+`--vf-godview-deck-radius` 12px; **the Lip** (GV-D7; built 2026-10-11) `--vf-godview-deck-lip` 30px
+— the lip grown into the drag bar, where a 14 band stood until then; still never less than the
+radius, so no pane corner meets the curve; **the groove** (the grip, GV-D12)
+`--vf-godview-deck-grip-width` / `--vf-godview-deck-grip-height` 40 × 6, corners
+`--vf-godview-deck-grip-radius` 3px — a slot pressed into the frame, not a bar laid on it, where a
+72 × 4 bar on the text ramp stood (the island's pull bar at instrument scale; James, 2026-09-28).
+The empty pane launcher's clearing (QL-1, pass 3 §22) is the terminal's ground at the sheet's
+glass — the sheet's own paint until round 3 gave the sheet the frame's tone; the clearing stands
+inside a pane, and nothing inside a pane changed (GV-D2) — but never thinner than
+`--vf-godview-launcher-clearing-floor` 92% of the ground: a viewer who thins the stage thins the
+sheet, and at the sheet's glass the prompt beneath would read through the launcher's rows. At the
+default opaque backdrop the floor changes nothing. A launch (QL-2, §8) covers its pane with the
+same paint and the same floor while it waits.
 
 **The wrapper's tokens** (round 3 — One Frame §23.2 and §23.3, GV-D7, GV-D11 and GV-D12; in
-`tokens.css` since 2026-10-11, projected AHEAD of the rules that draw them — nothing reads them
-until the Lip lands, and what each will draw is the ruled block below). The numbers are the ruled
-drawing's own (`kit/gv3.css`, `kit/gv3.js`), keyed per Godview mode as the deck's shadow is:
+`tokens.css` since 2026-10-11). The numbers are the ruled drawing's own (`kit/gv3.css`,
+`kit/gv3.js`). The frame's and the well's are drawn (the paragraph after the table); the
+controls', the grip's title-bar hit and the field's two stand AHEAD of the rules that will read
+them (the status line below). Keyed per Godview mode, as the deck's shadow is:
 
 | Role | Light | Dark |
 |---|---|---|
@@ -228,30 +234,32 @@ maximized title bar `--vf-godview-deck-grip-hit` 168px; the two controls
 `--vf-godview-deck-control-radius` 30px / 24px / 8px; the monitor's field
 `--vf-godview-deck-field-gap` 12px and `--vf-godview-deck-field-floor` 220px.
 
-*Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
-**How the wrapper is drawn, as ruled** (One Frame §23.2 and §23.3 — GV-D7 the Lip and GV-D12 the
-groove, ruled 2026-10-02 and locked as drawn; to be built, N12 (a), 2026-10-11; §8, the deck). The
-rows and the sheet's geometry above stay what ships. Two ruled values take a shipped token's place
-and are NOT projected yet: the lip's 30 and the groove's 40 × 6 — `--vf-godview-deck-lip` and
-`--vf-godview-deck-grip-width` / `-height` hold 14 and 72 × 4 in `tokens.css` until the commit that
-draws the Lip. The frame is painted at the stage's glass, as the sheet's ground is today.
-**The Lip** — `--vf-godview-deck-lip` **30px**, where 14 stands: the lip grown into the drag bar,
-still never less than the radius. **The groove** (the grip) — `--vf-godview-deck-grip-width` /
-`-height` **40 × 6**, where 72 × 4 stand, corners 3 (`-grip-radius`): a slot pressed into the frame,
-not a bar laid on it — filled with the well's edge, the well's shade inside its top
-(`inset 0 1px 1.5px`) and the well's rim under it (`0 1px 0`). **Its pill** (`-grip-pill`, padded
-0 by `-grip-pill-pad`) — clear at rest; under the pointer the pill is the terminal's ink at 7% and
-the groove takes 30% of that ink into its edge colour; held, the pill is 10% and the groove the
-full ink; 120ms on `ease`; under the keyboard's focus a 1px outline in text main, 1 off the pill.
-**Its hit** is the whole lip and 6 above it; in the maximized title bar (§8) it is `-grip-hit`
-wide, the bar's full height.
-**The two controls** (minimize and maximize, §8) — `-control-width` × `-control-height`, corners
-`-control-radius`, 4 apart, the last one 10 from the lip's right end (8 in the title bar): a 14
-glyph (§13) in the terminal's ink at 64%; under the pointer the full ink on a 10% fill of it, 120ms
-on `ease`. **The well** the panes sit in — corners `-well-radius` (a selected pane's 8, the 1 gap,
-the 1 edge), the panes 1 in from it and clipped at 9; drawn OVER the panes, the edge as a 1px inner
-ring and the shade as `inset 0 2px 4px`; under its foot, the rim as `0 1px 0`. **The monitor's
-field** ends `-field-gap` above the deck's edge and is never shorter than `-field-floor` (§8).
+**How the wrapper is drawn** (GV-D7 the Lip and GV-D12 the groove, ruled 2026-10-02 and locked as
+drawn; built 2026-10-11; §8, the deck). **The frame** is the sheet's ground: the terminal's
+ground mixed toward the terminal's own ink by the frame's share (the table), painted at the
+stage's glass as the sheet's ground was. The ink is the terminal's foreground — the same
+projection the panes are handed, said on the stage's root beside the ground; where a host hands
+none, Godview's text main. **The groove** is filled with the well's edge, the well's shade inside
+its top (`inset 0 1px 1.5px`) and the well's rim under it (`0 1px 0`). **Its pill** is clear at
+rest; under the pointer, anywhere on the lip, the pill is the terminal's ink at 7% and the groove
+takes 30% of that ink into its edge colour; held, the pill is 10% and the groove the full ink;
+120ms on `ease`; under the keyboard's focus a 1px outline in text main, 1 off the pill. **Its
+hit** is the whole lip and 6 above it — `row-resize` over it, `grabbing` while held. **The well**
+the panes sit in stands 8 in from the sheet's sides and its foot (inside the cover its foot is
+the window's reserve, §10), corners `--vf-godview-deck-well-radius` (a selected pane's 8, the 1
+gap, the 1 edge), the panes 1 in from it and clipped at 9; drawn OVER the panes, the edge as a 1px
+inner ring and the shade as `inset 0 2px 4px`; under its foot, the rim as `0 1px 0`. The well has
+no ground of its own: a pane paints its own ground over the frame's.
+
+*Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12). Not built: the Lip's two buttons, the terminals away and maximized, the edge's new outcomes and where a session opens (GV-D4, GV-D5, GV-D6, GV-D11). Until those land the terminals are always up, and their edge moves as §8's shipped text says.*
+**Still as ruled** (One Frame §23.1–§23.3; to be built, N12 (a), 2026-10-11; §8, the deck). **The
+grip's hit in the maximized title bar** is `--vf-godview-deck-grip-hit` wide, the bar's full
+height. **The two controls** (minimize and maximize, §8) — `--vf-godview-deck-control-width` ×
+`--vf-godview-deck-control-height`, corners `--vf-godview-deck-control-radius`, 4 apart, the last
+one 10 from the lip's right end (8 in the title bar): a 14 glyph (§13) in the terminal's ink at
+64%; under the pointer the full ink on a 10% fill of it, 120ms on `ease`. **The monitor's field**
+ends `--vf-godview-deck-field-gap` above the deck's edge and is never shorter than
+`--vf-godview-deck-field-floor` (§8).
 
 ### 2.8 Identity — the face
 
@@ -546,7 +554,7 @@ One more plain curve, with its reason: a **retract** goes back along the way it 
 stylesheet said 200ms, its constants table 180, and the table is the authority) — it accelerates
 home, the pop's reverse (M4). Leaving things never wait out an entrance's reveal delay.
 
-*Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
+*Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12). Not built: the Lip's two buttons, the terminals away and maximized, the edge's new outcomes and where a session opens (GV-D4, GV-D5, GV-D6, GV-D11). Until those land the terminals are always up, and their edge moves as §8's shipped text says.*
 **The terminals rise and fall** (Godview's deck, §8; One Frame §22 "Shared mechanics" and §23 —
 GV-D5, GV-D6, GV-D7 and GV-D11, ruled 2026-10-02): two durations, no new curve. The deck **rises**
 — called up from away, or maximized by its button — over **480ms on the island curve**: it is a thing that
@@ -1601,17 +1609,24 @@ its hot-point glow and rim left with the card (above); its last two rows are the
 - **Godview's terminal deck is a sheet over the monitor** (2026-09-28, James — the first of
   §1.1's named departures from the reference). The deck is one card whose top edge is a tab: rounded
   top corners, §2.3's hairline as a ring, and the Sheet shadow (§2.7's row) cast UP onto the
-  monitor, so the stage reads as lying beneath it. **The card's ground is always the terminal's
-  own background** (James, 2026-09-28): `--vf-godview-terminal-bg`, projected from the same
-  theme the panes are handed (a catalog theme, the per-mode choice, or §2.7's terminal
-  grounds), at the stage's glass (`--vf-godview-stage-opacity`). A pane's translucent ground
-  over a sheet of its own colour composites to that colour exactly, so lip, gaps and panes are
-  one surface — at an opaque backdrop; a viewer who thins the backdrop thins the
-  sheet with the rest of Godview, and the panes then read a shade denser than the lip (the
-  panes cannot shed their ground: ghosttea draws inverse video and glyph backdrops from it).
-  *Since 2026-10-03 (FC-D16) the backdrop's default is the covers' glass, 72%*, so that shade is
-  the default look; the panes keep their own 82% and the launcher its 92% floor (§2.7), so text
-  never sits on the field. **Inside the cover (§10, FC-D15)** the sheet's ground still runs to the
+  monitor, so the stage reads as lying beneath it. **The card's ground is the frame** (round 3,
+  GV-D7 — "make the inner pane part feel like wrapped, maybe a inner border", James, 2 Oct; built
+  2026-10-11): the terminal's own background — `--vf-godview-terminal-bg`, projected from the
+  same theme the panes are handed (a catalog theme, the per-mode choice, or §2.7's terminal
+  grounds) — mixed toward the terminal's own ink, 11% by day and 9% by night (§2.7), at the
+  stage's glass (`--vf-godview-stage-opacity`), with the ring and the shadow cast up. **The panes
+  sit in a well** set into it: 8 in from each side of the sheet (the 8 a covered view keeps
+  clear, §10) and from its foot, corners 10, the panes 1 in from its edge and clipped at 9; drawn
+  OVER the panes, a 1px inner edge and a soft shade at its top; under its foot, a rim of light —
+  set in, not drawn on. The well has no ground of its own, so a pane's own ground stands over the
+  frame's: the lip and the sheet around the well are a shade off the panes, on purpose. The
+  panes, their frames and the launcher are the ones that shipped before it, untouched (GV-D2).
+  *(Until 2026-10-11 the card's ground was the terminal's own background exactly — James,
+  2026-09-28 — so that lip, gaps and panes were one surface.)* A viewer who thins the backdrop
+  thins the sheet with the rest of Godview; the panes cannot shed their ground (ghosttea draws
+  inverse video and glyph backdrops from it). *Since 2026-10-03 (FC-D16) the backdrop's default
+  is the covers' glass, 72%*; the panes keep their own 82% and the launcher its 92% floor (§2.7),
+  so text never sits on the field. **Inside the cover (§10, FC-D15)** the sheet's ground still runs to the
   window's foot and edges, under the line, but the panes stop at 692 — the 88px reserve above the
   foot — and keep 8px clear of each edge.
   *Erratum 2026-10-03 (DK-0d, against the desk — DK-D25, R16):* on the desk Godview's LIVE backdrop
@@ -1631,8 +1646,14 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   the transcript's top fade and the sticky day heads are the cover's tint (`--vf-chrome-solid`,
   feathered by the room's own masks), never a backdrop filter — the room's sheet is rosetta's, so
   the override is VibeField's, scoped to the view and riding the room's own chunk.
-  Over the monitor the card occludes the bodies exactly as much as Godview occludes the field. **The edge moves:** a
-  grip in the lip (`role="separator"`, ↑/↓ 24px, ⇧ ×4, Home/End, double-click to rest) drags it.
+  Over the monitor the card occludes the bodies exactly as much as Godview occludes the field.
+  **The Lip** (GV-D7; built 2026-10-11) is the lip grown into the drag bar: **30** tall, on the
+  frame's tone. **The groove** (GV-D12 — James's pick over the lean: "i like the groove one")
+  stands in its middle, in its pill: a 40 × 6 slot pressed into the frame, the well's own depth
+  in miniature (§2.7 has its states), where a 72 × 4 bar stood until then. **The edge moves:**
+  the whole lip (`role="separator"`, ↑/↓ 24px, ⇧ ×4, Home/End, double-click to rest) drags it,
+  and 6 above it so it can be caught from the monitor — `row-resize` over it, `grabbing` while
+  held.
   Downward the monitor grows and the swarm's field grows with it; upward the monitor does NOT
   shrink — its tuned height (`Monitor height`, 35%, 170px floor) is its minimum — and the sheet
   slides OVER it, up to **the head's reserve, 56 from the window's top** (§8 "Godview's head —
@@ -1652,33 +1673,20 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   withdrawn while Godview is not the window's view. The door carries the three-valued state for
   Godview's own readers and for the shell (the window's lights); the frame's readers — the
   Peek's button and the Stories head — read only whether it is maximized. Nothing reads it yet.
-  *Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
+  *Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12). Not built: the Lip's two buttons, the terminals away and maximized, the edge's new outcomes and where a session opens (GV-D4, GV-D5, GV-D6, GV-D11). Until those land the terminals are always up, and their edge moves as §8's shipped text says.*
   **Round 3 redraws the wrapper around these panes, and nothing inside it** (One Frame §22 "Shared
   mechanics", §23 and §23.1–§23.3; GV-D2 — "keep the current terminal pane design as is … what i
   want you to redesign is the wrapper", James, 2 Oct; GV-D4, GV-D5, GV-D6, GV-D7, GV-D11 and GV-D12
   ruled 2026-10-02; to be built, N12 (a), ruled 2026-10-11). Everything above that status line is
-  what ships. The items below are the ruling, and each says which shipped sentence, if any, it
-  replaces on the day it lands. The numbers are the ruled drawing's, in its 1180 × 780 window; the
+  what ships — the Lip, the groove, the frame and the well among it since 2026-10-11. The items
+  below are the ruling still to build, and each says which shipped sentence, if any, it replaces
+  on the day it lands. The numbers are the ruled drawing's, in its 1180 × 780 window; the
   values are §2.7's. Three questions are open with James and are written as open: N14, N15, N16.
-  - **The Lip** (GV-D7): the lip grown into the drag bar — **30** tall, on the sheet's own ground
-    in the terminal's ink; nothing floats. **The groove** (GV-D12 — James's pick over the lean: "i
-    like the groove one") stands in its middle, in its pill: a 40 × 6 slot pressed into the frame,
-    the well's own depth in miniature, where the 72 × 4 bar is today. At its right end, 10 in and
-    4 apart, **minimize, then maximize** — the order windows keep them — each 30 × 24 with its
-    glyph at 14 (§13). The whole lip drags the edge, and 6 above it so it can be caught from the
-    monitor, but never its buttons: `row-resize` over it, `grabbing` while held. It stays the
-    `role="separator"` it is; its keys are below.
-  - **The well** (GV-D7 — "make the inner pane part feel like wrapped, maybe a inner border",
-    James, 2 Oct): the sheet stops being the terminal's ground exactly. Its ground is the **frame
-    tone** — the terminal's ground mixed toward the terminal's ink, 11% by day and 9% by night
-    (§2.7) — at the stage's glass, with the ring and the shadow cast up that the sheet has today.
-    The panes sit in a **well** set into it: 8 in from each side of the window (the 8 a covered
-    view keeps clear, §10), from the lip's foot to 692, corners 10, the panes 1 in from its edge
-    and clipped at 9; drawn OVER the panes, a 1px inner edge and a soft shade at its top; under
-    its foot, a rim of light — set in, not drawn on. The panes, their frames and the launcher are
-    the shipped ones, untouched (GV-D2). *Replaces* "**The card's ground is always the terminal's
-    own background**" (James, 2026-09-28) and its "lip, gaps and panes are one surface": the lip
-    and the sheet around the well become the frame, a shade off the panes, on purpose.
+  - **The Lip's two buttons** (GV-D7): at the lip's right end, 10 in and 4 apart, **minimize,
+    then maximize** — the order windows keep them — each 30 × 24 with its glyph at 14 (§13). The
+    whole lip drags the edge, but never its buttons. *(The Lip's bar, its groove and the well it
+    stands over are built — above. A button that does nothing is not drawn: these two arrive with
+    the slices that put the terminals away and maximize them.)*
   - **Rest:** the edge rests **300** from the window's top in the drawing's 780-tall window —
     where the sheet's top corners clear the edges' slivers (332–428) — so the lip is 300–330 and
     the panes 330–692. **What rest is on a window of another height — always 300, or the same
@@ -2206,7 +2214,7 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     "Godview's head — Stories") is centred on the window and keeps one head gap (12) from it, also
     as its glass widens. *(Corrected 2026-10-11: until the Stories head it stood over the
     instrument bar's right end and hung 8 below the bar's foot, PK2 (a).)*
-  - *Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
+  - *Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12). Not built: the Lip's two buttons, the terminals away and maximized, the edge's new outcomes and where a session opens (GV-D4, GV-D5, GV-D6, GV-D11). Until those land the terminals are always up, and their edge moves as §8's shipped text says.*
     **The button in the terminals' title bar** (GV-D11, ruled 2026-10-02; One Frame §23.1): while
     Godview's terminals are maximized (§8, the deck) the head's circle is not drawn — nothing of
     the head stands over the terminals — and the same button stands in their title bar, first of
@@ -2411,7 +2419,7 @@ numbers and provenance — "syncing history…", "external terminal — state on
 and what to do next; they don't apologize and they're never vague. No filler, no lorem:
 demo content is real-shaped (AAPL, San Francisco, 64°).
 
-*Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
+*Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12). Not built: the Lip's two buttons, the terminals away and maximized, the edge's new outcomes and where a session opens (GV-D4, GV-D5, GV-D6, GV-D11). Until those land the terminals are always up, and their edge moves as §8's shipped text says.*
 **The terminals' wrapper says the window's own words** (Godview, §8, the deck; One Frame §23.2 —
 "for close button, replace it with a minimize - button … for fill button, replace it with a
 maximize button", James, 2 Oct; ruled 2026-10-02). **The two readouts** while the edge is held are
@@ -2529,7 +2537,7 @@ their place". "Fullscreen" stays the pane's word (§8).
   longer Electron's page-zoom roles: each item sends its act to the window's head, which answers
   on Canvas as its keys do, and the three are disabled under a cover — so nothing in the menu bar
   or its keys zooms the whole window any more (One Frame FR-3's finding).
-  *Status 2026-10-11: ruled, not built. Until it lands, the terminals keep the 14px lip and its 72 × 4 grip, and are always up.*
+  *Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12). Not built: the Lip's two buttons, the terminals away and maximized, the edge's new outcomes and where a session opens (GV-D4, GV-D5, GV-D6, GV-D11). Until those land the terminals are always up, and their edge moves as §8's shipped text says.*
   **The head band's one exception — Godview's terminals, maximized** (GV-D11, ruled 2026-10-02;
   §8, the deck). While the deck is maximized the band holds the terminals' title bar and nothing
   of the head: the bar is the window's top 0–30, its controls centred on ITS axis, y 15, where the

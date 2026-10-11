@@ -153,6 +153,14 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(container?.textContent).toContain("Spend — where the money went");
     expect(container?.querySelector("[data-godview-spend-catalog] .vf-godview")).not.toBeNull();
     expect(container?.textContent).toContain("The interface, accounted for");
+    // Round 3 (GV-D7, GV-D12): the Lip's specimen is the shipping stage — its groove
+    // in its pill, its well — holding panes that wear the shipping frame.
+    expect(container?.textContent).toContain("Deck — the Lip: the groove and the well");
+    const lip = container?.querySelector("[data-godview-lip-catalog] .vf-godview");
+    expect(lip?.querySelector('[role="separator"] .vf-godview-deck-groove')).not.toBeNull();
+    const well = lip?.querySelector(".vf-godview-deck-well > .vf-godview-terminal-deck-body");
+    expect(well?.querySelectorAll(".ghostty-pane").length).toBeGreaterThanOrEqual(2);
+    expect(well?.querySelector(".ghostty-pane.is-active .vf-pane-frame")).not.toBeNull();
     // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 63 —
     // the wrapper's three (round 3) among them, drawn by the shipping component.
     expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(63);

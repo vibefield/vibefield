@@ -1198,6 +1198,14 @@
   margin: 0;
 }
 
+/* The same panes as a deck (the Lip's specimen): a row filling the box the
+   stage hands its deck. The stage's wrapper around it is the product's. */
+.vf-ds-pane-deck {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
 .vf-ds-pane-frame-figure figcaption {
   max-width: 32ch;
   color: var(--vf-text-tertiary);

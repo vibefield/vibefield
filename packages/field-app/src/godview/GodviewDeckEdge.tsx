@@ -37,15 +37,27 @@ interface Drag {
   bounds: DeckEdgeBounds;
 }
 
+/** The grip (GV-D12): the groove — a slot pressed into the frame — in the pill
+ * it answers the pointer on. Markup only; `godview.css` draws it and its
+ * states, keyed on the lip that holds it. A lip that is a picture (Settings'
+ * miniature) wears it too, at rest. */
+export function DeckGroove(): ReactElement {
+  return (
+    <span className="vf-godview-deck-grip" aria-hidden="true">
+      <span className="vf-godview-deck-groove" />
+    </span>
+  );
+}
+
 /**
- * THE DECK'S LIP (DESIGN.md §8, 2026-09-28): the band along the top of the
- * terminal sheet, and — with a monitor above it — the separator that moves the
- * sheet's edge. The number it moves is written straight onto the stage's root
- * as `--vf-godview-deck-shift` and `godview.css` does the layout, so a drag
- * re-renders this lip and nothing else: the monitor and the deck are elements
- * the stage was handed, and they follow the edge through CSS alone. The
- * terminals and the swarm each re-measure their own boxes (ResizeObserver),
- * which is how they resize without being told.
+ * THE DECK'S LIP (DESIGN.md §8, 2026-09-28; the Lip since round 3, GV-D7): the
+ * 30 bar along the top of the terminal sheet, and — with a monitor above it —
+ * the separator that moves the sheet's edge. The number it moves is written
+ * straight onto the stage's root as `--vf-godview-deck-shift` and `godview.css`
+ * does the layout, so a drag re-renders this lip and nothing else: the monitor
+ * and the deck are elements the stage was handed, and they follow the edge
+ * through CSS alone. The terminals and the swarm each re-measure their own
+ * boxes (ResizeObserver), which is how they resize without being told.
  *
  * Two numbers: the INTENT (where the viewer put the edge — remembered) and the
  * APPLIED shift (the intent clamped to this window). A window that shrinks
@@ -80,11 +92,12 @@ export function GodviewDeckEdge({ persist, monitorPresent }: GodviewDeckEdgeProp
   const measure = useCallback((): DeckEdgeBounds | null => {
     const found = stage();
     if (!found) return null;
-    // Inside the frame's cover the deck's body keeps the window's reserve
+    // Inside the frame's cover the deck's well keeps the window's reserve
     // clear (One Frame FC-D15, godview.css), so its minimum stands ABOVE that
     // reserve: the lip and a few rows, never a sliver of one under the line.
-    const body = found.root.querySelector(".vf-godview-terminal-deck-body");
-    const reserve = body === null ? 0 : Number.parseFloat(getComputedStyle(body).marginBottom) || 0;
+    // (The well carries the foot since round 3; the body is the panes, 1 in.)
+    const well = found.root.querySelector(".vf-godview-deck-well");
+    const reserve = well === null ? 0 : Number.parseFloat(getComputedStyle(well).marginBottom) || 0;
     return deckEdgeBounds(
       measureDeckEdge(found.root, found.monitor, applied.current),
       DECK_MIN_HEIGHT + reserve,
@@ -211,7 +224,7 @@ export function GodviewDeckEdge({ persist, monitorPresent }: GodviewDeckEdgeProp
         commit(next);
       }}
     >
-      <span className="vf-godview-deck-grip" aria-hidden="true" />
+      <DeckGroove />
     </div>
   );
 }

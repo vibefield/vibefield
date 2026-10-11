@@ -15,6 +15,9 @@
  *   5. with no monitor there is nothing to move against — no separator
  *   6. the stylesheet splits the one number into the monitor's growth and the
  *      deck's overlap, and the tokens it reads exist
+ *   7. the Lip's look (round 3, GV-D7 and GV-D12): a 30 bar holding the groove
+ *      in its pill, on the frame tone, the panes in a well — and the facts the
+ *      deck's marker says of the wrapper
  */
 
 import { readFileSync } from "node:fs";
@@ -39,7 +42,13 @@ import {
   godviewTerminalTheme,
   terminalGround,
 } from "../src/godview/deck-theme";
+import {
+  getDeckWrapperFacts,
+  resetDeckWrapperFactsForTest,
+} from "../src/godview/deck-wrapper-witness";
 import { GodviewStage } from "../src/godview/GodviewStage";
+import { GodviewMiniature } from "../src/panels/terminal/GodviewMiniature";
+import { BUILTIN_THEMES } from "../src/panels/terminal/theme-view";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -73,11 +82,23 @@ function rect(top: number, height: number): DOMRect {
   } as DOMRect;
 }
 
-// `godview.css`'s monitor rule, in the one place happy-dom measures.
+// The Lip's height (tokens.css), and what the well keeps clear at its foot.
+const LIP = 30;
+const WELL_FOOT = 8;
+
+// `godview.css`'s monitor rule, in the one place happy-dom measures — and, for
+// the wrapper's witness, where that rule puts the deck and the body in its well.
 function layout(this: Element): DOMRect {
   if (this.classList.contains("vf-godview")) return rect(0, windowHeight);
   if (this.classList.contains("vf-godview-monitor-stage")) {
     return rect(monitorTop, REST_MONITOR + Math.max(0, appliedShift(this)));
+  }
+  const deckTop = monitorTop + REST_MONITOR + appliedShift(this);
+  if (this.classList.contains("vf-godview-terminal-deck")) {
+    return rect(deckTop, windowHeight - deckTop);
+  }
+  if (this.classList.contains("vf-godview-terminal-deck-body")) {
+    return rect(deckTop + LIP + 1, windowHeight - deckTop - LIP - WELL_FOOT - 2);
   }
   return rect(0, 0);
 }
@@ -113,6 +134,7 @@ beforeEach(() => {
   windowHeight = 800;
   monitorTop = BAR;
   localStorage.clear();
+  resetDeckWrapperFactsForTest();
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(layout);
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
@@ -137,7 +159,17 @@ function Monitor(): ReactElement {
   return <section className="vf-godview-monitor-stage" aria-label="Agent monitor" />;
 }
 
-function mount({ monitor = true, persist = true }: { monitor?: boolean; persist?: boolean } = {}) {
+function mount({
+  monitor = true,
+  persist = true,
+  publishesDeck = false,
+  edge = true,
+}: {
+  monitor?: boolean;
+  persist?: boolean;
+  publishesDeck?: boolean;
+  edge?: boolean;
+} = {}) {
   root = createRoot(host);
   act(() =>
     root?.render(
@@ -147,7 +179,8 @@ function mount({ monitor = true, persist = true }: { monitor?: boolean; persist?
         tuningOpen={false}
         animations={false}
         {...(monitor ? { monitor: <Monitor /> } : {})}
-        deckEdge={{ persist }}
+        {...(edge ? { deckEdge: { persist } } : {})}
+        publishesDeck={publishesDeck}
         deck={<p>deck</p>}
       />,
     ),
@@ -370,6 +403,62 @@ describe("the deck edge, mounted", () => {
     expect(localStorage.getItem(DECK_EDGE_STORAGE_KEY)).toBeNull();
   });
 
+  it("keeps its minimum above the reserve at the well's foot (the cover's 88)", () => {
+    // Inside the frame's cover the well stands 88 above the window's foot
+    // (FC-D15), and the deck's 120 stands above that — read off the well, which
+    // is what carries the reserve since the panes moved into it.
+    const real = window.getComputedStyle.bind(window);
+    vi.spyOn(window, "getComputedStyle").mockImplementation((element: Element) => {
+      const style = real(element);
+      if (!element.classList.contains("vf-godview-deck-well")) return style;
+      return new Proxy(style, {
+        get: (target, key) => (key === "marginBottom" ? "88px" : Reflect.get(target, key)),
+      });
+    });
+    mount();
+    expect(separator()?.getAttribute("aria-valuemax")).toBe(String(MAX - 88));
+    dragBy(10_000);
+    expect(shiftOnRoot()).toBe(`${MAX - 88}px`);
+  });
+
+  it("a stage with no edge draws the Lip as a picture: the groove at rest, and no separator", () => {
+    // Settings' miniature: a still of Godview, which wears the groove.
+    mount({ edge: false });
+    expect(separator()).toBeNull();
+    const lip = host.querySelector(".vf-godview-deck-lip");
+    expect(lip?.getAttribute("aria-hidden")).toBe("true");
+    expect(lip?.querySelector(".vf-godview-deck-grip > .vf-godview-deck-groove")).not.toBeNull();
+  });
+
+  it("says the wrapper's facts for the deck's marker: up, where its top is, and each change of the body's box", () => {
+    mount({ publishesDeck: true });
+    // rest: the deck's top is the bar's 40 and the monitor's 280 below the stage's
+    expect(getDeckWrapperFacts()).toEqual({ state: "up", top: 320, bodyResizes: 0 });
+    // a re-measure that moved nothing counts nothing
+    resizeWindow(800);
+    expect(getDeckWrapperFacts()).toEqual({ state: "up", top: 320, bodyResizes: 0 });
+    // the window grows: the body's box changed once, the top did not move
+    resizeWindow(900);
+    expect(getDeckWrapperFacts()).toEqual({ state: "up", top: 320, bodyResizes: 1 });
+    // a person's drag resizes as it goes — the count is what a product move
+    // will be held to ("one resize per change", the slices to come)
+    const before = getDeckWrapperFacts()?.bodyResizes ?? 0;
+    dragBy(-100);
+    resizeWindow(900); // the observer's turn after the drag's layout
+    expect(getDeckWrapperFacts()?.top).toBe(220);
+    expect(getDeckWrapperFacts()?.bodyResizes).toBeGreaterThan(before);
+    // …and the stage going away withdraws them
+    act(() => root?.unmount());
+    root = null;
+    expect(getDeckWrapperFacts()).toBeNull();
+  });
+
+  it("a stage that is not the window's measures nothing for the marker", () => {
+    mount();
+    resizeWindow(900);
+    expect(getDeckWrapperFacts()).toBeNull();
+  });
+
   it("draws no separator and no shift without a monitor", () => {
     localStorage.setItem(DECK_EDGE_STORAGE_KEY, "-100");
     mount({ monitor: false });
@@ -390,15 +479,19 @@ describe("the deck sheet's ground", () => {
           darkThemeName: "Solarized Dark",
         },
       ]) {
-        const panes = terminalGround(godviewTerminalTheme(appearance, mode)).background;
+        const panes = terminalGround(godviewTerminalTheme(appearance, mode));
+        // Round 3: the frame tone is the ground mixed toward the terminal's own
+        // ink, so the stage's root is handed both, from the one projection.
         expect(godviewTerminalGroundStyle(appearance, mode)).toEqual({
-          "--vf-godview-terminal-bg": panes,
+          "--vf-godview-terminal-bg": panes.background,
+          "--vf-godview-terminal-ink": panes.ink,
         });
       }
     }
     // The reference grounds (§2.7), opaque: the alpha is the stage's to set.
     expect(godviewTerminalGroundStyle(DEFAULT_DECK_APPEARANCE, "dark")).toEqual({
       "--vf-godview-terminal-bg": "rgb(40 44 52)",
+      "--vf-godview-terminal-ink": "rgb(255 255 255)",
     });
   });
 });
@@ -425,14 +518,178 @@ describe("the deck sheet's stylesheet", () => {
     expect(deck).toContain("var(--vf-godview-deck-radius)");
   });
 
-  it("paints the sheet in the terminal's own ground, falling back per mode to §2.7's", () => {
-    expect(rule(".vf-godview-terminal-deck")).toContain("var(--deck-ground)");
-    expect(godview).toContain(
-      "--deck-ground: var(--vf-godview-terminal-bg, var(--vf-godview-light-terminal-bg));",
+  it("paints the sheet in the frame tone — the terminal's ground mixed toward its own ink — at the stage's glass", () => {
+    // GV-D7: the sheet stops being the terminal's ground exactly; the panes sit
+    // in a well set into a frame a shade off them.
+    expect(rule(".vf-godview-terminal-deck")).toMatch(
+      /background: color-mix\(\s*in srgb,\s*var\(--deck-frame\) var\(--vf-godview-stage-opacity, 100%\),\s*transparent\s*\);/,
     );
     expect(godview).toContain(
-      "--deck-ground: var(--vf-godview-terminal-bg, var(--vf-godview-dark-terminal-bg));",
+      "--deck-frame: color-mix(in srgb, var(--deck-ink) var(--deck-frame-ink), var(--deck-ground));",
     );
+    // the ink is the terminal's, which the stage's root is handed; Godview's
+    // text main only where a host hands none
+    expect(godview).toContain("--deck-ink: var(--vf-godview-terminal-ink, var(--text-main));");
+    for (const mode of ["light", "dark"]) {
+      expect(godview).toContain(`--deck-frame-ink: var(--vf-godview-${mode}-deck-frame-ink);`);
+      expect(godview).toContain(
+        `--deck-ground: var(--vf-godview-terminal-bg, var(--vf-godview-${mode}-terminal-bg));`,
+      );
+    }
+    // GV-D2: the launcher's clearing is untouched — still the TERMINAL's ground
+    expect(rule(".vf-godview-terminal-deck")).toMatch(
+      /--vf-pane-launcher-ground: color-mix\(\s*in srgb,\s*var\(--deck-ground\)/,
+    );
+  });
+
+  it("the lip is a 30 bar holding a 40 × 6 groove, from tokens DESIGN.md names", () => {
+    const tokens = readFileSync(join(PACKAGE_ROOT, "../design-kit/src/tokens.css"), "utf8");
+    const design = readFileSync(join(PACKAGE_ROOT, "../../DESIGN.md"), "utf8");
+    const token = (name: string): string | undefined =>
+      tokens.match(new RegExp(`^\\s*${name}:\\s*([^;]+);`, "m"))?.[1];
+    expect(token("--vf-godview-deck-lip")).toBe("30px");
+    expect(token("--vf-godview-deck-grip-width")).toBe("40px");
+    expect(token("--vf-godview-deck-grip-height")).toBe("6px");
+    expect(token("--vf-godview-deck-grip-radius")).toBe("3px");
+    for (const name of [
+      "--vf-godview-deck-lip",
+      "--vf-godview-deck-grip-width",
+      "--vf-godview-deck-grip-height",
+      "--vf-godview-deck-grip-radius",
+    ]) {
+      expect(design, name).toContain(`\`${name}\``);
+    }
+    // …and DESIGN.md states them as what ships: 14 and 72 × 4 are history
+    expect(design).toMatch(/`--vf-godview-deck-lip` 30px/);
+    expect(design).toMatch(
+      /`--vf-godview-deck-grip-width` \/ `--vf-godview-deck-grip-height` 40 × 6/,
+    );
+    expect(design).not.toMatch(/Until it lands, the terminals keep the 14px lip/);
+
+    // the bar reads its height; the groove its size, and is PRESSED IN: filled
+    // with the well's edge, the well's shade inside its top, its rim under it
+    expect(rule(".vf-godview-deck-lip")).toContain("flex: 0 0 var(--vf-godview-deck-lip);");
+    const groove = rule(".vf-godview-deck-groove");
+    expect(groove).toContain("width: var(--vf-godview-deck-grip-width);");
+    expect(groove).toContain("height: var(--vf-godview-deck-grip-height);");
+    expect(groove).toContain("border-radius: var(--vf-godview-deck-grip-radius);");
+    expect(groove).toContain("background: var(--deck-well-edge);");
+    expect(groove).toMatch(
+      /box-shadow:\s*inset 0 1px 1\.5px var\(--deck-well-shade\),\s*0 1px 0 var\(--deck-well-rim\);/,
+    );
+    // its pill: 22 tall, padded by the token, fully round, clear at rest
+    const pill = rule(".vf-godview-deck-grip");
+    expect(pill).toContain("height: var(--vf-godview-deck-grip-pill);");
+    expect(pill).toContain("padding: 0 var(--vf-godview-deck-grip-pill-pad);");
+    expect(pill).toContain("border-radius: calc(var(--vf-godview-deck-grip-pill) / 2);");
+    expect(pill).toContain("background: transparent;");
+    // under the pointer: the pill the ink at 7%, the groove 30% of it in its edge
+    expect(rule('.vf-godview-deck-lip[role="separator"]:hover .vf-godview-deck-grip')).toContain(
+      "background: color-mix(in srgb, var(--deck-ink) 7%, transparent);",
+    );
+    expect(rule('.vf-godview-deck-lip[role="separator"]:hover .vf-godview-deck-groove')).toContain(
+      "background: color-mix(in srgb, var(--deck-ink) 30%, var(--deck-well-edge));",
+    );
+    // held: 10%, and the groove the full ink — said AFTER the hover and at its
+    // weight, because a held lip is also under the pointer
+    const held = '.vf-godview-deck-lip[role="separator"][data-dragging="true"]';
+    expect(rule(`${held} .vf-godview-deck-grip`)).toContain(
+      "background: color-mix(in srgb, var(--deck-ink) 10%, transparent);",
+    );
+    expect(rule(`${held} .vf-godview-deck-groove`)).toContain("background: var(--deck-ink);");
+    expect(godview.indexOf(`${held} .vf-godview-deck-groove`)).toBeGreaterThan(
+      godview.indexOf('.vf-godview-deck-lip[role="separator"]:hover .vf-godview-deck-groove'),
+    );
+    expect(rule(held)).toContain("cursor: grabbing;");
+    // the keyboard's focus: 1px in text main, 1 off the pill
+    const focus = rule(".vf-godview-deck-lip:focus-visible .vf-godview-deck-grip");
+    expect(focus).toContain("outline: 1px solid var(--text-main);");
+    expect(focus).toContain("outline-offset: 1px;");
+    // the old bar's ramp is gone with the bar
+    expect(godview).not.toContain("background: var(--text-faint);\n  transition: background-color");
+
+    // mounted: the separator holds the pill and the groove, and NO button —
+    // minimize and maximize are drawn by the slices that make them work
+    mount();
+    const edge = separator();
+    expect(edge?.querySelector(".vf-godview-deck-grip > .vf-godview-deck-groove")).not.toBeNull();
+    expect(edge?.querySelectorAll("button")).toHaveLength(0);
+  });
+
+  it("the well's edge is drawn over the panes, 1 in, corners 10 and 9", () => {
+    mount();
+    // the sheet holds the lip, then the well; the well holds the box the deck fills
+    const well = host.querySelector(".vf-godview-terminal-deck > .vf-godview-deck-well");
+    expect(well).not.toBeNull();
+    expect(well?.previousElementSibling?.classList.contains("vf-godview-deck-lip")).toBe(true);
+    const body = well?.querySelector(":scope > .vf-godview-terminal-deck-body");
+    expect(body?.textContent).toBe("deck");
+
+    // the well: 8 in at each side and its foot, corners 10, a rim of light under it
+    const wellRule = rule(".vf-godview-deck-well");
+    expect(wellRule).toContain("margin: 0 8px 8px;");
+    expect(wellRule).toContain("border-radius: var(--vf-godview-deck-well-radius);");
+    expect(wellRule).toContain("box-shadow: 0 1px 0 var(--deck-well-rim);");
+    // its edge and its shade are an overlay ABOVE the panes, never a border under them
+    const over = rule(".vf-godview-deck-well::after");
+    expect(over).toContain("inset: 0;");
+    expect(over).toContain("z-index: 1;");
+    expect(over).toContain("border-radius: inherit;");
+    expect(over).toContain("pointer-events: none;");
+    expect(over).toMatch(
+      /box-shadow:\s*inset 0 0 0 1px var\(--deck-well-edge\),\s*inset 0 2px 4px var\(--deck-well-shade\);/,
+    );
+    // the panes: 1 in, clipped at 9, their own layers kept under that overlay
+    const bodyRule = rule(".vf-godview-terminal-deck-body");
+    expect(bodyRule).toContain("inset: 1px;");
+    expect(bodyRule).toContain("overflow: hidden;");
+    expect(bodyRule).toContain("border-radius: calc(var(--vf-godview-deck-well-radius) - 1px);");
+    expect(bodyRule).toContain("isolation: isolate;");
+    for (const mode of ["light", "dark"]) {
+      for (const part of ["edge", "rim", "shade"]) {
+        expect(godview).toContain(`--deck-well-${part}: var(--vf-godview-${mode}-well-${part});`);
+      }
+    }
+    // inside the cover the well's foot is the window's reserve (FC-D15), and
+    // nothing else of the well changes there
+    expect(rule(".vf-cover .vf-godview-deck-well")).toBe("\n  margin-bottom: 88px;\n");
+    expect(godview).not.toMatch(/^\.vf-cover \.vf-godview-terminal-deck-body \{/m);
+  });
+
+  it("the pane area is no-drag, so a pane's rows inside the window's drag strip take their clicks", () => {
+    // GV-D11's carve, declared for good: an "up" sheet never stands in the top
+    // 52, so this only bites when the terminals are maximized.
+    expect(rule(".vf-godview-deck-well")).toContain("-webkit-app-region: no-drag;");
+    // …and nothing else of the wrapper declares a region yet: the bar becomes
+    // window-drag only with the slice that maximizes it
+    expect(godview.match(/^\s*-webkit-app-region:/gm)).toHaveLength(1);
+  });
+
+  it("holds the deck's top at rest whatever the head's height: the stage's basis gives back what the head takes (L8a)", () => {
+    // basis = max(tuned, 170px) + (40px − head height) + max(0px, shift). With
+    // the head at 40 (the instrument bar, today) the middle term is 0 and
+    // nothing moves; at 0 (the Stories head) the stage is exactly 40 taller and
+    // the deck's top — head + basis — is where it was.
+    const monitor = rule(".vf-godview-monitor-stage");
+    expect(monitor).toMatch(
+      /flex: 0 0\s+calc\(\s*max\(var\(--vf-monitor-stage-height, 35%\), 170px\) \+\s*\(40px - var\(--vf-godview-head-height, 40px\)\) \+\s*max\(0px, var\(--vf-godview-deck-shift, 0px\)\)\s*\);/,
+    );
+    // The variable is set NOWHERE in this sheet: its default is the 40px inside
+    // that `var()`, and the head's owner sets it — to 0px, on the stage's root —
+    // when the bar goes. A second default here would be a second owner.
+    expect(godview).not.toMatch(/^\s*--vf-godview-head-height\s*:/m);
+    expect(godview.match(/var\(--vf-godview-head-height, 40px\)/g)).toHaveLength(1);
+    // the arithmetic the formula is: head + basis is the same number at 40 and at 0
+    const top = (head: number, tuned: number, shift: number): number =>
+      head + Math.max(tuned, 170) + (40 - head) + Math.max(0, shift);
+    for (const [tuned, shift] of [
+      [280, 0],
+      [120, 0],
+      [280, 96],
+    ] as const) {
+      expect(top(0, tuned, shift)).toBe(top(40, tuned, shift));
+      expect(top(0, tuned, shift) - 0 - (top(40, tuned, shift) - 40)).toBe(40);
+    }
   });
 
   it("reads tokens that exist (DESIGN.md first, then tokens.css)", () => {
@@ -444,6 +701,10 @@ describe("the deck sheet's stylesheet", () => {
       "--vf-godview-deck-lip",
       "--vf-godview-deck-grip-width",
       "--vf-godview-deck-grip-height",
+      "--vf-godview-deck-grip-radius",
+      "--vf-godview-deck-grip-pill",
+      "--vf-godview-deck-grip-pill-pad",
+      "--vf-godview-deck-well-radius",
       "--vf-godview-launcher-clearing-floor",
     ]) {
       expect(tokens, token).toMatch(new RegExp(`^\\s*${token}:`, "m"));
@@ -488,6 +749,66 @@ describe("the wrapper's tokens (round 3 — DESIGN.md first, then tokens.css)", 
   it("DESIGN.md names each by its whole name, so a token is never one the doc does not hold", () => {
     for (const [name] of WRAPPER_TOKENS) {
       expect(design, name).toContain(`\`${name}\``);
+    }
+  });
+});
+
+describe("Settings' miniature under the Lip (plan risk 10)", () => {
+  const tokens = readFileSync(join(PACKAGE_ROOT, "../design-kit/src/tokens.css"), "utf8");
+  const px = (name: string): number =>
+    Number.parseFloat(tokens.match(new RegExp(`^\\s*${name}:\\s*([^;]+);`, "m"))?.[1] ?? "NaN");
+
+  function mountMiniature(variant: "window" | "thumb" | "deck"): HTMLElement {
+    root = createRoot(host);
+    act(() =>
+      root?.render(
+        <GodviewMiniature
+          variant={variant}
+          mode="light"
+          theme={BUILTIN_THEMES.light}
+          palette={Array.from({ length: 16 }, () => "#808080")}
+          appearance={DEFAULT_DECK_APPEARANCE}
+        />,
+      ),
+    );
+    return host.querySelector<HTMLElement>(".vf-ts-mini") as HTMLElement;
+  }
+
+  it("draws the shipping stage: the groove in its lip, its panes in the well", () => {
+    const mini = mountMiniature("window");
+    expect(
+      mini.querySelector(".vf-godview-deck-lip > .vf-godview-deck-grip > .vf-godview-deck-groove"),
+    ).not.toBeNull();
+    expect(
+      mini.querySelector(
+        ".vf-godview-deck-well > .vf-godview-terminal-deck-body > .vf-ts-mini-deck .ghostty-pane",
+      ),
+    ).not.toBeNull();
+    // a picture: nothing in it can be dragged
+    expect(mini.querySelector('[role="separator"]')).toBeNull();
+  });
+
+  it("sizes its rows to what the Lip and the well leave a pane, never under the frame's bands", () => {
+    // The pane's box is the deck less the Lip (the token), the well's foot (8)
+    // and the 1 the panes stand in from the well at top and bottom; its grid is
+    // the frame's: 24 above and 30 below, the terminal's 2 of origin inside.
+    const lip = px("--vf-godview-deck-lip");
+    expect(lip).toBe(30);
+    for (const [variant, deck] of [
+      ["window", 250],
+      ["thumb", 212],
+      ["deck", 250],
+    ] as const) {
+      const mini = mountMiniature(variant);
+      const screen = mini.querySelector<HTMLElement>(".ghostty-pane.is-active .vf-ts-mini-screen");
+      const rows = screen?.querySelectorAll(".vf-ts-mini-line").length ?? 0;
+      const room = deck - lip - 8 - 2 - (24 + 2) - (30 + 2);
+      expect(rows, variant).toBeGreaterThan(0);
+      expect(rows * 19, variant).toBeLessThanOrEqual(room);
+      expect((rows + 1) * 19, variant).toBeGreaterThan(room);
+      expect(screen?.style.height, variant).toBe(`${rows * 19}px`);
+      act(() => root?.unmount());
+      root = null;
     }
   });
 });

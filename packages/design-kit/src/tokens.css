@@ -192,19 +192,22 @@
   --vf-godview-dark-terminal-divider: #414650;
   /* §2.7 + §8 (2026-09-28): the terminal deck is a sheet over the monitor. The
      shadow is §5's Sheet recipe per GODVIEW mode (not the app theme's); the lip
-     is never less than the radius, so no pane corner meets the curve. */
+     — since round 3 the Lip, the drag bar (GV-D7) — is never less than the
+     radius, so no pane corner meets the curve. */
   --vf-godview-light-deck-shadow: 0 -20px 40px rgb(0 0 0 / 8%);
   --vf-godview-dark-deck-shadow: 0 -20px 40px rgb(0 0 0 / 40%);
   --vf-godview-deck-radius: 12px;
-  --vf-godview-deck-lip: 14px;
+  --vf-godview-deck-lip: 30px;
   /* §2.7 — the launcher's clearing is never thinner than this, whatever the
      stage's glass: the prompt beneath must not read through its rows */
   --vf-godview-launcher-clearing-floor: 92%;
-  --vf-godview-deck-grip-width: 72px;
-  --vf-godview-deck-grip-height: 4px;
+  /* the grip is the groove (GV-D12): a 40 × 6 slot pressed into the frame */
+  --vf-godview-deck-grip-width: 40px;
+  --vf-godview-deck-grip-height: 6px;
   /* §2.7 + §8 (round 3, One Frame §23.2 — GV-D7 the Lip, GV-D12 the groove,
-     GV-D11 the title bar): the wrapper around Godview's terminals. Projected
-     ahead of the rules that draw them; the values are the ruled drawing's own.
+     GV-D11 the title bar): the wrapper around Godview's terminals. The values
+     are the ruled drawing's own; the controls', the grip's hit and the field's
+     two stand ahead of the rules that will read them.
      The frame is the sheet's ground — the terminal's ground mixed toward the
      terminal's ink by this much — and the well is what the panes sit in: its
      edge and shade drawn over them, its rim under its foot. Per GODVIEW mode,

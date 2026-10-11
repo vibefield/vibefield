@@ -1,7 +1,8 @@
 import { ChromeBoundary } from "@vibecook/puppeteer-views";
-import { type CSSProperties, type ReactElement, type ReactNode, useEffect } from "react";
+import { type CSSProperties, type ReactElement, type ReactNode, useEffect, useRef } from "react";
 import { type GodviewDeckState, publishGodviewDeck } from "../frame/deck-door";
-import { GodviewDeckEdge } from "./GodviewDeckEdge";
+import { useDeckWrapperWitness } from "./deck-wrapper-witness";
+import { DeckGroove, GodviewDeckEdge } from "./GodviewDeckEdge";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 
 export interface GodviewStageProps {
@@ -13,8 +14,9 @@ export interface GodviewStageProps {
   monitor?: ReactNode;
   tuningPanel?: ReactNode;
   deck: ReactNode;
-  /** The deck's movable edge (DESIGN.md §8, 2026-09-28). Absent, the lip is
-   * drawn and the edge stays at rest — the Settings miniature is a picture. */
+  /** The deck's movable edge (DESIGN.md §8, 2026-09-28). Absent, the Lip is
+   * drawn with its groove at rest and nothing moves — the Settings miniature
+   * is a picture. */
   deckEdge?: { persist: boolean };
   /** The terminals' wrapper: away, up or maximized (round 3, GV-D5/D6/D11).
    * The stage only draws it — written on the root beside the three attributes
@@ -58,6 +60,11 @@ export function GodviewStage({
     if (!publishesDeck) return;
     return () => publishGodviewDeck(null);
   }, [publishesDeck]);
+  // The wrapper's facts for the deck's marker — the window's stage only, and
+  // only while the markers are on (`deck-wrapper-witness.ts`).
+  const deckRef = useRef<HTMLElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useDeckWrapperWitness({ enabled: publishesDeck, state: deckState, deck: deckRef, body: bodyRef });
   return (
     <div
       aria-hidden={!open}
@@ -72,10 +79,12 @@ export function GodviewStage({
       <div className="vf-godview-vignette" aria-hidden="true" />
       {monitor}
       {tuningPanel}
-      {/* The deck is a sheet over the monitor (§8): its lip is the tab along
-          the top edge, and the body is the positioned box every deck face
-          fills (`inset: 0`), so the faces never learn the lip is there. */}
+      {/* The deck is a sheet over the monitor (§8): the Lip along its top
+          edge, then the well set into the frame, and in the well the body —
+          the positioned box every deck face fills (`inset: 0`), so the faces
+          never learn the lip or the well is there. */}
       <section
+        ref={deckRef}
         className="vf-godview-terminal-deck relative min-h-0 flex-1"
         aria-label="Terminal panes"
       >
@@ -86,9 +95,15 @@ export function GodviewStage({
             <GodviewDeckEdge persist={deckEdge.persist} monitorPresent={monitorPresent} />
           </ChromeBoundary>
         ) : (
-          <div className="vf-godview-deck-lip" aria-hidden="true" />
+          <div className="vf-godview-deck-lip" aria-hidden="true">
+            <DeckGroove />
+          </div>
         )}
-        <div className="vf-godview-terminal-deck-body">{deck}</div>
+        <div className="vf-godview-deck-well">
+          <div ref={bodyRef} className="vf-godview-terminal-deck-body">
+            {deck}
+          </div>
+        </div>
       </section>
     </div>
   );

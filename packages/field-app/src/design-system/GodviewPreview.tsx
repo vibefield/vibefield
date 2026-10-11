@@ -1,5 +1,5 @@
 import { monitorParameterDefaults, monitorViewFor } from "@vibecook/puppeteer-views";
-import { type CSSProperties, type ReactElement, useMemo, useState } from "react";
+import { type CSSProperties, type ReactElement, type ReactNode, useMemo, useState } from "react";
 import { useDeckAppearance } from "../godview/deck-appearance";
 import { godviewTerminalGroundStyle } from "../godview/deck-theme";
 import { GodviewMonitor } from "../godview/GodviewMonitor";
@@ -24,13 +24,16 @@ import type { MonitorPaneFacts } from "../godview/monitor/useMonitorAgents";
  * profile tabs' fixture (AR-S5) — puts a fold and its profiles on the stage;
  * without one nobody is asked, and the stage says so. `panes` are a deck's facts
  * as a fixture keeps them (the spawn bloom's births, SB-3), and `initialView`
- * opens another view — the swarm, where a host has WebGPU to draw it. */
+ * opens another view — the swarm, where a host has WebGPU to draw it. `deck` is
+ * what the stage holds in its well — a fixture's panes (the Lip's specimen,
+ * round 3) in place of the unavailable deck. */
 export function GodviewPreview({
   door = null,
   panes,
   initialView = "list",
   initialProfile = null,
   theme = "light",
+  deck,
 }: {
   door?: MonitorDoor | null;
   panes?: MonitorPaneFacts;
@@ -40,6 +43,8 @@ export function GodviewPreview({
   initialProfile?: string | null;
   /** Godview follows the app's theme (FC-D7) — here, the catalog page's. */
   theme?: GodviewTheme;
+  /** the deck the stage holds; absent, the honest unavailable deck */
+  deck?: ReactNode;
 } = {}): ReactElement {
   const [viewId, setViewId] = useState(initialView);
   const [tuningOpen, setTuningOpen] = useState(false);
@@ -105,7 +110,7 @@ export function GodviewPreview({
           }
           // The shipping edge, live on the page and forgotten with it.
           deckEdge={{ persist: false }}
-          deck={<GodviewUnavailableDeck />}
+          deck={deck ?? <GodviewUnavailableDeck />}
         />
       </div>
     </GodviewAgentsProvider>

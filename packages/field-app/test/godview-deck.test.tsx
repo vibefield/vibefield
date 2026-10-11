@@ -179,6 +179,9 @@ const { GodviewAgentsProvider } = await import("../src/godview/monitor/GodviewAg
 const { paneCwd, readDeviceHost } = await import("../src/godview/deck-restore");
 type RemoteSessionDoor = import("../src/godview/monitor/remote-door").RemoteSessionDoor;
 const { getGodviewLineDoor } = await import("../src/frame/line-door");
+const { publishDeckWrapperFacts, resetDeckWrapperFactsForTest } = await import(
+  "../src/godview/deck-wrapper-witness"
+);
 type LineViewDoor = import("../src/frame/line-door").LineViewDoor;
 const { DEFAULT_DECK_APPEARANCE, resetDeckAppearanceForTest, setDeckAppearance } = await import(
   "../src/godview/deck-appearance"
@@ -350,6 +353,7 @@ beforeEach(() => {
   runtimeObjects.length = 0;
   geometryCalls.length = 0;
   markers = [];
+  resetDeckWrapperFactsForTest();
   requests = [];
   calls = [];
   ownerFloors = {};
@@ -417,6 +421,33 @@ describe("the deck's mount, against stubs (GT-2c's named debt)", () => {
     await mountDeck();
     expect(runtimes).toHaveLength(1);
     expect(workspaceMounts.length).toBeGreaterThan(0);
+  });
+
+  it("says the wrapper's facts on its marker, and says them again when they move — with no render of the deck (round 3)", async () => {
+    await mountDeck();
+    // a deck in no stage that measures it says nothing of a wrapper
+    expect(latest().wrapper).toBeUndefined();
+    const mounts = workspaceMounts.length;
+    const said = markers.length;
+    const last = latest();
+
+    // the window's stage measures its own wrapper (`deck-wrapper-witness.ts`)
+    // and the deck's line carries what it says
+    act(() => publishDeckWrapperFacts({ state: "up", top: 320, bodyResizes: 0 }));
+    expect(markers).toHaveLength(said + 1);
+    expect(latest()).toEqual({ ...last, wrapper: { state: "up", top: 320, bodyResizes: 0 } });
+    // each change of the body's box is one more line, the count only growing
+    act(() => publishDeckWrapperFacts({ state: "up", top: 320, bodyResizes: 1 }));
+    expect(markers).toHaveLength(said + 2);
+    expect(latest().wrapper?.bodyResizes).toBe(1);
+    // a publish that moved nothing says nothing
+    act(() => publishDeckWrapperFacts({ state: "up", top: 320, bodyResizes: 1 }));
+    expect(markers).toHaveLength(said + 2);
+    // none of it rendered the deck: the workspace was handed nothing new
+    expect(workspaceMounts).toHaveLength(mounts);
+    // the stage going away takes the facts off the line
+    act(() => publishDeckWrapperFacts(null));
+    expect(latest().wrapper).toBeUndefined();
   });
 
   // ("recovers on the transition — the storm" RETIRED at TP-S3e: its subject

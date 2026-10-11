@@ -1,6 +1,8 @@
 /** High-rate diagnostic markers are opt-in; smoke and perf runs enable them
- * through their renderer mode. Ordinary development and production stay quiet. */
-function godviewMarkersEnabled(): boolean {
+ * through their renderer mode. Ordinary development and production stay quiet.
+ * Exported for a witness that would otherwise measure for nobody (the deck's
+ * wrapper, `godview/deck-wrapper-witness.ts`). */
+export function godviewMarkersEnabled(): boolean {
   if (typeof location === "undefined") return false;
   const params = new URLSearchParams(location.search);
   return (
@@ -158,6 +160,15 @@ export interface GodviewDeckFacts {
    * dimensions; a completed gesture releases the content box once. Physical
    * regressions separately observe canvas identity and content resizes. */
   zoom: { phase: "idle" | "entering" | "zoomed" | "leaving"; commits: number };
+  /** Round 3 — the wrapper around the terminals, as the window's stage
+   * measures it (`godview/deck-wrapper-witness.ts`): the state it draws (only
+   * `up` until the terminals can be put away or maximized), its top edge in CSS
+   * pixels from the stage's top, and `bodyResizes` — how many times the box
+   * the terminals fill (`.vf-godview-terminal-deck-body`) has changed size
+   * since the stage mounted. The count only grows, as `zoom.commits` does: a
+   * move the product makes is held to exactly one. Absent for a deck in no
+   * stage that measures it. */
+  wrapper?: { state: "away" | "up" | "maximized"; top: number; bodyResizes: number };
 }
 
 export function emitGodviewDeckMarker(facts: GodviewDeckFacts): void {
