@@ -39,6 +39,16 @@
 //   /gate     — the page (its own address by its query: `/gate?p=a`), answered at once while the gate is open and held
 //               while it is shut (`gate(false)`) until it opens — never longer than `FIXTURE_GATE_MS`: the STILL row's
 //               page, whose reload after a rest waits there while its pane shows its still.
+// PT-5b2 — and pages whose FIRST LOAD does not end as a plain load (what the grade found: no fixture page had ever
+// navigated before its first load finished):
+//   /loading     — the page, with an image that never arrives (`/hang.png`): its document commits and paints, its `load`
+//                  never fires — a link clicked on it is a navigation BEFORE the first load finished (FIRST-CLICK);
+//   /redirecting — the fixture's ground, the same hanging image, and a script that sends the page on to
+//                  `/next?from=redirect` `FIXTURE_REDIRECT_MS` later (FIRST-REDIRECT: a login's, a locale's redirect);
+//   /nothing     — an empty answer (204): a load that ends with no document (as `/file.bin`, an attachment, does);
+//   /busy        — the page for a phone that keeps its thread BUSY `FIXTURE_BUSY_MS` at each `touchstart`, and logs every
+//                  touchstart and touchend it hears (`touchLog`, said with each ask): two quick taps must read
+//                  start, end, start, end (TAPS — the hand's events in the order they were sent).
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { type AddressInfo, createServer as createTcpServer } from "node:net";
@@ -49,6 +59,10 @@ export const FIXTURE_HUE = { r: 29, g: 111, b: 216 } as const;
 
 /** How often the page asks the server (ms) — its pace follows the answer. */
 export const FIXTURE_ASK_MS = 250;
+/** PT-5b2 — how long `/redirecting`'s script waits before it sends its page on (ms); how long `/busy` keeps its thread at
+ * each touchstart (ms — longer than a tap and than the bound a press waits for its page's scale). */
+export const FIXTURE_REDIRECT_MS = 250;
+export const FIXTURE_BUSY_MS = 350;
 
 /** PT-4 — the page's title (`/next`'s says where it is). */
 export const FIXTURE_TITLE = "Portals fixture";
@@ -135,6 +149,9 @@ export interface LiveFixture {
   gate(open: boolean): void;
   /** PT-5b — `/gate`'s loads: how many were asked, how many answered, how many wait at the shut gate now. */
   gated(): { readonly asked: number; readonly answered: number; readonly waiting: number };
+  /** PT-5b2 — how many times a path was asked for (its pathname: `/loading`, `/redirecting`, `/nothing`, `/busy`,
+   * `/hang.png`, `/file.bin` — any). */
+  asked(path: string): number;
   /** PT-5a — an address whose connection is REFUSED (a port nobody listens on) until `open()` serves the page there. */
   refusing(): Promise<FixtureRefusing>;
   close(): Promise<void>;
@@ -210,6 +227,8 @@ export interface FixtureReport {
   readonly title: string;
   /** PT-5a — `/acts` alone: what came of what it asked for. */
   readonly acts?: FixtureActs;
+  /** PT-5b2 — `/busy` alone: every touchstart ("start") and touchend ("end") it heard, in order. */
+  readonly touchLog?: readonly string[];
 }
 
 /** A part's box in the page's view, CSS px. */
@@ -322,6 +341,7 @@ export function fixtureHtml(path: "/page" | "/next" | "/legacy" = "/page"): stri
     cookie: document.cookie,
     stored: stored(),
     title: document.title,
+    touchLog: window.__touchLog || [],
   }));
   const ask = () => fetch("/beacon?token=" + token + "&report=" + report(), { cache: "no-store" })
     .then((r) => r.json()).then((a) => pace(a.play === true)).catch(() => {});
@@ -330,6 +350,42 @@ export function fixtureHtml(path: "/page" | "/next" | "/legacy" = "/page"): stri
 </script>
 </body></html>`;
 }
+
+/** PT-5b2 — the image that never arrives: a page that carries it never finishes its first load. */
+const HANGING =
+  '<img src="/hang.png" alt="" style="position:absolute;left:0;top:0;width:1px;height:1px">';
+
+/** PT-5b2 — `/loading`: the page, its `load` never firing. */
+export const loadingHtml = (): string =>
+  fixtureHtml("/page").replace("</body></html>", `${HANGING}\n</body></html>`);
+
+/** PT-5b2 — `/redirecting`: the ground, the image that never arrives, and a script that sends the page on. */
+export function redirectingHtml(): string {
+  return `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${FIXTURE_TITLE} — redirecting</title>
+<style>html, body { margin: 0; background: ${hex(FIXTURE_HUE)}; }</style></head>
+<body>${HANGING}
+<script>
+  setTimeout(() => { location.href = "/next?from=redirect"; }, ${FIXTURE_REDIRECT_MS});
+</script>
+</body></html>`;
+}
+
+/** PT-5b2 — `/busy`: the page, keeping its thread busy at each touchstart and logging every touch it hears. */
+export const busyHtml = (): string =>
+  fixtureHtml("/page").replace(
+    "</body></html>",
+    `<script>
+  window.__touchLog = [];
+  addEventListener("touchstart", () => {
+    window.__touchLog.push("start");
+    const until = performance.now() + ${FIXTURE_BUSY_MS};
+    while (performance.now() < until) {}
+  }, { capture: true, passive: true });
+  addEventListener("touchend", () => { window.__touchLog.push("end"); }, { capture: true, passive: true });
+</script>
+</body></html>`,
+  );
 
 /**
  * PT-5a — `/acts`: what a page may ask for, each a control at a known place (a row of boxes on the fixture's ground, the
@@ -464,6 +520,9 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   /** PT-5a: the servers opened on once-refusing ports, closed with the fixture. */
   const revived: Server[] = [];
   const lastAt = new Map<string, FixtureReport>();
+  /** PT-5b2: how many times each pathname was asked for; and the answers that never come (`/hang.png`). */
+  const asks = new Map<string, number>();
+  const hung = new Set<ServerResponse>();
   const cookies = new Map<string, string>();
   const tokens: string[] = [];
   const html = (res: ServerResponse, body: string): void => {
@@ -472,6 +531,34 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   };
   const handle = (req: IncomingMessage, res: ServerResponse): void => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    asks.set(url.pathname, (asks.get(url.pathname) ?? 0) + 1);
+    if (url.pathname === "/hang.png") {
+      // never answered: whoever waits on it never finishes loading (closed with the fixture)
+      hung.add(res);
+      res.on("close", () => hung.delete(res));
+      return;
+    }
+    if (
+      url.pathname === "/loading" ||
+      url.pathname === "/redirecting" ||
+      url.pathname === "/busy"
+    ) {
+      cookies.set(url.pathname + url.search, req.headers.cookie ?? "");
+      html(
+        res,
+        url.pathname === "/loading"
+          ? loadingHtml()
+          : url.pathname === "/busy"
+            ? busyHtml()
+            : redirectingHtml(),
+      );
+      return;
+    }
+    if (url.pathname === "/nothing") {
+      res.writeHead(204, { "cache-control": "no-store" });
+      res.end();
+      return;
+    }
     if (url.pathname === "/acts" || url.pathname === "/revived") {
       cookies.set(url.pathname + url.search, req.headers.cookie ?? "");
       html(res, url.pathname === "/acts" ? actsHtml() : fixtureHtml("/next"));
@@ -583,6 +670,7 @@ export async function startLiveFixture(): Promise<LiveFixture> {
     icons: () => icons,
     slow: () => ({ ...slow }),
     files: () => files,
+    asked: (path) => asks.get(path) ?? 0,
     gate: (open) => {
       gateOpen = open;
       if (open) for (const answer of [...atGate]) answer();
@@ -611,6 +699,7 @@ export async function startLiveFixture(): Promise<LiveFixture> {
     close: async () => {
       gateOpen = true;
       for (const answer of [...atGate]) answer();
+      for (const res of [...hung]) res.destroy();
       for (const s of [server, ...revived])
         await new Promise<void>((resolve) => {
           s.closeAllConnections?.();

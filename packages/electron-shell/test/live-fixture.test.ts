@@ -13,11 +13,13 @@ import {
   actsHtml,
   FIXTURE_ACT_IDS,
   FIXTURE_ASK_MS,
+  FIXTURE_BUSY_MS,
   FIXTURE_COOKIE,
   FIXTURE_GATE_MS,
   FIXTURE_HUE,
   FIXTURE_ICON_HUE,
   FIXTURE_PARTS,
+  FIXTURE_REDIRECT_MS,
   FIXTURE_SLOW_MS,
   FIXTURE_TITLE,
   FIXTURE_TONE,
@@ -393,5 +395,65 @@ describe("the live pane's fixture page", () => {
     );
     expect(fixture.reportAt("/gate?p=a")?.token).toBe("g1");
     expect(fixture.reportAt("/gate?p=b")).toBeNull();
+  });
+
+  it("PT-5b2: pages whose FIRST LOAD does not end as a plain load — `/loading` (the page, with a subresource that never arrives: its `load` never fires), `/redirecting` (the same, and a script that sends it on), `/nothing` (an empty answer), each counted; `/hang.png` is never answered", async () => {
+    fixture = await startLiveFixture();
+    expect(FIXTURE_REDIRECT_MS).toBeGreaterThanOrEqual(100);
+    // /loading: the fixture's own page (its ground, its link to /next) with an image that hangs
+    const loading = await (await fetch(`${fixture.origin}/loading?p=c`)).text();
+    expect(loading).toContain("#1d6fd8");
+    expect(loading).toContain('href="/next"');
+    expect(loading).toMatch(/<img[^>]+src="\/hang\.png/);
+    // /redirecting: the ground, the hanging image, and a script that goes to /next a moment later
+    const redirecting = await (await fetch(`${fixture.origin}/redirecting?p=r`)).text();
+    expect(redirecting).toContain("#1d6fd8");
+    expect(redirecting).toMatch(/<img[^>]+src="\/hang\.png/);
+    expect(redirecting).toContain(`location.href = "/next?from=redirect"`);
+    expect(redirecting).toContain(`}, ${FIXTURE_REDIRECT_MS});`);
+    // /nothing: 204, no body
+    const nothing = await fetch(`${fixture.origin}/nothing`);
+    expect(nothing.status).toBe(204);
+    expect(await nothing.text()).toBe("");
+    expect(fixture.asked("/loading")).toBe(1);
+    expect(fixture.asked("/redirecting")).toBe(1);
+    expect(fixture.asked("/nothing")).toBe(1);
+    expect(fixture.asked("/never-asked")).toBe(0);
+    // the image is asked for and never answered — until the fixture closes
+    let answered = false;
+    const stop = new AbortController();
+    const hung = fetch(`${fixture.origin}/hang.png`, { signal: stop.signal }).then(
+      () => {
+        answered = true;
+      },
+      () => undefined,
+    );
+    await new Promise((r) => setTimeout(r, 150));
+    expect(answered).toBe(false);
+    expect(fixture.asked("/hang.png")).toBe(1);
+    stop.abort();
+    await hung;
+  });
+
+  it("PT-5b2: `/busy` is the page that keeps its thread BUSY at each touch — it logs every touchstart and touchend it hears, in order, and says the log with each ask", async () => {
+    fixture = await startLiveFixture();
+    expect(FIXTURE_BUSY_MS).toBeGreaterThanOrEqual(250);
+    const busy = await (await fetch(`${fixture.origin}/busy?p=t`)).text();
+    // a page made for phones (it names its viewport), in the fixture's ground
+    expect(busy).toContain('<meta name="viewport" content="width=device-width, initial-scale=1">');
+    expect(busy).toContain("#1d6fd8");
+    expect(busy).toContain("window.__touchLog");
+    expect(busy).toMatch(/addEventListener\("touchstart"/);
+    expect(busy).toContain(`performance.now() + ${FIXTURE_BUSY_MS}`);
+    // every page says its touch log with its report (none where the page keeps none)
+    expect(fixtureHtml("/page")).toContain("touchLog: window.__touchLog || []");
+    expect(fixtureHtml("/page")).not.toContain(
+      'addEventListener("touchstart", () => { window.__touchLog',
+    );
+    await fetch(
+      `${fixture.origin}/beacon?token=b1&report=${encodeURIComponent(JSON.stringify({ path: "/busy?p=t", touchLog: ["start", "end"] }))}`,
+    );
+    expect(fixture.reportAt("/busy?p=t")?.touchLog).toEqual(["start", "end"]);
+    expect(fixture.asked("/busy")).toBe(1);
   });
 });

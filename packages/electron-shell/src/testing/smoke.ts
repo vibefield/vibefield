@@ -138,6 +138,7 @@ import { coverRows } from "./smoke-covers";
 import { removeSmokeRoot, SMOKE_RUN_ENV, stopRunDaemons } from "./smoke-daemons";
 import { deskRigRows } from "./smoke-desk-rig";
 import { DEVICE_FLAG, type DeviceRowsDriver, devicePaneRows } from "./smoke-device-pane";
+import { FIRST_FLAG, type FirstLoadDriver, firstLoadRows } from "./smoke-first-load";
 import { HONEST_FLAG, type HonestRowsDriver, honestPaneRows } from "./smoke-honest-pane";
 import { type LastStillDriver, lastStillRows, STILL_FLAG } from "./smoke-last-still";
 import { LIVE_FLAG, type LiveRowsDriver, livePaneRows } from "./smoke-live-pane";
@@ -1151,6 +1152,10 @@ export async function runSmokeCanvas(opts: {
         // PT-5b — the last still and the many, its rows ALONE after the boot's (the author's loop: `node
         // packaging/run-smoke.mjs --smoke-canvas --last-still` on smoke:canvas's build); smoke:canvas runs them below
         problems.push(...(await stillRows(win, shotDir, opts)));
+      } else if (process.argv.includes(FIRST_FLAG)) {
+        // PT-5b2 — a page's first load, its rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs
+        // --smoke-canvas --first-load` on smoke:canvas's build); smoke:canvas runs them below
+        problems.push(...(await firstRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
       } else if (process.argv.includes(PANE_FLAG)) {
         // PT-1 — the browser pane's rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs
         // --smoke-canvas --browser-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
@@ -1344,6 +1349,10 @@ export async function runSmokeCanvas(opts: {
         // fourteen at rest (testing/smoke-last-still.ts). After PT-5a's (each lays its own panes and removes them) and
         // before the refusal's
         problems.push(...(await stillRows(win, shotDir, opts)));
+        // PT-5b2 — a page's FIRST LOAD (what PT-5b's grade found): a script's redirect and a link clicked before the load
+        // finished, an address that is no page, a pane still starting sent elsewhere and stopped, and two quick taps on
+        // a busy phone page heard in order (testing/smoke-first-load.ts)
+        problems.push(...(await firstRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
         // DK-9: last — it leaves the desk on its card
         problems.push(...(await deskRefusalRow(win, opts.viteUrl)));
       }
@@ -2015,6 +2024,51 @@ async function stillRows(
     return await lastStillRows(driver);
   } catch (error) {
     return [`PT-5b STILL: ${error instanceof Error ? error.message : String(error)}`];
+  } finally {
+    await fixture.close();
+  }
+}
+
+/** PT-5b2's rows on the smoke's fixture (testing/smoke-first-load.ts): PT-2's driver, and main's own word on the desk's
+ * pages (its offscreen WebContents by their address) and on the app's windows (by what they are). */
+async function firstRows(
+  win: BrowserWindow,
+  shotDir: string | undefined,
+  viteUrl: string,
+  liveSurfaces: (() => { readonly runtimes: number; readonly owners: number } | null) | undefined,
+): Promise<string[]> {
+  const fixture = await startLiveFixture();
+  const doors = { presenceRelay: "1", deskFaults: "1" };
+  try {
+    const driver: FirstLoadDriver = {
+      win,
+      shotDir,
+      say: (line) => console.log(line),
+      fixture,
+      custody: () => liveSurfaces?.() ?? null,
+      reload: async () => {
+        const ready = waitForConsole(win, "DESK_READY ", 60_000);
+        await loadRenderer(win, "smoke-canvas", viteUrl, doors);
+        try {
+          await ready;
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      pages: (prefix) =>
+        webContents
+          .getAllWebContents()
+          .filter((c) => !c.isDestroyed() && c.isOffscreen() && c.getURL().startsWith(prefix))
+          .map((c) => ({ id: c.id, url: c.getURL(), muted: c.isAudioMuted() })),
+      windowIds: () =>
+        BrowserWindow.getAllWindows()
+          .filter((w) => !w.isDestroyed() && !w.webContents.isOffscreen())
+          .map((w) => w.id),
+    };
+    return await firstLoadRows(driver);
+  } catch (error) {
+    return [`PT-5b2 FIRST: ${error instanceof Error ? error.message : String(error)}`];
   } finally {
     await fixture.close();
   }

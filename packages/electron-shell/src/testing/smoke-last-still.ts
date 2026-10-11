@@ -739,7 +739,7 @@ const FACE = (key: string): string => `(() => {
 })()`;
 
 /** A region of the desk captured without the marks, its pixels classified. */
-const PAGE_PIXELS = (rect: {
+export const PAGE_PIXELS = (rect: {
   x: number;
   y: number;
   width: number;
