@@ -445,6 +445,31 @@ describe("the live pane's fixture page", () => {
     expect(busy).toContain("window.__touchLog");
     expect(busy).toMatch(/addEventListener\("touchstart"/);
     expect(busy).toContain(`performance.now() + ${FIXTURE_BUSY_MS}`);
+    // the page's own touch script, RUN (a clock that moves 10 ms a read): a touchstart is logged and keeps the thread
+    // FIXTURE_BUSY_MS, a touchend is logged — two taps read start, end, start, end
+    const script = /<script>\s*(window\.__touchLog = \[\];[\s\S]*?)<\/script>/.exec(busy)?.[1];
+    if (script === undefined) throw new Error("the busy page carries no touch script");
+    const heard = new Map<string, () => void>();
+    const page = { __touchLog: [] as string[] };
+    let clock = 1_000;
+    new Function("window", "addEventListener", "performance", script)(
+      page,
+      (type: string, listener: () => void) => heard.set(type, listener),
+      {
+        now: () => {
+          clock += 10;
+          return clock;
+        },
+      },
+    );
+    const began = clock;
+    heard.get("touchstart")?.();
+    expect(page.__touchLog).toEqual(["start"]);
+    expect(clock - began).toBeGreaterThanOrEqual(FIXTURE_BUSY_MS);
+    heard.get("touchend")?.();
+    heard.get("touchstart")?.();
+    heard.get("touchend")?.();
+    expect(page.__touchLog).toEqual(["start", "end", "start", "end"]);
     // every page says its touch log with its report (none where the page keeps none)
     expect(fixtureHtml("/page")).toContain("touchLog: window.__touchLog || []");
     expect(fixtureHtml("/page")).not.toContain(

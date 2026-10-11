@@ -916,6 +916,14 @@ describe("the last still and the many — what the rows read by", () => {
         at: [0, 16, 33, 250],
       }),
     ).toEqual({ runs: "F1 S2 L1", ms: 250 });
+    // a frame of the page the watcher saw BEFORE the pane asked live again is not the answer
+    expect(
+      seenAgain({
+        kinds: ["L", "F", "F", "S", "L"],
+        asks: ["paused", "paused", "live", "live", "live"],
+        at: [0, 16, 33, 50, 300],
+      }),
+    ).toEqual({ runs: "F1 S1 L1", ms: 267 });
     // the page's frame never comes; the pane never asked live; nothing read
     expect(
       seenAgain({ kinds: ["F", "S", "S"], asks: ["paused", "live", "live"], at: [0, 16, 33] }),
