@@ -29,7 +29,6 @@ import {
   engineAgentOf,
   faviconOf,
   loadFailureOf,
-  POINT_SCALE_READ_MAX_MS,
   virtualKeyCodeOf,
 } from "../src/main/live-surfaces/browser-producer";
 import { browserSurfaceProfileName } from "../src/main/live-surfaces/browser-security";
@@ -2530,55 +2529,108 @@ describe("BrowserLiveSurfaceRuntime", () => {
     });
   });
 
-  describe("PT-5b2 (ruling 4) — the hand's events reach the page in the order they were sent, whatever is awaited on the way", () => {
-    const NONE = { shift: false, alt: false, ctrl: false, meta: false };
-    /** A phone's page, live, its window's inputs kept in ONE list as they reach it. */
-    const phone = async () => {
-      const result = setup({ source: phoneSource() });
-      const renderer = attach(result.runtime);
-      renderer.attachment.setDemand(demand(1, "live", 30, { width: 1206, height: 2622 }));
-      await flush();
-      await flush();
-      const window = result.native.windows[0];
-      if (window === undefined) throw new Error("no window");
-      window.paint(sharedPaint(1206, 2622).paint);
-      await flush();
-      const revision = result.runtime.summary.geometry?.revision ?? 0;
-      const heard: string[] = [];
-      const touch = window.dispatchTouch.bind(window);
-      window.dispatchTouch = async (input) => {
-        heard.push(input.type);
-        await touch(input);
+  const NONE = { shift: false, alt: false, ctrl: false, meta: false };
+  /**
+   * A page in the hand, live, its window's inputs kept in ONE list as they reach it — a phone's unless the row names
+   * another device. PT-5b3: its window has ONE QUEUE, as the native's has (`enqueue`): a read of the page's scale and every
+   * dispatch run one behind another, each to its answer — a read the page has not answered holds what is sent after it.
+   */
+  const phone = async (pageSource: ReturnType<typeof phoneSource> = phoneSource()) => {
+    const result = setup({ source: pageSource });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live", 30, { width: 1206, height: 2622 }));
+    await flush();
+    await flush();
+    const window = result.native.windows[0];
+    if (window === undefined) throw new Error("no window");
+    window.emitNavigationState({ ...NAV });
+    window.paint(sharedPaint(1206, 2622).paint);
+    await flush();
+    const revision = result.runtime.summary.geometry?.revision ?? 0;
+    const heard: string[] = [];
+    let tail: Promise<unknown> = Promise.resolve();
+    const queued =
+      <A extends unknown[], R>(run: (...args: A) => Promise<R>) =>
+      (...args: A): Promise<R> => {
+        const answer = tail.then(
+          () => run(...args),
+          () => run(...args),
+        );
+        tail = answer.catch(() => undefined);
+        return answer;
       };
-      const key = window.dispatchKey.bind(window);
-      window.dispatchKey = async (input) => {
-        heard.push(`${input.type} ${input.key}`);
-        await key(input);
-      };
-      const text = window.dispatchText.bind(window);
-      window.dispatchText = async (typed) => {
-        heard.push(`text ${typed}`);
-        await text(typed);
-      };
-      const send = (
-        input: Parameters<NonNullable<typeof renderer.attachment.dispatchInput>>[0],
-      ): void => renderer.attachment.dispatchInput?.(input, revision);
-      const pointer = (action: "down" | "up" | "move", x: number): void =>
-        send({ kind: "pointer", action, x, y: 10, button: "left", clickCount: 1 });
-      /** The page is busy: its scale's reads are answered when the row says (`answer`), or never. */
-      const answers: ((scale: number) => void)[] = [];
-      const busy = (): void => {
-        window.visualScale = () => {
-          window.scaleReads += 1;
-          return new Promise<number>((resolve) => {
-            answers.push(resolve);
-          });
-        };
-      };
-      const settle = (): Promise<void> => flush();
-      return { result, renderer, window, heard, send, pointer, busy, answers, settle };
+    const touch = window.dispatchTouch.bind(window);
+    window.dispatchTouch = queued(async (input) => {
+      heard.push(input.type);
+      await touch(input);
+    });
+    const mouse = window.dispatchMouse.bind(window);
+    window.dispatchMouse = queued(async (input) => {
+      heard.push(input.type);
+      await mouse(input);
+    });
+    const key = window.dispatchKey.bind(window);
+    window.dispatchKey = queued(async (input) => {
+      heard.push(`${input.type} ${input.key}`);
+      await key(input);
+    });
+    const text = window.dispatchText.bind(window);
+    window.dispatchText = queued(async (typed) => {
+      heard.push(`text ${typed}`);
+      await text(typed);
+    });
+    const scale = window.visualScale.bind(window);
+    window.visualScale = queued(() => scale());
+    const send = (
+      input: Parameters<NonNullable<typeof renderer.attachment.dispatchInput>>[0],
+      under: number = revision,
+    ): void => renderer.attachment.dispatchInput?.(input, under);
+    const pointer = (action: "down" | "up" | "move", x: number, under: number = revision): void =>
+      send(
+        {
+          kind: "pointer",
+          action,
+          x,
+          y: 10,
+          ...(action === "move" ? {} : { button: "left" as const }),
+          clickCount: 1,
+        },
+        under,
+      );
+    /** The page is busy: its scale's reads are answered when the row says (`answer`), or never. */
+    const answers: ((scale: number) => void)[] = [];
+    const busy = (): void => {
+      window.visualScale = queued(() => {
+        window.scaleReads += 1;
+        return new Promise<number>((resolve) => {
+          answers.push(resolve);
+        });
+      });
     };
+    /** The page REFUSES to say its scale (between two documents). */
+    const refusing = (): void => {
+      window.visualScale = queued(async () => {
+        window.scaleReads += 1;
+        throw new Error("Cannot find context with specified id");
+      });
+    };
+    const settle = (): Promise<void> => flush();
+    return {
+      result,
+      renderer,
+      window,
+      revision,
+      heard,
+      send,
+      pointer,
+      busy,
+      refusing,
+      answers,
+      settle,
+    };
+  };
 
+  describe("PT-5b2 (ruling 4) — the hand's events reach the page in the order they were sent, whatever is awaited on the way", () => {
     it("a RELEASE sent while its press's scale is still being read arrives AFTER it: the page hears a start and its end — never a finger left down", async () => {
       vi.useFakeTimers({ toFake: ["Date"] });
       vi.setSystemTime(2_000_000);
@@ -2631,57 +2683,195 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(p.heard.at(-1)).toBe("text c");
       p.result.runtime.dispose();
     });
+  });
 
-    it(`the scale's read is BOUNDED (${POINT_SCALE_READ_MAX_MS} ms): one that never answers holds the chain that long and no longer — the last scale read FOR THIS DOCUMENT stands, and the release follows`, async () => {
-      vi.useFakeTimers();
+  describe("PT-5b3 (rulings 5, 6) — a gesture ENDS; the scale's read is awaited in the chain", () => {
+    /** A `mobile` page with a MOUSE (laid out as a phone's, shown at its own scale; no touch). */
+    const mobileMouse = () => ({ ...phoneSource(), emulation: { ...PHONE, touchPoints: 0 } });
+    const types = (p: Awaited<ReturnType<typeof phone>>): string[] =>
+      p.window.touchInputs.map((t) => t.type);
+
+    it("ruling 5 — an event is judged against the geometry it was SENT under, as it ARRIVES: a release queued behind its press is not refused because the geometry moved while it waited its turn", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
       vi.setSystemTime(2_000_000);
       const p = await phone();
-      p.window.scale = 0.5;
-      p.pointer("down", 10);
-      p.pointer("up", 10);
-      await vi.advanceTimersByTimeAsync(0);
-      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
-      // the page hangs: its scale is never said again
       p.busy();
-      await vi.advanceTimersByTimeAsync(1_000);
+      const dropped = p.result.runtime.stats.inputDropped;
+      // a tap: its press takes its turn (and waits on its page), its release queues behind it — both sent under `revision`
       p.pointer("down", 20);
       p.pointer("up", 20);
-      await vi.advanceTimersByTimeAsync(POINT_SCALE_READ_MAX_MS - 1);
-      expect(p.heard).toHaveLength(2);
-      await vi.advanceTimersByTimeAsync(1);
-      expect(p.heard).toEqual(["touchStart", "touchEnd", "touchStart", "touchEnd"]);
-      // …at the scale this document was last read at
-      expect(p.window.touchInputs.at(-2)?.touchPoints[0]).toMatchObject({ x: 40, y: 20 });
+      await p.settle();
+      // …and while they wait the page's raster moves (the pane put down: its rest rung) — a frame of another size lands
+      p.window.paint(sharedPaint(603, 1311).paint);
+      await p.settle();
+      expect(p.result.runtime.summary.geometry?.revision).not.toBe(p.revision);
+      p.answers[0]?.(0.5);
+      await p.settle();
+      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped);
       p.result.runtime.dispose();
     });
 
-    it("with NO scale ever read for this document a press is NOT SENT — counted: at the wrong scale it would land on another element — and the next press, its read answered, is", async () => {
-      vi.useFakeTimers();
+    it("ruling 5 — a press sent under a geometry that has MOVED is refused as it arrives, counted, and NOTHING is down: its release is nothing (the page is not told of half a click, and nothing is counted), and a hover that follows is a hover", async () => {
+      const p = await phone({
+        ...phoneSource(),
+        emulation: { ...PHONE, mobile: false, touchPoints: 0 },
+      });
+      p.window.paint(sharedPaint(603, 1311).paint);
+      await p.settle();
+      const now = p.result.runtime.summary.geometry?.revision ?? 0;
+      expect(now).not.toBe(p.revision);
+      const dropped = p.result.runtime.stats.inputDropped;
+      p.pointer("down", 20);
+      p.pointer("up", 20);
+      await p.settle();
+      expect(p.heard).toEqual([]);
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
+      p.pointer("move", 30, now);
+      await p.settle();
+      expect(p.heard).toEqual(["mouseMoved"]);
+      expect(p.window.mouseInputs.at(-1)).toMatchObject({ type: "mouseMoved", button: "none" });
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 5 — a RELEASE of what is down is ALWAYS sent: under a geometry that moved since its press; and to a page that is no longer live (the window that took the press, paused)", async () => {
+      const p = await phone({
+        ...phoneSource(),
+        emulation: { ...PHONE, mobile: false, touchPoints: 0 },
+      });
+      p.pointer("down", 20);
+      await p.settle();
+      expect(p.heard).toEqual(["mousePressed"]);
+      // the raster moves under the button (a frame of another size): the release still names the revision it was sent under
+      p.window.paint(sharedPaint(603, 1311).paint);
+      await p.settle();
+      p.pointer("up", 22);
+      await p.settle();
+      expect(p.heard).toEqual(["mousePressed", "mouseReleased"]);
+      expect(p.window.mouseInputs.at(-1)).toMatchObject({
+        type: "mouseReleased",
+        x: 22,
+        y: 10,
+        button: "left",
+      });
+      // a button down, and the pane goes out of view: the page is PAUSED when its release arrives
+      const now = p.result.runtime.summary.geometry?.revision ?? 0;
+      p.pointer("down", 40, now);
+      await p.settle();
+      p.renderer.attachment.setDemand(demand(2, "paused", 0));
+      await p.settle();
+      expect(p.result.runtime.summary.state).toBe("paused");
+      p.pointer("up", 40, now);
+      await p.settle();
+      expect(p.heard).toEqual(["mousePressed", "mouseReleased", "mousePressed", "mouseReleased"]);
+      // …and a press there is refused, as ever: nobody is looking
+      const dropped = p.result.runtime.stats.inputDropped;
+      p.pointer("down", 40, now);
+      await p.settle();
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
+      expect(p.heard).toHaveLength(4);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 5 — a touch's END carries no point and reads no scale: a finger down when ANOTHER document commits under it, the page too busy to say its scale, is lifted at once", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
       vi.setSystemTime(2_000_000);
       const p = await phone();
       p.window.scale = 0.5;
-      p.pointer("down", 10);
-      p.pointer("up", 10);
-      await vi.advanceTimersByTimeAsync(0);
-      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
-      // ANOTHER document — its scale its own, and the page too busy to say it
+      p.pointer("down", 20);
+      await p.settle();
+      expect(p.heard).toEqual(["touchStart"]);
+      expect(p.window.scaleReads).toBe(1);
       p.window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
       p.busy();
       const unread = p.result.runtime.stats.inputScaleUnread;
+      p.pointer("up", 20);
+      await p.settle();
+      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
+      expect(types(p)).toEqual(["touchStart", "touchEnd"]);
+      expect(p.window.touchInputs.at(-1)?.touchPoints).toEqual([]);
+      expect(p.window.scaleReads).toBe(1);
+      expect(p.result.runtime.stats.inputScaleUnread).toBe(unread);
+      // a hover after it is nothing a finger does: the page is told of no move
+      p.pointer("move", 30);
+      await p.settle();
+      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
+      expect(p.window.scaleReads).toBe(1);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 5 — a mouse's release goes at the scale its PRESS went at, unread: a `mobile` page shown at 0.5, busy when the button lifts", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(2_000_000);
+      const p = await phone(mobileMouse());
+      p.window.scale = 0.5;
+      p.pointer("down", 20);
+      await p.settle();
+      expect(p.window.mouseInputs.at(-1)).toMatchObject({ type: "mousePressed", x: 40, y: 20 });
+      p.busy();
+      vi.setSystemTime(2_010_000);
+      p.pointer("up", 30);
+      await p.settle();
+      expect(p.heard).toEqual(["mousePressed", "mouseReleased"]);
+      expect(p.window.mouseInputs.at(-1)).toMatchObject({ type: "mouseReleased", x: 60, y: 20 });
+      expect(p.window.scaleReads).toBe(1);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 6 — a press on a document whose scale is unread and SLOW waits, as long as its page takes, and lands at the scale read — its release behind it; nothing is dropped, nothing counted unsent (the read and the dispatch share the window's one queue)", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(2_000_000);
+      const p = await phone();
+      // ANOTHER document, just loaded and hydrating: no scale read for it yet, and the page too busy to say it
+      p.window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
+      p.busy();
+      const dropped = p.result.runtime.stats.inputDropped;
+      const unread = p.result.runtime.stats.inputScaleUnread;
       p.pointer("down", 20);
       p.pointer("up", 20);
-      await vi.advanceTimersByTimeAsync(POINT_SCALE_READ_MAX_MS);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(p.heard).toEqual([]);
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped);
+      expect(p.result.runtime.stats.inputScaleUnread).toBe(unread);
+      p.answers[0]?.(0.25);
+      await vi.advanceTimersByTimeAsync(0);
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
-      // (its press, and the release behind it: neither can be placed)
-      expect(p.result.runtime.stats.inputScaleUnread).toBe(unread + 2);
-      // the page answers at last: the next press reads it, and lands where the page is drawn
-      for (const answer of p.answers.splice(0)) answer(0.25);
+      expect(p.window.touchInputs.at(-2)?.touchPoints[0]).toMatchObject({ x: 80, y: 40 });
+      // a second tap, at once: both heard, in order
       p.window.visualScale = async () => 0.25;
       p.pointer("down", 20);
       p.pointer("up", 20);
       await vi.advanceTimersByTimeAsync(0);
       expect(p.heard).toEqual(["touchStart", "touchEnd", "touchStart", "touchEnd"]);
-      expect(p.window.touchInputs.at(-2)?.touchPoints[0]).toMatchObject({ x: 80, y: 40 });
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 6 — a read the page REFUSES (between two documents): the scale known for this document is used; with NONE known the press is not sent — counted — and its release is nothing", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(2_000_000);
+      const p = await phone();
+      p.window.scale = 0.5;
+      p.pointer("down", 10);
+      p.pointer("up", 10);
+      await p.settle();
+      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
+      // the page refuses the next read: what was read for this document stands
+      p.refusing();
+      p.pointer("down", 20);
+      p.pointer("up", 20);
+      await p.settle();
+      expect(p.heard).toEqual(["touchStart", "touchEnd", "touchStart", "touchEnd"]);
+      expect(p.window.touchInputs.at(-2)?.touchPoints[0]).toMatchObject({ x: 40, y: 20 });
+      // ANOTHER document, and the page refuses: at a guess the point would be another element's
+      p.window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
+      const unread = p.result.runtime.stats.inputScaleUnread;
+      const dropped = p.result.runtime.stats.inputDropped;
+      p.pointer("down", 20);
+      p.pointer("up", 20);
+      await p.settle();
+      expect(p.heard).toHaveLength(4);
+      expect(p.result.runtime.stats.inputScaleUnread).toBe(unread + 1);
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
       p.result.runtime.dispose();
     });
   });

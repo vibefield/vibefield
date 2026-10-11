@@ -52,17 +52,6 @@ const CPU_FALLBACK_MAX_FPS = 10;
 /** PT-5b (ruling 5c): how long a `mobile` page's visual-viewport scale, once read, serves a move, a hover or a wheel
  * (a press always reads it afresh). */
 const POINT_SCALE_MS = 250;
-/** PT-5b2 (ruling 4): a read of a page's visual-viewport scale in flight — whose document's, in which window, asked when. */
-interface ScaleRead {
-  readonly doc: number;
-  readonly window: BrowserSurfaceNativeWindow;
-  readonly askedAt: number;
-  readonly done: Promise<void>;
-}
-
-/** PT-5b2 (ruling 4): the longest a pointer event waits for its page's scale to be read (a busy page answers late, a hung
- * one never) — past it the last scale read FOR THIS DOCUMENT stands; with none ever read for it, the event is not sent. */
-export const POINT_SCALE_READ_MAX_MS = 200;
 const CPU_FALLBACK_MAX_PIXELS = 1280 * 720;
 
 const BROWSER_CAPABILITIES = {
@@ -468,7 +457,8 @@ export interface BrowserLiveSurfaceRuntimeStats {
   readonly emulationReloads: number;
   /** PT-5b: windows made ANEW because the page's device moved to another density (ruling 5a). */
   readonly windowsRemade: number;
-  /** PT-5b2 (ruling 4): pointer events NOT SENT because their page's scale was never read for the document they were for. */
+  /** PT-5b2 (ruling 4), PT-5b3 (ruling 6): presses and moves NOT SENT because their page REFUSED to say its scale and
+   * none was known for the document they were for (a slow read is waited for, never counted here). */
   readonly inputScaleUnread: number;
   /** PT-5b: paints of a window's bootstrap document — taken as the window being up, shown to nobody. */
   readonly bootstrapPaints: number;
@@ -938,8 +928,13 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   /** PT-4: the device the page is seen as — the source's at its creation, an `emulate` command's after. Survives its
    * window: a producer started again is born on it. */
   #emulation: LiveSurfaceBrowserEmulationV1 | undefined;
-  /** PT-4: a finger is down on a touch page (a press began a touch; its moves and its release are the touch's). */
+  /**
+   * PT-4, PT-5b3 (ruling 5) — WHAT THE PAGE HAS BEEN TOLD IS DOWN: the finger (a press began a touch; its moves and its
+   * release are the touch's), and each mouse button with the scale its press went at. A release of what is down is
+   * ALWAYS sent; a release of nothing is nothing. Gone with the window.
+   */
   #touching = false;
+  readonly #pressed = new Map<string, number>();
   /** PT-4: the favicon the page last named and the ORIGIN it named it under — published with the browser state while the
    * page stands on that origin (a page that names the same icons as the one before says nothing, so a reload and a walk
    * within a site keep it; a page of another origin has none until it names its own); the count that names the word whose
@@ -1005,11 +1000,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #bootstrapPaints = 0;
   /** PT-5b (ruling 5a): the density the page's window was BORN at — an offscreen window's density is its own for life. */
   #windowDensity: number | undefined;
-  /** PT-5b (ruling 5c): a `mobile` page's visual-viewport scale as last read, and when (ms) — see `pointScale`. PT-5b2:
-   * `known` — it was read FOR THE DOCUMENT that stands (`doc` counts the documents: another one's scale is its own). */
-  #pointScale = { value: 1, at: Number.NEGATIVE_INFINITY, known: false, doc: 0 };
-  /** PT-5b2 (ruling 4): the one read of the page's scale in flight — whose document's, in which window, asked when. */
-  #scaleRead: ScaleRead | undefined;
+  /** PT-5b (ruling 5c): a `mobile` page's visual-viewport scale as last read, and when (ms) — see `pointScale`. `known`:
+   * it was read FOR THE DOCUMENT that stands (PT-5b3: forgotten at a commit — `#document` — and at nothing else). */
+  #pointScale = { value: 1, at: Number.NEGATIVE_INFINITY, known: false };
   /** PT-5a: the page's refusals by kind, and the last one a person is told of (its serial counts them for the page's life). */
   readonly #refusals: Record<BrowserSurfaceRefusal, number> = {
     alert: 0,
@@ -1219,19 +1212,67 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    *
    * PT-5b2 (ruling 4) — THE HAND'S EVENTS REACH THE PAGE IN THE ORDER THEY WERE SENT, whatever is awaited on the way:
    * one chain a page. An event takes its turn behind the one before it — a pointer, a wheel, a key, text, a composition
-   * alike — and a dispatch that rejects (a stale geometry, a bound passed, a command the window refuses) is its own
-   * caller's, never the chain's. (Before: every pointer event awaited its page's scale by itself — a press always reads
-   * it, a release a moment after a read does not — so on a busy `mobile` page a release overtook its press: the page
-   * heard a finger come down and never lift.) PT-5c routes on this chain.
+   * alike — and a dispatch that rejects (a command the window refuses) is its own caller's, never the chain's. PT-5c
+   * routes on this chain.
+   *
+   * PT-5b3 (ruling 5) — AN EVENT IS JUDGED AGAINST THE GEOMETRY IT WAS SENT UNDER AS IT ARRIVES, before it takes its turn:
+   * the chain orders, it does not judge that again. (PT-5b2 judged it at the turn: a release queued behind a press that
+   * waited on its page was thrown away when a frame of another size landed meanwhile — the page was left with a finger
+   * down, and every hover after it was a drag.) What the window IS — standing, live — is still read at the turn. And A
+   * RELEASE IS NEVER JUDGED BY ITS GEOMETRY: of what is down it is always sent (`release`).
    */
   dispatchInput(request: BrowserSurfaceInputRequest): Promise<void> {
-    const turn = this.#inputTail.then(() => this.dispatchInTurn(request));
+    const geometry = this.#geometry;
+    const release = request.kind === "mouse" && request.type === "up";
+    if (!release && geometry !== undefined && request.geometryRevision !== geometry.revision) {
+      return Promise.reject(new Error("Browser input named a stale geometry revision"));
+    }
+    const turn = this.#inputTail.then(() =>
+      release ? this.release(request) : this.dispatchInTurn(request, geometry),
+    );
     this.#inputTail = turn.catch(() => undefined);
     return turn;
   }
 
-  private async dispatchInTurn(request: BrowserSurfaceInputRequest): Promise<void> {
-    const geometry = this.#geometry;
+  /**
+   * PT-5b3 (ruling 5) — A GESTURE ENDS. A release of what the page was told is DOWN is always sent — to the window that
+   * took the press, live or paused; never refused for a geometry that moved, never withheld for a scale: a touch's end
+   * carries no point and reads none, a mouse's goes at the scale its press went at. A release of NOTHING (its press was
+   * refused, or its window is gone) is nothing: the page is not told of half a click.
+   */
+  private async release(
+    request: Extract<BrowserSurfaceInputRequest, { kind: "mouse" }>,
+  ): Promise<void> {
+    const window = this.#window;
+    if (this.#closed || window === null || window.isDestroyed()) return;
+    if (this.#touching) {
+      if (request.button !== undefined && request.button !== "left") return;
+      this.#touching = false;
+      await window.dispatchTouch({ type: "touchEnd", touchPoints: [] });
+      return;
+    }
+    const button = request.button ?? "left";
+    const scale = this.#pressed.get(button);
+    if (scale === undefined) return;
+    this.#pressed.delete(button);
+    const clicks = request.clickCount;
+    await window.dispatchMouse({
+      type: "mouseReleased",
+      x: Number.isFinite(request.x) ? Math.max(0, request.x) / scale : 0,
+      y: Number.isFinite(request.y) ? Math.max(0, request.y) / scale : 0,
+      button,
+      ...(clicks !== undefined && Number.isSafeInteger(clicks) && clicks >= 1 && clicks <= 3
+        ? { clickCount: clicks }
+        : {}),
+      ...(request.buttons === undefined ? {} : { buttons: request.buttons }),
+    });
+  }
+
+  private async dispatchInTurn(
+    request: BrowserSurfaceInputRequest,
+    /** the geometry that stood when the event ARRIVED — the one it was judged against, and its bounds */
+    geometry: LiveSurfaceGeometryV1 | undefined,
+  ): Promise<void> {
     const window = this.#window;
     if (
       this.#closed ||
@@ -1241,9 +1282,6 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       this.#lifecycle.snapshot.state !== "live"
     ) {
       throw new Error("Browser surface is not available for input");
-    }
-    if (request.geometryRevision !== geometry.revision) {
-      throw new Error("Browser input named a stale geometry revision");
     }
     if (request.kind === "text") {
       if (request.text.length === 0 || request.text.length > 16_384) {
@@ -1313,6 +1351,18 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     ) {
       throw new Error("Browser pointer input is outside the logical viewport");
     }
+    // PT-4 — A FINGER: on a touch device's page a press is a touch, its moves the touch's while it is down, its release
+    // the touch's end (`release`); a hover is nothing a finger does, and no other button is one — neither is told to the
+    // page, and neither asks it anything (PT-5b3: a hover over a touch page read its scale all the same). Sent as touch
+    // events from here (`Input.dispatchTouchEvent`), never by CDP's mouse-to-touch emulation: under
+    // `setEmitTouchEventsForMouse` a dispatched mouse event is swallowed and its command never answers (the PT-4 probe),
+    // and the commands queued behind it never run. The wheel stays the page's scroll (below).
+    const touch = (this.#emulation?.touchPoints ?? 0) > 0;
+    if (touch && request.kind === "mouse") {
+      if (request.type === "move" && !this.#touching) return;
+      if (request.type === "down" && request.button !== undefined && request.button !== "left")
+        return;
+    }
     // CDP Input coordinates are CSS pixels in the main-frame viewport. The
     // presentation adapter has already supplied Browser logical coordinates;
     // backing-raster pixels and visibleRect offsets are presentation-only.
@@ -1358,38 +1408,26 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     ) {
       throw new Error("Browser click count is outside the bounded contract");
     }
-    // PT-4 — A FINGER: on a touch device's page a press is a touch, its moves the touch's while it is down, its release
-    // the touch's end; a hover is nothing a finger does, and no other button is one. Sent as touch events from here
-    // (`Input.dispatchTouchEvent`), never by CDP's mouse-to-touch emulation: under `setEmitTouchEventsForMouse` a
-    // dispatched mouse event is swallowed and its command never answers (the PT-4 probe), and the commands queued behind it
-    // never run. The wheel stays the page's scroll (above).
-    if ((this.#emulation?.touchPoints ?? 0) > 0) {
+    if (touch) {
       const finger = [{ x, y, id: 0 }];
       if (request.type === "down") {
-        if (request.button !== undefined && request.button !== "left") return;
-        this.#touching = true;
         await window.dispatchTouch({ type: "touchStart", touchPoints: finger });
-      } else if (request.type === "move") {
-        if (this.#touching) await window.dispatchTouch({ type: "touchMove", touchPoints: finger });
-      } else if (this.#touching) {
-        this.#touching = false;
-        await window.dispatchTouch({ type: "touchEnd", touchPoints: [] });
-      }
+        // (told: the finger is DOWN — on the window that heard it)
+        if (this.#window === window) this.#touching = true;
+      } else await window.dispatchTouch({ type: "touchMove", touchPoints: finger });
       return;
     }
+    const button = request.type === "move" ? "none" : (request.button ?? "left");
     await window.dispatchMouse({
-      type:
-        request.type === "move"
-          ? "mouseMoved"
-          : request.type === "down"
-            ? "mousePressed"
-            : "mouseReleased",
+      type: request.type === "move" ? "mouseMoved" : "mousePressed",
       x,
       y,
-      button: request.type === "move" ? "none" : (request.button ?? "left"),
+      button,
       ...(request.clickCount === undefined ? {} : { clickCount: request.clickCount }),
       ...(request.buttons === undefined ? {} : { buttons: request.buttons }),
     });
+    // (told: the button is DOWN, at the scale its press went at — its release goes there)
+    if (request.type === "down" && this.#window === window) this.#pressed.set(button, scale);
   }
 
   /**
@@ -1756,58 +1794,33 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * `mobile` page: ruling 5b). There the page's px are the view's OVER its visual-viewport scale. The scale is READ AT
    * EACH PRESS (a press must land where the page is drawn NOW), and for a move, a hover or a wheel when what was read is
    * older than `POINT_SCALE_MS`; a new document's is read afresh. A page that is not `mobile` is asked nothing: 1.
-   * PT-5b2 (ruling 4) — the read is BOUNDED (`POINT_SCALE_READ_MAX_MS`): past it the last scale read FOR THIS DOCUMENT
-   * stands; with none ever read for this document the event is NOT SENT (counted) — at 1, or at the document before's
-   * scale, a press on a page shown at 0.41 lands on another element.
+   * PT-5b3 (ruling 6) — THE READ IS AWAITED IN THE CHAIN, as long as the page takes: a busy page answers late, and its
+   * events arrive late and in order — never dropped. (PT-5b2 bounded the read at 200 ms and, with no scale known for the
+   * document, did not send: but the read and every `Input.*` command share the window's ONE queue, and every dispatch
+   * waits for the page besides — the bound freed nothing, and a first tap on a page just loaded and still busy was lost.
+   * What a page that NEVER answers does to the chain is PT-5c's.) "Not sent, counted" is only for a read the page
+   * REFUSES — between two documents — with no scale known for this one: at a guess the point would be another element's.
    */
   private async pointScale(window: BrowserSurfaceNativeWindow, press: boolean): Promise<number> {
     if (!this.mobile()) return 1;
     const was = this.#pointScale;
     if (!press && was.known && Date.now() - was.at < POINT_SCALE_MS) return was.value;
-    // PT-5b2 (ruling 4) — the read is BOUNDED: a busy page answers late and a hung one never, and the chain behind this
-    // event must not wait on either. ONE read is in flight at a time, and its bound runs from when it was ASKED: the
-    // events that queue behind a page that does not answer share it — they do not each wait their own (a drag over a
-    // hung page would be seconds late). An answer that comes late still serves the events after it.
-    let reading = this.#scaleRead;
-    if (reading === undefined || reading.doc !== was.doc || reading.window !== window) {
-      const mine: ScaleRead = {
-        doc: was.doc,
-        window,
-        askedAt: Date.now(),
-        done: window.visualScale().then(
-          (said) => {
-            if (this.#scaleRead === mine) this.#scaleRead = undefined;
-            if (this.#pointScale.doc !== mine.doc || this.#window !== window) return;
-            const value =
-              Number.isFinite(said) && said > 0 ? Math.min(Math.max(said, 0.05), 20) : 1;
-            this.#pointScale = { value, at: Date.now(), known: true, doc: mine.doc };
-          },
-          () => {
-            // (a page between two documents answers nothing)
-            if (this.#scaleRead === mine) this.#scaleRead = undefined;
-          },
-        ),
-      };
-      reading = mine;
-      this.#scaleRead = mine;
+    const document = this.#document;
+    let said: number;
+    try {
+      said = await window.visualScale();
+    } catch {
+      // (a page between two documents answers nothing) — the scale read for THIS document stands
+      const now = this.#pointScale;
+      if (now.known && this.#document === document) return now.value;
+      this.#inputScaleUnread += 1;
+      throw new Error("Browser page's scale could not be read for this document");
     }
-    const left = reading.askedAt + POINT_SCALE_READ_MAX_MS - Date.now();
-    if (left > 0) {
-      let bound: ReturnType<typeof setTimeout> | undefined;
-      await Promise.race([
-        reading.done,
-        new Promise<void>((resolve) => {
-          bound = setTimeout(resolve, left);
-        }),
-      ]);
-      clearTimeout(bound);
-    }
-    const now = this.#pointScale;
-    // read just now, or the last one read FOR THIS DOCUMENT stands
-    if (now.known && now.doc === was.doc) return now.value;
-    // none was ever read for this document: at a guess (1, or the document before's) the point is another element's
-    this.#inputScaleUnread += 1;
-    throw new Error("Browser page's scale has not been read for this document");
+    const value = Number.isFinite(said) && said > 0 ? Math.min(Math.max(said, 0.05), 20) : 1;
+    // it is this document's — unless another committed, or the window went, while the page answered
+    if (this.#document === document && this.#window === window)
+      this.#pointScale = { value, at: Date.now(), known: true };
+    return value;
   }
 
   /**
@@ -1952,13 +1965,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // engine's own word — a commit — and nothing else: an address that moves WITHIN a document (a hash, a router's
     // `pushState`) keeps what was read for it (before, the address moving forgot it — and a release behind a busy page
     // was then withheld for want of a scale). While a document still loads, what was read of it is old.
-    if (another)
-      this.#pointScale = {
-        value: 1,
-        at: Number.NEGATIVE_INFINITY,
-        known: false,
-        doc: this.#pointScale.doc + 1,
-      };
+    if (another) this.#pointScale = { value: 1, at: Number.NEGATIVE_INFINITY, known: false };
     else if (clamped.loading)
       this.#pointScale = { ...this.#pointScale, at: Number.NEGATIVE_INFINITY };
     this.#browserState = clamped;
@@ -2593,12 +2600,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#stopAsked = false;
     this.#born = false;
     this.#documentBase = this.#document;
-    this.#pointScale = {
-      value: 1,
-      at: Number.NEGATIVE_INFINITY,
-      known: false,
-      doc: this.#pointScale.doc + 1,
-    };
+    this.#pointScale = { value: 1, at: Number.NEGATIVE_INFINITY, known: false };
     if (this.#startupTimer !== null) {
       clearTimeout(this.#startupTimer);
       this.#startupTimer = null;
@@ -2617,6 +2619,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     }
     this.#cursor = undefined;
     this.#touching = false;
+    this.#pressed.clear();
     if (window === null) return;
     this.#controlTargets?.revoke(this.surfaceId, window.controlContents);
     if (!window.isDestroyed()) window.destroy();
