@@ -155,6 +155,42 @@ describe("PT-5b — the last still is TAKEN by the host (ruling 1)", () => {
     face.demand(SEEN);
     await s.live.settled();
     expect(s.shelf.stills.keep).toHaveBeenCalledTimes(1);
+    // …nor the frame from BEFORE it failed, under the address that failed: a frame lands in the hand, then the page's
+    // load of another address fails — put down, nothing is kept (a still is a photograph of ONE address)
+    const t = stage();
+    const b = t.open();
+    b.face.demand(HELD);
+    b.frame();
+    b.handle.set({
+      browser: browserAt(OTHER, { failure: { reason: "connection-refused" } }) as never,
+    });
+    b.face.demand(SEEN);
+    await t.live.settled();
+    expect(t.shelf.takeStill).not.toHaveBeenCalled();
+    expect(t.shelf.stills.keep).not.toHaveBeenCalled();
+  });
+
+  it("a still is never taken OF A STILL: a frame not yet photographed, the texture let go and the shelf's still laid in its place — put down, nothing is read back", async () => {
+    const s = stage();
+    s.shelf.shelf.set(`${DOC}/${KEY}`, stillOf());
+    const { face, frame } = s.open();
+    face.demand(HELD);
+    frame();
+    // the budget's eviction: the film — then, still in the hand, the shelf's still
+    expect(s.live.navigation.evict?.(KEY)).toBe(true);
+    face.demand(HELD);
+    await s.live.settled();
+    expect(face.info().extra?.still).toBeDefined();
+    face.demand(SEEN);
+    await s.live.settled();
+    expect(s.shelf.takeStill).not.toHaveBeenCalled();
+    expect(s.shelf.stills.keep).not.toHaveBeenCalled();
+    // the page's next frame is photographed at the next put-down, as ever
+    face.demand(HELD);
+    frame();
+    face.demand(SEEN);
+    await s.live.settled();
+    expect(s.shelf.takeStill).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -394,10 +430,12 @@ describe("PT-5b — the still is SHOWN through the one path, and never passed of
     // a still that cannot be read is none
     const t = stage();
     t.shelf.shelf.set(`${DOC}/${KEY}`, stillOf());
-    t.shelf.decodeStill.mockResolvedValueOnce(undefined as never);
+    t.shelf.decodeStill.mockRejectedValueOnce(new Error("not a picture"));
     const b = t.open(KEY, false);
     await t.live.settled();
     expect(b.face.texture()).toBeUndefined();
+    expect(t.writers).toHaveLength(0);
+    expect(t.live.stats().stillsShown).toBe(0);
   });
 });
 
@@ -421,6 +459,10 @@ describe("PT-5b — the still is FORGOTTEN with its pane (ruling 1)", () => {
     const t = stage();
     t.shelf.shelf.set(`${DOC}/${KEY}`, stillOf());
     t.open().face.close();
+    // (and nothing waits to forget it: deleted half a minute later with no face open — its kind turned off — the grace
+    // of THIS close is not its delete's)
+    t.clock.advance(30_000);
+    t.exists.value = false;
     t.clock.advance(120_000);
     await t.live.settled();
     expect(t.shelf.stills.forget).not.toHaveBeenCalled();
@@ -449,6 +491,36 @@ describe("PT-5b — the still is FORGOTTEN with its pane (ruling 1)", () => {
     await s.live.settled();
     expect(s.shelf.stills.forget).not.toHaveBeenCalled();
     expect(s.shelf.shelf.has(`${DOC}/${KEY}`)).toBe(true);
+    // deleted AGAIN ten seconds after its undo: its grace runs from THIS delete — the first delete's ended with its undo
+    const v = stage();
+    v.shelf.shelf.set(`${DOC}/${KEY}`, stillOf());
+    const e = v.open();
+    v.exists.value = false;
+    e.face.close();
+    v.clock.advance(30_000);
+    v.exists.value = true;
+    const f = v.open(KEY, false);
+    v.clock.advance(10_000);
+    v.exists.value = false;
+    f.face.close();
+    // (sixty seconds after the FIRST delete)
+    v.clock.advance(20_000);
+    await v.live.settled();
+    expect(v.shelf.stills.forget).not.toHaveBeenCalled();
+    v.clock.advance(40_000);
+    await v.live.settled();
+    expect(v.shelf.stills.forget).toHaveBeenCalledTimes(1);
+    // undone where no face opens for it again (its kind turned off meanwhile): the document holds the object — kept
+    const w = stage();
+    w.shelf.shelf.set(`${DOC}/${KEY}`, stillOf());
+    const g = w.open();
+    w.exists.value = false;
+    g.face.close();
+    w.clock.advance(30_000);
+    w.exists.value = true;
+    w.clock.advance(60_000);
+    await w.live.settled();
+    expect(w.shelf.stills.forget).not.toHaveBeenCalled();
     // a deleted pane whose grace has not lapsed when the mount goes: its still stays (the shelf's bound holds it)
     const t = stage();
     const c = t.open();

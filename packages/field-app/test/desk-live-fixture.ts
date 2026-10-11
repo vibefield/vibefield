@@ -449,6 +449,8 @@ export function stage(over: Partial<DeskLiveDeps> = {}) {
     readonly presentation: ReturnType<typeof fakePresentation>;
     readonly handles: Handle[];
     attached: boolean;
+    /** Its producer answers nothing any more (a main process that hangs). */
+    deaf?: boolean;
   }
   const pages = new Map<string, Staged>();
   const RANK: Record<string, number> = { hibernated: 0, paused: 1, live: 2 };
@@ -473,7 +475,7 @@ export function stage(over: Partial<DeskLiveDeps> = {}) {
   /** The producer ANSWERS what it is asked, as LSF's does: live makes or resumes its page, paused pauses it, hibernated
    * lets its window go — a paused ask makes nothing of a page that has none. */
   const answer = (page: Staged): void => {
-    if (!page.attached) return;
+    if (!page.attached || page.deaf === true) return;
     const was = page.presentation.summary.state;
     const mode = folded(page);
     const next =
@@ -555,7 +557,11 @@ export function stage(over: Partial<DeskLiveDeps> = {}) {
     };
     /** The mode last written to its wire. */
     const wire = (): string | undefined => (handle.demands.at(-1) as { mode?: string })?.mode;
-    return { key, face, handle, presentation, arrived, attach, frame, say, wire };
+    /** Its producer answers nothing from here on. */
+    const deaf = (): void => {
+      staged.deaf = true;
+    };
+    return { key, face, handle, presentation, arrived, attach, frame, say, wire, deaf };
   };
   /** What the service has in flight that CAN finish does (every fake answers within a few turns of the microtask queue). */
   const turns = async (): Promise<void> => {

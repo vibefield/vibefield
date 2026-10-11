@@ -1094,8 +1094,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         (async () => {
           const kept = await stills.kept(docId, key);
           if (kept === undefined || !mine(kept)) return;
+          // (a still that cannot be read rejects: nothing is laid — the film)
           const bitmap = await decode(kept);
-          if (bitmap === undefined) return;
           if (!mine(kept)) {
             bitmap.close();
             return;
@@ -1104,7 +1104,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
           waiting = { bitmap, kept };
           if (layStill()) wordsOwed = true;
           tell();
-        })().catch(() => undefined),
+        })(),
       );
     };
     /**
@@ -1125,10 +1125,9 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         docId === undefined ||
         w === undefined ||
         device === undefined ||
+        // (a failed page's frames are not `liveShown`: the failure said so, and no frame of it is taken since)
         !liveShown ||
-        !fresh ||
-        veiled ||
-        failing(handle.state)
+        !fresh
       )
         return Promise.resolve(false);
       fresh = false;
@@ -1274,6 +1273,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         still = undefined;
         liveShown = true;
         fresh = true;
+        // (a still being read is void from here: were this page put to rest before the read ends, its texture is the page
+        // as it was — never the shelf's older photograph laid over it)
         showing += 1;
         dropWaiting();
         armStill();

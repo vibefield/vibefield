@@ -1434,6 +1434,19 @@ describe("PT-5b — a pane that shows a PHOTOGRAPH of its page (ruling 2)", () =
     const rested = record();
     expect(rested.brightness).toBe(0.7);
     expect(local.said(1 as Entity)?.rest).toBe(true);
+    // THAT it is a still is a word BY ITSELF: the page's frame landing in the same texture (a still no larger than its
+    // page is taken at its own size) with nothing else said — the pane is remade, at the page's own light, its mark gone
+    const made = t.n.remake.length;
+    face.say({ info: { address: PAGE } });
+    local.tick?.(36);
+    expect(t.n.remake).toHaveLength(made + 1);
+    expect(record().brightness).toBe(1);
+    expect(local.said(1 as Entity)?.rest).toBeUndefined();
+    // …and a photograph again when the host says so (the page put to rest: its texture as it was)
+    face.say({ info: { address: PAGE, extra: still(40_000) } });
+    local.tick?.(40);
+    expect(t.n.remake).toHaveLength(made + 2);
+    expect(record().brightness).toBe(0.7);
     // the page's first frame: the words carry no still — the page, at its own light, its head its own
     face.land({ epoch: 1, width: 2560, height: 1600 });
     face.say({ state: { is: "live" }, info: { address: PAGE } });

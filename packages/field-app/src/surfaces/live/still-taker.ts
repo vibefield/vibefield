@@ -22,10 +22,8 @@ export interface TakenStill {
 
 /** Reads a face's texture back and encodes it — undefined where it cannot (no content, a device lost under it). */
 export type StillTaker = (device: GPUDevice, face: LiveTexture) => Promise<TakenStill | undefined>;
-/** A kept still as a picture the face's writer copies from — undefined where it cannot be read. */
-export type StillDecoder = (
-  still: Pick<PageStill, "type" | "image">,
-) => Promise<ImageBitmap | undefined>;
+/** A kept still as a picture the face's writer copies from — rejected where it cannot be read. */
+export type StillDecoder = (still: Pick<PageStill, "type" | "image">) => Promise<ImageBitmap>;
 
 /** The quality a still is encoded at. */
 export const PAGE_STILL_QUALITY = 0.82;
@@ -174,12 +172,5 @@ export function createStillTaker(): StillTaker {
 
 /** The product's decoder: the platform's own (`createImageBitmap` over the still's bytes). */
 export function createStillDecoder(): StillDecoder {
-  return async (still) => {
-    if (typeof createImageBitmap !== "function") return undefined;
-    try {
-      return await createImageBitmap(new Blob([still.image as BlobPart], { type: still.type }));
-    } catch {
-      return undefined;
-    }
-  };
+  return (still) => createImageBitmap(new Blob([still.image as BlobPart], { type: still.type }));
 }

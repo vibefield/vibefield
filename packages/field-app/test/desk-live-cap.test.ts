@@ -10,7 +10,7 @@
 //  - a window reloaded: a page alive all along keeps its slot — no page is woken in its place;
 //  - a page let go of (a deleted pane's, kept by the pool's grace) is alive and counted, and rested first;
 //  - the budget's eviction lets the face's texture go: the film, then its still when next seen.
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   LIVE_ATTACH_HOLD_MS,
   liveDemandIntent,
@@ -122,11 +122,18 @@ describe("PT-5b — six pages alive at most (ruling 3)", () => {
     const { s, a, b, c } = await three();
     c.face.demand(HELD);
     await s.pump();
+    const from = c.handle.demands.length;
     expect(s.live.cap(1)).toBe(1);
     await s.pump();
     expect(c.wire()).toBe("live");
     expect(c.presentation.summary.state).toBe("live");
     expect([a.wire(), b.wire()]).toEqual(["hibernated", "hibernated"]);
+    // never, not for a moment (a rest is a LOAD when it ends): nothing but live was asked of it under the lowered cap,
+    // and the rests are the two others'
+    expect((c.handle.demands.slice(from) as { mode: string }[]).map((d) => d.mode)).not.toContain(
+      "hibernated",
+    );
+    expect(s.live.stats().rests).toBe(2);
     expect(s.live.faces().find((f) => f.key === "c")).toMatchObject({ alive: true, rested: false });
     expect(s.live.stats().alive).toBe(1);
     // a second pane cannot be held with it; put down, it is a seen page like another — and stays, the only one alive
@@ -311,11 +318,18 @@ describe("PT-5b — six pages alive at most (ruling 3)", () => {
     const e = u.open("e", true, "created");
     e.face.demand(SEEN);
     await u.pump();
+    e.deaf();
     e.face.close();
     const f = u.open("f", true, "created");
     f.face.demand(SEEN);
+    await u.pump();
+    // asked to rest, the page says nothing: the pane that wants its slot waits — two seconds, no longer
+    expect(e.presentation.summary.state).toBe("live");
     expect(f.wire()).toBe("paused");
-    u.clock.advance(2_000);
+    u.clock.advance(1_999);
+    await u.pump();
+    expect(f.wire()).toBe("paused");
+    u.clock.advance(1);
     await u.pump();
     expect(f.wire()).toBe("live");
   });
@@ -332,12 +346,35 @@ describe("PT-5b — six pages alive at most (ruling 3)", () => {
     const b = s.open("b", true, "created");
     const sent = b.handle.demands.length;
     b.face.demand(SEEN);
+    // (the ask of a pane over the cap is planned at its tick's end: read after it)
+    await flush();
     expect(b.handle.demands).toHaveLength(sent);
     s.live.park(false);
     await s.pump();
     expect(a.wire()).toBe("live");
     expect(b.wire()).toBe("paused");
     expect(s.live.stats()).toMatchObject({ alive: 1, wakes: 1 });
+    // parked, the cap lowered under two alive pages: nobody is put to rest until the desk runs again
+    const t = stage({ far });
+    t.live.cap(2);
+    const c = t.open("a", true, "created");
+    const d = t.open("b", true, "created");
+    c.face.demand(SEEN);
+    d.face.demand(SEEN);
+    await t.pump();
+    c.frame();
+    d.frame();
+    t.live.park(true);
+    await t.pump();
+    t.live.cap(1);
+    await t.pump();
+    expect([c.wire(), d.wire()]).toEqual(["paused", "paused"]);
+    expect(t.shelf.takeStill).not.toHaveBeenCalled();
+    expect(t.live.stats()).toMatchObject({ rests: 0, alive: 2 });
+    t.live.park(false);
+    await t.pump();
+    expect([c.wire(), d.wire()]).toEqual(["live", "hibernated"]);
+    expect(t.live.stats()).toMatchObject({ rests: 1, alive: 1 });
   });
 
   it("a page that STOPPED holds no slot: a waiting page comes alive — and when the stopped one is loaded again, the cap holds", async () => {
@@ -410,6 +447,44 @@ describe("PT-5b — six pages alive at most (ruling 3)", () => {
     expect(t.a.wire()).toBe("live");
     expect(d.wire()).toBe("paused");
     expect(t.s.live.stats().rests).toBe(0);
+  });
+
+  it("a still being READ when the page's frame lands is void: the page put to rest before the read ends, its texture stays the page as it was — the shelf's older photograph is never laid over it", async () => {
+    const s = stage({ far });
+    s.live.cap(1);
+    s.shelf.shelf.set(`${DOC}/a`, stillOf({ takenAt: 5 }));
+    // every read of the shelf's picture is slow: none ends before the test lets it
+    const reads: ((bitmap: ImageBitmap) => void)[] = [];
+    const old = { width: 800, height: 500, close: vi.fn() };
+    s.shelf.decodeStill.mockImplementation(
+      () =>
+        new Promise<ImageBitmap>((resolve) => {
+          reads.push(resolve);
+        }),
+    );
+    const a = s.open("a", true, "created");
+    a.face.demand(SEEN);
+    await s.pump();
+    expect(reads.length).toBeGreaterThan(0);
+    // the page's own frame lands first…
+    a.frame();
+    expect(a.face.info().extra?.still).toBeUndefined();
+    // …and the page is put to rest for a held one: what its texture holds is the page as it was
+    s.clock.advance(1_000);
+    const b = s.open("b", true, "created");
+    b.face.demand(HELD);
+    await s.pump();
+    expect(a.wire()).toBe("hibernated");
+    const rested = a.face.info().extra?.still;
+    expect(rested).toEqual({ takenAt: s.clock.now(), age: 0 });
+    const presented = s.writers[0]?.presented.length;
+    // the reads end now
+    for (const read of reads) read(old as unknown as ImageBitmap);
+    await s.live.settled();
+    expect(old.close).toHaveBeenCalledTimes(reads.length);
+    expect(s.live.stats().stillsShown).toBe(0);
+    expect(s.writers[0]?.presented).toHaveLength(presented ?? -1);
+    expect(a.face.info().extra?.still).toEqual(rested);
   });
 
   it("the test door: `cap()` reads it; lowered or raised, the plan is made again; a number that is none is nothing", async () => {
