@@ -23,6 +23,10 @@
 //                 page's area, `still` said, the rest mark — then the gate opens and the live page replaces it: sampled each
 //                 frame across the hand-over, the face is never the film (still → live, nothing between), nor is any capture
 //                 of its page's area;
+//   UNDER-WORDS — the page's process killed (the test's hook): the address that stopped is its still's, so the pane shows
+//                 "This page stopped" OVER ITS STILL — the fixture's hue still there, dimmed FURTHER than the photograph
+//                 (its ground's light under half the still's), the words' ink on it, no rest mark — and the notice is one
+//                 more row of the budget, its bytes the words' block alone; ↻ in hand loads the page again;
 //   TWO-WINDOWS — a second window joined to the same document (the smoke plays the mesh — `?docRelay=1`): each window's
 //                 pane alive on a page of its own; A's page navigates by a click; the `url` reaches B and B's page follows
 //                 ONCE; B writes nothing back;
@@ -62,6 +66,12 @@ export const STILL_ROWS = {
   shown: { hue: 0.4, film: 0.15 },
   /** a still is a step dimmer than its page alive: its brightest pixel at most this share of the live page's */
   dimmer: 0.94,
+  /** UNDER-WORDS: a pixel of the words' ink is light and grey (its luma at least this, its channels within this); at
+   * least so many of them; the still under them dimmed FURTHER — its ground's mean light at most this share of the
+   * photograph's; the notice's bytes at most this (PT-5a laid the page's whole area: 10 485 760 for a laptop's) */
+  ink: { luma: 150, spread: 44, min: 40 },
+  under: 0.7,
+  noticeMax: 2_000_000,
   /** MEMORY: the panes laid, the cap they end under, the most alive while their stills are made, the settle before a read */
   memory: { panes: 20, alive: 6, making: 10, settleMs: 2_500 },
 } as const;
@@ -76,8 +86,9 @@ export const STILL_HUE_DEG = ((): number => {
 })();
 
 /**
- * The pixel classifier, as source: 1 the fixture's ground (at its own light, or a still's dimmer one), 2 the film, 0
- * anything else. The renderer runs it over a capture (a bitmap never crosses) and the rows' units run the same text.
+ * The pixel classifier, as source: 1 the fixture's ground (at its own light, or a still's dimmer one), 2 the film, 3 a
+ * light grey (a notice's ink; a page's own white), 0 anything else. The renderer runs it over a capture (a bitmap never
+ * crosses) and the rows' units run the same text.
  */
 export const STILL_CLASSIFY = `((r, g, b) => {
   const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
@@ -87,7 +98,8 @@ export const STILL_CLASSIFY = `((r, g, b) => {
     const off = Math.abs(h - ${STILL_HUE_DEG.toFixed(2)});
     if (Math.min(off, 360 - off) <= ${STILL_ROWS.hue.deg}) return 1;
   }
-  return l <= ${STILL_ROWS.filmLuma} ? 2 : 0;
+  if (l <= ${STILL_ROWS.filmLuma}) return 2;
+  return l >= ${STILL_ROWS.ink.luma} && d <= ${STILL_ROWS.ink.spread} ? 3 : 0;
 })`;
 
 /** A page's area read back from a capture: its pixels, those of the fixture's ground, those of the film, its brightest. */
@@ -96,11 +108,16 @@ export interface PageSeen {
   readonly hue: number;
   readonly film: number;
   readonly lumaMax: number;
+  /** its light-grey pixels (a notice's ink; a page's white), and the mean light of its ground's (the hue's) pixels */
+  readonly ink: number;
+  readonly hueLuma: number;
 }
 
 /** A face's row as these rows read it. */
 export interface FaceSeen {
   readonly state: string;
+  /** a failed face's reason (the host's word leads it), else null */
+  readonly reason: string | null;
   readonly ask: string | null;
   readonly wire: string | null;
   readonly alive: boolean;
@@ -242,6 +259,21 @@ export interface LastStillSeen {
       readonly mark: boolean;
     };
   };
+  readonly underWords: {
+    /** the page's process killed; its face then, its head's rest mark, its page's area; the photograph's ground before */
+    readonly killed: boolean;
+    readonly face: FaceSeen | null;
+    readonly mark: boolean;
+    readonly page: PageSeen | null;
+    readonly photograph: number;
+    /** the kind's rows of the budget against the faces holding a texture; the notice's bytes (its rows' less the faces') */
+    readonly rows: number;
+    readonly textures: number;
+    readonly noticeBytes: number;
+    /** after ↻ in hand: its face, and the kind's rows of the budget against the faces' textures */
+    readonly recovered: FaceSeen | null;
+    readonly after: { readonly rows: number; readonly textures: number };
+  } | null;
   readonly twoWindows: {
     /** B joined A's document: the pane there by the same key; each window's page alive (main's pages at its address) */
     readonly joined: boolean;
@@ -553,6 +585,59 @@ export function judgeStill(seen: LastStillSeen["still"]): string[] {
   return out;
 }
 
+/** UNDER-WORDS: a failed face over its still — the still dimmed further under the words, the notice its own small row. */
+export function judgeUnderWords(seen: LastStillSeen["underWords"]): string[] {
+  if (seen === null) return ["UNDER-WORDS: the row did not run"];
+  const out: string[] = [];
+  if (!seen.killed)
+    return ["UNDER-WORDS: the page's process could not be found to kill — the row proved nothing"];
+  const face = seen.face;
+  if (face === null) out.push("UNDER-WORDS: the pane has no face");
+  else {
+    if (face.state !== "failed" || face.reason?.startsWith("stopped") !== true)
+      out.push(
+        `UNDER-WORDS: the killed page's face is ${face.state} (${face.reason ?? "no reason"}), not failed: stopped`,
+      );
+    if (face.still === null || face.veiled || face.bytes === 0)
+      out.push(
+        `UNDER-WORDS: the failed face shows no still (still ${face.still !== null}, hidden ${face.veiled}, ${face.bytes} bytes) — the film, though the shelf keeps a still of the address that stopped`,
+      );
+  }
+  if (seen.mark)
+    out.push(
+      "UNDER-WORDS: the failed pane's head carries the rest mark — a failed page is not at rest",
+    );
+  out.push(...shown("UNDER-WORDS", "the page's area under the words", seen.page));
+  if (seen.page !== null) {
+    if (seen.page.ink < STILL_ROWS.ink.min)
+      out.push(
+        `UNDER-WORDS: ${seen.page.ink} pixels of the words' ink in the page's area, not ${STILL_ROWS.ink.min} — the pane says nothing over its still`,
+      );
+    if (seen.photograph <= 0 || seen.page.hueLuma > seen.photograph * STILL_ROWS.under)
+      out.push(
+        `UNDER-WORDS: the still's ground reads ${seen.page.hueLuma} under the words against ${seen.photograph} as a photograph — it is not dimmed further`,
+      );
+  }
+  if (seen.rows !== seen.textures + 1)
+    out.push(
+      `UNDER-WORDS: the kind has ${seen.rows} rows of the budget for ${seen.textures} faces and a notice — the notice is not charged`,
+    );
+  if (seen.noticeBytes <= 0 || seen.noticeBytes > STILL_ROWS.noticeMax)
+    out.push(
+      `UNDER-WORDS: the notice holds ${seen.noticeBytes} bytes — not the words' block alone (at most ${STILL_ROWS.noticeMax})`,
+    );
+  const back = seen.recovered;
+  if (back === null || back.state !== "live" || back.still !== null)
+    out.push(
+      `UNDER-WORDS: after ↻ the pane is ${back?.state ?? "gone"} (still ${back !== null && back.still !== null}) — the page was not loaded again`,
+    );
+  if (seen.after.rows !== seen.after.textures)
+    out.push(
+      `UNDER-WORDS: after ↻ the kind has ${seen.after.rows} rows of the budget for ${seen.after.textures} faces — the notice's row was not released`,
+    );
+  return out;
+}
+
 /** TWO-WINDOWS: each window's pane alive; A's click reaches B through the document; B follows once and writes nothing back. */
 export function judgeTwoWindows(seen: LastStillSeen["twoWindows"]): string[] {
   if (seen === null) return ["TWO-WINDOWS: the row did not run"];
@@ -638,6 +723,8 @@ export interface LastStillDriver extends LiveRowsDriver {
   pages(prefix: string): readonly MainPage[];
   /** Every process's working set, summed. */
   memory(): AppMemory;
+  /** The renderer process of the page whose address begins with `prefix` KILLED (the test's hook); false: none such. */
+  killPage(prefix: string): boolean;
   /** A second window on a board of its own, loaded with the document relay (`?docRelay=1`), its desk ready. */
   openPeer(): Promise<BrowserWindow>;
 }
@@ -646,7 +733,7 @@ export interface LastStillDriver extends LiveRowsDriver {
 const FACE = (key: string): string => `(() => {
   const f = (globalThis.__vfDesk.live()?.faces ?? []).find((x) => x.key === ${JSON.stringify(key)});
   return f === undefined ? null : {
-    state: f.state.is, ask: f.demand?.mode ?? null, wire: f.wire?.mode ?? null, alive: f.alive, rested: f.rested,
+    state: f.state.is, reason: f.state.reason ?? null, ask: f.demand?.mode ?? null, wire: f.wire?.mode ?? null, alive: f.alive, rested: f.rested,
     still: f.still, stillAt: f.stillAt, presented: f.presented, veiled: f.veiled, bytes: f.texture?.bytes ?? 0,
   };
 })()`;
@@ -664,14 +751,14 @@ const PAGE_PIXELS = (rect: {
   const c = new OffscreenCanvas(w, h); const x = c.getContext("2d"); x.drawImage(shot, 0, 0, w, h); shot.close();
   const b = x.getImageData(0, 0, w, h).data;
   const classify = ${STILL_CLASSIFY};
-  let hue = 0, film = 0, hi = 0;
+  let hue = 0, film = 0, ink = 0, hi = 0, sum = 0;
   for (let i = 0; i < b.length; i += 4) {
     const k = classify(b[i], b[i + 1], b[i + 2]);
-    if (k === 1) hue += 1; else if (k === 2) film += 1;
     const l = 0.2126 * b[i] + 0.7152 * b[i + 1] + 0.0722 * b[i + 2];
+    if (k === 1) { hue += 1; sum += l; } else if (k === 2) film += 1; else if (k === 3) ink += 1;
     if (l > hi) hi = l;
   }
-  return { px: w * h, hue, film, lumaMax: Math.round(hi) };
+  return { px: w * h, hue, film, lumaMax: Math.round(hi), ink, hueLuma: hue === 0 ? 0 : Math.round((sum / hue) * 10) / 10 };
 })()`;
 
 /** The hand-over's sampler: each frame, the face's texture as the pane draws it — F the film (none, or hidden), S its
@@ -1295,6 +1382,74 @@ export async function lastStillRows(d: LastStillDriver): Promise<string[]> {
     said.gate = { before: gatedWas, after: d.fixture.gated() };
     problems.push(...judgeStill(still));
     await shoot("pt-5b-still-after-hand-over.png");
+
+    // ── UNDER-WORDS: the page's process killed — "This page stopped" over its still, dimmed further; ↻ loads it again ──
+    try {
+      const budgetRows = async (): Promise<{
+        rows: number;
+        bytes: number;
+        textures: number;
+        held: number;
+      }> => {
+        const b = await js<{ byOwner: Record<string, { bytes: number; entries: number }> } | null>(
+          "globalThis.__vfDesk.budget()",
+        );
+        const fs = await Promise.all(left.map((p) => face(p)));
+        return {
+          rows: b?.byOwner[PANE.type]?.entries ?? 0,
+          bytes: b?.byOwner[PANE.type]?.bytes ?? 0,
+          textures: fs.filter((f) => f !== null && f.bytes > 0).length,
+          held: fs.reduce((sum, f) => sum + (f?.bytes ?? 0), 0),
+        };
+      };
+      await frame(left);
+      await waitFor(
+        "the page's still on the shelf, of its address",
+        15_000,
+        () => stillOf(third as Pane),
+        (st) => st !== null && st.address === (third as Pane).address,
+      );
+      const killed = d.killPage(third.address);
+      const failedFace = await waitFor(
+        "the stopped page's face over its still",
+        STILL_ROWS.withinMs,
+        () => face(third as Pane),
+        (f) => f !== null && f.state === "failed" && f.still !== null && f.bytes > 0,
+      );
+      await sleep(900);
+      const wordsPage = await pageOf(third);
+      const charged = await budgetRows();
+      await shoot("pt-5b-stopped-over-its-still.png");
+      const wordsMark = await markOf(third);
+      // ↻ in hand: the face's own retry
+      await pickUp(third);
+      await h.pressSelector('[data-selection-bar] [data-face-row="hand"] [data-tool="reload"]');
+      const recovered = await waitFor(
+        "the page loaded again",
+        STILL_ROWS.withinMs,
+        () => face(third as Pane),
+        (f) => f !== null && f.state === "live" && f.still === null && f.presented >= 1,
+      );
+      await done();
+      await sleep(600);
+      const afterRows = await budgetRows();
+      const underWords: LastStillSeen["underWords"] = {
+        killed,
+        face: failedFace,
+        mark: wordsMark,
+        page: wordsPage,
+        photograph: shown.page?.hueLuma ?? 0,
+        rows: charged.rows,
+        textures: charged.textures,
+        noticeBytes: charged.bytes - charged.held,
+        recovered,
+        after: { rows: afterRows.rows, textures: afterRows.textures },
+      };
+      said.underWords = underWords;
+      problems.push(...judgeUnderWords(underWords));
+    } catch (error) {
+      problems.push(`UNDER-WORDS: ${error instanceof Error ? error.message : String(error)}`);
+    }
 
     // ── TWO-WINDOWS: a second window joined to the document; A's click; B follows once and writes nothing back ───────
     try {

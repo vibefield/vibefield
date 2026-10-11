@@ -17,7 +17,9 @@ import {
   judgeSilent,
   judgeStill,
   judgeTwoWindows,
+  judgeUnderWords,
   type LastStillSeen,
+  type PageSeen,
   pageAtRest,
   runsOf,
   STILL_CLASSIFY,
@@ -39,6 +41,7 @@ const stillAt = (q: string, takenAt: number, over: Partial<StillSaid> = {}): Sti
 });
 const LIVE: FaceSeen = {
   state: "live",
+  reason: null,
   ask: "live",
   wire: "live",
   alive: true,
@@ -58,8 +61,17 @@ const RESTED: FaceSeen = {
   still: 1_000,
   presented: 1,
 };
-const PAGE = { px: 171_872, hue: 128_753, film: 0, lumaMax: 255 };
-const DIM = { ...PAGE, lumaMax: 220 };
+const PAGE: PageSeen = {
+  px: 171_872,
+  hue: 128_753,
+  film: 0,
+  lumaMax: 255,
+  ink: 9_000,
+  hueLuma: 104.2,
+};
+const DIM: PageSeen = { ...PAGE, lumaMax: 220, hueLuma: 89.6 };
+/** A page's area read back, the rest as the fixture's own. */
+const area = (over: Partial<PageSeen>): PageSeen => ({ ...PAGE, ...over });
 
 describe("the last still and the many — its rows", () => {
   const rest: LastStillSeen["rest"] = {
@@ -101,7 +113,7 @@ describe("the last still and the many — its rows", () => {
         third: {
           face: { ...RESTED, still: null, state: "starting", wire: "paused" },
           mark: false,
-          page: { px: 1000, hue: 0, film: 990, lumaMax: 30 },
+          page: area({ px: 1000, hue: 0, film: 990, lumaMax: 30, ink: 0, hueLuma: 0 }),
           alive: PAGE,
         },
       }),
@@ -376,7 +388,7 @@ describe("the last still and the many — its rows", () => {
           waiting: 1,
           face: { ...LIVE, presented: 1 },
           mark: false,
-          page: { px: 374_616, hue: 0, film: 0, lumaMax: 255 },
+          page: area({ px: 374_616, hue: 0, film: 0, lumaMax: 255, ink: 0, hueLuma: 0 }),
         },
         handOver: { ...seen.handOver, runs: "-8 F4 S7 F16 L3868", leastHue: 0 },
       }),
@@ -397,7 +409,7 @@ describe("the last still and the many — its rows", () => {
           ...seen.shown,
           face: { ...RESTED, state: "starting", still: null, bytes: 0, presented: 0 },
           mark: false,
-          page: { px: 1000, hue: 0, film: 1000, lumaMax: 20 },
+          page: area({ px: 1000, hue: 0, film: 1000, lumaMax: 20, ink: 0, hueLuma: 0 }),
         },
         handOver: { ...seen.handOver, runs: "F260 L40", worstFilm: 1, leastHue: 0 },
       }),
@@ -443,6 +455,70 @@ describe("the last still and the many — its rows", () => {
       "STILL: the desk did not come back after the reload",
       "STILL: no load waited at the fixture's gate — the page was never asked for again",
       "STILL: only 1 captures were made across the hand-over",
+    ]);
+  });
+
+  it("UNDER-WORDS: a failed face over its still — the still shown under the words, dimmed FURTHER than the photograph, no rest mark, the notice one more row of the budget (the words' block alone); ↻ loads the page again and the row goes", () => {
+    const seen: NonNullable<LastStillSeen["underWords"]> = {
+      killed: true,
+      face: { ...RESTED, state: "failed", reason: "stopped: Browser page stopped", rested: false },
+      mark: false,
+      page: area({ hue: 250_000, px: 374_616, film: 0, ink: 3_100, hueLuma: 45.1 }),
+      photograph: 89.6,
+      rows: 3,
+      textures: 2,
+      noticeBytes: 598_332,
+      recovered: LIVE,
+      after: { rows: 2, textures: 2 },
+    };
+    expect(judgeUnderWords(seen)).toEqual([]);
+    expect(judgeUnderWords(null)).toEqual(["UNDER-WORDS: the row did not run"]);
+    expect(judgeUnderWords({ ...seen, killed: false })).toEqual([
+      "UNDER-WORDS: the page's process could not be found to kill — the row proved nothing",
+    ]);
+    // PT-5a's face: the film alone, whatever the shelf keeps — and the notice laid over the page's whole area
+    expect(
+      judgeUnderWords({
+        ...seen,
+        face: { ...(seen.face as FaceSeen), still: null, veiled: true },
+        page: area({ px: 374_616, hue: 0, film: 368_000, ink: 3_100, hueLuma: 0 }),
+        noticeBytes: 10_485_760,
+      }),
+    ).toEqual([
+      "UNDER-WORDS: the failed face shows no still (still false, hidden true, 21845272 bytes) — the film, though the shelf keeps a still of the address that stopped",
+      "UNDER-WORDS: the page's area under the words is 0.0% the fixture's hue, not 40% — the page is not drawn there",
+      "UNDER-WORDS: the page's area under the words is 98.2% film — the pane shows its dark film",
+      "UNDER-WORDS: the notice holds 10485760 bytes — not the words' block alone (at most 2000000)",
+    ]);
+    // the still shown as a photograph — at rest, it would say — with no words on it, the notice uncharged
+    expect(
+      judgeUnderWords({
+        ...seen,
+        mark: true,
+        page: area({ px: 374_616, hue: 269_731, film: 0, ink: 12, hueLuma: 89.6 }),
+        rows: 2,
+        noticeBytes: 0,
+      }),
+    ).toEqual([
+      "UNDER-WORDS: the failed pane's head carries the rest mark — a failed page is not at rest",
+      "UNDER-WORDS: 12 pixels of the words' ink in the page's area, not 40 — the pane says nothing over its still",
+      "UNDER-WORDS: the still's ground reads 89.6 under the words against 89.6 as a photograph — it is not dimmed further",
+      "UNDER-WORDS: the kind has 2 rows of the budget for 2 faces and a notice — the notice is not charged",
+      "UNDER-WORDS: the notice holds 0 bytes — not the words' block alone (at most 2000000)",
+    ]);
+    // the page never comes back; its notice's row is left behind
+    expect(
+      judgeUnderWords({
+        ...seen,
+        face: { ...LIVE },
+        recovered: seen.face,
+        after: { rows: 3, textures: 2 },
+      }),
+    ).toEqual([
+      "UNDER-WORDS: the killed page's face is live (no reason), not failed: stopped",
+      "UNDER-WORDS: the failed face shows no still (still false, hidden false, 21845272 bytes) — the film, though the shelf keeps a still of the address that stopped",
+      "UNDER-WORDS: after ↻ the pane is failed (still true) — the page was not loaded again",
+      "UNDER-WORDS: after ↻ the kind has 3 rows of the budget for 2 faces — the notice's row was not released",
     ]);
   });
 
@@ -563,9 +639,11 @@ describe("the last still and the many — what the rows read by", () => {
     // the film: the pane's dark film, its glass over it
     expect(classify(8, 9, 11)).toBe(2);
     expect(classify(34, 36, 38)).toBe(2);
-    // neither: the page's headline, its runner, a blank white frame, the mat, a grey
-    expect(classify(255, 255, 255)).toBe(0);
-    expect(classify(217, 217, 217)).toBe(0);
+    // a light grey: a notice's ink — and a page's own white (its headline; a blank frame)
+    expect(classify(230, 232, 234)).toBe(3);
+    expect(classify(255, 255, 255)).toBe(3);
+    expect(classify(217, 217, 217)).toBe(3);
+    // none of them: the page's runner, the mat, a middle grey
     expect(classify(255, 211, 77)).toBe(0);
     expect(classify(74, 104, 58)).toBe(0);
     expect(classify(128, 128, 128)).toBe(0);

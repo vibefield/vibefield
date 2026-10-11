@@ -1962,6 +1962,14 @@ async function stillRows(
           .getAllWebContents()
           .filter((c) => !c.isDestroyed() && c.isOffscreen() && c.getURL().startsWith(prefix))
           .map((c) => ({ id: c.id, url: c.getURL(), muted: c.isAudioMuted() })),
+      killPage: (prefix) => {
+        const page = webContents
+          .getAllWebContents()
+          .find((c) => !c.isDestroyed() && c.isOffscreen() && c.getURL().startsWith(prefix));
+        if (page === undefined) return false;
+        page.forcefullyCrashRenderer();
+        return true;
+      },
       memory: () => {
         const metrics = app.getAppMetrics();
         const kb = metrics.reduce((sum, m) => sum + m.memory.workingSetSize, 0);
