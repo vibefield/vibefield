@@ -13,7 +13,13 @@
 //    apart (the shelf writes a file and its type separately; this needs no second file).
 //  - THE BOUND: `PAGE_STILLS_MAX_BYTES` a device (64 MB). Held at each keep: the shelf's index is read (the directory
 //    itself — desk-blobs `list`) and the OLDEST stills are forgotten first until what is kept fits; the one just kept is
-//    never the one forgotten.
+//    never the one forgotten. A trim that fails (the shelf could not be listed) is that keep's alone: the next one trims.
+//  - THE SWEEP (PT-5b2 ruling 2): a deleted pane's still is forgotten when its page's grace lapses — by a timer in the
+//    LIVE service's memory, which a reload, a quit or a board's close inside that minute takes away. So when a document
+//    is OPEN AND WHOLE (use-workspace-session.ts: this device's own saved copy, its journal applied — nothing of it can
+//    "not have arrived yet") the stills under its prefix that no STANDING object's name makes are forgotten: a name is
+//    made of the object's key through `part` (plain, or its digest), so the standing objects' names are the whole truth
+//    for both — no digest is ever read back.
 
 import { deskBlobs, type KeptEntry } from "../../field/desk/desk-blobs";
 
@@ -96,6 +102,8 @@ export function unpackStill(bytes: Uint8Array): PageStill | undefined {
   const { address, logical, size, type, takenAt } = said as Record<string, unknown>;
   if (typeof address !== "string" || address.length === 0) return undefined;
   if (!pair(logical) || !pair(size)) return undefined;
+  // (PT-5b2: a still is at most `PAGE_STILL_MAX_PX` on its long side — a container that says more is none this desk kept)
+  if (Math.max(size[0], size[1]) > PAGE_STILL_MAX_PX) return undefined;
   if (typeof type !== "string" || !/^image\/[a-z0-9.+-]{1,40}$/.test(type)) return undefined;
   if (typeof takenAt !== "number" || !Number.isFinite(takenAt)) return undefined;
   return {
@@ -139,6 +147,12 @@ export interface PageStills {
   forget(docId: string, key: string): Promise<void>;
   /** A document deleted: every still of its panes forgotten. Answers how many. */
   forgetDocument(docId: string): Promise<number>;
+  /**
+   * PT-5b2 (ruling 2) — THE SWEEP: of the document's stills, those whose name no STANDING object makes are forgotten
+   * (`standing`: the durable keys of the objects the document holds — the caller's word, given only for a document that
+   * is open and whole). Answers how many went.
+   */
+  sweep(docId: string, standing: readonly string[]): Promise<number>;
   /** What the shelf keeps of page stills now. */
   usage(): Promise<{ readonly bytes: number; readonly stills: number }>;
 }
@@ -151,7 +165,7 @@ export function createPageStills(
   /** One trim at a time: two keeps landing together read one index, not two halves of it. */
   let trimming: Promise<void> = Promise.resolve();
   const trim = (spare: string): Promise<void> => {
-    trimming = trimming.then(async () => {
+    const run = trimming.then(async () => {
       const kept = [...(await shelf().list(PAGE_STILL_PREFIX))];
       let bytes = kept.reduce((sum, e) => sum + e.bytes, 0);
       // the oldest first; of two written in one instant, by name (a list has no order of its own)
@@ -163,13 +177,16 @@ export function createPageStills(
         bytes -= entry.bytes;
       }
     });
-    return trimming;
+    // (PT-5b2: a trim that failed is its own keep's — the chain goes on, and the next keep holds the bound again)
+    trimming = run.catch(() => undefined);
+    return run;
   };
   return {
     async keep(docId, key, still) {
       const name = pageStillName(docId, key);
       await shelf().keep(name, packStill(still), PAGE_STILL_TYPE);
-      await trim(name);
+      // the still IS kept: a bound that could not be held this once is no failed keep
+      await trim(name).catch(() => undefined);
     },
     async kept(docId, key) {
       const blob = await shelf().kept(pageStillName(docId, key));
@@ -184,6 +201,16 @@ export function createPageStills(
       const mine = await shelf().list(docStillPrefix(docId));
       for (const entry of mine) await shelf().forget(entry.key);
       return mine.length;
+    },
+    async sweep(docId, standing) {
+      const stand = new Set(standing.map((key) => pageStillName(docId, key)));
+      let swept = 0;
+      for (const entry of await shelf().list(docStillPrefix(docId))) {
+        if (stand.has(entry.key)) continue;
+        await shelf().forget(entry.key);
+        swept += 1;
+      }
+      return swept;
     },
     async usage() {
       const kept = await shelf().list(PAGE_STILL_PREFIX);

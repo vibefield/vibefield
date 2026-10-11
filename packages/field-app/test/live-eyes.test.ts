@@ -16,7 +16,8 @@ import * as pane from "@vibefield/plugin-browser-pane";
 import { describe, expect, it } from "vitest";
 import { buildRegistry, createFieldEngine } from "../src/field-engine";
 import { objectBindingsFrom } from "../src/plugin-host/build-widget";
-import { createLiveEyes } from "../src/surfaces/live/live-eyes";
+import { createLiveEyes, sweepDocumentStills } from "../src/surfaces/live/live-eyes";
+import type { PageStills } from "../src/surfaces/live/page-stills";
 
 const objectsQ = defineQuery([Position, Size, PrefabId, Not(Specimen)]);
 
@@ -100,6 +101,56 @@ describe("PT-5b — the cap's eyes", () => {
     ce.docs.close();
     expect(eyes.exists(only.key)).toBeUndefined();
     expect(eyes.far(only.key)).toBe(Number.POSITIVE_INFINITY);
+    ce.dispose();
+  });
+
+  it("PT-5b2 (ruling 2) — STANDING: the durable keys of the objects the document holds; a deleted one is not among them, and is again at its undo; undefined with no document open", () => {
+    const { ce, spawn, panes, eyes } = board();
+    spawn(0, 0);
+    spawn(1000, 0);
+    ce.world.sync();
+    const [a, b] = panes();
+    if (a === undefined || b === undefined) throw new Error("no panes");
+    expect([...(eyes.standing() ?? [])].sort()).toEqual([a.key, b.key].sort());
+    ce.ops.setSelection([a.entity as never]);
+    ce.ops.deleteSelection();
+    ce.world.sync();
+    expect(eyes.standing()).toEqual([b.key]);
+    ce.docs.undo();
+    ce.world.sync();
+    expect([...(eyes.standing() ?? [])].sort()).toEqual([a.key, b.key].sort());
+    ce.docs.close();
+    expect(eyes.standing()).toBeUndefined();
+    ce.dispose();
+  });
+
+  it("PT-5b2 (ruling 2) — THE SWEEP of an open document: the shelf is asked to keep the stills of the objects that STAND, by this document's id — and nothing is asked with no document open (a still is never swept on the word of a board that is not there)", async () => {
+    const { ce, spawn, panes } = board();
+    spawn(0, 0);
+    spawn(1000, 0);
+    ce.world.sync();
+    const [a, b] = panes();
+    if (a === undefined || b === undefined) throw new Error("no panes");
+    const asked: [string, readonly string[]][] = [];
+    const stills: Pick<PageStills, "sweep"> = {
+      sweep: async (docId, standing) => {
+        asked.push([docId, [...standing].sort()]);
+        return 1;
+      },
+    };
+    ce.ops.setSelection([a.entity as never]);
+    ce.ops.deleteSelection();
+    ce.world.sync();
+    expect(await sweepDocumentStills(ce, "doc-9", stills)).toBe(1);
+    expect(asked).toEqual([["doc-9", [b.key]]]);
+    // no document open: nothing is asked, nothing swept
+    ce.docs.close();
+    expect(await sweepDocumentStills(ce, "doc-9", stills)).toBe(0);
+    expect(asked).toHaveLength(1);
+    // …nor for a board with no id (the degraded, in-memory one)
+    ce.docs.create();
+    expect(await sweepDocumentStills(ce, "", stills)).toBe(0);
+    expect(asked).toHaveLength(1);
     ce.dispose();
   });
 });

@@ -261,3 +261,72 @@ describe("a page's last still, kept (PT-5b ruling 1)", () => {
     expect(await stills.forgetDocument(DOC)).toBe(0);
   });
 });
+
+describe("PT-5b2 — what the grade found on the shelf (rulings 2, 9)", () => {
+  it("THE SWEEP (ruling 2): the stills under a document's prefix that no STANDING object's name makes are forgotten — a plain name and a digest alike, by the names the standing objects make; never another document's; a standing object keeps its own", async () => {
+    const { store } = shelfOf();
+    const stills = createPageStills(() => store);
+    const odd = (n: number): string => `a key that is no plain name / ${n}`;
+    for (const key of ["a-1", "a-2", "a-3", odd(1), odd(2)]) await stills.keep(DOC, key, still());
+    await stills.keep(OTHER, "a-2", still());
+    expect(pageStillName(DOC, odd(1))).toMatch(/^page\.[^.]+\.x[0-9a-f]{32}$/);
+    // the document holds a-1, a-3 and the first odd one: a-2 and the second odd one were deleted
+    expect(await stills.sweep(DOC, ["a-1", "a-3", odd(1), "never-photographed"])).toBe(2);
+    expect(await stills.kept(DOC, "a-1")).toBeDefined();
+    expect(await stills.kept(DOC, "a-2")).toBeUndefined();
+    expect(await stills.kept(DOC, "a-3")).toBeDefined();
+    expect(await stills.kept(DOC, odd(1))).toBeDefined();
+    expect(await stills.kept(DOC, odd(2))).toBeUndefined();
+    // the other document's still of an object of the same key is its own
+    expect(await stills.kept(OTHER, "a-2")).toBeDefined();
+    // swept once: nothing more to forget; a document with no object left keeps none
+    expect(await stills.sweep(DOC, ["a-1", "a-3", odd(1)])).toBe(0);
+    expect(await stills.sweep(DOC, [])).toBe(3);
+    expect(await stills.usage()).toMatchObject({ stills: 1 });
+  });
+
+  it("the BOUND survives a trim that failed (ruling 9): the keep it rode kept its still all the same, and the next keep holds the bound again", async () => {
+    const { store, clock } = shelfOf();
+    const big = (n: number): PageStill => still({ image: new Uint8Array(n) });
+    const one = packStill(big(1_000)).byteLength;
+    let failing = 0;
+    const flaky = {
+      keep: store.keep.bind(store),
+      kept: store.kept.bind(store),
+      forget: store.forget.bind(store),
+      list: async (prefix: string) => {
+        if (failing > 0) {
+          failing -= 1;
+          throw new Error("the directory could not be listed");
+        }
+        return store.list(prefix);
+      },
+    };
+    const stills = createPageStills(() => flaky, { maxBytes: one * 2 + 10 });
+    clock.now = 1_000;
+    await stills.keep(DOC, "k1", big(1_000));
+    clock.now = 1_001;
+    await stills.keep(DOC, "k2", big(1_000));
+    // the third keep's trim cannot list the shelf: its still is kept, the bound is not held THIS time
+    failing = 1;
+    clock.now = 1_002;
+    await stills.keep(DOC, "k3", big(1_000));
+    expect(await stills.kept(DOC, "k3")).toBeDefined();
+    expect((await stills.usage()).stills).toBe(3);
+    // …and the next keep holds it again: the oldest two go
+    clock.now = 1_003;
+    await stills.keep(DOC, "k4", big(1_000));
+    expect((await stills.usage()).stills).toBe(2);
+    expect(await stills.kept(DOC, "k1")).toBeUndefined();
+    expect(await stills.kept(DOC, "k2")).toBeUndefined();
+    expect(await stills.kept(DOC, "k4")).toBeDefined();
+  });
+
+  it(`a container that names a picture larger than ${PAGE_STILL_MAX_PX} px is no still (ruling 9): read back as none`, () => {
+    expect(
+      unpackStill(packStill(still({ size: [PAGE_STILL_MAX_PX, PAGE_STILL_MAX_PX] }))),
+    ).toBeDefined();
+    expect(unpackStill(packStill(still({ size: [PAGE_STILL_MAX_PX + 1, 1_000] })))).toBeUndefined();
+    expect(unpackStill(packStill(still({ size: [1_000, 20_000] })))).toBeUndefined();
+  });
+});

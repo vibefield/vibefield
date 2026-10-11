@@ -16,6 +16,7 @@ import { setActiveCanvasEngine } from "../plugin-host/canvas-engine-ref";
 import { buildGhostWidgetTypes } from "../plugin-host/ghost-stubs";
 import type { PreparedRendererPlugins } from "../plugin-host/staged-loader";
 import type { WindowKinds } from "../plugin-host/window-kinds";
+import { sweepDocumentStills } from "../surfaces/live/live-eyes";
 import { deskBlobs } from "./desk/desk-blobs";
 import { bindCapabilityUpgrades } from "./desk/desk-capabilities";
 import { currentDesk, deskCensus } from "./desk/desk-door";
@@ -249,6 +250,9 @@ export function useWorkspaceSession(
     let unbindCapabilities = (): void => {};
     let unregisterReopen = (): void => {};
     let stopLearning = (): void => {};
+    /** PT-5b2 (ruling 2): this device's own saved copy of the board was opened, its journal applied, and it is writable —
+     * the board is WHOLE: nothing of it can "not have arrived yet" (what arrives later is a peer's, never photographed here). */
+    let openedWhole = false;
     // DK-9: what a remount on a new engine asks of THIS generation — the typing ended (its session
     // commits as the editor's lease ends) and the board's envelope as it stands
     const registerReopen = (): void => {
@@ -398,6 +402,7 @@ export function useWorkspaceSession(
         manager.contentApplied(pending.generation);
         return () => closeDocument("readonly-document-close");
       }
+      openedWhole = true;
     } else {
       const session = ce.docs.create();
       // ICE stamps the whole catalog on a new board; the binding keeps a plugin enabled later
@@ -450,6 +455,19 @@ export function useWorkspaceSession(
       keep: (png) => manager.keepStill(pending.docId, png),
     });
     const unregisterStills = manager.registerStills(pending.generation, pending.docId, stills);
+    // PT-5b2 (ruling 2) — THE SWEEP: a deleted pane's last still is forgotten when its page's grace lapses, by a timer a
+    // reload, a quit or a board's close inside that minute takes away — so at each open of a board that is WHOLE, the
+    // shelf's stills under it whose object it no longer holds are forgotten (a pane deleted with no face open too: its
+    // kind off, a peer's delete while this device had the board closed). Never on the word of a quarantined blank, a
+    // read-only board or a new one: there an object may only not be there YET.
+    if (openedWhole)
+      void sweepDocumentStills(ce, pending.docId).catch((error: unknown) =>
+        getRendererLogger()
+          .child({ component: "board.session", docId: pending.docId })
+          .warn("renderer.board.page_stills_sweep_failed", "A board's page stills were not swept", {
+            error: error instanceof Error ? error.message : String(error),
+          }),
+      );
     manager.contentApplied(pending.generation);
     return () => {
       behaviorConnection?.close("document-close");
