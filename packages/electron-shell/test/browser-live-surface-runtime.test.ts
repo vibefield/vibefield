@@ -1948,43 +1948,46 @@ describe("BrowserLiveSurfaceRuntime", () => {
     laptop.runtime.dispose();
   });
 
-  describe("PT-5b2 (rulings 3, 6) — a page's FIRST LOAD: superseded, ended with nothing, sent elsewhere, stopped", () => {
-    const FIRST = "https://example.test/app";
-    /** What Electron 43 rejects `loadURL` with (the scratch probe): a navigation that replaced the load; a load that ended
-     * with no document (an attachment, a 204, a stop with nothing answered). */
-    const aborted = (): Error =>
-      Object.assign(new Error("ERR_ABORTED (-3) loading"), { code: "ERR_ABORTED", errno: -3 });
-    const nothing = (): Error =>
-      Object.assign(new Error("ERR_FAILED (-2) loading"), { code: "ERR_FAILED", errno: -2 });
-    /** A page asked for live whose first `loadURL` settles when the row says: `resolve`, or `reject(with)`. */
-    const starting = async () => {
-      const result = setup();
-      const renderer = attach(result.runtime);
-      renderer.attachment.setDemand(demand(1, "live"));
-      const window = result.native.windows[0];
-      if (window === undefined) throw new Error("no window yet");
-      const loads: { url: string; resolve(): void; reject(error: Error): void }[] = [];
-      window.loadURL = (url: string) => {
-        window.loadedUrls.push(url);
-        return new Promise<void>((resolve, reject) => {
-          loads.push({ url, resolve, reject });
-        });
-      };
-      await flush();
-      // the window is up: its blank bootstrap paints (the startup deadline is met), the page's server has not answered
-      window.paint({ ...sharedPaint(320, 180).paint, bootstrap: true });
-      const blank = (loading: boolean): void =>
-        window.emitNavigationState({
-          url: "about:blank",
-          title: "about:blank",
-          loading,
-          canGoBack: false,
-          canGoForward: false,
-        });
-      blank(true);
-      return { result, renderer, window, loads, blank };
+  const FIRST = "https://example.test/app";
+  /** What Electron 43 rejects `loadURL` with (the scratch probe): a navigation that replaced the load; a load that ended
+   * with no document (an attachment, a 204, a stop with nothing answered). */
+  const aborted = (): Error =>
+    Object.assign(new Error("ERR_ABORTED (-3) loading"), { code: "ERR_ABORTED", errno: -3 });
+  const nothing = (): Error =>
+    Object.assign(new Error("ERR_FAILED (-2) loading"), { code: "ERR_FAILED", errno: -2 });
+  /** A page asked for live whose first `loadURL` settles when the row says: `resolve`, or `reject(with)`. */
+  const starting = async (
+    options: Parameters<typeof setup>[0] = {},
+    { blankPaint = true }: { blankPaint?: boolean } = {},
+  ) => {
+    const result = setup(options);
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    const window = result.native.windows[0];
+    if (window === undefined) throw new Error("no window yet");
+    const loads: { url: string; resolve(): void; reject(error: Error): void }[] = [];
+    window.loadURL = (url: string) => {
+      window.loadedUrls.push(url);
+      return new Promise<void>((resolve, reject) => {
+        loads.push({ url, resolve, reject });
+      });
     };
+    await flush();
+    // the window is up: its blank bootstrap paints (the startup deadline is met), the page's server has not answered
+    if (blankPaint) window.paint({ ...sharedPaint(320, 180).paint, bootstrap: true });
+    const blank = (loading: boolean): void =>
+      window.emitNavigationState({
+        url: "about:blank",
+        title: "about:blank",
+        loading,
+        canGoBack: false,
+        canGoForward: false,
+      });
+    blank(true);
+    return { result, renderer, window, loads, blank };
+  };
 
+  describe("PT-5b2 (rulings 3, 6) — a page's FIRST LOAD: superseded, ended with nothing, sent elsewhere, stopped", () => {
     it("a first load that another navigation SUPERSEDES is not a failed page (Electron rejects it ERR_ABORTED: a script's redirect, a link clicked while the page still loads)", async () => {
       const p = await starting();
       // the page's document commits and paints; before its load FINISHES a script sends it elsewhere
@@ -2130,6 +2133,251 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(q.window.navigations).toEqual(["stop", "reload"]);
       p.result.runtime.dispose();
       q.result.runtime.dispose();
+    });
+  });
+
+  describe("PT-5b3 (rulings 1, 2, 3) — a window not yet BORN, a device switch with no document, a load that ended", () => {
+    const ELSEWHERE = "https://example.test/elsewhere";
+    /** A laptop told it has TOUCH: the same density, and what the page is told of its device moved. */
+    const TOUCH_LAPTOP: LiveSurfaceBrowserEmulationV1 = { ...LAPTOP, touchPoints: 5 };
+    const laptopSource = () => ({ ...source(), deviceScaleFactor: 2, emulation: LAPTOP });
+    /**
+     * A page asked for live whose window is NOT BORN yet: its layout answers when the row says (`born()`). As Electron does
+     * (the scratch probe `pt-5b3-probe/unborn.cjs`): a `loadURL`, or the engine's own reload, asked before that REJECTS
+     * the bootstrap's promise — on which every layout of the native waits — so `born()` then FAILS the birth; a `stop`
+     * asked there stops nothing and rejects nothing.
+     */
+    const hold = (window: FakeBrowserWindow): (() => Promise<void>) => {
+      let held = true;
+      let bootstrapRejected = false;
+      const waiting: { resolve(): void; reject(error: Error): void }[] = [];
+      const raster = window.setBackingRaster.bind(window);
+      window.setBackingRaster = (async (...args: Parameters<typeof raster>) => {
+        if (held)
+          await new Promise<void>((resolve, reject) => {
+            waiting.push({ resolve, reject });
+          });
+        return raster(...args);
+      }) as typeof window.setBackingRaster;
+      const load = window.loadURL.bind(window);
+      window.loadURL = (url: string) => {
+        if (held) bootstrapRejected = true;
+        return load(url);
+      };
+      const navigate = window.navigate.bind(window);
+      window.navigate = (action) => {
+        if (held && action === "reload") bootstrapRejected = true;
+        navigate(action);
+      };
+      return async (): Promise<void> => {
+        held = false;
+        for (const w of waiting.splice(0)) {
+          if (bootstrapRejected) w.reject(aborted());
+          else w.resolve();
+        }
+        await flush();
+      };
+    };
+    // (a source that names its device: its birth tells the device first, so the layout the row holds is asked a turn later)
+    const unborn = async (options: Parameters<typeof setup>[0] = { source: laptopSource() }) => {
+      const result = setup(options);
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(demand(1, "live"));
+      const window = result.native.windows[0];
+      if (window === undefined) throw new Error("no window yet");
+      const born = hold(window);
+      await flush();
+      return { result, renderer, window, born };
+    };
+
+    it("ruling 1 — a RELOAD taken before the window is born asks NOTHING of it (the load it asks for has not begun, and will): the born window loads the address ONCE, and the source is not failed", async () => {
+      const p = await unborn();
+      expect(p.result.runtime.summary.state).toBe("starting");
+      expect(p.window.loadedUrls).toEqual([]);
+      p.renderer.attachment.navigate?.({ action: "reload" });
+      await flush();
+      expect(p.window.loadedUrls).toEqual([]);
+      expect(p.window.navigations).toEqual([]);
+      await p.born();
+      expect(p.result.runtime.summary.state).not.toBe("failed");
+      expect(p.result.runtime.summary.error).toBeUndefined();
+      expect(p.result.native.windows).toHaveLength(1);
+      expect(p.window.loadedUrls).toEqual([FIRST]);
+      expect(p.result.runtime.stats.navigationDropped).toBe(0);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 1 — a GO before the birth says where the page is headed and asks nothing of the window: the born window loads THAT, once", async () => {
+      const p = await unborn();
+      p.renderer.attachment.navigate?.({ action: "go", url: ELSEWHERE });
+      await flush();
+      expect(p.window.loadedUrls).toEqual([]);
+      expect(p.result.runtime.summary.browser).toMatchObject({ url: ELSEWHERE, loading: true });
+      // an address the desk does not open is refused, as ever — and changes nothing
+      p.renderer.attachment.navigate?.({ action: "go", url: "file:///etc/passwd" });
+      await flush();
+      expect(p.result.runtime.stats.navigationDropped).toBe(1);
+      await p.born();
+      expect(p.result.runtime.summary.state).not.toBe("failed");
+      expect(p.result.native.windows).toHaveLength(1);
+      expect(p.window.loadedUrls).toEqual([ELSEWHERE]);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 1 — a STOP before the birth is remembered: the born window is NOT loaded, the page says `stopped` at its address — and is not started again by the startup deadline; ↻ loads it. A ↻ or a go after the stop, still before the birth, is the load after all", async () => {
+      vi.useFakeTimers();
+      const p = await unborn();
+      p.renderer.attachment.navigate?.({ action: "stop" });
+      await vi.advanceTimersByTimeAsync(0);
+      // nothing is asked of a window that is not born — the engine's stop would stop nothing (the probe)
+      expect(p.window.navigations).toEqual([]);
+      expect(p.window.loadedUrls).toEqual([]);
+      await p.born();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(p.window.loadedUrls).toEqual([]);
+      expect(p.result.runtime.summary.state).toBe("starting");
+      expect(p.result.runtime.summary.browser).toEqual({
+        url: FIRST,
+        loading: false,
+        canGoBack: false,
+        canGoForward: false,
+        failure: { reason: "stopped" },
+      });
+      // (ruling 3: the window is up — it was born — and the person stopped it: nothing starts it again)
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(p.result.native.windows).toHaveLength(1);
+      expect(p.result.runtime.summary.state).toBe("starting");
+      expect(p.result.runtime.summary.browser?.failure).toEqual({ reason: "stopped" });
+      p.renderer.attachment.navigate?.({ action: "reload" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(p.window.loadedUrls).toEqual([FIRST]);
+      expect(p.result.runtime.summary.browser?.failure).toBeUndefined();
+      // a stop, then ↻, both before the birth: the load after all
+      const q = await unborn();
+      q.renderer.attachment.navigate?.({ action: "stop" });
+      q.renderer.attachment.navigate?.({ action: "reload" });
+      await q.born();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(q.window.loadedUrls).toEqual([FIRST]);
+      expect(q.result.runtime.summary.browser?.failure).toBeUndefined();
+      // a stop, then a go: it loads where it was sent
+      const r = await unborn();
+      r.renderer.attachment.navigate?.({ action: "stop" });
+      r.renderer.attachment.navigate?.({ action: "go", url: ELSEWHERE });
+      await r.born();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(r.window.loadedUrls).toEqual([ELSEWHERE]);
+      p.result.runtime.dispose();
+      q.result.runtime.dispose();
+      r.result.runtime.dispose();
+    });
+
+    it("ruling 2 — a device switched to BEFORE the birth (the same density): the born window is told the device it should have before anything loads, and loads once — never the engine's reload (a page that has been somewhere before: woken from rest)", async () => {
+      const p = await unborn({ source: laptopSource() });
+      await p.born();
+      p.window.emitNavigationState({ ...NAV });
+      p.window.paint(sharedPaint().paint);
+      await flush();
+      expect(p.result.runtime.summary.state).toBe("live");
+      // put to rest, and woken: its window is made anew — and is not born yet
+      p.renderer.attachment.setDemand(demand(2, "hibernated", 0));
+      await flush();
+      p.renderer.attachment.setDemand(demand(3, "live"));
+      const woken = p.result.native.windows[1];
+      if (woken === undefined) throw new Error("no second window");
+      const born = hold(woken);
+      await flush();
+      await p.result.runtime.navigate({ action: "emulate", emulation: TOUCH_LAPTOP });
+      await flush();
+      expect(woken.loadedUrls).toEqual([]);
+      await born();
+      expect(p.result.runtime.summary.state).not.toBe("failed");
+      expect(p.result.native.windows).toHaveLength(2);
+      expect(woken.navigations).toEqual([]);
+      expect(woken.loadedUrls).toEqual([FIRST]);
+      // what the window was told LAST before its one load: the device it should have
+      expect(woken.emulations.at(-1)?.touchPoints).toBe(5);
+      expect(woken.order.lastIndexOf("emulate")).toBeLessThan(woken.order.indexOf("load"));
+      expect(woken.order.filter((step) => step === "load")).toHaveLength(1);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 2 — a device switch (the same density) on a page whose first address has NOT ANSWERED asks for the ADDRESS again — never the engine's own reload, which reloads the blank: the page stays headed there, loading", async () => {
+      const p = await starting({ source: laptopSource() });
+      await p.result.runtime.navigate({ action: "emulate", emulation: TOUCH_LAPTOP });
+      await flush();
+      expect(p.result.native.windows).toHaveLength(1);
+      expect(p.window.navigations).toEqual([]);
+      expect(p.window.loadedUrls).toEqual([FIRST, FIRST]);
+      expect(p.window.emulations.at(-1)?.touchPoints).toBe(5);
+      // the load it replaced is nothing (Electron rejects it ERR_ABORTED); the page is headed where it was
+      p.loads[0]?.reject(aborted());
+      await flush();
+      expect(p.result.runtime.summary.state).toBe("starting");
+      expect(p.result.runtime.summary.browser).toMatchObject({ url: FIRST, loading: true });
+      expect(p.result.runtime.summary.browser?.failure).toBeUndefined();
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 2 — a device switch on a page that has SAID its load ended (`no-document`, `stopped`) tells it its device and loads NOTHING: what it said stands, word for word, and ↻ loads it on the new device", async () => {
+      const p = await starting({ source: laptopSource() });
+      p.blank(false);
+      await flush();
+      expect(p.result.runtime.summary.browser?.failure).toEqual({ reason: "no-document" });
+      const said = p.result.runtime.summary.browser;
+      await p.result.runtime.navigate({ action: "emulate", emulation: TOUCH_LAPTOP });
+      await flush();
+      expect(p.window.emulations.at(-1)?.touchPoints).toBe(5);
+      expect(p.window.navigations).toEqual([]);
+      expect(p.window.loadedUrls).toEqual([FIRST]);
+      expect(p.result.runtime.summary.browser).toEqual(said);
+      p.renderer.attachment.navigate?.({ action: "reload" });
+      await flush();
+      expect(p.window.loadedUrls).toEqual([FIRST, FIRST]);
+      // …and one the person stopped stays `stopped`
+      const q = await starting({ source: laptopSource() });
+      q.renderer.attachment.navigate?.({ action: "stop" });
+      q.blank(false);
+      await flush();
+      expect(q.result.runtime.summary.browser?.failure).toEqual({ reason: "stopped" });
+      await q.result.runtime.navigate({ action: "emulate", emulation: TOUCH_LAPTOP });
+      await flush();
+      expect(q.window.navigations).toEqual(["stop"]);
+      expect(q.window.loadedUrls).toEqual([FIRST]);
+      expect(q.result.runtime.summary.browser?.failure).toEqual({ reason: "stopped" });
+      p.result.runtime.dispose();
+      q.result.runtime.dispose();
+    });
+
+    it("ruling 3 — a first load that ENDED with nothing before any paint of the window was heard meets the startup deadline: the page is not started again behind the person, nor failed as a source", async () => {
+      vi.useFakeTimers();
+      const p = await starting({}, { blankPaint: false });
+      p.blank(false);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(p.result.runtime.summary.browser?.failure).toEqual({ reason: "no-document" });
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(p.result.native.windows).toHaveLength(1);
+      expect(p.result.runtime.summary.state).toBe("starting");
+      expect(p.result.runtime.summary.error).toBeUndefined();
+      expect(p.result.runtime.summary.browser?.failure).toEqual({ reason: "no-document" });
+      // (a page whose load has NOT ended and whose window never painted is the deadline's still: the window never came up)
+      const q = await starting({}, { blankPaint: false });
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(q.result.native.windows.length).toBeGreaterThan(1);
+      p.result.runtime.dispose();
+      q.result.runtime.dispose();
+    });
+
+    it("ruling 1's table — a STOP on a page that has said its load ended asks nothing and remembers nothing: a load that follows and ends with nothing by itself is `no-document`, never `stopped`", async () => {
+      const p = await starting();
+      p.blank(false);
+      await flush();
+      expect(p.result.runtime.summary.browser?.failure).toEqual({ reason: "no-document" });
+      p.renderer.attachment.navigate?.({ action: "stop" });
+      await flush();
+      expect(p.window.navigations).toEqual([]);
+      expect(p.result.runtime.summary.browser?.failure).toEqual({ reason: "no-document" });
+      p.result.runtime.dispose();
     });
   });
 

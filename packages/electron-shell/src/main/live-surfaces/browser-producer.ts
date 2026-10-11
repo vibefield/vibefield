@@ -978,6 +978,15 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #documentStands = false;
   #heardLoading = false;
   #stopAsked = false;
+  /**
+   * PT-5b3 (ruling 1) — THE WINDOW IS BORN: `bornOn` has ended — its bootstrap blank loaded, its session attached WITH
+   * ITS GUARDS, its device told. A page is `starting` from `startProducer`, a few hundred milliseconds before that; until
+   * then NOTHING IS ASKED OF ITS WINDOW. (Electron, probed: a `loadURL` or a reload asked before the bootstrap has
+   * settled rejects the bootstrap's own promise, ERR_ABORTED — every layout of the native waits on it, so the birth
+   * failed and the source with it; after the bootstrap and before the guards, the page loaded unguarded, as the engine's
+   * own agent, and then again. A `stop` there stops nothing.) Its birth then asks for the address ONCE.
+   */
+  #born = false;
   /** PT-5b2 (ruling 4) — ONE CHAIN a page: the hand's events take their turn here, in the order they were sent. */
   #inputTail: Promise<void> = Promise.resolve();
   #bootstrapPaints = 0;
@@ -1442,6 +1451,20 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     ) {
       throw new Error("Browser surface is not available for navigation");
     }
+    if (!this.#born) {
+      // PT-5b3 (ruling 1) — THE WINDOW IS NOT BORN YET: nothing is asked of it. A GO says where the page is headed — the
+      // born window loads THAT, once; a RELOAD is nothing (the load it asks for has not begun, and will — a stop
+      // remembered before it is forgotten: ↻ after Stop is the load after all); a STOP is remembered — the born window is
+      // not loaded, and the page says `stopped` at its address (↻ loads it). There is no history to go through.
+      if (command.action === "go") {
+        if (!isAllowedBrowserTopLevelUrl(command.url)) {
+          throw new Error("Browser navigation URL must use HTTP or HTTPS");
+        }
+        this.headed(command.url);
+      } else if (command.action === "stop") this.#stopAsked = true;
+      else if (command.action === "reload") this.#stopAsked = false;
+      return;
+    }
     if (command.action === "go") {
       if (!isAllowedBrowserTopLevelUrl(command.url)) {
         throw new Error("Browser navigation URL must use HTTP or HTTPS");
@@ -1453,9 +1476,12 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     }
     if (!this.#documentStands) {
       // NO DOCUMENT OF THE PAGE STANDS — the window shows its bootstrap blank. A STOP is asked of the engine and
-      // remembered: when the load ends with nothing, THAT is what is said. A RELOAD is a load of the address the page was
-      // sent to — the engine's own reload would reload the blank (the probe). There is no history to go through.
+      // remembered: when the load ends with nothing, THAT is what is said — and where the page has SAID its load ended
+      // already (PT-5b3) nothing is under way: a stop is nothing, and nothing is remembered. A RELOAD is a load of the
+      // address the page was sent to — the engine's own reload would reload the blank (the probe). There is no history
+      // to go through.
       if (command.action === "stop") {
+        if (this.#browserState?.failure !== undefined) return;
         this.#stopAsked = true;
         window.navigate("stop");
       } else if (command.action === "reload") {
@@ -1505,9 +1531,18 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * no page (an attachment — cancelled by the session's guard — or an empty answer), or the person stopped it before
    * anything arrived. The window stands, at its blank; the page SAYS so — a failure of the address it was asked for, in
    * the contract's words — and a reload asks again. Never `starting` for good, never a blank passed off as live.
+   *
+   * PT-5b3 (ruling 3) — and THE STARTUP DEADLINE IS MET: a window that answered a load (or was born, and held back by
+   * the person's stop) is up. Before, only a paint of the blank heard after the remote load began met it — in every run
+   * so far that paint came, and nothing makes it come: without it a page that had said "no page at this address" was
+   * started again behind the person five seconds later, then failed as a source (`frame-stalled`).
    */
   private loadEnded(): void {
     if (this.#documentStands || this.#browserState?.failure !== undefined) return;
+    if (this.#startupTimer !== null) {
+      clearTimeout(this.#startupTimer);
+      this.#startupTimer = null;
+    }
     this.#browserState = {
       url: this.#resumeUrl ?? this.source.initialUrl,
       loading: false,
@@ -1580,6 +1615,41 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   }
 
   /**
+   * PT-5b3 (rulings 1, 2) — A WINDOW'S BIRTH, and the ONE load that follows it. The window is laid out and told its
+   * device (`bornOn`); a device switched to meanwhile is told again, BEFORE anything loads; then the window is BORN, and
+   * the address is asked for — once, where the page is headed (`#resumeUrl`: a `go` taken before the birth moved it) —
+   * or NOT asked for, where the person stopped it before the birth: the page says `stopped` at its address, and ↻
+   * loads it. `failed`: the window could not be laid out or told its device — THAT is the source's.
+   */
+  private born(
+    window: BrowserSurfaceNativeWindow,
+    epoch: number,
+    raster: LiveSurfacePixelSizeV1,
+    viewport: LiveSurfaceBrowserSourceV1["logicalViewport"],
+    failed: () => void,
+  ): void {
+    const told = this.#emulation;
+    void this.bornOn(window, raster, viewport).then(
+      () => {
+        if (!this.isCurrent(window, epoch)) return;
+        if (this.#emulation !== told) {
+          this.born(window, epoch, raster, viewport, failed);
+          return;
+        }
+        this.#born = true;
+        this.#controlTargets?.associate(this.surfaceId, epoch, window.controlContents);
+        // PT-5a: a load the page itself said FAILED is not a failed SOURCE — its window lives, its state says why, and a
+        // reload asks again. PT-5b2 (ruling 6): and NOTHING of the source is read off this load's promise (`load`)
+        if (this.#stopAsked) this.loadEnded();
+        else this.load(window, this.#resumeUrl ?? this.source.initialUrl);
+      },
+      () => {
+        if (this.isCurrent(window, epoch)) failed();
+      },
+    );
+  }
+
+  /**
    * PT-4 — THE DEVICE SWITCH under a running page (the `emulate` command): the page is told at once — its agent and hints,
    * touch, the scheme, its density and mobile layout at the viewport the demand names — and, when what it is TOLD of its
    * device moved (its agent, its hints, mobile, touch), RELOADED ONCE: a loaded document keeps what it learnt at its load
@@ -1598,6 +1668,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       this.remakeWindow();
       return;
     }
+    // PT-5b3 (rulings 1, 2) — THE WINDOW IS NOT BORN YET: nothing is asked of it; its birth tells it the device it should
+    // have before anything loads (`born`), and loads once. (Before: told behind the birth's own commands — after the
+    // page's load had begun, its first request gone out under the device before — and then, where the page had said a
+    // state in an earlier life, the engine's reload: of the blank.)
+    if (!this.#born) return;
     const epoch = this.#lifecycle.snapshot.producerEpoch;
     const told = toldKey(was) !== toldKey(next);
     if (this.#rasterTimer !== null) {
@@ -1614,11 +1689,25 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       .then(() => {
         if (!this.isCurrent(window, epoch)) return;
         this.#viewport = viewport;
-        // a page that has loaded learns its device by loading again; one still to load is born on it
-        if (told && this.#browserState !== undefined) {
+        if (!told) {
+          window.invalidate();
+          return;
+        }
+        // a page that has loaded learns its device by loading again
+        if (this.#documentStands) {
           this.#emulationReloads += 1;
           window.navigate("reload");
-        } else window.invalidate();
+          return;
+        }
+        // PT-5b3 (ruling 2) — NO DOCUMENT OF THE PAGE STANDS: the engine's own reload would reload the BLANK (the probe)
+        // — and the page then said `no-document` for an address that had only not answered yet. A page that has SAID
+        // its load ended (`no-document`, `stopped`) is told its device and loads nothing: what it said stands, word for
+        // word, and ↻ loads it on the new device. A load under way is asked again, as a load of the ADDRESS.
+        if (this.#browserState?.failure !== undefined) return;
+        const url = this.#resumeUrl ?? this.source.initialUrl;
+        this.#emulationReloads += 1;
+        this.headed(url);
+        this.load(window, url);
       })
       .catch(() => undefined);
   }
@@ -1980,22 +2069,10 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         () => this.handleStartupTimeout(window, epoch),
         this.#startupTimeoutMs,
       );
-      void this.bornOn(window, initialRaster, viewport).then(
-        () => {
-          if (!this.isCurrent(window, epoch)) return;
-          this.#controlTargets?.associate(this.surfaceId, epoch, window.controlContents);
-          // PT-5a: a load the page itself said FAILED is not a failed SOURCE — its window lives, its state says why, and
-          // a reload asks again. PT-5b2 (ruling 6): and NOTHING of the source is read off this load's promise (`load`)
-          this.load(window, this.#resumeUrl ?? this.source.initialUrl);
-        },
-        () => {
-          // the window could not be laid out or told its device: THAT is the source's
-          if (this.isCurrent(window, epoch)) {
-            this.failSource(
-              sourceError("source-not-found", "Browser source could not load", "user-action"),
-            );
-          }
-        },
+      this.born(window, epoch, initialRaster, viewport, () =>
+        this.failSource(
+          sourceError("source-not-found", "Browser source could not load", "user-action"),
+        ),
       );
       this.publishSummary();
     } catch {
@@ -2451,19 +2528,10 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         () => this.handleStartupTimeout(window, epoch),
         this.#startupTimeoutMs,
       );
-      void this.bornOn(window, initialRaster, viewport).then(
-        () => {
-          if (!this.isCurrent(window, epoch)) return;
-          this.#controlTargets?.associate(this.surfaceId, epoch, window.controlContents);
-          this.load(window, this.#resumeUrl ?? this.source.initialUrl);
-        },
-        () => {
-          if (this.isCurrent(window, epoch)) {
-            this.failSource(
-              sourceError("source-not-found", "Browser source could not reconnect", "user-action"),
-            );
-          }
-        },
+      this.born(window, epoch, initialRaster, viewport, () =>
+        this.failSource(
+          sourceError("source-not-found", "Browser source could not reconnect", "user-action"),
+        ),
       );
     } catch {
       this.failSource(
@@ -2505,6 +2573,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#documentStands = false;
     this.#heardLoading = false;
     this.#stopAsked = false;
+    this.#born = false;
     this.#pointScale = {
       value: 1,
       at: Number.NEGATIVE_INFINITY,
