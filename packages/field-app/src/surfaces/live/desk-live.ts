@@ -38,6 +38,8 @@
 //    says its stops (`whenStopped: "say"`): a desk page is never restarted behind the person.
 //  - THE FAVICON (PT-4 ruling 4): the page's icon rides LSF's browser state; the face's words carry its bytes under
 //    `extra.favicon` (decoded once a key) — `null` where the page has none, absent before the page has said anything.
+//    PT-5a (ruling 8): its bytes cross the page's port ONCE a key — main's control session posts them with the first
+//    summary that names the key and the key alone after; the pool's attachment keeps them, so the state read here is whole.
 
 import type { LiveTextureOptions, LiveWriter } from "@vibecook/ice/desk";
 import type {
@@ -159,6 +161,8 @@ export interface DeskLiveFaceRow {
    * asked for and was refused (0: nothing). */
   readonly veiled: boolean;
   readonly refused: number;
+  /** PT-5a (ruling 8): how many times a favicon's BYTES arrived on the page's attachment — once a key, whatever the summaries. */
+  readonly faviconBytes: number;
 }
 
 export interface DeskLiveSources extends LiveSources {
@@ -490,8 +494,10 @@ const refusalOf = (
   refused: NonNullable<LiveSurfaceBrowserStateV1["refused"]>,
 ): LiveBrowserRefusal => ({ what: refused.what, serial: refused.serial });
 
-/** A favicon's bytes out of the state's base64. */
-function faviconOf(icon: NonNullable<LiveSurfaceBrowserStateV1["favicon"]>): LiveFavicon {
+/** A favicon's bytes out of the state's base64 (PT-5a: the pool's summary is whole — a favicon it names has its bytes; one
+ * that came without them, which the attachment never lets through, is none). */
+function faviconOf(icon: NonNullable<LiveSurfaceBrowserStateV1["favicon"]>): LiveFavicon | null {
+  if (icon.data === undefined) return null;
   const raw = atob(icon.data);
   const bytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
@@ -558,6 +564,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         texture: undefined,
         veiled: false,
         refused: 0,
+        faviconBytes: 0,
       }),
     });
     return face;
@@ -816,6 +823,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
               : { width: t.width, height: t.height, revision: t.revision, epoch: t.epoch },
           veiled,
           refused: handle.state.browser?.refused?.serial ?? 0,
+          faviconBytes: handle.faviconArrivals ?? 0,
         };
       },
     });

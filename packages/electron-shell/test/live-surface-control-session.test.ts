@@ -7,6 +7,7 @@ import type {
 } from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
+  faviconOnce,
   LiveSurfaceControlSession,
   type LiveSurfaceMainMessagePort,
 } from "../src/main/live-surfaces/control-session";
@@ -222,6 +223,92 @@ describe("LiveSurfaceControlSession", () => {
       attachmentId: "attachment_0123456789abcdef",
       summary: { state: "reconnecting", producerEpoch: 2 },
     });
+  });
+
+  it("PT-5a: a favicon's BYTES go down an attachment's port ONCE a key — with the first summary that names it (the attach's own, or a later one) — and the key alone after; another key is sent whole, and the first again after it (one key is remembered: the last)", () => {
+    const icon = (key: string) => ({ key, mediaType: "image/png", data: "AAAAAAAA" });
+    const page = (revision: number, favicon?: ReturnType<typeof icon>, cursor = "default") => ({
+      ...summary("live", 1),
+      stateRevision: revision,
+      browser: {
+        url: "https://example.test/",
+        loading: false,
+        canGoBack: false,
+        canGoForward: false,
+        cursor,
+        ...(favicon === undefined ? {} : { favicon }),
+      },
+    });
+    const A = "aaaaaaaaaaaaaaaa";
+    const B = "bbbbbbbbbbbbbbbb";
+    const result = setup(undefined, (authority) => {
+      authority.initialSummary = page(1, icon(A));
+    });
+    attach(result);
+    const favicons = (): unknown[] =>
+      result.port.sent
+        .filter((m) => ["attached", "summary"].includes((m as { type: string }).type))
+        .map((m) => {
+          const s =
+            (m as { summary?: LiveSurfaceRuntimeSummaryV1 }).summary ??
+            (m as { attachment: { summary: LiveSurfaceRuntimeSummaryV1 } }).attachment.summary;
+          return s.browser?.favicon ?? null;
+        });
+    // the attach's own summary names the key: its bytes with it
+    expect(favicons()).toEqual([icon(A)]);
+    // a hover across the page: five summaries, the cursor moving — the key alone on each
+    for (let i = 0; i < 5; i += 1)
+      result.authority.context?.publishSummary(
+        page(2 + i, icon(A), i % 2 === 0 ? "pointer" : "text"),
+      );
+    expect(favicons().slice(1)).toEqual(Array(5).fill({ key: A, mediaType: "image/png" }));
+    // the page goes to a site with another icon: its bytes once, then its key alone
+    result.authority.context?.publishSummary(page(10, icon(B)));
+    result.authority.context?.publishSummary(page(11, icon(B), "pointer"));
+    expect(favicons().slice(6)).toEqual([icon(B), { key: B, mediaType: "image/png" }]);
+    // a page with no icon says none; the last key sent is still the renderer's — named alone when the page comes back to it
+    result.authority.context?.publishSummary(page(12));
+    result.authority.context?.publishSummary(page(13, icon(B)));
+    expect(favicons().slice(8)).toEqual([null, { key: B, mediaType: "image/png" }]);
+    // back at the first site: its key is not the last sent — whole again
+    result.authority.context?.publishSummary(page(14, icon(A)));
+    expect(favicons().at(-1)).toEqual(icon(A));
+    // what crossed: three favicons' bytes for fourteen summaries
+    const bytes = JSON.stringify(result.port.sent).split("AAAAAAAA").length - 1;
+    expect(bytes).toBe(3);
+    expect(result.protocolFaults).toEqual([]);
+  });
+
+  it("PT-5a: a favicon first named AFTER the attach is sent whole then; a summary that names one without bytes is posted as it is", () => {
+    const result = setup();
+    attach(result);
+    const browser = {
+      url: "https://example.test/",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+    };
+    const named = { key: "cccccccccccccccc", mediaType: "image/png" };
+    result.authority.context?.publishSummary({
+      ...summary("live", 1),
+      stateRevision: 2,
+      browser: { ...browser, favicon: { ...named, data: "BBBB" } },
+    });
+    result.authority.context?.publishSummary({
+      ...summary("live", 1),
+      stateRevision: 3,
+      browser: { ...browser, favicon: { ...named, data: "BBBB" } },
+    });
+    const sent = result.port.sent.slice(-2) as { summary: LiveSurfaceRuntimeSummaryV1 }[];
+    expect(sent[0]?.summary.browser?.favicon).toEqual({ ...named, data: "BBBB" });
+    expect(sent[1]?.summary.browser?.favicon).toEqual(named);
+    // (the helper alone: a summary with no favicon, or one already without bytes, is returned as it is)
+    const mark = { faviconSent: undefined as string | undefined };
+    const bare = { ...summary("live", 1), browser };
+    expect(faviconOnce(mark, bare)).toBe(bare);
+    const keyOnly = { ...summary("live", 1), browser: { ...browser, favicon: named } };
+    expect(faviconOnce(mark, keyOnly)).toBe(keyOnly);
+    expect(mark.faviconSent).toBeUndefined();
   });
 
   it("folds synchronous attach summaries into one monotonic attached snapshot", () => {

@@ -65,6 +65,9 @@ export class LiveSurfaceRendererAttachment<
   readonly #queue: LatestLiveSurfaceFrameQueue<TFrame>;
   #summary: LiveSurfaceRuntimeSummaryV1;
   #closed = false;
+  /** PT-5a: the last favicon whose BYTES this attachment was sent, and how many times bytes arrived (`withFavicon`). */
+  #favicon: { readonly key: string; readonly data: string } | undefined;
+  #faviconArrivals = 0;
 
   constructor(
     readonly attachmentId: string,
@@ -72,7 +75,7 @@ export class LiveSurfaceRendererAttachment<
     private readonly sendControl: (message: unknown) => void,
     private readonly onLocalClose: (attachmentId: string) => void,
   ) {
-    this.#summary = summary;
+    this.#summary = this.withFavicon(summary);
     this.#queue = new LatestLiveSurfaceFrameQueue<TFrame>(summary.producerEpoch, ({ value }) => {
       try {
         value.close();
@@ -93,6 +96,34 @@ export class LiveSurfaceRendererAttachment<
 
   get frameStats(): LiveSurfaceFrameQueueStats {
     return this.#queue.stats;
+  }
+
+  /** PT-5a: how many summaries arrived CARRYING a favicon's bytes — once a key (a witness: a hover's summaries add none). */
+  get faviconArrivals(): number {
+    return this.#faviconArrivals;
+  }
+
+  /**
+   * PT-5a (ruling 8) — the host sends a favicon's BYTES once a key (the first summary that names it on this port); later
+   * summaries name the key alone. The bytes sent are kept (one key: the last), and the summary a holder reads is WHOLE:
+   * `browser.favicon.data` as before. A key whose bytes never came is no favicon — never half of one.
+   */
+  private withFavicon(summary: LiveSurfaceRuntimeSummaryV1): LiveSurfaceRuntimeSummaryV1 {
+    const browser = summary.browser;
+    const favicon = browser?.favicon;
+    if (browser === undefined || favicon === undefined) return summary;
+    if (favicon.data !== undefined) {
+      this.#favicon = { key: favicon.key, data: favicon.data };
+      this.#faviconArrivals += 1;
+      return summary;
+    }
+    if (this.#favicon?.key === favicon.key)
+      return {
+        ...summary,
+        browser: { ...browser, favicon: { ...favicon, data: this.#favicon.data } },
+      };
+    const { favicon: _unsent, ...rest } = browser;
+    return { ...summary, browser: rest };
   }
 
   get closed(): boolean {
@@ -243,13 +274,14 @@ export class LiveSurfaceRendererAttachment<
     if (summary.producerEpoch > this.#summary.producerEpoch) {
       this.#queue.resetEpoch(summary.producerEpoch);
     }
-    this.#summary = summary;
+    const whole = this.withFavicon(summary);
+    this.#summary = whole;
     this.#queue.setAccepting(PRESENTATION_STATES.has(summary.state));
     const listeners = [...this.#summaryListeners];
     if (summary.state === "closed") this.closeFromHost();
     for (const listener of listeners) {
       try {
-        listener(summary);
+        listener(whole);
       } catch {
         // Observers are isolated so one faulty consumer cannot skip cleanup.
       }

@@ -289,6 +289,30 @@ describe("LSF-1 Live Surfaces contracts", () => {
       ).toBe(false);
   });
 
+  it("PT-5a: a favicon may be named WITHOUT its bytes — a summary after the first that names its key — but never without its key or its type", () => {
+    const state = {
+      url: "https://example.test/",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+    };
+    const named = { key: "0123456789abcdef", mediaType: "image/png" };
+    expect(LiveSurfaceBrowserStateV1.parse({ ...state, favicon: named }).favicon).toEqual(named);
+    expect(
+      LiveSurfaceBrowserStateV1.parse({ ...state, favicon: { ...named, data: "AAAA" } }).favicon,
+    ).toEqual({ ...named, data: "AAAA" });
+    for (const favicon of [
+      { key: named.key },
+      { mediaType: named.mediaType },
+      { ...named, data: "" },
+      { ...named, data: "not base64!" },
+    ])
+      expect(
+        LiveSurfaceBrowserStateV1.safeParse({ ...state, favicon }).success,
+        JSON.stringify(favicon),
+      ).toBe(false);
+  });
+
   it("PT-5a: the browser state says a load FAILED and why, in a closed set of reasons; a browser source says whether its page, stopped, is restarted or SAID", () => {
     const state = {
       url: "https://example.test/",

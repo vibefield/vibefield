@@ -187,6 +187,9 @@ export interface SurfaceHandle<TFrame extends LiveSurfaceClosableFrame> {
   retry(): void;
   /** Drop this holder's claim. Idempotent. */
   release(): void;
+  /** PT-5a: how many times a favicon's BYTES arrived on the surface's attachment (once a key) — 0 with none attached. A
+   * witness's read (the desk's face row): optional, so a handle that is not the pool's own need not count. */
+  readonly faviconArrivals?: number;
 }
 
 /** Which stage of the attach failed. A classification, never a message. */
@@ -361,6 +364,10 @@ class PoolHandle<TFrame extends LiveSurfaceClosableFrame> implements SurfaceHand
   retry(): void {
     if (this.#released) return;
     this.pool.retryEntry(this.entry);
+  }
+
+  get faviconArrivals(): number {
+    return this.entry.attachment?.faviconArrivals ?? 0;
   }
 
   release(): void {

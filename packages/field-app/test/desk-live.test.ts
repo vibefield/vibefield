@@ -217,6 +217,8 @@ function fakeHandle(key: string, opts: SurfaceAcquireOptions) {
     retry() {
       h.retried += 1;
     },
+    /** PT-5a: how many times a favicon's bytes arrived on the page's attachment (the pool's word). */
+    faviconArrivals: 0,
     release() {
       h.released += 1;
     },
@@ -538,6 +540,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         texture: undefined,
         veiled: false,
         refused: 0,
+        faviconBytes: 0,
       },
     ]);
     face.demand(UNSEEN);
@@ -575,6 +578,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         texture: { width: 2560, height: 1600, revision: 1, epoch: 0 },
         veiled: false,
         refused: 0,
+        faviconBytes: 0,
       },
     ]);
     expect(live.stats()).toMatchObject({ presented: 1, dropped: 1, writers: 1 });
@@ -599,6 +603,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         texture: undefined,
         veiled: false,
         refused: 0,
+        faviconBytes: 0,
       },
     ]);
   });
@@ -980,6 +985,31 @@ describe("PT-4 — the page as a device sees it", () => {
     handle.set({ browser: BROWSER as never });
     expect(face.info().extra).toEqual({ favicon: null });
     expect(live.faces()[0]?.favicon).toBeNull();
+  });
+
+  it("PT-5a (ruling 8): the face's row says how many times the favicon's BYTES arrived on its page's port (the pool's word) — and a favicon named without bytes, which the pool never lets through, is no favicon", () => {
+    const { face, handle, live } = attached();
+    const NAV = {
+      url: "http://127.0.0.1:4321/",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+    };
+    const icon = { key: "0123456789abcdef", mediaType: "image/png", data: btoa("\u0089PNG") };
+    handle.faviconArrivals = 1;
+    handle.set({ browser: { ...NAV, favicon: icon } as never });
+    expect(face.info().extra?.favicon).toMatchObject({ key: icon.key });
+    expect(live.faces()[0]).toMatchObject({ faviconBytes: 1, favicon: icon.key });
+    // the cursor moves: the same favicon object, no new bytes
+    const first = face.info().extra?.favicon;
+    handle.set({ browser: { ...NAV, favicon: icon, cursor: "pointer" } as never });
+    expect(face.info().extra?.favicon).toBe(first);
+    expect(live.faces()[0]).toMatchObject({ faviconBytes: 1 });
+    // named without bytes by another key: none
+    handle.set({
+      browser: { ...NAV, favicon: { key: "fedcba9876543210", mediaType: "image/png" } } as never,
+    });
+    expect(face.info().extra?.favicon).toBeNull();
   });
 
   it("a page is CALLED by its title, else by its spec's label — and nothing where no page is open for the key (ruling 5)", () => {

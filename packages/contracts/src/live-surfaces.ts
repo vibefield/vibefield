@@ -444,8 +444,8 @@ export const LiveSurfaceLoadFailureV1 = z.enum([
 ]);
 export type LiveSurfaceLoadFailureV1 = z.infer<typeof LiveSurfaceLoadFailureV1>;
 
-/** PT-4: the most a favicon may weigh — a page's icon rides every summary of its state, so it is kept small; one past it
- * is none. Its base64 is four characters for three bytes. */
+/** PT-4: the most a favicon may weigh — kept small; one past it is none. Its base64 is four characters for three bytes.
+ * (PT-5a: its bytes no longer ride every summary of the page's state — see `favicon` below.) */
 export const LIVE_SURFACE_FAVICON_MAX_BYTES = 32 * 1024;
 export const LIVE_SURFACE_FAVICON_MAX_BASE64 = 4 * Math.ceil(LIVE_SURFACE_FAVICON_MAX_BYTES / 3);
 
@@ -469,7 +469,12 @@ export const LiveSurfaceBrowserStateV1 = z
       .optional(),
     /** PT-4: the page's FAVICON — fetched by the producer through the page's own session (http/https only), held to
      * `LIVE_SURFACE_FAVICON_MAX_BYTES`: its bytes (base64), their media type, and a short digest a holder compares instead
-     * of the bytes. Absent: the page has none the producer could read (a holder draws its generic mark). */
+     * of the bytes. Absent: the page has none the producer could read (a holder draws its generic mark).
+     * PT-5a — THE BYTES CROSS ONCE A KEY: on an attachment's port `data` rides only the FIRST summary that names a key
+     * (the attach's own, or the one that first says it); every later summary of that key carries the key and the media
+     * type alone — each cursor move in hand is a summary, and up to 43,692 characters rode each one. The renderer's
+     * attachment keeps the bytes it was sent and its `summary` is whole again (a holder reads `data` as before); a key
+     * whose bytes it was never sent is no favicon. Main-side (the producer's own summary) `data` is always there. */
     favicon: z
       .object({
         key: z.string().regex(/^[a-f0-9]{16}$/u),
@@ -478,7 +483,8 @@ export const LiveSurfaceBrowserStateV1 = z
           .string()
           .min(4)
           .max(LIVE_SURFACE_FAVICON_MAX_BASE64)
-          .regex(/^[A-Za-z0-9+/]+={0,2}$/u),
+          .regex(/^[A-Za-z0-9+/]+={0,2}$/u)
+          .optional(),
       })
       .passthrough()
       .optional(),

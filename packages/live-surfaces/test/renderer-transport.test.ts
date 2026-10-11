@@ -295,6 +295,66 @@ describe("LiveSurfaceRendererTransport", () => {
     expect(attachment.summary.producerEpoch).toBe(2);
   });
 
+  it("PT-5a: keeps the favicon's BYTES it was sent — a later summary naming the key alone is WHOLE to its holders; bytes arrive once a key; a key whose bytes never came is no favicon", async () => {
+    const { attachment, hostControl } = await attachedTransport();
+    const browser = {
+      url: "https://example.test/",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+    };
+    const A = { key: "aaaaaaaaaaaaaaaa", mediaType: "image/png" };
+    const B = { key: "bbbbbbbbbbbbbbbb", mediaType: "image/png" };
+    const heard: unknown[] = [];
+    attachment.onSummary((next) => heard.push(next.browser?.favicon ?? null));
+    const say = (revision: number, favicon?: object, cursor = "default"): void =>
+      hostControl.postMessage({
+        v: 1,
+        type: "summary",
+        attachmentId: attachment.attachmentId,
+        summary: {
+          ...summary(1, "live", revision),
+          browser: { ...browser, cursor, ...(favicon === undefined ? {} : { favicon }) },
+        },
+      });
+    expect(attachment.faviconArrivals).toBe(0);
+    say(2, { ...A, data: "AAAA" });
+    expect(attachment.summary.browser?.favicon).toEqual({ ...A, data: "AAAA" });
+    expect(attachment.faviconArrivals).toBe(1);
+    // the cursor moves: the key alone crosses — the summary a holder reads still has the bytes
+    say(3, A, "pointer");
+    say(4, A, "text");
+    expect(attachment.summary.browser).toMatchObject({
+      cursor: "text",
+      favicon: { ...A, data: "AAAA" },
+    });
+    expect(attachment.faviconArrivals).toBe(1);
+    // another key, its bytes with it; then alone
+    say(5, { ...B, data: "BBBB" });
+    say(6, B);
+    expect(attachment.summary.browser?.favicon).toEqual({ ...B, data: "BBBB" });
+    expect(attachment.faviconArrivals).toBe(2);
+    // a key whose bytes were never sent here (the last sent was B's): no favicon — never half of one
+    say(7, A);
+    expect(attachment.summary.browser).not.toHaveProperty("favicon");
+    expect(attachment.summary.browser?.url).toBe("https://example.test/");
+    // none named: none; the last key's bytes are still kept for when it is named again
+    say(8);
+    say(9, B);
+    expect(attachment.summary.browser?.favicon).toEqual({ ...B, data: "BBBB" });
+    expect(attachment.faviconArrivals).toBe(2);
+    expect(heard.slice(1)).toEqual([
+      { ...A, data: "AAAA" },
+      { ...A, data: "AAAA" },
+      { ...A, data: "AAAA" },
+      { ...B, data: "BBBB" },
+      { ...B, data: "BBBB" },
+      null,
+      null,
+      { ...B, data: "BBBB" },
+    ]);
+  });
+
   it("rejects stale summaries and isolates observers while closing", async () => {
     const { transport, attachment, hostControl } = await attachedTransport();
     const observed: string[] = [];

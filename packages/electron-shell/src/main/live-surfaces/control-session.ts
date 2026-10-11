@@ -50,6 +50,30 @@ interface ManagedAttachment {
   lastFrameSequence: bigint | null;
   cpuFrameInFlight: { readonly producerEpoch: number; readonly sequence: string } | null;
   active: boolean;
+  /** PT-5a: the key of the favicon whose BYTES last went down this attachment's port (`faviconOnce`). */
+  faviconSent: string | undefined;
+}
+
+/**
+ * PT-5a (ruling 8) — THE FAVICON'S BYTES CROSS ONCE A KEY. A browser page's summary names its favicon and carries its bytes
+ * (base64, up to 43,692 characters); a summary is posted at every move of the page's state — each cursor change in hand. So
+ * the summary AS POSTED carries the bytes only the first time it names a key on this attachment's port; after that the key
+ * and the media type alone — the renderer's attachment keeps the bytes it was sent (packages/live-surfaces: `withFavicon`).
+ * One key is remembered, the last sent, on both sides: a page that goes elsewhere and comes back is sent its bytes again.
+ */
+export function faviconOnce(
+  sent: { faviconSent: string | undefined },
+  summary: LiveSurfaceRuntimeSummaryV1,
+): LiveSurfaceRuntimeSummaryV1 {
+  const browser = summary.browser;
+  const favicon = browser?.favicon;
+  if (browser === undefined || favicon === undefined || favicon.data === undefined) return summary;
+  if (sent.faviconSent !== favicon.key) {
+    sent.faviconSent = favicon.key;
+    return summary;
+  }
+  const { data: _bytes, ...named } = favicon;
+  return { ...summary, browser: { ...browser, favicon: named } };
 }
 
 export interface LiveSurfaceControlSessionOptions {
@@ -297,7 +321,12 @@ export class LiveSurfaceControlSession {
               this.protocolFault("runtime summary moved backwards or changed identity");
               return;
             }
-            this.post({ v: 1, type: "summary", attachmentId, summary });
+            this.post({
+              v: 1,
+              type: "summary",
+              attachmentId,
+              summary: faviconOnce(managed, summary),
+            });
           }
         },
         publishCpuFrame: (frame) => {
@@ -348,13 +377,14 @@ export class LiveSurfaceControlSession {
         lastFrameSequence: null,
         cpuFrameInFlight: null,
         active: true,
+        faviconSent: undefined,
       };
       this.#attachments.set(attachmentId, managed);
       this.post({
         v: 1,
         type: "attached",
         requestId,
-        attachment: { v: 1, attachmentId, summary },
+        attachment: { v: 1, attachmentId, summary: faviconOnce(managed, summary) },
       });
     } catch {
       if (managed !== null) managed.active = false;
