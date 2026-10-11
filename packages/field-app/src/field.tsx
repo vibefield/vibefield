@@ -247,7 +247,7 @@ export function FieldView({
         ),
       // PT-5b — and three more a smoke's rows need of a desk of many panes, each an op the product's own chrome
       // performs: an object deleted (selected, then ⌫'s own op — one undo step), the view framed on some objects (the
-      // head's "Zoom to fit" over a selection), the view panned to a world point
+      // head's "Zoom to fit" over a selection), the view panned to a world point (PT-5b3: and zoomed)
       removeWidget: (entity: string): boolean => {
         const e = Number(entity) as Entity;
         if (!Number.isFinite(e) || !ce.world.isAlive(e)) return false;
@@ -260,6 +260,10 @@ export function FieldView({
       },
       panTo: (x: number, y: number): void => {
         ce.ops.panTo(x, y);
+      },
+      // PT-5b3 — the view zoomed about its centre (the zoom menu's own op): a pane drawn as large as a row needs it
+      zoomTo: (zoom: number): void => {
+        ce.ops.zoomTo(zoom);
       },
     };
     const scope = globalThis as Record<string, unknown>;

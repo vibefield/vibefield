@@ -6,6 +6,7 @@
  * hand-over's frames read as runs. PT-5b2: SWEEP and EVICTED; a photograph's ground held to the live page's at THE LAW'S DIM
  * (REST, STILL — a still through the wrong transfer curve does not pass); what EVICTED's watcher saw, read.
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { FIXTURE_HUE } from "../src/testing/live-fixture";
 import {
@@ -733,7 +734,7 @@ describe("the last still and the many — its rows", () => {
       seen: { ...LIVE, presented: 1 },
       still: stillAt("e", 9_000),
       unseen: {
-        fill: { alive: 3, bytes: 262_143_816 },
+        fill: { laid: 3, alive: 3, bytes: 262_143_816, each: [87_381_272, 87_381_272, 87_381_272] },
         face: paused,
         pages: 1,
         evictions: 1,
@@ -798,7 +799,7 @@ describe("the last still and the many — its rows", () => {
         },
       }),
     ).toEqual([
-      "EVICTED: out of view the pane holds 21845272 bytes and 0 textures were evicted (the budget: 152915904 charged of 268435456; 3 large panes alive on 262143816 bytes) — the budget evicted nothing of it: the row proved nothing",
+      "EVICTED: out of view the pane holds 21845272 bytes and 0 textures were evicted (the budget: 152915904 charged of 268435456; 3 large panes laid, 3 alive, on 262143816 bytes) — the budget evicted nothing of it: the row proved nothing",
     ]);
     expect(
       judgeEvicted({
@@ -894,9 +895,19 @@ describe("the last still and the many — what the rows read by", () => {
     // another dim is another reading — by more than the row allows; no dim at all is the live page
     expect(dimmed([46.6, 116.3, 218.1], undefined, 0.8)).toEqual([44.3, 105.9, 198]);
     expect(dimmed([46.6, 116.3, 218.1], undefined, 1)).toEqual([46.6, 116.3, 218.1]);
-    expect(STILL_ROWS.law).toEqual({ dim: 0.7, within: 4 });
     // a page whose live reading is darker than the fixture's own light at (1 − dim) is black, never a negative light
     expect(dimmed([2, 2, 2])).toEqual([0, 0, 0]);
+  });
+
+  it("PT-5b3 — the still's dim is ONE number: the row's law is the pane's own (`display.still` in the plugin's law — read off its source: the shell may not import the plugin)", () => {
+    const law = readFileSync(
+      new URL("../../../plugins/browser-pane/src/law.ts", import.meta.url),
+      "utf8",
+    );
+    const display = /\bdisplay:\s*\{([^}]*)\}/u.exec(law)?.[1];
+    if (display === undefined) throw new Error("the pane's law says no `display`");
+    const still = /\bstill:\s*([0-9.]+)/u.exec(display)?.[1];
+    expect(Number(still)).toBe(STILL_ROWS.law.dim);
   });
 
   it("PT-5b2 — what EVICTED's watcher saw, read: from the frame the pane asks live again, the face as runs and how long until the page's own frame", () => {
@@ -949,7 +960,7 @@ describe("the last still and the many — what the rows read by", () => {
     expect(STILL_ROWS.dimmer).toBeLessThan(1);
   });
 
-  it("PT-5b2 — EVICTED's numbers: three large panes fill the desk's budget to within a laptop's face, and the laptop's tips it", () => {
+  it("PT-5b3 — EVICTED's numbers: a large pane is the outline of a laptop's page at twice its size; drawn at its top rung (its device's 2 px a CSS px) its texture is 87 MB — the row's most passes the desk's budget with a large pane to spare, so its ceiling is never what stops it, on any display", () => {
     const mm = 200 / 76.2;
     /** A pane's outline for a page of w × h CSS px at the laptop's density (0.2 mm a px): the border round it, the head. */
     const outline = (w: number, h: number): { w: number; h: number } => ({
@@ -966,17 +977,13 @@ describe("the last still and the many — what the rows read by", () => {
         if (lw === 1 && lh === 1) return sum;
       }
     };
-    // at the Mac's density (2): a laptop's face, a large pane's
-    const laptop = bytes(2560, 1600);
-    const large = bytes(5120, 3200);
-    expect(laptop).toBe(21_845_272);
+    const { deviceDpr, most } = STILL_ROWS.evicted;
+    const large = bytes(2560 * deviceDpr, 1600 * deviceDpr);
     expect(large).toBe(87_381_272);
-    const cap = 268_435_456;
-    expect(STILL_ROWS.evicted.fill * large).toBeLessThanOrEqual(cap);
-    expect(STILL_ROWS.evicted.fill * large + laptop).toBeGreaterThan(cap);
-    // out of the large panes' view; the bound its page's frame is held to
+    // the desk's budget (ICE's 256 MiB): the row's ceiling of large panes, each at its top rung, passes it with a large
+    // pane to spare
+    expect(most * large).toBeGreaterThan(268_435_456 + large);
+    // the pane lies out of the large panes' view
     expect(STILL_ROWS.evicted.away).toBeGreaterThan(4 * STILL_ROWS.evicted.big.h);
-    expect(STILL_ROWS.evicted.withinMs).toBe(3_000);
-    expect(STILL_ROWS.sweep.minGraceMs).toBeLessThanOrEqual(60_000);
   });
 });

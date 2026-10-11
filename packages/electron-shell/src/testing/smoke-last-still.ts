@@ -39,10 +39,12 @@
 //   STILL, its ground held to THE LAW — the photograph's ground is the live page's at the law's dim (`display.still`: 0.7
 //                 of its light), each channel within a tolerance: a still through the wrong transfer curve does not pass
 //                 (REST's too: the page as it was put to rest);
-//   EVICTED     — three LARGE panes seen (their textures fill the desk's budget to within a laptop's face) and one more pane
-//                 out of view, its page ALIVE and quiet: the budget's eviction takes the unseen pane's texture (the one
-//                 the kind does not keep) and its page stays alive, paused; seen again, the pane shows its page's own
-//                 frame again within a bound — said with what it wore meanwhile, each frame — and no rest mark.
+//   EVICTED     — a pane on a quiet page, seen, then out of view while LARGE panes are laid and seen one at a time, each
+//                 drawn at its page's top rung on whatever display this is (PT-5b3: framed alone, then zoomed until its
+//                 page is drawn at more than half its native width), until their textures' own bytes take the desk's
+//                 budget past its room: the budget's eviction takes the unseen pane's texture (the least recently used)
+//                 and its page stays alive, paused; seen again, the pane shows its page's own frame again within a bound
+//                 — said with what it wore meanwhile, each frame — and no rest mark.
 // Then the panes are removed and the board is as found. `--last-still` beside `--smoke-canvas` runs these rows alone after
 // the boot's (the author's loop).
 
@@ -91,10 +93,17 @@ export const STILL_ROWS = {
   law: { dim: 0.7, within: 4 },
   /** PT-5b2 — SWEEP: the grace the pane is deleted under is at least this (the pool's own is a minute) */
   sweep: { minGraceMs: 30_000 },
-  /** PT-5b2 — EVICTED: the large panes (so many, each a page of 2560 × 1600 — at the Mac's density a texture of 87 MB),
-   * how far from them the pane is laid (world units: out of their view), and how long after it is seen again (its ask
-   * live) its page's own frame may take */
-  evicted: { fill: 3, big: { w: 1370.08, h: 881.89 }, away: 9_000, withinMs: 3_000 },
+  /** PT-5b2 — EVICTED: the large panes (each a laptop's page of 2560 × 1600 — at its device's 2 px a CSS px a texture of
+   * 87 MB at its top rung), the most the row lays (PT-5b3: as many as their bytes need — three on any display, drawn at
+   * the top rung), how far from them the pane is laid (world units: out of their view), and how long after it is seen
+   * again (its ask live) its page's own frame may take */
+  evicted: {
+    most: 6,
+    big: { w: 1370.08, h: 881.89 },
+    deviceDpr: 2,
+    away: 9_000,
+    withinMs: 3_000,
+  },
 } as const;
 
 /** The fixture ground's hue angle (degrees). */
@@ -353,11 +362,16 @@ export interface LastStillSeen {
     /** seen, alone in the view: its face (the page's own frame in its texture), its still on the shelf */
     readonly seen: FaceSeen | null;
     readonly still: StillSaid | null;
-    /** the large panes seen, the pane out of view: the large faces alive and their textures' bytes; the pane's face — no
-     * texture: the budget's eviction — main's pages at its address, the service's evictions counted meanwhile, and the
-     * budget then (what is charged, its cap) */
+    /** the large panes laid and seen one at a time, the pane out of view: how many, the large faces alive and each one's
+     * texture's bytes; the pane's face — no texture: the budget's eviction — main's pages at its address, the service's
+     * evictions counted meanwhile, and the budget then (what is charged, its cap) */
     readonly unseen: {
-      readonly fill: { readonly alive: number; readonly bytes: number };
+      readonly fill: {
+        readonly laid: number;
+        readonly alive: number;
+        readonly bytes: number;
+        readonly each: readonly number[];
+      };
       readonly face: FaceSeen | null;
       readonly pages: number;
       readonly evictions: number;
@@ -768,7 +782,7 @@ export function judgeEvicted(seen: LastStillSeen["evicted"]): string[] {
   if (u.face === null) out.push("EVICTED: out of view the pane has no face");
   else if (u.face.bytes !== 0 || u.evictions < 1)
     out.push(
-      `EVICTED: out of view the pane holds ${u.face.bytes} bytes and ${u.evictions} textures were evicted (the budget: ${u.used} charged of ${u.cap}; ${u.fill.alive} large panes alive on ${u.fill.bytes} bytes) — the budget evicted nothing of it: the row proved nothing`,
+      `EVICTED: out of view the pane holds ${u.face.bytes} bytes and ${u.evictions} textures were evicted (the budget: ${u.used} charged of ${u.cap}; ${u.fill.laid} large panes laid, ${u.fill.alive} alive, on ${u.fill.bytes} bytes) — the budget evicted nothing of it: the row proved nothing`,
     );
   else if (!u.face.alive || u.face.rested || u.pages !== 1 || u.face.ask !== "paused")
     out.push(
@@ -2085,8 +2099,9 @@ export async function lastStillRows(d: LastStillDriver): Promise<string[]> {
    * Then the pane SEEN AGAIN, watched each frame until its page's own frame. The panes are removed after.
    */
   async function evictedRows(x: number, y: number): Promise<LastStillSeen["evicted"]> {
-    const { fill: count, big, away } = STILL_ROWS.evicted;
-    // no page of the rows before is left in main, and the cap is the desk's own
+    const { most, big, deviceDpr, away } = STILL_ROWS.evicted;
+    // no page of the rows before is left in main, and the cap holds every page the row makes alive (an unseen page is
+    // never put to rest for a seen one here: the pane must stay ALIVE out of view)
     await js("globalThis.__vfDesk.liveGrace(300)");
     await waitFor(
       "no page left in main",
@@ -2095,11 +2110,13 @@ export async function lastStillRows(d: LastStillDriver): Promise<string[]> {
       (n) => n === 0,
     );
     await js("globalThis.__vfDesk.liveGrace(null)");
-    await cap(6);
+    await cap(most + 2);
     const pane = await lay("e", x, y - away, "/page?ev=");
     const fill: Pane[] = [];
-    for (let i = 0; i < count; i += 1)
-      fill.push(await lay(`f${i}`, x + i * (big.w + STILL_ROWS.gap), y, "/page?ef=", big));
+    /** A large pane's page, world units wide; its native width (device px) — the stream's top rung is above its half. */
+    const pageW = big.w - 2 * PANE.border * PANE.mm;
+    const nativeW = (pageW / (PANE.laptop * PANE.mm)) * deviceDpr;
+    const dpr = await js<number>("window.devicePixelRatio");
     try {
       await frame([pane]);
       const seenFace = await waitFor(
@@ -2123,18 +2140,35 @@ export async function lastStillRows(d: LastStillDriver): Promise<string[]> {
       await settled();
       const evictionsWas = (await stats()).evictions ?? 0;
       const presentedWas = (await face(pane))?.presented ?? 0;
-      // the large panes seen, the pane out of view: past its room, the budget evicts what the kind does not keep
-      await frame(fill);
-      for (const p of fill)
+      // large panes, each seen alone and drawn at its top rung on THIS display (framed, then zoomed until its page is
+      // drawn at more than half its native width), until their textures' own bytes take the budget past its room — the
+      // pane, out of view and the least recently used, is what the budget lets go
+      while (fill.length < most && ((await face(pane))?.bytes ?? 0) > 0) {
+        const large = await lay(
+          `f${fill.length}`,
+          x + fill.length * (big.w + STILL_ROWS.gap),
+          y,
+          "/page?ef=",
+          big,
+        );
+        fill.push(large);
+        await frame([large]);
+        const want = (1.15 * (nativeW / 2)) / (pageW * dpr);
+        if ((await camera()).zoom < want) {
+          await js(`globalThis.__vfFieldSmoke.zoomTo(${want})`);
+          await settledCamera();
+        }
         await waitFor(
-          `large pane ${p.q} live`,
+          `large pane ${large.q} live at its top rung`,
           STILL_ROWS.withinMs,
-          () => face(p),
+          () => face(large),
           (f) => f !== null && f.state === "live" && f.bytes > 0,
         );
+        await sleep(400);
+      }
       await waitFor(
         "the unseen pane's texture evicted",
-        15_000,
+        10_000,
         () => face(pane),
         (f) => f !== null && f.bytes === 0 && f.ask === "paused",
       );
@@ -2145,8 +2179,10 @@ export async function lastStillRows(d: LastStillDriver): Promise<string[]> {
       const fillFaces = await Promise.all(fill.map((p) => face(p)));
       const unseen = {
         fill: {
+          laid: fill.length,
           alive: fillFaces.filter((f) => f?.alive === true).length,
           bytes: fillFaces.reduce((sum, f) => sum + (f?.bytes ?? 0), 0),
+          each: fillFaces.map((f) => f?.bytes ?? 0),
         },
         face: await face(pane),
         pages: pagesAt(pane).length,

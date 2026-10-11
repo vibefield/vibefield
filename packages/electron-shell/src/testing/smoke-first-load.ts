@@ -23,7 +23,11 @@
 //                    switched to;
 //   TAPS-COLD      — a phone's page HELD busy with its scale never read (`/cold`, held on the smoke's word — a page just
 //                    loaded and hydrating): two quick taps sent inside the hold are heard once it ends — start, end,
-//                    start, end — never dropped for want of a scale.
+//                    start, end — never dropped for want of a scale;
+//   TIDY           — a pane in hand on a page that TIDIES its own address (`?tidy=1`, on the smoke's word:
+//                    `history.replaceState`, a move WITHIN the document, nothing painted): put down, its still is kept
+//                    under the address NOW; put to rest and the window RELOADED with the gate shut, the pane shows that
+//                    still before its page's first frame.
 // Then the panes are removed and the board is as found. `--first-load` beside `--smoke-canvas` runs these rows alone
 // after the boot's (the author's loop).
 
@@ -31,7 +35,14 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { FIXTURE_HOLD_MS, type FixtureReport } from "./live-fixture";
 import { PANE, type PaneHands, paneHands } from "./smoke-browser-pane";
-import { type MainPage, PAGE_PIXELS, type PageSeen, pageAtRest } from "./smoke-last-still";
+import {
+  type MainPage,
+  PAGE_PIXELS,
+  type PageSeen,
+  pageAtRest,
+  STILL_ROWS,
+  type StillSaid,
+} from "./smoke-last-still";
 import type { LiveRowsDriver } from "./smoke-live-pane";
 import { type HeldFrameSeen, pageOnWindow } from "./smoke-use-pane";
 
@@ -142,6 +153,27 @@ export interface FirstLoadSeen {
     readonly agent: string | null;
     readonly askedOpened: number;
     readonly told: number;
+  };
+  /** PT-5b3 (ruling 4) — TIDY. */
+  readonly tidy: {
+    /** in hand, its page live: the face before its page tidied its address, and after (no frame since: `presented`) */
+    readonly before: FirstFace | null;
+    readonly after: FirstFace | null;
+    /** the document's own word for its address once the page tidied it (the pane follows its page's own moves) */
+    readonly url: string | null;
+    /** put down: the still the shelf keeps of it — the address it is filed under */
+    readonly kept: StillSaid | null;
+    /** put to rest before the reload: at rest, its page gone from main */
+    readonly rested: boolean;
+    /** the window reloaded with the gate shut: came back; its load waiting at the gate; its face; its page's area */
+    readonly reloaded: boolean;
+    readonly waiting: number;
+    readonly shown: FirstFace | null;
+    readonly still: boolean;
+    readonly bytes: number;
+    readonly page: PageSeen | null;
+    /** the gate opened: its face */
+    readonly opened: FirstFace | null;
   };
   /** PT-5b3 (ruling 6) — TAPS-COLD. */
   readonly tapsCold: {
@@ -401,6 +433,65 @@ export function judgeSwitch(seen: FirstLoadSeen["switched"]): string[] {
   return out;
 }
 
+/** TIDY (PT-5b3): an address moved WITHIN the document keeps the pane's photograph — under the address NOW, across a reload. */
+export function judgeTidy(seen: FirstLoadSeen["tidy"]): string[] {
+  const out: string[] = [];
+  const b = seen.before;
+  const a = seen.after;
+  if (b === null || b.state !== "live" || b.presented < 1 || b.address?.includes("tidy=1") !== true)
+    out.push(
+      `TIDY: in hand the pane was ${b?.state ?? "without a face"} at ${b?.address ?? "no address"} (${b?.presented ?? 0} frames), not live on the page that tidies — the row proved nothing`,
+    );
+  if (a === null || a.address?.endsWith("/gate?p=t") !== true)
+    out.push(
+      `TIDY: once told, the page says it is at ${a?.address ?? "no address"}, not /gate?p=t — it did not tidy its address: the row proved nothing`,
+    );
+  else if (b !== null && a.presented !== b.presented)
+    out.push(
+      `TIDY: ${a.presented - b.presented} frames landed after the page tidied its address — its texture is of the address NOW whatever the law: the row proved nothing`,
+    );
+  if (seen.url?.endsWith("/gate?p=t") !== true)
+    out.push(
+      `TIDY: the document says the pane is at ${seen.url ?? "no address"}, not where its page tidied itself to (/gate?p=t)`,
+    );
+  if (seen.kept === null)
+    out.push(
+      "TIDY: put down, the pane kept NO still — an address that moved within its document cost it its photograph",
+    );
+  else if (!seen.kept.address.endsWith("/gate?p=t"))
+    out.push(
+      `TIDY: put down, its still is filed under ${seen.kept.address}, not the address now (/gate?p=t)`,
+    );
+  if (!seen.rested)
+    out.push("TIDY: the pane was not at rest before the reload — its page would not load again");
+  if (!seen.reloaded) out.push("TIDY: the desk did not come back after the reload");
+  if (seen.waiting < 1)
+    out.push(
+      "TIDY: no load waited at the fixture's gate after the reload — the row proved nothing",
+    );
+  const sh = seen.shown;
+  if (!seen.still || seen.bytes === 0)
+    out.push(
+      `TIDY: after the reload, before its page's first frame, the pane is ${sh?.state ?? "without a face"} with ${seen.still ? "" : "no "}still and ${seen.bytes} bytes — the film, not its photograph`,
+    );
+  else if (sh !== null && sh.presented !== 0)
+    out.push(
+      `TIDY: ${sh.presented} frames of the page landed while its load waited at the gate — the row proved nothing`,
+    );
+  if (seen.page === null || seen.page.px === 0)
+    out.push("TIDY: the pane's page area could not be read after the reload");
+  else if (seen.page.hue / seen.page.px < STILL_ROWS.shown.hue)
+    out.push(
+      `TIDY: after the reload the pane's page area is ${((seen.page.hue / seen.page.px) * 100).toFixed(1)}% the fixture's hue, not ${STILL_ROWS.shown.hue * 100}% — its photograph is not drawn`,
+    );
+  const o = seen.opened;
+  if (o === null || o.state !== "live" || o.presented < 1)
+    out.push(
+      `TIDY: the gate opened, the pane is ${o?.state ?? "without a face"} (${o?.presented ?? 0} frames) — its page did not replace its still`,
+    );
+  return out;
+}
+
 /** TAPS-COLD (PT-5b3): a press on a page too busy to say its scale WAITS — both taps are heard once the page is free. */
 export function judgeTapsCold(seen: FirstLoadSeen["tapsCold"]): string[] {
   const out: string[] = [];
@@ -445,6 +536,12 @@ const FACE = (key: string): string => `(() => {
   };
 })()`;
 
+/** PT-5b3 — a face's photograph, by its key: whether its texture is a still, its texture's bytes, whether it rests. */
+const PHOTO = (key: string): string => `(() => {
+  const f = (globalThis.__vfDesk.live()?.faces ?? []).find((x) => x.key === ${JSON.stringify(key)});
+  return f === undefined ? null : { still: f.still !== null, bytes: f.texture?.bytes ?? 0, rested: f.rested };
+})()`;
+
 /** A run of states, each said once while it lasts ("starting", "live"). */
 export function runOf(states: readonly string[]): string[] {
   const out: string[] = [];
@@ -455,7 +552,7 @@ export function runOf(states: readonly string[]): string[] {
 /** PT-5b2's rows (above). Returns the problems, each in words. */
 export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
   const { say, win } = d;
-  const h: PaneHands = paneHands(d);
+  let h: PaneHands = paneHands(d);
   const problems: string[] = [];
   const said: Partial<Record<keyof FirstLoadSeen, unknown>> = {};
   const js = <T>(expression: string): Promise<T> => h.js<T>(expression);
@@ -1057,6 +1154,114 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
     said.tapsCold = tapsCold;
     problems.push(...judgeTapsCold(tapsCold));
     await done();
+
+    // ── TIDY (PT-5b3): a pane in hand on a page that tidies its own address; put down; at rest; the window reloaded ────
+    const photo = (p: Pane): Promise<{ still: boolean; bytes: number; rested: boolean } | null> =>
+      js(PHOTO(p.key));
+    const stillOf = (p: Pane): Promise<StillSaid | null> =>
+      js<StillSaid | null>(`globalThis.__vfDesk.pageStill(${JSON.stringify(p.key)})`);
+    d.fixture.gate(false);
+    const tidyPane = await lay("/gate?p=t&tidy=1", x0 + 2 * step, y2);
+    await frame([tidyPane]);
+    await waitFor(
+      "the tidying pane's load waiting at the gate",
+      FIRST_ROWS.withinMs,
+      () => d.fixture.gated().waiting,
+      (n) => n >= 1,
+    );
+    // in hand BEFORE its first frame (in hand no still is taken by the clock: the put-down's is the one)
+    await pickUp(tidyPane);
+    d.fixture.gate(true);
+    await waitFor(
+      "the tidying page live in hand",
+      FIRST_ROWS.withinMs,
+      () => face(tidyPane),
+      (f) => f !== null && f.state === "live" && f.presented >= 1,
+    );
+    await waitFor(
+      "the tidying page's word",
+      FIRST_ROWS.withinMs,
+      () => d.fixture.reportAt("/gate?p=t&tidy=1"),
+      (r) => r !== null,
+    );
+    await sleep(400);
+    const tidyBefore = await face(tidyPane);
+    d.fixture.tidy("/gate?p=t");
+    const tidyAfter = await waitFor(
+      "the page's address tidied",
+      10_000,
+      () => face(tidyPane),
+      (f) => f !== null && f.address?.endsWith("/gate?p=t") === true,
+    );
+    const tidyUrl = await waitFor(
+      "the document following the page's own move",
+      10_000,
+      async () =>
+        (
+          await js<{ key: string | null; props: Record<string, string | undefined> }[]>(
+            `globalThis.__vfDesk.objects(${JSON.stringify(PANE.type)})`,
+          )
+        ).find((r) => r.key === tidyPane.key)?.props.url ?? null,
+      (u) => u?.endsWith("/gate?p=t") === true,
+    );
+    const takenWas = (await stillOf(tidyPane))?.takenAt ?? 0;
+    await done();
+    const tidyKept = await waitFor(
+      "the put-down's still on the shelf",
+      15_000,
+      () => stillOf(tidyPane),
+      (st) => st !== null && st.takenAt > takenWas,
+    );
+    // to rest: another pane seen, this one out of view, the cap at one
+    await frame([cold]);
+    await js("globalThis.__vfDesk.liveCap(1)");
+    const tidyRest = await waitFor(
+      "the tidied pane at rest, its page gone from main",
+      FIRST_ROWS.withinMs,
+      async () => ({ f: await photo(tidyPane), pages: d.pages(`${origin}/gate?p=t`).length }),
+      (v) => v.f?.rested === true && v.pages === 0,
+    );
+    d.fixture.gate(false);
+    const tidyReloaded = await d.reload();
+    h = paneHands(d);
+    await sleep(600);
+    await frame([tidyPane]);
+    const tidyShown = await waitFor(
+      "the pane on its still, its load waiting at the gate",
+      FIRST_ROWS.withinMs,
+      async () => ({
+        f: await face(tidyPane),
+        p: await photo(tidyPane),
+        waiting: d.fixture.gated().waiting,
+      }),
+      (v) => v.p?.still === true && (v.p?.bytes ?? 0) > 0 && v.waiting >= 1,
+    );
+    await sleep(500);
+    const tidyPage = await pageOf(tidyPane);
+    await shoot("pt-5b3-tidy-after-reload.png");
+    d.fixture.gate(true);
+    const tidyOpened = await waitFor(
+      "the tidied page live again",
+      FIRST_ROWS.withinMs,
+      () => face(tidyPane),
+      (f) => f !== null && f.state === "live" && f.presented >= 1,
+    );
+    const tidy: FirstLoadSeen["tidy"] = {
+      before: tidyBefore,
+      after: tidyAfter,
+      url: tidyUrl,
+      kept: tidyKept,
+      rested: tidyRest.f?.rested === true && tidyRest.pages === 0,
+      reloaded: tidyReloaded,
+      waiting: tidyShown.waiting,
+      shown: tidyShown.f,
+      still: tidyShown.p?.still === true,
+      bytes: tidyShown.p?.bytes ?? 0,
+      page: tidyPage,
+      opened: tidyOpened,
+    };
+    said.tidy = tidy;
+    problems.push(...judgeTidy(tidy));
   } catch (error) {
     // a step that cannot go on ends the rows — never what the rows before it found (they are said with it)
     problems.push(`PT-5b2 FIRST: ${error instanceof Error ? error.message : String(error)}`);
@@ -1074,6 +1279,7 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
           await js(`globalThis.__vfFieldSmoke.removeWidget(${JSON.stringify(String(row.entity))})`);
       await sleep(900);
       await js("globalThis.__vfDesk.liveGrace(null)");
+      await js("globalThis.__vfDesk.liveCap(6)");
       await js("globalThis.__vfFieldSmoke.frame([])");
     } catch {
       /* a row that cannot go on ends the rows, never what the earlier rows found */

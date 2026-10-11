@@ -17,6 +17,7 @@ import {
   judgeSwitch,
   judgeTaps,
   judgeTapsCold,
+  judgeTidy,
   runOf,
 } from "../src/testing/smoke-first-load";
 import type { PageSeen } from "../src/testing/smoke-last-still";
@@ -315,6 +316,85 @@ describe("a page's first load, in the product — its rows", () => {
       "SWITCH-STARTING: before the switch the pane was live (1 frames, its address asked for 1 times), not starting at the shut gate — the row proved nothing",
       "SWITCH-STARTING: the bar offered no act for the tablet — the row proved nothing",
       `SWITCH-STARTING: its device switched, the pane says it is at ${O}/elsewhere, not its address`,
+    ]);
+  });
+
+  it("TIDY (PT-5b3): a pane on a page that tidies its own address keeps its photograph — put down, filed under the address NOW; at rest and the window reloaded, shown before its page's first frame", () => {
+    const at = (path: string) => `${O}${path}`;
+    const inHand = face({ address: at("/gate?p=t&tidy=1"), presented: 2 });
+    const seen: FirstLoadSeen["tidy"] = {
+      before: inHand,
+      after: { ...inHand, address: at("/gate?p=t") },
+      url: at("/gate?p=t"),
+      kept: {
+        address: at("/gate?p=t"),
+        logical: [1280, 800],
+        size: [1600, 1000],
+        type: "image/webp",
+        bytes: 10_368,
+        takenAt: 2_000,
+        keptAt: 2_070,
+      },
+      rested: true,
+      reloaded: true,
+      waiting: 1,
+      shown: face({
+        state: "starting",
+        address: at("/gate?p=t"),
+        loading: true,
+        presented: 0,
+      }),
+      still: true,
+      bytes: 8_532_924,
+      page: { ...WORDS, hue: 780_000, film: 0, ink: 150_000 },
+      opened: face({ address: at("/gate?p=t") }),
+    };
+    expect(judgeTidy(seen)).toEqual([]);
+    // the lane before PT-5b3: the put-down took nothing (its texture "of the address before"), so the reload found no
+    // photograph — the film
+    expect(
+      judgeTidy({
+        ...seen,
+        kept: null,
+        still: false,
+        bytes: 0,
+        page: { ...WORDS, hue: 0 },
+      }),
+    ).toEqual([
+      "TIDY: put down, the pane kept NO still — an address that moved within its document cost it its photograph",
+      "TIDY: after the reload, before its page's first frame, the pane is starting with no still and 0 bytes — the film, not its photograph",
+      "TIDY: after the reload the pane's page area is 0.0% the fixture's hue, not 40% — its photograph is not drawn",
+    ]);
+    // a still filed under the address before; the document not following the page's own move
+    expect(
+      judgeTidy({
+        ...seen,
+        kept: seen.kept === null ? null : { ...seen.kept, address: at("/gate?p=t&tidy=1") },
+        url: at("/gate?p=t&tidy=1"),
+      }),
+    ).toEqual([
+      `TIDY: the document says the pane is at ${at("/gate?p=t&tidy=1")}, not where its page tidied itself to (/gate?p=t)`,
+      `TIDY: put down, its still is filed under ${at("/gate?p=t&tidy=1")}, not the address now (/gate?p=t)`,
+    ]);
+    // rows that proved nothing: a page that did not tidy; a frame after the tidy; no rest, no reload, no load waiting
+    expect(
+      judgeTidy({
+        ...seen,
+        after: { ...inHand, presented: 3 },
+        rested: false,
+        reloaded: false,
+        waiting: 0,
+        opened: null,
+      }),
+    ).toEqual([
+      `TIDY: once told, the page says it is at ${at("/gate?p=t&tidy=1")}, not /gate?p=t — it did not tidy its address: the row proved nothing`,
+      "TIDY: the pane was not at rest before the reload — its page would not load again",
+      "TIDY: the desk did not come back after the reload",
+      "TIDY: no load waited at the fixture's gate after the reload — the row proved nothing",
+      "TIDY: the gate opened, the pane is without a face (0 frames) — its page did not replace its still",
+    ]);
+    expect(judgeTidy({ ...seen, after: { ...seen.after, presented: 3 } as FirstFace })).toEqual([
+      "TIDY: 1 frames landed after the page tidied its address — its texture is of the address NOW whatever the law: the row proved nothing",
     ]);
   });
 
