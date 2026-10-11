@@ -6776,8 +6776,8 @@ export async function runSmokeGodview(opts: {
       15_000,
     );
     verdict["peekLiveNow"] = liveNow;
-    if (liveNow.inBar) {
-      throw new Error("the instrument bar still carries FIND — search is the frame's button now");
+    if (liveNow.inGodview) {
+      throw new Error("Godview still carries a FIND of its own — search is the frame's button");
     }
     const watched = await untilLiveNow(
       win,

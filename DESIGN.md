@@ -33,8 +33,6 @@ Three surface families, one physics:
 
 ### 1.1 Godview visual source
 
-*Status 2026-10-11: ruled, not built. Until it lands, Godview keeps the 40px instrument bar and the search button stands over its right end (PK2 (a)).*
-
 *Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12). Not built: the Lip's two buttons, the terminals away and maximized, the edge's new outcomes and where a session opens (GV-D4, GV-D5, GV-D6, GV-D11). Until those land the terminals are always up, and their edge moves as §8's shipped text says.*
 
 Godview is the deliberate control-room exception to the iOS-widget chrome around it. Its
@@ -52,8 +50,8 @@ the temporary system-control panel exposes that alpha for live tuning.
 cover BELOW the frame (§10), reached by ⌘2 or its cell in the views track (§8). **Its head is the
 frame's, not the reference's instrument bar** (GV-D1, ruled 2026-10-02; §8 "Godview's head —
 Stories"): the 40px bar, its counters (FC-D18) and its ☼◐ switch (FC-D7) are gone from VibeField.
-puppeteer's own Godview keeps the bar. *(Corrected 2026-10-11: this paragraph said Godview "keeps
-this instrument bar as its head for now".)*
+puppeteer's own Godview keeps the bar. *(Until the Stories head, built 2026-10-11, this paragraph
+said Godview "keeps this instrument bar as its head for now".)*
 **Since FR-4 (2026-10-03) Godview follows the app's theme (FC-D7):** its ☼◐ switch and its own
 remembered light are gone, and the parchment or graphite deck is whichever the app's one theme
 control (§8, the Me menu) resolves to — unless Settings → Terminal → Look holds the one override,
@@ -978,11 +976,14 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     act, **its key at the row's end**: **Views** — Canvas ⌘1 · Godview ⌘2 · History ⌘3 ·
     Assistant ⌘4, which waits ("not built yet"); **On this view** — the line's create (Objects B
     on Canvas, New terminal ⌘T in Godview, Resume this session in History, waiting until a session
-    is chosen — Jump to this session while it runs here, by the line's own reading) and on Canvas
-    the four zoom acts; **App** — Settings… ⌘,; then each enabled
+    is chosen — Jump to this session while it runs here, by the line's own reading), on Canvas
+    the four zoom acts, and in Godview **System control**, the one act with no key (GV-D1,
+    2026-10-11: it left the instrument bar for the palette — §8 "Godview's head — Stories");
+    **App** — Settings… ⌘,; then each enabled
     plugin's palette commands under the plugin's name, one no live handler answers drawn
     "unavailable" and never run. Eyebrows 10px mono capitals in tertiary ink; rows 36, a 16 glyph
-    in a 24 column in secondary ink (the zoom acts carry none), 13/500, the hot row in the ready
+    in a 24 column in secondary ink (the zoom acts and System control carry none), 13/500, the
+    hot row in the ready
     fill; a row that waits says why under its name. Typing filters every group; ↑ ↓ move,
     Return runs, Esc or the dim closes it. The prose footer ("↵ to run · esc to close") retired
     (F7, F15): the keys are said in the rows. The backdrop dim behind it, no recede.
@@ -1000,23 +1001,27 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   - *Since FR-4 (2026-10-03) the right cluster is GONE:* the theme went into the Me menu (FC-D5,
     F3) and Artifacts behind the right notch (FC-D10, F10), so the head's right slot is the zoom
     readout alone, 16 in, and the pill gives up only the wider of the lights' 96 and that slot.
-- *Status 2026-10-11: ruled, not built. Until it lands, Godview keeps the 40px instrument bar and the search button stands over its right end (PK2 (a)).*
-  **Godview's head — Stories** (One Frame §23, round 3; GV-D1 ruled 2026-10-02; MV-D16 marks only,
-  ruled 2026-10-03; N12 (a) and N13 (a) ruled 2026-10-11): the monitor's views switch in a row of
-  glass circles on the frame's head row (the head, above) — every circle 40 at `top-2`, centred on
-  y 28, 12 apart, **the row centred on the window**. It is the monitor host's chrome, drawn in the
-  frame's language.
+- **Godview's head — Stories** (One Frame §23, round 3; GV-D1 ruled 2026-10-02; MV-D16 marks only,
+  ruled 2026-10-03; N12 (a) and N13 (a) ruled 2026-10-11; built 2026-10-11): the monitor's views
+  switch in a row of glass circles on the frame's head row (the head, above) — every circle 40 at
+  `top-2`, centred on y 28, 12 apart, **the row centred on the window**. It is the monitor host's
+  chrome, drawn in the frame's language. **It wears the frame's theme** — the app's, as the search
+  button beside it does, also where Settings → Terminal → Look holds Godview's own mode (§1.1) —
+  and stands over the terminals' sheet and over Godview's scanlines and vignette: the frame's glass
+  carries neither.
   - **A circle** is the line's glass (§5) with its hairline, the island shadow and the line's
     lift. It holds its view's **mark** from the view's manifest (MV-D6): filled, in a 22 box
-    centred, in secondary ink; primary on the current view and under the pointer. **Marks only**
-    (MV-D16): never a still, never a second running view.
+    centred, in secondary ink; primary on the current view and under the pointer or the focus.
+    **Marks only** (MV-D16): never a still, never a second running view. A view whose manifest
+    draws no mark shows its label's initial, in the label's 12/500.
   - **The current view's ring is the circle's own edge**: 2 in primary ink inside its 40, in
     place of the hairline. Nothing grows, shifts or clips. Under the pointer or the keyboard's
     focus, another circle's edge is 1.5 in tertiary ink. The edge changes in 120ms.
   - **Its name is said under it** while the pointer or the focus is on it: a solid label
     (`--vf-chrome-solid`, FC-D14) 24 tall, 8 under the circle and centred on it, corners 12,
     padded 0 10, ringed by the strong hairline, with the island shadow. The name is 12/500 in
-    primary ink; after it come **the keys the view takes while it is focused**, 11/400 in tertiary
+    primary ink — the view's manifest label, said in sentence case (§9): the instrument's SWARM is
+    said Swarm; 6 after it come **the keys the view takes while it is focused**, 11/400 in tertiary
     ink (M177: this label is where a view's focus keys are said, as the bar's tooltip was). It
     appears in 140ms, 3 down into place, and never covers the next circle's ring. The circles
     have no keys of their own.
@@ -1026,21 +1031,38 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     whole circles**, three at a time, in 320ms on the island curve, with a 28 glass chevron on the
     same axis outside each end that has more. 700ms after the pointer leaves the head it comes
     back to the page that holds the current view.
+    *As built (2026-10-11):* a chevron is the line's glass, 12 from the row, holding `chevron` 12
+    in secondary ink (primary under the pointer); it comes and goes in 160ms, and its place and
+    gap come off the room before the circles are counted. A row that pages clips 10 past each
+    end — under the gap, so no neighbour shows — along the row alone, so the shadows keep their
+    room. A row that shows fewer than three turns by what it shows. A circle the keyboard reaches
+    off the page turns the row to it, and the return never moves a page from under the
+    keyboard's focus.
   - **There is no "Add a view" circle** (N13 (a)): nothing adds a view yet, and a control that
     opens nothing is not drawn. It returns with that flow, last in the row.
   - **The stage runs under the head**, to the window's top. A view keeps its words and controls
     clear of the head's reserve, **56** (the head's foot at 48, plus 8), through the stage's top
     inset (§8 "The monitor view owns its drawing").
+    *As built (2026-10-11):* the reserve is `--vf-godview-head-reserve`. The stage's own chrome —
+    the usage column and the claims strip — begins at it, where it began 11 under the bar. The
+    swarm steers by the stage's obstacles and reads no inset, so the reserve is the first of
+    them, the band across the stage's top: its bodies keep below the head as they kept below the
+    bar. The rain is a picture with no words or controls of its own, and bleeds under the head.
+    The terminals' edge rests where it rested: the monitor's rest height takes up the bar's 40.
   - **Maximized** (GV-D11) nothing of the head stands over the terminals' title bar: the row and
     its chevrons fade in 200ms and take no pointer.
   - **Reduced motion:** the row pages and the label appears at once.
   - **The window still drags by the app's strip** across the head's row; every circle and
     chevron is a control and never drags it.
+  - **A head that fails** says "Monitor views unavailable" where the row stood, in the label's
+    solid in secondary ink, and the stage and its view stay (§8 "The monitor view owns its
+    drawing").
   - **What left with the bar:** the counters (FC-D18) and the ☼◐ switch (FC-D7), hidden since
-    One Frame; the spacer for the window's lights, which the frame's head row already clears; and
+    One Frame; the spacer for the window's lights, which the frame's head row already clears; the
+    bridge notice's slot, empty since the bridge retired; and
     **System control**, now an act in the palette's "On this view" group while the view is
-    Godview, with no key — its panel is §1.1's temporary one, unchanged, and open to whoever
-    could open it before.
+    Godview, with no key and no glyph — its panel is §1.1's temporary one, unchanged, and open to
+    whoever could open it before.
 - **The Me menu** (UA-D19, ratified 2026-09-22 — Where You Sit II, design 2B): the owner's
   face replaces the Settings gear at the bottom-left (`bottom-4 left-4`; Godview stays beside
   it, `hud.panel` above both — *Godview's button retired 2026-10-03, FR-1: its cell in the views
@@ -1929,7 +1951,6 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   shared token sheet defines the easings and the sans. A new shared name changes the contract
   first; a view never copies a curve or reads an undeclared host token.
   Stage insets replace host padding rules, including the timeline's former extra 11px (MV-6).
-  *Status 2026-10-11: ruled, not built. Until it lands, Godview keeps the 40px instrument bar and the search button stands over its right end (PK2 (a)).*
   **The head reads the manifest:** each view supplies its filled mark and its focus keys; the host
   has no view mark table. The declared keys are said in the circle's label, after the view's name
   — ruled 2026-10-07 (James, M177) for the bar's tooltip, and carried to the label when the
@@ -2257,11 +2278,10 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     **With a filter on** (Godview's, GV-D3) the glass grows a token after the circle naming it —
     the desktop's OS mark and name, a hairline, the profile's glyph and name ("studio · Work"), at
     13/500 in primary ink — and a 26 × that clears both: a filtered view never looks unfiltered.
-    *Status 2026-10-11: ruled, not built. Until it lands, Godview keeps the 40px instrument bar and the search button stands over its right end (PK2 (a)).*
     **In Godview** it stands in the same place, on the head's own row: the Stories row (§8
     "Godview's head — Stories") is centred on the window and keeps one head gap (12) from it, also
-    as its glass widens. *(Corrected 2026-10-11: until the Stories head it stood over the
-    instrument bar's right end and hung 8 below the bar's foot, PK2 (a).)*
+    as its glass widens. *(Until the Stories head, built 2026-10-11, it stood over the instrument
+    bar's right end and hung 8 below the bar's foot, PK2 (a).)*
   - *Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12). Not built: the Lip's two buttons, the terminals away and maximized, the edge's new outcomes and where a session opens (GV-D4, GV-D5, GV-D6, GV-D11). Until those land the terminals are always up, and their edge moves as §8's shipped text says.*
     **The button in the terminals' title bar** (GV-D11, ruled 2026-10-02; One Frame §23.1): while
     Godview's terminals are maximized (§8, the deck) the head's circle is not drawn — nothing of

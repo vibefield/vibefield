@@ -240,7 +240,10 @@ It exits 0 only when the repeat passes fresh AND the pool passes.
   - The timezone is UTC and the locale en-US (over CDP).
   - Ambient animations are off and reduced motion is emulated.
 - **How:** it uses the compositor (`capturePage`, which draws the WebGPU swarm). The capture is
-  the monitor's region: the instrument bar, the stage and the view.
+  the monitor's region: the head, the stage under it and the view — the window's full width from
+  its top to the stage's foot. *(Until Godview's head, GV-D1, 2026-10-11, the region's top 40 px
+  were the instrument bar. The stage's foot did not move, so the region is the same rectangle in
+  an arm with the bar and an arm with the head; what is inside its top 56 px differs by design.)*
 - **The A/A control** is A captured twice.
   - A pixel differs past 24/255 on any channel.
   - A capture differs past 0.1 % of its pixels.

@@ -87,16 +87,29 @@ interface HeadRect {
   height: number;
 }
 
+/** Godview's head as drawn (GV-D1 — the Stories row; the instrument bar it
+ * replaced is gone, and System control with it, to the palette), in CSS px:
+ * the frame's search button, the row and its circles, and the stage that runs
+ * under them with its own chrome below the head's reserve. */
 export interface GodviewHeadFacts {
   window: { width: number; height: number };
   search: HeadRect | null;
-  bar: HeadRect | null;
-  systemControl: HeadRect | null;
+  /** the row: as many whole circles as it shows */
   views: HeadRect | null;
-  /** the gap from System control's right edge to the button's left edge */
+  /** every circle of the group, the ones off the page too */
+  circles: (HeadRect | null)[];
+  /** the monitor's stage: its top is the window's since the head */
+  stage: HeadRect | null;
+  /** the stage's own chrome, which begins at the head's reserve (56) */
+  claims: HeadRect | null;
+  usage: HeadRect | null;
+  /** a circle's name, while the pointer or the focus is on one */
+  label: HeadRect | null;
+  /** from the row's right end — its chevron's, while it pages — to the button's left edge */
   gap: number | null;
-  /** how far the button hangs below the bar's foot */
-  overhang: number | null;
+  /** the row's centre against the window's, and its axis against the button's */
+  offCentre: number | null;
+  offAxis: number | null;
 }
 
 const HEAD_FACTS = `(() => {
@@ -106,14 +119,21 @@ const HEAD_FACTS = `(() => {
     return { x: box.x, y: box.y, width: box.width, height: box.height };
   };
   const search = rect(document.querySelector(".vf-peek-find"));
-  const bar = rect(document.querySelector(".vf-godview .vf-godview-header"));
-  const systemControl = rect(document.querySelector('.vf-godview-header [aria-label="System control"]'));
-  const views = rect(document.querySelector('.vf-godview-header [role="group"][aria-label="Monitor view"]'));
+  const group = document.querySelector('.vf-godview .vf-stories [role="group"][aria-label="Monitor view"]');
+  const views = rect(document.querySelector(".vf-godview .vf-stories-row"));
+  const circles = group === null ? [] : [...group.querySelectorAll("button")].map(rect);
+  const chevrons = [...document.querySelectorAll(".vf-godview .vf-stories-chev:not(:disabled)")].map(rect);
+  const stage = rect(document.querySelector(".vf-godview .vf-godview-monitor-stage"));
+  const claims = rect(document.querySelector(".vf-godview .vf-monitor-claims"));
+  const usage = rect(document.querySelector(".vf-godview .vf-monitor-chrome"));
+  const label = rect(document.querySelector(".vf-godview .vf-stories-label"));
+  const right = Math.max(...[views, ...chevrons].filter((box) => box !== null).map((box) => box.x + box.width), -Infinity);
   return {
     window: { width: window.innerWidth, height: window.innerHeight },
-    search, bar, systemControl, views,
-    gap: search && systemControl ? search.x - (systemControl.x + systemControl.width) : null,
-    overhang: search && bar ? search.y + search.height - (bar.y + bar.height) : null,
+    search, views, circles, stage, claims, usage, label,
+    gap: search && Number.isFinite(right) ? search.x - right : null,
+    offCentre: views ? views.x + views.width / 2 - window.innerWidth / 2 : null,
+    offAxis: search && views ? views.y + views.height / 2 - (search.y + search.height / 2) : null,
   };
 })()`;
 
@@ -140,7 +160,7 @@ export function bitmapContent(
 }
 
 /** The monitor's region: the window's full width from its top to the bottom
- * of Godview's monitor stage — the instrument bar, the stage, the view. The
+ * of Godview's monitor stage — the head, the stage under it, the view. The
  * deck below it (a terminal's blinking cursor) and the composer's animated
  * avatar are not the views', and the first A/A trial read exactly them. */
 const MONITOR_REGION = `(() => {

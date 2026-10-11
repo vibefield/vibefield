@@ -61,7 +61,10 @@ The catalog currently mounts these shipping views directly:
 - Artifact Hub and all empty/loading/populated/unavailable states — in the right edge's drawer
   since One Frame FR-4, where the side panel's contents now live
 - Godview stage, monitor registry, tuning panel, unavailable terminal deck, and the complete
-  swarm-circle state matrix
+  swarm-circle state matrix — and, since GV-D1 (2026-10-11), Godview's head: the shipping
+  `GodviewHeadView`, which the shipping monitor mounts, so every Godview specimen wears it and no
+  catalog module names it. The stage specimen stages the catalog's own button for the System
+  control panel, which the product reaches from the palette
 - the command palette (re-cut by One Frame FR-3: the frame's acts and the plugins' commands, each
   key at its row's end), settings dialog and loading veil (the side-panel frame retired into the
   right edge's drawer, FR-4)
@@ -158,18 +161,23 @@ replaces the data source, never the view or host markup. `SwarmBodiesPreview` mo
 `swarmMonitorView` over SDK fixtures to show the state matrix. The view owns its physics worker,
 canvas, accessibility and lifecycle; field-app no longer supplies a physics context or circle CSS.
 Each view's sheet is scoped to `.mv-<id>` and reads only its own custom properties and the finite
-SDK `MONITOR_SKIN` (DESIGN §8). Host CSS names no view class. The bar reads marks and focus keys
-from manifests. Every host chrome piece has its own `ChromeBoundary` — the bar, Find, usage, the
+SDK `MONITOR_SKIN` (DESIGN §8). Host CSS names no view class. The head reads marks and focus keys
+from manifests (`godview/GodviewHeadView.tsx`, its sheet beside it; DESIGN §8 "Godview's head —
+Stories"). Every host chrome piece has its own `ChromeBoundary` — the head, usage, the
 profile notice and the claims in `GodviewMonitor`; System control and the deck in `GodviewOverlay`;
 the deck's edge in `GodviewStage`; each pane's frame, the frames and the launchers in `GodviewDeck` —
 so a throw names that piece unavailable where it stood without unmounting the monitor or its view,
 and each is tried again only for a fact it reads (its `retryKey`), at most once per window: 1 s,
-doubling to 30 s while it keeps failing (Find's key is the agents it searches). The bar and the
+doubling to 30 s while it keeps failing. The head and the
 profile notice have no `retryKey`, as they read only the window's own state: they are not tried
 again until the monitor remounts (M192). The `godview-monitor`,
 `godview-overlay-boundaries` and `godview-deck-frames` tests hold each piece, on a held clock
 (`chrome-clock-fixture.ts`). *(Made true 2026-10-07, MV-8b: the deck, System control and the
-claims had no boundary before. The window: 2026-10-08, the package's boundary since M179.)*
+claims had no boundary before. The window: 2026-10-08, the package's boundary since M179.
+Corrected 2026-10-11, GV-D1: this paragraph said "the bar" where it says the head — the views
+package's instrument bar left VibeField for the head that day — and still listed Find, whose
+sheet left at P2, 2026-10-09. System control's toggle went with the bar to the palette, through
+`frame/system-control-door.ts`; its panel and its boundary are where they were.)*
 Agent/profile glyphs and shared mark data come from the SDK's `/react` and `/toolkit`.
 
 When a staged view or content token lives in another workspace package, the catalog composes it
