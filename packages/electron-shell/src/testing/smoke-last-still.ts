@@ -32,6 +32,17 @@
 //                 ONCE; B writes nothing back;
 //   MEMORY      — the app's memory (every process's working set, summed) with no page, one laptop page alive, six, and six
 //                 alive beside fourteen at rest — said in the row.
+// PT-5b2 (what PT-5b's grade found, rulings 2 and 9):
+//   SWEEP       — a pane with a still, at rest, DELETED under the pool's own long grace, and the window reloaded inside it
+//                 (STILL's reload): the reload took the grace's timer with it, so the still is gone from the shelf because
+//                 the board's open SWEPT it — and the panes that stand keep their own;
+//   STILL, its ground held to THE LAW — the photograph's ground is the live page's at the law's dim (`display.still`: 0.7
+//                 of its light), each channel within a tolerance: a still through the wrong transfer curve does not pass
+//                 (REST's too: the page as it was put to rest);
+//   EVICTED     — three LARGE panes seen (their textures fill the desk's budget to within a laptop's face) and one more pane
+//                 out of view, its page ALIVE and quiet: the budget's eviction takes the unseen pane's texture (the one
+//                 the kind does not keep) and its page stays alive, paused; seen again, the pane shows its page's own
+//                 frame again within a bound — said with what it wore meanwhile, each frame — and no rest mark.
 // Then the panes are removed and the board is as found. `--last-still` beside `--smoke-canvas` runs these rows alone after
 // the boot's (the author's loop).
 
@@ -74,6 +85,16 @@ export const STILL_ROWS = {
   noticeMax: 2_000_000,
   /** MEMORY: the panes laid, the cap they end under, the most alive while their stills are made, the settle before a read */
   memory: { panes: 20, alive: 6, making: 10, settleMs: 2_500 },
+  /** PT-5b2 — THE LAW a photograph is drawn by (the pane's own, said again here: plugins/browser-pane/src/law.ts
+   * `display.still`): this share of its PAGE's light, under the pane's own light (what the desk's lamp adds on its glass is
+   * not the page's, and is not dimmed); and how far a channel of its ground may read from the live page's ground so dimmed */
+  law: { dim: 0.7, within: 4 },
+  /** PT-5b2 — SWEEP: the grace the pane is deleted under is at least this (the pool's own is a minute) */
+  sweep: { minGraceMs: 30_000 },
+  /** PT-5b2 — EVICTED: the large panes (so many, each a page of 2560 × 1600 — at the Mac's density a texture of 87 MB),
+   * how far from them the pane is laid (world units: out of their view), and how long after it is seen again (its ask
+   * live) its page's own frame may take */
+  evicted: { fill: 3, big: { w: 1370.08, h: 881.89 }, away: 9_000, withinMs: 3_000 },
 } as const;
 
 /** The fixture ground's hue angle (degrees). */
@@ -111,6 +132,8 @@ export interface PageSeen {
   /** its light-grey pixels (a notice's ink; a page's white), and the mean light of its ground's (the hue's) pixels */
   readonly ink: number;
   readonly hueLuma: number;
+  /** PT-5b2 — its ground's (the hue's) pixels' mean colour, a channel each (0s: none) */
+  readonly ground: readonly [number, number, number];
 }
 
 /** A face's row as these rows read it. */
@@ -257,8 +280,32 @@ export interface LastStillSeen {
       readonly leastHue: number;
       readonly face: FaceSeen | null;
       readonly mark: boolean;
+      /** PT-5b2 — the page's area once the page is live (the same pane, the same view as `shown.page`) */
+      readonly page: PageSeen | null;
     };
   };
+  /** PT-5b2 (ruling 2) — SWEEP, across STILL's reload. */
+  readonly sweep: {
+    /** the grace in force when the pane was deleted; how long after its delete the window was reloaded */
+    readonly graceMs: number | null;
+    readonly reloadedAfterMs: number;
+    /** the deleted pane: at rest when it was deleted; its still before its delete, at the reload (there yet: its grace
+     * had not run out) and after it; whether the document holds the pane after the reload; how long after its delete the
+     * shelf was last read */
+    readonly gone: {
+      readonly rested: boolean;
+      readonly before: StillSaid | null;
+      readonly atReload: StillSaid | null;
+      readonly after: StillSaid | null;
+      readonly stands: boolean;
+      readonly readAfterMs: number;
+    };
+    /** the panes that stand: each one's still before the reload and after it */
+    readonly kept: readonly {
+      readonly before: StillSaid | null;
+      readonly after: StillSaid | null;
+    }[];
+  } | null;
   readonly underWords: {
     /** the page's process killed; its face then, its head's rest mark, its page's area; the photograph's ground before */
     readonly killed: boolean;
@@ -301,6 +348,34 @@ export interface LastStillSeen {
     /** the most pages main held at once while the stills were made */
     readonly peak: number;
   } | null;
+  /** PT-5b2 (ruling 9) — EVICTED: three large panes and one more, its page alive and quiet. */
+  readonly evicted: {
+    /** seen, alone in the view: its face (the page's own frame in its texture), its still on the shelf */
+    readonly seen: FaceSeen | null;
+    readonly still: StillSaid | null;
+    /** the large panes seen, the pane out of view: the large faces alive and their textures' bytes; the pane's face — no
+     * texture: the budget's eviction — main's pages at its address, the service's evictions counted meanwhile, and the
+     * budget then (what is charged, its cap) */
+    readonly unseen: {
+      readonly fill: { readonly alive: number; readonly bytes: number };
+      readonly face: FaceSeen | null;
+      readonly pages: number;
+      readonly evictions: number;
+      readonly used: number | null;
+      readonly cap: number | null;
+    };
+    /** seen again: the face each frame as runs from its live ask ("S14 L60" — F the film, S its still, L the page's own
+     * frame), how long from that ask to the page's own frame (null: none came), frames of its page landed since; its
+     * face then, its head's rest mark, its page's area */
+    readonly again: {
+      readonly runs: string;
+      readonly ms: number | null;
+      readonly frames: number;
+      readonly face: FaceSeen | null;
+      readonly mark: boolean;
+      readonly page: PageSeen | null;
+    };
+  } | null;
 }
 
 const share = (n: number, of: number): number => (of === 0 ? 0 : n / of);
@@ -317,6 +392,48 @@ function shown(row: string, what: string, page: PageSeen | null): string[] {
   if (share(page.film, page.px) > STILL_ROWS.shown.film)
     out.push(`${row}: ${what} is ${pct(page.film, page.px)} film — the pane shows its dark film`);
   return out;
+}
+
+const lightOf = (byte: number): number => {
+  const c = byte / 255;
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+};
+const byteOf = (light: number): number =>
+  255 * (light <= 0.0031308 ? 12.92 * light : 1.055 * light ** (1 / 2.4) - 0.055);
+/**
+ * A live page's ground as its PHOTOGRAPH reads by the law (to a tenth, a channel each): the PAGE's light at `dim` — the
+ * light the page's own colour gives is known (`page`: the fixture's ground), so what the live reading holds beyond it is
+ * the pane's own (the lamp on its glass), and stays.
+ */
+export const dimmed = (
+  live: readonly [number, number, number],
+  page: readonly [number, number, number] = [FIXTURE_HUE.r, FIXTURE_HUE.g, FIXTURE_HUE.b],
+  dim: number = STILL_ROWS.law.dim,
+): [number, number, number] => {
+  const at = (v: number, own: number): number =>
+    Math.round(byteOf(Math.max(0, lightOf(v) - (1 - dim) * lightOf(own))) * 10) / 10;
+  return [at(live[0], page[0]), at(live[1], page[1]), at(live[2], page[2])];
+};
+const rgb = (c: readonly [number, number, number]): string => `rgb(${c.join(", ")})`;
+
+/** PT-5b2 — is a photograph's ground the live page's AT THE LAW'S DIM, each channel within the tolerance? (A page's area
+ * with none of the ground in it is said by the row's own "is it shown".) */
+function toTheLaw(
+  row: string,
+  what: string,
+  still: PageSeen | null,
+  live: PageSeen | null,
+): string[] {
+  if (still === null || still.hue === 0) return [];
+  if (live === null || live.hue === 0)
+    return [`${row}: the live page's ground was not read — ${what}'s was held to nothing`];
+  const want = dimmed(live.ground);
+  const off = Math.max(...want.map((v, i) => Math.abs(v - (still.ground[i] ?? 0))));
+  return off <= STILL_ROWS.law.within
+    ? []
+    : [
+        `${row}: ${what}'s ground reads ${rgb(still.ground)} where the live page's ${rgb(live.ground)} at the law's dim (${STILL_ROWS.law.dim} of the page's light) is ${rgb(want)} — ${Math.round(off * 10) / 10} off on a channel, past the ${STILL_ROWS.law.within} the row allows: the photograph is not drawn at the law's dim`,
+      ];
 }
 
 /** REST: two alive under the cap, the third on its still; picked up, it comes alive and another rests — its still first. */
@@ -370,6 +487,7 @@ export function judgeRest(seen: LastStillSeen["rest"]): string[] {
       out.push(
         `REST: the still's brightest pixel is ${seen.third.page.lumaMax} against the live page's ${seen.third.alive.lumaMax} — a still is not drawn dimmer than its page`,
       );
+    out.push(...toTheLaw("REST", "the pane at rest", seen.third.page, seen.third.alive));
   } else if (seen.third.alive === null)
     out.push("REST: the pane's page was not read while it was alive");
   const picked = seen.picked.face;
@@ -582,6 +700,97 @@ export function judgeStill(seen: LastStillSeen["still"]): string[] {
       `STILL: after the hand-over the pane is ${after?.state ?? "gone"} (still ${after !== null && after.still !== null}, ${after?.presented ?? 0} frames) — the page did not replace its still`,
     );
   if (seen.handOver.mark) out.push("STILL: the head of the live page still carries the rest mark");
+  // PT-5b2 (ruling 9): the photograph off the shelf, held to the live page that replaced it
+  out.push(...toTheLaw("STILL", "the still", seen.shown.page, seen.handOver.page));
+  return out;
+}
+
+/** PT-5b2 — SWEEP: a pane deleted and the window reloaded inside its grace — its still is gone after, the standing keep theirs. */
+export function judgeSweep(seen: LastStillSeen["sweep"]): string[] {
+  if (seen === null) return ["SWEEP: the row did not run"];
+  const out: string[] = [];
+  const g = seen.gone;
+  if (seen.graceMs === null || seen.graceMs < STILL_ROWS.sweep.minGraceMs)
+    out.push(
+      `SWEEP: the pane was deleted under a grace of ${seen.graceMs} ms, not the pool's own long one (at least ${STILL_ROWS.sweep.minGraceMs}) — the row proved nothing`,
+    );
+  else if (seen.reloadedAfterMs >= seen.graceMs)
+    out.push(
+      `SWEEP: the window was reloaded ${seen.reloadedAfterMs} ms after the delete — past its ${seen.graceMs} ms grace: the row proved nothing`,
+    );
+  if (!g.rested)
+    out.push("SWEEP: the pane was not at rest when it was deleted — a page of it was left in main");
+  if (g.before === null)
+    out.push("SWEEP: the pane had no still before its delete — the row proved nothing");
+  else if (g.atReload === null)
+    out.push(
+      "SWEEP: the deleted pane's still was gone BEFORE the reload — forgotten by its grace, not swept: the row proved nothing",
+    );
+  if (g.stands)
+    out.push(
+      "SWEEP: after the reload the document holds the deleted pane — its delete was not saved: the row proved nothing",
+    );
+  if (g.after !== null)
+    out.push(
+      `SWEEP: ${g.readAfterMs} ms after its delete — the window reloaded ${seen.reloadedAfterMs} ms after it, inside its ${seen.graceMs} ms grace — the deleted pane's still is on the shelf yet: the reload took the grace's timer, and nothing swept it`,
+    );
+  if (seen.kept.length === 0)
+    out.push("SWEEP: no pane stood across the reload — the row proved nothing");
+  seen.kept.forEach((k, i) => {
+    if (k.before === null)
+      out.push(
+        `SWEEP: standing pane ${i + 1} had no still before the reload — the row proved nothing`,
+      );
+    else if (k.after === null)
+      out.push(
+        `SWEEP: standing pane ${i + 1} lost its still at the reload — the sweep took a still whose pane stands`,
+      );
+    else if (k.after.takenAt < k.before.takenAt)
+      out.push(`SWEEP: standing pane ${i + 1}'s still after the reload is an older one`);
+  });
+  return out;
+}
+
+/** PT-5b2 — EVICTED: an unseen face whose page is alive loses its texture to the budget; seen again, it shows its page again. */
+export function judgeEvicted(seen: LastStillSeen["evicted"]): string[] {
+  if (seen === null) return ["EVICTED: the row did not run"];
+  const out: string[] = [];
+  const was = seen.seen;
+  if (was === null || !was.alive || was.state !== "live" || was.still !== null || was.bytes === 0)
+    out.push(
+      `EVICTED: seen, the pane was ${was?.state ?? "without a face"} (alive ${was?.alive ?? false}, still ${was !== null && was.still !== null}, ${was?.bytes ?? 0} bytes) — not its page's own frame: the row proved nothing`,
+    );
+  if (seen.still === null)
+    out.push(
+      "EVICTED: the pane had no still on the shelf — what it would wear was not there: the row proved nothing",
+    );
+  const u = seen.unseen;
+  if (u.face === null) out.push("EVICTED: out of view the pane has no face");
+  else if (u.face.bytes !== 0 || u.evictions < 1)
+    out.push(
+      `EVICTED: out of view the pane holds ${u.face.bytes} bytes and ${u.evictions} textures were evicted (the budget: ${u.used} charged of ${u.cap}; ${u.fill.alive} large panes alive on ${u.fill.bytes} bytes) — the budget evicted nothing of it: the row proved nothing`,
+    );
+  else if (!u.face.alive || u.face.rested || u.pages !== 1 || u.face.ask !== "paused")
+    out.push(
+      `EVICTED: evicted, the pane's page is alive ${u.face.alive}, rested ${u.face.rested}, asked ${u.face.ask}, with ${u.pages} pages in main — not an unseen face whose page is ALIVE: the row proved nothing`,
+    );
+  const a = seen.again;
+  if (a.ms === null)
+    out.push(
+      `EVICTED: seen again, the pane never showed its page's own frame (${a.runs === "" ? "no frame read" : a.runs}; ${a.frames} frames of its page landed) — its page is alive and the pane wears ${a.face !== null && a.face.still !== null ? "its still" : "its film"} for good`,
+    );
+  else if (a.ms > STILL_ROWS.evicted.withinMs)
+    out.push(
+      `EVICTED: seen again, the page's own frame took ${a.ms} ms (${a.runs}) — past ${STILL_ROWS.evicted.withinMs}`,
+    );
+  const f = a.face;
+  if (f === null || f.state !== "live" || f.still !== null || f.bytes === 0 || !f.alive)
+    out.push(
+      `EVICTED: seen again, the pane is ${f?.state ?? "without a face"} (still ${f !== null && f.still !== null}, ${f?.bytes ?? 0} bytes) — not its page alive in its texture`,
+    );
+  if (a.mark)
+    out.push("EVICTED: seen again, the pane's head carries the rest mark — its page is alive");
+  out.push(...shown("EVICTED", "the page's area of the pane seen again", a.page));
   return out;
 }
 
@@ -751,14 +960,15 @@ export const PAGE_PIXELS = (rect: {
   const c = new OffscreenCanvas(w, h); const x = c.getContext("2d"); x.drawImage(shot, 0, 0, w, h); shot.close();
   const b = x.getImageData(0, 0, w, h).data;
   const classify = ${STILL_CLASSIFY};
-  let hue = 0, film = 0, ink = 0, hi = 0, sum = 0;
+  let hue = 0, film = 0, ink = 0, hi = 0, sum = 0, gr = 0, gg = 0, gb = 0;
   for (let i = 0; i < b.length; i += 4) {
     const k = classify(b[i], b[i + 1], b[i + 2]);
     const l = 0.2126 * b[i] + 0.7152 * b[i + 1] + 0.0722 * b[i + 2];
-    if (k === 1) { hue += 1; sum += l; } else if (k === 2) film += 1; else if (k === 3) ink += 1;
+    if (k === 1) { hue += 1; sum += l; gr += b[i]; gg += b[i + 1]; gb += b[i + 2]; } else if (k === 2) film += 1; else if (k === 3) ink += 1;
     if (l > hi) hi = l;
   }
-  return { px: w * h, hue, film, lumaMax: Math.round(hi), ink, hueLuma: hue === 0 ? 0 : Math.round((sum / hue) * 10) / 10 };
+  const mean = (n) => (hue === 0 ? 0 : Math.round((n / hue) * 10) / 10);
+  return { px: w * h, hue, film, lumaMax: Math.round(hi), ink, hueLuma: mean(sum), ground: [mean(gr), mean(gg), mean(gb)] };
 })()`;
 
 /** The hand-over's sampler: each frame, the face's texture as the pane draws it — F the film (none, or hidden), S its
@@ -778,6 +988,41 @@ const SAMPLER = (key: string): string => `(() => {
   requestAnimationFrame(tick);
   return true;
 })()`;
+
+/** PT-5b2 — EVICTED's watcher: each frame from now, what the face wears (as the hand-over's sampler reads it), what its
+ * pane asks, and when. */
+const WATCH = (key: string): string => `(() => {
+  const s = { kinds: [], asks: [], at: [], on: true };
+  globalThis.__pt5b2Evicted = s;
+  const tick = (t) => {
+    if (!s.on) return;
+    const f = (globalThis.__vfDesk?.live()?.faces ?? []).find((x) => x.key === ${JSON.stringify(key)});
+    s.kinds.push(f === undefined ? "-" : f.texture === undefined || f.veiled ? "F" : f.still !== null ? "S" : "L");
+    s.asks.push(f?.demand?.mode ?? "none");
+    s.at.push(t);
+    if (s.kinds.length < 3000) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  return true;
+})()`;
+
+/**
+ * What the watcher saw, read: from the frame the pane's ask is `live` again, the face as runs, and how long until the
+ * page's own frame (null: none came).
+ */
+export function seenAgain(log: {
+  readonly kinds: readonly string[];
+  readonly asks: readonly string[];
+  readonly at: readonly number[];
+}): { readonly runs: string; readonly ms: number | null } {
+  const from = log.asks.indexOf("live");
+  if (from < 0) return { runs: "", ms: null };
+  const to = log.kinds.indexOf("L", from);
+  return {
+    runs: runsOf(log.kinds.slice(from)),
+    ms: to < 0 ? null : Math.round((log.at[to] ?? 0) - (log.at[from] ?? 0)),
+  };
+}
 
 /**
  * The PAGE of a pane at rest on the desk (desk CSS px), from its world rect through the camera: inside the clear border,
@@ -932,11 +1177,17 @@ export async function lastStillRows(d: LastStillDriver): Promise<string[]> {
     writeFileSync(join(d.shotDir, name), (await w.capturePage()).toPNG());
   };
   /** A pane laid at a world point, pointed at its own address of the fixture; its key once the document names it. */
-  const lay = async (q: string, x: number, y: number, path = "/gate?p="): Promise<Pane> => {
+  const lay = async (
+    q: string,
+    x: number,
+    y: number,
+    path = "/gate?p=",
+    size: { readonly w: number; readonly h: number } = STILL_ROWS.laid,
+  ): Promise<Pane> => {
     const address = `${origin}${path}${q}`;
     const e = Number(
       await js<string>(
-        `globalThis.__vfFieldSmoke.spawnWidget(${JSON.stringify(PANE.type)}, { x: ${x}, y: ${y}, w: ${STILL_ROWS.laid.w}, h: ${STILL_ROWS.laid.h}, props: { url: ${JSON.stringify(address)} } })`,
+        `globalThis.__vfFieldSmoke.spawnWidget(${JSON.stringify(PANE.type)}, { x: ${x}, y: ${y}, w: ${size.w}, h: ${size.h}, props: { url: ${JSON.stringify(address)} } })`,
       ),
     );
     const key = await waitFor(
@@ -1288,6 +1539,44 @@ export async function lastStillRows(d: LastStillDriver): Promise<string[]> {
     await js("globalThis.__vfDesk.liveGrace(null)");
     const left = panes.filter((p) => p !== gonePane);
 
+    // ── SWEEP, its first half (PT-5b2): a pane with a still, AT REST, deleted under the pool's own long grace ──────────
+    const graceNow = await js<number | null>("globalThis.__vfDesk.liveGrace()");
+    await cap(3);
+    const swept = await lay("x", x0, y0 + 2_600);
+    await frame([...left, swept]);
+    await waitFor(
+      "pane x live",
+      STILL_ROWS.withinMs,
+      () => face(swept),
+      (f) => f !== null && f.state === "live" && f.presented >= 1,
+    );
+    const sweptBefore = await waitFor(
+      "pane x's still",
+      15_000,
+      () => stillOf(swept),
+      (st) => st !== null,
+    );
+    // out of view under a cap of 2 it is the one put to rest (the unseen first): no page of it is left in main, and its
+    // delete is the document's (the smoke's door — FORGOT deletes by the person's key)
+    await frame(left);
+    await cap(STILL_ROWS.cap);
+    const sweptRest = await waitFor(
+      "pane x at rest, its page gone from main",
+      STILL_ROWS.withinMs,
+      async () => ({ f: await face(swept), pages: pagesAt(swept).length }),
+      (v) => v.f?.rested === true && v.pages === 0,
+    );
+    await settled();
+    const sweptRested = sweptRest.f?.rested === true && sweptRest.pages === 0;
+    await remove(swept);
+    const sweptAt = Date.now();
+    await waitFor(
+      "pane x gone from the board",
+      5_000,
+      async () => (await rowsNow()).some((r) => r.key === swept.key),
+      (there) => !there,
+    );
+
     // ── STILL, its second half: the put-down pane at rest, the window RELOADED with the gate shut ─────────────────────
     await frame(left);
     // the put-down pane is the one at rest: the other is picked up and put down (it is the most recently seen), the cap 1
@@ -1310,6 +1599,10 @@ export async function lastStillRows(d: LastStillDriver): Promise<string[]> {
       (n) => n === 0,
     );
     await settled();
+    // (SWEEP: the shelf as the reload finds it — the deleted pane's still there yet, its grace not run out)
+    const standingBefore = await Promise.all(left.map((p) => stillOf(p)));
+    const sweptAtReload = await stillOf(swept);
+    const reloadedAfterMs = Date.now() - sweptAt;
     d.fixture.gate(false);
     const gatedWas = d.fixture.gated();
     const reloading = d.reload();
@@ -1379,12 +1672,38 @@ export async function lastStillRows(d: LastStillDriver): Promise<string[]> {
         leastHue: captures.length === 0 ? 0 : Math.min(...captures.map((c) => share(c.hue, c.px))),
         face: await face(third),
         mark: await markOf(third),
+        page: await pageOf(third),
       },
     };
     said.still = still;
     said.gate = { before: gatedWas, after: d.fixture.gated() };
     problems.push(...judgeStill(still));
     await shoot("pt-5b-still-after-hand-over.png");
+
+    // ── SWEEP, its second half (PT-5b2): the board's open swept the deleted pane's still; the standing keep theirs ────
+    const sweptAfter = await waitFor(
+      "the deleted pane's still swept from the shelf",
+      10_000,
+      () => stillOf(swept),
+      (st) => st === null,
+    );
+    const sweep: LastStillSeen["sweep"] = {
+      graceMs: graceNow,
+      reloadedAfterMs,
+      gone: {
+        rested: sweptRested,
+        before: sweptBefore,
+        atReload: sweptAtReload,
+        after: sweptAfter,
+        stands: (await rowsNow()).some((r) => r.key === swept.key),
+        readAfterMs: Date.now() - sweptAt,
+      },
+      kept: await Promise.all(
+        left.map(async (p, i) => ({ before: standingBefore[i] ?? null, after: await stillOf(p) })),
+      ),
+    };
+    said.sweep = sweep;
+    problems.push(...judgeSweep(sweep));
 
     // ── UNDER-WORDS: the page's process killed — "This page stopped" over its still, dimmed further; ↻ loads it again ──
     try {
@@ -1463,8 +1782,18 @@ export async function lastStillRows(d: LastStillDriver): Promise<string[]> {
       problems.push(`TWO-WINDOWS: ${error instanceof Error ? error.message : String(error)}`);
     }
 
-    // ── MEMORY: no page, one, six, six beside fourteen at rest ───────────────────────────────────────────────────────
     for (const p of left) await remove(p);
+
+    // ── EVICTED (PT-5b2): three large panes seen, one more out of view — its page alive, its texture the budget's ─────
+    try {
+      const evicted = await evictedRows(x0, y0 - 8_000);
+      said.evicted = evicted;
+      problems.push(...judgeEvicted(evicted));
+    } catch (error) {
+      problems.push(`EVICTED: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    // ── MEMORY: no page, one, six, six beside fourteen at rest ───────────────────────────────────────────────────────
     try {
       const memory = await memoryRows(x0, y0 + STILL_ROWS.laid.h + 1200);
       said.memory = memory;
@@ -1746,6 +2075,115 @@ export async function lastStillRows(d: LastStillDriver): Promise<string[]> {
       };
     } finally {
       clearInterval(watch);
+    }
+  }
+
+  /**
+   * EVICTED (PT-5b2, ruling 9): one pane on a quiet page, SEEN alone — its page alive, its own frame in its texture, its
+   * still on the shelf. Then three LARGE panes seen and the pane out of view: their textures take the budget past its room
+   * with the pane's, the kind keeps what is seen, and the pane's texture is the one evicted — its page alive yet, paused.
+   * Then the pane SEEN AGAIN, watched each frame until its page's own frame. The panes are removed after.
+   */
+  async function evictedRows(x: number, y: number): Promise<LastStillSeen["evicted"]> {
+    const { fill: count, big, away } = STILL_ROWS.evicted;
+    // no page of the rows before is left in main, and the cap is the desk's own
+    await js("globalThis.__vfDesk.liveGrace(300)");
+    await waitFor(
+      "no page left in main",
+      20_000,
+      () => d.pages(origin).length,
+      (n) => n === 0,
+    );
+    await js("globalThis.__vfDesk.liveGrace(null)");
+    await cap(6);
+    const pane = await lay("e", x, y - away, "/page?ev=");
+    const fill: Pane[] = [];
+    for (let i = 0; i < count; i += 1)
+      fill.push(await lay(`f${i}`, x + i * (big.w + STILL_ROWS.gap), y, "/page?ef=", big));
+    try {
+      await frame([pane]);
+      const seenFace = await waitFor(
+        "the pane alive, its page's own frame in its texture",
+        STILL_ROWS.withinMs,
+        () => face(pane),
+        (f) =>
+          f !== null &&
+          f.state === "live" &&
+          f.alive &&
+          f.still === null &&
+          f.bytes > 0 &&
+          f.presented >= 1,
+      );
+      const kept = await waitFor(
+        "the pane's still on the shelf",
+        15_000,
+        () => stillOf(pane),
+        (st) => st !== null,
+      );
+      await settled();
+      const evictionsWas = (await stats()).evictions ?? 0;
+      const presentedWas = (await face(pane))?.presented ?? 0;
+      // the large panes seen, the pane out of view: past its room, the budget evicts what the kind does not keep
+      await frame(fill);
+      for (const p of fill)
+        await waitFor(
+          `large pane ${p.q} live`,
+          STILL_ROWS.withinMs,
+          () => face(p),
+          (f) => f !== null && f.state === "live" && f.bytes > 0,
+        );
+      await waitFor(
+        "the unseen pane's texture evicted",
+        15_000,
+        () => face(pane),
+        (f) => f !== null && f.bytes === 0 && f.ask === "paused",
+      );
+      await sleep(600);
+      const budget = await js<{ used?: number; cap?: number } | null>(
+        "globalThis.__vfDesk.budget()",
+      );
+      const fillFaces = await Promise.all(fill.map((p) => face(p)));
+      const unseen = {
+        fill: {
+          alive: fillFaces.filter((f) => f?.alive === true).length,
+          bytes: fillFaces.reduce((sum, f) => sum + (f?.bytes ?? 0), 0),
+        },
+        face: await face(pane),
+        pages: pagesAt(pane).length,
+        evictions: ((await stats()).evictions ?? 0) - evictionsWas,
+        used: budget?.used ?? null,
+        cap: budget?.cap ?? null,
+      };
+      await shoot("pt-5b2-evicted-out-of-view.png");
+      // seen again: each frame from here, what its face wears
+      await js(WATCH(pane.key));
+      await frame([pane]);
+      await waitFor(
+        "the page's own frame in the pane seen again",
+        STILL_ROWS.withinMs,
+        () => face(pane),
+        (f) => f !== null && f.still === null && f.bytes > 0,
+      );
+      await sleep(400);
+      const log = await js<{ kinds: string[]; asks: string[]; at: number[] }>(
+        "(() => { const s = globalThis.__pt5b2Evicted; s.on = false; return { kinds: s.kinds, asks: s.asks, at: s.at }; })()",
+      );
+      const againFace = await face(pane);
+      await shoot("pt-5b2-evicted-seen-again.png");
+      return {
+        seen: seenFace,
+        still: kept,
+        unseen,
+        again: {
+          ...seenAgain(log),
+          frames: (againFace?.presented ?? 0) - presentedWas,
+          face: againFace,
+          mark: await markOf(pane),
+          page: await pageOf(pane),
+        },
+      };
+    } finally {
+      for (const p of [...fill, pane]) await remove(p).catch(() => undefined);
     }
   }
 }

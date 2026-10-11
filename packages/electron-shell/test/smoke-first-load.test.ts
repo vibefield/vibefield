@@ -35,6 +35,7 @@ const WORDS: PageSeen = {
   lumaMax: 234,
   ink: 7_329,
   hueLuma: 0,
+  ground: [0, 0, 0],
 };
 
 const REDIRECT: FirstLoadSeen["redirect"] = {

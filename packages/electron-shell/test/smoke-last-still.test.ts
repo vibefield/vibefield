@@ -3,19 +3,23 @@
  * REST, HELD-NEVER, SILENT, BUDGET, FORGOT, STILL, TWO-WINDOWS and MEMORY — each passing what the product should do and
  * failing, in words with its numbers, what it should not; the still's pixel classifier (the fixture's ground at the page's
  * own light and at a photograph's dimmer one, the film, anything else); a pane's page at rest through the camera; and the
- * hand-over's frames read as runs.
+ * hand-over's frames read as runs. PT-5b2: SWEEP and EVICTED; a photograph's ground held to the live page's at THE LAW'S DIM
+ * (REST, STILL — a still through the wrong transfer curve does not pass); what EVICTED's watcher saw, read.
  */
 import { describe, expect, it } from "vitest";
 import { FIXTURE_HUE } from "../src/testing/live-fixture";
 import {
+  dimmed,
   type FaceSeen,
   judgeBudget,
+  judgeEvicted,
   judgeForgot,
   judgeHeldNever,
   judgeMemory,
   judgeRest,
   judgeSilent,
   judgeStill,
+  judgeSweep,
   judgeTwoWindows,
   judgeUnderWords,
   type LastStillSeen,
@@ -26,6 +30,7 @@ import {
   STILL_HUE_DEG,
   STILL_ROWS,
   type StillSaid,
+  seenAgain,
 } from "../src/testing/smoke-last-still";
 
 const ORIGIN = "http://127.0.0.1:60348";
@@ -68,8 +73,11 @@ const PAGE: PageSeen = {
   lumaMax: 255,
   ink: 9_000,
   hueLuma: 104.2,
+  // (the fixture's ground under the desk's lamp, as a green run read it)
+  ground: [46.6, 116.3, 218.1],
 };
-const DIM: PageSeen = { ...PAGE, lumaMax: 220, hueLuma: 89.6 };
+/** The page as its photograph (a green run's reading: the law's dim of the page's light, within a level or two). */
+const DIM: PageSeen = { ...PAGE, lumaMax: 220, hueLuma: 89.6, ground: [43.5, 101.3, 186.9] };
 /** A page's area read back, the rest as the fixture's own. */
 const area = (over: Partial<PageSeen>): PageSeen => ({ ...PAGE, ...over });
 
@@ -128,6 +136,17 @@ describe("the last still and the many — its rows", () => {
     // a still drawn at the page's own light: passed off as the page
     expect(judgeRest({ ...rest, third: { ...rest.third, page: PAGE } })).toEqual([
       "REST: the still's brightest pixel is 255 against the live page's 255 — a still is not drawn dimmer than its page",
+      "REST: the pane at rest's ground reads rgb(46.6, 116.3, 218.1) where the live page's rgb(46.6, 116.3, 218.1) at the law's dim (0.7 of the page's light) is rgb(43.1, 100.2, 186.8) — 31.3 off on a channel, past the 4 the row allows: the photograph is not drawn at the law's dim",
+    ]);
+    // PT-5b2 — a still through the WRONG TRANSFER CURVE: the fixture's hue yet, and dimmer than its page (all the row held
+    // it to before) — not the page's ground at the law's dim
+    expect(
+      judgeRest({
+        ...rest,
+        third: { ...rest.third, page: { ...DIM, hueLuma: 55.6, ground: [12.1, 61.5, 152.3] } },
+      }),
+    ).toEqual([
+      "REST: the pane at rest's ground reads rgb(12.1, 61.5, 152.3) where the live page's rgb(46.6, 116.3, 218.1) at the law's dim (0.7 of the page's light) is rgb(43.1, 100.2, 186.8) — 38.7 off on a channel, past the 4 the row allows: the photograph is not drawn at the law's dim",
     ]);
     // the rest hibernated its page WITHOUT taking its still first: the shelf's is the old one
     expect(judgeRest({ ...rest, picked: { ...rest.picked, after: stillAt("c", 1_030) } })).toEqual([
@@ -374,6 +393,7 @@ describe("the last still and the many — its rows", () => {
         leastHue: 0.74,
         face: { ...LIVE, presented: 2 },
         mark: false,
+        page: PAGE,
       },
     };
     expect(judgeStill(seen)).toEqual([]);
@@ -400,6 +420,18 @@ describe("the last still and the many — its rows", () => {
       "STILL: the page's area before the page's first frame is 0.0% the fixture's hue, not 40% — the page is not drawn there",
       "STILL: the film showed between the still and the page (-8 F4 S7 F16 L3868) — a frame with neither",
       "STILL: a capture across the hand-over was 0.0% the fixture's hue — the page's area was not the page's",
+    ]);
+    // PT-5b2 — the photograph off the shelf at ANOTHER dim (0.8 of the page's light), and one whose live page was not read
+    expect(
+      judgeStill({
+        ...seen,
+        shown: { ...seen.shown, page: { ...DIM, ground: [44.3, 105.9, 198] } },
+      }),
+    ).toEqual([
+      "STILL: the still's ground reads rgb(44.3, 105.9, 198) where the live page's rgb(46.6, 116.3, 218.1) at the law's dim (0.7 of the page's light) is rgb(43.1, 100.2, 186.8) — 11.2 off on a channel, past the 4 the row allows: the photograph is not drawn at the law's dim",
+    ]);
+    expect(judgeStill({ ...seen, handOver: { ...seen.handOver, page: null } })).toEqual([
+      "STILL: the live page's ground was not read — the still's was held to nothing",
     ]);
     // no still at all: the film until the page
     expect(
@@ -615,6 +647,180 @@ describe("the last still and the many — its rows", () => {
       "MEMORY: six pages (1100 MB) weigh no more than one (1122 MB) — the reads are not of what they say",
     ]);
   });
+  it("SWEEP (PT-5b2): a pane at rest deleted, the window reloaded INSIDE its long grace — its still is gone from the shelf after the reload, and the panes that stand keep theirs", () => {
+    const seen: NonNullable<LastStillSeen["sweep"]> = {
+      graceMs: 60_000,
+      reloadedAfterMs: 2_542,
+      gone: {
+        rested: true,
+        before: stillAt("x", 7_000),
+        atReload: stillAt("x", 7_000),
+        after: null,
+        stands: false,
+        readAfterMs: 5_740,
+      },
+      kept: [
+        { before: stillAt("a", 8_000), after: stillAt("a", 8_000) },
+        { before: stillAt("b", 3_000), after: stillAt("b", 9_500) },
+      ],
+    };
+    expect(judgeSweep(seen)).toEqual([]);
+    // the lane before PT-5b2: the reload took the grace's timer, and nothing swept the shelf
+    expect(
+      judgeSweep({
+        ...seen,
+        gone: { ...seen.gone, after: stillAt("x", 7_000), readAfterMs: 15_800 },
+      }),
+    ).toEqual([
+      "SWEEP: 15800 ms after its delete — the window reloaded 2542 ms after it, inside its 60000 ms grace — the deleted pane's still is on the shelf yet: the reload took the grace's timer, and nothing swept it",
+    ]);
+    // a sweep that takes a standing pane's still (an object that had only not arrived yet reads as a deleted one)
+    expect(
+      judgeSweep({
+        ...seen,
+        kept: [
+          { before: stillAt("a", 8_000), after: null },
+          { before: stillAt("b", 3_000), after: stillAt("b", 2_000) },
+        ],
+      }),
+    ).toEqual([
+      "SWEEP: standing pane 1 lost its still at the reload — the sweep took a still whose pane stands",
+      "SWEEP: standing pane 2's still after the reload is an older one",
+    ]);
+    // rows that proved nothing: the test's short grace (the timer forgot it), a reload past the grace, a delete not saved,
+    // a pane with a page yet, no still to begin with, nothing standing
+    expect(
+      judgeSweep({
+        ...seen,
+        graceMs: 2_500,
+        gone: { ...seen.gone, rested: false, atReload: null, stands: true },
+      }),
+    ).toEqual([
+      "SWEEP: the pane was deleted under a grace of 2500 ms, not the pool's own long one (at least 30000) — the row proved nothing",
+      "SWEEP: the pane was not at rest when it was deleted — a page of it was left in main",
+      "SWEEP: the deleted pane's still was gone BEFORE the reload — forgotten by its grace, not swept: the row proved nothing",
+      "SWEEP: after the reload the document holds the deleted pane — its delete was not saved: the row proved nothing",
+    ]);
+    expect(
+      judgeSweep({
+        ...seen,
+        reloadedAfterMs: 61_000,
+        gone: { ...seen.gone, before: null, atReload: null },
+        kept: [{ before: null, after: null }],
+      }),
+    ).toEqual([
+      "SWEEP: the window was reloaded 61000 ms after the delete — past its 60000 ms grace: the row proved nothing",
+      "SWEEP: the pane had no still before its delete — the row proved nothing",
+      "SWEEP: standing pane 1 had no still before the reload — the row proved nothing",
+    ]);
+    expect(judgeSweep({ ...seen, graceMs: null, kept: [] })).toEqual([
+      "SWEEP: the pane was deleted under a grace of null ms, not the pool's own long one (at least 30000) — the row proved nothing",
+      "SWEEP: no pane stood across the reload — the row proved nothing",
+    ]);
+    expect(judgeSweep(null)).toEqual(["SWEEP: the row did not run"]);
+  });
+
+  it("EVICTED (PT-5b2): out of view, its page alive, the pane's texture is the budget's to take — seen again it shows its page's own frame within the bound, no rest mark", () => {
+    const paused: FaceSeen = {
+      ...LIVE,
+      state: "paused",
+      ask: "paused",
+      wire: "paused",
+      bytes: 0,
+      presented: 1,
+    };
+    const seen: NonNullable<LastStillSeen["evicted"]> = {
+      seen: { ...LIVE, presented: 1 },
+      still: stillAt("e", 9_000),
+      unseen: {
+        fill: { alive: 3, bytes: 262_143_816 },
+        face: paused,
+        pages: 1,
+        evictions: 1,
+        used: 305_407_816,
+        cap: 268_435_456,
+      },
+      again: {
+        runs: "F1 L131",
+        ms: 9,
+        frames: 1,
+        face: { ...LIVE, presented: 2 },
+        mark: false,
+        page: PAGE,
+      },
+    };
+    expect(judgeEvicted(seen)).toEqual([]);
+    // (it may wear its still a moment: the shelf's read came before the page's frame)
+    expect(
+      judgeEvicted({ ...seen, again: { ...seen.again, runs: "F1 S14 L60", ms: 250 } }),
+    ).toEqual([]);
+    // THE FINDING the row is for: a quiet page's resume brings no frame — the pane wears its still, dimmed and deaf, for good
+    expect(
+      judgeEvicted({
+        ...seen,
+        again: {
+          runs: "F2 S1800",
+          ms: null,
+          frames: 0,
+          face: { ...LIVE, still: 9_000, bytes: 8_532_924, presented: 1 },
+          mark: true,
+          page: DIM,
+        },
+      }),
+    ).toEqual([
+      "EVICTED: seen again, the pane never showed its page's own frame (F2 S1800; 0 frames of its page landed) — its page is alive and the pane wears its still for good",
+      "EVICTED: seen again, the pane is live (still true, 8532924 bytes) — not its page alive in its texture",
+      "EVICTED: seen again, the pane's head carries the rest mark — its page is alive",
+    ]);
+    // no still to wear, no frame either: the film for good; a frame that came late
+    expect(
+      judgeEvicted({
+        ...seen,
+        again: { runs: "F1800", ms: null, frames: 0, face: paused, mark: false, page: null },
+      }),
+    ).toEqual([
+      "EVICTED: seen again, the pane never showed its page's own frame (F1800; 0 frames of its page landed) — its page is alive and the pane wears its film for good",
+      "EVICTED: seen again, the pane is paused (still false, 0 bytes) — not its page alive in its texture",
+      "EVICTED: the page's area of the pane seen again could not be read",
+    ]);
+    expect(
+      judgeEvicted({ ...seen, again: { ...seen.again, runs: "F1 S400 L9", ms: 6_700 } }),
+    ).toEqual(["EVICTED: seen again, the page's own frame took 6700 ms (F1 S400 L9) — past 3000"]);
+    // rows that proved nothing: the budget evicted nothing of it; its page was put to rest, not left alive; it was never live
+    expect(
+      judgeEvicted({
+        ...seen,
+        unseen: {
+          ...seen.unseen,
+          face: { ...paused, bytes: 21_845_272 },
+          evictions: 0,
+          used: 152_915_904,
+        },
+      }),
+    ).toEqual([
+      "EVICTED: out of view the pane holds 21845272 bytes and 0 textures were evicted (the budget: 152915904 charged of 268435456; 3 large panes alive on 262143816 bytes) — the budget evicted nothing of it: the row proved nothing",
+    ]);
+    expect(
+      judgeEvicted({
+        ...seen,
+        unseen: {
+          ...seen.unseen,
+          face: { ...paused, alive: false, rested: true, wire: "hibernated" },
+          pages: 0,
+        },
+      }),
+    ).toEqual([
+      "EVICTED: evicted, the pane's page is alive false, rested true, asked paused, with 0 pages in main — not an unseen face whose page is ALIVE: the row proved nothing",
+    ]);
+    expect(
+      judgeEvicted({ ...seen, seen: null, still: null, unseen: { ...seen.unseen, face: null } }),
+    ).toEqual([
+      "EVICTED: seen, the pane was without a face (alive false, still false, 0 bytes) — not its page's own frame: the row proved nothing",
+      "EVICTED: the pane had no still on the shelf — what it would wear was not there: the row proved nothing",
+      "EVICTED: out of view the pane has no face",
+    ]);
+    expect(judgeEvicted(null)).toEqual(["EVICTED: the row did not run"]);
+  });
 });
 
 describe("the last still and the many — what the rows read by", () => {
@@ -679,6 +885,48 @@ describe("the last still and the many — what the rows read by", () => {
     });
   });
 
+  it("PT-5b2 — a live page's ground as its photograph reads by THE LAW: the page's own light at 0.7, the pane's own light as it is", () => {
+    // the fixture's ground with no light but its own: 0.7 of its light, a channel each
+    expect(dimmed([FIXTURE_HUE.r, FIXTURE_HUE.g, FIXTURE_HUE.b])).toEqual([23.1, 93.7, 184.2]);
+    // under the desk's lamp (a green run's reading): what the lamp adds on the glass is not the page's, and is not dimmed —
+    // the run's own photograph read rgb(43.5, 101.3, 186.9) off the shelf, rgb(43.6, 100.3, 187.1) as it was put to rest
+    expect(dimmed([46.6, 116.3, 218.1])).toEqual([43.1, 100.2, 186.8]);
+    // another dim is another reading — by more than the row allows; no dim at all is the live page
+    expect(dimmed([46.6, 116.3, 218.1], undefined, 0.8)).toEqual([44.3, 105.9, 198]);
+    expect(dimmed([46.6, 116.3, 218.1], undefined, 1)).toEqual([46.6, 116.3, 218.1]);
+    expect(STILL_ROWS.law).toEqual({ dim: 0.7, within: 4 });
+    // a page whose live reading is darker than the fixture's own light at (1 − dim) is black, never a negative light
+    expect(dimmed([2, 2, 2])).toEqual([0, 0, 0]);
+  });
+
+  it("PT-5b2 — what EVICTED's watcher saw, read: from the frame the pane asks live again, the face as runs and how long until the page's own frame", () => {
+    // out of view (paused) the film; seen: one more frame of film, then the page
+    expect(
+      seenAgain({
+        kinds: ["F", "F", "F", "L", "L"],
+        asks: ["paused", "paused", "live", "live", "live"],
+        at: [1000, 1008.3, 1016.7, 1025.4, 1033.3],
+      }),
+    ).toEqual({ runs: "F1 L2", ms: 9 });
+    // its still laid first
+    expect(
+      seenAgain({
+        kinds: ["F", "S", "S", "L"],
+        asks: ["live", "live", "live", "live"],
+        at: [0, 16, 33, 250],
+      }),
+    ).toEqual({ runs: "F1 S2 L1", ms: 250 });
+    // the page's frame never comes; the pane never asked live; nothing read
+    expect(
+      seenAgain({ kinds: ["F", "S", "S"], asks: ["paused", "live", "live"], at: [0, 16, 33] }),
+    ).toEqual({ runs: "S2", ms: null });
+    expect(seenAgain({ kinds: ["F", "F"], asks: ["paused", "paused"], at: [0, 16] })).toEqual({
+      runs: "",
+      ms: null,
+    });
+    expect(seenAgain({ kinds: [], asks: [], at: [] })).toEqual({ runs: "", ms: null });
+  });
+
   it("the hand-over's frames as runs", () => {
     expect(runsOf([])).toBe("");
     expect(runsOf(["S"])).toBe("S1");
@@ -691,5 +939,36 @@ describe("the last still and the many — what the rows read by", () => {
     expect(STILL_ROWS.graceMs).toBeLessThan(60_000);
     expect(STILL_ROWS.memory).toMatchObject({ panes: 20, alive: 6, making: 10 });
     expect(STILL_ROWS.dimmer).toBeLessThan(1);
+  });
+
+  it("PT-5b2 — EVICTED's numbers: three large panes fill the desk's budget to within a laptop's face, and the laptop's tips it", () => {
+    const mm = 200 / 76.2;
+    /** A pane's outline for a page of w × h CSS px at the laptop's density (0.2 mm a px): the border round it, the head. */
+    const outline = (w: number, h: number): { w: number; h: number } => ({
+      w: Math.round((w * 0.2 + 2 * 5) * mm * 100) / 100,
+      h: Math.round((h * 0.2 + 5 + 11) * mm * 100) / 100,
+    });
+    expect(outline(1280, 800)).toEqual(STILL_ROWS.laid);
+    expect(outline(2560, 1600)).toEqual(STILL_ROWS.evicted.big);
+    /** A texture's bytes on the device, every level counted (rgba8). */
+    const bytes = (w: number, h: number): number => {
+      let sum = 0;
+      for (let lw = w, lh = h; ; lw = Math.max(1, lw >> 1), lh = Math.max(1, lh >> 1)) {
+        sum += lw * lh * 4;
+        if (lw === 1 && lh === 1) return sum;
+      }
+    };
+    // at the Mac's density (2): a laptop's face, a large pane's
+    const laptop = bytes(2560, 1600);
+    const large = bytes(5120, 3200);
+    expect(laptop).toBe(21_845_272);
+    expect(large).toBe(87_381_272);
+    const cap = 268_435_456;
+    expect(STILL_ROWS.evicted.fill * large).toBeLessThanOrEqual(cap);
+    expect(STILL_ROWS.evicted.fill * large + laptop).toBeGreaterThan(cap);
+    // out of the large panes' view; the bound its page's frame is held to
+    expect(STILL_ROWS.evicted.away).toBeGreaterThan(4 * STILL_ROWS.evicted.big.h);
+    expect(STILL_ROWS.evicted.withinMs).toBe(3_000);
+    expect(STILL_ROWS.sweep.minGraceMs).toBeLessThanOrEqual(60_000);
   });
 });
