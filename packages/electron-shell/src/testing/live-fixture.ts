@@ -54,8 +54,9 @@
 //                  it is busy only on the smoke's word. `hold(path, ms)`: the next ask of a page at `path` is answered
 //                  `hold: ms` — the page says it began (`/held`, a beacon), keeps its thread `ms`, and says when the
 //                  hold began and ended (`held`): a page just loaded and hydrating, its scale never read (TAPS-COLD).
-//   ?tidy=1      — on any page: once loaded and painted, its script takes `tidy` out of its address with
-//                  `history.replaceState` — a move WITHIN the document — and paints nothing more (TIDY).
+//   ?tidy=1      — on any page, on the smoke's word (`tidy(path)`: the next ask of a page at `path` is answered
+//                  `tidy`): its script takes `tidy` out of its own address with `history.replaceState` — a move WITHIN
+//                  the document — and paints nothing (TIDY).
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { type AddressInfo, createServer as createTcpServer } from "node:net";
@@ -166,6 +167,9 @@ export interface LiveFixture {
   /** PT-5b3 — the next ask of a page whose path begins with `path` is answered `hold: ms`: the page keeps its thread
    * that long (and says so: `/held` is asked for as the hold begins; its `held` says when it began and ended). Once. */
   hold(path: string, ms: number): void;
+  /** PT-5b3 — the next ask of a page whose path begins with `path` is answered `tidy`: the page takes `tidy` out of its
+   * own address (`history.replaceState`), within its document. Once. */
+  tidy(path: string): void;
   /** PT-5a — an address whose connection is REFUSED (a port nobody listens on) until `open()` serves the page there. */
   refusing(): Promise<FixtureRefusing>;
   close(): Promise<void>;
@@ -371,15 +375,17 @@ export function fixtureHtml(path: "/page" | "/next" | "/legacy" = "/page"): stri
     while (performance.now() < began + ms) {}
     window.__held = [Math.round(began), Math.round(performance.now())];
   };
-  const ask = () => fetch("/beacon?token=" + token + "&report=" + report(), { cache: "no-store" })
-    .then((r) => r.json()).then((a) => { pace(a.play === true); hold(a.hold); }).catch(() => {});
-  // PT-5b3 — ?tidy=1: once loaded and painted the page takes "tidy" out of its own address — within the document
-  const asked = new URLSearchParams(location.search);
-  if (asked.get("tidy")) addEventListener("load", () => requestAnimationFrame(() => requestAnimationFrame(() => {
+  // PT-5b3 — TIDIED on the server's word: the page takes "tidy" out of its own address — a move within the document —
+  // and paints nothing
+  const tidy = (go) => {
+    const asked = new URLSearchParams(location.search);
+    if (go !== true || !asked.has("tidy")) return;
     asked.delete("tidy");
     const rest = asked.toString();
     history.replaceState(null, "", location.pathname + (rest ? "?" + rest : ""));
-  })));
+  };
+  const ask = () => fetch("/beacon?token=" + token + "&report=" + report(), { cache: "no-store" })
+    .then((r) => r.json()).then((a) => { pace(a.play === true); tidy(a.tidy); hold(a.hold); }).catch(() => {});
   ask();
   setInterval(ask, ${FIXTURE_ASK_MS});
 </script>
@@ -571,8 +577,9 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   /** PT-5b2: how many times each pathname was asked for; and the answers that never come (`/hang.png`). */
   const asks = new Map<string, number>();
   const hung = new Set<ServerResponse>();
-  /** PT-5b3: the hold owed to the next ask of a page at this path. */
+  /** PT-5b3: the hold, and the tidying, owed to the next ask of a page at this path. */
   let holding: { readonly path: string; readonly ms: number } | null = null;
+  let tidying: string | null = null;
   const cookies = new Map<string, string>();
   const agents = new Map<string, string>();
   const tokens: string[] = [];
@@ -717,8 +724,20 @@ export async function startLiveFixture(): Promise<LiveFixture> {
         hold = holding.ms;
         holding = null;
       }
+      let tidy = false;
+      if (
+        tidying !== null &&
+        last !== null &&
+        last.token === token &&
+        last.path.startsWith(tidying)
+      ) {
+        tidy = true;
+        tidying = null;
+      }
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
-      res.end(JSON.stringify({ play: playing, ...(hold > 0 ? { hold } : {}) }));
+      res.end(
+        JSON.stringify({ play: playing, ...(hold > 0 ? { hold } : {}), ...(tidy ? { tidy } : {}) }),
+      );
       return;
     }
     res.writeHead(404);
@@ -747,6 +766,9 @@ export async function startLiveFixture(): Promise<LiveFixture> {
     asked: (path) => asks.get(path) ?? 0,
     hold: (path, ms) => {
       holding = { path, ms };
+    },
+    tidy: (path) => {
+      tidying = path;
     },
     gate: (open) => {
       gateOpen = open;

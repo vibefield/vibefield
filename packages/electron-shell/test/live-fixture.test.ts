@@ -547,49 +547,37 @@ describe("the live pane's fixture page", () => {
     expect(fixtureHtml("/page")).toContain("held: window.__held || null");
   });
 
-  it("PT-5b3: `?tidy=1` — once loaded and painted the page takes `tidy` out of its own address with `history.replaceState` (a move WITHIN the document), keeping the rest of its query; a page not asked to tidy leaves its address alone", () => {
-    const source = /const asked = new URLSearchParams\(location\.search\);[\s\S]*?\}\)\)\);/.exec(
-      fixtureHtml("/page"),
-    )?.[0];
+  it("PT-5b3: `?tidy=1` — on the smoke's word (`tidy(path)`, told with the next ask of a page at that path, once) the page takes `tidy` out of its own address with `history.replaceState` (a move WITHIN the document), keeping the rest of its query; untold, or not asked to tidy, it leaves its address alone", async () => {
+    fixture = await startLiveFixture();
+    const ask = async (token: string, path: string): Promise<Record<string, unknown>> =>
+      (await (
+        await fetch(
+          `${fixture?.origin}/beacon?token=${token}&report=${encodeURIComponent(JSON.stringify({ path }))}`,
+        )
+      ).json()) as Record<string, unknown>;
+    fixture.tidy("/gate?p=t");
+    expect(await ask("o1", "/gate?p=a")).toEqual({ play: false });
+    expect(await ask("t1", "/gate?p=t&tidy=1")).toEqual({ play: false, tidy: true });
+    expect(await ask("t1", "/gate?p=t&tidy=1")).toEqual({ play: false });
+    // the page's own function, run
+    const source = /const tidy = \(go\) => \{[\s\S]*?\n {2}\};/.exec(fixtureHtml("/page"))?.[0];
     if (source === undefined) throw new Error("the page carries no tidy");
-    const run = (search: string) => {
-      const listeners = new Map<string, () => void>();
-      const frames: (() => void)[] = [];
+    const run = (search: string, go: unknown): unknown[][] => {
       const replaced: unknown[][] = [];
-      new Function(
-        "location",
-        "addEventListener",
-        "requestAnimationFrame",
-        "history",
-        "URLSearchParams",
-        source,
-      )(
-        { search, pathname: "/gate" },
-        (type: string, listener: () => void) => listeners.set(type, listener),
-        (frame: () => void) => frames.push(frame),
-        { replaceState: (...args: unknown[]) => replaced.push(args) },
-        URLSearchParams,
-      );
-      return { listeners, frames, replaced };
+      (
+        new Function("location", "history", "URLSearchParams", `${source}; return tidy;`)(
+          { search, pathname: "/gate" },
+          { replaceState: (...args: unknown[]) => replaced.push(args) },
+          URLSearchParams,
+        ) as (go: unknown) => void
+      )(go);
+      return replaced;
     };
-    const tidy = run("?p=t&tidy=1");
-    // nothing before its load, nor before it has painted (two frames on)
-    expect(tidy.replaced).toEqual([]);
-    tidy.listeners.get("load")?.();
-    expect(tidy.replaced).toEqual([]);
-    tidy.frames.shift()?.();
-    expect(tidy.replaced).toEqual([]);
-    tidy.frames.shift()?.();
-    expect(tidy.replaced).toEqual([[null, "", "/gate?p=t"]]);
+    expect(run("?p=t&tidy=1", true)).toEqual([[null, "", "/gate?p=t"]]);
     // alone in its query: the bare path
-    const bare = run("?tidy=1");
-    bare.listeners.get("load")?.();
-    bare.frames.shift()?.();
-    bare.frames.shift()?.();
-    expect(bare.replaced).toEqual([[null, "", "/gate"]]);
-    // not asked: it waits for nothing and replaces nothing
-    const plain = run("?p=t");
-    expect(plain.listeners.size).toBe(0);
-    expect(plain.replaced).toEqual([]);
+    expect(run("?tidy=1", true)).toEqual([[null, "", "/gate"]]);
+    // untold; and a page that was not asked to tidy: nothing
+    expect(run("?p=t&tidy=1", undefined)).toEqual([]);
+    expect(run("?p=t", true)).toEqual([]);
   });
 });
