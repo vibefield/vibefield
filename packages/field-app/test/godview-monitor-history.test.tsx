@@ -102,6 +102,8 @@ function fakePort(): FakePort {
       asks.push(window);
       return new Promise((resolve, reject) => waiting.push({ resolve, reject }));
     },
+    // TV-8's lookup is `godview-open-ended-lane.test.tsx`'s; nothing here opens a lane
+    sessions: () => Promise.resolve([]),
     async answer(result = ANSWER) {
       const next = waiting.shift();
       if (next === undefined) throw new Error("no read is waiting");

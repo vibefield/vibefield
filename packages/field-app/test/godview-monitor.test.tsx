@@ -2154,6 +2154,8 @@ function pastPort(
       port.asks += 1;
       return answer();
     },
+    // TV-8's lookup is `godview-open-ended-lane.test.tsx`'s; nothing here opens a lane
+    sessions: () => Promise.resolve([]),
   };
   return port;
 }

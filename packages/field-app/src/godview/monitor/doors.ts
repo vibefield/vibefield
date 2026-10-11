@@ -409,7 +409,14 @@ export function modelBoardOver(client: DoorClient): ModelBoardPort {
 /** TL (B-D6 (a)) — the lanes' past as the backend derives it from the record
  * (`agent.recordedLanes`), asked only while a mounted view asks for it
  * (`monitor-history.ts`). An answer the window cannot read is a refusal, which
- * the hook words as the past's `unavailable`. */
+ * the hook words as the past's `unavailable`.
+ *
+ * TV-8 — and which session a native id is (`index.sessions`' lookup), asked
+ * when an ended lane is opened (`open-ended-lane.ts`). The contract's rows as
+ * they are: the find sheet's `facts` drops `provider`, which an opening reads
+ * when a row names it. A refusal propagates in fieldd's own words (they are
+ * the status line's detail); an answer the window cannot read is one too, in a
+ * person's words rather than the parser's. */
 export function recordedLanesPortOver(client: DoorClient): RecordedLanesPort {
   return {
     read: async (window) =>
@@ -419,6 +426,15 @@ export function recordedLanesPortOver(client: DoorClient): RecordedLanesPort {
           untilMs: window.untilMs,
         }),
       ),
+    sessions: async (nativeSessionIds) => {
+      const answer = IndexSessionsResult.safeParse(
+        await client.request("index.sessions", { nativeSessionIds: [...nativeSessionIds] }),
+      );
+      if (!answer.success) {
+        throw new Error("The agent index answered sessions this window cannot read");
+      }
+      return answer.data.rows;
+    },
   };
 }
 

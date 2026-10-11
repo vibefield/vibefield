@@ -1163,6 +1163,11 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   button in primary ink. A notice may carry a detail — the renderer's own words after VibeField's,
   verbatim, 11 mono and faint on a row of its own under them (the degraded desk's ICE message; DK-17,
   2026-10-07). It stands with the frame, above the cover (§10).
+  **An ended lane that could not be opened** in History (TV-8, 2026-10-11; Godview's timeline) is
+  said here, in the Peek's pattern for a pick that could not be shown ("Could not jump — ‹why›"),
+  each once: **"Could not open — the record cannot be read now"**, with the door's own words as
+  its detail; **"Could not open — no session is recorded for this run"**; **"Could not open —
+  this run is no longer in the timeline"**.
 - **The selection bar** (Chrome on the Mat §3.1; MC-D2 the line's glass, ruled 2026-10-01; MC-D1;
   One Frame §7; R1, R2, R3, R7–R10, R23, R25; DK-11): one element over `handle.selection`'s anchor,
   placed imperatively each time the anchor publishes — never a render per frame.

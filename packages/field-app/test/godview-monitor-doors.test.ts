@@ -34,6 +34,7 @@ import {
   historyPortOver,
   modelBoardFailure,
   profileSetsPortOver,
+  recordedLanesPortOver,
   toAccountUsageBatch,
   usagePortOver,
 } from "../src/godview/monitor/doors";
@@ -727,6 +728,42 @@ describe("the model board refusal", () => {
     );
     // a cause with no kind and no flag is not guessed at
     expect(modelBoardFailure(new Error("UNAVAILABLE: looks retryable")).retryable).toBe(false);
+  });
+});
+
+describe("TV-8 — the past's door also says which session a native id is (index.sessions' lookup)", () => {
+  it("asks for the named ids alone and answers the contract's rows, a named provider kept", async () => {
+    const answer = fixture("index-sessions.valid.json") as { rows: Record<string, unknown>[] };
+    const { client, request } = requestingClient({
+      "index.sessions": { rows: [{ ...answer.rows[0], provider: "codex" }, answer.rows[1]] },
+    });
+    const rows = await recordedLanesPortOver(client).sessions([
+      "3b9d4c2e-6f18-4a7b-9c3d-2e1f0a8b7c6d",
+    ]);
+    expect(request).toHaveBeenCalledWith("index.sessions", {
+      nativeSessionIds: ["3b9d4c2e-6f18-4a7b-9c3d-2e1f0a8b7c6d"],
+    });
+    expect(rows.map((row) => [row.sessionId, row.nativeSessionId, row.provider])).toEqual([
+      ["s_7c1e2f9a", "3b9d4c2e-6f18-4a7b-9c3d-2e1f0a8b7c6d", "codex"],
+      ["s_0a4b5c6d", "8e2f1a0b-9c7d-4e6f-8a1b-0c9d8e7f6a5b", undefined],
+    ]);
+  });
+
+  it("a refusal propagates as the door said it: its words are the status line's detail", async () => {
+    const refusal = rpcError("UNAVAILABLE", "the agent index is starting", true);
+    const { client } = requestingClient({
+      "index.sessions": async () => {
+        throw refusal;
+      },
+    });
+    await expect(recordedLanesPortOver(client).sessions(["nat"])).rejects.toBe(refusal);
+  });
+
+  it("an answer the window cannot read is a refusal in a person's words, never the parser's", async () => {
+    const { client } = requestingClient({ "index.sessions": { rows: [{ sessionId: 7 }] } });
+    await expect(recordedLanesPortOver(client).sessions(["nat"])).rejects.toThrow(
+      /^The agent index answered sessions this window cannot read$/,
+    );
   });
 });
 

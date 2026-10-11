@@ -6,6 +6,7 @@ import type { MonitorPalette } from "@vibecook/puppeteer-views";
 import type { AgentRecordedLanesResult } from "@vibefield/contracts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sdkOsMark } from "./model-board";
+import { lendEndedLanes, type RecordedSessionRow } from "./open-ended-lane";
 
 // TL (docket v9, RULED 2026-10-09; B-D6 (a); TIMELINE SHAPES v2) — THE
 // RECORD'S PAST, LENT TO A VIEW (capability `history`). The backend beside the
@@ -50,6 +51,10 @@ export const KEPT_PAST_DETAIL =
 /** The backend's door, as the window reads it (`doors.ts` `recordedLanesPortOver`). */
 export interface RecordedLanesPort {
   read(window: { sinceMs: number; untilMs: number }): Promise<AgentRecordedLanesResult>;
+  /** TV-8 — which of the index's sessions these native ids are (`index.sessions`'
+   * lookup): what an ended lane opens in History by (`open-ended-lane.ts`). A
+   * refusal propagates, and is said. */
+  sessions(nativeSessionIds: readonly string[]): Promise<readonly RecordedSessionRow[]>;
 }
 
 /** The backend's answer as the SDK's snapshot: `device.self` said by this
@@ -292,9 +297,20 @@ export function useMonitorHistory(options: MonitorHistoryOptions): MonitorHistor
     [snapshot, desk, here],
   );
   // built once per narrowed snapshot (and per theme or receding filter), never per publish
-  return useMemo(() => {
+  const history = useMemo(() => {
     if (!asking || noRecord || narrowed === undefined) return undefined;
     const colourFor = projectColourFor({ tint: { l: tintL, c: tintC }, neutral });
     return lendHistory(narrowed, { colourFor, receded });
   }, [asking, noRecord, narrowed, tintL, tintC, neutral, receded]);
+  // TV-8 — what the view is lent, an opening is lent too (`openEndedLane`): the
+  // same lanes, and the door that read them. Keyed on the lent object, so it
+  // moves only when the past does; taken back when the past or the stage goes.
+  useEffect(
+    () =>
+      history === undefined || port === undefined
+        ? undefined
+        : lendEndedLanes({ ended: history.ended, port }),
+    [history, port],
+  );
+  return history;
 }
