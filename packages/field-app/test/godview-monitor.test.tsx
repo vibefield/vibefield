@@ -1217,6 +1217,49 @@ describe("the monitor stage", () => {
     expect(ackText(host)).toContain("is in the active pane");
   });
 
+  it("says how the deck's rule placed it: a new pane, its own pane focused, or the active one (GV-D4)", async () => {
+    // The door answers how the session was placed (`deck-placement.ts`), and
+    // the stage's words follow — never "mounted" for a session that was only
+    // focused where it already was.
+    const door = fakeDoor();
+    const host = await mountMonitor("list", door);
+    const pick = async (placement: "beside" | "focus" | "replace"): Promise<string> => {
+      door.mountLocal.mockResolvedValueOnce({
+        state: "mounted",
+        sessionId: "run-claude-pty",
+        placement,
+      });
+      const row = [...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-list-row")].find(
+        (candidate) => candidate.textContent?.includes("vibe-field"),
+      );
+      await act(async () => row?.click());
+      return ackText(host);
+    };
+    // fewer than three panes: beside the focused one
+    expect(await pick("beside")).toBe("vibe-field opened in a new pane");
+    // already in a pane: focused where it is, nothing mounted
+    expect(await pick("focus")).toBe("vibe-field is in the active pane");
+    // three or more: the focused pane's place
+    expect(await pick("replace")).toBe("vibe-field mounted in the active pane");
+    expect(door.mountLocal).toHaveBeenCalledTimes(3);
+
+    // …and a new terminal says the same two places
+    door.createTerminal.mockResolvedValueOnce({
+      state: "mounted",
+      sessionId: "born-2",
+      placement: "beside",
+    });
+    await act(async () => host.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
+    expect(ackText(host)).toBe("terminal opened in a new pane");
+    door.createTerminal.mockResolvedValueOnce({
+      state: "mounted",
+      sessionId: "born-3",
+      placement: "replace",
+    });
+    await act(async () => host.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
+    expect(ackText(host)).toBe("terminal opened in the active pane");
+  });
+
   it("opens an empty terminal through the view action, without agent or profile controls", async () => {
     const door = fakeDoor();
     const host = await mountMonitor("list", door);

@@ -4100,6 +4100,19 @@ const SPLIT_CHORD: { key: string; shift: boolean; label: string } =
     ? { key: "d", shift: false, label: "⌘D" }
     : { key: "o", shift: true, label: "Ctrl+Shift+O" };
 
+/**
+ * GV-D4 (James, 2026-10-02; DESIGN.md §8, the deck: "A session with no pane";
+ * built 2026-10-11). A session with no pane — and a new terminal — opens BESIDE
+ * the focused pane while fewer than this many panes show, and takes the focused
+ * pane's place after; ⌘D is not capped. The ruling's own number, written here
+ * and not imported: a smoke that read the product's constant could not see it
+ * change.
+ */
+const PLACEMENT_PANES = 3;
+/** The pane count a placement must leave, from the count it found. */
+const panesAfterPlacement = (before: number): number =>
+  before < PLACEMENT_PANES ? before + 1 : before;
+
 /** Put keyboard focus in the workspace's active terminal.
  *
  * Workspace shortcuts act on its active pane. Focusing a different textarea
@@ -5897,8 +5910,10 @@ async function swarmEmptyGround(win: BrowserWindow): Promise<{ x: number; y: num
  *   2. pressed and held on empty ground (Electron input events into this
  *      window, never the OS's), the swarm blooms; moved onto the profile's bud
  *      and let go, a shell is born there: fieldd's roster names the set, the
- *      deck shows it in the active pane (its shape unchanged), the stage says
- *      "opened under <set>", and the swarm lists it;
+ *      deck places it by the rule (GV-D4, since 2026-10-11: a pane more beside
+ *      the focused one while fewer than three show, the focused pane's place
+ *      after — until then always the active pane, its shape unchanged), the
+ *      stage says "opened under <set>" and where, and the swarm lists it;
  *   3. its pane's launcher reads `Under <set>`, and the typed agent — the
  *      smoke's stub, the one agent installed — reads `no sign-in` there;
  *   4. typed in that pane, the agent is refused in VibeField's sentence
@@ -6064,25 +6079,33 @@ async function spawnBloomRows(ctx: {
     );
     const shown = await deck.until(
       (facts) => facts.activeSessionId === bound.sessionId,
-      "the deck to show the born shell in the active pane",
+      "the deck to show the born shell in the focused pane",
       30_000,
     );
-    if (shown.panes !== before.panes) {
+    // GV-D4: placed as a session with no pane is. Fewer than three panes
+    // showing, it opened beside the focused one — a pane more; three or more,
+    // it took the focused pane's place and the count did not move.
+    const beside = before.panes < PLACEMENT_PANES;
+    if (shown.panes !== panesAfterPlacement(before.panes)) {
       throw new Error(
-        `the birth changed the deck's shape (${before.panes} → ${shown.panes} panes)`,
+        `the birth was placed against the rule (${before.panes} → ${shown.panes} panes; GV-D4 wants ${panesAfterPlacement(before.panes)})`,
       );
     }
     const ack = await untilRead("the stage to say where the terminal opened", 10_000, async () => {
       const text = await readMonitorAck(win);
       return text.includes("opened") ? text : undefined;
     });
-    if (ack !== `terminal opened under ${set.label} in the active pane`) {
-      throw new Error(`the stage said "${ack}", not that it opened under ${set.label}`);
+    const where = beside ? "in a new pane" : "in the active pane";
+    if (ack !== `terminal opened under ${set.label} ${where}`) {
+      throw new Error(
+        `the stage said "${ack}", not that it opened under ${set.label} ${where} (${before.panes} panes showed)`,
+      );
     }
     // …and the swarm has it: the born shell's own row. A door birth keeps its
     // own id as its visual (only a launcher's hand-over passes a body on), and
-    // the fresh shell it displaced is reaped — so a count of terminal rows can
-    // stay level, and only the row itself is the witness.
+    // where it took the focused pane's place the fresh shell it displaced is
+    // reaped — so a count of terminal rows can stay level, and only the row
+    // itself is the witness.
     const bornRow = `.vf-monitor-swarm-list button[data-agent-bubble-id="${bound.sessionId}"]`;
     await waitForRendererFact(
       win,
@@ -6097,6 +6120,8 @@ async function spawnBloomRows(ctx: {
       sessionId: bound.sessionId,
       profileSet: bound.profileSet,
       ack,
+      placed: beside ? "beside" : "replace",
+      panes: `${before.panes} → ${shown.panes}`,
       listedInSwarm: true,
     });
     return bound.sessionId;
@@ -8279,6 +8304,11 @@ export async function runSmokeGodview(opts: {
     // Placed after the recovery deliberately: an attach REPLACES what the
     // active pane is showing, and every row above asserts about the sessions
     // this deck was holding. Nothing below them asserts anything.
+    // *Corrected 2026-10-11 (GV-D4):* an attach, a row's select and a new
+    // terminal no longer take the active pane by default. Each is PLACED: a
+    // session a pane already shows is focused where it is; any other opens
+    // beside the focused pane while fewer than three panes show (a pane more)
+    // and takes the focused pane's place after (the count unchanged).
     //
     // 13a. THE LOCAL-ROUTING ROW (AR-3 — GT-4's split-honesty row, re-fed):
     //      a LOCAL bubble is one of the deck's own panes (no managed agent runs
@@ -8299,6 +8329,12 @@ export async function runSmokeGodview(opts: {
     // AR-5: the swarm's bodies are drawn on a canvas; each has a button in
     // the swarm's list (the package's reachability rule), which is what a
     // click lands on here. `data-agent-bubble-source` names the row's kind.
+    // What the selector's first match IS, read before the click (the note
+    // under the click says why it matters).
+    const clickedNewTerminal = (await win.webContents.executeJavaScript(
+      `document.querySelector('.vf-monitor-swarm-list button:not([data-agent-bubble-source="remote"])')?.hasAttribute("data-swarm-new-terminal") === true`,
+    )) as boolean;
+    verdict["localClickWasNewTerminal"] = clickedNewTerminal;
     const localClicked = await clickMonitorBubble(
       win,
       '.vf-monitor-swarm-list button:not([data-agent-bubble-source="remote"])',
@@ -8314,20 +8350,53 @@ export async function runSmokeGodview(opts: {
     const afterLocalClick = await deckSettled(deck, 1_500, 45_000);
     const localAck = await readMonitorAck(win);
     verdict["localAck"] = localAck;
-    // The words a person would have read: the row is the active pane's own
-    // session, so the stage says it is there — or, if the click landed on
-    // another pane's session, that it was mounted. Either is the door's local
-    // verb answering; silence is the failure.
-    if (!localAck.includes("active pane")) {
+    // *Corrected 2026-10-11 (GV-D4), two claims above at once.*
+    // (1) WHAT IS CLICKED. The selector's first match is the list's own
+    //     "＋ New terminal…" (`data-swarm-new-terminal`, the views package's),
+    //     which leads the list: the last landing's verdict reads
+    //     `localBubbleClicked: ""` and `localAck: "terminal opened in the
+    //     active pane"`. So this row has been the door's CREATE, not a row's
+    //     select, for as long as that button has led — still the door's local
+    //     verb answering, which is the row's claim, but not the verb its name
+    //     says. Recorded, and read below, rather than assumed either way.
+    // (2) WHERE IT LANDS. "The deck does not move" was GT-D17's active pane.
+    //     Under GV-D4 the door PLACES: a session a pane already shows is
+    //     focused where it is (the count unchanged, "… is in the active
+    //     pane"); any other — and a new terminal, which no pane can show yet —
+    //     opens beside the focused pane while fewer than three show (a pane
+    //     more, "… in a new pane") and takes its place after (the count
+    //     unchanged, "… in the active pane").
+    // What holds whichever was clicked: the stage answered in the door's
+    // words, and its words and the pane count agree with each other and with
+    // the cap. Silence is still the failure.
+    const saidNewPane = localAck.includes("in a new pane");
+    if (!saidNewPane && !localAck.includes("active pane")) {
       throw new Error(
         `selecting a local row did not answer through the door's local verb: ${JSON.stringify(localAck)}`,
       );
     }
-    if (afterLocalClick.panes !== beforeLocalClick.panes) {
+    const wantLocalPanes = saidNewPane ? beforeLocalClick.panes + 1 : beforeLocalClick.panes;
+    if (afterLocalClick.panes !== wantLocalPanes) {
       throw new Error(
-        `selecting a local row changed the deck's shape (${beforeLocalClick.panes} → ${afterLocalClick.panes} panes)`,
+        `the stage said ${JSON.stringify(localAck)} and the deck went ${beforeLocalClick.panes} → ${afterLocalClick.panes} panes — its words and its shape disagree (GV-D4)`,
       );
     }
+    if (saidNewPane && beforeLocalClick.panes >= PLACEMENT_PANES) {
+      throw new Error(
+        `a pane was opened beside with ${beforeLocalClick.panes} already showing — GV-D4 caps a placement at ${PLACEMENT_PANES}`,
+      );
+    }
+    // A new terminal is in no pane yet, so the rule leaves it one answer.
+    if (
+      clickedNewTerminal &&
+      afterLocalClick.panes !== panesAfterPlacement(beforeLocalClick.panes)
+    ) {
+      throw new Error(
+        `a new terminal was placed against the rule (${beforeLocalClick.panes} → ${afterLocalClick.panes} panes; GV-D4 wants ${panesAfterPlacement(beforeLocalClick.panes)})`,
+      );
+    }
+    verdict["localPlacement"] =
+      `${saidNewPane ? "beside" : "the focused pane"} (${beforeLocalClick.panes} → ${afterLocalClick.panes} panes)`;
     // NOTHING IS CARVED OUT of this check any more (GT-6a). It used to exclude
     // row 10's own-kill target, whose pane stayed mounted holding its last
     // summary — ghosttea's terminate drops the local registration, so no exited
@@ -8350,6 +8419,10 @@ export async function runSmokeGodview(opts: {
     // 13b. THE DOOR ROW. A peer's session is a bubble in the swarm, and
     //      CLICKING it attaches the active pane to it — no palette anywhere in
     //      this path (⌘⇧O stays off; GT-D7's amendment).
+    //      *Corrected 2026-10-11 (GV-D4):* clicking it PLACES the peer's
+    //      session as any session with no pane is — beside the focused pane
+    //      while fewer than three show, in its place after — and it is the
+    //      focused pane's session either way.
     //
     //      Behind an honest capability check, because a peer is not something
     //      this harness can conjure: the mesh floor is GT-4's other half, and
@@ -8395,17 +8468,18 @@ export async function runSmokeGodview(opts: {
         (facts) =>
           facts.activeSessionId !== undefined &&
           !beforeAttach.sessionIds.includes(facts.activeSessionId),
-        "the active pane to be showing the peer's session",
+        "the focused pane to be showing the peer's session",
         30_000,
       );
       verdict["remoteAttachedSessionId"] = attached.activeSessionId ?? null;
       verdict["remoteAttachAck"] = await readMonitorAck(win);
-      // The pane COUNT is unchanged: GT-D17 attaches the pane the user is in,
-      // it does not split one open. That is the difference between our door
-      // and upstream's palette, and it is worth asserting rather than assuming.
-      if (attached.panes !== beforeAttach.panes) {
+      // The pane COUNT follows the rule (GV-D4): a pane more while fewer than
+      // three showed, unchanged after. Until 2026-10-11 it never moved — GT-D17
+      // attached the pane the user was in. Still never upstream's palette, and
+      // still worth asserting rather than assuming.
+      if (attached.panes !== panesAfterPlacement(beforeAttach.panes)) {
         throw new Error(
-          `the attach changed the deck's shape (${beforeAttach.panes} → ${attached.panes} panes); GT-D17 attaches the ACTIVE pane`,
+          `the attach was placed against the rule (${beforeAttach.panes} → ${attached.panes} panes; GV-D4 wants ${panesAfterPlacement(beforeAttach.panes)})`,
         );
       }
     }
@@ -8954,6 +9028,7 @@ export async function runSmokeGodview(opts: {
       await focusDeck(win);
       await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
       const sessionsBefore = new Set(deck.current()?.sessionIds ?? []);
+      const panesBeforeT = deck.current()?.panes ?? 0;
       const heardT = waitForConsole(win, "LINE_KEY ", 10_000);
       pressProductChord(win, "t");
       const tFacts = JSON.parse(await heardT) as { key: string; view: string; outcome: string };
@@ -8969,12 +9044,20 @@ export async function runSmokeGodview(opts: {
       if (paneHeardT.some((key) => /\+t$/iu.test(key))) {
         throw new Error(`the pane heard ⌘T too (ghostty's new_tab): ${JSON.stringify(paneHeardT)}`);
       }
-      // A new terminal takes the ACTIVE pane (the deck's `createTerminal`, the
-      // swarm's hold's door): a session the deck did not show, in a pane it had.
+      // A new terminal is PLACED (the deck's `createTerminal`, the swarm's
+      // hold's door; GV-D4): beside the focused pane while fewer than three
+      // panes show, in its place after — until 2026-10-11 always the active
+      // pane, a session the deck did not show in a pane it had.
       const born = grown.sessionIds.find((id) => !sessionsBefore.has(id)) ?? "?";
+      if (grown.panes !== panesAfterPlacement(panesBeforeT)) {
+        throw new Error(
+          `⌘T's new terminal was placed against the rule (${panesBeforeT} → ${grown.panes} panes; GV-D4 wants ${panesAfterPlacement(panesBeforeT)})`,
+        );
+      }
       lineKeys["⌘T"] =
-        `godview, a pane focused: the line asked the deck; a new shell ${born.slice(0, 8)}… in the ` +
-        `active pane (${grown.panes} panes); the pane never heard it`;
+        `godview, a pane focused: the line asked the deck; a new shell ${born.slice(0, 8)}… ` +
+        `${panesBeforeT < PLACEMENT_PANES ? "beside the focused pane" : "in the focused pane's place"} ` +
+        `(${panesBeforeT} → ${grown.panes} panes); the pane never heard it`;
 
       pressViewKey(win, "canvas");
       await untilRenderer(

@@ -31,6 +31,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
@@ -87,6 +88,11 @@ const workspace = {
   /** The live context's `mountSession`, so a test can land a birth the way
    * ghosttea lands what `createSplitSession` answers. */
   mount: (_summary: { id: string; cwd?: string | null }): void => undefined,
+  /** The live context's `addSession` — ghosttea's split of the active pane,
+   * where a ⌘D birth lands (and, since GV-D4, a session opened beside it). */
+  add: (_summary: { id: string; cwd?: string | null }): void => undefined,
+  /** Panes a split has made, named in order: `beside-1`, `beside-2`. */
+  splits: 0,
   refresh: (): void => undefined,
 };
 
@@ -94,7 +100,9 @@ const workspace = {
  * Ghosttea's workspace, as much of it as a frame needs: the panes as real
  * elements carrying the class and the `data-pane-id` the mounter looks for, the
  * context published through the sidebar slot (the only seam an embedder gets),
- * and the two verbs the deck drives it with. The context object is memoized on
+ * and the verbs the deck drives it with — its mount into the active pane, its
+ * split of the active pane (GV-D4: where a session with no pane opens while
+ * fewer than three show) and its two births. The context object is memoized on
  * a version counter because the deck republishes on identity — a fresh one per
  * render would be an infinite loop, which is exactly what the real library
  * avoids by memoizing its own.
@@ -112,6 +120,12 @@ function WorkspaceStub({
   ) => { color?: string; label?: string } | undefined;
 }): ReactElement {
   const [version, setVersion] = useState(0);
+  // A pane the workspace adds, and the pane it calls active, reach the deck
+  // only through a republished context — and the deck's door WAITS for that
+  // (GV-D4: a focus, a split). Under `act` a plain state update is held until
+  // the scope ends, which the door's wait is inside; ghosttea's own commit is
+  // not held by anything, so the stub commits these two at once.
+  const publishNow = (): void => flushSync(() => setVersion((current) => current + 1));
   const context = useMemo(
     () => ({
       panes: workspace.panes,
@@ -125,6 +139,50 @@ function WorkspaceStub({
         workspace.mounts.push(summary.id);
         setVersion((current) => current + 1);
         return true;
+      },
+      // Ghosttea's `splitActive` (⌘D's own verb): the same override, called
+      // first and synchronously, and the birth landed through `addSession`.
+      splitActive: async () => {
+        const active = workspace.panes.find((pane) => pane.id === workspace.activePaneId)!;
+        const create = workspaceProps["createSplitSession"] as (
+          session: StubSession,
+          axis: "horizontal" | "vertical",
+        ) => Promise<StubSession>;
+        if (workspace.fenced) return undefined;
+        try {
+          const born = await create(active.session, "horizontal");
+          workspace.add(born);
+          return born;
+        } catch {
+          return undefined;
+        }
+      },
+      // Ghosttea's `addSession`: a pane already showing the session is
+      // activated; any other gets a new pane to the RIGHT of the active one,
+      // which becomes the active one.
+      addSession: (summary: { id: string; cwd?: string | null; exited?: boolean }) => {
+        workspace.mounts.push(summary.id);
+        const existing = workspace.panes.find((entry) => entry.session.id === summary.id);
+        if (existing !== undefined) {
+          workspace.activePaneId = existing.id;
+        } else {
+          workspace.splits += 1;
+          const pane: StubPane = {
+            id: `beside-${workspace.splits}`,
+            session: stubSession(summary.id, {
+              cwd: summary.cwd ?? null,
+              exited: summary.exited === true,
+            }),
+          };
+          const at = workspace.panes.findIndex((entry) => entry.id === workspace.activePaneId);
+          workspace.panes = [
+            ...workspace.panes.slice(0, at + 1),
+            pane,
+            ...workspace.panes.slice(at + 1),
+          ];
+          workspace.activePaneId = pane.id;
+        }
+        publishNow();
       },
       createSessionInActivePane: async () => {
         const active = workspace.panes.find((pane) => pane.id === workspace.activePaneId)!;
@@ -158,12 +216,13 @@ function WorkspaceStub({
       activateSession: (sessionId: string) => {
         const pane = workspace.panes.find((entry) => entry.session.id === sessionId);
         if (pane !== undefined) workspace.activePaneId = pane.id;
-        setVersion((current) => current + 1);
+        publishNow();
       },
     }),
     [version],
   );
   workspace.mount = context.mountSession;
+  workspace.add = context.addSession;
   workspace.refresh = () => setVersion((current) => current + 1);
   return (
     <>
@@ -635,6 +694,7 @@ beforeEach(() => {
   workspace.activePaneId = "pane-1";
   workspace.mounts = [];
   workspace.fenced = false;
+  workspace.splits = 0;
   localStorage.clear();
   document.documentElement.style.setProperty("--tint-l", "0.6");
   document.documentElement.style.setProperty("--tint-c", "0.15");
@@ -665,10 +725,15 @@ describe("the deck's pane frames", () => {
     await act(async () => {
       outcome = await deckDoor?.createTerminal();
     });
-    expect(outcome).toEqual({ state: "mounted", sessionId: "born-1" });
+    // GV-D4: one pane showing, so the new terminal opens beside it
+    expect(outcome).toEqual({ state: "mounted", sessionId: "born-1", placement: "beside" });
     expect(requests.filter((request) => request.method === "terminal.create")).toHaveLength(1);
     expect(requests.some((request) => request.method === "agent.spawn")).toBe(false);
     expect(workspace.mounts).toContain("born-1");
+    expect(workspace.panes.map((pane) => [pane.id, pane.session.id])).toEqual([
+      ["pane-1", "pty-1"],
+      ["beside-1", "born-1"],
+    ]);
   });
 
   it("shares each pane's colour with Swarm across duplicate sessions, replacement and pane closure", async () => {
@@ -1206,9 +1271,10 @@ describe("the deck's pane frames", () => {
       if (kind === "remote") remoteSessions.add("born-1");
       if (kind === "foreground") {
         await act(async () => {
-          workspace.panes[0]!.session = stubSession("born-1", {
-            activity: { kind: "foreground-job" },
-          });
+          // the born shell's own pane (it opened beside the one showing, GV-D4)
+          const pane = workspace.panes.find((entry) => entry.session.id === "born-1");
+          if (pane === undefined) throw new Error("the born shell is in no pane");
+          pane.session = stubSession("born-1", { activity: { kind: "foreground-job" } });
           workspace.refresh();
         });
         await settle();
@@ -1314,23 +1380,72 @@ describe("the deck's pane frames", () => {
     expect(otherPane?.getAttribute("data-workspace-visible")).toBe("false");
   });
 
+  it("leaves a pane's fullscreen when a session lands behind it, and keeps it when it lands in it (GV-D4)", async () => {
+    // A session already in a pane is focused where it is — and a pane behind
+    // another's fullscreen is out of sight, so the fullscreen is left first:
+    // the keyboard never goes to a pane nobody can see.
+    workspace.panes = [
+      { id: "pane-1", session: stubSession("pty-1") },
+      { id: "pane-2", session: stubSession("pty-2") },
+    ];
+    const host = await mountDeck();
+    const stage = host.querySelector<HTMLElement>(".terminal-host")!;
+    const pane = paneOf(host, "pane-1")!;
+    vi.spyOn(stage, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 1000, 600));
+    vi.spyOn(pane, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 500, 600));
+    const zoomHost = host.querySelector<HTMLElement>(".vf-deck-zoom");
+    await act(async () => verb(frameFor(host, "pty-1"), "zoom")?.click());
+    await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+    await act(async () => {
+      pane.dispatchEvent(Object.assign(new Event("transitionend"), { propertyName: "width" }));
+    });
+    expect(zoomHost?.dataset["zoomPhase"]).toBe("zoomed");
+    expect(paneOf(host, "pane-2")?.getAttribute("data-workspace-visible")).toBe("false");
+
+    // the session IN the fullscreen pane, picked: nothing to leave
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await deckDoor?.mountLocal("pty-1");
+    });
+    await settle();
+    expect(outcome).toEqual({ state: "mounted", sessionId: "pty-1", placement: "focus" });
+    expect(zoomHost?.dataset["zoomPhase"]).toBe("zoomed");
+
+    // the session behind it, picked (a body, a row, a search result)
+    await act(async () => {
+      outcome = await deckDoor?.mountLocal("pty-2");
+    });
+    await settle();
+    expect(outcome).toEqual({ state: "mounted", sessionId: "pty-2", placement: "focus" });
+    expect(workspace.activePaneId).toBe("pane-2");
+    expect(workspace.mounts, "the shown session was mounted again").toEqual([]);
+    expect(zoomHost?.dataset["zoomPhase"]).toBe("idle");
+    expect(paneOf(host, "pane-1")?.hasAttribute("data-vf-zoom-pane")).toBe(false);
+    expect(paneOf(host, "pane-2")?.getAttribute("data-workspace-visible")).toBe("true");
+  });
+
   it("says where a peer's session lives, from the attach that put it there", async () => {
     const host = await mountDeck();
-    const paneColor = paneOf(host, "pane-1")?.style.getPropertyValue("--ghostty-pane-color");
     expect(deckDoor).not.toBeNull();
+    let outcome: unknown;
     await act(async () => {
-      await deckDoor?.attach({
+      outcome = await deckDoor?.attach({
         deviceId: "mini",
         deviceName: "mini",
         remoteSessionId: "s1",
       });
     });
     await settle();
+    expect(outcome).toMatchObject({ state: "attached", sessionId: "s1" });
     // DS-4e — the pane holds the OWNER's session (its own id), where ghosttea's
     // palette used to hand back a local replica of it
     const frame = frameFor(host, "s1");
     expect(frame).not.toBeNull();
+    // GV-D4: it opened beside the one pane showing, and wears that new pane's colour
+    const paneColor = paneOf(host, "beside-1")?.style.getPropertyValue("--ghostty-pane-color");
+    expect(paneColor).toBeTruthy();
     expect(frame?.style.getPropertyValue("--pane-color")).toBe(paneColor);
+    expect(frameFor(host, "pty-1"), "the pane it opened beside kept its session").not.toBeNull();
     expect(frame?.querySelector(".vf-pane-badge-name")?.getAttribute("title")).toContain("on mini");
     expect(frame?.querySelector(".vf-pane-os")).not.toBeNull();
   });
@@ -1412,8 +1527,10 @@ describe("the empty pane launcher (QL-1)", () => {
     expect(launcherFor(host, "born-1")).toBeNull();
     expect(launcherOwnsKeys()).toBe(false);
     // ⌥1 over it is the shell's, so no agent replaces (and leaks) the used shell
+    // (its own pane: it opened beside the one showing, GV-D4)
+    expect(workspace.panes.find((pane) => pane.id === "beside-1")?.session.id).toBe("born-1");
     await act(async () => {
-      pressIn(paneOf(host, "pane-1"), "Digit1");
+      pressIn(paneOf(host, "beside-1"), "Digit1");
     });
     await settle();
     expect(requests.filter((call) => call.method === "agent.spawn")).toEqual([]);
@@ -1742,7 +1859,8 @@ describe("the empty pane launcher (QL-1)", () => {
     expect(launcher?.querySelector('[data-profile-glyph="briefcase"]')).not.toBeNull();
     expect(launcher?.querySelector('[title="Codex · no sign-in"]')).not.toBeNull();
     await act(async () => {
-      pressIn(paneOf(host, "pane-1"), "Digit1");
+      // the born shell's own pane: it opened beside the one showing (GV-D4)
+      pressIn(paneOf(host, "beside-1"), "Digit1");
     });
     await settle();
     expect(requests.filter((call) => call.method === "agent.spawn")).toEqual([
@@ -1798,7 +1916,12 @@ describe("births under an Agent Profile (SB-3)", () => {
     await act(async () => {
       outcome = await deckDoor?.createTerminal({ profileSet: "work" });
     });
-    expect(outcome).toEqual({ state: "mounted", sessionId: "born-1", profileSet: "work" });
+    expect(outcome).toEqual({
+      state: "mounted",
+      sessionId: "born-1",
+      placement: "beside",
+      profileSet: "work",
+    });
     expect(creates()).toEqual([
       { cwd: "/home/tester/vibe-field", workloadClass: "interactive", profileSet: "work" },
     ]);
@@ -1812,7 +1935,7 @@ describe("births under an Agent Profile (SB-3)", () => {
     await act(async () => {
       outcome = await deckDoor?.createTerminal({ profileSet: "work" });
     });
-    expect(outcome).toEqual({ state: "mounted", sessionId: "born-1" });
+    expect(outcome).toEqual({ state: "mounted", sessionId: "born-1", placement: "beside" });
     expect(requests.filter((call) => call.method === "terminal.terminate")).toEqual([]);
   });
 
@@ -1859,22 +1982,26 @@ describe("births under an Agent Profile (SB-3)", () => {
 
   it("keeps a Work pane Work — its ⌘D split, its agent-exit shell and its meta — whatever its agent ran under", async () => {
     await mountDeck();
-    // the pane's shell is born under Work…
+    // the pane's shell is born under Work — in a pane of its own, beside the
+    // one showing (GV-D4)…
     await act(async () => {
       await deckDoor?.createTerminal({ profileSet: "work" });
     });
     await settle();
+    const work = workspace.panes.find((pane) => pane.session.id === "born-1");
+    if (work === undefined) throw new Error("the Work shell is in no pane");
+    expect(work.id).toBe("beside-1");
     // …and an agent that ran under This Mac takes its place in the pane
     await act(async () => {
       foldFrame?.([
         managedSummary({ terminalSessionId: "agent-pty", alive: true, profileSet: "native" }),
       ]);
-      workspace.panes[0]!.session = stubSession("agent-pty");
+      work.session = stubSession("agent-pty");
       workspace.refresh();
     });
     await settle();
     const paneMeta = workspaceProps["paneMeta"] as (session: unknown, paneId: string) => unknown;
-    expect(paneMeta(stubSession("agent-pty"), "pane-1")).toMatchObject({ profileSet: "work" });
+    expect(paneMeta(stubSession("agent-pty"), work.id)).toMatchObject({ profileSet: "work" });
     // ⌘D copies the SOURCE pane's set, not the agent's run's
     await act(async () => {
       await splitDoor()(stubSession("agent-pty"), "vertical");
@@ -1884,7 +2011,7 @@ describe("births under an Agent Profile (SB-3)", () => {
       foldFrame?.([
         managedSummary({ terminalSessionId: "agent-pty", alive: false, profileSet: "native" }),
       ]);
-      workspace.panes[0]!.session = stubSession("agent-pty", {
+      work.session = stubSession("agent-pty", {
         exited: true,
         exitOutcome: "completed",
       });
@@ -1917,12 +2044,20 @@ describe("births under an Agent Profile (SB-3)", () => {
     expect(host.querySelector(".vf-godview-deck-fault")).toBeNull();
     expect(terminalPoolSnapshot().fault).toBeNull();
     expect(terminalPoolSnapshot().phase).toBe(phase);
-    expect(workspace.panes[0]?.session.id).toBe("pty-1");
+    // no pane changed hands, and none was added for a birth that never was
+    expect(workspace.panes.map((pane) => [pane.id, pane.session.id])).toEqual([
+      ["pane-1", "pty-1"],
+    ]);
     createAnswer = undefined;
     await act(async () => {
       outcome = await deckDoor?.createTerminal({ profileSet: "work" });
     });
-    expect(outcome).toEqual({ state: "mounted", sessionId: "born-1", profileSet: "work" });
+    expect(outcome).toEqual({
+      state: "mounted",
+      sessionId: "born-1",
+      placement: "beside",
+      profileSet: "work",
+    });
   });
 
   it("still faults the pool when fieldd could not be reached at all", async () => {
@@ -2048,8 +2183,9 @@ describe("births under an Agent Profile (SB-3)", () => {
       { cwd: "/home/tester/vibe-field", workloadClass: "interactive", profileSet: "work" },
     ]);
     expect(workspace.mounts).toContain("born-1");
+    // GV-D4: one pane showing, so the bloom's birth opened beside it
     expect(container.querySelector(".vf-monitor-ack")?.textContent).toBe(
-      "terminal opened under Work in the active pane",
+      "terminal opened under Work in a new pane",
     );
   });
 });

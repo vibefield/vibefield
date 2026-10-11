@@ -35,10 +35,15 @@ export function linePanesOf(
   });
 }
 
-/** The door's outcome in the line's terms — its refusal in the swarm's own
- * sentence for a deck with no pane to open into (useMonitorAgents' createAt). */
+/** The door's outcome in the line's terms — how the deck's rule placed it
+ * (GV-D4), when the door says; its refusal in the swarm's own sentence for a
+ * deck with no pane to place by (useMonitorAgents' createAt). */
 export function newTerminalOutcome(outcome: LocalMountOutcome): NewTerminalOutcome {
-  if (outcome.state === "mounted") return { state: "opened" };
+  if (outcome.state === "mounted")
+    return {
+      state: "opened",
+      ...(outcome.placement !== undefined ? { placement: outcome.placement } : {}),
+    };
   if (outcome.state === "failed") return { state: "refused", reason: outcome.reason };
   return { state: "refused", reason: "no pane to open it in — open one in the deck first" };
 }

@@ -67,6 +67,7 @@ import {
 import { afterNextFrame, godviewColdOpen } from "./cold-open";
 import { deckThemeNameForMode, useDeckAppearance } from "./deck-appearance";
 import { bornInThisView, GodviewDeckLaunchers, recordBornShell } from "./deck-launchers";
+import { type DeckPlacement, type DeckShape, deckPlacement } from "./deck-placement";
 import {
   paneCwd,
   paneProfileSet,
@@ -263,6 +264,16 @@ async function settled(predicate: () => boolean, ms: number): Promise<boolean> {
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
   return true;
+}
+
+/** The deck as the placement rule reads it (GV-D4, `deck-placement.ts`): the
+ * panes ghosttea lays out and the one it calls active — read at CALL time, off
+ * the context the workspace last published. */
+function deckShape(context: GhostteaWorkspaceContext): DeckShape {
+  return {
+    panes: context.panes.map((pane) => ({ id: pane.id, sessionId: pane.session.id })),
+    focusedPaneId: context.activePaneId,
+  };
 }
 
 /**
@@ -984,7 +995,9 @@ export function GodviewDeck({
    * `createSessionInActivePane` (:384) through it, so this single prop is every
    * interactive new-pane door the user has. Supplying it is what puts fieldd in
    * front of those births; omitting it is what used to send them down the
-   * control connection instead.
+   * control connection instead. Since GV-D4 the door's own new terminal rides
+   * both: the split while fewer than three panes show, the active pane after
+   * (`createTerminal`, below).
    *
    * A throw here is upstream's to handle (it logs and leaves the layout alone),
    * and that is the honest outcome: a pane that could not be born should not be
@@ -1025,12 +1038,79 @@ export function GodviewDeck({
   );
 
   /**
-   * A floor session, put in a pane — the workspace half of every mount this
-   * deck performs (the door's, and the pane frame's resume since GT-6).
+   * A pane fullscreen over where a session is about to land is LEFT first
+   * (GV-D4): a session focused or mounted behind another pane's fullscreen
+   * would take the keyboard out of sight. A split under one makes no sense
+   * either, so `beside` always leaves it — what ⌘D does, by the controller's
+   * own validation. The pane's own fullscreen stays the pane's: landing IN the
+   * fullscreen pane leaves it up.
+   */
+  const leaveZoomFor = useCallback((placement: DeckPlacement): void => {
+    if (placement.kind === "none") return;
+    const zoomed = deckZoom.current.state.paneId;
+    if (zoomed === null) return;
+    if (placement.kind === "beside" || zoomed !== placement.paneId) deckZoom.current.reset();
+  }, []);
+
+  /**
+   * A SESSION WITH NO PANE, PLACED (GV-D4, James 2026-10-02; DESIGN.md §8 "A
+   * session with no pane"; the rule is `deck-placement.ts`). Every door that
+   * brings a session into the terminals lands here — a body, a list row, a
+   * rain column, a timeline lane, a spend row, a search result, History's
+   * Resume and Jump to, a peer's attach:
    *
-   * With no `replacing` the session lands in the pane the user is in. With one,
-   * it lands in the pane showing the PTY it takes the place of, and ONLY there
-   * (AR-4b): that pane is activated, the mount waits for the workspace to
+   *   · already in a pane — that pane is focused, and nothing is mounted twice;
+   *   · fewer than three panes — a new pane BESIDE the focused one: ghosttea's
+   *     own split of the active pane (`addSession`, what ⌘D lands through), so
+   *     the new pane stands to its right and the row is equalized;
+   *   · three or more — the focused pane's place (`mountSession`): the session
+   *     it showed is detached, never killed (GT-D5).
+   *
+   * Until 2026-10-11 every one of them took the ACTIVE pane (GT-D17). Read
+   * AFTER whatever round trip produced the summary: the panes and the focused
+   * one are whatever the user made them while the floor answered. `summary` is
+   * absent only for a session the caller already saw in a pane.
+   */
+  const placeSessionNow = useCallback(
+    async (sessionId: string, summary: SessionSummary | undefined): Promise<LocalMountOutcome> => {
+      const context = workspaceRef.current;
+      if (context === undefined || context.activePaneId === undefined) return { state: "no-pane" };
+      const placement = deckPlacement(deckShape(context), sessionId);
+      if (placement.kind === "none") return { state: "no-pane" };
+      leaveZoomFor(placement);
+      if (placement.kind === "focus") {
+        if (context.activePaneId !== placement.paneId) {
+          context.activateSession(sessionId);
+          if (!(await settled(() => workspaceRef.current?.activePaneId === placement.paneId, 500)))
+            return {
+              state: "failed",
+              reason: "the pane showing it could not be made the active one",
+            };
+        }
+        return { state: "mounted", sessionId, placement: "focus" };
+      }
+      if (summary === undefined)
+        return { state: "failed", reason: "no pane shows this session any more" };
+      if (placement.kind === "beside") context.addSession(summary);
+      else context.mountSession(summary);
+      return (await settled(
+        () => workspaceRef.current?.panes.some((pane) => pane.session.id === sessionId) === true,
+        500,
+      ))
+        ? { state: "mounted", sessionId, placement: placement.kind }
+        : { state: "failed", reason: "the workspace did not take the mount" };
+    },
+    [leaveZoomFor],
+  );
+
+  /**
+   * A floor session, put in THE PANE OF THE PTY IT REPLACES — the hand-over
+   * (AR-4b; the door's `replacing`, and the pane frame's resume since GT-6). A
+   * session that replaces nothing is not this function's: it is placed by the
+   * rule above.
+   *
+   * It lands in the pane showing the PTY it takes the place of, and ONLY there:
+   * that pane is activated, the mount waits for the workspace to
    * commit the activation (the active pane is a ref the workspace syncs after
    * render, and `mountSession` reads that ref) and refuses if it never does —
    * a pane that closed under the wait must not hand its replacement to
@@ -1043,7 +1123,7 @@ export function GodviewDeck({
   const mountSummaryNow = useCallback(
     async (
       summary: SessionSummary,
-      replacing: string | undefined,
+      replacing: string,
       paneId?: string,
     ): Promise<LocalMountOutcome> => {
       const paneShows = (sessionId: string): boolean =>
@@ -1053,12 +1133,6 @@ export function GodviewDeck({
       let context = workspaceRef.current;
       if (context === undefined || context.activePaneId === undefined) return { state: "no-pane" };
       const sessionId = summary.id;
-      if (replacing === undefined) {
-        context.mountSession(summary);
-        return (await settled(() => paneShows(sessionId), 500))
-          ? { state: "mounted", sessionId }
-          : { state: "failed", reason: "the workspace did not take the mount" };
-      }
       const target = context.panes.find(
         (pane) => pane.session.id === replacing && (paneId === undefined || pane.id === paneId),
       );
@@ -1141,10 +1215,11 @@ export function GodviewDeck({
       // mounted view asks for it (`monitor-history.ts`, PF6)
       pastLanes: recordedLanesPortOver(doorClient),
       // DS-4e (2026-10-01; `thinking-desktop-sync-plane.md` §6.3) — ANOTHER
-      // desktop's session, mounted in the pane the user is in through the
-      // SAME routed host a local pane rides: never ghosttea's remote palette,
-      // which threw under the routed runtime (and whose replica no longer
-      // exists). Serialized with the local mounts (AR-4b): one active-pane slot.
+      // desktop's session, placed as any session with no pane is (GV-D4)
+      // through the SAME routed host a local pane rides: never ghosttea's
+      // remote palette, which threw under the routed runtime (and whose replica
+      // no longer exists). Serialized with the local mounts (AR-4b): they all
+      // place by the one focused pane.
       attach: (request) => {
         const run = mountQueue.current.then(() => attachRemoteNow(request));
         mountQueue.current = run.then(
@@ -1156,13 +1231,24 @@ export function GodviewDeck({
       createTerminal: async (request) => {
         const context = workspaceRef.current;
         if (context?.activeSession === undefined) return { state: "no-pane" };
+        // GV-D4: a new terminal is placed as a session with no pane is — it
+        // can be in no pane yet, so it opens beside the focused pane while
+        // fewer than three show and takes its place after.
+        const placement = deckPlacement(deckShape(context));
+        if (placement.kind !== "beside" && placement.kind !== "replace")
+          return { state: "no-pane" };
         // SB-3: the ask rides the pending-birth ref into the override (above).
         const birth: PendingBirth = { profileSet: request?.profileSet };
         pendingBirth.current = birth;
         try {
-          // Ghosttea owns pane placement and concurrent-birth fencing. Its
-          // createSplitSession override uses the same product door as Cmd–D.
-          const opening = context.createSessionInActivePane();
+          // Ghosttea owns the two births and their concurrent-birth fencing:
+          // its split of the active pane (⌘D's own — the new pane to the
+          // right, the row equalized) or its birth in the active pane. Its
+          // createSplitSession override puts both through the product door.
+          const opening =
+            placement.kind === "beside"
+              ? context.splitActive()
+              : context.createSessionInActivePane();
           // A birth ghosttea fenced (another one in flight) never reached the
           // override, and its ask must not wait there for the next ⌘D.
           if (pendingBirth.current === birth) pendingBirth.current = null;
@@ -1174,10 +1260,14 @@ export function GodviewDeck({
               reason: birth.refusal ?? "the workspace could not open a terminal",
             };
           }
+          // Only a birth that LANDED leaves a fullscreen it landed behind: a
+          // refused one changes nothing a person can see.
+          leaveZoomFor(placement);
           const bound = terminalSessionProfileSet(session.id);
           return {
             state: "mounted",
             sessionId: session.id,
+            placement: placement.kind,
             ...(bound !== undefined ? { profileSet: bound } : {}),
           };
         } catch (cause) {
@@ -1192,7 +1282,8 @@ export function GodviewDeck({
         // Mounts are SERIALIZED (AR-4b): two replacements landing in one fold
         // frame would otherwise race each other for the single active-pane
         // slot the workspace mounts into, and the second's activation would
-        // capture the first's mount.
+        // capture the first's mount. A placement (GV-D4) reads the focused
+        // pane and the pane count, so it waits its turn in the same queue.
         const run = mountQueue.current.then(() => mountLocalNow(sessionId, options));
         mountQueue.current = run.then(
           () => undefined,
@@ -1211,8 +1302,11 @@ export function GodviewDeck({
      *   2. the session ADOPTED as the owner's — from here the routed host asks
      *      its ticket, renewal, kill and refresh by `device`, and the summary is
      *      registered so the owner's session events reach the pane;
-     *   3. the MOUNT, in the active pane (GT-D17: attach the pane the user is
-     *      in; the session it showed is detached, never killed — GT-D5).
+     *   3. the PLACEMENT, by the rule every session with no pane follows
+     *      (GV-D4, `placeSessionNow`; until 2026-10-11 GT-D17's "attach the
+     *      pane the user is in"): beside the focused pane, or in its place
+     *      with three showing — the session it showed is detached, never
+     *      killed (GT-D5) — or its own pane focused if one already shows it.
      *
      * The ticket is the runtime's to ask once the pane mounts: its answer is
      * the loopback pair this desktop's daemon re-homed, dialled as a local
@@ -1235,7 +1329,7 @@ export function GodviewDeck({
         // stamps it into the persisted document so a later restore does not
         // have to guess from a path.
         remoteDevices.current.set(summary.id, request.deviceName);
-        const mounted = await mountSummaryNow(summary, undefined);
+        const mounted = await placeSessionNow(summary.id, summary);
         if (mounted.state !== "mounted") return mounted;
         return { state: "attached", sessionId: summary.id, readWrite: summary.readWrite };
       } catch (cause) {
@@ -1251,14 +1345,25 @@ export function GodviewDeck({
       sessionId: string,
       options: LocalMountOptions | undefined,
     ): Promise<LocalMountOutcome> {
-      if (workspaceRef.current?.activePaneId === undefined) return { state: "no-pane" };
+      const context = workspaceRef.current;
+      if (context?.activePaneId === undefined) return { state: "no-pane" };
       try {
+        // GV-D4: a session a pane already shows is only focused, and nothing
+        // is read from the floor to do it (a hand-over is not this: it names
+        // the PTY it replaces).
+        if (
+          options?.replacing === undefined &&
+          context.panes.some((pane) => pane.session.id === sessionId)
+        )
+          return await placeSessionNow(sessionId, undefined);
         // The floor is the one authority both halves read (the pool's own
         // join for a birth, asked here for a session that already exists).
         const summary = await terminalSessionSummary(sessionId);
         if (summary === null)
           return { state: "failed", reason: "the floor does not list this session" };
-        return await mountSummaryNow(summary, options?.replacing, options?.paneId);
+        return options?.replacing === undefined
+          ? await placeSessionNow(sessionId, summary)
+          : await mountSummaryNow(summary, options.replacing, options.paneId);
       } catch (cause) {
         return {
           state: "failed",
@@ -1266,7 +1371,7 @@ export function GodviewDeck({
         };
       }
     }
-  }, [runtime, fieldd, mountSummaryNow, observeRoster]);
+  }, [runtime, fieldd, mountSummaryNow, placeSessionNow, leaveZoomFor, observeRoster]);
 
   useEffect(() => {
     onRemoteDoor?.(door);
@@ -1313,8 +1418,10 @@ export function GodviewDeck({
   // `createTerminal` — what the swarm's hold does, without a spot to land on —
   // and the interim send pastes into a pane through the pane's own input. The
   // rows are the panes this deck shows, named as the swarm names their bodies.
-  // History lands here too: its Resume places, its Jump to reveals (P3).
-  // Published on change only; the deck going away takes the door with it.
+  // History lands here too: its Resume places, its Jump to reveals (P3) — each
+  // by the one rule for a session with no pane (GV-D4), and each outcome says
+  // how it was placed. Published on change only; the deck going away takes the
+  // door with it.
   const linePanesKey = JSON.stringify(
     linePanesOf(workspace?.panes ?? [], paneAgents.agents, workspace?.activePaneId, (id) =>
       bornCwd.current.get(id),
@@ -1334,8 +1441,8 @@ export function GodviewDeck({
         return pane !== undefined && root !== null && pasteIntoPane(root, pane.id, text);
       },
       // AR-8c — History's Resume: the resumed agent's create ticket, adopted
-      // into the pool exactly as the launcher's resume adopts one, and mounted
-      // in the active pane through the door's serialized mount (AR-4b).
+      // into the pool exactly as the launcher's resume adopts one, and placed
+      // by the rule (GV-D4) through the door's serialized mount (AR-4b).
       canPlace: door !== null,
       place: async (terminal) => {
         if (door === null) return { state: "refused", reason: "the deck has no connection yet" };
@@ -1344,19 +1451,13 @@ export function GodviewDeck({
       },
       // P3 — History's Jump to: the pane already showing the running session
       // becomes the active one (never a second mount of it); a session no pane
-      // shows is mounted in the active pane through the door's serialized mount.
-      // A mount in flight lands first, since a replacement borrows the focus.
-      reveal: async (sessionId) => {
-        if (door === null) return { state: "refused", reason: "the deck has no connection yet" };
-        await mountQueue.current;
-        const context = workspaceRef.current;
-        if (context?.panes.some((pane) => pane.session.id === sessionId) !== true)
-          return newTerminalOutcome(await door.mountLocal(sessionId));
-        if (context.activeSession?.id !== sessionId) context.activateSession(sessionId);
-        return (await settled(() => workspaceRef.current?.activeSession?.id === sessionId, 500))
-          ? { state: "opened" }
-          : { state: "refused", reason: "the pane showing it could not be made the active one" };
-      },
+      // shows is placed by the rule. Both are the door's serialized mount since
+      // GV-D4 — the rule's "already shown" is the reveal — so a mount in flight
+      // lands first, as it always had to (a replacement borrows the focus).
+      reveal: async (sessionId) =>
+        door === null
+          ? { state: "refused", reason: "the deck has no connection yet" }
+          : newTerminalOutcome(await door.mountLocal(sessionId)),
     });
   }, [linePanesKey, active, door]);
   useEffect(() => () => publishGodviewLineDoor(null), []);

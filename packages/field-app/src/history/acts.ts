@@ -19,8 +19,9 @@ import { type ResumeReading, readResume, resumeNative } from "./resume";
 // pressed on ANY session or project the room draws. They are one set of acts,
 // here, over the window's fieldd client: what each asks of fieldd, and how its
 // outcome reads. Where the act shows what it did, the window moves to Godview
-// and its deck places the pane (the swarm's open's pane), as the line's
-// Resume always has.
+// and its deck places the session as the swarm's open does (GV-D4: beside the
+// focused pane, or in its place with three showing), as the line's Resume
+// always has.
 
 /** How long an act waits for Godview's deck — mounted on Godview's first
  * open — to be able to place what it started. */
@@ -108,7 +109,11 @@ export async function resumeTarget(
     return { state: "refused", reason: "it resumed, but the deck did not open to show it" };
   }
   const placed = await deck.place(answer.terminal);
-  if (placed.state === "opened") return { state: "resumed" };
+  if (placed.state === "opened")
+    return {
+      state: "resumed",
+      ...(placed.placement !== undefined ? { placement: placed.placement } : {}),
+    };
   deps.unplaced?.("resume", placed.reason);
   return { state: "refused", reason: `it resumed, but no pane took it (${placed.reason})` };
 }

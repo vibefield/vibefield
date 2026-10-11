@@ -825,8 +825,10 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     grows 1.06 on the pop curve), 6 clear of the track, its glyph 16 in secondary ink (primary while
     open or hovered). It is the view's own act (FC-D3), and only Canvas's is a bare plus (FR-3):
     **Canvas — Objects** (`plus`, B): the objects rise behind the line and the plus turns 135° into
-    ✕ over 600ms on the island curve; **Godview — New terminal** (`start`, ⌘T): a fresh shell in the
-    active pane, which shows its launcher; **History — Resume** (`resume`): waiting, faint by ink as
+    ✕ over 600ms on the island curve; **Godview — New terminal** (`start`, ⌘T): a fresh shell, which
+    shows its launcher, placed as a session with no pane is (the deck, below; GV-D4) — beside the
+    focused pane while fewer than three panes show, in its place after; **History — Resume**
+    (`resume`): waiting, faint by ink as
     the Assistant's cell is, until a session is chosen — and **Jump to** (`jump`) while the chosen
     session runs on this desktop (§8 "History", 2026-10-08). Between views the glyph cross-fades in
     place, 200ms `ease` (One Frame §12), and so does History's between Resume and Jump to; the
@@ -869,8 +871,9 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   clipboard, and the note says that and why: "Copied — no agent takes a message from here yet". The
   note is the views track's note (solid, 12/500 in secondary ink, rising 4px as it fades in), over
   send with its right edge on send's (so a long sentence never leaves the window) — or, for create's
-  outcomes ("Terminal opened in the active pane"), centred over create — for 2.4s. Sending clears
-  the draft's words and chips and keeps the aim.
+  outcomes ("Terminal opened in a new pane", or "Terminal opened in the active pane" where it took
+  the focused pane's place, GV-D4), centred over create — for 2.4s. Sending clears the draft's words
+  and chips and keeps the aim.
   **One surface at a time, at the line** (One Frame FR-4, F11): @'s list and the objects are ONE
   owner's two surfaces — opening either folds the other — and Settings, the palette, the docs
   explorer, the Artifact panel and the Me menu fold them as they folded the tray. The Me menu and
@@ -1739,14 +1742,20 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     a launch brings back — last run's panes with the called session, or the called session alone
     — is N14, open with James.** **⌘W on the last pane** asks for Canvas today; **whether it
     should instead minimize the terminals and stay in Godview is N16, open with James.**
-  - **A session with no pane** (GV-D4): it opens **beside the focused pane, up to three panes**;
-    with three or more showing it **takes the focused pane's place** (the session it displaces
-    keeps running); a session already in a pane is focused where it is, never mounted twice. A
-    new terminal — ⌘T, the bloom's birth — is placed by the same rule. The cap is this rule's
-    alone: **⌘D still splits without limit.** *Replaces* "the active pane" wherever a door says it
-    today — the line's New terminal, History's Resume and Jump to, the Peek's Open in the
-    terminals, each in its own entry of this section: those sentences and their notes stand until
-    this lands.
+  - **A session with no pane** (GV-D4 — *built 2026-10-11, the first of these items to ship*): it
+    opens **beside the focused pane, up to three panes**; with three or more showing it **takes
+    the focused pane's place** (the session it displaces keeps running); a session already in a
+    pane is focused where it is, never mounted twice. A new terminal — ⌘T, the bloom's birth — is
+    placed by the same rule. The cap is this rule's alone: **⌘D still splits without limit.**
+    Beside is the split ⌘D makes: the new pane stands to the focused pane's right, the row shared
+    equally, and it is the focused pane from then on. A pane held fullscreen over where a session
+    lands is let go first, so nothing is focused out of sight; landing in the fullscreen pane
+    leaves it up. Every door that selects a session places it so — a body, a list row, a rain
+    column, a timeline lane, a spend row, a search result, a peer's attach — and what it says
+    follows: **"… in a new pane"** beside, **"… in the active pane"** where it took the focused
+    pane's place, **"… is in the active pane"** for one only focused. *Replaced* "the active
+    pane" wherever a door said it — the line's New terminal, History's Resume and Jump to, the
+    Peek's Open in the terminals, each rewritten in its own entry of this section.
   - **One resize per change.** *Replaces* "No transition on the edge: every frame of an animated
     edge would be a PTY resize" — whose reason stands, and is the reason for this. A move the
     product makes is ONE resize of the terminals. **Rising** — called up, or maximized by its
@@ -2040,10 +2049,11 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     chosen ("Resume this session — choose a session first"), and waiting with the empty pane
     launcher's own words for one it would not resume ("its folder is gone", "not offered here", "not
     installed"). Pressed, it continues the conversation in its own agent and persona (`agent.resume`,
-    the native form, as the launcher asks it) in the active pane — the pane the swarm's open uses —
-    and the window moves to Godview to show it; the note says **"Resumed in the active pane"**, or
-    **"Could not resume — …"** in the launcher's words, and then the window stays in History. Jump to,
-    for a session still running, is owed.
+    the native form, as the launcher asks it), placed as the swarm's open places a session with no
+    pane (§8, the deck, GV-D4: beside the focused pane while fewer than three panes show, in its
+    place after), and the window moves to Godview to show it; the note says **"Resumed in a new
+    pane"** or **"Resumed in the active pane"**, or **"Could not resume — …"** in the launcher's
+    words, and then the window stays in History. Jump to, for a session still running, is owed.
     *Corrected 2026-10-08 (P3):* Jump to is built — the next entry.
   - **Its create is Jump to while the session runs here** (`jump`, §13; AR-D43, K11 — built
     2026-10-08, P3; the room's own row footer, PJ-D9 (a), waits for PJ-4's slot). Whether the
@@ -2058,7 +2068,7 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     `jump` (200ms `ease`, as between views) and the act is **"Jump to this session"**, which never
     waits on the launcher's reading: a running session is shown even where it could not be resumed.
     Pressed, the window moves to Godview and the pane showing that session becomes the active one —
-    or, when no pane shows it, it is put in the active pane, as a resumed one is; the note says
+    or, when no pane shows it, it is placed as a resumed one is (GV-D4); the note says
     **"Jumped to its pane"**, or **"Could not jump — …"** in the deck's words. A session running on
     another desktop is not running *here* (reaching it is the mesh's, DS-4): the create stays
     Resume and says nothing new. The palette's row is the line's: the same reading, the same act.
@@ -2286,7 +2296,7 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     focus, read-only — so it makes **no geometry claim** (the pane keeps the PTY's size; the peek
     draws what fits), takes no focus and types nothing. A run on another desktop cannot be watched
     from here (no mirror until DS-4's): the peek says where it runs and that Open brings its
-    terminal into the active pane.
+    terminal into a pane here.
   - **The peek** (K8, until the docket's PK3 rules): what opening the row would show. Today, that
     session's matched lines — every hit the index answered for it, in reading order, each led by
     who said it and marked as above, at 13.5/1.55 in primary ink — under the session's title at
@@ -2328,11 +2338,13 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     (§10) — the palette, a drawer, the Me menu, Settings or a change of view fold it, and it folds
     them; ⌘K over it opens the palette, ⌘F over the palette opens it.
   - **Open in the terminals** (P2). A live row — ↵, a click or Open — folds the popup and, in
-    Godview, does what the view's own select does: this desktop's run mounted in the active pane, a
-    peer's attached there. From History it takes Jump to's path (P3): the frame moves to Godview and
-    the deck reveals the pane showing the run (activated, or mounted in the active pane); a peer's
-    run is selected through Godview as it opens. A run that could not be shown is SAID, on the
-    line's note in Jump to's words ("Could not jump — ‹why›"): the popup folded at the pick.
+    Godview, does what the view's own select does: this desktop's run placed as a session with no
+    pane is (§8, the deck, GV-D4 — its own pane focused if one shows it, else beside the focused
+    pane, else in its place), a peer's attached the same way. From History it takes Jump to's path
+    (P3): the frame moves to Godview and the deck reveals the pane showing the run (activated, or
+    placed by that rule); a peer's run is selected through Godview as it opens. A run that could
+    not be shown is SAID, on the line's note in Jump to's words ("Could not jump — ‹why›"): the
+    popup folded at the pick.
   - **Open at the line.** A past row — ↵, a click or Open — folds the popup and opens History at the
     line: the room's own `openAt` with the hit's session and message, the session in its project and
     the transcript landed on the message (§8 "History"). Everything reads this desktop's index (K5);

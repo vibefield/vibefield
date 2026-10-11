@@ -193,7 +193,7 @@ export function PeekLive({
         </span>
         <p>
           It runs on {row.remote.name}. Search shows this desktop's terminals; Open brings its
-          terminal into the active pane.
+          terminal into a pane here.
         </p>
       </div>
     );
