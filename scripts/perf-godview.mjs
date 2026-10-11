@@ -49,7 +49,8 @@
 // `--no-build` both native executables and the JS hosts must already be built.
 // Every arm runs the same window mode (M31: offscreen by
 // default, never focused, never on top — proven: the swarm renders WebGPU
-// there), the same clock, the same warm-up.
+// there), the same clock, the same warm-up — and the summary says which views
+// each arm's lab warmed, as its launches reported (`perf-godview-method.mjs`).
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -65,6 +66,7 @@ import {
   WARMUP_RECIPE,
   waitForLoad,
 } from "./godview-lab-arms.mjs";
+import { warmedViews, warmupLine } from "./perf-godview-method.mjs";
 import {
   cellMetrics,
   gateVerdict,
@@ -252,7 +254,8 @@ async function main() {
 
   // cells are keyed view × corpus; every run has the same set
   const keys = runs.A[0].cells.map((cell) => `${cell.view} × ${cell.corpus}`);
-  // M33's instruments, as each launch said: the hook stood, CDP answered, React timed
+  // M33's instruments, as each launch said: the hook stood, CDP answered, React
+  // timed — and what its lab's warm-up replayed through (the method law)
   const instruments = Object.fromEntries(
     Object.entries(runs).map(([arm, list]) => [
       arm,
@@ -263,6 +266,7 @@ async function main() {
         swarmRenderers: [
           ...new Set(list.flatMap((run) => run.cells.map((cell) => cell.swarmRenderer))),
         ].filter((renderer) => renderer !== null),
+        warmedViews: warmedViews(list),
       },
     ]),
   );
@@ -299,6 +303,10 @@ async function main() {
       .join("; ")}`,
     `- rounds: ${rounds}, ${paired ? "A B A′ / A′ B A alternating" : "A,B"} per round, one Electron process per launch`,
     `- window: ${windowMode}${windowMode === "offscreen" ? ` (${fps} fps, scale ${scale}: frame p50 is pinned there; read rAF work, delivery work and LoAF)` : ""}; clock: ${clock}`,
+    warmupLine(
+      WARMUP_RECIPE,
+      Object.fromEntries(Object.entries(instruments).map(([arm, held]) => [arm, held.warmedViews])),
+    ),
     `- load average at launches: ${loads.map((l) => `${l.arm}${l.round} ${l.load.toFixed(0)}`).join(" · ")}`,
     "- estimator: medians; paired diff T = median(B−A), z = |T| / (1.858·MAD/√R); tails are weather",
     paired

@@ -56,6 +56,8 @@ import { runGodviewWorkerWindows } from "./godview-worker-windows";
 //                            `n=10,duration=1500,seed=9,markerQuietMs=50`); under
 //                            `model` its stream is played too, so the model path
 //                            pays its first-use costs where nothing is measured
+//   VF_GODVIEW_PERF_WARMUP   `0`: no warm-up (the report's `warmedViews` is then
+//                            empty, and the runner's summary says so)
 //   VF_GODVIEW_PERF_CLOCK    `corpus` (default, M31: the page's Date reads the
 //                            corpus's wall time while a replay plays) or `real`
 //   VF_GODVIEW_PERF_WINDOW   `offscreen` (default) or `shown` — never focused,
@@ -156,6 +158,8 @@ export async function runGodviewPerfLab(opts: {
 
   let code = 0;
   const cells: GodviewPerfCell[] = [];
+  /** the views the discarded warm-up replayed through, as it got through them */
+  const warmedViews: string[] = [];
   const startedAt = Date.now();
   let lab: LabWindow | null = null;
   try {
@@ -188,15 +192,37 @@ export async function runGodviewPerfLab(opts: {
     // A WARM-UP, discarded: the first trial's first cell carried 4.4 s of
     // long-frame blocking (two LoAFs, the longest 2.3 s) that no later cell saw
     // — first-use costs of the stage, the views' chunks and the JIT. One short
-    // corpus through the default view pays them before anything is measured;
-    // under `model`, through the model path.
+    // corpus pays them before anything is measured; under `model`, through the
+    // model path. It replays once through EVERY view of the run, in the run's
+    // order (MV lab debts, 2026-10-11): through the default view alone, as it
+    // ran until then, every other view first mounted — its chunk, its root,
+    // its canvas — inside its own first measured cell. Each view is entered as
+    // a cell enters it (selected, settled, then the replay), and the warm-up
+    // ends where every recipe's last cell ends — the replay stopped on the last
+    // view, settled — so the first measured cell is entered as any later
+    // recipe's first is: its corpus loaded, then its own view selected.
+    // The cost is per launch: a switch, the settle and the 1.5 s corpus for
+    // each view, ~3.3 s; the four views and the closing settle ~15 s where the
+    // one-view warm-up took ~3 s (about 4 min more over an R7's 21 launches).
     if (process.env["VF_GODVIEW_PERF_WARMUP"] !== "0") {
       const warm = await loadCorpus(win, warmupRecipe, source);
-      await page(win, "window.__vfGodviewReplay.start()");
-      await untilEnded(win, "the warm-up replay to end", warm.durationMs + 30_000);
-      await page(win, "window.__vfGodviewReplay.stop()");
+      for (const view of views) {
+        await selectView(win, monitor, view);
+        await sleep(settleMs);
+        await page(win, "window.__vfGodviewReplay.start()");
+        await untilEnded(win, `the warm-up replay to end on ${view}`, warm.durationMs + 30_000);
+        await page(win, "window.__vfGodviewReplay.stop()");
+        warmedViews.push(view);
+      }
       await sleep(settleMs);
-      say({ kind: "warmed", arm, corpus: warm.corpus, model: warm.model !== null });
+      say({
+        kind: "warmed",
+        arm,
+        corpus: warm.corpus,
+        model: warm.model !== null,
+        views: warmedViews,
+        leftOn: monitor.current()?.viewId ?? null,
+      });
     }
 
     for (const recipe of recipes) {
@@ -309,6 +335,7 @@ export async function runGodviewPerfLab(opts: {
         metered: lab?.metered ?? false,
         synthetic,
         warmupRecipe,
+        warmedViews,
         electron: process.versions["electron"],
         platform: process.platform,
         loadavg: loadavg(),

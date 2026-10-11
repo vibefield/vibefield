@@ -47,6 +47,22 @@ failed launches. Reports carry `profile: {kind: "isolated-chromium-v1", id}`; th
 opaque hash of the canonical path. Runners reject missing/mismatched proof and reused IDs
 before grading. Historical testing bundles need the same proof instrumentation. The worker
 lifecycle probe uses one profile per process, shared by its intentionally concurrent windows.
+
+**Lab-debts update (2026-10-11, lane `mv/lab-debts`):** debts of the instrument itself, each a
+change of METHOD. An A/B pair must run the same lab in both arms, so a pair takes its A arm
+from main after these, and a cohort measured before them is not pooled with one measured after
+(the pooled reader compares the summaries' `instruments`, which now carry what each arm's lab
+did around its cells).
+
+- **The warm-up replays through every measured view.** Until here one short corpus replayed
+  through the default view only, so every other view first mounted — its chunk, its root, its
+  canvas — inside its own first measured cell. The warm corpus now replays once through each
+  view of the run, in the run's order, each entered as a cell enters it (selected, settled,
+  replayed), and ends as a recipe's last cell ends: stopped on the last view, settled. It costs
+  ~15 s a launch with the four views where the one-view warm-up took ~3 s.
+  `VF_GODVIEW_PERF_WARMUP=0` still skips it. Each report carries `warmedViews`; the `warmed`
+  line, the summary's `instruments` and its header name them per arm, and the header says so
+  when the arms did not warm the same views.
 The ordinary `pnpm smoke:godview` and `pnpm smoke:terminal-direct` runners also own fresh
 profiles and verify the app and window paths before navigation. After building, use
 `node scripts/smoke-godview.mjs` for the same smoke without rebuilding; direct Electron

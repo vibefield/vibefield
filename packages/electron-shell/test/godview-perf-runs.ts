@@ -150,6 +150,7 @@ export async function writeRun(dir: string, options: RunOptions = {}): Promise<u
         reactHook: true,
         synthetic: {},
         warmupRecipe: "n=10,duration=1500,seed=9,markerQuietMs=50",
+        warmedViews: [...VIEWS],
         cells: VIEWS.map((view) => labCell(view, task, render)),
       };
       runs[arm]?.push(report);
@@ -163,7 +164,13 @@ export async function writeRun(dir: string, options: RunOptions = {}): Promise<u
       (runs[arm] ?? []).map((run) => stats.cellMetrics(run.cells[index]));
     return { cell, rows: stats.judgeCell(read("A"), read("B"), read("A′"), table) };
   });
-  const instruments = { reactHook: true, metered: true, timed: true, swarmRenderers: ["webgpu"] };
+  const instruments = {
+    reactHook: true,
+    metered: true,
+    timed: true,
+    swarmRenderers: ["webgpu"],
+    warmedViews: [...VIEWS],
+  };
   const summary = {
     profiles,
     label: "A/B",
