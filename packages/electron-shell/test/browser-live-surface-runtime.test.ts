@@ -29,6 +29,7 @@ import {
   engineAgentOf,
   faviconOf,
   loadFailureOf,
+  POINT_SCALE_READ_MAX_MS,
   virtualKeyCodeOf,
 } from "../src/main/live-surfaces/browser-producer";
 import { browserSurfaceProfileName } from "../src/main/live-surfaces/browser-security";
@@ -441,9 +442,10 @@ function cpuPaint(width = 64, height = 48) {
   };
 }
 
+/** A few turns of the microtask queue (PT-5b2: an input takes its turn on its page's chain — a turn or two more than
+ * when each was sent on its own). */
 async function flush(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let i = 0; i < 48; i += 1) await Promise.resolve();
 }
 
 afterEach(() => {
@@ -1944,6 +1946,162 @@ describe("BrowserLiveSurfaceRuntime", () => {
     expect(plain.scaleReads).toBe(0);
     expect(plain.mouseInputs.at(-1)).toMatchObject({ x: 10, y: 20 });
     laptop.runtime.dispose();
+  });
+
+  describe("PT-5b2 (ruling 4) — the hand's events reach the page in the order they were sent, whatever is awaited on the way", () => {
+    const NONE = { shift: false, alt: false, ctrl: false, meta: false };
+    /** A phone's page, live, its window's inputs kept in ONE list as they reach it. */
+    const phone = async () => {
+      const result = setup({ source: phoneSource() });
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(demand(1, "live", 30, { width: 1206, height: 2622 }));
+      await flush();
+      await flush();
+      const window = result.native.windows[0];
+      if (window === undefined) throw new Error("no window");
+      window.paint(sharedPaint(1206, 2622).paint);
+      await flush();
+      const revision = result.runtime.summary.geometry?.revision ?? 0;
+      const heard: string[] = [];
+      const touch = window.dispatchTouch.bind(window);
+      window.dispatchTouch = async (input) => {
+        heard.push(input.type);
+        await touch(input);
+      };
+      const key = window.dispatchKey.bind(window);
+      window.dispatchKey = async (input) => {
+        heard.push(`${input.type} ${input.key}`);
+        await key(input);
+      };
+      const text = window.dispatchText.bind(window);
+      window.dispatchText = async (typed) => {
+        heard.push(`text ${typed}`);
+        await text(typed);
+      };
+      const send = (
+        input: Parameters<NonNullable<typeof renderer.attachment.dispatchInput>>[0],
+      ): void => renderer.attachment.dispatchInput?.(input, revision);
+      const pointer = (action: "down" | "up" | "move", x: number): void =>
+        send({ kind: "pointer", action, x, y: 10, button: "left", clickCount: 1 });
+      /** The page is busy: its scale's reads are answered when the row says (`answer`), or never. */
+      const answers: ((scale: number) => void)[] = [];
+      const busy = (): void => {
+        window.visualScale = () => {
+          window.scaleReads += 1;
+          return new Promise<number>((resolve) => {
+            answers.push(resolve);
+          });
+        };
+      };
+      const settle = (): Promise<void> => flush();
+      return { result, renderer, window, heard, send, pointer, busy, answers, settle };
+    };
+
+    it("a RELEASE sent while its press's scale is still being read arrives AFTER it: the page hears a start and its end — never a finger left down", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(2_000_000);
+      const p = await phone();
+      p.window.scale = 0.5;
+      // a first tap: the scale is read, and serves a moment
+      p.pointer("down", 10);
+      p.pointer("up", 10);
+      await p.settle();
+      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
+      // the page is busy: the next read takes a while. A second tap within the moment — its press, then its release
+      // BEFORE the press's read has answered
+      p.busy();
+      p.pointer("down", 20);
+      p.pointer("up", 20);
+      await p.settle();
+      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
+      p.answers[0]?.(0.5);
+      await p.settle();
+      expect(p.heard).toEqual(["touchStart", "touchEnd", "touchStart", "touchEnd"]);
+      p.result.runtime.dispose();
+    });
+
+    it("a KEY and a text sent at once after a press arrive after it; and a dispatch that REJECTS does not break the chain", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(2_000_000);
+      const p = await phone();
+      p.busy();
+      p.pointer("down", 10);
+      p.send({ kind: "key", action: "down", key: "a", code: "KeyA", modifiers: NONE });
+      p.send({ kind: "text", text: "a" });
+      p.pointer("up", 10);
+      await p.settle();
+      // nothing overtakes the press, which waits on its page
+      expect(p.heard).toEqual([]);
+      p.answers[0]?.(1);
+      await p.settle();
+      expect(p.heard).toEqual(["touchStart", "keyDown a", "text a", "touchEnd"]);
+      // a key the window refuses (its command rejects): counted dropped — and the events behind it still arrive, in order
+      const dropped = p.result.runtime.stats.inputDropped;
+      const key = p.window.dispatchKey;
+      p.window.dispatchKey = async () => {
+        throw new Error("the page's debugger went");
+      };
+      p.send({ kind: "key", action: "down", key: "b", code: "KeyB", modifiers: NONE });
+      p.send({ kind: "text", text: "c" });
+      await p.settle();
+      p.window.dispatchKey = key;
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
+      expect(p.heard.at(-1)).toBe("text c");
+      p.result.runtime.dispose();
+    });
+
+    it(`the scale's read is BOUNDED (${POINT_SCALE_READ_MAX_MS} ms): one that never answers holds the chain that long and no longer — the last scale read FOR THIS DOCUMENT stands, and the release follows`, async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(2_000_000);
+      const p = await phone();
+      p.window.scale = 0.5;
+      p.pointer("down", 10);
+      p.pointer("up", 10);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
+      // the page hangs: its scale is never said again
+      p.busy();
+      await vi.advanceTimersByTimeAsync(1_000);
+      p.pointer("down", 20);
+      p.pointer("up", 20);
+      await vi.advanceTimersByTimeAsync(POINT_SCALE_READ_MAX_MS - 1);
+      expect(p.heard).toHaveLength(2);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(p.heard).toEqual(["touchStart", "touchEnd", "touchStart", "touchEnd"]);
+      // …at the scale this document was last read at
+      expect(p.window.touchInputs.at(-2)?.touchPoints[0]).toMatchObject({ x: 40, y: 20 });
+      p.result.runtime.dispose();
+    });
+
+    it("with NO scale ever read for this document a press is NOT SENT — counted: at the wrong scale it would land on another element — and the next press, its read answered, is", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(2_000_000);
+      const p = await phone();
+      p.window.scale = 0.5;
+      p.pointer("down", 10);
+      p.pointer("up", 10);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
+      // ANOTHER document — its scale its own, and the page too busy to say it
+      p.window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
+      p.busy();
+      const unread = p.result.runtime.stats.inputScaleUnread;
+      p.pointer("down", 20);
+      p.pointer("up", 20);
+      await vi.advanceTimersByTimeAsync(POINT_SCALE_READ_MAX_MS);
+      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
+      // (its press, and the release behind it: neither can be placed)
+      expect(p.result.runtime.stats.inputScaleUnread).toBe(unread + 2);
+      // the page answers at last: the next press reads it, and lands where the page is drawn
+      for (const answer of p.answers.splice(0)) answer(0.25);
+      p.window.visualScale = async () => 0.25;
+      p.pointer("down", 20);
+      p.pointer("up", 20);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(p.heard).toEqual(["touchStart", "touchEnd", "touchStart", "touchEnd"]);
+      expect(p.window.touchInputs.at(-2)?.touchPoints[0]).toMatchObject({ x: 80, y: 40 });
+      p.result.runtime.dispose();
+    });
   });
 
   it("PT-4: a press on a touch device's page is a TOUCH — its moves while it is down, its release its end; a hover and another button are nothing; the wheel stays the page's scroll", async () => {

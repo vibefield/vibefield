@@ -52,6 +52,17 @@ const CPU_FALLBACK_MAX_FPS = 10;
 /** PT-5b (ruling 5c): how long a `mobile` page's visual-viewport scale, once read, serves a move, a hover or a wheel
  * (a press always reads it afresh). */
 const POINT_SCALE_MS = 250;
+/** PT-5b2 (ruling 4): a read of a page's visual-viewport scale in flight — whose document's, in which window, asked when. */
+interface ScaleRead {
+  readonly doc: number;
+  readonly window: BrowserSurfaceNativeWindow;
+  readonly askedAt: number;
+  readonly done: Promise<void>;
+}
+
+/** PT-5b2 (ruling 4): the longest a pointer event waits for its page's scale to be read (a busy page answers late, a hung
+ * one never) — past it the last scale read FOR THIS DOCUMENT stands; with none ever read for it, the event is not sent. */
+export const POINT_SCALE_READ_MAX_MS = 200;
 const CPU_FALLBACK_MAX_PIXELS = 1280 * 720;
 
 const BROWSER_CAPABILITIES = {
@@ -453,6 +464,8 @@ export interface BrowserLiveSurfaceRuntimeStats {
   readonly emulationReloads: number;
   /** PT-5b: windows made ANEW because the page's device moved to another density (ruling 5a). */
   readonly windowsRemade: number;
+  /** PT-5b2 (ruling 4): pointer events NOT SENT because their page's scale was never read for the document they were for. */
+  readonly inputScaleUnread: number;
   /** PT-5b: paints of a window's bootstrap document — taken as the window being up, shown to nobody. */
   readonly bootstrapPaints: number;
   /** PT-5a: what the page asked for and was refused, counted by kind (the diagnostics' count — ruling 7). */
@@ -955,11 +968,17 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #emulations = 0;
   #emulationReloads = 0;
   #windowsRemade = 0;
+  #inputScaleUnread = 0;
+  /** PT-5b2 (ruling 4) — ONE CHAIN a page: the hand's events take their turn here, in the order they were sent. */
+  #inputTail: Promise<void> = Promise.resolve();
   #bootstrapPaints = 0;
   /** PT-5b (ruling 5a): the density the page's window was BORN at — an offscreen window's density is its own for life. */
   #windowDensity: number | undefined;
-  /** PT-5b (ruling 5c): a `mobile` page's visual-viewport scale as last read, and when (ms) — see `pointScale`. */
-  #pointScale = { value: 1, at: Number.NEGATIVE_INFINITY };
+  /** PT-5b (ruling 5c): a `mobile` page's visual-viewport scale as last read, and when (ms) — see `pointScale`. PT-5b2:
+   * `known` — it was read FOR THE DOCUMENT that stands (`doc` counts the documents: another one's scale is its own). */
+  #pointScale = { value: 1, at: Number.NEGATIVE_INFINITY, known: false, doc: 0 };
+  /** PT-5b2 (ruling 4): the one read of the page's scale in flight — whose document's, in which window, asked when. */
+  #scaleRead: ScaleRead | undefined;
   /** PT-5a: the page's refusals by kind, and the last one a person is told of (its serial counts them for the page's life). */
   readonly #refusals: Record<BrowserSurfaceRefusal, number> = {
     alert: 0,
@@ -1064,6 +1083,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       emulations: this.#emulations,
       emulationReloads: this.#emulationReloads,
       windowsRemade: this.#windowsRemade,
+      inputScaleUnread: this.#inputScaleUnread,
       bootstrapPaints: this.#bootstrapPaints,
       refused: { ...this.#refusals },
       effectiveDemand: this.#effectiveDemand === null ? null : copyDemand(this.#effectiveDemand),
@@ -1162,8 +1182,23 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     if (this.#lifecycle.snapshot.state !== "closed") this.#lifecycle.transition("closed");
   }
 
-  /** Main-private input seam; authorization is deliberately outside LiveSurfaceAttachment. */
-  async dispatchInput(request: BrowserSurfaceInputRequest): Promise<void> {
+  /**
+   * Main-private input seam; authorization is deliberately outside LiveSurfaceAttachment.
+   *
+   * PT-5b2 (ruling 4) — THE HAND'S EVENTS REACH THE PAGE IN THE ORDER THEY WERE SENT, whatever is awaited on the way:
+   * one chain a page. An event takes its turn behind the one before it — a pointer, a wheel, a key, text, a composition
+   * alike — and a dispatch that rejects (a stale geometry, a bound passed, a command the window refuses) is its own
+   * caller's, never the chain's. (Before: every pointer event awaited its page's scale by itself — a press always reads
+   * it, a release a moment after a read does not — so on a busy `mobile` page a release overtook its press: the page
+   * heard a finger come down and never lift.) PT-5c routes on this chain.
+   */
+  dispatchInput(request: BrowserSurfaceInputRequest): Promise<void> {
+    const turn = this.#inputTail.then(() => this.dispatchInTurn(request));
+    this.#inputTail = turn.catch(() => undefined);
+    return turn;
+  }
+
+  private async dispatchInTurn(request: BrowserSurfaceInputRequest): Promise<void> {
     const geometry = this.#geometry;
     const window = this.#window;
     if (
@@ -1533,21 +1568,58 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * `mobile` page: ruling 5b). There the page's px are the view's OVER its visual-viewport scale. The scale is READ AT
    * EACH PRESS (a press must land where the page is drawn NOW), and for a move, a hover or a wheel when what was read is
    * older than `POINT_SCALE_MS`; a new document's is read afresh. A page that is not `mobile` is asked nothing: 1.
+   * PT-5b2 (ruling 4) — the read is BOUNDED (`POINT_SCALE_READ_MAX_MS`): past it the last scale read FOR THIS DOCUMENT
+   * stands; with none ever read for this document the event is NOT SENT (counted) — at 1, or at the document before's
+   * scale, a press on a page shown at 0.41 lands on another element.
    */
   private async pointScale(window: BrowserSurfaceNativeWindow, press: boolean): Promise<number> {
     if (!this.mobile()) return 1;
-    const now = Date.now();
-    if (!press && now - this.#pointScale.at < POINT_SCALE_MS) return this.#pointScale.value;
-    let read = 1;
-    try {
-      read = await window.visualScale();
-    } catch {
-      // (a page between two documents answers nothing: the last scale read stands, 1 with none)
-      return this.#pointScale.value;
+    const was = this.#pointScale;
+    if (!press && was.known && Date.now() - was.at < POINT_SCALE_MS) return was.value;
+    // PT-5b2 (ruling 4) — the read is BOUNDED: a busy page answers late and a hung one never, and the chain behind this
+    // event must not wait on either. ONE read is in flight at a time, and its bound runs from when it was ASKED: the
+    // events that queue behind a page that does not answer share it — they do not each wait their own (a drag over a
+    // hung page would be seconds late). An answer that comes late still serves the events after it.
+    let reading = this.#scaleRead;
+    if (reading === undefined || reading.doc !== was.doc || reading.window !== window) {
+      const mine: ScaleRead = {
+        doc: was.doc,
+        window,
+        askedAt: Date.now(),
+        done: window.visualScale().then(
+          (said) => {
+            if (this.#scaleRead === mine) this.#scaleRead = undefined;
+            if (this.#pointScale.doc !== mine.doc || this.#window !== window) return;
+            const value =
+              Number.isFinite(said) && said > 0 ? Math.min(Math.max(said, 0.05), 20) : 1;
+            this.#pointScale = { value, at: Date.now(), known: true, doc: mine.doc };
+          },
+          () => {
+            // (a page between two documents answers nothing)
+            if (this.#scaleRead === mine) this.#scaleRead = undefined;
+          },
+        ),
+      };
+      reading = mine;
+      this.#scaleRead = mine;
     }
-    const value = Number.isFinite(read) && read > 0 ? Math.min(Math.max(read, 0.05), 20) : 1;
-    this.#pointScale = { value, at: now };
-    return value;
+    const left = reading.askedAt + POINT_SCALE_READ_MAX_MS - Date.now();
+    if (left > 0) {
+      let bound: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        reading.done,
+        new Promise<void>((resolve) => {
+          bound = setTimeout(resolve, left);
+        }),
+      ]);
+      clearTimeout(bound);
+    }
+    const now = this.#pointScale;
+    // read just now, or the last one read FOR THIS DOCUMENT stands
+    if (now.known && now.doc === was.doc) return now.value;
+    // none was ever read for this document: at a guess (1, or the document before's) the point is another element's
+    this.#inputScaleUnread += 1;
+    throw new Error("Browser page's scale has not been read for this document");
   }
 
   /**
@@ -1669,7 +1741,19 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         }
       : said;
     // PT-5b: another document takes its own scale — the next point reads it
-    if (this.#browserState?.url !== clamped.url || clamped.loading)
+    // (PT-5b2: ANOTHER DOCUMENT is an address that moved, or a load that begins — a reload is one too; what was read
+    // for the document before is nothing of this one. While a document still loads, what was read of it is old.)
+    if (
+      this.#browserState?.url !== clamped.url ||
+      (clamped.loading && this.#browserState?.loading !== true)
+    )
+      this.#pointScale = {
+        value: 1,
+        at: Number.NEGATIVE_INFINITY,
+        known: false,
+        doc: this.#pointScale.doc + 1,
+      };
+    else if (clamped.loading)
       this.#pointScale = { ...this.#pointScale, at: Number.NEGATIVE_INFINITY };
     this.#browserState = clamped;
     if (webOriginOf(clamped.url) !== undefined) this.#resumeUrl = clamped.url;
@@ -2313,7 +2397,12 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // `createReconnectingProducer` says so: a page woken is born as its ask says), at its own density, its scale unread
     this.#muted = false;
     this.#windowDensity = undefined;
-    this.#pointScale = { value: 1, at: Number.NEGATIVE_INFINITY };
+    this.#pointScale = {
+      value: 1,
+      at: Number.NEGATIVE_INFINITY,
+      known: false,
+      doc: this.#pointScale.doc + 1,
+    };
     if (this.#startupTimer !== null) {
       clearTimeout(this.#startupTimer);
       this.#startupTimer = null;
