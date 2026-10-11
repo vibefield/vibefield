@@ -2,17 +2,25 @@
  * THE GODVIEW LAB'S WAIT FOR ITS DECK (MV lab debts) — `waitForLabDeck` over a
  * real `MarkerTail`, fed the console lines a page would print: a wait that
  * fails says the deck's last state and what that state still lacked. A launch
- * was lost on 2026-10-10 to a bare "timed out" with no reason to read. The
- * window, CDP and the page are the lab run's own proof; this holds the wait.
+ * was lost on 2026-10-10 to a bare "timed out" with no reason to read. And the
+ * heap reading's order and its refusals (`collectedHeap`): collect, then read;
+ * nothing, never a throw, when either does not answer. The window, CDP and the
+ * page are the lab run's own proof; this holds the wait and the order.
  */
 import { EventEmitter } from "node:events";
+import type { BrowserWindow } from "electron";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({ app: {} }));
 vi.mock("../src/main/windows", () => ({ createMainWindow: vi.fn(), loadRenderer: vi.fn() }));
 
 import type { LabDeckState } from "../src/testing/godview-lab-readiness";
-import { type LabWindow, MarkerTail, waitForLabDeck } from "../src/testing/godview-lab-window";
+import {
+  collectedHeap,
+  type LabWindow,
+  MarkerTail,
+  waitForLabDeck,
+} from "../src/testing/godview-lab-window";
 
 const WAITING =
   "timed out after 60000ms waiting for the terminal deck to open a pane with an observed roster and WebGPU";
@@ -97,5 +105,68 @@ describe("the lab's wait for its deck", () => {
       window.deck.until(() => false, "a thing that never comes", 1_000).then(() => undefined),
     );
     expect(message).toBe("timed out after 1000ms waiting for a thing that never comes");
+  });
+});
+
+describe("the lab's heap reading after a forced collection", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const after = { usedJSHeapSize: 74_000_000, totalJSHeapSize: 120_000_000 };
+
+  /** A window as far as the reading drives it: its debugger and its page. */
+  function window(options: { collect?: () => Promise<unknown>; read?: () => Promise<unknown> }): {
+    win: BrowserWindow;
+    calls: string[];
+  } {
+    const calls: string[] = [];
+    const win = {
+      webContents: {
+        debugger: {
+          isAttached: () => true,
+          attach: vi.fn(),
+          sendCommand: (method: string) => {
+            calls.push(method);
+            return (options.collect ?? (async () => ({})))();
+          },
+        },
+        executeJavaScript: (expression: string) => {
+          calls.push(expression.includes("performance.memory") ? "performance.memory" : expression);
+          return (options.read ?? (async () => after))();
+        },
+      },
+    } as unknown as BrowserWindow;
+    return { win, calls };
+  }
+
+  /** Run the reading to its end on fake timers. */
+  async function read(win: BrowserWindow): Promise<unknown> {
+    const reading = collectedHeap(win);
+    await vi.advanceTimersByTimeAsync(21_000);
+    return reading;
+  }
+
+  it("collects first, then reads the page's heap", async () => {
+    const { win, calls } = window({});
+    expect(await read(win)).toEqual(after);
+    expect(calls).toEqual(["HeapProfiler.collectGarbage", "performance.memory"]);
+  });
+
+  it("reads nothing, and never throws, when the collection is refused", async () => {
+    const { win, calls } = window({ collect: () => Promise.reject(new Error("no debugger")) });
+    expect(await read(win)).toBeNull();
+    // the page is not asked: an uncollected reading would pass for a collected one
+    expect(calls).toEqual(["HeapProfiler.collectGarbage"]);
+  });
+
+  it("reads nothing when the collection never answers within its bound", async () => {
+    const { win, calls } = window({ collect: () => new Promise(() => undefined) });
+    expect(await read(win)).toBeNull();
+    expect(calls).toEqual(["HeapProfiler.collectGarbage"]);
+  });
+
+  it("reads nothing when the page does not answer after the collection", async () => {
+    const { win } = window({ read: () => Promise.reject(new Error("the window is gone")) });
+    expect(await read(win)).toBeNull();
   });
 });

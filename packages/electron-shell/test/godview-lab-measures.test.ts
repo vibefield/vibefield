@@ -1,13 +1,14 @@
 /**
  * THE GODVIEW LAB'S TOTAL-WORK MEASURES (MV-3c; build-mv M33): the React
  * commit hook the lab evaluates before any page script, the per-second
- * main-thread totals from two CDP samples, and the negative controls' spelling.
+ * main-thread totals from two CDP samples, the heap row's reading (MV lab
+ * debts), and the negative controls' spelling.
  * The live half (React really calling the hook in the profiling build, CDP
  * really answering) is the lab run's own proof; this holds the bookkeeping.
  */
 import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
-import { metricTotals, parseSynthetic } from "../src/testing/godview-lab-measures";
+import { labHeap, metricTotals, parseSynthetic } from "../src/testing/godview-lab-measures";
 import { REACT_COMMIT_HOOK_SOURCE } from "../src/testing/react-commit-hook";
 
 interface Ledger {
@@ -100,6 +101,32 @@ describe("a window's totals", () => {
     expect(metricTotals(null, sample)).toBeNull();
     expect(metricTotals(sample, null)).toBeNull();
     expect(metricTotals(sample, sample)).toBeNull();
+  });
+});
+
+describe("a cell's heap row", () => {
+  const probe = { usedJSHeapSize: 123_000_000, totalJSHeapSize: 160_000_000 };
+
+  it("is the page's heap after the forced collection, and says it was collected", () => {
+    const after = { usedJSHeapSize: 74_000_000, totalJSHeapSize: 120_000_000 };
+    expect(labHeap(probe, after)).toEqual({ collected: true, ...after });
+  });
+
+  it("keeps the probe's own reading when no collection could be forced, marked uncollected", () => {
+    expect(labHeap(probe, null)).toEqual({ collected: false, ...probe });
+  });
+
+  it("reads nothing as nothing: a page without performance.memory, a report without the row", () => {
+    const none = { usedJSHeapSize: null, totalJSHeapSize: null };
+    expect(labHeap(none, null)).toEqual({ collected: false, ...none });
+    expect(labHeap(undefined, null)).toEqual({ collected: false, ...none });
+    expect(labHeap(null, null)).toEqual({ collected: false, ...none });
+    expect(labHeap({ usedJSHeapSize: "many", totalJSHeapSize: Number.NaN }, null)).toEqual({
+      collected: false,
+      ...none,
+    });
+    // collected, and the page then had no number to give: never the probe's passed off as it
+    expect(labHeap(probe, none)).toEqual({ collected: true, ...none });
   });
 });
 

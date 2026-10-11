@@ -4,7 +4,7 @@ import { gunzipSync } from "node:zlib";
 import { app, type BrowserWindow } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
-import type { PageMetrics } from "./godview-lab-measures";
+import type { HeapSample, PageMetrics } from "./godview-lab-measures";
 import { type LabProfile, labProfileProof } from "./godview-lab-profile";
 import {
   type LabDeckState,
@@ -223,13 +223,45 @@ export async function cdp<T>(
   win: BrowserWindow,
   method: string,
   params: Record<string, unknown> = {},
+  timeoutMs = 5_000,
 ): Promise<T | null> {
   try {
     if (!win.webContents.debugger.isAttached()) win.webContents.debugger.attach("1.3");
     return await Promise.race([
       win.webContents.debugger.sendCommand(method, params) as Promise<T>,
-      sleep(5_000).then(() => null),
+      sleep(timeoutMs).then(() => null),
     ]);
+  } catch {
+    return null;
+  }
+}
+
+/** `performance.memory` as the page has it (Chromium's own; null without it). */
+const PAGE_HEAP = `(() => {
+  const memory = performance.memory;
+  return memory ? { usedJSHeapSize: memory.usedJSHeapSize, totalJSHeapSize: memory.totalJSHeapSize } : null;
+})()`;
+
+/**
+ * The page's JS heap after a forced collection (MV lab debts), or null when
+ * none could be forced or the page did not answer after it — the caller keeps
+ * the reading it had and says so; a launch is never failed for this.
+ *
+ * Read at whatever phase the collector was in, the heap row was that phase: on
+ * 2026-10-11 one read `worse` while the same build against itself ran from
+ * −26 to +20 MB. `HeapProfiler.collectGarbage` is a full collection of the
+ * page's main isolate and needs no domain enabled; it answers when the
+ * collection is done. It is a pause on the main thread, so a caller measuring
+ * anything calls this only once its window has closed. A few hundred MB under
+ * a loaded host can outlast `cdp`'s 5 s, hence the longer bound.
+ */
+export async function collectedHeap(win: BrowserWindow): Promise<HeapSample | null> {
+  if ((await cdp(win, "HeapProfiler.collectGarbage", {}, 20_000)) === null) return null;
+  // `performance.memory` answers from a cache it refreshes at most every 50 ms,
+  // and the probe's report read it moments before the collection
+  await sleep(100);
+  try {
+    return await page<HeapSample | null>(win, PAGE_HEAP);
   } catch {
     return null;
   }

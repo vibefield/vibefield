@@ -77,6 +77,17 @@ did around its cells).
   end load — and it prints one plain line per such launch. The quiet line is `--quiet <n>` when
   given, else the run's own `--load-max` (the runner now records it as `summary.loadMax`), else
   15. It names; it does not refuse: the exit code and the verdict are as they were.
+- **The heap row is read after a collection.** `js heap MB` was the probe's
+  `performance.memory.usedJSHeapSize` at whatever phase the collector was in: on 2026-10-11 one
+  read `worse` while the same build against itself ran from −26 to +20 MB. The lab now forces a
+  full collection (CDP `HeapProfiler.collectGarbage`) once the cell's window has closed — the CDP
+  totals and the probe's report are read first, so the pause is in no task, script, frame or LoAF
+  row — and reads the page's heap again. Each cell carries `heap: {collected, usedJSHeapSize,
+  totalJSHeapSize}`; `report.memory` stays the probe's own uncollected reading. A collection that
+  cannot be forced never fails a launch: the cell keeps the probe's reading with `collected:
+  false`. The summary counts collected cells per arm (`heapCollected`) and its header says so.
+  The warm-up ends on a collection too, so every measured cell starts from a collected heap:
+  that changes what the cells' own collector does inside their windows, in every arm alike.
 The ordinary `pnpm smoke:godview` and `pnpm smoke:terminal-direct` runners also own fresh
 profiles and verify the app and window paths before navigation. After building, use
 `node scripts/smoke-godview.mjs` for the same smoke without rebuilding; direct Electron

@@ -66,7 +66,7 @@ import {
   WARMUP_RECIPE,
   waitForLoad,
 } from "./godview-lab-arms.mjs";
-import { warmedViews, warmupLine } from "./perf-godview-method.mjs";
+import { heapCollection, heapLine, warmedViews, warmupLine } from "./perf-godview-method.mjs";
 import {
   cellMetrics,
   gateVerdict,
@@ -270,6 +270,12 @@ async function main() {
       },
     ]),
   );
+  // the heap row is a level only where the lab forced a collection before
+  // reading it; counted per arm, outside `instruments` (a context row's one
+  // uncollected cell must not make two cohorts unlike to the pooled reader)
+  const heapCollected = Object.fromEntries(
+    Object.entries(runs).map(([arm, list]) => [arm, heapCollection(list)]),
+  );
   const summary = {
     profiles: [...profiles],
     label,
@@ -280,6 +286,7 @@ async function main() {
       ]),
     ),
     instruments,
+    heapCollected,
     rounds,
     window: { mode: windowMode, fps, scale },
     clock,
@@ -309,6 +316,7 @@ async function main() {
       WARMUP_RECIPE,
       Object.fromEntries(Object.entries(instruments).map(([arm, held]) => [arm, held.warmedViews])),
     ),
+    heapLine(heapCollected),
     `- load average at launches (each waited below ${loadMax}; the proof audit reads each launch's end): ${loads.map((l) => `${l.arm}${l.round} ${l.load.toFixed(0)}`).join(" · ")}`,
     "- estimator: medians; paired diff T = median(B−A), z = |T| / (1.858·MAD/√R); tails are weather",
     paired

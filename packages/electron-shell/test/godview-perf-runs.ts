@@ -83,6 +83,8 @@ function labCell(view: string, task: number, render: number) {
       },
     },
     memory: { rendererMB: 500, gpuMB: 200 },
+    // after the forced collection: below the probe's own reading above
+    heap: { collected: true, usedJSHeapSize: 90 * 1_048_576, totalJSHeapSize: 120 * 1_048_576 },
     totals: {
       seconds: 8,
       taskMsPerS: task,
@@ -182,6 +184,12 @@ export async function writeRun(dir: string, options: RunOptions = {}): Promise<u
       "A′": { root: "/arms/a", source: "model", synthetic: "" },
     },
     instruments: { A: instruments, B: instruments, "A′": instruments },
+    heapCollected: Object.fromEntries(
+      Object.entries(runs).map(([arm, list]) => [
+        arm,
+        { cells: list.length * VIEWS.length, collected: list.length * VIEWS.length },
+      ]),
+    ),
     rounds,
     window: { mode: "offscreen", fps: 60, scale: 2 },
     clock: "corpus",

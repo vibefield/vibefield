@@ -42,3 +42,31 @@ export function warmupLine(recipe, byArm) {
   }
   return `${head} ${arms.map(([arm, views]) => `${arm} ${say(views)}`).join("; ")} — THE ARMS DID NOT RUN THE SAME WARM-UP: another lab is another method, and this pair is not one measurement`;
 }
+
+/**
+ * How many of an arm's cells had their heap read after a forced collection
+ * (`cell.heap.collected`), over every launch. A lab from before the heap row's
+ * collection marks none: its row is the probe's reading, a collector's phase.
+ */
+export function heapCollection(runs) {
+  const cells = runs.flatMap((run) => run?.cells ?? []);
+  return {
+    cells: cells.length,
+    collected: cells.filter((cell) => cell?.heap?.collected === true).length,
+  };
+}
+
+/** The summary header's line for the heap row: whether it is a level (read
+ * after a collection) in every cell of every arm, and where it is not. */
+export function heapLine(byArm) {
+  const head =
+    "- js heap MB, read after a forced collection (CDP `HeapProfiler.collectGarbage`, once the cell's window had closed):";
+  const arms = Object.entries(byArm);
+  const whole = ({ cells, collected }) => cells > 0 && collected === cells;
+  if (arms.length > 0 && arms.every(([, count]) => whole(count))) {
+    return `${head} every cell of every arm`;
+  }
+  const say = (count) =>
+    whole(count) ? `all ${count.cells} cells` : `${count.collected} of ${count.cells} cells`;
+  return `${head} ${arms.map(([arm, count]) => `${arm} ${say(count)}`).join("; ")} — an uncollected cell keeps the probe's own reading, A PHASE OF THE COLLECTOR AND NOT A LEVEL: a heap row over such cells is not a reading`;
+}
