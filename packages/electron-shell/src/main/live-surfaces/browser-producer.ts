@@ -1727,6 +1727,17 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     if (!this.#born) return;
     const epoch = this.#lifecycle.snapshot.producerEpoch;
     const told = toldKey(was) !== toldKey(next);
+    // PT-5b3 (ruling 2) — A LOAD UNDER WAY, NO DOCUMENT OF THE PAGE YET, and what the page is told of its device moved:
+    // the address must be asked for AGAIN, as that device. The engine's own reload would reload the blank (PT-5b2's probe)
+    // — and the engine takes none of the device's commands while a navigation is pending: every `Emulation.*` command
+    // waits, unanswered, for the commit (PT-5b3's probe, `pending.cjs`), so told on this window the page would load as
+    // the device before and then load again. So the window is made ANEW: born on the device, its address asked for once
+    // more, at once — there is no page to lose (no history, no scroll, nothing typed).
+    if (told && !this.#documentStands && this.#browserState?.failure === undefined) {
+      this.#emulationReloads += 1;
+      this.remakeWindow();
+      return;
+    }
     if (this.#rasterTimer !== null) {
       clearTimeout(this.#rasterTimer);
       this.#rasterTimer = null;
@@ -1741,25 +1752,15 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       .then(() => {
         if (!this.isCurrent(window, epoch)) return;
         this.#viewport = viewport;
-        if (!told) {
-          window.invalidate();
-          return;
-        }
-        // a page that has loaded learns its device by loading again
-        if (this.#documentStands) {
+        // a page that has loaded learns its device by loading again. PT-5b3 (ruling 2) — with NO DOCUMENT of the page
+        // standing the engine's own reload is never asked (it reloads the blank — and the page then said `no-document`
+        // for an address it had never been asked for again): a page that has SAID its load ended (`no-document`,
+        // `stopped`) is told its device and loads nothing — what it said stands, word for word, and ↻ loads it on the
+        // new device.
+        if (told && this.#documentStands) {
           this.#emulationReloads += 1;
           window.navigate("reload");
-          return;
-        }
-        // PT-5b3 (ruling 2) — NO DOCUMENT OF THE PAGE STANDS: the engine's own reload would reload the BLANK (the probe)
-        // — and the page then said `no-document` for an address that had only not answered yet. A page that has SAID
-        // its load ended (`no-document`, `stopped`) is told its device and loads nothing: what it said stands, word for
-        // word, and ↻ loads it on the new device. A load under way is asked again, as a load of the ADDRESS.
-        if (this.#browserState?.failure !== undefined) return;
-        const url = this.#resumeUrl ?? this.source.initialUrl;
-        this.#emulationReloads += 1;
-        this.headed(url);
-        this.load(window, url);
+        } else window.invalidate();
       })
       .catch(() => undefined);
   }

@@ -1623,32 +1623,39 @@ describe("BrowserLiveSurfaceRuntime", () => {
     result.runtime.dispose();
   });
 
-  it("PT-4: a page still to load is told its device and NOT reloaded; a page asleep is born on it when it wakes", async () => {
+  it("PT-4: a page still to load learns its device by loading AS it — PT-5b3: its address asked for again on a window made anew, never the engine's reload; a page asleep is born on it when it wakes", async () => {
     const result = setup({ source: { ...source(), deviceScaleFactor: 2, emulation: LAPTOP } });
     const renderer = attach(result.runtime);
     renderer.attachment.setDemand(demand(1, "live"));
     await flush();
     await flush();
     const first = result.native.windows[0];
-    // no navigation truth yet — the page has not loaded: told, never reloaded
+    // no navigation truth yet — the page's load is under way, no document of it yet. (PT-4 told the device on that window
+    // and left it: but the engine holds a device's commands while a load is pending, so the page loaded as the device
+    // before. PT-5b3, ruling 2: the address is asked for again AS the device, on a window made anew.)
     await result.runtime.navigate({ action: "emulate", emulation: TABLET });
     await flush();
     await flush();
-    expect(first?.emulations).toHaveLength(2);
+    expect(first?.emulations).toHaveLength(1);
     expect(first?.navigations).toEqual([]);
+    expect(first?.isDestroyed()).toBe(true);
+    expect(result.runtime.stats.windowsRemade).toBe(1);
+    const anew = result.native.windows[1];
+    expect(anew?.emulations.at(-1)).toMatchObject({ touchPoints: TABLET.touchPoints });
+    expect(anew?.order).toEqual(["emulate", "raster", "load"]);
     // asleep (hibernated: no window): the device is kept, and the next window is born on it
-    first?.paint(sharedPaint().paint);
+    anew?.paint(sharedPaint().paint);
     renderer.attachment.setDemand(demand(2, "hibernated"));
     expect(result.runtime.summary.state).toBe("hibernated");
     await result.runtime.navigate({ action: "emulate", emulation: PHONE });
     expect(result.runtime.stats.emulations).toBe(2);
     // (no window stands: none is made anew — and none is made for a page asleep)
-    expect(result.runtime.stats.windowsRemade).toBe(0);
-    expect(result.native.windows).toHaveLength(1);
+    expect(result.runtime.stats.windowsRemade).toBe(1);
+    expect(result.native.windows).toHaveLength(2);
     renderer.attachment.setDemand(demand(3, "live"));
     await flush();
     await flush();
-    const second = result.native.windows[1];
+    const second = result.native.windows[2];
     expect(second?.emulations.at(-1)).toMatchObject({ userAgent: IPHONE_UA, touchPoints: 5 });
     expect(second?.options.deviceScaleFactor).toBe(3);
     expect(second?.order).toEqual(["emulate", "raster", "load"]);
@@ -2323,21 +2330,42 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.result.runtime.dispose();
     });
 
-    it("ruling 2 — a device switch (the same density) on a page whose first address has NOT ANSWERED asks for the ADDRESS again — never the engine's own reload, which reloads the blank: the page stays headed there, loading", async () => {
+    it("ruling 2 — a device switch (the same density) on a page whose first address has NOT ANSWERED asks for the ADDRESS again, as that device — never the engine's own reload, which reloads the blank: its window is made anew (the engine takes none of a device's commands while a load is pending), and the page stays headed there, loading", async () => {
       const p = await starting({ source: laptopSource() });
       await p.result.runtime.navigate({ action: "emulate", emulation: TOUCH_LAPTOP });
       await flush();
-      expect(p.result.native.windows).toHaveLength(1);
+      // nothing more was asked of the window whose load was pending — not the engine's reload, not a second load
       expect(p.window.navigations).toEqual([]);
-      expect(p.window.loadedUrls).toEqual([FIRST, FIRST]);
-      expect(p.window.emulations.at(-1)?.touchPoints).toBe(5);
-      // the load it replaced is nothing (Electron rejects it ERR_ABORTED); the page is headed where it was
+      expect(p.window.loadedUrls).toEqual([FIRST]);
+      expect(p.window.isDestroyed()).toBe(true);
+      expect(p.result.runtime.stats.windowsRemade).toBe(1);
+      // its window made anew: told the device it should have BEFORE its one load of the address
+      expect(p.result.native.windows).toHaveLength(2);
+      const anew = p.result.native.windows[1];
+      if (anew === undefined) throw new Error("no window was made anew");
+      expect(anew.emulations.at(-1)?.touchPoints).toBe(5);
+      expect(anew.loadedUrls).toEqual([FIRST]);
+      expect(anew.order.lastIndexOf("emulate")).toBeLessThan(anew.order.indexOf("load"));
+      expect(anew.navigations).toEqual([]);
+      // the load it replaced is nothing (its window is gone); the page is headed where it was — never "no page"
       p.loads[0]?.reject(aborted());
       await flush();
       expect(p.result.runtime.summary.state).toBe("starting");
+      expect(p.result.runtime.summary.error).toBeUndefined();
       expect(p.result.runtime.summary.browser).toMatchObject({ url: FIRST, loading: true });
       expect(p.result.runtime.summary.browser?.failure).toBeUndefined();
+      // a SCHEME alone is told live: no window is made, nothing is loaded
+      const q = await starting({ source: laptopSource() });
+      await q.result.runtime.navigate({
+        action: "emulate",
+        emulation: { ...LAPTOP, colorScheme: "dark" },
+      });
+      await flush();
+      expect(q.result.native.windows).toHaveLength(1);
+      expect(q.window.loadedUrls).toEqual([FIRST]);
+      expect(q.window.navigations).toEqual([]);
       p.result.runtime.dispose();
+      q.result.runtime.dispose();
     });
 
     it("ruling 2 — a device switch on a page that has SAID its load ended (`no-document`, `stopped`) tells it its device and loads NOTHING: what it said stands, word for word, and ↻ loads it on the new device", async () => {
