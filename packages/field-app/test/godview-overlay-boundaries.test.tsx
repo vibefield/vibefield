@@ -22,6 +22,7 @@ import { act, useEffect, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
+import { getGodviewDeck, resetGodviewDeckDoorForTest } from "../src/frame/deck-door";
 import { getGodviewFindDoor, resetGodviewFindDoorForTest } from "../src/frame/find-door";
 import { resetActiveViewForTest } from "../src/frame/view-state";
 import type { MonitorDoor } from "../src/godview/monitor/remote-door";
@@ -207,6 +208,7 @@ beforeEach(() => {
   });
   resetActiveViewForTest();
   resetGodviewFindDoorForTest();
+  resetGodviewDeckDoorForTest();
   publishView = null;
   const quiet = () => undefined;
   setRendererLogger({
@@ -340,6 +342,36 @@ describe("the overlay's chrome cannot take down the monitor (M49)", () => {
     stop?.();
     await setView("canvas");
     expect(getGodviewFindDoor()).toBeNull();
+  });
+
+  it("says its terminals are up while Godview is the window's view, and nothing once it is not or is gone (round 3, L2 — the deck's door)", async () => {
+    // before Godview has ever shown, nobody has spoken for the window
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container, { onCaughtError: vi.fn(), onUncaughtError: vi.fn() });
+    await act(async () => root?.render(<GodviewOverlay />));
+    expect(getGodviewDeck()).toBeNull();
+
+    await setView("godview");
+    // the deck is always up today: the state on the stage's root and the
+    // door's word are the same fact
+    const stage = container.querySelector(".vf-godview");
+    expect(stage?.getAttribute("data-godview-deck")).toBe("up");
+    expect(getGodviewDeck()).toBe("up");
+
+    // another view: the stage stays mounted (sessions run on), the door is silent
+    await setView("canvas");
+    expect(container.querySelector(".vf-godview")).toBe(stage);
+    expect(stage?.getAttribute("data-godview-open")).toBe("false");
+    expect(getGodviewDeck()).toBeNull();
+
+    await setView("godview");
+    expect(getGodviewDeck()).toBe("up");
+
+    // the overlay going away takes its word with it
+    await act(async () => root?.unmount());
+    root = null;
+    expect(getGodviewDeck()).toBeNull();
   });
 
   it("a throwing deck edge says so in the lip's place; the monitor, its view and the deck stay", async () => {

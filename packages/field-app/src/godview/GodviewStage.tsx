@@ -1,5 +1,6 @@
 import { ChromeBoundary } from "@vibecook/puppeteer-views";
-import type { CSSProperties, ReactElement, ReactNode } from "react";
+import { type CSSProperties, type ReactElement, type ReactNode, useEffect } from "react";
+import { type GodviewDeckState, publishGodviewDeck } from "../frame/deck-door";
 import { GodviewDeckEdge } from "./GodviewDeckEdge";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 
@@ -15,6 +16,15 @@ export interface GodviewStageProps {
   /** The deck's movable edge (DESIGN.md §8, 2026-09-28). Absent, the lip is
    * drawn and the edge stays at rest — the Settings miniature is a picture. */
   deckEdge?: { persist: boolean };
+  /** The terminals' wrapper: away, up or maximized (round 3, GV-D5/D6/D11).
+   * The stage only draws it — written on the root beside the three attributes
+   * above, for the stylesheet. Its owner is the overlay. Today the deck is
+   * always up. */
+  deckState?: GodviewDeckState;
+  /** Only the window's Godview speaks for the window (`frame/deck-door.ts`),
+   * as `publishesFind` does for the monitor: the catalog's stage and Settings'
+   * miniature draw a state and say nothing. */
+  publishesDeck?: boolean;
   className?: string;
 }
 
@@ -31,15 +41,30 @@ export function GodviewStage({
   tuningPanel,
   deck,
   deckEdge,
+  deckState = "up",
+  publishesDeck = false,
   className = "",
 }: GodviewStageProps): ReactElement {
   const monitorPresent = monitor !== undefined && monitor !== null && monitor !== false;
+  // The door's word and the root's attribute are one fact, said in one place.
+  // Closed — Godview is not the window's view — it is withdrawn: the frame
+  // must never read a deck it cannot see.
+  const spoken = publishesDeck && open ? deckState : null;
+  useEffect(() => {
+    if (!publishesDeck) return;
+    publishGodviewDeck(spoken);
+  }, [publishesDeck, spoken]);
+  useEffect(() => {
+    if (!publishesDeck) return;
+    return () => publishGodviewDeck(null);
+  }, [publishesDeck]);
   return (
     <div
       aria-hidden={!open}
       data-godview-open={open ? "true" : "false"}
       data-godview-tuning-open={tuningOpen ? "true" : "false"}
       data-godview-animations={animations ? "on" : "off"}
+      data-godview-deck={deckState}
       className={`vf-godview theme-${theme} ${className}`.trim()}
       style={style}
     >

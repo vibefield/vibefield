@@ -286,6 +286,11 @@ export function GodviewOverlay(): ReactElement | null {
         }
         // The sheet's edge is this viewer's, remembered (DESIGN.md §8).
         deckEdge={DECK_EDGE_PERSISTED}
+        // Round 3 (L2): the window's Godview says what its terminals are —
+        // the stage's default, "up", which is the whole truth until they can
+        // be put away — and only it: the frame reads this through the deck's
+        // door, and nothing while another view shows.
+        publishesDeck
         deck={
           terminalAvailable ? (
             <ChromeBoundary name="Deck" retryKey={deckRetryKey}>
