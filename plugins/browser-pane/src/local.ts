@@ -218,7 +218,10 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
   };
   const chargeNotice = (entity: number, bytes: number): void => {
     const e = entity as Entity;
-    if (bytes <= 0) return releaseNotice(e);
+    if (bytes <= 0) {
+      releaseNotice(e);
+      return;
+    }
     const key = live.words(e)?.key;
     if (key === undefined || host?.budget === undefined) return;
     const row = noticeBudgetKey(key);
