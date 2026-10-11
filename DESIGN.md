@@ -1985,8 +1985,11 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   2 × 12px tick in text-muted marks its last recorded activity. It has no glow and, past that
   tick, no body. It is named by its session's title, else by what ran it and its project. A
   receding filter (the profile tab) takes it to 30% of that; a narrowing one (the scope row's
-  desktop) removes it, as each does a live row. It is lit and read, never opened. Only a run this
-  runtime ran is a lane.
+  desktop) removes it, as each does a live row. It is lit and read. In VibeField a click on it,
+  Return while it is lit, or its line in the reader's list opens its session in History (TV-8, ruled
+  2026-10-11); a session that cannot be opened says why on the status line (§8 "The status line").
+  Where no host lends that door (puppeteer's own Godview, the phone) it is never a control. Only a
+  run this runtime ran is a lane.
   **At the head** sit the swarm's bodies, lit as the swarm lights them, the swarm's wave ringing out of
   one you owe (1.1s, island, the view's only loop). Beside each body is a readout: the current
   state's length, then its word. Names float over the wakes' far end; there is no rail. **Pointing
