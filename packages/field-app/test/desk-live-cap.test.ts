@@ -487,6 +487,31 @@ describe("PT-5b — six pages alive at most (ruling 3)", () => {
     expect(a.face.info().extra?.still).toEqual(rested);
   });
 
+  it("PT-5b2 (ruling 8) — least recently SEEN, not least recently asked: a pane watched for ten minutes outlives one glanced at eight minutes ago", async () => {
+    const s = stage();
+    s.live.cap(2);
+    // a comes into view at 0 s and stays; b is glanced at from 100 s to 110 s
+    const a = s.open("a", true, "created");
+    a.face.demand(SEEN);
+    s.clock.advance(100_000);
+    const b = s.open("b", true, "created");
+    b.face.demand(SEEN);
+    await s.pump();
+    s.clock.advance(10_000);
+    b.face.demand(UNSEEN);
+    // a leaves the view at 601 s — seen a moment ago; b was last seen eight minutes ago
+    s.clock.advance(491_000);
+    a.face.demand(UNSEEN);
+    await s.pump();
+    expect([a.wire(), b.wire()]).toEqual(["paused", "paused"]);
+    // a slot is wanted: the page that gives it is the one seen LONGEST ago
+    s.clock.advance(1_000);
+    const c = s.open("c", true, "created");
+    c.face.demand(SEEN);
+    await s.pump();
+    expect([a.wire(), b.wire(), c.wire()]).toEqual(["paused", "hibernated", "live"]);
+  });
+
   it("the test door: `cap()` reads it; lowered or raised, the plan is made again; a number that is none is nothing", async () => {
     const { s, a, b, c } = await three();
     expect(s.live.cap()).toBe(2);

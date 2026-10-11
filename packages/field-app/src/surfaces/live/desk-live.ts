@@ -91,7 +91,7 @@ import {
   type SurfacePool,
 } from "../pool";
 import { type CapFace, capPlan, LIVE_PAGES_MAX } from "./live-cap";
-import type { PageStill, PageStills } from "./page-stills";
+import { PAGE_STILL_MAX_PX, type PageStill, type PageStills } from "./page-stills";
 import type { StillDecoder, StillTaker } from "./still-taker";
 
 /** What the gate answers for a face's key: the object's type (its kind's name — the texture's label), or why it may not open. */
@@ -979,7 +979,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     const tally = { arrivals: 0, presented: 0, dropped: 0, inputs: 0 };
     let lastInput: LiveInput["kind"] | null = null;
     /** PT-5b — THE CAP: the service lets this page be alive (it woke it, or took it as it stood); it put it to rest (its
-     * wire is `hibernated`); it is putting it to rest now (its still being taken); when its pane was last seen. */
+     * wire is `hibernated`); it is putting it to rest now (its still being taken); when its pane was last seen (it is
+     * seen from a live ask until its ask leaves `live`). */
     let allowed = false;
     let rested = false;
     let resting = false;
@@ -989,6 +990,9 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
      * frame landed since; the still's timer; a still read and waiting for the device; the reads begun (the last one wins). */
     let still: { readonly takenAt: number; readonly address: string } | undefined;
     let liveShown = false;
+    /** PT-5b2 (ruling 1) — the address the page said when the frame NOW IN THE TEXTURE was consumed: what its pixels are
+     * of. A url that moves with no frame since leaves the texture "of the address before". */
+    let frameOf: string | undefined;
     let stillAt = Number.NEGATIVE_INFINITY;
     let fresh = false;
     let stillTimer: unknown = null;
@@ -1021,6 +1025,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     let headed: string | undefined;
     let saidAt = handle.state.browser?.url;
     const paneAddress = (): string => headed ?? addressNow();
+    /** PT-5b2 (ruling 1): the texture's pixels are of the address the page is at now. */
+    const ofNow = (): boolean => frameOf !== undefined && sameAddress(frameOf, addressNow());
     const dropWaiting = (): void => {
       waiting?.bitmap.close();
       waiting = undefined;
@@ -1067,8 +1073,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       still = { takenAt: w.kept.takenAt, address: w.kept.address };
       stillAt = Math.max(stillAt, w.kept.takenAt);
       liveShown = false;
-      // a still takes no press (there is no page under it); and it is what the shelf KEPT, so it is not hidden
-      shown = undefined;
+      // it is what the shelf KEPT, so it is not hidden (and it takes no press: there is no page under it — every way here
+      // has let the displayed frame's geometry go already: a rest, a failure, an eviction, an open)
       veiled = false;
       counts.stillsShown += 1;
       return true;
@@ -1097,7 +1103,9 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
           if (kept === undefined || !mine(kept)) return;
           // (a still that cannot be read rejects: nothing is laid — the film)
           const bitmap = await decode(kept);
-          if (!mine(kept)) {
+          // PT-5b2 (ruling 9): a still is at most `PAGE_STILL_MAX_PX` on its long side — a picture the shelf holds that is
+          // larger is none this desk took, and no texture of any size is made of it
+          if (!mine(kept) || Math.max(bitmap.width, bitmap.height) > PAGE_STILL_MAX_PX) {
             bitmap.close();
             return;
           }
@@ -1111,7 +1119,10 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     /**
      * PT-5b — THE STILL, TAKEN from what the face's writer holds (its texture read back: still-taker.ts) and kept on the
      * shelf with the address it is a photograph of. Only a LIVE frame not yet photographed is: a quiet page writes nothing,
-     * a still is never taken of a still, and a failed page's frames are not shown, so not kept.
+     * a still is never taken of a still, and a failed page's frames are not shown, so not kept. PT-5b2 (ruling 1) — the
+     * address is the one ITS PIXELS are of: a texture of the address before (the url moved, no frame since) is not
+     * photographed under the new one, and nothing is taken while the page says it is loading — on every path (a put-down,
+     * a rest, the timer). Refused so, the frame stays owed.
      */
     const takeStill = (): Promise<boolean> => {
       const stills = deps.stills;
@@ -1128,22 +1139,37 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         device === undefined ||
         // (a failed page's frames are not `liveShown`: the failure said so, and no frame of it is taken since)
         !liveShown ||
-        !fresh
+        !fresh ||
+        frameOf === undefined ||
+        !ofNow() ||
+        handle.state.browser?.loading === true
       )
         return Promise.resolve(false);
       fresh = false;
-      const address = addressNow();
+      const address = frameOf;
       const logical: readonly [number, number] = [w.face.logical[0], w.face.logical[1]];
       const at = now();
+      // PT-5b2 (ruling 5) — the thirty seconds run from the take's BEGINNING: a frame that lands while the texture is read
+      // back and encoded arms the timer from here (before: from the still before — a second take 1.5 s after, for exactly
+      // the pages that paint most). A take that fails — it answers no picture, it rejects, its keep fails — gives the
+      // moment back, and its frame is owed again; a still is counted taken when it is KEPT.
+      const before = stillAt;
+      stillAt = at;
+      const failed = (): false => {
+        if (stillAt === at) stillAt = before;
+        fresh = true;
+        // (a frame that landed meanwhile armed the timer from the take that failed: armed again, from the still before)
+        if (stillTimer !== null) {
+          timers.clear(stillTimer);
+          stillTimer = null;
+          armStill();
+        }
+        return false;
+      };
       return track(
         (async () => {
           const taken = await take(device, w.face);
-          if (taken === undefined) {
-            fresh = true;
-            return false;
-          }
-          stillAt = at;
-          counts.stillsTaken += 1;
+          if (taken === undefined) return failed();
           await stills.keep(docId, key, {
             address,
             logical,
@@ -1152,8 +1178,9 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
             image: taken.image,
             takenAt: at,
           });
+          counts.stillsTaken += 1;
           return true;
-        })().catch(() => false),
+        })().catch(failed),
       );
     };
     /** At rest in view: a still at most once every `PAGE_STILL_EVERY_MS`, a little after the first frame since the last. */
@@ -1241,10 +1268,12 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
           asked === undefined ||
           asked.mode === "paused" ||
           device === undefined ||
-          failing(handle.state)
+          failing(handle.state) ||
+          (rested && !allowed)
         ) {
           // an unseen face's frame (ruling 6) — or one before the device, or a failed page's (PT-5a: the engine's own
-          // error page is never shown): taken and closed, drawn nowhere
+          // error page is never shown), or (PT-5b2) one that was crossing when its page was PUT TO REST (consumed, it
+          // unsaid the pane's still — no dim, no mark, `paused` — until its page was woken): taken and closed, drawn nowhere
           if (p.presentLatestVia(() => false).kind !== "idle") {
             counts.dropped += 1;
             tally.dropped += 1;
@@ -1274,6 +1303,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         veiled = false;
         still = undefined;
         liveShown = true;
+        frameOf = addressNow();
         fresh = true;
         // (a still being read is void from here: were this page put to rest before the read ends, its texture is the page
         // as it was — never the shelf's older photograph laid over it)
@@ -1322,12 +1352,17 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         const was = asked;
         asked = d;
         counts.demands += 1;
-        if (d.mode === "live") seenAt = now();
+        // PT-5b2 (ruling 8) — LAST SEEN: a pane is seen until its ask leaves `live`, so it is stamped then too (asks are
+        // change-only: stamped at a live ask alone, a pane watched for ten minutes read as last seen ten minutes ago)
+        if (d.mode === "live" || was?.mode === "live") seenAt = now();
         // PT-5b — PUT DOWN: the best pixels the page will have are in its texture now
         if (was?.mode === "live" && was.interactive && !(d.mode === "live" && d.interactive))
           void takeStill();
         // the cap may wake it, make it wait, or rest another for it
         ask(lane, d.mode === "live" && d.interactive);
+        // PT-5b2 (ruling 1) — seen again with a texture of an address the page has LEFT while nobody looked (a peer's `go`,
+        // a script's redirect: its frames were taken and closed meanwhile): the film, never the page it left
+        if (d.mode === "live" && was?.mode !== "live" && liveShown && !ofNow()) letGo();
         // seen with nothing of the page to show: its still, where the shelf keeps one
         if (d.mode === "live" && !liveShown && still === undefined) void showStill();
       },
@@ -1522,10 +1557,15 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         // what its texture holds is a photograph now, and says so
         if (liveShown) {
           liveShown = false;
-          still = { takenAt: Number.isFinite(stillAt) ? stillAt : now(), address: addressNow() };
+          // (PT-5b2, ruling 1: a photograph of the address ITS PIXELS are of — the pane gone elsewhere since, its film)
+          still = {
+            takenAt: Number.isFinite(stillAt) ? stillAt : now(),
+            address: frameOf ?? addressNow(),
+          };
           shown = undefined;
           wordsOwed = true;
           tell();
+          stillStands();
         }
         lane.send();
       },
@@ -1603,9 +1643,9 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       disposed = true;
       for (const { face } of [...faces.values()]) face.close();
       faces.clear();
-      // (a deleted pane's still whose grace had not lapsed stays: the shelf's bound, and its document's delete, hold it)
-      for (const owed of forgetting.values()) timers.clear(owed);
-      forgetting.clear();
+      // PT-5b2 (ruling 2) — a deleted pane's grace is the UNDO's, not the mount's: its timer stands past this mount (a
+      // plugin toggled, a device healed — the document is there to say, when it lapses, that the pane is still gone);
+      // where no document is open to say (the board closed, the window going) the next open's sweep forgets it
       if (planTimer !== null) timers.clear(planTimer);
       planTimer = null;
     },

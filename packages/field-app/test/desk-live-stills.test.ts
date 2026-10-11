@@ -499,7 +499,7 @@ describe("PT-5b — the still is FORGOTTEN with its pane (ruling 1)", () => {
     expect(u.shelf.stills.forget).not.toHaveBeenCalled();
   });
 
-  it("UNDONE within the grace: the pane's face opens again — its still is kept, and shown; the mount going forgets nothing", async () => {
+  it("UNDONE within the grace: the pane's face opens again — its still is kept, and shown; the MOUNT going takes no grace away (PT-5b2: the timer is the undo's, not the mount's)", async () => {
     const s = stage();
     s.shelf.shelf.set(`${DOC}/${KEY}`, stillOf());
     const a = s.open();
@@ -545,14 +545,40 @@ describe("PT-5b — the still is FORGOTTEN with its pane (ruling 1)", () => {
     w.clock.advance(60_000);
     await w.live.settled();
     expect(w.shelf.stills.forget).not.toHaveBeenCalled();
-    // a deleted pane whose grace has not lapsed when the mount goes: its still stays (the shelf's bound holds it)
+    // PT-5b2 (ruling 2) — a deleted pane whose grace has not lapsed when the MOUNT goes (a plugin toggled, a device
+    // healed: the document stands): its grace runs on, and its still is forgotten when it lapses — not before
     const t = stage();
+    t.shelf.shelf.set(`${DOC}/${KEY}`, stillOf());
     const c = t.open();
     t.exists.value = false;
     c.face.close();
     t.live.dispose();
-    t.clock.advance(120_000);
+    t.clock.advance(59_999);
+    await t.live.settled();
     expect(t.shelf.stills.forget).not.toHaveBeenCalled();
+    t.clock.advance(1);
+    await t.live.settled();
+    expect(t.shelf.stills.forget).toHaveBeenCalledWith(DOC, KEY);
+    // …undone meanwhile (on the mount that followed): kept
+    const x = stage();
+    const g2 = x.open();
+    x.exists.value = false;
+    g2.face.close();
+    x.live.dispose();
+    x.exists.value = true;
+    x.clock.advance(120_000);
+    await x.live.settled();
+    expect(x.shelf.stills.forget).not.toHaveBeenCalled();
+    // …and where no document is open to say when it lapses (the board closed: the next open's SWEEP does it): not here
+    const y = stage();
+    const h2 = y.open();
+    y.exists.value = false;
+    h2.face.close();
+    y.live.dispose();
+    y.exists.value = undefined;
+    y.clock.advance(120_000);
+    await y.live.settled();
+    expect(y.shelf.stills.forget).not.toHaveBeenCalled();
     // the pane deleted, then the object's key back on ANOTHER document's desk meanwhile: not forgotten under the wrong one
     let doc = DOC;
     const u = stage({ docId: () => doc });
