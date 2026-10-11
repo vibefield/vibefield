@@ -338,7 +338,7 @@ export function judgeDownload(seen: HonestSeen["download"]): string[] {
     out.push(
       `DOWNLOAD: the head went on saying it past ${HONEST_ROWS.saidWithinMs} ms — its address never came back`,
     );
-  if (seen.path !== "/acts")
+  if (seen.path?.split("?")[0] !== "/acts")
     out.push(`DOWNLOAD: the page is at ${seen.path}, not the page that asked`);
   return out;
 }
@@ -630,10 +630,14 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
   const before = await census();
   const panes: number[] = [];
   const ACTS = "/acts";
+  /** The acts page as the pane is at it now: its path, with the visit's own query (each return to it is a NEW address —
+   * the document's url must move for the page to be sent there). */
+  let actsPath: string = ACTS;
+  let visits = 0;
   let paneKey = "";
 
   const report = (): FixtureReport | null => d.fixture.report();
-  const acts = (): FixtureActs | null => d.fixture.reportAt(ACTS)?.acts ?? null;
+  const acts = (): FixtureActs | null => d.fixture.reportAt(actsPath)?.acts ?? null;
   /** The page's word that `ok` accepts, waited for; the last one it said (logged) if none does in time. */
   const hear = async (
     label: string,
@@ -650,7 +654,7 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
     say(`SMOKE_CANVAS_HONEST_UNHEARD ${JSON.stringify({ label, last: from() })}`);
     return null;
   };
-  const atActs = (): FixtureReport | null => d.fixture.reportAt(ACTS);
+  const atActs = (): FixtureReport | null => d.fixture.reportAt(actsPath);
   const held = (): Promise<number | null> =>
     js<number | null>("globalThis.__vfDesk.held()?.entity ?? null");
   const heldFrame = (): Promise<HeldFrameSeen | null> =>
@@ -971,14 +975,21 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
     problems.push(...judgeBar(bar));
 
     // ── POPUP: a target=_blank link, then window.open — the same pane goes there; no window, no page, no pane more ────
+    /** Back at the acts page BY AN ADDRESS OF ITS OWN (the visit's query) — never the history's back, never the address
+     * the document already says: a row that left the page elsewhere (or nowhere) must not strand the rows after it. */
+    const toActs = async (): Promise<void> => {
+      visits += 1;
+      actsPath = `${ACTS}?visit=${visits}`;
+      await goTo(d.fixture.origin + actsPath);
+      await hear("the acts page again", (r) => r.path === actsPath && r.acts !== undefined);
+      await sleep(600);
+    };
     const windows0 = d.windows();
     const faces0 = await faces();
     const panes0 = await census();
     await press(await onAct("popup"));
     const blank = await hear("the pane at the link's address", (r) => r.path === "/next");
-    await pressTool("back");
-    await hear("the acts page again", (r) => r.path === ACTS);
-    await sleep(600);
+    await toActs();
     await press(await onAct("open"));
     const opened = await hear(
       "the pane where window.open asked",
@@ -994,9 +1005,7 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
     };
     said.popup = popup;
     problems.push(...judgePopup(popup));
-    await pressTool("back");
-    await hear("the acts page after the pop-ups", (r) => r.path === ACTS);
-    await sleep(600);
+    await toActs();
 
     // ── ALERT: alert, confirm and prompt — the page's word after them arrives ─────────────────────────────────────────
     const windowsA = d.windows();

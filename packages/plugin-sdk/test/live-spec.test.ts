@@ -2,7 +2,13 @@
 // the plugin and the host read one shape (ICE design-019 §3.2 — the host's contract, never the desk's). The host refuses what it
 // cannot read rather than guessing at it.
 import { describe, expect, it } from "vitest";
-import { type LiveBrowserSpec, liveBrowserSpec } from "../src/desk";
+import {
+  LIVE_BROWSER_FAILURES,
+  type LiveBrowserSpec,
+  liveBrowserFailure,
+  liveBrowserFailureReason,
+  liveBrowserSpec,
+} from "../src/desk";
 
 const PAGE: LiveBrowserSpec = {
   source: "browser",
@@ -88,5 +94,50 @@ describe("liveBrowserSpec — the host reads a browser face's page", () => {
       { ...phone, agent: { ...phone.agent, navigatorPlatform: "p".repeat(33) } },
     ])
       expect(liveBrowserSpec({ ...PAGE, device }), JSON.stringify(device)).toBeUndefined();
+  });
+});
+
+describe("PT-5a — why a browser face failed: the host's word, read by the kind", () => {
+  it("the words are a closed set: a load's reasons, a page that stopped, a lane lost, a page the desk may not open, anything else", () => {
+    expect(LIVE_BROWSER_FAILURES).toEqual([
+      "name-not-resolved",
+      "offline",
+      "connection-refused",
+      "connection-failed",
+      "timed-out",
+      "certificate",
+      "blocked",
+      "load-failed",
+      "stopped",
+      "unresponsive",
+      "lost",
+      "may-not",
+      "failed",
+    ]);
+  });
+
+  it("a reason is the word, then the host's own detail after a colon — and reads back as its word, whatever the detail says", () => {
+    for (const word of LIVE_BROWSER_FAILURES) {
+      expect(liveBrowserFailureReason(word)).toBe(word);
+      expect(liveBrowserFailureReason(word, "")).toBe(word);
+      expect(liveBrowserFailureReason(word, "net::ERR (-102)")).toBe(`${word}: net::ERR (-102)`);
+      expect(liveBrowserFailure(word), word).toBe(word);
+      expect(liveBrowserFailure(`${word}: net::ERR (-102)`), word).toBe(word);
+      // a detail that itself names another word is still the first word's
+      expect(liveBrowserFailure(`${word}: stopped: offline`), word).toBe(word);
+    }
+  });
+
+  it("a reason that leads with none of them — a host older than PT-5a, an engine's own string — is `failed`", () => {
+    for (const reason of [
+      "",
+      "the page failed",
+      "FORBIDDEN_SCOPE: plugin acme.tools is not granted surface.browser",
+      "stoppedish",
+      "Stopped",
+      "offline:no space after the colon",
+      " offline",
+    ])
+      expect(liveBrowserFailure(reason), reason).toBe("failed");
   });
 });

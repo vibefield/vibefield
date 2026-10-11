@@ -761,6 +761,10 @@ describe("PT-5a — a failed page's face (ruling 3)", () => {
     k.record(k.resolve(ctx), ctx);
     local.tick?.(500);
     expect(local.saying(1 as Entity)).toBeUndefined();
+    // a frame lands, the page's words the same: the old refusal is still not said
+    t.faces.get(KEY)?.land();
+    local.tick?.(550);
+    expect(local.saying(1 as Entity)).toBeUndefined();
     // the next one IS said
     t.faces.get(KEY)?.say({
       info: { ...said, extra: { favicon: null, refused: { what: "download", serial: 5 } } },
