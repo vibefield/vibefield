@@ -180,21 +180,24 @@ describe("UI system ownership boundaries", () => {
     expect(view).toContain("portalContainer={layers}");
   });
 
-  it("retires rosetta's room glass on the desk — the room's fades are the cover's tint, never a backdrop filter (DK-15, R16)", () => {
-    // DESIGN.md §8 "The covers over the desk": under a cover the desk is a still
-    // blurred once, and the room's host-surface frost (a 14px backdrop filter on
-    // the transcript's top fade and the sticky day heads) would re-blur it every
-    // frame anything beneath moved. vitest loads no CSS; the rule is held here and
-    // the computed style by smoke:canvas's COVER HISTORY row.
+  it("keeps the transcript's top fade the cover's tint on the desk, and leaves the sticky day heads the room's own frost (DK-15, R16; docket N3 (a))", () => {
+    // DESIGN.md §8 "The covers over the desk" and its N3 (a) carve-out: under a
+    // cover the transcript's top fade is the cover's tint, never a backdrop
+    // filter; the sticky day heads keep the room's host-surface frost (its 14px
+    // blur and its mask, room.css), so the override names them nowhere. vitest
+    // loads no CSS; the rule is held here and the computed style by
+    // smoke:canvas's COVER HISTORY row.
     const css = source("history/history-room-glass.css");
+    const rules = css.replace(/\/\*[\s\S]*?\*\//gu, "");
     const block =
-      /\.vf-history \.ah-frame\[data-ah-surface="host"\] \.tr-frost::before,\s*\.vf-history \.ah-frame\[data-ah-surface="host"\] \.ah-day::before \{([^}]*)\}/u.exec(
-        css,
+      /\.vf-history \.ah-frame\[data-ah-surface="host"\] \.tr-frost::before \{([^}]*)\}/u.exec(
+        rules,
       )?.[1] ?? "";
     expect(block).toContain("backdrop-filter: none;");
     expect(block).toContain("-webkit-backdrop-filter: none;");
     expect(block).toContain("background: var(--vf-chrome-solid);");
-    expect(css).not.toMatch(/backdrop-filter:\s*blur/);
+    expect(rules).not.toContain(".ah-day");
+    expect(rules).not.toMatch(/backdrop-filter:\s*blur/);
     // in the room's own chunk: only the room's view imports it, after the room's sheet
     const view = source("history/HistoryRoomView.tsx");
     expect(view.indexOf('import "./history-room-glass.css";')).toBeGreaterThan(
