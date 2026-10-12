@@ -29,6 +29,8 @@ import type { FieldHost } from "../src/host";
 import { setHost } from "../src/host";
 
 let runtimesMade = 0;
+/** A case's own floor read, in place of the runtime's `listSessions` answer. */
+let listSessionsOverride: (() => Promise<unknown>) | null = null;
 let runtimeOptions: unknown[] = [];
 let registeredSessions: unknown[] = [];
 
@@ -43,7 +45,7 @@ vi.mock("@vibecook/ghosttea-react", () => ({
       connect: () => Promise.resolve(),
       startPerformanceMeasurement: () => Promise.resolve(),
       finishPerformanceMeasurement: () => Promise.resolve({ backend: "test" }),
-      listSessions: () => Promise.resolve(sessionSummaries),
+      listSessions: () => listSessionsOverride?.() ?? Promise.resolve(sessionSummaries),
       registerSession: (session: unknown) => registeredSessions.push(session),
       dispose: () => undefined,
       rendererBackend: "test",
@@ -200,6 +202,7 @@ async function settle(): Promise<void> {
 
 beforeEach(() => {
   runtimesMade = 0;
+  listSessionsOverride = null;
   runtimeOptions = [];
   registeredSessions = [];
   requests = [];
@@ -881,5 +884,86 @@ describe("which shell was born under which Agent Profile (SB-3)", () => {
       plane: "fieldd",
       message: "not connected",
     });
+  });
+});
+
+// The debts lane (2026-10-12) — a floor read has ONE budget: the routed host
+// refuses a `terminal.sessions` that never answered at its read's 5 s
+// (`UNAVAILABLE {state: "timeout", timeoutMs}`), and that refusal is this
+// read's lapse — said in the owner's name, and final for a lookup. Before,
+// only the pool's own 10 s race was final: the host's refusal was retried,
+// a fresh 5 s read each time.
+describe("a floor read that does not answer has one budget, the routed host's", () => {
+  const lapsed = (timeoutMs?: number) =>
+    new FielddRpcError(
+      "UNAVAILABLE",
+      "terminal.sessions had no answer within 5000 ms",
+      true,
+      timeoutMs === undefined
+        ? { service: "terminal", state: "timeout" }
+        : { service: "terminal", state: "timeout", timeoutMs },
+    );
+
+  it("the host's 5 s refusal ends the lookup at once — one read, refused at 5 s in the floor's name, never five", async () => {
+    vi.useFakeTimers();
+    try {
+      let reads = 0;
+      listSessionsOverride = () => {
+        reads += 1;
+        return new Promise((_resolve, reject) => {
+          setTimeout(() => reject(lapsed(5_000)), 5_000);
+        });
+      };
+      pool.openTerminalPool(fieldd, { sessionIds: [] });
+      await settle();
+      const settled = vi.fn();
+      const started = Date.now();
+      pool.terminalSessionSummary("absent-1").then(settled, settled);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(settled).toHaveBeenCalledTimes(1);
+      expect(Date.now() - started).toBe(5_000);
+      const refusal = settled.mock.calls[0]?.[0] as Error;
+      expect(refusal).toBeInstanceOf(Error);
+      expect(refusal.message).toBe("the floor did not answer in 5 s");
+      // nothing more is asked after the refusal
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(reads).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("words the host's lapse in the owner's name, from its timeoutMs, and 5 s without one", async () => {
+    await expect(pool.floorReadWithin(Promise.reject(lapsed(5_000)), "studio")).rejects.toThrow(
+      /^studio did not answer in 5 s$/,
+    );
+    await expect(pool.floorReadWithin(Promise.reject(lapsed(3_000)), "studio")).rejects.toThrow(
+      /^studio did not answer in 3 s$/,
+    );
+    await expect(pool.floorReadWithin(Promise.reject(lapsed()), "studio")).rejects.toThrow(
+      /^studio did not answer in 5 s$/,
+    );
+    // any other refusal is the daemon's own words, carried whole
+    const other = new FielddRpcError("UNAVAILABLE", "the terminal floor is not available", true, {
+      service: "terminal",
+      state: "absent",
+    });
+    await expect(pool.floorReadWithin(Promise.reject(other), "studio")).rejects.toBe(other);
+  });
+
+  it("keeps the pool's 10 s race as the outer guard for a read the host does not bound", async () => {
+    vi.useFakeTimers();
+    try {
+      const settled = vi.fn();
+      pool.floorReadWithin(new Promise(() => undefined), "studio").then(settled, settled);
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(settled).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(settled).toHaveBeenCalledWith(
+        expect.objectContaining({ message: "studio did not answer in 10 s" }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

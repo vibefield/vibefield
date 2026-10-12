@@ -1067,14 +1067,24 @@ export async function openDormantTransport(
  * mount in words and the next one runs. Twice the routed host's own 5 s wait
  * for a floor fieldd has not observed yet, so that wait's own refusal comes
  * first.
+ *
+ * Since 2026-10-12 (the debts lane) the routed host bounds every attempt of
+ * that read by the same 5 s and refuses a hung one `{state: "timeout"}`; that
+ * refusal is this read's lapse, said in the owner's name like this one's. A
+ * read through the host so gives up at 5 s; this 10 s race stays the outer
+ * guard for a read that does not come through the host's deadline.
  */
 export const TERMINAL_FLOOR_READ_TIMEOUT_MS = 10_000;
+
+/** The routed host's read bound, when its refusal does not say its own. */
+const ROUTED_READ_TIMEOUT_MS = 5_000;
 
 /** A floor read that did not answer in time; its message says whose. */
 class FloorReadLate extends Error {}
 
 /** `read`, or a refusal naming `who` ("studio did not answer in 10 s") once
- * `TERMINAL_FLOOR_READ_TIMEOUT_MS` pass. */
+ * `TERMINAL_FLOOR_READ_TIMEOUT_MS` pass — or once the routed host gave up on
+ * the read first ("studio did not answer in 5 s"). */
 export async function floorReadWithin<T>(read: Promise<T>, who: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -1092,9 +1102,28 @@ export async function floorReadWithin<T>(read: Promise<T>, who: string): Promise
         );
       }),
     ]);
+  } catch (cause) {
+    const lapsedMs = readLapseMs(cause);
+    if (lapsedMs !== undefined)
+      throw new FloorReadLate(`${who} did not answer in ${lapsedMs / 1_000} s`);
+    throw cause;
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
+}
+
+/** The bound a refusal says the read lapsed at — `UNAVAILABLE {state:
+ * "timeout"}`, its `timeoutMs` or the host's 5 s — or undefined for any other
+ * refusal, which stays the daemon's own words. */
+function readLapseMs(cause: unknown): number | undefined {
+  if (!(cause instanceof Error) || !("kind" in cause) || cause.kind !== "UNAVAILABLE") {
+    return undefined;
+  }
+  const details = (cause as { details?: unknown }).details;
+  if (details === null || typeof details !== "object") return undefined;
+  const { state, timeoutMs } = details as { state?: unknown; timeoutMs?: unknown };
+  if (state !== "timeout") return undefined;
+  return typeof timeoutMs === "number" && timeoutMs > 0 ? timeoutMs : ROUTED_READ_TIMEOUT_MS;
 }
 
 /**
