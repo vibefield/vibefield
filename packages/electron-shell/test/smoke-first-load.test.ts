@@ -559,7 +559,12 @@ describe("a page's first load, in the product — what the rows read by", () => 
         keys: ["down KeyQ", "up KeyQ"],
         face: face({ address: `${O}/cut?p=k`, presented: 3 }),
       },
-      phone: { cut: 1, log: ["start", "end"], heardMs: 312 },
+      phone: {
+        cut: 1,
+        face: face({ address: `${O}/cut?p=t`, presented: 2 }),
+        log: ["start", "end"],
+        heardMs: 312,
+      },
     };
     expect(judgeLateFail(seen)).toEqual([]);
     // the lane before PT-5c2: the native counted the late failure as another document and said its failure — the key was
@@ -571,7 +576,7 @@ describe("a page's first load, in the product — what the rows read by", () => 
           keys: ["down KeyQ"],
           face: face({ state: "failed", reason: "failed: the page could not load" }),
         },
-        phone: { cut: 1, log: [], heardMs: null },
+        phone: { ...seen.phone, log: [], heardMs: null },
       }),
     ).toEqual([
       "LATE-FAIL: once its body was cut the laptop pane is failed (failed: the page could not load) — a document's late failure was said as the page's (the page stands, showing what came)",
@@ -596,6 +601,33 @@ describe("a page's first load, in the product — what the rows read by", () => 
       "LATE-FAIL: the page never said its key down (it heard nothing) — the row proved nothing",
       "LATE-FAIL (phone): the fixture cut no body under the phone pane — the row proved nothing",
     ]);
+  });
+
+  it("LATE-FAIL (PT-5d, G2): the phone's tap goes only once its page has said its load ENDED after the cut — the late failure landed; a tap before that proves nothing, and the judge says so", () => {
+    const seen: LateFailSeen = {
+      laptop: {
+        cut: 1,
+        before: ["down KeyQ"],
+        keys: ["down KeyQ", "up KeyQ"],
+        face: face({ address: `${O}/cut?p=k`, presented: 3 }),
+      },
+      phone: {
+        cut: 1,
+        face: face({ address: `${O}/cut?p=t`, presented: 2 }),
+        log: ["start", "end"],
+        heardMs: 240,
+      },
+    };
+    expect(judgeLateFail(seen)).toEqual([]);
+    // the tap went while the page still said it was loading — a slow main had not taken the late failure: with F1 taken
+    // away that tap lands in the document that stood, and the row passes on nothing (PT-5c2's fixed second)
+    const early = [
+      "LATE-FAIL (phone): the tap went before its page said its load ended after the cut — the late failure had not landed: the row proved nothing",
+    ];
+    expect(
+      judgeLateFail({ ...seen, phone: { ...seen.phone, face: face({ loading: true }) } }),
+    ).toEqual(early);
+    expect(judgeLateFail({ ...seen, phone: { ...seen.phone, face: null } })).toEqual(early);
   });
 
   it("HELD-PAINT (PT-5c2, F7): a click and a key while the next document's first paint is held go nowhere — the desk counts them unsent, and the next page's head heard nothing of them", () => {

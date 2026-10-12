@@ -257,11 +257,13 @@ export interface LateFailSeen {
     readonly keys: readonly string[];
     readonly face: FirstFace | null;
   };
-  /** the phone pane: how many held bodies were cut; what its page heard of the tap sent after the cut, and how long after
-   * the send the page said it (null: it never did) — said, not judged: main's wall clock under a gate's load says main's
-   * load; the refusal F1's count caused is a tap never heard */
+  /** the phone pane: how many held bodies were cut; its face when the tap was sent — PT-5d (G2): once its load had ended
+   * after the cut, the late failure landed (null: not read); what its page heard of the tap, and how long after the send
+   * the page said it (null: it never did) — said, not judged: main's wall clock under a gate's load says main's load; the
+   * refusal F1's count caused is a tap never heard */
   readonly phone: {
     readonly cut: number;
+    readonly face: FirstFace | null;
     readonly log: readonly string[];
     readonly heardMs: number | null;
   };
@@ -710,6 +712,11 @@ export function judgeLateFail(seen: LateFailSeen): string[] {
   if (p.cut < 1)
     out.push(
       "LATE-FAIL (phone): the fixture cut no body under the phone pane — the row proved nothing",
+    );
+  // (PT-5d, G2: a tap sent before the late failure landed meets the document as it stood, whatever F1 makes of it)
+  if (p.face === null || p.face.loading)
+    out.push(
+      "LATE-FAIL (phone): the tap went before its page said its load ended after the cut — the late failure had not landed: the row proved nothing",
     );
   if (p.heardMs === null || p.log.join(",") !== "start,end")
     out.push(
@@ -1877,6 +1884,7 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
     await pickUp(cutPhone);
     const phoneFrame = await heldFrame();
     let phoneCut = 0;
+    let phoneFace: FirstFace | null = null;
     let phoneLog: readonly string[] = [];
     let heardMs: number | null = null;
     if (phoneFrame !== null && phoneWord !== null) {
@@ -1886,8 +1894,15 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
       h.move(point.x, point.y);
       await sleep(200);
       phoneCut = d.fixture.cut("/cut?p=t");
-      // (the engine's word of the late failure, and whatever its page says after it, landed)
-      await sleep(1_000);
+      // PT-5d (G2): the late failure LANDED — the phone's face says its load ended, as the laptop's above — before the
+      // tap (PT-5c2 waited a fixed second: under a gate's load main took the engine's word later, and a tap before it
+      // met the document as it stood, whatever F1 made of the failure)
+      phoneFace = await waitFor(
+        "the cut phone page's load ended",
+        10_000,
+        () => face(cutPhone),
+        (f) => f !== null && !f.loading,
+      );
       const before = (at(cutPhone)?.touchLog ?? []).length;
       const sent = Date.now();
       win.webContents.sendInputEvent({
@@ -1911,7 +1926,7 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
     await done();
     const lateFail: LateFailSeen = {
       laptop: { cut: lateCut, before: lateBefore, keys: lateKeys, face: lateFace },
-      phone: { cut: phoneCut, log: phoneLog, heardMs },
+      phone: { cut: phoneCut, face: phoneFace, log: phoneLog, heardMs },
     };
     said.lateFail = lateFail;
     problems.push(...judgeLateFail(lateFail));
