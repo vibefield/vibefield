@@ -167,6 +167,23 @@ export interface RequestOptions {
    * answers it from its receipt. Ignored on any call that is not keyed; an
    * undefined one is omitted (a caller may pass `error.forward?.idempotencyKey`). */
   idempotencyKey?: string | undefined;
+  /** The call's bound, from when it is made: the wait for `ready` and for
+   * the answer together. Past it the call is refused `UNAVAILABLE {state:
+   * "timeout"}` (retryable) and its pending entry is dropped, so a late answer
+   * resolves nothing; a keyed forward that already LEFT is `outcome-unknown`
+   * instead, with its key, like any cut. Omitted: no bound (as before). */
+  timeoutMs?: number | undefined;
+}
+
+/** A call past its `RequestOptions.timeoutMs`: nobody answered in time. No
+ * JSON-RPC code — this client's own verdict, which `asOutcomeUnknown` reads as
+ * a cut for a keyed forward that left. */
+function timedOut(method: string, timeoutMs: number): FielddRpcError {
+  return new FielddRpcError("UNAVAILABLE", `${method} had no answer within ${timeoutMs} ms`, true, {
+    service: "fieldd",
+    state: "timeout",
+    timeoutMs,
+  });
 }
 
 /** DS-D15 — a fresh key for one logical call (contracts' `IdempotencyKey`,
@@ -238,6 +255,13 @@ interface SubEntry {
    * one subscription, and how many came before it (the backoff) */
   replayRetry?: ReturnType<typeof setTimeout> | undefined;
   replayRetries?: number;
+}
+
+/** A call's `RequestOptions.timeoutMs`, fixed when the call was made. */
+interface CallBound {
+  method: string;
+  timeoutMs: number;
+  deadline: number;
 }
 
 interface Pending {
@@ -381,8 +405,12 @@ export class FielddClient {
   async request(method: string, params?: unknown, opts?: RequestOptions): Promise<unknown> {
     let key: string | undefined;
     let sent = false;
+    const bound =
+      opts?.timeoutMs === undefined
+        ? undefined
+        : { timeoutMs: opts.timeoutMs, deadline: Date.now() + opts.timeoutMs, method };
     try {
-      await this.ready();
+      await (bound === undefined ? this.ready() : this.readyWithin(bound));
       // decided AFTER the hello: it may name the daemon's own device
       key = this.forwardKeyFor(method, params, opts);
       const wire =
@@ -392,7 +420,7 @@ export class FielddClient {
       // sendRequest puts it on this socket in this same tick, or refuses
       // "not connected" — so this is whether the request LEFT
       sent = this.ws !== null;
-      return await this.sendRequest(method, wire);
+      return await this.sendRequest(method, wire, undefined, false, bound);
     } catch (e) {
       if (key === undefined) {
         // never keyed, or never sent: a key the caller brought stays its own
@@ -760,11 +788,41 @@ export class FielddClient {
     }
   }
 
+  /** `ready()` inside a call's bound: past its deadline the wait is withdrawn
+   * and refused `timeout`, so the call is never sent after its caller was told
+   * it failed. */
+  private readyWithin(bound: CallBound): Promise<void> {
+    if (this.status === "ready" || this.status === "failed" || this.status === "closed")
+      return this.ready();
+    this.connect();
+    return new Promise((resolve, reject) => {
+      const waiter = {
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        reject: (e: Error) => {
+          clearTimeout(timer);
+          reject(e);
+        },
+      };
+      const timer = setTimeout(
+        () => {
+          this.readyWaiters = this.readyWaiters.filter((w) => w !== waiter);
+          reject(timedOut(bound.method, bound.timeoutMs));
+        },
+        Math.max(0, bound.deadline - Date.now()),
+      );
+      this.readyWaiters.push(waiter);
+    });
+  }
+
   private sendRequest(
     method: string,
     params: unknown,
     subKey?: number,
     dropSubOnFailure = false,
+    bound?: CallBound,
   ): Promise<unknown> {
     const ws = this.ws;
     if (!ws) return Promise.reject(new FielddRpcError("UNAVAILABLE", "not connected", true));
@@ -776,6 +834,26 @@ export class FielddClient {
     return new Promise((resolve, reject) => {
       const entry: Pending = { resolve, reject, ...(dropSubOnFailure ? { dropSubOnFailure } : {}) };
       if (subKey !== undefined) entry.subKey = subKey;
+      if (bound !== undefined) {
+        // past the bound the entry goes, so the answer that comes late
+        // resolves nothing and the map does not hold the call for ever
+        const timer = setTimeout(
+          () => {
+            if (this.pending.get(id) !== entry) return;
+            this.pending.delete(id);
+            reject(timedOut(bound.method, bound.timeoutMs));
+          },
+          Math.max(0, bound.deadline - Date.now()),
+        );
+        entry.resolve = (v) => {
+          clearTimeout(timer);
+          resolve(v);
+        };
+        entry.reject = (e) => {
+          clearTimeout(timer);
+          reject(e);
+        };
+      }
       this.pending.set(id, entry);
       ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
     });
