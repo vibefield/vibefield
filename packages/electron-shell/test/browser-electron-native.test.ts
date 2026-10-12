@@ -2342,6 +2342,83 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         vi.useRealTimers();
       }
     });
+
+    // PT-5d (M12): FROZEN until run 4 answers v9b (and v9c–v9f, F-h) — the cells of H2's doubt the second review found
+    // (J6, J7, J13 here; J3 in the frames' rows). If v9b says the page's keys are safe with a frame of another site
+    // focused and reach it, the doubt and M3's ban go, and these with them; if it crashes, they are built against the
+    // run's facts. Each row is RED as the code stands (said in the note), and unskipped by that build.
+    describe.skip("PT-5d (M12, FROZEN) — run 4's v9b: H2's doubt, as built", () => {
+      it("J6 — a key WAITING for a word when the PAGE commits is refused (its document is gone), never sent into the new one", async () => {
+        vi.useFakeTimers();
+        try {
+          const r = await framed();
+          word(r, "inner");
+          const key = r.native.dispatchKey({
+            type: "keyDown",
+            key: "a",
+            code: "KeyA",
+            modifiers: NONE,
+          });
+          await vi.advanceTimersByTimeAsync(100);
+          r.at("https://host.test/b");
+          r.contents.emit("did-navigate", {}, "https://host.test/b");
+          expect(await settle(key)).toMatch(/^refused/);
+          expect(r.hand()).not.toContain("keyDown@page");
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it("J7 — the doubt's bound is ONE: five key-like events in a doubt no word ends are refused within its second — a move behind them is not held five seconds", async () => {
+        vi.useFakeTimers();
+        try {
+          const r = await framed();
+          word(r, "here", "F");
+          word(r, "away", "F");
+          const texts = Array.from({ length: 5 }, () =>
+            r.native.dispatchText("x").catch(() => undefined),
+          );
+          void r.native.dispatchMouse({
+            type: "mouseMoved",
+            x: 1,
+            y: 1,
+            button: "none",
+            buttons: 0,
+          });
+          await vi.advanceTimersByTimeAsync(1_100);
+          expect(r.hand()).toContain("mouseMoved@page 1,1");
+          await vi.advanceTimersByTimeAsync(5_000);
+          await Promise.all(texts);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it("J13 — a key's UP whose down was SENT before the doubt began is sent, never refused — a release of what is down is always sent: Shift held on the page across a press into F whose word never comes", async () => {
+        vi.useFakeTimers();
+        try {
+          const r = await framed();
+          await r.native.dispatchKey({
+            type: "keyDown",
+            key: "Shift",
+            code: "ShiftLeft",
+            modifiers: NONE,
+          });
+          word(r, "here");
+          await press(r, 180, 120);
+          const up = r.native.dispatchKey({
+            type: "keyUp",
+            key: "Shift",
+            code: "ShiftLeft",
+            modifiers: NONE,
+          });
+          expect(await settle(up)).toBe("sent");
+          expect(r.hand().filter((h) => h.startsWith("keyUp"))).toHaveLength(1);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+    });
   });
 
   describe("M6.5b — a frame of another site is told the page's DEVICE: its agent with its hints, touch, the colour scheme", () => {

@@ -375,6 +375,23 @@ describe("PT-5d (rulings 1, M3; M7 H2) — keys, text, a composition and a comma
   });
 });
 
+// PT-5d (M12): FROZEN until run 4 answers v9b (the native's rows say why, J6, J7, J13 beside them) — RED as the code stands.
+describe.skip("PT-5d (M12, FROZEN) — run 4's v9b: H2's doubt, as built", () => {
+  it("J3 — a word said of an EARLIER hint never settles a later one: the page's late word of its own key, heard after a press into A was sent — the keys wait for a word of the press", () => {
+    const f = page();
+    // a key's down on the page (the page busy): answered late, its word still on its way
+    f.handSent();
+    f.handAnswered();
+    // the press into A, queued behind it, sent at once
+    f.press("left", 180, 120);
+    f.handSent();
+    // the page's word — of the KEY — then A answers the press
+    f.where(undefined, "here");
+    f.handAnswered();
+    expect(f.inDoubt()).toBe(true);
+  });
+});
+
 describe("PT-5d (M12 J2) — the doubt is the frames' alone: a document that never held a frame of another site has none", () => {
   it("a press on a frameless page is no doubt; a frame attached, it is; the page commits a frameless document — none again; its frames all gone, the document keeps it (a frame's session swaps through none)", () => {
     const f = new BrowserFrames();
