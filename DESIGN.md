@@ -1435,7 +1435,8 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   `createImageBitmap` on the desk's own canvas stands in — a bitmap ICE does not promise, so its
   absence falls back the same way. **Godview's live backdrop** (GT-7's viewer glass,
   `backdropOpacity` / `backdropBlur`) **and rosetta's room glass retire on the desk**: the cover is
-  a tint over the still, and their settings rows go (R16; the deck's note, below).
+  a tint over the still, and their settings rows go (R16; the deck's note, below). *(Carve-out
+  2026-10-12, docket N3 (a): the room's sticky day heads keep their own frost — the deck's note.)*
   *Amended 2026-10-07 (DK-16; plan addenda (68), (69)):* the rim the receded still leaves at the
   window's edge (≈12 px at 0.98) is the mat's ground as the theme lights it under the cover's tint —
   the still's own ring, `box-shadow: 0 0 0 2vmax var(--vf-mat-ground)`, never the canvas's colour
@@ -1697,6 +1698,11 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   the transcript's top fade and the sticky day heads are the cover's tint (`--vf-chrome-solid`,
   feathered by the room's own masks), never a backdrop filter — the room's sheet is rosetta's, so
   the override is VibeField's, scoped to the view and riding the room's own chunk.
+  *Carve-out 2026-10-12 (docket N3 (a), James):* the **sticky day heads frost** again — the room's
+  own 14px blur, feathered by its own mask (`linear-gradient(#000 72%, transparent)`), over the
+  cover's glass, on every head the room draws as `.ah-day` (a list's days and its section heads
+  alike); the override keeps only **the transcript's top fade**, which stays the cover's tint. The
+  ruling asks the frost's cost to be measured under a cover before it lands.
   Over the monitor the card occludes the bodies exactly as much as Godview occludes the field.
   **The Lip** (GV-D7; built 2026-10-11) is the lip grown into the drag bar: **30** tall, on the
   frame's tone. **The groove** (GV-D12 — James's pick over the lean: "i like the groove one")
@@ -2127,6 +2133,11 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     The room's paper fades — the transcript's top frost, the sticky day heads — **frost** over that
     glass (a 14px blur feathered by its own mask, the package's), never a mask on the scroller, which
     would fade the pinned chrome with the rows.
+    *Corrected 2026-10-12 (docket N3 (a)):* this said both fades frost, and from DK-15 (2026-10-07)
+    neither did — on the desk both were the cover's tint (§8 "The covers over the desk", the deck's
+    note), which this line was not corrected for. Since N3 (a) the **sticky day heads frost** as
+    above; **the transcript's top fade is the cover's tint** (`--vf-chrome-solid`, feathered by the
+    room's mask), never a frost.
   - **Its edges are the frame's.** The columns end at **692** — the reserve of 88 above the window's
     foot (FC-D15) — and keep **8** clear at each side for the notches' slivers; the top band, 0–52, is
     the head's (FC-D6), holding only the window's lights: the strip's search pill left for the frame's
