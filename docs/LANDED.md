@@ -9391,3 +9391,52 @@ computed `::before`; each arm 8 s of scripted scrolling; six paired A/B per laun
 
 **Validation:** red and green logs under `/Volumes/SamsungRed/lanes/dui/`; then the landing gate on the exact tree
 (`lanes/land3/logs/`, under this landing's sha).
+
+## Debts, fourth part — index-timeline's lost frame is instrumented, a fieldd-client call can carry a bound, one hung terminal read no longer pins every pane, and every kill-matrix create outlives a lost cell birth (2026-10-12; `54f6471d` · `9e9dd977` · `f0ce25eb` · `0bee8178` through lane land3, gated on the exact tree)
+
+**Why:** the rest of lane dfd's slices (the debts lane, N10 (a); brief `draft/history-finish/briefs/debts-fieldd.md`,
+survey `draft/history-finish/surveys/s-debts-fieldd.md` with its appendix). The first part above landed its first four.
+
+**What landed:**
+- `54f6471d` index-timeline's barrier row, instrumented, not fixed: the fake rosettad logs per socket what it did
+  (opened, resync fired, drop fired, send failed, closed); `until` takes a label its timeout names; an expired wait dumps
+  the subscription's frames, the tail's state (`IndexTailService.tailState()`, diagnostics only) and the fake's events,
+  and the row's fieldd writes its index log. No cause was reproduced (0 red in 30 alone, 0 in 30 beside a whole fieldd
+  suite); the survey's candidate (a repair whose delivery throws) is the projection's tested design and cannot lose this
+  frame in the index tail, so no fix went in. Five sightings, the fifth at a low 1-minute load (15.6) during a busy test
+  phase; the next red says which side lost it.
+- `9e9dd977` `RequestOptions.timeoutMs` in fieldd-client, no default: past it a call is refused `UNAVAILABLE {service:
+  "fieldd", state: "timeout", timeoutMs}` (retryable), its pending entry dropped; a call still waiting for ready is never
+  sent; a keyed forward that already left becomes outcome-unknown with its key. Which callers pass one is the lead's to
+  decide (the survey's appendix lists about thirty, with proposed bounds). Red first.
+- `f0ce25eb` the routed inventory read (`terminal/routed/host.ts`): each attempt races the read's 5 s (listRuntimeSessions'
+  designed deadline, before checked only between attempts), an expiry lets go of the shared read and refuses
+  `{state: "timeout"}`, and a generation re-read happens at most once — one hung `terminal.sessions` no longer pins every
+  pane of that desktop. The pool's `floorReadWithin` says that lapse in the owner's name ("studio did not answer in 5 s")
+  and ends the lookup at once; its own 10 s race stays the outer guard. **So Godview's deck now gives up on a routed
+  floor read at 5 s, where the fourth set's entry above says 10.** Red first (routed host and pool rows).
+- `0bee8178` terminal-kill-matrix: every `terminal.create` that can meet a slow cell birth (16, across rows 1, 3+6, 6,
+  6b, epoch arbitration, churn, S2-A, S3-A/B/C) re-asks a retryable UNAVAILABLE within its row's budget, and every
+  native row prints the field-native log on failure. "epoch arbitration reaches through the ticket path" lost the same
+  15 s birth race row 6 did, on this lane's own gate (`lanes/land3/logs/e7337bf6/verify.log`). Red first: forced, 3 of
+  3; fixed, 0 of 3; every bootstrap forced at once, the file green.
+
+**Validation:** the lane's red and green logs under `/Volumes/SamsungRed/lanes/dfd/` (`red-6-client-timeout.log`,
+`red-6-routed-inventory.log`, `red-6b-pool-floor-read.log`, `red-4b-killmatrix-epoch-birthrace.log`, the `s5-loop-*`
+stress logs); the lane's own gate green on its tip; then the landing gate on the exact tree (`lanes/land3/logs/`, under
+this landing's sha).
+
+**Found while landing parts two and three** (each a fieldd red on a tree that did not touch fieldd, each passing on a
+re-run): agent-session "re-attach across a restart … the audit attempt … never got an outcome record" (four sightings
+across lanes: fs1a, pins, pj2, land3 `40d8299f`); rosettad-supervisor "stop() SIGINTs, awaits the exit, the file is
+gone" left the daemon's announce file behind (two: jump, land3 `40d8299f`) — if the product, a reader could find a dead
+daemon's address.
+
+**Owed:**
+- those two reds, diagnosed (a budget or a real ordering fault) — the debts lane's next;
+- which fieldd-client callers pass a `timeoutMs` (the lead's call; the survey's appendix);
+- field-native's logging worker waits out its retry backoff before a requested flush, so the fatal path's
+  `flush(500 ms)` cannot write after two failed writes (the "Debts, first part" entry) — the field-native owner's;
+- **smoke:canvas on the live display for N3** ("Debts, third part"): its COVER HISTORY row went red to green offscreen
+  for the intended reason, but the whole smoke cannot pass offscreen (its occluded row, DK-13's debugger, DK-14's @ list,
+  the HAND_* timings), so the landing gates here never run it.
