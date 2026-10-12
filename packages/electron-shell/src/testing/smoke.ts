@@ -1010,8 +1010,14 @@ export async function runSmokeCanvas(opts: {
   viteUrl: string;
   beforeExit: () => Promise<void>;
   onWindow?: (window: BrowserWindow) => void;
-  /** PT-2 — main's live-surface custody (`LiveSurfaceAuthority.state()`): the live rows' GONE reads its runtimes. */
-  liveSurfaces?: () => { readonly runtimes: number; readonly owners: number } | null;
+  /** PT-2 — main's live-surface custody (`LiveSurfaceAuthority.state()`): the live rows' GONE reads its runtimes;
+   * PT-5c2 (F4) TAPS-PENDING's guard its count of the device switches main accepted (PT-5d, G7: named here, so a census
+   * built to this type keeps it). */
+  liveSurfaces?: () => {
+    readonly runtimes: number;
+    readonly owners: number;
+    readonly emulations: number;
+  } | null;
 }): Promise<void> {
   const gpu = !process.argv.includes("--disable-gpu");
   // DK-16: the GPU kept and the page given no `navigator.gpu` (`--smoke-no-webgpu`, as a remote desktop has none —
