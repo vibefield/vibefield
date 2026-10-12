@@ -1412,7 +1412,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   }
 
   /** PT-5b3 (ruling 5), PT-5c2 (F2): `turn` on `window` — ended (rejected) if the producer lets the window go first; its
-   * entry taken out the moment it settles, whichever way. */
+   * entry taken out the moment it settles, whichever way — PT-5d (G5): a turn that throws before it returns a promise
+   * too. */
   private whileStanding<T>(window: BrowserSurfaceNativeWindow, turn: () => Promise<T>): Promise<T> {
     let pending = this.#pending.get(window);
     if (pending === undefined) {
@@ -1422,7 +1423,15 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     const entries = pending;
     return new Promise<T>((resolve, reject) => {
       entries.add(reject);
-      turn().then(
+      let running: Promise<T>;
+      try {
+        running = turn();
+      } catch (error) {
+        entries.delete(reject);
+        reject(error);
+        return;
+      }
+      running.then(
         (value) => {
           entries.delete(reject);
           resolve(value);

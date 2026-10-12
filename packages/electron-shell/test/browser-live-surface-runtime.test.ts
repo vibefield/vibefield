@@ -5304,6 +5304,41 @@ describe("BrowserLiveSurfaceRuntime", () => {
         expect(p.heard).toEqual(["mousePressed", "mouseReleased"]);
         p.result.runtime.dispose();
       });
+
+      it("G5 — a turn that THROWS SYNCHRONOUSLY leaves no entry behind: 1,000 commits, each with a finger down whose cancel's dispatch throws before it returns a promise (a native no caller has today) — main's functions do not grow by one a commit (before: the turn's entry kept until its window went)", async () => {
+        const { queryObjects } = await import("node:v8");
+        // (`queryObjects` collects fully first)
+        const functions = (): number => queryObjects(Function, { format: "count" }) as number;
+        const p = await phone();
+        const touch = p.window.dispatchTouch;
+        p.window.dispatchTouch = ((input) => {
+          if (input.type === "touchCancel")
+            throw new Error("a native that throws before it answers");
+          return touch(input);
+        }) as typeof p.window.dispatchTouch;
+        const commits = async (n: number, from: number): Promise<void> => {
+          for (let i = 0; i < n; i += 1) {
+            p.pointer("down", 20);
+            await p.delivered();
+            p.window.emitNavigationState({ ...NAV, url: `${NEXT}?${from + i}` });
+            p.window.say(1);
+            await p.delivered();
+          }
+        };
+        await commits(50, 0);
+        p.heard.length = 0;
+        p.window.touchInputs.length = 0;
+        const before = functions();
+        await commits(1_000, 50);
+        const started = p.heard.filter((h) => h === "touchStart").length;
+        p.heard.length = 0;
+        p.window.touchInputs.length = 0;
+        const after = functions();
+        expect(started).toBe(1_000);
+        // (before: +1,002 — one a commit; after: +2)
+        expect(after - before).toBeLessThan(200);
+        p.result.runtime.dispose();
+      }, 30_000);
     });
   });
 });
