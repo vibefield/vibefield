@@ -2548,6 +2548,90 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         vi.useRealTimers();
       }
     });
+
+    it("M12 J14 — H9's paint is the touch TARGET's own document's: a touch to a frame whose own document committed and has not painted since is not timed until the window's next paint (the page's own first paint long done); a frame not committed since is timed from its send", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = recording(
+          (method, _params, session) => {
+            if (method === "Input.dispatchTouchEvent" && session === "F")
+              return new Promise(() => {});
+            if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };
+            if (method === "DOM.getBoxModel")
+              return { model: { content: [100, 80, 500, 80, 500, 380, 100, 380] } };
+            return {};
+          },
+          { hungInputMs: 20_000 },
+        );
+        const hung: (string | undefined)[] = [];
+        r.native.onInputHung((frame) => hung.push(frame));
+        const paint = (): void =>
+          r.contents.emit(
+            "paint",
+            {},
+            { x: 0, y: 0, width: 1, height: 1 },
+            { getSize: () => ({ width: 1, height: 1 }) },
+          );
+        await r.native.loadURL("https://host.test/a");
+        r.at("https://host.test/a");
+        r.contents.emit("did-navigate", {}, "https://host.test/a");
+        paint();
+        r.attach("F");
+        await vi.advanceTimersByTimeAsync(0);
+        // F commits a document of its own (its own word): not painted yet
+        r.emit("Page.frameNavigated", { frame: { id: "t-F", url: "https://frame.test/b" } }, "F");
+        void r.native
+          .dispatchTouch({ type: "touchStart", touchPoints: [{ x: 180, y: 120, id: 0 }] })
+          .catch(() => undefined);
+        await vi.advanceTimersByTimeAsync(30_000);
+        expect(hung).toEqual([]);
+        // the window paints: from now its bound runs
+        paint();
+        await vi.advanceTimersByTimeAsync(19_999);
+        expect(hung).toEqual([]);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(hung).toEqual(["https://frame.test"]);
+        // a frame NOT committed since the window last painted (its commit before that paint): its touch timed from its send
+        const s = recording(
+          (method, _params, session) => {
+            if (method === "Input.dispatchTouchEvent" && session === "G")
+              return new Promise(() => {});
+            if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };
+            if (method === "DOM.getBoxModel")
+              return { model: { content: [100, 80, 500, 80, 500, 380, 100, 380] } };
+            return {};
+          },
+          { hungInputMs: 20_000 },
+        );
+        const said: (string | undefined)[] = [];
+        s.native.onInputHung((frame) => said.push(frame));
+        await s.native.loadURL("https://host.test/a");
+        s.at("https://host.test/a");
+        s.contents.emit("did-navigate", {}, "https://host.test/a");
+        s.contents.emit(
+          "paint",
+          {},
+          { x: 0, y: 0, width: 1, height: 1 },
+          { getSize: () => ({ width: 1, height: 1 }) },
+        );
+        s.attach("G");
+        await vi.advanceTimersByTimeAsync(0);
+        s.emit("Page.frameNavigated", { frame: { id: "t-G", url: "https://frame.test/c" } }, "G");
+        s.contents.emit(
+          "paint",
+          {},
+          { x: 0, y: 0, width: 1, height: 1 },
+          { getSize: () => ({ width: 1, height: 1 }) },
+        );
+        void s.native
+          .dispatchTouch({ type: "touchStart", touchPoints: [{ x: 180, y: 120, id: 0 }] })
+          .catch(() => undefined);
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(said).toEqual(["https://frame.test"]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe("M6.4b — the host's bound on a page that hangs: a command of the hand timed from its SEND to its answer", () => {

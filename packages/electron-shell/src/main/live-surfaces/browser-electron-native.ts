@@ -289,6 +289,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   readonly #parentFrames = new Map<string, string>();
   /** PT-5d (M7 H9): the page's document now has painted (true before its first: nothing waits) */
   #painted = true;
+  /** PT-5d (M12 J14): the frames whose OWN document committed since the window last painted — a touch to one is timed from
+   * the next paint, as the page's (H9) */
+  readonly #unpainted = new Set<string>();
   /** PT-5d (M7 H9): touch commands whose bound starts at the page's next paint */
   readonly #atPaint = new Set<() => void>();
   /** PT-5d (M7 H11, M12 J12): the hand's commands in flight, by the session each went to (`undefined`: the page's) — all
@@ -366,10 +369,14 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       this.#parentFrames.clear();
       this.focusMoved();
     };
-    // PT-5d (M7 H9): the page's document painted — a touch waiting for it is timed from now
+    // PT-5d (M7 H9): the page's document painted — a touch waiting for it is timed from now. PT-5d (M12 J14): and a frame's
+    // committed since — the window paints as ONE image (the offscreen view composites every frame): a paint after a
+    // frame's commit is taken as the frame's (one whose own first paint is held while the host paints is timed from the
+    // host's paint — a stated limit)
     window.webContents.on("paint", () => {
-      if (this.#painted) return;
+      if (this.#painted && this.#unpainted.size === 0) return;
       this.#painted = true;
+      this.#unpainted.clear();
       for (const arm of [...this.#atPaint]) arm();
       this.#atPaint.clear();
     });
@@ -462,8 +469,11 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         | { readonly id?: unknown; readonly url?: unknown }
         | undefined;
       if (sessionId === undefined || sessionId === "" || frame === undefined) return;
-      if (this.#frames.frames().find((f) => f.session === sessionId)?.targetId === frame.id)
+      if (this.#frames.frames().find((f) => f.session === sessionId)?.targetId === frame.id) {
         this.#frames.committed(sessionId, typeof frame.url === "string" ? frame.url : undefined);
+        // (M12 J14: its new document has not painted yet)
+        this.#unpainted.add(sessionId);
+      }
       return;
     }
     // PT-5d (M8): THE WORDS' ISOLATED WORLD, by document — where a frame's sight and size are read: never the page's main
@@ -1108,7 +1118,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * past the window's `hungInputMs`, said hung once (`onInputHung`) with the origin of the frame it went to (M6.4a). Born
    * without the bound (a page that does not say when it stops), nothing is timed. PT-5d (M7 H9): a TOUCH sent to a
    * document that has not painted since it committed is timed from that paint — the engine answers a touch at a paint
-   * (F7): a page whose first paint a stylesheet holds is loading, not stopped.
+   * (F7): a page whose first paint a stylesheet holds is loading, not stopped. PT-5d (M12 J14): the TARGET's document —
+   * the page's, or the frame's own (its commit, by its own word) — never the page's alone.
    */
   private async handCommand(
     method: string,
@@ -1124,7 +1135,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         for (const listener of [...this.#hungListeners]) listener(frame);
       }, bound);
     };
-    const atPaint = method === "Input.dispatchTouchEvent" && !this.#painted;
+    const atPaint =
+      method === "Input.dispatchTouchEvent" &&
+      (session === undefined ? !this.#painted : this.#unpainted.has(session));
     if (atPaint) this.#atPaint.add(arm);
     else arm();
     // PT-5d (M7 H11): the page's commit lets it go — a document that hung and was left (an address typed, ↻ at last) keeps
