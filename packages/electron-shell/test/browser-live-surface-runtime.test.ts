@@ -4874,7 +4874,9 @@ describe("BrowserLiveSurfaceRuntime", () => {
         expect(refused.promises - resting.promises).toBeLessThan(500);
         expect(refused.heap - resting.heap).toBeLessThan(500_000);
         p.result.runtime.dispose();
-      });
+        // (20,100 events and four full collections: ~0.7 s alone, past vitest's 5 s with the whole suite's files beside
+        // it — `91ec0b28`'s run timed out at 5.1 s; its bound is its own)
+      }, 30_000);
 
       it("F3 — a document's bound on its first word runs out ONCE: four wheels and a key on a page that never speaks — the first wheel waits its second, the three after it are refused AT ONCE, counted, and the key is heard by 1.5 s (before: a second each — the key at 4 s; the orchestrator's S3)", async () => {
         vi.useFakeTimers();
