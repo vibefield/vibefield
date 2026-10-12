@@ -2484,35 +2484,79 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       }
     });
 
-    // PT-5d (M12): FROZEN until run 4 answers v9b (and v9c–v9f, F-h) — the cells of H2's doubt the second review found
-    // (J6, J7, J13 here; J3 in the frames' rows). If v9b says the page's keys are safe with a frame of another site
-    // focused and reach it, the doubt and M3's ban go, and these with them; if it crashes, they are built against the
-    // run's facts. Each row is RED as the code stands (said in the note), and unskipped by that build.
-    describe.skip("PT-5d (M12, FROZEN) — run 4's v9b: H2's doubt, as built", () => {
-      it("J7 — the doubt's bound is ONE: five key-like events in a doubt no word ends are refused within its second — a move behind them is not held five seconds", async () => {
-        vi.useFakeTimers();
-        try {
-          const r = await framed();
-          word(r, "here", "F");
-          word(r, "away", "F");
-          const texts = Array.from({ length: 5 }, () =>
-            r.native.dispatchText("x").catch(() => undefined),
+    it("M12 J7 (unfrozen at M15) — ONE bound a doubt: five texts in a doubt no word ends — the first waits its second and is refused; the episode SPENT, the four after it are refused at once; a move behind them is sent within that second, never held five", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = await framed();
+        word(r, "here", "F");
+        word(r, "away", "F");
+        const said: string[] = [];
+        const texts = Array.from({ length: 5 }, () =>
+          r.native.dispatchText("x").then(
+            () => said.push("sent"),
+            (error: unknown) =>
+              said.push(`refused: ${error instanceof Error ? error.message : String(error)}`),
+          ),
+        );
+        void r.native.dispatchMouse({
+          type: "mouseMoved",
+          x: 1,
+          y: 1,
+          button: "none",
+          buttons: 0,
+        });
+        await vi.advanceTimersByTimeAsync(900);
+        expect(said).toEqual([]);
+        await vi.advanceTimersByTimeAsync(200);
+        expect(r.hand()).toContain("mouseMoved@page 1,1");
+        expect(said).toEqual(Array(5).fill("refused: Browser input's focus is in doubt"));
+        expect(r.hand().filter((h) => h.startsWith("insertText"))).toEqual([]);
+        await Promise.all(texts);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("M12 J7 — a new EPISODE: a word (any focus word — one that leaves the focus unknown too) or a new hint renews the doubt's bound: the next key-like event waits its second again; spent again, the one after it is refused at once", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = await framed();
+        word(r, "here", "F");
+        word(r, "away", "F");
+        const said: string[] = [];
+        const text = (t: string): void => {
+          void r.native.dispatchText(t).then(
+            () => said.push(`${t} sent`),
+            () => said.push(`${t} refused`),
           );
-          void r.native.dispatchMouse({
-            type: "mouseMoved",
-            x: 1,
-            y: 1,
-            button: "none",
-            buttons: 0,
-          });
-          await vi.advanceTimersByTimeAsync(1_100);
-          expect(r.hand()).toContain("mouseMoved@page 1,1");
-          await vi.advanceTimersByTimeAsync(5_000);
-          await Promise.all(texts);
-        } finally {
-          vi.useRealTimers();
-        }
-      });
+        };
+        // the episode: the first waits its second; spent — the next refused at once
+        text("a");
+        await vi.advanceTimersByTimeAsync(1_100);
+        text("b");
+        await vi.advanceTimersByTimeAsync(0);
+        expect(said).toEqual(["a refused", "b refused"]);
+        // a word that leaves the focus unknown (the page's `away`): a new episode — the next waits its second again
+        word(r, "away");
+        text("c");
+        await vi.advanceTimersByTimeAsync(500);
+        expect(said).toEqual(["a refused", "b refused"]);
+        await vi.advanceTimersByTimeAsync(600);
+        text("d");
+        await vi.advanceTimersByTimeAsync(0);
+        expect(said).toEqual(["a refused", "b refused", "c refused", "d refused"]);
+        // a new hint (a press on the page): a new episode — the next waits for its word, and the page's own sends it
+        await press(r, 1, 1);
+        text("e");
+        await vi.advanceTimersByTimeAsync(500);
+        expect(said).toHaveLength(4);
+        word(r, "here");
+        await vi.advanceTimersByTimeAsync(0);
+        expect(said).toEqual(["a refused", "b refused", "c refused", "d refused", "e sent"]);
+        expect(r.hand().filter((h) => h.startsWith("insertText"))).toEqual(["insertText@page e"]);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

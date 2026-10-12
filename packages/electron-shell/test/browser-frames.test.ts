@@ -414,6 +414,48 @@ describe("PT-5d (M12 J3, unfrozen at M15) — the doubt settles only on a word t
   });
 });
 
+describe("PT-5d (M12 J7, unfrozen at M15) — ONE bound a doubt: a doubt spent stays spent until a word or a new hint renews it", () => {
+  it("J7 — a doubt is born unspent (a hint, a blur, the focused frame's session gone); spent, it stays spent across its hint's answer and a STALE word (J3); a word — one that leaves the focus unknown too — renews it, and so does a new hint; a word that settles it ends it", () => {
+    const f = page();
+    // a hint — the press into A — answered: in doubt, unspent; spent, it stays spent across the answer
+    f.press("left", 180, 120);
+    f.handSent(100);
+    expect(f.doubtSpent()).toBe(false);
+    f.spendDoubt();
+    f.handAnswered();
+    expect(f.inDoubt()).toBe(true);
+    expect(f.doubtSpent()).toBe(true);
+    // a stale word (its event before the hint) moves nothing: still spent
+    f.where(undefined, "away", 50);
+    expect(f.doubtSpent()).toBe(true);
+    // the page's `away` (where the focus went still unknown): renewed
+    f.where(undefined, "away", 150);
+    expect(f.inDoubt()).toBe(true);
+    expect(f.doubtSpent()).toBe(false);
+    // spent again: a new hint renews it
+    f.spendDoubt();
+    f.handSent(200);
+    expect(f.doubtSpent()).toBe(false);
+    f.handAnswered();
+    // spent again: A's word settles it — no doubt, nothing spent
+    f.spendDoubt();
+    f.where("A", "here", 201);
+    expect(f.inDoubt()).toBe(false);
+    expect(f.doubtSpent()).toBe(false);
+    // the focused frame's session gone: a doubt born unspent
+    f.detached("A");
+    expect(f.inDoubt()).toBe(true);
+    expect(f.doubtSpent()).toBe(false);
+    // a blur: the focused frame's own `away`, no word of where it went — a doubt born unspent
+    const g = page();
+    g.where("A", "here");
+    expect(g.inDoubt()).toBe(false);
+    g.where("A", "away");
+    expect(g.inDoubt()).toBe(true);
+    expect(g.doubtSpent()).toBe(false);
+  });
+});
+
 describe("PT-5d (M12 J2) — the doubt is the frames' alone: a document that never held a frame of another site has none", () => {
   it("a press on a frameless page is no doubt; a frame attached, it is; the page commits a frameless document — none again; its frames all gone, the document keeps it (a frame's session swaps through none)", () => {
     const f = new BrowserFrames();

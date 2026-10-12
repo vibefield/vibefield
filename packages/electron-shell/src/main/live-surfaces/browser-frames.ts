@@ -53,6 +53,9 @@ interface Doubt {
   heard: boolean;
   /** the hint's command is answered (a doubt with no hint is) — a word heard now settles it */
   answered: boolean;
+  /** PT-5d (M12 J7): a key-like event has waited this doubt's whole bound — the next are refused at once, until a word or a
+   * new hint (a new doubt) renews it */
+  spent: boolean;
 }
 
 /** Where an event goes — the page's own session (`undefined`) or a frame's — and the document it is for. */
@@ -161,7 +164,8 @@ export class BrowserFrames {
     // where the focus is now is unknown: in doubt until a word (before: the page's — keys on its session, a frame focused)
     if (this.#doubt !== null) {
       if (this.#doubt.base === session) this.#doubt.base = null;
-    } else if (this.#focused === session) this.#doubt = { base: null, heard: true, answered: true };
+    } else if (this.#focused === session)
+      this.#doubt = { base: null, heard: true, answered: true, spent: false };
   }
 
   /** A frame committed another document — its own word, on its own session. The frames of the document before go with
@@ -248,12 +252,14 @@ export class BrowserFrames {
         typeof base === "string" && base !== session && this.under(base, session) ? base : null;
     else next = base === null || base === session || this.under(base, session) ? null : base;
     if (doubt === null) {
-      if (next === null) this.#doubt = { base: null, heard: true, answered: true };
+      if (next === null) this.#doubt = { base: null, heard: true, answered: true, spent: false };
       else this.#focused = next;
       return;
     }
     doubt.base = next;
     doubt.heard = true;
+    // (M12 J7: a word — any — renews the doubt's bound: the words come, the next may say where it is)
+    doubt.spent = false;
     if (doubt.answered && next !== null) this.settle(next);
   }
 
@@ -266,6 +272,7 @@ export class BrowserFrames {
       base: this.#doubt === null ? this.#focused : this.#doubt.base,
       heard: false,
       answered: false,
+      spent: false,
     };
   }
 
@@ -283,6 +290,18 @@ export class BrowserFrames {
    * cross-site navigation leaves none attached while its new session comes.) */
   inDoubt(): boolean {
     return this.#doubt !== null && this.#framed;
+  }
+
+  /** PT-5d (M12 J7): has a key-like event waited this doubt's whole bound — ONE bound a doubt: the next are refused at once
+   * (before: each waited its own, one behind another on the hand's one queue — N events, N seconds of a frozen pane)? A
+   * word, or a new hint, renews it. */
+  doubtSpent(): boolean {
+    return this.#doubt?.spent === true;
+  }
+
+  /** PT-5d (M12 J7): a key-like event waited the doubt's whole bound, and no word came. */
+  spendDoubt(): void {
+    if (this.#doubt !== null) this.#doubt.spent = true;
   }
 
   /** The frames of the page's tree, by session, and their parents: what the native reads their quads by. */

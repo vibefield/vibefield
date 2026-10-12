@@ -1114,9 +1114,14 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     }
   }
 
-  /** PT-5d (M7 H2): the focus known — at once, or when a word settles it; refused once `FOCUS_WORD_MS` have passed. */
+  /** PT-5d (M7 H2): the focus known — at once, or when a word settles it; refused once `FOCUS_WORD_MS` have passed. PT-5d
+   * (M12 J7): ONE bound a doubt — once a key-like event has waited it out, the next are refused at once until a word or a
+   * new hint renews it (before: each waited its own second on the hand's one queue — five typed into a frame whose word
+   * never comes held the moves behind them five seconds, and were refused anyway). */
   private focusSettled(): Promise<void> {
     if (!this.#frames.inDoubt()) return Promise.resolve();
+    if (this.#frames.doubtSpent())
+      return Promise.reject(new Error("Browser input's focus is in doubt"));
     return new Promise<void>((resolve, reject) => {
       const waiter = {
         known: (): void => {
@@ -1131,10 +1136,10 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
           reject(error);
         },
       };
-      const timer = setTimeout(
-        () => waiter.refuse(new Error("Browser input's focus is in doubt")),
-        FOCUS_WORD_MS,
-      );
+      const timer = setTimeout(() => {
+        this.#frames.spendDoubt();
+        waiter.refuse(new Error("Browser input's focus is in doubt"));
+      }, FOCUS_WORD_MS);
       this.#focusWaiters.add(waiter);
     });
   }
