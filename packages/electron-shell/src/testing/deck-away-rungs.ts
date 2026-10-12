@@ -247,3 +247,233 @@ async function deckAwaySteps(
   verdict["roundTripped"] = true;
   return verdict;
 }
+
+// THE EDGE'S OUTCOMES — the rung after it (round 3, W4; DESIGN.md §8 "A drag
+// has three outcomes", "Two readouts", "The monitor makes room"), driven with
+// the smoke's own input (`sendInputEvent`: trusted moves, read at the window):
+//
+//   · held down 60 and let go slowly, the edge STAYS there and is remembered,
+//     and the monitor's field ends 12 above it;
+//   · held down past the line — less than 120 left — the stage says Minimize
+//     the terminals, and let go there they go AWAY, the remembered edge kept;
+//   · a body brings them back up at that remembered edge;
+//   · a double-click puts the edge back at rest and forgets it.
+//
+// It starts from rest (a fresh profile's) and leaves the edge there.
+
+/** The lip where a person takes it — its middle, left of the grip and clear
+ * of the buttons — and the edge as the page holds it. */
+const LIP_NOW = `(() => {
+  const stage = document.querySelector(".vf-cover .vf-godview");
+  const lip = stage?.querySelector('.vf-godview-deck-lip[role="separator"]');
+  if (!stage || !lip) return JSON.stringify({ absent: true });
+  const box = lip.getBoundingClientRect();
+  const sheet = stage.querySelector(".vf-godview-terminal-deck");
+  const monitor = stage.querySelector(".vf-godview-monitor-stage");
+  return JSON.stringify({
+    x: Math.round(box.left + box.width / 2 - 160),
+    y: Math.round(box.top + box.height / 2),
+    shift: stage.style.getPropertyValue("--vf-godview-deck-shift"),
+    field: stage.style.getPropertyValue("--vf-godview-field-shift"),
+    remembered: localStorage.getItem("vf-godview-deck-edge-v1"),
+    readout: stage.querySelector(".vf-godview-deck-readout")?.getAttribute("data-on") ?? null,
+    sheetTop: sheet ? sheet.offsetTop : null,
+    monitorFoot: monitor ? Math.round(monitor.getBoundingClientRect().bottom) : null,
+    windowFoot: window.innerHeight,
+  });
+})()`;
+
+interface LipNow {
+  absent?: true;
+  x: number;
+  y: number;
+  shift: string;
+  field: string;
+  remembered: string | null;
+  readout: string | null;
+  sheetTop: number | null;
+  monitorFoot: number | null;
+  windowFoot: number;
+}
+
+async function lipNow(win: BrowserWindow): Promise<LipNow> {
+  const now = JSON.parse((await win.webContents.executeJavaScript(LIP_NOW)) as string) as LipNow;
+  if (now.absent === true) throw new Error("the deck draws no edge to hold");
+  return now;
+}
+
+/** Press the lip, move it to `toY` in `steps` moves `every` ms apart (slowly:
+ * no fling), let `held` look while it is still held, then let go there. */
+async function holdLip(
+  win: BrowserWindow,
+  from: { x: number; y: number },
+  toY: number,
+  steps: number,
+  every: number,
+  held?: () => Promise<void>,
+): Promise<void> {
+  const input = win.webContents;
+  input.sendInputEvent({ type: "mouseMove", x: from.x, y: from.y });
+  await sleep(60);
+  input.sendInputEvent({ type: "mouseDown", x: from.x, y: from.y, button: "left", clickCount: 1 });
+  await sleep(every);
+  for (let step = 1; step <= steps; step += 1) {
+    input.sendInputEvent({
+      type: "mouseMove",
+      x: from.x,
+      y: Math.round(from.y + ((toY - from.y) * step) / steps),
+      button: "left",
+      modifiers: ["leftbuttondown"],
+    });
+    await sleep(every);
+  }
+  if (held !== undefined) await held();
+  await sleep(every);
+  input.sendInputEvent({ type: "mouseUp", x: from.x, y: toY, button: "left", clickCount: 1 });
+  await sleep(120);
+}
+
+/** The rung. */
+export async function deckEdgeRung(
+  win: BrowserWindow,
+  opts: DeckAwayRungOptions,
+): Promise<Record<string, unknown>> {
+  const verdict: Record<string, unknown> = {};
+  try {
+    return await deckEdgeSteps(win, opts, verdict);
+  } catch (error) {
+    // Leave the terminals up and the edge at rest for whatever runs next.
+    const now = await stageNow(win).catch(() => null);
+    if (now?.state === "away") {
+      await click(win, ACTIVE_BODY, "calling the terminals back after a failure").catch(
+        () => undefined,
+      );
+    }
+    await win.webContents
+      .executeJavaScript(
+        `(() => { const lip = document.querySelector('.vf-cover .vf-godview-deck-lip[role="separator"]'); lip?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })); return "ok"; })()`,
+      )
+      .catch(() => undefined);
+    const said = error instanceof Error ? error.message : String(error);
+    throw new Error(`${said} [read: ${JSON.stringify(verdict)}; now: ${JSON.stringify(now)}]`);
+  }
+}
+
+async function deckEdgeSteps(
+  win: BrowserWindow,
+  opts: DeckAwayRungOptions,
+  verdict: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  opts.pressViewKey("godview");
+  await opts.deck.until(
+    (facts) => facts.active && facts.wrapper?.state === "up",
+    "Godview showing its terminals up",
+    30_000,
+  );
+  await stageAtRest(win, "the terminals up");
+  const before = await opts.settled();
+  const restTop = before.wrapper?.top;
+  if (restTop === undefined) throw new Error("the deck's marker carries no wrapper facts");
+  const start = await lipNow(win);
+  if (start.shift !== "" || start.remembered !== null) {
+    return { unavailable: `the edge was not at rest (${start.shift || start.remembered})` };
+  }
+  verdict["rest"] = { top: restTop, monitorFoot: start.monitorFoot };
+
+  // STAYS — 60 down, let go slowly
+  await holdLip(win, start, start.y + 60, 6, 80);
+  await opts.deck.until(
+    (facts) => facts.wrapper?.state === "up" && facts.wrapper.top !== restTop,
+    "a slow let-go to leave the edge where it was let go",
+    10_000,
+  );
+  // what the edge came to once the let-go has settled (a held edge's marker
+  // moves with it)
+  const stayed = await opts.settled();
+  const there = await lipNow(win);
+  verdict["stays"] = {
+    top: stayed.wrapper?.top,
+    remembered: there.remembered,
+    field: there.field,
+    monitorFoot: there.monitorFoot,
+  };
+  if (Math.abs((stayed.wrapper?.top ?? 0) - (restTop + 60)) > 1) {
+    throw new Error(
+      `let go 60 down, the edge stands at ${stayed.wrapper?.top}, not ${restTop + 60}`,
+    );
+  }
+  if (there.remembered !== there.shift.replace("px", "") || there.field !== there.shift) {
+    throw new Error(
+      `the edge that stayed is not the one remembered and measured (${JSON.stringify(there)})`,
+    );
+  }
+  if (there.sheetTop === null || there.monitorFoot === null) {
+    throw new Error("the stage lost its sheet or its monitor");
+  }
+  if (Math.abs(there.sheetTop - 12 - there.monitorFoot) > 1) {
+    throw new Error(
+      `the monitor's field ends at ${there.monitorFoot}, not 12 above the edge (${there.sheetTop})`,
+    );
+  }
+
+  // AWAY — held past the line (70 left above the panes' foot), let go slowly
+  const line = there.windowFoot - COVER_RESERVE - 70;
+  let saidWhileHeld: string | null = null;
+  await holdLip(win, there, line, 8, 80, async () => {
+    saidWhileHeld = (await lipNow(win)).readout;
+  });
+  verdict["readoutWhileHeld"] = saidWhileHeld;
+  if (saidWhileHeld !== "true") {
+    throw new Error(`held past the line, the stage said nothing (readout ${saidWhileHeld})`);
+  }
+  await opts.deck.until(
+    (facts) => !facts.active && facts.wrapper?.state === "away",
+    "a let-go with less than 120 left to put the terminals away",
+    10_000,
+  );
+  await stageAtRest(win, "the fall");
+  const gone = await lipNow(win);
+  verdict["away"] = { remembered: gone.remembered, field: gone.field, readout: gone.readout };
+  if (gone.remembered !== there.remembered || gone.field !== there.field) {
+    throw new Error(
+      `the drag that put them away moved the remembered edge: ${JSON.stringify(there)} → ${JSON.stringify(gone)}`,
+    );
+  }
+  if (gone.readout !== "false") throw new Error("the readout stayed after the let-go");
+
+  // CALLED UP — at the edge that was remembered
+  await click(win, ACTIVE_BODY, "a body of the swarm");
+  await opts.deck.until(
+    (facts) => facts.active && facts.wrapper?.state === "up",
+    "a body to bring the terminals back",
+    10_000,
+  );
+  await stageAtRest(win, "the rise");
+  const back = await opts.settled();
+  verdict["back"] = { top: back.wrapper?.top };
+  if (back.wrapper?.top !== stayed.wrapper?.top) {
+    throw new Error(
+      `they came back with their top at ${back.wrapper?.top}, not where the edge was left (${stayed.wrapper?.top})`,
+    );
+  }
+
+  // REST — a double-click on the lip, and the memory goes
+  const lip = await lipNow(win);
+  const input = win.webContents;
+  for (const clickCount of [1, 2]) {
+    input.sendInputEvent({ type: "mouseDown", x: lip.x, y: lip.y, button: "left", clickCount });
+    input.sendInputEvent({ type: "mouseUp", x: lip.x, y: lip.y, button: "left", clickCount });
+  }
+  const rested = await opts.deck.until(
+    (facts) => facts.wrapper?.top === restTop,
+    "a double-click to put the edge back at rest",
+    10_000,
+  );
+  const atRest = await lipNow(win);
+  verdict["rested"] = { top: rested.wrapper?.top, remembered: atRest.remembered };
+  if (atRest.remembered !== null || atRest.shift !== "" || atRest.field !== "") {
+    throw new Error(`rest did not forget the edge (${JSON.stringify(atRest)})`);
+  }
+  verdict["outcomes"] = true;
+  return verdict;
+}

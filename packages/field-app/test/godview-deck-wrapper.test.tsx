@@ -312,17 +312,17 @@ describe("away (GV-D6 — nothing, fully away)", () => {
   it("the stylesheet: away and arrived, the sheet is out of the flow at its own box, below the foot and unseen; the monitor has the window to the reserve", () => {
     const arrived = '.vf-godview[data-godview-deck="away"]:not([data-godview-deck-motion])';
     const away = rule(`${arrived} .vf-godview-terminal-deck`);
-    expect(away).toContain("position: absolute;");
     expect(away).toContain("visibility: hidden;");
     expect(away).toContain("transform: translateY(calc(100% + 40px));");
-    expect(away).toContain("margin-top: 0;");
-    // its own box: the top an up sheet has, so arriving lays it out at the
-    // size it travelled at — the head's 40 and the monitor's basis (L8a: the
-    // deck's top at rest is that sum whatever the head's height), plus the edge
-    expect(away).toMatch(
-      /top: calc\(\s*40px \+\s+max\(var\(--vf-monitor-stage-height, 35%\), 170px\) \+\s+var\(--vf-godview-deck-shift, 0px\)\s*\);/,
+    // its own box: away changes nothing of its layout — the sheet is placed at
+    // its edge, out of the flow, whatever the state (round 3, W4)
+    expect(away).not.toMatch(/\b(position|top|bottom|height|margin-top|flex)\s*:/);
+    const placed = rule(".vf-godview[data-godview-deck-edge] .vf-godview-terminal-deck");
+    expect(placed).toContain("position: absolute;");
+    expect(placed).toMatch(
+      /top: calc\(var\(--vf-godview-deck-rest\) \+ var\(--vf-godview-deck-shift, 0px\)\);/,
     );
-    expect(away).toMatch(/bottom: 0;/);
+    expect(placed).toMatch(/bottom: 0;/);
     // the monitor alone: the window, to the covers' reserve (L5, FC-D15)
     expect(rule(`${arrived} .vf-godview-monitor-stage`)).toContain("flex: 1 1 0;");
     expect(rule(`.vf-cover ${arrived} .vf-godview-monitor-stage`)).toContain(

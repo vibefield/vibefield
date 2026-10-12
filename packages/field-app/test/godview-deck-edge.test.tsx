@@ -6,18 +6,24 @@
  * The layout is the stylesheet's (`godview.css` reads one custom property), so
  * this fixture emulates that one rule in the only place happy-dom lays anything
  * out — `getBoundingClientRect` — and holds the edge to the contract:
- *   1. the bounds: up to the head's reserve, 56 from the window's top (the
- *      monitor never shrinks), down until the deck would drop under its minimum
+ *   1. the bounds: up to the head's reserve, 56 from the window's top, down
+ *      until the deck that is UP would drop under 120 — and a held edge on to
+ *      24 short of the panes' foot
  *   2. a drag writes the shift onto the stage's root and nothing else, and the
  *      viewer's position is remembered (and only by the live overlay)
- *   3. the keyboard and a double-click move it the same way
+ *   3. the keyboard and a double-click move it the same way, and never
+ *      minimize
  *   4. a window that shrinks clamps the edge; one that grows returns it
  *   5. with no monitor there is nothing to move against — no separator
- *   6. the stylesheet splits the one number into the monitor's growth and the
- *      deck's overlap, and the tokens it reads exist
+ *   6. the stylesheet places the sheet at its edge and ends the monitor's
+ *      field 12 above the edge as last set, and the tokens it reads exist
  *   7. the Lip's look (round 3, GV-D7 and GV-D12): a 30 bar holding the groove
  *      in its pill, on the frame tone, the panes in a well — and the facts the
  *      deck's marker says of the wrapper
+ *   8. the edge's outcomes (round 3, W4): let go with less than 120 left, or
+ *      flung down, and the terminals go away; otherwise the edge stays and is
+ *      remembered. Held past the line, the stage says so. A lost pointer
+ *      capture does not end the drag.
  */
 
 import { readFileSync } from "node:fs";
@@ -31,12 +37,18 @@ import { DEFAULT_DECK_APPEARANCE } from "../src/godview/deck-appearance";
 import {
   clampDeckShift,
   DECK_EDGE_STORAGE_KEY,
+  DECK_FLING,
   DECK_HEAD_RESERVE,
+  DECK_HELD_LEAST,
   DECK_MIN_HEIGHT,
   DECK_SHIFT_PROPERTY,
   deckEdgeBounds,
   deckEdgeValueText,
+  deckLetGo,
   deckShiftForKey,
+  FIELD_SHIFT_PROPERTY,
+  flingVelocity,
+  trustDeckEdgeEventsForTest,
 } from "../src/godview/deck-edge";
 import { DECK_FALL_MS, DECK_RISE_MS, DECK_TRAVEL_GRACE_MS } from "../src/godview/deck-state";
 import {
@@ -56,9 +68,12 @@ import { BUILTIN_THEMES } from "../src/panels/terminal/theme-view";
 
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-// The emulated window: the bar is 40px, the monitor's tuned height 280px.
+// The emulated window: the bar is 40px, the monitor's tuned height 280px, so
+// the deck's top at rest stands 320 from the stage's top — with the bar and
+// without it (L8a: the head's height is given back to the monitor's basis).
 const BAR = 40;
 const REST_MONITOR = 280;
+const DECK_REST = BAR + REST_MONITOR;
 let windowHeight = 800;
 /** Where the monitor's stage begins below the window's top: the bar's 40 today,
  * 0 once the head takes no band (the Stories head). */
@@ -66,11 +81,15 @@ let monitorTop = BAR;
 /** Whether the emulated monitor stands alone (the terminals away). */
 let awayMonitor = false;
 
-function appliedShift(element: Element): number {
+function rootShift(element: Element, property: string): number {
   const root = element.closest<HTMLElement>(".vf-godview");
-  const raw = root?.style.getPropertyValue(DECK_SHIFT_PROPERTY) ?? "";
+  const raw = root?.style.getPropertyValue(property) ?? "";
   return raw === "" ? 0 : Number.parseFloat(raw);
 }
+/** The edge as it stands — held or not. */
+const appliedShift = (element: Element): number => rootShift(element, DECK_SHIFT_PROPERTY);
+/** The edge as last SET — what the monitor's field follows (once per change). */
+const fieldShift = (element: Element): number => rootShift(element, FIELD_SHIFT_PROPERTY);
 
 function rect(top: number, height: number): DOMRect {
   return {
@@ -96,16 +115,18 @@ const WELL_FOOT = 8;
  * out one. */
 let paintedScale = 1;
 
-// `godview.css`'s monitor rule, in the one place happy-dom measures — and, for
-// the wrapper's witness, where that rule puts the deck and the body in its well.
+// `godview.css`'s rules, in the one place happy-dom measures: the sheet stands
+// at its edge — rest and the shift — and the monitor's field ends 12 above the
+// edge as last set, never above 220; the body is the panes in the well.
 function layout(this: Element): DOMRect {
   if (this.classList.contains("vf-godview")) return rect(0, windowHeight);
   if (this.classList.contains("vf-godview-monitor-stage")) {
     // away, the monitor alone has the window down to the covers' reserve
     if (awayMonitor) return rect(monitorTop, windowHeight - monitorTop - 88);
-    return rect(monitorTop, REST_MONITOR + Math.max(0, appliedShift(this)));
+    const foot = Math.max(220, DECK_REST + fieldShift(this) - 12);
+    return rect(monitorTop, foot - monitorTop);
   }
-  const deckTop = monitorTop + REST_MONITOR + appliedShift(this);
+  const deckTop = DECK_REST + appliedShift(this);
   if (this.classList.contains("vf-godview-terminal-deck")) {
     return rect(deckTop, windowHeight - deckTop);
   }
@@ -196,6 +217,10 @@ beforeEach(() => {
   proto["hasPointerCapture"] = (id: number) => captured.has(id);
   host = document.createElement("div");
   document.body.append(host);
+  // a test's pointer events are synthetic: the edge reads trusted ones only
+  trustDeckEdgeEventsForTest(true);
+  clock = 1_000;
+  vi.spyOn(performance, "now").mockImplementation(() => clock);
 });
 
 afterEach(() => {
@@ -203,9 +228,13 @@ afterEach(() => {
   root = null;
   host.remove();
   observers.length = 0;
+  trustDeckEdgeEventsForTest(false);
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
+
+/** The page's clock, which the edge reads for a fling (`performance.now`). */
+let clock = 1_000;
 
 function Monitor(): ReactElement {
   return <section className="vf-godview-monitor-stage" aria-label="Agent monitor" />;
@@ -217,12 +246,15 @@ function mount({
   publishesDeck = false,
   edge = true,
   deckState = "up",
+  onDeckState,
 }: {
   monitor?: boolean;
   persist?: boolean;
   publishesDeck?: boolean;
   edge?: boolean;
   deckState?: GodviewDeckState;
+  /** the owner's ear: with it, the terminals can be minimized */
+  onDeckState?: (next: GodviewDeckState) => void;
 } = {}) {
   root ??= createRoot(host);
   act(() =>
@@ -236,6 +268,7 @@ function mount({
         {...(edge ? { deckEdge: { persist } } : {})}
         publishesDeck={publishesDeck}
         deckState={deckState}
+        {...(onDeckState !== undefined ? { onDeckState } : {})}
         deck={<p>deck</p>}
       />,
     ),
@@ -245,6 +278,11 @@ function mount({
 const stageRoot = (): HTMLElement => host.querySelector<HTMLElement>(".vf-godview") as HTMLElement;
 const separator = (): HTMLElement | null => host.querySelector<HTMLElement>('[role="separator"]');
 const shiftOnRoot = (): string => stageRoot().style.getPropertyValue(DECK_SHIFT_PROPERTY);
+const fieldOnRoot = (): string => stageRoot().style.getPropertyValue(FIELD_SHIFT_PROPERTY);
+const readout = (): HTMLElement | null =>
+  host.querySelector<HTMLElement>(".vf-godview > .vf-godview-deck-readout");
+const veil = (): HTMLElement | null =>
+  host.querySelector<HTMLElement>(".vf-godview > .vf-godview-deck-veil");
 
 function pointer(type: string, clientY: number): void {
   const target = separator();
@@ -271,47 +309,54 @@ function key(name: string, shiftKey = false): void {
   });
 }
 
-// room = 800 − 40 = 760 → the lowest edge: 760 − 280 − 120
-const MAX = 800 - BAR - REST_MONITOR - DECK_MIN_HEIGHT;
+// The lowest a deck that is UP stands: 120 left above the window's foot
+// (no reserve outside the cover) — 800 − 120 − 320
+const MAX = 800 - DECK_MIN_HEIGHT - DECK_REST;
 // the highest: the sheet's top at the head's reserve, 56 from the window's top —
-// at rest it stands at 40 + 280, so it rises by 264 (until 2026-10-11, by 280:
-// to the bar's foot)
-const MIN = DECK_HEAD_RESERVE - (BAR + REST_MONITOR);
+// at rest it stands at 320, so it rises by 264 (until 2026-10-11, by 280: to
+// the bar's foot)
+const MIN = DECK_HEAD_RESERVE - DECK_REST;
+// the lowest a HELD edge goes: 24 short of the panes' foot (round 3, W4)
+const HELD = 800 - DECK_HELD_LEAST - DECK_REST;
 /** Where the sheet's top stands in the window, from the shift on the root. */
 const sheetTop = (): number =>
-  monitorTop + REST_MONITOR + (shiftOnRoot() === "" ? 0 : Number.parseFloat(shiftOnRoot()));
+  DECK_REST + (shiftOnRoot() === "" ? 0 : Number.parseFloat(shiftOnRoot()));
 
 describe("the deck edge's arithmetic", () => {
-  it("rises to the head's reserve — 56 from the window's top — and falls until the deck's minimum", () => {
+  it("rises to the head's reserve — 56 from the window's top — and falls until the deck's minimum, a held edge on to 24 short of the foot", () => {
     expect(DECK_HEAD_RESERVE).toBe(56);
-    // under the bar (the monitor begins at 40): rest is 320, the reach 56
-    expect(deckEdgeBounds({ monitorTop: 40, restMonitor: 280, room: 760 })).toEqual({
+    expect(DECK_MIN_HEIGHT).toBe(120);
+    expect(DECK_HELD_LEAST).toBe(24);
+    // rest at 320 in an 800 stage with nothing kept under the panes
+    expect(deckEdgeBounds({ restTop: 320, height: 800, reserve: 0 })).toEqual({
       min: -264,
       max: 360,
+      held: 456,
     });
-    // with no band above the monitor (it begins at 0): rest is 280, the reach the SAME 56
-    expect(deckEdgeBounds({ monitorTop: 0, restMonitor: 280, room: 800 })).toEqual({
-      min: -224,
-      max: 400,
+    // inside the cover the panes end 88 above the foot (692 in the drawing's 780)
+    expect(deckEdgeBounds({ restTop: 300, height: 780, reserve: 88 })).toEqual({
+      min: -244,
+      // End: 120 left — 572 in the drawing
+      max: 572 - 300,
+      // held: 24 short of 692
+      held: 692 - 24 - 300,
     });
-    for (const geometry of [
-      { monitorTop: 40, restMonitor: 280, room: 760 },
-      { monitorTop: 0, restMonitor: 280, room: 800 },
-      { monitorTop: 40, restMonitor: 170, room: 760 },
-    ]) {
-      const { min } = deckEdgeBounds(geometry);
-      expect(geometry.monitorTop + geometry.restMonitor + min, JSON.stringify(geometry)).toBe(56);
+    for (const restTop of [320, 280, 210]) {
+      const { min } = deckEdgeBounds({ restTop, height: 800, reserve: 0 });
+      expect(restTop + min, String(restTop)).toBe(56);
     }
-    // A window too short for the minimum keeps the resting layout.
-    expect(deckEdgeBounds({ monitorTop: 40, restMonitor: 280, room: 300 })).toEqual({
+    // A window too short for the minimum keeps the resting layout, held too.
+    expect(deckEdgeBounds({ restTop: 320, height: 340, reserve: 0 })).toEqual({
       min: -264,
       max: 0,
+      held: 0,
     });
     // …and a monitor so short that rest already stands above the reserve keeps
     // it too: the reserve never pushes the edge DOWN from rest
-    expect(deckEdgeBounds({ monitorTop: 0, restMonitor: 40, room: 400 })).toEqual({
+    expect(deckEdgeBounds({ restTop: 40, height: 400, reserve: 0 })).toEqual({
       min: 0,
       max: 240,
+      held: 336,
     });
   });
 
@@ -323,13 +368,67 @@ describe("the deck edge's arithmetic", () => {
     expect(clampDeckShift(Number.NaN, bounds)).toBe(0);
   });
 
-  it("answers the separator's keys and leaves every other key alone", () => {
-    const bounds = { min: -280, max: 360 };
+  it("answers the separator's keys and leaves every other key alone — and keys never go past the up deck's least", () => {
+    const bounds = { min: -280, max: 360, held: 456 };
     expect(deckShiftForKey("ArrowUp", false, 0, bounds)).toBe(-24);
     expect(deckShiftForKey("ArrowDown", true, 0, bounds)).toBe(96);
     expect(deckShiftForKey("Home", false, 0, bounds)).toBe(-280);
     expect(deckShiftForKey("End", false, 0, bounds)).toBe(360);
+    expect(deckShiftForKey("ArrowDown", true, 360, bounds)).toBe(360);
     expect(deckShiftForKey("a", false, 0, bounds)).toBeNull();
+  });
+
+  it("decides a let-go: less than 120 left goes away, a fling down goes away, anything else stays", () => {
+    const bounds = { min: -264, max: 360, held: 456 };
+    expect(DECK_FLING).toBe(1.4);
+    // stays: anywhere the up deck may stand, let go slowly
+    for (const shift of [-264, -100, 0, 200, 360]) {
+      expect(deckLetGo(shift, bounds, 0), String(shift)).toBe("stays");
+    }
+    // less than 120 left: away
+    expect(deckLetGo(361, bounds, 0)).toBe("away");
+    expect(deckLetGo(456, bounds, 0)).toBe("away");
+    // a fling decides without the distance: faster than 1.4 px/ms, down
+    expect(deckLetGo(0, bounds, 1.41)).toBe("away");
+    expect(deckLetGo(0, bounds, 1.4)).toBe("stays");
+    // …and a fling UP maximizes, which is the next slice's: for now it stays
+    expect(deckLetGo(-100, bounds, -3)).toBe("stays");
+  });
+
+  it("reads a fling from the last moves and the let-go itself, so a pause before letting go is no fling", () => {
+    // 60px in 20ms: 3 px/ms
+    expect(
+      flingVelocity([
+        [0, 400],
+        [10, 430],
+        [20, 460],
+      ]),
+    ).toBe(3);
+    // the same moves, then held still 300ms before letting go at the same place
+    expect(
+      flingVelocity([
+        [0, 400],
+        [10, 430],
+        [20, 460],
+        [320, 460],
+      ]),
+    ).toBeLessThan(DECK_FLING);
+    // up is negative
+    expect(
+      flingVelocity([
+        [0, 460],
+        [20, 400],
+      ]),
+    ).toBe(-3);
+    // nothing to read: no fling
+    expect(flingVelocity([[0, 400]])).toBe(0);
+    expect(flingVelocity([])).toBe(0);
+    expect(
+      flingVelocity([
+        [5, 400],
+        [5, 600],
+      ]),
+    ).toBe(0);
   });
 
   it("says where the edge is in words", () => {
@@ -360,7 +459,8 @@ describe("the deck edge, mounted", () => {
     expect(localStorage.getItem(DECK_EDGE_STORAGE_KEY)).toBe("-100");
   });
 
-  it("stops at the head's reserve going up and at the deck's minimum going down", () => {
+  it("stops at the head's reserve going up and at the deck's minimum going down, where nothing can minimize it", () => {
+    // a stage with no owner to minimize (a catalog's picture) keeps today's floor
     mount();
     dragBy(-5_000);
     expect(shiftOnRoot()).toBe(`${MIN}px`);
@@ -371,10 +471,11 @@ describe("the deck edge, mounted", () => {
 
   it("reaches the same 56 from the window's top when no bar stands above the monitor", () => {
     // The head's owner removes the 40 bar and lets the stage begin at the
-    // window's top. The reach is a place in the WINDOW, so it does not move.
+    // window's top. The reach is a place in the WINDOW, so it does not move —
+    // and neither does rest (L8a: the monitor's basis takes the 40 back).
     monitorTop = 0;
     mount();
-    expect(separator()?.getAttribute("aria-valuemin")).toBe(String(56 - REST_MONITOR));
+    expect(separator()?.getAttribute("aria-valuemin")).toBe(String(MIN));
     dragBy(-5_000);
     expect(sheetTop()).toBe(56);
     key("End");
@@ -570,6 +671,241 @@ describe("the deck edge, mounted", () => {
   });
 });
 
+describe('the edge\'s outcomes (round 3, W4 — DESIGN.md §8 "A let-go decides")', () => {
+  /** What the stage asked its owner for, in order. */
+  let asked: GodviewDeckState[] = [];
+  const owner = (next: GodviewDeckState): void => {
+    asked.push(next);
+  };
+  beforeEach(() => {
+    asked = [];
+  });
+
+  /** A held drag on the page's clock: `steps` moves `every` ms apart, then the
+   * let-go — `pause` ms after the last move, where the last move was. */
+  function hold(dy: number, { steps = 4, every = 100, pause = 16 } = {}): void {
+    pointer("pointerdown", 400);
+    for (let step = 1; step <= steps; step += 1) {
+      clock += every;
+      pointer("pointermove", 400 + (dy * step) / steps);
+    }
+    clock += pause;
+    pointer("pointerup", 400 + dy);
+  }
+
+  it("less than 120 left goes away — and the place the viewer left the edge is still the one remembered", () => {
+    localStorage.setItem(DECK_EDGE_STORAGE_KEY, "100");
+    mount({ onDeckState: owner });
+    expect(shiftOnRoot()).toBe("100px");
+    expect(fieldOnRoot()).toBe("100px");
+    // held down to 90 left, let go slowly (0.3 px/ms): away
+    hold(MAX - 100 + 30, { steps: 6, every: 100 });
+    expect(asked).toEqual(["away"]);
+    // the drag that put them away is not a place: the memory and the field
+    // still say where the edge was left
+    expect(localStorage.getItem(DECK_EDGE_STORAGE_KEY)).toBe("100");
+    expect(fieldOnRoot()).toBe("100px");
+    // …and the sheet falls at the size it HAS: the held edge is not undone
+    expect(shiftOnRoot()).toBe(`${MAX + 30}px`);
+  });
+
+  it("a fling past 1.4 px/ms goes away, however much is left", () => {
+    mount({ onDeckState: owner });
+    // 60 down in 30ms — 2 px/ms — with 300 still left
+    hold(60, { steps: 3, every: 10, pause: 0 });
+    expect(asked).toEqual(["away"]);
+    expect(localStorage.getItem(DECK_EDGE_STORAGE_KEY)).toBeNull();
+  });
+
+  it("otherwise it stays, and is remembered — and the monitor's field follows it once, on the let-go, never per frame", () => {
+    mount({ onDeckState: owner });
+    pointer("pointerdown", 400);
+    for (const y of [450, 500, 550, 600]) {
+      clock += 100;
+      pointer("pointermove", y);
+      // the terminals follow the held edge (rows only); the field does not
+      expect(fieldOnRoot()).toBe("");
+    }
+    expect(shiftOnRoot()).toBe("200px");
+    clock += 16;
+    pointer("pointerup", 600);
+    expect(asked).toEqual([]);
+    expect(localStorage.getItem(DECK_EDGE_STORAGE_KEY)).toBe("200");
+    expect(fieldOnRoot()).toBe("200px");
+  });
+
+  it("a pause before letting go is no fling: fast, then held still, then let go, it stays", () => {
+    mount({ onDeckState: owner });
+    hold(90, { steps: 3, every: 10, pause: 300 });
+    expect(asked).toEqual([]);
+    expect(localStorage.getItem(DECK_EDGE_STORAGE_KEY)).toBe("90");
+  });
+
+  it("a held edge goes on down past the line, and stops 24 short of the panes' foot", () => {
+    mount({ onDeckState: owner });
+    pointer("pointerdown", 400);
+    clock += 100;
+    pointer("pointermove", 400 + 10_000);
+    expect(shiftOnRoot()).toBe(`${HELD}px`);
+    expect(sheetTop()).toBe(800 - 24);
+    clock += 100;
+    pointer("pointerup", 400 + 10_000);
+    expect(asked).toEqual(["away"]);
+  });
+
+  it("a lost capture does not end the drag: the moves are read at the window", () => {
+    // record §23 "Found while driving it": Chrome dropped the edge's capture
+    // after the first move, with no release anywhere
+    mount({ onDeckState: owner });
+    pointer("pointerdown", 400);
+    act(() => {
+      separator()?.dispatchEvent(
+        new PointerEvent("lostpointercapture", { bubbles: true, pointerId: 1 }),
+      );
+    });
+    // the next moves land wherever the pointer is — here, on the page
+    act(() => {
+      clock += 100;
+      document.body.dispatchEvent(
+        new PointerEvent("pointermove", { bubbles: true, clientY: 450, pointerId: 1 }),
+      );
+    });
+    expect(shiftOnRoot()).toBe("50px");
+    expect(separator()?.getAttribute("data-dragging")).toBe("true");
+    act(() => {
+      clock += 100;
+      document.body.dispatchEvent(
+        new PointerEvent("pointerup", { bubbles: true, clientY: 450, pointerId: 1 }),
+      );
+    });
+    expect(separator()?.hasAttribute("data-dragging")).toBe(false);
+    expect(localStorage.getItem(DECK_EDGE_STORAGE_KEY)).toBe("50");
+    // another pointer's moves are not this drag's
+    pointer("pointerdown", 400);
+    act(() => {
+      document.body.dispatchEvent(
+        new PointerEvent("pointermove", { bubbles: true, clientY: 600, pointerId: 2 }),
+      );
+    });
+    expect(shiftOnRoot()).toBe("50px");
+    pointer("pointerup", 400);
+  });
+
+  it("reads trusted moves only: a synthetic copy moves nothing", () => {
+    trustDeckEdgeEventsForTest(false);
+    mount({ onDeckState: owner });
+    pointer("pointerdown", 400);
+    pointer("pointermove", 500);
+    pointer("pointerup", 500);
+    expect(shiftOnRoot()).toBe("");
+    expect(asked).toEqual([]);
+  });
+
+  it("held past the line, the stage says Minimize the terminals over a veil; let go, it goes", () => {
+    mount({ onDeckState: owner });
+    expect(readout()?.getAttribute("data-on")).toBe("false");
+    expect(veil()?.getAttribute("data-on")).toBe("false");
+    expect(readout()?.getAttribute("aria-hidden")).toBe("true");
+    pointer("pointerdown", 400);
+    clock += 100;
+    pointer("pointermove", 400 + MAX - 10);
+    // above the line: nothing said
+    expect(readout()?.getAttribute("data-on")).toBe("false");
+    clock += 100;
+    pointer("pointermove", 400 + MAX + 10);
+    // past it: the verb and the noun
+    expect(readout()?.getAttribute("data-on")).toBe("true");
+    expect(veil()?.getAttribute("data-on")).toBe("true");
+    expect(readout()?.textContent).toBe("Minimize the terminals");
+    expect(readout()?.querySelector("i")?.textContent).toBe("Minimize");
+    // back above it, held: gone again
+    clock += 100;
+    pointer("pointermove", 400 + MAX - 10);
+    expect(readout()?.getAttribute("data-on")).toBe("false");
+    clock += 100;
+    pointer("pointermove", 400 + MAX + 40);
+    clock += 100;
+    pointer("pointerup", 400 + MAX + 40);
+    expect(readout()?.getAttribute("data-on")).toBe("false");
+    expect(veil()?.getAttribute("data-on")).toBe("false");
+    expect(asked).toEqual(["away"]);
+  });
+
+  it("says no readout where nothing can minimize (a picture's edge)", () => {
+    mount();
+    expect(readout()).toBeNull();
+  });
+
+  it("keys never minimize: End stops at 120 left, and ↓ there moves nothing", () => {
+    mount({ onDeckState: owner });
+    key("End");
+    expect(shiftOnRoot()).toBe(`${MAX}px`);
+    key("ArrowDown");
+    key("ArrowDown", true);
+    expect(shiftOnRoot()).toBe(`${MAX}px`);
+    expect(asked).toEqual([]);
+    expect(readout()?.getAttribute("data-on")).toBe("false");
+    // each key is a change: the field follows it
+    expect(fieldOnRoot()).toBe(`${MAX}px`);
+  });
+
+  it("a double-click puts the edge back at rest and forgets — the field with it", () => {
+    mount({ onDeckState: owner });
+    key("ArrowUp", true);
+    expect(fieldOnRoot()).toBe("-96px");
+    act(() => {
+      separator()?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    });
+    expect(shiftOnRoot()).toBe("");
+    expect(fieldOnRoot()).toBe("");
+    expect(localStorage.getItem(DECK_EDGE_STORAGE_KEY)).toBeNull();
+    expect(asked).toEqual([]);
+  });
+
+  it("the readout's recipe: 800 64px/1, −0.04em in text main, the verb at 40%, haloed in the monitor's ground over a 62% veil — centred between y 60 and the edge, the veil to 26 above it", () => {
+    const godview = readFileSync(join(PACKAGE_ROOT, "src/godview/godview.css"), "utf8");
+    const rule = (selector: string): string => {
+      const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s+");
+      return godview.match(new RegExp(`^${escaped} \\{([^}]*)\\}`, "m"))?.[1] ?? "";
+    };
+    const words = rule(".vf-godview-deck-readout");
+    expect(words).toContain("position: absolute;");
+    expect(words).toMatch(
+      /top: max\(\s*150px,\s*calc\(\(60px \+ var\(--vf-godview-deck-rest\) \+ var\(--vf-godview-deck-shift, 0px\)\) \/ 2\)\s*\);/,
+    );
+    expect(words).toContain("height: 0;");
+    expect(words).toContain("place-items: center;");
+    expect(words).toContain("pointer-events: none;");
+    // under the sheet (10), over the monitor's chrome (7)
+    expect(words).toContain("z-index: 9;");
+    expect(words).toContain("opacity: 0;");
+    expect(words).toContain("transition: opacity 160ms ease;");
+    const on = rule('.vf-godview-deck-readout[data-on="true"]');
+    expect(on).toContain("opacity: 1;");
+    expect(on).toContain("transition-duration: 120ms;");
+    const type = rule(".vf-godview-deck-readout b");
+    expect(type).toContain("font: 800 64px / 1 var(--vf-font-sans);");
+    expect(type).toContain("letter-spacing: -0.04em;");
+    expect(type).toContain("color: var(--text-main);");
+    expect(type).toContain("white-space: nowrap;");
+    expect(type).toMatch(
+      /text-shadow:\s*0 0 40px var\(--monitor-bg\),\s*0 0 18px var\(--monitor-bg\);/,
+    );
+    expect(rule(".vf-godview-deck-readout b i")).toContain("opacity: 0.4;");
+    const theVeil = rule(".vf-godview-deck-veil");
+    expect(theVeil).toContain("inset: 0;");
+    expect(theVeil).toContain("z-index: 8;");
+    expect(theVeil).toContain(
+      "background: color-mix(in srgb, var(--monitor-bg) 62%, transparent);",
+    );
+    expect(theVeil).toMatch(
+      /clip-path: inset\(\s*0 0\s*calc\(100% - var\(--vf-godview-deck-rest\) - var\(--vf-godview-deck-shift, 0px\) \+ 26px\)\s*0\s*\);/,
+    );
+    expect(theVeil).toContain("transition: opacity 160ms ease;");
+    expect(rule('.vf-godview-deck-veil[data-on="true"]')).toContain("opacity: 1;");
+  });
+});
+
 describe("the deck sheet's ground", () => {
   it("is the background of the very theme the panes are handed, per mode and per catalog choice", () => {
     for (const mode of ["light", "dark"] as const) {
@@ -600,24 +936,56 @@ describe("the deck sheet's ground", () => {
 
 describe("the deck sheet's stylesheet", () => {
   const godview = readFileSync(join(PACKAGE_ROOT, "src/godview/godview.css"), "utf8");
+  // a selector matched across the line breaks the formatter puts in a long one
   const rule = (selector: string): string => {
-    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s+");
     return godview.match(new RegExp(`^${escaped} \\{([^}]*)\\}`, "m"))?.[1] ?? "";
   };
+  const placed = ".vf-godview[data-godview-deck-edge]";
 
-  it("grows the monitor by the downward shift only, and draws no edge of its own", () => {
-    const monitor = rule(".vf-godview-monitor-stage");
-    expect(monitor).toContain("max(var(--vf-monitor-stage-height, 35%), 170px)");
-    expect(monitor).toContain("max(0px, var(--vf-godview-deck-shift, 0px))");
-    expect(monitor).not.toContain("border-bottom");
+  it("the monitor makes room: its field ends 12 above the edge as last SET — never above 220 — and draws no edge of its own", () => {
+    // DESIGN.md §8 "The monitor makes room": measured once per change, never
+    // per frame — so the field follows the edge as it was let go (the field
+    // shift, set by the edge at each change), never the held one.
+    const root = rule(".vf-godview");
+    expect(root).toMatch(
+      /--vf-godview-deck-rest: calc\(40px \+ max\(var\(--vf-monitor-stage-height, 35%\), 170px\)\);/,
+    );
+    expect(root).toMatch(
+      /--vf-godview-field-foot: max\(\s*var\(--vf-godview-deck-field-floor\),\s*calc\(\s*var\(--vf-godview-deck-rest\) \+\s+var\(--vf-godview-field-shift, 0px\) -\s*var\(--vf-godview-deck-field-gap\)\s*\)\s*\);/,
+    );
+    const monitor = rule(`${placed} .vf-godview-monitor-stage`);
+    expect(monitor).toContain(
+      "flex-basis: calc(var(--vf-godview-field-foot) - var(--vf-godview-head-height, 40px));",
+    );
+    // the held edge never reaches the field
+    expect(monitor).not.toContain("--vf-godview-deck-shift");
+    expect(rule(".vf-godview-monitor-stage")).not.toContain("--vf-godview-deck-shift");
+    expect(rule(".vf-godview-monitor-stage")).not.toContain("border-bottom");
+    expect(FIELD_SHIFT_PROPERTY).toBe("--vf-godview-field-shift");
   });
 
-  it("lays the deck over the monitor by the upward shift, as a sheet", () => {
+  it("stands the sheet at its edge — rest and the shift — over the monitor, as a sheet", () => {
     const deck = rule(".vf-godview-terminal-deck");
-    expect(deck).toContain("margin-top: min(0px, var(--vf-godview-deck-shift, 0px))");
     expect(deck).toContain("z-index: 10");
     expect(deck).toContain("var(--deck-shadow)");
     expect(deck).toContain("var(--vf-godview-deck-radius)");
+    // no margin follows the edge any more: the sheet is PLACED at it
+    expect(deck).not.toContain("margin-top");
+    const at = rule(`${placed} .vf-godview-terminal-deck`);
+    expect(at).toContain("position: absolute;");
+    expect(at).toMatch(
+      /top: calc\(var\(--vf-godview-deck-rest\) \+ var\(--vf-godview-deck-shift, 0px\)\);/,
+    );
+    for (const side of ["right", "bottom", "left"]) expect(at).toContain(`${side}: 0;`);
+    // a stage with an edge says so on its root; a picture (Settings'
+    // miniature) keeps the sheet in the flow under its own monitor
+    mount();
+    expect(stageRoot().hasAttribute("data-godview-deck-edge")).toBe(true);
+    act(() => root?.unmount());
+    root = null;
+    mount({ edge: false });
+    expect(stageRoot().hasAttribute("data-godview-deck-edge")).toBe(false);
   });
 
   it("paints the sheet in the frame tone — the terminal's ground mixed toward its own ink — at the stage's glass", () => {
@@ -767,30 +1135,36 @@ describe("the deck sheet's stylesheet", () => {
     expect(godview.match(/^\s*-webkit-app-region:/gm)).toHaveLength(1);
   });
 
-  it("holds the deck's top at rest whatever the head's height: the stage's basis gives back what the head takes (L8a)", () => {
-    // basis = max(tuned, 170px) + (40px − head height) + max(0px, shift). With
-    // the head at 40 (the instrument bar, today) the middle term is 0 and
-    // nothing moves; at 0 (the Stories head) the stage is exactly 40 taller and
-    // the deck's top — head + basis — is where it was.
-    const monitor = rule(".vf-godview-monitor-stage");
-    expect(monitor).toMatch(
-      /flex: 0 0\s+calc\(\s*max\(var\(--vf-monitor-stage-height, 35%\), 170px\) \+\s*\(40px - var\(--vf-godview-head-height, 40px\)\) \+\s*max\(0px, var\(--vf-godview-deck-shift, 0px\)\)\s*\);/,
+  it("holds the deck's top at rest whatever the head's height: the monitor's basis gives back what the head takes (L8a)", () => {
+    // The sheet stands at rest + the shift, rest = 40 + the tuned basis — a
+    // place in the stage that names no head. The monitor's basis is the field's
+    // foot less the head's height: with the head at 40 (the instrument bar,
+    // today) nothing moves; at 0 (the Stories head) the monitor is exactly 40
+    // taller and the deck's top is where it was.
+    expect(rule(`${placed} .vf-godview-monitor-stage`)).toContain(
+      "flex-basis: calc(var(--vf-godview-field-foot) - var(--vf-godview-head-height, 40px));",
+    );
+    expect(rule(".vf-godview-monitor-stage")).toMatch(
+      /flex: 0 0\s+calc\(\s*max\(var\(--vf-monitor-stage-height, 35%\), 170px\) \+\s*\(40px - var\(--vf-godview-head-height, 40px\)\)\s*\);/,
     );
     // The variable is set NOWHERE in this sheet: its default is the 40px inside
-    // that `var()`, and the head's owner sets it — to 0px, on the stage's root —
-    // when the bar goes. A second default here would be a second owner.
+    // those `var()`s, and the head's owner sets it — to 0px, on the stage's
+    // root — when the bar goes. A second default here would be a second owner.
     expect(godview).not.toMatch(/^\s*--vf-godview-head-height\s*:/m);
-    expect(godview.match(/var\(--vf-godview-head-height, 40px\)/g)).toHaveLength(1);
-    // the arithmetic the formula is: head + basis is the same number at 40 and at 0
-    const top = (head: number, tuned: number, shift: number): number =>
-      head + Math.max(tuned, 170) + (40 - head) + Math.max(0, shift);
+    expect(godview.match(/var\(--vf-godview-head-height, 40px\)/g)).toHaveLength(2);
+    // the arithmetic: the monitor ends at the field's foot whatever the head,
+    // and the deck's top never names the head
+    const monitorFoot = (head: number, foot: number): number => head + (foot - head);
+    const deckTop = (tuned: number, shift: number): number => 40 + Math.max(tuned, 170) + shift;
     for (const [tuned, shift] of [
       [280, 0],
       [120, 0],
       [280, 96],
     ] as const) {
-      expect(top(0, tuned, shift)).toBe(top(40, tuned, shift));
-      expect(top(0, tuned, shift) - 0 - (top(40, tuned, shift) - 40)).toBe(40);
+      const foot = Math.max(220, deckTop(tuned, shift) - 12);
+      expect(monitorFoot(0, foot)).toBe(monitorFoot(40, foot));
+      // 12 above the edge — or the field at its floor, the sheet over it
+      expect(foot === 220 || deckTop(tuned, shift) - foot === 12, `${tuned}/${shift}`).toBe(true);
     }
   });
 

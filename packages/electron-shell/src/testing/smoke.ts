@@ -74,7 +74,7 @@ import type { ElectronLogging } from "../main/logging";
 import { sharedProfilePath } from "../main/smoke-profile";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
-import { deckAwayRung } from "./deck-away-rungs";
+import { deckAwayRung, deckEdgeRung } from "./deck-away-rungs";
 import { labProfileProof } from "./godview-lab-profile";
 import {
   historyByProjectPhotos,
@@ -9275,11 +9275,18 @@ export async function runSmokeGodview(opts: {
     //      per change. The last of the deck rungs, because the terminals'
     //      state is the run's (it survives the warm open's reload): it leaves
     //      them up at their old top.
-    verdict["deckAway"] = await deckAwayRung(win, {
+    const deckRungs = {
       deck,
       settled: () => deckSettled(deck, 1_000, 30_000),
-      pressViewKey: (view) => pressViewKey(win, view),
-    });
+      pressViewKey: (view: "godview") => pressViewKey(win, view),
+    };
+    verdict["deckAway"] = await deckAwayRung(win, deckRungs);
+    // THE EDGE'S OUTCOMES (round 3, W4; the same module): held and let go with
+    //      the smoke's own input — it stays and is remembered, the field 12
+    //      above it; past the line the stage says Minimize the terminals and a
+    //      let-go there puts them away; a body brings them back at the
+    //      remembered edge; a double-click rests it. From rest, back to rest.
+    verdict["deckEdge"] = await deckEdgeRung(win, deckRungs);
 
     // THE WARM OPEN — the AFTER number, and the row that actually tests GT-D14.
     //

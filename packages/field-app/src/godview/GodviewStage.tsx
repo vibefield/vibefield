@@ -92,6 +92,12 @@ export function GodviewStage({
   const bodyRef = useRef<HTMLDivElement>(null);
   const travel = useDeckTravel(deckState);
   const away = deckState === "away";
+  // The Lip's minimize and a let-go past the line ask the owner the same
+  // thing; a stage with no owner (a picture) asks nothing and says nothing.
+  const minimize =
+    onDeckState === undefined ? undefined : () => onDeckState(deckAfter(deckState, "minimize"));
+  // Held past the line, the stage says what letting go would do (§8, §9).
+  const [readout, setReadout] = useState(false);
   // Away, the deck takes no pointer, no focus and no key (§8 "Minimized"):
   // the sheet is inert, and a pane that held the keyboard lets it go — before
   // the paint, so not one key reaches a hidden pane.
@@ -119,6 +125,9 @@ export function GodviewStage({
       data-godview-animations={animations ? "on" : "off"}
       data-godview-deck={deckState}
       {...(travel !== null ? { "data-godview-deck-motion": travel } : {})}
+      // an edge PLACES the sheet (godview.css): without one — Settings'
+      // miniature — the sheet stays in the flow under its own monitor
+      {...(deckEdge ? { "data-godview-deck-edge": "" } : {})}
       className={`vf-godview theme-${theme} ${className}`.trim()}
       style={style}
     >
@@ -144,6 +153,7 @@ export function GodviewStage({
               persist={deckEdge.persist}
               monitorPresent={monitorPresent}
               away={away}
+              {...(minimize !== undefined ? { onMinimize: minimize, onReadout: setReadout } : {})}
             />
           </ChromeBoundary>
         ) : (
@@ -151,16 +161,39 @@ export function GodviewStage({
             <DeckGroove />
           </div>
         )}
-        {onDeckState !== undefined ? (
-          <DeckControls onMinimize={() => onDeckState(deckAfter(deckState, "minimize"))} />
-        ) : null}
+        {minimize !== undefined ? <DeckControls onMinimize={minimize} /> : null}
         <div className="vf-godview-deck-well">
           <div ref={bodyRef} className="vf-godview-terminal-deck-body">
             {deck}
           </div>
         </div>
       </section>
+      {deckEdge && minimize !== undefined && monitorPresent ? <DeckReadout on={readout} /> : null}
     </div>
+  );
+}
+
+/**
+ * THE READOUT WHILE THE EDGE IS HELD (DESIGN.md §8 "A let-go decides", §9; James,
+ * 29 Sep: a readout is huge bold words in open space). Past the line, what
+ * letting go would do — *Minimize* the terminals — written on the monitor,
+ * centred between y 60 and the edge, over a veil of the monitor's ground down
+ * to 26 above it, both under the sheet. Placed by `godview.css` from the held
+ * edge on the root, so a move re-renders nothing here. (*Maximize* is the next
+ * slice's.) A picture for the eye: the keys never minimize, so it is not
+ * spoken.
+ */
+function DeckReadout({ on }: { on: boolean }): ReactElement {
+  const state = on ? "true" : "false";
+  return (
+    <>
+      <div className="vf-godview-deck-veil" data-on={state} aria-hidden="true" />
+      <div className="vf-godview-deck-readout" data-on={state} aria-hidden="true">
+        <b>
+          <i>Minimize</i> the terminals
+        </b>
+      </div>
+    </>
   );
 }
 

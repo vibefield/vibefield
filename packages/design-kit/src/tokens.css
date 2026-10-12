@@ -206,8 +206,8 @@
   --vf-godview-deck-grip-height: 6px;
   /* §2.7 + §8 (round 3, One Frame §23.2 — GV-D7 the Lip, GV-D12 the groove,
      GV-D11 the title bar): the wrapper around Godview's terminals. The values
-     are the ruled drawing's own; the grip's hit and the field's two stand ahead
-     of the rules that will read them.
+     are the ruled drawing's own; the grip's hit stands ahead of the rule that
+     will read it (the maximized title bar).
      The frame is the sheet's ground — the terminal's ground mixed toward the
      terminal's ink by this much — and the well is what the panes sit in: its
      edge and shade drawn over them, its rim under its foot. Per GODVIEW mode,

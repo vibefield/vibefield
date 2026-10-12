@@ -33,7 +33,7 @@ Three surface families, one physics:
 
 ### 1.1 Godview visual source
 
-*Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the Lip's minimize, and the terminals away and called up as they were left (GV-D5's call, GV-D6). Not built: maximize and the terminals maximized (GV-D11), the edge's new outcomes and its readouts, and the monitor alone at launch (GV-D5). Until those land a launch opens the terminals up, and their edge moves as §8's shipped text says.*
+*Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the Lip's minimize, and the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's stays and away, its Minimize readout, and the monitor making room. Not built: maximize and the terminals maximized — by the button, the edge above 104 or a fling up, with their readout (GV-D11) — and the monitor alone at launch (GV-D5). Until those land a launch opens the terminals up, and their edge moves as §8's shipped text says.*
 
 Godview is the deliberate control-room exception to the iOS-widget chrome around it. Its
 visual source of truth is `p008/chopsticks/apps/godview`: a flat 40px instrument bar, compact
@@ -248,21 +248,20 @@ minimize** (built 2026-10-11 with the terminals away; §8) is a control of
 `--vf-godview-deck-control-radius`, 10 from the lip's right end and on its axis: a 14 glyph (§13)
 in the terminal's ink at 64%; under the pointer the full ink on a 10% fill of it, 120ms on `ease`;
 under the keyboard's focus the pill's outline, 1px in text main, 1 off. It stands above the lip's
-hit, so the edge never takes its press. **The well**
+hit, so the edge never takes its press. **The monitor's field** (built 2026-10-11, §8 "The monitor
+makes room") ends `--vf-godview-deck-field-gap` above the deck's edge as last set and is never
+shorter than `--vf-godview-deck-field-floor`. **The well**
 the panes sit in stands 8 in from the sheet's sides and its foot (inside the cover its foot is
 the window's reserve, §10), corners `--vf-godview-deck-well-radius` (a selected pane's 8, the 1
 gap, the 1 edge), the panes 1 in from it and clipped at 9; drawn OVER the panes, the edge as a 1px
 inner ring and the shade as `inset 0 2px 4px`; under its foot, the rim as `0 1px 0`. The well has
 no ground of its own: a pane paints its own ground over the frame's.
 
-*Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the Lip's minimize, and the terminals away and called up as they were left (GV-D5's call, GV-D6). Not built: maximize and the terminals maximized (GV-D11), the edge's new outcomes and its readouts, and the monitor alone at launch (GV-D5). Until those land a launch opens the terminals up, and their edge moves as §8's shipped text says.*
+*Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the Lip's minimize, and the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's stays and away, its Minimize readout, and the monitor making room. Not built: maximize and the terminals maximized — by the button, the edge above 104 or a fling up, with their readout (GV-D11) — and the monitor alone at launch (GV-D5). Until those land a launch opens the terminals up, and their edge moves as §8's shipped text says.*
 **Still as ruled** (One Frame §23.1–§23.3; to be built, N12 (a), 2026-10-11; §8, the deck). **The
 grip's hit in the maximized title bar** is `--vf-godview-deck-grip-hit` wide, the bar's full
 height. **Maximize** (§8) stands beside minimize, drawn as it is (above), 4 apart, the last of
 the two 10 from the lip's right end (8 in the title bar), where minimize stands until then.
-**The monitor's field**
-ends `--vf-godview-deck-field-gap` above the deck's edge and is never shorter than
-`--vf-godview-deck-field-floor` (§8).
 
 ### 2.8 Identity — the face
 
@@ -557,7 +556,7 @@ One more plain curve, with its reason: a **retract** goes back along the way it 
 stylesheet said 200ms, its constants table 180, and the table is the authority) — it accelerates
 home, the pop's reverse (M4). Leaving things never wait out an entrance's reveal delay.
 
-*Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the Lip's minimize, and the terminals away and called up as they were left (GV-D5's call, GV-D6). Not built: maximize and the terminals maximized (GV-D11), the edge's new outcomes and its readouts, and the monitor alone at launch (GV-D5). Until those land a launch opens the terminals up, and their edge moves as §8's shipped text says.*
+*Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the Lip's minimize, and the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's stays and away, its Minimize readout, and the monitor making room. Not built: maximize and the terminals maximized — by the button, the edge above 104 or a fling up, with their readout (GV-D11) — and the monitor alone at launch (GV-D5). Until those land a launch opens the terminals up, and their edge moves as §8's shipped text says.*
 **The terminals rise and fall** (Godview's deck, §8; One Frame §22 "Shared mechanics" and §23 —
 GV-D5, GV-D6, GV-D7 and GV-D11, ruled 2026-10-02; built 2026-10-11 for the call and the minimize):
 two durations, no new curve. The deck **rises** — called up from away (built), or maximized by its
@@ -570,7 +569,7 @@ length and two frames (34ms), never by a `transitionend` a hidden window may not
 during a fall turns it round from where it is. Beside them, on plain `ease`: the view's bodies
 fade out under a maximized deck, and back, in 260ms (the drawing's number, 20 past the table's
 range); the sheet's top corners and shadow go and return in 160ms; the two readouts (§8, §9) come
-in 120ms and leave in 160ms, their veil 160ms both ways; the title bar's own search steps out in
+in 120ms and leave in 160ms, their veil 160ms both ways (built for *Minimize*, 2026-10-11); the title bar's own search steps out in
 120ms. Under reduced motion the deck is at its end at once.
 
 Loops are for an indicator waiting on a fact it cannot predict, never for decoration (QL-2's
@@ -1708,17 +1707,41 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   drags the edge, but never its button. **The edge moves:**
   the whole lip (`role="separator"`, ↑/↓ 24px, ⇧ ×4, Home/End, double-click to rest) drags it,
   and 6 above it so it can be caught from the monitor — `row-resize` over it, `grabbing` while
-  held.
-  Downward the monitor grows and the swarm's field grows with it; upward the monitor does NOT
-  shrink — its tuned height (`Monitor height`, 35%, 170px floor) is its minimum — and the sheet
-  slides OVER it, up to **the head's reserve, 56 from the window's top** (§8 "Godview's head —
-  Stories": the head's foot at 48, plus 8), the bodies still moving beneath. *(2026-10-11: until
-  then it rose to the bar's bottom edge, 40. The reach is a place in the window, so it is the
-  same 56 with the bar above the monitor and without it — and a lip at 56 is clear of the app's
-  drag strip, the window's top 52, §10.)* The deck keeps
-  at least 120px — above the cover's reserve, inside the cover. Terminals resize live (rows only,
-  so no reflow of history). The position is
-  the viewer's (`localStorage`), re-clamped to each window, never a shared setting.
+  held. A drag reads the person's own moves at the window, so a pointer capture the browser
+  drops ends nothing (One Frame §23, "Found while driving it"; 2026-10-11). The sheet is
+  **placed at its edge**: rest — the head's 40 and the monitor's tuned height (`Monitor height`,
+  35%, 170px floor) below the stage's top, whatever the head — plus the edge's move, so the
+  terminals' box follows the edge alone. It rises up to **the head's reserve, 56 from the
+  window's top** (§8 "Godview's head — Stories": the head's foot at 48, plus 8), the bodies still
+  moving beneath. *(2026-10-11: until then it rose to the bar's bottom edge, 40. The reach is a
+  place in the window, so it is the same 56 with the bar above the monitor and without it — and
+  a lip at 56 is clear of the app's drag strip, the window's top 52, §10.)*
+  **The monitor makes room** (round 3, W4; built 2026-10-11 — *replaced* "Downward the monitor
+  grows and the swarm's field grows with it; upward the monitor does NOT shrink — its tuned
+  height … is its minimum"): its field **ends 12 above the deck's edge** as it was last set and
+  is **never shorter than 220** from the window's top, measured once per change — a let-go, a
+  key, a double-click, a window that moves the bounds — and never once per frame of a drag: a
+  held edge moves the sheet and its terminals, not the field. With the edge higher than the
+  floor allows, the sheet slides OVER the field, the bodies still moving beneath. At rest the
+  field ends 12 above the sheet.
+  **A let-go decides** (round 3, W4; built 2026-10-11 — *replaced* "The deck keeps at least
+  120px — above the cover's reserve, inside the cover"). Held, the edge follows the pointer and
+  the terminals resize with it (rows only, so no reflow of history), on down past the line to 24
+  short of the panes' foot (692 inside the cover). Let go, **it stays**, and the place is
+  remembered — the viewer's (`localStorage`, the saved edge keeping its key), re-clamped to each
+  window, never a shared setting — unless **less than 120 is left** between the edge and the
+  panes' foot, or it is let go **moving down faster than 1.4 px/ms** (read across its last six
+  positions, the let-go's own among them, so a pause before letting go is no fling): then the
+  terminals go **away** (minimized, below), and the place the viewer left the edge is still the
+  one remembered. 120 is still the least a deck that is UP keeps: End takes the edge there, and
+  **keys never minimize**. **While the edge is held past the line, the stage says what letting go
+  would do** (James, 29 Sep: a readout is huge bold words in open space — the bloom's words,
+  below): ***Minimize* the terminals** (§9), 800 at 64px/1, −0.04em, in Godview's text main
+  (§2.7), the verb at 40% and the noun full, haloed in the monitor's ground (40 and 18), over a
+  **veil** of that ground at 62%; written on the monitor, centred between y 60 and the edge
+  (never above 150), its veil over the monitor down to 26 above the edge — both under the sheet.
+  In over 120ms, out over 160ms (§6), and gone when the edge is let go. Keys say nothing: they
+  never minimize.
   **One resize per change** (built 2026-10-11 for the rise and the fall; *replaced* "No transition
   on the edge: every frame of an animated edge would be a PTY resize" — whose reason stands, and
   is the reason for this). A move the product makes is ONE resize of the terminals, at most.
@@ -1762,7 +1785,7 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   words. A call while they are up moves nothing, and a call from another view (History's acts)
   raises them for the return. A hand-over — the fold moving a PTY into the pane it replaces —
   selects nothing, and raises nothing.
-  *Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the Lip's minimize, and the terminals away and called up as they were left (GV-D5's call, GV-D6). Not built: maximize and the terminals maximized (GV-D11), the edge's new outcomes and its readouts, and the monitor alone at launch (GV-D5). Until those land a launch opens the terminals up, and their edge moves as §8's shipped text says.*
+  *Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the Lip's minimize, and the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's stays and away, its Minimize readout, and the monitor making room. Not built: maximize and the terminals maximized — by the button, the edge above 104 or a fling up, with their readout (GV-D11) — and the monitor alone at launch (GV-D5). Until those land a launch opens the terminals up, and their edge moves as §8's shipped text says.*
   **Round 3 redraws the wrapper around these panes, and nothing inside it** (One Frame §22 "Shared
   mechanics", §23 and §23.1–§23.3; GV-D2 — "keep the current terminal pane design as is … what i
   want you to redesign is the wrapper", James, 2 Oct; GV-D4, GV-D5, GV-D6, GV-D7, GV-D11 and GV-D12
@@ -1783,36 +1806,23 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     the panes 330–692. **What rest is on a window of another height — always 300, or the same
     share — is N15, open with James;** nothing here decides it, and the shipped rest
     (`Monitor height`, 35%, 170px floor) stands until he rules.
-  - **A drag has three outcomes.** Held, the edge follows the pointer and the terminals resize
-    with it, rows only, as today — but it is no longer stopped at 120: it goes on down (the drawing
-    stops it 24 short of 692). Let go, where the edge is decides: **it stays**, and the place is
-    remembered as today — the viewer's (`localStorage`, the saved edge keeping its key),
-    re-clamped to each window, never a shared setting; **less than 120 left** between the edge
-    and 692 **→ away** (minimized); **the edge above 104 → maximized**. **A fling decides without
-    the distance:** let go moving faster than **1.4 px/ms**, the terminals go away if the edge was
-    moving down and maximize if it was moving up. *Replaces* "The deck keeps at least 120px": 120
-    is still the least a deck that is UP keeps, and becomes the line past which letting go puts
-    it away.
-  - **Two readouts while the edge is held** (James, 29 Sep: a readout is huge bold words in open
-    space — the bloom's words, below): past either line the stage says what letting go would do,
-    as a verb and a noun — ***Minimize* the terminals** while less than 120 is left, ***Maximize*
-    the terminals** while the edge is above 104, and nothing between (§9). 800 at 64px/1,
-    −0.04em, in Godview's text main (§2.7), the verb at 40% and the noun full, haloed in the
-    monitor's ground (40 and 18), over a **veil** of that ground at 62%. *Minimize* is written on the
-    monitor, centred between y 60 and the edge, its veil over the monitor down to 26 above the
-    edge — both under the sheet. *Maximize* is written over the terminals, centred between the
-    edge and 692, its veil over the sheet from the edge down. In over 120ms, out over 160ms (§6),
-    and gone when the edge is let go.
+  - **A drag's third outcome** (GV-D11): let go with **the edge above 104 → maximized**, and a
+    fling UP — faster than **1.4 px/ms** — maximizes as a fling down puts them away. *(It stays,
+    and less than 120 left or a fling down puts them away — built, above, "A let-go decides".
+    Until this lands the edge goes no higher than the head's reserve, 56, and a fling up stays.)*
+  - **The second readout while the edge is held:** ***Maximize* the terminals** while the edge is
+    above 104 (§9), and nothing between the two lines — written over the terminals, centred
+    between the edge and 692, its veil over the sheet from the edge down; the first readout's
+    recipe and timings otherwise (built for *Minimize* — above).
   - **Keys and the double-click.** On the focused edge **↑ ↓ move it 24, with ⇧ 96; Home takes it
     to the 104 line, End to 120 left** (572 in the drawing). Keys move the edge between those two
     and nowhere else: **they never minimize and never maximize.** **A double-click** on the lip,
     never on a button, puts the edge back at rest and forgets the remembered place. Each of these
     is one layout, with no travel. On the maximized bar's grip a double-click restores the
     terminals to rest (a fall, §6), and the same keys take them out of maximized: to the 104
-    line, or with End to 120 left. *Replaces* today's upper bound, the bar's bottom edge, for
-    Home and for ↑; the lower bound is today's, 120 left.
-  - **Minimized by the edge** (GV-D6): an edge let go with less than 120 left, or a fling down,
-    puts the terminals away as the minimize button does (built — above).
+    line, or with End to 120 left. *Replaces* today's upper bound, the head's reserve (56), for
+    Home and for ↑; the lower bound is today's, 120 left. *(Keys that never minimize and the
+    double-click's rest are built — above.)*
   - **Godview opens on the monitor alone at launch, then as you left it** (GV-D5): within a run —
     the view left and come back to, or the window reloaded — the deck is in the state it was left
     in, away, up at its edge, or maximized (built for away and up — above); a launch starts away.
@@ -1846,14 +1856,10 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     `transform` (480ms, island, §6). An edge let go above 104, or flung up, is maximized AT ONCE,
     in that one layout with no travel: the edge was already in the hand. **Falling** — restored —
     it travels at the size it HAS (300ms, the retract curve) and is laid out on arrival.
-  - **The monitor makes room.** *Replaces* "upward the monitor does NOT shrink — its tuned height
-    … is its minimum": the field **ends 12 above the deck's edge** wherever the edge is, growing
-    as the edge falls and shrinking as it rises, and is **never shorter than 220** — measured as
-    the drawing measures it, from the window's top, where the ruled head lets the stage begin (§8
-    "Godview's head — Stories"). With the edge higher than that allows, the sheet slides OVER the
-    field, the bodies still moving beneath, as it slides over the whole monitor today. At rest
-    the field ends at 288. Maximized, the view's bodies rest: its stage fades out (260ms) and the
-    cover's glass stays under the sheet; they come back as the deck leaves maximized.
+  - **The monitor while maximized:** the view's bodies rest — its stage fades out (260ms) and the
+    cover's glass stays under the sheet; they come back as the deck leaves maximized. *(The field
+    ending 12 above the edge, never shorter than 220, measured once per change, is built —
+    above, "The monitor makes room".)*
   - **Maximized — the bar is the window's title bar** (GV-D11 — "it looks kind of awkward having
     the search button there blocking the terminal from becoming fullscreen and having the big gap
     at top", James, 2 Oct). The maximize button, an edge let go above 104, or a fling up: the
@@ -2321,7 +2327,7 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     "Godview's head — Stories") is centred on the window and keeps one head gap (12) from it, also
     as its glass widens. *(Until the Stories head, built 2026-10-11, it stood over the instrument
     bar's right end and hung 8 below the bar's foot, PK2 (a).)*
-  - *Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the Lip's minimize, and the terminals away and called up as they were left (GV-D5's call, GV-D6). Not built: maximize and the terminals maximized (GV-D11), the edge's new outcomes and its readouts, and the monitor alone at launch (GV-D5). Until those land a launch opens the terminals up, and their edge moves as §8's shipped text says.*
+  - *Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the Lip's minimize, and the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's stays and away, its Minimize readout, and the monitor making room. Not built: maximize and the terminals maximized — by the button, the edge above 104 or a fling up, with their readout (GV-D11) — and the monitor alone at launch (GV-D5). Until those land a launch opens the terminals up, and their edge moves as §8's shipped text says.*
     **The button in the terminals' title bar** (GV-D11, ruled 2026-10-02; One Frame §23.1): while
     Godview's terminals are maximized (§8, the deck) the head's circle is not drawn — nothing of
     the head stands over the terminals — and the same button stands in their title bar, first of
@@ -2528,11 +2534,11 @@ numbers and provenance — "syncing history…", "external terminal — state on
 and what to do next; they don't apologize and they're never vague. No filler, no lorem:
 demo content is real-shaped (AAPL, San Francisco, 64°).
 
-*Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the Lip's minimize, and the terminals away and called up as they were left (GV-D5's call, GV-D6). Not built: maximize and the terminals maximized (GV-D11), the edge's new outcomes and its readouts, and the monitor alone at launch (GV-D5). Until those land a launch opens the terminals up, and their edge moves as §8's shipped text says.*
+*Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the Lip's minimize, and the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's stays and away, its Minimize readout, and the monitor making room. Not built: maximize and the terminals maximized — by the button, the edge above 104 or a fling up, with their readout (GV-D11) — and the monitor alone at launch (GV-D5). Until those land a launch opens the terminals up, and their edge moves as §8's shipped text says.*
 **The terminals' wrapper says the window's own words** (Godview, §8, the deck; One Frame §23.2 —
 "for close button, replace it with a minimize - button … for fill button, replace it with a
-maximize button", James, 2 Oct; ruled 2026-10-02; minimize's title and name built 2026-10-11, the
-rest to build). **The two readouts** while the edge is held are
+maximize button", James, 2 Oct; ruled 2026-10-02; minimize's title, its name and its readout
+built 2026-10-11, maximize's and restore's to build). **The two readouts** while the edge is held are
 a verb and its noun, saying what letting go would do: **Minimize the terminals** · **Maximize the
 terminals**. Round 2's "Put away" and "Fill the window", and the buttons' first names, close and
 fill, are retired. **The three titles:** **Minimize — every session keeps running** (it says the
@@ -2647,7 +2653,7 @@ their place". "Fullscreen" stays the pane's word (§8).
   longer Electron's page-zoom roles: each item sends its act to the window's head, which answers
   on Canvas as its keys do, and the three are disabled under a cover — so nothing in the menu bar
   or its keys zooms the whole window any more (One Frame FR-3's finding).
-  *Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the Lip's minimize, and the terminals away and called up as they were left (GV-D5's call, GV-D6). Not built: maximize and the terminals maximized (GV-D11), the edge's new outcomes and its readouts, and the monitor alone at launch (GV-D5). Until those land a launch opens the terminals up, and their edge moves as §8's shipped text says.*
+  *Status 2026-10-11: ruled, partly built. Built: the Lip's look — the 30 bar, the groove in its pill, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the Lip's minimize, and the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's stays and away, its Minimize readout, and the monitor making room. Not built: maximize and the terminals maximized — by the button, the edge above 104 or a fling up, with their readout (GV-D11) — and the monitor alone at launch (GV-D5). Until those land a launch opens the terminals up, and their edge moves as §8's shipped text says.*
   **The head band's one exception — Godview's terminals, maximized** (GV-D11, ruled 2026-10-02;
   §8, the deck). While the deck is maximized the band holds the terminals' title bar and nothing
   of the head: the bar is the window's top 0–30, its controls centred on ITS axis, y 15, where the

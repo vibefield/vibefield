@@ -100,6 +100,23 @@
      where a host hands none, Godview's own text main. */
   --deck-ink: var(--vf-godview-terminal-ink, var(--text-main));
   --deck-frame: color-mix(in srgb, var(--deck-ink) var(--deck-frame-ink), var(--deck-ground));
+  /* THE DECK'S PLACE (DESIGN.md §8; round 3, L8a and W4). Its top at rest,
+     from the stage's top: the head's 40 and the monitor's tuned basis — a
+     place in the stage that names no head, so it holds when the head's band
+     goes. And the monitor's field foot: 12 above the edge as last SET (the
+     edge writes `--vf-godview-field-shift` once per change, never per frame of
+     a drag), never above the field's floor, 220 from the window's top. Both
+     resolve their 35% where they are used: a flex basis and a top, each
+     against the stage's height. */
+  --vf-godview-deck-rest: calc(40px + max(var(--vf-monitor-stage-height, 35%), 170px));
+  --vf-godview-field-foot: max(
+    var(--vf-godview-deck-field-floor),
+    calc(
+      var(--vf-godview-deck-rest) +
+      var(--vf-godview-field-shift, 0px) -
+      var(--vf-godview-deck-field-gap)
+    )
+  );
   background: color-mix(
     in srgb,
     var(--vf-godview-stage-color, var(--monitor-bg)) var(--vf-godview-stage-opacity),
@@ -418,18 +435,16 @@
   background: var(--control-hover-bg);
 }
 
-/* The monitor's height is its TUNED height (the floor, 170px under it) plus
-   whatever the deck's edge has been dragged DOWN by (DESIGN.md §8,
-   `deck-edge.ts`): dragged up, the shift is negative, this adds nothing, and
-   the deck slides over the monitor instead. No bottom rule of its own — the
-   deck sheet's ring is the one edge between the two, and a straight line here
-   would cut across the sheet's rounded corners.
+/* The monitor's height is its TUNED height (the floor, 170px under it) — a
+   picture's (Settings' miniature draws its own). No bottom rule of its own —
+   the deck sheet's ring is the one edge between the two, and a straight line
+   here would cut across the sheet's rounded corners.
 
    THE DECK'S TOP AT REST IS THE INVARIANT (round 3, agreed with the head's
    owner): it stands 40 + the tuned height below the stage's top, whatever
    stands above the monitor. So the basis gives back what the head does not
    take of that 40 — `40px − --vf-godview-head-height`. Its default, in the
-   `var()` below, is the bar's 40, so a stage with no head (the Settings
+   `var()`s, is the bar's 40, so a stage with no head (the Settings
    miniature, a catalog plate) moves nothing; since the Stories head the head's
    own sheet sets it to 0px on the stage's root (`godview-head.css`), in the same
    commit that took the bar out of the column, so the stage is exactly 40 taller
@@ -442,13 +457,22 @@
   flex: 0 0
     calc(
       max(var(--vf-monitor-stage-height, 35%), 170px) +
-      (40px - var(--vf-godview-head-height, 40px)) +
-      max(0px, var(--vf-godview-deck-shift, 0px))
+      (40px - var(--vf-godview-head-height, 40px))
     );
   overflow: hidden;
   /* The overlay owns the glass. Painting a second opaque panel here made the
      stage-opacity control visually inert. */
   background: transparent;
+}
+
+/* THE MONITOR MAKES ROOM (round 3, W4; DESIGN.md §8). On a stage whose edge
+   moves, the field ends 12 above the edge as it was last set and is never
+   shorter than its floor — measured once per change: a held edge moves the
+   sheet and its terminals, never the field. Up past the floor, the sheet
+   slides over the field, the bodies still moving beneath. The head's height
+   is the basis's to give back, as above. */
+.vf-godview[data-godview-deck-edge] .vf-godview-monitor-stage {
+  flex-basis: calc(var(--vf-godview-field-foot) - var(--vf-godview-head-height, 40px));
 }
 
 /* The claims (AR-3, GT-D17): what the fold and the mesh report, in the
@@ -608,14 +632,14 @@
    of Godview, and over the monitor it hides the bodies as much as Godview
    hides the field.
 
-   Dragged up, the shift is negative and becomes the sheet's margin: the flex
-   column gives the deck that much more height and the sheet rides up over the
-   monitor, which keeps its own. */
+   On a stage whose edge moves the sheet is PLACED at its edge (below): rest
+   and the shift, down to the stage's foot — so the terminals' box follows the
+   edge alone, never the monitor's. A picture's sheet (Settings' miniature)
+   flows under its own monitor. */
 .vf-godview-terminal-deck {
   z-index: 10;
   display: flex;
   flex-direction: column;
-  margin-top: min(0px, var(--vf-godview-deck-shift, 0px));
   border-radius: var(--vf-godview-deck-radius) var(--vf-godview-deck-radius) 0 0;
   background: color-mix(
     in srgb,
@@ -639,6 +663,14 @@
       max(var(--vf-godview-stage-opacity, 100%), var(--vf-godview-launcher-clearing-floor)),
     transparent
   );
+}
+
+.vf-godview[data-godview-deck-edge] .vf-godview-terminal-deck {
+  position: absolute;
+  top: calc(var(--vf-godview-deck-rest) + var(--vf-godview-deck-shift, 0px));
+  right: 0;
+  bottom: 0;
+  left: 0;
 }
 
 /* THE LIP (GV-D7): the tab's band grown into the drag bar — 30 tall, on the
@@ -841,23 +873,12 @@
   transition: transform 480ms var(--vf-ease-island);
 }
 
-/* Away, arrived: nothing at the foot. The sheet leaves the flow AT THE BOX IT
-   HAD — the top an up sheet stands at: the head's 40 and the monitor's basis
-   (the deck's top at rest is that sum whatever the head's height, L8a) plus
-   the edge — so arriving lays the terminals out again not at all, and rising
-   lays them out not at all either. Below the foot, unseen; the section is
-   inert (`GodviewStage`): no pointer, no focus, no key. */
+/* Away, arrived: nothing at the foot. The sheet keeps THE BOX IT HAD — it is
+   placed at its edge, out of the flow, whatever the state — so arriving lays
+   the terminals out again not at all, and rising to the same edge lays them
+   out not at all either. Below the foot, unseen; the section is inert
+   (`GodviewStage`): no pointer, no focus, no key. */
 .vf-godview[data-godview-deck="away"]:not([data-godview-deck-motion]) .vf-godview-terminal-deck {
-  position: absolute;
-  top: calc(
-    40px +
-    max(var(--vf-monitor-stage-height, 35%), 170px) +
-    var(--vf-godview-deck-shift, 0px)
-  );
-  right: 0;
-  bottom: 0;
-  left: 0;
-  margin-top: 0;
   transform: translateY(calc(100% + 40px));
   visibility: hidden;
 }
@@ -874,6 +895,69 @@
   .vf-godview[data-godview-deck-motion] .vf-godview-terminal-deck {
     transition: none;
   }
+}
+
+/* THE READOUT WHILE THE EDGE IS HELD (round 3, W4; DESIGN.md §8 "A let-go
+   decides", §9; James, 29 Sep: a readout is huge bold words in open space).
+   Past the line, *Minimize* the terminals — 800 64px/1 at −0.04em in Godview's
+   text main, the verb at 40% and the noun full, haloed in the monitor's
+   ground (40 and 18) — written on the monitor, centred between y 60 and the
+   held edge (never above 150), over a veil of that ground at 62% down to 26
+   above the edge. Both under the sheet (10), over the monitor's chrome (7).
+   In over 120ms, out over 160ms; the veil 160ms both ways. Placed from the
+   held edge on the root, so a move re-renders nothing. */
+.vf-godview-deck-readout {
+  position: absolute;
+  z-index: 9;
+  top: max(
+    150px,
+    calc((60px + var(--vf-godview-deck-rest) + var(--vf-godview-deck-shift, 0px)) / 2)
+  );
+  right: 0;
+  left: 0;
+  height: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.vf-godview-deck-readout[data-on="true"] {
+  opacity: 1;
+  transition-duration: 120ms;
+}
+
+.vf-godview-deck-readout b {
+  font: 800 64px / 1 var(--vf-font-sans);
+  letter-spacing: -0.04em;
+  color: var(--text-main);
+  white-space: nowrap;
+  text-shadow:
+    0 0 40px var(--monitor-bg),
+    0 0 18px var(--monitor-bg);
+}
+
+.vf-godview-deck-readout b i {
+  font-style: normal;
+  opacity: 0.4;
+}
+
+.vf-godview-deck-veil {
+  position: absolute;
+  z-index: 8;
+  inset: 0;
+  background: color-mix(in srgb, var(--monitor-bg) 62%, transparent);
+  clip-path: inset(
+    0 0 calc(100% - var(--vf-godview-deck-rest) - var(--vf-godview-deck-shift, 0px) + 26px) 0
+  );
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.vf-godview-deck-veil[data-on="true"] {
+  opacity: 1;
 }
 
 /* A live WebGPU canvas may be promoted above ordinary DOM overlays on macOS.
