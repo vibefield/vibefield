@@ -2077,21 +2077,33 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     const bounded = this.#transport === "cpu-bgra" ? clampCpuRaster(requested) : requested;
     void window
       .setEmulation(this.nativeEmulation(next))
-      .then(() => window.setBackingRaster(bounded, viewport, this.density(), this.mobile()))
-      .then(() => {
-        if (!this.isCurrent(window, epoch)) return;
-        this.#viewport = viewport;
-        // (F9: told — its commands answered — the hand follows the device switched to)
+      .then((): Promise<void> | undefined => {
+        if (!this.isCurrent(window, epoch)) return undefined;
+        // (F9: told — the hand follows the device whose commands the window answered.) PT-5d (G3) — THE LAST ONE IT
+        // ANSWERED, in its device queue's order: the window answers a switch's `setEmulation` before any asked after it,
+        // so the told device moves here, at the answer. (Before: in each switch's own chain, after its layout — with two
+        // switches in flight, B and then back to A, B's layout answered after A's `setEmulation` and made the hand B's
+        // for the whole reload B then asked, while the page was last told A.)
         this.#told = next;
-        // a page that has loaded learns its device by loading again. PT-5b3 (ruling 2) — with NO DOCUMENT of the page
-        // standing the engine's own reload is never asked (it reloads the blank — and the page then said `no-document`
-        // for an address it had never been asked for again): a page that has SAID its load ended (`no-document`,
-        // `stopped`) is told its device and loads nothing — what it said stands, word for word, and ↻ loads it on the
-        // new device.
-        if (told && this.#documentStands) {
-          this.#emulationReloads += 1;
-          window.navigate("reload");
-        } else window.invalidate();
+        // SUPERSEDED — another switch was asked since: it lays the page out and reloads it for itself; this one asks
+        // neither. (The layout's `mobile` is the device ASKED when the layout is asked — `this.mobile()` — so the one
+        // layout asked is the latest switch's, at its own viewport.)
+        if (this.#emulation !== next) return undefined;
+        return window
+          .setBackingRaster(bounded, viewport, this.density(), this.mobile())
+          .then(() => {
+            if (!this.isCurrent(window, epoch) || this.#emulation !== next) return;
+            this.#viewport = viewport;
+            // a page that has loaded learns its device by loading again. PT-5b3 (ruling 2) — with NO DOCUMENT of the page
+            // standing the engine's own reload is never asked (it reloads the blank — and the page then said
+            // `no-document` for an address it had never been asked for again): a page that has SAID its load ended
+            // (`no-document`, `stopped`) is told its device and loads nothing — what it said stands, word for word, and ↻
+            // loads it on the new device.
+            if (told && this.#documentStands) {
+              this.#emulationReloads += 1;
+              window.navigate("reload");
+            } else window.invalidate();
+          });
       })
       .catch(() => undefined);
   }

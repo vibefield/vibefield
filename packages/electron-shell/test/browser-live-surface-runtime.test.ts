@@ -5221,6 +5221,54 @@ describe("BrowserLiveSurfaceRuntime", () => {
         expect(p.window.mouseInputs.map((m) => m.type)).toEqual(["mousePressed", "mouseReleased"]);
         p.result.runtime.dispose();
       });
+
+      it("G3 — the told device follows the order the window ANSWERED its device commands: two switches in flight — B (a phone at 2), then back to A (the laptop) — once A's commands are answered a tap goes as the laptop the window was last told; B, superseded, asks no layout and no reload of its own: the page is laid out as A and reloaded ONCE (before: B's layout answered last made the hand a finger, for the reload B asked)", async () => {
+        const p = await standing({ source: laptopAt2() });
+        const r = p.result.runtime.summary.geometry?.revision ?? 0;
+        // the device's commands answered one behind another, when the row says — as the native's device queue has them
+        const held: Array<() => void> = [];
+        const hold =
+          <A extends unknown[], R>(run: (...a: A) => Promise<R>) =>
+          async (...a: A): Promise<R> => {
+            await new Promise<void>((resolve) => held.push(resolve));
+            return run(...a);
+          };
+        p.first.setEmulation = hold(p.first.setEmulation.bind(p.first));
+        p.first.setBackingRaster = hold(
+          p.first.setBackingRaster.bind(p.first),
+        ) as typeof p.first.setBackingRaster;
+        const reloads = (): number => p.first.navigations.filter((n) => n === "reload").length;
+        const before = reloads();
+        await p.result.runtime.navigate({
+          action: "emulate",
+          emulation: { ...PHONE, deviceScaleFactor: 2 },
+        });
+        await p.result.runtime.navigate({ action: "emulate", emulation: LAPTOP });
+        await delivered();
+        // B's emulation answered, A's, then the command asked next — in the queue's order
+        for (let i = 0; i < 3; i += 1) {
+          held[i]?.();
+          await delivered();
+        }
+        p.first.say(1);
+        for (const action of ["down", "up"] as const)
+          p.renderer.attachment.dispatchInput?.(
+            { kind: "pointer", action, x: 10, y: 10, button: "left", clickCount: 1 },
+            r,
+          );
+        await delivered();
+        expect(p.first.touchInputs).toEqual([]);
+        expect(p.first.mouseInputs.map((m) => m.type)).toEqual(["mousePressed", "mouseReleased"]);
+        // whatever else was asked, answered: one layout (A's), laid as A; one reload
+        for (let i = 3; i < held.length; i += 1) {
+          held[i]?.();
+          await delivered();
+        }
+        expect(held).toHaveLength(3);
+        expect(p.first.rasterMobile.at(-1)).toBe(false);
+        expect(reloads() - before).toBe(1);
+        p.result.runtime.dispose();
+      });
     });
   });
 });
