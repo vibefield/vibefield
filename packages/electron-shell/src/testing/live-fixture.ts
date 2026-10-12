@@ -325,6 +325,10 @@ export interface FixtureFramed {
   readonly heard: readonly string[];
   /** the buttons its last pointermove held (null: none came) */
   readonly moveButtons: number | null;
+  /** PT-5d (M15 F3): how many pointermoves it heard with its primary button held (a drag's) */
+  readonly movesHeld: number;
+  /** PT-5d (M15 F1): its clicks on its own ground (`html`, `body`), each at its point to the tenth of a CSS px */
+  readonly grounds: readonly (readonly [number, number])[];
   /** its file input's `cancel` and `change` (the nested frame's) */
   readonly cancels: number;
   readonly changes: number;
@@ -623,7 +627,8 @@ export const FRAMES_WORD = "alpha";
 const framesScript = (ids: readonly string[], elementOnly?: readonly string[]): string => `<script>
   const token = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
   const heard = [], clicks = [];
-  let moveButtons = null, cancels = 0, changes = 0;
+  let moveButtons = null, cancels = 0, changes = 0, movesHeld = 0;
+  const grounds = [];
   const el = (id) => document.getElementById(id);
   const named = (t) => (t && t.id ? "#" + t.id : t && t.tagName ? t.tagName.toLowerCase() : "?");
   const only = ${JSON.stringify(elementOnly ?? null)};
@@ -633,11 +638,15 @@ const framesScript = (ids: readonly string[], elementOnly?: readonly string[]): 
       hear(e, e.type + " " + named(e.target));
       if (e.type === "click" && e.target && ["b", "bl", "bm", "ib", "b2", "sb"].includes(e.target.id))
         clicks.push([Math.round(e.clientX), Math.round(e.clientY)]);
+      // (M15 F1: a click on its own ground, to the tenth — the window↔page mapping's own error, measured)
+      else if (e.type === "click" && ["html", "body"].includes(named(e.target)) && grounds.length < 50)
+        grounds.push([Math.round(e.clientX * 10) / 10, Math.round(e.clientY * 10) / 10]);
     }, { capture: true, passive: true });
   addEventListener("keydown", (e) => hear(e, "keydown " + e.key), true);
   // (M7 H15: the pointer leaving its link — FRAME-HOVER's real leave)
   addEventListener("mouseout", (e) => { if (e.target && e.target.id === "l") hear(e, "mouseout #l"); }, true);
-  addEventListener("pointermove", (e) => { moveButtons = e.buttons; }, true);
+  // (M15 F3: and how many it heard with its primary button held — a drag's moves)
+  addEventListener("pointermove", (e) => { moveButtons = e.buttons; if (e.buttons & 1) movesHeld += 1; }, true);
   if (el("if")) {
     el("if").addEventListener("cancel", () => { cancels += 1; });
     el("if").addEventListener("change", () => { changes += 1; });
@@ -659,7 +668,7 @@ const framesScript = (ids: readonly string[], elementOnly?: readonly string[]): 
     view: [innerWidth, innerHeight],
     vv: (() => { try { const v = visualViewport; return v ? [v.scale, v.offsetLeft, v.offsetTop] : undefined; } catch { return undefined; } })(),
     framed: {
-      clicks, heard, moveButtons, cancels, changes,
+      clicks, heard, moveButtons, movesHeld, grounds, cancels, changes,
       range: el("r") ? Number(el("r").value) : null,
       caret: el("t") ? el("t").selectionStart : null,
       scroller: el("s") ? Math.round(el("s").scrollTop) : null,

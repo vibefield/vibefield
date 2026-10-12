@@ -792,6 +792,9 @@ describe("the live pane's fixture page", () => {
       clicks: [[80, 42]],
       heard: ["pointerdown #b", "click #b", "keydown h"],
       moveButtons: 0,
+      // (M15 F3: the moves it heard with its primary button held — a drag's)
+      movesHeld: 1,
+      grounds: [],
       range: 10,
       caret: 5,
       scroller: 40,
@@ -819,8 +822,11 @@ describe("the live pane's fixture page", () => {
     const host = await run(fixture.hostOrigin, "/frames/host?p=g");
     host.fire("pointerdown", { target: host.parts.get("b") });
     host.fire("pointerdown", { target: host.parts.get("f") });
+    // (M15 F1: a click on its own ground — its point said, to the tenth: the window↔page mapping's own error, measured)
+    host.fire("click", { target: { tagName: "HTML" }, clientX: 140.26, clientY: 162.5 });
     const hostSaid = await host.ask();
     expect(hostSaid.framed.heard).toEqual(["pointerdown #f"]);
+    expect(hostSaid.framed.grounds).toEqual([[140.3, 162.5]]);
     expect(Object.keys(hostSaid.framed.parts as Record<string, unknown>)).toEqual(["frame"]);
     // M6.3a: the clipped host hears the hand on its header and the frame's element alone
     const clippedHost = await run(fixture.hostOrigin, "/frames/clipped?p=g");

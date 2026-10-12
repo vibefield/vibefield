@@ -85,8 +85,16 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
   });
 
-  it("FRAME-DRAG: the thumb moved, and after a release OUTSIDE the frame its next move holds no button; a drag that never reached it, or a button left down, says so", () => {
+  it("FRAME-DRAG: the thumb moved, and after a release OUTSIDE the frame its next move holds no button; a drag that never reached it, or a button left down, says so — M15 F3: and which half failed, by the moves the frame heard with its button held", () => {
     expect(judgeFrameDrag({ before: 10, after: 84, buttonsAfter: 0 })).toEqual([]);
+    expect(judgeFrameDrag({ before: 10, after: 100, buttonsAfter: 0, movesHeld: 12 })).toEqual([]);
+    // M15 F3: the moves never reached the frame — or reached it, and its thumb never followed
+    expect(judgeFrameDrag({ before: 10, after: 10, buttonsAfter: 0, movesHeld: 0 })).toEqual([
+      "FRAME-DRAG: the range stood at 10 after the drag (from 10) — the frame heard no move with its button held: the drag's moves never reached it",
+    ]);
+    expect(judgeFrameDrag({ before: 10, after: 10, buttonsAfter: 0, movesHeld: 12 })).toEqual([
+      "FRAME-DRAG: the range stood at 10 after the drag (from 10) — the frame heard 12 moves with its button held and its thumb never followed: they reached it and did not drag",
+    ]);
     expect(judgeFrameDrag({ before: 10, after: 10, buttonsAfter: 1 })).toEqual([
       "FRAME-DRAG: the range stood at 10 after the drag (from 10) — the drag never moved it",
       "FRAME-DRAG: after the release outside the frame its next move held buttons 1 — a button left down in the frame (every hover a drag)",

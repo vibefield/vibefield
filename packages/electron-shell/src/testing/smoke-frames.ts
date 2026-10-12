@@ -109,6 +109,8 @@ export interface FramesSeen {
     readonly before: number | null;
     readonly after: number | null;
     readonly buttonsAfter: number | null;
+    /** M15 F3: the moves the frame heard with its primary button held over the drag (absent: not counted) */
+    readonly movesHeld?: number | null;
   };
   readonly wheel: {
     readonly scroller: readonly [number | null, number | null];
@@ -236,6 +238,15 @@ export interface FramePressSeen {
   readonly clicked: Point | null;
   /** what the host page heard on the frame's element over the press */
   readonly hostHeard: readonly string[];
+  /** M15 F1: a press on the HOST's own ground beside the frame — where it was aimed and where the host's click landed, in
+   * its view's px: the window↔page mapping's own error, measured (absent: none pressed; null clicked: none came) */
+  readonly ground?: GroundSeen | null;
+}
+
+/** M15 F1: a press on a host's own ground: where it was aimed, and where its click landed (null: none came). */
+interface GroundSeen {
+  readonly aimed: Point;
+  readonly clicked: Point | null;
 }
 
 const near = (a: Point, b: Point, by: number): boolean =>
@@ -299,9 +310,16 @@ export function judgeFrameDrag(seen: FramesSeen["drag"]): string[] {
   if (seen.before === null || seen.after === null)
     return ["FRAME-DRAG: the frame never said its range — the row proved nothing"];
   const out: string[] = [];
+  // (M15 F3: which half failed, by the moves the frame heard with its button held)
   if (seen.after < seen.before + 10)
     out.push(
-      `FRAME-DRAG: the range stood at ${seen.after} after the drag (from ${seen.before}) — the drag never moved it`,
+      `FRAME-DRAG: the range stood at ${seen.after} after the drag (from ${seen.before}) — ${
+        seen.movesHeld === undefined || seen.movesHeld === null
+          ? "the drag never moved it"
+          : seen.movesHeld === 0
+            ? "the frame heard no move with its button held: the drag's moves never reached it"
+            : `the frame heard ${seen.movesHeld} moves with its button held and its thumb never followed: they reached it and did not drag`
+      }`,
     );
   if (seen.buttonsAfter === null)
     out.push(
@@ -920,6 +938,46 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     };
     const framed = () => at(FRAME)?.framed ?? null;
     const hostHeard = () => at(HOST)?.framed?.heard ?? [];
+    /** M15 F4: the host wheeled back to its top over its own ground right of the frame (never over the frame: its scroller
+     * would take the wheel), until it says it stands at 0 */
+    const hostToTop = async (): Promise<void> => {
+      if (held === null || view === null) return;
+      const ground = await onWindow(held, view, FRAMES_BOX.x + FRAMES_BOX.w + 200, view[1] / 2);
+      h.move(ground.x, ground.y);
+      await sleep(150);
+      for (let i = 0; i < 12; i += 1) {
+        win.webContents.sendInputEvent({
+          type: "mouseWheel",
+          x: ground.x,
+          y: ground.y,
+          deltaX: 0,
+          deltaY: 200,
+          canScroll: true,
+        });
+        await sleep(60);
+      }
+      await waitFor(
+        "the host back at its top",
+        5_000,
+        () => at(HOST)?.scrollY ?? null,
+        (y) => y === 0,
+      );
+      await sleep(400);
+    };
+
+    /** M15 F1: a press on the host's OWN ground at a point of its view — where the host's click landed (its view's px) */
+    const groundPress = async (x: number, y: number): Promise<GroundSeen | null> => {
+      if (held === null || view === null) return null;
+      const grounds0 = at(HOST)?.framed?.grounds.length ?? 0;
+      await h.press(await onWindow(held, view, x, y));
+      const landed = await waitFor(
+        "the host's click on its ground",
+        5_000,
+        () => at(HOST)?.framed?.grounds ?? null,
+        (g) => (g?.length ?? 0) > grounds0,
+      );
+      return { aimed: [x, y], clicked: landed?.[grounds0] ?? null };
+    };
 
     // ── FRAME-PRESS ──────────────────────────────────────────────────────────────────────────────────────────────────
     const b = framed()?.parts.b ?? null;
@@ -936,10 +994,16 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       () => framed(),
       (f) => (f?.clicks.length ?? 0) > clicks0,
     );
+    // (F1: the mapping's own error beside it — the host's ground 20 px left of the frame, at the button's height)
+    const hostBox = at(HOST)?.framed?.parts.frame ?? null;
     const press: FramePressSeen = {
       aimed,
       clicked: afterPress?.clicks[clicks0] ?? null,
       hostHeard: hostHeard().slice(heard0),
+      ground:
+        aimed === null || hostBox === null
+          ? null
+          : await groundPress(hostBox.x - 20, hostBox.y + aimed[1]),
     };
     said.press = press;
     problems.push(...judgeFramePress("FRAME-PRESS", press));
@@ -959,10 +1023,15 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       () => at(SAME)?.framed ?? null,
       (f) => (f?.clicks.length ?? 0) > sameClicks0,
     );
+    // (F1: beside it — the host's ground 20 px right of the frame, at the child's button's height)
     const same: FramePressSeen = {
       aimed: sameAimed,
       clicked: afterSame?.clicks[sameClicks0] ?? null,
       hostHeard: hostHeard().slice(heardSame),
+      ground:
+        c === null || sameAimed === null || hostBox === null
+          ? null
+          : await groundPress(hostBox.x + hostBox.w + 20, hostBox.y + c.y + sameAimed[1]),
     };
     said.same = same;
     problems.push(...judgeFramePress("FRAME-PRESS (its own site's frame in it)", same));
@@ -1013,7 +1082,11 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const word = framed()?.parts.w ?? null;
     if (word !== null) {
       const w = await inFrame(word.x + 20, word.y + word.h / 2);
-      if (w !== null) await h.press(w, 2);
+      // (M15 F2: a double-click is TWO presses — the second with its count of 2, as USE's DOUBLE)
+      if (w !== null) {
+        await h.press(w, 1);
+        await h.press(w, 2);
+      }
     }
     const sel =
       (
@@ -1030,10 +1103,14 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     // ── FRAME-DRAG: the thumb from its left, released OUTSIDE the frame; then a hover over it ──────────────────────
     const r = framed()?.parts.r ?? null;
     const rangeBefore = framed()?.range ?? null;
+    const movesHeld0 = framed()?.movesHeld ?? null;
     let buttonsAfter: number | null = null;
     if (r !== null) {
       const from = await inFrame(r.x + r.w * 0.1, r.y + r.h / 2);
-      const to = await inFrame(-40, r.y + r.h / 2);
+      // (M15 F3: released RIGHT of the frame, on the host's ground past its right edge — a drag that works ends at the
+      // top whether or not a move outside the frame reaches it; before: released left of it, where a drag that works
+      // ends at 0 and its judge wants a rise)
+      const to = await inFrame(FRAMES_BOX.w + 40, r.y + r.h / 2);
       const through = await inFrame(r.x + r.w * 0.9, r.y + r.h / 2);
       if (from !== null && to !== null && through !== null) {
         h.move(from.x, from.y);
@@ -1057,7 +1134,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
             });
             await sleep(30);
           }
-        // released OUTSIDE the frame (past its left edge, over the host)
+        // released OUTSIDE the frame (past its right edge, over the host)
         win.webContents.sendInputEvent({
           type: "mouseUp",
           x: to.x,
@@ -1083,7 +1160,13 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
           )?.moveButtons ?? null;
       }
     }
-    const drag = { before: rangeBefore, after: framed()?.range ?? null, buttonsAfter };
+    const movesHeld1 = framed()?.movesHeld ?? null;
+    const drag = {
+      before: rangeBefore,
+      after: framed()?.range ?? null,
+      buttonsAfter,
+      movesHeld: movesHeld0 === null || movesHeld1 === null ? null : movesHeld1 - movesHeld0,
+    };
     said.drag = drag;
     problems.push(...judgeFrameDrag(drag));
 
@@ -1116,8 +1199,9 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     };
     said.wheel = wheel;
     problems.push(...judgeFrameWheel(wheel));
-    // (the host may have scrolled: the rows after it aim through its next word of its frame's box)
-    await sleep(500);
+    // (M15 F4: the chain leg left the host at its END — every row after it aimed at a frame out of view: it is wheeled
+    // back to its top over its OWN ground, right of the frame, never over it — its scroller would take the wheel)
+    await hostToTop();
 
     // ── FRAME-TYPE (M15, a stated limit): the field pressed — the typing, the IME and ⌘A each REFUSED ─────────────────
     const t = framed()?.parts.t ?? null;
@@ -1315,6 +1399,13 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         });
         await sleep(60);
       }
+    // (M15 F4: … until the host says it stands at its top)
+    await waitFor(
+      "the host back at its top",
+      5_000,
+      () => at(HOST)?.scrollY ?? null,
+      (y) => y === 0,
+    );
     await sleep(600);
 
     // ── FRAME-GONE: a press held in the frame; the frame sent elsewhere under it; released; the next press ─────────────
