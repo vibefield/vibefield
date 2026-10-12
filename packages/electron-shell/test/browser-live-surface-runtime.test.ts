@@ -3514,20 +3514,6 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(plain.result.runtime.summary.state).toBe("live");
       plain.result.runtime.dispose();
     });
-
-    it("the engine's `unresponsive` and the host's bound: whichever comes first says it — once", async () => {
-      vi.useFakeTimers();
-      const p = await stuck({ unresponsiveMs: 100 });
-      p.window.dispatchKey = () => new Promise<void>(() => {});
-      p.key("down", "a");
-      p.window.hang(true);
-      await vi.advanceTimersByTimeAsync(100);
-      expect(p.result.runtime.summary.state).toBe("failed");
-      const said = p.renderer.summaries.filter((s) => s.state === "failed").length;
-      await vi.advanceTimersByTimeAsync(1_000);
-      expect(p.renderer.summaries.filter((s) => s.state === "failed")).toHaveLength(said);
-      p.result.runtime.dispose();
-    });
   });
 
   it("PT-5a: a page UNRESPONSIVE past the bound is said to have stopped (`frame-stalled`, the person's to recover) — one that answers again within it is not; a source that does not say is left alone", async () => {

@@ -143,8 +143,10 @@ describe("PT-5d (ruling 3) — a gesture ends where it began", () => {
   it("A's press, then A's session GOES (the frame removed, its process gone): its release goes nowhere — never a command to a gone session", () => {
     const f = page();
     f.press("left", 180, 120);
+    f.keyDown("KeyQ");
     f.detached("A");
     expect(f.release("left", 180, 120)).toBeNull();
+    expect(f.keyUp("KeyQ")).toBeNull();
     // and a press on the page while A was down, released: the page's
     f.press("right", 20, 20);
     expect(f.release("right", 20, 20)?.target).toEqual({ session: undefined, document: 1 });

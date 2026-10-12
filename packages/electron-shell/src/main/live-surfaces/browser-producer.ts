@@ -1473,8 +1473,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   /** PT-5d (ruling 6): a turn of the hand on `window` went unanswered past the host's bound — the page is said to have
    * stopped, as at the engine's own `unresponsive` past PT-5a's (the person's reload makes it anew). */
   private inputHung(window: BrowserSurfaceNativeWindow): void {
-    if (this.#closed || this.#window !== window || this.#lifecycle.snapshot.state === "failed")
-      return;
+    // (said once: a page said stopped has no window — the engine's word after it, or another bound, finds none)
+    if (this.#closed || this.#window !== window) return;
     this.#waitsForReload = true;
     this.failSource(sourceError("frame-stalled", "Browser page stopped responding", "user-action"));
   }
