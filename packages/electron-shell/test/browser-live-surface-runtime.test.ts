@@ -5039,6 +5039,32 @@ describe("BrowserLiveSurfaceRuntime", () => {
         expect(p.result.runtime.emulations()).toBe(p.result.runtime.stats.emulations);
         p.result.runtime.dispose();
       });
+
+      it("C46 — a press of ANOTHER attachment, waiting for its document's word, is NOT refused when an attachment goes — only the going one's waits end — and it is sent when the word comes", async () => {
+        const p = await phone();
+        const other = attach(p.result.runtime, "attachment_browser_00000002");
+        other.attachment.setDemand(demand(2, "live", 30, { width: 1206, height: 2622 }));
+        await p.delivered();
+        p.window.emitNavigationState({ ...NAV, url: NEXT });
+        await p.delivered();
+        const dropped = p.result.runtime.stats.inputDropped;
+        other.attachment.dispatchInput?.(
+          { kind: "pointer", action: "down", x: 20, y: 10, button: "left", clickCount: 1 },
+          p.revision,
+        );
+        await p.delivered();
+        expect(p.heard).toEqual([]);
+        // the FIRST attachment goes (its window reloaded): its own waits end — none — and the page stays live
+        p.renderer.attachment.dispose();
+        await p.delivered();
+        expect(p.result.runtime.summary.state).toBe("live");
+        expect(p.result.runtime.stats.inputDropped).toBe(dropped);
+        p.window.say(1);
+        await p.delivered();
+        expect(p.heard).toEqual(["touchStart"]);
+        expect(p.result.runtime.stats.inputDropped).toBe(dropped);
+        p.result.runtime.dispose();
+      });
     });
   });
 });
