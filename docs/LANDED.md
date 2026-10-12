@@ -9325,3 +9325,37 @@ backoff short is the field-native owner's question.
 
 **Owed:** index-timeline's lost `.snapshot` (four sightings: not a budget — the frame never came; instrumented next);
 fieldd-client requests and the routed inventory read still have no bound of their own (lane dfd, next).
+
+## Debts, second part — Godview's filter is kept for the run, the search steps out of the terminals' bar in 120 ms, and smoke:godview's launcher rung settles its focus before it presses (2026-10-12; `6a0e808c` · `8c6982f0` · `39b1698a` through lane land3, gated on the exact tree)
+
+**Why:** the debts lane (N10 (a)), its renderer half: lane dui (`debts/ui`, brief `draft/history-finish/briefs/debts-ui.md`,
+survey `draft/history-finish/surveys/s-debts-ui.md`). N4 (a) is James's ruling of 2026-10-12; the 120 ms step was
+round 3's one mark left (GV-D11, DESIGN.md §6, §8); the launcher rung had failed twice at two different steps on trees
+that touch no launcher code (the wrapper's entry, "Owed").
+
+**What landed:**
+- `6a0e808c` N4 (a): Godview's two filters (the desktop and the profile chosen in search's Live now) are kept for the
+  run in the window's session storage (`godview/filter-state.ts`, `vf-godview-filters-v1`, every access in try/catch),
+  so closing Godview or a reload keeps them and a launch or a new window starts on everything. Only the window's own
+  stage reads or writes them; a stale id falls back where it is read, so no false token shows. Red first.
+- `8c6982f0` the search's step: leaving maximized, the bar's control fades where it stands over 120 ms `ease`, then
+  (120 + 34 ms, on a timer, never `transitionend`) the head's circle fades in over 200 ms — one element, never in two
+  places, never a FLIP (a 24 bar control morphing into a 40 glass circle is unruled). Into the bar, a re-maximize
+  mid-step, a change of view and reduced motion change place at once. DESIGN.md's "(not built …)" notes removed. Red
+  first.
+- `39b1698a` the launcher rung's focus race (a read-only survey traced it: the launcher's field is open only while it
+  holds focus, and ghosttea hands focus back to the terminal on a pane's activation): before ⌥↵ the rung waits for the
+  split session's own input gate (as the line-send rung does, `6bde8506`), puts focus on the split's terminal and
+  holds it two frames; after ⌥↵ it requires the field open and focused across two frames, again before each ⎋; its
+  state names the focused pane and class, so a red says what took the focus. No retry. Witness: the rung green 5 runs
+  in 5 (`/Volumes/SamsungRed/lanes/dui/rung5-run1..5.log`); nothing took the focus in them, so whether the product
+  races (⌥↵ right after ⌘D) stays unproven.
+
+**Validation:** the lane's red and green logs under `/Volumes/SamsungRed/lanes/dui/`; then the landing gate on the
+exact tree (`lanes/land3/logs/`, under this landing's sha).
+
+**Found:** with a filter token on, the Stories row's side reserve widens 154 ms into the row's fade back (the token
+width is the bar's until the step ends; visible only if the row was clipped). smoke:canvas's COVER HISTORY "frosts"
+guard read nothing: that smoke stages no person, so History had no day head to read (N3's slice changes it).
+
+**Owed:** History's day heads frost (N3 (a)), its cost measured under a cover first (lane dui, next).
