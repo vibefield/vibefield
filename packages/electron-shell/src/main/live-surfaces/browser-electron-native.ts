@@ -1273,9 +1273,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   /** PT-5c (ruling 1): the HAND's queue — its input, one behind another, never behind the device's. */
   /**
    * PT-5d (M9) — see `BrowserSurfaceNativeWindow.setFocused`: `Emulation.setFocusEmulationEnabled` on the PAGE's session —
-   * the page behaves as focused (`document.hasFocus()`, its window's `focus`), whatever the app's own activation — in the
-   * hand's queue. Another window of the native told before is untold first (in its own queue: never waited on — a page
-   * that hangs keeps no other from its focus). A frame of another site is not told: its own renderer holds its focus,
+   * the page behaves as focused (`document.hasFocus()`, its window's `focus`), whatever the app's own activation — on its
+   * DEVICE queue (M12 J1: never holding the hand, outside its bound). Another window of the native told before is untold
+   * first (on its own device queue: never waited on — a page that hangs keeps no other from its focus). A frame of another site is not told: its own renderer holds its focus,
    * and the run's F-h says whether each frame's session needs its own (M9).
    */
   setFocused(focused: boolean): Promise<void> {
@@ -1305,11 +1305,15 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   }
 
   private tellFocus(enabled: boolean): Promise<void> {
-    // (a window destroyed meanwhile: `ensureDebugger` refuses it — nothing sent. A command of the hand like any other —
-    // M6.4b: timed from its send, so a page that hung by itself is said stopped at the bound; let go at its commit)
-    return this.hand(async () => {
+    // (a window destroyed meanwhile: `ensureDebugger` refuses it — nothing sent. PT-5d (M12 J1): on the DEVICE queue, as
+    // the page's other emulation — never holding the hand, outside its bound: a page hung by itself is said stopped by
+    // the hand's own command, sent at once behind it)
+    return this.device(async () => {
+      await this.bootstrapReady;
       await this.ensureDebugger();
-      await this.handCommand("Emulation.setFocusEmulationEnabled", { enabled }, undefined);
+      await this.window.webContents.debugger.sendCommand("Emulation.setFocusEmulationEnabled", {
+        enabled,
+      });
     });
   }
 

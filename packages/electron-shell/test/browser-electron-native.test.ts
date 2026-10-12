@@ -2407,12 +2407,14 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       }
     });
 
-    it("M9 × M6.4b — telling the page it is focused is a command of the hand: a page that hung BY ITSELF (nothing of the hand outstanding) never answers it — said hung, the bound after it was sent", async () => {
+    it("M12 J1 (re-saying M9 × M6.4b) — the telling never holds the hand and is outside its bound: a page hung BY ITSELF, then taken — its telling unanswered on the DEVICE queue, its press sent at once and timed: said hung, the bound after the PRESS was sent; a page switched away from while its telling pends past the bound is NOT said stopped by it", async () => {
       vi.useFakeTimers();
       try {
         const r = recording(
           (method) =>
-            method === "Emulation.setFocusEmulationEnabled" ? new Promise(() => {}) : {},
+            method === "Emulation.setFocusEmulationEnabled" || method === "Input.dispatchMouseEvent"
+              ? new Promise(() => {})
+              : {},
           { hungInputMs: BOUND },
         );
         const hung: (string | undefined)[] = [];
@@ -2420,10 +2422,19 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         await r.native.loadURL("https://host.test/a");
         r.at("https://host.test/a");
         r.contents.emit("did-navigate", {}, "https://host.test/a");
+        // told, and switched away from (untold) at once: neither answered — past the bound, nothing said
         void r.native.setFocused(true).catch(() => undefined);
-        await vi.advanceTimersByTimeAsync(BOUND - 1);
+        void r.native.setFocused(false).catch(() => undefined);
+        await vi.advanceTimersByTimeAsync(BOUND * 2);
         expect(hung).toEqual([]);
-        await vi.advanceTimersByTimeAsync(2);
+        // taken again: the press behind the telling is sent at once — and it is the press's bound that says the page hung
+        void r.native.setFocused(true).catch(() => undefined);
+        void r.native
+          .dispatchMouse({ type: "mousePressed", x: 5, y: 5, button: "left", clickCount: 1 })
+          .catch(() => undefined);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(r.hand().some((h) => h.startsWith("mousePressed"))).toBe(true);
+        await vi.advanceTimersByTimeAsync(BOUND + 1);
         expect(hung).toEqual([undefined]);
       } finally {
         vi.useRealTimers();
@@ -2579,10 +2590,11 @@ describe("PT-5d (M9) — a page TOLD it is focused while its pane takes the hand
 
   it("told: `Emulation.setFocusEmulationEnabled` on the PAGE's session, in the hand's queue — the key queued after it sent at once, never waiting on a word; told again: nothing; ANOTHER window told: this one untold first; untold: `enabled: false`, once; a window destroyed is told nothing", async () => {
     const w = two();
+    // (M12 J1: the telling on the device queue, the key on the hand's — neither waits on the other)
     void w.a.setFocused(true);
     await w.a.dispatchKey({ type: "keyDown", key: "a", code: "KeyA", modifiers: 0 });
     await w.a.setFocused(true);
-    expect(w.sent).toEqual(["A true", "A keyDown"]);
+    expect([...w.sent].sort()).toEqual(["A keyDown", "A true"]);
     await w.b.setFocused(true);
     expect(w.sent.slice(2)).toEqual(["A false", "B true"]);
     await w.b.setFocused(false);

@@ -125,8 +125,9 @@ export interface BrowserSurfaceNativeWindow {
   dispatchCompose(text: string, caret: number): Promise<void>;
   /**
    * PT-5d (M9) — TELL THE PAGE IT IS FOCUSED, or no longer: an offscreen window holds no window's focus of its own, and a
-   * document's own word of where its focus is (`here`, `away`) is the only one the hand's keys follow. In the hand's
-   * queue — ahead of the event queued after it. ONE window of a native at a time, as a browser has one focused window:
+   * document's own word of where its focus is (`here`, `away`) is the only one the hand's keys follow. PT-5d (M12 J1): on
+   * the window's DEVICE queue — never awaited by the hand, outside its bound. ONE window of a native at a time, as a
+   * browser has one focused window:
    * telling one untells the one before. Told again, or untold while not told: nothing.
    */
   setFocused(focused: boolean): Promise<void>;
@@ -1590,10 +1591,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   }
 
   /** PT-5d (M9): the hand takes the page — told it is focused (the native sends nothing if it is already its focused
-   * window). A refusal is the window's: the event is sent all the same. */
-  private async take(window: BrowserSurfaceNativeWindow, by: string | undefined): Promise<void> {
+   * window). PT-5d (M12 J1): NEVER awaited — the telling goes on the window's device queue; the event that took the page
+   * is sent at once, whatever the telling waits on (a navigation pending, a hung renderer). */
+  private take(window: BrowserSurfaceNativeWindow, by: string | undefined): void {
     this.#taken = { window, by };
-    await window.setFocused(true).catch(() => undefined);
+    void window.setFocused(true).catch(() => undefined);
   }
 
   /** PT-5d (M9): the hand has left the page — told so, on the window it was told on, if that still stands. */
@@ -1656,7 +1658,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // engine's word after it can say the focus is the page's (an offscreen page told nothing says `away`: every key would
     // wait for a word and be refused)
     if ((request.kind === "mouse" && request.type === "down") || request.kind === "key")
-      await this.take(window, by);
+      this.take(window, by);
     if (request.kind === "text") {
       if (request.text.length === 0 || request.text.length > 16_384) {
         throw new Error("Browser text input is outside the bounded contract");

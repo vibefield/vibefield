@@ -3730,6 +3730,18 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.result.runtime.dispose();
     });
 
+    it("M12 J1 — the telling never holds the hand: a taking whose telling never answers (a navigation pending, a hung renderer) still sends its press at once", async () => {
+      vi.useFakeTimers();
+      const p = await held();
+      p.window.setFocused = (focused: boolean): Promise<void> => {
+        p.window.hand.push(`focus ${focused}`);
+        return new Promise<void>(() => {});
+      };
+      await p.press();
+      expect(p.window.hand).toEqual(["focus true", "mouse mousePressed", "mouse mouseReleased"]);
+      p.result.runtime.dispose();
+    });
+
     it("its window GOES (a crash; made again): the one gone is told nothing more, the new one nothing until the hand takes it", async () => {
       vi.useFakeTimers();
       const p = await held();
