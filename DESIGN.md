@@ -570,7 +570,7 @@ during a fall turns it round from where it is. Beside them, on plain `ease`: the
 fade out under a maximized deck, and back, in 260ms (the drawing's number, 20 past the table's
 range); the sheet's top corners and shadow go and return in 160ms; the two readouts (§8, §9) come
 in 120ms and leave in 160ms, their veil 160ms both ways; the title bar's own search steps out in
-120ms *(not built: the one button changes its place at once, §8 "Search — the Peek")*. Under reduced motion the deck is at its end at once.
+120ms, and only then the head's returns in 200ms (§8 "Search — the Peek"). Under reduced motion the deck is at its end at once.
 
 Loops are for an indicator waiting on a fact it cannot predict, never for decoration (QL-2's
 launch, §8): a **breath** — `ease-in-out`, alternate, 1.1s, scale 1 → 1.06 — and a repeating
@@ -2340,7 +2340,7 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     as its glass widens. *(Until the Stories head, built 2026-10-11, it stood over the instrument
     bar's right end and hung 8 below the bar's foot, PK2 (a).)*
   - **The button in the terminals' title bar** (GV-D11, ruled 2026-10-02; One Frame §23.1;
-    built 2026-10-11 — the bar's own step-out below is not): while
+    built 2026-10-11, its step-out below 2026-10-12): while
     Godview's terminals are maximized (§8, the deck) the head's circle is not drawn — nothing of
     the head stands over the terminals — and the same button stands in their title bar, first of
     the controls at its right end, before the hairline. It is folded to the bar: **24 tall**,
@@ -2352,10 +2352,14 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     the keyboard, and the popup opens over the terminals. ⌘F is unchanged. **A filter that is on
     is not named in the bar:** maximized there is no view for it to filter, and the popup shows
     it. As the grip is dragged out of maximized the bar's button steps out (120ms) and the head's
-    returns (200ms), so search is never in two places. *(As built the button changes its place at
-    once — it is one button, so it is never in two — and the head's row fades back in its 200ms;
-    the 120ms step-out is not built.)* The deck's ink it wears is lent by Godview's stage on the
-    document (`--vf-godview-bar-ink`) while the terminals are maximized.
+    returns (200ms), so search is never in two places. It is one button, so the two are a
+    sequence, never a morph of the 24 bar control into the 40 glass circle: the bar's control
+    fades where it stands over 120ms on `ease`, taking no pointer, and once it is gone (its 120ms
+    and the deck's two frames, 34ms, on a timer) the circle fades in at the head over 200ms on
+    `ease`; maximized again mid-step, it is back in the bar at once. Into the bar, and under
+    reduced motion, it changes its place at once. The head's row starts its fade back as the deck
+    leaves maximized, so the circle starts 154ms after it. The deck's ink it wears is lent by
+    Godview's stage on the document (`--vf-godview-bar-ink`) while the terminals are maximized.
   - **The popup — Peek, 900 × 560**, centred in the window: solid (`--vf-chrome-solid`, FC-D14 —
     rows to be read), corners 24, ringed by the strong hairline, with its own shadow (§5, *Search
     popup*). It pops in on the island curve (§6). **The scrim** (§5, *Search scrim*) blurs and dims

@@ -43,6 +43,11 @@ export interface PeekToken {
   readonly profile: LiveProfileChoice | null;
 }
 
+/** GV-D11 — the button's step between the terminals' bar and the head: the
+ * bar's control fading out where it stands, then the head's circle fading in
+ * (`Peek.tsx` times them; `peek.css` draws them). */
+export type PeekStep = "out" | "in";
+
 /** The frame's search button at the head's right end, ⌘F printed under its
  * glyph (Ctrl F off the Mac). With a filter on, the glass grows a token
  * naming it — "studio · Work" — and an × that clears it (GV-D3): a filtered
@@ -56,6 +61,7 @@ export function PeekButtonView({
   token = null,
   onClearToken,
   bar = false,
+  step = null,
 }: {
   keys: ViewKeys;
   open: boolean;
@@ -69,6 +75,9 @@ export function PeekButtonView({
    * their title bar, folded to it — ⌘F beside the glyph, no glass, and no
    * filter named (there is no view for it to filter; the popup shows it). */
   bar?: boolean;
+  /** Leaving the bar (GV-D11): `out` while the bar's control fades where it
+   * stands, `in` while the head's circle fades back. */
+  step?: PeekStep | null;
 }): ReactElement {
   const mac = keys === "mac";
   const words =
@@ -81,6 +90,7 @@ export function PeekButtonView({
       className="vf-peek-find no-drag"
       data-scoped={token === null || bar ? undefined : "true"}
       data-bar={bar ? "true" : undefined}
+      data-step={step ?? undefined}
     >
       <button
         ref={buttonRef}

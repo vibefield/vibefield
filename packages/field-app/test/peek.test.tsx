@@ -1274,8 +1274,9 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
     await openPeek();
     expect(pop()).not.toBeNull();
     press(field() ?? document.body, { key: "Escape" });
+    // back at the head once it has stepped out of the bar (the row below)
     act(() => publishGodviewDeck("up"));
-    expect(find()?.hasAttribute("data-bar")).toBe(false);
+    await until(() => !find()?.hasAttribute("data-bar"), "back at the head", 1_000);
     expect(host?.querySelector(".vf-peek-token")).not.toBeNull();
     // in History the button never stands in a bar, whatever the door says
     act(() => publishGodviewDeck("maximized"));
@@ -1283,6 +1284,111 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
     press(field() ?? document.body, { key: "Escape" });
     expect(find()?.hasAttribute("data-bar")).toBe(false);
     act(() => publishGodviewDeck(null));
+  });
+
+  it("steps out of the bar before it returns to the head — out over 120 ms, the circle in over 200, never in two places; a re-maximize puts it in the bar at once (GV-D11; DESIGN.md §6, §8)", () => {
+    vi.useFakeTimers();
+    try {
+      godviewDoor();
+      mount(fieldd());
+      to("godview");
+      const find = (): HTMLElement | null =>
+        host?.querySelector<HTMLElement>(".vf-peek-find") ?? null;
+      const now = (): [string | null, string | null] => [
+        find()?.getAttribute("data-bar") ?? null,
+        find()?.getAttribute("data-step") ?? null,
+      ];
+      const before = button();
+      // into the bar: at once, no step
+      act(() => publishGodviewDeck("maximized"));
+      expect(now()).toEqual(["true", null]);
+      // out of it: the bar's control fades where it stands…
+      act(() => publishGodviewDeck("up"));
+      expect(now()).toEqual(["true", "out"]);
+      act(() => vi.advanceTimersByTime(153));
+      expect(now()).toEqual(["true", "out"]);
+      // …for 120 and two frames (the deck's rule, never `transitionend`), then
+      // the head's circle fades in
+      act(() => vi.advanceTimersByTime(1));
+      expect(now()).toEqual([null, "in"]);
+      act(() => vi.advanceTimersByTime(199));
+      expect(now()).toEqual([null, "in"]);
+      act(() => vi.advanceTimersByTime(1));
+      expect(now()).toEqual([null, null]);
+      // one button, the same element, the whole way
+      expect(host?.querySelectorAll(".vf-peek-button")).toHaveLength(1);
+      expect(button()).toBe(before);
+
+      // maximized again mid-step: back in the bar at once, and the step's
+      // timer, if it fires, moves nothing
+      act(() => publishGodviewDeck("maximized"));
+      act(() => publishGodviewDeck("up"));
+      act(() => vi.advanceTimersByTime(60));
+      act(() => publishGodviewDeck("maximized"));
+      expect(now()).toEqual(["true", null]);
+      act(() => vi.advanceTimersByTime(400));
+      expect(now()).toEqual(["true", null]);
+      // …and while the circle is coming in
+      act(() => publishGodviewDeck("up"));
+      act(() => vi.advanceTimersByTime(200));
+      expect(now()).toEqual([null, "in"]);
+      act(() => publishGodviewDeck("maximized"));
+      expect(now()).toEqual(["true", null]);
+      act(() => vi.advanceTimersByTime(400));
+      expect(now()).toEqual(["true", null]);
+
+      // the step out takes no pointer; the circle comes in on plain `ease`
+      const css = readFileSync(join(HERE, "..", "src", "frame", "peek.css"), "utf8");
+      const rule = (selector: string): string =>
+        css.match(new RegExp(`^${selector.replace(/[[\]".]/g, "\\$&")} \\{([^}]*)\\}`, "m"))?.[1] ??
+        "";
+      const out = rule('.vf-peek-find[data-step="out"]');
+      expect(out).toContain("opacity: 0;");
+      expect(out).toContain("pointer-events: none;");
+      expect(out).toContain("transition: opacity 120ms ease;");
+      expect(rule('.vf-peek-find[data-step="in"]')).toContain(
+        "animation: vf-peek-fade 200ms ease;",
+      );
+    } finally {
+      act(() => publishGodviewDeck(null));
+      vi.useRealTimers();
+    }
+  });
+
+  it("changes place at once under reduced motion, and leaving Godview from the bar is at once (GV-D11)", () => {
+    vi.useFakeTimers();
+    const matchMedia = window.matchMedia;
+    let reduced = true;
+    window.matchMedia = ((query: string) => ({
+      matches: reduced && query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      godviewDoor();
+      mount(fieldd());
+      to("godview");
+      const now = (): [string | null, string | null] => {
+        const find = host?.querySelector<HTMLElement>(".vf-peek-find");
+        return [find?.getAttribute("data-bar") ?? null, find?.getAttribute("data-step") ?? null];
+      };
+      act(() => publishGodviewDeck("maximized"));
+      expect(now()).toEqual(["true", null]);
+      act(() => publishGodviewDeck("up"));
+      expect(now()).toEqual([null, null]);
+      // with motion, a change of view out of the bar is no step either: only
+      // leaving maximized moves
+      reduced = false;
+      act(() => publishGodviewDeck("maximized"));
+      expect(now()).toEqual(["true", null]);
+      to("history");
+      expect(now()).toEqual([null, null]);
+    } finally {
+      window.matchMedia = matchMedia;
+      act(() => publishGodviewDeck(null));
+      vi.useRealTimers();
+    }
   });
 
   it("asks nothing of a feed of its own in Godview — the monitor's rows are the ones it reads (PF6 stays Godview's)", async () => {
