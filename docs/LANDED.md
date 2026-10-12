@@ -9148,3 +9148,96 @@ their smoke rungs read: away and back 313 → 313 with zero resizes, the monitor
 - Maximized, the monitor's loops rest (its `animations` off), but it still renders on every model publish under the
   title bar: the ruled "its loops stop" is met; no monitor work at all while maximized would be a new mark, which
   the MV lead's perf lab can measure.
+
+## GV-D1 + TV-8 + MV lab debts — Godview's head is the Stories row, an ended lane opens in History, and the perf lab says what it saw (2026-10-12; `8c55581c` — eighteen commits `654021de`→`8c55581c`; lane mvland over main `79ca676d`, fast-forward; puppeteer `vf/timeline-open-ended` `dce6adb`)
+
+**Why:** James answered the MV lead's walk-through of twenty calls on 2026-10-11 at 08:27 UTC: "go with your lean, communicate with history lead, and then plan and go ahead".
+- TV-1…TV-7 as built.
+- TV-8: build "an ended lane opens in History".
+- N12 (a): the MV lead builds the Stories head; the History lead builds the Lip and the title bar.
+- N13 (a): no "Add a view" circle.
+- SV-D15…D19 as built.
+- The lab's debts lane: go.
+- No second perf run.
+
+On 2026-10-12 at 04:53 UTC James ruled "Merge now, diagnose after" and accepted the perf pair's one red row as noise (below).
+- The plan: `draft/monitor-view-sdk/build-after-wave2.md` (§1 the rulings, §3–§5 the lanes, §6b the one-tree landing, §7 the decisions while building).
+- The perf method, fixed before any launch (M174): `after-wave2-perf-method.md`.
+- The head's brief: `briefs/mv-head.md`.
+
+**What landed:**
+- **The perf lab's debts** (`654021de`→`e1492558`, lane mvlab):
+  - the warm-up replays through every measured view, so no view first mounts inside its own first cell;
+  - `waitForLabDeck` says what it saw: the deck's last `GODVIEW_DECK` state and what it still lacked ride the timeout (a launch was lost on 2026-10-10 to a bare "timed out");
+  - the proof audit reads the load at each launch's end, both ranges, and names every launch that ended over the quiet line;
+  - the heap row is read after a forced collection (CDP `HeapProfiler.collectGarbage`) once the cell's window has closed.
+- **TV-8, the host's half** (`98277072`→`12139d78`, the History lead's, lane tl/open-ended-lane):
+  - `openEndedLane(id)` in `godview/monitor/open-ended-lane.ts` never throws at the view;
+  - it says its three refusals on the status line: "Could not open — the record cannot be read now", "… no session is recorded for this run", "… this run is no longer in the timeline";
+  - an answer opens nothing once the person has left Godview;
+  - an ended lane's desktop mark follows this desktop's id.
+- **TV-8, the view's half** (puppeteer `dce6adb`, one commit on `c20a07d`): the optional fourth command `openEnded?(id)` on `MonitorViewCommands`.
+  - The host answers it and the backend never sees it; `history` stays plain data.
+  - Its presence is read at the view's mount.
+  - The timeline's press, Enter and the reader's button open a lit ended lane.
+  - With no host command, the lane is no control.
+- **TV-8, the wiring** (`2545577d`→`8b105a21`):
+  - EL8: puppeteer `c20a07d` → `dce6adb`;
+  - the stage lends `openEnded: openEndedLane` from the first render, on the one commands object;
+  - `smoke:godview`'s `timelineOpensEnded` presses an ended lane on the past rung's own run, and History opens its session;
+  - DESIGN.md's sentence.
+- **The Stories head** (`4f2b87c3`→`8c55581c`, GV-D1):
+  - **The row:** a controller-free `GodviewHeadView` with its own sheet. A row of 40 glass circles, 12 apart, on the frame's head row, centred on the window. Each circle holds the view's manifest mark, filled. It pages by three past nine, with 28 chevrons, and comes back 700 ms after the pointer leaves. The label under a circle gives the view's name and then its focus keys.
+  - **The selector the instruments use is kept:** `[role="group"][aria-label="Monitor view"] button[aria-label="<LABEL> view"]`.
+  - **Maximized:** while the deck is maximized, the head reads `useGodviewDeckMaximized()` from the deck's door and is inert, with no drag holes.
+  - **The bar leaves VibeField:** `MonitorBar`, its stand-ins, the lights' spacer and the bridge notice's slot are gone. puppeteer's own bar is untouched.
+  - **System control** is the palette's act in "On this view", through `frame/system-control-door.ts`, the same shape as `find-door.ts`.
+  - **The stage runs under the head:** the shared stage rule's `(40px − --vf-godview-head-height)` gives the bar's 40 back to the monitor (the head's sheet sets 0px), so the deck's top edge rests where it rested; `godview-stage-rule.test.ts` holds this. The top inset is never less than the reserve, 56. The reserve is lent to the swarm as its first obstacle (0, 0, stage width, 56).
+  - **The canvas's head goes with the canvas under any cover** (`8c55581c`). It is hidden by `visibility` once the cover has faded in (240 ms, or 120 under reduced motion) and shown at once as it lowers. Before this, its name pill and zoom readout stood sharp, at about 28 %, through the cover's 72 % tint. Godview's bar had hidden them; History, which has no bar, had shown them since the Peek. DESIGN.md §8 "The covers over the desk" says it; `head.test` keys the delays to `view-frame.css`'s own fades; `smoke:godview` asserts the computed visibility in Godview and in History.
+  - **DESIGN.md:** the "ruled, not built" lines are dropped, and the notes read "Until the Stories head, built 2026-10-11, …".
+
+**After the landing, with this entry** (`2529fe8d`, over GV round 3's `fb4b642d`): the labs call the terminals up as
+a first call would, ahead of W7 (N14 (a): Godview opens with its terminals away).
+- `testing/godview-deck-up.ts` asks `window.__vfGodviewDeck?.up?.()` once Godview lends it. The seam is the History
+  lead's: under the Godview markers only, idempotent.
+- The ask is made in `waitForLabDeck` (the perf lab's and the capture's one wait) and after `terminal-perf-lab.ts`'s
+  `setView("godview")`.
+- Before W7 it asks nothing. W7 lands after it.
+- The call to `up()` is inside a `try`. If the deck wait then fails, its error ends "…; the deck's up() threw: ‹message›".
+
+**Gates:**
+- **The gate of record on `8c55581c`** (`lanes/mvland/logs/8c55581c/`, verify with the Nx cache off, bounded smoke:godview):
+  - verify `EXIT: 0` (line 10265);
+  - smoke `EXIT: 0`;
+  - smoke:godview run 1 `EXIT: 2`, then run 2 `EXIT 0`.
+  - Run 1 failed at the empty-pane launcher's ⌥↵/⎋ rung (smoke.ts ~6970–6995): "⎋ to close the launcher's field … {"shown":false,"open":false,"agents":0,"focusInField":false}". This is the rung's second sighting; the first was the History lead's, `lanes/land3/logs/86a49d68/smoke-godview-run4.log:177`, at the ⌥↵ step. Both were under load on canvas2d, neither tree touches the launcher, and the launcher is QL's.
+- **The tree before the covered-head commit** (`dc1cdf89`, `lanes/mvland/logs/dc1cdf89/`): verify `EXIT: 0`, smoke `EXIT: 0`, smoke:godview `EXIT 0` on its first run.
+- **The perf pairs:**
+  - Both run R7 on every view at n10, n20 and n60, with A = main `79ca676d` + the lab's four (`e1492558`, puppeteer `c20a07d`) and B = the tree.
+  - Both take both locks, after the CPU was under 50 % busy for three minutes, with `--load-max 400`.
+  - Logs: `lanes/mvland/logs/vf-ab-<B8>/`.
+  - On `dc1cdf89`: **pass**. `worse` [], `noisy` []; better rows: timeline × n20 React render 24.5→23.5 ms/s, and swarm × n60 recalc style 1.3→0.0. The swarm's style recalc goes to about 0 at every size, with the bar.
+  - On `8c55581c`: **worse, one row**: swarm × n60 task 222.6→229.7 ms/s (T 14.3, z 4.4, z₀ 0.8). **James accepted it as noise** on this reading:
+    - per round, B−A is +17.0, −21.7, −24.1, +15.7, −9.4, +18.9, +14.3: the sign splits 4 to 3, and the MAD measures only the + cluster's width;
+    - the null arm splits the same way;
+    - React commits/s, DOM mutations, GPU submits and per-root commits are all equal;
+    - the host's root and puppeteer's swarm root moved together (+1.6, +0.7), and on `dc1cdf89` they moved the other way;
+    - the same row read 229.3→219.8 an hour earlier, on a tree that differs only by the covered-head commit.
+    Its better rows: swarm n10 and n20 task, swarm n10 script, timeline n10 task, swarm n60 recalc style. Noisy: timeline n10 React render and script.
+  - Audits: every launch's end load under 400. Captures: 16 per arm, code 0.
+- **Photos:** `draft/monitor-view-sdk/evidence/stories-head-8c55581c/` (before and after in both themes, and the head row in every view).
+
+**Found:**
+- The canvas's head showing through a covered view's tint (fixed here, and History with it).
+- **The swarm reaches under the Stories circles.** In every B swarm capture, bodies' rings and labels reach up to about y 15–25, though the reserve is a hard static obstacle (padded 7). Under diagnosis, as James ruled.
+- The perf method's expectation said the swarm's field would be 24 px taller. It is about 16–23 px shorter: the stage grew 40, and the band takes 63.
+
+**Owed:**
+- **The swarm's reach-up:** a one-launch probe reads the physics circles against the drawn rings, then a fix where the cause lies (puppeteer's at the next pin).
+- **Lane A2:**
+  - the lab reports the deck's state and the stage's size;
+  - its audit refuses a run whose deck is `maximized`;
+  - the reading prints the sign count beside z (B>A in k of R rounds).
+- **`ChromeLayer` drops `runSystemControl()`'s false:** a known no-op (the palette re-renders the act as waiting in the same update), owed its words the next time the frame's acts are touched.
+- **puppeteer `view-sdk/src/view.ts:111`:** "(the lab's and the catalog's)" gains the window's maximized deck, at the next pin.
+- **The launcher rung's two sightings:** the debts lane (N10 (a)).
