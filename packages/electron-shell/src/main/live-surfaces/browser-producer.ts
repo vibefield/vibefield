@@ -49,8 +49,6 @@ const DEFAULT_UNRESPONSIVE_MS = 5_000;
  * pool's own grace). */
 const DEFAULT_DETACHED_HIBERNATE_MS = 60_000;
 const CPU_FALLBACK_MAX_FPS = 10;
-/** PT-5b (ruling 5c): how long a `mobile` page's visual-viewport scale, once read, serves a move, a hover or a wheel
- * (a press always reads it afresh). */
 /** PT-5c (ruling 2): where a button is let go that the person never let go over the page — outside its view (CSS px). */
 const OUTSIDE_THE_VIEW = { x: -1000, y: -1000 } as const;
 /** PT-5c (R2): how long an event waits for its document's first word of its scale before it is refused — the net under the

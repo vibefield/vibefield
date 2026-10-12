@@ -520,7 +520,11 @@ export function judgeTidy(seen: FirstLoadSeen["tidy"]): string[] {
     out.push(
       `TIDY: ${a.presented - b.presented} frames landed after the page tidied its address — its texture is of the address NOW whatever the law: the row proved nothing`,
     );
-  else if (b !== null && seen.down !== null && seen.down.presented !== b.presented)
+  else if (b !== null && seen.down === null)
+    out.push(
+      "TIDY: the face was not read at the put-down — no frame between the tidy and the still is proved: the row proved nothing",
+    );
+  else if (b !== null && seen.down.presented !== b.presented)
     out.push(
       `TIDY: ${seen.down.presented - b.presented} frames landed between the page's tidy and the put-down — the still is of the address NOW whatever the law: the row proved nothing`,
     );

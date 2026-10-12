@@ -407,6 +407,10 @@ describe("a page's first load, in the product — its rows", () => {
     expect(judgeTidy({ ...seen, down: { ...seen.down, presented: 4 } as FirstFace })).toEqual([
       "TIDY: 2 frames landed between the page's tidy and the put-down — the still is of the address NOW whatever the law: the row proved nothing",
     ]);
+    // PT-5c2: the face NOT read at the put-down proves nothing of a frame there — never a silent pass
+    expect(judgeTidy({ ...seen, down: null })).toEqual([
+      "TIDY: the face was not read at the put-down — no frame between the tidy and the still is proved: the row proved nothing",
+    ]);
   });
 
   it("TAPS-COLD (PT-5b3): two quick taps sent while a phone's page is held busy, its scale never read, are heard once it is free — start, end, start, end — never dropped", () => {

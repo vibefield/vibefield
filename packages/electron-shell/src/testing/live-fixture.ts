@@ -479,12 +479,7 @@ export const busyHtml = (): string =>
 export const coldHtml = (): string =>
   fixtureHtml("/page").replace("</body></html>", touchLogScript(0));
 
-/**
- * PT-5c (ruling 1) — `/pending?p=<name>`: the page whose LINK goes to the fixture's gate (`/gate?p=pending-<name>`), its
- * field beside it the page's own — a tap or a click on the link while the gate is shut leaves a navigation PENDING, the
- * page standing; what reaches the field then (its focus, its words, its touches) the page says with its report, and the
- * page the gate lets through says its own. `name`: letters, digits and dashes only.
- */
+/** PT-5c (ruling 1) — the scale `/zoom` zooms itself to at a double tap. */
 export const ZOOM_SCALE = 2;
 
 /**
@@ -509,6 +504,12 @@ export const zoomHtml = (): string =>
 </body></html>`,
     );
 
+/**
+ * PT-5c (ruling 1) — `/pending?p=<name>`: the page whose LINK goes to the fixture's gate (`/gate?p=pending-<name>`), its
+ * field beside it the page's own — a tap or a click on the link while the gate is shut leaves a navigation PENDING, the
+ * page standing; what reaches the field then (its focus, its words, its touches) the page says with its report, and the
+ * page the gate lets through says its own. `name`: letters, digits and dashes only.
+ */
 export const pendingHtml = (name: string): string =>
   fixtureHtml("/page").replace(
     '<a id="next" href="/next">',
