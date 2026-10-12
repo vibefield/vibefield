@@ -110,34 +110,49 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
   });
 
-  it("FRAME-TYPE: the text and the composition in the frame's field, the caret after them — and no key heard by the HOST meanwhile (M7 H2: one there went down the page's session with the frame focused)", () => {
-    const want = FRAMES_ROWS.typed + FRAMES_ROWS.composed;
-    expect(judgeFrameType({ field: want, caret: want.length, hostHeard: [] })).toEqual([]);
-    expect(judgeFrameType({ field: "", caret: 0, hostHeard: [] })).toEqual([
-      `FRAME-TYPE: the frame's field holds "", not ${JSON.stringify(want)} — the keys never reached the frame`,
+  it("FRAME-TYPE (M15, a stated limit): typing into a frame of another site is OFF — its field left EMPTY, no key heard by the host or by the frame, and main counting each leg's refusals (the typing, the IME, ⌘A); before M15 the field held what was typed — the path that crashed main", () => {
+    const off = {
+      focused: true,
+      refused: { typed: 10, composed: 2, selectAll: 1 },
+      field: "",
+      hostHeard: ["pointerdown #f"],
+      frameHeard: ["mouseup #t", "click #t"],
+      hostAsks: 2,
+      frameAsks: 2,
+    };
+    expect(judgeFrameType(off)).toEqual([]);
+    // the field never focused: the legs typed at nothing of the frame's
+    expect(judgeFrameType({ ...off, focused: false })).toEqual([
+      "FRAME-TYPE: the frame's field never took the focus — the row proved nothing",
     ]);
-    expect(judgeFrameType({ field: want, caret: 0, hostHeard: [] })).toEqual([
-      `FRAME-TYPE: the frame's caret stands at 0, not after what was typed (${want.length})`,
-    ]);
+    // as built before M15: what was typed in the field — the keys down the frame's own session — and none refused
     expect(
       judgeFrameType({
-        field: want,
-        caret: want.length,
-        hostHeard: ["pointerdown #f", "keydown h", "keydown é"],
+        ...off,
+        refused: { typed: 0, composed: 0, selectAll: 0 },
+        field: FRAMES_ROWS.typed + FRAMES_ROWS.composed,
+        frameHeard: [...off.frameHeard, "keydown h", "keydown é"],
       }),
     ).toEqual([
-      "FRAME-TYPE: the host page heard 2 key(s) while the frame's field was typed in (keydown h, keydown é) — they went down the page's session with a frame of another site focused (M3's banned path)",
+      `FRAME-TYPE: the frame's field holds ${JSON.stringify(FRAMES_ROWS.typed + FRAMES_ROWS.composed)} — typing reached a frame of another site (M15: refused, a stated limit — through the product's frame session it crashed main)`,
+      `FRAME-TYPE (typed): main refused 0 key-like event(s), not ${FRAMES_ROWS.refusedAtLeast.typed} or more — the rest went somewhere, or never reached main`,
+      `FRAME-TYPE (composed): main refused 0 key-like event(s), not ${FRAMES_ROWS.refusedAtLeast.composed} or more — the rest went somewhere, or never reached main`,
+      `FRAME-TYPE (selectAll): main refused 0 key-like event(s), not ${FRAMES_ROWS.refusedAtLeast.selectAll} or more — the rest went somewhere, or never reached main`,
+      "FRAME-TYPE: the frame heard 2 key(s) (keydown h, keydown é) — they went down its own session (M15: typing into a frame of another site is off)",
     ]);
-    // M12 J11: the host's word read after two more of its asks — one taken after the last key; fewer: that half proved
-    // nothing (a report up to an ask old could miss a key sent late)
-    expect(judgeFrameType({ field: want, caret: want.length, hostHeard: [], hostAsks: 2 })).toEqual(
-      [],
-    );
-    expect(judgeFrameType({ field: want, caret: want.length, hostHeard: [], hostAsks: 1 })).toEqual(
-      [
-        "FRAME-TYPE: the host's word was read before one taken after the last key (1 ask since) — its host-heard half proved nothing",
-      ],
-    );
+    // main's count never read: that leg proved nothing
+    expect(judgeFrameType({ ...off, refused: { ...off.refused, composed: null } })).toEqual([
+      "FRAME-TYPE (composed): main's count of the refused was never read — the leg proved nothing",
+    ]);
+    // the host heard keys: the page's session, with a frame of another site focused (M3's banned path)
+    expect(judgeFrameType({ ...off, hostHeard: [...off.hostHeard, "keydown h"] })).toEqual([
+      "FRAME-TYPE: the host page heard 1 key(s) while the frame's field was typed in (keydown h) — they went down the page's session with a frame of another site focused (M3's banned path)",
+    ]);
+    // M12 J11, M15: each page's word read after two more of its asks — one taken after the last key; fewer: proved nothing
+    expect(judgeFrameType({ ...off, hostAsks: 1, frameAsks: null })).toEqual([
+      "FRAME-TYPE: the host's word was read before one taken after the last key (1 ask since) — its host-heard half proved nothing",
+      "FRAME-TYPE: the frame's word was read before one taken after the last key (0 ask since) — its empty field and its keys heard proved nothing",
+    ]);
   });
 
   it("FRAME-NESTED and FRAME-HALF: a press that lands — only where the nested frame is a third site, and only where the frame is half out", () => {

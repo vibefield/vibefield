@@ -324,6 +324,8 @@ export interface LiveRowsDriver extends PaneRowsDriver {
     readonly runtimes: number;
     readonly owners: number;
     readonly emulations?: number;
+    /** PT-5d (M15): the key-like events refused while a frame of another site held the focus (FRAME-TYPE) */
+    readonly frameKeysRefused?: number;
   } | null;
   /** The window's renderer replaced (a reload), resolved once the desk says DESK_READY again. */
   readonly reload: () => Promise<boolean>;

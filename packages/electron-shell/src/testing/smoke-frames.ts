@@ -14,9 +14,10 @@
 //   FRAME-DRAG   — the range's thumb dragged, released OUTSIDE the frame: its value moved, and no button is left down (the
 //                  next move over the frame holds none — it hovers, it does not drag);
 //   FRAME-WHEEL  — the wheel over the frame's scroller scrolls it; at its end, the host page;
-//   FRAME-TYPE   — the frame's field pressed (the keys follow the focus), "héllo" typed and a syllable composed: in its
-//                  field, the caret after them — and the host heard NO key meanwhile (M3, M7 H2: nothing key-like on the
-//                  page's session while the frame holds the focus);
+//   FRAME-TYPE   — M15, a STATED LIMIT: the frame's field pressed (its focus the frame's, by its own word), then "héllo"
+//                  typed, a syllable composed and committed, and ⌘A: its field left EMPTY, no key heard by the host or by
+//                  the frame, and main counting each leg's refusals — typing into a frame of another site is OFF (through
+//                  the product's frame session it crashed main: `Electron-2026-10-12-123521.ips`); main alive after;
 //   FRAME-NESTED — a press on the button of the frame in the frame (a third site) lands there;
 //   FRAME-HALF   — the host scrolled until the frame is half out of its view: a press on the frame's part in view lands;
 //   FRAME-ZOOMED — M7 H11: a press at a page scale not 1 — a phone's host naming no viewport (drawn whole at about 0.41),
@@ -68,6 +69,9 @@ export const FRAMES_ROWS = {
   typed: "héllo",
   composing: "か",
   composed: "か",
+  /** M15: the fewest main refuses over each of FRAME-TYPE's legs — a character's down or its text (one each, at least), the
+   * composition and its commit, ⌘A's command */
+  refusedAtLeast: { typed: 5, composed: 2, selectAll: 1 },
   /** STUCK: the host's bound on a command never answered (the producer's `hungInputMs`) and the margin past it */
   hungMs: 20_000,
   stuckMarginMs: 10_000,
@@ -111,12 +115,25 @@ export interface FramesSeen {
     readonly host: readonly [number | null, number | null];
   };
   readonly type: {
+    /** the frame's field took the focus at the press — what the legs type at */
+    readonly focused: boolean;
+    /** M15: main's count of the key-like events refused while a frame of another site held the focus
+     * (`LiveCensus.frameKeysRefused`), risen over each leg (null: unread) */
+    readonly refused: {
+      readonly typed: number | null;
+      readonly composed: number | null;
+      readonly selectAll: number | null;
+    };
+    /** the frame's field after the legs (M15: "" — nothing typed reaches it) */
     readonly field: string | null;
-    readonly caret: number | null;
     /** the keys the HOST page heard (on the frame's element) while the frame's field was typed in */
     readonly hostHeard: readonly string[];
-    /** M12 J11: the host's asks since the last key, before its `heard` was read (absent: not counted) */
-    readonly hostAsks?: number | null;
+    /** M15: what the FRAME's own document heard meanwhile — no key goes to its session */
+    readonly frameHeard: readonly string[];
+    /** M12 J11: the host's asks since the last key, before its `heard` was read */
+    readonly hostAsks: number | null;
+    /** M15: the frame's asks since the last key, before its field and its `heard` were read */
+    readonly frameAsks: number | null;
   };
   readonly nested: FramePressSeen & { readonly third: boolean };
   readonly half: FramePressSeen & { readonly top: number | null };
@@ -315,28 +332,47 @@ export function judgeFrameWheel(seen: FramesSeen["wheel"]): string[] {
   return out;
 }
 
-/** FRAME-TYPE: the text and the composition in the frame's field, the caret after them; no key heard by the host. */
+/** FRAME-TYPE (M15, a stated limit): typing into a frame of another site is OFF — its field left empty, no key heard by the
+ * host or by the frame, and each leg's refusals counted by main. */
 export function judgeFrameType(seen: FramesSeen["type"]): string[] {
-  const want = FRAMES_ROWS.typed + FRAMES_ROWS.composed;
+  if (!seen.focused)
+    return ["FRAME-TYPE: the frame's field never took the focus — the row proved nothing"];
   const out: string[] = [];
-  if (seen.field !== want)
+  if (seen.field !== "")
     out.push(
-      `FRAME-TYPE: the frame's field holds ${JSON.stringify(seen.field)}, not ${JSON.stringify(want)} — the keys never reached the frame`,
+      `FRAME-TYPE: the frame's field holds ${JSON.stringify(seen.field)} — typing reached a frame of another site (M15: refused, a stated limit — through the product's frame session it crashed main)`,
     );
-  else if (seen.caret !== want.length)
-    out.push(
-      `FRAME-TYPE: the frame's caret stands at ${seen.caret}, not after what was typed (${want.length})`,
-    );
+  for (const leg of ["typed", "composed", "selectAll"] as const) {
+    const refused = seen.refused[leg];
+    const least = FRAMES_ROWS.refusedAtLeast[leg];
+    if (refused === null)
+      out.push(
+        `FRAME-TYPE (${leg}): main's count of the refused was never read — the leg proved nothing`,
+      );
+    else if (refused < least)
+      out.push(
+        `FRAME-TYPE (${leg}): main refused ${refused} key-like event(s), not ${least} or more — the rest went somewhere, or never reached main`,
+      );
+  }
   const keys = seen.hostHeard.filter((h) => h.startsWith("keydown"));
   if (keys.length > 0)
     out.push(
       `FRAME-TYPE: the host page heard ${keys.length} key(s) while the frame's field was typed in (${keys.join(", ")}) — they went down the page's session with a frame of another site focused (M3's banned path)`,
     );
-  // M12 J11: a host's word taken after the last key — its asks come every quarter second: one taken before would miss a
+  const frameKeys = seen.frameHeard.filter((h) => h.startsWith("keydown"));
+  if (frameKeys.length > 0)
+    out.push(
+      `FRAME-TYPE: the frame heard ${frameKeys.length} key(s) (${frameKeys.join(", ")}) — they went down its own session (M15: typing into a frame of another site is off)`,
+    );
+  // M12 J11: each page's word taken after the last key — its asks come every quarter second: one taken before would miss a
   // key sent late
-  if (seen.hostAsks !== undefined && (seen.hostAsks === null || seen.hostAsks < 2))
+  if (seen.hostAsks === null || seen.hostAsks < 2)
     out.push(
       `FRAME-TYPE: the host's word was read before one taken after the last key (${seen.hostAsks ?? 0} ask since) — its host-heard half proved nothing`,
+    );
+  if (seen.frameAsks === null || seen.frameAsks < 2)
+    out.push(
+      `FRAME-TYPE: the frame's word was read before one taken after the last key (${seen.frameAsks ?? 0} ask since) — its empty field and its keys heard proved nothing`,
     );
   return out;
 }
@@ -1083,48 +1119,81 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     // (the host may have scrolled: the rows after it aim through its next word of its frame's box)
     await sleep(500);
 
-    // ── FRAME-TYPE: the field pressed, text typed, a syllable composed ─────────────────────────────────────────────
+    // ── FRAME-TYPE (M15, a stated limit): the field pressed — the typing, the IME and ⌘A each REFUSED ─────────────────
     const t = framed()?.parts.t ?? null;
     const typeHeard0 = hostHeard().length;
+    const frameHeard0 = framed()?.heard.length ?? 0;
+    let focused = false;
+    const refused: { typed: number | null; composed: number | null; selectAll: number | null } = {
+      typed: null,
+      composed: null,
+      selectAll: null,
+    };
+    /** main's count of the key-like events refused while a frame of another site held the focus (null: unread) */
+    const refusedNow = (): number | null => d.custody()?.frameKeysRefused ?? null;
+    /** how far main's count rose over a leg — waited for until it rose by the leg's least */
+    const refusedOver = async (
+      leg: keyof typeof FRAMES_ROWS.refusedAtLeast,
+      act: () => Promise<void>,
+    ): Promise<void> => {
+      const before = refusedNow();
+      await act();
+      const least = FRAMES_ROWS.refusedAtLeast[leg];
+      const after = await waitFor(
+        `main's refusals of the ${leg} leg`,
+        5_000,
+        refusedNow,
+        (n) => before !== null && n !== null && n >= before + least,
+      );
+      refused[leg] = before === null || after === null ? null : after - before;
+    };
     if (t !== null) {
       const w = await inFrame(t.x + t.w / 2, t.y + t.h / 2);
       if (w !== null) await h.press(w);
-      await waitFor(
-        "the frame's field focused",
-        5_000,
-        () => at(FRAME),
-        (rep) => rep?.focused === "t",
+      focused =
+        (
+          await waitFor(
+            "the frame's field focused",
+            5_000,
+            () => at(FRAME),
+            (rep) => rep?.focused === "t",
+          )
+        )?.focused === "t";
+      await refusedOver("typed", async () => {
+        for (const ch of FRAMES_ROWS.typed) {
+          win.webContents.sendInputEvent({ type: "keyDown", keyCode: ch });
+          win.webContents.sendInputEvent({ type: "char", keyCode: ch });
+          win.webContents.sendInputEvent({ type: "keyUp", keyCode: ch });
+          await sleep(30);
+        }
+      });
+      await refusedOver("composed", async () => {
+        await d.compose(FRAMES_ROWS.composing, FRAMES_ROWS.composing.length);
+        await sleep(300);
+        await d.commit(FRAMES_ROWS.composed);
+      });
+      await refusedOver("selectAll", () =>
+        h.key("a", [process.platform === "darwin" ? "meta" : "control"]),
       );
-      for (const ch of FRAMES_ROWS.typed) {
-        win.webContents.sendInputEvent({ type: "keyDown", keyCode: ch });
-        win.webContents.sendInputEvent({ type: "char", keyCode: ch });
-        win.webContents.sendInputEvent({ type: "keyUp", keyCode: ch });
-        await sleep(30);
-      }
-      await d.compose(FRAMES_ROWS.composing, FRAMES_ROWS.composing.length);
-      await sleep(300);
-      await d.commit(FRAMES_ROWS.composed);
     }
-    const typedWord = await waitFor(
-      "the frame's field typed",
-      5_000,
-      () => at(FRAME),
-      (rep) => rep?.field === FRAMES_ROWS.typed + FRAMES_ROWS.composed,
-    );
-    // (M12 J11: the host's word taken AFTER the last key — two more of its asks: the first may have been said before it)
+    // (M12 J11, M15: each page's word taken AFTER the last key — two more of its asks: the first may have been said
+    // before it)
     const hostAsked = d.fixture.reports(HOST);
-    const hostAsks =
-      (await waitFor(
-        "the host's word after the typing",
-        5_000,
-        () => d.fixture.reports(HOST),
-        (n) => n >= hostAsked + 2,
-      )) - hostAsked;
-    const type = {
-      field: typedWord?.field ?? null,
-      caret: typedWord?.framed?.caret ?? null,
+    const frameAsked = d.fixture.reports(FRAME);
+    await waitFor(
+      "the pages' words after the typing",
+      5_000,
+      () => [d.fixture.reports(HOST), d.fixture.reports(FRAME)] as const,
+      ([host, frame]) => host >= hostAsked + 2 && frame >= frameAsked + 2,
+    );
+    const type: FramesSeen["type"] = {
+      focused,
+      refused,
+      field: at(FRAME)?.field ?? null,
       hostHeard: hostHeard().slice(typeHeard0),
-      hostAsks,
+      frameHeard: (framed()?.heard ?? []).slice(frameHeard0),
+      hostAsks: d.fixture.reports(HOST) - hostAsked,
+      frameAsks: d.fixture.reports(FRAME) - frameAsked,
     };
     said.type = type;
     problems.push(...judgeFrameType(type));
