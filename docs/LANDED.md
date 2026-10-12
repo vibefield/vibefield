@@ -9440,3 +9440,40 @@ daemon's address.
 - **smoke:canvas on the live display for N3** ("Debts, third part"): its COVER HISTORY row went red to green offscreen
   for the intended reason, but the whole smoke cannot pass offscreen (its occluded row, DK-13's debugger, DK-14's @ list,
   the HAND_* timings), so the landing gates here never run it.
+
+## Debts, fifth part — the four fieldd reds that met this day's landings were the tests' own races, each proven and fixed; one upstream finding for rosetta (2026-10-12; `3c4a7d78` · `c9921d1f` · `9921f40e` · `5e8c45f0` through lane land3, gated on the exact tree)
+
+**Why:** parts two to four each met fieldd reds on trees that did not touch fieldd (the fourth part's entry, "Found"
+and "Owed"). Lane dfd diagnosed each; every fix is test-only, each proven red first by forcing the ordering it found
+and green under the same probe (`/Volumes/SamsungRed/lanes/dfd/red-q*.log`, `q*-fixed-probe.log`). No product fault.
+
+**What landed:**
+- `3c4a7d78` agent-session (four sightings, the re-attach row): `auditAct` read the audit ledger once. The boot's
+  background re-attach shows its row in agent.list and writes `reattach: attached` before its fsync'd outcome is
+  appended (`AuditService.requiredAs` writes the attempt, runs the effect, then the outcome), and the row read the
+  ledger in that gap. No outcome is ever dropped (later writes made 3 s late: 3/3 red before, 0/3 after). `auditAct`
+  now waits up to 10 s; all 13 call sites await it.
+- `c9921d1f` rosettad-supervisor (two sightings): the FAKE rosettad wrote its ready line before it installed its SIGINT
+  handler, so a stop that came first killed it by Node's default and left its announce file behind; fieldd's supervisor
+  did nothing wrong (stop() awaits the real exit; the red took 329 ms, no SIGKILL). The fake arms its guard first.
+- `9921f40e` index-timeline (six sightings, the most frequent red of the round): the instrumentation of the fourth
+  part caught it on its first gate — the fake opened with `resync: 1` and never fired it; fieldd's tail was live, not
+  gapped. The fake's session socket sent the open's snapshot and only then read its poll baseline, so a resync written
+  at once was taken for the starting state. It reads the baseline first and re-sends a change landing in between, as
+  rosetta's own stream does. The barrier row 10 of 10 after.
+- `5e8c45f0` terminal-seam GT-1 (new at a load of 4): the row read `terminal.list`, then minted a ticket expecting a
+  refusal; an observation landing between them makes the mint rightly succeed. Both honest answers pass now — a
+  refusal must be the not-yet-observed NOT_FOUND, a success must find the session listed — and a ticket for a session
+  fieldd still does not list fails.
+
+**Validation:** the lane's red and green logs above; the lane's gate green on its tip (`2dceff05`); then the landing
+gate on the exact tree (`lanes/land3/logs/`, under this landing's sha).
+
+**Found (upstream, rosetta; not changed):** the real rosettad has the fake's shape — `serve.rs:396-409` arms ctrl_c
+inside a spawned tokio task (registered only when first polled), unordered against the announce file (:432-452) and the
+ready line (:458); a SIGINT that beats that first poll leaves a dead daemon's announce file. fieldd's orphan pass and
+rosetta's readers skip dead pids, so it is tolerated; the fix is to arm the handler before announcing.
+
+**Owed (the debts lane's end):** which fieldd-client callers pass a `timeoutMs` (the lead's call;
+`draft/history-finish/surveys/s-debts-fieldd.md`'s appendix); field-native's flush behind its backoff (the first part's
+entry); the rosetta finding above; smoke:canvas on the live display for N3 (the third part's).
