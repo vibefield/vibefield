@@ -75,6 +75,9 @@
 //                   (FRAME-NESTED), and a frame of its OWN site: `/frames/same` (M6.1 — a document of its process, so on its
 //                   session, drawn at another size); on the smoke's word (`goFrame`) it goes to `/frames/next` (FRAME-GONE);
 //   /frames/same  — the frame's own child of its site: a button (its clicks and point — FRAME-PRESS presses it too);
+//   /frames/covered — at `hostOrigin` (M7 H3): the frame under a FIXED header drawn over its top (FRAME-COVERED), and a
+//                   menu button that opens a dropdown over the frame, its item (FRAME-MENU); it hears the hand on its
+//                   header, its menu's button and item, and the frame's element;
 //   /frames/clipped — at `hostOrigin`: a header across the top and, under it, a SCROLLER holding the frame
 //                   (`/frames/frame`), scrolled so the frame's top half sits above the scroller's clip edge — under the
 //                   header (FRAME-CLIPPED, M6.3a: a press there is the host's); it hears the hand on its header and the
@@ -715,6 +718,24 @@ ${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; } iframe { display
 ${framesScript(["f", "hd", "sc"], ["f", "hd"])}
 </body></html>`;
 
+/** PT-5d (M7 H3) — FRAME-COVERED's host page: where its frame stands, and how far down its fixed header reaches (the frame's
+ * top `header − y` px under it). */
+export const FRAMES_COVERED = { x: 160, y: 60, header: 140 } as const;
+
+/** PT-5d (M7 H3) — `/frames/covered?p=<name>` at `hostOrigin`: a frame of `frameOrigin` at `FRAMES_COVERED`, a FIXED header
+ * across the top drawn over the frame's top, and a menu button that opens a dropdown (`#mn`) over the frame, its item
+ * (`#mi`) over the frame's right; it hears the hand on its header, its menu's button and item, and the frame's element. */
+export const framesCoveredHtml = (name: string, frameOrigin: string): string => `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${FIXTURE_TITLE} — covered</title>
+${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; } iframe { position: absolute; border: 0; } #mn { position: absolute; display: none; z-index: 3; background: #fff; box-shadow: 0 4px 16px #0004; }</style></head>
+<body><iframe id="f" src="${frameOrigin}/frames/frame?p=${cleanName(name)}" style="left:${FRAMES_COVERED.x}px;top:${FRAMES_COVERED.y}px;width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px"></iframe>
+<button id="hd" style="position:fixed;left:0;top:0;width:100%;height:${FRAMES_COVERED.header}px;z-index:2">header</button>
+<button id="mb" style="left:860px;top:200px;width:120px;height:40px">menu</button>
+<div id="mn" style="left:600px;top:240px;width:240px;height:200px"><button id="mi" style="left:20px;top:80px;width:200px;height:40px">item</button></div>
+<script>const mn = document.getElementById("mn"); document.getElementById("mb").addEventListener("click", () => { mn.style.display = mn.style.display === "block" ? "none" : "block"; });</script>
+${framesScript(["f", "hd", "mb", "mn", "mi"], ["f", "hd", "mb", "mi"])}
+</body></html>`;
+
 /** PT-5d (M6.1) — `/frames/same?p=<name>`: the frame's own child of its site — a document of the frame's process, so
  * speaking on the frame's session, its viewport another size than the frame's — a button. */
 export const framesSameHtml = (): string => `<!doctype html>
@@ -957,17 +978,19 @@ export async function startLiveFixture(): Promise<LiveFixture> {
           ? framesHostHtml(name, frameOrigin)
           : url.pathname === "/frames/clipped"
             ? framesClippedHtml(name, frameOrigin)
-            : url.pathname === "/frames/frame"
-              ? framesFrameHtml(name, innerOrigin)
-              : url.pathname === "/frames/inner"
-                ? framesInnerHtml()
-                : url.pathname === "/frames/same"
-                  ? framesSameHtml()
-                  : url.pathname === "/frames/next"
-                    ? framesNextHtml()
-                    : url.pathname === "/frames/loop"
-                      ? framesLoopHtml()
-                      : null;
+            : url.pathname === "/frames/covered"
+              ? framesCoveredHtml(name, frameOrigin)
+              : url.pathname === "/frames/frame"
+                ? framesFrameHtml(name, innerOrigin)
+                : url.pathname === "/frames/inner"
+                  ? framesInnerHtml()
+                  : url.pathname === "/frames/same"
+                    ? framesSameHtml()
+                    : url.pathname === "/frames/next"
+                      ? framesNextHtml()
+                      : url.pathname === "/frames/loop"
+                        ? framesLoopHtml()
+                        : null;
       if (page === null) {
         res.writeHead(404);
         res.end();

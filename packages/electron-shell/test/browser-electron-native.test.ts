@@ -76,7 +76,7 @@ vi.mock("../src/main/live-surfaces/browser-security", async (importOriginal) => 
 
 import {
   ElectronBrowserSurfaceNative,
-  FRAME_VISIBLE_PART,
+  FRAME_SIGHT,
   FRAME_WORDS_BINDING,
   FRAME_WORDS_SCRIPT,
   PAGE_SCALE_BINDING,
@@ -1117,17 +1117,37 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
           return this.box.height;
         },
       };
-      const laidOut = (r: { left: number; top: number; width: number; height: number }) => ({
+      const laid = new Map<number, unknown>();
+      const laidOut = (
+        r: { left: number; top: number; width: number; height: number },
+        i: number,
+      ): unknown => {
+        const e = {
+          parentElement: holder,
+          style: {},
+          getBoundingClientRect: () => ({
+            ...r,
+            right: r.left + r.width,
+            bottom: r.top + r.height,
+          }),
+          offsetWidth: r.width,
+          offsetHeight: r.height,
+          clientLeft: 0,
+          clientTop: 0,
+          clientWidth: r.width,
+          clientHeight: r.height,
+          contains: (other: unknown) => other === e,
+        };
+        laid.set(i, e);
+        return e;
+      };
+      /** M7 H3: what the host draws over its frames (the hit test finds it first), by the row */
+      const drawn: { cover: ((x: number, y: number) => boolean) | null } = { cover: null };
+      const cover = {
         parentElement: holder,
         style: {},
-        getBoundingClientRect: () => ({ ...r, right: r.left + r.width, bottom: r.top + r.height }),
-        offsetWidth: r.width,
-        offsetHeight: r.height,
-        clientLeft: 0,
-        clientTop: 0,
-        clientWidth: r.width,
-        clientHeight: r.height,
-      });
+        contains: (other: unknown) => other === cover,
+      };
       const computed = (e: { style?: Record<string, string> }) => ({
         position: "static",
         overflowX: "visible",
@@ -1176,6 +1196,8 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
           querySelectorAll: () => rects.map(laidOut),
           documentElement: root,
           body: { parentElement: root, style: {} },
+          elementFromPoint: (x: number, y: number) =>
+            drawn.cover?.(x, y) === true ? cover : (laid.get(0) ?? null),
           hasFocus: () => focus.has,
           get activeElement() {
             return focus.active;
@@ -1200,7 +1222,19 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       const after = (): void => {
         for (const callback of later.splice(0)) callback();
       };
-      return { said, g, self, rects, holder, focus, fire, tick, after, every: () => every?.() };
+      return {
+        said,
+        g,
+        self,
+        rects,
+        holder,
+        focus,
+        drawn,
+        fire,
+        tick,
+        after,
+        every: () => every?.(),
+      };
     };
     const d = run();
     expect(FRAME_WORDS_BINDING in d.g).toBe(false);
@@ -1259,6 +1293,11 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     d.every();
     d.tick();
     expect(d.said.filter((w) => w === "moved")).toHaveLength(3);
+    // M7 H3: nothing moved, nothing clipped anew — the host drew a MENU over its frame: moved
+    d.drawn.cover = (x, y) => x > 300 && y > 100;
+    d.every();
+    d.tick();
+    expect(d.said.filter((w) => w === "moved")).toHaveLength(4);
     // the page's blank, a document with no binding: nothing; a FRAME's blank (an editor's) speaks (M7 H2)
     const blank = run({ href: "about:blank" });
     blank.fire("keydown", { isTrusted: true });
@@ -1387,6 +1426,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       paddingBottom: "0px",
       ...e.style,
     });
+    // (M7 H3: the sight's visible part — nothing drawn over these frames: the engine's hit test finds each where it is)
     const part = (
       frame: Fake,
       view: { w: number; h: number; vv?: Record<string, number> } = { w: 1280, h: 800 },
@@ -1398,15 +1438,17 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
           "globalThis",
           "innerWidth",
           "innerHeight",
-          `return (${FRAME_VISIBLE_PART});`,
+          "performance",
+          `return (${FRAME_SIGHT});`,
         )(
           computed,
-          { documentElement: root, body },
+          { documentElement: root, body, elementFromPoint: () => frame },
           { visualViewport: view.vv },
           view.w,
           view.h,
-        ) as (this: Fake) => unknown
-      ).call(frame);
+          { now: () => 0 },
+        ) as (this: Fake, quick: boolean) => { visible: unknown }
+      ).call(frame, false).visible;
     // FRAME-CLIPPED's: 640 × 420 at 160, 90 in a scroller at 160, 300 (680 × 420, its scrollbar 15) — its top half clipped
     const scroller = el(
       { left: 160, top: 300, width: 680, height: 420 },
@@ -1490,13 +1532,167 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     ]);
   });
 
+  it("M7 H3 — what COVERS a frame, by the engine's own hit test over its visible part: a fixed header's exact rect cut to it; an overlay passed through (`pointer-events: none` — the hit test finds the frame) is none; the frame's own ancestor (its rounded corner) is none; the frame itself `pointer-events: none` is covered whole; a cover known before is kept while its centre is still its own, dropped once it is not; the quick look's word changes when a cover appears", () => {
+    type Fake = { style: Record<string, string>; parentElement: Fake | null } & Record<
+      string,
+      unknown
+    >;
+    const root: Fake = { style: {}, parentElement: null };
+    const el = (
+      box: { left: number; top: number; width: number; height: number },
+      style: Record<string, string> = {},
+      parent: Fake = root,
+    ): Fake => {
+      const e: Fake = {
+        style,
+        parentElement: parent,
+        box,
+        getBoundingClientRect: () => ({
+          ...(e["box"] as typeof box),
+          right: (e["box"] as typeof box).left + (e["box"] as typeof box).width,
+          bottom: (e["box"] as typeof box).top + (e["box"] as typeof box).height,
+        }),
+        offsetWidth: box.width,
+        offsetHeight: box.height,
+        clientLeft: 0,
+        clientTop: 0,
+        clientWidth: box.width,
+        clientHeight: box.height,
+        isConnected: true,
+        contains: (other: unknown) => {
+          for (let x = other as Fake | null; x !== null; x = x.parentElement)
+            if (x === e) return true;
+          return false;
+        },
+      };
+      return e;
+    };
+    const body = el({ left: 0, top: 0, width: 1280, height: 2400 });
+    const computed = (e: Fake) => ({
+      position: "static",
+      overflowX: "visible",
+      overflowY: "visible",
+      contain: "none",
+      transform: "none",
+      perspective: "none",
+      filter: "none",
+      pointerEvents: "auto",
+      visibility: "visible",
+      borderLeftWidth: "0px",
+      borderTopWidth: "0px",
+      borderRightWidth: "0px",
+      borderBottomWidth: "0px",
+      paddingLeft: "0px",
+      paddingTop: "0px",
+      paddingRight: "0px",
+      paddingBottom: "0px",
+      ...e.style,
+    });
+    let now = 0;
+    const g: Record<string | symbol, unknown> = {};
+    const sight = (frame: Fake, hit: (x: number, y: number) => unknown, quick = false): unknown =>
+      (
+        new Function(
+          "getComputedStyle",
+          "document",
+          "globalThis",
+          "innerWidth",
+          "innerHeight",
+          "performance",
+          `return (${FRAME_SIGHT});`,
+        )(computed, { documentElement: root, body, elementFromPoint: hit }, g, 1280, 800, {
+          now: () => now,
+        }) as (this: Fake, quick: boolean) => unknown
+      ).call(frame, quick);
+    // the frame 640 × 420 at 160, 60; a fixed header 0 → 140 across the page: its top 80 px covered
+    const frame = el({ left: 160, top: 60, width: 640, height: 420 }, {}, body);
+    const header = el({ left: 0, top: 0, width: 1280, height: 140 }, { position: "fixed" }, body);
+    const bare = (x: number, y: number): unknown => (x < 0 || y < 0 ? null : frame);
+    const headed = (x: number, y: number): unknown => (y < 140 ? header : bare(x, y));
+    expect(sight(frame, headed)).toEqual({ visible: [0, 0, 1, 1], covers: [[0, 0, 1, 0.1905]] });
+    // an overlay with `pointer-events: none`: the hit test passes through it — nothing covers
+    expect(sight(frame, bare)).toEqual({ visible: [0, 0, 1, 1], covers: [] });
+    // its rounded corners: the hit test finds its ANCESTOR there — no cover
+    const rounded = (x: number, y: number): unknown => (x < 172 && y < 72 ? body : bare(x, y));
+    expect(sight(frame, rounded)).toEqual({ visible: [0, 0, 1, 1], covers: [] });
+    // the frame itself `pointer-events: none`: covered whole by what is under it
+    const deaf = el(
+      { left: 160, top: 60, width: 640, height: 420 },
+      { pointerEvents: "none" },
+      body,
+    );
+    expect(sight(deaf, () => body)).toEqual({ visible: [0, 0, 1, 1], covers: [[0, 0, 1, 1]] });
+    // a small dropdown between the quick look's points, found by a whole look; kept by its centre within the second…
+    const menu = el({ left: 620, top: 330, width: 30, height: 30 }, { position: "absolute" }, body);
+    const opened = (x: number, y: number): unknown =>
+      x >= 620 && x < 650 && y >= 330 && y < 360 ? menu : bare(x, y);
+    now = 10_000;
+    expect(sight(frame, opened)).toEqual({
+      visible: [0, 0, 1, 1],
+      covers: [[0.7188, 0.6429, 0.7656, 0.7143]],
+    });
+    now = 10_500;
+    expect(sight(frame, opened)).toEqual({
+      visible: [0, 0, 1, 1],
+      covers: [[0.7188, 0.6429, 0.7656, 0.7143]],
+    });
+    // … dropped once its centre is not its own (closed)
+    now = 10_600;
+    expect(sight(frame, bare)).toEqual({ visible: [0, 0, 1, 1], covers: [] });
+    // the quick look (the words' `moved`): its word changes when a cover appears over one of its points
+    const plain = sight(frame, bare, true);
+    expect(typeof plain).toBe("string");
+    expect(sight(frame, headed, true)).not.toBe(plain);
+    expect(sight(frame, bare, true)).toBe(plain);
+  });
+
+  it("M7 H3 — a frame's COVERS are read with its quad: a press on the part a fixed header covers is the page's, below it the frame's", async () => {
+    const r = recording((method) => {
+      if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };
+      if (method === "DOM.getBoxModel")
+        return { model: { content: [100, 80, 500, 80, 500, 380, 100, 380] } };
+      if (method === "DOM.resolveNode") return { object: { objectId: "owner-7" } };
+      if (method === "Runtime.callFunctionOn")
+        return { result: { value: { visible: [0, 0, 1, 1], covers: [[0, 0, 1, 40 / 300]] } } };
+      return {};
+    });
+    await r.native.loadURL("https://host.test/a");
+    r.at("https://host.test/a");
+    r.contents.emit("did-navigate", {}, "https://host.test/a");
+    r.attach("F");
+    await turns();
+    for (const y of [100, 305]) {
+      await r.native.dispatchMouse({
+        type: "mousePressed",
+        x: 180,
+        y,
+        button: "left",
+        clickCount: 1,
+      });
+      await r.native.dispatchMouse({
+        type: "mouseReleased",
+        x: 180,
+        y,
+        button: "left",
+        clickCount: 1,
+      });
+    }
+    expect(r.hand()).toEqual([
+      "mousePressed@page 180,100",
+      "mouseReleased@page 180,100",
+      "mousePressed@F 80,225",
+      "mouseReleased@F 80,225",
+    ]);
+  });
+
   it("M6.3a — a frame's VISIBLE part is READ beside its quad, of its owner in its parent's document (`Runtime.callFunctionOn` on the parent's session, its object released): a press on the part its scroller clips is the page's, on the part in view the frame's", async () => {
     const r = recording((method) => {
       if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };
       if (method === "DOM.getBoxModel")
         return { model: { content: [100, 80, 500, 80, 500, 380, 100, 380] } };
       if (method === "DOM.resolveNode") return { object: { objectId: "owner-7" } };
-      if (method === "Runtime.callFunctionOn") return { result: { value: [0, 0.5, 1, 1] } };
+      if (method === "Runtime.callFunctionOn")
+        return { result: { value: { visible: [0, 0.5, 1, 1], covers: [] } } };
       return {};
     });
     await r.native.loadURL("https://host.test/a");
@@ -1507,7 +1703,12 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     const call = r.sent.find((c) => c.method === "Runtime.callFunctionOn");
     expect(call).toEqual({
       method: "Runtime.callFunctionOn",
-      params: { objectId: "owner-7", functionDeclaration: FRAME_VISIBLE_PART, returnByValue: true },
+      params: {
+        objectId: "owner-7",
+        functionDeclaration: FRAME_SIGHT,
+        arguments: [{ value: false }],
+        returnByValue: true,
+      },
     });
     expect(r.sent).toContainEqual({
       method: "Runtime.releaseObject",

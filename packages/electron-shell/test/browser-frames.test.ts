@@ -365,7 +365,7 @@ describe("PT-5d (M6.3a) — a frame takes a point only on its VISIBLE part: what
     f.pageCommitted(1);
     f.attached("A", "t-A", undefined);
     // 400 × 300 at 100, 80 — its top half under its scroller's clip edge: in view from halfway down
-    f.placed("A", box(100, 80, 400, 300), [0, 0.5, 1, 1]);
+    f.placed("A", box(100, 80, 400, 300), { visible: [0, 0.5, 1, 1], covers: [] });
     expect(f.press("left", 180, 120).target.session).toBeUndefined();
     f.release("left", 180, 120);
     expect(f.press("left", 180, 305)).toEqual({
@@ -378,14 +378,14 @@ describe("PT-5d (M6.3a) — a frame takes a point only on its VISIBLE part: what
     expect(f.wheel(180, 120).target.session).toBeUndefined();
     expect(f.move(180, 121).map((r) => r.target.session)).toEqual(["A", undefined]);
     // scrolled out of its scroller: nothing lands in it
-    f.placed("A", box(100, 80, 400, 300), [0, 0, 0, 0]);
+    f.placed("A", box(100, 80, 400, 300), { visible: [0, 0, 0, 0], covers: [] });
     expect(f.wheel(180, 305).target.session).toBeUndefined();
   });
 
   it("a frame in a frame, clipped in ITS parent's view: a point over its clipped part is its parent's, carried into it", () => {
     const f = page();
     // B's right half clipped in A's view
-    f.placed("B", box(250, 190, 120, 90), [0, 0, 0.5, 1]);
+    f.placed("B", box(250, 190, 120, 90), { visible: [0, 0, 0.5, 1], covers: [] });
     expect(f.press("left", 360, 285).target.session).toBe("B");
     f.release("left", 360, 285);
     expect(f.press("left", 460, 285)).toEqual({
@@ -393,5 +393,41 @@ describe("PT-5d (M6.3a) — a frame takes a point only on its VISIBLE part: what
       x: 360,
       y: 205,
     });
+  });
+});
+
+describe("PT-5d (M7 H3) — what the host draws OVER a frame is the host's: a frame takes a point only on its visible part, outside every cover", () => {
+  it("a fixed header over A's top 40 px: a press there is the PAGE's, one below it A's; a hover and the wheel the same; a drag out under the header stays A's", () => {
+    const f = new BrowserFrames();
+    f.pageCommitted(1);
+    f.attached("A", "t-A", undefined);
+    // A 400 × 300 at 100, 80; covered from its top to 40 px down (a cover, as fractions of its content box)
+    f.placed("A", box(100, 80, 400, 300), { visible: [0, 0, 1, 1], covers: [[0, 0, 1, 40 / 300]] });
+    expect(f.press("left", 180, 100).target.session).toBeUndefined();
+    f.release("left", 180, 100);
+    expect(f.press("left", 180, 200)).toEqual({
+      target: { session: "A", document: 0 },
+      x: 80,
+      y: 120,
+    });
+    expect(f.move(180, 100)).toEqual([{ target: { session: "A", document: 0 }, x: 80, y: 20 }]);
+    f.release("left", 180, 100);
+    expect(f.wheel(180, 100).target.session).toBeUndefined();
+    expect(f.wheel(180, 200).target.session).toBe("A");
+  });
+
+  it("two frames overlapping: where B covers A (A's sight says so), B; where nothing covers A, A — whatever order they attached in", () => {
+    const f = new BrowserFrames();
+    f.pageCommitted(1);
+    f.attached("B", "t-B", undefined);
+    f.attached("A", "t-A", undefined);
+    f.placed("B", box(300, 200, 100, 100), { visible: [0, 0, 1, 1], covers: [] });
+    // A attached LATER — before H3 it took the overlap; its sight says B is drawn over its 200..300, 120..220
+    f.placed("A", box(100, 80, 400, 300), {
+      visible: [0, 0, 1, 1],
+      covers: [[0.5, 0.4, 0.75, 0.7333]],
+    });
+    expect(f.wheel(350, 250).target.session).toBe("B");
+    expect(f.wheel(150, 100).target.session).toBe("A");
   });
 });

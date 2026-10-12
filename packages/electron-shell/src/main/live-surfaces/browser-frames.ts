@@ -22,6 +22,12 @@ export type FrameQuad = readonly [number, number, number, number, number, number
 /** PT-5d (M6.3a): the part of a frame's content box in view, as fractions of it: [u0, v0, u1, v1]. */
 export type FrameVisible = readonly [number, number, number, number];
 
+/** PT-5d (M6.3a, M7 H3): a frame's SIGHT — the part of it in view, and the rects the host draws over it (fractions). */
+export interface FrameSight {
+  readonly visible: FrameVisible;
+  readonly covers: readonly FrameVisible[];
+}
+
 /**
  * PT-5d (M7 H2): where a document SAYS the focus is, after a trusted event in it — `here`: in its own process (its active
  * element, through every child it can see into, is no frame); `inner`: in a frame it cannot see into (another process or
@@ -63,8 +69,8 @@ interface FrameRecord {
   size: readonly [number, number] | undefined;
   /** its placements, counted: a size read with a quad no longer current is dropped */
   placement: number;
-  /** the part of it in view, read with its quad (none: all of it) — M6.3a */
-  visible: FrameVisible | undefined;
+  /** its sight, read with its quad (none: all of it in view, nothing over it) — M6.3a, M7 H3 */
+  sight: FrameSight | undefined;
   /** its own commits */
   documents: number;
   /** its document's address, as its target and its commits say it (M6.4a: a hung frame named by its origin) */
@@ -106,7 +112,7 @@ export class BrowserFrames {
       quad: undefined,
       size: undefined,
       placement: 0,
-      visible: undefined,
+      sight: undefined,
       documents: 0,
       url,
       order: this.#order,
@@ -149,16 +155,16 @@ export class BrowserFrames {
    * A frame's quad as its parent's session said it (`undefined`: it is not laid out — no box, nothing lands in it); the
    * placement's count, for the read of its own size that goes with it. PT-5d (M6.1): a quad DRAWN AT ANOTHER SIZE (its
    * owner resized, its transform changed) unsays the size read before — the quad's own until its own is read; a quad that
-   * only moved (a scroll) keeps it. PT-5d (M6.3a): with its VISIBLE part (none: all of it) — a point on a part an
-   * ancestor of its owner clips is not the frame's.
+   * only moved (a scroll) keeps it. PT-5d (M6.3a, M7 H3): with its SIGHT (none: all of it, nothing over it) — a point on a
+   * part an ancestor of its owner clips, or the host draws over, is not the frame's.
    */
-  placed(session: string, quad: FrameQuad | undefined, visible?: FrameVisible): number {
+  placed(session: string, quad: FrameQuad | undefined, sight?: FrameSight): number {
     const frame = this.#frames.get(session);
     if (frame === undefined) return 0;
     if (quad === undefined || frame.quad === undefined || !sameDrawnSize(frame.quad, quad))
       frame.size = undefined;
     frame.quad = quad;
-    frame.visible = visible;
+    frame.sight = sight;
     frame.placement += 1;
     return frame.placement;
   }
@@ -457,11 +463,14 @@ function within(frame: FrameRecord, [x, y]: readonly [number, number]): boolean 
   return x >= 0 && y >= 0 && x < w && y < h;
 }
 
-/** PT-5d (M6.3a): is a point of a frame's own viewport on the part of it in view? */
+/** PT-5d (M6.3a, M7 H3): is a point of a frame's own viewport on the part of it in view, and under nothing the host draws
+ * over it? */
 function inView(frame: FrameRecord, [x, y]: readonly [number, number]): boolean {
   const q = frame.quad;
-  const v = frame.visible;
-  if (q === undefined || v === undefined) return true;
+  const sight = frame.sight;
+  if (q === undefined || sight === undefined) return true;
   const [w, h] = sizeOf(frame, q);
-  return x >= v[0] * w && y >= v[1] * h && x < v[2] * w && y < v[3] * h;
+  const on = (r: FrameVisible): boolean =>
+    x >= r[0] * w && y >= r[1] * h && x < r[2] * w && y < r[3] * h;
+  return on(sight.visible) && !sight.covers.some(on);
 }

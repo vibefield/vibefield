@@ -3,6 +3,7 @@ import {
   BrowserFrames,
   type FrameQuad,
   type FrameRouted,
+  type FrameSight,
   type FrameVisible,
 } from "./browser-frames";
 import {
@@ -74,16 +75,27 @@ export const PAGE_SCALE_SCRIPT = `(() => { const say = globalThis[${JSON.stringi
 export const FRAME_WORDS_BINDING = "__vibefieldFrameWords";
 
 /**
- * PT-5d (M6.3a) — THE VISIBLE PART OF A FRAME, as its parent's document draws it: the part of its owner's content box (as
- * drawn — a transform's scale in it) left in view by every containing block up its chain whose overflow clips (or that
- * contains its paint), and by the view — the visual viewport's part of it; as fractions of the box ([u0, v0, u1, v1];
- * none: [0, 0, 0, 0]). A positioned holder skips the static blocks between it and an absolute frame; a fixed frame is
- * held by the view but for a transformed (or filtered, or contained) block; the root's clip, and the body's when it is
- * the view's, is the view. Called on the owner element (`this`): read with the quad (`Runtime.callFunctionOn`), and in the
- * words script's look, so a clip that changes with the frame not moving says `moved`. Occlusion — the host drawing over
- * a frame — is NOT seen: a stated limit of PT-5d (M6.3b).
+ * PT-5d (M6.3a, M7 H3) — THE FRAME'S SIGHT, as its parent's document draws it — called on the owner element (`this`):
+ *  - its VISIBLE part — of its owner's content box (as drawn: a transform's scale in it), what every containing block up
+ *    its chain whose overflow clips (or that contains its paint) leaves in view, and the view (the visual viewport's part
+ *    of it); a positioned holder skips the static blocks between it and an absolute frame, a fixed frame is held by the
+ *    view but for a transformed (or filtered, or contained) block, the root's clip — and the body's when it is the view's
+ *    — is the view's;
+ *  - what COVERS it (M7 H3) — what the ENGINE's own hit test (`elementFromPoint`) finds over its visible part that is
+ *    neither the frame nor an ancestor of it (its rounded corner): an overlay with `pointer-events: none` is passed
+ *    through as the engine passes it; the frame itself `pointer-events: none` (or not visible) is covered whole by what
+ *    is under it. The hits: each cover known before (kept while its own centre is still its own); a QUICK look of 5 × 5
+ *    points; the WHOLE look — every 24 CSS px (WCAG 2.2's least target size: a cover a person can aim at holds a point),
+ *    widened past 600 points for a big frame — when the quick look finds a cover not known, or a second has passed since
+ *    the last whole look. Each cover's exact client rect cut to the visible part (a bounding rect for another shape).
+ * As fractions of the content box ([u0, v0, u1, v1]; none: [0, 0, 0, 0]): `{ visible, covers }`. With `quick`, the WORDS'
+ * look instead (`moved`): the visible part and the quick look's 25 hits, a string — a clip or a cover that changes with
+ * the frame not moving says `moved`. Read beside the quad (`Runtime.callFunctionOn`): a word cannot name the frame's
+ * session — the read binds the sight to its owner. Limits: a cover smaller than the quick look's cell that appears with
+ * nothing else moving is seen at the next read; a cover an ancestor's pseudo-element draws is none (its element is the
+ * frame's ancestor); a perspective transform's quad is taken by three corners (H15).
  */
-export const FRAME_VISIBLE_PART = `function () { const el = this; const none = [0, 0, 0, 0]; const css = (e) => getComputedStyle(e); const px = (v) => parseFloat(v) || 0; const num = (v, or) => (typeof v === "number" && Number.isFinite(v) ? v : or); const r = el.getBoundingClientRect(); if (!(r.width > 0 && r.height > 0)) return none; const s = css(el); const kx = el.offsetWidth > 0 ? r.width / el.offsetWidth : 1; const ky = el.offsetHeight > 0 ? r.height / el.offsetHeight : 1; const left = r.left + (px(s.borderLeftWidth) + px(s.paddingLeft)) * kx; const top = r.top + (px(s.borderTopWidth) + px(s.paddingTop)) * ky; const right = r.right - (px(s.borderRightWidth) + px(s.paddingRight)) * kx; const bottom = r.bottom - (px(s.borderBottomWidth) + px(s.paddingBottom)) * ky; if (!(right > left && bottom > top)) return none; let x0 = left, y0 = top, x1 = right, y1 = bottom; const paints = (t) => /paint|strict|content/.test(t.contain || ""); const holdsFixed = (t) => t.transform !== "none" || t.perspective !== "none" || t.filter !== "none" || paints(t) || /layout/.test(t.contain || ""); const holder = (e) => { const position = css(e).position; for (let a = e.parentElement; a && a !== document.documentElement; a = a.parentElement) { const t = css(a); if (position === "fixed") { if (holdsFixed(t)) return a; } else if (position === "absolute") { if (t.position !== "static" || holdsFixed(t)) return a; } else return a; } return null; }; const root = css(document.documentElement); const bodyIsView = root.overflowX === "visible" && root.overflowY === "visible"; for (let a = holder(el); a; a = holder(a)) { if (a === document.body && bodyIsView) continue; const t = css(a); const cx = t.overflowX !== "visible" || paints(t); const cy = t.overflowY !== "visible" || paints(t); if (!cx && !cy) continue; const b = a.getBoundingClientRect(); const ax = a.offsetWidth > 0 ? b.width / a.offsetWidth : 1; const ay = a.offsetHeight > 0 ? b.height / a.offsetHeight : 1; const cl = b.left + a.clientLeft * ax; const ct = b.top + a.clientTop * ay; if (cx) { x0 = Math.max(x0, cl); x1 = Math.min(x1, cl + a.clientWidth * ax); } if (cy) { y0 = Math.max(y0, ct); y1 = Math.min(y1, ct + a.clientHeight * ay); } } const v = globalThis.visualViewport; const vx = num(v && v.offsetLeft, 0); const vy = num(v && v.offsetTop, 0); x0 = Math.max(x0, vx); y0 = Math.max(y0, vy); x1 = Math.min(x1, vx + num(v && v.width, innerWidth)); y1 = Math.min(y1, vy + num(v && v.height, innerHeight)); if (!(x1 > x0 && y1 > y0)) return none; const w = right - left; const h = bottom - top; const q = (n) => Math.round(n * 1e4) / 1e4; return [q((x0 - left) / w), q((y0 - top) / h), q((x1 - left) / w), q((y1 - top) / h)]; }`;
+export const FRAME_SIGHT = `function (quick) { const el = this; const none = [0, 0, 0, 0]; const css = (e) => getComputedStyle(e); const px = (v) => parseFloat(v) || 0; const num = (v, or) => (typeof v === "number" && Number.isFinite(v) ? v : or); const r = el.getBoundingClientRect(); if (!(r.width > 0 && r.height > 0)) return quick ? "none" : { visible: none, covers: [] }; const s = css(el); const kx = el.offsetWidth > 0 ? r.width / el.offsetWidth : 1; const ky = el.offsetHeight > 0 ? r.height / el.offsetHeight : 1; const left = r.left + (px(s.borderLeftWidth) + px(s.paddingLeft)) * kx; const top = r.top + (px(s.borderTopWidth) + px(s.paddingTop)) * ky; const right = r.right - (px(s.borderRightWidth) + px(s.paddingRight)) * kx; const bottom = r.bottom - (px(s.borderBottomWidth) + px(s.paddingBottom)) * ky; if (!(right > left && bottom > top)) return quick ? "none" : { visible: none, covers: [] }; let x0 = left, y0 = top, x1 = right, y1 = bottom; const paints = (t) => /paint|strict|content/.test(t.contain || ""); const holdsFixed = (t) => t.transform !== "none" || t.perspective !== "none" || t.filter !== "none" || paints(t) || /layout/.test(t.contain || ""); const holder = (e) => { const position = css(e).position; for (let a = e.parentElement; a && a !== document.documentElement; a = a.parentElement) { const t = css(a); if (position === "fixed") { if (holdsFixed(t)) return a; } else if (position === "absolute") { if (t.position !== "static" || holdsFixed(t)) return a; } else return a; } return null; }; const root = css(document.documentElement); const bodyIsView = root.overflowX === "visible" && root.overflowY === "visible"; for (let a = holder(el); a; a = holder(a)) { if (a === document.body && bodyIsView) continue; const t = css(a); const cx = t.overflowX !== "visible" || paints(t); const cy = t.overflowY !== "visible" || paints(t); if (!cx && !cy) continue; const b = a.getBoundingClientRect(); const ax = a.offsetWidth > 0 ? b.width / a.offsetWidth : 1; const ay = a.offsetHeight > 0 ? b.height / a.offsetHeight : 1; const cl = b.left + a.clientLeft * ax; const ct = b.top + a.clientTop * ay; if (cx) { x0 = Math.max(x0, cl); x1 = Math.min(x1, cl + a.clientWidth * ax); } if (cy) { y0 = Math.max(y0, ct); y1 = Math.min(y1, ct + a.clientHeight * ay); } } const v = globalThis.visualViewport; const vx = num(v && v.offsetLeft, 0); const vy = num(v && v.offsetTop, 0); x0 = Math.max(x0, vx); y0 = Math.max(y0, vy); x1 = Math.min(x1, vx + num(v && v.width, innerWidth)); y1 = Math.min(y1, vy + num(v && v.height, innerHeight)); if (!(x1 > x0 && y1 > y0)) return quick ? "none" : { visible: none, covers: [] }; const w = right - left; const h = bottom - top; const q = (n) => Math.round(n * 1e4) / 1e4; const frac = (a, b, c, d) => [q((a - left) / w), q((b - top) / h), q((c - left) / w), q((d - top) / h)]; const visible = frac(x0, y0, x1, y1); const hit = (x, y) => { try { return document.elementFromPoint(x, y); } catch { return null; } }; const inside = (c, t) => { try { return c === t || c.contains(t); } catch { return false; } }; const over = (t) => t !== null && t !== el && !inside(t, el); const at = (i, j) => [x0 + ((i + 0.5) * (x1 - x0)) / 5, y0 + ((j + 0.5) * (y1 - y0)) / 5]; if (quick) { let bits = ""; for (let j = 0; j < 5; j += 1) for (let i = 0; i < 5; i += 1) { const [x, y] = at(i, j); bits += over(hit(x, y)) ? "1" : "0"; } return visible.join(",") + "|" + bits; } if (s.pointerEvents === "none" || s.visibility !== "visible") return { visible, covers: [visible] }; const key = Symbol.for("vibefield.sight"); const memo = globalThis[key] instanceof WeakMap ? globalThis[key] : (globalThis[key] = new WeakMap()); const was = memo.get(el) || { covers: [], at: -Infinity }; const covers = []; const known = (t) => covers.some((c) => inside(c, t)); const cut = (c) => { const b = c.getBoundingClientRect(); const a = [Math.max(x0, b.left), Math.max(y0, b.top), Math.min(x1, b.right), Math.min(y1, b.bottom)]; return a[2] > a[0] && a[3] > a[1] ? a : null; }; for (const c of was.covers) { if (!c.isConnected) continue; const a = cut(c); if (a === null) continue; const t = hit((a[0] + a[2]) / 2, (a[1] + a[3]) / 2); if (t !== null && inside(c, t)) covers.push(c); } let fresh = false; for (let j = 0; j < 5; j += 1) for (let i = 0; i < 5; i += 1) { const [x, y] = at(i, j); const t = hit(x, y); if (over(t) && !known(t)) { covers.push(t); fresh = true; } } const now = performance.now(); let looked = was.at; if (fresh || now - was.at >= 1000) { const step = Math.max(24, Math.sqrt(((x1 - x0) * (y1 - y0)) / 600)); for (let y = y0 + step / 2; y < y1; y += step) for (let x = x0 + step / 2; x < x1; x += step) { const t = hit(x, y); if (over(t) && !known(t)) covers.push(t); } looked = now; } memo.set(el, { covers, at: looked }); const out = []; for (const c of covers) { const a = cut(c); if (a !== null) out.push(frac(a[0], a[1], a[2], a[3])); } return { visible, covers: out }; }`;
 
 /**
  * PT-5d (rulings 1, M3) — said to every document of every session (the page's and its frames'): it takes the binding for
@@ -93,18 +105,31 @@ export const FRAME_VISIBLE_PART = `function () { const el = this; const none = [
  *    and focus change in it (one word a task, once its default actions are done: a Tab's focus move, a press's): where
  *    the keys, text, a composition and a command go, and the only word of it — the ENGINE's events alone (M7 H1:
  *    `isTrusted`; a page's `dispatchEvent` says nothing);
- *  - `moved` — its frames' boxes, or their visible parts (M6.3a: `FRAME_VISIBLE_PART`), changed (a scroll of any of its
- *    scrollers, a resize, its visual viewport, a transition's or an animation's end, a load — and, for what no event says,
- *    a look every half second while it holds a frame), once an animation frame at most, and only when they did: main
- *    then reads their quads and visible parts again, off the hand's path.
+ *  - `moved` — its frames' boxes, or their sight (`FRAME_SIGHT`'s quick look: the visible part, M6.3a, and what covers
+ *    them, M7 H3), changed (a scroll of any of its scrollers, a resize, its visual viewport, a transition's or an
+ *    animation's end, a load, a mutation — its nodes, a class, a style, `hidden`, `open` — and, for what no event says, a
+ *    look every half second while it holds a frame), once an animation frame at most, and only when they did: main then
+ *    reads their quads and sight again, off the hand's path.
  * Never the page's bootstrap blank — a frame's blank document (an editor's, an ad's slot) speaks (M7 H2: a press in it
  * must say where the focus went). Never its size (M6.1): every document of a frame's process says its words on the frame's
  * session — its own children of its site too — so a frame's viewport is READ of its local root, beside its quad.
  */
-export const FRAME_WORDS_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; try { delete globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; } catch {} if (typeof say !== "function" || (window === window.top && location.href === "about:blank")) return; const tell = (word) => { try { say(word); } catch {} }; const where = () => { try { if (!document.hasFocus()) return "away"; let d = document; for (let i = 0; i < 32; i += 1) { const a = d.activeElement; const n = a ? a.localName : ""; if (n !== "iframe" && n !== "frame" && n !== "object" && n !== "embed" && n !== "fencedframe") return "here"; let inner = null; try { inner = a.contentDocument; } catch {} if (!inner) return "inner"; d = inner; } return "inner"; } catch { return "away"; } }; let asked = false; const ask = (e) => { if (!e.isTrusted || asked) return; asked = true; setTimeout(() => { asked = false; tell(where()); }, 0); }; for (const t of ["pointerdown", "mousedown", "keydown", "touchend", "click", "focus", "blur", "focusin", "focusout"]) addEventListener(t, ask, true); let drawn = ""; const part = ${FRAME_VISIBLE_PART}; const seen = (f) => { try { return part.call(f).join(","); } catch { return ""; } }; const boxes = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { const r = f.getBoundingClientRect(); out += r.left + "," + r.top + "," + r.width + "," + r.height + ":" + seen(f) + ";"; } return out; }; let due = false; const look = () => { due = false; const now = boxes(); if (now !== drawn) { drawn = now; tell("moved"); } }; const moved = () => { if (due) return; due = true; requestAnimationFrame(look); }; addEventListener("scroll", moved, { capture: true, passive: true }); addEventListener("resize", moved); addEventListener("load", moved); for (const t of ["DOMContentLoaded", "transitionend", "animationend"]) addEventListener(t, moved, true); globalThis.visualViewport?.addEventListener("resize", moved); globalThis.visualViewport?.addEventListener("scroll", moved); setInterval(() => { if (document.querySelector("iframe, frame")) moved(); }, 500); moved(); })();`;
+export const FRAME_WORDS_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; try { delete globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; } catch {} if (typeof say !== "function" || (window === window.top && location.href === "about:blank")) return; const tell = (word) => { try { say(word); } catch {} }; const where = () => { try { if (!document.hasFocus()) return "away"; let d = document; for (let i = 0; i < 32; i += 1) { const a = d.activeElement; const n = a ? a.localName : ""; if (n !== "iframe" && n !== "frame" && n !== "object" && n !== "embed" && n !== "fencedframe") return "here"; let inner = null; try { inner = a.contentDocument; } catch {} if (!inner) return "inner"; d = inner; } return "inner"; } catch { return "away"; } }; let asked = false; const ask = (e) => { if (!e.isTrusted || asked) return; asked = true; setTimeout(() => { asked = false; tell(where()); }, 0); }; for (const t of ["pointerdown", "mousedown", "keydown", "touchend", "click", "focus", "blur", "focusin", "focusout"]) addEventListener(t, ask, true); let drawn = ""; const part = ${FRAME_SIGHT}; const seen = (f) => { try { return String(part.call(f, true)); } catch { return ""; } }; const boxes = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { const r = f.getBoundingClientRect(); out += r.left + "," + r.top + "," + r.width + "," + r.height + ":" + seen(f) + ";"; } return out; }; let due = false; const look = () => { due = false; const now = boxes(); if (now !== drawn) { drawn = now; tell("moved"); } }; const moved = () => { if (due) return; due = true; requestAnimationFrame(look); }; addEventListener("scroll", moved, { capture: true, passive: true }); addEventListener("resize", moved); addEventListener("load", moved); for (const t of ["DOMContentLoaded", "transitionend", "animationend"]) addEventListener(t, moved, true); globalThis.visualViewport?.addEventListener("resize", moved); globalThis.visualViewport?.addEventListener("scroll", moved); try { new MutationObserver(() => { if (document.querySelector("iframe, frame")) moved(); }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["class", "style", "hidden", "open"] }); } catch {} setInterval(() => { if (document.querySelector("iframe, frame")) moved(); }, 500); moved(); })();`;
 
 /** PT-5d (M6.1): a frame's own viewport, in its own CSS px — evaluated in its session's local root. */
 const FRAME_SIZE = 'innerWidth + "," + innerHeight';
+
+/** PT-5d (M7 H3): a sight as the read answers it — `{ visible, covers }`, each part four fractions — or none. */
+function sightOf(value: unknown): FrameSight | undefined {
+  const part = (v: unknown): v is FrameVisible =>
+    Array.isArray(v) &&
+    v.length === 4 &&
+    v.every((n) => typeof n === "number" && Number.isFinite(n));
+  if (typeof value !== "object" || value === null) return undefined;
+  const { visible, covers } = value as { readonly visible?: unknown; readonly covers?: unknown };
+  if (!part(visible) || !Array.isArray(covers) || !covers.every(part)) return undefined;
+  return { visible, covers };
+}
 
 /** PT-5c (R3): the least time between two discards of the page's console entries. */
 const CONSOLE_DISCARD_MS = 1_000;
@@ -398,9 +423,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * session's local root (`Runtime.evaluate` in its own frame), never said by a document of it: every document of its
    * process speaks on its session, its own children of its site too. Not awaited by the placement (a frame busy with its
    * own load, or hung, holds no placement up): until it answers the frame is taken at its quad's own size, and an answer
-   * for a quad no longer current is dropped. PT-5d (M6.3a): and its VISIBLE part (`FRAME_VISIBLE_PART`, called on its
-   * owner in its parent's document — the object released after), placed with the quad: a point on the part an ancestor
-   * clips is the parent's. Unread (refused), the whole box — as before M6.3a.
+   * for a quad no longer current is dropped. PT-5d (M6.3a, M7 H3): and its SIGHT (`FRAME_SIGHT`, called on its owner in
+   * its parent's document — the object released after) — its visible part and what covers it — placed with the quad: a
+   * point on a part an ancestor clips, or the host draws over, is the parent's. Unread (refused), the whole box.
    */
   private placeFrame(session: string): void {
     const inFlight = this.#placing.get(session);
@@ -435,8 +460,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         Array.isArray(content) && content.length === 8 && content.every(Number.isFinite)
           ? (content as unknown as FrameQuad)
           : undefined;
-      const visible = quad === undefined ? undefined : await this.visiblePart(frame.parent, owner);
-      const placement = this.#frames.placed(session, quad, visible);
+      const sight = quad === undefined ? undefined : await this.sightOf(frame.parent, owner);
+      const placement = this.#frames.placed(session, quad, sight);
       if (quad === undefined) return;
       void cdp
         .sendCommand("Runtime.evaluate", { expression: FRAME_SIZE, returnByValue: true }, session)
@@ -459,11 +484,11 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       });
   }
 
-  /** PT-5d (M6.3a): the visible part of a frame's owner, read in its parent's document; unread (refused), none said. */
-  private async visiblePart(
+  /** PT-5d (M6.3a, M7 H3): the sight of a frame's owner, read in its parent's document; unread (refused), none said. */
+  private async sightOf(
     parent: string | undefined,
     owner: number,
-  ): Promise<FrameVisible | undefined> {
+  ): Promise<FrameSight | undefined> {
     const cdp = this.window.webContents.debugger;
     try {
       const node = (await cdp.sendCommand("DOM.resolveNode", { backendNodeId: owner }, parent)) as {
@@ -474,13 +499,15 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       try {
         const out = (await cdp.sendCommand(
           "Runtime.callFunctionOn",
-          { objectId, functionDeclaration: FRAME_VISIBLE_PART, returnByValue: true },
+          {
+            objectId,
+            functionDeclaration: FRAME_SIGHT,
+            arguments: [{ value: false }],
+            returnByValue: true,
+          },
           parent,
         )) as { readonly result?: { readonly value?: unknown } };
-        const value = out.result?.value;
-        return Array.isArray(value) && value.length === 4 && value.every(Number.isFinite)
-          ? (value as unknown as FrameVisible)
-          : undefined;
+        return sightOf(out.result?.value);
       } finally {
         void cdp.sendCommand("Runtime.releaseObject", { objectId }, parent).catch(() => undefined);
       }

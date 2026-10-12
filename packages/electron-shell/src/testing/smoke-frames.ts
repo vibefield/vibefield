@@ -24,6 +24,10 @@
 //   FRAME-CLIPPED — M6.3a: the frame in a host's SCROLLER, its top half above the scroller's clip edge, under the host's
 //                  header: a press on the clipped part is the host's (its header heard it; the frame nothing), a press on
 //                  the part in view the frame's (before M6.3a the frame took both);
+//   FRAME-COVERED — M7 H3: a FIXED header drawn over the frame's top: a press on the header there is the host's, one below
+//                  it the frame's (before H3 the frame took both — a regression of PT-5d's routing);
+//   FRAME-MENU   — M7 H3: the host's dropdown opened over the frame: its item's press is the host's, the frame hears
+//                  nothing;
 //   FRAME-PICKER — the file input in the NESTED frame pressed (M2): no panel, its `cancel` heard, main's windows as they were;
 //   BACK-WRITTEN — ruling 5: a pane the document sent from A to B, the page's own ‹ back to A: the document's url is A again;
 //   STUCK        — ruling 6: a page whose button starts an endless loop, pressed, then a key it never answers: the face says
@@ -100,6 +104,22 @@ export interface FramesSeen {
     readonly went: boolean;
     readonly nextClicks: number;
     readonly ms: number | null;
+  };
+  readonly covered: {
+    /** the frame's top and the header's bottom, in the host's view */
+    readonly top: number | null;
+    readonly edge: number | null;
+    /** the press on its part under the header: what the host heard of it, and the frame's clicks */
+    readonly hidden: { readonly hostHeard: readonly string[]; readonly frameClicks: number } | null;
+    /** the press below the header */
+    readonly shown: FramePressSeen;
+  };
+  readonly menu: {
+    /** the host's dropdown open over the frame */
+    readonly opened: boolean;
+    /** what the host heard of its item's press, and what the frame heard meanwhile */
+    readonly hostHeard: readonly string[];
+    readonly frameHeard: readonly string[];
   };
   readonly clipped: {
     /** the frame's top and its scroller's, in the host's view */
@@ -291,6 +311,48 @@ export function judgeFrameClipped(seen: FramesSeen["clipped"]): string[] {
       );
   }
   out.push(...judgeFramePress("FRAME-CLIPPED (its part in view)", seen.shown));
+  return out;
+}
+
+/** FRAME-COVERED (M7 H3): a fixed header drawn over the frame's top — a press on it there is the host's; below it, the
+ * frame's. */
+export function judgeFrameCovered(seen: FramesSeen["covered"]): string[] {
+  if (seen.top === null || seen.edge === null || seen.top >= seen.edge)
+    return [
+      `FRAME-COVERED: the frame's top stood at ${seen.top ?? "nothing"}, the header's bottom at ${seen.edge ?? "nothing"} — the header was not over it: the row proved nothing`,
+    ];
+  const out: string[] = [];
+  if (seen.hidden === null)
+    out.push(
+      "FRAME-COVERED: the frame's covered part could not be aimed at — that half proved nothing",
+    );
+  else {
+    if (seen.hidden.frameClicks > 0)
+      out.push(
+        `FRAME-COVERED: the press on the header over the frame went INTO the frame (${seen.hidden.frameClicks} click) — the host draws its header there`,
+      );
+    if (!seen.hidden.hostHeard.includes("click #hd"))
+      out.push(
+        `FRAME-COVERED: the host heard ${seen.hidden.hostHeard.join(", ") || "nothing"} — not the press on its header, drawn over the frame`,
+      );
+  }
+  out.push(...judgeFramePress("FRAME-COVERED (below the header)", seen.shown));
+  return out;
+}
+
+/** FRAME-MENU (M7 H3): the host's dropdown opened over the frame — its item's press is the host's; the frame hears nothing. */
+export function judgeFrameMenu(seen: FramesSeen["menu"]): string[] {
+  if (!seen.opened)
+    return ["FRAME-MENU: the host's menu never opened over the frame — the row proved nothing"];
+  const out: string[] = [];
+  if (!seen.hostHeard.includes("click #mi"))
+    out.push(
+      `FRAME-MENU: the host heard ${seen.hostHeard.join(", ") || "nothing"} — not its menu item's press`,
+    );
+  if (seen.frameHeard.length > 0)
+    out.push(
+      `FRAME-MENU: the frame heard ${seen.frameHeard.join(", ")} — the item's press went INTO the frame under the menu`,
+    );
   return out;
 }
 
@@ -1054,6 +1116,126 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     said.clipped = clipped;
     problems.push(...judgeFrameClipped(clipped));
     await shoot("pt-5d-frame-clipped.png");
+    await done();
+
+    // ── FRAME-COVERED, FRAME-MENU (M7 H3): a fixed header over the frame's top; a dropdown opened over it ──────────────
+    const coveredPane = await lay(`${d.fixture.hostOrigin}/frames/covered?p=v`, x0 + 5 * step, y0);
+    await frame([coveredPane]);
+    await live(coveredPane);
+    const COVERED_HOST = "/frames/covered?p=v";
+    const COVERED_FRAME = "/frames/frame?p=v";
+    await waitFor(
+      "the covered host's word",
+      FRAMES_ROWS.withinMs,
+      () => at(COVERED_HOST),
+      (rep) => rep?.framed?.parts.frame !== undefined && rep?.framed?.parts.hd !== undefined,
+    );
+    await waitFor(
+      "the covered frame's word",
+      FRAMES_ROWS.withinMs,
+      () => at(COVERED_FRAME),
+      (rep) => rep?.framed?.parts.b !== undefined,
+    );
+    await pickUp(coveredPane);
+    await sleep(800);
+    const coveredHeld = await heldFrame();
+    const coveredHost = at(COVERED_HOST);
+    const vBox = coveredHost?.framed?.parts.frame ?? null;
+    const vFramed = () => at(COVERED_FRAME)?.framed ?? null;
+    const vHostHeard = () => at(COVERED_HOST)?.framed?.heard ?? [];
+    const onCovered = async (x: number, y: number) =>
+      coveredHeld === null || coveredHost === null
+        ? null
+        : onWindow(coveredHeld, coveredHost.view, x, y);
+    // the frame's button, under the header: the host's
+    const vb = vFramed()?.parts.b ?? null;
+    let coveredHidden: FramesSeen["covered"]["hidden"] = null;
+    if (vb !== null && vBox !== null) {
+      const clicks0 = vFramed()?.clicks.length ?? 0;
+      const heard0 = vHostHeard().length;
+      const w = await onCovered(vBox.x + centre(vb)[0], vBox.y + centre(vb)[1]);
+      if (w !== null) {
+        await h.press(w);
+        const heard = await waitFor(
+          "the header's click",
+          5_000,
+          () => vHostHeard().slice(heard0),
+          (got) => got.includes("click #hd"),
+        );
+        await sleep(600);
+        coveredHidden = {
+          hostHeard: heard,
+          frameClicks: (vFramed()?.clicks.length ?? 0) - clicks0,
+        };
+      }
+    }
+    // its low button, below the header: the frame's
+    const vbl = vFramed()?.parts.bl ?? null;
+    const coveredAimed: Point | null = vbl === null ? null : centre(vbl);
+    const coveredClicks0 = vFramed()?.clicks.length ?? 0;
+    const coveredHeard0 = vHostHeard().length;
+    if (coveredAimed !== null && vBox !== null) {
+      const w = await onCovered(vBox.x + coveredAimed[0], vBox.y + coveredAimed[1]);
+      if (w !== null) await h.press(w);
+    }
+    const coveredShown = await waitFor(
+      "the covered frame's click below the header",
+      5_000,
+      () => vFramed(),
+      (f) => (f?.clicks.length ?? 0) > coveredClicks0,
+    );
+    const covered = {
+      top: vBox?.y ?? null,
+      edge: (() => {
+        const hd = coveredHost?.framed?.parts.hd ?? null;
+        return hd === null ? null : hd.y + hd.h;
+      })(),
+      hidden: coveredHidden,
+      shown: {
+        aimed: coveredAimed,
+        clicked: coveredShown?.clicks[coveredClicks0] ?? null,
+        hostHeard: vHostHeard().slice(coveredHeard0),
+      },
+    };
+    said.covered = covered;
+    problems.push(...judgeFrameCovered(covered));
+    // FRAME-MENU: the host's menu opened over the frame; its item pressed
+    const mb = at(COVERED_HOST)?.framed?.parts.mb ?? null;
+    let opened = false;
+    let menuHostHeard: readonly string[] = [];
+    let menuFrameHeard: readonly string[] = [];
+    if (mb !== null) {
+      const w = await onCovered(centre(mb)[0], centre(mb)[1]);
+      if (w !== null) await h.press(w);
+      const open = await waitFor(
+        "the host's menu open",
+        5_000,
+        () => at(COVERED_HOST)?.framed?.parts.mn ?? null,
+        (mn) => mn !== null && mn.w > 0,
+      );
+      opened = open !== null && open.w > 0;
+      // (its look sees the menu over its frame — a mutation: the next frame — and the sight is read again)
+      await sleep(800);
+      const mi = at(COVERED_HOST)?.framed?.parts.mi ?? null;
+      if (opened && mi !== null) {
+        const heard0 = vHostHeard().length;
+        const frameHeard0 = vFramed()?.heard.length ?? 0;
+        const wi = await onCovered(centre(mi)[0], centre(mi)[1]);
+        if (wi !== null) await h.press(wi);
+        menuHostHeard = await waitFor(
+          "the menu item's click",
+          5_000,
+          () => vHostHeard().slice(heard0),
+          (got) => got.includes("click #mi"),
+        );
+        await sleep(600);
+        menuFrameHeard = (vFramed()?.heard ?? []).slice(frameHeard0);
+      }
+    }
+    const menu = { opened, hostHeard: menuHostHeard, frameHeard: menuFrameHeard };
+    said.menu = menu;
+    problems.push(...judgeFrameMenu(menu));
+    await shoot("pt-5d-frame-covered.png");
     await done();
 
     // ── FRAME-TOUCH: a phone's pane on the host; a tap on the frame's button ────────────────────────────────────────

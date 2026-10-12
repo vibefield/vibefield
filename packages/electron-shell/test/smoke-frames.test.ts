@@ -11,11 +11,13 @@ import {
   FRAMES_ROWS,
   judgeBackWritten,
   judgeFrameClipped,
+  judgeFrameCovered,
   judgeFrameDouble,
   judgeFrameDrag,
   judgeFrameGone,
   judgeFrameHalf,
   judgeFrameHover,
+  judgeFrameMenu,
   judgeFrameNested,
   judgeFramePicker,
   judgeFramePress,
@@ -180,6 +182,61 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
     expect(judgeFrameClipped({ top: 90, edge: 300, hidden: null, shown })).toEqual([
       "FRAME-CLIPPED: the frame's clipped part could not be aimed at — that half proved nothing",
+    ]);
+  });
+
+  it("FRAME-COVERED (M7 H3): a fixed header over the frame's top — a press on the header there is the HOST's, one below it the frame's; before H3 the frame took both; a header not over the frame proves nothing", () => {
+    const shown = { aimed: [90, 352] as const, clicked: [90, 352] as const, hostHeard: [] };
+    const header = ["pointerdown #hd", "mousedown #hd", "mouseup #hd", "click #hd"];
+    expect(
+      judgeFrameCovered({
+        top: 60,
+        edge: 140,
+        hidden: { hostHeard: header, frameClicks: 0 },
+        shown,
+      }),
+    ).toEqual([]);
+    expect(
+      judgeFrameCovered({ top: 60, edge: 140, hidden: { hostHeard: [], frameClicks: 1 }, shown }),
+    ).toEqual([
+      "FRAME-COVERED: the press on the header over the frame went INTO the frame (1 click) — the host draws its header there",
+      "FRAME-COVERED: the host heard nothing — not the press on its header, drawn over the frame",
+    ]);
+    expect(
+      judgeFrameCovered({
+        top: 140,
+        edge: 140,
+        hidden: { hostHeard: header, frameClicks: 0 },
+        shown,
+      }),
+    ).toEqual([
+      "FRAME-COVERED: the frame's top stood at 140, the header's bottom at 140 — the header was not over it: the row proved nothing",
+    ]);
+    expect(judgeFrameCovered({ top: 60, edge: 140, hidden: null, shown })).toEqual([
+      "FRAME-COVERED: the frame's covered part could not be aimed at — that half proved nothing",
+    ]);
+  });
+
+  it("FRAME-MENU (M7 H3): the host's dropdown opened over the frame — its item's press is the host's, the frame hears nothing; before H3 the frame took it; a menu never opened proves nothing", () => {
+    expect(
+      judgeFrameMenu({
+        opened: true,
+        hostHeard: ["pointerdown #mi", "mousedown #mi", "mouseup #mi", "click #mi"],
+        frameHeard: [],
+      }),
+    ).toEqual([]);
+    expect(
+      judgeFrameMenu({
+        opened: true,
+        hostHeard: [],
+        frameHeard: ["pointerdown #r", "mousedown #r", "click #r"],
+      }),
+    ).toEqual([
+      "FRAME-MENU: the host heard nothing — not its menu item's press",
+      "FRAME-MENU: the frame heard pointerdown #r, mousedown #r, click #r — the item's press went INTO the frame under the menu",
+    ]);
+    expect(judgeFrameMenu({ opened: false, hostHeard: [], frameHeard: [] })).toEqual([
+      "FRAME-MENU: the host's menu never opened over the frame — the row proved nothing",
     ]);
   });
 

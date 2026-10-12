@@ -671,6 +671,11 @@ describe("the live pane's fixture page", () => {
     expect(clipped).toContain(`<iframe id="f" src="${fixture.origin}/frames/frame?p=a"`);
     for (const id of ["hd", "sc"]) expect(clipped).toContain(`id="${id}"`);
     expect(clipped).toContain("scrollTop = 610");
+    // M7 H3: a frame under a FIXED header, and a menu that opens over it
+    const covered = await page(fixture.hostOrigin, "/frames/covered?p=a");
+    expect(covered).toContain(`<iframe id="f" src="${fixture.origin}/frames/frame?p=a"`);
+    for (const id of ["hd", "mb", "mn", "mi"]) expect(covered).toContain(`id="${id}"`);
+    expect(covered).toContain("position:fixed");
     expect(await page(fixture.origin, "/frames/next?p=a")).toContain('id="b2"');
     expect(await page(fixture.origin, "/frames/loop?p=a")).toContain("for (;;) {}");
     expect((await fetch(`${fixture.origin}/frames/elsewhere`)).status).toBe(404);
@@ -684,7 +689,7 @@ describe("the live pane's fixture page", () => {
       if (script === undefined) throw new Error(`${path} carries no frames script`);
       const on = new Map<string, ((e: Record<string, unknown>) => void)[]>();
       const parts = new Map<string, Record<string, unknown>>();
-      for (const id of ["b", "t", "r", "s", "f", "if", "ib", "sb", "hd", "sc"])
+      for (const id of ["b", "t", "r", "s", "f", "if", "ib", "sb", "hd", "sc", "mb", "mn", "mi"])
         parts.set(id, {
           id,
           value: id === "r" ? "10" : id === "t" ? "héllo" : "",
@@ -798,6 +803,17 @@ describe("the live pane's fixture page", () => {
       "frame",
       "hd",
       "sc",
+    ]);
+    // M7 H3: the covered host hears the hand on its header, its menu's button and item, and the frame's element alone
+    const coveredHost = await run(fixture.hostOrigin, "/frames/covered?p=g");
+    for (const id of ["hd", "mb", "mn", "mi", "f", "b"])
+      coveredHost.fire("pointerdown", { target: coveredHost.parts.get(id) });
+    const coveredSaid = await coveredHost.ask();
+    expect(coveredSaid.framed.heard).toEqual([
+      "pointerdown #hd",
+      "pointerdown #mb",
+      "pointerdown #mi",
+      "pointerdown #f",
     ]);
   });
 
