@@ -21,10 +21,11 @@ import {
 // ONCE, at boot — this stages, in the run's own root:
 //
 //   · a STUB: the smoke's own stand-in for the agent's CLI. It answers the
-//     launch's probes (`--version`, `--help`), records every run of itself
-//     (its arguments and its environment's NAMES — never a value) and, run as
-//     a managed session, waits at its prompt until `exit` or the end of its
-//     input;
+//     launch's probes (`--version`, `--help`) and its model picker's read
+//     (PJ-6: the agent's own stream-json `initialize`, answered with
+//     `TYPED_AGENT_MODELS`), records every run of itself (its arguments and
+//     its environment's NAMES — never a value) and, run as a managed session,
+//     waits at its prompt until `exit` or the end of its input;
 //   · the MACHINE RECORD naming the stub as that agent's ACTIVE install — the
 //     choice Settings → Agents records (`machine/agents/distribution.json`,
 //     AR-D16), so the launch recipe, the launch's probe and the gateway's
@@ -91,6 +92,20 @@ Options:
   -h, --help                   print this help
 `;
 
+/** PJ-6 — the stub's own model picker, in the agent's native `initialize` rows
+ * (`value`, `displayName`, the effort levels each model offers): one model with
+ * efforts, one without. The History rung starts the first at its last level. */
+export const TYPED_AGENT_MODELS = [
+  {
+    value: "stub-steady",
+    displayName: "Steady",
+    description: "The stub's model with an effort",
+    supportedEffortLevels: ["low", "high"],
+    supportsEffort: true,
+  },
+  { value: "stub-plain", displayName: "Plain", supportsEffort: false },
+] as const;
+
 /** The stub, as a Node program: `#!/usr/bin/env node`, so a shell, the
  * shim's exec and fieldd's probes all run the same file the same way. */
 export function typedAgentStubSource(calls: string): string {
@@ -122,20 +137,42 @@ if (argv.length === 1 && (argv[0] === "--help" || argv[0] === "-h")) {
   process.stdout.write(${JSON.stringify(STUB_HELP)});
   process.exit(0);
 }
-// Not a session (a sign-in's status, a usage read): nothing to answer.
-if (!argv.includes("--session-id") && !argv.includes("--resume")) process.exit(1);
-process.stdout.write("typed-agent stub: a managed session. Type exit to leave.\\n");
 let pending = "";
 process.stdin.setEncoding("utf8");
-process.stdin.on("data", (chunk) => {
-  pending += chunk;
-  for (let at = pending.indexOf("\\n"); at >= 0; at = pending.indexOf("\\n")) {
-    const line = pending.slice(0, at).trim();
-    pending = pending.slice(at + 1);
-    if (line === "exit") process.exit(0);
-  }
-});
-process.stdin.on("end", () => process.exit(0));
+if (argv.includes("--print") && argv.includes("stream-json")) {
+  // PJ-6 — the model picker's read: one control request, the agent's own
+  // \`initialize\` answered under its id with the stub's models
+  process.stdin.on("data", (chunk) => {
+    pending += chunk;
+    const at = pending.indexOf("\\n");
+    if (at < 0) return;
+    const request = JSON.parse(pending.slice(0, at));
+    const answer = {
+      type: "control_response",
+      response: {
+        subtype: "success",
+        request_id: request.request_id,
+        response: { models: ${JSON.stringify(TYPED_AGENT_MODELS)} },
+      },
+    };
+    process.stdout.write(JSON.stringify(answer) + "\\n", () => process.exit(0));
+  });
+  process.stdin.on("end", () => process.exit(0));
+} else if (!argv.includes("--session-id") && !argv.includes("--resume")) {
+  // Not a session (a sign-in's status, a usage read): nothing to answer.
+  process.exit(1);
+} else {
+  process.stdout.write("typed-agent stub: a managed session. Type exit to leave.\\n");
+  process.stdin.on("data", (chunk) => {
+    pending += chunk;
+    for (let at = pending.indexOf("\\n"); at >= 0; at = pending.indexOf("\\n")) {
+      const line = pending.slice(0, at).trim();
+      pending = pending.slice(at + 1);
+      if (line === "exit") process.exit(0);
+    }
+  });
+  process.stdin.on("end", () => process.exit(0));
+}
 `;
 }
 

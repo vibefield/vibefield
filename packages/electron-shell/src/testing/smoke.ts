@@ -80,6 +80,7 @@ import {
   historyByProjectPhotos,
   historyByProjectRung,
   historyGoneFolderRung,
+  historyNewAgentAtModelRung,
   historyNewAgentRung,
 } from "./history-project-rungs";
 import { jumpToRung } from "./jump-rungs";
@@ -9402,6 +9403,10 @@ export async function runSmokeGodview(opts: {
       pressViewKey: (view: "godview" | "history") => pressViewKey(win, view),
     };
     verdict["historyNewAgent"] = await historyNewAgentRung(win, historyActs);
+    // PJ-6 — and at a model and an effort: Another model…, the stub's own
+    //      picker read through fieldd, a model, its effort; the fold row shows
+    //      them as the launch's configured intent
+    verdict["historyNewAgentAtModel"] = await historyNewAgentAtModelRung(win, historyActs);
     verdict["historyGoneFolder"] = await historyGoneFolderRung(win, historyActs);
 
     // THE TERMINALS AWAY, AND CALLED UP (round 3 — GV-D5, GV-D6;

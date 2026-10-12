@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { AgentListResult, IndexSessionsResult, ProjectListResult } from "@vibefield/contracts";
 import type { FielddHandle } from "@vibefield/fieldd-supervisor";
 import type { BrowserWindow } from "electron";
-import { readTypedAgentCalls, type StagedTypedAgent } from "./typed-agent";
+import { readTypedAgentCalls, type StagedTypedAgent, TYPED_AGENT_MODELS } from "./typed-agent";
 
 // HISTORY BY PROJECT's RUNG in `pnpm smoke:godview` (PJ-4, H1 (a): "we map,
 // the room draws"). It rides the History rung, after that rung opened the
@@ -417,6 +417,146 @@ export async function historyNewAgentRung(
       (value) => value === "godview",
     );
     return { project: name, folder, startsIn, item: row.text, note, run, stubCwd: call.cwd, view };
+  } finally {
+    await evaluate(NOTES_OFF).catch(() => undefined);
+  }
+}
+
+/**
+ * NEW AGENT AT A MODEL AND AN EFFORT (PJ-6's witness, the slice table's): in
+ * the same project, ②'s New agent, Another model… beside the typed agent under
+ * This Mac — the rows turn IN PLACE to the agent's own picker, read through
+ * fieldd (`agent.models`) from the stub's own `initialize` — its first model,
+ * then that model's last effort. It starts AT them: the line says "Started in
+ * …", the stub's own record says it was launched with the model and the effort
+ * (the adapter's translation of puppeteer's validated selection), and fieldd's
+ * fold row shows them as the launch's configured intent — the monitor's
+ * `model {id, intent: configured}` and `effort {value, intent: configured}`,
+ * from the adapter's `model:updated` / `effort:updated` at launch.
+ */
+export async function historyNewAgentAtModelRung(
+  win: BrowserWindow,
+  opts: HistoryActRungOptions,
+): Promise<Record<string, unknown>> {
+  const staged = opts.staged;
+  const name = opts.byProject?.name;
+  if (staged === undefined || opts.byProject?.checked !== true || name === undefined)
+    return { unavailable: "History by project was not witnessed in this run" };
+  const [model] = TYPED_AGENT_MODELS;
+  const effort = model.supportedEffortLevels.at(-1) as string;
+  const evaluate = async (expression: string): Promise<string> =>
+    String(await win.webContents.executeJavaScript(expression));
+  /** a menu row by its exact key (the keys join their parts with U+001F) */
+  const rowKeyed = (key: string, inside = ".ah-menu__item") =>
+    `[...(${HISTORY_ROOM}?.querySelectorAll(".ah-menu [role=menu] ${inside}") ?? [])].find((row) => row.getAttribute("data-key") === ${JSON.stringify(key)})`;
+  try {
+    opts.pressViewKey("history");
+    await untilValue(win, "History, the view", VIEW_NOW, 10_000, (value) => value === "history");
+    await untilValue(
+      win,
+      `${name} chosen`,
+      chooseProject(name, false),
+      20_000,
+      (v) => v === "chosen",
+    );
+    const before = AgentListResult.parse(await opts.handle.client.request("agent.list", {}));
+    const runsBefore = new Set(before.sessions.map((row) => row.runtimeRunId));
+    const callsBefore = readTypedAgentCalls(staged.calls).length;
+    await evaluate(NOTES_ARM);
+    await pressWhenThere(
+      win,
+      "New agent's act in ②'s head",
+      `${HISTORY_ROOM}?.querySelector('.ah-hostact[data-place="head"][data-act="new-agent"]')`,
+      actsHeld(HISTORY_ROOM),
+      5_000,
+    );
+    // Another model…, beside the typed agent under This Mac
+    await pressWhenThere(
+      win,
+      "Another model… beside the typed agent under This Mac",
+      `${rowKeyed(`${staged.agentId}\u001fnative`, ".ah-menu__row")}?.querySelector('.ah-menu__act[data-act="another"]')`,
+      MENU_HELD,
+      10_000,
+    );
+    // the rows turn in place to the picker, read from the stub through fieldd
+    await pressWhenThere(
+      win,
+      `the picker's ${model.displayName}`,
+      rowKeyed(`model\u001f${model.value}`),
+      MENU_HELD,
+      30_000,
+    );
+    const page = JSON.parse(
+      await untilValue(
+        win,
+        `${model.displayName}'s effort values`,
+        `JSON.stringify((() => { const row = ${rowKeyed(`value\u001f${effort}`)}; return row ? { title: (row.closest(".ah-menu__group")?.querySelector(".ah-menu__title")?.textContent ?? "").trim() } : null; })())`,
+        10_000,
+        (value) => value !== "null",
+      ),
+    ) as { title: string };
+    await pressWhenThere(
+      win,
+      `${model.displayName} at ${effort}`,
+      rowKeyed(`value\u001f${effort}`),
+      MENU_HELD,
+      5_000,
+    );
+    const note = await heardNote(
+      win,
+      "New agent at a model",
+      ["Started in ", "Could not start"],
+      60_000,
+    );
+    if (!note.startsWith("Started in ")) throw new Error(`New agent said: ${note}`);
+    // fieldd's fold: a new run of the agent, at the model and the effort as configured
+    const deadline = Date.now() + 30_000;
+    let seen = "no new run";
+    let row: Record<string, unknown> | undefined;
+    while (Date.now() < deadline) {
+      const after = AgentListResult.parse(await opts.handle.client.request("agent.list", {}));
+      const fresh = after.sessions.find(
+        (candidate) => candidate.kind === staged.agentId && !runsBefore.has(candidate.runtimeRunId),
+      );
+      const monitor = fresh?.monitor as
+        | { model?: { id?: string; intent?: string }; effort?: { value?: string; intent?: string } }
+        | undefined;
+      seen = JSON.stringify({ model: monitor?.model, effort: monitor?.effort });
+      if (
+        fresh !== undefined &&
+        monitor?.model?.id === model.value &&
+        monitor.model.intent === "configured" &&
+        monitor.effort?.value === effort &&
+        monitor.effort.intent === "configured"
+      ) {
+        row = { runtimeRunId: fresh.runtimeRunId, model: monitor.model, effort: monitor.effort };
+        break;
+      }
+      await sleep(250);
+    }
+    if (row === undefined)
+      throw new Error(`the new run's fold row does not show the model and the effort: ${seen}`);
+    // the stub's own record: launched with them, as the adapter translates them
+    const launch = readTypedAgentCalls(staged.calls)
+      .slice(callsBefore)
+      .find((candidate) => candidate.argv.includes("--session-id"));
+    const flag = (name: string): string | undefined => {
+      const at = launch?.argv.indexOf(name) ?? -1;
+      return at < 0 ? undefined : launch?.argv[at + 1];
+    };
+    if (flag("--model") !== model.value || flag("--effort") !== effort)
+      throw new Error(`the stub was launched with ${JSON.stringify(launch?.argv ?? null)}`);
+    const reads = readTypedAgentCalls(staged.calls)
+      .slice(callsBefore)
+      .filter((candidate) => candidate.argv.includes("--print")).length;
+    return {
+      project: name,
+      page: page.title,
+      note,
+      run: row,
+      launched: { model: flag("--model"), effort: flag("--effort") },
+      pickerReads: reads,
+    };
   } finally {
     await evaluate(NOTES_OFF).catch(() => undefined);
   }

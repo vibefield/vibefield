@@ -21,6 +21,7 @@ import {
   stageTypedAgent,
   startupFilesRead,
   TYPED_AGENT_ID,
+  TYPED_AGENT_MODELS,
 } from "../src/testing/typed-agent";
 
 // AR-7 — the godview smoke's typed-agent fixture, its PURE and on-disk halves:
@@ -225,6 +226,42 @@ describe("the stub — the smoke's own stand-in, run as the program it is", () =
       ["--session-id", "s-2"],
       ["auth", "status", "--json"],
     ]);
+  });
+});
+
+describe("the stub's model picker (PJ-6)", () => {
+  it("answers the picker's read — one stream-json control request — with its own models in the agent's `initialize` rows, under the request's id, and leaves", () => {
+    const staged = stageTypedAgent({
+      vibefieldRoot: root(),
+      source: {},
+      ownerHome: "/Users/owner",
+    });
+    const read = spawnSync(
+      staged.stub,
+      ["--print", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"],
+      {
+        input: `${JSON.stringify({
+          type: "control_request",
+          request_id: 7,
+          request: { subtype: "initialize", hooks: {} },
+        })}\n`,
+        encoding: "utf8",
+        cwd: staged.work,
+      },
+    );
+    expect(read.status).toBe(0);
+    expect(JSON.parse(read.stdout.trim())).toEqual({
+      type: "control_response",
+      response: {
+        subtype: "success",
+        request_id: 7,
+        response: { models: TYPED_AGENT_MODELS },
+      },
+    });
+    // one model offers efforts, one none — the rung starts the first at its last
+    expect(TYPED_AGENT_MODELS.map((model) => model.supportsEffort)).toEqual([true, false]);
+    // the read is recorded like any run, and is no session
+    expect(readTypedAgentCalls(staged.calls).map((call) => call.argv[0])).toEqual(["--print"]);
   });
 });
 
