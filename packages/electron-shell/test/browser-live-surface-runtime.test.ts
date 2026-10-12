@@ -5270,6 +5270,43 @@ describe("BrowserLiveSurfaceRuntime", () => {
         p.result.runtime.dispose();
       });
 
+      it("G3 — … and a switch superseded AFTER its layout was asked (back to A once B's emulation had answered): B's layout answers, B reloads nothing; A lays the page out and reloads it ONCE (the red-proof found this door unwitnessed)", async () => {
+        const p = await standing({ source: laptopAt2() });
+        const held: Array<() => void> = [];
+        const hold =
+          <A extends unknown[], R>(run: (...a: A) => Promise<R>) =>
+          async (...a: A): Promise<R> => {
+            await new Promise<void>((resolve) => held.push(resolve));
+            return run(...a);
+          };
+        p.first.setEmulation = hold(p.first.setEmulation.bind(p.first));
+        p.first.setBackingRaster = hold(
+          p.first.setBackingRaster.bind(p.first),
+        ) as typeof p.first.setBackingRaster;
+        const reloads = (): number => p.first.navigations.filter((n) => n === "reload").length;
+        const before = reloads();
+        await p.result.runtime.navigate({
+          action: "emulate",
+          emulation: { ...PHONE, deviceScaleFactor: 2 },
+        });
+        await delivered();
+        // B's emulation answered: its layout asked
+        held[0]?.();
+        await delivered();
+        expect(held).toHaveLength(2);
+        // back to A while B's layout waits; then B's layout answers — B superseded
+        await p.result.runtime.navigate({ action: "emulate", emulation: LAPTOP });
+        await delivered();
+        for (let i = 1; i < held.length; i += 1) {
+          held[i]?.();
+          await delivered();
+        }
+        expect(held).toHaveLength(4);
+        expect(p.first.rasterMobile.at(-1)).toBe(false);
+        expect(reloads() - before).toBe(1);
+        p.result.runtime.dispose();
+      });
+
       it("G4 — an event goes as the device the page is told when it is SENT: a phone's page, a switch to a laptop of its density asked while its commands go unanswered, a commit, a press waiting for the new document's word — the switch is answered meanwhile: the press is REFUSED, counted, and its release is a release of nothing; the next press goes as the laptop (before: a touch to a page told it is a laptop)", async () => {
         const p = await phone();
         let answered: () => void = () => {};
