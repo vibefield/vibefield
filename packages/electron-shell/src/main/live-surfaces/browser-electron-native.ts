@@ -37,6 +37,16 @@ const PAGE_GUARD_SCRIPT =
   '(() => { try { Object.defineProperty(window, "close", { value: function close() {}, writable: true, configurable: true }); } catch {} window.prompt = function prompt() { return null; }; })();';
 
 /**
+ * PT-5d (M7 H1) — THE HOST'S WORDS LIVE IN THEIR OWN WORLD: the isolated world every document of the page's and its
+ * frames' sessions runs the words in (`Page.addScriptToEvaluateOnNewDocument`'s `worldName`), the only world their
+ * bindings are installed in (`Runtime.addBinding`'s `executionContextName`). No page script sees, catches or calls a
+ * binding — before: in the page's own world, a document that set a setter on its global before the binding's install
+ * caught it, and any could `dispatchEvent` a `focus` the words said. The guard stays in the page's own world: it replaces
+ * the page's own `window.close` and `prompt`.
+ */
+export const WORDS_WORLD = "__vibefield_words";
+
+/**
  * PT-5c (ruling 1) — THE PAGE SAYS ITS SCALE. The binding the page's own session adds (`Runtime.addBinding` — heard only
  * with the Runtime on: PT-5c's probe) through which the guard below says the page's visual-viewport scale: nothing reads
  * the engine on the hand's path (a read of `Page.getLayoutMetrics` is the renderer's, and goes unanswered while a
@@ -79,7 +89,8 @@ export const FRAME_VISIBLE_PART = `function () { const el = this; const none = [
  * PT-5d (rulings 1, M3) — said to every document of every session (the page's and its frames'): it takes the binding for
  * itself and deletes it from the page's reach, then SAYS
  *  - `focus` and `blur` of its OWN window — where the keys, text, a composition and a command go (the frame whose window has
- *    the focus; the page's when none has; a blur moves nothing — M6.2);
+ *    the focus; the page's when none has; a blur moves nothing — M6.2) — the ENGINE's alone (M7 H1: `isTrusted`; a
+ *    page's `dispatchEvent` says nothing);
  *  - `moved` — its frames' boxes, or their visible parts (M6.3a: `FRAME_VISIBLE_PART`), changed (a scroll of any of its
  *    scrollers, a resize, its visual viewport, a transition's or an animation's end, a load — and, for what no event says,
  *    a look every half second while it holds a frame), once an animation frame at most, and only when they did: main
@@ -87,7 +98,7 @@ export const FRAME_VISIBLE_PART = `function () { const el = this; const none = [
  * Never the bootstrap blank. Never its size (M6.1): every document of a frame's process says its words on the frame's
  * session — its own children of its site too — so a frame's viewport is READ of its local root, beside its quad.
  */
-export const FRAME_WORDS_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; try { delete globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; } catch {} if (typeof say !== "function" || location.href === "about:blank") return; const tell = (word) => { try { say(word); } catch {} }; addEventListener("focus", (e) => { if (e.target === window) tell("focus"); }); addEventListener("blur", (e) => { if (e.target === window) tell("blur"); }); let drawn = ""; const part = ${FRAME_VISIBLE_PART}; const seen = (f) => { try { return part.call(f).join(","); } catch { return ""; } }; const boxes = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { const r = f.getBoundingClientRect(); out += r.left + "," + r.top + "," + r.width + "," + r.height + ":" + seen(f) + ";"; } return out; }; let due = false; const look = () => { due = false; const now = boxes(); if (now !== drawn) { drawn = now; tell("moved"); } }; const moved = () => { if (due) return; due = true; requestAnimationFrame(look); }; addEventListener("scroll", moved, { capture: true, passive: true }); addEventListener("resize", moved); addEventListener("load", moved); for (const t of ["DOMContentLoaded", "transitionend", "animationend"]) addEventListener(t, moved, true); globalThis.visualViewport?.addEventListener("resize", moved); globalThis.visualViewport?.addEventListener("scroll", moved); setInterval(() => { if (document.querySelector("iframe, frame")) moved(); }, 500); moved(); })();`;
+export const FRAME_WORDS_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; try { delete globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; } catch {} if (typeof say !== "function" || location.href === "about:blank") return; const tell = (word) => { try { say(word); } catch {} }; addEventListener("focus", (e) => { if (e.isTrusted && e.target === window) tell("focus"); }); addEventListener("blur", (e) => { if (e.isTrusted && e.target === window) tell("blur"); }); let drawn = ""; const part = ${FRAME_VISIBLE_PART}; const seen = (f) => { try { return part.call(f).join(","); } catch { return ""; } }; const boxes = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { const r = f.getBoundingClientRect(); out += r.left + "," + r.top + "," + r.width + "," + r.height + ":" + seen(f) + ";"; } return out; }; let due = false; const look = () => { due = false; const now = boxes(); if (now !== drawn) { drawn = now; tell("moved"); } }; const moved = () => { if (due) return; due = true; requestAnimationFrame(look); }; addEventListener("scroll", moved, { capture: true, passive: true }); addEventListener("resize", moved); addEventListener("load", moved); for (const t of ["DOMContentLoaded", "transitionend", "animationend"]) addEventListener(t, moved, true); globalThis.visualViewport?.addEventListener("resize", moved); globalThis.visualViewport?.addEventListener("scroll", moved); setInterval(() => { if (document.querySelector("iframe, frame")) moved(); }, 500); moved(); })();`;
 
 /** PT-5d (M6.1): a frame's own viewport, in its own CSS px — evaluated in its session's local root. */
 const FRAME_SIZE = 'innerWidth + "," + innerHeight';
@@ -321,13 +332,22 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     void (async () => {
       await send("Page.enable");
       await send("Page.setInterceptFileChooserDialog", NO_FILE_PICKER);
-      // PT-5d: its words (its focus, its frames, its size) through its own binding — heard with its Runtime on
+      // PT-5d: its words (its focus, its frames) through its own binding — heard with its Runtime on; the binding and the
+      // words in the words' own world (M7 H1), the guard in its own
       await send("Runtime.enable");
-      await send("Runtime.addBinding", { name: FRAME_WORDS_BINDING });
+      await send("Runtime.addBinding", {
+        name: FRAME_WORDS_BINDING,
+        executionContextName: WORDS_WORLD,
+      });
       // (PT-5d: run at once in the document it holds as it attaches — attached without waiting, its first document is
       // already running: the PT-5a guard had never reached it)
       await send("Page.addScriptToEvaluateOnNewDocument", {
-        source: `${PAGE_GUARD_SCRIPT}${FRAME_WORDS_SCRIPT}`,
+        source: PAGE_GUARD_SCRIPT,
+        runImmediately: true,
+      });
+      await send("Page.addScriptToEvaluateOnNewDocument", {
+        source: FRAME_WORDS_SCRIPT,
+        worldName: WORDS_WORLD,
         runImmediately: true,
       });
       // PT-5d (M2) — A FRAME IN A FRAME is guarded too: auto-attach is per session, so this child's own, as the page's —
@@ -966,11 +986,22 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
           // PT-5c (ruling 1): the page's word of its scale — a binding, heard only with the Runtime on (its cost: each
           // console line of the page is one message more to main — PT-5c's probe)
           await cdp.sendCommand("Runtime.enable");
-          await cdp.sendCommand("Runtime.addBinding", { name: PAGE_SCALE_BINDING });
+          // (PT-5d, M7 H1: each binding the words' world's alone)
+          await cdp.sendCommand("Runtime.addBinding", {
+            name: PAGE_SCALE_BINDING,
+            executionContextName: WORDS_WORLD,
+          });
           // PT-5d: the page's own words of its frames and its focus
-          await cdp.sendCommand("Runtime.addBinding", { name: FRAME_WORDS_BINDING });
+          await cdp.sendCommand("Runtime.addBinding", {
+            name: FRAME_WORDS_BINDING,
+            executionContextName: WORDS_WORLD,
+          });
           await cdp.sendCommand("Page.addScriptToEvaluateOnNewDocument", {
-            source: `${PAGE_GUARD_SCRIPT}${PAGE_SCALE_SCRIPT}${FRAME_WORDS_SCRIPT}`,
+            source: PAGE_GUARD_SCRIPT,
+          });
+          await cdp.sendCommand("Page.addScriptToEvaluateOnNewDocument", {
+            source: `${PAGE_SCALE_SCRIPT}${FRAME_WORDS_SCRIPT}`,
+            worldName: WORDS_WORLD,
           });
           await cdp.sendCommand("Target.setAutoAttach", {
             autoAttach: true,

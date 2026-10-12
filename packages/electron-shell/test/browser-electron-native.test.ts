@@ -81,6 +81,7 @@ import {
   FRAME_WORDS_SCRIPT,
   PAGE_SCALE_BINDING,
   PAGE_SCALE_SCRIPT,
+  WORDS_WORLD,
 } from "../src/main/live-surfaces/browser-electron-native";
 import {
   BrowserLiveSurfaceRuntime,
@@ -310,17 +311,26 @@ describe("PT-5c (ruling 1) — the page SAYS its scale; the hand's commands neve
     for (let i = 0; i < 20; i += 1) await Promise.resolve();
   };
 
-  it("the page's session turns its Runtime on and takes a BINDING for the page's word — before the guard said to every new document, which carries the word's reporter; all of it before the device's first command", async () => {
+  it("the page's session turns its Runtime on and takes a BINDING for the page's word — before the guard said to every new document, which carries the word's reporter; all of it before the device's first command; PT-5d (M7 H1): the bindings and the words in an ISOLATED world, the guard in the page's own", async () => {
     const r = recording();
     await r.native.setEmulation(EMULATION);
     const methods = r.methods();
     expect(methods).toContain("Runtime.enable");
-    expect(r.sent.find((c) => c.method === "Runtime.addBinding")?.params).toEqual({
-      name: PAGE_SCALE_BINDING,
-    });
-    const guard = r.sent.find((c) => c.method === "Page.addScriptToEvaluateOnNewDocument")
-      ?.params as { source?: string } | undefined;
+    // H1: no page script sees, catches or calls a binding — each is the isolated world's alone
+    expect(r.sent.filter((c) => c.method === "Runtime.addBinding").map((c) => c.params)).toEqual([
+      { name: PAGE_SCALE_BINDING, executionContextName: WORDS_WORLD },
+      { name: FRAME_WORDS_BINDING, executionContextName: WORDS_WORLD },
+    ]);
+    const scripts = r.sent
+      .filter((c) => c.method === "Page.addScriptToEvaluateOnNewDocument")
+      .map((c) => c.params as { source: string; worldName?: string });
+    // the guard in the page's OWN world (it replaces the page's own `window.close` and `prompt`); the words in theirs
+    expect(scripts.map((x) => x.worldName)).toEqual([undefined, WORDS_WORLD]);
+    expect(scripts[0]?.source).not.toContain(PAGE_SCALE_BINDING);
+    expect(scripts[0]?.source).not.toContain(FRAME_WORDS_BINDING);
+    const guard = scripts[1];
     expect(guard?.source).toContain(PAGE_SCALE_BINDING);
+    expect(guard?.source).toContain(FRAME_WORDS_BINDING);
     expect(guard?.source).toContain("visualViewport");
     expect(methods.indexOf("Runtime.enable")).toBeLessThan(methods.indexOf("Runtime.addBinding"));
     expect(methods.indexOf("Runtime.addBinding")).toBeLessThan(
@@ -770,9 +780,21 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       "Runtime.enable",
       "Runtime.addBinding",
       "Page.addScriptToEvaluateOnNewDocument",
+      "Page.addScriptToEvaluateOnNewDocument",
       "Target.setAutoAttach",
     ];
     expect(r.on("frame-1")).toEqual(guards);
+    // M7 H1: its binding and its words in the isolated world, its guard in its own
+    expect(
+      r.sent.find((c) => c.session === "frame-1" && c.method === "Runtime.addBinding")?.params,
+    ).toEqual({ name: FRAME_WORDS_BINDING, executionContextName: WORDS_WORLD });
+    expect(
+      r.sent
+        .filter(
+          (c) => c.session === "frame-1" && c.method === "Page.addScriptToEvaluateOnNewDocument",
+        )
+        .map((c) => (c.params as { worldName?: string }).worldName),
+    ).toEqual([undefined, WORDS_WORLD]);
     expect(
       r.sent.find((c) => c.session === "frame-1" && c.method === "Target.setAutoAttach")?.params,
     ).toEqual({
@@ -781,11 +803,10 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       flatten: true,
     });
     // its guard and its words run in the document it already holds too
-    expect(
-      r.sent.find(
-        (c) => c.session === "frame-1" && c.method === "Page.addScriptToEvaluateOnNewDocument",
-      )?.params,
-    ).toMatchObject({ runImmediately: true });
+    for (const c of r.sent.filter(
+      (x) => x.session === "frame-1" && x.method === "Page.addScriptToEvaluateOnNewDocument",
+    ))
+      expect(c.params).toMatchObject({ runImmediately: true });
     // the frame in it attaches on ITS session: guarded the same — and where it is drawn is asked of ITS parent's session
     r.attach("frame-2", "frame-1");
     await turns();
@@ -1027,7 +1048,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
   it("rulings 1, M3 — a document's WORDS, run: it takes the binding out of the page's reach; says `focus` and `blur` of its OWN window (never an element's), and `moved` — only when its frames' boxes or their VISIBLE parts changed (M6.3a: a clip that changes with the frame not moving), once an animation frame; never its size (M6.1: a frame's own viewport is READ with its quad); a document holding no frame never says moved; the blank and a document with no binding say nothing", () => {
     const run = (options: { href?: string; binding?: boolean } = {}) => {
       const said: string[] = [];
-      const on = new Map<string, ((event?: { target?: unknown }) => void)[]>();
+      const on = new Map<string, ((event?: { target?: unknown; isTrusted?: boolean }) => void)[]>();
       let frame: (() => void) | undefined;
       let every: (() => void) | undefined;
       const rects: { left: number; top: number; width: number; height: number }[] = [];
@@ -1104,7 +1125,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         g,
         self,
         { href: options.href ?? "https://example.test/a" },
-        (type: string, listener: (event?: { target?: unknown }) => void) =>
+        (type: string, listener: (event?: { target?: unknown; isTrusted?: boolean }) => void) =>
           on.set(type, [...(on.get(type) ?? []), listener]),
         (callback: () => void) => {
           frame = callback;
@@ -1122,7 +1143,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         self.innerHeight,
         computed,
       );
-      const fire = (type: string, event?: { target?: unknown }): void => {
+      const fire = (type: string, event?: { target?: unknown; isTrusted?: boolean }): void => {
         for (const listener of on.get(type) ?? []) listener(event);
       };
       const tick = (): void => {
@@ -1141,9 +1162,13 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     d.tick();
     expect(d.said).toEqual([]);
     // its window's focus and blur — an element's focus (its target not the window) is not the window's
-    d.fire("focus", { target: d.self });
-    d.fire("focus", { target: {} });
-    d.fire("blur", { target: d.self });
+    d.fire("focus", { target: d.self, isTrusted: true });
+    d.fire("focus", { target: {}, isTrusted: true });
+    d.fire("blur", { target: d.self, isTrusted: true });
+    expect(d.said).toEqual(["focus", "blur"]);
+    // M7 H1: a SYNTHETIC focus or blur — `window.dispatchEvent(new Event("focus"))`, the page's own script — says nothing
+    d.fire("focus", { target: d.self, isTrusted: false });
+    d.fire("blur", { target: d.self, isTrusted: false });
     expect(d.said).toEqual(["focus", "blur"]);
     // a frame added: the half-second look says it moved — once; a scroll that moved nothing says nothing
     d.rects.push({ left: 100, top: 80, width: 400, height: 300 });
