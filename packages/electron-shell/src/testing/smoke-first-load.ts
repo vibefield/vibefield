@@ -211,7 +211,7 @@ export interface PendingSeen {
   /** how many times the gate was asked since the link's press: the navigation PENDED there */
   readonly asked: number;
   /** the desktop twin: a device command told meanwhile (the pane's own scheme — the engine answers none while the navigation
-   * pends) */
+   * pends): main's own count of devices told MOVED after the gate was asked (PT-5c R5) */
   readonly told: boolean;
   /** the page that stood, after the press on its field: its touchstarts, what has its focus, its field's words */
   readonly standing: {
@@ -1422,9 +1422,17 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
           (n) => n >= 1,
         );
         if (name === "laptop") {
-          // a device command the engine leaves unanswered while the navigation pends: the pane's own scheme
+          // a device command the engine leaves unanswered while the navigation pends: the pane's own scheme — TOLD when
+          // main's own count of devices told has moved (R5: never the desk's write answering — a run where no device
+          // command went out says it proved nothing)
           const e = await entityOf(pane);
-          told = await js<boolean>(`globalThis.__vfDesk.writeProps(${e}, { scheme: "dark" })`);
+          const emulations = async (): Promise<number> =>
+            (await js<Record<string, number>>("globalThis.__vfDesk.live()?.stats ?? {}"))
+              .emulations ?? 0;
+          const told0 = await emulations();
+          await js<boolean>(`globalThis.__vfDesk.writeProps(${e}, { scheme: "dark" })`);
+          told =
+            (await waitFor("the pane's scheme told", 3_000, emulations, (n) => n > told0)) > told0;
           await sleep(500);
         }
         await h.press(onWindow(word0.parts.field));
