@@ -62,14 +62,17 @@ export const FRAME_WORDS_BINDING = "__vibefieldFrameWords";
  * PT-5d (rulings 1, M3) — said to every document of every session (the page's and its frames'): it takes the binding for
  * itself and deletes it from the page's reach, then SAYS
  *  - `focus` and `blur` of its OWN window — where the keys, text, a composition and a command go (the frame whose window has
- *    the focus; the page's when none has);
- *  - `size:W,H` — its viewport, in its own CSS px (a frame under a transform is drawn at another size);
+ *    the focus; the page's when none has; a blur moves nothing — M6.2);
  *  - `moved` — its frames' boxes changed (a scroll of any of its scrollers, a resize, its visual viewport, a transition's
  *    or an animation's end, a load — and, for what no event says, a look every half second while it holds a frame), once
  *    an animation frame at most, and only when they did: main then reads their quads again, off the hand's path.
- * Never the bootstrap blank.
+ * Never the bootstrap blank. Never its size (M6.1): every document of a frame's process says its words on the frame's
+ * session — its own children of its site too — so a frame's viewport is READ of its local root, beside its quad.
  */
-export const FRAME_WORDS_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; try { delete globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; } catch {} if (typeof say !== "function" || location.href === "about:blank") return; const tell = (word) => { try { say(word); } catch {} }; addEventListener("focus", (e) => { if (e.target === window) tell("focus"); }); addEventListener("blur", (e) => { if (e.target === window) tell("blur"); }); let size = ""; const sized = () => { const now = innerWidth + "," + innerHeight; if (now !== size) { size = now; tell("size:" + now); } }; let drawn = ""; const boxes = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { const r = f.getBoundingClientRect(); out += r.left + "," + r.top + "," + r.width + "," + r.height + ";"; } return out; }; let due = false; const look = () => { due = false; const now = boxes(); if (now !== drawn) { drawn = now; tell("moved"); } }; const moved = () => { if (due) return; due = true; requestAnimationFrame(look); }; addEventListener("scroll", moved, { capture: true, passive: true }); addEventListener("resize", () => { sized(); moved(); }); addEventListener("load", () => { sized(); moved(); }); for (const t of ["DOMContentLoaded", "transitionend", "animationend"]) addEventListener(t, moved, true); globalThis.visualViewport?.addEventListener("resize", moved); globalThis.visualViewport?.addEventListener("scroll", moved); setInterval(() => { if (document.querySelector("iframe, frame")) moved(); }, 500); sized(); moved(); })();`;
+export const FRAME_WORDS_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; try { delete globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; } catch {} if (typeof say !== "function" || location.href === "about:blank") return; const tell = (word) => { try { say(word); } catch {} }; addEventListener("focus", (e) => { if (e.target === window) tell("focus"); }); addEventListener("blur", (e) => { if (e.target === window) tell("blur"); }); let drawn = ""; const boxes = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { const r = f.getBoundingClientRect(); out += r.left + "," + r.top + "," + r.width + "," + r.height + ";"; } return out; }; let due = false; const look = () => { due = false; const now = boxes(); if (now !== drawn) { drawn = now; tell("moved"); } }; const moved = () => { if (due) return; due = true; requestAnimationFrame(look); }; addEventListener("scroll", moved, { capture: true, passive: true }); addEventListener("resize", moved); addEventListener("load", moved); for (const t of ["DOMContentLoaded", "transitionend", "animationend"]) addEventListener(t, moved, true); globalThis.visualViewport?.addEventListener("resize", moved); globalThis.visualViewport?.addEventListener("scroll", moved); setInterval(() => { if (document.querySelector("iframe, frame")) moved(); }, 500); moved(); })();`;
+
+/** PT-5d (M6.1): a frame's own viewport, in its own CSS px — evaluated in its session's local root. */
+const FRAME_SIZE = 'innerWidth + "," + innerHeight';
 
 /** PT-5c (R3): the least time between two discards of the page's console entries. */
 const CONSOLE_DISCARD_MS = 1_000;
@@ -314,23 +317,17 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
 
   /**
    * PT-5d (rulings 1, M3) — a document's word, on its own session (`undefined`: the page's): its window's focus — where
-   * the keys go (its blur moves nothing: M6.2); its frames moved — their quads read again; its viewport's size (a
-   * frame's: under a transform it is drawn at another).
+   * the keys go (its blur moves nothing: M6.2); its frames moved — their quads read again. (No other word moves anything:
+   * a frame's size is READ — M6.1.)
    */
   private frameWord(session: string | undefined, word: string): void {
     if (word === "focus" || word === "blur") {
       this.#frames.focus(session, word === "focus");
       return;
     }
-    if (word === "moved") {
+    if (word === "moved")
       for (const frame of this.#frames.frames())
         if (frame.parent === session) this.placeFrame(frame.session);
-      return;
-    }
-    if (word.startsWith("size:") && session !== undefined) {
-      const [w, h] = word.slice(5).split(",").map(Number);
-      if (w !== undefined && h !== undefined) this.#frames.sized(session, w, h);
-    }
   }
 
   /**
@@ -338,7 +335,11 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * document (`DOM.getFrameOwner`, once) and that element's content quad (`DOM.getBoxModel`: its scroll and its transform
    * in it) on the parent's session. One read in flight a frame; another asked meanwhile is read once it answers. A
    * frame not laid out (`display: none`) has no quad: nothing lands in it. (While a navigation pends the renderer answers
-   * none of it: the quad kept is the last read.)
+   * none of it: the quad kept is the last read.) PT-5d (M6.1): and with the quad, the frame's OWN viewport — read of its
+   * session's local root (`Runtime.evaluate` in its own frame), never said by a document of it: every document of its
+   * process speaks on its session, its own children of its site too. Not awaited by the placement (a frame busy with its
+   * own load, or hung, holds no placement up): until it answers the frame is taken at its quad's own size, and an answer
+   * for a quad no longer current is dropped.
    */
   private placeFrame(session: string): void {
     const inFlight = this.#placing.get(session);
@@ -369,12 +370,24 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         frame.parent,
       )) as { readonly model?: { readonly content?: unknown } };
       const content = box.model?.content;
-      this.#frames.placed(
-        session,
+      const quad =
         Array.isArray(content) && content.length === 8 && content.every(Number.isFinite)
           ? (content as unknown as FrameQuad)
-          : undefined,
-      );
+          : undefined;
+      const placement = this.#frames.placed(session, quad);
+      if (quad === undefined) return;
+      void cdp
+        .sendCommand("Runtime.evaluate", { expression: FRAME_SIZE, returnByValue: true }, session)
+        .then(
+          (answer) => {
+            const value = (answer as { readonly result?: { readonly value?: unknown } }).result
+              ?.value;
+            if (typeof value !== "string") return;
+            const [w, h] = value.split(",").map(Number);
+            if (w !== undefined && h !== undefined) this.#frames.sized(session, w, h, placement);
+          },
+          () => undefined,
+        );
     })()
       .catch(() => this.#frames.placed(session, undefined))
       .finally(() => {

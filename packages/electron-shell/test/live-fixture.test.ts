@@ -642,7 +642,7 @@ describe("the live pane's fixture page", () => {
     expect(win.__keyLog).toEqual(["down KeyQ", "up KeyQ"]);
   });
 
-  it("PT-5d: pages of THREE SITES — `/frames/host` at `hostOrigin` (localhost) drawing a frame of the fixture's own origin (127.0.0.1) at `FRAMES_BOX`, that frame drawing one of `innerOrigin` ([::1]); each served at every origin, its name kept clean; `/frames/next` and `/frames/loop` (an endless loop on its button)", async () => {
+  it("PT-5d: pages of THREE SITES — `/frames/host` at `hostOrigin` (localhost) drawing a frame of the fixture's own origin (127.0.0.1) at `FRAMES_BOX`, that frame drawing one of `innerOrigin` ([::1]) and one of its OWN site (`/frames/same`, M6.1 — a document of its process, its size another); each served at every origin, its name kept clean; `/frames/next` and `/frames/loop` (an endless loop on its button)", async () => {
     fixture = await startLiveFixture();
     const port = new URL(fixture.origin).port;
     expect(fixture.hostOrigin).toBe(`http://localhost:${port}`);
@@ -659,6 +659,8 @@ describe("the live pane's fixture page", () => {
     );
     const frame = await page(fixture.origin, "/frames/frame?p=a");
     expect(frame).toContain(`<iframe id="n" src="${fixture.innerOrigin}/frames/inner?p=a"`);
+    expect(frame).toContain('<iframe id="c" src="/frames/same?p=a"');
+    expect(await page(fixture.origin, "/frames/same?p=a")).toContain('id="sb"');
     for (const id of ["b", "bl", "l", "t", "w", "r", "s"]) expect(frame).toContain(`id="${id}"`);
     expect(frame).toContain(FRAMES_WORD);
     const inner = await page(fixture.innerOrigin, "/frames/inner?p=a");
@@ -677,7 +679,7 @@ describe("the live pane's fixture page", () => {
       if (script === undefined) throw new Error(`${path} carries no frames script`);
       const on = new Map<string, ((e: Record<string, unknown>) => void)[]>();
       const parts = new Map<string, Record<string, unknown>>();
-      for (const id of ["b", "t", "r", "s", "f", "if", "ib"])
+      for (const id of ["b", "t", "r", "s", "f", "if", "ib", "sb"])
         parts.set(id, {
           id,
           value: id === "r" ? "10" : id === "t" ? "héllo" : "",
@@ -769,6 +771,10 @@ describe("the live pane's fixture page", () => {
     frame.location.href = "";
     await frame.ask();
     expect(frame.location.href).toBe("");
+    // the frame's own child of its site says its clicks at their points too (M6.1)
+    const same = await run(fixture.origin, "/frames/same?p=g");
+    same.fire("click", { target: same.parts.get("sb"), clientX: 70.2, clientY: 30.4 });
+    expect((await same.ask()).framed.clicks).toEqual([[70, 30]]);
     // the host hears the hand on the frame's ELEMENT alone; its frame's box is its `frame`
     const host = await run(fixture.hostOrigin, "/frames/host?p=g");
     host.fire("pointerdown", { target: host.parts.get("b") });

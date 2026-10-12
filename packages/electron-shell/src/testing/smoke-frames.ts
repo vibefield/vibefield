@@ -4,7 +4,9 @@
 // with every ask — testing/live-fixture.ts), the desk's (each face's row) and main's (its windows):
 //   FRAME-PRESS  — a press on the frame's button: the frame hears its click within 1 CSS px of where the hand pressed, and
 //                  the host nothing on the frame's element (before PT-5d: every press over the frame was the host's, on
-//                  its element — PT-5d's probe — and the frame heard none);
+//                  its element — PT-5d's probe — and the frame heard none); then on the button of the frame's own child of
+//                  its site, the same (M6.1: that child's words, on the frame's session, once set the frame's size — every
+//                  press into the frame then landed elsewhere);
 //   FRAME-HOVER  — the cursor a pointer over the frame's link, not off it (the frame's cursor comes through the page's own
 //                  `cursor-changed`);
 //   FRAME-DOUBLE — a double-click selects the frame's word;
@@ -68,6 +70,8 @@ type Point = readonly [number, number];
 /** What the rows saw — the SMOKE_CANVAS_FRAMES line, and what the judges read. */
 export interface FramesSeen {
   readonly press: FramePressSeen;
+  /** FRAME-PRESS's second press: the button of the frame's own child of its site (M6.1) */
+  readonly same: FramePressSeen;
   readonly hover: { readonly over: string | null; readonly off: string | null };
   readonly double: { readonly sel: string | null };
   readonly drag: {
@@ -485,6 +489,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const HOST = "/frames/host?p=f";
     const FRAME = "/frames/frame?p=f";
     const INNER = "/frames/inner?p=f";
+    const SAME = "/frames/same?p=f";
     await waitFor(
       "the host's word",
       FRAMES_ROWS.withinMs,
@@ -502,6 +507,12 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       FRAMES_ROWS.withinMs,
       () => at(INNER),
       (r) => r?.framed?.parts.ib !== undefined,
+    );
+    await waitFor(
+      "the frame's own child's word",
+      FRAMES_ROWS.withinMs,
+      () => at(SAME),
+      (r) => r?.framed?.parts.sb !== undefined,
     );
     await pickUp(host);
     // (the frames' places are read off the hand's path: give them a moment once the pane is in hand)
@@ -540,6 +551,29 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     };
     said.press = press;
     problems.push(...judgeFramePress("FRAME-PRESS", press));
+    // … and in the frame's own child of its site (M6.1): through the frame's box of it, its button's own point
+    const c = framed()?.parts.c ?? null;
+    const sb = at(SAME)?.framed?.parts.sb ?? null;
+    const sameAimed: Point | null = c === null || sb === null ? null : centre(sb);
+    const sameClicks0 = at(SAME)?.framed?.clicks.length ?? 0;
+    const heardSame = hostHeard().length;
+    if (c !== null && sameAimed !== null) {
+      const w = await inFrame(c.x + sameAimed[0], c.y + sameAimed[1]);
+      if (w !== null) await h.press(w);
+    }
+    const afterSame = await waitFor(
+      "the own-site child's click",
+      5_000,
+      () => at(SAME)?.framed ?? null,
+      (f) => (f?.clicks.length ?? 0) > sameClicks0,
+    );
+    const same: FramePressSeen = {
+      aimed: sameAimed,
+      clicked: afterSame?.clicks[sameClicks0] ?? null,
+      hostHeard: hostHeard().slice(heardSame),
+    };
+    said.same = same;
+    problems.push(...judgeFramePress("FRAME-PRESS (its own site's frame in it)", same));
     await shoot("pt-5d-frame-press.png");
 
     // ── FRAME-HOVER ──────────────────────────────────────────────────────────────────────────────────────────────────

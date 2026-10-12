@@ -1021,7 +1021,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     expect(r.hand()).toEqual(["mousePressed@page 1,1"]);
   });
 
-  it("rulings 1, M3 — a document's WORDS, run: it takes the binding out of the page's reach; says its viewport's size, `focus` and `blur` of its OWN window (never an element's), and `moved` — only when its frames' boxes changed, once an animation frame; a document holding no frame never says moved; the blank and a document with no binding say nothing", () => {
+  it("rulings 1, M3 — a document's WORDS, run: it takes the binding out of the page's reach; says `focus` and `blur` of its OWN window (never an element's), and `moved` — only when its frames' boxes changed, once an animation frame; never its size (M6.1: a frame's own viewport is READ with its quad); a document holding no frame never says moved; the blank and a document with no binding say nothing", () => {
     const run = (options: { href?: string; binding?: boolean } = {}) => {
       const said: string[] = [];
       const on = new Map<string, ((event?: { target?: unknown }) => void)[]>();
@@ -1074,13 +1074,16 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     const d = run();
     expect(FRAME_WORDS_BINDING in d.g).toBe(false);
     d.tick();
-    // its size, at once; no frame in it: no `moved`
-    expect(d.said).toEqual(["size:400,300"]);
+    // nothing at once, nor at a resize or its load — no size (M6.1); no frame in it: no `moved`
+    d.fire("resize");
+    d.fire("load");
+    d.tick();
+    expect(d.said).toEqual([]);
     // its window's focus and blur — an element's focus (its target not the window) is not the window's
     d.fire("focus", { target: d.self });
     d.fire("focus", { target: {} });
     d.fire("blur", { target: d.self });
-    expect(d.said).toEqual(["size:400,300", "focus", "blur"]);
+    expect(d.said).toEqual(["focus", "blur"]);
     // a frame added: the half-second look says it moved — once; a scroll that moved nothing says nothing
     d.rects.push({ left: 100, top: 80, width: 400, height: 300 });
     d.every();
@@ -1134,5 +1137,40 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       clickCount: 1,
     });
     expect(r.hand()).toEqual(["mousePressed@F 80,40"]);
+  });
+
+  it("M6.1 — a frame's own viewport is READ beside its quad, of its session's LOCAL ROOT (`Runtime.evaluate` on its own session): under a transform a point is scaled by it; a word of its own child of its site never moves it", async () => {
+    const r = recording((method, _params, session) => {
+      if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };
+      if (method === "DOM.getBoxModel")
+        return { model: { content: [100, 80, 500, 80, 500, 380, 100, 380] } };
+      // drawn at 400 × 300, its own viewport 200 × 150 (a `transform: scale(2)`)
+      if (method === "Runtime.evaluate" && session === "F")
+        return { result: { type: "string", value: "200,150" } };
+      return {};
+    });
+    await r.native.loadURL("https://host.test/a");
+    r.at("https://host.test/a");
+    r.contents.emit("did-navigate", {}, "https://host.test/a");
+    r.attach("F");
+    await turns();
+    expect(r.sent.find((c) => c.method === "Runtime.evaluate")).toMatchObject({
+      session: "F",
+      params: { returnByValue: true },
+    });
+    // a word of F's own child of its site (its viewport 640 × 480): under the guard before M6.1 every document said it
+    r.emit(
+      "Runtime.bindingCalled",
+      { name: FRAME_WORDS_BINDING, payload: "size:640,480", executionContextId: 2 },
+      "F",
+    );
+    await r.native.dispatchMouse({
+      type: "mousePressed",
+      x: 300,
+      y: 230,
+      button: "left",
+      clickCount: 1,
+    });
+    expect(r.hand()).toEqual(["mousePressed@F 100,75"]);
   });
 });

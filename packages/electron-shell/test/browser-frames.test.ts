@@ -73,8 +73,7 @@ describe("PT-5d (ruling 1) — the frame drawn at a point takes the event, on it
     f.pageCommitted(1);
     f.attached("S", "t-S", undefined);
     // 200 × 100 of its own drawn at 400 × 200 from the page's 100, 100
-    f.placed("S", box(100, 100, 400, 200));
-    f.sized("S", 200, 100);
+    f.sized("S", 200, 100, f.placed("S", box(100, 100, 400, 200)));
     expect(f.press("left", 300, 200)).toEqual({
       target: { session: "S", document: 0 },
       x: 100,
@@ -83,12 +82,37 @@ describe("PT-5d (ruling 1) — the frame drawn at a point takes the event, on it
     f.release("left", 300, 200);
     f.attached("R", "t-R", undefined);
     // 100 × 50 of its own turned a quarter clockwise about its top-left at the page's 600, 100: its top edge points down
-    f.placed("R", [600, 100, 600, 200, 550, 200, 550, 100]);
-    f.sized("R", 100, 50);
+    f.sized("R", 100, 50, f.placed("R", [600, 100, 600, 200, 550, 200, 550, 100]));
     const at = f.press("left", 590, 130);
     expect(at.target.session).toBe("R");
     expect(at.x).toBeCloseTo(30, 9);
     expect(at.y).toBeCloseTo(10, 9);
+  });
+
+  it("M6.1 — a frame's own viewport is the one READ with its quad: a read for a quad no longer current is dropped; until its size is read, a frame is taken at its quad's own size", () => {
+    const f = new BrowserFrames();
+    f.pageCommitted(1);
+    f.attached("S", "t-S", undefined);
+    const first = f.placed("S", box(100, 100, 400, 200));
+    // its parent said `moved` before the first read answered: placed again — the first read lands late, for a quad gone
+    const second = f.placed("S", box(100, 100, 400, 200));
+    f.sized("S", 800, 400, first);
+    expect(f.press("left", 300, 200)).toEqual({
+      target: { session: "S", document: 0 },
+      x: 200,
+      y: 100,
+    });
+    f.release("left", 300, 200);
+    f.sized("S", 200, 100, second);
+    expect(f.press("left", 300, 200)).toMatchObject({ x: 100, y: 50 });
+    f.release("left", 300, 200);
+    // only moved (its parent scrolled by 50): its size kept
+    f.placed("S", box(100, 50, 400, 200));
+    expect(f.press("left", 300, 150)).toMatchObject({ x: 100, y: 50 });
+    f.release("left", 300, 150);
+    // drawn at another size (its owner resized): its quad's own size again until its own is read with it
+    f.placed("S", box(100, 100, 600, 300));
+    expect(f.press("left", 400, 250)).toMatchObject({ x: 300, y: 150 });
   });
 
   it("only the page's tree: a frame said to be in a frame the page does not hold is no target; a frame's going takes the frames in it", () => {

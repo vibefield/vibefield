@@ -50,6 +50,16 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     expect(judgeFramePress("FRAME-PRESS", { aimed: null, clicked: null, hostHeard: [] })).toEqual([
       "FRAME-PRESS: the frame's part could not be aimed at — the row proved nothing",
     ]);
+    // M6.1: its second press, in the frame's own child of its site — the same words, its own name
+    expect(
+      judgeFramePress("FRAME-PRESS (its own site's frame in it)", {
+        aimed: [70, 30],
+        clicked: [17, 7],
+        hostHeard: [],
+      }),
+    ).toEqual([
+      "FRAME-PRESS (its own site's frame in it): the frame's click landed at 17, 7, not where the hand pressed (70, 30, ±1)",
+    ]);
   });
 
   it("FRAME-HOVER: a pointer over the frame's link, not off it", () => {

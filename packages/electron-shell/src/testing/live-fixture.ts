@@ -71,8 +71,10 @@
 //                   never heard here: PT-5d's probe had the host hear every press over the frame, on its element);
 //   /frames/frame — the frame: a button (its click and its point: FRAME-PRESS), a link (FRAME-HOVER), a field (FRAME-TYPE),
 //                   a word (FRAME-DOUBLE), a range and the buttons its last move held (FRAME-DRAG), a scroller (FRAME-WHEEL),
-//                   its touches (FRAME-TOUCH), and a frame of a THIRD site (`[::1]`, `innerOrigin`): `/frames/inner`
-//                   (FRAME-NESTED); on the smoke's word (`goFrame`) it goes to `/frames/next` (FRAME-GONE);
+//                   its touches (FRAME-TOUCH), a frame of a THIRD site (`[::1]`, `innerOrigin`): `/frames/inner`
+//                   (FRAME-NESTED), and a frame of its OWN site: `/frames/same` (M6.1 — a document of its process, so on its
+//                   session, drawn at another size); on the smoke's word (`goFrame`) it goes to `/frames/next` (FRAME-GONE);
+//   /frames/same  — the frame's own child of its site: a button (its clicks and point — FRAME-PRESS presses it too);
 //   /frames/inner — the nested frame: a button (its clicks and point) and a file input counting its `cancel` and `change`
 //                   (FRAME-PICKER — M2: the picker intercepted in a frame inside a frame);
 //   /frames/next  — where the frame goes: a button, its clicks;
@@ -615,7 +617,7 @@ const framesScript = (ids: readonly string[], elementOnly?: string): string => `
   for (const type of ["pointerdown", "mousedown", "mouseup", "click", "dblclick", "touchstart", "touchend", "touchcancel"])
     addEventListener(type, (e) => {
       hear(e, e.type + " " + named(e.target));
-      if (e.type === "click" && e.target && ["b", "bl", "ib", "b2"].includes(e.target.id))
+      if (e.type === "click" && e.target && ["b", "bl", "ib", "b2", "sb"].includes(e.target.id))
         clicks.push([Math.round(e.clientX), Math.round(e.clientY)]);
     }, { capture: true, passive: true });
   addEventListener("keydown", (e) => hear(e, "keydown " + e.key), true);
@@ -680,7 +682,8 @@ ${FRAMES_STYLE}<style>body { background: #e9f0fb; height: 100vh; overflow: hidde
 <input id="r" type="range" min="0" max="100" value="10" style="left:20px;top:250px;width:260px;height:24px">
 <div id="s" style="position:absolute;left:320px;top:20px;width:140px;height:180px;overflow:auto;background:#fff"><div style="height:1200px"></div></div>
 <iframe id="n" src="${innerOrigin}/frames/inner?p=${cleanName(name)}" style="left:320px;top:230px;width:280px;height:160px"></iframe>
-${framesScript(["b", "bl", "l", "t", "w", "r", "s", "n"])}
+<iframe id="c" src="/frames/same?p=${cleanName(name)}" style="left:470px;top:20px;width:160px;height:100px"></iframe>
+${framesScript(["b", "bl", "l", "t", "w", "r", "s", "n", "c"])}
 </body></html>`;
 
 /** PT-5d — `/frames/inner?p=<name>`: the nested frame — a button and a file input. */
@@ -689,6 +692,14 @@ export const framesInnerHtml = (): string => `<!doctype html>
 <body><button id="ib" style="left:0;top:0;width:140px;height:80px">inner</button>
 <input id="if" type="file" style="left:150px;top:10px;width:120px;height:40px">
 ${framesScript(["ib", "if"])}
+</body></html>`;
+
+/** PT-5d (M6.1) — `/frames/same?p=<name>`: the frame's own child of its site — a document of the frame's process, so
+ * speaking on the frame's session, its viewport another size than the frame's — a button. */
+export const framesSameHtml = (): string => `<!doctype html>
+<html><head><meta charset="utf-8"><title>same site</title>${FRAMES_STYLE}<style>body { background: #f4d8f0; }</style></head>
+<body><button id="sb" style="left:10px;top:10px;width:120px;height:40px">same</button>
+${framesScript(["sb"])}
 </body></html>`;
 
 /** PT-5d — `/frames/next?p=<name>`: where the frame goes on the smoke's word — a button. */
@@ -927,11 +938,13 @@ export async function startLiveFixture(): Promise<LiveFixture> {
             ? framesFrameHtml(name, innerOrigin)
             : url.pathname === "/frames/inner"
               ? framesInnerHtml()
-              : url.pathname === "/frames/next"
-                ? framesNextHtml()
-                : url.pathname === "/frames/loop"
-                  ? framesLoopHtml()
-                  : null;
+              : url.pathname === "/frames/same"
+                ? framesSameHtml()
+                : url.pathname === "/frames/next"
+                  ? framesNextHtml()
+                  : url.pathname === "/frames/loop"
+                    ? framesLoopHtml()
+                    : null;
       if (page === null) {
         res.writeHead(404);
         res.end();

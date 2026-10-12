@@ -37,8 +37,10 @@ interface FrameRecord {
   readonly parent: string | undefined;
   /** its owner's content quad in its parent's viewport (none until the first read) */
   quad: FrameQuad | undefined;
-  /** its own viewport's size in its own CSS px, as its document says it (none: the quad's own) */
+  /** its own viewport's size in its own CSS px, READ of its local root with its quad (none: the quad's own) — M6.1 */
   size: readonly [number, number] | undefined;
+  /** its placements, counted: a size read with a quad no longer current is dropped */
+  placement: number;
   /** its own commits */
   documents: number;
   /** its place in the order frames attach — the later one wins where two overlap */
@@ -74,6 +76,7 @@ export class BrowserFrames {
       parent,
       quad: undefined,
       size: undefined,
+      placement: 0,
       documents: 0,
       order: this.#order,
     });
@@ -105,16 +108,27 @@ export class BrowserFrames {
     this.#hover = undefined;
   }
 
-  /** A frame's quad as its parent's session said it (`undefined`: it is not laid out — no box, nothing lands in it). */
-  placed(session: string, quad: FrameQuad | undefined): void {
+  /**
+   * A frame's quad as its parent's session said it (`undefined`: it is not laid out — no box, nothing lands in it); the
+   * placement's count, for the read of its own size that goes with it. PT-5d (M6.1): a quad DRAWN AT ANOTHER SIZE (its
+   * owner resized, its transform changed) unsays the size read before — the quad's own until its own is read; a quad that
+   * only moved (a scroll) keeps it.
+   */
+  placed(session: string, quad: FrameQuad | undefined): number {
     const frame = this.#frames.get(session);
-    if (frame !== undefined) frame.quad = quad;
+    if (frame === undefined) return 0;
+    if (quad === undefined || frame.quad === undefined || !sameDrawnSize(frame.quad, quad))
+      frame.size = undefined;
+    frame.quad = quad;
+    frame.placement += 1;
+    return frame.placement;
   }
 
-  /** A frame's own viewport, as its document says it. */
-  sized(session: string, width: number, height: number): void {
+  /** A frame's own viewport, read of its local root with the quad of `placement` — dropped if that is no longer current
+   * (PT-5d, M6.1: never a word of its documents — its own children of its site say theirs on its session too). */
+  sized(session: string, width: number, height: number, placement: number): void {
     const frame = this.#frames.get(session);
-    if (frame === undefined || !(width > 0 && height > 0)) return;
+    if (frame === undefined || frame.placement !== placement || !(width > 0 && height > 0)) return;
     frame.size = [width, height];
   }
 
@@ -286,6 +300,11 @@ export class BrowserFrames {
     return { session, document: this.#frames.get(session)?.documents ?? 0 };
   }
 }
+
+/** Two quads drawn at the same size — their two edges as long (to a hundredth of a px): only moved. */
+const sameDrawnSize = (a: FrameQuad, b: FrameQuad): boolean =>
+  Math.abs(Math.hypot(a[2] - a[0], a[3] - a[1]) - Math.hypot(b[2] - b[0], b[3] - b[1])) < 0.01 &&
+  Math.abs(Math.hypot(a[6] - a[0], a[7] - a[1]) - Math.hypot(b[6] - b[0], b[7] - b[1])) < 0.01;
 
 /** The same target: the same session, the same document. */
 const same = (a: FrameTarget, b: FrameTarget): boolean =>
