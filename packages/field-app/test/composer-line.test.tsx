@@ -400,6 +400,23 @@ describe("the interim send (thinking-four-views §11)", () => {
     expect(q(".vf-line-note").textContent).toBe("Copied — vibe-field's pane is not on screen");
   });
 
+  it("copies an aim at a shown pane that would drop the paste, and says its input is why", async () => {
+    // the deck's door answers false while the pane's input is closed
+    const used = mount("godview", { door: door({ paste: vi.fn(() => false) }) });
+    typeText("@");
+    press(editor(), { key: "Enter" });
+    typeText("run the tests");
+    await act(async () => {
+      press(editor(), { key: "Enter" });
+    });
+    expect(used.door?.paste).toHaveBeenCalledWith("s-vibe", "run the tests");
+    expect(used.write).toHaveBeenCalledWith("run the tests");
+    expect(q(".vf-line-note").textContent).toBe("Copied — vibe-field's pane is not taking input");
+    // sent all the same: the words go, the aim stays
+    expect(editor().textContent).toBe("");
+    expect(q('.vf-line-chip[data-chip="aim"]').textContent).toContain("vibe-field");
+  });
+
   it("keeps the draft when the clipboard refuses it, and says so", async () => {
     mount("canvas", { write: vi.fn(async () => Promise.reject(new Error("denied"))) });
     typeText("keep me");

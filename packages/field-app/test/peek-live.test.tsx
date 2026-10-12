@@ -35,7 +35,7 @@ import {
   whenGodviewFindDoor,
 } from "../src/frame/find-door";
 import type { LineViewDoor } from "../src/frame/line-door";
-import { type LiveOpenDoors, openLiveRow } from "../src/frame/live-open";
+import { LIVE_OPEN_WAIT_MS, type LiveOpenDoors, openLiveRow } from "../src/frame/live-open";
 import { PeekView } from "../src/frame/PeekView";
 import {
   liveFoot,
@@ -504,6 +504,28 @@ describe("opening a live row (`live-open.ts`)", () => {
       state: "refused",
       reason: "Godview is not showing its runs",
     });
+  });
+
+  it("from History, a deck that never shows it is refused in Jump to's words once the bound passes (2026-10-11)", async () => {
+    // Jump to's path, and Jump to's bound: the deck's mounts wait their turn
+    // (AR-4b), and a turn that never ends is said, never waited on
+    const at = {
+      ...doors(),
+      whenGodviewCanPlace: async () =>
+        ({ reveal: () => new Promise(() => undefined) }) as unknown as LineViewDoor,
+    };
+    const STILL_WAITING = { state: "still waiting" } as const;
+    vi.useFakeTimers();
+    try {
+      const opening = openLiveRow(row("pty-1"), "history", at);
+      await vi.advanceTimersByTimeAsync(LIVE_OPEN_WAIT_MS + 1_000);
+      expect(await Promise.race([opening, Promise.resolve(STILL_WAITING)])).toEqual({
+        state: "refused",
+        reason: "no pane showed it in 20 s",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

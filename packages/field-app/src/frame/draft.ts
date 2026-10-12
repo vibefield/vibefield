@@ -247,6 +247,7 @@ export type SendOutcome =
   | { readonly kind: "pasted"; readonly name: string }
   | { readonly kind: "copied" }
   | { readonly kind: "copied-off-screen"; readonly name: string }
+  | { readonly kind: "copied-input-closed"; readonly name: string }
   | { readonly kind: "copy-refused" };
 
 export function sendNote(outcome: SendOutcome): string {
@@ -257,6 +258,8 @@ export function sendNote(outcome: SendOutcome): string {
       return "Copied — no agent takes a message from here yet";
     case "copied-off-screen":
       return `Copied — ${outcome.name}'s pane is not on screen`;
+    case "copied-input-closed":
+      return `Copied — ${outcome.name}'s pane is not taking input`;
     case "copy-refused":
       return "Not sent — the clipboard refused it";
   }

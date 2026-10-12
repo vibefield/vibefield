@@ -14,7 +14,11 @@
  *   · R6 ③'s folders: by desktop, another desktop's never opened here;
  *   · R7 the chips; H4 each act's intent;
  *   · Resume refusing a gone folder with the reason, and a session another
- *     desktop holds (the host key).
+ *     desktop holds (the host key);
+ *   · an act never ending in silence (2026-10-11): a deck that never answers,
+ *     an answer that cannot be read and a throw are each refused in words;
+ *   · and never refused for the person's time (W7): while the deck asks the
+ *     restore question its bound stands, and the line says what it waits on.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -31,10 +35,21 @@ import { projectInk } from "@vibefield/design-kit/project-ink";
 import { isValidElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
+  hearLineSays,
+  type LineViewDoor,
+  type NewTerminalOutcome,
+  publishGodviewLineDoor,
+  resetGodviewLineDoorForTest,
+  WAITING_ON_PERSON_NOTE,
+} from "../src/frame/line-door";
+import {
   deviceOfHostKey,
+  HISTORY_DECK_WAIT_MS,
   type HistoryActsDeps,
   hostKeyOf,
+  jumpTarget,
   newAgent,
+  newAgentNote,
   projectIntent,
   resumeTarget,
   spawnParamsOf,
@@ -446,16 +461,36 @@ const deck = () => {
   };
 };
 
-const depsOf = (
-  client: ReturnType<typeof resumeClient>,
-  door: ReturnType<typeof deck>["door"],
-): HistoryActsDeps => ({
+const depsOf = (client: ReturnType<typeof resumeClient>, door: LineViewDoor): HistoryActsDeps => ({
   client,
   self: () => STUDIO,
   nameOf: (device) => (device === LAPTOP ? "Laptop" : "Studio"),
   deck: async () => door,
   showView: () => undefined,
 });
+
+/** `client`, with `method` answered by `answer` instead. */
+const answering = (
+  client: ReturnType<typeof resumeClient>,
+  method: string,
+  answer: () => Record<string, unknown>,
+): ReturnType<typeof resumeClient> => ({
+  calls: client.calls,
+  async request(asked: string, params: Record<string, unknown>) {
+    if (asked !== method) return await client.request(asked, params);
+    client.calls.push({ method: asked, params });
+    return answer();
+  },
+});
+
+/** What `pending` has come to by now, or STILL_WAITING — so an act that never
+ * ends is an assertion's red, not a test's timeout. */
+const STILL_WAITING = { state: "still waiting" } as const;
+const settledBy = <T,>(pending: Promise<T>): Promise<T | typeof STILL_WAITING> =>
+  Promise.race([pending, Promise.resolve(STILL_WAITING)]);
+
+/** A deck whose mount queue never answers: what both 10-11 reds met. */
+const neverAnswers = (): Promise<never> => new Promise(() => undefined);
 
 describe("the acts", () => {
   const TARGET = {
@@ -520,6 +555,231 @@ describe("the acts", () => {
       profileId: "claude:9a3d",
     });
     expect(place).toHaveBeenCalledTimes(1);
+  });
+
+  // 2026-10-11 — two `smoke:godview` reds: New agent started a run, moved the
+  // window to Godview, and the line said nothing for 60 s. An act's wait on the
+  // deck is bounded (the deck's mounts wait their turn, AR-4b), and every end
+  // after the spawn is said in words and logged.
+  it("New agent whose pane the deck never answers for is refused in words once the bound passes", async () => {
+    const client = resumeClient(true);
+    const { door } = deck();
+    const unplaced = vi.fn();
+    vi.useFakeTimers();
+    try {
+      const pending = newAgent(
+        { ...depsOf(client, { ...door, place: neverAnswers }), unplaced },
+        {
+          provider: "claude",
+          cwd: "/Users/me/Projects/vibe-field",
+          where: "~/Projects/vibe-field",
+        },
+      );
+      await vi.advanceTimersByTimeAsync(HISTORY_DECK_WAIT_MS + 1_000);
+      const outcome = await settledBy(pending);
+      expect(outcome).toEqual({
+        state: "refused",
+        reason: "it started, but no pane took it in 20 s",
+      });
+      expect(
+        newAgentNote({ state: "refused", reason: "it started, but no pane took it in 20 s" }),
+      ).toBe("Could not start — it started, but no pane took it in 20 s");
+      expect(unplaced).toHaveBeenCalledExactlyOnceWith("spawn", "no pane took it in 20 s");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("New agent whose answer cannot be read is refused in words — the run started, so it says so", async () => {
+    // `agent.spawn` answered, but not with a create ticket this build reads
+    const client = answering(resumeClient(true), "agent.spawn", () => ({}));
+    const { door, place } = deck();
+    const unplaced = vi.fn();
+    await expect(
+      newAgent(
+        { ...depsOf(client, door), unplaced },
+        {
+          provider: "claude",
+          cwd: "/Users/me/Projects/vibe-field",
+          where: "~/Projects/vibe-field",
+        },
+      ),
+    ).resolves.toEqual({
+      state: "refused",
+      reason: "it started, but no pane took it (fieldd's answer could not be read)",
+    });
+    expect(place).not.toHaveBeenCalled();
+    expect(unplaced).toHaveBeenCalledExactlyOnceWith(
+      "spawn",
+      expect.stringContaining("invalid_type"),
+    );
+  });
+
+  it("New agent whose deck throws as it places is refused in the throw's words", async () => {
+    const client = resumeClient(true);
+    const { door } = deck();
+    const unplaced = vi.fn();
+    const outcome = await newAgent(
+      {
+        ...depsOf(client, {
+          ...door,
+          place: async () => {
+            throw new Error("the routed terminal runtime has no fieldd client");
+          },
+        }),
+        unplaced,
+      },
+      { provider: "claude", cwd: "/w", where: "~/w" },
+    );
+    expect(outcome).toEqual({
+      state: "refused",
+      reason: "it started, but no pane took it (the routed terminal runtime has no fieldd client)",
+    });
+    expect(unplaced).toHaveBeenCalledExactlyOnceWith(
+      "spawn",
+      "the routed terminal runtime has no fieldd client",
+    );
+  });
+
+  it("Resume and Jump to whose pane the deck never answers for are refused in their own words", async () => {
+    vi.useFakeTimers();
+    try {
+      const { door } = deck();
+      const unplaced = vi.fn();
+      const resumed = resumeTarget(
+        { ...depsOf(resumeClient(true), { ...door, place: neverAnswers }), unplaced },
+        TARGET,
+      );
+      // a run continuing the chosen conversation here, so Jump to has a pane to show
+      const running = answering(resumeClient(true), "agent.list", () => ({
+        sessions: [{ ...SUMMARY, sessionId: TARGET.nativeSessionId }],
+      }));
+      const jumped = jumpTarget(
+        { ...depsOf(running, { ...door, reveal: neverAnswers }), unplaced },
+        TARGET,
+      );
+      await vi.advanceTimersByTimeAsync(HISTORY_DECK_WAIT_MS + 1_000);
+      expect(await settledBy(resumed)).toEqual({
+        state: "refused",
+        reason: "it resumed, but no pane took it in 20 s",
+      });
+      expect(await settledBy(jumped)).toEqual({
+        state: "refused",
+        reason: "no pane showed it in 20 s",
+      });
+      expect(unplaced).toHaveBeenCalledTimes(2);
+      expect(unplaced).toHaveBeenCalledWith("resume", "no pane took it in 20 s");
+      expect(unplaced).toHaveBeenCalledWith("jump", "no pane showed it in 20 s");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // W7 (GV-D5, N14 (a)): a launch opens Godview on the monitor alone, so an
+  // act's call can be the one that brings last time's panes back — and with
+  // some of them ended, the deck asks the person first. Their time is never
+  // the deck's: the bound waits while they decide, and the line says so.
+  describe("while the deck asks the person (W7)", () => {
+    const AGENT = { provider: "claude", cwd: "/w", where: "~/w" };
+
+    it("waits with the person past any bound, says what it waits on once, then lands", async () => {
+      const client = resumeClient(true);
+      const { door } = deck();
+      let land: (outcome: NewTerminalOutcome) => void = () => undefined;
+      const place = (): Promise<NewTerminalOutcome> =>
+        new Promise((resolve) => {
+          land = resolve;
+        });
+      const heard: string[] = [];
+      const stop = hearLineSays((text) => heard.push(text));
+      vi.useFakeTimers();
+      try {
+        // the call brought the deck up asking: restore last time's panes?
+        publishGodviewLineDoor({ ...door, place, waitsOnPerson: true });
+        const pending = newAgent(depsOf(client, { ...door, place }), AGENT);
+        await vi.advanceTimersByTimeAsync(HISTORY_DECK_WAIT_MS * 3);
+        expect(await settledBy(pending), "the person's time ran the deck's bound").toBe(
+          STILL_WAITING,
+        );
+        expect(heard).toEqual([WAITING_ON_PERSON_NOTE]);
+        // they answer; the deck places it
+        publishGodviewLineDoor({ ...door, place, waitsOnPerson: false });
+        land({ state: "opened" });
+        expect(await pending).toEqual({ state: "started", where: "~/w" });
+        expect(heard).toEqual([WAITING_ON_PERSON_NOTE]);
+      } finally {
+        vi.useRealTimers();
+        stop();
+        resetGodviewLineDoorForTest();
+      }
+    });
+
+    it("Resume and Jump to never say their 20 s while the person decides — only 20 s of the deck's own time after", async () => {
+      const { door } = deck();
+      const unplaced = vi.fn();
+      const asking = { ...door, place: neverAnswers, reveal: neverAnswers };
+      vi.useFakeTimers();
+      try {
+        publishGodviewLineDoor({ ...asking, waitsOnPerson: true });
+        const resumed = resumeTarget({ ...depsOf(resumeClient(true), asking), unplaced }, TARGET);
+        const running = answering(resumeClient(true), "agent.list", () => ({
+          sessions: [{ ...SUMMARY, sessionId: TARGET.nativeSessionId }],
+        }));
+        const jumped = jumpTarget({ ...depsOf(running, asking), unplaced }, TARGET);
+        // a minute of the person's time: neither act is refused for it
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(await settledBy(resumed)).toBe(STILL_WAITING);
+        expect(await settledBy(jumped)).toBe(STILL_WAITING);
+        expect(unplaced).not.toHaveBeenCalled();
+        // answered: the deck's own 20 s run from here
+        publishGodviewLineDoor({ ...asking, waitsOnPerson: false });
+        await vi.advanceTimersByTimeAsync(HISTORY_DECK_WAIT_MS - 1_000);
+        expect(await settledBy(resumed)).toBe(STILL_WAITING);
+        expect(await settledBy(jumped)).toBe(STILL_WAITING);
+        await vi.advanceTimersByTimeAsync(2_000);
+        expect(await settledBy(resumed)).toEqual({
+          state: "refused",
+          reason: "it resumed, but no pane took it in 20 s",
+        });
+        expect(await settledBy(jumped)).toEqual({
+          state: "refused",
+          reason: "no pane showed it in 20 s",
+        });
+      } finally {
+        vi.useRealTimers();
+        resetGodviewLineDoorForTest();
+      }
+    });
+
+    it("runs its bound on from where it stood once the person has answered", async () => {
+      const client = resumeClient(true);
+      const { door } = deck();
+      const unplaced = vi.fn();
+      vi.useFakeTimers();
+      try {
+        publishGodviewLineDoor({ ...door, place: neverAnswers });
+        const pending = newAgent(
+          { ...depsOf(client, { ...door, place: neverAnswers }), unplaced },
+          AGENT,
+        );
+        await vi.advanceTimersByTimeAsync(15_000);
+        // the deck's 15 s spent; now the question, for a minute
+        publishGodviewLineDoor({ ...door, place: neverAnswers, waitsOnPerson: true });
+        await vi.advanceTimersByTimeAsync(60_000);
+        publishGodviewLineDoor({ ...door, place: neverAnswers, waitsOnPerson: false });
+        await vi.advanceTimersByTimeAsync(4_000);
+        expect(await settledBy(pending)).toBe(STILL_WAITING);
+        await vi.advanceTimersByTimeAsync(2_000);
+        expect(await settledBy(pending)).toEqual({
+          state: "refused",
+          reason: "it started, but no pane took it in 20 s",
+        });
+        expect(unplaced).toHaveBeenCalledExactlyOnceWith("spawn", "no pane took it in 20 s");
+      } finally {
+        vi.useRealTimers();
+        resetGodviewLineDoorForTest();
+      }
+    });
   });
 });
 

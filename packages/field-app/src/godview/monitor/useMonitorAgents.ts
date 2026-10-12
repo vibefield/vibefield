@@ -19,6 +19,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { askGodviewDeckUp } from "../../frame/deck-door";
 import type { LiveFindAgent } from "../../frame/find-door";
 import type { MonitorFloorRecord } from "./agents";
 import { NO_RUNS, useChromeKey } from "./chrome-facts";
@@ -70,10 +71,12 @@ import { createWindowViewReplica, type WindowViewReplica } from "./window-view";
  *     the chosen profile tab recedes, and which rows this window shows at all
  *     (M3: the live ones, and none whose pane has exited).
  *   · THE VERBS — every one through the DOOR the deck built (`MonitorDoor`): a
- *     local row's select mounts its PTY in the active pane, a peer's attaches
- *     its terminal there, create opens an empty terminal — and every outcome is
- *     said out loud, in fieldd's own words. Views receive SDK commands; the
- *     window handles the door's promises.
+ *     local row's select brings its PTY into the terminals, a peer's attaches
+ *     its terminal there, create opens an empty terminal — each placed by the
+ *     deck's one rule (GV-D4: its own pane focused, else beside the focused
+ *     pane, else in its place) — and every outcome is said out loud, in
+ *     fieldd's own words. Views receive SDK commands; the window handles the
+ *     door's promises.
  *   · THE SCREEN — what the active pane shows, reported to the backend
  *     (`reportShown`, L5), which keeps the unread marks.
  *
@@ -604,7 +607,9 @@ export function useMonitorAgents({
   /**
    * THE DOOR, opened (GT-D17). A remote row's select is the reference app's
    * `commands.select` means:
-   * "Mount this session in the active pane". The mechanics are the deck's —
+   * "Mount this session in the active pane" — since GV-D4 (2026-10-11), placed
+   * as any session with no pane is: beside the focused pane, in its place with
+   * three showing, or its own pane focused. The mechanics are the deck's —
    * `door.attach` is where the runtime and the workspace live — and the one
    * thing that crosses back is an outcome, said out loud.
    */
@@ -651,8 +656,12 @@ export function useMonitorAgents({
 
   /**
    * A LOCAL row's select (AR-3): a managed agent's PTY, or an unclaimed
-   * terminal, mounted in the pane the user is in. A row already showing there
-   * is acknowledged rather than re-mounted; a row whose PTY the board no longer
+   * terminal, brought into the terminals by the deck's rule (GV-D4,
+   * `deck-placement.ts`): a session a pane already shows is focused where it
+   * is, never mounted twice; one with no pane opens beside the focused pane
+   * while fewer than three show, and takes its place after. The door answers
+   * which, and the words follow. A row already in the active pane is
+   * acknowledged without asking the door; a row whose PTY the board no longer
    * names has nothing to mount and says so.
    */
   const mountLocal = useCallback(
@@ -663,6 +672,9 @@ export function useMonitorAgents({
         return;
       }
       if (agent.active && panes.activeSessionId === sessionId) {
+        // the door is not asked, so the select is the call itself: with the
+        // terminals away, this session brings them back too (GV-D6)
+        askGodviewDeckUp();
         announce(`${projectName(agent)} is in the active pane`);
         return;
       }
@@ -680,7 +692,14 @@ export function useMonitorAgents({
         return;
       }
       setSelectedId(undefined);
-      announce(`${projectName(agent)} mounted in the active pane`);
+      announce(
+        outcome.placement === "focus"
+          ? // its own pane, focused: nothing was mounted
+            `${projectName(agent)} is in the active pane`
+          : outcome.placement === "beside"
+            ? `${projectName(agent)} opened in a new pane`
+            : `${projectName(agent)} mounted in the active pane`,
+      );
     },
     [announce, door, panes.activeSessionId],
   );
@@ -698,10 +717,12 @@ export function useMonitorAgents({
   );
 
   /**
-   * A new terminal, in the active pane (SB-3): under the Agent Profile the
-   * spawn bloom or the list's menu chose, else unbound. The views match the
-   * body they drew at the release point to the row by `spawnHint`, so the
-   * position is kept as given. Every outcome is said, a refusal in fieldd's own
+   * A new terminal (SB-3), placed by the deck's rule (GV-D4): beside the
+   * focused pane while fewer than three show, in its place after — under the
+   * Agent Profile the spawn bloom or the list's menu chose, else unbound. The
+   * views match the body they drew at the release point to the row by
+   * `spawnHint`, so the position is kept as given. Every outcome is said, a
+   * refusal in fieldd's own
    * words; a create that opened nothing then REJECTS with the sentence it said,
    * so a view's pending body is put away at once rather than waiting its birth out.
    */
@@ -753,6 +774,8 @@ export function useMonitorAgents({
       // the door's answer names the session: its row keeps the position from
       // here on, whichever row claimed it first
       if (position) setSpawnHints((current) => new Map(current).set(outcome.sessionId, position));
+      // GV-D4: a new pane beside the one the person was in, or that pane itself
+      const where = outcome.placement === "beside" ? "in a new pane" : "in the active pane";
       if (profileSet !== undefined && outcome.profileSet === undefined) {
         // asked with a profile, answered without one: a daemon older than the
         // binding (SB-2) births unbound — the shell is kept
@@ -760,10 +783,10 @@ export function useMonitorAgents({
           `terminal opened, but not under ${label ?? "that profile"} — this VibeField daemon cannot open terminals under a profile yet`,
         );
       } else if (outcome.profileSet !== undefined && profiles.length > 1) {
-        announce(`terminal opened${under} in the active pane`);
+        announce(`terminal opened${under} ${where}`);
       } else {
         // one profile is no choice, and the plain sentence says it all
-        announce("terminal opened in the active pane");
+        announce(`terminal opened ${where}`);
       }
     },
     [announce, door, profiles],

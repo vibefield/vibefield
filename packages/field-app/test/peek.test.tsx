@@ -38,6 +38,7 @@ import { act, type ReactElement, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { isCommandPaletteChord, listenForProductChord } from "../src/field/product-chords";
+import { publishGodviewDeck, resetGodviewDeckDoorForTest } from "../src/frame/deck-door";
 import {
   type GodviewFindDoor,
   type LiveFeedSnapshot,
@@ -174,6 +175,7 @@ function hostOn(platform: ShellPlatform): void {
 }
 
 beforeEach(() => {
+  resetGodviewDeckDoorForTest();
   resetActiveViewForTest();
   resetGodviewLineDoorForTest();
   resetHistoryLineDoorForTest();
@@ -1156,6 +1158,39 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
     godview.holdViewKeys(false);
     expect(press(document.body, { key: "f", metaKey: true }).defaultPrevented).toBe(true);
     expect(surfaceNow).toBe("search");
+  });
+
+  it("stands in the terminals' title bar while they are maximized — the same button, folded to the bar, no filter named — and back at the head after (GV-D11)", async () => {
+    const godview = godviewDoor();
+    mount(fieldd());
+    to("godview");
+    act(() => godview.door().setDesk("studio"));
+    const find = (): HTMLElement | null =>
+      host?.querySelector<HTMLElement>(".vf-peek-find") ?? null;
+    expect(find()?.hasAttribute("data-bar")).toBe(false);
+    expect(host?.querySelector(".vf-peek-token")).not.toBeNull();
+    const before = button();
+    act(() => publishGodviewDeck("maximized"));
+    // one button, the same element, in another place: never a second one
+    expect(host?.querySelectorAll(".vf-peek-button")).toHaveLength(1);
+    expect(button()).toBe(before);
+    expect(find()?.getAttribute("data-bar")).toBe("true");
+    expect(find()?.closest(".vf-godview")).toBeNull();
+    // maximized there is no view for a filter to filter: the bar names none
+    expect(host?.querySelector(".vf-peek-token")).toBeNull();
+    // it still opens the one popup
+    await openPeek();
+    expect(pop()).not.toBeNull();
+    press(field() ?? document.body, { key: "Escape" });
+    act(() => publishGodviewDeck("up"));
+    expect(find()?.hasAttribute("data-bar")).toBe(false);
+    expect(host?.querySelector(".vf-peek-token")).not.toBeNull();
+    // in History the button never stands in a bar, whatever the door says
+    act(() => publishGodviewDeck("maximized"));
+    await openHistory();
+    press(field() ?? document.body, { key: "Escape" });
+    expect(find()?.hasAttribute("data-bar")).toBe(false);
+    act(() => publishGodviewDeck(null));
   });
 
   it("asks nothing of a feed of its own in Godview — the monitor's rows are the ones it reads (PF6 stays Godview's)", async () => {

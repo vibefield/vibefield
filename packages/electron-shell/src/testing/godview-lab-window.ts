@@ -4,9 +4,15 @@ import { gunzipSync } from "node:zlib";
 import { app, type BrowserWindow } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
-import type { PageMetrics } from "./godview-lab-measures";
+import { askGodviewDeckUp, sayingDeckAsk } from "./godview-deck-up";
+import type { HeapSample, PageMetrics } from "./godview-lab-measures";
 import { type LabProfile, labProfileProof } from "./godview-lab-profile";
-import { type LabDeckState, labDeckReady } from "./godview-lab-readiness";
+import {
+  type LabDeckState,
+  labDeckReady,
+  labDeckSeen,
+  labDeckTimeout,
+} from "./godview-lab-readiness";
 import { REACT_COMMIT_HOOK_SOURCE } from "./react-commit-hook";
 
 // THE GODVIEW LAB'S WINDOW (MV-3c; build-mv M31, M32) — what the perf lab and
@@ -99,13 +105,22 @@ export class MarkerTail<T> {
     return this.#latest;
   }
 
-  async until(predicate: (value: T) => boolean, what: string, timeoutMs: number): Promise<T> {
+  /** `seen`, when given, is what a timeout adds to its error: the latest
+   * value in the caller's words (null when the marker never came). */
+  async until(
+    predicate: (value: T) => boolean,
+    what: string,
+    timeoutMs: number,
+    seen?: (latest: T | null) => string,
+  ): Promise<T> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
       const latest = this.#latest;
       if (latest !== null && predicate(latest)) return latest;
       if (Date.now() >= deadline)
-        throw new Error(`timed out after ${timeoutMs}ms waiting for ${what}`);
+        throw new Error(
+          `timed out after ${timeoutMs}ms waiting for ${what}${seen ? ` — ${seen(latest)}` : ""}`,
+        );
       await new Promise<void>((resolve) => {
         const waiter = (): void => {
           this.#waiters.delete(waiter);
@@ -209,13 +224,45 @@ export async function cdp<T>(
   win: BrowserWindow,
   method: string,
   params: Record<string, unknown> = {},
+  timeoutMs = 5_000,
 ): Promise<T | null> {
   try {
     if (!win.webContents.debugger.isAttached()) win.webContents.debugger.attach("1.3");
     return await Promise.race([
       win.webContents.debugger.sendCommand(method, params) as Promise<T>,
-      sleep(5_000).then(() => null),
+      sleep(timeoutMs).then(() => null),
     ]);
+  } catch {
+    return null;
+  }
+}
+
+/** `performance.memory` as the page has it (Chromium's own; null without it). */
+const PAGE_HEAP = `(() => {
+  const memory = performance.memory;
+  return memory ? { usedJSHeapSize: memory.usedJSHeapSize, totalJSHeapSize: memory.totalJSHeapSize } : null;
+})()`;
+
+/**
+ * The page's JS heap after a forced collection (MV lab debts), or null when
+ * none could be forced or the page did not answer after it — the caller keeps
+ * the reading it had and says so; a launch is never failed for this.
+ *
+ * Read at whatever phase the collector was in, the heap row was that phase: on
+ * 2026-10-11 one read `worse` while the same build against itself ran from
+ * −26 to +20 MB. `HeapProfiler.collectGarbage` is a full collection of the
+ * page's main isolate and needs no domain enabled; it answers when the
+ * collection is done. It is a pause on the main thread, so a caller measuring
+ * anything calls this only once its window has closed. A few hundred MB under
+ * a loaded host can outlast `cdp`'s 5 s, hence the longer bound.
+ */
+export async function collectedHeap(win: BrowserWindow): Promise<HeapSample | null> {
+  if ((await cdp(win, "HeapProfiler.collectGarbage", {}, 20_000)) === null) return null;
+  // `performance.memory` answers from a cache it refreshes at most every 50 ms,
+  // and the probe's report read it moments before the collection
+  await sleep(100);
+  try {
+    return await page<HeapSample | null>(win, PAGE_HEAP);
   } catch {
     return null;
   }
@@ -367,15 +414,28 @@ export async function openLabWindow(opts: {
 
 /** Perf and capture measure a fresh single-window host, so wait before replay
  * shifts its clock. The worker lifecycle probe opens auxiliary realms and has
- * its own worker-readiness contract; it does not measure a terminal workload. */
+ * its own worker-readiness contract; it does not measure a terminal workload.
+ * A wait that fails says what it saw — the deck's last state (bounded) and the
+ * readiness conditions that state still lacked: a launch was lost to this wait
+ * on 2026-10-10 with a bare "timed out" and no reason to read. Since W7 the
+ * terminals start away, so the wait first asks for them as a first call would
+ * (`godview-deck-up.ts`; nothing to ask before W7), and a wait that fails after
+ * the deck's `up()` threw says so. */
 export async function waitForLabDeck(lab: LabWindow): Promise<void> {
-  await lab.deck.until(
-    (state) => {
-      if (state.error !== undefined) throw new Error(`Terminal deck: ${state.error}`);
-      return labDeckReady(state);
-    },
-    "the terminal deck to open a pane with an observed roster and WebGPU",
-    60_000,
+  await askGodviewDeckUp(lab.win);
+  await sayingDeckAsk(
+    lab.win,
+    lab.deck.until(
+      (state) => {
+        if (state.error !== undefined) {
+          throw new Error(`Terminal deck: ${state.error} — the deck said ${labDeckSeen(state)}`);
+        }
+        return labDeckReady(state);
+      },
+      "the terminal deck to open a pane with an observed roster and WebGPU",
+      60_000,
+      labDeckTimeout,
+    ),
   );
 }
 

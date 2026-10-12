@@ -9,7 +9,7 @@ import {
   saveMonitorParameters,
 } from "@vibecook/puppeteer-views";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { STAGE_HEIGHT_KEY, STAGE_PARAMETER_GROUPS } from "./stage-parameters";
+import { STAGE_PARAMETER_GROUPS } from "./stage-parameters";
 
 // The monitor's chosen view and its tunables — state that lives ABOVE the stage.
 //
@@ -58,8 +58,6 @@ export interface MonitorTuning {
   /** The active view's own bag, already normalized to its controls. */
   parameters: MonitorParameters;
   stageParameters: MonitorParameters;
-  /** The monitor's share of the overlay height, as a percentage. */
-  stageHeight: number;
   selectView(viewId: string): void;
   setParameter(key: string, value: number): void;
   setStageParameter(key: string, value: number): void;
@@ -141,7 +139,6 @@ export function useMonitorTuning(): MonitorTuning {
     view,
     parameters,
     stageParameters,
-    stageHeight: stageParameters[STAGE_HEIGHT_KEY] as number,
     selectView,
     setParameter,
     setStageParameter,

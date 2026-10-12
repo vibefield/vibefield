@@ -32,6 +32,10 @@
   --crt-vignette: rgba(0, 0, 0, 0.15);
   --deck-shadow: var(--vf-godview-light-deck-shadow);
   --deck-ground: var(--vf-godview-terminal-bg, var(--vf-godview-light-terminal-bg));
+  --deck-frame-ink: var(--vf-godview-light-deck-frame-ink);
+  --deck-well-edge: var(--vf-godview-light-well-edge);
+  --deck-well-rim: var(--vf-godview-light-well-rim);
+  --deck-well-shade: var(--vf-godview-light-well-shade);
   color-scheme: light;
 }
 
@@ -64,6 +68,10 @@
   --crt-vignette: rgba(0, 0, 0, 0.75);
   --deck-shadow: var(--vf-godview-dark-deck-shadow);
   --deck-ground: var(--vf-godview-terminal-bg, var(--vf-godview-dark-terminal-bg));
+  --deck-frame-ink: var(--vf-godview-dark-deck-frame-ink);
+  --deck-well-edge: var(--vf-godview-dark-well-edge);
+  --deck-well-rim: var(--vf-godview-dark-well-rim);
+  --deck-well-shade: var(--vf-godview-dark-well-shade);
   color-scheme: dark;
 }
 
@@ -85,6 +93,35 @@
      is blurred once, and a backdrop filter is re-blurred by the compositor every
      frame the swarm moves. The deck sheet and the launcher read the same value. */
   --vf-godview-stage-opacity: 72%;
+  /* Round 3 (GV-D7; DESIGN.md §2.7, §8): the deck sheet's ground is the FRAME —
+     the terminal's ground mixed toward the terminal's own ink, 11% by day and
+     9% by night — so the well the panes sit in reads as set into it. The ink
+     is the terminal's, handed to this root beside its ground (`deck-theme.ts`);
+     where a host hands none, Godview's own text main. */
+  --deck-ink: var(--vf-godview-terminal-ink, var(--text-main));
+  --deck-frame: color-mix(in srgb, var(--deck-ink) var(--deck-frame-ink), var(--deck-ground));
+  /* THE DECK'S PLACE (DESIGN.md §8 "Rest"; round 3, L8a, W4 and N15 (a)). Its
+     top at rest, from the stage's top: the drawing's share of the stage — 300
+     of its 780 — never above the floor, 232 (the field's floor and its gap) —
+     a place in the stage that names no head, so it holds when the head's band
+     goes. And the monitor's field foot: 12 above the edge as last SET (the
+     edge writes `--vf-godview-field-shift` once per change, never per frame of
+     a drag), never above the field's floor, 220 from the window's top. Both
+     resolve the share's percent where they are used: a flex basis and a top,
+     each against the stage's height. (Until N15 rest was the head's 40 and a
+     tuned `Monitor height`, 35% above a 170 floor.) */
+  --vf-godview-deck-rest: max(var(--vf-godview-deck-rest-share), var(--vf-godview-deck-rest-floor));
+  /* What the well keeps clear under the panes: its 8, the covers' reserve
+     inside the cover (88, FC-D15) — where the Maximize readout centres. */
+  --vf-godview-panes-foot: 8px;
+  --vf-godview-field-foot: max(
+    var(--vf-godview-deck-field-floor),
+    calc(
+      var(--vf-godview-deck-rest) +
+      var(--vf-godview-field-shift, 0px) -
+      var(--vf-godview-deck-field-gap)
+    )
+  );
   background: color-mix(
     in srgb,
     var(--vf-godview-stage-color, var(--monitor-bg)) var(--vf-godview-stage-opacity),
@@ -136,7 +173,6 @@
    its ground on a canvas. Deleted rather than left to be quietly outranked.
    MV-5 (M59, W5): minus the SWARM too — its crossfade is the view's own now
    (`swarm.css`, under its root class), and no host rule names a view's class. */
-.vf-godview-header,
 .vf-godview-monitor-stage,
 .vf-godview-terminal-deck,
 .vf-godview-terminal-deck .ghostty-window,
@@ -146,14 +182,6 @@
     color 240ms ease,
     border-color 240ms ease,
     background-color 240ms ease;
-}
-
-/* The shell's native traffic lights start at x=18 (windows.ts). Combined
-   with the shared bar's 15px padding and 8px gap, reserve the same ~96px
-   leading region as the product HUD. Only the macOS host mounts this slot. */
-.vf-godview-native-controls-space {
-  flex: 0 0 72px;
-  align-self: stretch;
 }
 
 .vf-monitor-feed-retry {
@@ -412,25 +440,46 @@
   background: var(--control-hover-bg);
 }
 
-/* The monitor's height is its TUNED height (the floor, 170px under it) plus
-   whatever the deck's edge has been dragged DOWN by (DESIGN.md §8,
-   `deck-edge.ts`): dragged up, the shift is negative, this adds nothing, and
-   the deck slides over the monitor instead. No bottom rule of its own — the
-   deck sheet's ring is the one edge between the two, and a straight line here
-   would cut across the sheet's rounded corners. */
+/* The monitor's height is rest less the head's height (N15 (a)) — a
+   picture's too (Settings' miniature draws its own). No bottom rule of its own
+   — the deck sheet's ring is the one edge between the two, and a straight line
+   here would cut across the sheet's rounded corners.
+
+   THE DECK'S TOP AT REST IS THE INVARIANT (round 3, agreed with the head's
+   owner): it stands at rest below the stage's top, whatever stands above the
+   monitor. So the basis is rest less what the head takes of it —
+   `rest − --vf-godview-head-height`. Its default, in the
+   `var()`s, is the bar's 40, so a stage with no head (the Settings
+   miniature, a catalog plate) moves nothing; since the Stories head the head's
+   own sheet sets it to 0px on the stage's root (`godview-head.css`), in the same
+   commit that took the bar out of the column, so the stage is exactly 40 taller
+   with the deck's top where it was. Never one without the other: the variable at 0 with the bar
+   still in the column puts the deck 40 lower. */
 .vf-godview-monitor-stage {
   position: relative;
   width: 100%;
   min-height: 0;
-  flex: 0 0
-    calc(
-      max(var(--vf-monitor-stage-height, 35%), 170px) +
-      max(0px, var(--vf-godview-deck-shift, 0px))
-    );
+  flex: 0 0 calc(var(--vf-godview-deck-rest) - var(--vf-godview-head-height, 40px));
   overflow: hidden;
   /* The overlay owns the glass. Painting a second opaque panel here made the
      stage-opacity control visually inert. */
   background: transparent;
+  /* round 3 (GV-D11, §6): it fades out under a maximized deck and back, 260ms */
+  transition:
+    color 240ms ease,
+    border-color 240ms ease,
+    background-color 240ms ease,
+    opacity 260ms ease;
+}
+
+/* THE MONITOR MAKES ROOM (round 3, W4; DESIGN.md §8). On a stage whose edge
+   moves, the field ends 12 above the edge as it was last set and is never
+   shorter than its floor — measured once per change: a held edge moves the
+   sheet and its terminals, never the field. Up past the floor, the sheet
+   slides over the field, the bodies still moving beneath. The head's height
+   is the basis's to give back, as above. */
+.vf-godview[data-godview-deck-edge] .vf-godview-monitor-stage {
+  flex-basis: calc(var(--vf-godview-field-foot) - var(--vf-godview-head-height, 40px));
 }
 
 /* The claims (AR-3, GT-D17): what the fold and the mesh report, in the
@@ -443,14 +492,18 @@
    this class the slot deleted the strip's old rule under the same name and
    wrote none for the slot, so the column laid out in flow — below the
    clipped swarm, and across the whole width over the list, whose left
-   padding then pushed every row off the stage (the review's blocker). */
+   padding then pushed every row off the stage (the review's blocker).
+   GV-D1: the stage begins at the window's top, under the head, so the column
+   and the strip beside it begin at the head's reserve (56: the head's foot at
+   48, plus 8) — clear of the head's row, the window's lights and the app's
+   drag strip — where they began 11 under the bar. */
 .vf-monitor-chrome {
   position: absolute;
   z-index: 7;
-  top: 11px;
+  top: var(--vf-godview-head-reserve);
   left: 13px;
   width: 46px;
-  height: calc(100% - 17px);
+  height: calc(100% - var(--vf-godview-head-reserve) - 6px);
   color: var(--text-main);
 }
 
@@ -462,26 +515,26 @@
    "1 SESSIONS" in the same corner.
 
    No new spacing number is invented: the strip's measured bottom is the one
-   number this host hands over (0 when the strip is empty — which reproduces the
-   package's rule exactly), and a view's own band stands past it. The rain and
-   the swarm keep their full bleed: the swarm steers its bodies around the
-   chrome's rectangles (the stage's obstacles), and the rain is a canvas the
-   column already crosses. DESIGN.md §9: two claims that overlap are one
-   unreadable claim.
+   number this host hands over (the head's reserve when the strip is empty,
+   GV-D1 — it was 0 under the bar), and a view's own band stands past it. The
+   rain and the swarm keep their full bleed: the swarm steers its bodies around
+   the chrome's rectangles (the stage's obstacles — the head's reserve the
+   first of them), and the rain is a canvas the column already crosses.
+   DESIGN.md §9: two claims that overlap are one unreadable claim.
    TL (2026-10-02): the timeline lays out in flow (its map strip is a row at
    its top), so it starts below the strip as the list does.
 
    MV-4 / MV-6 (M58, M63, W5): both flow views — the list and the timeline —
    are SDK views and clear the strip THEMSELVES: the view host hands them the
-   strip's measured bottom as `stage.insets.top` (`GodviewMonitor`, 0 for a
-   silent strip), and no host rule names them. The list starts its own 11px
-   band past it; the timeline starts AT it, as puppeteer's Godview draws it —
-   11px higher than the host rule that stood here put it, since that rule added
-   the list's band to the timeline too (named in MV-6). */
+   strip's measured bottom as `stage.insets.top` (`GodviewMonitor`; the head's
+   reserve for a silent strip), and no host rule names them. The list starts
+   its own 11px band past it; the timeline starts AT it, as puppeteer's Godview
+   draws it — 11px higher than the host rule that stood here put it, since that
+   rule added the list's band to the timeline too (named in MV-6). */
 .vf-monitor-claims {
   position: absolute;
   z-index: 7;
-  top: 11px;
+  top: var(--vf-godview-head-reserve);
   left: 72px;
   width: min(300px, calc(100% - 96px));
   display: flex;
@@ -569,46 +622,55 @@
   vertical-align: -1px;
 }
 
-/* ── THE DECK SHEET (DESIGN.md §8, 2026-09-28) ────────────────────────────
+/* ── THE DECK SHEET (DESIGN.md §8, 2026-09-28; its wrapper redrawn in round 3) ──
    One card over the monitor, its top edge a tab: rounded top corners, the
    hairline as a ring (the ring's sides and foot fall outside the stage and are
    clipped by it, so only the top edge and its curves draw), and §5's Sheet
    shadow cast up onto the stage beneath. Above the monitor's chrome (7) and
-   its popups (9), under the bar (20) and the CRT layers (30).
+   its popups (9), under the CRT layers (30) and the head (31).
 
-   The ground is the TERMINAL's (James, 2026-09-28): `--vf-godview-terminal-bg`,
-   published from the same projection the panes are handed (`deck-theme.ts`),
-   with the §2.7 terminal grounds as the per-mode fallback. A pane paints its
-   own ground translucent (the viewer's pane opacity), and a translucent colour
-   over a sheet of the same colour composites to that colour exactly — so the
-   lip, the gaps between panes and the panes read as one surface. The sheet
-   takes the stage's glass: opaque at the default backdrop, and thinned with the
-   rest of Godview when the viewer thins it. Over the monitor it hides the
-   bodies as much as Godview hides the field.
+   The ground is the FRAME (GV-D7, James 2026-10-02: "make the inner pane part
+   feel like wrapped"): the terminal's ground — `--vf-godview-terminal-bg`,
+   from the same projection the panes are handed (`deck-theme.ts`), §2.7's
+   terminal grounds as the per-mode fallback — mixed toward the terminal's own
+   ink (`--deck-frame`, on the root). The lip and the sheet around the well are
+   that tone; the panes, in the well, paint their own ground over it, a shade
+   off it on purpose. The sheet takes the stage's glass, thinned with the rest
+   of Godview, and over the monitor it hides the bodies as much as Godview
+   hides the field.
 
-   Dragged up, the shift is negative and becomes the sheet's margin: the flex
-   column gives the deck that much more height and the sheet rides up over the
-   monitor, which keeps its own. */
+   On a stage whose edge moves the sheet is PLACED at its edge (below): rest
+   and the shift, down to the stage's foot — so the terminals' box follows the
+   edge alone, never the monitor's. A picture's sheet (Settings' miniature)
+   flows under its own monitor. */
 .vf-godview-terminal-deck {
   z-index: 10;
   display: flex;
   flex-direction: column;
-  margin-top: min(0px, var(--vf-godview-deck-shift, 0px));
+  /* round 3 (GV-D11, §6): its top corners and shadow go and return, 160ms */
+  transition:
+    color 240ms ease,
+    border-color 240ms ease,
+    background-color 240ms ease,
+    border-radius 160ms ease,
+    box-shadow 160ms ease;
   border-radius: var(--vf-godview-deck-radius) var(--vf-godview-deck-radius) 0 0;
   background: color-mix(
     in srgb,
-    var(--deck-ground) var(--vf-godview-stage-opacity, 100%),
+    var(--deck-frame) var(--vf-godview-stage-opacity, 100%),
     transparent
   );
   box-shadow:
     var(--deck-shadow),
     0 0 0 1px var(--panel-border);
-  /* QL-1: the empty pane launcher's clearing is this sheet's own paint (pass 3
-     §22 "in VibeField's sheet: the sheet's tint instead of the ground"), so a
-     thinned stage thins the clearing with it — down to a FLOOR (DESIGN.md
-     §2.7, `--vf-godview-launcher-clearing-floor`): under it the prompt the
-     launcher stands on reads through the rows. The launcher's stylesheet
-     reads the token; the rule for the clearing stays the package's. */
+  /* QL-1: the empty pane launcher's clearing is the TERMINAL's ground at this
+     sheet's glass (pass 3 §22 "in VibeField's sheet: the sheet's tint instead
+     of the ground"), so a thinned stage thins the clearing with it — down to a
+     FLOOR (DESIGN.md §2.7, `--vf-godview-launcher-clearing-floor`): under it
+     the prompt the launcher stands on reads through the rows. It stays the
+     terminal's ground, not the frame's tone: the launcher is drawn inside a
+     pane, and round 3 changes nothing inside one (GV-D2). The launcher's
+     stylesheet reads the token; the rule for the clearing stays the package's. */
   --vf-pane-launcher-ground: color-mix(
     in srgb,
     var(--deck-ground)
@@ -617,7 +679,50 @@
   );
 }
 
-/* The tab's band. At least the radius tall, so no pane corner meets the curve
+.vf-godview[data-godview-deck-edge] .vf-godview-terminal-deck {
+  position: absolute;
+  top: calc(var(--vf-godview-deck-rest) + var(--vf-godview-deck-shift, 0px));
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+/* Where the sheet rests, held still whatever the sheet does (up, maximized at
+   the window's top, travelling): the edge measures rest off it. */
+.vf-godview-deck-rest {
+  position: absolute;
+  top: var(--vf-godview-deck-rest);
+  left: 0;
+  width: 0;
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ── MAXIMIZED — THE BAR IS THE WINDOW'S TITLE BAR (round 3, W6 — GV-D11;
+   DESIGN.md §8) ──
+   Laid out at the window's top: the panes run from the bar's foot (30) to the
+   same well's foot, 8 in at each side. A fall out of maximized keeps this
+   layout until it arrives (`data-godview-deck-layout`). */
+.vf-godview[data-godview-deck-edge][data-godview-deck-layout="maximized"]
+.vf-godview-terminal-deck {
+  top: 0;
+}
+
+/* …the sheet without its top corners, its ring or its shadow (160ms), and
+   the view's bodies resting under it: its stage fades out (260ms), the cover's
+   glass stays. */
+.vf-godview[data-godview-deck="maximized"] .vf-godview-terminal-deck {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.vf-godview[data-godview-deck="maximized"] .vf-godview-monitor-stage {
+  opacity: 0;
+}
+
+/* THE LIP (GV-D7): the tab's band grown into the drag bar — 30 tall, on the
+   frame's tone. At least the radius tall, so no pane corner meets the curve
    and nothing inside the sheet has to be clipped to it. */
 .vf-godview-deck-lip {
   position: relative;
@@ -644,35 +749,345 @@
   left: 0;
 }
 
-/* The island's pull bar at instrument scale, on the text ramp: faint at rest,
-   muted under the pointer, main while held. */
+/* The grip's PILL: 22 tall, fully round, clear at rest — the ground the groove
+   answers the pointer on. Above the lip's reach (its `::before`). */
 .vf-godview-deck-grip {
-  width: var(--vf-godview-deck-grip-width);
-  height: var(--vf-godview-deck-grip-height);
-  border-radius: 999px;
-  background: var(--text-faint);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--vf-godview-deck-grip-pill);
+  padding: 0 var(--vf-godview-deck-grip-pill-pad);
+  border-radius: calc(var(--vf-godview-deck-grip-pill) / 2);
+  background: transparent;
   transition: background-color 120ms ease;
 }
 
-.vf-godview-deck-lip[role="separator"]:hover .vf-godview-deck-grip {
-  background: var(--text-muted);
+/* THE GROOVE (GV-D12): a 40 × 6 slot PRESSED INTO the frame, not a bar laid
+   on it — the well's own depth in miniature: filled with the well's edge, the
+   well's shade inside its top, the well's rim of light under it. */
+.vf-godview-deck-groove {
+  width: var(--vf-godview-deck-grip-width);
+  height: var(--vf-godview-deck-grip-height);
+  border-radius: var(--vf-godview-deck-grip-radius);
+  background: var(--deck-well-edge);
+  box-shadow:
+    inset 0 1px 1.5px var(--deck-well-shade),
+    0 1px 0 var(--deck-well-rim);
+  transition: background-color 120ms ease;
 }
 
-.vf-godview-deck-lip[data-dragging="true"] .vf-godview-deck-grip {
-  background: var(--text-main);
+/* Under the pointer, anywhere on the lip: the pill the terminal's ink at 7%,
+   and the groove takes 30% of that ink into its edge colour. */
+.vf-godview-deck-lip[role="separator"]:hover .vf-godview-deck-grip {
+  background: color-mix(in srgb, var(--deck-ink) 7%, transparent);
+}
+
+.vf-godview-deck-lip[role="separator"]:hover .vf-godview-deck-groove {
+  background: color-mix(in srgb, var(--deck-ink) 30%, var(--deck-well-edge));
+}
+
+/* Held: the pill 10%, the groove the full ink. Said AFTER the hover and at
+   its weight, because a held lip is also under the pointer: the old bar's
+   held rule weighed less than its hover rule (three simple selectors to
+   four), so wherever both applied the hover's colour won. */
+.vf-godview-deck-lip[role="separator"][data-dragging="true"] {
+  cursor: grabbing;
+}
+
+.vf-godview-deck-lip[role="separator"][data-dragging="true"] .vf-godview-deck-grip {
+  background: color-mix(in srgb, var(--deck-ink) 10%, transparent);
+}
+
+.vf-godview-deck-lip[role="separator"][data-dragging="true"] .vf-godview-deck-groove {
+  background: var(--deck-ink);
 }
 
 .vf-godview-deck-lip:focus-visible .vf-godview-deck-grip {
   outline: 1px solid var(--text-main);
-  outline-offset: 2px;
+  outline-offset: 1px;
 }
 
-/* The box every deck face fills (`inset: 0` — the deck, its faults, the
-   unavailable notice), under the lip. */
-.vf-godview-terminal-deck-body {
+/* The bar moves the WINDOW, as a title bar does; its grip's 168 hit drags the
+   terminals and its buttons click — holes in the drag region. (The app's own
+   strip, the window's top 52, is left as it is: the panes' area is no-drag,
+   above, so their rows under the bar take their clicks.) */
+.vf-godview[data-godview-deck="maximized"] .vf-godview-deck-lip {
+  cursor: default;
+  -webkit-app-region: drag;
+}
+
+.vf-godview-deck-grip-hit {
+  position: relative;
+  display: grid;
+  width: var(--vf-godview-deck-grip-hit);
+  height: 100%;
+  place-items: center;
+  -webkit-app-region: no-drag;
+}
+
+.vf-godview[data-godview-deck="maximized"] .vf-godview-deck-grip-hit {
+  cursor: row-resize;
+}
+
+/* THE WELL (GV-D7): what the panes sit in, set into the frame. 8 in from the
+   sheet's sides and its foot — the 8 a covered view keeps clear (FC-D15) —
+   corners 10 (a selected pane's 8, the 1 gap, the 1 edge), and a rim of light
+   under its foot. It has no ground of its own: the panes paint theirs over
+   the frame's.
+
+   It is also the wrapper's one window region (GV-D11's carve, declared for
+   good): the pane area never moves the window. An "up" sheet never stands in
+   the app's drag strip (the top 52), so this bites only once the terminals
+   can be maximized — and then a pane's first rows take their clicks. The 8
+   beside the well is frame, and is left to the strip. */
+.vf-godview-deck-well {
   position: relative;
   min-height: 0;
   flex: 1 1 auto;
+  margin: 0 8px 8px;
+  border-radius: var(--vf-godview-deck-well-radius);
+  box-shadow: 0 1px 0 var(--deck-well-rim);
+  -webkit-app-region: no-drag;
+}
+
+/* Its edge and its shade are drawn OVER the panes — a 1px inner ring and a
+   soft shade at its top — so the well reads as set in, not drawn on. Never a
+   border under them: a pane's own ground would cover it. */
+.vf-godview-deck-well::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1px var(--deck-well-edge),
+    inset 0 2px 4px var(--deck-well-shade);
+  pointer-events: none;
+}
+
+/* The box every deck face fills (`inset: 0` — the deck, its faults, the
+   unavailable notice): the panes, 1 in from the well's edge and clipped at 9.
+   Its own stacking context, so the panes' layers (their frames' 7, a banner's
+   8) stay under the well's edge whatever they are numbered. */
+.vf-godview-terminal-deck-body {
+  position: absolute;
+  inset: 1px;
+  overflow: hidden;
+  border-radius: calc(var(--vf-godview-deck-well-radius) - 1px);
+  isolation: isolate;
+}
+
+/* THE LIP'S BUTTONS (GV-D7; DESIGN.md §2.7, §8): at its right end, 10 in and
+   4 apart — minimize, then maximize once the terminals can be maximized —
+   each 30 × 24 with its glyph at 14, on the lip's axis. On the frame's tone in
+   the terminal's ink at 64%; under the pointer the full ink on a 10% fill of
+   it. Beside the separator, not in it, and above its reach (the lip's
+   `::before`), so the edge never takes their press. */
+.vf-godview-deck-controls {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 10px;
+  height: var(--vf-godview-deck-lip);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+
+/* Maximized, 8 in: a hairline, minimize, restore. The frame's search button
+   stands before the hairline — the frame's one button in another place
+   (peek.css), never a second one here. */
+.vf-godview[data-godview-deck="maximized"] .vf-godview-deck-controls {
+  right: 8px;
+}
+
+.vf-godview-deck-hair {
+  width: 1px;
+  height: 14px;
+  margin: 0 4px;
+  background: color-mix(in srgb, var(--deck-ink) 16%, transparent);
+}
+
+.vf-godview-deck-control {
+  width: var(--vf-godview-deck-control-width);
+  height: var(--vf-godview-deck-control-height);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--vf-godview-deck-control-radius);
+  color: color-mix(in srgb, var(--deck-ink) 64%, transparent);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.vf-godview-deck-control:hover {
+  color: var(--deck-ink);
+  background: color-mix(in srgb, var(--deck-ink) 10%, transparent);
+}
+
+.vf-godview-deck-control:focus-visible {
+  outline: 1px solid var(--text-main);
+  outline-offset: 1px;
+}
+
+/* ── THE TERMINALS AWAY, AND THEIR TRAVEL (round 3 — GV-D5, GV-D6; DESIGN.md
+   §6 "The terminals rise and fall", §8 "Minimized", "One resize per change") ──
+   The stage's root says the state (`data-godview-deck`) and, between two
+   states, the travel (`data-godview-deck-motion`, `GodviewStage`). Each travel
+   is a transition of the sheet's `transform` alone (M3): the sheet keeps its
+   box the whole way, so the terminals are laid out once per change.
+
+   Falling — minimized: the sheet keeps its place in the flow and travels down
+   at the size it has, its top 40 past the window's foot (the drawing's), on
+   the retract curve. */
+.vf-godview[data-godview-deck-motion="fall"] .vf-godview-terminal-deck {
+  transform: translateY(calc(100% + 40px));
+  transition: transform 300ms cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* Rising — called up from away: the sheet is back in the flow at its end size
+   at once, and travels up from where it was (below the foot, or wherever a
+   fall it turns round had it) on the island curve. */
+.vf-godview[data-godview-deck-motion="rise"] .vf-godview-terminal-deck {
+  transition: transform 480ms var(--vf-ease-island);
+}
+
+/* Maximized by its button (W6): laid out at the window's top at once and
+   travelling there from where its edge stood (the stage sets the start), on
+   the island curve — its corners and shadow going as it rises. */
+.vf-godview[data-godview-deck-motion="maximize"] .vf-godview-terminal-deck {
+  transition:
+    transform 480ms var(--vf-ease-island),
+    border-radius 160ms ease,
+    box-shadow 160ms ease;
+}
+
+/* Restored (W6): still laid out at the window's top, the sheet falls to where
+   its edge stands, at the size it has, on the retract curve — its corners and
+   shadow returning — and is laid out there on arrival. */
+.vf-godview[data-godview-deck-motion="restore"] .vf-godview-terminal-deck {
+  transform: translateY(calc(var(--vf-godview-deck-rest) + var(--vf-godview-deck-shift, 0px)));
+  transition:
+    transform 300ms cubic-bezier(0.4, 0, 1, 1),
+    border-radius 160ms ease,
+    box-shadow 160ms ease;
+}
+
+/* Away, arrived: nothing at the foot. The sheet keeps THE BOX IT HAD — it is
+   placed at its edge, out of the flow, whatever the state — so arriving lays
+   the terminals out again not at all, and rising to the same edge lays them
+   out not at all either. Below the foot, unseen; the section is inert
+   (`GodviewStage`): no pointer, no focus, no key. */
+.vf-godview[data-godview-deck="away"]:not([data-godview-deck-motion]) .vf-godview-terminal-deck {
+  transform: translateY(calc(100% + 40px));
+  visibility: hidden;
+}
+
+/* …and the monitor has the window (to the covers' reserve inside the cover,
+   below): its field is laid out once, on arrival — never per frame. */
+.vf-godview[data-godview-deck="away"]:not([data-godview-deck-motion]) .vf-godview-monitor-stage {
+  flex: 1 1 0;
+}
+
+/* M6: under reduced motion no travel is started (`GodviewStage`) and none is
+   drawn: the deck is at its end at once. */
+@media (prefers-reduced-motion: reduce) {
+  .vf-godview[data-godview-deck-motion] .vf-godview-terminal-deck {
+    transition: none;
+  }
+}
+
+/* THE READOUT WHILE THE EDGE IS HELD (round 3, W4; DESIGN.md §8 "A let-go
+   decides", §9; James, 29 Sep: a readout is huge bold words in open space).
+   Past the line, *Minimize* the terminals — 800 64px/1 at −0.04em in Godview's
+   text main, the verb at 40% and the noun full, haloed in the monitor's
+   ground (40 and 18) — written on the monitor, centred between y 60 and the
+   held edge (never above 150), over a veil of that ground at 62% down to 26
+   above the edge. Both under the sheet (10), over the monitor's chrome (7).
+   In over 120ms, out over 160ms; the veil 160ms both ways. Placed from the
+   held edge on the root, so a move re-renders nothing. */
+.vf-godview-deck-readout {
+  position: absolute;
+  z-index: 9;
+  top: max(
+    150px,
+    calc((60px + var(--vf-godview-deck-rest) + var(--vf-godview-deck-shift, 0px)) / 2)
+  );
+  right: 0;
+  left: 0;
+  height: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.vf-godview-deck-readout[data-on="true"] {
+  opacity: 1;
+  transition-duration: 120ms;
+}
+
+.vf-godview-deck-readout b {
+  font: 800 64px / 1 var(--vf-font-sans);
+  letter-spacing: -0.04em;
+  color: var(--text-main);
+  white-space: nowrap;
+  text-shadow:
+    0 0 40px var(--monitor-bg),
+    0 0 18px var(--monitor-bg);
+}
+
+.vf-godview-deck-readout b i {
+  font-style: normal;
+  opacity: 0.4;
+}
+
+.vf-godview-deck-veil {
+  position: absolute;
+  z-index: 8;
+  inset: 0;
+  background: color-mix(in srgb, var(--monitor-bg) 62%, transparent);
+  clip-path: inset(
+    0 0 calc(100% - var(--vf-godview-deck-rest) - var(--vf-godview-deck-shift, 0px) + 26px) 0
+  );
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.vf-godview-deck-veil[data-on="true"] {
+  opacity: 1;
+}
+
+/* *Maximize* the terminals (W6): written over the terminals, centred between
+   the held edge and the panes' foot (never above 150), its veil over the sheet
+   from the edge down — both over the sheet. */
+.vf-godview-deck-readout[data-readout="maximize"] {
+  z-index: 12;
+  top: max(
+    150px,
+    calc(
+      (
+        var(--vf-godview-deck-rest) +
+        var(--vf-godview-deck-shift, 0px) +
+        100% -
+        var(--vf-godview-panes-foot)
+      ) /
+      2
+    )
+  );
+}
+
+.vf-godview-deck-veil[data-readout="maximize"] {
+  z-index: 11;
+  clip-path: inset(calc(var(--vf-godview-deck-rest) + var(--vf-godview-deck-shift, 0px)) 0 0 0);
 }
 
 /* A live WebGPU canvas may be promoted above ordinary DOM overlays on macOS.
@@ -941,8 +1356,8 @@
 }
 
 /* AR-S5 — a profile tab with no sessions under it says so over the stage, in
-   the bar's own type (the agents-settings record's T3): the profile's glyph in
-   a dashed ring, its name, one sentence. The bodies behind it step back to 7%
+   the instrument's type (the agents-settings record's T3): the profile's glyph
+   in a dashed ring, its name, one sentence. The bodies behind it step back to 7%
    (`@vibecook/puppeteer-views` monitor/recede.ts), so the words read. */
 .vf-monitor-profile-empty {
   position: absolute;
@@ -1018,39 +1433,24 @@
 /* FC-D15: the content ends at 692 — the 88 reserve above the window's foot,
    where the frame's line floats over the deck's own ground — and keeps 8px
    clear of each edge for the notches' slivers. The sheet's ground still runs to
-   the foot and to the edges; only what it holds stops short. */
+   the foot and to the edges; only what it holds stops short. The deck's well
+   keeps that 8 at its sides wherever it is drawn; here its foot is the reserve. */
 .vf-cover .vf-godview-monitor-stage {
   width: auto;
   margin-inline: 8px;
 }
 
-.vf-cover .vf-godview-terminal-deck-body {
-  margin: 0 8px 88px;
+.vf-cover .vf-godview-deck-well {
+  margin-bottom: 88px;
 }
 
-/* PK2 (a), 2026-10-09 (DESIGN.md §8 "Search — the Peek"): the frame's search
-   button stands at the head's right end in Godview as in History — 16 in, at
-   top 8 — so the bar's tools end one head gap (12) short of it: System control
-   sits beside the button and never under it. The button's width is the Peek's
-   own measure (`--vf-peek-find-width`, the circle's 40 until a filter token
-   widens its glass), so the tools step aside as the token grows. */
-.vf-cover .vf-godview-header {
-  padding-right: calc(16px + var(--vf-peek-find-width, 40px) + 12px);
+.vf-cover .vf-godview {
+  --vf-godview-panes-foot: 88px;
 }
 
-/* FC-D18: the counters are removed (`GodviewMonitor` retired their ⌘1–⌘3 and
-   their cycling). The views package's bar draws its counters group whatever a
-   host passes, so the host hides it until the package draws it only for counts
-   it is handed — the ask on record (One Frame §21). */
-.vf-godview-header [role="group"][aria-label="Agent status"] {
-  display: none;
-}
-
-/* FC-D7: Godview follows the app's theme (One Frame FR-4), so its ☼◐ switch is
-   gone. The views package's bar draws it whatever a host passes, so the host
-   hides it — with the tooltip host the package wraps it in — until the package
-   draws it only for a host that hands it a handler (the ask on record, beside
-   the counters'). */
-.vf-godview-header .vf-godview-bar-tip-host:has(> .vf-godview-theme-switch) {
-  display: none;
+/* The terminals away (GV-D6, L5): the monitor alone ends at 692 too — the
+   covers' reserve — and a field under the line is the head's to draw. */
+.vf-cover .vf-godview[data-godview-deck="away"]:not([data-godview-deck-motion])
+  .vf-godview-monitor-stage {
+  margin-bottom: 88px;
 }

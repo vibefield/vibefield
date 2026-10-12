@@ -7,8 +7,11 @@
  * whole tree, the monitor and its view with it (M47's class). Each now sits
  * behind its own named `ChromeBoundary`, and this file mounts the SHIPPING
  * overlay to hold that: a throwing deck, panel or edge says "<name>
- * unavailable" where it stood, while the monitor's stage, its bar and its view
- * root stay — the same elements, never remounted.
+ * unavailable" where it stood, while the monitor's stage, its head and its view
+ * root stay — the same elements, never remounted. System control is opened as
+ * the product opens it since GV-D1: through the door the overlay lends the
+ * palette (`frame/system-control-door.ts`), the instrument bar that held its
+ * control having left VibeField.
  *
  * Three things are stood in, and only these: the deck (its own fixture
  * mounts the real one over ghosttea's stubs; here it is a stand-in that builds
@@ -22,7 +25,17 @@ import { act, useEffect, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
+import {
+  askGodviewDeckUp,
+  getGodviewDeck,
+  resetGodviewDeckDoorForTest,
+} from "../src/frame/deck-door";
 import { getGodviewFindDoor, resetGodviewFindDoorForTest } from "../src/frame/find-door";
+import {
+  getSystemControlDoor,
+  resetSystemControlDoorForTest,
+  runSystemControl,
+} from "../src/frame/system-control-door";
 import { resetActiveViewForTest } from "../src/frame/view-state";
 import type { MonitorDoor } from "../src/godview/monitor/remote-door";
 import { type FieldHost, setHost } from "../src/host";
@@ -166,20 +179,31 @@ const latest = (): GodviewMonitorFacts | undefined => markers.at(-1);
 const statusIn = (host: ParentNode, selector: string): string | undefined =>
   host.querySelector(`${selector} > span[role="status"]`)?.textContent ?? undefined;
 
-/** The monitor as mounted: its stage, its bar, and the view host's root. */
+/** The monitor as mounted: its stage, its head, and the view host's root. */
 function monitorParts(host: HTMLElement) {
   return {
     stage: host.querySelector(".vf-godview-monitor-stage"),
-    bar: host.querySelector(".vf-godview-header"),
+    head: host.querySelector(".vf-stories"),
     view: host.querySelector("[data-monitor-view-root]"),
   };
+}
+
+/** System control, toggled as the palette's act toggles it: the frame's run of
+ * the door the overlay lends (`ChromeLayer`'s `runFrameAct`). */
+async function toggleSystemControl(): Promise<void> {
+  let ran = false;
+  await act(async () => {
+    ran = runSystemControl();
+  });
+  expect(ran, "Godview lends the palette no System control").toBe(true);
+  await settle();
 }
 
 /** The SAME elements, by identity, and still in the document: nothing above the
  * failed piece remounted. */
 function expectSameMonitor(host: HTMLElement, before: ReturnType<typeof monitorParts>): void {
   const after = monitorParts(host);
-  for (const part of ["stage", "bar", "view"] as const) {
+  for (const part of ["stage", "head", "view"] as const) {
     expect(before[part], part).not.toBeNull();
     expect(after[part], part).toBe(before[part]);
     expect(after[part]?.isConnected, part).toBe(true);
@@ -197,6 +221,8 @@ beforeEach(() => {
   stand.door = fakeDoor();
   markers = [];
   localStorage.clear();
+  // each case is a launch: the terminals' state is kept for the run (L3)
+  sessionStorage.clear();
   for (const [name, value] of Object.entries(TOKENS)) {
     document.documentElement.style.setProperty(name, value);
   }
@@ -207,6 +233,8 @@ beforeEach(() => {
   });
   resetActiveViewForTest();
   resetGodviewFindDoorForTest();
+  resetGodviewDeckDoorForTest();
+  resetSystemControlDoorForTest();
   publishView = null;
   const quiet = () => undefined;
   setRendererLogger({
@@ -267,9 +295,7 @@ describe("the overlay's chrome cannot take down the monitor (M49)", () => {
     // opening, the echo of the null door — is no reason to try it again: the
     // deck is not asked to render at all.
     const renders = stand.deckRenders;
-    const toggle = host.querySelector<HTMLButtonElement>('button[aria-label="System control"]');
-    await act(async () => toggle?.click());
-    await settle();
+    await toggleSystemControl();
     expect(document.getElementById("vf-godview-tweak-panel")).not.toBeNull();
     expect(stand.deckRenders).toBe(renders);
     expect(stand.deckMounts).toBe(1);
@@ -291,10 +317,9 @@ describe("the overlay's chrome cannot take down the monitor (M49)", () => {
     const host = await mountOverlay();
     const before = monitorParts(host);
     stand.panelThrows = true;
-    const toggle = host.querySelector<HTMLButtonElement>('button[aria-label="System control"]');
-    expect(toggle).not.toBeNull();
-    await act(async () => toggle?.click());
-    await settle();
+    // the bar's control is gone with the bar: no button in Godview opens the panel
+    expect(host.querySelector('button[aria-label="System control"]')).toBeNull();
+    await toggleSystemControl();
     expect(statusIn(host, ".vf-godview")).toBe("System control unavailable");
     expect(document.getElementById("vf-godview-tweak-panel")).toBeNull();
     expectSameMonitor(host, before);
@@ -305,19 +330,48 @@ describe("the overlay's chrome cannot take down the monitor (M49)", () => {
     // the boundary's first window at the latest), and a closed panel draws nothing
     stand.panelThrows = false;
     holdChromeClock();
-    await act(async () => toggle?.click());
-    await settle();
+    await toggleSystemControl();
     await advanceChromeClock();
     await settle();
     expect(statusIn(host, ".vf-godview")).toBeUndefined();
-    await act(async () => toggle?.click());
-    await settle();
+    await toggleSystemControl();
     expect(document.getElementById("vf-godview-tweak-panel")).not.toBeNull();
+  });
+
+  it("lends the palette System control while Godview shows — the one verb, the same panel — and withdraws it when it closes (GV-D1)", async () => {
+    const host = await mountOverlay();
+    const door = getSystemControlDoor();
+    expect(door).not.toBeNull();
+    expect(document.getElementById("vf-godview-tweak-panel")).toBeNull();
+    expect(host.querySelector(".vf-godview")?.getAttribute("data-godview-tuning-open")).toBe(
+      "false",
+    );
+    await toggleSystemControl();
+    const panel = document.getElementById("vf-godview-tweak-panel");
+    expect(panel?.textContent).toContain("SYSTEM CONTROL");
+    expect(host.querySelector(".vf-godview")?.getAttribute("data-godview-tuning-open")).toBe(
+      "true",
+    );
+    // the door is the same object while Godview is open: a toggle republishes nothing
+    expect(getSystemControlDoor()).toBe(door);
+    await toggleSystemControl();
+    expect(document.getElementById("vf-godview-tweak-panel")).toBeNull();
+    // another view: the door goes, and a panel left open closes with Godview
+    await toggleSystemControl();
+    expect(document.getElementById("vf-godview-tweak-panel")).not.toBeNull();
+    await setView("canvas");
+    expect(getSystemControlDoor()).toBeNull();
+    // with no door the frame's run is a no, never a throw
+    expect(runSystemControl()).toBe(false);
+    expect(document.getElementById("vf-godview-tweak-panel")).toBeNull();
+    await setView("godview");
+    expect(getSystemControlDoor()).not.toBeNull();
+    expect(document.getElementById("vf-godview-tweak-panel")).toBeNull();
   });
 
   it("lends the frame's Peek its Live now while Godview shows, and withdraws it when it closes (P2 — Find left the stage)", async () => {
     const host = await mountOverlay();
-    // no sheet of its own: the stage mounts no Find, and the bar has no FIND
+    // no sheet of its own: the stage mounts no Find, and the head has no FIND
     expect(host.querySelector(".vf-find-sheet")).toBeNull();
     expect(host.querySelector('button[aria-label="Find an agent by what was said"]')).toBeNull();
     await act(async () =>
@@ -340,6 +394,42 @@ describe("the overlay's chrome cannot take down the monitor (M49)", () => {
     stop?.();
     await setView("canvas");
     expect(getGodviewFindDoor()).toBeNull();
+  });
+
+  it("says its terminals' state while Godview is the window's view — away at a launch (W7) — and nothing once it is not or is gone (round 3, L2 — the deck's door)", async () => {
+    // before Godview has ever shown, nobody has spoken for the window
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container, { onCaughtError: vi.fn(), onUncaughtError: vi.fn() });
+    await act(async () => root?.render(<GodviewOverlay />));
+    expect(getGodviewDeck()).toBeNull();
+
+    await setView("godview");
+    // a launch opens on the monitor alone (W7, GV-D5): the state on the
+    // stage's root and the door's word are the same fact
+    const stage = container.querySelector(".vf-godview");
+    expect(stage?.getAttribute("data-godview-deck")).toBe("away");
+    expect(getGodviewDeck()).toBe("away");
+    // a call brings them up
+    await act(async () => {
+      askGodviewDeckUp();
+    });
+    expect(stage?.getAttribute("data-godview-deck")).toBe("up");
+    expect(getGodviewDeck()).toBe("up");
+
+    // another view: the stage stays mounted (sessions run on), the door is silent
+    await setView("canvas");
+    expect(container.querySelector(".vf-godview")).toBe(stage);
+    expect(stage?.getAttribute("data-godview-open")).toBe("false");
+    expect(getGodviewDeck()).toBeNull();
+
+    await setView("godview");
+    expect(getGodviewDeck()).toBe("up");
+
+    // the overlay going away takes its word with it
+    await act(async () => root?.unmount());
+    root = null;
+    expect(getGodviewDeck()).toBeNull();
   });
 
   it("a throwing deck edge says so in the lip's place; the monitor, its view and the deck stay", async () => {

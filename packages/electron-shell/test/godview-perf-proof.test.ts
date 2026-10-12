@@ -5,21 +5,44 @@
  * own words. Held against recorded runs too, where the lab exists
  * (`godview-perf-runs.ts` writes the synthetic ones).
  */
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { RECIPE, reportName, script, writeRun } from "./godview-perf-runs";
 
+interface Launch {
+  arm: string;
+  round: number;
+  startLoad: number | null;
+  endLoad: number | null;
+}
+interface Loads {
+  endLoadRange: [number, number] | null;
+  endLoadUnread: number;
+  endedOverQuiet: Launch[];
+}
+interface Account extends Loads {
+  reports: number;
+  cells: number;
+  profiles: number;
+  verdict: string;
+  rounds: number;
+  loadRange: [number, number] | null;
+  quietLine: number;
+  quietLineFrom: string;
+}
 interface Proof {
-  auditProof(dir: string): {
-    reports: number;
-    cells: number;
-    profiles: number;
-    verdict: string;
-    rounds: number;
-  };
+  auditProof(dir: string, options?: { quiet?: number }): Account;
   declaredMembership(recipe: string, viewId: string): Record<string, unknown>;
+  quietLine(summary: unknown, asked?: number): { quietLine: number; quietLineFrom: string };
+  launchLoads(
+    summary: unknown,
+    launches: { arm: string; round: number; loadavg?: unknown }[],
+    quiet: number,
+  ): Loads;
+  overQuietLines(account: Pick<Account, "quietLine" | "endedOverQuiet">): string[];
 }
 
 let proof: Proof;
@@ -198,5 +221,132 @@ describe("the proof audit", () => {
     const dir = await healthyRun();
     unlinkSync(join(dir, "summary.json"));
     expect(() => proof.auditProof(dir)).toThrow(/did not complete/);
+  });
+});
+
+describe("the proof audit's reading of the load at each launch's two ends", () => {
+  it("reads both ranges off a quiet run, held to the run's own --load-max, and names nobody", async () => {
+    const dir = await healthyRun();
+    expect(proof.auditProof(dir)).toMatchObject({
+      loadRange: [4, 4],
+      endLoadRange: [5, 5],
+      endLoadUnread: 0,
+      quietLine: 60,
+      quietLineFrom: "the run's --load-max",
+      endedOverQuiet: [],
+    });
+  });
+
+  it("names every launch that ended over the quiet line, in launch order, and still passes", async () => {
+    const dir = await healthyRun();
+    // round 1 ran A B A′, round 2 A′ B A: every launch started at 4
+    const ended = (arm: string, round: number, load: number): void =>
+      edit(dir, reportName(arm, round), (json) => {
+        json["loadavg"] = [load, 39.1, 32.2];
+      });
+    ended("A", 2, 108.1572265625);
+    ended("B", 1, 72.5);
+    ended("A′", 1, 60); // AT the line is not over it
+    const account = proof.auditProof(dir);
+    expect(account.verdict).toBe("unread");
+    expect(account.loadRange).toEqual([4, 4]);
+    expect(account.endLoadRange).toEqual([5, 108.1572265625]);
+    expect(account.endedOverQuiet).toEqual([
+      { arm: "B", round: 1, startLoad: 4, endLoad: 72.5 },
+      { arm: "A", round: 2, startLoad: 4, endLoad: 108.1572265625 },
+    ]);
+    expect(proof.overQuietLines(account)).toEqual([
+      "B r1 ended over the quiet line (60): load 4.00 before the launch, 72.50 at its end",
+      "A r2 ended over the quiet line (60): load 4.00 before the launch, 108.16 at its end",
+    ]);
+  });
+
+  it("holds a run that recorded no --load-max to 15, and the caller's --quiet beats both", async () => {
+    const dir = await healthyRun();
+    edit(dir, reportName("A′", 2), (json) => {
+      json["loadavg"] = [18.05, 11.4, 9.6];
+    });
+    expect(proof.auditProof(dir).endedOverQuiet).toEqual([]);
+    expect(proof.auditProof(dir, { quiet: 15 })).toMatchObject({
+      quietLine: 15,
+      quietLineFrom: "--quiet",
+      endedOverQuiet: [{ arm: "A′", round: 2, startLoad: 4, endLoad: 18.05 }],
+    });
+    // a run from before the runner recorded its ceiling
+    edit(dir, "summary.json", (json) => {
+      delete json["loadMax"];
+    });
+    expect(proof.auditProof(dir)).toMatchObject({
+      quietLine: 15,
+      quietLineFrom: "default",
+      endedOverQuiet: [{ arm: "A′", round: 2 }],
+    });
+    expect(proof.auditProof(dir, { quiet: 20 }).endedOverQuiet).toEqual([]);
+  });
+
+  it("prints the account, one plain line per loud launch, then PROOF OK — and still exits 0", async () => {
+    const dir = await healthyRun();
+    edit(dir, reportName("A′", 2), (json) => {
+      json["loadavg"] = [18.05, 11.4, 9.6];
+    });
+    const audit = join(import.meta.dirname, "..", "..", "..", "scripts", "perf-godview-proof.mjs");
+    // execFileSync throws on any exit but 0
+    const out = execFileSync(process.execPath, [audit, dir, "--quiet", "15"], { encoding: "utf8" });
+    const [account, ...rest] = out.trimEnd().split("\n");
+    expect(JSON.parse(account ?? "")).toMatchObject({
+      verdict: "unread",
+      quietLine: 15,
+      endedOverQuiet: [{ arm: "A′", round: 2 }],
+    });
+    expect(rest).toEqual([
+      "A′ r2 ended over the quiet line (15): load 4.00 before the launch, 18.05 at its end",
+      "PROOF OK — instrument validation, not a performance grade",
+    ]);
+  });
+
+  it("the quiet line is the caller's, else the run's, else 15", () => {
+    expect(proof.quietLine({ loadMax: 8 }, 30)).toEqual({
+      quietLine: 30,
+      quietLineFrom: "--quiet",
+    });
+    expect(proof.quietLine({ loadMax: 8 })).toEqual({
+      quietLine: 8,
+      quietLineFrom: "the run's --load-max",
+    });
+    expect(proof.quietLine({})).toEqual({ quietLine: 15, quietLineFrom: "default" });
+    expect(proof.quietLine({ loadMax: "60" }, Number.NaN)).toMatchObject({ quietLine: 15 });
+  });
+
+  it("reads what is there: a launch with no start on record, a report with no end", () => {
+    const summary = {
+      loads: [
+        { round: 1, arm: "A", load: 3 },
+        { round: 1, arm: "B", load: 14.8 },
+      ],
+    };
+    const loads = proof.launchLoads(
+      summary,
+      [
+        { arm: "A′", round: 1, loadavg: [40, 20, 10] }, // the runner recorded no start for it
+        { arm: "B", round: 1, loadavg: [28.8, 14, 10] },
+        { arm: "A", round: 1 }, // a report from a lab that wrote no loadavg
+      ],
+      15,
+    );
+    expect(loads.endLoadRange).toEqual([28.8, 40]);
+    expect(loads.endLoadUnread).toBe(1);
+    // launch order as the runner recorded it; a launch it did not record comes last
+    expect(loads.endedOverQuiet).toEqual([
+      { arm: "B", round: 1, startLoad: 14.8, endLoad: 28.8 },
+      { arm: "A′", round: 1, startLoad: null, endLoad: 40 },
+    ]);
+    expect(proof.overQuietLines({ quietLine: 15, endedOverQuiet: loads.endedOverQuiet })[1]).toBe(
+      "A′ r1 ended over the quiet line (15): load unread before the launch, 40.00 at its end",
+    );
+    expect(proof.launchLoads({}, [], 15)).toEqual({
+      endLoadRange: null,
+      endLoadUnread: 0,
+      endedOverQuiet: [],
+    });
   });
 });

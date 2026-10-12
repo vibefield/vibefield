@@ -113,9 +113,10 @@ extraResources:
 afterPack: packaging/after-pack.mjs
 
 # Apple platforms use the layered Icon Composer source; electron-builder 26 compiles it with
-# Xcode 26 actool into Assets.car plus an ICNS fallback. The other platform icons remain generated
-# deterministically from icons/app-master.svg. Paths are explicit so builder defaults cannot
-# silently select a stale conventional filename.
+# Xcode 26 actool into Assets.car (light, dark and tinted appearances) plus an ICNS fallback. The
+# other platform icons are generated deterministically from the same package's layers
+# (icons/README.md). Paths are explicit so builder defaults cannot silently select a stale
+# conventional filename.
 
 # The staged app declares no dependencies and ships no node_modules, so there is nothing to
 # rebuild. Off explicitly: a rebuild step that silently does nothing is still a step that can

@@ -528,9 +528,10 @@ const liveRows = async () => {
 };
 
 describe("the device filter — in search's Live now (GV-D3)", () => {
-  it("offers every desktop as its mark and its name, here first, all by default — and the bar draws no chip", async () => {
+  it("offers every desktop as its mark and its name, here first, all by default — and the head draws no chip", async () => {
     const view = await mountMonitor(fakeDoor());
-    expect(view.querySelector(".vf-godview-header .vf-device-filter")).toBeNull();
+    expect(view.querySelector(".vf-stories-slot")).not.toBeNull();
+    expect(view.querySelector(".vf-device-filter")).toBeNull();
     const filters = getGodviewFindDoor()?.filters;
     expect(filters?.desk).toBeNull();
     expect(filters?.desks.map((desk) => [desk.id, desk.here, desk.os])).toEqual([

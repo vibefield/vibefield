@@ -184,6 +184,12 @@ changes. The 1024×1024 opaque RGB app icon is an export of the existing
 `apps/desktop/packaging/icons/app-master.svg`; it has no alpha channel or baked-in
 rounded corners.
 
+> **Since 2026-10-09** the icon set is generated with the desktop's icons by
+> `pnpm --filter @vibefield/desktop icons:generate` from `apps/desktop/packaging/icons/app.icon`
+> (`app-master.svg` is retired): `AppIcon.png`, `AppIcon-Dark.png` and `AppIcon-Tinted.png`, the
+> plain white, plain black and grey icons, still 1024×1024 opaque RGB with no alpha channel or
+> baked-in corners. Builds uploaded before then carry the old flat icon.
+
 ## Install and test away from your Mac
 
 1. Install Apple's [TestFlight](https://testflight.apple.com/) on the iPhone.

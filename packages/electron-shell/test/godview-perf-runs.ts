@@ -83,6 +83,8 @@ function labCell(view: string, task: number, render: number) {
       },
     },
     memory: { rendererMB: 500, gpuMB: 200 },
+    // after the forced collection: below the probe's own reading above
+    heap: { collected: true, usedJSHeapSize: 90 * 1_048_576, totalJSHeapSize: 120 * 1_048_576 },
     totals: {
       seconds: 8,
       taskMsPerS: task,
@@ -150,6 +152,9 @@ export async function writeRun(dir: string, options: RunOptions = {}): Promise<u
         reactHook: true,
         synthetic: {},
         warmupRecipe: "n=10,duration=1500,seed=9,markerQuietMs=50",
+        warmedViews: [...VIEWS],
+        // the one-minute load as the launch ended, then the five and the fifteen
+        loadavg: [5, 4, 4],
         cells: VIEWS.map((view) => labCell(view, task, render)),
       };
       runs[arm]?.push(report);
@@ -163,7 +168,13 @@ export async function writeRun(dir: string, options: RunOptions = {}): Promise<u
       (runs[arm] ?? []).map((run) => stats.cellMetrics(run.cells[index]));
     return { cell, rows: stats.judgeCell(read("A"), read("B"), read("A′"), table) };
   });
-  const instruments = { reactHook: true, metered: true, timed: true, swarmRenderers: ["webgpu"] };
+  const instruments = {
+    reactHook: true,
+    metered: true,
+    timed: true,
+    swarmRenderers: ["webgpu"],
+    warmedViews: [...VIEWS],
+  };
   const summary = {
     profiles,
     label: "A/B",
@@ -173,10 +184,17 @@ export async function writeRun(dir: string, options: RunOptions = {}): Promise<u
       "A′": { root: "/arms/a", source: "model", synthetic: "" },
     },
     instruments: { A: instruments, B: instruments, "A′": instruments },
+    heapCollected: Object.fromEntries(
+      Object.entries(runs).map(([arm, list]) => [
+        arm,
+        { cells: list.length * VIEWS.length, collected: list.length * VIEWS.length },
+      ]),
+    ),
     rounds,
     window: { mode: "offscreen", fps: 60, scale: 2 },
     clock: "corpus",
     warmupRecipe: "n=10,duration=1500,seed=9,markerQuietMs=50",
+    loadMax: 60,
     loads,
     startedAt: "2026-10-07T00-00-00-000Z",
     cells,

@@ -5,7 +5,13 @@ import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-superviso
 import { app, type BrowserWindow } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
 import { runGodviewCapture } from "./godview-capture";
-import { type MetricTotals, metricTotals, parseSynthetic } from "./godview-lab-measures";
+import {
+  type LabHeap,
+  labHeap,
+  type MetricTotals,
+  metricTotals,
+  parseSynthetic,
+} from "./godview-lab-measures";
 import {
   type LabDeckState,
   type LabMonitorState,
@@ -13,6 +19,7 @@ import {
   singlePaneLabDeck,
 } from "./godview-lab-readiness";
 import {
+  collectedHeap,
   type LabWindow,
   labWindowOptions,
   leave,
@@ -56,6 +63,8 @@ import { runGodviewWorkerWindows } from "./godview-worker-windows";
 //                            `n=10,duration=1500,seed=9,markerQuietMs=50`); under
 //                            `model` its stream is played too, so the model path
 //                            pays its first-use costs where nothing is measured
+//   VF_GODVIEW_PERF_WARMUP   `0`: no warm-up (the report's `warmedViews` is then
+//                            empty, and the runner's summary says so)
 //   VF_GODVIEW_PERF_CLOCK    `corpus` (default, M31: the page's Date reads the
 //                            corpus's wall time while a replay plays) or `real`
 //   VF_GODVIEW_PERF_WINDOW   `offscreen` (default) or `shown` — never focused,
@@ -76,6 +85,14 @@ import { runGodviewWorkerWindows } from "./godview-worker-windows";
 // script, layout, style — CDP `Performance.getMetrics` at the window's start
 // and end). Those totals are what the paired gate reads: a view in its own root,
 // or work moved into rAF, is inside them.
+//
+// THE HEAP ROW (MV lab debts, 2026-10-11). Every cell's `heap` is the page's JS
+// heap after a forced collection, taken once the cell's window has closed (the
+// CDP totals and the probe's report are both read first), so the pause is in no
+// task, script, frame or LoAF row. `heap.collected` says whether the collection
+// was forced; where it was not, the row keeps the probe's own reading — a phase
+// of the collector — and the runner's summary counts those cells. The warm-up
+// ends on a collection too, so every measured cell starts from a collected heap.
 //
 // It asserts nothing about the numbers (L14: pairing is the gate), only that
 // the machinery answered: the bridges installed, the player heard what it
@@ -104,6 +121,9 @@ export interface GodviewPerfCell {
   swarmRenderer: string | null;
   /** M33 — Chromium's main-thread totals per second over the cell */
   totals: MetricTotals | null;
+  /** The page's JS heap once the cell's window had closed: after a forced
+   * collection where `collected`, else the probe's own reading (`report.memory`). */
+  heap: LabHeap;
   /** The same healthy one-pane host workload at both ends of this sample. */
   deck: { start: LabDeckState; end: LabDeckState };
   monitor: LabMonitorState;
@@ -156,6 +176,8 @@ export async function runGodviewPerfLab(opts: {
 
   let code = 0;
   const cells: GodviewPerfCell[] = [];
+  /** the views the discarded warm-up replayed through, as it got through them */
+  const warmedViews: string[] = [];
   const startedAt = Date.now();
   let lab: LabWindow | null = null;
   try {
@@ -188,15 +210,42 @@ export async function runGodviewPerfLab(opts: {
     // A WARM-UP, discarded: the first trial's first cell carried 4.4 s of
     // long-frame blocking (two LoAFs, the longest 2.3 s) that no later cell saw
     // — first-use costs of the stage, the views' chunks and the JIT. One short
-    // corpus through the default view pays them before anything is measured;
-    // under `model`, through the model path.
+    // corpus pays them before anything is measured; under `model`, through the
+    // model path. It replays once through EVERY view of the run, in the run's
+    // order (MV lab debts, 2026-10-11): through the default view alone, as it
+    // ran until then, every other view first mounted — its chunk, its root,
+    // its canvas — inside its own first measured cell. Each view is entered as
+    // a cell enters it (selected, settled, then the replay), and the warm-up
+    // ends where every recipe's last cell ends — the replay stopped on the last
+    // view, settled — so the first measured cell is entered as any later
+    // recipe's first is: its corpus loaded, then its own view selected.
+    // The cost is per launch: a switch, the settle and the 1.5 s corpus for
+    // each view, ~3.3 s; the four views and the closing settle ~15 s where the
+    // one-view warm-up took ~3 s (about 4 min more over an R7's 21 launches).
     if (process.env["VF_GODVIEW_PERF_WARMUP"] !== "0") {
       const warm = await loadCorpus(win, warmupRecipe, source);
-      await page(win, "window.__vfGodviewReplay.start()");
-      await untilEnded(win, "the warm-up replay to end", warm.durationMs + 30_000);
-      await page(win, "window.__vfGodviewReplay.stop()");
+      for (const view of views) {
+        await selectView(win, monitor, view);
+        await sleep(settleMs);
+        await page(win, "window.__vfGodviewReplay.start()");
+        await untilEnded(win, `the warm-up replay to end on ${view}`, warm.durationMs + 30_000);
+        await page(win, "window.__vfGodviewReplay.stop()");
+        warmedViews.push(view);
+      }
+      // every cell ends on a forced collection (its heap row); so does the
+      // warm-up, and the first measured cell starts from a collected heap too
+      const collected = (await collectedHeap(win)) !== null;
       await sleep(settleMs);
-      say({ kind: "warmed", arm, corpus: warm.corpus, model: warm.model !== null });
+      // (the runner echoes a line's first 160 characters: what is new leads)
+      say({
+        kind: "warmed",
+        arm,
+        views: warmedViews,
+        leftOn: monitor.current()?.viewId ?? null,
+        collected,
+        corpus: warm.corpus,
+        model: warm.model !== null,
+      });
     }
 
     for (const recipe of recipes) {
@@ -235,6 +284,11 @@ export async function runGodviewPerfLab(opts: {
         const metrics = app.getAppMetrics();
         const renderer = metrics.find((metric) => metric.type === "Tab");
         const gpu = metrics.find((metric) => metric.type === "GPU");
+        // THE HEAP ROW, last: the window is closed — the CDP totals and the
+        // probe's report are read above, the process sizes as they always were
+        // — so the collection's pause lands in no row of this cell, and the
+        // next cell's window opens only after its own select and settle.
+        const heap = labHeap(report["memory"], await collectedHeap(win));
         const cell: GodviewPerfCell = {
           view,
           corpus: loaded.corpus,
@@ -251,6 +305,7 @@ export async function runGodviewPerfLab(opts: {
           startedAt: cellStartedAt,
           swarmRenderer: view === "swarm" ? await swarmRenderer(win) : null,
           totals: metricTotals(metricsAtStart, metricsAtEnd),
+          heap,
           deck: { start: deckAtStart, end: deckAtEnd },
           monitor: membership,
         };
@@ -276,6 +331,7 @@ export async function runGodviewPerfLab(opts: {
           delivered: (replay as { delivered?: number }).delivered,
           skipped: (replay as { skipped?: number }).skipped,
           listeners: replayStart.listeners,
+          heapCollected: heap.collected,
           ...(cell.swarmRenderer !== null ? { swarmRenderer: cell.swarmRenderer } : {}),
         });
         await page(win, "window.__vfGodviewReplay.stop()");
@@ -309,6 +365,7 @@ export async function runGodviewPerfLab(opts: {
         metered: lab?.metered ?? false,
         synthetic,
         warmupRecipe,
+        warmedViews,
         electron: process.versions["electron"],
         platform: process.platform,
         loadavg: loadavg(),

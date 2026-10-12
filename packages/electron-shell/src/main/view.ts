@@ -30,9 +30,11 @@ import type { WebContents } from "electron";
 
 export interface ViewHostOptions {
   logger?: Logger;
-  /** Called after every request with the resulting state, so the application
-   * menu can move its mark and lend or reclaim ⌘W. */
-  onChanged?: (state: FrameViewState) => void;
+  /** Called after every request with the resulting state and the window it is
+   * of, so the application menu can move its mark and lend or reclaim ⌘W, and
+   * that window's lights can follow its view in the same step
+   * (`window-lights.ts`). */
+  onChanged?: (state: FrameViewState, target: WebContents) => void;
 }
 
 /** One window's view. */
@@ -69,7 +71,7 @@ export class ViewWindowState {
     // Published even when unchanged: a request is also how a reloaded document
     // asks for the truth, and a refused one must still be answered.
     this.publish();
-    this.opts.onChanged?.(this.current());
+    this.opts.onChanged?.(this.current(), this.target);
     return this.current();
   }
 

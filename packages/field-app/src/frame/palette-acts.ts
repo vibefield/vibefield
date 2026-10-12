@@ -8,12 +8,15 @@ import { ZOOM_ACTS, type ZoomAct, zoomKeyLabel } from "./zoom";
 // §8 "The head"): every act with its key at the row's end — the palette is
 // where keys are said. Pure: the controller runs them, the view draws them.
 // Built from the tables that already own each act (the views track's, the
-// line's create, the zoom's), so a key changed there changes here.
+// line's create, the zoom's), so a key changed there changes here. Godview's
+// System control is the one act with no table and no key: it was the
+// instrument bar's last tool, and the palette is where it went (GV-D1).
 
 export type FrameActRun =
   | { readonly kind: "view"; readonly view: FrameView }
   | { readonly kind: "create" }
   | { readonly kind: "zoom"; readonly act: ZoomAct }
+  | { readonly kind: "system-control" }
   | { readonly kind: "settings" };
 
 export interface FrameAct {
@@ -40,12 +43,15 @@ export interface FrameActGroup {
  * `historyWaits` is why History's create (Resume) waits — the line's own
  * reading of what History lends it (`historyCreateWaits`, AR-8c); absent,
  * History's create waits for a session to be chosen. `historyLive`: the chosen
- * session runs here, so the create is Jump to (P3) — the same door's word. */
+ * session runs here, so the create is Jump to (P3) — the same door's word.
+ * `systemControlWaits` is why Godview's System control cannot run — its door
+ * (`system-control-door.ts`) is not there yet — or null when it can. */
 export function frameActGroups(
   view: FrameView,
   keys: ViewKeys,
   historyWaits: string | null = "choose a session first",
   historyLive = false,
+  systemControlWaits: string | null = null,
 ): FrameActGroup[] {
   const views: FrameAct[] = FRAME_VIEWS.map((cell) => ({
     id: `view-${cell.view}`,
@@ -80,6 +86,19 @@ export function frameActGroups(
         run: { kind: "zoom", act: entry.act },
       });
     }
+  }
+  // System control is Godview's (GV-D1): §1.1's temporary panel, toggled from
+  // here since the instrument bar left. No key, and no glyph: `sliders` is
+  // General settings, and a glyph is one drawing per meaning (§13).
+  if (view === "godview") {
+    onView.push({
+      id: "system-control",
+      name: "System control",
+      glyph: null,
+      key: null,
+      waits: systemControlWaits,
+      run: { kind: "system-control" },
+    });
   }
   const app: FrameAct[] = [
     {

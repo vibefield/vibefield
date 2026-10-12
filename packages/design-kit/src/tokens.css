@@ -192,16 +192,61 @@
   --vf-godview-dark-terminal-divider: #414650;
   /* §2.7 + §8 (2026-09-28): the terminal deck is a sheet over the monitor. The
      shadow is §5's Sheet recipe per GODVIEW mode (not the app theme's); the lip
-     is never less than the radius, so no pane corner meets the curve. */
+     — since round 3 the Lip, the drag bar (GV-D7) — is never less than the
+     radius, so no pane corner meets the curve. */
   --vf-godview-light-deck-shadow: 0 -20px 40px rgb(0 0 0 / 8%);
   --vf-godview-dark-deck-shadow: 0 -20px 40px rgb(0 0 0 / 40%);
   --vf-godview-deck-radius: 12px;
-  --vf-godview-deck-lip: 14px;
+  --vf-godview-deck-lip: 30px;
   /* §2.7 — the launcher's clearing is never thinner than this, whatever the
      stage's glass: the prompt beneath must not read through its rows */
   --vf-godview-launcher-clearing-floor: 92%;
-  --vf-godview-deck-grip-width: 72px;
-  --vf-godview-deck-grip-height: 4px;
+  /* the grip is the groove (GV-D12): a 40 × 6 slot pressed into the frame */
+  --vf-godview-deck-grip-width: 40px;
+  --vf-godview-deck-grip-height: 6px;
+  /* §2.7 + §8 (round 3, One Frame §23.2 — GV-D7 the Lip, GV-D12 the groove,
+     GV-D11 the title bar): the wrapper around Godview's terminals. The values
+     are the ruled drawing's own.
+     The frame is the sheet's ground — the terminal's ground mixed toward the
+     terminal's ink by this much — and the well is what the panes sit in: its
+     edge and shade drawn over them, its rim under its foot. Per GODVIEW mode,
+     as the deck's shadow is. */
+  --vf-godview-light-deck-frame-ink: 11%;
+  --vf-godview-dark-deck-frame-ink: 9%;
+  --vf-godview-light-well-edge: rgb(0 0 0 / 17%);
+  --vf-godview-dark-well-edge: rgb(0 0 0 / 42%);
+  --vf-godview-light-well-rim: rgb(255 255 255 / 60%);
+  --vf-godview-dark-well-rim: rgb(255 255 255 / 6%);
+  --vf-godview-light-well-shade: rgb(0 0 0 / 9%);
+  --vf-godview-dark-well-shade: rgb(0 0 0 / 28%);
+  /* the well's corners: a selected pane's 8, the 1 gap, the 1 edge */
+  --vf-godview-deck-well-radius: 10px;
+  /* the groove's corners, and the pill it stands in (its height; its corners
+     are half of it) with the pill's side padding */
+  --vf-godview-deck-grip-radius: 3px;
+  --vf-godview-deck-grip-pill: 22px;
+  --vf-godview-deck-grip-pill-pad: 12px;
+  /* maximized, the grip's hit in the title bar: the bar's full height */
+  --vf-godview-deck-grip-hit: 168px;
+  /* minimize and maximize at the lip's right end (minimize and restore in
+     the maximized title bar) */
+  --vf-godview-deck-control-width: 30px;
+  --vf-godview-deck-control-height: 24px;
+  --vf-godview-deck-control-radius: 8px;
+  /* the monitor's field ends this far above the deck's edge, and is never
+     shorter than the floor */
+  --vf-godview-deck-field-gap: 12px;
+  --vf-godview-deck-field-floor: 220px;
+  /* §8 "Rest" (N15 (a)): the deck rests at the drawing's share of the stage —
+     300 of its 780 — never above the floor, the field's floor and its gap (so
+     at rest the field always ends the gap above the edge). The share's percent
+     resolves where it is used, against the stage's height. */
+  --vf-godview-deck-rest-share: calc(100% * 5 / 13);
+  --vf-godview-deck-rest-floor: 232px;
+  /* §8 "Godview's head — Stories" (GV-D1): the stage runs under the head, and a
+     view keeps its words and controls clear of the head's reserve — the head's
+     foot at 48, plus 8. The stage's own chrome begins at it. */
+  --vf-godview-head-reserve: 56px;
 
   --vf-godview-rain-green: #4ade80;
   --vf-godview-rain-green-focus: #22c55e;

@@ -462,12 +462,16 @@ export function HeadZoomView({
 export interface HeadViewProps {
   place: HeadPlaceViewProps;
   zoom: HeadZoomViewProps;
+  /** A view covers the canvas, and the head goes with it (DESIGN.md §8 "The
+   * covers over the desk"): it is DOM over the desk, never in the desk's blurred
+   * still, so the cover's tint alone would leave the pill and the readout sharp. */
+  covered?: boolean;
 }
 
 /** The whole head: the explorer's dim, the name pill at the centre, and the
  * right slot — the readout alone since FR-4 (the theme went into the Me menu,
  * Artifacts behind the right notch). */
-export function HeadView({ place, zoom }: HeadViewProps): ReactElement {
+export function HeadView({ place, zoom, covered = false }: HeadViewProps): ReactElement {
   const toolsRef = useRef<HTMLDivElement>(null);
   // The pill stays centred on the window, so it gives up the WIDER side's
   // slot on both sides: the lights' 96 on the left, the right slot as wide as
@@ -485,7 +489,9 @@ export function HeadView({ place, zoom }: HeadViewProps): ReactElement {
   }, []);
   const side = Math.max(96, right + 16 + 12);
   return (
-    <>
+    // `display: contents`: no box, so every piece keeps its place. It carries only
+    // the visibility the pieces inherit while a view covers the canvas.
+    <div className="vf-head" {...(covered ? { "data-covered": "" } : {})}>
       <div
         className="vf-head-dim"
         data-open={place.open === true ? "true" : "false"}
@@ -496,6 +502,6 @@ export function HeadView({ place, zoom }: HeadViewProps): ReactElement {
       <div ref={toolsRef} className="vf-head-tools no-drag hud-flight" data-hud-flight="top-right">
         <HeadZoomView {...zoom} />
       </div>
-    </>
+    </div>
   );
 }

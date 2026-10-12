@@ -1,6 +1,8 @@
 /** High-rate diagnostic markers are opt-in; smoke and perf runs enable them
- * through their renderer mode. Ordinary development and production stay quiet. */
-function godviewMarkersEnabled(): boolean {
+ * through their renderer mode. Ordinary development and production stay quiet.
+ * Exported for a witness that would otherwise measure for nobody (the deck's
+ * wrapper, `godview/deck-wrapper-witness.ts`). */
+export function godviewMarkersEnabled(): boolean {
   if (typeof location === "undefined") return false;
   const params = new URLSearchParams(location.search);
   return (
@@ -158,11 +160,36 @@ export interface GodviewDeckFacts {
    * dimensions; a completed gesture releases the content box once. Physical
    * regressions separately observe canvas identity and content resizes. */
   zoom: { phase: "idle" | "entering" | "zoomed" | "leaving"; commits: number };
+  /** Round 3 — the wrapper around the terminals, as the window's stage
+   * measures it (`godview/deck-wrapper-witness.ts`): the state it draws, its
+   * top edge in CSS pixels from the stage's top, and `bodyResizes` — how many
+   * times the box the terminals fill (`.vf-godview-terminal-deck-body`) has
+   * changed size since the stage mounted. The count only grows, as
+   * `zoom.commits` does: a move the product makes is held to exactly one.
+   * `raisedBy: "lab"` (W7) — a lab's call (the markers' own seam,
+   * `godview/deck-state.ts`) brought the terminals up from away; kept while they
+   * stay up or maximized, gone when they go away. Absent for a deck in no
+   * stage that measures it. */
+  wrapper?: {
+    state: "away" | "up" | "maximized";
+    top: number;
+    bodyResizes: number;
+    raisedBy?: "lab";
+  };
 }
 
 export function emitGodviewDeckMarker(facts: GodviewDeckFacts): void {
   if (!godviewMarkersEnabled()) return;
   console.log(`GODVIEW_DECK ${JSON.stringify(facts)}`);
+}
+
+/** W7 — the lab's call (the markers' own seam, `godview/deck-state.ts`) never
+ * throws to the lab: a throw inside it is said here, one line. What came
+ * of a call that went through is the deck's own trail above — the restore
+ * question (`consent`), a fault (`error`), the rise (`wrapper.raisedBy`). */
+export function emitGodviewDeckLabMarker(facts: { up: "threw"; reason: string }): void {
+  if (!godviewMarkersEnabled()) return;
+  console.log(`GODVIEW_DECK_LAB ${JSON.stringify(facts)}`);
 }
 
 /**
@@ -408,6 +435,10 @@ export function emitZoomMenuMarker(facts: ZoomMenuFacts): void {
  * `warm` names the stations the prewarm had already passed, so the same line
  * reads honestly with the prewarm on and off. */
 export interface GodviewColdOpenFacts {
+  /** What time zero is (`ColdOpenReport.zero`): the terminals' first call
+   * since round 3's W7 — Godview opens on the monitor alone — and the view's
+   * open before it. A comparison across W7 must name it. */
+  zero: "first-call";
   totalMs: number;
   phases: Record<string, number>;
   warm: readonly string[];

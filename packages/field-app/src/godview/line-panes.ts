@@ -35,10 +35,15 @@ export function linePanesOf(
   });
 }
 
-/** The door's outcome in the line's terms — its refusal in the swarm's own
- * sentence for a deck with no pane to open into (useMonitorAgents' createAt). */
+/** The door's outcome in the line's terms — how the deck's rule placed it
+ * (GV-D4), when the door says; its refusal in the swarm's own sentence for a
+ * deck with no pane to place by (useMonitorAgents' createAt). */
 export function newTerminalOutcome(outcome: LocalMountOutcome): NewTerminalOutcome {
-  if (outcome.state === "mounted") return { state: "opened" };
+  if (outcome.state === "mounted")
+    return {
+      state: "opened",
+      ...(outcome.placement !== undefined ? { placement: outcome.placement } : {}),
+    };
   if (outcome.state === "failed") return { state: "refused", reason: outcome.reason };
   return { state: "refused", reason: "no pane to open it in — open one in the deck first" };
 }
@@ -46,8 +51,12 @@ export function newTerminalOutcome(outcome: LocalMountOutcome): NewTerminalOutco
 /** Paste `text` into a pane's input — the road ⌘V takes: the pane's own
  * paste handler takes it (bracketed when the program asked for that), and
  * nothing presses Return. The pane is focused first, because the input it
- * pastes through is the one holding the keyboard. True when the pane took it
- * (its handler claims the event). */
+ * pastes through is the one holding the keyboard. True when the pane's handler
+ * claimed the event — which says a pane is there to hear it, NOT that the
+ * paste was sent: ghosttea's handler claims a paste its runtime then drops
+ * while the routed input is closed. The deck's door asks the runtime that
+ * first (`GodviewDeck`'s `paste`) and hands nothing over while the session's
+ * input is closed. */
 export function pasteIntoPane(root: ParentNode, paneId: string, text: string): boolean {
   const id =
     typeof CSS !== "undefined" && typeof CSS.escape === "function" ? CSS.escape(paneId) : paneId;

@@ -13,6 +13,7 @@ import {
   type HistoryLineDoor,
   historyCreateWaits,
   jumpNote,
+  newTerminalNote,
   resumeNote,
 } from "../src/frame/line-door";
 import { liveRunOf, readLiveRun } from "../src/history/jump";
@@ -110,6 +111,23 @@ describe("the line's words around Jump to (P3)", () => {
     );
     expect(resumeNote({ state: "running" })).toBe("This session is running — Jump to it");
     expect(resumeNote({ state: "resumed" })).toBe("Resumed in the active pane");
+  });
+
+  it("says where the deck's rule placed a resume and a new terminal (GV-D4)", () => {
+    // beside the focused pane while fewer than three panes show
+    expect(resumeNote({ state: "resumed", placement: "beside" })).toBe("Resumed in a new pane");
+    expect(newTerminalNote({ state: "opened", placement: "beside" })).toBe(
+      "Terminal opened in a new pane",
+    );
+    // with three or more it takes the focused pane's place — and a door that
+    // does not say keeps the sentence it always had
+    expect(resumeNote({ state: "resumed", placement: "replace" })).toBe(
+      "Resumed in the active pane",
+    );
+    expect(newTerminalNote({ state: "opened", placement: "replace" })).toBe(
+      "Terminal opened in the active pane",
+    );
+    expect(newTerminalNote({ state: "opened" })).toBe("Terminal opened in the active pane");
   });
 
   it("never makes Jump to wait on the launcher's reading — only on a choice", () => {

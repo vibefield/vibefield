@@ -166,6 +166,53 @@ async function heardNote(
   throw new Error(`${label}: the line said ${JSON.stringify(heard)}`);
 }
 
+/**
+ * Press what `find` names (a page expression for one element), once it is there:
+ * polled until the element exists and is enabled, then pressed by its own
+ * `.click()` IN THE SAME EVALUATION, so the press's own result comes back. A
+ * miss is never silent — an `?.click()` that found nothing used to read as a
+ * press, and the rung then waited its whole bound for an outcome nothing had
+ * asked for: past `timeoutMs` this fails at once with what `held` (a page
+ * expression) says was there.
+ */
+async function pressWhenThere(
+  win: BrowserWindow,
+  label: string,
+  find: string,
+  held: string,
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let seen = "";
+  while (Date.now() < deadline) {
+    const answer = JSON.parse(
+      String(
+        await win.webContents.executeJavaScript(`(() => {
+          const target = ${find};
+          if (target && !target.disabled) { target.click(); return JSON.stringify({ pressed: true }); }
+          return JSON.stringify({ pressed: false, found: target ? "disabled" : "absent", held: ${held} });
+        })()`),
+      ),
+    ) as { pressed: boolean; found?: string; held?: unknown };
+    if (answer.pressed) return;
+    seen = `${answer.found}; it held ${JSON.stringify(answer.held)}`;
+    await sleep(150);
+  }
+  throw new Error(`${label} could not be pressed within ${timeoutMs}ms: ${seen}`);
+}
+
+/** What the room's open menu holds: open or not, and its rows' keys. */
+const MENU_HELD = `(() => {
+  const menu = ${HISTORY_ROOM}?.querySelector(".ah-menu [role=menu]");
+  if (!menu) return { open: false };
+  return { open: true, keys: [...menu.querySelectorAll(".ah-menu__item")].map((row) =>
+    (row.getAttribute("data-key") ?? "?") + (row.disabled ? " (off)" : "")) };
+})()`;
+
+/** The acts a place in the room holds (a head's, a row's), by their keys. */
+const actsHeld = (scope: string): string =>
+  `[...(${scope}?.querySelectorAll(".ah-hostact") ?? [])].map((act) => (act.getAttribute("data-place") ?? "?") + ":" + (act.getAttribute("data-act") ?? "?") + (act.disabled ? " (off)" : ""))`;
+
 /** A path as the OS resolves it (macOS's /var is /private/var), or itself. */
 function resolved(path: string): string {
   try {
@@ -224,8 +271,12 @@ export async function historyNewAgentRung(
     const runsBefore = new Set(before.sessions.map((row) => row.runtimeRunId));
     const callsBefore = readTypedAgentCalls(staged.calls).length;
     await evaluate(NOTES_ARM);
-    await evaluate(
-      `(${HISTORY_ROOM}?.querySelector('.ah-hostact[data-place="head"][data-act="new-agent"]')?.click(), "ok")`,
+    await pressWhenThere(
+      win,
+      "New agent's act in ②'s head",
+      `${HISTORY_ROOM}?.querySelector('.ah-hostact[data-place="head"][data-act="new-agent"]')`,
+      actsHeld(HISTORY_ROOM),
+      5_000,
     );
     // the menu's row for the typed agent (its key is the catalog id, then the persona)
     const item = await untilValue(
@@ -236,25 +287,86 @@ export async function historyNewAgentRung(
         const row = items.find((candidate) =>
           (candidate.getAttribute("data-key") ?? "").startsWith(${JSON.stringify(`${staged.agentId}`)}));
         if (!row) return "";
+        // Starts in's row, read in the same look as the agent's (recorded, never asserted)
+        const where = items.find((candidate) => candidate.getAttribute("data-key") === "where");
         return JSON.stringify({
           key: row.getAttribute("data-key"),
           disabled: row.disabled || row.getAttribute("aria-disabled") === "true",
           text: (row.textContent ?? "").replace(/\\s+/g, " ").trim(),
+          startsIn: (where?.textContent ?? "").replace(/\\s+/g, " ").trim(),
         });
       })()`,
       10_000,
       (value) => value !== "",
     );
-    const row = JSON.parse(item) as { key: string; disabled: boolean; text: string };
+    const row = JSON.parse(item) as {
+      key: string;
+      disabled: boolean;
+      text: string;
+      startsIn: string;
+    };
     if (row.disabled)
       throw new Error(`New agent's row for the typed agent is disabled: ${row.text}`);
-    const startsIn = await evaluate(
-      `([...(${HISTORY_ROOM}?.querySelectorAll(".ah-menu [role=menu] .ah-menu__item") ?? [])].find((c) => c.getAttribute("data-key") === "where")?.textContent ?? "").replace(/\\s+/g, " ").trim()`,
+    const startsIn = row.startsIn;
+    await pressWhenThere(
+      win,
+      "New agent's row for the typed agent",
+      `[...(${HISTORY_ROOM}?.querySelectorAll(".ah-menu [role=menu] .ah-menu__item") ?? [])].find((c) => c.getAttribute("data-key") === ${JSON.stringify(row.key)})`,
+      MENU_HELD,
+      5_000,
     );
-    await evaluate(
-      `([...(${HISTORY_ROOM}?.querySelectorAll(".ah-menu [role=menu] .ah-menu__item") ?? [])].find((c) => c.getAttribute("data-key") === ${JSON.stringify(row.key)})?.click(), "ok")`,
-    );
-    const note = await heardNote(win, "New agent", ["Started in ", "Could not start"], 60_000);
+    // The press was taken (its own result above). A note that never comes is then
+    // told apart by what followed it: fieldd lists a new run of the agent or none,
+    // and the window shows the view it moved to (Godview, once the deck is asked
+    // to place the pane). Both reds of 10-11 were a start that reached fieldd and
+    // moved the window, and said nothing on the line in 60 s.
+    const note = await heardNote(
+      win,
+      "New agent",
+      ["Started in ", "Could not start"],
+      60_000,
+    ).catch(async (error: unknown) => {
+      const after = await opts.handle.client
+        .request("agent.list", {})
+        .then((answer) => AgentListResult.parse(answer))
+        .catch(() => null);
+      const freshRuns =
+        after?.sessions.filter(
+          (candidate) =>
+            candidate.kind === staged.agentId && !runsBefore.has(candidate.runtimeRunId),
+        ) ?? null;
+      const fresh = freshRuns?.map((candidate) => candidate.runtimeRunId) ?? null;
+      const view = await evaluate(VIEW_NOW).catch(() => "unread");
+      const listed =
+        fresh === null
+          ? "fieldd's agent.list could not be read"
+          : fresh.length === 0
+            ? "fieldd lists no new run of the agent"
+            : `fieldd lists a new run of it (${fresh.join(", ")})`;
+      // whether the deck placed it (2026-10-11): a pane's frame names its session
+      // (`data-vf-pane-frame`), and the new run's floor session is its terminal's
+      const floors = (freshRuns ?? []).flatMap((candidate) =>
+        candidate.terminal?.runtimeSessionId !== undefined
+          ? [candidate.terminal.runtimeSessionId]
+          : [],
+      );
+      const panes = await evaluate(
+        `JSON.stringify([...document.querySelectorAll(".vf-godview-terminal-deck [data-vf-pane-frame]")].map((frame) => frame.getAttribute("data-vf-pane-frame")))`,
+      )
+        .then((answer) => JSON.parse(answer) as string[])
+        .catch(() => null);
+      const shown =
+        floors.length === 0
+          ? "no new run names a floor session to look for in the deck"
+          : panes === null
+            ? "the deck's panes could not be read"
+            : floors.some((floor) => panes.includes(floor))
+              ? `a deck pane shows its session (${floors.join(", ")})`
+              : `no deck pane shows its session ${floors.join(", ")} (the deck shows ${JSON.stringify(panes)})`;
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)} — after the press ${listed}, ${shown}, and the window shows ${view}`,
+      );
+    });
     if (!note.startsWith("Started in ")) throw new Error(`New agent said: ${note}`);
     // fieldd's own account: a new run of the typed agent, its workspace the folder
     const want = resolved(folder);
@@ -359,7 +471,15 @@ export async function historyGoneFolderRung(
     renameSync(staged.work, aside);
     moved = true;
     await evaluate(NOTES_ARM);
-    await evaluate(`(${rowAct("resume")}?.click(), "ok")`);
+    await pressWhenThere(
+      win,
+      "the seeded session's Resume",
+      rowAct("resume"),
+      actsHeld(
+        `${HISTORY_ROOM}?.querySelector('.ah-session-list-item[data-motion-key=${JSON.stringify(session.sessionId)}]')`,
+      ),
+      5_000,
+    );
     const note = await heardNote(
       win,
       "Resume on a gone folder",
@@ -439,9 +559,13 @@ export async function historyByProjectPhotos(
   ];
   const WORKTREE_TOGGLE = 'button[aria-label="Toggle the project worktree"]';
   const worktreeOpen = `(${HISTORY_ROOM}?.querySelector(${JSON.stringify(WORKTREE_TOGGLE)})?.getAttribute("aria-pressed") ?? "absent")`;
-  const press = (selector: string): Promise<unknown> =>
-    win.webContents.executeJavaScript(
-      `(${HISTORY_ROOM}?.querySelector(${JSON.stringify(selector)})?.click(), "ok")`,
+  const press = (selector: string): Promise<void> =>
+    pressWhenThere(
+      win,
+      selector,
+      `${HISTORY_ROOM}?.querySelector(${JSON.stringify(selector)})`,
+      worktreeOpen,
+      5_000,
     );
   // A menu is opened as a person's pointer opens it (ROOM API v3: a synthetic
   // `.click()` reads as a key's, and a key's open rings its row): a real

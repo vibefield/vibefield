@@ -125,6 +125,10 @@ export function cellMetrics(cell) {
   const react = r.react ?? null;
   const seconds = r.windowMs / 1_000;
   const perSecond = (value) => (seconds > 0 ? value / seconds : Number.NaN);
+  // the lab's own heap record: after a forced collection where it says so
+  // (`cell.heap`, MV lab debts). A report from a lab before it has only the
+  // probe's reading, taken at whatever phase the collector was in.
+  const heap = cell.heap ?? r.memory;
   return {
     "task ms/s": totals?.taskMsPerS ?? Number.NaN,
     "script ms/s": totals?.scriptMsPerS ?? Number.NaN,
@@ -156,8 +160,7 @@ export function cellMetrics(cell) {
     "mark→draw2d ms": latency("firstDraw2dAfter"),
     "mark→gpu ms": latency("firstGpuAfter"),
     "mark→frame ms": latency("nextFrameAfter"),
-    "js heap MB":
-      r.memory.usedJSHeapSize === null ? Number.NaN : r.memory.usedJSHeapSize / 1_048_576,
+    "js heap MB": heap.usedJSHeapSize === null ? Number.NaN : heap.usedJSHeapSize / 1_048_576,
     "renderer MB": cell.memory?.rendererMB ?? Number.NaN,
     "gpu MB": cell.memory?.gpuMB ?? Number.NaN,
   };

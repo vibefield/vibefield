@@ -199,10 +199,11 @@ const stage = (host: HTMLElement): Element | null =>
   host.querySelector(".vf-godview-monitor-stage");
 
 /**
- * Which view the bar is wearing (AR-5).
+ * Which view the head is wearing (AR-5; the head since GV-D1).
  *
- * The `<select>` this used to read is gone: the stage's header is the package's
- * instrument bar, and a view is chosen with a mark that reports itself pressed.
+ * The `<select>` this used to read is gone, and so is the package's instrument
+ * bar that replaced it: a view is chosen with a circle of the head, which
+ * reports itself pressed as the bar's mark did.
  * The claim is unchanged — the choice survives a close — and it is still read
  * off the screen rather than out of storage, which is the point of making it.
  */

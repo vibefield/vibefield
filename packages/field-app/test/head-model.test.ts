@@ -133,8 +133,11 @@ describe("the palette's table of the frame's acts (One Frame §7)", () => {
     ]);
   });
 
-  it("follows the view: Godview's New terminal ⌘T, History's Resume waiting, no zoom off Canvas", () => {
-    expect(rows("godview", "mac")[1]).toEqual(["On this view", ["New terminal ⌘T"]]);
+  it("follows the view: Godview's New terminal ⌘T and System control, History's Resume waiting, no zoom off Canvas", () => {
+    expect(rows("godview", "mac")[1]).toEqual([
+      "On this view",
+      ["New terminal ⌘T", "System control"],
+    ]);
     const history = frameActGroups("history", "mac")[1]?.acts ?? [];
     expect(history.map((act) => [act.name, act.waits])).toEqual([
       ["Resume this session", "choose a session first"],
@@ -147,8 +150,39 @@ describe("the palette's table of the frame's acts (One Frame §7)", () => {
       ["Jump to this session", "jump", null, "create"],
     ]);
     // a live word from History never reaches another view's create
-    expect(rows("godview", "mac")[1]).toEqual(["On this view", ["New terminal ⌘T"]]);
+    expect(rows("godview", "mac")[1]).toEqual([
+      "On this view",
+      ["New terminal ⌘T", "System control"],
+    ]);
     expect(frameActGroups("godview", "mac", null, true)[1]?.acts[0]?.glyph).toBe("start");
+  });
+
+  it("lists System control in Godview alone, with no key and no glyph, waiting only while its door is not there (GV-D1)", () => {
+    const control = (view: Parameters<typeof frameActGroups>[0], waits?: string | null) =>
+      frameActGroups(view, "mac", null, false, waits)
+        .flatMap((group) => group.acts)
+        .find((act) => act.id === "system-control");
+    expect(control("godview")).toEqual({
+      id: "system-control",
+      name: "System control",
+      glyph: null,
+      key: null,
+      waits: null,
+      run: { kind: "system-control" },
+    });
+    // it has no key on any platform: the palette is its one door
+    expect(
+      frameActGroups("godview", "other")[1]?.acts.find((act) => act.id === "system-control")?.key,
+    ).toBeNull();
+    expect(control("godview", "Godview is still opening")?.waits).toBe("Godview is still opening");
+    for (const view of ["canvas", "history", "assistant"] as const) {
+      expect(control(view), view).toBeUndefined();
+    }
+    // it stands in the view's own group, after the create
+    expect(frameActGroups("godview", "mac")[1]?.acts.map((act) => act.id)).toEqual([
+      "create",
+      "system-control",
+    ]);
   });
 
   it("says the waiting Assistant waits, and the keys the Windows way", () => {

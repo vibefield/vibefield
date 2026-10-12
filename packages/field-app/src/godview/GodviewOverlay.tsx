@@ -6,13 +6,16 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import { answerGodviewDeckUp, type GodviewDeckState } from "../frame/deck-door";
+import { publishSystemControlDoor } from "../frame/system-control-door";
 import { useActiveView } from "../frame/view-state";
-import { getHost } from "../host";
 import { prewarmTerminalPool, terminalPoolConfigured } from "../terminal/pool";
 import { godviewColdOpen } from "./cold-open";
 import { useDeckAppearance } from "./deck-appearance";
+import { deckAfter, installGodviewDeckLab, storeDeckState, storedDeckState } from "./deck-state";
 import { godviewTerminalGroundStyle } from "./deck-theme";
 import { GodviewDeck } from "./GodviewDeck";
 import { GodviewMonitor } from "./GodviewMonitor";
@@ -71,13 +74,12 @@ function whenIdle(task: () => void, timeoutMs: number): () => void {
   return () => window.clearTimeout(timer);
 }
 
-/** RETIRED shape kept for the docs trail: the bridge badge died with the
- * bridge at TP-S3e (per-activation health is the routed runtime's, surfaced by
- * the deck's own faces). */
-function bridgeNotice(): string | null {
-  return null;
-}
-/* the old ladder, for reference:
+/* RETIRED, kept for the docs trail: the bridge badge died with the bridge at
+   TP-S3e (per-activation health is the routed runtime's, surfaced by the deck's
+   own faces), and `bridgeNotice()` answered null from then on. Its slot was the
+   instrument bar's and left with the bar (GV-D1): when a plane-down notice
+   returns it is one held notice on the frame's status line.
+   the old ladder, for reference:
   if (status.state === "bridge-down") return "TERMINAL BRIDGE DOWN · REBUILDING";
   return "TERMINAL BRIDGE UNAVAILABLE · RECONNECTING";
 */
@@ -115,6 +117,44 @@ export function GodviewOverlay(): ReactElement | null {
   const [remoteDoor, setRemoteDoor] = useState<RemoteSessionDoor | null>(null);
   const [panes, setPanes] = useState<MonitorPaneFacts>({ sessionIds: [] });
   const monitorPanes = useGodviewReplayPanes(panes);
+  /** THE TERMINALS' STATE (round 3, L2 — GV-D5, GV-D6): away, up or
+   * maximized, owned here and only here. The stage draws it and asks for a
+   * change (the Lip's minimize); a call — any session brought to the
+   * terminals, through the deck's doors or the frame's deck door — brings them
+   * up as they were left. Kept for the run (L3): a reload finds what was left,
+   * a launch opens on the monitor alone, the terminals away (W7). */
+  const [deckState, setDeckState] = useState<GodviewDeckState>(storedDeckState);
+  useEffect(() => storeDeckState(deckState), [deckState]);
+  const callTerminalsUp = useCallback(() => setDeckState((state) => deckAfter(state, "call")), []);
+  // N16 (a): ⌘W on the last pane minimizes them, and Godview stays the view
+  const minimizeTerminals = useCallback(
+    () => setDeckState((state) => deckAfter(state, "minimize")),
+    [],
+  );
+  useEffect(() => answerGodviewDeckUp(callTerminalsUp), [callTerminalsUp]);
+  /** THE FIRST CALL (W7 — GV-D5, N14 (a)). A launch opens Godview on the
+   * monitor alone: the deck is mounted — its door is the monitor's — but not
+   * CALLED, so it asks no restore question, mounts no workspace and births no
+   * shell. The first call brings last run's panes up with the session it
+   * called; from then on the deck stays called (minimized, its panes stay
+   * mounted, as before W7). A reload into up or maximized was called before. */
+  const [called, setCalled] = useState(() => deckState !== "away");
+  if (!called && deckState !== "away") setCalled(true);
+  /** W7 — the lab's call, under the Godview markers only (`deck-state.ts`):
+   * the witness says when it raised the terminals from away, until they next
+   * go away. */
+  const [raisedBy, setRaisedBy] = useState<"lab" | null>(null);
+  if (raisedBy !== null && deckState === "away") setRaisedBy(null);
+  const deckStateNow = useRef(deckState);
+  deckStateNow.current = deckState;
+  useEffect(
+    () =>
+      installGodviewDeckLab(() => {
+        if (deckStateNow.current === "away") setRaisedBy("lab");
+        callTerminalsUp();
+      }),
+    [callTerminalsUp],
+  );
 
   const changeTuning = useCallback((patch: Partial<GodviewTuning>) => {
     setTuning((current) => ({ ...current, ...patch }));
@@ -122,12 +162,25 @@ export function GodviewOverlay(): ReactElement | null {
   const resetTuning = useCallback(() => setTuning(defaultGodviewTuning(theme)), [theme]);
 
   useEffect(() => {
-    if (open) {
-      // Time zero for the cold-open trace, taken before any React work the open
-      // causes — this effect runs on the commit that first saw `open`.
-      godviewColdOpen.mark("open");
-      setEverOpened(true);
-    } else setTuningOpen(false);
+    if (open) setEverOpened(true);
+    else setTuningOpen(false);
+  }, [open]);
+
+  // Time zero for the cold-open trace, taken before any React work the open
+  // causes — this effect runs on the commit that first saw the terminals
+  // called while Godview shows. Since W7 that is their first call, not the
+  // view's open (the report says so, `zero: "first-call"`).
+  useEffect(() => {
+    if (open && called) godviewColdOpen.mark("open");
+  }, [open, called]);
+
+  // GV-D1 — System control is the palette's act now (the instrument bar that
+  // held its control left VibeField): while Godview is the window's view it
+  // lends the frame the one verb that toggles the panel, and takes it back.
+  useEffect(() => {
+    if (!open) return;
+    publishSystemControlDoor({ toggle: () => setTuningOpen((current) => !current) });
+    return () => publishSystemControlDoor(null);
   }, [open]);
 
   // THE PREWARM (GT-D14). At idle after this overlay has mounted — which is
@@ -217,16 +270,15 @@ export function GodviewOverlay(): ReactElement | null {
 
   if (!everOpened) return null;
 
-  const notice = bridgeNotice();
   const terminalAvailable = terminalPoolConfigured();
   const stage = monitor.stageParameters;
   const screenStyle = {
     ...godviewTuningStyle(tuning),
     // The backdrop is the cover's 72% tint over the desk's still (DK-15) —
     // godview.css's own, no longer the viewer's (GT-7's setting retired).
-    // The deck sheet wears the terminal's own ground (DESIGN.md §8).
+    // The deck sheet is the frame: the terminal's own ground mixed toward the
+    // terminal's own ink, so the root is handed both (DESIGN.md §8, GV-D7).
     ...godviewTerminalGroundStyle(appearance, theme),
-    "--vf-monitor-stage-height": `${monitor.stageHeight}%`,
     "--vf-scanline-density": `${stage[SCANLINE_DENSITY_KEY] ?? 2}px`,
     "--vf-scanline-opacity": stage[SCANLINE_OPACITY_KEY] ?? 0.4,
     "--vf-vignette-opacity": stage[VIGNETTE_OPACITY_KEY] ?? 1,
@@ -254,17 +306,14 @@ export function GodviewOverlay(): ReactElement | null {
               view={monitor.view}
               parameters={monitor.parameters}
               theme={theme}
-              notice={notice}
-              tuningOpen={tuningOpen}
               door={remoteDoor}
               panes={monitorPanes}
-              reserveWindowControls={getHost().platform === "darwin"}
-              // MV-W4: the same switch, for a ported view's own loop
-              animations={labSwitches.animations}
+              // MV-W4: the same switch, for a ported view's own loop — and
+              // under a maximized deck the view's bodies rest (GV-D11)
+              animations={labSwitches.animations && deckState !== "maximized"}
               // P2: the window's Godview lends the frame's Peek its Live now
               publishesFind
               onSelectView={monitor.selectView}
-              onToggleTuning={() => setTuningOpen((current) => !current)}
             />
           ) : undefined
         }
@@ -286,11 +335,23 @@ export function GodviewOverlay(): ReactElement | null {
         }
         // The sheet's edge is this viewer's, remembered (DESIGN.md §8).
         deckEdge={DECK_EDGE_PERSISTED}
+        // Round 3 (L2): the window's Godview says what its terminals are, and
+        // only it: the frame reads this through the deck's door (nothing while
+        // another view shows) and the shell hears it by name.
+        deckState={deckState}
+        onDeckState={setDeckState}
+        publishesDeck
+        deckRaisedBy={raisedBy}
         deck={
           terminalAvailable ? (
             <ChromeBoundary name="Deck" retryKey={deckRetryKey}>
               <GodviewDeck
-                active={open}
+                // Away, the terminals take no demand, as a closed Godview's
+                // do: every session runs on the floor, nothing is drawn (PF6)
+                active={open && deckState !== "away"}
+                // W7: until the first call the deck is a door and nothing else
+                called={called}
+                onLastPaneClose={minimizeTerminals}
                 theme={theme}
                 onRendererBackend={setRendererBackend}
                 onRemoteDoor={setRemoteDoor}

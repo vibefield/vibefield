@@ -74,15 +74,16 @@ const VIEW_NOW = `(document.querySelector(".vf-views-line")?.getAttribute("data-
 
 /** P2 — Live now as the window draws it: whether the popup is open and on
  * which scope, its live rows (title, state, the floor session a row's pane
- * is), what the hot row's live peek is doing, and whether the instrument bar
- * still carries a FIND of its own. */
+ * is), what the hot row's live peek is doing, and whether Godview still
+ * carries a FIND of its own (the instrument bar's left at P2, and the bar at
+ * GV-D1: search is the frame's button). */
 export interface LiveNowFacts {
   open: boolean;
   scope: string | null;
   rows: { title: string | null; state: string | null; floor: string | null }[];
   livePeek: string | null;
   foot: string | null;
-  inBar: boolean;
+  inGodview: boolean;
 }
 
 export const LIVE_NOW = `(() => {
@@ -98,12 +99,52 @@ export const LIVE_NOW = `(() => {
     rows,
     livePeek: pop?.querySelector("[data-live-peek]")?.getAttribute("data-live-peek") ?? null,
     foot: pop?.querySelector(".vf-peek-said")?.textContent ?? null,
-    inBar: document.querySelector('.vf-godview-header button[aria-label="Find an agent by what was said"]') !== null,
+    inGodview: document.querySelector('.vf-godview button[aria-label="Find an agent by what was said"]') !== null,
   });
 })()`;
 
-/** PK2 — Godview's head as drawn: the frame's search button, the bar, and
- * the bar's last tool beside it, in CSS px (DESIGN.md §8 "Search — the Peek"). */
+/** GV-D1 — Godview's head as drawn, in CSS px (DESIGN.md §8 "Godview's head —
+ * Stories", "Search — the Peek"): the frame's search button, the Stories row
+ * and its circles beside it on the same axis, and the stage that runs under
+ * them with its own chrome below the head's reserve. The instrument bar and
+ * its System control, which PK2 measured the button against, are gone. */
+interface HeadBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+interface HeadNow {
+  window: { width: number; height: number };
+  search: HeadBox | null;
+  views: HeadBox | null;
+  circles: (HeadBox | null)[];
+  stage: HeadBox | null;
+  claims: HeadBox | null;
+  usage: HeadBox | null;
+  label: HeadBox | null;
+  bar: boolean;
+  canvasHead: CanvasHeadNow;
+  gap: number | null;
+  offCentre: number | null;
+  offAxis: number | null;
+}
+
+/** The canvas's own head under a cover (DESIGN.md §8 "The covers over the
+ * desk"): the computed visibility of its name pill and its zoom readout, each
+ * `hidden` once the cover has faded in — never left sharp under the tint. */
+interface CanvasHeadNow {
+  place: string;
+  tools: string;
+}
+const CANVAS_HEAD_NOW_EXPR = `(() => {
+  const seen = (element) => (element === null ? "absent" : getComputedStyle(element).visibility);
+  return { place: seen(document.querySelector(".vf-head-place")), tools: seen(document.querySelector(".vf-head-tools")) };
+})()`;
+const CANVAS_HEAD_NOW = `JSON.stringify(${CANVAS_HEAD_NOW_EXPR})`;
+const canvasHeadHidden = (head: CanvasHeadNow): boolean =>
+  head.place === "hidden" && head.tools === "hidden";
+
 const HEAD_NOW = `(() => {
   const rect = (element) => {
     if (element === null) return null;
@@ -111,15 +152,72 @@ const HEAD_NOW = `(() => {
     return { x: box.x, y: box.y, width: box.width, height: box.height };
   };
   const search = rect(document.querySelector(".vf-peek-find"));
-  const bar = rect(document.querySelector(".vf-godview .vf-godview-header"));
-  const tool = rect(document.querySelector('.vf-godview-header [aria-label="System control"]'));
+  const group = document.querySelector('.vf-godview .vf-stories [role="group"][aria-label="Monitor view"]');
+  const views = rect(document.querySelector(".vf-godview .vf-stories-row"));
+  const circles = group === null ? [] : [...group.querySelectorAll("button")].map(rect);
+  const chevrons = [...document.querySelectorAll(".vf-godview .vf-stories-chev:not(:disabled)")].map(rect);
+  const stage = rect(document.querySelector(".vf-godview .vf-godview-monitor-stage"));
+  const claims = rect(document.querySelector(".vf-godview .vf-monitor-claims"));
+  const usage = rect(document.querySelector(".vf-godview .vf-monitor-chrome"));
+  const label = rect(document.querySelector(".vf-godview .vf-stories-label"));
+  const right = Math.max(...[views, ...chevrons].filter((box) => box !== null).map((box) => box.x + box.width), -Infinity);
   return JSON.stringify({
     window: { width: window.innerWidth, height: window.innerHeight },
-    search, bar, systemControl: tool,
-    gap: search && tool ? search.x - (tool.x + tool.width) : null,
-    overhang: search && bar ? search.y + search.height - (bar.y + bar.height) : null,
+    search, views, circles, stage, claims, usage, label,
+    bar: document.querySelector(".vf-godview .vf-godview-header") !== null,
+    canvasHead: ${CANVAS_HEAD_NOW_EXPR},
+    gap: search && Number.isFinite(right) ? search.x - right : null,
+    offCentre: views ? views.x + views.width / 2 - window.innerWidth / 2 : null,
+    offAxis: search && views ? views.y + views.height / 2 - (search.y + search.height / 2) : null,
   });
 })()`;
+
+/** What the head's drawing must hold, whatever the window: the row on the
+ * frame's head row (40 at top 8, on the search button's axis, centred on the
+ * window, one head gap from the button), whole circles of 40, the stage begun
+ * at the window's top, and the stage's chrome clear of the head's reserve. */
+function headProblems(head: HeadNow): string[] {
+  const problems: string[] = [];
+  const near = (value: number | null, target: number): boolean =>
+    value !== null && Math.abs(value - target) <= 0.5;
+  if (head.bar) problems.push("the instrument bar is still mounted");
+  if (!canvasHeadHidden(head.canvasHead)) {
+    problems.push(
+      `the canvas's head shows under the cover: the name pill ${head.canvasHead.place}, the zoom readout ${head.canvasHead.tools} (hidden)`,
+    );
+  }
+  if (head.views === null) return [...problems, "the Stories row is not drawn"];
+  if (!near(head.views.y, 8) || !near(head.views.height, 40)) {
+    problems.push(`the row stands at y ${head.views.y}, ${head.views.height} tall (8, 40)`);
+  }
+  if (!near(head.offCentre, 0))
+    problems.push(`the row is ${head.offCentre} off the window's centre`);
+  if (head.search !== null && !near(head.offAxis, 0)) {
+    problems.push(`the row is ${head.offAxis} off the search button's axis`);
+  }
+  if (head.gap !== null && head.gap < 12 - 0.5) {
+    problems.push(`the row stands ${head.gap} from the search button (12 at least)`);
+  }
+  if (head.circles.length === 0) problems.push("the row holds no circle");
+  for (const circle of head.circles) {
+    if (circle === null || !near(circle.width, 40) || !near(circle.height, 40)) {
+      problems.push(`a circle is ${circle?.width} × ${circle?.height} (40 × 40)`);
+      break;
+    }
+  }
+  if (head.stage === null || !near(head.stage.y, 0)) {
+    problems.push(`the stage begins at y ${head.stage?.y} (the window's top, 0)`);
+  }
+  for (const [name, box] of [
+    ["claims strip", head.claims],
+    ["usage column", head.usage],
+  ] as const) {
+    if (box !== null && box.height > 0 && box.y < 56 - 0.5) {
+      problems.push(`the ${name} begins at y ${box.y}, inside the head's reserve (56)`);
+    }
+  }
+  return problems;
+}
 
 /** The popup's place and the field's recede, as the window draws them now. */
 const PEEK_NOW = `(() => {
@@ -259,6 +357,16 @@ const settled = (now: PeekNow): boolean => {
 export async function peekGeometryRung(win: BrowserWindow): Promise<Record<string, unknown>> {
   const before = JSON.parse(await win.webContents.executeJavaScript(PEEK_NOW)) as PeekNow;
   if (before.button === null) throw new Error("the frame's search button is not in History");
+  // the canvas's head goes with the canvas under History's cover too, so its
+  // pill and readout never stand sharp behind the button (DESIGN.md §8 "The
+  // covers over the desk"); the cover's fade has long ended by this rung
+  await untilValue(
+    win,
+    "the canvas's head hidden under History's cover",
+    CANVAS_HEAD_NOW,
+    5_000,
+    (value) => canvasHeadHidden(JSON.parse(value) as CanvasHeadNow),
+  );
   chord(win, "f");
   const open = JSON.parse(
     await untilValue(win, "⌘F opening the Peek, settled", PEEK_NOW, 10_000, (value) =>
@@ -481,19 +589,34 @@ export async function peekPhotosRung(
     const now = JSON.parse(value) as PeekNow;
     return !now.open && now.recedeTransform === "none";
   });
-  // PK2 (a): Godview's head, the frame's search button at its right end
-  // beside System control — photographed and measured in both themes
+  // GV-D1: Godview's head — the Stories row on the frame's head row, the
+  // frame's search button at its right end, the stage under both —
+  // photographed and measured in both themes; the theme is put back before a
+  // drawing that is wrong is said
   chord(win, "2");
   await untilValue(win, "⌘2 to Godview", VIEW_NOW, 10_000, (value) => value === "godview");
-  const heads: Record<string, unknown> = {};
+  await untilValue(
+    win,
+    "Godview's head to mount",
+    `(document.querySelector(".vf-godview .vf-stories") === null ? "absent" : "mounted")`,
+    10_000,
+    (value) => value === "mounted",
+  );
+  const heads: Record<string, HeadNow> = {};
   for (const theme of ["light", "dark"] as const) {
     await win.webContents.executeJavaScript(`window.vibefield.theme.set(${JSON.stringify(theme)})`);
     await untilValue(win, `the ${theme} theme`, THEME_NOW, 5_000, (value) => value === theme);
     await sleep(500);
     shots.push(await capture(win, join(opts.shotDir, `godview-head-${theme}.png`)));
-    heads[theme] = JSON.parse(String(await win.webContents.executeJavaScript(HEAD_NOW)));
+    heads[theme] = JSON.parse(String(await win.webContents.executeJavaScript(HEAD_NOW))) as HeadNow;
   }
   await win.webContents.executeJavaScript(`window.vibefield.theme.set("auto")`);
+  for (const [theme, head] of Object.entries(heads)) {
+    const problems = headProblems(head);
+    if (problems.length > 0) {
+      throw new Error(`Godview's head, ${theme}: ${problems.join("; ")} (${JSON.stringify(head)})`);
+    }
+  }
   return { word: opts.word, rows: found.rows, shots, heads };
 }
 

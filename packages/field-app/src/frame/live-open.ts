@@ -1,18 +1,19 @@
 import type { FrameView } from "@vibefield/contracts";
 import { type GodviewFindDoor, getGodviewFindDoor, whenGodviewFindDoor } from "./find-door";
-import { type LineViewDoor, whenGodviewCanPlace } from "./line-door";
+import { deckAnswerWithin, type LineViewDoor, lateReason, whenGodviewCanPlace } from "./line-door";
 import type { PeekLiveRow } from "./peek-live";
 import { requestView } from "./view-state";
 
 // OPENING A LIVE ROW (P2; DESIGN.md §8 "Search — the Peek": "a live result
 // opens in the terminals"). In Godview it is what the find sheet's pick did —
-// the view's own select, through the find door: a local run's PTY mounted in
-// the active pane, a peer's attached there. From History (PK5) it is Jump to's
-// path (P3, `history/HistoryView.tsx`): the frame asks for Godview, waits for
-// a deck that can place, and the deck REVEALS the pane showing the run's floor
-// session — activated, or mounted in the active pane; a peer's run, which has
-// no floor session here, is selected through the find door Godview publishes
-// as it opens.
+// the view's own select, through the find door: a local run's PTY placed by
+// the deck's rule (GV-D4 — its own pane focused, else beside the focused pane,
+// else in its place), a peer's attached the same way. From History (PK5) it is
+// Jump to's path (P3, `history/HistoryView.tsx`): the frame asks for Godview,
+// waits for a deck that can place, and the deck REVEALS the pane showing the
+// run's floor session — activated, or placed by that rule; a peer's run, which
+// has no floor session here, is selected through the find door Godview
+// publishes as it opens.
 
 /** How long a pick from History waits for Godview's deck (or its monitor) —
  * mounted on Godview's first open — to be able to show the run (Resume's). */
@@ -51,8 +52,17 @@ export async function openLiveRow(
   if (row.floorSessionId !== null) {
     const deck = await doors.whenGodviewCanPlace(LIVE_OPEN_WAIT_MS);
     if (deck === null) return { state: "refused", reason: "the deck did not open to show it" };
-    const shown = await deck.reveal(row.floorSessionId);
-    return shown.state === "opened" ? { state: "shown" } : shown;
+    // Jump to's bound too (2026-10-11): the deck mounts in turn (AR-4b), and a
+    // turn that never ends is said, never waited on
+    try {
+      const shown = await deckAnswerWithin(deck.reveal(row.floorSessionId), LIVE_OPEN_WAIT_MS);
+      if (shown.state === "opened") return { state: "shown" };
+      if (shown.state === "late")
+        return { state: "refused", reason: lateReason("showed", LIVE_OPEN_WAIT_MS) };
+      return shown;
+    } catch (cause) {
+      return { state: "refused", reason: cause instanceof Error ? cause.message : String(cause) };
+    }
   }
   const door = await doors.whenGodviewFindDoor(LIVE_OPEN_WAIT_MS);
   if (door === null) return { state: "refused", reason: "Godview did not open to show it" };

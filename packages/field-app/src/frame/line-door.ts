@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import type { DeckPlaced } from "../godview/deck-placement";
 
 // WHAT GODVIEW LENDS THE LINE (One Frame FR-2; DESIGN.md §8 "The line").
 // The line is the frame's and Godview is a view below it, but two of the
@@ -27,9 +28,11 @@ export interface LinePane {
   readonly active: boolean;
 }
 
-/** What a new terminal came to — the door's own outcomes (SB-3's words). */
+/** What a new terminal came to — the door's own outcomes (SB-3's words).
+ * `placement` (GV-D4): how the deck's rule placed it — beside the focused
+ * pane, in its place, or its own pane focused — when the deck says. */
 export type NewTerminalOutcome =
-  | { readonly state: "opened" }
+  | { readonly state: "opened"; readonly placement?: DeckPlaced }
   | { readonly state: "refused"; readonly reason: string };
 
 export interface LineViewDoor {
@@ -37,24 +40,32 @@ export interface LineViewDoor {
   readonly panes: readonly LinePane[];
   /** Whether the deck is on screen — a paste lands only where it can be seen. */
   readonly onScreen: boolean;
-  /** A fresh shell in the active pane, which shows its launcher: what the
-   * swarm's hold does without a spot to land on. */
+  /** A fresh shell, which shows its launcher: what the swarm's hold does
+   * without a spot to land on — beside the focused pane while fewer than three
+   * panes show, in its place after (GV-D4). */
   newTerminal(): Promise<NewTerminalOutcome>;
   /** Paste `text` into the input of the pane showing `sessionId` — the road ⌘V
    * takes, so the pane brackets it and nothing presses Return. True when the
-   * pane took it. */
+   * pane took it; false, with nothing handed to the pane, while its input is
+   * closed (a paste there would be dropped), and the line copies instead. */
   paste(sessionId: string, text: string): boolean;
   /** AR-8c — whether `place` can mount now: the deck has its door. */
   readonly canPlace: boolean;
   /** AR-8c — History's Resume lands here: the create ticket `agent.resume`
    * answered with (plain data, the same ticket a shell birth carries), adopted
-   * by the deck and mounted in the ACTIVE pane — the pane the swarm's open uses
-   * (GT-D17; the session it showed is detached, never killed). */
+   * by the deck and placed as the swarm's open places a session with no pane
+   * (GV-D4: beside the focused pane, or in its place with three showing — the
+   * session it showed is detached, never killed). */
   place(terminal: unknown): Promise<NewTerminalOutcome>;
   /** P3 — History's Jump to lands here: the pane showing floor session
    * `sessionId` becomes the active one, or, when no pane shows it, it is
-   * mounted in the active pane through the door's serialized mount (AR-4b). */
+   * placed by the same rule through the door's serialized mount (AR-4b). */
   reveal(sessionId: string): Promise<NewTerminalOutcome>;
+  /** W7 (GV-D5) — the deck is asking the person something before it can
+   * place anything: the restore question a launch's first call can bring up
+   * (last time's panes, some ended). An act racing the deck (`deckAnswerWithin`)
+   * reads it: its bound waits while the person decides. Absent: no one. */
+  readonly waitsOnPerson?: boolean;
 }
 
 let godview: LineViewDoor | null = null;
@@ -84,17 +95,86 @@ export function useGodviewLineDoor(): LineViewDoor | null {
 }
 
 /** The words a new terminal's outcome is said in — the swarm's own sentences
- * (useMonitorAgents' createAt), so the two doors to one act speak alike. */
+ * (useMonitorAgents' createAt), so the two doors to one act speak alike. Where
+ * it opened follows the deck's rule (GV-D4): a new pane beside the one the
+ * person was in, or — with three showing — the active pane itself. */
 export function newTerminalNote(outcome: NewTerminalOutcome): string {
-  return outcome.state === "opened"
-    ? "Terminal opened in the active pane"
-    : `Terminal could not be opened — ${outcome.reason}`;
+  if (outcome.state !== "opened") return `Terminal could not be opened — ${outcome.reason}`;
+  return outcome.placement === "beside"
+    ? "Terminal opened in a new pane"
+    : "Terminal opened in the active pane";
 }
 
 /** Test seam. */
 export function resetGodviewLineDoorForTest(): void {
   godview = null;
   listeners.clear();
+}
+
+/** What the deck answered an act (`place`, `reveal`) within its bound, or
+ * `late`: nothing yet. Its mounts wait their turn (AR-4b), and a turn that
+ * never ends is said by the act that waited on it, never waited on without
+ * end (2026-10-11 — New agent's run started and the line said nothing). */
+export type DeckAnswer = NewTerminalOutcome | { readonly state: "late" };
+
+/** What the line says while an act waits on the person's answer in Godview
+ * (W7): the restore question's own two buttons, "restore" and "start clean". */
+export const WAITING_ON_PERSON_NOTE =
+  "Waiting in Godview — restore last time's panes, or start clean";
+
+/** The deck's answer, or `late` once `timeoutMs` pass. A throw is the act's.
+ *
+ * W7 (GV-D5): the bound is the DECK'S time, never the person's. While the
+ * published deck waits on the person (`waitsOnPerson` — the restore question a
+ * launch's first call can bring up), its clock stands, and the line says once
+ * what the act is waiting for (`onWaiting`, default: `WAITING_ON_PERSON_NOTE`
+ * on the line); answered, the clock runs on from where it stood. */
+export async function deckAnswerWithin(
+  answer: Promise<NewTerminalOutcome>,
+  timeoutMs: number,
+  onWaiting: () => void = () => {
+    sayOnLine(WAITING_ON_PERSON_NOTE);
+  },
+): Promise<DeckAnswer> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let stop = (): void => undefined;
+  try {
+    return await Promise.race([
+      answer,
+      new Promise<DeckAnswer>((resolve) => {
+        let left = timeoutMs;
+        let since = 0;
+        let said = false;
+        const read = (): void => {
+          if (godview?.waitsOnPerson === true) {
+            if (timer !== undefined) {
+              clearTimeout(timer);
+              timer = undefined;
+              left -= Date.now() - since;
+            }
+            if (!said) {
+              said = true;
+              onWaiting();
+            }
+          } else if (timer === undefined) {
+            since = Date.now();
+            timer = setTimeout(() => resolve({ state: "late" }), Math.max(0, left));
+          }
+        };
+        stop = subscribe(read);
+        read();
+      }),
+    ]);
+  } finally {
+    stop();
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+/** How a `late` is said (DESIGN.md §8 "History"): "no pane took it in 20 s"
+ * for a pane placed, "no pane showed it in 20 s" for one revealed. */
+export function lateReason(verb: "took" | "showed", timeoutMs: number): string {
+  return `no pane ${verb} it in ${Math.round(timeoutMs / 1_000)} s`;
 }
 
 /** Wait (bounded) for a deck that can place — History's Resume (and Jump to)
@@ -129,7 +209,7 @@ export function whenGodviewCanPlace(timeoutMs: number): Promise<LineViewDoor | n
 /** What a Resume came to, said on the line. `running`: the session runs here,
  * so nothing was resumed — Jump to is the act (P3). */
 export type ResumeOutcome =
-  | { readonly state: "resumed" }
+  | { readonly state: "resumed"; readonly placement?: DeckPlaced }
   | { readonly state: "running" }
   | { readonly state: "refused"; readonly reason: string };
 
@@ -149,8 +229,9 @@ export interface HistoryLineDoor {
   /** P3 — the chosen session runs on this desktop, by the last `agent.list`
    * answer (kept while a new one is on its way): the create is Jump to. */
   readonly live: boolean;
-  /** Resume the chosen session in its own agent, in the pane the swarm's open
-   * uses, and show it (the frame moves to Godview). */
+  /** Resume the chosen session in its own agent, placed as the swarm's open
+   * places a session with no pane (GV-D4), and show it (the frame moves to
+   * Godview). */
   resume(): Promise<ResumeOutcome>;
   /** P3 — show the pane the chosen session runs in (the frame moves to
    * Godview, whose deck reveals it). */
@@ -187,7 +268,10 @@ export function useHistoryLineDoor(): HistoryLineDoor | null {
 export function resumeNote(outcome: ResumeOutcome): string {
   switch (outcome.state) {
     case "resumed":
-      return "Resumed in the active pane";
+      // GV-D4: a new pane beside the focused one, or the active pane itself
+      return outcome.placement === "beside"
+        ? "Resumed in a new pane"
+        : "Resumed in the active pane";
     case "running":
       return "This session is running — Jump to it";
     case "refused":

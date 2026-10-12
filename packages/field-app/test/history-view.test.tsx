@@ -36,6 +36,25 @@ import { configureTerminalPool } from "../src/terminal/pool";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+// 2026-10-11 — an act that THROWS (the acts themselves no longer do; this is
+// the controller's last word on one that would): the real acts, unless a case
+// names one to throw with these words.
+const throwing = vi.hoisted(() => ({ act: null as "resume" | "newAgent" | null }));
+vi.mock("../src/history/acts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/history/acts")>();
+  return {
+    ...actual,
+    resumeTarget: (...args: Parameters<typeof actual.resumeTarget>) =>
+      throwing.act === "resume"
+        ? Promise.reject(new Error("the act threw"))
+        : actual.resumeTarget(...args),
+    newAgent: (...args: Parameters<typeof actual.newAgent>) =>
+      throwing.act === "newAgent"
+        ? Promise.reject(new Error("the act threw"))
+        : actual.newAgent(...args),
+  };
+});
+
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "contracts", "fixtures");
 const fixture = (name: string): Record<string, unknown> =>
   JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
@@ -74,6 +93,7 @@ beforeEach(() => {
   resetActiveViewForTest();
   resetGodviewLineDoorForTest();
   resetHistoryLineDoorForTest();
+  throwing.act = null;
   publish = null;
   asked = [];
   setRendererLogger({
@@ -640,4 +660,110 @@ describe("Jump to, while the chosen session runs here (P3)", () => {
     });
     await until(says("Resume this session"), "the create to say Resume once answered");
   });
+});
+
+// 2026-10-11 — two `smoke:godview` reds: New agent was pressed, fieldd started
+// the run, the window moved to Godview, and the line said nothing — the act's
+// promise rejected into a `void` with no handler. Every act's outcome is said:
+// one that throws is refused on the line in its own words, and logged.
+describe("an act that throws is said and logged (2026-10-11)", () => {
+  /** What the controller logged, by event. */
+  function captureLog(): Array<{ event: string; error?: unknown; attrs?: unknown }> {
+    const logged: Array<{ event: string; error?: unknown; attrs?: unknown }> = [];
+    const child = {
+      error: (event: string, _message: string, error?: unknown, attrs?: unknown) =>
+        logged.push({ event, error, attrs }),
+      info: (event: string, _message: string, attrs?: unknown) => logged.push({ event, attrs }),
+    };
+    setRendererLogger({ child: () => child, error: () => undefined } as unknown as RendererLogger);
+    return logged;
+  }
+  const noteNow = (): string | null | undefined =>
+    host?.querySelector(".vf-line-note")?.textContent;
+
+  it("a session row's Resume that throws says Could not resume, with the throw's words", async () => {
+    const logged = captureLog();
+    throwing.act = "resume";
+    mount(fieldd(() => SPAWNED));
+    to("history");
+    await choose();
+    const resume = await until(
+      () =>
+        historySlot()?.querySelector<HTMLButtonElement>(
+          '.ah-session-list-item .ah-hostact[data-place="row"][data-act="resume"]',
+        ),
+      "the session row's Resume",
+    );
+    await act(async () => {
+      resume.click();
+    });
+    expect(await until(noteNow, "the line's note", 3_000)).toBe("Could not resume — the act threw");
+    expect(logged.filter((entry) => entry.event === "renderer.history.act_failed")).toEqual([
+      {
+        event: "renderer.history.act_failed",
+        error: new Error("the act threw"),
+        attrs: { act: "resume" },
+      },
+    ]);
+  }, 20_000);
+
+  it("the line's Resume that throws is said the same way", async () => {
+    const logged = captureLog();
+    throwing.act = "resume";
+    mount(fieldd(() => SPAWNED));
+    to("history");
+    await choose();
+    await until(() => (create().hasAttribute("aria-disabled") ? null : true), "Resume to wake");
+    await act(async () => {
+      create().click();
+    });
+    expect(await until(noteNow, "the line's note", 3_000)).toBe("Could not resume — the act threw");
+    expect(logged.filter((entry) => entry.event === "renderer.history.act_failed")).toEqual([
+      {
+        event: "renderer.history.act_failed",
+        error: new Error("the act threw"),
+        attrs: { act: "resume" },
+      },
+    ]);
+  }, 20_000);
+
+  it("New agent that throws says Could not start, with the throw's words", async () => {
+    const logged = captureLog();
+    throwing.act = "newAgent";
+    mount(fieldd(() => SPAWNED));
+    to("history");
+    await choose();
+    const start = await until(
+      () =>
+        historySlot()?.querySelector<HTMLButtonElement>(
+          '.ah-hostact[data-place="head"][data-act="new-agent"]',
+        ),
+      "New agent in ②'s head",
+    );
+    await act(async () => {
+      start.click();
+    });
+    const row = await until(
+      () =>
+        [
+          ...(historySlot()?.querySelectorAll<HTMLButtonElement>(
+            ".ah-menu [role=menu] .ah-menu__item",
+          ) ?? []),
+        ].find(
+          (item) => (item.getAttribute("data-key") ?? "").startsWith("claude") && !item.disabled,
+        ),
+      "New agent's row for an agent",
+    );
+    await act(async () => {
+      row.click();
+    });
+    expect(await until(noteNow, "the line's note", 3_000)).toBe("Could not start — the act threw");
+    expect(logged.filter((entry) => entry.event === "renderer.history.act_failed")).toEqual([
+      {
+        event: "renderer.history.act_failed",
+        error: new Error("the act threw"),
+        attrs: { act: "newAgent" },
+      },
+    ]);
+  }, 20_000);
 });

@@ -85,7 +85,8 @@ export interface GodviewFindDoor {
    * port, named for what it reads; not `MonitorCapabilities.history`. */
   readonly transcripts: HistoryPort;
   /** What a row's pick does in Godview: the view's own select — a local run's
-   * PTY mounted in the active pane, a peer's attached there. */
+   * PTY placed by the deck's rule (GV-D4: its own pane focused, else beside
+   * the focused pane, else in its place), a peer's attached the same way. */
   select(rowId: string): void;
   readonly filters: LiveFilters;
   setDesk(id: string | null): void;

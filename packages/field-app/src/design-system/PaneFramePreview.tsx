@@ -229,12 +229,18 @@ const SPECIMENS: readonly FrameSpecimen[] = [
   },
 ];
 
-function PaneSpecimen({
+/** The host's pane, standing in for ghosttea's, with the shipping frame
+ * portalled into it: the class the frame's stylesheet scopes to, the colour the
+ * workspace sets, and whatever box and ground its place gives it (`style`). */
+function FramedPane({
   specimen,
-  ground,
+  active,
+  style,
 }: {
   specimen: FrameSpecimen;
-  ground: { background: string; ink: string };
+  /** the deck's selected pane: the frame's line and glow, and its radius */
+  active: boolean;
+  style: CSSProperties;
 }): ReactElement {
   const agent = specimen.row === undefined ? undefined : paneFrameAgentFacts(specimen.row);
   /** The pane element the frame is PORTALLED into, exactly as the deck hands
@@ -242,66 +248,128 @@ function PaneSpecimen({
    * the render after the element exists. */
   const [pane, setPane] = useState<HTMLElement | null>(null);
   return (
+    <div
+      ref={setPane}
+      className={`ghostty-pane${active ? " is-active" : ""}`}
+      data-pane-id={specimen.id}
+      // Ghosttea's accent layer exists only for a pane the host dealt a
+      // colour, and since PU-14b that is what decides whether the frame's
+      // line and glow are the project's or the terminal's ink — so the bare
+      // shell carries no accent here either.
+      {...(specimen.color !== undefined ? { "data-pane-accent": "" } : {})}
+      style={
+        {
+          position: "relative",
+          ...style,
+          "--ghostty-pane-color": specimen.color ?? "",
+        } as CSSProperties
+      }
+    >
+      {specimen.stopping ? (
+        // The ONE specimen the portal cannot hold still: `stopping` is state
+        // inside `PaneFrame`, set by a press and cleared when the run leaves
+        // `working`, so the markup half is mounted with it forced. Same
+        // shipping component underneath — `PaneFrame` renders this.
+        <PaneFrameChrome
+          sessionId={specimen.session.id}
+          model={paneFrameModel({
+            session: specimen.session,
+            ...(agent ? { agent } : {}),
+            nowMs: NOW,
+          })}
+          {...(specimen.color !== undefined ? { color: specimen.color } : {})}
+          zoomed={specimen.zoomed === true}
+          stopping
+          verbs={VERBS}
+          onStop={() => undefined}
+          onResume={() => undefined}
+          onZoom={() => undefined}
+        />
+      ) : pane === null ? null : (
+        <PaneFrame
+          pane={pane}
+          session={specimen.session}
+          {...(agent ? { agent } : {})}
+          {...(specimen.remote !== undefined ? { remote: specimen.remote } : {})}
+          {...(specimen.color !== undefined ? { color: specimen.color } : {})}
+          zoomed={specimen.zoomed === true}
+          nowMs={NOW}
+          verbs={VERBS}
+        />
+      )}
+    </div>
+  );
+}
+
+function PaneSpecimen({
+  specimen,
+  ground,
+}: {
+  specimen: FrameSpecimen;
+  ground: { background: string; ink: string };
+}): ReactElement {
+  return (
     <figure className="vf-ds-pane-frame-figure">
-      {/* The host's pane, standing in for ghosttea's: the class the frame's
-          stylesheet scopes to, the colour the workspace sets, the ground the
-          terminal draws on, and a real WIDTH — the narrow specimen is 200px and
-          the package's own observer decides what that means, rather than this
-          fixture writing `data-vf-narrow` by hand and calling it a state. */}
-      <div
-        ref={setPane}
-        className="ghostty-pane is-active"
-        data-pane-id={specimen.id}
-        // Ghosttea's accent layer exists only for a pane the host dealt a
-        // colour, and since PU-14b that is what decides whether the frame's
-        // line and glow are the project's or the terminal's ink — so the bare
-        // shell carries no accent here either.
-        {...(specimen.color !== undefined ? { "data-pane-accent": "" } : {})}
-        style={
-          {
-            position: "relative",
-            width: specimen.narrow ? 200 : 320,
-            height: 132,
-            background: ground.background,
-            "--ghostty-pane-color": specimen.color ?? "",
-          } as CSSProperties
-        }
-      >
-        {specimen.stopping ? (
-          // The ONE specimen the portal cannot hold still: `stopping` is state
-          // inside `PaneFrame`, set by a press and cleared when the run leaves
-          // `working`, so the markup half is mounted with it forced. Same
-          // shipping component underneath — `PaneFrame` renders this.
-          <PaneFrameChrome
-            sessionId={specimen.session.id}
-            model={paneFrameModel({
-              session: specimen.session,
-              ...(agent ? { agent } : {}),
-              nowMs: NOW,
-            })}
-            {...(specimen.color !== undefined ? { color: specimen.color } : {})}
-            zoomed={specimen.zoomed === true}
-            stopping
-            verbs={VERBS}
-            onStop={() => undefined}
-            onResume={() => undefined}
-            onZoom={() => undefined}
-          />
-        ) : pane === null ? null : (
-          <PaneFrame
-            pane={pane}
-            session={specimen.session}
-            {...(agent ? { agent } : {})}
-            {...(specimen.remote !== undefined ? { remote: specimen.remote } : {})}
-            {...(specimen.color !== undefined ? { color: specimen.color } : {})}
-            zoomed={specimen.zoomed === true}
-            nowMs={NOW}
-            verbs={VERBS}
-          />
-        )}
-      </div>
+      {/* A real WIDTH — the narrow specimen is 200px and the package's own
+          observer decides what that means, rather than this fixture writing
+          `data-vf-narrow` by hand and calling it a state. The ground the
+          terminal draws on, opaque: a specimen stands on the page, not in a
+          deck. */}
+      <FramedPane
+        specimen={specimen}
+        active
+        style={{
+          width: specimen.narrow ? 200 : 320,
+          height: 132,
+          background: ground.background,
+        }}
+      />
       <figcaption>{specimen.caption}</figcaption>
     </figure>
+  );
+}
+
+/** The panes a deck fixture holds, left to right: a bare shell (selected), a
+ * working agent, and one whose process has ended. */
+const DECK_PANES = ["shell", "working", "exited"] as const;
+
+/**
+ * A DECK OF THEM, for a stage to hold (round 3 — the Lip's specimen): three of
+ * the specimens above as a deck's panes, side by side, filling the box
+ * `GodviewStage` hands its deck. This file still owns no markup of the frame's
+ * and none of the stage's: the stage draws the Lip, the groove and the well
+ * (`godview.css`), and these are what sits in the well.
+ *
+ * Each pane paints the terminal's ground at the viewer's PANE OPACITY — the
+ * deck's default, 82% — as ghosttea paints a real pane's, because that is what
+ * the well is judged by: the frame's tone reads through a pane by exactly as
+ * much here as it does in the product.
+ */
+export function PaneFrameDeck({ theme }: { theme: "light" | "dark" }): ReactElement {
+  const ground = terminalGround(godviewTerminalTheme(DEFAULT_DECK_APPEARANCE, theme));
+  const glass = `${Math.round(DEFAULT_DECK_APPEARANCE.opacity * 100)}%`;
+  return (
+    <div
+      className="vf-deck-framed vf-ds-pane-deck"
+      style={{ "--vf-godview-terminal-ink": ground.ink } as CSSProperties}
+    >
+      {DECK_PANES.map((id, index) => {
+        const specimen = SPECIMENS.find((entry) => entry.id === id);
+        return specimen === undefined ? null : (
+          <FramedPane
+            key={id}
+            specimen={specimen}
+            active={index === 0}
+            style={{
+              minWidth: 0,
+              height: "100%",
+              flex: "1 1 0",
+              background: `color-mix(in srgb, ${ground.background} ${glass}, transparent)`,
+            }}
+          />
+        );
+      })}
+    </div>
   );
 }
 

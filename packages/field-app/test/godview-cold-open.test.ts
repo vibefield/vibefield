@@ -111,6 +111,17 @@ describe("the cold-open trace (GT-D15.4)", () => {
     expect(order("connected")).toBeGreaterThan(order("ticket"));
   });
 
+  // W7 (GV-D5): Godview opens on the monitor alone, and the terminals' open
+  // starts at their first call — so time zero moved, and every report says
+  // which zero it was measured from. A comparison across W7 must name it.
+  it("names its time zero: the terminals' first call (W7)", () => {
+    const trace = tracing();
+    expect(trace.report().zero, "a trace with no open still says its zero").toBe("first-call");
+    trace.mark("open", 0);
+    trace.mark("frame", 40);
+    expect(trace.report()).toMatchObject({ zero: "first-call", totalMs: 40, complete: true });
+  });
+
   it("is incomplete, not zero, when the open never reached a frame", () => {
     const trace = tracing();
     trace.mark("open", 0);
@@ -198,6 +209,9 @@ describe("the ambient-animation audit (GT-D15.1)", () => {
   const css = [
     readFileSync(join(godviewRoot, "godview.css"), "utf8"),
     readFileSync(join(godviewRoot, "deck-zoom.css"), "utf8"),
+    // GV-D1: the head's own sheet rides `GodviewHeadView`, mounted with the
+    // monitor — its label arrives by an entry transition, never a keyframe
+    readFileSync(join(godviewRoot, "godview-head.css"), "utf8"),
     ...packageSheets,
     ...ownSheets,
   ].join("\n");

@@ -140,6 +140,20 @@ describe("a cell's metrics", () => {
     expect(current["react render ms/s"]).toBe(old["react render ms/s"]);
   });
 
+  it("the heap row is the lab's reading after a collection, and the probe's own where a report has none", () => {
+    // a report from a lab before the heap row's collection: the probe's reading alone
+    const before = cell(150);
+    expect(stats.cellMetrics(before)["js heap MB"]).toBe(100);
+    const mb = (megabytes: number): number => megabytes * 1_048_576;
+    const collected = { collected: true, usedJSHeapSize: mb(74), totalJSHeapSize: mb(120) };
+    expect(stats.cellMetrics({ ...before, heap: collected })["js heap MB"]).toBe(74);
+    // a collection that could not be forced: the lab carries the probe's reading, marked
+    const kept = { collected: false, usedJSHeapSize: mb(100), totalJSHeapSize: null };
+    expect(stats.cellMetrics({ ...before, heap: kept })["js heap MB"]).toBe(100);
+    const unread = { collected: false, usedJSHeapSize: null, totalJSHeapSize: null };
+    expect(Number.isNaN(stats.cellMetrics({ ...before, heap: unread })["js heap MB"])).toBe(true);
+  });
+
   it("the gate rows are the totals, frame p50, the LoAF rows and the total's components (M33, M40)", () => {
     const gate = stats
       .metricTable(16.7)

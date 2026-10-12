@@ -146,6 +146,22 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(container?.textContent).toContain("Infinite canvas and visual tuning workbench");
     expect(container?.textContent).toContain("Field chrome playground");
     expect(container?.textContent).toContain("Godview stage");
+    // GV-D1: every Godview stage wears the head — the shipping view, mounted
+    // by the shipping monitor, never a copy — with the registry's five circles
+    // and nothing of the instrument bar it replaced.
+    const stages = [...(container?.querySelectorAll(".vf-ds-godview-frame > .vf-godview") ?? [])];
+    expect(stages.length).toBeGreaterThanOrEqual(5);
+    for (const stage of stages) {
+      expect(stage.classList.contains("theme-light")).toBe(true);
+      expect(
+        [
+          ...stage.querySelectorAll(
+            '.vf-stories-slot .vf-stories [role="group"][aria-label="Monitor view"] button',
+          ),
+        ].map((button) => button.getAttribute("aria-label")),
+      ).toEqual(["SWARM view", "LIST view", "RAIN view", "TIMELINE view", "SPEND view"]);
+      expect(stage.querySelector(".vf-godview-header")).toBeNull();
+    }
     expect(container?.textContent).toContain(
       "Swarm bodies — every drawn state, on the package's own fixtures",
     );
@@ -153,8 +169,44 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(container?.textContent).toContain("Spend — where the money went");
     expect(container?.querySelector("[data-godview-spend-catalog] .vf-godview")).not.toBeNull();
     expect(container?.textContent).toContain("The interface, accounted for");
-    // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 60.
-    expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(60);
+    // Round 3 (GV-D7, GV-D12): the Lip's specimen is the shipping stage — its groove
+    // in its pill, its well — holding panes that wear the shipping frame.
+    expect(container?.textContent).toContain("Deck — the Lip: the groove and the well");
+    const lip = container?.querySelector("[data-godview-lip-catalog] .vf-godview");
+    expect(lip?.querySelector('[role="separator"] .vf-godview-deck-groove')).not.toBeNull();
+    const well = lip?.querySelector(".vf-godview-deck-well > .vf-godview-terminal-deck-body");
+    expect(well?.querySelectorAll(".ghostty-pane").length).toBeGreaterThanOrEqual(2);
+    expect(well?.querySelector(".ghostty-pane.is-active .vf-pane-frame")).not.toBeNull();
+    // …the Lip's first button, live on the page (GV-D7), beside the separator
+    const minimize = lip?.querySelector('button[aria-label="Minimize the terminals"]');
+    expect(minimize?.closest('[role="separator"]')).toBeNull();
+    expect(minimize?.closest(".vf-godview-terminal-deck")).not.toBeNull();
+    // GV-D6: the terminals away — the monitor alone, the sheet kept, unseen and inert
+    expect(container?.textContent).toContain("Deck — away: the monitor alone");
+    // GV-D11: maximized — the same stage, its bar the window's title bar: the
+    // sheet laid out at the top, a hairline, minimize and restore at its end
+    expect(container?.textContent).toContain("Deck — maximized: the bar as the title bar");
+    const full = container?.querySelector("[data-godview-maximized-catalog] .vf-godview");
+    expect(full?.getAttribute("data-godview-deck")).toBe("maximized");
+    expect(full?.getAttribute("data-godview-deck-layout")).toBe("maximized");
+    expect(full?.querySelector(".vf-godview-deck-controls > .vf-godview-deck-hair")).not.toBeNull();
+    expect(
+      full?.querySelector('button[aria-label="Restore the terminals to their place"]'),
+    ).not.toBeNull();
+    const away = container?.querySelector("[data-godview-away-catalog] .vf-godview");
+    expect(away?.getAttribute("data-godview-deck")).toBe("away");
+    expect(away?.querySelector(".vf-godview-terminal-deck")?.hasAttribute("inert")).toBe(true);
+    expect(away?.querySelector(".vf-godview-monitor-stage")).not.toBeNull();
+    // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 63 —
+    // the wrapper's three (round 3) among them, drawn by the shipping component.
+    expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(63);
+    for (const name of ["minimize", "maximize", "restore"]) {
+      const tile = [...(container?.querySelectorAll("#glyphs .vf-ds-glyph") ?? [])].find(
+        (figure) => figure.querySelector("code")?.textContent === name,
+      );
+      expect(tile?.querySelector("svg.vf-glyph"), name).not.toBeNull();
+      expect(tile?.querySelector("small")?.textContent, name).toBe("instrument");
+    }
     // One Frame FR-1: the view frame on fixtures — the shipping track and cover
     // over a field, and a plate per state the page's Chrome & Composer plates
     // show for the frame (the last the keys as Windows prints them).
@@ -382,6 +434,32 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(place?.dataset.open).toBe("true");
 
     expect(container?.querySelector(".vf-godview .vf-monitor-list")).not.toBeNull();
+    // GV-D1: the head in the other theme too — the page is dark, so the frame's
+    // tokens the head is drawn in are the night's (`.dark .vf-stories`), and
+    // every stage that follows the page is Godview's dark.
+    const darkStages = [
+      ...(container?.querySelectorAll(".vf-ds-godview-frame > .vf-godview.theme-dark") ?? []),
+    ];
+    expect(darkStages.length).toBeGreaterThanOrEqual(5);
+    for (const stage of darkStages) {
+      expect(stage.closest(".dark")).toBe(document.documentElement);
+      expect(stage.querySelectorAll(".vf-stories .vf-story").length).toBe(5);
+    }
+    // System control is the palette's act in the product; the stage specimen
+    // stages the catalog's own button for the shipping panel.
+    const control = container?.querySelector<HTMLButtonElement>(
+      '.vf-ds-godview-controls button[aria-controls="vf-godview-tweak-panel"]',
+    );
+    expect(control?.textContent).toBe("System control");
+    expect(control?.getAttribute("aria-expanded")).toBe("false");
+    expect(document.getElementById("vf-godview-tweak-panel")).toBeNull();
+    await act(async () => control?.click());
+    expect(control?.getAttribute("aria-expanded")).toBe("true");
+    expect(document.getElementById("vf-godview-tweak-panel")?.textContent).toContain(
+      "SYSTEM CONTROL",
+    );
+    await act(async () => control?.click());
+    expect(document.getElementById("vf-godview-tweak-panel")).toBeNull();
     // The swarm's bodies (AR-5): the views package's own fixtures on the
     // SHIPPING view, through the view host since MV-5. A happy-dom window has
     // no WebGPU, so the view says so — the same honest line the product draws,

@@ -14,6 +14,8 @@ import {
   FrameViewState,
   FrameZoomRequest,
   frameViewBuilt,
+  GodviewDeckSetRequest,
+  GodviewDeckState,
   isUnambiguousLinkText,
   ProductInfo,
   RendererParticipantIdentity,
@@ -40,6 +42,8 @@ import {
   ThemeSetRequest,
   ThemeState,
   WindowConnection,
+  WindowLights,
+  WindowLightsState,
   WindowTerminalBootstrap,
 } from "../src/shell";
 
@@ -216,7 +220,7 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the twenty-one channel keys, in order", () => {
+  it("exposes exactly the twenty-two channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -233,6 +237,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "viewZoom", // FR-4 — main → renderer: the View menu's zoom, as an act for the head
       "themeState", // FR-4 — the app's one theme, main's (Light · Dark · Auto)
       "themeSet",
+      "deckSet", // GV round 3 — Godview's deck said by name; main moves the lights and lends ⌘W by it
       "usersUpdate", // UA-3 — the Account page's profile write (main owns users.json)
       "usersList", // UA-5 — the roster; one truth for switcher + tray submenu
       "usersCreate", // UA-5 — mint user N under the §3.3 lock, then attach
@@ -259,6 +264,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       viewZoom: "vibefield:view:zoom",
       themeState: "vibefield:theme:state",
       themeSet: "vibefield:theme:set",
+      deckSet: "vibefield:deck:set",
       usersUpdate: "vibefield:users:update",
       usersList: "vibefield:users:list",
       usersCreate: "vibefield:users:create",
@@ -343,6 +349,59 @@ describe("the frame's active view (FR-1)", () => {
     expect(FrameViewState.parse({ view: "canvas", future: "field" })).toEqual({
       view: "canvas",
       future: "field",
+    });
+  });
+});
+
+describe("Godview's deck, said to main by name (round 3 — GV-D6, GV-D11)", () => {
+  it("has three states — away, up, maximized — or none", () => {
+    expect(GodviewDeckState.options).toEqual(["away", "up", "maximized"]);
+    for (const deck of GodviewDeckState.options) {
+      expect(GodviewDeckSetRequest.parse({ deck })).toEqual({ deck });
+    }
+    // A window whose page has no deck to speak of says so: null, never silence.
+    expect(GodviewDeckSetRequest.parse({ deck: null })).toEqual({ deck: null });
+    expect(GodviewDeckSetRequest.safeParse({}).success).toBe(false);
+    expect(GodviewDeckSetRequest.safeParse({ deck: "full" }).success).toBe(false);
+    expect(GodviewDeckSetRequest.safeParse({ deck: true }).success).toBe(false);
+  });
+
+  it("never carries a position: the page names a state and main owns the numbers", () => {
+    // Coordinates are not a request…
+    expect(GodviewDeckSetRequest.safeParse({ x: 12, y: 9 }).success).toBe(false);
+    expect(GodviewDeckSetRequest.safeParse({ deck: { x: 12, y: 9 } }).success).toBe(false);
+    // …and not an answer: the lights are named by where they stand.
+    expect(WindowLights.options).toEqual(["head", "bar", "none"]);
+    expect(
+      WindowLightsState.safeParse({ deck: "maximized", lights: { x: 12, y: 9 } }).success,
+    ).toBe(false);
+  });
+
+  it("is answered with what main holds: the deck as said, and where the lights stand", () => {
+    expect(WindowLightsState.parse({ deck: "maximized", lights: "bar" })).toEqual({
+      deck: "maximized",
+      lights: "bar",
+    });
+    expect(WindowLightsState.parse({ deck: null, lights: "head" })).toEqual({
+      deck: null,
+      lights: "head",
+    });
+    // A window with no inset lights (not a Mac, a default title bar) is told so.
+    expect(WindowLightsState.parse({ deck: "maximized", lights: "none" }).lights).toBe("none");
+    expect(WindowLightsState.safeParse({ deck: "up" }).success).toBe(false);
+    expect(WindowLightsState.safeParse({ lights: "head" }).success).toBe(false);
+    expect(WindowLightsState.safeParse({ deck: "up", lights: "tray" }).success).toBe(false);
+  });
+
+  it("passes unknown fields through, like every other inbound shape (EL9)", () => {
+    expect(GodviewDeckSetRequest.parse({ deck: "up", future: "field" })).toEqual({
+      deck: "up",
+      future: "field",
+    });
+    expect(WindowLightsState.parse({ deck: "up", lights: "head", future: 1 })).toEqual({
+      deck: "up",
+      lights: "head",
+      future: 1,
     });
   });
 });

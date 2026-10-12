@@ -1,7 +1,7 @@
 // THE GODVIEW LAB'S MEASURES (MV-3c; build-mv M33) — the pure half of what the
 // perf lab and the capture tool read, kept free of Electron so a unit test can
-// hold it: a window's main-thread totals from two CDP samples, and the
-// negative controls' spelling.
+// hold it: a window's main-thread totals from two CDP samples, the heap row's
+// reading, and the negative controls' spelling.
 
 /** Chromium's cumulative main-thread totals at one instant, in seconds. */
 export interface PageMetrics {
@@ -34,6 +34,36 @@ export function metricTotals(
     scriptMsPerS: perSecond(start.script, end.script),
     layoutMsPerS: perSecond(start.layout, end.layout),
     recalcStyleMsPerS: perSecond(start.recalcStyle, end.recalcStyle),
+  };
+}
+
+/** The page's `performance.memory`, as far as the lab reads it. */
+export interface HeapSample {
+  usedJSHeapSize: number | null;
+  totalJSHeapSize: number | null;
+}
+
+/** A cell's JS heap as the lab reports it: the paired runner's "js heap MB". */
+export interface LabHeap extends HeapSample {
+  /** read after a forced collection, not at whatever phase the collector was in */
+  collected: boolean;
+}
+
+/**
+ * The heap row's reading (MV lab debts). `collected` is the page's heap after
+ * a forced collection, or null when none could be forced or the page did not
+ * answer after it; the row then keeps the probe's own reading from the cell's
+ * report (`report.memory`, what the row was until 2026-10-11) and says it is
+ * uncollected. Never a reason to fail a launch.
+ */
+export function labHeap(probe: unknown, collected: HeapSample | null): LabHeap {
+  const bytes = (value: unknown): number | null =>
+    typeof value === "number" && Number.isFinite(value) ? value : null;
+  const from = (collected ?? probe ?? {}) as Partial<Record<keyof HeapSample, unknown>>;
+  return {
+    collected: collected !== null,
+    usedJSHeapSize: bytes(from.usedJSHeapSize),
+    totalJSHeapSize: bytes(from.totalJSHeapSize),
   };
 }
 

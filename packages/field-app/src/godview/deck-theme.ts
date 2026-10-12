@@ -151,20 +151,24 @@ export function godviewTerminalEffects(appearance: DeckAppearance): TerminalEffe
   return { postProcess: "none", shaderEffects: stack, animate: appearance.shaderAnimate };
 }
 
-/** The deck sheet's ground (DESIGN.md §8, 2026-09-28 — James: the deck is
- * always the terminal's own colour). The background of the SAME projection the
- * workspace is handed, so a catalog theme, the per-mode choice and the reference
- * palettes all reach the sheet exactly as they reach the panes. The alpha is
- * dropped: the sheet takes the stage's glass (`--vf-godview-stage-opacity`), and
- * a pane's own translucent ground over a sheet of its own colour composites to
- * that colour exactly — which is what makes the lip, the gaps and the panes one
- * surface. Readers: the overlay, the catalog's stage. */
+/** What the deck sheet is painted from (DESIGN.md §8): the terminal's ground
+ * and, since round 3 (GV-D7), the terminal's ink — the sheet's ground is the
+ * FRAME, that ground mixed toward that ink (`godview.css`, `--deck-frame`), and
+ * the groove answers the pointer in the same ink. Both come off the SAME
+ * projection the workspace is handed, so a catalog theme, the per-mode choice
+ * and the reference palettes all reach the sheet exactly as they reach the
+ * panes. The alpha is dropped: the sheet takes the stage's glass
+ * (`--vf-godview-stage-opacity`). The ink is the name the pane frame already
+ * reads inside the deck (`--vf-godview-terminal-ink`), now said on the stage's
+ * root too — the same value, one level up. Readers: the overlay, the catalog's
+ * stage. */
 export function godviewTerminalGroundStyle(
   appearance: DeckAppearance,
   godviewTheme: GodviewTheme,
-): Record<"--vf-godview-terminal-bg", string> {
+): Record<"--vf-godview-terminal-bg" | "--vf-godview-terminal-ink", string> {
+  const ground = terminalGround(godviewTerminalTheme(appearance, godviewTheme));
   return {
-    "--vf-godview-terminal-bg": terminalGround(godviewTerminalTheme(appearance, godviewTheme))
-      .background,
+    "--vf-godview-terminal-bg": ground.background,
+    "--vf-godview-terminal-ink": ground.ink,
   };
 }

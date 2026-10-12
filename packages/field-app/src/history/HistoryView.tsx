@@ -37,6 +37,7 @@ import {
   projectIntent,
   resumeTarget,
   type SessionTarget,
+  thrownReason,
 } from "./acts";
 import {
   type HistoryHostActs,
@@ -208,6 +209,19 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
     }),
     [fieldd],
   );
+  /** An act that threw is said all the same (2026-10-11, the honest-states
+   * rule): its own refusal in the throw's words, where its outcome would have
+   * been said — and logged. The acts refuse in words themselves; this is the
+   * controller's last word on one that does not. */
+  const failed = useCallback((act: string, error: unknown): string => {
+    log().error(
+      "renderer.history.act_failed",
+      "a History act threw; its refusal was said on the line",
+      error,
+      { act },
+    );
+    return thrownReason(error);
+  }, []);
   /** A press's own answer moves the create, as the line's reading would. */
   const noteRun = useCallback(
     async (target: SessionTarget) => {
@@ -221,10 +235,15 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
     const chosen = selectionRef.current;
     if (chosen === null) return { state: "refused", reason: "choose a session first" };
     const target = targetOfSelection(chosen);
-    const outcome = await resumeTarget(deps, target, readingRef.current);
+    let outcome: ResumeOutcome;
+    try {
+      outcome = await resumeTarget(deps, target, readingRef.current);
+    } catch (error) {
+      return { state: "refused", reason: failed("resume", error) };
+    }
     if (outcome.state === "running") await noteRun(target);
     return outcome;
-  }, [deps, noteRun]);
+  }, [deps, noteRun, failed]);
 
   // P3 — Jump to: the run asked for again at the press, the pane showing its
   // floor session revealed in Godview
@@ -232,10 +251,15 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
     const chosen = selectionRef.current;
     if (chosen === null) return { state: "refused", reason: "choose a session first" };
     const target = targetOfSelection(chosen);
-    const outcome = await jumpTarget(deps, target);
+    let outcome: JumpOutcome;
+    try {
+      outcome = await jumpTarget(deps, target);
+    } catch (error) {
+      outcome = { state: "refused", reason: failed("jump", error) };
+    }
     await noteRun(target);
     return outcome;
-  }, [deps, noteRun]);
+  }, [deps, noteRun, failed]);
 
   const chosen = selection?.sessionId ?? null;
   const waits = current?.state === "waits" ? current.why : null;
@@ -275,24 +299,44 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
     () => ({
       setDesktop: (desktop) => setHostState((state) => ({ ...state, desktop })),
       setAgent: (agent) => setHostState((state) => ({ ...state, agent })),
+      // each act's outcome is said on the line — and one that threw, as its
+      // own refusal (`failed`), never a press that ends in silence
       resume: (target) => {
-        void resumeTarget(deps, target).then((outcome) => {
-          sayOnHistoryLine(resumeNote(outcome));
-          if (outcome.state === "running") void noteRun(target);
-        });
+        void resumeTarget(deps, target).then(
+          (outcome) => {
+            sayOnHistoryLine(resumeNote(outcome));
+            if (outcome.state === "running") void noteRun(target);
+          },
+          (error: unknown) =>
+            sayOnHistoryLine(resumeNote({ state: "refused", reason: failed("resume", error) })),
+        );
       },
       jump: (target) => {
-        void jumpTarget(deps, target).then((outcome) => {
-          sayOnHistoryLine(jumpNote(outcome));
-          void noteRun(target);
-        });
+        void jumpTarget(deps, target).then(
+          (outcome) => {
+            sayOnHistoryLine(jumpNote(outcome));
+            void noteRun(target);
+          },
+          (error: unknown) => {
+            sayOnHistoryLine(jumpNote({ state: "refused", reason: failed("jump", error) }));
+            void noteRun(target);
+          },
+        );
       },
       newAgent: (ask) => {
-        void newAgent(deps, ask).then((outcome) => sayOnHistoryLine(newAgentNote(outcome)));
+        void newAgent(deps, ask).then(
+          (outcome) => sayOnHistoryLine(newAgentNote(outcome)),
+          (error: unknown) =>
+            sayOnHistoryLine(newAgentNote({ state: "refused", reason: failed("newAgent", error) })),
+        );
       },
       intent: (params, words) => {
-        void projectIntent(fieldd, params).then((outcome) =>
-          sayOnHistoryLine(intentNote(outcome, words)),
+        void projectIntent(fieldd, params).then(
+          (outcome) => sayOnHistoryLine(intentNote(outcome, words)),
+          (error: unknown) =>
+            sayOnHistoryLine(
+              intentNote({ state: "refused", reason: failed("intent", error) }, words),
+            ),
         );
       },
       // H4 — the room keeps its field open on a rejection and says the
@@ -305,7 +349,7 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
       },
       shown: (project) => showSuggestions(project),
     }),
-    [deps, fieldd, noteRun, showSuggestions],
+    [deps, fieldd, noteRun, showSuggestions, failed],
   );
   const inputs = useMemo(() => historyHostInputs(model, hostState, acts), [model, hostState, acts]);
 

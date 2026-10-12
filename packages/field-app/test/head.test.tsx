@@ -411,6 +411,48 @@ describe("the name pill (FR-3, FC-D9)", () => {
   });
 });
 
+describe('under a cover (DESIGN.md §8 "The covers over the desk")', () => {
+  const read = (file: string): string => readFileSync(join(process.cwd(), file), "utf8");
+  const head = read("src/frame/head.css");
+  const cover = read("src/frame/view-frame.css");
+  const number = (text: string, pattern: RegExp): number => Number(text.match(pattern)?.[1]);
+
+  it("goes with the canvas under any cover, and stands in Canvas", () => {
+    for (const [view, covered] of [
+      ["canvas", false],
+      ["godview", true],
+      ["history", true],
+    ] as const) {
+      mount({ view });
+      const wrapper = $(".vf-head");
+      expect(wrapper?.hasAttribute("data-covered"), view).toBe(covered);
+      // the pill and the readout inherit the wrapper's visibility: both inside it
+      expect(wrapper?.contains($(".vf-head-place")), view).toBe(true);
+      expect(wrapper?.contains($(".vf-head-tools")), view).toBe(true);
+      act(() => root?.unmount());
+      root = null;
+      host?.remove();
+    }
+  });
+
+  it("hides by visibility once the cover has faded in, and keeps every box", () => {
+    // no box of its own, so nothing moves; `visibility` keeps the pieces' boxes,
+    // so the measured side and the Peek's find width read the same
+    expect(head).toMatch(/^\.vf-head \{\s*display: contents;\s*\}/m);
+    expect(head).toMatch(/^\.vf-head\[data-covered\] \{\s*visibility: hidden;/m);
+    // the delay is the cover's own fade, in both motions
+    const fade = number(cover, /^\.vf-cover \{[^}]*?transition:\s*opacity (\d+)ms/m);
+    const reducedFade = number(cover, /\.vf-cover \{\s*transition:\s*opacity (\d+)ms/);
+    expect([fade, reducedFade]).toEqual([240, 120]);
+    expect(
+      number(head, /^\.vf-head\[data-covered\] \{[^}]*transition: visibility 0s linear (\d+)ms/m),
+    ).toBe(fade);
+    expect(
+      number(head, /\.vf-head\[data-covered\] \{\s*transition: visibility 0s linear (\d+)ms/),
+    ).toBe(reducedFade);
+  });
+});
+
 describe("the fields explorer, grown from the pill", () => {
   it("asks the one owner for the fields: the pill grows into the explorer, with a fresh list", () => {
     const { manager } = mount();

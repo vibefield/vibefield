@@ -13,19 +13,62 @@ export interface LabDeckState {
   error?: string;
 }
 
+/** Which of the lab's readiness conditions a deck state does not meet, each
+ * with what was read. `labDeckReady` is exactly "none of them". */
+export function labDeckMissing(state: LabDeckState | null): string[] {
+  if (state === null) return ["a GODVIEW_DECK marker (none was read)"];
+  const read = (value: unknown): string =>
+    typeof value === "string" ? JSON.stringify(value) : String(value);
+  const missing: string[] = [];
+  if (state.active !== true) missing.push(`an active deck (active ${read(state.active)})`);
+  if (!(Number.isInteger(state.panes) && state.panes > 0)) {
+    missing.push(`a pane (panes ${read(state.panes)})`);
+  }
+  if (!(Number.isInteger(state.sessions) && state.sessions > 0)) {
+    missing.push(`a session (sessions ${read(state.sessions)})`);
+  }
+  if (state.poolPhase !== "open") missing.push(`an open pool (poolPhase ${read(state.poolPhase)})`);
+  if (state.rosterState !== "observed") {
+    missing.push(`an observed roster (rosterState ${read(state.rosterState)})`);
+  }
+  if (state.rendererBackend !== "webgpu") {
+    missing.push(`a WebGPU terminal renderer (rendererBackend ${read(state.rendererBackend)})`);
+  }
+  if (state.error !== undefined) missing.push(`no deck error (error ${read(state.error)})`);
+  return missing;
+}
+
 export function labDeckReady(state: LabDeckState | null): boolean {
-  return (
-    state !== null &&
-    state.active === true &&
-    Number.isInteger(state.panes) &&
-    state.panes > 0 &&
-    Number.isInteger(state.sessions) &&
-    state.sessions > 0 &&
-    state.poolPhase === "open" &&
-    state.rosterState === "observed" &&
-    state.rendererBackend === "webgpu" &&
-    state.error === undefined
-  );
+  return labDeckMissing(state).length === 0;
+}
+
+/** A deck state for an error's text: the readiness facts first (they survive
+ * the bound), the marker's other fields after them, as JSON of at most `limit`
+ * characters. A marker never read says so. */
+export function labDeckSeen(state: LabDeckState | null, limit = 600): string {
+  if (state === null) return "no GODVIEW_DECK marker";
+  const { active, panes, sessions, poolPhase, rosterState, rendererBackend, error, ...rest } =
+    state;
+  const text = JSON.stringify({
+    active,
+    panes,
+    sessions,
+    poolPhase,
+    rosterState,
+    rendererBackend,
+    ...(error !== undefined ? { error } : {}),
+    ...rest,
+  });
+  return text.length > limit ? `${text.slice(0, Math.max(0, limit - 1))}…` : text;
+}
+
+/** What a wait for the deck that timed out says it saw: the last state read,
+ * and which readiness conditions that state still lacked. */
+export function labDeckTimeout(state: LabDeckState | null): string {
+  const missing = labDeckMissing(state);
+  return `the deck last said ${labDeckSeen(state)}; still missing: ${
+    missing.length > 0 ? missing.join(", ") : "nothing (ready as the wait ended)"
+  }`;
 }
 
 /** A fresh perf/capture process owns one workspace with its initial shell.

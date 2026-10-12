@@ -11,9 +11,11 @@
  * Two claims did NOT move, because they are about the seam rather than about a
  * view:
  *
- *   1. THE SPLIT. Stage height belongs to no view. It is what lets a view's own
- *      controls come and go with it, so the stage group must declare it and no
- *      view in the package's registry may.
+ *   1. THE SPLIT. The stage's own tunables (the CRT overlays) belong to no
+ *      view. It is what lets a view's own controls come and go with it. The
+ *      stage's HEIGHT is no tunable at all since N15 (a): the deck's rest is the
+ *      drawing's share above a floor (DESIGN.md §8 "Rest"), so neither the
+ *      stage's groups nor any view in the package's registry declares it.
  *   2. THE KEY. A view's tunables are stored per view AND per `parametersRevision`
  *      — the reference's 2026-09-09 lock. A view whose defaults were re-decided
  *      stores under the revision, so every installation lands on the new numbers
@@ -36,12 +38,16 @@ import {
   monitorTuningSections,
   useMonitorTuning,
 } from "../src/godview/monitor/monitor-tuning";
-import { STAGE_HEIGHT_KEY, STAGE_PARAMETER_GROUPS } from "../src/godview/monitor/stage-parameters";
+import { STAGE_PARAMETER_GROUPS } from "../src/godview/monitor/stage-parameters";
+
+/** The retired `Monitor height` slider's key (N15 (a)). */
+const RETIRED_STAGE_HEIGHT = "stageHeight";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const VIEW_KEY = "vf-godview-monitor-view-v1";
 const PARAMETERS_PREFIX = "vf-godview-monitor-parameters-v1";
+const STAGE_STORAGE_KEY = "vf-godview-monitor-stage-v1";
 
 let root: Root | null = null;
 let container: HTMLElement | null = null;
@@ -86,16 +92,20 @@ function storedParameterKeys(): Record<string, unknown> {
 }
 
 describe("the stage's own parameters", () => {
-  it("keeps the stage's height out of every view's bag", () => {
-    // The split the reference draws and we keep: stage height belongs to no
-    // single view, so no view may declare it and every view must survive it
-    // moving.
-    expect(monitorParameterDefaults(STAGE_PARAMETER_GROUPS)).toHaveProperty(STAGE_HEIGHT_KEY);
+  it("tunes no stage height anywhere: the slider is gone, and no view declares one (N15 (a))", () => {
+    // Rest is the drawing's share of the stage above a floor, never a number a
+    // person sets: the stage's groups carry no height, and no view may.
+    expect(monitorParameterDefaults(STAGE_PARAMETER_GROUPS)).not.toHaveProperty(
+      RETIRED_STAGE_HEIGHT,
+    );
+    expect(
+      STAGE_PARAMETER_GROUPS.flatMap((group) => group.controls).map((control) => control.label),
+    ).not.toContain("Monitor height");
     for (const view of MONITOR_VIEWS) {
       expect(
         monitorParameterDefaults(view.parameterGroups),
         `${view.id} declares the stage's height`,
-      ).not.toHaveProperty(STAGE_HEIGHT_KEY);
+      ).not.toHaveProperty(RETIRED_STAGE_HEIGHT);
     }
   });
 
@@ -113,15 +123,25 @@ describe("the stage's own parameters", () => {
     );
   });
 
-  it("starts the stage at its declared default height and clamps an edit to the control", async () => {
-    const tuning = await mountTuning();
-    const declared = monitorParameterDefaults(STAGE_PARAMETER_GROUPS)[STAGE_HEIGHT_KEY];
-    expect(tuning().stageHeight).toBe(declared);
-    await act(async () => tuning().setStageParameter(STAGE_HEIGHT_KEY, 10_000));
-    const control = STAGE_PARAMETER_GROUPS.flatMap((group) => group.controls).find(
-      (candidate) => candidate.key === STAGE_HEIGHT_KEY,
+  it("reads past a height an older build stored, removes it from storage on load, and offers no way to set one", async () => {
+    // an installation that tuned the retired slider to 60% keeps its other
+    // numbers, and the 60 never applies again (persisted params pin old
+    // defaults — the lead's L21 addition)
+    localStorage.setItem(
+      STAGE_STORAGE_KEY,
+      JSON.stringify({ [RETIRED_STAGE_HEIGHT]: 60, scanlineDensity: 4 }),
     );
-    expect(tuning().stageHeight).toBe(control?.max);
+    const tuning = await mountTuning();
+    expect(tuning().stageParameters).not.toHaveProperty(RETIRED_STAGE_HEIGHT);
+    expect(tuning().stageParameters["scanlineDensity"]).toBe(4);
+    expect(tuning()).not.toHaveProperty("stageHeight");
+    // the load writes the bag back without it: the key is gone from storage
+    const stored = JSON.parse(localStorage.getItem(STAGE_STORAGE_KEY) ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    expect(stored).not.toHaveProperty(RETIRED_STAGE_HEIGHT);
+    expect(stored["scanlineDensity"]).toBe(4);
   });
 });
 

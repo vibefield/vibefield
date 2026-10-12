@@ -52,7 +52,7 @@ describe("ViewWindowState", () => {
     expect(state.set("assistant")).toEqual({ view: "godview" });
     // still answered, so a page that asked is never left waiting
     expect(fake.sent).toEqual([{ channel: IPC_CHANNELS.viewState, payload: { view: "godview" } }]);
-    expect(onChanged).toHaveBeenLastCalledWith({ view: "godview" });
+    expect(onChanged).toHaveBeenLastCalledWith({ view: "godview" }, contents);
   });
 
   it("publishes to the renderer on every request, changed or not", () => {
@@ -72,7 +72,22 @@ describe("ViewWindowState", () => {
     const { contents } = fakeContents();
     const state = new ViewWindowState(contents, { onChanged });
     state.set("history");
-    expect(onChanged).toHaveBeenLastCalledWith({ view: "history" });
+    expect(onChanged).toHaveBeenLastCalledWith({ view: "history" }, contents);
+  });
+
+  it("names the window that asked, so what main composes with a view is per window", () => {
+    // The window's lights follow its view (window-lights.ts): a view change in
+    // one window must never move another's.
+    const onChanged = vi.fn();
+    const registry = new ViewRegistry({ onChanged });
+    const a = fakeContents(21).contents;
+    const b = fakeContents(22).contents;
+    registry.ensure(a).set("godview");
+    registry.ensure(b).set("history");
+    expect(onChanged.mock.calls).toEqual([
+      [{ view: "godview" }, a],
+      [{ view: "history" }, b],
+    ]);
   });
 
   it("republishes to a reloaded document, which believes it is on the canvas", () => {

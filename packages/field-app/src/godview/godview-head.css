@@ -1,0 +1,296 @@
+/* Godview's head — Stories (DESIGN.md §8 "Godview's head — Stories"; One Frame
+   §23, round 3 — the kit's `gv3.css` is the drawing; GV-D1, MV-D16 marks only,
+   N12 (a), N13 (a)). The monitor host's chrome in the frame's language: every
+   number is DESIGN.md's — §8 the head's row and this entry, §5 the line's
+   glass, the island shadow and the solid label, §6 the island curve. Tokens
+   only. No keyframe: the label arrives by an entry transition, as Godview runs
+   none (GT-D15.1's audit). The row's arithmetic is `head-row.ts`. */
+
+/* ── THE COLUMN — the head takes no band of it ─────────────────────────────
+   The head is a row of glass circles over the stage, never a band of the
+   stage's column, so the stage begins at the window's top and the shared stage
+   rule (`godview.css`, `.vf-godview-monitor-stage`) gives the monitor the 40px
+   the instrument bar held: the deck's edge rests where it rested. The rule's
+   own sheet sets this nowhere (one owner: the head's). */
+.vf-godview {
+  --vf-godview-head-height: 0px;
+}
+
+/* ── THE SLOT — the frame's head row, over the stage ───────────────────────
+   `GodviewMonitor` mounts the head here, behind its boundary. A band of no
+   height across the window's top, so the stage runs under it to the window's
+   top and the column beneath is laid out as if it were not there. Above the
+   deck's sheet (10) and the CRT layers (30): it is the frame's glass and
+   carries no scanline, as the search button beside it carries none. */
+.vf-stories-slot {
+  position: absolute;
+  z-index: 31;
+  inset: 0 0 auto;
+  height: 0;
+  font-family: var(--vf-font-sans);
+}
+
+/* A head that failed says so where the row stood (its boundary's status, M49):
+   the label's own solid, centred on the lights' axis. */
+.vf-stories-slot > span[role="status"] {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  display: inline-flex;
+  height: 24px;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 12px;
+  color: var(--vf-text-secondary);
+  background: var(--vf-chrome-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* ── THE ROOM — what the row may take ──────────────────────────────────────
+   Every control 40 at top 8, on the lights' axis (y 28). The row is centred on
+   the window, so it gives up the WIDER end on both sides: one head gap (12)
+   from the lights' slot (96), and one from the search button — 16 in, as wide
+   as the Peek says its glass is (`--vf-peek-find-width`: the circle's 40 until
+   a filter's token widens it). The view measures this box and shows as many
+   whole circles as it holds. The glass is the line's (§5): the solid at 88%
+   under a 24 blur, ringed by the hairline, with the island shadow — by night
+   94%, the strong hairline and a 6% top light. */
+.vf-stories {
+  --vf-stories-side: max(96px + 12px, 16px + var(--vf-peek-find-width, 40px) + 12px);
+  --vf-stories-glass: color-mix(in srgb, var(--vf-chrome-solid) 88%, transparent);
+  --vf-stories-edge: var(--vf-hairline);
+  --vf-stories-lift: 0 0 0 transparent;
+  position: absolute;
+  top: 8px;
+  right: var(--vf-stories-side);
+  left: var(--vf-stories-side);
+  display: flex;
+  height: 40px;
+  justify-content: center;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+
+.dark .vf-stories {
+  --vf-stories-glass: color-mix(in srgb, var(--vf-chrome-solid) 94%, transparent);
+  --vf-stories-edge: var(--vf-hairline-strong);
+  --vf-stories-lift: inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+/* Maximized (GV-D11) nothing of the head stands over the terminals' title bar:
+   the row and its chevrons fade in 200ms. The view makes them inert, so they
+   take no pointer and no focus. */
+.vf-stories[data-deck="maximized"] {
+  opacity: 0;
+}
+
+/* ── THE ROW — as many whole circles as fit, nine at most ──────────────────
+   `--vf-stories-shown` circles 40 wide, 12 apart; the chevrons and the label
+   are placed from this box. */
+.vf-stories-row {
+  position: relative;
+  width: calc(var(--vf-stories-shown) * 52px - 12px);
+  height: 40px;
+  flex: none;
+}
+
+.vf-stories-reel {
+  height: 40px;
+}
+
+/* A row that pages shows whole circles only: it clips 10 past each end — under
+   the gap's 12, so no neighbour shows — along the row alone, and the shadows
+   keep their room above and below. `overflow`, never a clip path: a clip path
+   would make the reel the circles' backdrop root, and their glass would blur
+   nothing. */
+.vf-stories[data-paged] .vf-stories-reel {
+  margin-inline: -10px;
+  padding-inline: 10px;
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+/* It pages by whole circles, in 320ms on the island curve. */
+.vf-stories-track {
+  display: flex;
+  width: max-content;
+  height: 40px;
+  gap: 12px;
+  transform: translateX(calc(var(--vf-stories-offset) * -52px));
+  transition: transform 320ms var(--vf-ease-island);
+}
+
+/* ── A CIRCLE — the line's glass, holding its view's mark ──────────────────
+   The mark is the view's manifest's (MV-D6, MV-D16: marks only): FILLED in a
+   22 box, never stroked, in secondary ink — primary on the current view and
+   under the pointer or the focus. */
+.vf-story {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  outline: none;
+  color: var(--vf-text-secondary);
+  background: var(--vf-stories-glass);
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 0 0 1px var(--vf-stories-edge),
+    var(--vf-shadow-island),
+    var(--vf-stories-lift);
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    box-shadow 120ms ease,
+    color 120ms ease;
+}
+
+.vf-story > svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+  fill: currentcolor;
+  stroke: none;
+}
+
+/* a view with no mark shows its label's initial, in the label's type */
+.vf-story > span {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+/* Under the pointer or the keyboard's focus, another circle's edge is 1.5 in
+   tertiary ink, in place of the hairline. */
+.vf-story:is(:hover, :focus-visible) {
+  color: var(--vf-text-primary);
+  box-shadow:
+    inset 0 0 0 1.5px var(--vf-text-tertiary),
+    var(--vf-shadow-island),
+    var(--vf-stories-lift);
+}
+
+/* The current view's ring is the circle's own edge: 2 in primary ink inside
+   its 40, in place of the hairline. Nothing grows, shifts or clips. */
+.vf-story[aria-pressed="true"] {
+  color: var(--vf-text-primary);
+  box-shadow:
+    inset 0 0 0 2px var(--vf-text-primary),
+    var(--vf-shadow-island),
+    var(--vf-stories-lift);
+}
+
+/* ── THE CHEVRONS — outside each end that has more ─────────────────────────
+   28, the line's glass, on the row's axis (6 down its 40), one gap from the
+   row; `chevron` 12 in secondary ink, primary under the pointer. One with
+   nothing more behind it is not there (the view disables it). */
+.vf-stories-chev {
+  position: absolute;
+  top: 6px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  color: var(--vf-text-secondary);
+  background: var(--vf-stories-glass);
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 0 0 1px var(--vf-stories-edge),
+    var(--vf-shadow-island),
+    var(--vf-stories-lift);
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    opacity 160ms ease,
+    color 120ms ease;
+}
+
+.vf-stories-chev[data-end="start"] {
+  right: calc(100% + 12px);
+}
+
+.vf-stories-chev[data-end="end"] {
+  left: calc(100% + 12px);
+}
+
+.vf-stories-chev:hover {
+  color: var(--vf-text-primary);
+}
+
+.vf-stories-chev:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+.vf-stories-chev:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── THE LABEL — a circle's name, said under it ────────────────────────────
+   Solid (FC-D14): 24 tall, 8 under the circle and centred on it, corners 12,
+   padded 0 10, ringed by the strong hairline, with the island shadow. The name
+   12/500 in primary ink; 6 after it the keys the view takes while it is
+   focused, 11/400 in tertiary ink (M177). It appears in 140ms, 3 down into
+   place. Under the circles, so it never covers a ring; never a target. */
+.vf-stories-label {
+  position: absolute;
+  top: 48px;
+  left: calc((var(--vf-stories-at) - var(--vf-stories-offset)) * 52px + 20px);
+  display: inline-flex;
+  height: 24px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: 12px;
+  color: var(--vf-text-primary);
+  background: var(--vf-chrome-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+@starting-style {
+  .vf-stories-label {
+    opacity: 0;
+    transform: translate(-50%, -3px);
+  }
+}
+
+.vf-stories-label > kbd {
+  color: var(--vf-text-tertiary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+/* Reduced motion: the row pages and the label appears at once. */
+@media (prefers-reduced-motion: reduce) {
+  .vf-stories-track,
+  .vf-stories-label {
+    transition: none;
+  }
+}

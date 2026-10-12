@@ -120,6 +120,18 @@ describe("the pooled reader", () => {
     expect(() => pool.poolRuns(one, two)).toThrow(/differ in clock/);
   });
 
+  it("refuses a cohort another lab measured: a lab change is a change of method", async () => {
+    // a first cohort from before the per-view warm-up says nothing of its warmed views
+    const [one, two] = await cohorts();
+    const path = join(one, "summary.json");
+    const summary = JSON.parse(readFileSync(path, "utf8"));
+    for (const arm of Object.values<Record<string, unknown>>(summary.instruments)) {
+      delete arm["warmedViews"];
+    }
+    writeFileSync(path, JSON.stringify(summary));
+    expect(() => pool.poolRuns(one, two)).toThrow(/differ in instruments/);
+  });
+
   it("refuses a negative control as a cohort", async () => {
     const [one, two] = await cohorts();
     const path = join(one, "summary.json");

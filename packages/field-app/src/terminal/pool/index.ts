@@ -28,6 +28,7 @@ export {
   configureTerminalPool,
   createTerminalSession,
   disposeTerminalPool,
+  floorReadWithin,
   openDormantTransport,
   openTerminalPool,
   type ProjectedSessionDemand,

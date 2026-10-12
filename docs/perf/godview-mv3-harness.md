@@ -47,6 +47,47 @@ failed launches. Reports carry `profile: {kind: "isolated-chromium-v1", id}`; th
 opaque hash of the canonical path. Runners reject missing/mismatched proof and reused IDs
 before grading. Historical testing bundles need the same proof instrumentation. The worker
 lifecycle probe uses one profile per process, shared by its intentionally concurrent windows.
+
+**Lab-debts update (2026-10-11, lane `mv/lab-debts`):** debts of the instrument itself, each a
+change of METHOD. An A/B pair must run the same lab in both arms, so a pair takes its A arm
+from main after these, and a cohort measured before them is not pooled with one measured after
+(the pooled reader compares the summaries' `instruments`, which now carry what each arm's lab
+did around its cells).
+
+- **The warm-up replays through every measured view.** Until here one short corpus replayed
+  through the default view only, so every other view first mounted — its chunk, its root, its
+  canvas — inside its own first measured cell. The warm corpus now replays once through each
+  view of the run, in the run's order, each entered as a cell enters it (selected, settled,
+  replayed), and ends as a recipe's last cell ends: stopped on the last view, settled. It costs
+  ~15 s a launch with the four views where the one-view warm-up took ~3 s.
+  `VF_GODVIEW_PERF_WARMUP=0` still skips it. Each report carries `warmedViews`; the `warmed`
+  line, the summary's `instruments` and its header name them per arm, and the header says so
+  when the arms did not warm the same views.
+- **The wait for the deck says what it saw.** A launch whose deck never came ready failed with a
+  bare "timed out after 60000ms waiting for the terminal deck…" (one was lost so on 2026-10-10).
+  The error now carries the last `GODVIEW_DECK` state read — JSON, the readiness facts first,
+  at most 600 characters — and the readiness conditions that state still lacked, or that no
+  marker came at all. The runners echo a `failed` line up to 1,200 characters (other lab lines
+  stay clipped at 160), so the reason reaches the run's own log. Perf and capture share the wait.
+- **The proof audit reads the load at each launch's end.** It printed only `loadRange`, the
+  runner's reading BEFORE each launch, and a launch that starts under the ceiling can end far
+  over it (0e020306's A r5: 12 before, 108 as it ended). Its account now also carries
+  `endLoadRange` (each report's own `loadavg[0]` as its launch ended), the `quietLine` and whose
+  it is, and `endedOverQuiet` — every launch that ended over the line, with arm, round, start and
+  end load — and it prints one plain line per such launch. The quiet line is `--quiet <n>` when
+  given, else the run's own `--load-max` (the runner now records it as `summary.loadMax`), else
+  15. It names; it does not refuse: the exit code and the verdict are as they were.
+- **The heap row is read after a collection.** `js heap MB` was the probe's
+  `performance.memory.usedJSHeapSize` at whatever phase the collector was in: on 2026-10-11 one
+  read `worse` while the same build against itself ran from −26 to +20 MB. The lab now forces a
+  full collection (CDP `HeapProfiler.collectGarbage`) once the cell's window has closed — the CDP
+  totals and the probe's report are read first, so the pause is in no task, script, frame or LoAF
+  row — and reads the page's heap again. Each cell carries `heap: {collected, usedJSHeapSize,
+  totalJSHeapSize}`; `report.memory` stays the probe's own uncollected reading. A collection that
+  cannot be forced never fails a launch: the cell keeps the probe's reading with `collected:
+  false`. The summary counts collected cells per arm (`heapCollected`) and its header says so.
+  The warm-up ends on a collection too, so every measured cell starts from a collected heap:
+  that changes what the cells' own collector does inside their windows, in every arm alike.
 The ordinary `pnpm smoke:godview` and `pnpm smoke:terminal-direct` runners also own fresh
 profiles and verify the app and window paths before navigation. After building, use
 `node scripts/smoke-godview.mjs` for the same smoke without rebuilding; direct Electron
@@ -143,7 +184,7 @@ pnpm perf:godview --synthetic-b root:2
 # captures: one current checkout = A/A; choose --source-a fold only for an old A
 pnpm capture:godview [--a <A checkout>] [--b <B checkout>] [--out <dir>]
 # the proof audit: a run measured what it says, read off its files before any grade (MV-8b)
-node scripts/perf-godview-proof.mjs <run dir>
+node scripts/perf-godview-proof.mjs <run dir> [--quiet <n>]
 # a NOISY R7's one repeat: the fresh R7 AND every sample pooled (R14) must pass (M155)
 node scripts/perf-godview-pool.mjs <first run dir> <repeat run dir> [--out <file>]
 ```
@@ -199,7 +240,10 @@ It exits 0 only when the repeat passes fresh AND the pool passes.
   - The timezone is UTC and the locale en-US (over CDP).
   - Ambient animations are off and reduced motion is emulated.
 - **How:** it uses the compositor (`capturePage`, which draws the WebGPU swarm). The capture is
-  the monitor's region: the instrument bar, the stage and the view.
+  the monitor's region: the head, the stage under it and the view — the window's full width from
+  its top to the stage's foot. *(Until Godview's head, GV-D1, 2026-10-11, the region's top 40 px
+  were the instrument bar. The stage's foot did not move, so the region is the same rectangle in
+  an arm with the bar and an arm with the head; what is inside its top 56 px differs by design.)*
 - **The A/A control** is A captured twice.
   - A pixel differs past 24/255 on any channel.
   - A capture differs past 0.1 % of its pixels.

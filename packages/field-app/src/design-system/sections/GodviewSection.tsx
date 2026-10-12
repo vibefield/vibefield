@@ -5,7 +5,7 @@ import { meshBoardDoor } from "../godview-mesh-fixtures";
 import { profileTabsDoor } from "../godview-profiles-fixtures";
 import { spendDoor } from "../godview-spend-fixtures";
 import { timelineDoor } from "../godview-timeline-fixtures";
-import { PaneFramePreview } from "../PaneFramePreview";
+import { PaneFrameDeck, PaneFramePreview } from "../PaneFramePreview";
 import { PaneLauncherPreview } from "../PaneLauncherPreview";
 import { PeekPlate } from "../PeekPreview";
 import { SpawnBloomPreview } from "../SpawnBloomPreview";
@@ -26,8 +26,14 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
       title="A deliberate change of register"
       description="Godview is the instrument-stage exception: compact monospace controls, flat geometry, stark status bodies, and a parchment or graphite terminal deck. The swarm's bodies below are the views package's own fixtures drawn by the shipping renderer, so its state grammar is read as the pixels Godview paints."
     >
-      <Specimen title="Godview stage" source="godview/GodviewStage.tsx" bleed>
-        <GodviewPreview theme={theme} />
+      <Specimen
+        title="Godview stage — the head's circles switch the monitor's views (GV-D1); System control is the palette's act in the product"
+        source="godview/GodviewStage.tsx · godview/GodviewHeadView.tsx"
+        bleed
+      >
+        {/* the terminals up, though a launch opens away (W7, GV-D5): the stage's
+            specimen shows the deck and its Lip, which away would hide */}
+        <GodviewPreview theme={theme} systemControl deckState="up" />
       </Specimen>
       <Specimen
         title="Timeline — the swarm through time: five runs from their births to now, runtime only"
@@ -88,6 +94,38 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
       >
         <div data-spawn-bloom-list-catalog="">
           <SpawnBloomPreview view="list" />
+        </div>
+      </Specimen>
+      <Specimen
+        title="Deck — the Lip: the groove and the well"
+        source="godview/GodviewStage.tsx · godview/GodviewDeckEdge.tsx"
+        bleed
+      >
+        <div data-godview-lip-catalog="">
+          <GodviewPreview theme={theme} deck={<PaneFrameDeck theme={theme} />} deckControls />
+        </div>
+      </Specimen>
+      <Specimen
+        title="Deck — away: the monitor alone (minimized; every session keeps running)"
+        source="godview/GodviewStage.tsx · godview/godview.css"
+        bleed
+      >
+        <div data-godview-away-catalog="">
+          <GodviewPreview theme={theme} deckState="away" deck={<PaneFrameDeck theme={theme} />} />
+        </div>
+      </Specimen>
+      <Specimen
+        title="Deck — maximized: the bar as the title bar (the frame's search stands before the hairline in the window)"
+        source="godview/GodviewStage.tsx · godview/godview.css"
+        bleed
+      >
+        <div data-godview-maximized-catalog="">
+          <GodviewPreview
+            theme={theme}
+            deckState="maximized"
+            deckControls
+            deck={<PaneFrameDeck theme={theme} />}
+          />
         </div>
       </Specimen>
       <Specimen

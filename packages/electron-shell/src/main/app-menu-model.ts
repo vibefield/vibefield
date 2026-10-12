@@ -12,7 +12,7 @@
 // how Electron keeps their labels, accelerators, and platform ordering correct
 // without us restating them.
 
-import type { FrameView, FrameZoomAct } from "@vibefield/contracts";
+import type { FrameView, FrameZoomAct, GodviewDeckState } from "@vibefield/contracts";
 
 export type MenuPlatform = "darwin" | "other";
 
@@ -40,9 +40,10 @@ export interface AppMenuActions {
    * window to switch — the items still appear (an absent menu item reads as a
    * missing feature), disabled, which is the honest face of "not here yet". */
   setView?: (view: FrameView) => void;
-  /** Close the focused window. Needed only while Godview is the view, when the
-   * close item drops `role: "close"` to release ⌘W (see `closeWindowItem`) and
-   * therefore loses the role's built-in behaviour along with its accelerator. */
+  /** Close the focused window. Needed only while ⌘W is lent to Godview's
+   * panes, when the close item drops `role: "close"` to release it (see
+   * `closeWindowItem`) and therefore loses the role's built-in behaviour along
+   * with its accelerator. */
   closeWindow?: () => void;
   /** Take a screenshot with the native helper (SNAP-D3). Undefined where no
    * helper exists for the platform or in a mode with no window — the item
@@ -58,6 +59,11 @@ export interface AppMenuState {
   /** The focused window's active view — the mark's fact and ⌘W's. Main owns
    * it (contracts FrameViewState, `view.ts`), so this is not a guess. */
   view: FrameView;
+  /** That window's Godview deck, as its page last said it by name (the deck
+   * door, `window-lights.ts`): ⌘W's second fact. Absent or null is "nothing
+   * said" — a page that has no deck to speak of, and every page before the
+   * deck's state slices. */
+  deck?: GodviewDeckState | null;
 }
 
 /** THE ROAD TO THE VIEW KEYS (FC-D4, ruled 2026-10-01), so nobody re-walks it.
@@ -232,11 +238,25 @@ function viewItems(
  * a chord the page leaves UNCLAIMED. SNAP-3 measured the other half on darwin —
  * a chord the page claims never reaches the menu (VIEW_KEYS_ROAD) — so the
  * handover stays for the panes that leave ⌘W unclaimed, and since FR-1 it is
- * keyed on Godview being the window's view rather than on an overlay bit. */
+ * keyed on Godview being the window's view rather than on an overlay bit.
+ *
+ * *Note (2026-10-11, Godview round 3):* the lend reads the deck too. GV-D6 lets
+ * the terminals be put fully AWAY, and then Godview is a view with no pane to
+ * answer ⌘W, exactly as History is — so there the item is History's: the role,
+ * its ⌘W, the window closes. No third behaviour was invented for it. With
+ * nothing said of the deck the lend is what FR-1 made it, so a page that never
+ * speaks (every build before the deck's state slices) changes nothing.
+ *
+ * *Note (2026-10-12, N16 (a)):* ⌘W on the deck's LAST pane is the page's to
+ * answer, and it minimizes the terminals (ghosttea keeps the pane and asks its
+ * platform to close the window; the deck hands that to the terminals' owner).
+ * The deck then says away, so the item is History's again: a second ⌘W closes
+ * the window. Nothing here changed for it. */
 function closeWindowItem(state: AppMenuState, actions: AppMenuActions): AppMenuItem {
   // Keyed on GODVIEW being the view, not on "covered": History has no panes to
-  // lend ⌘W to, so there it closes the window as it always did.
-  if (state.view !== "godview") {
+  // lend ⌘W to, so there it closes the window as it always did — and so does
+  // Godview while its deck says it is away.
+  if (state.view !== "godview" || state.deck === "away") {
     return { id: CLOSE_WINDOW_ITEM_ID, role: "close", accelerator: "CommandOrControl+W" };
   }
   return {

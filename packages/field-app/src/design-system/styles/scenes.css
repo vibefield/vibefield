@@ -635,6 +635,13 @@
   position: absolute;
 }
 
+/* The specimen's own staging row above the stage: the catalog's button for the
+   System control panel, which the product reaches from the palette (GV-D1). */
+.vf-ds-godview-controls {
+  display: flex;
+  padding: 10px 12px;
+}
+
 /* In an edges plate (FR-4) the stage is the covered view's ground: it fills it. */
 .vf-ds-edges-ground .vf-ds-godview-frame {
   height: 100%;
@@ -1196,6 +1203,14 @@
   flex-direction: column;
   gap: 9px;
   margin: 0;
+}
+
+/* The same panes as a deck (the Lip's specimen): a row filling the box the
+   stage hands its deck. The stage's wrapper around it is the product's. */
+.vf-ds-pane-deck {
+  position: absolute;
+  inset: 0;
+  display: flex;
 }
 
 .vf-ds-pane-frame-figure figcaption {

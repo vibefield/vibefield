@@ -7,6 +7,8 @@ import {
   type FrameViewState,
   FrameViewState as FrameViewStateSchema,
   type FrameZoomAct,
+  GodviewDeckSetRequest,
+  type GodviewDeckState,
   IPC_CHANNELS,
   LIVE_SURFACE_PORT_BRIDGE_MESSAGE_V1,
   type RendererReplaceReason,
@@ -31,6 +33,8 @@ import {
   UsersSwitchParams,
   UsersUpdateParams,
   WindowConnection,
+  type WindowLightsState,
+  WindowLightsState as WindowLightsStateSchema,
 } from "@vibefield/contracts";
 import { contextBridge, ipcRenderer, sharedTexture } from "electron";
 import { PreloadDesktopStateBridge } from "./desktop-state";
@@ -383,6 +387,15 @@ contextBridge.exposeInMainWorld("vibefield", {
         await ipcRenderer.invoke(IPC_CHANNELS.themeSet, ThemeSetRequest.parse({ preference })),
       ),
     onState: (handler: (state: ThemeState) => void): (() => void) => themeState.subscribe(handler),
+  },
+  deck: {
+    /** Say Godview's deck state by name — or null for none — never a position
+     * (Godview round 3, GV-D11). Main owns the window's lights and answers
+     * with the word it now holds and where the lights stand for it. */
+    set: async (deck: GodviewDeckState | null): Promise<WindowLightsState> =>
+      WindowLightsStateSchema.parse(
+        await ipcRenderer.invoke(IPC_CHANNELS.deckSet, GodviewDeckSetRequest.parse({ deck })),
+      ),
   },
   /** SNAP-D3 — one native screenshot through main: the still's path on disk
    * (it is on the clipboard too), a cancel, or a typed error. Main serialises

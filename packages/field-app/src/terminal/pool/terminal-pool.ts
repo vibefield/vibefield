@@ -1059,6 +1059,45 @@ export async function openDormantTransport(
 }
 
 /**
+ * How long one read of a floor may take — this desktop's (`listSessions`, each
+ * attempt below) or a peer's (`readRemoteTerminalSession`, read by the deck) —
+ * before the mount that asked for it fails (2026-10-11). The deck mounts one
+ * session at a time (AR-4b), so a read that never answered held every mount
+ * queued behind it, History's New agent among them; bounded, it fails its own
+ * mount in words and the next one runs. Twice the routed host's own 5 s wait
+ * for a floor fieldd has not observed yet, so that wait's own refusal comes
+ * first.
+ */
+export const TERMINAL_FLOOR_READ_TIMEOUT_MS = 10_000;
+
+/** A floor read that did not answer in time; its message says whose. */
+class FloorReadLate extends Error {}
+
+/** `read`, or a refusal naming `who` ("studio did not answer in 10 s") once
+ * `TERMINAL_FLOOR_READ_TIMEOUT_MS` pass. */
+export async function floorReadWithin<T>(read: Promise<T>, who: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      read,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new FloorReadLate(
+                `${who} did not answer in ${TERMINAL_FLOOR_READ_TIMEOUT_MS / 1_000} s`,
+              ),
+            ),
+          TERMINAL_FLOOR_READ_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+/**
  * Resolve a session id to the ghosttea summary a PANE is mounted from.
  *
  * The join between the two halves of a birth: fieldd makes the session (audited,
@@ -1073,6 +1112,11 @@ export async function openDormantTransport(
  * it independently. This is the same "observed inventory lags the spawn" gap
  * that made `create` mint its own ticket (`contracts/src/terminal.ts:135-142`),
  * seen from the renderer's side.
+ *
+ * Each attempt is bounded (`TERMINAL_FLOOR_READ_TIMEOUT_MS`), and one that
+ * does not answer ends the lookup at once: the retries are for an inventory
+ * that lags a spawn, which answers quickly; a floor that does not answer at
+ * all would only hold the deck's queue five times as long.
  */
 export async function terminalSessionSummary(
   sessionId: string,
@@ -1085,9 +1129,9 @@ export async function terminalSessionSummary(
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     let known: SessionSummary[];
     try {
-      known = await target.listSessions();
+      known = await floorReadWithin(target.listSessions(), "the floor");
     } catch (cause) {
-      if (attempt + 1 >= attempts) throw cause;
+      if (cause instanceof FloorReadLate || attempt + 1 >= attempts) throw cause;
       await new Promise((resolve) => setTimeout(resolve, 20));
       continue;
     }

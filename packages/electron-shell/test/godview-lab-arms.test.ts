@@ -15,6 +15,7 @@ let arms: {
   assertLabDeckProof(state: unknown, context: string): void;
   assertLabMonitorProof(state: unknown, view: string, context: string): unknown;
   assertLabMembershipMatches(reference: unknown[], sample: unknown[], context: string): void;
+  echoedLabLine(line: string): string;
 };
 const roots: string[] = [];
 
@@ -223,5 +224,26 @@ describe("isolated profiles across lab launches", () => {
     ).rejects.toBe(failure);
     expect(existsSync(owned)).toBe(false);
     expect(existsSync(unrelated)).toBe(true);
+  });
+});
+
+describe("a lab line as a runner echoes it", () => {
+  it("clips an ordinary line to 160 characters", () => {
+    const cell = `GODVIEW_PERF_LAB {"kind":"cell","arm":"A","view":"swarm","pad":"${"x".repeat(300)}"}`;
+    expect(arms.echoedLabLine(cell)).toBe(cell.slice(0, 160));
+    expect(arms.echoedLabLine("GODVIEW_PERF_LAB {}")).toBe("GODVIEW_PERF_LAB {}");
+  });
+
+  it("echoes a failure's line past that: its reason is the launch's only account", () => {
+    // the deck wait's timeout, with the deck's last state: longer than 160 by itself
+    const seen = JSON.stringify({ active: true, panes: 0, sessions: 0, poolPhase: "opening" });
+    const failed = `GODVIEW_PERF_LAB ${JSON.stringify({
+      kind: "failed",
+      arm: "A′",
+      error: `timed out after 60000ms waiting for the terminal deck to open a pane with an observed roster and WebGPU — the deck last said ${seen}; still missing: a pane (panes 0)`,
+    })}`;
+    expect(failed.length).toBeGreaterThan(160);
+    expect(arms.echoedLabLine(failed)).toBe(failed);
+    expect(arms.echoedLabLine(`${failed}${"y".repeat(2_000)}`)).toHaveLength(1_200);
   });
 });

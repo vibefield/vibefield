@@ -6,6 +6,7 @@ import type { MonitorPalette } from "@vibecook/puppeteer-views";
 import type { AgentRecordedLanesResult } from "@vibefield/contracts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sdkOsMark } from "./model-board";
+import { lendEndedLanes, type RecordedSessionRow } from "./open-ended-lane";
 
 // TL (docket v9, RULED 2026-10-09; B-D6 (a); TIMELINE SHAPES v2) — THE
 // RECORD'S PAST, LENT TO A VIEW (capability `history`). The backend beside the
@@ -31,6 +32,13 @@ import { sdkOsMark } from "./model-board";
 // publish never drops it or puts it off: a leaving takes a pending read with
 // it, a seam or an arrival is served by the one already wanted.
 //
+// This desktop's mark: `device.self` never travels, and which desktop is here
+// is learned by asks of its own (the roster's row, else the board's first
+// desktop), which nothing orders before the past's answer. So the snapshot is
+// kept as it was read, and the mark is said over it from `here`: once per
+// snapshot and once when `here` arrives — never per publish, never by a new
+// read — and the SAME object when no lane's mark moves.
+//
 // Honest states (v2 items 3, 9): before the first answer the capability is
 // absent (the view draws today's floor). A record that cannot be read now is
 // lent as `unavailable` with its words — unless a good past was read before,
@@ -50,15 +58,17 @@ export const KEPT_PAST_DETAIL =
 /** The backend's door, as the window reads it (`doors.ts` `recordedLanesPortOver`). */
 export interface RecordedLanesPort {
   read(window: { sinceMs: number; untilMs: number }): Promise<AgentRecordedLanesResult>;
+  /** TV-8 — which of the index's sessions these native ids are (`index.sessions`'
+   * lookup): what an ended lane opens in History by (`open-ended-lane.ts`). A
+   * refusal propagates, and is said. */
+  sessions(nativeSessionIds: readonly string[]): Promise<readonly RecordedSessionRow[]>;
 }
 
-/** The backend's answer as the SDK's snapshot: `device.self` said by this
- * reader as it says it for the model's rows (`modelRowFrom`: it never travels),
- * the OS mark kept only when it is the SDK's word. */
-export function snapshotFrom(
-  answer: AgentRecordedLanesResult,
-  here: string | undefined,
-): MonitorPastSnapshot {
+/** The backend's answer as the SDK's snapshot: the OS mark kept only when it is
+ * the SDK's word, and NO lane marked this desktop's yet — `device.self` never
+ * travels, and this reader says it afterwards (`selfMarked`), because which
+ * desktop is here may not be known when the answer comes. */
+export function snapshotFrom(answer: AgentRecordedLanesResult): MonitorPastSnapshot {
   return {
     ...answer,
     ended: answer.ended.map((lane) => ({
@@ -67,10 +77,29 @@ export function snapshotFrom(
         id: lane.device.id,
         name: lane.device.name,
         ...(sdkOsMark(lane.device.os) !== undefined ? { os: sdkOsMark(lane.device.os) } : {}),
-        self: lane.device.id === here,
+        self: false,
       },
     })),
   } as MonitorPastSnapshot;
+}
+
+/**
+ * `device.self` said by this reader, as it says it for the model's rows (`modelRowFrom`): a lane is this desktop's
+ * when its device is `here`. The SAME snapshot when no lane's mark moves (no lane is here's, or `here` is not known),
+ * so identity holds.
+ */
+export function selfMarked(
+  snapshot: MonitorPastSnapshot,
+  here: string | undefined,
+): MonitorPastSnapshot {
+  let moved = false;
+  const ended = snapshot.ended.map((lane) => {
+    const self = lane.device.id === here;
+    if (lane.device.self === self) return lane;
+    moved = true;
+    return { ...lane, device: { ...lane.device, self } };
+  });
+  return moved ? { ...snapshot, ended } : snapshot;
 }
 
 /** A refusal the door means as "there is no record here", not "not now". */
@@ -149,7 +178,7 @@ export function useMonitorHistory(options: MonitorHistoryOptions): MonitorHistor
   const { port, wants, rows, here, palette, receded, desk } = options;
   const now = options.now ?? Date.now;
   const asking = wants && port !== undefined;
-  /** the snapshot lent, kept as one object while nothing moves */
+  /** the snapshot as read, kept as one object while nothing moves; no lane says `self` in it (`selfMarked`) */
   const [snapshot, setSnapshot] = useState<MonitorPastSnapshot | undefined>(undefined);
   /** the door said there is no record here: lend nothing, ask no more */
   const [noRecord, setNoRecord] = useState(false);
@@ -164,8 +193,6 @@ export function useMonitorHistory(options: MonitorHistoryOptions): MonitorHistor
   const lastGood = useRef<MonitorPastSnapshot | undefined>(undefined);
   const nowRef = useRef(now);
   nowRef.current = now;
-  const hereRef = useRef(here);
-  hereRef.current = here;
   const seams = useRef<ReadonlyMap<string, number>>(new Map());
   /** the one re-read the rows asked for and that has not begun */
   const again = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -207,7 +234,7 @@ export function useMonitorHistory(options: MonitorHistoryOptions): MonitorHistor
     port!.read(window).then(
       (answer) => {
         if (!live) return;
-        const next = snapshotFrom(answer, hereRef.current);
+        const next = snapshotFrom(answer);
         if (next.state === "unavailable") {
           fail(next);
           return;
@@ -286,15 +313,32 @@ export function useMonitorHistory(options: MonitorHistoryOptions): MonitorHistor
   const tintL = palette.tint.l;
   const tintC = palette.tint.c;
   const neutral = palette.neutral;
-  // the narrowing filter first, keyed on the snapshot's identity and the choice
+  // this desktop's mark first, keyed on the snapshot's identity and `here`: an
+  // answer read before `here` was known is marked the moment it is, with no new read
+  const marked = useMemo(
+    () => (snapshot === undefined ? undefined : selfMarked(snapshot, here)),
+    [snapshot, here],
+  );
+  // then the narrowing filter, keyed on the marked snapshot's identity and the choice
   const narrowed = useMemo(
-    () => (snapshot === undefined ? undefined : narrowPast(snapshot, desk, here)),
-    [snapshot, desk, here],
+    () => (marked === undefined ? undefined : narrowPast(marked, desk, here)),
+    [marked, desk, here],
   );
   // built once per narrowed snapshot (and per theme or receding filter), never per publish
-  return useMemo(() => {
+  const history = useMemo(() => {
     if (!asking || noRecord || narrowed === undefined) return undefined;
     const colourFor = projectColourFor({ tint: { l: tintL, c: tintC }, neutral });
     return lendHistory(narrowed, { colourFor, receded });
   }, [asking, noRecord, narrowed, tintL, tintC, neutral, receded]);
+  // TV-8 — what the view is lent, an opening is lent too (`openEndedLane`): the
+  // same lanes, and the door that read them. Keyed on the lent object, so it
+  // moves only when the past does; taken back when the past or the stage goes.
+  useEffect(
+    () =>
+      history === undefined || port === undefined
+        ? undefined
+        : lendEndedLanes({ ended: history.ended, port }),
+    [history, port],
+  );
+  return history;
 }
