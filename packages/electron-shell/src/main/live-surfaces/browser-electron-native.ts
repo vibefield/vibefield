@@ -985,9 +985,12 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   }
 
   dispatchMouse(input: BrowserSurfaceNativeMouseInput): Promise<void> {
+    // PT-5d (M12 J9): when it ARRIVED — a wheel's gesture is measured by the hand's spacing, never by its turn's (a page
+    // answering each wheel late spaces the turns by its answers: every wheel a new gesture, H7's defect back)
+    const arrived = performance.now();
     return this.hand(async () => {
       await this.ensureDebugger();
-      for (const routed of this.routeMouse(input))
+      for (const routed of this.routeMouse(input, arrived))
         await this.hinted(input.type === "mousePressed", () =>
           this.handCommand(
             "Input.dispatchMouseEvent",
@@ -1117,16 +1120,19 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     }
   }
 
-  /** PT-5d: a pointer's event, routed — a hover that crosses into another target first tells the one it left. */
-  private routeMouse(input: BrowserSurfaceNativeMouseInput): readonly FrameRouted[] {
+  /** PT-5d: a pointer's event, routed — a hover that crosses into another target first tells the one it left; a wheel by
+   * when it `arrived` (M12 J9). */
+  private routeMouse(
+    input: BrowserSurfaceNativeMouseInput,
+    arrived: number,
+  ): readonly FrameRouted[] {
     const button = input.button === undefined || input.button === "none" ? "left" : input.button;
     if (input.type === "mousePressed") return [this.#frames.press(button, input.x, input.y)];
     if (input.type === "mouseReleased") {
       const routed = this.#frames.release(button, input.x, input.y);
       return routed === null ? [] : [routed];
     }
-    if (input.type === "mouseWheel")
-      return [this.#frames.wheel(input.x, input.y, performance.now())];
+    if (input.type === "mouseWheel") return [this.#frames.wheel(input.x, input.y, arrived)];
     return this.#frames.move(input.x, input.y);
   }
 

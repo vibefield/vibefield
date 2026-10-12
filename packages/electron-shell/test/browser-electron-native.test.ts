@@ -2039,6 +2039,51 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     ]);
   });
 
+  it("M12 J9 — the wheel's gesture gap is measured at each wheel's ARRIVAL, never at its turn: wheels 50 ms apart, the page answering each in 300 ms — one gesture, latched to the page, though the page scrolled a frame under the pointer meanwhile", async () => {
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date", "performance"],
+    });
+    try {
+      const r = recording((method, params) => {
+        if (method === "Input.dispatchMouseEvent")
+          return new Promise((resolve) => setTimeout(() => resolve({}), 300));
+        if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };
+        if (method === "DOM.getBoxModel")
+          return (params as { backendNodeId: number }).backendNodeId === 7
+            ? { model: { content: [100, 80, 500, 80, 500, 380, 100, 380] } }
+            : {};
+        return {};
+      });
+      await r.native.loadURL("https://host.test/a");
+      r.at("https://host.test/a");
+      r.contents.emit("did-navigate", {}, "https://host.test/a");
+      const wheel = () =>
+        void r.native.dispatchMouse({
+          type: "mouseWheel",
+          x: 180,
+          y: 120,
+          deltaX: 0,
+          deltaY: 10,
+        });
+      wheel();
+      await vi.advanceTimersByTimeAsync(0);
+      // the page scrolls F under the pointer
+      r.attach("F");
+      await vi.advanceTimersByTimeAsync(50);
+      wheel();
+      await vi.advanceTimersByTimeAsync(50);
+      wheel();
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(r.hand()).toEqual([
+        "mouseWheel@page 180,120",
+        "mouseWheel@page 180,120",
+        "mouseWheel@page 180,120",
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("M6.3a — a frame's VISIBLE part is READ beside its quad, of its owner in its parent's document (`Runtime.callFunctionOn` on the parent's session, its object released): a press on the part its scroller clips is the page's, on the part in view the frame's", async () => {
     const r = recording((method) => {
       if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };

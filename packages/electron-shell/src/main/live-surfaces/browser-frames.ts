@@ -95,8 +95,8 @@ interface FrameRecord {
  * `letGoOn` lets a button go. */
 const OUTSIDE = -1000;
 
-/** PT-5d (M7 H7): wheels less than this apart are one gesture — latched to the target its first went to (the desk's wheel
- * carries no phase: the ruled 100–300 ms). */
+/** PT-5d (M7 H7): wheels less than this apart as they ARRIVE (M12 J9 — never as their turns run) are one gesture — latched
+ * to the target its first went to (the desk's wheel carries no phase: the ruled 100–300 ms). */
 export const WHEEL_LATCH_MS = 200;
 
 /** The pressed buttons, the finger and the held keys — each the target its gesture began on. */
@@ -331,7 +331,7 @@ export class BrowserFrames {
   /** The wheel: the frame drawn under it — PT-5d (M7 H7) LATCHED to its gesture's first target: a wheel less than
    * `WHEEL_LATCH_MS` after the last goes where it went, the point carried into it (a frame the page scrolls under the
    * pointer mid-gesture takes none of it: the page's scroll went on through every embed it passed); its target gone, a new
-   * gesture. `now`: the hand's clock (ms). */
+   * gesture. `now`: when the wheel ARRIVED (ms) — M12 J9: never when its turn ran. */
   wheel(x: number, y: number, now: number): FrameRouted {
     const latched = this.#wheel;
     if (latched !== undefined && now - latched.at < WHEEL_LATCH_MS) {
