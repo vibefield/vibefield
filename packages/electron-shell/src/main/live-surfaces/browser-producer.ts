@@ -878,6 +878,33 @@ function enterMakesChar(modifiers: BrowserSurfaceKeyModifiers | undefined): bool
   return modifiers?.meta !== true && modifiers?.control !== true && modifiers?.alt !== true;
 }
 
+/** PT-5c (R8): a key the page was told is DOWN — what its press carried, and who pressed it. */
+interface KeyDown {
+  readonly key: string;
+  readonly code: string;
+  readonly location: 0 | 1 | 2 | 3 | undefined;
+  readonly windowsVirtualKeyCode: number | undefined;
+  readonly by: string | undefined;
+}
+
+/** PT-5c (R8): a held key's up — the key as its release names it (the attachment's going names none), its code, its place. */
+function keyUpOf(
+  down: KeyDown,
+  key: string,
+  modifiers: BrowserSurfaceKeyModifiers | undefined,
+): BrowserSurfaceNativeKeyInput {
+  return {
+    type: "keyUp",
+    key,
+    code: down.code,
+    modifiers: keyModifierMask(modifiers),
+    ...(down.location === undefined ? {} : { location: down.location }),
+    ...(down.windowsVirtualKeyCode === undefined
+      ? {}
+      : { windowsVirtualKeyCode: down.windowsVirtualKeyCode }),
+  };
+}
+
 function keyModifierMask(modifiers: BrowserSurfaceKeyModifiers | undefined): number {
   if (modifiers === undefined) return 0;
   return (
@@ -948,6 +975,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       readonly by: string | undefined;
     }
   >();
+  /** PT-5c (R8) — A KEY IS PRESSED TOO: each key the page was told is DOWN, by its `code`, with what its press carried and
+   * the attachment it came through. Its up is a release; an attachment's going lets its keys up; a commit forgets them. */
+  readonly #keysDown = new Map<string, KeyDown>();
   /** PT-4: the favicon the page last named and the ORIGIN it named it under — published with the browser state while the
    * page stands on that origin (a page that names the same icons as the one before says nothing, so a reload and a walk
    * within a site keep it; a page of another origin has none until it names its own); the count that names the word whose
@@ -1277,7 +1307,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // counted, never delivered to the document that replaced it. What was down in the gone document was ended at the
     // commit (`acceptNavigationState`), so a release of it is nothing.
     const document = this.#document;
-    const release = request.kind === "mouse" && request.type === "up";
+    // (R8: a key's up is a release, as a button's)
+    const release = (request.kind === "mouse" || request.kind === "key") && request.type === "up";
     // PT-5c (ruling 1) — AN EVENT WITH NO POINT IS NEVER JUDGED BY A GEOMETRY: a key, text and a composition are judged
     // by their window and their document alone. (Before: refused when a frame of another size had landed since their own
     // — a desk zoom that moved the raster's rung, a pane resized — and a `keyUp` refused left the key down in the page.)
@@ -1335,9 +1366,21 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * refused, or its window is gone) is nothing: the page is not told of half a click.
    */
   private async release(
-    request: Extract<BrowserSurfaceInputRequest, { kind: "mouse" }>,
+    request: Extract<BrowserSurfaceInputRequest, { kind: "mouse" | "key" }>,
     window: BrowserSurfaceNativeWindow,
   ): Promise<void> {
+    // PT-5c (R8) — A KEY'S UP IS A RELEASE: of a key the page was told is down it is sent — to a page at rest too, never
+    // judged by a geometry; of a key not down it is nothing. (Before: a keyUp was judged as a press — refused at a rest,
+    // the key left down for good; sent though no keyDown was told.)
+    if (request.kind === "key") {
+      const down = this.#keysDown.get(request.code);
+      if (down === undefined) return;
+      this.#keysDown.delete(request.code);
+      await window.dispatchKey(
+        keyUpOf(down, validKeyToken(request.key) ? request.key : down.key, request.modifiers),
+      );
+      return;
+    }
     if (this.#touching) {
       if (request.button !== undefined && request.button !== "left") return;
       this.#touching = false;
@@ -1400,6 +1443,12 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         button: button as Exclude<BrowserSurfaceMouseButton, "none">,
       });
     }
+    // R8: a KEY it holds down is let up, as a button
+    for (const [code, down] of [...this.#keysDown]) {
+      if (down.by !== by) continue;
+      this.#keysDown.delete(code);
+      await window.dispatchKey(keyUpOf(down, down.key, undefined));
+    }
   }
 
   private async dispatchInTurn(
@@ -1458,8 +1507,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         throw new Error("Browser key input has invalid key state");
       }
       const commands = editingCommandsOf(request, process.platform);
+      // (a key's up is a release — `release`: what reaches here is a key's DOWN)
       await window.dispatchKey({
-        type: request.type === "down" ? "keyDown" : "keyUp",
+        type: "keyDown",
         key: request.key,
         code: request.code,
         modifiers: keyModifierMask(request.modifiers),
@@ -1471,11 +1521,21 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         // ⏎'s char (PT-3): a page acts on its KEYPRESS — a form's implicit submission, a textarea's newline — and CDP makes
         // one only for a keyDown that carries its text (the wire's text arrives as `insertText`, which makes none). The
         // PT-3 smoke's KEYS row: without it, ⏎ in a field submitted nothing.
-        ...(request.type === "down" && request.key === "Enter" && enterMakesChar(request.modifiers)
+        ...(request.key === "Enter" && enterMakesChar(request.modifiers)
           ? { text: "\r", unmodifiedText: "\r" }
           : {}),
         ...(commands === undefined ? {} : { commands }),
       });
+      // (told: the key is DOWN — on the window that heard it, in the document it was sent for, by the attachment that sent
+      // it. R8)
+      if (this.#window === window && this.#document === document)
+        this.#keysDown.set(request.code, {
+          key: request.key,
+          code: request.code,
+          location: request.location,
+          windowsVirtualKeyCode: request.windowsVirtualKeyCode,
+          by,
+        });
       return;
     }
     if (
@@ -2012,6 +2072,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       "Browser input's document is gone",
     );
     this.#pressed.clear();
+    // R8: the keys too — forgotten, as the buttons
+    this.#keysDown.clear();
     if (!this.#touching) return;
     this.#touching = false;
     this.#touchingBy = undefined;
@@ -2852,6 +2914,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#touching = false;
     this.#touchingBy = undefined;
     this.#pressed.clear();
+    this.#keysDown.clear();
     if (window === null) return;
     this.#controlTargets?.revoke(this.surfaceId, window.controlContents);
     if (!window.isDestroyed()) window.destroy();

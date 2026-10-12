@@ -4468,5 +4468,64 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(p.result.runtime.stats.inputDropped).toBe(dropped + 2);
       p.result.runtime.dispose();
     });
+
+    it("R8 — a KEY is pressed too: held across a REST its up is a RELEASE — sent to the page at rest, never refused; the up of a key the page was never told is down is nothing", async () => {
+      const p = await laptop();
+      const r = p.result.runtime.summary.geometry?.revision ?? 0;
+      const keys = (): string[] => p.window.keyInputs.map((k) => `${k.type} ${k.key}`);
+      p.key("down", r, "q");
+      await delivered();
+      p.renderer.attachment.setDemand(demand(2, "paused"));
+      await delivered();
+      expect(p.result.runtime.summary.state).toBe("paused");
+      p.key("up", r, "q");
+      await delivered();
+      expect(keys()).toEqual(["keyDown q", "keyUp q"]);
+      // live again: the up of a key never pressed is nothing
+      p.renderer.attachment.setDemand(demand(3, "live"));
+      await delivered();
+      p.key("up", r, "b");
+      await delivered();
+      expect(keys()).toEqual(["keyDown q", "keyUp q"]);
+      p.result.runtime.dispose();
+    });
+
+    it("R8 — a key held when the attachment that pressed it GOES is let up, as a button (Space held in a design tool's page stays down no longer); another attachment's key stands until its own up", async () => {
+      const p = await laptop();
+      const other = attach(p.result.runtime, "attachment_browser_00000002");
+      other.attachment.setDemand(demand(2, "live"));
+      await delivered();
+      const r = p.result.runtime.summary.geometry?.revision ?? 0;
+      const keys = (): string[] => p.window.keyInputs.map((k) => `${k.type} ${k.key}`);
+      const otherKey = (action: "down" | "up"): void =>
+        other.attachment.dispatchInput?.(
+          { kind: "key", action, key: "b", code: "KeyB", modifiers: NONE },
+          r,
+        );
+      p.key("down", r, "a");
+      otherKey("down");
+      await delivered();
+      p.renderer.attachment.dispose();
+      await delivered();
+      expect(keys()).toEqual(["keyDown a", "keyDown b", "keyUp a"]);
+      expect(p.window.keyInputs.at(-1)).toMatchObject({ type: "keyUp", key: "a", code: "KeyA" });
+      otherKey("up");
+      await delivered();
+      expect(keys()).toEqual(["keyDown a", "keyDown b", "keyUp a", "keyUp b"]);
+      p.result.runtime.dispose();
+    });
+
+    it("R8 — a key down when another document commits is FORGOTTEN, as a button: the hand's late up is nothing (it would be a stray keyUp in the next document)", async () => {
+      const p = await laptop();
+      const r = p.result.runtime.summary.geometry?.revision ?? 0;
+      p.key("down", r, "a");
+      await delivered();
+      p.window.emitNavigationState({ ...NAV, url: NEXT });
+      await delivered();
+      p.key("up", r, "a");
+      await delivered();
+      expect(p.window.keyInputs.map((k) => `${k.type} ${k.key}`)).toEqual(["keyDown a"]);
+      p.result.runtime.dispose();
+    });
   });
 });
