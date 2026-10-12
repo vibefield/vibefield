@@ -30,6 +30,23 @@ const FAVICON_TIMEOUT_MS = 5_000;
 const PAGE_GUARD_SCRIPT =
   '(() => { try { Object.defineProperty(window, "close", { value: function close() {}, writable: true, configurable: true }); } catch {} window.prompt = function prompt() { return null; }; })();';
 
+/**
+ * PT-5c (ruling 1) — THE PAGE SAYS ITS SCALE. The binding the page's own session adds (`Runtime.addBinding` — heard only
+ * with the Runtime on: PT-5c's probe) through which the guard below says the page's visual-viewport scale: nothing reads
+ * the engine on the hand's path (a read of `Page.getLayoutMetrics` is the renderer's, and goes unanswered while a
+ * navigation pends — a tap after a link waited for the site and landed on the next document).
+ */
+export const PAGE_SCALE_BINDING = "__vibefieldPageScale";
+
+/**
+ * PT-5c (ruling 1) — said to every new document of the page's own session after the guard, before its own scripts: it takes
+ * the binding for itself and deletes it from the page's reach (the page's scripts never see it — the probe), then SAYS the
+ * visual viewport's scale — at once, at DOMContentLoaded, at load, at its first animation frame (the first words of a
+ * document — the early ones can be the scale before its layout: the last of them comes before its first paint), and at
+ * every `resize` of its visual viewport (a zoom the page makes, a pinch). The top frame's alone; never the bootstrap blank.
+ */
+const PAGE_SCALE_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(PAGE_SCALE_BINDING)}]; try { delete globalThis[${JSON.stringify(PAGE_SCALE_BINDING)}]; } catch {} if (typeof say !== "function" || window !== window.top || location.href === "about:blank") return; let last; const tell = (force) => { const viewport = globalThis.visualViewport; const scale = viewport ? viewport.scale : 1; if (!force && scale === last) return; last = scale; try { say(String(scale)); } catch {} }; tell(true); addEventListener("DOMContentLoaded", () => tell(true), { once: true }); addEventListener("load", () => tell(true), { once: true }); requestAnimationFrame(() => tell(true)); globalThis.visualViewport?.addEventListener("resize", () => tell(false)); })();`;
+
 /** The file picker never shown: CDP says it was asked for (`Page.fileChooserOpened`) and cancels it — the input hears `cancel`. */
 const NO_FILE_PICKER = { enabled: true, cancel: true } as const;
 
@@ -71,7 +88,6 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   readonly controlContents;
   #remoteLoadStarted = false;
   #debuggerAttached = false;
-  #commandTail: Promise<void> = Promise.resolve();
   /** PT-5a: the bootstrap document has been taken out of the page's history (below) — once a window's life. */
   #bootstrapPruned = false;
   /** PT-5a: the main frame's last load failed with this net error (cleared when a page commits). */
@@ -84,6 +100,19 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * page's server takes to answer: a blank that is nothing of the page (its paints are marked — `bootstrap`).
    */
   #pageDocument = false;
+  /** PT-5c (ruling 1): who hears the page's word of its scale. */
+  readonly #scaleListeners = new Set<(scale: number, document: number) => void>();
+  /**
+   * PT-5c (ruling 1) — TWO QUEUES, never one: the DEVICE's (its layout, what it is told — `Emulation.*`, the window's size)
+   * and the HAND's (`Input.*`). A device command the renderer does not answer — every one, while a navigation pends — no
+   * longer holds the hand's behind it: the probe's press, release and key behind an unanswered metrics override were
+   * answered in 1–2 ms and heard by the page that stood. Each keeps its own order; between them none is kept — an event
+   * is aimed at the frame the person saw, and a device's layout arrives at a later frame.
+   */
+  #deviceTail: Promise<void> = Promise.resolve();
+  #handTail: Promise<void> = Promise.resolve();
+  /** The page's session, attached with its guards — once, shared by both queues. */
+  #ready: Promise<void> | undefined;
   /**
    * PT-5b3 (ruling 4) — THE PAGE'S DOCUMENTS, COUNTED as the engine commits them: one more at each `did-navigate` of the
    * page's own (never the blank's) and at each main-frame load that FAILED (the engine's error page then stands in the
@@ -136,6 +165,16 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     params: Readonly<Record<string, unknown>>,
     sessionId: string | undefined,
   ): void {
+    // PT-5c (ruling 1): the page's word of its scale — on its OWN session, by its own binding; tagged with the document the
+    // window counts as it arrives (every word came after its document's `did-navigate`: the probe)
+    if (method === "Runtime.bindingCalled") {
+      if ((sessionId !== undefined && sessionId !== "") || params["name"] !== PAGE_SCALE_BINDING)
+        return;
+      const scale = Number(params["payload"]);
+      if (!Number.isFinite(scale) || scale <= 0) return;
+      for (const listener of [...this.#scaleListeners]) listener(scale, this.#documents);
+      return;
+    }
     if (method === "Page.fileChooserOpened") {
       this.refused("file-picker");
       return;
@@ -219,7 +258,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       width: integerDimension(logicalViewport.width * deviceScaleFactor),
       height: integerDimension(logicalViewport.height * deviceScaleFactor),
     });
-    return this.enqueue(async () => {
+    return this.device(async () => {
       if (this.isDestroyed()) throw new Error("Browser surface was destroyed during resize");
       await this.bootstrapReady;
       await this.ensureDebugger();
@@ -251,7 +290,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * event is swallowed and its command never answers, and this window's commands run one behind another.
    */
   setEmulation(emulation: BrowserSurfaceNativeEmulation): Promise<void> {
-    return this.enqueue(async () => {
+    return this.device(async () => {
       if (this.isDestroyed()) throw new Error("Browser surface was destroyed during emulation");
       await this.bootstrapReady;
       await this.ensureDebugger();
@@ -276,49 +315,42 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     });
   }
 
-  /** PT-5b (ruling 5c): the page's visual-viewport scale now (1 where the engine says none). */
-  visualScale(): Promise<number> {
-    let scale = 1;
-    return this.enqueue(async () => {
-      await this.ensureDebugger();
-      const metrics = (await this.window.webContents.debugger.sendCommand(
-        "Page.getLayoutMetrics",
-      )) as { cssVisualViewport?: { scale?: number } } | undefined;
-      const said = metrics?.cssVisualViewport?.scale;
-      if (typeof said === "number" && Number.isFinite(said) && said > 0) scale = said;
-    }).then(() => scale);
+  /** PT-5c (ruling 1): the page's word of its visual viewport's scale, with the document the window counted as it came. */
+  onScale(listener: (scale: number, document: number) => void): () => void {
+    this.#scaleListeners.add(listener);
+    return () => this.#scaleListeners.delete(listener);
   }
 
   dispatchTouch(input: BrowserSurfaceNativeTouchInput): Promise<void> {
-    return this.enqueue(async () => {
+    return this.hand(async () => {
       await this.ensureDebugger();
       await this.window.webContents.debugger.sendCommand("Input.dispatchTouchEvent", input);
     });
   }
 
   dispatchMouse(input: BrowserSurfaceNativeMouseInput): Promise<void> {
-    return this.enqueue(async () => {
+    return this.hand(async () => {
       await this.ensureDebugger();
       await this.window.webContents.debugger.sendCommand("Input.dispatchMouseEvent", input);
     });
   }
 
   dispatchKey(input: BrowserSurfaceNativeKeyInput): Promise<void> {
-    return this.enqueue(async () => {
+    return this.hand(async () => {
       await this.ensureDebugger();
       await this.window.webContents.debugger.sendCommand("Input.dispatchKeyEvent", input);
     });
   }
 
   dispatchText(text: string): Promise<void> {
-    return this.enqueue(async () => {
+    return this.hand(async () => {
       await this.ensureDebugger();
       await this.window.webContents.debugger.sendCommand("Input.insertText", { text });
     });
   }
 
   dispatchCompose(text: string, caret: number): Promise<void> {
-    return this.enqueue(async () => {
+    return this.hand(async () => {
       await this.ensureDebugger();
       await this.window.webContents.debugger.sendCommand("Input.imeSetComposition", {
         text,
@@ -525,9 +557,20 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     return () => this.window.webContents.off("destroyed", listener);
   }
 
-  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.#commandTail.then(operation, operation);
-    this.#commandTail = result.then(
+  /** PT-5c (ruling 1): the DEVICE's queue — its layout and what it is told, one behind another. */
+  private device<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.#deviceTail.then(operation, operation);
+    this.#deviceTail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
+  /** PT-5c (ruling 1): the HAND's queue — its input, one behind another, never behind the device's. */
+  private hand<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.#handTail.then(operation, operation);
+    this.#handTail = result.then(
       () => undefined,
       () => undefined,
     );
@@ -540,28 +583,41 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * `prompt` replaced in every new document, frames in other processes attached so they are guarded too. A guard that
    * cannot be set fails the command that asked for the session — the page is never loaded without them.
    */
-  private async ensureDebugger(): Promise<void> {
-    if (this.isDestroyed()) throw new Error("Browser surface target is unavailable");
+  private ensureDebugger(): Promise<void> {
+    if (this.isDestroyed())
+      return Promise.reject(new Error("Browser surface target is unavailable"));
     const cdp = this.window.webContents.debugger;
-    if (!cdp.isAttached()) {
-      cdp.attach("1.3");
-      try {
-        await cdp.sendCommand("Page.enable");
-        await cdp.sendCommand("Page.setInterceptFileChooserDialog", NO_FILE_PICKER);
-        await cdp.sendCommand("Page.addScriptToEvaluateOnNewDocument", {
-          source: PAGE_GUARD_SCRIPT,
-        });
-        await cdp.sendCommand("Target.setAutoAttach", {
-          autoAttach: true,
-          waitForDebuggerOnStart: false,
-          flatten: true,
-        });
-      } catch (error) {
-        cdp.detach();
-        throw error;
-      }
+    // (one attach, both queues wait on it: neither sends a command before the guards are on)
+    if (this.#ready === undefined || !cdp.isAttached()) {
+      const ready = (async () => {
+        cdp.attach("1.3");
+        try {
+          await cdp.sendCommand("Page.enable");
+          await cdp.sendCommand("Page.setInterceptFileChooserDialog", NO_FILE_PICKER);
+          // PT-5c (ruling 1): the page's word of its scale — a binding, heard only with the Runtime on (its cost: each
+          // console line of the page is one message more to main — PT-5c's probe)
+          await cdp.sendCommand("Runtime.enable");
+          await cdp.sendCommand("Runtime.addBinding", { name: PAGE_SCALE_BINDING });
+          await cdp.sendCommand("Page.addScriptToEvaluateOnNewDocument", {
+            source: `${PAGE_GUARD_SCRIPT}${PAGE_SCALE_SCRIPT}`,
+          });
+          await cdp.sendCommand("Target.setAutoAttach", {
+            autoAttach: true,
+            waitForDebuggerOnStart: false,
+            flatten: true,
+          });
+        } catch (error) {
+          cdp.detach();
+          throw error;
+        }
+        this.#debuggerAttached = true;
+      })();
+      this.#ready = ready;
+      ready.catch(() => {
+        if (this.#ready === ready) this.#ready = undefined;
+      });
     }
-    this.#debuggerAttached = true;
+    return this.#ready;
   }
 }
 

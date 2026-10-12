@@ -51,7 +51,6 @@ const DEFAULT_DETACHED_HIBERNATE_MS = 60_000;
 const CPU_FALLBACK_MAX_FPS = 10;
 /** PT-5b (ruling 5c): how long a `mobile` page's visual-viewport scale, once read, serves a move, a hover or a wheel
  * (a press always reads it afresh). */
-const POINT_SCALE_MS = 250;
 /** PT-5c (ruling 2): where a button is let go that the person never let go over the page — outside its view (CSS px). */
 const OUTSIDE_THE_VIEW = { x: -1000, y: -1000 } as const;
 const CPU_FALLBACK_MAX_PIXELS = 1280 * 720;
@@ -135,11 +134,13 @@ export interface BrowserSurfaceNativeWindow {
    * answered, not an image, or past the cap. */
   fetchIcon(url: string, maxBytes: number): Promise<BrowserSurfaceIcon | null>;
   /**
-   * PT-5b (ruling 5c): the page's VISUAL-VIEWPORT scale now (CDP `Page.getLayoutMetrics().cssVisualViewport.scale`) — how
-   * many view px a page's CSS px takes on screen: 1 for a page laid out at the view's width; under 1 for a `mobile` page
-   * that lays itself out wider (one that names no viewport: 980 px into a phone's 402 — 0.41) and is shown whole.
+   * PT-5c (ruling 1) — the page SAYS its VISUAL-VIEWPORT scale (its guard's word through a binding): how many view px a
+   * page's CSS px takes on screen — 1 for a page laid out at the view's width; under 1 for a `mobile` page that lays itself
+   * out wider (one that names no viewport: 980 px into a phone's 402 — 0.41) and is shown whole; more after it zooms. Said
+   * at a document's start and at every change, with the document the window counted as the word came. (PT-5b read it —
+   * `Page.getLayoutMetrics`, the renderer's — on the hand's path: unanswered while a navigation pends.)
    */
-  visualScale(): Promise<number>;
+  onScale(listener: (scale: number, document: number) => void): () => void;
   /** PT-5a: the page stopped answering its input (`true` — Electron's `unresponsive`) or answers again (`false`). */
   onUnresponsive(listener: (unresponsive: boolean) => void): () => void;
   /** PT-5a: the page asked for something it MAY NOT have, and was answered at once (`BrowserSurfaceRefusal`); a pop-up
@@ -460,9 +461,6 @@ export interface BrowserLiveSurfaceRuntimeStats {
   readonly emulationReloads: number;
   /** PT-5b: windows made ANEW because the page's device moved to another density (ruling 5a). */
   readonly windowsRemade: number;
-  /** PT-5b2 (ruling 4), PT-5b3 (ruling 6): presses and moves NOT SENT because their page REFUSED to say its scale and
-   * none was known for the document they were for (a slow read is waited for, never counted here). */
-  readonly inputScaleUnread: number;
   /** PT-5b: paints of a window's bootstrap document — taken as the window being up, shown to nobody. */
   readonly bootstrapPaints: number;
   /** PT-5a: what the page asked for and was refused, counted by kind (the diagnostics' count — ruling 7). */
@@ -485,6 +483,7 @@ interface SourceCallbacks {
   readonly removeFavicon: () => void;
   readonly removeRefused: () => void;
   readonly removeUnresponsive: () => void;
+  readonly removeScale: () => void;
 }
 
 function increment(value: number, name: string): number {
@@ -981,7 +980,6 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #emulations = 0;
   #emulationReloads = 0;
   #windowsRemade = 0;
-  #inputScaleUnread = 0;
   /**
    * PT-5b2 (rulings 3, 6) — THE PAGE'S FIRST LOAD, as the engine's events say it (never the `loadURL` promise alone): a
    * DOCUMENT of the page stands in the window (it committed, or the engine's error page stands in a failed address's
@@ -1024,9 +1022,14 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #bootstrapPaints = 0;
   /** PT-5b (ruling 5a): the density the page's window was BORN at — an offscreen window's density is its own for life. */
   #windowDensity: number | undefined;
-  /** PT-5b (ruling 5c): a `mobile` page's visual-viewport scale as last read, and when (ms) — see `pointScale`. `known`:
-   * it was read FOR THE DOCUMENT that stands (PT-5b3: forgotten at a commit — `#document` — and at nothing else). */
-  #pointScale = { value: 1, at: Number.NEGATIVE_INFINITY, known: false };
+  /** PT-5c (ruling 1): a `mobile` page's visual-viewport scale as its page last SAID it, and the document it said it for. */
+  #pageScale: { readonly value: number; readonly document: number } | undefined;
+  /** PT-5c (ruling 1): presses and moves waiting for their document's first word (see `pointScale`). */
+  readonly #scaleWaiters = new Set<{
+    readonly document: number;
+    readonly heard: (scale: number) => void;
+    readonly gone: (error: Error) => void;
+  }>();
   /** PT-5a: the page's refusals by kind, and the last one a person is told of (its serial counts them for the page's life). */
   readonly #refusals: Record<BrowserSurfaceRefusal, number> = {
     alert: 0,
@@ -1139,7 +1142,6 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       emulations: this.#emulations,
       emulationReloads: this.#emulationReloads,
       windowsRemade: this.#windowsRemade,
-      inputScaleUnread: this.#inputScaleUnread,
       bootstrapPaints: this.#bootstrapPaints,
       refused: { ...this.#refusals },
       effectiveDemand: this.#effectiveDemand === null ? null : copyDemand(this.#effectiveDemand),
@@ -1268,6 +1270,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // replaced it (a press sent to the page that crashed, landing on the page made again in its place). And its turn
     // ENDS when its window goes: the next window's first event never waits behind a command sent to one that is no more.
     const window = this.#window;
+    // PT-5c (ruling 1) — AN EVENT IS FOR THE DOCUMENT THAT STOOD WHEN IT WAS SENT (the moment main hears it): at its turn an
+    // event whose document has gone — another committed: a link the page followed, a redirect, a reload — is refused,
+    // counted, never delivered to the document that replaced it. What was down in the gone document was ended at the
+    // commit (`acceptNavigationState`), so a release of it is nothing.
+    const document = this.#document;
     const release = request.kind === "mouse" && request.type === "up";
     // PT-5c (ruling 1) — AN EVENT WITH NO POINT IS NEVER JUDGED BY A GEOMETRY: a key, text and a composition are judged
     // by their window and their document alone. (Before: refused when a frame of another size had landed since their own
@@ -1277,23 +1284,28 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       return Promise.reject(new Error("Browser input named a stale geometry revision"));
     }
     const turn = this.#inputTail.then(() =>
-      this.onWindow(window, (standing) =>
+      this.onWindow(window, document, (standing) =>
         release
           ? this.release(request, standing)
-          : this.dispatchInTurn(request, geometry, standing, by),
+          : this.dispatchInTurn(request, geometry, standing, document, by),
       ),
     );
     this.#inputTail = turn.catch(() => undefined);
     return turn;
   }
 
-  /** PT-5b3 (ruling 5): an event's turn on the window it was sent for — refused if that window is gone, ended if it goes. */
+  /** PT-5b3 (ruling 5): an event's turn on the window it was sent for — refused if that window is gone, ended if it goes.
+   * PT-5c (ruling 1): and on the DOCUMENT it was sent for — refused if another has committed since. */
   private onWindow(
     window: BrowserSurfaceNativeWindow | null,
+    document: number,
     turn: (window: BrowserSurfaceNativeWindow) => Promise<void>,
   ): Promise<void> {
     if (this.#closed || window === null || window.isDestroyed() || this.#window !== window) {
       return Promise.reject(new Error("Browser input's window is gone"));
+    }
+    if (this.#document !== document) {
+      return Promise.reject(new Error("Browser input's document is gone"));
     }
     return Promise.race([turn(window), this.goneOf(window)]);
   }
@@ -1392,6 +1404,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     geometry: LiveSurfaceGeometryV1 | undefined,
     /** the window it was sent for — standing, the chain's turn has made sure */
     window: BrowserSurfaceNativeWindow,
+    /** PT-5c (ruling 1): the document it was sent for — standing at its turn */
+    document: number,
     /** the attachment it came through */
     by: string | undefined,
   ): Promise<void> {
@@ -1482,11 +1496,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // presentation adapter has already supplied Browser logical coordinates;
     // backing-raster pixels and visibleRect offsets are presentation-only.
     // PT-5b (ruling 5c): the VIEW's — a `mobile` page shown whole at its own scale takes them over that scale
-    const scale = await this.pointScale(
-      window,
-      request.kind === "mouse" && request.type === "down",
-    );
-    if (window.isDestroyed() || this.#window !== window) {
+    const scale = await this.pointScale(document);
+    if (window.isDestroyed() || this.#window !== window || this.#document !== document) {
       throw new Error("Browser surface is not available for input");
     }
     const x = request.x / scale;
@@ -1527,10 +1538,14 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       const finger = [{ x, y, id: 0 }];
       if (request.type === "down") {
         await window.dispatchTouch({ type: "touchStart", touchPoints: finger });
-        // (told: the finger is DOWN — on the window that heard it, by the attachment that sent it)
+        // (told: the finger is DOWN — on the window that heard it, by the attachment that sent it. PT-5c (ruling 1): a
+        // touchStart ANSWERED after another document committed went down in a document that is gone — the engine holds
+        // that touch open over the next one (deaf to touch without its end: the probe), so it is cancelled at once)
         if (this.#window === window) {
-          this.#touching = true;
-          this.#touchingBy = by;
+          if (this.#document === document) {
+            this.#touching = true;
+            this.#touchingBy = by;
+          } else await window.dispatchTouch({ type: "touchCancel", touchPoints: [] });
         }
       } else await window.dispatchTouch({ type: "touchMove", touchPoints: finger });
       return;
@@ -1544,8 +1559,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       ...(request.clickCount === undefined ? {} : { clickCount: request.clickCount }),
       ...(request.buttons === undefined ? {} : { buttons: request.buttons }),
     });
-    // (told: the button is DOWN, at the scale its press went at — its release goes there)
-    if (request.type === "down" && this.#window === window)
+    // (told: the button is DOWN, at the scale its press went at — its release goes there. PT-5c (ruling 1): a press
+    // answered after another document committed is forgotten: the engine carries no button across a commit — the probe)
+    if (request.type === "down" && this.#window === window && this.#document === document)
       this.#pressed.set(button, { scale, x: request.x, y: request.y, by });
   }
 
@@ -1931,36 +1947,67 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * PT-5b (ruling 5c) — WHERE THE HAND'S POINT IS ON THE PAGE. The hand sends the VIEW's points (the displayed frame's
    * logical px) and CDP takes the page's CSS px: the same thing wherever the page is laid out at the view's width — every
    * page but a `mobile` one that lays itself out wider and is shown whole, scaled into the view (never forced to 1 on a
-   * `mobile` page: ruling 5b). There the page's px are the view's OVER its visual-viewport scale. The scale is READ AT
-   * EACH PRESS (a press must land where the page is drawn NOW), and for a move, a hover or a wheel when what was read is
-   * older than `POINT_SCALE_MS`; a new document's is read afresh. A page that is not `mobile` is asked nothing: 1.
-   * PT-5b3 (ruling 6) — THE READ IS AWAITED IN THE CHAIN, as long as the page takes: a busy page answers late, and its
-   * events arrive late and in order — never dropped. (PT-5b2 bounded the read at 200 ms and, with no scale known for the
-   * document, did not send: but the read and every `Input.*` command share the window's ONE queue, and every dispatch
-   * waits for the page besides — the bound freed nothing, and a first tap on a page just loaded and still busy was lost.
-   * What a page that NEVER answers does to the chain is PT-5c's.) "Not sent, counted" is only for a read the page
-   * REFUSES — between two documents — with no scale known for this one: at a guess the point would be another element's.
+   * `mobile` page: ruling 5b). There the page's px are the view's OVER its visual-viewport scale. A page that is not
+   * `mobile` is asked nothing: 1.
+   * PT-5c (ruling 1) — THE SCALE IS FOLLOWED, NEVER READ ON THE HAND'S PATH: the page SAYS it (its guard's word at its
+   * start and at every change of its visual viewport — a zoom it makes, a pinch), and an event goes at the scale its
+   * document last said. (PT-5b read it at each press, on the chain — `Page.getLayoutMetrics`, the renderer's: while a
+   * navigation pended it was not answered, and a tap after a link to a slow site waited for the site, then landed, with
+   * the keys and the wheel behind it, on the NEXT document.) An event of a document whose page has not yet said its scale
+   * — a new one — WAITS for the page's first word; that wait ends at the word, at the next commit (refused, counted), or
+   * when the window goes (its turn ends with it).
    */
-  private async pointScale(window: BrowserSurfaceNativeWindow, press: boolean): Promise<number> {
-    if (!this.mobile()) return 1;
-    const was = this.#pointScale;
-    if (!press && was.known && Date.now() - was.at < POINT_SCALE_MS) return was.value;
-    const document = this.#document;
-    let said: number;
-    try {
-      said = await window.visualScale();
-    } catch {
-      // (a page between two documents answers nothing) — the scale read for THIS document stands
-      const now = this.#pointScale;
-      if (now.known && this.#document === document) return now.value;
-      this.#inputScaleUnread += 1;
-      throw new Error("Browser page's scale could not be read for this document");
+  private pointScale(document: number): Promise<number> {
+    if (!this.mobile()) return Promise.resolve(1);
+    const said = this.#pageScale;
+    if (said !== undefined && said.document === document) return Promise.resolve(said.value);
+    return new Promise<number>((heard, gone) => {
+      this.#scaleWaiters.add({ document, heard, gone });
+    });
+  }
+
+  /** PT-5c (ruling 1): the page SAID its scale — the document's word, kept; the events waiting for it go at it. */
+  private acceptScale(
+    window: BrowserSurfaceNativeWindow,
+    epoch: number,
+    scale: number,
+    counted: number,
+  ): void {
+    if (!this.ownsProducer(window, epoch) || !Number.isFinite(scale) || scale <= 0) return;
+    const value = Math.min(Math.max(scale, 0.05), 20);
+    const document = this.#documentBase + counted;
+    this.#pageScale = { value, document };
+    for (const waiter of [...this.#scaleWaiters]) {
+      if (waiter.document !== document) continue;
+      this.#scaleWaiters.delete(waiter);
+      waiter.heard(value);
     }
-    const value = Number.isFinite(said) && said > 0 ? Math.min(Math.max(said, 0.05), 20) : 1;
-    // it is this document's — unless another committed, or the window went, while the page answered
-    if (this.#document === document && this.#window === window)
-      this.#pointScale = { value, at: Date.now(), known: true };
-    return value;
+  }
+
+  /** PT-5c (ruling 1): at a commit — the finger cancelled on the chain, the buttons forgotten, the old document's waits ended. */
+  private endDown(window: BrowserSurfaceNativeWindow): void {
+    this.scaleWaitsEnd(false);
+    this.#pressed.clear();
+    if (!this.#touching) return;
+    this.#touching = false;
+    this.#touchingBy = undefined;
+    const turn = this.#inputTail.then((): Promise<void> | undefined => {
+      if (this.#closed || window.isDestroyed() || this.#window !== window) return undefined;
+      return Promise.race([
+        window.dispatchTouch({ type: "touchCancel", touchPoints: [] }),
+        this.goneOf(window),
+      ]);
+    });
+    this.#inputTail = turn.catch(() => undefined);
+  }
+
+  /** PT-5c (ruling 1): the events waiting for a word of a document that is no more (or of any, `all`) wait no longer. */
+  private scaleWaitsEnd(all: boolean): void {
+    for (const waiter of [...this.#scaleWaiters]) {
+      if (!all && waiter.document === this.#document) continue;
+      this.#scaleWaiters.delete(waiter);
+      waiter.gone(new Error("Browser input's document is gone"));
+    }
   }
 
   /**
@@ -2101,13 +2148,13 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
             : { refused: this.#browserState.refused }),
         }
       : said;
-    // PT-5b: another document takes its own scale — the next point reads it. PT-5b3 (ruling 4): ANOTHER DOCUMENT is the
-    // engine's own word — a commit — and nothing else: an address that moves WITHIN a document (a hash, a router's
-    // `pushState`) keeps what was read for it (before, the address moving forgot it — and a release behind a busy page
-    // was then withheld for want of a scale). While a document still loads, what was read of it is old.
-    if (another) this.#pointScale = { value: 1, at: Number.NEGATIVE_INFINITY, known: false };
-    else if (clamped.loading)
-      this.#pointScale = { ...this.#pointScale, at: Number.NEGATIVE_INFINITY };
+    // PT-5c (ruling 1) — ANOTHER DOCUMENT (the engine's own word — a commit; never a move within one: PT-5b3 ruling 4):
+    // what was DOWN in the gone document is ended as the engine needs, and then nothing is down. A FINGER is cancelled —
+    // the engine holds a touch open across a commit, and the next document is deaf to touch until it ends (its cancel
+    // reaches the next document as nothing: PT-5c's probe `across.cjs`); a BUTTON is forgotten — the engine carries none
+    // across a commit, and a release after it is a stray `mouseup` in the next document. The events waiting for the gone
+    // document's word wait no longer (refused, counted); its scale is its own (`#pageScale` names its document).
+    if (another) this.endDown(window);
     this.#browserState = clamped;
     if (webOriginOf(clamped.url) !== undefined) this.#resumeUrl = clamped.url;
     this.publishSummary();
@@ -2218,6 +2265,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       const removeUnresponsive = window.onUnresponsive((unresponsive) =>
         this.acceptUnresponsive(window, epoch, unresponsive),
       );
+      const removeScale = window.onScale((scale, counted) =>
+        this.acceptScale(window, epoch, scale, counted),
+      );
       this.#callbacks = {
         removePaint,
         removeGone,
@@ -2227,6 +2277,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         removeFavicon,
         removeRefused,
         removeUnresponsive,
+        removeScale,
       };
       this.#producersStarted += 1;
       this.applyFrameRate();
@@ -2688,6 +2739,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         removeUnresponsive: window.onUnresponsive((unresponsive) =>
           this.acceptUnresponsive(window, epoch, unresponsive),
         ),
+        removeScale: window.onScale((scale, counted) =>
+          this.acceptScale(window, epoch, scale, counted),
+        ),
       };
       this.#producersStarted += 1;
       this.applyFrameRate();
@@ -2744,7 +2798,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#stopAsked = false;
     this.#born = false;
     this.#documentBase = this.#document;
-    this.#pointScale = { value: 1, at: Number.NEGATIVE_INFINITY, known: false };
+    // PT-5c (ruling 1): nothing waits for a word of this window's documents any more (its turns end with it besides)
+    this.#pageScale = undefined;
+    this.scaleWaitsEnd(true);
     if (this.#startupTimer !== null) {
       clearTimeout(this.#startupTimer);
       this.#startupTimer = null;
@@ -2757,6 +2813,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     callbacks?.removeFavicon();
     callbacks?.removeRefused();
     callbacks?.removeUnresponsive();
+    callbacks?.removeScale();
     if (this.#unresponsiveTimer !== null) {
       clearTimeout(this.#unresponsiveTimer);
       this.#unresponsiveTimer = null;

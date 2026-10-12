@@ -30,7 +30,7 @@ const electron = vi.hoisted(() => {
     url = "";
     loading = false;
     readonly debugger = Object.assign(new Emitter(), {
-      isAttached: () => false,
+      isAttached: (): boolean => false,
       attach: () => undefined,
       detach: () => undefined,
       sendCommand: async () => ({}),
@@ -57,6 +57,7 @@ const electron = vi.hoisted(() => {
       return Promise.resolve();
     }
     isDestroyed = (): boolean => false;
+    setContentSize = (): void => undefined;
   }
   return { BrowserWindow, made, session: { fromPartition: () => ({}), fromPath: () => ({}) } };
 });
@@ -67,7 +68,10 @@ vi.mock("../src/main/live-surfaces/browser-security", () => ({
   installGuardedBrowserSurfaceSession: () => undefined,
 }));
 
-import { ElectronBrowserSurfaceNative } from "../src/main/live-surfaces/browser-electron-native";
+import {
+  ElectronBrowserSurfaceNative,
+  PAGE_SCALE_BINDING,
+} from "../src/main/live-surfaces/browser-electron-native";
 import type { BrowserSurfaceNavigationState } from "../src/main/live-surfaces/browser-producer";
 
 const window = () => {
@@ -175,5 +179,135 @@ describe("the Electron adapter counts the page's documents (PT-5b3, ruling 4)", 
     await second.native.loadURL("https://example.test/a");
     second.contents.emit("did-start-loading");
     expect(second.said.at(-1)?.document).toBe(0);
+  });
+});
+
+describe("PT-5c (ruling 1) — the page SAYS its scale; the hand's commands never wait behind the device's", () => {
+  const EMULATION = {
+    userAgent: "probe/1",
+    navigatorPlatform: "MacIntel",
+    metadata: {
+      brands: [],
+      fullVersionList: [],
+      platform: "macOS",
+      platformVersion: "26.0",
+      architecture: "arm",
+      model: "",
+      mobile: false,
+    },
+    touchPoints: 5,
+  };
+  /** A window whose debugger records what it is sent, and holds the methods the row names until it lets them go. */
+  const recording = (hold: readonly string[] = []) => {
+    const w = window();
+    const sent: { method: string; params: unknown; session?: string }[] = [];
+    const held = new Map<string, () => void>();
+    let attached = false;
+    w.contents.debugger.isAttached = () => attached;
+    w.contents.debugger.attach = () => {
+      attached = true;
+    };
+    w.contents.debugger.sendCommand = async (
+      method?: string,
+      params?: unknown,
+      session?: string,
+    ) => {
+      sent.push({ method: method ?? "", params, ...(session === undefined ? {} : { session }) });
+      if (method !== undefined && hold.includes(method))
+        await new Promise<void>((resolve) => {
+          held.set(method, resolve);
+        });
+      return {};
+    };
+    const methods = (): string[] => sent.map((c) => c.method);
+    const release = (method: string): void => held.get(method)?.();
+    return { ...w, sent, methods, release };
+  };
+  const turns = async (): Promise<void> => {
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+  };
+
+  it("the page's session turns its Runtime on and takes a BINDING for the page's word — before the guard said to every new document, which carries the word's reporter; all of it before the device's first command", async () => {
+    const r = recording();
+    await r.native.setEmulation(EMULATION);
+    const methods = r.methods();
+    expect(methods).toContain("Runtime.enable");
+    expect(r.sent.find((c) => c.method === "Runtime.addBinding")?.params).toEqual({
+      name: PAGE_SCALE_BINDING,
+    });
+    const guard = r.sent.find((c) => c.method === "Page.addScriptToEvaluateOnNewDocument")
+      ?.params as { source?: string } | undefined;
+    expect(guard?.source).toContain(PAGE_SCALE_BINDING);
+    expect(guard?.source).toContain("visualViewport");
+    expect(methods.indexOf("Runtime.enable")).toBeLessThan(methods.indexOf("Runtime.addBinding"));
+    expect(methods.indexOf("Runtime.addBinding")).toBeLessThan(
+      methods.indexOf("Page.addScriptToEvaluateOnNewDocument"),
+    );
+    expect(methods.indexOf("Page.addScriptToEvaluateOnNewDocument")).toBeLessThan(
+      methods.indexOf("Emulation.setUserAgentOverride"),
+    );
+  });
+
+  it("the page's WORD — its binding called on the page's own session — is heard with the document the window counts; a frame's session, another binding, a word that is no scale: nothing", async () => {
+    const r = recording();
+    const heard: [number, number][] = [];
+    r.native.onScale((scale, document) => heard.push([scale, document]));
+    await r.native.loadURL("https://example.test/a");
+    r.at("https://example.test/a");
+    r.contents.emit("did-navigate", {}, "https://example.test/a");
+    const word = (payload: string, name: string = PAGE_SCALE_BINDING, session?: string): void =>
+      r.contents.debugger.emit(
+        "message",
+        {},
+        "Runtime.bindingCalled",
+        { name, payload, executionContextId: 3 },
+        session,
+      );
+    word("0.41");
+    word("0.5", PAGE_SCALE_BINDING, "a-frame-of-another-process");
+    word("1", "another");
+    word("NaN");
+    word("-1");
+    word("0");
+    expect(heard).toEqual([[0.41, 1]]);
+    r.at("https://example.test/b");
+    r.contents.emit("did-navigate", {}, "https://example.test/b");
+    word("2");
+    expect(heard).toEqual([
+      [0.41, 1],
+      [2, 2],
+    ]);
+  });
+
+  it("the HAND's commands never wait behind a DEVICE command the renderer has not answered (a navigation pends): a press sent after a layout is on its way at once; the device's commands keep their own order", async () => {
+    const r = recording(["Emulation.setDeviceMetricsOverride"]);
+    const laid = r.native.setBackingRaster(
+      { width: 640, height: 360 },
+      { width: 320, height: 180 },
+      2,
+      false,
+    );
+    await turns();
+    expect(r.methods()).toContain("Emulation.setDeviceMetricsOverride");
+    const pressed = r.native.dispatchMouse({
+      type: "mousePressed",
+      x: 1,
+      y: 1,
+      button: "left",
+      clickCount: 1,
+    });
+    await turns();
+    expect(r.methods()).toContain("Input.dispatchMouseEvent");
+    await pressed;
+    // the device's next command waits for the one before it
+    const told = r.native.setEmulation(EMULATION);
+    await turns();
+    expect(r.methods()).not.toContain("Emulation.setUserAgentOverride");
+    r.release("Emulation.setDeviceMetricsOverride");
+    await laid;
+    await told;
+    expect(r.methods().indexOf("Emulation.setDeviceMetricsOverride")).toBeLessThan(
+      r.methods().indexOf("Emulation.setUserAgentOverride"),
+    );
   });
 });

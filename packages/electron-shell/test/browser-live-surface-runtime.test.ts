@@ -151,12 +151,24 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
     this.order.push("emulate");
   }
 
-  /** PT-5b: the page's visual-viewport scale as the engine says it (a test sets it), and how many times it was read. */
+  /** PT-5b: the page's visual-viewport scale as the engine says it, and how many times it was READ — PT-5c (ruling 1):
+   * nothing reads it any more (the producer follows the page's word, `say`); the count is the rows' tripwire. */
   scale = 1;
   scaleReads = 0;
   async visualScale(): Promise<number> {
     this.scaleReads += 1;
     return this.scale;
+  }
+
+  /** PT-5c (ruling 1): the page SAYS its scale (its guard's word), tagged with the document the window counts now. */
+  onScale(listener: (scale: number, document: number) => void): () => void {
+    this.#events.on("scale", listener);
+    return () => this.#events.off("scale", listener);
+  }
+
+  say(scale: number): void {
+    this.scale = scale;
+    this.#events.emit("scale", scale, this.documents);
   }
 
   async dispatchTouch(input: BrowserSurfaceNativeTouchInput): Promise<void> {
@@ -1907,9 +1919,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
     result.runtime.dispose();
   });
 
-  it("PT-5b (ruling 5c): on a `mobile` page shown whole at its own scale the hand's points are the VIEW's — sent as the page's CSS px, the view's OVER the visual-viewport scale: read at each PRESS, kept a moment for its moves and the wheel (whose travel passes as it is), read afresh for a new document; a page that is not mobile is asked nothing", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(1_000_000);
+  it("PT-5b (ruling 5c), PT-5c (ruling 1): on a `mobile` page shown whole at its own scale the hand's points are the VIEW's — sent as the page's CSS px, the view's OVER the visual-viewport scale the page SAYS (its guard's word, at its start and at every change; never READ on the hand's path): its press, its moves and the wheel (whose travel passes as it is) go at it; a zoom is said, and the next event goes at it; another document's is its own; a page that is not mobile is asked nothing", async () => {
     const result = setup({ source: phoneSource() });
     const renderer = attach(result.runtime);
     renderer.attachment.setDemand(demand(1, "live", 30, { width: 1206, height: 2622 }));
@@ -1917,6 +1927,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
     await flush();
     const window = result.native.windows[0];
     if (window === undefined) throw new Error("no window");
+    window.emitNavigationState({ ...NAV });
     window.paint(sharedPaint(1206, 2622).paint);
     await flush();
     const revision = result.runtime.summary.geometry?.revision ?? 0;
@@ -1924,53 +1935,46 @@ describe("BrowserLiveSurfaceRuntime", () => {
       input: Parameters<NonNullable<typeof renderer.attachment.dispatchInput>>[0],
     ): Promise<void> => {
       renderer.attachment.dispatchInput?.(input, revision);
-      await flush();
-      await flush();
+      await delivered();
     };
-    // a page that names no viewport: laid out 980 px wide, shown whole in the phone's 402 — a scale of 0.41
-    window.scale = 402 / 980;
+    // a page that names no viewport: laid out 980 px wide, shown whole in the phone's 402 — it says 0.41
+    window.say(402 / 980);
     await send({ kind: "pointer", action: "down", x: 201, y: 100, button: "left", clickCount: 1 });
-    expect(window.scaleReads).toBe(1);
     const [finger] = window.touchInputs[0]?.touchPoints ?? [];
     expect(finger?.x).toBeCloseTo(490, 6);
     expect(finger?.y).toBeCloseTo(100 / (402 / 980), 6);
-    // its move, a moment later: the scale read at the press serves it
+    // its move: the scale said
     await send({ kind: "pointer", action: "move", x: 402, y: 100, buttons: 1 });
-    expect(window.scaleReads).toBe(1);
     expect(window.touchInputs[1]?.touchPoints[0]?.x).toBeCloseTo(980, 6);
     await send({ kind: "pointer", action: "up", x: 402, y: 100, button: "left", clickCount: 1 });
     // the wheel: WHERE it is — the page's px — and never how far: its travel is the view's, as the hand gave it (the engine
     // scrolls the document by it over the page's scale itself)
     await send({ kind: "wheel", x: 201, y: 437, deltaX: 0, deltaY: 82 });
-    expect(window.scaleReads).toBe(1);
     const wheel = window.mouseInputs.at(-1);
     expect(wheel?.x).toBeCloseTo(490, 6);
     expect(wheel?.deltaY).toBe(82);
-    // the page zoomed itself (a double tap): the NEXT PRESS reads it — never the scale of a moment ago
-    window.scale = 1;
+    // the page zoomed itself (a double tap it answers by zooming): it SAYS so — the next press goes at it
+    window.say(1);
     await send({ kind: "pointer", action: "down", x: 201, y: 100, button: "left", clickCount: 1 });
-    expect(window.scaleReads).toBe(2);
     expect(window.touchInputs.at(-1)?.touchPoints[0]).toEqual({ x: 201, y: 100, id: 0 });
     await send({ kind: "pointer", action: "up", x: 201, y: 100, button: "left", clickCount: 1 });
-    // a wheel long after: what was read is old — read again
-    window.scale = 0.5;
-    vi.setSystemTime(1_000_300);
+    window.say(0.5);
     await send({ kind: "wheel", x: 100, y: 100, deltaX: 0, deltaY: 10 });
-    expect(window.scaleReads).toBe(3);
     expect(window.mouseInputs.at(-1)).toMatchObject({ x: 200, y: 200, deltaY: 10 });
-    // another document takes its own scale: the next wheel reads it afresh, however soon
+    // another document takes its own scale: its first word
     window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
-    window.scale = 1;
+    window.say(1);
     await send({ kind: "wheel", x: 100, y: 100, deltaX: 0, deltaY: 10 });
-    expect(window.scaleReads).toBe(4);
     expect(window.mouseInputs.at(-1)).toMatchObject({ x: 100, y: 100, deltaY: 10 });
-    // a scale the engine cannot say (between two documents) leaves the last one standing; a number that is none is 1
-    window.scale = Number.NaN;
+    // a word that is no scale is nothing: the last one stands
+    window.say(Number.NaN);
     await send({ kind: "pointer", action: "down", x: 50, y: 50, button: "left", clickCount: 1 });
     expect(window.touchInputs.at(-1)?.touchPoints[0]).toEqual({ x: 50, y: 50, id: 0 });
+    // nothing was READ on the hand's path
+    expect(window.scaleReads).toBe(0);
     result.runtime.dispose();
 
-    // a laptop's page: laid out at the view's width, its scale forced — nothing is read, the points pass as they are
+    // a laptop's page: laid out at the view's width, its scale forced — nothing is asked, the points pass as they are
     const laptop = setup({
       source: { ...source(), emulation: { ...LAPTOP, deviceScaleFactor: 1 } },
     });
@@ -1982,7 +1986,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
     if (plain === undefined) throw new Error("no window");
     plain.paint(sharedPaint().paint);
     await flush();
-    plain.scale = 0.5;
+    plain.say(0.5);
     desk.attachment.dispatchInput?.(
       { kind: "pointer", action: "down", x: 10, y: 20, button: "left", clickCount: 1 },
       laptop.runtime.summary.geometry?.revision ?? 0,
@@ -2577,9 +2581,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       result.runtime.dispose();
     });
 
-    it("the scale read for a document is ITS OWN: an address that moves within the document keeps it — a finger's move behind it goes at that scale, unread — and a commit forgets it", async () => {
-      vi.useFakeTimers({ toFake: ["Date"] });
-      vi.setSystemTime(2_000_000);
+    it("the scale SAID for a document is ITS OWN: an address that moves within the document keeps it — a finger's move behind it goes at that scale — and another document's events go at ITS word (PT-5c: never read)", async () => {
       const result = setup({ source: phoneSource() });
       const renderer = attach(result.runtime);
       renderer.attachment.setDemand(demand(1, "live", 30, { width: 1206, height: 2622 }));
@@ -2596,28 +2598,32 @@ describe("BrowserLiveSurfaceRuntime", () => {
           { kind: "pointer", action, x, y: 10, button: "left", clickCount: 1, buttons: 1 },
           revision,
         );
-      window.scale = 0.5;
+      window.say(0.5);
       pointer("down", 10);
       await delivered();
       expect(window.touchInputs.map((t) => t.type)).toEqual(["touchStart"]);
-      expect(window.scaleReads).toBe(1);
-      // the page answers the touch by moving its address WITHIN the document (a router's pushState) — and is busy: its
-      // scale would not be said for a while
+      // the page answers the touch by moving its address WITHIN the document (a router's pushState): its word stands
       window.emitNavigationState({ ...NAV, url: "https://example.test/app/route", document: 1 });
-      window.visualScale = () => {
-        window.scaleReads += 1;
-        return new Promise<number>(() => {});
-      };
       pointer("move", 20);
       await delivered();
-      expect(window.scaleReads).toBe(1);
       expect(window.touchInputs.map((t) => t.type)).toEqual(["touchStart", "touchMove"]);
       expect(window.touchInputs.at(-1)?.touchPoints[0]).toMatchObject({ x: 40, y: 20 });
-      // ANOTHER document commits: what was read is nothing of it — the next move reads
+      // ANOTHER document commits: the finger is cancelled (PT-5c, ruling 1), and its press waits for the new one's word
       window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
-      pointer("move", 30);
+      pointer("down", 30);
       await delivered();
-      expect(window.scaleReads).toBe(2);
+      expect(window.touchInputs.map((t) => t.type)).toEqual([
+        "touchStart",
+        "touchMove",
+        "touchCancel",
+      ]);
+      window.say(1);
+      await delivered();
+      expect(window.touchInputs.at(-1)).toEqual({
+        type: "touchStart",
+        touchPoints: [{ x: 30, y: 10, id: 0 }],
+      });
+      expect(window.scaleReads).toBe(0);
       result.runtime.dispose();
     });
   });
@@ -2625,8 +2631,8 @@ describe("BrowserLiveSurfaceRuntime", () => {
   const NONE = { shift: false, alt: false, ctrl: false, meta: false };
   /**
    * A page in the hand, live, its window's inputs kept in ONE list as they reach it — a phone's unless the row names
-   * another device. PT-5b3: its window has ONE QUEUE, as the native's has (`enqueue`): a read of the page's scale and every
-   * dispatch run one behind another, each to its answer — a read the page has not answered holds what is sent after it.
+   * another device. Its window's dispatches run one behind another, each to its answer — as the native's HAND queue has
+   * them (PT-5c, ruling 1: the device's commands are a queue of their own; the page's scale is SAID, never read here).
    */
   const phone = async (pageSource: ReturnType<typeof phoneSource> = phoneSource()) => {
     const result = setup({ source: pageSource });
@@ -2637,6 +2643,8 @@ describe("BrowserLiveSurfaceRuntime", () => {
     const window = result.native.windows[0];
     if (window === undefined) throw new Error("no window");
     window.emitNavigationState({ ...NAV });
+    // (PT-5c: the page says its scale — its guard's first words — before its first frame)
+    window.say(1);
     window.paint(sharedPaint(1206, 2622).paint);
     await flush();
     const revision = result.runtime.summary.geometry?.revision ?? 0;
@@ -2672,8 +2680,6 @@ describe("BrowserLiveSurfaceRuntime", () => {
       heard.push(`text ${typed}`);
       await text(typed);
     });
-    const scale = window.visualScale.bind(window);
-    window.visualScale = queued(() => scale());
     const send = (
       input: Parameters<NonNullable<typeof renderer.attachment.dispatchInput>>[0],
       under: number = revision,
@@ -2690,23 +2696,6 @@ describe("BrowserLiveSurfaceRuntime", () => {
         },
         under,
       );
-    /** The page is busy: its scale's reads are answered when the row says (`answer`), or never. */
-    const answers: ((scale: number) => void)[] = [];
-    const busy = (): void => {
-      window.visualScale = queued(() => {
-        window.scaleReads += 1;
-        return new Promise<number>((resolve) => {
-          answers.push(resolve);
-        });
-      });
-    };
-    /** The page REFUSES to say its scale (between two documents). */
-    const refusing = (): void => {
-      window.visualScale = queued(async () => {
-        window.scaleReads += 1;
-        throw new Error("Cannot find context with specified id");
-      });
-    };
     return {
       result,
       renderer,
@@ -2715,50 +2704,42 @@ describe("BrowserLiveSurfaceRuntime", () => {
       heard,
       send,
       pointer,
-      busy,
-      refusing,
-      answers,
       delivered,
     };
   };
 
   describe("PT-5b2 (ruling 4) — the hand's events reach the page in the order they were sent, whatever is awaited on the way", () => {
-    it("a RELEASE sent while its press's scale is still being read arrives AFTER it: the page hears a start and its end — never a finger left down", async () => {
-      vi.useFakeTimers({ toFake: ["Date"] });
-      vi.setSystemTime(2_000_000);
+    it("a RELEASE sent while its press WAITS for its document's first word arrives AFTER it: the page hears a start and its end — never a finger left down (PT-5c: a wait for the page's word, where PT-5b2 had a read)", async () => {
       const p = await phone();
-      p.window.scale = 0.5;
-      // a first tap: the scale is read, and serves a moment
+      // a first tap: the scale its page said
       p.pointer("down", 10);
       p.pointer("up", 10);
       await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
-      // the page is busy: the next read takes a while. A second tap within the moment — its press, then its release
-      // BEFORE the press's read has answered
-      p.busy();
+      // ANOTHER document, whose page has not said its scale yet. A second tap — its press, then its release BEFORE the word
+      p.window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
       p.pointer("down", 20);
       p.pointer("up", 20);
       await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
-      p.answers[0]?.(0.5);
+      p.window.say(0.5);
       await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd", "touchStart", "touchEnd"]);
       p.result.runtime.dispose();
     });
 
     it("a KEY and a text sent at once after a press arrive after it; and a dispatch that REJECTS does not break the chain", async () => {
-      vi.useFakeTimers({ toFake: ["Date"] });
-      vi.setSystemTime(2_000_000);
       const p = await phone();
-      p.busy();
+      // a new document, whose page has not said its scale yet
+      p.window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
       p.pointer("down", 10);
       p.send({ kind: "key", action: "down", key: "a", code: "KeyA", modifiers: NONE });
       p.send({ kind: "text", text: "a" });
       p.pointer("up", 10);
       await p.delivered();
-      // nothing overtakes the press, which waits on its page
+      // nothing overtakes the press, which waits for its page's word
       expect(p.heard).toEqual([]);
-      p.answers[0]?.(1);
+      p.window.say(1);
       await p.delivered();
       expect(p.heard).toEqual(["touchStart", "keyDown a", "text a", "touchEnd"]);
       // a key the window refuses (its command rejects): counted dropped — and the events behind it still arrive, in order
@@ -2784,10 +2765,9 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.window.touchInputs.map((t) => t.type);
 
     it("ruling 5 — an event is judged against the geometry it was SENT under, as it ARRIVES: a release queued behind its press is not refused because the geometry moved while it waited its turn", async () => {
-      vi.useFakeTimers({ toFake: ["Date"] });
-      vi.setSystemTime(2_000_000);
       const p = await phone();
-      p.busy();
+      // a new document whose page has not said its scale yet (PT-5c: the wait is for its word)
+      p.window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
       const dropped = p.result.runtime.stats.inputDropped;
       // a tap: its press takes its turn (and waits on its page), its release queues behind it — both sent under `revision`
       p.pointer("down", 20);
@@ -2797,7 +2777,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.window.paint(sharedPaint(603, 1311).paint);
       await p.delivered();
       expect(p.result.runtime.summary.geometry?.revision).not.toBe(p.revision);
-      p.answers[0]?.(0.5);
+      p.window.say(0.5);
       await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
       expect(p.result.runtime.stats.inputDropped).toBe(dropped);
@@ -2865,72 +2845,65 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.result.runtime.dispose();
     });
 
-    it("ruling 5 — a touch's END carries no point and reads no scale: a finger down when ANOTHER document commits under it, the page too busy to say its scale, is lifted at once", async () => {
-      vi.useFakeTimers({ toFake: ["Date"] });
-      vi.setSystemTime(2_000_000);
+    it("ruling 5 — a touch's END carries no point and asks nothing; PT-5c (ruling 1): a finger down when ANOTHER document commits under it is cancelled THERE — its late release is nothing, and a hover after it is nothing a finger does", async () => {
       const p = await phone();
-      p.window.scale = 0.5;
+      p.window.say(0.5);
       p.pointer("down", 20);
       await p.delivered();
       expect(p.heard).toEqual(["touchStart"]);
-      expect(p.window.scaleReads).toBe(1);
-      p.window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
-      p.busy();
-      const unread = p.result.runtime.stats.inputScaleUnread;
       p.pointer("up", 20);
       await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
       expect(types(p)).toEqual(["touchStart", "touchEnd"]);
       expect(p.window.touchInputs.at(-1)?.touchPoints).toEqual([]);
-      expect(p.window.scaleReads).toBe(1);
-      expect(p.result.runtime.stats.inputScaleUnread).toBe(unread);
+      // a finger down; ANOTHER document commits under it (its page not yet speaking): cancelled at the commit
+      p.pointer("down", 20);
+      await p.delivered();
+      p.window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
+      p.pointer("up", 20);
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart", "touchEnd", "touchStart", "touchCancel"]);
       // a hover after it is nothing a finger does: the page is told of no move
       p.pointer("move", 30);
       await p.delivered();
-      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
-      expect(p.window.scaleReads).toBe(1);
+      expect(p.heard).toHaveLength(4);
+      expect(p.window.scaleReads).toBe(0);
       p.result.runtime.dispose();
     });
 
-    it("ruling 5 — a mouse's release goes at the scale its PRESS went at, unread: a `mobile` page shown at 0.5, busy when the button lifts", async () => {
-      vi.useFakeTimers({ toFake: ["Date"] });
-      vi.setSystemTime(2_000_000);
+    it("ruling 5 — a mouse's release goes at the scale its PRESS went at: a `mobile` page shown at 0.5 that zooms while the button is down (PT-5c: the scale said, never read)", async () => {
       const p = await phone(mobileMouse());
-      p.window.scale = 0.5;
+      p.window.say(0.5);
       p.pointer("down", 20);
       await p.delivered();
       expect(p.window.mouseInputs.at(-1)).toMatchObject({ type: "mousePressed", x: 40, y: 20 });
-      p.busy();
-      vi.setSystemTime(2_010_000);
+      // the page zooms while the button is down: the release goes where its press did — at the press's scale
+      p.window.say(1);
       p.pointer("up", 30);
       await p.delivered();
       expect(p.heard).toEqual(["mousePressed", "mouseReleased"]);
       expect(p.window.mouseInputs.at(-1)).toMatchObject({ type: "mouseReleased", x: 60, y: 20 });
-      expect(p.window.scaleReads).toBe(1);
+      expect(p.window.scaleReads).toBe(0);
       p.result.runtime.dispose();
     });
 
-    it("ruling 6 — a press on a document whose scale is unread and SLOW waits, as long as its page takes, and lands at the scale read — its release behind it; nothing is dropped, nothing counted unsent (the read and the dispatch share the window's one queue)", async () => {
+    it("ruling 6, PT-5c (ruling 1) — a press on a document whose page has not yet SAID its scale waits, as long as its page takes, and lands at the scale it says — its release behind it; nothing is dropped while it waits", async () => {
       vi.useFakeTimers();
       vi.setSystemTime(2_000_000);
       const p = await phone();
-      // ANOTHER document, just loaded and hydrating: no scale read for it yet, and the page too busy to say it
+      // ANOTHER document, just loaded and hydrating: its page has not said its scale yet
       p.window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
-      p.busy();
       const dropped = p.result.runtime.stats.inputDropped;
-      const unread = p.result.runtime.stats.inputScaleUnread;
       p.pointer("down", 20);
       p.pointer("up", 20);
       await vi.advanceTimersByTimeAsync(5_000);
       expect(p.heard).toEqual([]);
       expect(p.result.runtime.stats.inputDropped).toBe(dropped);
-      expect(p.result.runtime.stats.inputScaleUnread).toBe(unread);
-      p.answers[0]?.(0.25);
+      p.window.say(0.25);
       await vi.advanceTimersByTimeAsync(0);
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
       expect(p.window.touchInputs.at(-2)?.touchPoints[0]).toMatchObject({ x: 80, y: 40 });
       // a second tap, at once: both heard, in order
-      p.window.visualScale = async () => 0.25;
       p.pointer("down", 20);
       p.pointer("up", 20);
       await vi.advanceTimersByTimeAsync(0);
@@ -3021,35 +2994,6 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(p.result.runtime.stats.inputDropped).toBe(dropped + 3);
       p.result.runtime.dispose();
     });
-
-    it("ruling 6 — a read the page REFUSES (between two documents): the scale known for this document is used; with NONE known the press is not sent — counted — and its release is nothing", async () => {
-      vi.useFakeTimers({ toFake: ["Date"] });
-      vi.setSystemTime(2_000_000);
-      const p = await phone();
-      p.window.scale = 0.5;
-      p.pointer("down", 10);
-      p.pointer("up", 10);
-      await p.delivered();
-      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
-      // the page refuses the next read: what was read for this document stands
-      p.refusing();
-      p.pointer("down", 20);
-      p.pointer("up", 20);
-      await p.delivered();
-      expect(p.heard).toEqual(["touchStart", "touchEnd", "touchStart", "touchEnd"]);
-      expect(p.window.touchInputs.at(-2)?.touchPoints[0]).toMatchObject({ x: 40, y: 20 });
-      // ANOTHER document, and the page refuses: at a guess the point would be another element's
-      p.window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
-      const unread = p.result.runtime.stats.inputScaleUnread;
-      const dropped = p.result.runtime.stats.inputDropped;
-      p.pointer("down", 20);
-      p.pointer("up", 20);
-      await p.delivered();
-      expect(p.heard).toHaveLength(4);
-      expect(p.result.runtime.stats.inputScaleUnread).toBe(unread + 1);
-      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
-      p.result.runtime.dispose();
-    });
   });
 
   it("PT-4: a press on a touch device's page is a TOUCH — its moves while it is down, its release its end; a hover and another button are nothing; the wheel stays the page's scroll", async () => {
@@ -3059,6 +3003,8 @@ describe("BrowserLiveSurfaceRuntime", () => {
     await flush();
     await flush();
     const window = result.native.windows[0];
+    // (PT-5c: the page says its scale — its guard's first words)
+    window?.say(1);
     window?.paint(sharedPaint(1206, 2622).paint);
     await flush();
     const revision = result.runtime.summary.geometry?.revision ?? 0;
@@ -3637,6 +3583,160 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.result.runtime.dispose();
     });
 
+    const NEXT = "https://example.test/next";
+
+    it("ruling 1 — an event is for the DOCUMENT that stood when it was sent: a press and a key queued behind a key the page was slow to take are never delivered to the document that committed meanwhile — refused at their turn, counted", async () => {
+      const p = await laptop();
+      const r = p.result.runtime.summary.geometry?.revision ?? 0;
+      // the page takes its first key when the row says
+      let answer: () => void = () => {};
+      const keys: string[] = [];
+      const key = p.window.dispatchKey.bind(p.window);
+      p.window.dispatchKey = (input) => {
+        keys.push(`${input.type} ${input.key}`);
+        return keys.length > 1
+          ? key(input)
+          : new Promise<void>((resolve) => {
+              answer = resolve;
+            });
+      };
+      p.key("down", r, "a");
+      await delivered();
+      p.renderer.attachment.dispatchInput?.(
+        { kind: "pointer", action: "down", x: 10, y: 10, button: "left", clickCount: 1 },
+        r,
+      );
+      p.key("down", r, "z");
+      await delivered();
+      const dropped = p.result.runtime.stats.inputDropped;
+      // ANOTHER document commits (a link the page followed, a redirect, a reload)
+      p.window.emitNavigationState({ ...NAV, url: NEXT });
+      answer();
+      await delivered();
+      expect(p.window.mouseInputs).toEqual([]);
+      expect(keys).toEqual(["keyDown a"]);
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 2);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 1 — a FINGER down when another document commits is CANCELLED (the engine holds a touch open across a commit — the next document is deaf to touch without it: the probe); nothing is down; the hand's late release is nothing, and the next tap is heard whole", async () => {
+      const p = await phone();
+      p.pointer("down", 20);
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart"]);
+      p.window.emitNavigationState({ ...NAV, url: NEXT });
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart", "touchCancel"]);
+      expect(p.window.touchInputs.at(-1)).toEqual({ type: "touchCancel", touchPoints: [] });
+      // the hand lifts the finger it had down: nothing — what was down ended at the commit
+      p.pointer("up", 20);
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart", "touchCancel"]);
+      // the next document says its scale; a tap on it is heard whole
+      p.window.say(1);
+      p.pointer("down", 30);
+      p.pointer("up", 30);
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart", "touchCancel", "touchStart", "touchEnd"]);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 1 — a BUTTON down when another document commits is FORGOTTEN — nothing sent (a release after the commit is a stray mouseup in the next document: the probe); the hand's late release is nothing", async () => {
+      const p = await laptop();
+      const r = p.result.runtime.summary.geometry?.revision ?? 0;
+      const pointer = (action: "down" | "up"): void =>
+        p.renderer.attachment.dispatchInput?.(
+          { kind: "pointer", action, x: 10, y: 10, button: "left", clickCount: 1 },
+          r,
+        );
+      pointer("down");
+      await delivered();
+      expect(p.window.mouseInputs.map((m) => m.type)).toEqual(["mousePressed"]);
+      p.window.emitNavigationState({ ...NAV, url: NEXT });
+      await delivered();
+      pointer("up");
+      await delivered();
+      expect(p.window.mouseInputs.map((m) => m.type)).toEqual(["mousePressed"]);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 1 — a touchStart ANSWERED after another document committed is cancelled at once: nothing is set down — the next hover is nothing", async () => {
+      const p = await phone();
+      let answer: () => void = () => {};
+      p.window.dispatchTouch = (input) => {
+        p.heard.push(input.type);
+        if (input.type !== "touchStart") return Promise.resolve();
+        return new Promise<void>((resolve) => {
+          answer = resolve;
+        });
+      };
+      p.pointer("down", 20);
+      await p.delivered();
+      p.window.emitNavigationState({ ...NAV, url: NEXT });
+      await p.delivered();
+      answer();
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart", "touchCancel"]);
+      p.window.say(1);
+      p.pointer("move", 30);
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart", "touchCancel"]);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 1 — the scale is FOLLOWED: the page SAYS it (its guard's word) and nothing reads the engine on the hand's path — a press goes at the scale said; a zoom the page makes (a double tap it answers by zooming) is said, and the next press goes at it", async () => {
+      const p = await phone();
+      const reads = p.window.scaleReads;
+      p.window.say(0.5);
+      p.pointer("down", 20);
+      p.pointer("up", 20);
+      await p.delivered();
+      expect(
+        p.window.touchInputs.filter((t) => t.type === "touchStart").at(-1)?.touchPoints[0],
+      ).toMatchObject({ x: 40, y: 20 });
+      p.window.say(2);
+      p.pointer("down", 20);
+      p.pointer("up", 20);
+      await p.delivered();
+      expect(
+        p.window.touchInputs.filter((t) => t.type === "touchStart").at(-1)?.touchPoints[0],
+      ).toMatchObject({ x: 10, y: 5 });
+      expect(p.window.scaleReads).toBe(reads);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 1 — a press on a NEW document whose page has not yet said its scale WAITS for the page's first word, and lands at it; with no word, the next commit ends the wait — refused, counted, and its release is nothing; and so does the window's going", async () => {
+      const p = await phone();
+      p.window.emitNavigationState({ ...NAV, url: NEXT });
+      p.pointer("down", 20);
+      p.pointer("up", 20);
+      await p.delivered();
+      expect(p.heard).toEqual([]);
+      p.window.say(0.5);
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
+      expect(p.window.touchInputs.at(-2)?.touchPoints[0]).toMatchObject({ x: 40, y: 20 });
+      // a newer document, no word of it; ANOTHER commits before any: the press is refused, its release is nothing
+      p.window.emitNavigationState({ ...NAV, url: `${NEXT}/2` });
+      const dropped = p.result.runtime.stats.inputDropped;
+      p.pointer("down", 20);
+      p.pointer("up", 20);
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
+      p.window.emitNavigationState({ ...NAV, url: `${NEXT}/3` });
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
+      expect(p.result.runtime.stats.inputDropped).toBeGreaterThanOrEqual(dropped + 1);
+      // and a press waiting so when its window goes (a rest): its turn ends, nothing is heard
+      p.pointer("down", 20);
+      await p.delivered();
+      p.renderer.attachment.setDemand(demand(3, "hibernated", 0));
+      await p.delivered();
+      expect(p.result.runtime.summary.state).toBe("hibernated");
+      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
+      p.result.runtime.dispose();
+    });
+
     /** A second attachment of the same page, live, its first frame laid again — what the attachment that comes back is. */
     const again = async (
       runtime: BrowserLiveSurfaceRuntime,
@@ -3734,18 +3834,18 @@ describe("BrowserLiveSurfaceRuntime", () => {
       );
       await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
-      // a press of the other attachment takes its turn and waits on its page; the attachment goes before it is sent
-      p.busy();
+      // a press of the other attachment takes its turn and waits on its page (a new document, its page not yet speaking);
+      // the attachment goes before it is sent
+      p.window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
       other.attachment.dispatchInput?.(
         { kind: "pointer", action: "down", x: 20, y: 10, button: "left", clickCount: 1 },
         p.revision,
       );
       await p.delivered();
-      expect(p.answers).toHaveLength(1);
       other.attachment.dispose();
       await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
-      p.answers[0]?.(1);
+      p.window.say(1);
       await p.delivered();
       // the press takes its turn — then the release of what it set down
       expect(p.heard).toEqual(["touchStart", "touchEnd", "touchStart", "touchCancel"]);
