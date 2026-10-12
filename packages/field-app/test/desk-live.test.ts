@@ -19,6 +19,8 @@ import {
 } from "../src/surfaces/live/desk-live";
 import {
   attached,
+  browserAt,
+  documentOf,
   fakePresentation,
   LAPTOP_TOLD,
   PAGE,
@@ -493,6 +495,39 @@ describe("PT-3 — the face in use: its input, the page's cursor, a page navigat
     handle.lane = false;
     face.input?.({ kind: "text", text: "x" });
     expect(live.stats().inputsUnsent).toBe(2);
+  });
+
+  it("PT-5c2 (F7): nothing is sent through a frame of a document the page has LEFT — after a commit and before the new document's first frame the face shows the one before, and an event aimed at it lands on the new document (PT-5c2's probe): unsent, counted; its first frame, and the hand goes again", () => {
+    const NEXT = "http://127.0.0.1:4321/next";
+    const { live, face, presentation, handle } = attached();
+    handle.set({ browser: browserAt(PAGE.url) as never });
+    face.demand(SEEN);
+    presentation.land(documentOf(PAGE.url));
+    expect(face.take()).toBe(true);
+    const press = (): void =>
+      face.input?.({
+        kind: "pointer",
+        x: 640,
+        y: 400,
+        button: 0,
+        buttons: 1,
+        count: 1,
+        phase: "down",
+      });
+    press();
+    expect(handle.inputs).toHaveLength(1);
+    // another document commits (the page followed its link): no frame of it yet — the face shows the one before
+    handle.set({ browser: browserAt(NEXT) as never });
+    const unsent = live.stats().inputsUnsent;
+    press();
+    face.input?.({ kind: "key", key: "a", code: "KeyA", phase: "down", mods: 0, repeat: false });
+    expect(handle.inputs).toHaveLength(1);
+    expect(live.stats().inputsUnsent).toBe(unsent + 2);
+    // its first frame: the face shows the page as it stands — the hand goes again
+    presentation.land(documentOf(NEXT));
+    expect(face.take()).toBe(true);
+    press();
+    expect(handle.inputs).toHaveLength(2);
   });
 
   it("maps what the wire can carry, and says what it cannot as the wire can say it", () => {

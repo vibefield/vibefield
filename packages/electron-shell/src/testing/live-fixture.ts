@@ -63,6 +63,11 @@
 //                  load fails late, ERR_INCOMPLETE_CHUNKED_ENCODING, the document standing — its parser stopped, so neither
 //                  its DOMContentLoaded nor its `load` ever fires, and its page says no word of its scale after: PT-5c2's
 //                  probes `f1.cjs`, `cut.cjs`) (LATE-FAIL).
+// PT-5c2 — a page whose FIRST PAINT the fixture holds:
+//   /topaint     — the page, its link going to `/unpainted` (its name with it: `?p=<name>`);
+//   /unpainted   — the page with a stylesheet in its head (`/held.css?p=<name>`) answered only on the smoke's word
+//                  (`paint(name)`): it commits and does not paint; what reaches its document before then, the script at
+//                  the head of it hears (`heard`, said with each ask once the page runs its own) (HELD-PAINT).
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { type AddressInfo, createServer as createTcpServer } from "node:net";
@@ -179,6 +184,10 @@ export interface LiveFixture {
   /** PT-5c2 — every page at a path that begins with `path` whose body `/cut` holds open is CUT (its socket destroyed
    * mid-body); how many were. */
   cut(path: string): number;
+  /** PT-5c2 — how many of `/unpainted?p=<name>`'s stylesheets the fixture holds now (its first paint held). */
+  unpainted(name: string): number;
+  /** PT-5c2 — `name`'s held stylesheets answered, and every later one at once: its page may paint. */
+  paint(name: string): void;
   /** PT-5a — an address whose connection is REFUSED (a port nobody listens on) until `open()` serves the page there. */
   refusing(): Promise<FixtureRefusing>;
   close(): Promise<void>;
@@ -263,6 +272,9 @@ export interface FixtureReport {
   readonly vv?: readonly [number, number, number];
   /** PT-5c2 — `/cut` alone: every keydown ("down <code>") and keyup ("up <code>") it heard, in order. */
   readonly keyLog?: readonly string[];
+  /** PT-5c2 — `/unpainted` alone: what its head's script heard of the hand from the document's start (null: no such
+   * script — any other page). */
+  readonly heard?: readonly string[] | null;
 }
 
 /** A part's box in the page's view, CSS px. */
@@ -378,6 +390,7 @@ export function fixtureHtml(path: "/page" | "/next" | "/legacy" = "/page"): stri
     touchLog: window.__touchLog || [],
     touchAt: window.__touchAt || [],
     keyLog: window.__keyLog || [],
+    heard: window.__heard || null,
     held: window.__held || null,
     vv: window.visualViewport
       ? [visualViewport.scale, Math.round(visualViewport.offsetLeft), Math.round(visualViewport.offsetTop)]
@@ -470,6 +483,29 @@ const KEY_LOG = `<script>
  * never does: the smoke cuts it (`cut`). */
 export const cutHtml = (): string =>
   fixtureHtml("/page").replace("</body></html>", `${KEY_LOG}\n${touchLogScript(0)}`);
+
+/** A page's name, as the fixture keeps it in an address: letters, digits and dashes only. */
+const cleanName = (name: string): string => name.replace(/[^a-z0-9-]/giu, "");
+
+/** PT-5c2 — the head's script that hears the hand from the document's start — before any stylesheet, so what reaches the
+ * document before its first paint is heard: every pointerdown, mousedown, mouseup, click, keydown and touchstart. */
+const HEARS =
+  '<script>window.__heard = []; for (const type of ["pointerdown", "mousedown", "mouseup", "click", "keydown", "touchstart"]) addEventListener(type, (e) => window.__heard.push(e.type), { capture: true });</script>';
+
+/** PT-5c2 — `/unpainted?p=<name>`: the page whose FIRST PAINT the fixture holds — its head's stylesheet
+ * (`/held.css?p=<name>`) answered only on the smoke's word (`paint`); its head's script, before it, hears the hand. */
+export const unpaintedHtml = (name: string): string =>
+  fixtureHtml("/page").replace(
+    "<title>",
+    `${HEARS}<link rel="stylesheet" href="/held.css?p=${cleanName(name)}"><title>`,
+  );
+
+/** PT-5c2 — `/topaint?p=<name>`: the page whose LINK goes to `/unpainted?p=<name>`. */
+export const toUnpaintedHtml = (name: string): string =>
+  fixtureHtml("/page").replace(
+    '<a id="next" href="/next">',
+    `<a id="next" href="/unpainted?p=${cleanName(name)}">`,
+  );
 
 /** PT-5b2 — `/busy`: the page, keeping its thread busy at each touchstart and logging every touch it hears. */
 export const busyHtml = (): string =>
@@ -654,6 +690,9 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   const hung = new Set<ServerResponse>();
   /** PT-5c2: the bodies `/cut` holds open, by the address each was asked at (its path and query). */
   const cutting = new Map<ServerResponse, string>();
+  /** PT-5c2: `/held.css`'s answers owed, by the name each waits for; the names whose pages may paint. */
+  const sheets = new Map<() => void, string>();
+  const painting = new Set<string>();
   /** PT-5b3: the hold, and the tidying, owed to the next ask of a page at this path. */
   let holding: { readonly path: string; readonly ms: number } | null = null;
   let tidying: string | null = null;
@@ -673,6 +712,34 @@ export async function startLiveFixture(): Promise<LiveFixture> {
       // never answered: whoever waits on it never finishes loading (closed with the fixture)
       hung.add(res);
       res.on("close", () => hung.delete(res));
+      return;
+    }
+    if (url.pathname === "/topaint" || url.pathname === "/unpainted") {
+      cookies.set(url.pathname + url.search, req.headers.cookie ?? "");
+      const name = url.searchParams.get("p") ?? "";
+      html(res, url.pathname === "/topaint" ? toUnpaintedHtml(name) : unpaintedHtml(name));
+      return;
+    }
+    if (url.pathname === "/held.css") {
+      // PT-5c2: the stylesheet a page's first paint waits for — answered on the smoke's word (closed with the fixture)
+      const name = url.searchParams.get("p") ?? "";
+      let done = false;
+      const answer = (): void => {
+        if (done) return;
+        done = true;
+        sheets.delete(answer);
+        res.writeHead(200, { "content-type": "text/css", "cache-control": "no-store" });
+        res.end("html { color-scheme: light; }");
+      };
+      if (painting.has(name)) {
+        answer();
+        return;
+      }
+      sheets.set(answer, name);
+      res.on("close", () => {
+        done = true;
+        sheets.delete(answer);
+      });
       return;
     }
     if (url.pathname === "/cut") {
@@ -866,6 +933,11 @@ export async function startLiveFixture(): Promise<LiveFixture> {
     hold: (path, ms) => {
       holding = { path, ms };
     },
+    unpainted: (name) => [...sheets.values()].filter((at) => at === name).length,
+    paint: (name) => {
+      painting.add(name);
+      for (const [answer, at] of [...sheets]) if (at === name) answer();
+    },
     cut: (path) => {
       let cut = 0;
       for (const [res, at] of [...cutting]) {
@@ -909,6 +981,7 @@ export async function startLiveFixture(): Promise<LiveFixture> {
       for (const answer of [...atGate]) answer();
       for (const res of [...hung]) res.destroy();
       for (const res of [...cutting.keys()]) res.destroy();
+      for (const answer of [...sheets.keys()]) answer();
       for (const s of [server, ...revived])
         await new Promise<void>((resolve) => {
           s.closeAllConnections?.();

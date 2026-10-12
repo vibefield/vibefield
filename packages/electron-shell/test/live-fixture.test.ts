@@ -640,6 +640,54 @@ describe("the live pane's fixture page", () => {
     expect(win.__keyLog).toEqual(["down KeyQ", "up KeyQ"]);
   });
 
+  it("PT-5c2: `/topaint` links to `/unpainted`, the page whose FIRST PAINT the fixture holds — its head's stylesheet answered only once the smoke says `paint(name)` (and at once after), its head's script hearing the hand before it", async () => {
+    fixture = await startLiveFixture();
+    const linking = await (await fetch(`${fixture.origin}/topaint?p=h`)).text();
+    expect(linking).toContain('<a id="next" href="/unpainted?p=h">');
+    const page = await (
+      await fetch(`${fixture.origin}/unpainted?p=${encodeURIComponent('h"><b>')}`)
+    ).text();
+    // the head: the hearing script, then the held stylesheet (the name the fixture keeps), then the rest
+    const head = page.slice(0, page.indexOf("</head>"));
+    expect(head.indexOf("window.__heard = []")).toBeGreaterThan(-1);
+    expect(head.indexOf("window.__heard = []")).toBeLessThan(head.indexOf('href="/held.css?p=hb"'));
+    expect(head.indexOf('href="/held.css?p=hb"')).toBeLessThan(head.indexOf("<title>"));
+    // its stylesheet is held until the smoke's word
+    let answered: string | null = null;
+    const sheet = fetch(`${fixture.origin}/held.css?p=h`).then(async (r) => {
+      answered = `${r.headers.get("content-type")} ${await r.text()}`;
+    });
+    await new Promise((r) => setTimeout(r, 150));
+    expect(answered).toBe(null);
+    expect(fixture.unpainted("h")).toBe(1);
+    expect(fixture.unpainted("other")).toBe(0);
+    fixture.paint("h");
+    await sheet;
+    expect(answered).toContain("text/css");
+    expect(fixture.unpainted("h")).toBe(0);
+    // once its page may paint, its stylesheet is answered at once
+    expect((await fetch(`${fixture.origin}/held.css?p=h`)).status).toBe(200);
+    // the head's script, run: it hears the hand
+    const script = /<script>(window\.__heard = \[\];[\s\S]*?)<\/script>/.exec(page)?.[1];
+    if (script === undefined) throw new Error("the page carries no hearing script");
+    const win = { __heard: [] as string[] };
+    const heard = new Map<string, (e: { type: string }) => void>();
+    new Function("window", "addEventListener", script)(
+      win,
+      (type: string, listener: (e: { type: string }) => void) => heard.set(type, listener),
+    );
+    for (const type of ["pointerdown", "mousedown", "mouseup", "click", "keydown", "touchstart"])
+      heard.get(type)?.({ type });
+    expect(win.__heard).toEqual([
+      "pointerdown",
+      "mousedown",
+      "mouseup",
+      "click",
+      "keydown",
+      "touchstart",
+    ]);
+  });
+
   it("PT-5c: `/zoom` is a phone's page that ZOOMS ITSELF at a double tap (its viewport's minimum scale set to 2), its field near its top-left; and every page says its visual viewport (scale, offset) with its report", async () => {
     fixture = await startLiveFixture();
     const zoom = await (await fetch(`${fixture.origin}/zoom?p=z`)).text();

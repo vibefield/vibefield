@@ -141,7 +141,8 @@ export interface DeskLiveStats {
   readonly demands: number;
   /** ICE writers made — one per face and device; a remade one is a new texture (the PLAYING row's "none remade"). */
   readonly writers: number;
-  /** PT-3: inputs sent down a page's lane, and those the service could not send (no frame presented yet, a closed lane). */
+  /** PT-3: inputs sent down a page's lane, and those the service could not send (no frame presented yet, a closed lane —
+   * PT-5c2: or a frame of a document the page has left). */
   readonly inputs: number;
   readonly inputsUnsent: number;
   /** PT-3: navigations sent to a page by its key, and those refused (no page open for the key). */
@@ -1398,10 +1399,16 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       input(e: LiveInput): void {
         if (closed) return;
         // PT-5a: nothing is sent to a page whose frames are not shown (a press must never land on what nobody sees) —
-        // PT-5b: nor through a still (`shown` is none while one stands)
+        // PT-5b: nor through a still (`shown` is none while one stands) — PT-5c2 (F7): nor through a frame of a document
+        // the page has LEFT. After a commit, until the new document's first frame, the face shows the one before — and
+        // an event aimed at it lands on the NEW document: PT-5c2's probe `f7.cjs` (Electron 43.1.1, offscreen, the next
+        // document's first paint held by its stylesheet) had a press, its release and a key sent after the commit and
+        // before that paint heard by the new document at once, and a touch the moment it painted — as a tap. Unsent,
+        // counted; its first frame, and the hand goes again. (A release unsent here is nothing lost: at a commit the
+        // page's producer forgets what was down.)
         const at = shown;
         const events = at === undefined ? [] : liveInputEvents(e, at.logical);
-        if (at === undefined || events.length === 0) {
+        if (at === undefined || events.length === 0 || !ofNow()) {
           counts.inputsUnsent += 1;
           return;
         }

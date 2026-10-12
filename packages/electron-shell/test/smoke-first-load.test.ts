@@ -10,8 +10,10 @@ import {
   FIRST_ROWS,
   type FirstFace,
   type FirstLoadSeen,
+  type HeldPaintSeen,
   judgeClick,
   judgeDownGone,
+  judgeHeldPaint,
   judgeLateFail,
   judgeNoDocument,
   judgePending,
@@ -594,6 +596,45 @@ describe("a page's first load, in the product — what the rows read by", () => 
       "LATE-FAIL: the fixture cut no body under the laptop pane — the row proved nothing",
       "LATE-FAIL: the page never said its key down (it heard nothing) — the row proved nothing",
       "LATE-FAIL (phone): the fixture cut no body under the phone pane — the row proved nothing",
+    ]);
+  });
+
+  it("HELD-PAINT (PT-5c2, F7): a click and a key while the next document's first paint is held go nowhere — the desk counts them unsent, and the next page's head heard nothing of them", () => {
+    const seen: HeldPaintSeen = {
+      held: 1,
+      framesBetween: 0,
+      unsent: 4,
+      heard: [],
+      face: face({ address: `${O}/unpainted?p=h`, presented: 4 }),
+    };
+    expect(judgeHeldPaint(seen)).toEqual([]);
+    // the lane before PT-5c2: the desk sent them through the frame it showed, and the next document heard them
+    expect(
+      judgeHeldPaint({
+        ...seen,
+        unsent: 0,
+        heard: ["pointerdown", "mousedown", "mouseup", "click", "keydown"],
+      }),
+    ).toEqual([
+      "HELD-PAINT: the next page heard pointerdown, mousedown, mouseup, click, keydown before its first paint — a click and a key aimed at the page before landed on it",
+      "HELD-PAINT: the desk counted 0 inputs unsent over the click and the key — it sent them through a frame of the page it had left",
+    ]);
+    // rows that proved nothing: the paint not held, a frame of the next page meanwhile, the next page never standing or
+    // never speaking
+    expect(
+      judgeHeldPaint({
+        held: 0,
+        framesBetween: 1,
+        unsent: null,
+        heard: null,
+        face: face({ state: "starting" }),
+      }),
+    ).toEqual([
+      "HELD-PAINT: the next page's stylesheet was not held when the click was sent — its first paint was not held: the row proved nothing",
+      "HELD-PAINT: 1 frames landed while the next page's first paint was held — the pane showed the page as it stands: the row proved nothing",
+      `HELD-PAINT: let paint, the pane is starting at ${O}/next — the next page never stood: the row proved nothing`,
+      "HELD-PAINT: the next page never said what its head heard — the row proved nothing",
+      "HELD-PAINT: the desk counted no inputs unsent over the click and the key — it sent them through a frame of the page it had left",
     ]);
   });
 

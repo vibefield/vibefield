@@ -33,6 +33,11 @@
 //                    held across the cut (the page's own listener says its keydown) is let up and the page hears its keyup
 //                    — the same document stands, live, its load ended, no failure said; a phone pane: a tap after the cut
 //                    lands at once (never a second's refusal for a word of "another" document).
+// PT-5c2 (F7):
+//   HELD-PAINT     — a pane in hand on a page whose link goes to a page whose FIRST PAINT the fixture holds (`/topaint` →
+//                    `/unpainted`): the link pressed, the next document commits and does not paint; a click and a key
+//                    aimed at the pane as the desk still shows it — the document before's last frame — are not sent (the
+//                    desk counts them), and the next page, let paint, says its head heard nothing of them.
 // Then the panes are removed and the board is as found. `--first-load` beside `--smoke-canvas` runs these rows alone
 // after the boot's (the author's loop).
 
@@ -202,6 +207,8 @@ export interface FirstLoadSeen {
   readonly zoomed: { readonly scale: number | null; readonly focused: string };
   /** PT-5c2 (F1) — LATE-FAIL. */
   readonly lateFail: LateFailSeen;
+  /** PT-5c2 (F7) — HELD-PAINT. */
+  readonly heldPaint: HeldPaintSeen;
   /** PT-5c (ruling 2) — DOWN-GONE. */
   readonly downGone: {
     /** the page's touch log with the finger down, before the window reloaded; after the pane was back and hovered */
@@ -256,6 +263,20 @@ export interface LateFailSeen {
     readonly log: readonly string[];
     readonly heardMs: number | null;
   };
+}
+
+/** PT-5c2 (F7) — HELD-PAINT: a click while the next document's first paint is held. */
+export interface HeldPaintSeen {
+  /** how many of the next page's stylesheets the fixture still held once the click and the key had been sent */
+  readonly held: number;
+  /** frames the pane presented from the commit to the stylesheet let go (null: not read) */
+  readonly framesBetween: number | null;
+  /** how many more inputs the desk counted unsent over the click and the key (null: not read) */
+  readonly unsent: number | null;
+  /** what the next page's head heard of the hand before it painted, as its own word says (null: it never said) */
+  readonly heard: readonly string[] | null;
+  /** the pane once the next page painted */
+  readonly face: FirstFace | null;
 }
 
 const word = (reason: string | null): string => (reason ?? "").split(": ")[0] ?? "";
@@ -692,6 +713,35 @@ export function judgeLateFail(seen: LateFailSeen): string[] {
   else if (p.heardMs >= 1_000)
     out.push(
       `LATE-FAIL (phone): the page said the tap sent after the cut ${p.heardMs} ms after it was sent — it waited (a second's bound) for a word of a document that never came`,
+    );
+  return out;
+}
+
+/** PT-5c2 (F7) — HELD-PAINT: nothing is sent through a frame of a document the page has left. */
+export function judgeHeldPaint(seen: HeldPaintSeen): string[] {
+  const out: string[] = [];
+  if (seen.held < 1)
+    out.push(
+      "HELD-PAINT: the next page's stylesheet was not held when the click was sent — its first paint was not held: the row proved nothing",
+    );
+  if (seen.framesBetween === null || seen.framesBetween > 0)
+    out.push(
+      `HELD-PAINT: ${seen.framesBetween ?? "uncounted"} frames landed while the next page's first paint was held — the pane showed the page as it stands: the row proved nothing`,
+    );
+  const f = seen.face;
+  if (f === null || f.state !== "live" || f.address?.endsWith("/unpainted?p=h") !== true)
+    out.push(
+      `HELD-PAINT: let paint, the pane is ${f?.state ?? "without a face"} at ${f?.address ?? "no address"} — the next page never stood: the row proved nothing`,
+    );
+  if (seen.heard === null)
+    out.push("HELD-PAINT: the next page never said what its head heard — the row proved nothing");
+  else if (seen.heard.length > 0)
+    out.push(
+      `HELD-PAINT: the next page heard ${seen.heard.join(", ")} before its first paint — a click and a key aimed at the page before landed on it`,
+    );
+  if (seen.unsent === null || seen.unsent < 2)
+    out.push(
+      `HELD-PAINT: the desk counted ${seen.unsent ?? "no"} inputs unsent over the click and the key — it sent them through a frame of the page it had left`,
     );
   return out;
 }
@@ -1860,6 +1910,86 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
     };
     said.lateFail = lateFail;
     problems.push(...judgeLateFail(lateFail));
+
+    // ── HELD-PAINT (PT-5c2, F7): a click while the next document's first paint is held — the new page hears nothing ──────
+    const unsentNow = async (): Promise<number> =>
+      (await js<Record<string, number>>("globalThis.__vfDesk.live()?.stats ?? {}")).inputsUnsent ??
+      0;
+    const paintPane = await lay("/topaint?p=h", x0 + 6 * step, y0);
+    await frame([paintPane]);
+    await waitFor(
+      "the linking page live",
+      FIRST_ROWS.withinMs,
+      () => face(paintPane),
+      (f) => f !== null && f.state === "live" && f.presented >= 1,
+    );
+    const paintWord = await waitFor(
+      "the linking page's word",
+      FIRST_ROWS.withinMs,
+      () => at(paintPane),
+      (r) => r !== null,
+    );
+    await pickUp(paintPane);
+    const paintFrame = await heldFrame();
+    let paintHeld = 0;
+    let framesBetween: number | null = null;
+    let unsent: number | null = null;
+    let paintHeard: readonly string[] | null = null;
+    let paintFace: FirstFace | null = null;
+    if (paintFrame !== null && paintWord !== null) {
+      const off = await h.deskAt();
+      const onWindow = (r: { x: number; y: number; w: number; h: number }) => {
+        const q = pageOnWindow(paintFrame, paintWord.view, off, r.x + r.w / 2, r.y + r.h / 2);
+        return { x: Math.round(q.x), y: Math.round(q.y) };
+      };
+      // its link: the next document commits — and does not paint (its head's stylesheet held)
+      await h.press(onWindow(paintWord.parts.link));
+      await waitFor(
+        "the next document committed, its first paint held",
+        10_000,
+        async () => ({ f: await face(paintPane), held: d.fixture.unpainted("h") }),
+        (v) => v.held >= 1 && v.f?.address?.endsWith("/unpainted?p=h") === true,
+      );
+      await sleep(600);
+      const unsent0 = await unsentNow();
+      const presented0 = (await face(paintPane))?.presented ?? 0;
+      // a click and a key aimed at the pane as the desk shows it — the document before's last frame
+      await h.press(onWindow(paintWord.parts.field));
+      await sleep(200);
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "q" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "q" });
+      await sleep(600);
+      paintHeld = d.fixture.unpainted("h");
+      unsent = (await unsentNow()) - unsent0;
+      framesBetween = ((await face(paintPane))?.presented ?? 0) - presented0;
+      // the page may paint: its first frame, its own script, its word
+      d.fixture.paint("h");
+      paintFace = await waitFor(
+        "the next page painted",
+        FIRST_ROWS.withinMs,
+        () => face(paintPane),
+        (f) => f !== null && f.state === "live" && f.presented > presented0,
+      );
+      await waitFor(
+        "the next page's word",
+        FIRST_ROWS.withinMs,
+        () => d.fixture.reportAt("/unpainted?p=h"),
+        (r) => r !== null,
+      );
+      await sleep(800);
+      paintHeard = d.fixture.reportAt("/unpainted?p=h")?.heard ?? null;
+    }
+    await shoot("pt-5c2-held-paint.png");
+    await done();
+    const heldPaint: HeldPaintSeen = {
+      held: paintHeld,
+      framesBetween,
+      unsent,
+      heard: paintHeard,
+      face: paintFace,
+    };
+    said.heldPaint = heldPaint;
+    problems.push(...judgeHeldPaint(heldPaint));
   } catch (error) {
     // a step that cannot go on ends the rows — never what the rows before it found (they are said with it)
     problems.push(`PT-5b2 FIRST: ${error instanceof Error ? error.message : String(error)}`);
