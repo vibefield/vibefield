@@ -776,6 +776,106 @@
   isolation: isolate;
 }
 
+/* THE LIP'S BUTTONS (GV-D7; DESIGN.md §2.7, §8): at its right end, 10 in and
+   4 apart — minimize, then maximize once the terminals can be maximized —
+   each 30 × 24 with its glyph at 14, on the lip's axis. On the frame's tone in
+   the terminal's ink at 64%; under the pointer the full ink on a 10% fill of
+   it. Beside the separator, not in it, and above its reach (the lip's
+   `::before`), so the edge never takes their press. */
+.vf-godview-deck-controls {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 10px;
+  height: var(--vf-godview-deck-lip);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.vf-godview-deck-control {
+  width: var(--vf-godview-deck-control-width);
+  height: var(--vf-godview-deck-control-height);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--vf-godview-deck-control-radius);
+  color: color-mix(in srgb, var(--deck-ink) 64%, transparent);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.vf-godview-deck-control:hover {
+  color: var(--deck-ink);
+  background: color-mix(in srgb, var(--deck-ink) 10%, transparent);
+}
+
+.vf-godview-deck-control:focus-visible {
+  outline: 1px solid var(--text-main);
+  outline-offset: 1px;
+}
+
+/* ── THE TERMINALS AWAY, AND THEIR TRAVEL (round 3 — GV-D5, GV-D6; DESIGN.md
+   §6 "The terminals rise and fall", §8 "Minimized", "One resize per change") ──
+   The stage's root says the state (`data-godview-deck`) and, between two
+   states, the travel (`data-godview-deck-motion`, `GodviewStage`). Each travel
+   is a transition of the sheet's `transform` alone (M3): the sheet keeps its
+   box the whole way, so the terminals are laid out once per change.
+
+   Falling — minimized: the sheet keeps its place in the flow and travels down
+   at the size it has, its top 40 past the window's foot (the drawing's), on
+   the retract curve. */
+.vf-godview[data-godview-deck-motion="fall"] .vf-godview-terminal-deck {
+  transform: translateY(calc(100% + 40px));
+  transition: transform 300ms cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* Rising — called up from away: the sheet is back in the flow at its end size
+   at once, and travels up from where it was (below the foot, or wherever a
+   fall it turns round had it) on the island curve. */
+.vf-godview[data-godview-deck-motion="rise"] .vf-godview-terminal-deck {
+  transition: transform 480ms var(--vf-ease-island);
+}
+
+/* Away, arrived: nothing at the foot. The sheet leaves the flow AT THE BOX IT
+   HAD — the top an up sheet stands at: the head's 40 and the monitor's basis
+   (the deck's top at rest is that sum whatever the head's height, L8a) plus
+   the edge — so arriving lays the terminals out again not at all, and rising
+   lays them out not at all either. Below the foot, unseen; the section is
+   inert (`GodviewStage`): no pointer, no focus, no key. */
+.vf-godview[data-godview-deck="away"]:not([data-godview-deck-motion]) .vf-godview-terminal-deck {
+  position: absolute;
+  top: calc(
+    40px +
+    max(var(--vf-monitor-stage-height, 35%), 170px) +
+    var(--vf-godview-deck-shift, 0px)
+  );
+  right: 0;
+  bottom: 0;
+  left: 0;
+  margin-top: 0;
+  transform: translateY(calc(100% + 40px));
+  visibility: hidden;
+}
+
+/* …and the monitor has the window (to the covers' reserve inside the cover,
+   below): its field is laid out once, on arrival — never per frame. */
+.vf-godview[data-godview-deck="away"]:not([data-godview-deck-motion]) .vf-godview-monitor-stage {
+  flex: 1 1 0;
+}
+
+/* M6: under reduced motion no travel is started (`GodviewStage`) and none is
+   drawn: the deck is at its end at once. */
+@media (prefers-reduced-motion: reduce) {
+  .vf-godview[data-godview-deck-motion] .vf-godview-terminal-deck {
+    transition: none;
+  }
+}
+
 /* A live WebGPU canvas may be promoted above ordinary DOM overlays on macOS.
    Compositing the deck while the lab is open keeps the body-level panel on top
    without changing the visible terminal alpha. */
@@ -1127,5 +1227,12 @@
 }
 
 .vf-cover .vf-godview-deck-well {
+  margin-bottom: 88px;
+}
+
+/* The terminals away (GV-D6, L5): the monitor alone ends at 692 too — the
+   covers' reserve — and a field under the line is the head's to draw. */
+.vf-cover .vf-godview[data-godview-deck="away"]:not([data-godview-deck-motion])
+  .vf-godview-monitor-stage {
   margin-bottom: 88px;
 }

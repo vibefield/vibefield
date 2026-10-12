@@ -28,6 +28,11 @@ export interface GodviewDeckEdgeProps {
   /** Whether a monitor stands above the deck. Without one there is nothing to
    * move against, so the lip draws no grip and the edge sits at rest. */
   monitorPresent: boolean;
+  /** The terminals are away (GV-D6): the edge holds still where it was left.
+   * The monitor has the window then, and an edge that measured it would
+   * re-clamp itself and lay the hidden sheet out again — the one thing a
+   * minimized deck must not do (§8, one resize per change). */
+  away?: boolean;
 }
 
 interface Drag {
@@ -63,7 +68,11 @@ export function DeckGroove(): ReactElement {
  * APPLIED shift (the intent clamped to this window). A window that shrinks
  * clamps the edge; one that grows back returns it to where it was put.
  */
-export function GodviewDeckEdge({ persist, monitorPresent }: GodviewDeckEdgeProps): ReactElement {
+export function GodviewDeckEdge({
+  persist,
+  monitorPresent,
+  away = false,
+}: GodviewDeckEdgeProps): ReactElement {
   const lipRef = useRef<HTMLDivElement>(null);
   const [intentInit] = useState(() => (persist ? storedDeckShift() : 0));
   const intent = useRef(intentInit);
@@ -117,7 +126,9 @@ export function GodviewDeckEdge({ persist, monitorPresent }: GodviewDeckEdgeProp
   // tuned height move. A layout effect, so the first paint of an open
   // already stands where the viewer left it. The monitor unmounts while
   // Godview is closed; the edge rests then and comes back on the next open.
+  // Away, it holds still — measured again only when the terminals come up.
   useLayoutEffect(() => {
+    if (away) return;
     const found = monitorPresent ? stage() : null;
     if (!found) {
       apply(0);
@@ -140,7 +151,7 @@ export function GodviewDeckEdge({ persist, monitorPresent }: GodviewDeckEdgeProp
     observer.observe(found.root);
     observer.observe(found.monitor);
     return () => observer.disconnect();
-  }, [apply, measure, monitorPresent, stage]);
+  }, [apply, measure, monitorPresent, stage, away]);
 
   // The root outlives this lip only in a fixture swap; leave it at rest.
   useLayoutEffect(() => {

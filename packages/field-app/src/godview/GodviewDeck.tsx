@@ -40,6 +40,7 @@ import {
   emitGodviewDirectTerminalMarker,
   type GodviewDeckFacts,
 } from "../development-console";
+import { askGodviewDeckUp } from "../frame/deck-door";
 import { type LinePane, publishGodviewLineDoor } from "../frame/line-door";
 import { requestView } from "../frame/view-state";
 import { getHost } from "../host";
@@ -1225,6 +1226,9 @@ export function GodviewDeck({
       // no longer exists). Serialized with the local mounts (AR-4b): they all
       // place by the one focused pane.
       attach: (request) => {
+        // a call (GV-D5, GV-D6): the terminals come up as they were left —
+        // at the call, not after the floor answers; a failure is said in words
+        askGodviewDeckUp();
         const run = mountQueue.current.then(() => attachRemoteNow(request));
         mountQueue.current = run.then(
           () => undefined,
@@ -1233,6 +1237,7 @@ export function GodviewDeck({
         return run;
       },
       createTerminal: async (request) => {
+        askGodviewDeckUp(); // a call: ⌘T, the bloom's birth (GV-D6)
         const context = workspaceRef.current;
         if (context?.activeSession === undefined) return { state: "no-pane" };
         // GV-D4: a new terminal is placed as a session with no pane is — it
@@ -1283,6 +1288,10 @@ export function GodviewDeck({
         }
       },
       mountLocal: (sessionId, options) => {
+        // A session selected is a call (GV-D5, GV-D6): the terminals come up
+        // as they were left. A hand-over selects nothing — the fold moving a
+        // PTY into the pane it replaces — and raises nothing.
+        if (options?.replacing === undefined) askGodviewDeckUp();
         // Mounts are SERIALIZED (AR-4b): two replacements landing in one fold
         // frame would otherwise race each other for the single active-pane
         // slot the workspace mounts into, and the second's activation would

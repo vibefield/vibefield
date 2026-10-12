@@ -8,11 +8,13 @@ import {
   useMemo,
   useState,
 } from "react";
+import { answerGodviewDeckUp, type GodviewDeckState } from "../frame/deck-door";
 import { publishSystemControlDoor } from "../frame/system-control-door";
 import { useActiveView } from "../frame/view-state";
 import { prewarmTerminalPool, terminalPoolConfigured } from "../terminal/pool";
 import { godviewColdOpen } from "./cold-open";
 import { useDeckAppearance } from "./deck-appearance";
+import { deckAfter, storeDeckState, storedDeckState } from "./deck-state";
 import { godviewTerminalGroundStyle } from "./deck-theme";
 import { GodviewDeck } from "./GodviewDeck";
 import { GodviewMonitor } from "./GodviewMonitor";
@@ -114,6 +116,16 @@ export function GodviewOverlay(): ReactElement | null {
   const [remoteDoor, setRemoteDoor] = useState<RemoteSessionDoor | null>(null);
   const [panes, setPanes] = useState<MonitorPaneFacts>({ sessionIds: [] });
   const monitorPanes = useGodviewReplayPanes(panes);
+  /** THE TERMINALS' STATE (round 3, L2 — GV-D5, GV-D6): away, up or
+   * maximized, owned here and only here. The stage draws it and asks for a
+   * change (the Lip's minimize); a call — any session brought to the
+   * terminals, through the deck's doors or the frame's deck door — brings them
+   * up as they were left. Kept for the run (L3): a reload finds what was left,
+   * a launch opens up as today. */
+  const [deckState, setDeckState] = useState<GodviewDeckState>(storedDeckState);
+  useEffect(() => storeDeckState(deckState), [deckState]);
+  const callTerminalsUp = useCallback(() => setDeckState((state) => deckAfter(state, "call")), []);
+  useEffect(() => answerGodviewDeckUp(callTerminalsUp), [callTerminalsUp]);
 
   const changeTuning = useCallback((patch: Partial<GodviewTuning>) => {
     setTuning((current) => ({ ...current, ...patch }));
@@ -290,16 +302,19 @@ export function GodviewOverlay(): ReactElement | null {
         }
         // The sheet's edge is this viewer's, remembered (DESIGN.md §8).
         deckEdge={DECK_EDGE_PERSISTED}
-        // Round 3 (L2): the window's Godview says what its terminals are —
-        // the stage's default, "up", which is the whole truth until they can
-        // be put away — and only it: the frame reads this through the deck's
-        // door, and nothing while another view shows.
+        // Round 3 (L2): the window's Godview says what its terminals are, and
+        // only it: the frame reads this through the deck's door (nothing while
+        // another view shows) and the shell hears it by name.
+        deckState={deckState}
+        onDeckState={setDeckState}
         publishesDeck
         deck={
           terminalAvailable ? (
             <ChromeBoundary name="Deck" retryKey={deckRetryKey}>
               <GodviewDeck
-                active={open}
+                // Away, the terminals take no demand, as a closed Godview's
+                // do: every session runs on the floor, nothing is drawn (PF6)
+                active={open && deckState !== "away"}
                 theme={theme}
                 onRendererBackend={setRendererBackend}
                 onRemoteDoor={setRemoteDoor}

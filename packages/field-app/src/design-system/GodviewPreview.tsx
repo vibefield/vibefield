@@ -1,6 +1,7 @@
 import { monitorParameterDefaults, monitorViewFor } from "@vibecook/puppeteer-views";
 import { UiButton } from "@vibefield/design-kit/primitives";
 import { type CSSProperties, type ReactElement, type ReactNode, useMemo, useState } from "react";
+import type { GodviewDeckState } from "../frame/deck-door";
 import { useDeckAppearance } from "../godview/deck-appearance";
 import { godviewTerminalGroundStyle } from "../godview/deck-theme";
 import { GodviewMonitor } from "../godview/GodviewMonitor";
@@ -31,7 +32,11 @@ import type { MonitorPaneFacts } from "../godview/monitor/useMonitorAgents";
  * monitor's own, so every stage here wears it. `systemControl` stages the one
  * thing the head does not hold: in the product System control is the palette's
  * act (it left with the instrument bar), and a catalog stage has no palette, so
- * the specimen offers the catalog's own button for the shipping panel. */
+ * the specimen offers the catalog's own button for the shipping panel.
+ * `deckState` is the terminals' state the stage opens in (the monitor alone,
+ * away), and `deckControls` puts the Lip's buttons on it, owned here for the
+ * page's life: a catalog has no session to call the terminals back with, so
+ * what they put away stays away until the page is loaded again. */
 export function GodviewPreview({
   door = null,
   panes,
@@ -40,6 +45,8 @@ export function GodviewPreview({
   theme = "light",
   deck,
   systemControl = false,
+  deckState: initialDeckState = "up",
+  deckControls = false,
 }: {
   door?: MonitorDoor | null;
   panes?: MonitorPaneFacts;
@@ -53,8 +60,13 @@ export function GodviewPreview({
   deck?: ReactNode;
   /** Stage the catalog's own button for the System control panel. */
   systemControl?: boolean;
+  /** the terminals' state the stage opens in (round 3) */
+  deckState?: GodviewDeckState;
+  /** the Lip's buttons, live on the page (round 3, GV-D7) */
+  deckControls?: boolean;
 } = {}): ReactElement {
   const [viewId, setViewId] = useState(initialView);
+  const [deckState, setDeckState] = useState<GodviewDeckState>(initialDeckState);
   const [tuningOpen, setTuningOpen] = useState(false);
   const [tuning, setTuning] = useState<GodviewTuning>(() => defaultGodviewTuning(theme));
   const [tunedFor, setTunedFor] = useState(theme);
@@ -127,6 +139,8 @@ export function GodviewPreview({
           }
           // The shipping edge, live on the page and forgotten with it.
           deckEdge={{ persist: false }}
+          deckState={deckState}
+          {...(deckControls ? { onDeckState: setDeckState } : {})}
           deck={deck ?? <GodviewUnavailableDeck />}
         />
       </div>

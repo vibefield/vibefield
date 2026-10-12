@@ -68,7 +68,11 @@ import { act, Profiler } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
-import { publishGodviewDeck, resetGodviewDeckDoorForTest } from "../src/frame/deck-door";
+import {
+  answerGodviewDeckUp,
+  publishGodviewDeck,
+  resetGodviewDeckDoorForTest,
+} from "../src/frame/deck-door";
 import { getGodviewFindDoor, resetGodviewFindDoorForTest } from "../src/frame/find-door";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import { usagePortOver } from "../src/godview/monitor/doors";
@@ -1319,15 +1323,24 @@ describe("the monitor stage", () => {
     expect(door.mountLocal).toHaveBeenCalledTimes(1);
   });
 
-  it("an agent already in the active pane is acknowledged, not re-mounted", async () => {
+  it("an agent already in the active pane is acknowledged, not re-mounted — and the terminals are called up (GV-D6)", async () => {
     const door = fakeDoor();
     const host = await mountMonitor("list", door, { ...PANES, activeSessionId: "run-codex-pty" });
+    // the door is not asked, so the select itself is the call: with the
+    // terminals away, the session in the active pane brings them back too
+    resetGodviewDeckDoorForTest();
+    let calls = 0;
+    const stop = answerGodviewDeckUp(() => {
+      calls += 1;
+    });
     const row = [...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-list-row")].find(
       (candidate) => candidate.textContent?.includes("voyager"),
     );
     await act(async () => row?.click());
     expect(door.mountLocal).not.toHaveBeenCalled();
     expect(ackText(host)).toContain("is in the active pane");
+    expect(calls).toBe(1);
+    stop();
   });
 
   it("says how the deck's rule placed it: a new pane, its own pane focused, or the active one (GV-D4)", async () => {

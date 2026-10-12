@@ -177,6 +177,16 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     const well = lip?.querySelector(".vf-godview-deck-well > .vf-godview-terminal-deck-body");
     expect(well?.querySelectorAll(".ghostty-pane").length).toBeGreaterThanOrEqual(2);
     expect(well?.querySelector(".ghostty-pane.is-active .vf-pane-frame")).not.toBeNull();
+    // …the Lip's first button, live on the page (GV-D7), beside the separator
+    const minimize = lip?.querySelector('button[aria-label="Minimize the terminals"]');
+    expect(minimize?.closest('[role="separator"]')).toBeNull();
+    expect(minimize?.closest(".vf-godview-terminal-deck")).not.toBeNull();
+    // GV-D6: the terminals away — the monitor alone, the sheet kept, unseen and inert
+    expect(container?.textContent).toContain("Deck — away: the monitor alone");
+    const away = container?.querySelector("[data-godview-away-catalog] .vf-godview");
+    expect(away?.getAttribute("data-godview-deck")).toBe("away");
+    expect(away?.querySelector(".vf-godview-terminal-deck")?.hasAttribute("inert")).toBe(true);
+    expect(away?.querySelector(".vf-godview-monitor-stage")).not.toBeNull();
     // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 63 —
     // the wrapper's three (round 3) among them, drawn by the shipping component.
     expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(63);

@@ -26,6 +26,7 @@ import { fileURLToPath } from "node:url";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { GodviewDeckState } from "../src/frame/deck-door";
 import { DEFAULT_DECK_APPEARANCE } from "../src/godview/deck-appearance";
 import {
   clampDeckShift,
@@ -37,6 +38,7 @@ import {
   deckEdgeValueText,
   deckShiftForKey,
 } from "../src/godview/deck-edge";
+import { DECK_FALL_MS, DECK_RISE_MS, DECK_TRAVEL_GRACE_MS } from "../src/godview/deck-state";
 import {
   godviewTerminalGroundStyle,
   godviewTerminalTheme,
@@ -61,6 +63,8 @@ let windowHeight = 800;
 /** Where the monitor's stage begins below the window's top: the bar's 40 today,
  * 0 once the head takes no band (the Stories head). */
 let monitorTop = BAR;
+/** Whether the emulated monitor stands alone (the terminals away). */
+let awayMonitor = false;
 
 function appliedShift(element: Element): number {
   const root = element.closest<HTMLElement>(".vf-godview");
@@ -91,6 +95,8 @@ const WELL_FOOT = 8;
 function layout(this: Element): DOMRect {
   if (this.classList.contains("vf-godview")) return rect(0, windowHeight);
   if (this.classList.contains("vf-godview-monitor-stage")) {
+    // away, the monitor alone has the window down to the covers' reserve
+    if (awayMonitor) return rect(monitorTop, windowHeight - monitorTop - 88);
     return rect(monitorTop, REST_MONITOR + Math.max(0, appliedShift(this)));
   }
   const deckTop = monitorTop + REST_MONITOR + appliedShift(this);
@@ -133,6 +139,7 @@ let host: HTMLElement;
 beforeEach(() => {
   windowHeight = 800;
   monitorTop = BAR;
+  awayMonitor = false;
   localStorage.clear();
   resetDeckWrapperFactsForTest();
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(layout);
@@ -164,13 +171,15 @@ function mount({
   persist = true,
   publishesDeck = false,
   edge = true,
+  deckState = "up",
 }: {
   monitor?: boolean;
   persist?: boolean;
   publishesDeck?: boolean;
   edge?: boolean;
+  deckState?: GodviewDeckState;
 } = {}) {
-  root = createRoot(host);
+  root ??= createRoot(host);
   act(() =>
     root?.render(
       <GodviewStage
@@ -181,6 +190,7 @@ function mount({
         {...(monitor ? { monitor: <Monitor /> } : {})}
         {...(edge ? { deckEdge: { persist } } : {})}
         publishesDeck={publishesDeck}
+        deckState={deckState}
         deck={<p>deck</p>}
       />,
     ),
@@ -457,6 +467,37 @@ describe("the deck edge, mounted", () => {
     mount();
     resizeWindow(900);
     expect(getDeckWrapperFacts()).toBeNull();
+  });
+
+  it("minimize keeps the top: away, the edge is not measured again, and up again it stands where it was left", () => {
+    // GV-D6 "as they were left": the edge is the viewer's. Away, the monitor
+    // has the window (its box grows), and an edge that kept measuring would
+    // re-clamp itself against that and lay the hidden sheet out again — the
+    // one thing a minimized deck must not do (§8, one resize per change).
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    mount();
+    dragBy(150);
+    expect(shiftOnRoot()).toBe("150px");
+    mount({ deckState: "away" });
+    act(() => {
+      vi.advanceTimersByTime(DECK_FALL_MS + DECK_TRAVEL_GRACE_MS);
+    });
+    // the monitor alone: the window to the covers' reserve, in this emulation
+    awayMonitor = true;
+    resizeWindow(800);
+    resizeWindow(900);
+    expect(shiftOnRoot()).toBe("150px");
+    expect(localStorage.getItem(DECK_EDGE_STORAGE_KEY)).toBe("150");
+    // a call brings it up THERE
+    awayMonitor = false;
+    mount({ deckState: "up" });
+    act(() => {
+      vi.advanceTimersByTime(DECK_RISE_MS + DECK_TRAVEL_GRACE_MS);
+    });
+    resizeWindow(800);
+    expect(shiftOnRoot()).toBe("150px");
+    expect(sheetTop()).toBe(BAR + REST_MONITOR + 150);
+    vi.useRealTimers();
   });
 
   it("draws no separator and no shift without a monitor", () => {

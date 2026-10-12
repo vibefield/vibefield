@@ -100,7 +100,16 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
         bleed
       >
         <div data-godview-lip-catalog="">
-          <GodviewPreview theme={theme} deck={<PaneFrameDeck theme={theme} />} />
+          <GodviewPreview theme={theme} deck={<PaneFrameDeck theme={theme} />} deckControls />
+        </div>
+      </Specimen>
+      <Specimen
+        title="Deck — away: the monitor alone (minimized; every session keeps running)"
+        source="godview/GodviewStage.tsx · godview/godview.css"
+        bleed
+      >
+        <div data-godview-away-catalog="">
+          <GodviewPreview theme={theme} deckState="away" deck={<PaneFrameDeck theme={theme} />} />
         </div>
       </Specimen>
       <Specimen

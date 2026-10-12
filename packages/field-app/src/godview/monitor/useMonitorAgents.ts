@@ -19,6 +19,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { askGodviewDeckUp } from "../../frame/deck-door";
 import type { LiveFindAgent } from "../../frame/find-door";
 import type { MonitorFloorRecord } from "./agents";
 import { NO_RUNS, useChromeKey } from "./chrome-facts";
@@ -671,6 +672,9 @@ export function useMonitorAgents({
         return;
       }
       if (agent.active && panes.activeSessionId === sessionId) {
+        // the door is not asked, so the select is the call itself: with the
+        // terminals away, this session brings them back too (GV-D6)
+        askGodviewDeckUp();
         announce(`${projectName(agent)} is in the active pane`);
         return;
       }

@@ -183,6 +183,7 @@ const { GodviewAgentsProvider } = await import("../src/godview/monitor/GodviewAg
 const { paneCwd, readDeviceHost } = await import("../src/godview/deck-restore");
 type RemoteSessionDoor = import("../src/godview/monitor/remote-door").RemoteSessionDoor;
 const { getGodviewLineDoor } = await import("../src/frame/line-door");
+const { answerGodviewDeckUp } = await import("../src/frame/deck-door");
 const { publishDeckWrapperFacts, resetDeckWrapperFactsForTest } = await import(
   "../src/godview/deck-wrapper-witness"
 );
@@ -1789,6 +1790,84 @@ describe("a session with no pane is placed by the rule (GV-D4)", () => {
     expect(store.panes).toHaveLength(3);
     expect(store.showing("beside-1")).toBe("resumed-pty");
 
+    await dispose();
+  });
+});
+
+// GV-D5, GV-D6 (DESIGN.md §8 "Called up"): any session brings the terminals
+// back. Every caller reaches the deck through one of its doors — a body, a list
+// row, a rain column, a timeline lane and a spend row through the monitor's
+// select (`mountLocal`, a peer's `attach`); the swarm's bloom birth through
+// `createTerminal`; the line's New terminal (⌘T), History's Resume, New agent
+// and Jump to, and search's result through the line's door — so the deck's
+// door verbs are where the call is heard: each asks the frame's deck door for
+// the terminals (`askGodviewDeckUp`), which the overlay answers. A hand-over
+// (`replacing`) selects nothing: the fold moving a PTY in place is no call.
+describe("every caller brings the terminals up (GV-D5, GV-D6)", () => {
+  const TWO: readonly ProbePane[] = [
+    { id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } },
+    { id: "pane-2", session: { id: "other-pty", cols: 100, rows: 30 } },
+  ];
+  const lineDoor = (): LineViewDoor => {
+    const door = getGodviewLineDoor();
+    if (door === null) throw new Error("the deck published no line door");
+    return door;
+  };
+
+  it("every caller listed above brings it up, at the call; a hand-over does not", async () => {
+    const store = workspaceProbe({ panes: TWO, activePaneId: "pane-1" });
+    floor = [...floor, { sessionId: "listed-pty" }, { sessionId: "old-pty" }];
+    const { door, dispose } = await mountDeckWithDoor(store);
+    const heard: string[] = [];
+    let calling = "";
+    const stop = answerGodviewDeckUp(() => heard.push(calling));
+    const call = async (name: string, act_: () => Promise<unknown>): Promise<void> => {
+      calling = name;
+      await act(async () => {
+        await act_();
+      });
+    };
+
+    // the monitor's select: a body, a list row, a rain column, a timeline lane,
+    // a spend row — a session a pane shows, and one no pane shows
+    await call("select, shown", () => door.mountLocal("other-pty"));
+    await call("select, unshown", () => door.mountLocal("listed-pty"));
+    // a peer's body (whatever the peer answers, the person called it)
+    await call("attach", () =>
+      door.attach({ deviceId: "peer-1", deviceName: "studio", remoteSessionId: "remote-pty" }),
+    );
+    // the swarm's hold: the bloom's birth
+    await call("bloom", () => door.createTerminal());
+    // the line's New terminal (⌘T)
+    await call("new terminal", () => lineDoor().newTerminal());
+    // History's Resume and New agent: a create ticket, placed
+    floor = [...floor, { sessionId: "resumed-pty" }];
+    await call("resume", () =>
+      lineDoor().place({
+        sessionId: "resumed-pty",
+        session: bornSummary("resumed-pty"),
+        ...routedTicket("resumed-pty"),
+      }),
+    );
+    // History's Jump to, and search's result (the Peek's open)
+    await call("jump to", () => lineDoor().reveal("user-pty"));
+
+    expect(heard).toEqual([
+      "select, shown",
+      "select, unshown",
+      "attach",
+      "bloom",
+      "new terminal",
+      "resume",
+      "jump to",
+    ]);
+
+    // a hand-over is no call: the fold moved a PTY into the pane it replaces
+    heard.length = 0;
+    await call("hand-over", () => door.mountLocal("old-pty", { replacing: "user-pty" }));
+    expect(heard).toEqual([]);
+
+    stop();
     await dispose();
   });
 });

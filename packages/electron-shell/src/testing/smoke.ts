@@ -74,6 +74,7 @@ import type { ElectronLogging } from "../main/logging";
 import { sharedProfilePath } from "../main/smoke-profile";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
+import { deckAwayRung } from "./deck-away-rungs";
 import { labProfileProof } from "./godview-lab-profile";
 import {
   historyByProjectPhotos,
@@ -3767,6 +3768,9 @@ interface DeckFacts {
    * the field existed publishes no `zoom`, and a harness that threw on its
    * absence would be failing on a stale bundle rather than on a behaviour. */
   zoom?: { phase: "idle" | "entering" | "zoomed" | "leaving"; commits: number };
+  /** Round 3: the wrapper around the terminals — its state, its top, and how
+   * many times the box the panes fill has been laid out (only grows). */
+  wrapper?: { state: "away" | "up" | "maximized"; top: number; bodyResizes: number };
 }
 
 interface DirectTerminalFacts {
@@ -9263,6 +9267,19 @@ export async function runSmokeGodview(opts: {
     };
     verdict["historyNewAgent"] = await historyNewAgentRung(win, historyActs);
     verdict["historyGoneFolder"] = await historyGoneFolderRung(win, historyActs);
+
+    // THE TERMINALS AWAY, AND CALLED UP (round 3 — GV-D5, GV-D6;
+    //      `deck-away-rungs.ts`): the Lip's minimize puts them fully away and
+    //      the monitor alone has the window; a body brings them back as they
+    //      were left — the same sessions, the same top, laid out at most once
+    //      per change. The last of the deck rungs, because the terminals'
+    //      state is the run's (it survives the warm open's reload): it leaves
+    //      them up at their old top.
+    verdict["deckAway"] = await deckAwayRung(win, {
+      deck,
+      settled: () => deckSettled(deck, 1_000, 30_000),
+      pressViewKey: (view) => pressViewKey(win, view),
+    });
 
     // THE WARM OPEN — the AFTER number, and the row that actually tests GT-D14.
     //

@@ -832,6 +832,10 @@ describe("UI system ownership boundaries", () => {
     const section = source("design-system/sections/GodviewSection.tsx");
     expect(section).toContain("Deck — the Lip: the groove and the well");
     expect(section).toMatch(/<GodviewPreview\s[^>]*deck=\{<PaneFrameDeck\s/);
+    // GV-D6: the terminals away are the same stage handed that state — never a
+    // picture of a monitor without a deck
+    expect(section).toContain("Deck — away: the monitor alone");
+    expect(section).toMatch(/<GodviewPreview\s[^>]*deckState="away"/);
     expect(source("design-system/GodviewPreview.tsx")).toMatch(/<GodviewStage\s/);
     const fixture = source("design-system/PaneFramePreview.tsx");
     expect(fixture).toMatch(/export function PaneFrameDeck\(/);

@@ -20,6 +20,9 @@ import type { GodviewDeckState } from "../frame/deck-door";
 
 export type DeckWrapperFacts = NonNullable<GodviewDeckFacts["wrapper"]>;
 
+/** The sheet between two states (`GodviewStage`): rising, falling, or still. */
+export type DeckTravel = "rise" | "fall" | null;
+
 let facts: DeckWrapperFacts | null = null;
 const listeners = new Set<() => void>();
 
@@ -66,10 +69,13 @@ export function useDeckWrapperWitness(options: {
   /** Only the window's stage (`publishesDeck`) — never a fixture's. */
   enabled: boolean;
   state: GodviewDeckState;
+  /** A travel moves the sheet by `transform`, which no observer hears: the
+   * facts are read again when it ends, so `top` is where the sheet came to. */
+  travel?: DeckTravel;
   deck: RefObject<HTMLElement | null>;
   body: RefObject<HTMLElement | null>;
 }): void {
-  const { enabled, state, deck, body } = options;
+  const { enabled, state, travel = null, deck, body } = options;
   const box = useRef<string | null>(null);
   const resizes = useRef(0);
   useEffect(() => {
@@ -96,7 +102,7 @@ export function useDeckWrapperWitness(options: {
     observer.observe(section);
     observer.observe(pane);
     return () => observer.disconnect();
-  }, [enabled, state, deck, body]);
+  }, [enabled, state, travel, deck, body]);
   useEffect(() => {
     if (!enabled) return;
     return () => publishDeckWrapperFacts(null);

@@ -10,9 +10,11 @@ import { useSyncExternalStore } from "react";
 // module-store shape for the same reason — the publisher sits deep inside the
 // cover and the readers above it).
 //
-// A plain fact, and no verbs yet: asking for the terminals ("bring them up")
-// comes with the slice that can put them away. Today the deck is always up,
-// so "up" is all that is ever published.
+// A fact, and one verb: anyone may ASK for the terminals — bring them up, as
+// a call does (GV-D5, GV-D6) — and Godview's owner, the overlay, answers. The
+// deck's own doors ask on every call that selects a session (a body, a row,
+// History's acts, ⌘T, the bloom); so does a lab that needs the terminals on
+// screen before it measures them.
 
 /** The wrapper's state. It reads "up" from the START of a drag out of
  * maximized, not from the release, so the head returns at once. */
@@ -58,8 +60,29 @@ export function useGodviewDeckMaximized(): boolean {
   return useSyncExternalStore(subscribeGodviewDeck, isMaximized, isMaximized);
 }
 
+let answer: (() => void) | null = null;
+
+/** The owner's side (`GodviewOverlay`, one per window): answer the ask. The
+ * returned undo withdraws this answer, and only this one. */
+export function answerGodviewDeckUp(fn: () => void): () => void {
+  answer = fn;
+  return () => {
+    if (answer === fn) answer = null;
+  };
+}
+
+/** Bring the terminals up, as a call does: from away they rise as they were
+ * left — the same panes, the same edge; up (or maximized) nothing moves. True
+ * when a Godview heard it; false while none is mounted to answer. */
+export function askGodviewDeckUp(): boolean {
+  if (answer === null) return false;
+  answer();
+  return true;
+}
+
 /** Test seam. */
 export function resetGodviewDeckDoorForTest(): void {
   deck = null;
   listeners.clear();
+  answer = null;
 }
