@@ -981,6 +981,13 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   /** PT-5c (R8) — A KEY IS PRESSED TOO: each key the page was told is DOWN, by its `code`, with what its press carried and
    * the attachment it came through. Its up is a release; an attachment's going lets its keys up; a commit forgets them. */
   readonly #keysDown = new Map<string, KeyDown>();
+  /**
+   * PT-5c2 (F8) — THE GESTURE EACH ATTACHMENT'S HAND IS MAKING, as it was SENT: a left press begins one, its release ends
+   * it; a move of it REFUSED — at its arrival (a geometry gone stale) or at its turn (a rest, its attachment gone, its
+   * wait ended) — marks it, and a finger lifted from a gesture so marked is CANCELLED, never ended (`release`). The
+   * attachment's going ends its gesture (`letGo`).
+   */
+  readonly #gestures = new Map<string | undefined, { refused: boolean }>();
   /** PT-4: the favicon the page last named and the ORIGIN it named it under — published with the browser state while the
    * page stands on that origin (a page that names the same icons as the one before says nothing, so a reload and a walk
    * within a site keep it; a page of another origin has none until it names its own); the count that names the word whose
@@ -1329,22 +1336,55 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     const document = this.#document;
     // (R8: a key's up is a release, as a button's)
     const release = (request.kind === "mouse" || request.kind === "key") && request.type === "up";
+    // PT-5c2 (F8): the gesture this event is of, as the hand sent it — and whether it is one of its moves
+    const gesture = request.kind === "mouse" ? this.gestureOf(request, by) : undefined;
+    const move = request.kind === "mouse" && request.type === "move";
     // PT-5c (ruling 1) — AN EVENT WITH NO POINT IS NEVER JUDGED BY A GEOMETRY: a key, text and a composition are judged
     // by their window and their document alone. (Before: refused when a frame of another size had landed since their own
     // — a desk zoom that moved the raster's rung, a pane resized — and a `keyUp` refused left the key down in the page.)
     const pointed = (request.kind === "mouse" && !release) || request.kind === "wheel";
     if (pointed && geometry !== undefined && request.geometryRevision !== geometry.revision) {
+      if (move && gesture !== undefined) gesture.refused = true;
       return Promise.reject(new Error("Browser input named a stale geometry revision"));
     }
     const turn = this.#inputTail.then(() =>
       this.onWindow(window, document, (standing) =>
         release
-          ? this.release(request, standing)
+          ? this.release(request, standing, gesture)
           : this.dispatchInTurn(request, geometry, standing, document, by),
       ),
     );
+    // (F8: a move of the gesture refused at its turn marks it — before the next turn starts)
+    if (move && gesture !== undefined)
+      turn.catch(() => {
+        gesture.refused = true;
+      });
     this.#inputTail = turn.catch(() => undefined);
     return turn;
+  }
+
+  /**
+   * PT-5c2 (F8) — A GESTURE IS ONE: its press, its moves and its release as the hand sent them. A move of it the page never
+   * heard (refused as it arrived, or at its turn) leaves the page a gesture it did not see whole — and a touch it heard
+   * only as a start and an end is a SHORT touch: the engine taps under its start, a click the person never made (PT-5c's
+   * probe). So a finger lifted from such a gesture is CANCELLED. A mouse is unchanged: its release carries its own point,
+   * and the engine clicks only where press and release meet — a drag whose moves were dropped is still a press here and a
+   * release there, never a click under the press.
+   */
+  private gestureOf(
+    request: Extract<BrowserSurfaceInputRequest, { kind: "mouse" }>,
+    by: string | undefined,
+  ): { refused: boolean } | undefined {
+    const left = request.button === undefined || request.button === "left";
+    if (request.type === "down") {
+      if (!left) return undefined;
+      const gesture = { refused: false };
+      this.#gestures.set(by, gesture);
+      return gesture;
+    }
+    const gesture = this.#gestures.get(by);
+    if (request.type === "up" && left) this.#gestures.delete(by);
+    return gesture;
   }
 
   /** PT-5b3 (ruling 5): an event's turn on the window it was sent for — refused if that window is gone, ended if it goes.
@@ -1396,6 +1436,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   private async release(
     request: Extract<BrowserSurfaceInputRequest, { kind: "mouse" | "key" }>,
     window: BrowserSurfaceNativeWindow,
+    /** PT-5c2 (F8): the gesture it ends, as the hand sent it */
+    gesture: { readonly refused: boolean } | undefined,
   ): Promise<void> {
     // PT-5c (R8) — A KEY'S UP IS A RELEASE: of a key the page was told is down it is sent — to a page at rest too, never
     // judged by a geometry; of a key not down it is nothing. (Before: a keyUp was judged as a press — refused at a rest,
@@ -1413,7 +1455,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       if (request.button !== undefined && request.button !== "left") return;
       this.#touching = false;
       this.#touchingBy = undefined;
-      await window.dispatchTouch({ type: "touchEnd", touchPoints: [] });
+      // (F8: a gesture whose moves the page did not all hear is cancelled — never a tap)
+      await window.dispatchTouch({
+        type: gesture?.refused === true ? "touchCancel" : "touchEnd",
+        touchPoints: [],
+      });
       return;
     }
     const button = request.button ?? "left";
@@ -1446,6 +1492,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * dragged the page with its first hover: the third grade's P3.)
    */
   private letGo(by: string): void {
+    // (F8: its gesture ends with it)
+    this.#gestures.delete(by);
     // R1: what it sent and is still WAITING for its page's word is never sent — its wait ends now, ahead of the chain
     this.scaleWaitsEnd((waiter) => waiter.by === by, "Browser input's attachment is gone");
     const turn = this.#inputTail.then((): Promise<void> | undefined => {

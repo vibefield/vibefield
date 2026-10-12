@@ -5065,6 +5065,48 @@ describe("BrowserLiveSurfaceRuntime", () => {
         expect(p.result.runtime.stats.inputDropped).toBe(dropped);
         p.result.runtime.dispose();
       });
+
+      it("F8 — a touch gesture any of whose moves was REFUSED ends with `touchCancel`, never a tap the person did not make: a finger down, the page put to rest, two moves (refused), the finger up — cancelled (before: `touchEnd` after a start alone, a short touch — the engine tapped under its start)", async () => {
+        const p = await phone();
+        p.pointer("down", 20);
+        await p.delivered();
+        expect(p.heard).toEqual(["touchStart"]);
+        p.renderer.attachment.setDemand(demand(2, "paused", 30, { width: 1206, height: 2622 }));
+        await p.delivered();
+        p.pointer("move", 30);
+        p.pointer("move", 40);
+        p.pointer("up", 40);
+        await p.delivered();
+        expect(p.heard).toEqual(["touchStart", "touchCancel"]);
+        p.result.runtime.dispose();
+      });
+
+      it("F8 — … a move refused at its ARRIVAL (its geometry stale: a frame of another size landed) cancels its gesture too; a gesture whose every move was sent ends with `touchEnd`, as before", async () => {
+        const p = await phone();
+        p.pointer("down", 20);
+        p.pointer("move", 25);
+        p.pointer("up", 25);
+        await p.delivered();
+        expect(p.heard).toEqual(["touchStart", "touchMove", "touchEnd"]);
+        p.pointer("down", 20);
+        await p.delivered();
+        // a frame of another size lands: the move sent under the frame before is refused as it arrives
+        p.window.paint(sharedPaint(603, 1311).paint);
+        await p.delivered();
+        const dropped = p.result.runtime.stats.inputDropped;
+        p.pointer("move", 30);
+        p.pointer("up", 30);
+        await p.delivered();
+        expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
+        expect(p.heard).toEqual([
+          "touchStart",
+          "touchMove",
+          "touchEnd",
+          "touchStart",
+          "touchCancel",
+        ]);
+        p.result.runtime.dispose();
+      });
     });
   });
 });
