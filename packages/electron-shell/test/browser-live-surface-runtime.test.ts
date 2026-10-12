@@ -3912,6 +3912,55 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.result.runtime.dispose();
     });
 
+    it("PT-5d (M12 J8) — a touchStart LET GO at another document's commit (the native's H11: its turn refused — the engine took it and never answered it) is CANCELLED at once, as one answered after the commit; its turn still refused, counted; the hand's late release nothing — the next document's first tap whole", async () => {
+      const p = await phone();
+      let first = true;
+      let letGo: (error: Error) => void = () => {};
+      p.window.dispatchTouch = (input) => {
+        p.heard.push(input.type);
+        if (input.type !== "touchStart" || !first) return Promise.resolve();
+        first = false;
+        return new Promise<void>((_, reject) => {
+          letGo = reject;
+        });
+      };
+      const dropped = p.result.runtime.stats.inputDropped;
+      p.pointer("down", 20);
+      await p.delivered();
+      p.window.emitNavigationState({ ...NAV, url: NEXT });
+      letGo(new Error("Browser input's document is gone"));
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart", "touchCancel"]);
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
+      p.pointer("up", 20);
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart", "touchCancel"]);
+      p.window.say(1);
+      p.pointer("down", 30);
+      p.pointer("up", 30);
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart", "touchCancel", "touchStart", "touchEnd"]);
+      // a touchStart REFUSED while its document stands (the engine refused the command): nothing down — no cancel, and
+      // its release nothing
+      p.window.dispatchTouch = (input) => {
+        p.heard.push(input.type);
+        return input.type === "touchStart"
+          ? Promise.reject(new Error("refused"))
+          : Promise.resolve();
+      };
+      p.pointer("down", 40);
+      p.pointer("up", 40);
+      await p.delivered();
+      expect(p.heard).toEqual([
+        "touchStart",
+        "touchCancel",
+        "touchStart",
+        "touchEnd",
+        "touchStart",
+      ]);
+      p.result.runtime.dispose();
+    });
+
     it("ruling 1 — the scale is FOLLOWED: the page SAYS it (its guard's word) and nothing reads the engine on the hand's path — a press goes at the scale said; a zoom the page makes (a double tap it answers by zooming) is said, and the next press goes at it", async () => {
       const p = await phone();
       p.window.say(0.5);

@@ -1810,16 +1810,26 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     if (touch) {
       const finger = [{ x, y, id: 0 }];
       if (request.type === "down") {
-        await window.dispatchTouch({ type: "touchStart", touchPoints: finger });
+        const refused = await window
+          .dispatchTouch({ type: "touchStart", touchPoints: finger })
+          .then(
+            () => undefined,
+            (error: unknown) => ({ error }),
+          );
         // (told: the finger is DOWN — on the window that heard it, by the attachment that sent it. PT-5c (ruling 1): a
         // touchStart ANSWERED after another document committed went down in a document that is gone — the engine holds
-        // that touch open over the next one (deaf to touch without its end: the probe), so it is cancelled at once)
+        // that touch open over the next one (deaf to touch without its end: the probe), so it is cancelled at once. PT-5d
+        // (M12 J8): and one LET GO at that commit the same — the native's H11 refuses its turn, the engine took it all the
+        // same; a touchStart refused while its document stands is nothing down)
         if (this.#window === window) {
-          if (this.#document === document) {
+          if (this.#document !== document)
+            await window.dispatchTouch({ type: "touchCancel", touchPoints: [] });
+          else if (refused === undefined) {
             this.#touching = true;
             this.#touchingBy = by;
-          } else await window.dispatchTouch({ type: "touchCancel", touchPoints: [] });
+          }
         }
+        if (refused !== undefined) throw refused.error;
       } else await window.dispatchTouch({ type: "touchMove", touchPoints: finger });
       return;
     }
