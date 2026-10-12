@@ -8,6 +8,7 @@ import {
   type FrameVisible,
 } from "./browser-frames";
 import {
+  BrowserFrameKeysRefused,
   type BrowserSurfaceAgent,
   type BrowserSurfaceIcon,
   type BrowserSurfaceNative,
@@ -980,7 +981,11 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * another site on its own session, at the point carried into its viewport), its drag and its release to its press's;
    * a finger the same; a key, text, a composition and a command to the FOCUSED document's session — nothing key-like on
    * the page's while a frame of another site is focused (M3: PT-5d's probe crashed main with keys into such a frame,
-   * `Electron-2026-10-12-070259.ips`). An event whose target is gone is sent nowhere — never a command to a gone session.
+   * `Electron-2026-10-12-070259.ips`). PT-5d (M15) — and NOTHING key-like to such a frame either: typing into a frame of
+   * another site is OFF, a stated limit (James's ruling) — through the product's frame session it crashed main
+   * (`Electron-2026-10-12-123521.ips`, the same signature): refused at once (`BrowserFrameKeysRefused`), sent to no
+   * session; pointer input to frames unchanged. An event whose target is gone is sent nowhere — never a command to a gone
+   * session.
    * A page with no frame of another site: everything on the page's session, as before. PT-5d (M7 H2): which document
    * holds the focus is its own word alone — a press, a key's down and a tap's end are HINTS: each puts the focus in doubt
    * until a word heard with or after its answer settles it; key-like events wait for it (`FOCUS_WORD_MS`), then are
@@ -1046,6 +1051,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       const target =
         input.type === "keyUp" ? this.#frames.keyUp(input.code) : this.#frames.keyDown(input.code);
       if (target === null) return;
+      // PT-5d (M15): a frame of another site holding the focus — the key's down or up REFUSED, sent to no session: typing
+      // there is off (a key's up so refused, J13's stated limit: the page keeps that key down until its next up)
+      if (target.session !== undefined) throw new BrowserFrameKeysRefused();
       await this.hinted(input.type !== "keyUp", () =>
         this.handCommand("Input.dispatchKeyEvent", input, target.session),
       );
@@ -1056,7 +1064,10 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     return this.hand(async () => {
       await this.ensureDebugger();
       await this.focusSettled();
-      await this.handCommand("Input.insertText", { text }, this.#frames.focused().session);
+      const target = this.#frames.focused();
+      // (M15: text into a frame of another site — refused)
+      if (target.session !== undefined) throw new BrowserFrameKeysRefused();
+      await this.handCommand("Input.insertText", { text }, target.session);
     });
   }
 
@@ -1064,10 +1075,13 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     return this.hand(async () => {
       await this.ensureDebugger();
       await this.focusSettled();
+      const target = this.#frames.focused();
+      // (M15: a composition into a frame of another site — refused)
+      if (target.session !== undefined) throw new BrowserFrameKeysRefused();
       await this.handCommand(
         "Input.imeSetComposition",
         { text, selectionStart: caret, selectionEnd: caret },
-        this.#frames.focused().session,
+        target.session,
       );
     });
   }

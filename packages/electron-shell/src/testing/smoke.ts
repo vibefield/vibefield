@@ -1012,6 +1012,8 @@ export interface LiveCensus {
   readonly runtimes: number;
   readonly owners: number;
   readonly emulations: number;
+  /** PT-5d (M15): the key-like events main's pages refused because a frame of another site held the focus (FRAME-TYPE) */
+  readonly frameKeysRefused: number;
 }
 
 export async function runSmokeCanvas(opts: {

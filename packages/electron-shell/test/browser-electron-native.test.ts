@@ -972,13 +972,23 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     ]);
   });
 
-  it("M3 — keys, text, a composition and a command go to the FOCUSED frame's session — nothing key-like on the page's while a frame of another site is focused: the focus is what each document SAYS (M7 H2: a press a hint, its document's `here` the word)", async () => {
+  it("M3 under M15 — while a frame of another site holds the focus (its word), a key's down and up, text, a composition and a command are REFUSED at once, sent to NO session — neither the frame's (typing there crashed main: `123521.ips`) nor the page's; the page's own `here` takes the keys back; pointer input to the frame unchanged", async () => {
     const r = await framed();
     const word = (payload: string, session?: string): void =>
       r.emit(
         "Runtime.bindingCalled",
         { name: FRAME_WORDS_BINDING, payload, executionContextId: 1 },
         session,
+      );
+    const said: string[] = [];
+    const settled = (sent: Promise<void>): Promise<void> =>
+      sent.then(
+        () => {
+          said.push("sent");
+        },
+        (error: unknown) => {
+          said.push(`refused: ${error instanceof Error ? error.message : String(error)}`);
+        },
       );
     await r.native.dispatchMouse({
       type: "mousePressed",
@@ -995,20 +1005,27 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       button: "left",
       clickCount: 1,
     });
-    await r.native.dispatchKey({ type: "keyDown", key: "h", code: "KeyH", modifiers: NONE });
-    word("here", "F");
-    await r.native.dispatchKey({ type: "keyUp", key: "h", code: "KeyH", modifiers: NONE });
-    await r.native.dispatchText("é");
-    await r.native.dispatchCompose("か", 1);
-    await r.native.dispatchKey({
-      type: "keyDown",
-      key: "a",
-      code: "KeyA",
-      modifiers: 4,
-      commands: ["selectAll"],
-    });
-    word("here", "F");
-    await r.native.dispatchKey({ type: "keyUp", key: "a", code: "KeyA", modifiers: 4 });
+    await settled(
+      r.native.dispatchKey({ type: "keyDown", key: "h", code: "KeyH", modifiers: NONE }),
+    );
+    await settled(r.native.dispatchKey({ type: "keyUp", key: "h", code: "KeyH", modifiers: NONE }));
+    await settled(r.native.dispatchText("é"));
+    await settled(r.native.dispatchCompose("か", 1));
+    await settled(
+      r.native.dispatchKey({
+        type: "keyDown",
+        key: "a",
+        code: "KeyA",
+        modifiers: 4,
+        commands: ["selectAll"],
+      }),
+    );
+    await settled(r.native.dispatchKey({ type: "keyUp", key: "a", code: "KeyA", modifiers: 4 }));
+    expect(said).toEqual(
+      Array(6).fill(
+        "refused: Browser input's focus is in a frame of another site — typing there is off",
+      ),
+    );
     // a press on the page, and the page says it holds the focus: the keys are the page's again
     await r.native.dispatchMouse({
       type: "mousePressed",
@@ -1026,27 +1043,24 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       button: "left",
       clickCount: 1,
     });
-    await r.native.dispatchText("x");
-    // F's document says the focus is in it (its script focused a field): F's
+    await settled(r.native.dispatchText("x"));
+    // F's document says the focus is in it (its script focused a field): refused again
     word("here", "F");
-    await r.native.dispatchText("y");
+    await settled(r.native.dispatchText("y"));
+    expect(said.slice(6)).toEqual([
+      "sent",
+      "refused: Browser input's focus is in a frame of another site — typing there is off",
+    ]);
     expect(r.hand()).toEqual([
       "mousePressed@F 80,40",
       "mouseReleased@F 80,40",
-      "keyDown@F",
-      "keyUp@F",
-      "insertText@F é",
-      "imeSetComposition@F か",
-      "keyDown@F",
-      "keyUp@F",
       "mousePressed@page 20,20",
       "mouseReleased@page 20,20",
       "insertText@page x",
-      "insertText@F y",
     ]);
   });
 
-  it("M6.2 under M7 H2 — the focus going from F's own document to its own child of its site: both say `here` on F's session — a key between them goes on F's, never the page's; the page's own `here` takes the keys back", async () => {
+  it("M6.2 under M7 H2 and M15 — the focus going from F's own document to its own child of its site: both say `here` on F's session — a key between them is REFUSED (a frame of another site holds the focus), never the page's; the page's own `here` takes the keys back", async () => {
     const r = await framed();
     const word = (payload: string, session?: string): void =>
       r.emit(
@@ -1071,23 +1085,38 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     });
     // F's own document's word, then its child's — both F's session
     word("here", "F");
-    await r.native.dispatchKey({ type: "keyDown", key: "h", code: "KeyH", modifiers: NONE });
+    const said: string[] = [];
+    const settled = (sent: Promise<void>): Promise<void> =>
+      sent.then(
+        () => {
+          said.push("sent");
+        },
+        (error: unknown) => {
+          said.push(`refused: ${error instanceof Error ? error.message : String(error)}`);
+        },
+      );
+    await settled(
+      r.native.dispatchKey({ type: "keyDown", key: "h", code: "KeyH", modifiers: NONE }),
+    );
     word("here", "F");
-    await r.native.dispatchKey({ type: "keyUp", key: "h", code: "KeyH", modifiers: NONE });
-    await r.native.dispatchText("é");
+    await settled(r.native.dispatchKey({ type: "keyUp", key: "h", code: "KeyH", modifiers: NONE }));
+    await settled(r.native.dispatchText("é"));
     word("here");
-    await r.native.dispatchText("x");
+    await settled(r.native.dispatchText("x"));
+    expect(said).toEqual([
+      "refused: Browser input's focus is in a frame of another site — typing there is off",
+      "refused: Browser input's focus is in a frame of another site — typing there is off",
+      "refused: Browser input's focus is in a frame of another site — typing there is off",
+      "sent",
+    ]);
     expect(r.hand()).toEqual([
       "mousePressed@F 80,40",
       "mouseReleased@F 80,40",
-      "keyDown@F",
-      "keyUp@F",
-      "insertText@F é",
       "insertText@page x",
     ]);
   });
 
-  it("ruling 3 — what a frame took ends where it began: its press released once its session has GONE is sent nowhere (never a command to a gone session); once it committed ANOTHER document (its own word, `Page.frameNavigated` of its frame), nowhere; a key held in it goes up where the focus is — F, its new document (M7 H2: as a browser delivers it)", async () => {
+  it("ruling 3 — what a frame took ends where it began: its press released once its session has GONE is sent nowhere (never a command to a gone session); once it committed ANOTHER document (its own word, `Page.frameNavigated` of its frame), nowhere; M15: a key typed while F holds the focus is REFUSED — its down and its up sent nowhere", async () => {
     const r = await framed();
     const here = (): void =>
       r.emit(
@@ -1103,7 +1132,9 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       clickCount: 1,
     });
     here();
-    await r.native.dispatchKey({ type: "keyDown", key: "q", code: "KeyQ", modifiers: NONE });
+    await expect(
+      r.native.dispatchKey({ type: "keyDown", key: "q", code: "KeyQ", modifiers: NONE }),
+    ).rejects.toThrow("a frame of another site");
     here();
     r.emit("Page.frameNavigated", { frame: { id: "t-F", url: "https://frame.test/next" } }, "F");
     await r.native.dispatchMouse({
@@ -1113,7 +1144,9 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       button: "left",
       clickCount: 1,
     });
-    await r.native.dispatchKey({ type: "keyUp", key: "q", code: "KeyQ", modifiers: NONE });
+    await expect(
+      r.native.dispatchKey({ type: "keyUp", key: "q", code: "KeyQ", modifiers: NONE }),
+    ).rejects.toThrow("a frame of another site");
     // its next press is its new document's
     await r.native.dispatchMouse({
       type: "mousePressed",
@@ -1130,12 +1163,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       button: "left",
       clickCount: 1,
     });
-    expect(r.hand()).toEqual([
-      "mousePressed@F 80,40",
-      "keyDown@F",
-      "keyUp@F",
-      "mousePressed@F 80,40",
-    ]);
+    expect(r.hand()).toEqual(["mousePressed@F 80,40", "mousePressed@F 80,40"]);
   });
 
   it("ruling 3 — the PAGE's commit takes every frame of the document before: a press there afterwards is the page's", async () => {
@@ -2213,7 +2241,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       await r.native.dispatchMouse({ type: "mouseReleased", x, y, button: "left", clickCount: 1 });
     };
 
-    it("a press is a HINT: a key sent right after a press into F WAITS for the word of where the focus went — F's `here`, and it goes to F (never the page's, where the focus was before)", async () => {
+    it("a press is a HINT: a key sent right after a press into F WAITS for the word of where the focus went — F's `here`, and it is REFUSED (M15: a frame of another site holds the focus) — never the page's, where the focus was before", async () => {
       vi.useFakeTimers();
       try {
         const r = await framed();
@@ -2233,33 +2261,37 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         await vi.advanceTimersByTimeAsync(200);
         expect(r.hand()).toEqual(["mousePressed@F 80,40"]);
         word(r, "here", "F");
-        expect(await settle(key)).toBe("sent");
-        expect(r.hand()).toEqual(["mousePressed@F 80,40", "keyDown@F"]);
+        expect(await settle(key)).toBe(
+          "refused: Browser input's focus is in a frame of another site — typing there is off",
+        );
+        expect(r.hand()).toEqual(["mousePressed@F 80,40"]);
       } finally {
         vi.useRealTimers();
       }
     });
 
-    it("(a) a Tab on the page whose default moves the focus into F: its up goes to F — never the page's session", async () => {
+    it("(a) a Tab on the page whose default moves the focus into F: its up is REFUSED (M15, J13's stated limit: the page keeps it down until its next up) — never the page's session, nor F's", async () => {
       const r = await framed();
       await r.native.dispatchKey({ type: "keyDown", key: "Tab", code: "Tab", modifiers: NONE });
       word(r, "here", "F");
       word(r, "inner");
-      await r.native.dispatchKey({ type: "keyUp", key: "Tab", code: "Tab", modifiers: NONE });
-      expect(r.hand()).toEqual(["keyDown@page", "keyUp@F"]);
+      await expect(
+        r.native.dispatchKey({ type: "keyUp", key: "Tab", code: "Tab", modifiers: NONE }),
+      ).rejects.toThrow("a frame of another site");
+      expect(r.hand()).toEqual(["keyDown@page"]);
     });
 
-    it("(b) a press on the page that keeps F's focus (its mousedown prevented): the page says `inner` — the keys stay F's", async () => {
+    it("(b) a press on the page that keeps F's focus (its mousedown prevented): the page says `inner` — F still holds it: a key REFUSED (M15), never the page's", async () => {
       const r = await framed();
       await press(r, 180, 120);
       word(r, "here", "F");
       await press(r, 20, 20);
       word(r, "inner");
-      await r.native.dispatchText("x");
-      expect(r.hand().at(-1)).toBe("insertText@F x");
+      await expect(r.native.dispatchText("x")).rejects.toThrow("a frame of another site");
+      expect(r.hand().filter((h) => h.startsWith("insertText"))).toEqual([]);
     });
 
-    it("(c) a page-session press over F whose quad is not read — the host focused F's element: the page says `inner`; until F's own word a key WAITS, then is refused — never on the page's session; F's word, and the next goes to F", async () => {
+    it("(c) a page-session press over F whose quad is not read — the host focused F's element: the page says `inner`; until F's own word a key WAITS, then is refused — never on the page's session; F's word, and the next is REFUSED at once (M15)", async () => {
       vi.useFakeTimers();
       try {
         const r = recording((method) => {
@@ -2277,14 +2309,16 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         expect(said).toBe("refused: Browser input's focus is in doubt");
         expect(r.hand().filter((h) => h.startsWith("insertText"))).toEqual([]);
         word(r, "here", "F");
-        await settle(r.native.dispatchText("y"));
-        expect(r.hand().at(-1)).toBe("insertText@F y");
+        expect(await settle(r.native.dispatchText("y"))).toBe(
+          "refused: Browser input's focus is in a frame of another site — typing there is off",
+        );
+        expect(r.hand().filter((h) => h.startsWith("insertText"))).toEqual([]);
       } finally {
         vi.useRealTimers();
       }
     });
 
-    it("(d) a script moves the focus into F (`iframe.focus()`): the page's `inner` puts it in doubt — a key WAITS for F's word, then goes to F", async () => {
+    it("(d) a script moves the focus into F (`iframe.focus()`): the page's `inner` puts it in doubt — a key WAITS for F's word, then is REFUSED (M15)", async () => {
       vi.useFakeTimers();
       try {
         const r = await framed();
@@ -2293,8 +2327,10 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         await vi.advanceTimersByTimeAsync(100);
         expect(r.hand().filter((h) => h.startsWith("insertText"))).toEqual([]);
         word(r, "here", "F");
-        expect(await settle(text)).toBe("sent");
-        expect(r.hand().at(-1)).toBe("insertText@F x");
+        expect(await settle(text)).toBe(
+          "refused: Browser input's focus is in a frame of another site — typing there is off",
+        );
+        expect(r.hand().filter((h) => h.startsWith("insertText"))).toEqual([]);
       } finally {
         vi.useRealTimers();
       }
@@ -2338,6 +2374,45 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         const said = await settle(r.native.dispatchText("x"));
         expect(said).toBe("refused: Browser input's focus is in doubt");
         expect(r.hand()).not.toContain("insertText@page x");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("M15 J13 — a key's UP whose down went to the page: to the page while the PAGE holds the focus (its word); in doubt it WAITS like the rest — the word comes, and it goes; a frame of another site holding the focus: REFUSED at once — a stated limit (the page keeps that key down until its next up)", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = await framed();
+        const shift = (type: "keyDown" | "keyUp") =>
+          r.native.dispatchKey({ type, key: "Shift", code: "ShiftLeft", modifiers: NONE });
+        // the page holds the focus: its down and its up, the page's
+        await shift("keyDown");
+        word(r, "here");
+        expect(await settle(shift("keyUp"))).toBe("sent");
+        // in doubt — a press into F: the up waits; F says the focus is not in it (its mousedown kept it out): it goes
+        await shift("keyDown");
+        word(r, "here");
+        await press(r, 180, 120);
+        const up = shift("keyUp");
+        await vi.advanceTimersByTimeAsync(100);
+        expect(r.hand().filter((h) => h.startsWith("keyUp"))).toHaveLength(1);
+        word(r, "away", "F");
+        expect(await settle(up)).toBe("sent");
+        // F holds the focus (its word): the up refused, at once
+        await shift("keyDown");
+        word(r, "here");
+        await press(r, 180, 120);
+        word(r, "here", "F");
+        expect(await settle(shift("keyUp"))).toBe(
+          "refused: Browser input's focus is in a frame of another site — typing there is off",
+        );
+        expect(r.hand().filter((h) => h.startsWith("key"))).toEqual([
+          "keyDown@page",
+          "keyUp@page",
+          "keyDown@page",
+          "keyUp@page",
+          "keyDown@page",
+        ]);
       } finally {
         vi.useRealTimers();
       }
@@ -2389,31 +2464,6 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
           expect(r.hand()).toContain("mouseMoved@page 1,1");
           await vi.advanceTimersByTimeAsync(5_000);
           await Promise.all(texts);
-        } finally {
-          vi.useRealTimers();
-        }
-      });
-
-      it("J13 — a key's UP whose down was SENT before the doubt began is sent, never refused — a release of what is down is always sent: Shift held on the page across a press into F whose word never comes", async () => {
-        vi.useFakeTimers();
-        try {
-          const r = await framed();
-          await r.native.dispatchKey({
-            type: "keyDown",
-            key: "Shift",
-            code: "ShiftLeft",
-            modifiers: NONE,
-          });
-          word(r, "here");
-          await press(r, 180, 120);
-          const up = r.native.dispatchKey({
-            type: "keyUp",
-            key: "Shift",
-            code: "ShiftLeft",
-            modifiers: NONE,
-          });
-          expect(await settle(up)).toBe("sent");
-          expect(r.hand().filter((h) => h.startsWith("keyUp"))).toHaveLength(1);
         } finally {
           vi.useRealTimers();
         }

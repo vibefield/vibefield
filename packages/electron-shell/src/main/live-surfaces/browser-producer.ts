@@ -465,6 +465,20 @@ export interface BrowserLiveSurfaceRuntimeOptions {
   readonly onPaintCallbackDurationUs?: (durationUs: bigint) => void;
 }
 
+/**
+ * PT-5d (M15) — TYPING INTO A FRAME OF ANOTHER SITE IS OFF, a stated limit (James's ruling, 2026-10-12): a key-like event —
+ * a key's down or up, text, a composition, a command — while a frame of another site holds the page's focus is refused by
+ * the native and sent to NO session. Typing into such a frame through its own session crashed Electron's main
+ * (`Electron-2026-10-12-123521.ips`, the signature of `064207` and `070259`), and the page's own session is never sent a
+ * key while a frame holds the focus (M3). The runtime counts these apart (`frameKeysRefused`).
+ */
+export class BrowserFrameKeysRefused extends Error {
+  constructor() {
+    super("Browser input's focus is in a frame of another site — typing there is off");
+    this.name = "BrowserFrameKeysRefused";
+  }
+}
+
 export interface BrowserLiveSurfaceRuntimeStats {
   readonly attachmentsCreated: number;
   readonly activeAttachments: number;
@@ -482,6 +496,9 @@ export interface BrowserLiveSurfaceRuntimeStats {
   readonly importedReferencesReleased: number;
   readonly inputRequests: number;
   readonly inputDropped: number;
+  /** PT-5d (M15): the key-like events refused because a frame of another site held the focus — counted in `inputDropped`
+   * too (typing into such a frame is off: `BrowserFrameKeysRefused`). */
+  readonly frameKeysRefused: number;
   readonly navigationRequests: number;
   readonly navigationDropped: number;
   /** PT-4: emulations applied that differed from the one before; reloads they asked (the page's told device moved). */
@@ -1049,6 +1066,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #importedReferencesReleased = 0;
   #inputRequests = 0;
   #inputDropped = 0;
+  #frameKeysRefused = 0;
   #navigationRequests = 0;
   #navigationDropped = 0;
   #emulations = 0;
@@ -1235,6 +1253,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       importedReferencesReleased: this.#importedReferencesReleased,
       inputRequests: this.#inputRequests,
       inputDropped: this.#inputDropped,
+      frameKeysRefused: this.#frameKeysRefused,
       navigationRequests: this.#navigationRequests,
       navigationDropped: this.#navigationDropped,
       emulations: this.#emulations,
@@ -1250,6 +1269,12 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * (`LiveSurfaceAuthority.state()`). */
   emulations(): number {
     return this.#emulations;
+  }
+
+  /** PT-5d (M15): the key-like events this page refused because a frame of another site held the focus — main's census
+   * sums them (typing into such a frame is off). */
+  frameKeysRefused(): number {
+    return this.#frameKeysRefused;
   }
 
   supportSnapshot(): LiveSurfaceRuntimeSupportSnapshot {
@@ -1315,8 +1340,10 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         runtime.#inputRequests += 1;
         void runtime
           .dispatchInput(browserInputRequest(input, geometryRevision), context.attachmentId)
-          .catch(() => {
+          .catch((error: unknown) => {
             runtime.#inputDropped += 1;
+            // PT-5d (M15): typing into a frame of another site is off — its refusals counted apart
+            if (error instanceof BrowserFrameKeysRefused) runtime.#frameKeysRefused += 1;
           });
       },
       navigate(command) {

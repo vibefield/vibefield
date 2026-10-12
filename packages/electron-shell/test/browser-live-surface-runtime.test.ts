@@ -12,6 +12,7 @@ import {
   type BrowserControlTargetWebContents,
 } from "../src/main/live-surfaces/browser-control-target";
 import {
+  BrowserFrameKeysRefused,
   BrowserLiveSurfaceRuntime,
   type BrowserSurfaceAgent,
   type BrowserSurfaceIcon,
@@ -801,7 +802,12 @@ describe("BrowserLiveSurfaceRuntime", () => {
       custody.dispose();
       expect(quit.window?.destroyed).toBe(true);
       expect(quit.runtime.summary.state).toBe("closed");
-      expect(custody.state()).toEqual({ runtimes: 0, owners: 0, emulations: 0 });
+      expect(custody.state()).toEqual({
+        runtimes: 0,
+        owners: 0,
+        emulations: 0,
+        frameKeysRefused: 0,
+      });
       // no grace's timer outlives the runtimes it was for
       expect(vi.getTimerCount()).toBe(0);
       // an explicit `hibernated` demand from a renderer that comes back: at once, the grace or not
@@ -3781,6 +3787,24 @@ describe("BrowserLiveSurfaceRuntime", () => {
         );
       return { result, renderer, window, key };
     };
+
+    it("PT-5d (M15) — a key-like event the native REFUSES because a frame of another site holds the focus is counted APART (`frameKeysRefused`, and with every refusal in `inputDropped`); one refused for another reason is not; the runtime says its count to main's census (`frameKeysRefused()`)", async () => {
+      const p = await laptop();
+      const r = p.result.runtime.summary.geometry?.revision ?? 0;
+      p.window.dispatchKey = () => Promise.reject(new BrowserFrameKeysRefused());
+      p.window.dispatchText = () => Promise.reject(new BrowserFrameKeysRefused());
+      p.window.dispatchCompose = () =>
+        Promise.reject(new Error("Browser input's focus is in doubt"));
+      const dropped = p.result.runtime.stats.inputDropped;
+      p.key("down", r);
+      p.renderer.attachment.dispatchInput?.({ kind: "text", text: "é" }, r);
+      p.renderer.attachment.dispatchInput?.({ kind: "compose", text: "か", caret: 1 }, r);
+      await delivered();
+      expect(p.result.runtime.stats.frameKeysRefused).toBe(2);
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 3);
+      expect(p.result.runtime.frameKeysRefused()).toBe(2);
+      p.result.runtime.dispose();
+    });
 
     it("ruling 1 (P4) — an event with NO POINT is never judged by a geometry: a key's release, a word typed and a composition sent under the frame before one of another size landed all reach the page — no key is left down", async () => {
       const p = await laptop();

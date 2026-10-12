@@ -52,6 +52,9 @@ export interface LiveSurfaceRuntimeHandle extends LiveSurfaceRuntimeAuthority {
   /** PT-5c2 (F4): the device switches its page took (a browser page's `stats.emulations`; a capture takes none) — counted
    * by the census. */
   emulations?(): number;
+  /** PT-5d (M15): the key-like events its page refused because a frame of another site held the focus (a browser page's
+   * `stats.frameKeysRefused`) — counted by the census. */
+  frameKeysRefused?(): number;
 }
 
 /** Injectable producer construction; production binds the three real runtime
@@ -141,6 +144,7 @@ export class LiveSurfaceAuthority {
   #disposed = false;
   /** PT-5c2 (F4): the device switches the runtimes let go had taken — the census's count only grows. */
   #emulationsGone = 0;
+  #frameKeysRefusedGone = 0;
 
   constructor(deps: LiveSurfaceAuthorityDeps) {
     this.#deps = deps;
@@ -290,14 +294,18 @@ export class LiveSurfaceAuthority {
    * runtimes accepted (a switch asked of a born, live page is told at once; one asked of a window not yet born, at its
    * birth; one that moves the density remakes the window). The smoke's TAPS-PENDING reads it of a born, live page — where a
    * moved count is a device command sent; the desk's own count moves when its lane takes the write, sent or not. */
-  state(): { runtimes: number; owners: number; emulations: number } {
+  state(): { runtimes: number; owners: number; emulations: number; frameKeysRefused: number } {
     let owners = 0;
     let emulations = this.#emulationsGone;
+    // PT-5d (M15): and the key-like events refused because a frame of another site held the focus — typing into such a
+    // frame is off; the smoke's FRAME-TYPE reads that it was refused
+    let frameKeysRefused = this.#frameKeysRefusedGone;
     for (const entry of this.#bySurfaceId.values()) {
       owners += entry.owners.size;
       emulations += entry.runtime.emulations?.() ?? 0;
+      frameKeysRefused += entry.runtime.frameKeysRefused?.() ?? 0;
     }
-    return { runtimes: this.#bySurfaceId.size, owners, emulations };
+    return { runtimes: this.#bySurfaceId.size, owners, emulations, frameKeysRefused };
   }
 
   dispose(): void {
@@ -355,6 +363,7 @@ export class LiveSurfaceAuthority {
 
   #disposeEntry(entry: CustodyEntry): void {
     this.#emulationsGone += entry.runtime.emulations?.() ?? 0;
+    this.#frameKeysRefusedGone += entry.runtime.frameKeysRefused?.() ?? 0;
     this.#bySurfaceId.delete(entry.surfaceId);
     if (entry.dedupeKey !== null) this.#byDedupeKey.delete(entry.dedupeKey);
     try {
