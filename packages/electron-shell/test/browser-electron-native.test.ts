@@ -1200,7 +1200,10 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
   it("rulings 1, M3, M7 H2 — a document's WORDS, run: it takes the binding out of the page's reach; says WHERE THE FOCUS IS (`here`, `inner`, `away`) after each trusted event — one word a task, once its default actions are done — and `moved` only when its frames' boxes or their VISIBLE parts changed (M6.3a), once an animation frame; never its size (M6.1); a document holding no frame never says moved; the page's blank and a document with no binding say nothing — a FRAME's blank speaks; M12 J10 — what no event says is LOOKED for: a cover between the quick look's points, or the frame's own `pointer-events`, seen within the deep look's bound", () => {
     const run = (options: { href?: string; binding?: boolean; top?: boolean } = {}) => {
       const said: string[] = [];
-      const on = new Map<string, ((event?: { target?: unknown; isTrusted?: boolean }) => void)[]>();
+      const on = new Map<
+        string,
+        ((event?: { target?: unknown; isTrusted?: boolean; timeStamp?: number }) => void)[]
+      >();
       let frame: (() => void) | undefined;
       let every: (() => void) | undefined;
       const later: (() => void)[] = [];
@@ -1329,8 +1332,10 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         g,
         self,
         { href: options.href ?? "https://example.test/a" },
-        (type: string, listener: (event?: { target?: unknown; isTrusted?: boolean }) => void) =>
-          on.set(type, [...(on.get(type) ?? []), listener]),
+        (
+          type: string,
+          listener: (event?: { target?: unknown; isTrusted?: boolean; timeStamp?: number }) => void,
+        ) => on.set(type, [...(on.get(type) ?? []), listener]),
         (callback: () => void) => {
           frame = callback;
         },
@@ -1357,7 +1362,10 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         },
         { now: () => clock.ms },
       );
-      const fire = (type: string, event?: { target?: unknown; isTrusted?: boolean }): void => {
+      const fire = (
+        type: string,
+        event?: { target?: unknown; isTrusted?: boolean; timeStamp?: number },
+      ): void => {
         for (const listener of on.get(type) ?? []) listener(event);
       };
       const tick = (): void => {
@@ -1398,7 +1406,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     d.fire("mousedown", { isTrusted: true });
     expect(d.said).toEqual([]);
     d.after();
-    expect(d.said).toEqual(["here"]);
+    expect(d.said).toEqual(["here@0"]);
     // a key whose default moved the focus into a frame it cannot see into (another process, or origin): `inner`
     d.focus.active = { localName: "iframe", contentDocument: null };
     d.fire("keydown", { isTrusted: true });
@@ -1414,12 +1422,20 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     d.focus.has = false;
     d.fire("blur", { target: d.self, isTrusted: true });
     d.after();
-    expect(d.said).toEqual(["here", "inner", "here", "away"]);
+    expect(d.said).toEqual(["here@0", "inner@0", "here@0", "away@0"]);
     // M7 H1: a SYNTHETIC event — `dispatchEvent`, the page's own script — says nothing
     d.fire("focus", { target: d.self, isTrusted: false });
     d.fire("keydown", { isTrusted: false });
     d.after();
-    expect(d.said).toEqual(["here", "inner", "here", "away"]);
+    expect(d.said).toEqual(["here@0", "inner@0", "here@0", "away@0"]);
+    // M12 J3: a word says HOW LONG AGO the newest trusted event it answers happened (its own clock: a duration) — a key
+    // made at 100, dispatched to the document at 300 (it was busy), its word told at 350: 250, from the event's own stamp
+    d.focus.has = true;
+    d.clock.ms = 300;
+    d.fire("keydown", { isTrusted: true, timeStamp: 100 });
+    d.clock.ms = 350;
+    d.after();
+    expect(d.said.at(-1)).toBe("here@250");
     d.said.length = 0;
     d.focus.has = true;
     // a frame added: the half-second look says it moved — once; a scroll that moved nothing says nothing
@@ -1460,7 +1476,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     const editor = run({ href: "about:blank", top: false });
     editor.fire("keydown", { isTrusted: true });
     editor.after();
-    expect(editor.said).toEqual(["here"]);
+    expect(editor.said).toEqual(["here@0"]);
     // M12 J10 — what no event says is LOOKED for. A badge 16 × 16 — smaller than the quick look's cell — appears BETWEEN
     // its points (x 130, 190; y 102, 146) with nothing else moving: the half-second's DEEP look (the frame's whole sight,
     // its whole grid at most a second old — the grid's point 160, 140 lands on it) says moved within a second and a half;
@@ -2374,6 +2390,35 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         const said = await settle(r.native.dispatchText("x"));
         expect(said).toBe("refused: Browser input's focus is in doubt");
         expect(r.hand()).not.toContain("insertText@page x");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("M12 J3 (unfrozen at M15) — a word said of an EARLIER hint never settles a later one: the page's late word, its event 600 ms old (before the press into F was sent), heard after the press — it moves nothing; F's own word of the press settles it: the text then REFUSED (M15), never sent on the page's session", async () => {
+      vi.useFakeTimers({
+        toFake: [
+          "setTimeout",
+          "clearTimeout",
+          "setInterval",
+          "clearInterval",
+          "Date",
+          "performance",
+        ],
+      });
+      try {
+        const r = await framed();
+        await vi.advanceTimersByTimeAsync(1_000);
+        await press(r, 180, 120);
+        word(r, "here@600");
+        const text = r.native.dispatchText("x");
+        await vi.advanceTimersByTimeAsync(100);
+        expect(r.hand().filter((h) => h.startsWith("insertText"))).toEqual([]);
+        word(r, "here@0", "F");
+        expect(await settle(text)).toBe(
+          "refused: Browser input's focus is in a frame of another site — typing there is off",
+        );
+        expect(r.hand().filter((h) => h.startsWith("insertText"))).toEqual([]);
       } finally {
         vi.useRealTimers();
       }

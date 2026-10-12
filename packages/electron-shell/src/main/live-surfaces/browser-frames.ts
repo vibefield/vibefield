@@ -95,6 +95,10 @@ interface FrameRecord {
  * `letGoOn` lets a button go. */
 const OUTSIDE = -1000;
 
+/** PT-5d (M12 J3): how far before a hint's send a word's event may be placed and still be taken as following it — a word's
+ * age is rounded to the ms, and its transit only ever places it later. */
+export const WORD_TOLERANCE_MS = 2;
+
 /** PT-5d (M7 H7): wheels less than this apart as they ARRIVE (M12 J9 — never as their turns run) are one gesture — latched
  * to the target its first went to (the desk's wheel carries no phase: the ruled 100–300 ms). */
 export const WHEEL_LATCH_MS = 200;
@@ -114,6 +118,8 @@ export class BrowserFrames {
   #focused: string | undefined;
   /** PT-5d (M7 H2): the focus in doubt (`null`: known) */
   #doubt: Doubt | null = null;
+  /** PT-5d (M12 J3): when the latest hint was sent (main's clock) — a word placed before it is an earlier hint's */
+  #hintAt: number | undefined;
   /** PT-5d (M12 J2): a frame of another site was attached in the page's document — the doubt applies (an OOPIF may be in
    * transit while none is attached: a frame's own cross-site navigation swaps its session) */
   #framed = false;
@@ -225,10 +231,14 @@ export class BrowserFrames {
    * was, if that is elsewhere (else unknown). Unknown, or a word heard before a hint's answer, leaves the focus in doubt;
    * a word with or after the answer settles it. (Before: `focus`/`blur` of a window, and the hand's press, DECIDED it — a
    * Tab into a frame, a press that kept a frame's focus, a page that lost it sent keys on the page's session with a frame
-   * of another site focused: M3's banned path.)
+   * of another site focused: M3's banned path.) PT-5d (M12 J3): `at`, where main placed the word's event on its clock —
+   * one before the latest hint (less `WORD_TOLERANCE_MS`) is an EARLIER hint's late word, and moves nothing (before: it
+   * settled the later hint — the page's late word of its own key settled a press into a frame on the page).
    */
-  where(session: string | undefined, where: FocusWhere): void {
+  where(session: string | undefined, where: FocusWhere, at?: number): void {
     if (session !== undefined && !this.#frames.has(session)) return;
+    if (at !== undefined && this.#hintAt !== undefined && at < this.#hintAt - WORD_TOLERANCE_MS)
+      return;
     const doubt = this.#doubt;
     const base = doubt === null ? this.#focused : doubt.base;
     let next: string | undefined | null;
@@ -248,8 +258,10 @@ export class BrowserFrames {
   }
 
   /** PT-5d (M7 H2): a HINT — a press, a key's down, a tap — sent to a document: the focus may move; in doubt until a word
-   * heard with or after its answer says where it went. */
-  handSent(): void {
+   * heard with or after its answer says where it went. `at`: when it was sent (main's clock — M12 J3: the words of
+   * events before it move nothing). */
+  handSent(at?: number): void {
+    if (at !== undefined) this.#hintAt = at;
     this.#doubt = {
       base: this.#doubt === null ? this.#focused : this.#doubt.base,
       heard: false,

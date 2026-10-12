@@ -375,20 +375,42 @@ describe("PT-5d (rulings 1, M3; M7 H2) — keys, text, a composition and a comma
   });
 });
 
-// PT-5d (M12): FROZEN until run 4 answers v9b (the native's rows say why, J6, J7, J13 beside them) — RED as the code stands.
-describe.skip("PT-5d (M12, FROZEN) — run 4's v9b: H2's doubt, as built", () => {
-  it("J3 — a word said of an EARLIER hint never settles a later one: the page's late word of its own key, heard after a press into A was sent — the keys wait for a word of the press", () => {
+describe("PT-5d (M12 J3, unfrozen at M15) — the doubt settles only on a word that FOLLOWS the hint it answers: the hints numbered by their send on main's clock, each word placed there by its age", () => {
+  it("J3 — a word said of an EARLIER hint never settles a later one: the page's late word of its own key, heard after a press into A was sent — the doubt waits for a word of the press; A's own word settles it", () => {
     const f = page();
-    // a key's down on the page (the page busy): answered late, its word still on its way
-    f.handSent();
+    // a key's down on the page at 10 (the page busy): answered late, its word still on its way
+    f.handSent(10);
     f.handAnswered();
-    // the press into A, queued behind it, sent at once
+    // the press into A, queued behind it, sent at 510
     f.press("left", 180, 120);
-    f.handSent();
-    // the page's word — of the KEY — then A answers the press
-    f.where(undefined, "here");
+    f.handSent(510);
+    // the page's word — of the KEY: its event at 12 — then A answers the press
+    f.where(undefined, "here", 12);
     f.handAnswered();
     expect(f.inDoubt()).toBe(true);
+    // A's own word, of the press (its event at 511): A's
+    f.where("A", "here", 511);
+    expect(f.inDoubt()).toBe(false);
+    expect(f.focused().session).toBe("A");
+  });
+
+  it("a stale word moves nothing even with no doubt left — the page's late word after A's settled the press; a word of no age (an older document's words) is taken as following; a word within the tolerance of its hint follows it", () => {
+    const f = page();
+    f.press("left", 180, 120);
+    f.handSent(500);
+    f.handAnswered();
+    f.where("A", "here", 501);
+    expect(f.focused().session).toBe("A");
+    f.where(undefined, "here", 400);
+    expect(f.focused().session).toBe("A");
+    expect(f.inDoubt()).toBe(false);
+    f.where(undefined, "here");
+    expect(f.focused().session).toBeUndefined();
+    f.press("left", 180, 120);
+    f.handSent(900);
+    f.handAnswered();
+    f.where("A", "here", 899);
+    expect(f.focused().session).toBe("A");
   });
 });
 

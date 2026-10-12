@@ -115,7 +115,9 @@ export const FRAME_SIGHT = `function (quick) { const el = this; const none = [0,
  *    no frame), `inner` (in a frame it cannot see into), `away` (not in it) — after every trusted press, key, tap, click
  *    and focus change in it (one word a task, once its default actions are done: a Tab's focus move, a press's): where
  *    the keys, text, a composition and a command go, and the only word of it — the ENGINE's events alone (M7 H1:
- *    `isTrusted`; a page's `dispatchEvent` says nothing);
+ *    `isTrusted`; a page's `dispatchEvent` says nothing) — PT-5d (M12 J3): each with HOW LONG AGO (ms, its own monotonic
+ *    clock: a duration, so no clock is shared) the newest trusted event it answers happened (`here@37`): main places the
+ *    word at its arrival less that age, and a word of an event before the latest hint moves nothing;
  *  - `moved` — its frames' boxes, or their sight (`FRAME_SIGHT`'s quick look: the visible part, M6.3a, and what covers
  *    them, M7 H3), changed (a scroll of any of its scrollers, a resize, its visual viewport, a transition's or an
  *    animation's end, a load, a mutation — its nodes, a class, a style, `hidden`, `open` — and, for what no event says, a
@@ -130,7 +132,7 @@ export const FRAME_SIGHT = `function (quick) { const el = this; const none = [0,
  * must say where the focus went). Never its size (M6.1): every document of a frame's process says its words on the frame's
  * session — its own children of its site too — so a frame's viewport is READ of its local root, beside its quad.
  */
-export const FRAME_WORDS_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; try { delete globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; } catch {} if (typeof say !== "function" || (window === window.top && location.href === "about:blank")) return; const tell = (word) => { try { say(word); } catch {} }; const where = () => { try { if (!document.hasFocus()) return "away"; let d = document; for (let i = 0; i < 32; i += 1) { const a = d.activeElement; const n = a ? a.localName : ""; if (n !== "iframe" && n !== "frame" && n !== "object" && n !== "embed" && n !== "fencedframe") return "here"; let inner = null; try { inner = a.contentDocument; } catch {} if (!inner) return "inner"; d = inner; } return "inner"; } catch { return "away"; } }; let asked = false; const ask = (e) => { if (!e.isTrusted || asked) return; asked = true; setTimeout(() => { asked = false; tell(where()); }, 0); }; for (const t of ["pointerdown", "mousedown", "keydown", "touchend", "click", "focus", "blur", "focusin", "focusout"]) addEventListener(t, ask, true); let drawn = "", sights = "", deep = false; const part = ${FRAME_SIGHT}; const seen = (f) => { try { return String(part.call(f, true)); } catch { return ""; } }; const boxes = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { const r = f.getBoundingClientRect(); out += r.left + "," + r.top + "," + r.width + "," + r.height + ":" + seen(f) + ";"; } return out; }; const whole = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { let v = ""; try { v = JSON.stringify(part.call(f, false)); } catch {} out += v + ";"; } return out; }; let due = false; const look = () => { due = false; const now = boxes(); let changed = now !== drawn; drawn = now; if (deep) { deep = false; const all = whole(); if (all !== sights) { sights = all; changed = true; } } if (changed) tell("moved"); }; const moved = () => { if (due) return; due = true; requestAnimationFrame(look); }; addEventListener("scroll", moved, { capture: true, passive: true }); addEventListener("resize", moved); addEventListener("load", moved); for (const t of ["DOMContentLoaded", "transitionend", "animationend"]) addEventListener(t, moved, true); globalThis.visualViewport?.addEventListener("resize", moved); globalThis.visualViewport?.addEventListener("scroll", moved); try { new MutationObserver(() => { if (document.querySelector("iframe, frame")) moved(); }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["class", "style", "hidden", "open"] }); } catch {} setInterval(() => { if (document.querySelector("iframe, frame")) { deep = true; moved(); } }, 500); moved(); })();`;
+export const FRAME_WORDS_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; try { delete globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; } catch {} if (typeof say !== "function" || (window === window.top && location.href === "about:blank")) return; const tell = (word) => { try { say(word); } catch {} }; const where = () => { try { if (!document.hasFocus()) return "away"; let d = document; for (let i = 0; i < 32; i += 1) { const a = d.activeElement; const n = a ? a.localName : ""; if (n !== "iframe" && n !== "frame" && n !== "object" && n !== "embed" && n !== "fencedframe") return "here"; let inner = null; try { inner = a.contentDocument; } catch {} if (!inner) return "inner"; d = inner; } return "inner"; } catch { return "away"; } }; let asked = false; let newest = -Infinity; const ask = (e) => { if (!e.isTrusted) return; newest = Math.max(newest, typeof e.timeStamp === "number" ? e.timeStamp : performance.now()); if (asked) return; asked = true; setTimeout(() => { asked = false; const age = Math.max(0, Math.round(performance.now() - newest)); newest = -Infinity; tell(where() + "@" + age); }, 0); }; for (const t of ["pointerdown", "mousedown", "keydown", "touchend", "click", "focus", "blur", "focusin", "focusout"]) addEventListener(t, ask, true); let drawn = "", sights = "", deep = false; const part = ${FRAME_SIGHT}; const seen = (f) => { try { return String(part.call(f, true)); } catch { return ""; } }; const boxes = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { const r = f.getBoundingClientRect(); out += r.left + "," + r.top + "," + r.width + "," + r.height + ":" + seen(f) + ";"; } return out; }; const whole = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { let v = ""; try { v = JSON.stringify(part.call(f, false)); } catch {} out += v + ";"; } return out; }; let due = false; const look = () => { due = false; const now = boxes(); let changed = now !== drawn; drawn = now; if (deep) { deep = false; const all = whole(); if (all !== sights) { sights = all; changed = true; } } if (changed) tell("moved"); }; const moved = () => { if (due) return; due = true; requestAnimationFrame(look); }; addEventListener("scroll", moved, { capture: true, passive: true }); addEventListener("resize", moved); addEventListener("load", moved); for (const t of ["DOMContentLoaded", "transitionend", "animationend"]) addEventListener(t, moved, true); globalThis.visualViewport?.addEventListener("resize", moved); globalThis.visualViewport?.addEventListener("scroll", moved); try { new MutationObserver(() => { if (document.querySelector("iframe, frame")) moved(); }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["class", "style", "hidden", "open"] }); } catch {} setInterval(() => { if (document.querySelector("iframe, frame")) { deep = true; moved(); } }, 500); moved(); })();`;
 
 /** PT-5d (M6.1): a frame's own viewport, in its own CSS px — evaluated in its session's local root. */
 const FRAME_SIZE = 'innerWidth + "," + innerHeight';
@@ -619,8 +621,16 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * M6.1.)
    */
   private frameWord(session: string | undefined, word: string): void {
-    if (word === "here" || word === "inner" || word === "away") {
-      this.#frames.where(session, word);
+    // PT-5d (M12 J3): a focus word says how long ago the newest trusted event it answers happened — placed on main's own
+    // clock at its arrival less that age (a word with no age: as it is heard)
+    const [what, age] = word.split("@");
+    if (what === "here" || what === "inner" || what === "away") {
+      const ms = Number(age);
+      this.#frames.where(
+        session,
+        what,
+        age === undefined || !Number.isFinite(ms) ? undefined : performance.now() - ms,
+      );
       this.focusMoved();
       return;
     }
@@ -1090,7 +1100,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * its send until a word heard with or after its answer says where it went. */
   private async hinted(hint: boolean, send: () => Promise<void>): Promise<void> {
     if (!hint) return send();
-    this.#frames.handSent();
+    // (M12 J3: numbered by when it was sent, on main's clock — a word of an event before it moves nothing)
+    this.#frames.handSent(performance.now());
     try {
       await send();
     } finally {
