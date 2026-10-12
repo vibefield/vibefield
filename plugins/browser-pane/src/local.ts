@@ -423,8 +423,16 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
       const out = new Map<Entity, string>();
       for (const [e, url] of urls) {
         const at = live.words(e)?.info.address;
-        if (at === undefined || at === url || at === stoodAt.get(e) || !isPageUrl(at, SAMPLE_URL))
+        if (at === undefined) continue;
+        // PT-5d (ruling 5) — THE DOCUMENT'S WAIT FOR ITS PAGE ENDS WHEN THE PAGE ARRIVES at the document's address: from
+        // then on every address the page says is its own move — written, the one where it stood too. (Before: never
+        // ended — a page the document sent from A to B that went back to A by itself was never written, and the document
+        // kept B: PT-5a's finding 6.)
+        if (at === url) {
+          stoodAt.delete(e);
           continue;
+        }
+        if (at === stoodAt.get(e) || !isPageUrl(at, SAMPLE_URL)) continue;
         out.set(e, at);
       }
       return out;

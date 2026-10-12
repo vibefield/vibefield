@@ -1125,6 +1125,61 @@ describe("PT-3 — the pane in use: its hand's input, its controls, the url it f
     expect([...local.addressed()]).toEqual([[1, PEER]]);
   });
 
+  it("PT-5d (ruling 5) — BACK-WRITTEN: the document's wait for its page ENDS when the page ARRIVES at the document's address — sent from A to B, arrived at B, the page goes BACK to A by itself: A is written (before: never — A was where it stood when the document moved it, and the document kept B)", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    const PEER = "http://127.0.0.1:4321/peer";
+    const recordAt = (url: string) => {
+      const ctx = ctxOf({ url }, local);
+      k.record(k.resolve(ctx), ctx);
+    };
+    const pageAt = (address: string) => {
+      t.faces.get(KEY)?.say({ state: { is: "live" }, info: { address } });
+      local.tick?.(0);
+    };
+    recordAt(PAGE);
+    pageAt(PAGE);
+    // the document sends it to B: until it arrives, where it stood is never written over B
+    recordAt(PEER);
+    expect(t.navigations).toEqual([{ key: KEY, command: { action: "go", url: PEER } }]);
+    expect([...local.addressed()]).toEqual([]);
+    pageAt(PEER);
+    expect([...local.addressed()]).toEqual([]);
+    // arrived: from now on every address the page says is its own — its own ‹ to A
+    pageAt(PAGE);
+    expect([...local.addressed()]).toEqual([[1, PAGE]]);
+    // the write lands: the record reads it — no navigation, nothing addressed
+    recordAt(PAGE);
+    expect(t.navigations).toHaveLength(1);
+    expect([...local.addressed()]).toEqual([]);
+  });
+
+  it("PT-5d (ruling 5) — … in a REDIRECT's order: sent from A to B and sent on by B's server to C (it never says B), C is the page's own — written; the write lands; the page's own ‹ to A is written too", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    const PEER = "http://127.0.0.1:4321/peer";
+    const ON = "http://127.0.0.1:4321/redirected";
+    const recordAt = (url: string) => {
+      const ctx = ctxOf({ url }, local);
+      k.record(k.resolve(ctx), ctx);
+    };
+    const pageAt = (address: string) => {
+      t.faces.get(KEY)?.say({ state: { is: "live" }, info: { address } });
+      local.tick?.(0);
+    };
+    recordAt(PAGE);
+    pageAt(PAGE);
+    recordAt(PEER);
+    expect([...local.addressed()]).toEqual([]);
+    pageAt(ON);
+    expect([...local.addressed()]).toEqual([[1, ON]]);
+    recordAt(ON);
+    expect(t.navigations).toEqual([{ key: KEY, command: { action: "go", url: PEER } }]);
+    expect([...local.addressed()]).toEqual([]);
+    pageAt(PAGE);
+    expect([...local.addressed()]).toEqual([[1, PAGE]]);
+  });
+
   it("a page's CURSOR that moves asks a frame — never a remake: the record does not read it", () => {
     const t = fakeHost();
     const local = createPaneLocal(t.host);
