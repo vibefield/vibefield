@@ -8,8 +8,10 @@
  *
  * What it reads is CACHED, never asked on the hand's path (PT-5c, ruling 1): a frame's place is its owner's content quad
  * in its parent's viewport, read off the path and read again when the parent's document says something moved; which
- * frame has the focus is what each document's guard SAYS of its own window, and the hand's own press (a press in a frame
- * focuses its window). A gesture ends where it began (ruling 3): a press, a finger and a key remember their target, and
+ * document holds the focus is what each document SAYS of it (PT-5d, M7 H2: its own trusted word, after every press, key,
+ * tap and focus change in it — a press, a key's down and a tap are HINTS that put the focus in doubt until a word says
+ * where it went; while in doubt nothing key-like is sent anywhere — the native waits for a word, bounded, then refuses).
+ * A gesture ends where it began (ruling 3): a press, a finger and a key remember their target, and
  * their moves and releases go to it wherever the point is — or nowhere, once its frame is gone or its document is not
  * the press's. Only frames of the page's own tree are targets (ruling 4): the native adds them as they attach.
  */
@@ -19,6 +21,23 @@ export type FrameQuad = readonly [number, number, number, number, number, number
 
 /** PT-5d (M6.3a): the part of a frame's content box in view, as fractions of it: [u0, v0, u1, v1]. */
 export type FrameVisible = readonly [number, number, number, number];
+
+/**
+ * PT-5d (M7 H2): where a document SAYS the focus is, after a trusted event in it — `here`: in its own process (its active
+ * element, through every child it can see into, is no frame); `inner`: in a frame it cannot see into (another process or
+ * origin — whose own word says which); `away`: not in it at all.
+ */
+export type FocusWhere = "here" | "inner" | "away";
+
+/** PT-5d (M7 H2): the focus in DOUBT — since a hint (a press, a key's down, a tap), a blur, a focused frame's going. */
+interface Doubt {
+  /** where the focus is as the words since have said it (`undefined`: the page's; `null`: unknown) */
+  base: string | undefined | null;
+  /** a word has been heard since the hint */
+  heard: boolean;
+  /** the hint's command is answered (a doubt with no hint is) — a word heard now settles it */
+  answered: boolean;
+}
 
 /** Where an event goes — the page's own session (`undefined`) or a frame's — and the document it is for. */
 export interface FrameTarget {
@@ -65,8 +84,10 @@ export class BrowserFrames {
   readonly #frames = new Map<string, FrameRecord>();
   #order = 0;
   #pageDocument = 0;
-  /** the session whose document has the focus (`undefined`: the page's own) */
+  /** the session whose document has the focus (`undefined`: the page's own) — when not in doubt */
   #focused: string | undefined;
+  /** PT-5d (M7 H2): the focus in doubt (`null`: known) */
+  #doubt: Doubt | null = null;
   readonly #hand: Hand = { buttons: new Map(), finger: undefined, keys: new Map() };
   /** where the last hover went — told that the pointer left it when the next goes elsewhere */
   #hover: FrameTarget | undefined;
@@ -97,7 +118,11 @@ export class BrowserFrames {
     if (!this.#frames.delete(session)) return;
     for (const frame of [...this.#frames.values()])
       if (frame.parent === session) this.detached(frame.session);
-    if (this.#focused === session) this.#focused = undefined;
+    // PT-5d (M7 H2): the focused frame gone or swapped (its own cross-site navigation: a new session for the same frame) —
+    // where the focus is now is unknown: in doubt until a word (before: the page's — keys on its session, a frame focused)
+    if (this.#doubt !== null) {
+      if (this.#doubt.base === session) this.#doubt.base = null;
+    } else if (this.#focused === session) this.#doubt = { base: null, heard: true, answered: true };
   }
 
   /** A frame committed another document — its own word, on its own session. The frames of the document before go with
@@ -116,6 +141,7 @@ export class BrowserFrames {
     this.#pageDocument = document;
     this.#frames.clear();
     this.#focused = undefined;
+    this.#doubt = null;
     this.#hover = undefined;
   }
 
@@ -146,15 +172,55 @@ export class BrowserFrames {
   }
 
   /**
-   * A document's window said `focus` (`true`) or `blur` (`false`) — on its own session (`undefined`: the page's, its main
-   * document's or any of its process's). PT-5d (M6.2): A BLUR MOVES NOTHING — a frame's window blurs as the focus goes to
-   * its own child of its site (whose `focus` comes on the same session after it), or as the whole page loses the focus:
-   * taken as the page's, the keys went on the page's session with a frame of another site focused between the two words
-   * (M3's banned path). Only a `focus`, the hand's press or finger, or the focused frame's going moves the keys.
+   * PT-5d (M7 H2) — A DOCUMENT SAID WHERE THE FOCUS IS — on its own session (`undefined`: the page's — its main document or
+   * any of its process). The ONLY truth of the focus: `here` — that session's; `inner` — a frame of another process under
+   * it: the one the focus was in, if it is one (else unknown, until that frame's own word); `away` — not under it: where it
+   * was, if that is elsewhere (else unknown). Unknown, or a word heard before a hint's answer, leaves the focus in doubt;
+   * a word with or after the answer settles it. (Before: `focus`/`blur` of a window, and the hand's press, DECIDED it — a
+   * Tab into a frame, a press that kept a frame's focus, a page that lost it sent keys on the page's session with a frame
+   * of another site focused: M3's banned path.)
    */
-  focus(session: string | undefined, focused: boolean): void {
-    if (!focused || (session !== undefined && !this.#frames.has(session))) return;
-    this.#focused = session;
+  where(session: string | undefined, where: FocusWhere): void {
+    if (session !== undefined && !this.#frames.has(session)) return;
+    const doubt = this.#doubt;
+    const base = doubt === null ? this.#focused : doubt.base;
+    let next: string | undefined | null;
+    if (where === "here") next = session;
+    else if (where === "inner")
+      next =
+        typeof base === "string" && base !== session && this.under(base, session) ? base : null;
+    else next = base === null || base === session || this.under(base, session) ? null : base;
+    if (doubt === null) {
+      if (next === null) this.#doubt = { base: null, heard: true, answered: true };
+      else this.#focused = next;
+      return;
+    }
+    doubt.base = next;
+    doubt.heard = true;
+    if (doubt.answered && next !== null) this.settle(next);
+  }
+
+  /** PT-5d (M7 H2): a HINT — a press, a key's down, a tap — sent to a document: the focus may move; in doubt until a word
+   * heard with or after its answer says where it went. */
+  handSent(): void {
+    this.#doubt = {
+      base: this.#doubt === null ? this.#focused : this.#doubt.base,
+      heard: false,
+      answered: false,
+    };
+  }
+
+  /** PT-5d (M7 H2): the hint's command answered — a word heard since settles the doubt; else the next word will. */
+  handAnswered(): void {
+    const doubt = this.#doubt;
+    if (doubt === null || doubt.answered) return;
+    doubt.answered = true;
+    if (doubt.heard && doubt.base !== null) this.settle(doubt.base);
+  }
+
+  /** PT-5d (M7 H2): is the focus in doubt — nothing key-like may be sent until a word settles it? */
+  inDoubt(): boolean {
+    return this.#doubt !== null;
   }
 
   /** The frames of the page's tree, by session, and their parents: what the native reads their quads by. */
@@ -172,11 +238,11 @@ export class BrowserFrames {
 
   // ── the hand's events ──────────────────────────────────────────────────────────────────────────────────────────
 
-  /** A button's press at a page point: the frame drawn there (the innermost), its target remembered; the focus follows it. */
+  /** A button's press at a page point: the frame drawn there (the innermost), its target remembered. (Where the focus goes
+   * is its document's word — M7 H2: a press is a hint, never a decision.) */
   press(button: string, x: number, y: number): FrameRouted {
     const routed = this.at(x, y);
     this.#hand.buttons.set(button, routed.target);
-    this.#focused = routed.target.session;
     // (the pointer is the press's target's until its release: a hover after it leaves it, as after a drag in a browser)
     this.#hover = routed.target;
     return routed;
@@ -214,11 +280,10 @@ export class BrowserFrames {
     return this.at(x, y);
   }
 
-  /** A finger down: the frame drawn there, the finger's target remembered; the focus follows it. */
+  /** A finger down: the frame drawn there, the finger's target remembered. */
   touchStart(x: number, y: number): FrameRouted {
     const routed = this.at(x, y);
     this.#hand.finger = routed.target;
-    this.#focused = routed.target.session;
     return routed;
   }
 
@@ -242,10 +307,13 @@ export class BrowserFrames {
     return target;
   }
 
-  /** A key's up: to its down's target if it still stands; else nowhere (a key not down: the focused). */
+  /** A key's up: PT-5d (M7 H2) to the CURRENT focus when that is a frame of another site — as a browser delivers it (a Tab
+   * whose down moved the focus into a frame has its up there, never on the page's session); else to its down's target if
+   * it still stands — else nowhere (a key not down: the focused). */
   keyUp(code: string): FrameTarget | null {
     const target = this.#hand.keys.get(code);
     this.#hand.keys.delete(code);
+    if (this.#focused !== undefined) return this.focused();
     if (target === undefined) return this.focused();
     return this.stands(target) ? target : null;
   }
@@ -319,6 +387,23 @@ export class BrowserFrames {
       [px, py] = local;
     }
     return { target, x: px, y: py };
+  }
+
+  /** The focus known again: `session`'s. */
+  private settle(session: string | undefined): void {
+    this.#focused = session;
+    this.#doubt = null;
+  }
+
+  /** Is frame `session` under `parent` (`undefined`: the page — every frame of its tree is)? */
+  private under(session: string | undefined, parent: string | undefined): boolean {
+    if (session === undefined) return false;
+    let s = this.#frames.get(session)?.parent;
+    for (;;) {
+      if (s === parent) return true;
+      if (s === undefined) return false;
+      s = this.#frames.get(s)?.parent;
+    }
   }
 
   private targetOf(session: string | undefined): FrameTarget {

@@ -14,7 +14,8 @@
 //                  next move over the frame holds none — it hovers, it does not drag);
 //   FRAME-WHEEL  — the wheel over the frame's scroller scrolls it; at its end, the host page;
 //   FRAME-TYPE   — the frame's field pressed (the keys follow the focus), "héllo" typed and a syllable composed: in its
-//                  field, the caret after them (M3: nothing key-like on the page's session meanwhile);
+//                  field, the caret after them — and the host heard NO key meanwhile (M3, M7 H2: nothing key-like on the
+//                  page's session while the frame holds the focus);
 //   FRAME-NESTED — a press on the button of the frame in the frame (a third site) lands there;
 //   FRAME-HALF   — the host scrolled until the frame is half out of its view: a press on the frame's part in view lands;
 //   FRAME-TOUCH  — on a phone, a tap on the frame's button: its touch's start and end, and the click;
@@ -86,7 +87,12 @@ export interface FramesSeen {
     readonly scroller: readonly [number | null, number | null];
     readonly host: readonly [number | null, number | null];
   };
-  readonly type: { readonly field: string | null; readonly caret: number | null };
+  readonly type: {
+    readonly field: string | null;
+    readonly caret: number | null;
+    /** the keys the HOST page heard (on the frame's element) while the frame's field was typed in */
+    readonly hostHeard: readonly string[];
+  };
   readonly nested: FramePressSeen & { readonly third: boolean };
   readonly half: FramePressSeen & { readonly top: number | null };
   readonly touch: { readonly heard: readonly string[] | null; readonly clicks: number };
@@ -212,7 +218,7 @@ export function judgeFrameWheel(seen: FramesSeen["wheel"]): string[] {
   return out;
 }
 
-/** FRAME-TYPE: the text and the composition in the frame's field, the caret after them. */
+/** FRAME-TYPE: the text and the composition in the frame's field, the caret after them; no key heard by the host. */
 export function judgeFrameType(seen: FramesSeen["type"]): string[] {
   const want = FRAMES_ROWS.typed + FRAMES_ROWS.composed;
   const out: string[] = [];
@@ -223,6 +229,11 @@ export function judgeFrameType(seen: FramesSeen["type"]): string[] {
   else if (seen.caret !== want.length)
     out.push(
       `FRAME-TYPE: the frame's caret stands at ${seen.caret}, not after what was typed (${want.length})`,
+    );
+  const keys = seen.hostHeard.filter((h) => h.startsWith("keydown"));
+  if (keys.length > 0)
+    out.push(
+      `FRAME-TYPE: the host page heard ${keys.length} key(s) while the frame's field was typed in (${keys.join(", ")}) — they went down the page's session with a frame of another site focused (M3's banned path)`,
     );
   return out;
 }
@@ -757,6 +768,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
 
     // ── FRAME-TYPE: the field pressed, text typed, a syllable composed ─────────────────────────────────────────────
     const t = framed()?.parts.t ?? null;
+    const typeHeard0 = hostHeard().length;
     if (t !== null) {
       const w = await inFrame(t.x + t.w / 2, t.y + t.h / 2);
       if (w !== null) await h.press(w);
@@ -782,7 +794,11 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       () => at(FRAME),
       (rep) => rep?.field === FRAMES_ROWS.typed + FRAMES_ROWS.composed,
     );
-    const type = { field: typedWord?.field ?? null, caret: typedWord?.framed?.caret ?? null };
+    const type = {
+      field: typedWord?.field ?? null,
+      caret: typedWord?.framed?.caret ?? null,
+      hostHeard: hostHeard().slice(typeHeard0),
+    };
     said.type = type;
     problems.push(...judgeFrameType(type));
 

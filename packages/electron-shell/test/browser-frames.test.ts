@@ -5,7 +5,11 @@
  * is what each document says of its own window and follows the hand's press; a gesture ends where it began.
  */
 import { describe, expect, it } from "vitest";
-import { BrowserFrames, type FrameQuad } from "../src/main/live-surfaces/browser-frames";
+import {
+  BrowserFrames,
+  type FocusWhere,
+  type FrameQuad,
+} from "../src/main/live-surfaces/browser-frames";
 
 /** An axis-aligned quad: its left, top, width, height. */
 const box = (x: number, y: number, w: number, h: number): FrameQuad => [
@@ -167,9 +171,12 @@ describe("PT-5d (ruling 3) — a gesture ends where it began", () => {
   it("A's press, then A's session GOES (the frame removed, its process gone): its release goes nowhere — never a command to a gone session", () => {
     const f = page();
     f.press("left", 180, 120);
+    f.where("A", "here");
     f.keyDown("KeyQ");
     f.detached("A");
     expect(f.release("left", 180, 120)).toBeNull();
+    // (where the focus went is unknown: the native waits for a word; once the page says it holds it, the up is nowhere)
+    f.where(undefined, "here");
     expect(f.keyUp("KeyQ")).toBeNull();
     // and a press on the page while A was down, released: the page's
     f.press("right", 20, 20);
@@ -199,74 +206,156 @@ describe("PT-5d (ruling 3) — a gesture ends where it began", () => {
   });
 });
 
-describe("PT-5d (rulings 1, M3) — keys, text, a composition and a command go to the FOCUSED document's session: nothing key-like on the page's while a frame of another site is focused", () => {
-  it("the focus follows the hand's press: a press in A, and a key's down, its up, text go to A; a press on the page, and they are the page's", () => {
+describe("PT-5d (rulings 1, M3; M7 H2) — keys, text, a composition and a command go to the FOCUSED document's session — which is its own word alone; nothing key-like on the page's while a frame of another site may hold the focus", () => {
+  /** A hint sent to a document and answered, then the words said after it. */
+  const hinted = (f: BrowserFrames, ...words: [string | undefined, FocusWhere][]): void => {
+    f.handSent();
+    f.handAnswered();
+    for (const [session, where] of words) f.where(session, where);
+  };
+
+  it("a press is a HINT: the focus in doubt until its document says where it went — A's `here`: keys, text go to A; a press on the page and the page's `here`: the page's", () => {
     const f = page();
     expect(f.focused().session).toBeUndefined();
     f.press("left", 180, 120);
+    hinted(f);
+    expect(f.inDoubt()).toBe(true);
+    f.where("A", "here");
+    expect(f.inDoubt()).toBe(false);
     f.release("left", 180, 120);
     expect(f.keyDown("KeyH")).toEqual({ session: "A", document: 0 });
     expect(f.keyUp("KeyH")).toEqual({ session: "A", document: 0 });
     expect(f.focused()).toEqual({ session: "A", document: 0 });
     f.press("left", 20, 20);
+    hinted(f, [undefined, "here"]);
     expect(f.keyDown("KeyH").session).toBeUndefined();
   });
 
-  it("the focus as each document SAYS it of its own window: B's `focus` (a script focused its field), the page's own; a `blur` moves nothing (M6.2); a word of a session the page does not hold is nothing", () => {
+  it("the focus as each document SAYS it: B's `here` (a script focused its field), the page's own; a word of a session the page does not hold is nothing; a word heard BEFORE a hint's answer is kept, and settles it at the answer", () => {
     const f = page();
-    f.focus("B", true);
+    f.where("B", "here");
     expect(f.focused().session).toBe("B");
-    f.focus("A", false);
+    f.where("elsewhere", "here");
     expect(f.focused().session).toBe("B");
-    f.focus("B", false);
-    expect(f.focused().session).toBe("B");
-    f.focus("A", true);
-    f.focus("elsewhere", true);
-    expect(f.focused().session).toBe("A");
-    f.focus(undefined, true);
+    f.where(undefined, "here");
     expect(f.focused().session).toBeUndefined();
+    // a press's own word can come before its answer (another channel): kept, then the answer settles it
+    f.handSent();
+    f.where("A", "here");
+    expect(f.inDoubt()).toBe(true);
+    f.handAnswered();
+    expect(f.focused().session).toBe("A");
+    // no word heard by the answer: still in doubt — the next word settles it
+    f.handSent();
+    f.handAnswered();
+    expect(f.inDoubt()).toBe(true);
+    f.where("A", "here");
+    expect(f.focused().session).toBe("A");
   });
 
-  it("M6.2 — a `blur` moves NOTHING: A's own window's blur as the focus goes to A's own child of its site (its `focus` follows on A's session) — A throughout, never the page between the two words; the whole page losing its focus — A still; the page's own `focus` takes the keys back", () => {
+  it("M6.2 under H2 — the focus going from A's own document to its own child of its site: both say `here` on A's session — A throughout, never in doubt; the whole page losing it: A says `away` — in doubt, nothing key-like sent until a word", () => {
     const f = page();
-    f.press("left", 180, 120);
-    f.release("left", 180, 120);
-    f.focus("A", false);
-    expect(f.keyDown("KeyH")).toEqual({ session: "A", document: 0 });
-    f.keyUp("KeyH");
-    f.focus("A", true);
+    f.where("A", "here");
+    f.where("A", "here");
+    expect(f.inDoubt()).toBe(false);
     expect(f.focused().session).toBe("A");
-    // the whole page loses its focus: A's window blurs, no other takes it — the engine still sends keys to A
-    f.focus("A", false);
+    f.where("A", "away");
+    expect(f.inDoubt()).toBe(true);
+    f.where(undefined, "away");
+    expect(f.inDoubt()).toBe(true);
+    f.where("A", "here");
     expect(f.focused().session).toBe("A");
-    f.focus(undefined, true);
-    expect(f.focused().session).toBeUndefined();
   });
 
-  it("M6.2 — a frame's COMMIT takes the frames of its document before: B focused in A, A commits — B is no target, the keys are the page's, and a press where B was is A's new document's", () => {
+  it("M6.2 under H2 — a frame's COMMIT takes the frames of its document before: B focused in A, A commits — B is no target, and where the focus is is unknown (in doubt); a press where B was is A's new document's", () => {
     const f = page();
-    f.focus("B", true);
+    f.where("B", "here");
     f.committed("A");
     expect(f.frames().map((x) => x.session)).toEqual(["A"]);
-    expect(f.focused()).toEqual({ session: undefined, document: 1 });
+    expect(f.inDoubt()).toBe(true);
     expect(f.press("left", 360, 285).target).toEqual({ session: "A", document: 1 });
   });
 
-  it("a key's UP goes where its down went though the focus moved since (R8: a key's up is a release); gone or of another document since — nowhere", () => {
+  it("a key's UP goes to the CURRENT focus when that is a frame of another site (as a browser delivers it), else where its down went if it stands — gone or of another document since: nowhere", () => {
     const f = page();
-    f.focus("A", true);
+    f.where("A", "here");
     f.keyDown("KeyQ");
-    f.focus("B", true);
-    expect(f.keyUp("KeyQ")).toEqual({ session: "A", document: 0 });
+    f.where("B", "here");
+    expect(f.keyUp("KeyQ")).toEqual({ session: "B", document: 0 });
+    // a down in A, the focus to the PAGE since: the up where the down went
+    f.where("A", "here");
     f.keyDown("KeyW");
-    f.committed("B");
-    expect(f.keyUp("KeyW")).toBeNull();
-    f.focus("A", true);
+    f.where(undefined, "here");
+    expect(f.keyUp("KeyW")).toEqual({ session: "A", document: 0 });
+    // … unless A committed another document since, or went: nowhere
+    f.where("A", "here");
     f.keyDown("KeyE");
-    f.detached("A");
+    f.where(undefined, "here");
+    f.committed("A");
     expect(f.keyUp("KeyE")).toBeNull();
-    // A's focus went with it: the page's
+    f.where("A", "here");
+    f.keyDown("KeyR");
+    f.where(undefined, "here");
+    f.detached("A");
+    expect(f.keyUp("KeyR")).toBeNull();
+  });
+
+  it("M7 H2 (a) — the Tab whose DOWN moved the focus into A: its UP goes to A, never the page's session", () => {
+    const f = page();
+    expect(f.keyDown("Tab").session).toBeUndefined();
+    f.handSent();
+    f.where("A", "here");
+    f.handAnswered();
+    f.where(undefined, "inner");
+    expect(f.inDoubt()).toBe(false);
+    expect(f.keyUp("Tab")).toEqual({ session: "A", document: 0 });
+  });
+
+  it("M7 H2 (b) — a press on the page that does NOT take A's focus (its mousedown prevented, the page's scrollbar): the page says `inner` — A kept it; keys go to A", () => {
+    const f = page();
+    f.press("left", 180, 120);
+    hinted(f, ["A", "here"]);
+    f.release("left", 180, 120);
+    f.press("left", 20, 20);
+    hinted(f);
+    expect(f.inDoubt()).toBe(true);
+    f.where(undefined, "inner");
+    expect(f.keyDown("KeyH").session).toBe("A");
+  });
+
+  it("M7 H2 (c, d) — the page says `inner` with the focus its own before (its element focused A, a script's `iframe.focus()`): in doubt until A's own word — never the page's", () => {
+    const f = page();
+    f.press("left", 180, 120);
+    hinted(f, [undefined, "inner"]);
+    expect(f.inDoubt()).toBe(true);
+    f.where("A", "here");
+    expect(f.focused().session).toBe("A");
+    // a script moved it into B: the page's `inner` first (A no frame of it… it is: A stays), then B's own word
+    f.where(undefined, "inner");
+    expect(f.focused().session).toBe("A");
+    f.where("A", "inner");
+    expect(f.focused().session).toBe("A");
+    f.where("B", "here");
+    expect(f.focused().session).toBe("B");
+  });
+
+  it("M7 H2 (e, f, g) — A's `away` (the focus to another frame, or the whole page lost it), A's session gone or swapped, the page's own `away`: each in doubt — until a word says where", () => {
+    const f = page();
+    f.where("A", "here");
+    f.where("A", "away");
+    expect(f.inDoubt()).toBe(true);
+    f.where("B", "here");
+    expect(f.focused().session).toBe("B");
+    f.detached("B");
+    expect(f.inDoubt()).toBe(true);
+    f.where(undefined, "here");
     expect(f.focused().session).toBeUndefined();
+    f.where(undefined, "away");
+    expect(f.inDoubt()).toBe(true);
+    // the PAGE's commit: its new document holds the focus
+    f.pageCommitted(2);
+    expect(f.inDoubt()).toBe(false);
+    expect(f.focused()).toEqual({ session: undefined, document: 2 });
   });
 });
 

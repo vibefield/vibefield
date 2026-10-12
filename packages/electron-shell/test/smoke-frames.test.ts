@@ -103,14 +103,23 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
   });
 
-  it("FRAME-TYPE: the text and the composition in the frame's field, the caret after them", () => {
+  it("FRAME-TYPE: the text and the composition in the frame's field, the caret after them — and no key heard by the HOST meanwhile (M7 H2: one there went down the page's session with the frame focused)", () => {
     const want = FRAMES_ROWS.typed + FRAMES_ROWS.composed;
-    expect(judgeFrameType({ field: want, caret: want.length })).toEqual([]);
-    expect(judgeFrameType({ field: "", caret: 0 })).toEqual([
+    expect(judgeFrameType({ field: want, caret: want.length, hostHeard: [] })).toEqual([]);
+    expect(judgeFrameType({ field: "", caret: 0, hostHeard: [] })).toEqual([
       `FRAME-TYPE: the frame's field holds "", not ${JSON.stringify(want)} — the keys never reached the frame`,
     ]);
-    expect(judgeFrameType({ field: want, caret: 0 })).toEqual([
+    expect(judgeFrameType({ field: want, caret: 0, hostHeard: [] })).toEqual([
       `FRAME-TYPE: the frame's caret stands at 0, not after what was typed (${want.length})`,
+    ]);
+    expect(
+      judgeFrameType({
+        field: want,
+        caret: want.length,
+        hostHeard: ["pointerdown #f", "keydown h", "keydown é"],
+      }),
+    ).toEqual([
+      "FRAME-TYPE: the host page heard 2 key(s) while the frame's field was typed in (keydown h, keydown é) — they went down the page's session with a frame of another site focused (M3's banned path)",
     ]);
   });
 

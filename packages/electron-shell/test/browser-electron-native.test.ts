@@ -667,6 +667,15 @@ describe("PT-5c2 (F1) — the producer over this adapter: a document's LATE fail
     // Space held — a design tool's page pans while it is down
     space("down");
     await turns();
+    // (its page says the focus is its own, as a page's words do after a key — M7 H2: the key a hint)
+    contents.debugger.emit(
+      "message",
+      {},
+      "Runtime.bindingCalled",
+      { name: FRAME_WORDS_BINDING, payload: "here", executionContextId: 1 },
+      "",
+    );
+    await turns();
     // the page's body is cut mid-stream: Electron says the load failed, that alone (PT-5c2's probe), and that it stopped
     contents.emit(
       "did-fail-load",
@@ -869,8 +878,14 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     ]);
   });
 
-  it("M3 — keys, text, a composition and a command go to the FOCUSED frame's session — nothing key-like on the page's while a frame of another site is focused: the focus follows the hand's press, and what each document says of its window (`focus`)", async () => {
+  it("M3 — keys, text, a composition and a command go to the FOCUSED frame's session — nothing key-like on the page's while a frame of another site is focused: the focus is what each document SAYS (M7 H2: a press a hint, its document's `here` the word)", async () => {
     const r = await framed();
+    const word = (payload: string, session?: string): void =>
+      r.emit(
+        "Runtime.bindingCalled",
+        { name: FRAME_WORDS_BINDING, payload, executionContextId: 1 },
+        session,
+      );
     await r.native.dispatchMouse({
       type: "mousePressed",
       x: 180,
@@ -878,6 +893,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       button: "left",
       clickCount: 1,
     });
+    word("here", "F");
     await r.native.dispatchMouse({
       type: "mouseReleased",
       x: 180,
@@ -886,6 +902,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       clickCount: 1,
     });
     await r.native.dispatchKey({ type: "keyDown", key: "h", code: "KeyH", modifiers: NONE });
+    word("here", "F");
     await r.native.dispatchKey({ type: "keyUp", key: "h", code: "KeyH", modifiers: NONE });
     await r.native.dispatchText("é");
     await r.native.dispatchCompose("か", 1);
@@ -896,8 +913,9 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       modifiers: 4,
       commands: ["selectAll"],
     });
+    word("here", "F");
     await r.native.dispatchKey({ type: "keyUp", key: "a", code: "KeyA", modifiers: 4 });
-    // a press on the page: the keys are the page's again
+    // a press on the page, and the page says it holds the focus: the keys are the page's again
     await r.native.dispatchMouse({
       type: "mousePressed",
       x: 20,
@@ -905,6 +923,8 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       button: "left",
       clickCount: 1,
     });
+    word("here");
+    word("away", "F");
     await r.native.dispatchMouse({
       type: "mouseReleased",
       x: 20,
@@ -913,12 +933,8 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       clickCount: 1,
     });
     await r.native.dispatchText("x");
-    // F's document says its window took the focus (its script focused a field): F's
-    r.emit(
-      "Runtime.bindingCalled",
-      { name: FRAME_WORDS_BINDING, payload: "focus", executionContextId: 1 },
-      "F",
-    );
+    // F's document says the focus is in it (its script focused a field): F's
+    word("here", "F");
     await r.native.dispatchText("y");
     expect(r.hand()).toEqual([
       "mousePressed@F 80,40",
@@ -936,7 +952,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     ]);
   });
 
-  it("M6.2 — a `blur` moves nothing: F's own window's blur and its own child's `focus` come on F's session — a key between the two words goes on F's, never the page's (M3); the page's own `focus` takes the keys back", async () => {
+  it("M6.2 under M7 H2 — the focus going from F's own document to its own child of its site: both say `here` on F's session — a key between them goes on F's, never the page's; the page's own `here` takes the keys back", async () => {
     const r = await framed();
     const word = (payload: string, session?: string): void =>
       r.emit(
@@ -951,6 +967,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       button: "left",
       clickCount: 1,
     });
+    word("here", "F");
     await r.native.dispatchMouse({
       type: "mouseReleased",
       x: 180,
@@ -958,12 +975,13 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       button: "left",
       clickCount: 1,
     });
-    word("blur", "F");
+    // F's own document's word, then its child's — both F's session
+    word("here", "F");
     await r.native.dispatchKey({ type: "keyDown", key: "h", code: "KeyH", modifiers: NONE });
+    word("here", "F");
     await r.native.dispatchKey({ type: "keyUp", key: "h", code: "KeyH", modifiers: NONE });
-    word("focus", "F");
     await r.native.dispatchText("é");
-    word("focus");
+    word("here");
     await r.native.dispatchText("x");
     expect(r.hand()).toEqual([
       "mousePressed@F 80,40",
@@ -975,8 +993,14 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     ]);
   });
 
-  it("ruling 3 — what a frame took ends where it began: its press released once its session has GONE is sent nowhere (never a command to a gone session); once it committed ANOTHER document (its own word, `Page.frameNavigated` of its frame), nowhere; a key held in it the same", async () => {
+  it("ruling 3 — what a frame took ends where it began: its press released once its session has GONE is sent nowhere (never a command to a gone session); once it committed ANOTHER document (its own word, `Page.frameNavigated` of its frame), nowhere; a key held in it goes up where the focus is — F, its new document (M7 H2: as a browser delivers it)", async () => {
     const r = await framed();
+    const here = (): void =>
+      r.emit(
+        "Runtime.bindingCalled",
+        { name: FRAME_WORDS_BINDING, payload: "here", executionContextId: 1 },
+        "F",
+      );
     await r.native.dispatchMouse({
       type: "mousePressed",
       x: 180,
@@ -984,7 +1008,9 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       button: "left",
       clickCount: 1,
     });
+    here();
     await r.native.dispatchKey({ type: "keyDown", key: "q", code: "KeyQ", modifiers: NONE });
+    here();
     r.emit("Page.frameNavigated", { frame: { id: "t-F", url: "https://frame.test/next" } }, "F");
     await r.native.dispatchMouse({
       type: "mouseReleased",
@@ -1010,8 +1036,12 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       button: "left",
       clickCount: 1,
     });
-    // a frame's frame of its own committing is no commit of F's
-    expect(r.hand()).toEqual(["mousePressed@F 80,40", "keyDown@F", "mousePressed@F 80,40"]);
+    expect(r.hand()).toEqual([
+      "mousePressed@F 80,40",
+      "keyDown@F",
+      "keyUp@F",
+      "mousePressed@F 80,40",
+    ]);
   });
 
   it("ruling 3 — the PAGE's commit takes every frame of the document before: a press there afterwards is the page's", async () => {
@@ -1045,14 +1075,21 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     expect(r.hand()).toEqual(["mousePressed@page 1,1"]);
   });
 
-  it("rulings 1, M3 — a document's WORDS, run: it takes the binding out of the page's reach; says `focus` and `blur` of its OWN window (never an element's), and `moved` — only when its frames' boxes or their VISIBLE parts changed (M6.3a: a clip that changes with the frame not moving), once an animation frame; never its size (M6.1: a frame's own viewport is READ with its quad); a document holding no frame never says moved; the blank and a document with no binding say nothing", () => {
-    const run = (options: { href?: string; binding?: boolean } = {}) => {
+  it("rulings 1, M3, M7 H2 — a document's WORDS, run: it takes the binding out of the page's reach; says WHERE THE FOCUS IS (`here`, `inner`, `away`) after each trusted event — one word a task, once its default actions are done — and `moved` only when its frames' boxes or their VISIBLE parts changed (M6.3a), once an animation frame; never its size (M6.1); a document holding no frame never says moved; the page's blank and a document with no binding say nothing — a FRAME's blank speaks", () => {
+    const run = (options: { href?: string; binding?: boolean; top?: boolean } = {}) => {
       const said: string[] = [];
       const on = new Map<string, ((event?: { target?: unknown; isTrusted?: boolean }) => void)[]>();
       let frame: (() => void) | undefined;
       let every: (() => void) | undefined;
+      const later: (() => void)[] = [];
       const rects: { left: number; top: number; width: number; height: number }[] = [];
-      const self = { innerWidth: 400, innerHeight: 300 };
+      const self: { innerWidth: number; innerHeight: number; top?: unknown } = {
+        innerWidth: 400,
+        innerHeight: 300,
+      };
+      if (options.top !== false) self.top = self;
+      /** where the focus is, as the document would read it */
+      const focus: { has: boolean; active: unknown } = { has: true, active: { localName: "body" } };
       const g: Record<string, unknown> = { visualViewport: { addEventListener: () => undefined } };
       if (options.binding !== false) g[FRAME_WORDS_BINDING] = (word: string) => said.push(word);
       // the frames' holder, a block that clips nothing until the row says
@@ -1120,6 +1157,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         "innerWidth",
         "innerHeight",
         "getComputedStyle",
+        "setTimeout",
         FRAME_WORDS_SCRIPT,
       )(
         g,
@@ -1138,10 +1176,17 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
           querySelectorAll: () => rects.map(laidOut),
           documentElement: root,
           body: { parentElement: root, style: {} },
+          hasFocus: () => focus.has,
+          get activeElement() {
+            return focus.active;
+          },
         },
         self.innerWidth,
         self.innerHeight,
         computed,
+        (callback: () => void) => {
+          later.push(callback);
+        },
       );
       const fire = (type: string, event?: { target?: unknown; isTrusted?: boolean }): void => {
         for (const listener of on.get(type) ?? []) listener(event);
@@ -1151,7 +1196,11 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         frame = undefined;
         f?.();
       };
-      return { said, g, self, rects, holder, fire, tick, every: () => every?.() };
+      /** the tasks after this one (`setTimeout(…, 0)`) */
+      const after = (): void => {
+        for (const callback of later.splice(0)) callback();
+      };
+      return { said, g, self, rects, holder, focus, fire, tick, after, every: () => every?.() };
     };
     const d = run();
     expect(FRAME_WORDS_BINDING in d.g).toBe(false);
@@ -1161,15 +1210,35 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     d.fire("load");
     d.tick();
     expect(d.said).toEqual([]);
-    // its window's focus and blur — an element's focus (its target not the window) is not the window's
-    d.fire("focus", { target: d.self, isTrusted: true });
-    d.fire("focus", { target: {}, isTrusted: true });
+    // M7 H2: where the focus is, after a trusted press — once its default actions are done (the next task), one word
+    d.fire("pointerdown", { isTrusted: true });
+    d.fire("mousedown", { isTrusted: true });
+    expect(d.said).toEqual([]);
+    d.after();
+    expect(d.said).toEqual(["here"]);
+    // a key whose default moved the focus into a frame it cannot see into (another process, or origin): `inner`
+    d.focus.active = { localName: "iframe", contentDocument: null };
+    d.fire("keydown", { isTrusted: true });
+    d.after();
+    // a frame it CAN see into (its own site), the focus on a field inside it: `here`
+    d.focus.active = {
+      localName: "iframe",
+      contentDocument: { activeElement: { localName: "input" } },
+    };
+    d.fire("focusin", { isTrusted: true });
+    d.after();
+    // the whole page lost the focus: `away`
+    d.focus.has = false;
     d.fire("blur", { target: d.self, isTrusted: true });
-    expect(d.said).toEqual(["focus", "blur"]);
-    // M7 H1: a SYNTHETIC focus or blur — `window.dispatchEvent(new Event("focus"))`, the page's own script — says nothing
+    d.after();
+    expect(d.said).toEqual(["here", "inner", "here", "away"]);
+    // M7 H1: a SYNTHETIC event — `dispatchEvent`, the page's own script — says nothing
     d.fire("focus", { target: d.self, isTrusted: false });
-    d.fire("blur", { target: d.self, isTrusted: false });
-    expect(d.said).toEqual(["focus", "blur"]);
+    d.fire("keydown", { isTrusted: false });
+    d.after();
+    expect(d.said).toEqual(["here", "inner", "here", "away"]);
+    d.said.length = 0;
+    d.focus.has = true;
     // a frame added: the half-second look says it moved — once; a scroll that moved nothing says nothing
     d.rects.push({ left: 100, top: 80, width: 400, height: 300 });
     d.every();
@@ -1190,13 +1259,19 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     d.every();
     d.tick();
     expect(d.said.filter((w) => w === "moved")).toHaveLength(3);
-    // the blank, a document with no binding: nothing
+    // the page's blank, a document with no binding: nothing; a FRAME's blank (an editor's) speaks (M7 H2)
     const blank = run({ href: "about:blank" });
+    blank.fire("keydown", { isTrusted: true });
     blank.tick();
+    blank.after();
     expect(blank.said).toEqual([]);
     const bare = run({ binding: false });
     bare.tick();
     expect(bare.said).toEqual([]);
+    const editor = run({ href: "about:blank", top: false });
+    editor.fire("keydown", { isTrusted: true });
+    editor.after();
+    expect(editor.said).toEqual(["here"]);
   });
 
   it("ruling 1 — where a frame is drawn is read again when its parent's document says its frames MOVED (its words, on its own session): one read in flight a frame; the quad read next is where the hand's next press lands", async () => {
@@ -1460,6 +1535,131 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       "mousePressed@F 80,225",
       "mouseReleased@F 80,225",
     ]);
+  });
+
+  describe("M7 H2 — M3's ban made total: the page's session gets nothing key-like unless the page's own document holds the focus (the review's cells)", () => {
+    const word = (r: Awaited<ReturnType<typeof framed>>, payload: string, session?: string): void =>
+      r.emit(
+        "Runtime.bindingCalled",
+        { name: FRAME_WORDS_BINDING, payload, executionContextId: 1 },
+        session,
+      );
+    /** what came of a key-like event: sent, or refused (its words) — the doubt's second run out */
+    const settle = async (sent: Promise<void>): Promise<string> => {
+      const out = sent.then(
+        () => "sent",
+        (error: unknown) => `refused: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      await vi.advanceTimersByTimeAsync(5_000);
+      return out;
+    };
+    const press = async (r: Awaited<ReturnType<typeof framed>>, x: number, y: number) => {
+      await r.native.dispatchMouse({ type: "mousePressed", x, y, button: "left", clickCount: 1 });
+      await r.native.dispatchMouse({ type: "mouseReleased", x, y, button: "left", clickCount: 1 });
+    };
+
+    it("(a) a Tab on the page whose default moves the focus into F: its up goes to F — never the page's session", async () => {
+      const r = await framed();
+      await r.native.dispatchKey({ type: "keyDown", key: "Tab", code: "Tab", modifiers: NONE });
+      word(r, "here", "F");
+      word(r, "inner");
+      await r.native.dispatchKey({ type: "keyUp", key: "Tab", code: "Tab", modifiers: NONE });
+      expect(r.hand()).toEqual(["keyDown@page", "keyUp@F"]);
+    });
+
+    it("(b) a press on the page that keeps F's focus (its mousedown prevented): the page says `inner` — the keys stay F's", async () => {
+      const r = await framed();
+      await press(r, 180, 120);
+      word(r, "here", "F");
+      await press(r, 20, 20);
+      word(r, "inner");
+      await r.native.dispatchText("x");
+      expect(r.hand().at(-1)).toBe("insertText@F x");
+    });
+
+    it("(c) a page-session press over F whose quad is not read — the host focused F's element: the page says `inner`; until F's own word a key WAITS, then is refused — never on the page's session; F's word, and the next goes to F", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = recording((method) => {
+          if (method === "DOM.getBoxModel") throw new Error("not laid out yet");
+          return {};
+        });
+        await r.native.loadURL("https://host.test/a");
+        r.at("https://host.test/a");
+        r.contents.emit("did-navigate", {}, "https://host.test/a");
+        r.attach("F");
+        await vi.advanceTimersByTimeAsync(0);
+        await press(r, 180, 120);
+        word(r, "inner");
+        const said = await settle(r.native.dispatchText("x"));
+        expect(said).toBe("refused: Browser input's focus is in doubt");
+        expect(r.hand().filter((h) => h.startsWith("insertText"))).toEqual([]);
+        word(r, "here", "F");
+        await settle(r.native.dispatchText("y"));
+        expect(r.hand().at(-1)).toBe("insertText@F y");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("(d) a script moves the focus into F (`iframe.focus()`): the page's `inner` puts it in doubt — a key WAITS for F's word, then goes to F", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = await framed();
+        word(r, "inner");
+        const text = r.native.dispatchText("x");
+        await vi.advanceTimersByTimeAsync(100);
+        expect(r.hand().filter((h) => h.startsWith("insertText"))).toEqual([]);
+        word(r, "here", "F");
+        expect(await settle(text)).toBe("sent");
+        expect(r.hand().at(-1)).toBe("insertText@F x");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("(e) F says `away` and no document says it took the focus (the whole page lost it): a key waits, then is refused — sent nowhere", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = await framed();
+        await press(r, 180, 120);
+        word(r, "here", "F");
+        word(r, "away", "F");
+        const said = await settle(r.native.dispatchText("x"));
+        expect(said).toBe("refused: Browser input's focus is in doubt");
+        expect(r.hand().filter((h) => h.startsWith("insertText"))).toEqual([]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("(f) the focused frame's session SWAPPED (its own cross-site navigation) or gone: a key waits, then is refused — never on the page's session", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = await framed();
+        await press(r, 180, 120);
+        word(r, "here", "F");
+        r.emit("Target.detachedFromTarget", { sessionId: "F", targetId: "t-F" });
+        const said = await settle(r.native.dispatchText("x"));
+        expect(said).toBe("refused: Browser input's focus is in doubt");
+        expect(r.hand().filter((h) => h.startsWith("insertText"))).toEqual([]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("(g) the page's own `away` (the page lost the focus): a key waits, then is refused — not sent on the page's session", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = await framed();
+        word(r, "away");
+        const said = await settle(r.native.dispatchText("x"));
+        expect(said).toBe("refused: Browser input's focus is in doubt");
+        expect(r.hand()).not.toContain("insertText@page x");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe("M6.4b — the host's bound on a page that hangs: a command of the hand timed from its SEND to its answer", () => {

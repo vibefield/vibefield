@@ -88,23 +88,29 @@ export const FRAME_VISIBLE_PART = `function () { const el = this; const none = [
 /**
  * PT-5d (rulings 1, M3) — said to every document of every session (the page's and its frames'): it takes the binding for
  * itself and deletes it from the page's reach, then SAYS
- *  - `focus` and `blur` of its OWN window — where the keys, text, a composition and a command go (the frame whose window has
- *    the focus; the page's when none has; a blur moves nothing — M6.2) — the ENGINE's alone (M7 H1: `isTrusted`; a
- *    page's `dispatchEvent` says nothing);
+ *  - WHERE THE FOCUS IS (M7 H2) — `here` (in its own process: its active element, through every child it can see into, is
+ *    no frame), `inner` (in a frame it cannot see into), `away` (not in it) — after every trusted press, key, tap, click
+ *    and focus change in it (one word a task, once its default actions are done: a Tab's focus move, a press's): where
+ *    the keys, text, a composition and a command go, and the only word of it — the ENGINE's events alone (M7 H1:
+ *    `isTrusted`; a page's `dispatchEvent` says nothing);
  *  - `moved` — its frames' boxes, or their visible parts (M6.3a: `FRAME_VISIBLE_PART`), changed (a scroll of any of its
  *    scrollers, a resize, its visual viewport, a transition's or an animation's end, a load — and, for what no event says,
  *    a look every half second while it holds a frame), once an animation frame at most, and only when they did: main
  *    then reads their quads and visible parts again, off the hand's path.
- * Never the bootstrap blank. Never its size (M6.1): every document of a frame's process says its words on the frame's
+ * Never the page's bootstrap blank — a frame's blank document (an editor's, an ad's slot) speaks (M7 H2: a press in it
+ * must say where the focus went). Never its size (M6.1): every document of a frame's process says its words on the frame's
  * session — its own children of its site too — so a frame's viewport is READ of its local root, beside its quad.
  */
-export const FRAME_WORDS_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; try { delete globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; } catch {} if (typeof say !== "function" || location.href === "about:blank") return; const tell = (word) => { try { say(word); } catch {} }; addEventListener("focus", (e) => { if (e.isTrusted && e.target === window) tell("focus"); }); addEventListener("blur", (e) => { if (e.isTrusted && e.target === window) tell("blur"); }); let drawn = ""; const part = ${FRAME_VISIBLE_PART}; const seen = (f) => { try { return part.call(f).join(","); } catch { return ""; } }; const boxes = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { const r = f.getBoundingClientRect(); out += r.left + "," + r.top + "," + r.width + "," + r.height + ":" + seen(f) + ";"; } return out; }; let due = false; const look = () => { due = false; const now = boxes(); if (now !== drawn) { drawn = now; tell("moved"); } }; const moved = () => { if (due) return; due = true; requestAnimationFrame(look); }; addEventListener("scroll", moved, { capture: true, passive: true }); addEventListener("resize", moved); addEventListener("load", moved); for (const t of ["DOMContentLoaded", "transitionend", "animationend"]) addEventListener(t, moved, true); globalThis.visualViewport?.addEventListener("resize", moved); globalThis.visualViewport?.addEventListener("scroll", moved); setInterval(() => { if (document.querySelector("iframe, frame")) moved(); }, 500); moved(); })();`;
+export const FRAME_WORDS_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; try { delete globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; } catch {} if (typeof say !== "function" || (window === window.top && location.href === "about:blank")) return; const tell = (word) => { try { say(word); } catch {} }; const where = () => { try { if (!document.hasFocus()) return "away"; let d = document; for (let i = 0; i < 32; i += 1) { const a = d.activeElement; const n = a ? a.localName : ""; if (n !== "iframe" && n !== "frame" && n !== "object" && n !== "embed" && n !== "fencedframe") return "here"; let inner = null; try { inner = a.contentDocument; } catch {} if (!inner) return "inner"; d = inner; } return "inner"; } catch { return "away"; } }; let asked = false; const ask = (e) => { if (!e.isTrusted || asked) return; asked = true; setTimeout(() => { asked = false; tell(where()); }, 0); }; for (const t of ["pointerdown", "mousedown", "keydown", "touchend", "click", "focus", "blur", "focusin", "focusout"]) addEventListener(t, ask, true); let drawn = ""; const part = ${FRAME_VISIBLE_PART}; const seen = (f) => { try { return part.call(f).join(","); } catch { return ""; } }; const boxes = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { const r = f.getBoundingClientRect(); out += r.left + "," + r.top + "," + r.width + "," + r.height + ":" + seen(f) + ";"; } return out; }; let due = false; const look = () => { due = false; const now = boxes(); if (now !== drawn) { drawn = now; tell("moved"); } }; const moved = () => { if (due) return; due = true; requestAnimationFrame(look); }; addEventListener("scroll", moved, { capture: true, passive: true }); addEventListener("resize", moved); addEventListener("load", moved); for (const t of ["DOMContentLoaded", "transitionend", "animationend"]) addEventListener(t, moved, true); globalThis.visualViewport?.addEventListener("resize", moved); globalThis.visualViewport?.addEventListener("scroll", moved); setInterval(() => { if (document.querySelector("iframe, frame")) moved(); }, 500); moved(); })();`;
 
 /** PT-5d (M6.1): a frame's own viewport, in its own CSS px — evaluated in its session's local root. */
 const FRAME_SIZE = 'innerWidth + "," + innerHeight';
 
 /** PT-5c (R3): the least time between two discards of the page's console entries. */
 const CONSOLE_DISCARD_MS = 1_000;
+/** PT-5d (M7 H2): how long a key, text, a composition or a command waits for a word of where the focus is, while it is in
+ * doubt, before it is refused — PT-5c's second for a document's scale word, the precedent. */
+const FOCUS_WORD_MS = 1_000;
 
 /** The file picker never shown: CDP says it was asked for (`Page.fileChooserOpened`) and cancels it — the input hears `cancel`. */
 const NO_FILE_PICKER = { enabled: true, cancel: true } as const;
@@ -163,6 +169,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   readonly #scaleListeners = new Set<(scale: number, document: number) => void>();
   /** PT-5d (M6.4b): who hears that a command of the hand went unanswered past the bound. */
   readonly #hungListeners = new Set<(frame?: string) => void>();
+  /** PT-5d (M7 H2): key-like events waiting for a word of where the focus is */
+  readonly #focusWaiters = new Set<() => void>();
   /**
    * PT-5c (ruling 1) — TWO QUEUES, never one: the DEVICE's (its layout, what it is told — `Emulation.*`, the window's size)
    * and the HAND's (`Input.*`). A device command the renderer does not answer — every one, while a navigation pends — no
@@ -218,6 +226,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       // PT-5d: the frames of the document before go with it
       this.#frames.pageCommitted(this.#documents);
       this.#owners.clear();
+      this.focusMoved();
     };
     window.webContents.on("did-navigate", (_event, url) => {
       if (this.#remoteLoadStarted && url !== "about:blank") committed();
@@ -285,6 +294,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         this.#owners.delete(gone);
         this.#placing.delete(gone);
         this.#discards.delete(gone);
+        this.focusMoved();
       }
       return;
     }
@@ -364,13 +374,14 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   }
 
   /**
-   * PT-5d (rulings 1, M3) — a document's word, on its own session (`undefined`: the page's): its window's focus — where
-   * the keys go (its blur moves nothing: M6.2); its frames moved — their quads read again. (No other word moves anything:
-   * a frame's size is READ — M6.1.)
+   * PT-5d (rulings 1, M3) — a document's word, on its own session (`undefined`: the page's): where the focus is (M7 H2) —
+   * where the keys go; its frames moved — their quads read again. (No other word moves anything: a frame's size is READ —
+   * M6.1.)
    */
   private frameWord(session: string | undefined, word: string): void {
-    if (word === "focus" || word === "blur") {
-      this.#frames.focus(session, word === "focus");
+    if (word === "here" || word === "inner" || word === "away") {
+      this.#frames.where(session, word);
+      this.focusMoved();
       return;
     }
     if (word === "moved")
@@ -632,7 +643,10 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * a finger the same; a key, text, a composition and a command to the FOCUSED document's session — nothing key-like on
    * the page's while a frame of another site is focused (M3: PT-5d's probe crashed main with keys into such a frame,
    * `Electron-2026-10-12-070259.ips`). An event whose target is gone is sent nowhere — never a command to a gone session.
-   * A page with no frame of another site: everything on the page's session, as before.
+   * A page with no frame of another site: everything on the page's session, as before. PT-5d (M7 H2): which document
+   * holds the focus is its own word alone — a press, a key's down and a tap's end are HINTS: each puts the focus in doubt
+   * until a word heard with or after its answer settles it; key-like events wait for it (`FOCUS_WORD_MS`), then are
+   * refused — never sent on the page's session while a frame may hold the focus.
    */
   dispatchTouch(input: BrowserSurfaceNativeTouchInput): Promise<void> {
     return this.hand(async () => {
@@ -657,7 +671,10 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       }
       const target = this.#frames.touchEnd();
       if (target === null) return;
-      await this.handCommand("Input.dispatchTouchEvent", input, target.session);
+      // (a tap's end: its document may move the focus — a hint)
+      await this.hinted(input.type === "touchEnd", () =>
+        this.handCommand("Input.dispatchTouchEvent", input, target.session),
+      );
     });
   }
 
@@ -665,10 +682,12 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     return this.hand(async () => {
       await this.ensureDebugger();
       for (const routed of this.routeMouse(input))
-        await this.handCommand(
-          "Input.dispatchMouseEvent",
-          { ...input, x: routed.x, y: routed.y },
-          routed.target.session,
+        await this.hinted(input.type === "mousePressed", () =>
+          this.handCommand(
+            "Input.dispatchMouseEvent",
+            { ...input, x: routed.x, y: routed.y },
+            routed.target.session,
+          ),
         );
     });
   }
@@ -676,16 +695,20 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   dispatchKey(input: BrowserSurfaceNativeKeyInput): Promise<void> {
     return this.hand(async () => {
       await this.ensureDebugger();
+      await this.focusSettled();
       const target =
         input.type === "keyUp" ? this.#frames.keyUp(input.code) : this.#frames.keyDown(input.code);
       if (target === null) return;
-      await this.handCommand("Input.dispatchKeyEvent", input, target.session);
+      await this.hinted(input.type !== "keyUp", () =>
+        this.handCommand("Input.dispatchKeyEvent", input, target.session),
+      );
     });
   }
 
   dispatchText(text: string): Promise<void> {
     return this.hand(async () => {
       await this.ensureDebugger();
+      await this.focusSettled();
       await this.handCommand("Input.insertText", { text }, this.#frames.focused().session);
     });
   }
@@ -693,12 +716,49 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   dispatchCompose(text: string, caret: number): Promise<void> {
     return this.hand(async () => {
       await this.ensureDebugger();
+      await this.focusSettled();
       await this.handCommand(
         "Input.imeSetComposition",
         { text, selectionStart: caret, selectionEnd: caret },
         this.#frames.focused().session,
       );
     });
+  }
+
+  /** PT-5d (M7 H2): a command that may move the focus (a press, a key's down, a tap's end) — a HINT: the focus in doubt from
+   * its send until a word heard with or after its answer says where it went. */
+  private async hinted(hint: boolean, send: () => Promise<void>): Promise<void> {
+    if (!hint) return send();
+    this.#frames.handSent();
+    try {
+      await send();
+    } finally {
+      this.#frames.handAnswered();
+      this.focusMoved();
+    }
+  }
+
+  /** PT-5d (M7 H2): the focus known — at once, or when a word settles it; refused once `FOCUS_WORD_MS` have passed. */
+  private focusSettled(): Promise<void> {
+    if (!this.#frames.inDoubt()) return Promise.resolve();
+    return new Promise<void>((resolve, reject) => {
+      const known = (): void => {
+        if (this.#frames.inDoubt()) return;
+        clearTimeout(timer);
+        this.#focusWaiters.delete(known);
+        resolve();
+      };
+      const timer = setTimeout(() => {
+        this.#focusWaiters.delete(known);
+        reject(new Error("Browser input's focus is in doubt"));
+      }, FOCUS_WORD_MS);
+      this.#focusWaiters.add(known);
+    });
+  }
+
+  /** PT-5d (M7 H2): where the focus is may have changed — each waiting key-like event looks again. */
+  private focusMoved(): void {
+    for (const known of [...this.#focusWaiters]) known();
   }
 
   /** PT-5d (M6.4b): a command of the hand the page never answered, said (see `handCommand`). */
