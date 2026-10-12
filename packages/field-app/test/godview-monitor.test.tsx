@@ -712,6 +712,13 @@ describe("the monitor stage", () => {
     expect(recording.updates).toBeGreaterThan(updates);
   });
 
+  it("stands the head's slot beside the stage, never inside it: the stage's mask dissolves the field under the head, never the head (2026-10-12)", async () => {
+    const host = await mountMonitor("swarm", null);
+    expect(host.querySelector(".vf-stories-slot")).not.toBeNull();
+    expect(host.querySelector(".vf-godview-monitor-stage .vf-stories-slot")).toBeNull();
+    expect(host.querySelector(".vf-stories-slot .vf-godview-monitor-stage")).toBeNull();
+  });
+
   it("gives a silent strip no room of its own: the top inset is the head's reserve, and the package's own band stands past it (GV-D1)", async () => {
     const fire = driveObservers();
     // No door: nobody has been asked yet, so there is no claim to make and

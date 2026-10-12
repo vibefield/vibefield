@@ -1053,9 +1053,21 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     *As built (2026-10-11):* the reserve is `--vf-godview-head-reserve`. The stage's own chrome —
     the usage column and the claims strip — begins at it, where it began 11 under the bar. The
     swarm steers by the stage's obstacles and reads no inset, so the reserve is the first of
-    them, the band across the stage's top: its bodies keep below the head as they kept below the
-    bar. The rain is a picture with no words or controls of its own, and bleeds under the head.
+    them, the band across the stage's top. *(Corrected 2026-10-12: this said "its bodies keep
+    below the head as they kept below the bar". They do not, and they never did. The swarm's crowd
+    is bigger than its field (no body is smaller than r 50), and its physics lets the crowd past
+    every edge, a band as thick as a wall included. Under the bar the swarm spilled above the
+    stage's top too, and the bar and the stage's edge hid it. Measured in
+    `draft/monitor-view-sdk/evidence/swarm-probe-ce17e858`.)* The rain is a picture with no words or
+    controls of its own; it runs under the head too.
     The terminals' edge rests where it rested: the monitor's rest height takes up the bar's 40.
+  - **The field dissolves under the head** (2026-10-12; James: "Fade now + sizing later"). The
+    stage is masked from clear at the head's axis, **28**, to whole at the reserve, **56**
+    (`--vf-godview-head-fade-from` → `--vf-godview-head-reserve`), whatever the view. What a field
+    draws in that band, the swarm's crowd or the rain's ground, fades out under the glass instead
+    of standing beside the circles. The stage's own chrome begins at the reserve and is never
+    faded. It is the stage that is masked, never the head beside it. Until the swarm sizes its
+    bodies to its field (puppeteer's, owed), the fade is what keeps the head clear.
   - **Maximized** (GV-D11) nothing of the head stands over the terminals' title bar: the row and
     its chevrons fade in 200ms and take no pointer.
   - **Reduced motion:** the row pages and the label appears at once.

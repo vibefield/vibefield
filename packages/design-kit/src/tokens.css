@@ -247,6 +247,9 @@
      view keeps its words and controls clear of the head's reserve — the head's
      foot at 48, plus 8. The stage's own chrome begins at it. */
   --vf-godview-head-reserve: 56px;
+  /* §8 "The field dissolves under the head" (2026-10-12): the stage is masked from
+     clear at the head's axis (its 40 at top 8, centred on 28) to whole at the reserve. */
+  --vf-godview-head-fade-from: 28px;
 
   --vf-godview-rain-green: #4ade80;
   --vf-godview-rain-green-focus: #22c55e;

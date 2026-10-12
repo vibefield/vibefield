@@ -594,4 +594,21 @@ describe("the head's stylesheet, held to DESIGN.md's entry", () => {
     expect(HEAD_RESERVE).toBe(56);
     expect(HEAD_RESERVE).toBe(8 + 40 + 8);
   });
+
+  it("dissolves the field under the head: the stage masked from clear at the head's axis to whole at the reserve (2026-10-12)", () => {
+    // the swarm's crowd is bigger than its field and no edge holds it (the probe
+    // of 2026-10-12), so what a field draws in the head's band fades under the glass
+    const stage = rule(".vf-godview-monitor-stage").replace(/\s+/g, " ");
+    expect(stage).toContain(
+      "mask-image: linear-gradient( to bottom, transparent var(--vf-godview-head-fade-from), black var(--vf-godview-head-reserve) )",
+    );
+    // the axis is the head's own: its 40 at top 8, centred on 28
+    const tokens = readFileSync(join(PACKAGE_ROOT, "../design-kit/src/tokens.css"), "utf8");
+    expect(tokens).toMatch(/^\s*--vf-godview-head-fade-from: 28px;/m);
+    expect(28).toBe(8 + 40 / 2);
+    // and DESIGN.md says it, with both numbers
+    const design = readFileSync(join(PACKAGE_ROOT, "../../DESIGN.md"), "utf8");
+    expect(design).toContain("**The field dissolves under the head**");
+    expect(design).toContain("`--vf-godview-head-fade-from` → `--vf-godview-head-reserve`");
+  });
 });

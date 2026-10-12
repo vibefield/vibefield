@@ -16,6 +16,21 @@
   --vf-godview-head-height: 0px;
 }
 
+/* ── THE FIELD DISSOLVES UNDER THE HEAD (2026-10-12) ───────────────────────
+   The stage runs under the head, and what a field draws in the head's band —
+   the swarm's crowd, which no edge holds (its bodies are bigger than its
+   field), and the rain's ground — fades out under the glass, as the bar once
+   hid it: clear at the head's axis, whole at the reserve, whatever the view.
+   The stage is masked, never the head (its slot stands beside the stage); the
+   stage's own chrome begins at the reserve, where the mask is whole. */
+.vf-godview-monitor-stage {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent var(--vf-godview-head-fade-from),
+    black var(--vf-godview-head-reserve)
+  );
+}
+
 /* ── THE SLOT — the frame's head row, over the stage ───────────────────────
    `GodviewMonitor` mounts the head here, behind its boundary. A band of no
    height across the window's top, so the stage runs under it to the window's
