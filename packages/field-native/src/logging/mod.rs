@@ -1760,7 +1760,10 @@ mod tests {
         assert_eq!(health["ring"]["records"], RING_RECORDS);
 
         failing.store(false, Ordering::Relaxed);
-        assert!(logging.flush(Duration::from_secs(4)));
+        // The flush first waits out the retry backoff the failures armed (250 ms
+        // × 2^attempt — the worker does not cut it short for a flush), then
+        // drains up to the queue's 8,192 records; a loaded host overran 4 s.
+        assert!(logging.flush(Duration::from_secs(15)));
         assert!(logging.close(Duration::from_secs(2)));
     }
 

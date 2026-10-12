@@ -168,7 +168,9 @@ describe("the holders ledger's last write is bounded at stop (DS-5d, M176)", () 
   it(
     "a ledger that settles is waited for as before, and nothing is said",
     async () => {
-      const { daemon, logRoot } = await setup({ stopMs: 100 });
+      // the control's flush is a REAL fsync'd write, so its bound is room for a
+      // loaded host, not the never-settling rows' 100 ms (that wait is the point)
+      const { daemon, logRoot } = await setup({ stopMs: 10_000 });
       await within(daemon.stop(), STOP_GUARD_MS, "the clean stop");
       const lines = events(logRoot);
       expect(lines.some((line) => line.event === "fieldd.docs.holders_stop_timeout")).toBe(false);

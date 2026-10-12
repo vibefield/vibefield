@@ -2157,5 +2157,6 @@ describe("the catalog (AC-3) — the doors answer from the table, the roll call 
     const win = await window(daemon, ALL, "cen");
     const { providers } = (await win.call("agent.providers", {})) as AgentProvidersResult;
     expect(providers.find((p) => p.id === "claude")).toMatchObject({ history: "indexed" });
-  });
+    // its own two 15 s waits, the 1.2 s census window and a rosettad bounce
+  }, 30_000);
 });

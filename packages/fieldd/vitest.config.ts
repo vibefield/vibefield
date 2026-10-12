@@ -24,9 +24,18 @@ import { defineConfig } from "vitest/config";
 // regression being papered over. The cost is honest: ~15s → ~115s for this one
 // project. A gate that fails two runs in five teaches people to re-run until
 // green, which is precisely how a real failure gets waved through.
+//
+// The budgets (debts lane, 2026-10-12): vitest's defaults (5 s a test, 10 s a
+// hook) are not a product budget, and a loaded host stalls these fsync-heavy
+// files past them — one gate run failed four files at once (audit-service,
+// project-library, workspace-engine, audit-retention), each normally under
+// 0.6 s. 30 s is the ceiling a stall gets; a row whose product has a real
+// bound asserts that bound in its own words, never through this number.
 export default defineConfig({
   test: {
     fileParallelism: !process.env["CI"] && process.platform !== "win32",
     globalSetup: ["./test/global-setup.ts"],
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
   },
 });
