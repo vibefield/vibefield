@@ -76,6 +76,8 @@ vi.mock("../src/main/live-surfaces/browser-security", async (importOriginal) => 
 
 import {
   ElectronBrowserSurfaceNative,
+  FRAME_WORDS_BINDING,
+  FRAME_WORDS_SCRIPT,
   PAGE_SCALE_BINDING,
   PAGE_SCALE_SCRIPT,
 } from "../src/main/live-surfaces/browser-electron-native";
@@ -461,7 +463,7 @@ describe("PT-5c (ruling 1) — the page SAYS its scale; the hand's commands neve
     expect(run({ binding: false }).said).toEqual([]);
   });
 
-  it("R3 — the page's console entries are DISCARDED as they come, at most once a second (with the Runtime on, every object a page logs is held until then — PT-5c's probe): a call on the page's own session sends `Runtime.discardConsoleEntries` at once, the many after it one more when the second is up; an exception the same; never behind the hand's queue; a frame's session is not this page's console", async () => {
+  it("R3 — the page's console entries are DISCARDED as they come, at most once a second (with the Runtime on, every object a page logs is held until then — PT-5c's probe): a call on the page's own session sends `Runtime.discardConsoleEntries` at once, the many after it one more when the second is up; an exception the same; never behind the hand's queue; a frame's console is discarded on the frame's own session (PT-5d: it runs its Runtime too, for its words), never the page's", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     try {
       const r = recording(["Input.dispatchMouseEvent"]);
@@ -493,8 +495,11 @@ describe("PT-5c (ruling 1) — the page SAYS its scale; the hand's commands neve
       expect(discards()).toBe(3);
       await vi.advanceTimersByTimeAsync(2_000);
       heard("Runtime.consoleAPICalled", "a-frame-of-another-process");
-      await vi.advanceTimersByTimeAsync(2_000);
-      expect(discards()).toBe(3);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(discards()).toBe(4);
+      expect(
+        r.sent.filter((c) => c.method === "Runtime.discardConsoleEntries").map((c) => c.session),
+      ).toEqual([undefined, undefined, undefined, "a-frame-of-another-process"]);
     } finally {
       vi.useRealTimers();
     }
@@ -681,9 +686,11 @@ describe("PT-5c2 (F1) — the producer over this adapter: a document's LATE fail
   });
 });
 
-describe("PT-5d (M2) — every frame of another site is guarded, a frame in a frame too", () => {
-  /** A window whose debugger records what it is sent, by session. */
-  const recording = () => {
+describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's events routed to the target that takes them (rulings 1, 3, 4)", () => {
+  /** A window whose debugger records what it is sent, by session, and answers what the row says (else `{}`). */
+  const recording = (
+    answer: (method: string, params: unknown, session?: string) => object = () => ({}),
+  ) => {
     const w = window();
     const sent: { method: string; params: unknown; session?: string }[] = [];
     let attached = false;
@@ -697,34 +704,72 @@ describe("PT-5d (M2) — every frame of another site is guarded, a frame in a fr
       session?: string,
     ) => {
       sent.push({ method: method ?? "", params, ...(session === undefined ? {} : { session }) });
-      return {};
+      return answer(method ?? "", params, session);
     };
-    const attach = (session: string, parent?: string): void =>
-      w.contents.debugger.emit(
-        "message",
-        {},
+    const emit = (method: string, params: unknown, session?: string): void =>
+      w.contents.debugger.emit("message", {}, method, params, session);
+    const attach = (session: string, parent?: string, type = "iframe"): void =>
+      emit(
         "Target.attachedToTarget",
-        { sessionId: session, targetInfo: { type: "iframe", targetId: `t-${session}`, url: "" } },
+        { sessionId: session, targetInfo: { type, targetId: `t-${session}`, url: "" } },
         parent,
       );
     const on = (session: string): string[] =>
       sent.filter((c) => c.session === session).map((c) => c.method);
-    return { ...w, sent, attach, on };
+    /** what the hand sent: `method@session x,y` (a key's type, text's, a composition's) */
+    const hand = (): string[] =>
+      sent
+        .filter((c) => c.method.startsWith("Input."))
+        .map((c) => {
+          const q = c.params as {
+            type?: string;
+            x?: number;
+            y?: number;
+            text?: string;
+            touchPoints?: { x: number; y: number }[];
+          };
+          const at =
+            q.touchPoints?.[0] ?? (q.x === undefined ? undefined : { x: q.x, y: q.y ?? 0 });
+          return `${q.type ?? c.method.slice(6)}@${c.session ?? "page"}${at === undefined ? "" : ` ${at.x},${at.y}`}${q.text === undefined ? "" : ` ${q.text}`}`;
+        });
+    return { ...w, sent, emit, attach, on, hand };
   };
   const turns = async (): Promise<void> => {
-    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+    for (let i = 0; i < 30; i += 1) await Promise.resolve();
   };
+  /** A page at its first document, frame F (its owner element 7 of the page, drawn 400 × 300 at 100, 80) placed. */
+  const framed = async () => {
+    const r = recording((method, params) => {
+      if (method === "DOM.getFrameOwner")
+        return { backendNodeId: (params as { frameId: string }).frameId === "t-F" ? 7 : 8 };
+      if (method === "DOM.getBoxModel")
+        return (params as { backendNodeId: number }).backendNodeId === 7
+          ? { model: { content: [100, 80, 500, 80, 500, 380, 100, 380] } }
+          : { model: { content: [250, 190, 370, 190, 370, 280, 250, 280] } };
+      return {};
+    });
+    await r.native.loadURL("https://host.test/a");
+    r.at("https://host.test/a");
+    r.contents.emit("did-navigate", {}, "https://host.test/a");
+    r.attach("F");
+    await turns();
+    return r;
+  };
+  const NONE = 0;
 
-  it("a child session's attach puts the guards on it AND its own auto-attach (flat, as the page's) — so a frame of another site inside it is attached, and guarded, before it runs", async () => {
+  it("M2 — a child session's attach puts the guards on it AND its own auto-attach (flat, as the page's) — so a frame of another site inside it is attached, and guarded, before it runs", async () => {
     const r = recording();
     r.attach("frame-1");
     await turns();
-    expect(r.on("frame-1")).toEqual([
+    const guards = [
       "Page.enable",
       "Page.setInterceptFileChooserDialog",
+      "Runtime.enable",
+      "Runtime.addBinding",
       "Page.addScriptToEvaluateOnNewDocument",
       "Target.setAutoAttach",
-    ]);
+    ];
+    expect(r.on("frame-1")).toEqual(guards);
     expect(
       r.sent.find((c) => c.session === "frame-1" && c.method === "Target.setAutoAttach")?.params,
     ).toEqual({
@@ -732,9 +777,323 @@ describe("PT-5d (M2) — every frame of another site is guarded, a frame in a fr
       waitForDebuggerOnStart: false,
       flatten: true,
     });
-    // the frame in it attaches on ITS session: guarded the same
+    // its guard and its words run in the document it already holds too
+    expect(
+      r.sent.find(
+        (c) => c.session === "frame-1" && c.method === "Page.addScriptToEvaluateOnNewDocument",
+      )?.params,
+    ).toMatchObject({ runImmediately: true });
+    // the frame in it attaches on ITS session: guarded the same — and where it is drawn is asked of ITS parent's session
     r.attach("frame-2", "frame-1");
     await turns();
-    expect(r.on("frame-2")).toEqual(r.on("frame-1"));
+    expect(r.on("frame-2")).toEqual(guards);
+    expect(
+      r.sent.find((c) => c.method === "DOM.getFrameOwner" && c.session === "frame-1")?.params,
+    ).toEqual({
+      frameId: "t-frame-2",
+    });
+  });
+
+  it("M2 — a guard step the engine refuses (its script, its Runtime) keeps no guard after it off: the frames inside are still attached and guarded", async () => {
+    const r = recording((method, _params, session) => {
+      if (
+        session === "frame-1" &&
+        (method === "Runtime.enable" || method === "Page.addScriptToEvaluateOnNewDocument")
+      )
+        throw new Error("refused");
+      return {};
+    });
+    r.attach("frame-1");
+    await turns();
+    expect(r.on("frame-1")).toContain("Target.setAutoAttach");
+  });
+
+  it("ruling 1 — a press over a frame of another site goes on the FRAME's session, at the point carried into its viewport (where its owner's quad, read off the hand's path, says it is drawn); its drag and its release outside it go there too; a press beside it is the page's, as before", async () => {
+    const r = await framed();
+    await r.native.dispatchMouse({
+      type: "mousePressed",
+      x: 180,
+      y: 120,
+      button: "left",
+      clickCount: 1,
+    });
+    await r.native.dispatchMouse({ type: "mouseMoved", x: 60, y: 120, button: "left", buttons: 1 });
+    await r.native.dispatchMouse({
+      type: "mouseReleased",
+      x: 40,
+      y: 120,
+      button: "left",
+      clickCount: 1,
+    });
+    await r.native.dispatchMouse({
+      type: "mousePressed",
+      x: 20,
+      y: 20,
+      button: "left",
+      clickCount: 1,
+    });
+    expect(r.hand()).toEqual([
+      "mousePressed@F 80,40",
+      "mouseMoved@F -40,40",
+      "mouseReleased@F -60,40",
+      // the hover left F: the press beside it is the page's
+      "mousePressed@page 20,20",
+    ]);
+    // the quad was read on the page's session, of F's owner element, once
+    expect(r.sent.filter((c) => c.method === "DOM.getFrameOwner")).toEqual([
+      { method: "DOM.getFrameOwner", params: { frameId: "t-F" } },
+    ]);
+  });
+
+  it("M3 — keys, text, a composition and a command go to the FOCUSED frame's session — nothing key-like on the page's while a frame of another site is focused: the focus follows the hand's press, and what each document says of its window (`focus`)", async () => {
+    const r = await framed();
+    await r.native.dispatchMouse({
+      type: "mousePressed",
+      x: 180,
+      y: 120,
+      button: "left",
+      clickCount: 1,
+    });
+    await r.native.dispatchMouse({
+      type: "mouseReleased",
+      x: 180,
+      y: 120,
+      button: "left",
+      clickCount: 1,
+    });
+    await r.native.dispatchKey({ type: "keyDown", key: "h", code: "KeyH", modifiers: NONE });
+    await r.native.dispatchKey({ type: "keyUp", key: "h", code: "KeyH", modifiers: NONE });
+    await r.native.dispatchText("é");
+    await r.native.dispatchCompose("か", 1);
+    await r.native.dispatchKey({
+      type: "keyDown",
+      key: "a",
+      code: "KeyA",
+      modifiers: 4,
+      commands: ["selectAll"],
+    });
+    await r.native.dispatchKey({ type: "keyUp", key: "a", code: "KeyA", modifiers: 4 });
+    // a press on the page: the keys are the page's again
+    await r.native.dispatchMouse({
+      type: "mousePressed",
+      x: 20,
+      y: 20,
+      button: "left",
+      clickCount: 1,
+    });
+    await r.native.dispatchMouse({
+      type: "mouseReleased",
+      x: 20,
+      y: 20,
+      button: "left",
+      clickCount: 1,
+    });
+    await r.native.dispatchText("x");
+    // F's document says its window took the focus (its script focused a field): F's
+    r.emit(
+      "Runtime.bindingCalled",
+      { name: FRAME_WORDS_BINDING, payload: "focus", executionContextId: 1 },
+      "F",
+    );
+    await r.native.dispatchText("y");
+    expect(r.hand()).toEqual([
+      "mousePressed@F 80,40",
+      "mouseReleased@F 80,40",
+      "keyDown@F",
+      "keyUp@F",
+      "insertText@F é",
+      "imeSetComposition@F か",
+      "keyDown@F",
+      "keyUp@F",
+      "mousePressed@page 20,20",
+      "mouseReleased@page 20,20",
+      "insertText@page x",
+      "insertText@F y",
+    ]);
+  });
+
+  it("ruling 3 — what a frame took ends where it began: its press released once its session has GONE is sent nowhere (never a command to a gone session); once it committed ANOTHER document (its own word, `Page.frameNavigated` of its frame), nowhere; a key held in it the same", async () => {
+    const r = await framed();
+    await r.native.dispatchMouse({
+      type: "mousePressed",
+      x: 180,
+      y: 120,
+      button: "left",
+      clickCount: 1,
+    });
+    await r.native.dispatchKey({ type: "keyDown", key: "q", code: "KeyQ", modifiers: NONE });
+    r.emit("Page.frameNavigated", { frame: { id: "t-F", url: "https://frame.test/next" } }, "F");
+    await r.native.dispatchMouse({
+      type: "mouseReleased",
+      x: 180,
+      y: 120,
+      button: "left",
+      clickCount: 1,
+    });
+    await r.native.dispatchKey({ type: "keyUp", key: "q", code: "KeyQ", modifiers: NONE });
+    // its next press is its new document's
+    await r.native.dispatchMouse({
+      type: "mousePressed",
+      x: 180,
+      y: 120,
+      button: "left",
+      clickCount: 1,
+    });
+    r.emit("Target.detachedFromTarget", { sessionId: "F", targetId: "t-F" });
+    await r.native.dispatchMouse({
+      type: "mouseReleased",
+      x: 180,
+      y: 120,
+      button: "left",
+      clickCount: 1,
+    });
+    // a frame's frame of its own committing is no commit of F's
+    expect(r.hand()).toEqual(["mousePressed@F 80,40", "keyDown@F", "mousePressed@F 80,40"]);
+  });
+
+  it("ruling 3 — the PAGE's commit takes every frame of the document before: a press there afterwards is the page's", async () => {
+    const r = await framed();
+    r.at("https://host.test/b");
+    r.contents.emit("did-navigate", {}, "https://host.test/b");
+    await r.native.dispatchMouse({
+      type: "mousePressed",
+      x: 180,
+      y: 120,
+      button: "left",
+      clickCount: 1,
+    });
+    expect(r.hand()).toEqual(["mousePressed@page 180,120"]);
+  });
+
+  it("ruling 4 — a WORKER, a service worker attached under the page's debugger is no frame: not guarded as one, never a target", async () => {
+    const r = recording();
+    r.attach("W", undefined, "worker");
+    r.attach("S", undefined, "service_worker");
+    await turns();
+    expect(r.on("W")).toEqual([]);
+    expect(r.on("S")).toEqual([]);
+    await r.native.dispatchMouse({
+      type: "mousePressed",
+      x: 1,
+      y: 1,
+      button: "left",
+      clickCount: 1,
+    });
+    expect(r.hand()).toEqual(["mousePressed@page 1,1"]);
+  });
+
+  it("rulings 1, M3 — a document's WORDS, run: it takes the binding out of the page's reach; says its viewport's size, `focus` and `blur` of its OWN window (never an element's), and `moved` — only when its frames' boxes changed, once an animation frame; a document holding no frame never says moved; the blank and a document with no binding say nothing", () => {
+    const run = (options: { href?: string; binding?: boolean } = {}) => {
+      const said: string[] = [];
+      const on = new Map<string, ((event?: { target?: unknown }) => void)[]>();
+      let frame: (() => void) | undefined;
+      let every: (() => void) | undefined;
+      const rects: { left: number; top: number; width: number; height: number }[] = [];
+      const self = { innerWidth: 400, innerHeight: 300 };
+      const g: Record<string, unknown> = { visualViewport: { addEventListener: () => undefined } };
+      if (options.binding !== false) g[FRAME_WORDS_BINDING] = (word: string) => said.push(word);
+      new Function(
+        "globalThis",
+        "window",
+        "location",
+        "addEventListener",
+        "requestAnimationFrame",
+        "setInterval",
+        "document",
+        "innerWidth",
+        "innerHeight",
+        FRAME_WORDS_SCRIPT,
+      )(
+        g,
+        self,
+        { href: options.href ?? "https://example.test/a" },
+        (type: string, listener: (event?: { target?: unknown }) => void) =>
+          on.set(type, [...(on.get(type) ?? []), listener]),
+        (callback: () => void) => {
+          frame = callback;
+        },
+        (callback: () => void) => {
+          every = callback;
+        },
+        {
+          querySelector: () => (rects.length > 0 ? {} : null),
+          querySelectorAll: () => rects.map((r) => ({ getBoundingClientRect: () => r })),
+        },
+        self.innerWidth,
+        self.innerHeight,
+      );
+      const fire = (type: string, event?: { target?: unknown }): void => {
+        for (const listener of on.get(type) ?? []) listener(event);
+      };
+      const tick = (): void => {
+        const f = frame;
+        frame = undefined;
+        f?.();
+      };
+      return { said, g, self, rects, fire, tick, every: () => every?.() };
+    };
+    const d = run();
+    expect(FRAME_WORDS_BINDING in d.g).toBe(false);
+    d.tick();
+    // its size, at once; no frame in it: no `moved`
+    expect(d.said).toEqual(["size:400,300"]);
+    // its window's focus and blur — an element's focus (its target not the window) is not the window's
+    d.fire("focus", { target: d.self });
+    d.fire("focus", { target: {} });
+    d.fire("blur", { target: d.self });
+    expect(d.said).toEqual(["size:400,300", "focus", "blur"]);
+    // a frame added: the half-second look says it moved — once; a scroll that moved nothing says nothing
+    d.rects.push({ left: 100, top: 80, width: 400, height: 300 });
+    d.every();
+    d.tick();
+    d.fire("scroll");
+    d.fire("scroll");
+    d.tick();
+    expect(d.said.filter((w) => w === "moved")).toHaveLength(1);
+    // a scroll that moved it: once an animation frame, however many scrolls
+    d.rects[0] = { left: 100, top: 30, width: 400, height: 300 };
+    d.fire("scroll");
+    d.fire("scroll");
+    d.tick();
+    expect(d.said.filter((w) => w === "moved")).toHaveLength(2);
+    // the blank, a document with no binding: nothing
+    const blank = run({ href: "about:blank" });
+    blank.tick();
+    expect(blank.said).toEqual([]);
+    const bare = run({ binding: false });
+    bare.tick();
+    expect(bare.said).toEqual([]);
+  });
+
+  it("ruling 1 — where a frame is drawn is read again when its parent's document says its frames MOVED (its words, on its own session): one read in flight a frame; the quad read next is where the hand's next press lands", async () => {
+    let at = [100, 80, 500, 80, 500, 380, 100, 380];
+    const r = recording((method) => {
+      if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };
+      if (method === "DOM.getBoxModel") return { model: { content: at } };
+      return {};
+    });
+    await r.native.loadURL("https://host.test/a");
+    r.at("https://host.test/a");
+    r.contents.emit("did-navigate", {}, "https://host.test/a");
+    r.attach("F");
+    await turns();
+    // the page scrolled by 50: its words say so — F is read again, once however many words come
+    at = [100, 30, 500, 30, 500, 330, 100, 330];
+    for (let i = 0; i < 3; i += 1)
+      r.emit("Runtime.bindingCalled", {
+        name: FRAME_WORDS_BINDING,
+        payload: "moved",
+        executionContextId: 1,
+      });
+    await turns();
+    expect(r.sent.filter((c) => c.method === "DOM.getBoxModel").length).toBeLessThanOrEqual(3);
+    await r.native.dispatchMouse({
+      type: "mousePressed",
+      x: 180,
+      y: 70,
+      button: "left",
+      clickCount: 1,
+    });
+    expect(r.hand()).toEqual(["mousePressed@F 80,40"]);
   });
 });

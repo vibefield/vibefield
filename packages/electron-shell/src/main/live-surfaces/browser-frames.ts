@@ -1,0 +1,317 @@
+/**
+ * PT-5d (rulings 1, 3, 4) — THE HAND REACHES EVERY FRAME: which of a page's targets takes each event of the hand, and the
+ * point carried into it. Electron's offscreen view forwards every event to the ROOT widget — no input router, no hit test
+ * — so a press over a frame of another site (another process) is heard by the HOST page, on the iframe ELEMENT, and the
+ * frame hears nothing; `sendInputEvent` the same (PT-5d's probe, v5, v6). A press dispatched on the FRAME'S OWN session,
+ * at the point carried into its viewport, lands where it is drawn (v7): this module decides, for each event, the page's
+ * own session or a frame's.
+ *
+ * What it reads is CACHED, never asked on the hand's path (PT-5c, ruling 1): a frame's place is its owner's content quad
+ * in its parent's viewport, read off the path and read again when the parent's document says something moved; which
+ * frame has the focus is what each document's guard SAYS of its own window, and the hand's own press (a press in a frame
+ * focuses its window). A gesture ends where it began (ruling 3): a press, a finger and a key remember their target, and
+ * their moves and releases go to it wherever the point is — or nowhere, once its frame is gone or its document is not
+ * the press's. Only frames of the page's own tree are targets (ruling 4): the native adds them as they attach.
+ */
+
+/** A frame's content quad in its PARENT's viewport (CSS px): its corners from its top-left, clockwise (CDP's `DOM.Quad`). */
+export type FrameQuad = readonly [number, number, number, number, number, number, number, number];
+
+/** Where an event goes — the page's own session (`undefined`) or a frame's — and the document it is for. */
+export interface FrameTarget {
+  readonly session: string | undefined;
+  readonly document: number;
+}
+
+/** An event routed: its target, and its point carried into the target's viewport. */
+export interface FrameRouted {
+  readonly target: FrameTarget;
+  readonly x: number;
+  readonly y: number;
+}
+
+interface FrameRecord {
+  readonly session: string;
+  readonly targetId: string;
+  /** its parent's session (`undefined`: the page's own) */
+  readonly parent: string | undefined;
+  /** its owner's content quad in its parent's viewport (none until the first read) */
+  quad: FrameQuad | undefined;
+  /** its own viewport's size in its own CSS px, as its document says it (none: the quad's own) */
+  size: readonly [number, number] | undefined;
+  /** its own commits */
+  documents: number;
+  /** its place in the order frames attach — the later one wins where two overlap */
+  readonly order: number;
+}
+
+/** The pressed buttons, the finger and the held keys — each the target its gesture began on. */
+interface Hand {
+  readonly buttons: Map<string, FrameTarget>;
+  finger: FrameTarget | undefined;
+  readonly keys: Map<string, FrameTarget>;
+}
+
+export class BrowserFrames {
+  readonly #frames = new Map<string, FrameRecord>();
+  #order = 0;
+  #pageDocument = 0;
+  /** the session whose document has the focus (`undefined`: the page's own) */
+  #focused: string | undefined;
+  readonly #hand: Hand = { buttons: new Map(), finger: undefined, keys: new Map() };
+  /** where the last hover went — told that the pointer left it when the next goes elsewhere */
+  #hover: FrameTarget | undefined;
+
+  // ── the page's tree, as the native hears it ────────────────────────────────────────────────────────────────────
+
+  /** A frame of the page's tree attached: its session, its target, its parent's session (`undefined`: the page's). */
+  attached(session: string, targetId: string, parent: string | undefined): void {
+    if (parent !== undefined && !this.#frames.has(parent)) return;
+    this.#order += 1;
+    this.#frames.set(session, {
+      session,
+      targetId,
+      parent,
+      quad: undefined,
+      size: undefined,
+      documents: 0,
+      order: this.#order,
+    });
+  }
+
+  /** A frame's session went (the frame removed, its process gone, it moved to another): it, and every frame in it. */
+  detached(session: string): void {
+    if (!this.#frames.delete(session)) return;
+    for (const frame of [...this.#frames.values()])
+      if (frame.parent === session) this.detached(frame.session);
+    if (this.#focused === session) this.#focused = undefined;
+  }
+
+  /** A frame committed another document — its own word, on its own session. */
+  committed(session: string): void {
+    const frame = this.#frames.get(session);
+    if (frame !== undefined) frame.documents += 1;
+  }
+
+  /** The PAGE committed another document: every frame of the one before goes with it; the focus is the page's. */
+  pageCommitted(document: number): void {
+    this.#pageDocument = document;
+    this.#frames.clear();
+    this.#focused = undefined;
+    this.#hover = undefined;
+  }
+
+  /** A frame's quad as its parent's session said it (`undefined`: it is not laid out — no box, nothing lands in it). */
+  placed(session: string, quad: FrameQuad | undefined): void {
+    const frame = this.#frames.get(session);
+    if (frame !== undefined) frame.quad = quad;
+  }
+
+  /** A frame's own viewport, as its document says it. */
+  sized(session: string, width: number, height: number): void {
+    const frame = this.#frames.get(session);
+    if (frame === undefined || !(width > 0 && height > 0)) return;
+    frame.size = [width, height];
+  }
+
+  /** A document's window said `focus` (`true`) or `blur` (`false`) — on its own session (`undefined`: the page's). */
+  focus(session: string | undefined, focused: boolean): void {
+    if (session !== undefined && !this.#frames.has(session)) return;
+    if (focused) this.#focused = session;
+    else if (this.#focused === session) this.#focused = undefined;
+  }
+
+  /** The frames of the page's tree, by session, and their parents: what the native reads their quads by. */
+  frames(): readonly {
+    readonly session: string;
+    readonly targetId: string;
+    readonly parent: string | undefined;
+  }[] {
+    return [...this.#frames.values()].map(({ session, targetId, parent }) => ({
+      session,
+      targetId,
+      parent,
+    }));
+  }
+
+  // ── the hand's events ──────────────────────────────────────────────────────────────────────────────────────────
+
+  /** A button's press at a page point: the frame drawn there (the innermost), its target remembered; the focus follows it. */
+  press(button: string, x: number, y: number): FrameRouted {
+    const routed = this.at(x, y);
+    this.#hand.buttons.set(button, routed.target);
+    this.#focused = routed.target.session;
+    // (the pointer is the press's target's until its release: a hover after it leaves it, as after a drag in a browser)
+    this.#hover = routed.target;
+    return routed;
+  }
+
+  /**
+   * A move: with a button down, to that press's target wherever the point is (a drag — nowhere once it is gone); else a
+   * HOVER, to the frame drawn there — and, where the hover crosses from one target into another, first to the one it
+   * left, at the point carried into it (outside it): its document hears the pointer leave, as a browser's router tells it.
+   */
+  move(x: number, y: number): readonly FrameRouted[] {
+    const held = [...this.#hand.buttons.values()][0];
+    if (held !== undefined) {
+      const routed = this.to(held, x, y);
+      return routed === null ? [] : [routed];
+    }
+    const routed = this.at(x, y);
+    const was = this.#hover;
+    this.#hover = routed.target;
+    if (was === undefined || same(was, routed.target)) return [routed];
+    const left = this.to(was, x, y);
+    return left === null ? [routed] : [left, routed];
+  }
+
+  /** A button's release: to its press's target if it still stands, wherever the point is; else nowhere. (A release the
+   * frames never saw pressed — pressed before they were known — is the page's, as every event was before PT-5d.) */
+  release(button: string, x: number, y: number): FrameRouted | null {
+    const target = this.#hand.buttons.get(button) ?? this.targetOf(undefined);
+    this.#hand.buttons.delete(button);
+    return this.to(target, x, y);
+  }
+
+  /** The wheel: the frame drawn under it. */
+  wheel(x: number, y: number): FrameRouted {
+    return this.at(x, y);
+  }
+
+  /** A finger down: the frame drawn there, the finger's target remembered; the focus follows it. */
+  touchStart(x: number, y: number): FrameRouted {
+    const routed = this.at(x, y);
+    this.#hand.finger = routed.target;
+    this.#focused = routed.target.session;
+    return routed;
+  }
+
+  /** The finger's move: to its target if it stands. */
+  touchMove(x: number, y: number): FrameRouted | null {
+    const finger = this.#hand.finger;
+    return finger === undefined ? null : this.to(finger, x, y);
+  }
+
+  /** The finger lifted or cancelled: to its target if it stands; it is let go either way. */
+  touchEnd(): FrameTarget | null {
+    const finger = this.#hand.finger;
+    this.#hand.finger = undefined;
+    return finger !== undefined && this.stands(finger) ? finger : null;
+  }
+
+  /** A key's down: the focused document's session; its target remembered by its code. */
+  keyDown(code: string): FrameTarget {
+    const target = this.focused();
+    this.#hand.keys.set(code, target);
+    return target;
+  }
+
+  /** A key's up: to its down's target if it still stands; else nowhere (a key not down: the focused). */
+  keyUp(code: string): FrameTarget | null {
+    const target = this.#hand.keys.get(code);
+    this.#hand.keys.delete(code);
+    if (target === undefined) return this.focused();
+    return this.stands(target) ? target : null;
+  }
+
+  /** Text, a composition, a command: the focused document's session. */
+  focused(): FrameTarget {
+    return this.targetOf(this.#focused);
+  }
+
+  /** Is the target still there — its session attached, its document the one it was? */
+  stands(target: FrameTarget): boolean {
+    if (target.session === undefined) return target.document === this.#pageDocument;
+    const frame = this.#frames.get(target.session);
+    return frame !== undefined && frame.documents === target.document;
+  }
+
+  // ── where a point is ───────────────────────────────────────────────────────────────────────────────────────────
+
+  /** The innermost frame drawn at a page point (its quad known), and the point in its viewport. */
+  at(x: number, y: number): FrameRouted {
+    let session: string | undefined;
+    let px = x;
+    let py = y;
+    for (;;) {
+      let inner: FrameRecord | undefined;
+      let carried: readonly [number, number] | undefined;
+      for (const frame of this.#frames.values()) {
+        if (frame.parent !== session || frame.quad === undefined) continue;
+        const local = carry(frame, px, py);
+        if (local === undefined || !within(frame, local)) continue;
+        if (inner === undefined || frame.order > inner.order) {
+          inner = frame;
+          carried = local;
+        }
+      }
+      if (inner === undefined || carried === undefined) break;
+      session = inner.session;
+      [px, py] = carried;
+    }
+    return { target: this.targetOf(session), x: px, y: py };
+  }
+
+  /** A page point carried into a target's viewport through every quad above it; nowhere if it does not stand. */
+  to(target: FrameTarget, x: number, y: number): FrameRouted | null {
+    if (!this.stands(target)) return null;
+    const chain: FrameRecord[] = [];
+    for (let s = target.session; s !== undefined; ) {
+      const frame = this.#frames.get(s);
+      if (frame === undefined) return null;
+      chain.unshift(frame);
+      s = frame.parent;
+    }
+    let px = x;
+    let py = y;
+    for (const frame of chain) {
+      const local = carry(frame, px, py);
+      if (local === undefined) return null;
+      [px, py] = local;
+    }
+    return { target, x: px, y: py };
+  }
+
+  private targetOf(session: string | undefined): FrameTarget {
+    if (session === undefined) return { session: undefined, document: this.#pageDocument };
+    return { session, document: this.#frames.get(session)?.documents ?? 0 };
+  }
+}
+
+/** The same target: the same session, the same document. */
+const same = (a: FrameTarget, b: FrameTarget): boolean =>
+  a.session === b.session && a.document === b.document;
+
+/**
+ * A point of a frame's parent carried into the frame's own viewport: where it is along the quad's top edge and down its
+ * left (a quad under a transform is a parallelogram), times the frame's own viewport (its document's word — else the
+ * quad's own size). Undefined: a quad with no area.
+ */
+function carry(frame: FrameRecord, x: number, y: number): readonly [number, number] | undefined {
+  const q = frame.quad;
+  if (q === undefined) return undefined;
+  const [x1, y1, x2, y2, , , x4, y4] = q;
+  const ax = x2 - x1;
+  const ay = y2 - y1;
+  const bx = x4 - x1;
+  const by = y4 - y1;
+  const det = ax * by - ay * bx;
+  if (!Number.isFinite(det) || Math.abs(det) < 1e-9) return undefined;
+  const dx = x - x1;
+  const dy = y - y1;
+  const u = (dx * by - dy * bx) / det;
+  const v = (ax * dy - ay * dx) / det;
+  const [w, h] = frame.size ?? [Math.hypot(ax, ay), Math.hypot(bx, by)];
+  return [u * w, v * h];
+}
+
+/** Is a point of a frame's own viewport inside it? */
+function within(frame: FrameRecord, [x, y]: readonly [number, number]): boolean {
+  const q = frame.quad;
+  if (q === undefined) return false;
+  const [w, h] = frame.size ?? [
+    Math.hypot(q[2] - q[0], q[3] - q[1]),
+    Math.hypot(q[6] - q[0], q[7] - q[1]),
+  ];
+  return x >= 0 && y >= 0 && x < w && y < h;
+}

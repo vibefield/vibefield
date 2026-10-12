@@ -1,4 +1,5 @@
 import { BrowserWindow, session } from "electron";
+import { BrowserFrames, type FrameQuad, type FrameRouted } from "./browser-frames";
 import {
   type BrowserSurfaceAgent,
   type BrowserSurfaceIcon,
@@ -49,6 +50,26 @@ export const PAGE_SCALE_BINDING = "__vibefieldPageScale";
  * delegate's: PT-5c's probe `bfcache.cjs` — so in this engine none comes; the word is there for one that restores.)
  */
 export const PAGE_SCALE_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(PAGE_SCALE_BINDING)}]; try { delete globalThis[${JSON.stringify(PAGE_SCALE_BINDING)}]; } catch {} if (typeof say !== "function" || window !== window.top || location.href === "about:blank") return; let last; const tell = (force) => { const viewport = globalThis.visualViewport; const scale = viewport ? viewport.scale : 1; if (!force && scale === last) return; last = scale; try { say(String(scale)); } catch {} }; tell(true); addEventListener("DOMContentLoaded", () => tell(true), { once: true }); addEventListener("load", () => tell(true), { once: true }); requestAnimationFrame(() => tell(true)); addEventListener("pageshow", (event) => { if (event.persisted) tell(true); }); globalThis.visualViewport?.addEventListener("resize", () => tell(false)); })();`;
+
+/**
+ * PT-5d (rulings 1, M3) — WHAT A DOCUMENT SAYS OF ITS FRAMES AND ITS FOCUS. The binding every session adds — the page's and
+ * each frame's of another site (heard only with the Runtime on) — through which the script below speaks: what the hand's
+ * routing reads (`BrowserFrames`), never asking the renderer on the hand's path.
+ */
+export const FRAME_WORDS_BINDING = "__vibefieldFrameWords";
+
+/**
+ * PT-5d (rulings 1, M3) — said to every document of every session (the page's and its frames'): it takes the binding for
+ * itself and deletes it from the page's reach, then SAYS
+ *  - `focus` and `blur` of its OWN window — where the keys, text, a composition and a command go (the frame whose window has
+ *    the focus; the page's when none has);
+ *  - `size:W,H` — its viewport, in its own CSS px (a frame under a transform is drawn at another size);
+ *  - `moved` — its frames' boxes changed (a scroll of any of its scrollers, a resize, its visual viewport, a transition's
+ *    or an animation's end, a load — and, for what no event says, a look every half second while it holds a frame), once
+ *    an animation frame at most, and only when they did: main then reads their quads again, off the hand's path.
+ * Never the bootstrap blank.
+ */
+export const FRAME_WORDS_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; try { delete globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; } catch {} if (typeof say !== "function" || location.href === "about:blank") return; const tell = (word) => { try { say(word); } catch {} }; addEventListener("focus", (e) => { if (e.target === window) tell("focus"); }); addEventListener("blur", (e) => { if (e.target === window) tell("blur"); }); let size = ""; const sized = () => { const now = innerWidth + "," + innerHeight; if (now !== size) { size = now; tell("size:" + now); } }; let drawn = ""; const boxes = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { const r = f.getBoundingClientRect(); out += r.left + "," + r.top + "," + r.width + "," + r.height + ";"; } return out; }; let due = false; const look = () => { due = false; const now = boxes(); if (now !== drawn) { drawn = now; tell("moved"); } }; const moved = () => { if (due) return; due = true; requestAnimationFrame(look); }; addEventListener("scroll", moved, { capture: true, passive: true }); addEventListener("resize", () => { sized(); moved(); }); addEventListener("load", () => { sized(); moved(); }); for (const t of ["DOMContentLoaded", "transitionend", "animationend"]) addEventListener(t, moved, true); globalThis.visualViewport?.addEventListener("resize", moved); globalThis.visualViewport?.addEventListener("scroll", moved); setInterval(() => { if (document.querySelector("iframe, frame")) moved(); }, 500); sized(); moved(); })();`;
 
 /** PT-5c (R3): the least time between two discards of the page's console entries. */
 const CONSOLE_DISCARD_MS = 1_000;
@@ -119,9 +140,18 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   #handTail: Promise<void> = Promise.resolve();
   /** The page's session, attached with its guards — once, shared by both queues. */
   #ready: Promise<void> | undefined;
-  /** PT-5c (R3): the discard of the page's console entries that is due, and when the last was sent. */
-  #discardTimer: ReturnType<typeof setTimeout> | null = null;
-  #discardedAt = Number.NEGATIVE_INFINITY;
+  /** PT-5c (R3): the discard of the page's console entries that is due, and when the last was sent. PT-5d: and of each
+   * frame's session — every one runs its Runtime now (its words) — by session (`""`: the page's). */
+  readonly #discards = new Map<
+    string,
+    { timer: ReturnType<typeof setTimeout> | null; at: number }
+  >();
+  /** PT-5d (rulings 1, 3, 4): the frames of other sites the page's tree holds — where each event of the hand goes. */
+  readonly #frames = new BrowserFrames();
+  /** PT-5d: each frame's owner element in its parent's document (`DOM.getFrameOwner`), asked once. */
+  readonly #owners = new Map<string, number>();
+  /** PT-5d: the quad reads in flight, by frame — another asked meanwhile is read once it answers. */
+  readonly #placing = new Map<string, { again: boolean }>();
   /**
    * PT-5b3 (ruling 4) — THE PAGE'S DOCUMENTS, COUNTED as the engine commits them: one more at each `did-navigate` of the
    * page's own (never the blank's) and at each main-frame load that FAILED (the engine's error page then stands in the
@@ -151,6 +181,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     const committed = (): void => {
       this.#pageDocument = true;
       this.#documents += 1;
+      // PT-5d: the frames of the document before go with it
+      this.#frames.pageCommitted(this.#documents);
+      this.#owners.clear();
     };
     window.webContents.on("did-navigate", (_event, url) => {
       if (this.#remoteLoadStarted && url !== "about:blank") committed();
@@ -187,6 +220,11 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     // PT-5c (ruling 1): the page's word of its scale — on its OWN session, by its own binding; tagged with the document the
     // window counts as it arrives (every word came after its document's `did-navigate`: the probe)
     if (method === "Runtime.bindingCalled") {
+      // PT-5d: a document's word of its frames and its focus — the page's or a frame's, on its own session
+      if (params["name"] === FRAME_WORDS_BINDING) {
+        this.frameWord(sessionId === "" ? undefined : sessionId, String(params["payload"]));
+        return;
+      }
       if ((sessionId !== undefined && sessionId !== "") || params["name"] !== PAGE_SCALE_BINDING)
         return;
       const scale = Number(params["payload"]);
@@ -200,7 +238,30 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     // come: at once, then at most once a second; sent straight on the page's session — never on the hand's queue nor the
     // device's (its answer is awaited by nobody, and while a navigation pends the engine answers no renderer command).
     if (method === "Runtime.consoleAPICalled" || method === "Runtime.exceptionThrown") {
-      if (sessionId === undefined || sessionId === "") this.discardConsole();
+      // (PT-5d: a frame's session runs its Runtime too — its console is discarded on it, the same way)
+      this.discardConsole(sessionId ?? "");
+      return;
+    }
+    // PT-5d (ruling 3): a frame's session went — the frame removed, its process gone, it moved to another process: no event
+    // of the hand goes to it again, and nothing waits on it
+    if (method === "Target.detachedFromTarget") {
+      const gone = params["sessionId"];
+      if (typeof gone === "string") {
+        this.#frames.detached(gone);
+        this.#owners.delete(gone);
+        this.#placing.delete(gone);
+        this.#discards.delete(gone);
+      }
+      return;
+    }
+    // PT-5d (ruling 3): A FRAME'S DOCUMENTS, COUNTED BY ITS OWN WORD — CDP's `Page.frameNavigated` of the frame its own
+    // session is for (its target's id): a commit there, an error page's too; a late failure, an abort, a move within its
+    // document say none. The page's count never moves for a frame's (the page's is counted at its own `did-navigate`).
+    if (method === "Page.frameNavigated") {
+      const frame = params["frame"] as { readonly id?: unknown } | undefined;
+      if (sessionId === undefined || sessionId === "" || frame === undefined) return;
+      if (this.#frames.frames().find((f) => f.session === sessionId)?.targetId === frame.id)
+        this.#frames.committed(sessionId);
       return;
     }
     if (method === "Page.fileChooserOpened") {
@@ -214,41 +275,137 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       return;
     }
     if (method !== "Target.attachedToTarget") return;
-    const info = params["targetInfo"] as { readonly type?: unknown } | undefined;
+    const info = params["targetInfo"] as
+      | { readonly type?: unknown; readonly targetId?: unknown }
+      | undefined;
     const child = params["sessionId"];
+    // PT-5d (ruling 4): a FRAME of the page's tree alone — never a worker, a service worker, another page
     if (info?.type !== "iframe" || typeof child !== "string" || this.isDestroyed()) return;
+    const parent = sessionId === undefined || sessionId === "" ? undefined : sessionId;
+    if (typeof info.targetId === "string") this.#frames.attached(child, info.targetId, parent);
     const cdp = this.window.webContents.debugger;
+    // (each step its own: one the engine refuses never keeps the guards after it off — the nested frames' least of all)
+    const send = (method: string, params: Record<string, unknown> = {}): Promise<unknown> =>
+      cdp.sendCommand(method, params, child).catch(() => undefined);
     void (async () => {
-      await cdp.sendCommand("Page.enable", {}, child);
-      await cdp.sendCommand("Page.setInterceptFileChooserDialog", NO_FILE_PICKER, child);
-      await cdp.sendCommand(
-        "Page.addScriptToEvaluateOnNewDocument",
-        { source: PAGE_GUARD_SCRIPT },
-        child,
-      );
+      await send("Page.enable");
+      await send("Page.setInterceptFileChooserDialog", NO_FILE_PICKER);
+      // PT-5d: its words (its focus, its frames, its size) through its own binding — heard with its Runtime on
+      await send("Runtime.enable");
+      await send("Runtime.addBinding", { name: FRAME_WORDS_BINDING });
+      // (PT-5d: run at once in the document it holds as it attaches — attached without waiting, its first document is
+      // already running: the PT-5a guard had never reached it)
+      await send("Page.addScriptToEvaluateOnNewDocument", {
+        source: `${PAGE_GUARD_SCRIPT}${FRAME_WORDS_SCRIPT}`,
+        runImmediately: true,
+      });
       // PT-5d (M2) — A FRAME IN A FRAME is guarded too: auto-attach is per session, so this child's own, as the page's —
       // a frame of another site inside it attaches on this session, and the same guards are put on it here. (Before: never
       // attached — its file input, its dialogs, its `window.open` were not ours to answer: the bisect's v2.)
-      await cdp.sendCommand(
-        "Target.setAutoAttach",
-        { autoAttach: true, waitForDebuggerOnStart: false, flatten: true },
-        child,
-      );
-    })().catch(() => undefined);
+      await send("Target.setAutoAttach", {
+        autoAttach: true,
+        waitForDebuggerOnStart: false,
+        flatten: true,
+      });
+    })();
+    // where it is drawn — off the hand's path
+    this.placeFrame(child);
   }
 
-  /** PT-5c (R3): one discard of the page's console entries — now, or when a second has passed since the last. */
-  private discardConsole(): void {
-    if (this.#discardTimer !== null || this.isDestroyed()) return;
-    this.#discardTimer = setTimeout(
+  /**
+   * PT-5d (rulings 1, M3) — a document's word, on its own session (`undefined`: the page's): its window's focus or blur —
+   * where the keys go; its frames moved — their quads read again; its viewport's size (a frame's: under a transform it
+   * is drawn at another).
+   */
+  private frameWord(session: string | undefined, word: string): void {
+    if (word === "focus" || word === "blur") {
+      this.#frames.focus(session, word === "focus");
+      return;
+    }
+    if (word === "moved") {
+      for (const frame of this.#frames.frames())
+        if (frame.parent === session) this.placeFrame(frame.session);
+      return;
+    }
+    if (word.startsWith("size:") && session !== undefined) {
+      const [w, h] = word.slice(5).split(",").map(Number);
+      if (w !== undefined && h !== undefined) this.#frames.sized(session, w, h);
+    }
+  }
+
+  /**
+   * PT-5d (ruling 1) — WHERE A FRAME IS DRAWN, read OFF the hand's path and kept: its owner element in its parent's
+   * document (`DOM.getFrameOwner`, once) and that element's content quad (`DOM.getBoxModel`: its scroll and its transform
+   * in it) on the parent's session. One read in flight a frame; another asked meanwhile is read once it answers. A
+   * frame not laid out (`display: none`) has no quad: nothing lands in it. (While a navigation pends the renderer answers
+   * none of it: the quad kept is the last read.)
+   */
+  private placeFrame(session: string): void {
+    const inFlight = this.#placing.get(session);
+    if (inFlight !== undefined) {
+      inFlight.again = true;
+      return;
+    }
+    const frame = this.#frames.frames().find((f) => f.session === session);
+    if (frame === undefined || this.isDestroyed()) return;
+    const mark = { again: false };
+    this.#placing.set(session, mark);
+    const cdp = this.window.webContents.debugger;
+    void (async () => {
+      let owner = this.#owners.get(session);
+      if (owner === undefined) {
+        const found = (await cdp.sendCommand(
+          "DOM.getFrameOwner",
+          { frameId: frame.targetId },
+          frame.parent,
+        )) as { readonly backendNodeId?: unknown };
+        if (typeof found.backendNodeId !== "number") throw new Error("no owner");
+        owner = found.backendNodeId;
+        this.#owners.set(session, owner);
+      }
+      const box = (await cdp.sendCommand(
+        "DOM.getBoxModel",
+        { backendNodeId: owner },
+        frame.parent,
+      )) as { readonly model?: { readonly content?: unknown } };
+      const content = box.model?.content;
+      this.#frames.placed(
+        session,
+        Array.isArray(content) && content.length === 8 && content.every(Number.isFinite)
+          ? (content as unknown as FrameQuad)
+          : undefined,
+      );
+    })()
+      .catch(() => this.#frames.placed(session, undefined))
+      .finally(() => {
+        if (this.#placing.get(session) !== mark) return;
+        this.#placing.delete(session);
+        if (mark.again) this.placeFrame(session);
+      });
+  }
+
+  /** PT-5c (R3): one discard of a session's console entries (`""`: the page's) — now, or when a second has passed since
+   * its last. */
+  private discardConsole(session: string): void {
+    if (this.isDestroyed()) return;
+    let due = this.#discards.get(session);
+    if (due === undefined) {
+      due = { timer: null, at: Number.NEGATIVE_INFINITY };
+      this.#discards.set(session, due);
+    }
+    if (due.timer !== null) return;
+    const entry = due;
+    entry.timer = setTimeout(
       () => {
-        this.#discardTimer = null;
-        this.#discardedAt = Date.now();
+        entry.timer = null;
+        entry.at = Date.now();
         const cdp = this.window.webContents.debugger;
         if (this.isDestroyed() || !cdp.isAttached()) return;
-        void cdp.sendCommand("Runtime.discardConsoleEntries").catch(() => undefined);
+        void cdp
+          .sendCommand("Runtime.discardConsoleEntries", {}, session === "" ? undefined : session)
+          .catch(() => undefined);
       },
-      Math.max(0, this.#discardedAt + CONSOLE_DISCARD_MS - Date.now()),
+      Math.max(0, entry.at + CONSOLE_DISCARD_MS - Date.now()),
     );
   }
 
@@ -262,10 +419,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   }
 
   destroy(): void {
-    if (this.#discardTimer !== null) {
-      clearTimeout(this.#discardTimer);
-      this.#discardTimer = null;
-    }
+    for (const due of this.#discards.values()) if (due.timer !== null) clearTimeout(due.timer);
+    this.#discards.clear();
     if (this.isDestroyed()) return;
     if (this.#debuggerAttached && this.window.webContents.debugger.isAttached()) {
       try {
@@ -376,43 +531,106 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     return () => this.#scaleListeners.delete(listener);
   }
 
+  /**
+   * PT-5d (rulings 1, 3, M3) — THE HAND'S EVENTS GO TO THE TARGET THAT TAKES THEM (`BrowserFrames`, decided at the event's
+   * turn on the hand's queue, from what is kept — never a read): a pointer's to the frame drawn under it (a frame of
+   * another site on its own session, at the point carried into its viewport), its drag and its release to its press's;
+   * a finger the same; a key, text, a composition and a command to the FOCUSED document's session — nothing key-like on
+   * the page's while a frame of another site is focused (M3: PT-5d's probe crashed main with keys into such a frame,
+   * `Electron-2026-10-12-070259.ips`). An event whose target is gone is sent nowhere — never a command to a gone session.
+   * A page with no frame of another site: everything on the page's session, as before.
+   */
   dispatchTouch(input: BrowserSurfaceNativeTouchInput): Promise<void> {
     return this.hand(async () => {
       await this.ensureDebugger();
-      await this.window.webContents.debugger.sendCommand("Input.dispatchTouchEvent", input);
+      const cdp = this.window.webContents.debugger;
+      if (input.type === "touchStart" || input.type === "touchMove") {
+        const point = input.touchPoints[0];
+        if (point === undefined) {
+          await cdp.sendCommand("Input.dispatchTouchEvent", input);
+          return;
+        }
+        const routed =
+          input.type === "touchStart"
+            ? this.#frames.touchStart(point.x, point.y)
+            : this.#frames.touchMove(point.x, point.y);
+        if (routed === null) return;
+        await cdp.sendCommand(
+          "Input.dispatchTouchEvent",
+          { ...input, touchPoints: [{ ...point, x: routed.x, y: routed.y }] },
+          routed.target.session,
+        );
+        return;
+      }
+      const target = this.#frames.touchEnd();
+      if (target === null) return;
+      await cdp.sendCommand("Input.dispatchTouchEvent", input, target.session);
     });
   }
 
   dispatchMouse(input: BrowserSurfaceNativeMouseInput): Promise<void> {
     return this.hand(async () => {
       await this.ensureDebugger();
-      await this.window.webContents.debugger.sendCommand("Input.dispatchMouseEvent", input);
+      const cdp = this.window.webContents.debugger;
+      for (const routed of this.routeMouse(input))
+        await cdp.sendCommand(
+          "Input.dispatchMouseEvent",
+          { ...input, x: routed.x, y: routed.y },
+          routed.target.session,
+        );
     });
   }
 
   dispatchKey(input: BrowserSurfaceNativeKeyInput): Promise<void> {
     return this.hand(async () => {
       await this.ensureDebugger();
-      await this.window.webContents.debugger.sendCommand("Input.dispatchKeyEvent", input);
+      const target =
+        input.type === "keyUp" ? this.#frames.keyUp(input.code) : this.#frames.keyDown(input.code);
+      if (target === null) return;
+      await this.window.webContents.debugger.sendCommand(
+        "Input.dispatchKeyEvent",
+        input,
+        target.session,
+      );
     });
   }
 
   dispatchText(text: string): Promise<void> {
     return this.hand(async () => {
       await this.ensureDebugger();
-      await this.window.webContents.debugger.sendCommand("Input.insertText", { text });
+      await this.window.webContents.debugger.sendCommand(
+        "Input.insertText",
+        { text },
+        this.#frames.focused().session,
+      );
     });
   }
 
   dispatchCompose(text: string, caret: number): Promise<void> {
     return this.hand(async () => {
       await this.ensureDebugger();
-      await this.window.webContents.debugger.sendCommand("Input.imeSetComposition", {
-        text,
-        selectionStart: caret,
-        selectionEnd: caret,
-      });
+      await this.window.webContents.debugger.sendCommand(
+        "Input.imeSetComposition",
+        {
+          text,
+          selectionStart: caret,
+          selectionEnd: caret,
+        },
+        this.#frames.focused().session,
+      );
     });
+  }
+
+  /** PT-5d: a pointer's event, routed — a hover that crosses into another target first tells the one it left. */
+  private routeMouse(input: BrowserSurfaceNativeMouseInput): readonly FrameRouted[] {
+    const button = input.button === undefined || input.button === "none" ? "left" : input.button;
+    if (input.type === "mousePressed") return [this.#frames.press(button, input.x, input.y)];
+    if (input.type === "mouseReleased") {
+      const routed = this.#frames.release(button, input.x, input.y);
+      return routed === null ? [] : [routed];
+    }
+    if (input.type === "mouseWheel") return [this.#frames.wheel(input.x, input.y)];
+    return this.#frames.move(input.x, input.y);
   }
 
   navigate(action: "back" | "forward" | "reload" | "stop"): void {
@@ -657,8 +875,10 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
           // console line of the page is one message more to main — PT-5c's probe)
           await cdp.sendCommand("Runtime.enable");
           await cdp.sendCommand("Runtime.addBinding", { name: PAGE_SCALE_BINDING });
+          // PT-5d: the page's own words of its frames and its focus
+          await cdp.sendCommand("Runtime.addBinding", { name: FRAME_WORDS_BINDING });
           await cdp.sendCommand("Page.addScriptToEvaluateOnNewDocument", {
-            source: `${PAGE_GUARD_SCRIPT}${PAGE_SCALE_SCRIPT}`,
+            source: `${PAGE_GUARD_SCRIPT}${PAGE_SCALE_SCRIPT}${FRAME_WORDS_SCRIPT}`,
           });
           await cdp.sendCommand("Target.setAutoAttach", {
             autoAttach: true,
