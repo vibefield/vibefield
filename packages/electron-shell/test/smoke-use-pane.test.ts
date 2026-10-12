@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  CURRENT_AT,
   judgeClick,
   judgeCursor,
   judgeDouble,
@@ -23,6 +24,22 @@ import {
 const ORIGIN = "http://127.0.0.1:50123";
 
 describe("the page in use — its rows", () => {
+  it("CURRENT_AT (PT-5d, G6): a press after a navigation waits for a frame of the document NOW at the address the row just sent the pane to — `current` at another address (the desk has not heard the commit: the document before's frame), or not current, is not it", () => {
+    const sent = "http://127.0.0.1:4321/acts?visit=2";
+    const at = (faces: readonly unknown[]): boolean =>
+      new Function("globalThis", `return ${CURRENT_AT("k", sent)};`)({
+        __vfDesk: { live: () => ({ faces }) },
+      }) as boolean;
+    expect(at([{ key: "k", current: true, info: { address: sent } }])).toBe(true);
+    expect(
+      at([{ key: "k", current: true, info: { address: "http://127.0.0.1:4321/acts?visit=1" } }]),
+    ).toBe(false);
+    expect(at([{ key: "k", current: false, info: { address: sent } }])).toBe(false);
+    expect(at([{ key: "k", current: true, info: {} }])).toBe(false);
+    expect(at([{ key: "other", current: true, info: { address: sent } }])).toBe(false);
+    expect(at([])).toBe(false);
+  });
+
   it("HELD-CLICK: the page, its address and its url at /next; ⌘Z takes the desk's edit back, never the page's navigation", () => {
     const ok: UseSeen["click"] = {
       path: "/next",

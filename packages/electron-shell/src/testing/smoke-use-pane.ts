@@ -295,6 +295,12 @@ export interface UseRowsDriver extends LiveRowsDriver {
 const FACE_ROW = (key: string): string =>
   `((globalThis.__vfDesk.live()?.faces ?? []).find((f) => f.key === ${JSON.stringify(key)}) ?? null)`;
 
+/** PT-5c2 (F7), PT-5d (G6) — the face shows a frame of the document NOW (the desk sends nothing through a frame of a
+ * document the page has left), AT THE ADDRESS the row just sent the pane to: until the desk hears the commit, `current`
+ * alone is true over the document before's frame. What a press after a navigation waits for. */
+export const CURRENT_AT = (key: string, address: string): string =>
+  `(() => { const f = ${FACE_ROW(key)}; const at = f?.info?.address; if (f?.current !== true || typeof at !== "string") return false; try { return new URL(at).href === ${JSON.stringify(new URL(address).href)}; } catch { return false; } })()`;
+
 /** The wheel the window sees, summed (its events' deltaY, CSS px) — armed before the wheel, read after. */
 const WHEEL_ARM = `(() => {
   const w = { dy: 0, n: 0 };
@@ -707,11 +713,12 @@ export async function usePaneRows(d: UseRowsDriver): Promise<string[]> {
     problems.push(...judgeTools(tools));
 
     // ── EDIT: the page's own editing chords in its field — ⌘A then a letter replaces, ⌘Z takes it back ──────────────────
-    // (PT-5c2, F7: the typed address's page on the face first — the desk sends nothing through a frame of the page before)
+    // (PT-5c2, F7: the typed address's page on the face first — the desk sends nothing through a frame of the page before;
+    // PT-5d, G6: at the typed address)
     await until(
       "the typed page's frame on the face",
       10_000,
-      `${FACE_ROW(paneKey)}?.current === true`,
+      CURRENT_AT(paneKey, `${d.fixture.origin}${USE_ROWS.typedPath}`),
     );
     await press(await part("field"));
     await hear("the field focused for the chords", (r) => r.focused === "field");

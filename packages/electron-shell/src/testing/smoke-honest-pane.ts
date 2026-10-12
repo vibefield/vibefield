@@ -43,7 +43,7 @@ import {
 } from "./live-fixture";
 import { BARE_FOR, layPane, PANE, pageRegion, paneHands, paneToMiddle } from "./smoke-browser-pane";
 import type { LiveRowsDriver } from "./smoke-live-pane";
-import { type HeldFrameSeen, pageOnWindow } from "./smoke-use-pane";
+import { CURRENT_AT, type HeldFrameSeen, pageOnWindow } from "./smoke-use-pane";
 
 /** The flag beside `--smoke-canvas` that runs these rows alone after the boot's (the author's loop). */
 export const HONEST_FLAG = "--honest-pane";
@@ -912,9 +912,10 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
       () => undefined,
     );
   /** PT-5c2 (F7): the face shows the page as it stands — a frame of the document NOW, so the hand's input goes (the desk
-   * sends nothing through a frame of a document the page has left): a press after a navigation waits for it. */
-  const current = (label: string): Promise<void> =>
-    until(label, 10_000, `${FACE_ROW(paneKey)}?.current === true`);
+   * sends nothing through a frame of a document the page has left): a press after a navigation waits for it. PT-5d (G6):
+   * at the address just sent to (`CURRENT_AT`). */
+  const current = (label: string, address: string): Promise<void> =>
+    until(label, 10_000, CURRENT_AT(paneKey, address));
 
   try {
     // ── the pane laid alone on clear ground, at actual size, brought to the middle, pointed at the fixture, live ───────
@@ -975,7 +976,7 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
     if ((await hear("the acts page", (r) => r.acts !== undefined, atActs)) === null)
       throw new Error("the acts page never spoke");
     await hear("the acts page the page in hand", (r) => r.path === ACTS);
-    await current("the acts page's frame on the face");
+    await current("the acts page's frame on the face", d.fixture.origin + ACTS);
     await sleep(600);
     await press(await onAct("slow"));
     const loading = await toolIs("reload", (t) => t.label === "Stop");
@@ -1003,7 +1004,7 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
       actsPath = `${ACTS}?visit=${visits}`;
       await goTo(d.fixture.origin + actsPath);
       await hear("the acts page again", (r) => r.path === actsPath && r.acts !== undefined);
-      await current("the acts page's frame on the face again");
+      await current("the acts page's frame on the face again", d.fixture.origin + actsPath);
       await sleep(600);
     };
     const windows0 = d.windows();
