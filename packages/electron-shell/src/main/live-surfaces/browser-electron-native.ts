@@ -167,6 +167,20 @@ const CONSOLE_DISCARD_MS = 1_000;
 /** PT-5d (M7 H2): how long a key, text, a composition or a command waits for a word of where the focus is, while it is in
  * doubt, before it is refused — PT-5c's second for a document's scale word, the precedent. */
 const FOCUS_WORD_MS = 1_000;
+/** PT-5d (M6.5b i): how long one step of a frame's start — a guard, its device, its auto-attach — may go unanswered before
+ * it, and every step after it, is abandoned and the frame resumed: a frame is never left paused. */
+const FRAME_STEP_MS = 2_000;
+/**
+ * PT-5d (M6.5b i) — THE PAGE'S AUTO-ATTACH AND EACH FRAME'S: flat; each frame of another site STARTS PAUSED (waiting for the
+ * debugger) until its guards and its device are on; FILTERED to frames — no worker or service worker is ever attached,
+ * paused or sent anything (ruling 4).
+ */
+const AUTO_ATTACH = {
+  autoAttach: true,
+  waitForDebuggerOnStart: true,
+  flatten: true,
+  filter: [{ type: "iframe" }],
+} as const;
 
 /** The file picker never shown: CDP says it was asked for (`Page.fileChooserOpened`) and cancels it — the input hears `cancel`. */
 const NO_FILE_PICKER = { enabled: true, cancel: true } as const;
@@ -231,6 +245,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   #emulation: BrowserSurfaceNativeEmulation | undefined;
   /** PT-5d (M6.5b): each frame's tells of the device, one behind another */
   readonly #frameTells = new Map<string, Promise<void>>();
+  /** PT-5d (M6.5b i): the frames attached under this page's debugger, and not gone */
+  readonly #children = new Set<string>();
   /**
    * PT-5c (ruling 1) — TWO QUEUES, never one: the DEVICE's (its layout, what it is told — `Emulation.*`, the window's size)
    * and the HAND's (`Input.*`). A device command the renderer does not answer — every one, while a navigation pends — no
@@ -351,6 +367,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     if (method === "Target.detachedFromTarget") {
       const gone = params["sessionId"];
       if (typeof gone === "string") {
+        this.#children.delete(gone);
         this.#frames.detached(gone);
         this.#owners.delete(gone);
         this.#placing.delete(gone);
@@ -398,40 +415,63 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         typeof info.url === "string" ? info.url : undefined,
       );
     const cdp = this.window.webContents.debugger;
-    // (each step its own: one the engine refuses never keeps the guards after it off — the nested frames' least of all)
-    const send = (method: string, params: Record<string, unknown> = {}): Promise<unknown> =>
-      cdp.sendCommand(method, params, child).catch(() => undefined);
+    this.#children.add(child);
+    /** one step: sent if the frame is still attached — answered, refused (each its own: one the engine refuses never keeps
+     * the guards after it off, the nested frames' least of all), or unanswered past `FRAME_STEP_MS` (false: abandoned) */
+    const step = async (work: () => Promise<unknown>): Promise<boolean> => {
+      if (!this.#children.has(child) || this.isDestroyed()) return false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const answered = await Promise.race([
+        work().then(
+          () => true,
+          () => true,
+        ),
+        new Promise<boolean>((resolve) => {
+          timer = setTimeout(() => resolve(false), FRAME_STEP_MS);
+        }),
+      ]);
+      clearTimeout(timer);
+      return answered && this.#children.has(child);
+    };
+    const send = (method: string, params: Record<string, unknown> = {}) =>
+      step(() => cdp.sendCommand(method, params, child));
+    // PT-5d (M6.5b i) — A FRAME STARTS PAUSED (its auto-attach waits for the debugger): its guards, its device and its own
+    // auto-attach are on before its first document runs a line — its agent goes out with its first request, its scripts
+    // read the page's device — THEN it is resumed; in a `finally`, and every step before it bounded: a frame is never
+    // left paused (a dead embed). A frame whose session went meanwhile is sent nothing more.
     void (async () => {
-      await send("Page.enable");
-      await send("Page.setInterceptFileChooserDialog", NO_FILE_PICKER);
-      // PT-5d: its words (its focus, its frames) through its own binding — heard with its Runtime on; the binding and the
-      // words in the words' own world (M7 H1), the guard in its own
-      await send("Runtime.enable");
-      await send("Runtime.addBinding", {
-        name: FRAME_WORDS_BINDING,
-        executionContextName: WORDS_WORLD,
-      });
-      // (PT-5d: run at once in the document it holds as it attaches — attached without waiting, its first document is
-      // already running: the PT-5a guard had never reached it)
-      await send("Page.addScriptToEvaluateOnNewDocument", {
-        source: PAGE_GUARD_SCRIPT,
-        runImmediately: true,
-      });
-      await send("Page.addScriptToEvaluateOnNewDocument", {
-        source: FRAME_WORDS_SCRIPT,
-        worldName: WORDS_WORLD,
-        runImmediately: true,
-      });
-      // PT-5d (M6.5b): the page's device — its agent and hints, touch, the colour scheme (per target: never inherited)
-      await this.tellFrame(child);
-      // PT-5d (M2) — A FRAME IN A FRAME is guarded too: auto-attach is per session, so this child's own, as the page's —
-      // a frame of another site inside it attaches on this session, and the same guards are put on it here. (Before: never
-      // attached — its file input, its dialogs, its `window.open` were not ours to answer: the bisect's v2.)
-      await send("Target.setAutoAttach", {
-        autoAttach: true,
-        waitForDebuggerOnStart: false,
-        flatten: true,
-      });
+      try {
+        const done =
+          (await send("Page.enable")) &&
+          (await send("Page.setInterceptFileChooserDialog", NO_FILE_PICKER)) &&
+          // PT-5d: its words (its focus, its frames) through its own binding — heard with its Runtime on; the binding and
+          // the words in the words' own world (M7 H1), the guard in its own
+          (await send("Runtime.enable")) &&
+          (await send("Runtime.addBinding", {
+            name: FRAME_WORDS_BINDING,
+            executionContextName: WORDS_WORLD,
+          })) &&
+          // (PT-5d: and at once in the document it holds as it attaches, whatever it is)
+          (await send("Page.addScriptToEvaluateOnNewDocument", {
+            source: PAGE_GUARD_SCRIPT,
+            runImmediately: true,
+          })) &&
+          (await send("Page.addScriptToEvaluateOnNewDocument", {
+            source: FRAME_WORDS_SCRIPT,
+            worldName: WORDS_WORLD,
+            runImmediately: true,
+          })) &&
+          // PT-5d (M6.5b): the page's device — its agent and hints, touch, the colour scheme (per target: never inherited)
+          (await step(() => this.tellFrame(child))) &&
+          // PT-5d (M2) — A FRAME IN A FRAME is guarded too: auto-attach is per session, so this child's own, as the page's
+          // — a frame of another site inside it attaches on this session, and the same guards are put on it here, as it
+          // starts paused. (Before: never attached — its file input, its dialogs, its `window.open` were not ours.)
+          (await send("Target.setAutoAttach", AUTO_ATTACH));
+        void done;
+      } finally {
+        if (this.#children.has(child) && !this.isDestroyed())
+          void cdp.sendCommand("Runtime.runIfWaitingForDebugger", {}, child).catch(() => undefined);
+      }
     })();
     // where it is drawn — off the hand's path
     this.placeFrame(child);
@@ -1137,11 +1177,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
             source: `${PAGE_SCALE_SCRIPT}${FRAME_WORDS_SCRIPT}`,
             worldName: WORDS_WORLD,
           });
-          await cdp.sendCommand("Target.setAutoAttach", {
-            autoAttach: true,
-            waitForDebuggerOnStart: false,
-            flatten: true,
-          });
+          await cdp.sendCommand("Target.setAutoAttach", AUTO_ATTACH);
         } catch (error) {
           cdp.detach();
           throw error;

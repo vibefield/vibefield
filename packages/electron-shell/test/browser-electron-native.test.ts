@@ -757,7 +757,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     return { ...w, sent, emit, attach, on, hand };
   };
   const turns = async (): Promise<void> => {
-    for (let i = 0; i < 30; i += 1) await Promise.resolve();
+    for (let i = 0; i < 200; i += 1) await Promise.resolve();
   };
   /** A page at its first document, frame F (its owner element 7 of the page, drawn 400 × 300 at 100, 80) placed. */
   const framed = async () => {
@@ -791,6 +791,8 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       "Page.addScriptToEvaluateOnNewDocument",
       "Page.addScriptToEvaluateOnNewDocument",
       "Target.setAutoAttach",
+      // M6.5b (i): it started PAUSED — resumed once its guards, its device and its own auto-attach are on
+      "Runtime.runIfWaitingForDebugger",
     ];
     expect(r.on("frame-1")).toEqual(guards);
     // M7 H1: its binding and its words in the isolated world, its guard in its own
@@ -808,8 +810,9 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       r.sent.find((c) => c.session === "frame-1" && c.method === "Target.setAutoAttach")?.params,
     ).toEqual({
       autoAttach: true,
-      waitForDebuggerOnStart: false,
+      waitForDebuggerOnStart: true,
       flatten: true,
+      filter: [{ type: "iframe" }],
     });
     // its guard and its words run in the document it already holds too
     for (const c of r.sent.filter(
@@ -839,6 +842,63 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     r.attach("frame-1");
     await turns();
     expect(r.on("frame-1")).toContain("Target.setAutoAttach");
+    // M6.5b (i): and it is resumed — last
+    expect(r.on("frame-1").at(-1)).toBe("Runtime.runIfWaitingForDebugger");
+  });
+
+  it("M6.5b (i) — a frame STARTS PAUSED: the page's auto-attach and each frame's wait for the debugger, FILTERED to frames (no worker is ever attached, paused or sent anything); each step before the resume BOUNDED (2 s): one never answered is abandoned with the steps after it, and the frame resumed; a frame whose session went meanwhile is sent nothing more", async () => {
+    vi.useFakeTimers();
+    try {
+      const r = recording((method, _params, session) =>
+        method === "Runtime.enable" && session !== undefined ? new Promise(() => {}) : {},
+      );
+      await r.native.setEmulation({
+        userAgent: "probe/1",
+        navigatorPlatform: "MacIntel",
+        metadata: {
+          brands: [],
+          fullVersionList: [],
+          platform: "macOS",
+          platformVersion: "26.0",
+          architecture: "arm",
+          model: "",
+          mobile: false,
+        },
+        touchPoints: 0,
+      });
+      expect(r.sent.find((c) => c.method === "Target.setAutoAttach")?.params).toEqual({
+        autoAttach: true,
+        waitForDebuggerOnStart: true,
+        flatten: true,
+        filter: [{ type: "iframe" }],
+      });
+      r.attach("F");
+      await vi.advanceTimersByTimeAsync(1_999);
+      expect(r.on("F")).toEqual([
+        "Page.enable",
+        "Page.setInterceptFileChooserDialog",
+        "Runtime.enable",
+      ]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(r.on("F")).toEqual([
+        "Page.enable",
+        "Page.setInterceptFileChooserDialog",
+        "Runtime.enable",
+        "Runtime.runIfWaitingForDebugger",
+      ]);
+      // gone while its step hung: nothing more, not even the resume
+      r.attach("G");
+      await vi.advanceTimersByTimeAsync(500);
+      r.emit("Target.detachedFromTarget", { sessionId: "G", targetId: "t-G" });
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(r.on("G")).toEqual([
+        "Page.enable",
+        "Page.setInterceptFileChooserDialog",
+        "Runtime.enable",
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("ruling 1 — a press over a frame of another site goes on the FRAME's session, at the point carried into its viewport (where its owner's quad, read off the hand's path, says it is drawn); its drag and its release outside it go there too; a press beside it is the page's, as before", async () => {
