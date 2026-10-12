@@ -961,6 +961,14 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * window: a producer started again is born on it. */
   #emulation: LiveSurfaceBrowserEmulationV1 | undefined;
   /**
+   * PT-5c2 (F9) — THE DEVICE THE PAGE WAS TOLD: the emulation whose commands its window ANSWERED — its birth's, or a
+   * switch's once answered — what the standing page is laid out for, and what the hand follows (a finger or a mouse, a
+   * `mobile` page's scale). `#emulation` is the one ASKED: a switch's commands wait, unanswered, while a navigation pends
+   * (PT-5b3's probe `pending.cjs`). (Before: the hand followed the device asked at once — a tap went as a finger to a page
+   * laid out as a laptop, or as a mouse to a phone's.) A window made anew is told at its birth.
+   */
+  #told: LiveSurfaceBrowserEmulationV1 | undefined;
+  /**
    * PT-4, PT-5b3 (ruling 5) — WHAT THE PAGE HAS BEEN TOLD IS DOWN: the finger (a press began a touch; its moves and its
    * release are the touch's), and each mouse button with the scale its press went at. A release of what is down is
    * ALWAYS sent; a release of nothing is nothing. Gone with the window.
@@ -1637,7 +1645,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // events from here (`Input.dispatchTouchEvent`), never by CDP's mouse-to-touch emulation: under
     // `setEmitTouchEventsForMouse` a dispatched mouse event is swallowed and its command never answers (the PT-4 probe),
     // and the commands queued behind it never run. The wheel stays the page's scroll (below).
-    const touch = (this.#emulation?.touchPoints ?? 0) > 0;
+    // (F9: the device the page was TOLD — never one asked and not yet answered)
+    const touch = (this.#told?.touchPoints ?? 0) > 0;
     if (touch && request.kind === "mouse") {
       if (request.type === "move" && !this.#touching) return;
       if (request.type === "down" && request.button !== undefined && request.button !== "left")
@@ -2000,6 +2009,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
           return;
         }
         this.#born = true;
+        // (F9: the device its birth told it — the hand follows it from now)
+        this.#told = told;
         this.#controlTargets?.associate(this.surfaceId, epoch, window.controlContents);
         // PT-5a: a load the page itself said FAILED is not a failed SOURCE — its window lives, its state says why, and a
         // reload asks again. PT-5b2 (ruling 6): and NOTHING of the source is read off this load's promise (`load`)
@@ -2070,6 +2081,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       .then(() => {
         if (!this.isCurrent(window, epoch)) return;
         this.#viewport = viewport;
+        // (F9: told — its commands answered — the hand follows the device switched to)
+        this.#told = next;
         // a page that has loaded learns its device by loading again. PT-5b3 (ruling 2) — with NO DOCUMENT of the page
         // standing the engine's own reload is never asked (it reloads the blank — and the page then said `no-document`
         // for an address it had never been asked for again): a page that has SAID its load ended (`no-document`,
@@ -2133,7 +2146,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * that came late let the backlog go in a burst.)
    */
   private pointScale(document: number, by: string | undefined): Promise<number> {
-    if (!this.mobile()) return Promise.resolve(1);
+    // (F9: a `mobile` page as the page was TOLD)
+    if (this.#told?.mobile !== true) return Promise.resolve(1);
     const said = this.#pageScale;
     if (said !== undefined && said.document === document) return Promise.resolve(said.value);
     if (this.#silent === document)

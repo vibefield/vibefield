@@ -5107,6 +5107,45 @@ describe("BrowserLiveSurfaceRuntime", () => {
         ]);
         p.result.runtime.dispose();
       });
+
+      it("F9 — the hand follows the device the page was TOLD: a switch to a phone of the same density, its commands unanswered (a navigation pends — PT-5b3's probe): a tap meanwhile goes as the laptop the standing page is laid out for; once the commands are answered, as the phone", async () => {
+        const p = await standing({ source: laptopAt2() });
+        const r = p.result.runtime.summary.geometry?.revision ?? 0;
+        // the device's commands go unanswered until the row says
+        let answered: () => void = () => {};
+        const emulate = p.first.setEmulation.bind(p.first);
+        p.first.setEmulation = async (emulation) => {
+          await new Promise<void>((resolve) => {
+            answered = resolve;
+          });
+          return emulate(emulation);
+        };
+        await p.result.runtime.navigate({
+          action: "emulate",
+          emulation: { ...PHONE, deviceScaleFactor: 2 },
+        });
+        await delivered();
+        const tap = (): void => {
+          for (const action of ["down", "up"] as const)
+            p.renderer.attachment.dispatchInput?.(
+              { kind: "pointer", action, x: 10, y: 10, button: "left", clickCount: 1 },
+              r,
+            );
+        };
+        tap();
+        await delivered();
+        expect(p.first.mouseInputs.map((m) => m.type)).toEqual(["mousePressed", "mouseReleased"]);
+        expect(p.first.touchInputs).toEqual([]);
+        // answered: the page is told it is a phone (its page says its scale) — the hand follows
+        answered();
+        await delivered();
+        p.first.say(1);
+        tap();
+        await delivered();
+        expect(p.first.touchInputs.map((t) => t.type)).toEqual(["touchStart", "touchEnd"]);
+        expect(p.first.mouseInputs).toHaveLength(2);
+        p.result.runtime.dispose();
+      });
     });
   });
 });
