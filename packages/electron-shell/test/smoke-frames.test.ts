@@ -253,6 +253,28 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ).toEqual([
       "FRAME-COVERED (a page hiding its header from the read): its press could not be aimed — that leg proved nothing",
     ]);
+    // M12 J5: the frame held in an about:blank SLOT of the host (a frame of its own process), the header over the SLOT:
+    // its press still the host's; below it, the frame's
+    const plain = { top: 60, edge: 140, hidden: { hostHeard: header, frameClicks: 0 }, shown };
+    const slot = { top: 60, edge: 140, hidden: { hostHeard: header, frameClicks: 0 }, shown };
+    expect(judgeFrameCovered({ ...plain, slot })).toEqual([]);
+    expect(
+      judgeFrameCovered({ ...plain, slot: { ...slot, hidden: { hostHeard: [], frameClicks: 1 } } }),
+    ).toEqual([
+      "FRAME-COVERED (the frame in an about:blank slot): the press on the header over the slot went INTO the frame (1 click) — the page draws its header over the slot (M12 J5)",
+      "FRAME-COVERED (the frame in an about:blank slot): the host heard nothing — not the press on its header, drawn over the slot",
+    ]);
+    expect(
+      judgeFrameCovered({ ...plain, slot: { ...slot, shown: { ...shown, clicked: null } } }),
+    ).toEqual([
+      "FRAME-COVERED (the frame in an about:blank slot, below the header): the frame heard no click — the press never reached a frame of another site (the host heard nothing)",
+    ]);
+    expect(judgeFrameCovered({ ...plain, slot: { ...slot, top: 140 } })).toEqual([
+      "FRAME-COVERED (the frame in an about:blank slot): the slot's top stood at 140, the header's bottom at 140 — the header was not over it: that half proved nothing",
+    ]);
+    expect(judgeFrameCovered({ ...plain, slot: null })).toEqual([
+      "FRAME-COVERED (the frame in an about:blank slot): its presses could not be aimed — that leg proved nothing",
+    ]);
   });
 
   it("FRAME-MENU (M7 H3): the host's dropdown opened over the frame — its item's press is the host's, the frame hears nothing; before H3 the frame took it; a menu never opened proves nothing", () => {

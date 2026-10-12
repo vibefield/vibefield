@@ -30,7 +30,10 @@
 //                  the part in view the frame's (before M6.3a the frame took both);
 //   FRAME-COVERED — M7 H3: a FIXED header drawn over the frame's top: a press on the header there is the host's, one below
 //                  it the frame's (before H3 the frame took both — a regression of PT-5d's routing); M8: and a page that
-//                  hides its header from a read in its own world (its DOM's methods replaced) — still the host's;
+//                  hides its header from a read in its own world (its DOM's methods replaced) — still the host's; M12 J5:
+//                  and the frame held in an about:blank SLOT of the host (a frame of the host's own process), the header
+//                  drawn over the SLOT — still the host's (before J5 the slot's own document alone was read: the frame
+//                  took it), below it the frame's;
 //   FRAME-MENU   — M7 H3: the host's dropdown opened over the frame: its item's press is the host's, the frame hears
 //                  nothing;
 //   FRAME-PICKER — the file input in the NESTED frame pressed (M2): no panel, its `cancel` heard, main's windows as they were;
@@ -148,6 +151,17 @@ export interface FramesSeen {
     readonly shown: FramePressSeen;
     /** M8: the press on the header of a page that hides it from a read in its own world (absent: the leg not run) */
     readonly sly?: { readonly hostHeard: readonly string[]; readonly frameClicks: number } | null;
+    /** M12 J5: the frame in an about:blank SLOT of the host, the header over the slot — the slot's top and the header's
+     * bottom, the press on the header over it, the press below (absent: the leg not run) */
+    readonly slot?: {
+      readonly top: number | null;
+      readonly edge: number | null;
+      readonly hidden: {
+        readonly hostHeard: readonly string[];
+        readonly frameClicks: number;
+      } | null;
+      readonly shown: FramePressSeen;
+    } | null;
   };
   readonly menu: {
     /** the host's dropdown open over the frame */
@@ -481,6 +495,38 @@ export function judgeFrameCovered(seen: FramesSeen["covered"]): string[] {
       out.push(
         `FRAME-COVERED (a page hiding its header from the read): the host heard ${seen.sly.hostHeard.join(", ") || "nothing"} — not the press on its header`,
       );
+  }
+  // M12 J5: the frame in an about:blank slot of the host — the header drawn over the SLOT
+  const slot = seen.slot;
+  if (slot === null)
+    out.push(
+      "FRAME-COVERED (the frame in an about:blank slot): its presses could not be aimed — that leg proved nothing",
+    );
+  else if (slot !== undefined) {
+    if (slot.top === null || slot.edge === null || slot.top >= slot.edge)
+      out.push(
+        `FRAME-COVERED (the frame in an about:blank slot): the slot's top stood at ${slot.top ?? "nothing"}, the header's bottom at ${slot.edge ?? "nothing"} — the header was not over it: that half proved nothing`,
+      );
+    else if (slot.hidden === null)
+      out.push(
+        "FRAME-COVERED (the frame in an about:blank slot): its covered part could not be aimed at — that half proved nothing",
+      );
+    else {
+      if (slot.hidden.frameClicks > 0)
+        out.push(
+          `FRAME-COVERED (the frame in an about:blank slot): the press on the header over the slot went INTO the frame (${slot.hidden.frameClicks} click) — the page draws its header over the slot (M12 J5)`,
+        );
+      if (!slot.hidden.hostHeard.includes("click #hd"))
+        out.push(
+          `FRAME-COVERED (the frame in an about:blank slot): the host heard ${slot.hidden.hostHeard.join(", ") || "nothing"} — not the press on its header, drawn over the slot`,
+        );
+    }
+    out.push(
+      ...judgeFramePress(
+        "FRAME-COVERED (the frame in an about:blank slot, below the header)",
+        slot.shown,
+      ),
+    );
   }
   return out;
 }
@@ -1519,7 +1565,88 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         frameClicks: (at(SLY_FRAME)?.framed?.clicks.length ?? 0) - clicks0,
       };
     }
-    const covered = { ...coveredSeen, sly };
+    await done();
+
+    // ── FRAME-COVERED's slot leg (M12 J5): the frame in an about:blank SLOT of the host (a frame of the host's own
+    // process), the host's header drawn over the slot ───────────────────────────────────────────────────────────────
+    const slotPane = await lay(
+      `${d.fixture.hostOrigin}/frames/covered?p=o&slot=1`,
+      x0 + 9 * step,
+      y0,
+    );
+    await frame([slotPane]);
+    await live(slotPane);
+    const SLOT_HOST = "/frames/covered?p=o&slot=1";
+    const SLOT_FRAME = "/frames/frame?p=o";
+    await waitFor(
+      "the slot host's word",
+      FRAMES_ROWS.withinMs,
+      () => at(SLOT_HOST),
+      (rep) => rep?.framed?.parts.frame !== undefined && rep?.framed?.parts.hd !== undefined,
+    );
+    await waitFor(
+      "the slot's frame's word",
+      FRAMES_ROWS.withinMs,
+      () => at(SLOT_FRAME),
+      (rep) => rep?.framed?.parts.b !== undefined,
+    );
+    await pickUp(slotPane);
+    await sleep(800);
+    const slotHeld = await heldFrame();
+    const slotHost = at(SLOT_HOST);
+    // (the frame stands at the slot's own 0, 0: the slot's box is the frame's)
+    const oBox = slotHost?.framed?.parts.frame ?? null;
+    const oFramed = () => at(SLOT_FRAME)?.framed ?? null;
+    const oHostHeard = () => at(SLOT_HOST)?.framed?.heard ?? [];
+    let slot: FramesSeen["covered"]["slot"] = null;
+    if (slotHeld !== null && slotHost !== null && oBox !== null) {
+      // the frame's button, under the header drawn over the slot: the host's
+      const ob = oFramed()?.parts.b ?? null;
+      let hidden: NonNullable<FramesSeen["covered"]["slot"]>["hidden"] = null;
+      if (ob !== null) {
+        const clicks0 = oFramed()?.clicks.length ?? 0;
+        const heard0 = oHostHeard().length;
+        await h.press(
+          await onWindow(slotHeld, slotHost.view, oBox.x + centre(ob)[0], oBox.y + centre(ob)[1]),
+        );
+        const heard = await waitFor(
+          "the header's click over the slot",
+          5_000,
+          () => oHostHeard().slice(heard0),
+          (got) => got.includes("click #hd"),
+        );
+        await sleep(600);
+        hidden = { hostHeard: heard, frameClicks: (oFramed()?.clicks.length ?? 0) - clicks0 };
+      }
+      // its low button, below the header: the frame's
+      const obl = oFramed()?.parts.bl ?? null;
+      const aimed: Point | null = obl === null ? null : centre(obl);
+      const clicks0 = oFramed()?.clicks.length ?? 0;
+      const heard0 = oHostHeard().length;
+      if (aimed !== null)
+        await h.press(
+          await onWindow(slotHeld, slotHost.view, oBox.x + aimed[0], oBox.y + aimed[1]),
+        );
+      const shown = await waitFor(
+        "the slot's frame's click below the header",
+        5_000,
+        () => oFramed(),
+        (f) => (f?.clicks.length ?? 0) > clicks0,
+      );
+      const hd = slotHost.framed?.parts.hd ?? null;
+      slot = {
+        top: oBox.y,
+        edge: hd === null ? null : hd.y + hd.h,
+        hidden,
+        shown: {
+          aimed,
+          clicked: shown?.clicks[clicks0] ?? null,
+          hostHeard: oHostHeard().slice(heard0),
+        },
+      };
+    }
+    await shoot("pt-5d-frame-covered-slot.png");
+    const covered = { ...coveredSeen, sly, slot };
     said.covered = covered;
     problems.push(...judgeFrameCovered(covered));
     await done();

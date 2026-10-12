@@ -682,6 +682,15 @@ describe("the live pane's fixture page", () => {
     expect(sly).toContain("Element.prototype.getBoundingClientRect = function");
     expect(sly).toContain("Document.prototype.elementFromPoint = function");
     expect(sly).toContain("Document.prototype.elementsFromPoint = function");
+    // M12 J5: its slot form holds the frame in an about:blank SLOT the page writes — a frame of its own process — at the
+    // slot's own 0, 0, where the frame stood: the header is drawn over the slot
+    const slotted = await page(fixture.hostOrigin, "/frames/covered?p=a&slot=1");
+    expect(slotted).not.toContain('<iframe id="f" src=');
+    expect(slotted).toContain('<iframe id="f" style="');
+    const written = /d\.write\(("(?:[^"\\]|\\.)*")\)/u.exec(slotted)?.[1];
+    expect(JSON.parse(written ?? '""')).toContain(
+      `<iframe id="g" src="${fixture.origin}/frames/frame?p=a"`,
+    );
     expect(await page(fixture.origin, "/frames/next?p=a")).toContain('id="b2"');
     // M7 H11: each frames page's loads counted by its path and query (a reload of a page that hangs is one more)
     expect(fixture.framesServed("/frames/next?p=a")).toBe(1);

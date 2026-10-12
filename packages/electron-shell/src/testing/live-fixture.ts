@@ -77,7 +77,8 @@
 //   /frames/same  — the frame's own child of its site: a button (its clicks and point — FRAME-PRESS presses it too);
 //   /frames/covered — at `hostOrigin` (M7 H3): the frame under a FIXED header drawn over its top (FRAME-COVERED), and a
 //                   menu button that opens a dropdown over the frame, its item (FRAME-MENU); it hears the hand on its
-//                   header, its menu's button and item, and the frame's element;
+//                   header, its menu's button and item, and the frame's element; `&slot=1` (M12 J5): the frame held in
+//                   an about:blank SLOT the page writes (a frame of its own process), the header over the slot;
 //   /frames/clipped — at `hostOrigin`: a header across the top and, under it, a SCROLLER holding the frame
 //                   (`/frames/frame`), scrolled so the frame's top half sits above the scroller's clip edge — under the
 //                   header (FRAME-CLIPPED, M6.3a: a press there is the host's); it hears the hand on its header and the
@@ -745,15 +746,21 @@ export const FRAMES_COVERED = { x: 160, y: 60, header: 140 } as const;
  * (`#mi`) over the frame's right; it hears the hand on its header, its menu's button and item, and the frame's element.
  * `&sly=1` (M8): the page replaces its OWN world's DOM methods to hide its header from a read — `getBoundingClientRect`
  * says nothing of it, `elementFromPoint` names the frame where the header is, `elementsFromPoint` drops it (after its
- * own words are set up: what it says of itself stays true). */
+ * own words are set up: what it says of itself stays true). `&slot=1` (M12 J5): the frame is held in an about:blank SLOT
+ * the page writes (`#f` — a frame of the page's own process, an ad server's friendly iframe) at the slot's own 0, 0, the
+ * slot where the frame stood: the header is drawn over the SLOT. */
 export const framesCoveredHtml = (
   name: string,
   frameOrigin: string,
   sly = false,
-): string => `<!doctype html>
+  slot = false,
+): string => {
+  const src = `${frameOrigin}/frames/frame?p=${cleanName(name)}`;
+  const place = `left:${FRAMES_COVERED.x}px;top:${FRAMES_COVERED.y}px;width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px`;
+  return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${FIXTURE_TITLE} — covered</title>
 ${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; } iframe { position: absolute; border: 0; } #mn { position: absolute; display: none; z-index: 3; background: #fff; box-shadow: 0 4px 16px #0004; }</style></head>
-<body><iframe id="f" src="${frameOrigin}/frames/frame?p=${cleanName(name)}" style="left:${FRAMES_COVERED.x}px;top:${FRAMES_COVERED.y}px;width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px"></iframe>
+<body>${slot ? `<iframe id="f" style="${place}"></iframe>\n${slotScript(src)}` : `<iframe id="f" src="${src}" style="${place}"></iframe>`}
 <button id="hd" style="position:fixed;left:0;top:0;width:100%;height:${FRAMES_COVERED.header}px;z-index:2">header</button>
 <button id="mb" style="left:860px;top:200px;width:120px;height:40px">menu</button>
 <div id="mn" style="left:600px;top:240px;width:240px;height:200px"><button id="mi" style="left:20px;top:80px;width:200px;height:40px">item</button></div>
@@ -761,6 +768,16 @@ ${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; } iframe { positio
 ${framesScript(["f", "hd", "mb", "mn", "mi"], ["f", "hd", "mb", "mi"])}
 ${sly ? SLY_SCRIPT : ""}
 </body></html>`;
+};
+
+/** PT-5d (M12 J5) — the page writes its about:blank slot `#f`: the frame of another site (`src`) at the slot's 0, 0,
+ * filling it — as an ad server writes the creative's frame into its friendly iframe. */
+const slotScript = (src: string): string => `<script>(() => {
+  const d = document.getElementById("f").contentDocument;
+  d.open();
+  d.write(${JSON.stringify(`<!doctype html><html><head><style>html, body { margin: 0; overflow: hidden; } iframe { display: block; border: 0; }</style></head><body><iframe id="g" src="${src}" style="width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px"></iframe></body></html>`)});
+  d.close();
+})();</script>`;
 
 /** PT-5d (M8) — a host page's own world lying about its header: what a read in the page's world would believe. */
 const SLY_SCRIPT = `<script>(() => {
@@ -1021,7 +1038,12 @@ export async function startLiveFixture(): Promise<LiveFixture> {
           : url.pathname === "/frames/clipped"
             ? framesClippedHtml(name, frameOrigin)
             : url.pathname === "/frames/covered"
-              ? framesCoveredHtml(name, frameOrigin, url.searchParams.get("sly") === "1")
+              ? framesCoveredHtml(
+                  name,
+                  frameOrigin,
+                  url.searchParams.get("sly") === "1",
+                  url.searchParams.get("slot") === "1",
+                )
               : url.pathname === "/frames/frame"
                 ? framesFrameHtml(name, innerOrigin)
                 : url.pathname === "/frames/inner"
