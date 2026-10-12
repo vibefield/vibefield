@@ -36,6 +36,7 @@ import {
   BrowserWindow,
   Menu,
   MessageChannelMain,
+  nativeTheme,
   powerSaveBlocker,
   session,
   type WebContents,
@@ -2147,6 +2148,7 @@ async function framesRows(
           ids: shown.map((w) => w.id),
         };
       },
+      systemDark: () => nativeTheme.shouldUseDarkColors,
     };
     return await framesPaneRows(driver);
   } catch (error) {

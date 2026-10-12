@@ -128,6 +128,16 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ).toEqual([
       "FRAME-TYPE: the host page heard 2 key(s) while the frame's field was typed in (keydown h, keydown é) — they went down the page's session with a frame of another site focused (M3's banned path)",
     ]);
+    // M12 J11: the host's word read after two more of its asks — one taken after the last key; fewer: that half proved
+    // nothing (a report up to an ask old could miss a key sent late)
+    expect(judgeFrameType({ field: want, caret: want.length, hostHeard: [], hostAsks: 2 })).toEqual(
+      [],
+    );
+    expect(judgeFrameType({ field: want, caret: want.length, hostHeard: [], hostAsks: 1 })).toEqual(
+      [
+        "FRAME-TYPE: the host's word was read before one taken after the last key (1 ask since) — its host-heard half proved nothing",
+      ],
+    );
   });
 
   it("FRAME-NESTED and FRAME-HALF: a press that lands — only where the nested frame is a third site, and only where the frame is half out", () => {
@@ -333,6 +343,12 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ).toEqual([
       "FRAME-TOUCH: the host page was told no touch — not a phone: that half proved nothing",
     ]);
+    // M12 J11: the colours prove something only where the page was told colours NOT the system's — a frame told nothing
+    // follows the system's
+    expect(judgeFrameTouch({ ...tap, device: { ...told, systemDark: false } })).toEqual([]);
+    expect(judgeFrameTouch({ ...tap, device: { ...told, systemDark: true } })).toEqual([
+      "FRAME-TOUCH: the page was told the system's own colours (dark true) — a frame told nothing would match them: the colour half proved nothing",
+    ]);
   });
 
   it("FRAME-GONE: the frame went elsewhere under a held press; the next press landed in its new document at once — not after waiting on the gone one", () => {
@@ -445,6 +461,13 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
     expect(judgeStuck({ ...said, reloadActed: null, typed: null })).toEqual([
       "STUCK: its legs while stalled (↻, an address typed) never ran — they proved nothing",
+    ]);
+    // M12 J11: the legs prove something only with the chain STALLED — a key the hung page never answers sent before them
+    // (a press is answered: with nothing in flight they act with or without the let-go)
+    const legs = { reloadActed: true, typed: { arrived: true, stayed: true } };
+    expect(judgeStuck({ ...said, ...legs, stalled: true })).toEqual([]);
+    expect(judgeStuck({ ...said, ...legs, stalled: false })).toEqual([
+      "STUCK: its legs while stalled (↻, an address typed) ran with nothing in flight — no key left unanswered: they proved nothing",
     ]);
   });
 });

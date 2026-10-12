@@ -82,6 +82,8 @@ export interface FramesDriver extends LiveRowsDriver {
   /** main's windows that are not offscreen, and which has the focus (M7 H11: a BrowserWindow panel is one more; a native
    * panel is none — it takes the app's focus) */
   windows(): WindowsSeen;
+  /** M12 J11: whether the system's colours are dark (main's `nativeTheme`) — what a page told nothing follows */
+  systemDark(): boolean;
 }
 
 /** A point in a frame's own CSS px. */
@@ -113,6 +115,8 @@ export interface FramesSeen {
     readonly caret: number | null;
     /** the keys the HOST page heard (on the frame's element) while the frame's field was typed in */
     readonly hostHeard: readonly string[];
+    /** M12 J11: the host's asks since the last key, before its `heard` was read (absent: not counted) */
+    readonly hostAsks?: number | null;
   };
   readonly nested: FramePressSeen & { readonly third: boolean };
   readonly half: FramePressSeen & { readonly top: number | null };
@@ -123,6 +127,8 @@ export interface FramesSeen {
     readonly device: {
       readonly frame: FramesDevice | null;
       readonly host: FramesDevice | null;
+      /** M12 J11: whether the system's colours are dark — what a frame told nothing follows (absent: not read) */
+      readonly systemDark?: boolean | null;
     };
   };
   readonly gone: {
@@ -196,6 +202,9 @@ export interface FramesSeen {
     readonly reloadActed?: boolean | null;
     /** M7 H11: an address of another site typed while the chain was stalled — the page arrived there, and stayed live */
     readonly typed?: { readonly arrived: boolean; readonly stayed: boolean } | null;
+    /** M12 J11: a key the hung page never answers was sent before those legs — the chain stalled behind it (absent: not
+     * said) */
+    readonly stalled?: boolean;
   };
 }
 
@@ -323,6 +332,12 @@ export function judgeFrameType(seen: FramesSeen["type"]): string[] {
     out.push(
       `FRAME-TYPE: the host page heard ${keys.length} key(s) while the frame's field was typed in (${keys.join(", ")}) — they went down the page's session with a frame of another site focused (M3's banned path)`,
     );
+  // M12 J11: a host's word taken after the last key — its asks come every quarter second: one taken before would miss a
+  // key sent late
+  if (seen.hostAsks !== undefined && (seen.hostAsks === null || seen.hostAsks < 2))
+    out.push(
+      `FRAME-TYPE: the host's word was read before one taken after the last key (${seen.hostAsks ?? 0} ask since) — its host-heard half proved nothing`,
+    );
   return out;
 }
 
@@ -353,6 +368,15 @@ export function judgeFrameTouch(seen: FramesSeen["touch"]): string[] {
     if (frame.dark !== host.dark)
       out.push(
         `FRAME-TOUCH: the frame's colour scheme is not the page's (dark ${frame.dark}, the page's ${host.dark})`,
+      );
+    // M12 J11: colours that match prove something only where the page's are not the SYSTEM's — a frame told nothing
+    // follows the system's
+    else if (
+      seen.device.systemDark !== undefined &&
+      (seen.device.systemDark === null || host.dark === seen.device.systemDark)
+    )
+      out.push(
+        `FRAME-TOUCH: the page was told the system's own colours (dark ${host.dark}) — a frame told nothing would match them: the colour half proved nothing`,
       );
   }
   return out;
@@ -603,6 +627,11 @@ export function judgeStuck(seen: FramesSeen["stuck"]): string[] {
   // M7 H11: ↻ and an address typed WHILE the chain was stalled — never on the hand's chain
   if (seen.reloadActed === null && seen.typed === null)
     out.push("STUCK: its legs while stalled (↻, an address typed) never ran — they proved nothing");
+  // M12 J11: with nothing in flight (a press is answered) they act with or without the let-go
+  else if (seen.stalled === false)
+    out.push(
+      "STUCK: its legs while stalled (↻, an address typed) ran with nothing in flight — no key left unanswered: they proved nothing",
+    );
   else {
     if (seen.reloadActed === false)
       out.push(
@@ -1082,10 +1111,20 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       () => at(FRAME),
       (rep) => rep?.field === FRAMES_ROWS.typed + FRAMES_ROWS.composed,
     );
+    // (M12 J11: the host's word taken AFTER the last key — two more of its asks: the first may have been said before it)
+    const hostAsked = d.fixture.reports(HOST);
+    const hostAsks =
+      (await waitFor(
+        "the host's word after the typing",
+        5_000,
+        () => d.fixture.reports(HOST),
+        (n) => n >= hostAsked + 2,
+      )) - hostAsked;
     const type = {
       field: typedWord?.field ?? null,
       caret: typedWord?.framed?.caret ?? null,
       hostHeard: hostHeard().slice(typeHeard0),
+      hostAsks,
     };
     said.type = type;
     problems.push(...judgeFrameType(type));
@@ -1737,10 +1776,13 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     problems.push(...judgeFrameZoomed(zoomed));
 
     // ── FRAME-TOUCH: a phone's pane on the host; a tap on the frame's button ────────────────────────────────────────
+    // (M12 J11: on the scheme OPPOSITE the system's — a frame told nothing follows the system's: on the same, the colour
+    // half could not fail)
+    const systemDark = d.systemDark();
     const phone = await lay(`${d.fixture.hostOrigin}/frames/host?p=t`, x0 + step, y0, {
       w: PANE.phoneCut.w,
       h: PANE.phoneCut.h,
-      props: { device: "phone" },
+      props: { device: "phone", scheme: systemDark ? "light" : "dark" },
     });
     await frame([phone]);
     await live(phone);
@@ -1797,6 +1839,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       device: {
         frame: at(PHONE_FRAME)?.framed?.device ?? null,
         host: at(PHONE_HOST)?.framed?.device ?? null,
+        systemDark,
       },
     };
     said.touch = touch;
@@ -1894,7 +1937,9 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     // M7 H11: ↻ and an address typed WHILE the chain is stalled — never on the hand's chain: they act
     let reloadActed: boolean | null = null;
     let typed: FramesSeen["stuck"]["typed"] = null;
-    /** the loop page live, its button pressed: the page hangs (its asks stop) */
+    let stalled = false;
+    /** the loop page live, its button pressed: the page hangs (its asks stop) — and a key it never answers, the chain
+     * stalled behind it (M12 J11: a press is answered — with nothing in flight the legs act with or without H11's let-go) */
     const hangAgain = async (): Promise<boolean> => {
       const back = await waitFor(
         "the loop page live again",
@@ -1916,7 +1961,12 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       await h.press(await onWindow(heldNow, word.view, centre(lbNow)[0], centre(lbNow)[1]));
       const asked = d.fixture.reports(LOOP);
       await sleep(1_500);
-      return d.fixture.reports(LOOP) === asked;
+      if (d.fixture.reports(LOOP) !== asked) return false;
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "q" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "q" });
+      await sleep(300);
+      stalled = true;
+      return true;
     };
     if (reloaded && (await hangAgain())) {
       // ↻ at once, the chain stalled: the page's address asked again within three seconds (served once more)
@@ -1969,7 +2019,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       }
       typed = { arrived, stayed };
     }
-    const stuck = { hung, saidMs, reason, reloaded, reloadActed, typed };
+    const stuck = { hung, saidMs, reason, reloaded, reloadActed, typed, stalled };
     said.stuck = stuck;
     problems.push(...judgeStuck(stuck));
     await done();
