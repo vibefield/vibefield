@@ -498,3 +498,56 @@ describe("PT-5b3 — a still is of a DOCUMENT, and the engine says which (ruling
     expect(a.face.info().extra?.still).toBeUndefined();
   });
 });
+
+// PT-5c (ruling 3) — WHERE NO DOCUMENT OF THE PAGE STANDS the producer says no serial (a window made anew before its first
+// commit, a page at rest sent elsewhere, a page headed elsewhere before its first commit). The desk's rule stands as
+// built: with no serial it reads the address of the frame's arrival against the page's. WITNESSES, written with the
+// producer's new word (the third grade's P1a, P1b — whose probes gave the desk the OLD document's serial at the new
+// address, which the producer no longer says).
+describe("PT-5c — where no document of the page stands the producer says none, and the desk reads the address (ruling 3)", () => {
+  it("a page HEADED elsewhere with nothing of it standing (a window made anew, then a go) is not this document: put to REST its pane shows its film — never the page it left, labelled as where it is headed (P1a)", async () => {
+    const s = stage();
+    s.live.cap(1);
+    const a = s.open();
+    a.face.demand(SEEN);
+    await s.pump();
+    expect(a.frame()).toBe(true);
+    // what the producer says now: the new address, loading, NO serial
+    a.handle.set({ browser: browserAt(NEXT, { document: undefined, loading: true }) as never });
+    const b = s.open("13918995204487956201-2", true, "created");
+    b.face.demand(HELD);
+    await s.pump();
+    await s.live.settled();
+    expect(a.face.info().extra?.still).toBeUndefined();
+    expect(a.face.texture()).toBeUndefined();
+    expect(keptOf(s)).not.toBe(NEXT);
+  });
+
+  it("…and an UNSEEN pane whose page was sent elsewhere at rest (a peer's go; no serial said) is not photographed onto the shelf under the new address by its timer — and seen again it lets go (P1b)", async () => {
+    const s = stage();
+    const { face, frame, handle } = s.open();
+    face.demand(SEEN);
+    expect(frame()).toBe(true);
+    face.demand(UNSEEN);
+    handle.set({ browser: browserAt(NEXT, { document: undefined, loading: false }) as never });
+    s.clock.advance(PAGE_STILL_SETTLE_MS + PAGE_STILL_EVERY_MS);
+    await s.live.settled();
+    expect(s.shelf.takeStill).not.toHaveBeenCalled();
+    expect(keptOf(s)).toBeNull();
+    face.demand(SEEN);
+    await s.live.settled();
+    expect(face.texture()).toBeUndefined();
+  });
+
+  it("at the SAME address with nothing of it standing (a page woken; a window made anew by a density switch) the texture of the page as it was stays its picture until the new document's first frame — no film between two pictures of one address", async () => {
+    const s = stage();
+    const { face, frame, handle } = s.open();
+    face.demand(SEEN);
+    expect(frame()).toBe(true);
+    face.demand(UNSEEN);
+    handle.set({ browser: browserAt(PAGE.url, { document: undefined, loading: true }) as never });
+    face.demand(SEEN);
+    await s.live.settled();
+    expect(face.texture()).toBeDefined();
+  });
+});

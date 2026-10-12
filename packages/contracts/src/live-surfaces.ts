@@ -501,7 +501,9 @@ export const LiveSurfaceBrowserStateV1 = z
      * engine's error page standing in a failed address's place) and never at a move within one (a hash, `pushState`,
      * `replaceState`). It counts for the surface's life: a window made anew begins another. Whoever asks "is this
      * another document?" — whose pixels a texture holds, whose scale was read — asks this. Absent: no document of the
-     * page has committed yet, or the producer counts none: a holder then reads it by the address, as before. */
+     * page STANDS in its window (none has committed yet — in a window made anew too —, the page is at rest or failed,
+     * headed elsewhere before its first commit, or its load ended with nothing: PT-5c), or the producer counts none: a
+     * holder then reads it by the address, as before. */
     document: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
     /** PT-5a: the page's last LOAD FAILED. `url` is still the address that was ASKED for — never the engine's error page —
      * and there is no `title`; a `reload` asks for it again. Absent once a page commits. */

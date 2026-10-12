@@ -1093,7 +1093,14 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         : {
             browser: {
               ...this.#browserState,
-              ...(this.#document === 0 ? {} : { document: this.#document }),
+              // PT-5c (ruling 3) — NOTHING SAYS A DOCUMENT THAT DOES NOT STAND: where no document of the page stands in
+              // its window (none committed in a window made anew, a page at rest, one headed elsewhere before its first
+              // commit, a load that ended with nothing) the serial is not said — whoever asks "is this another
+              // document?" reads the address. (Before: the last one stood, said at the new address — the desk took the
+              // old page's picture for the new address's at a rest and on the shelf: the third grade's P1.)
+              ...(this.#document === 0 || !this.#documentStands
+                ? {}
+                : { document: this.#document }),
               ...(this.#cursor === undefined ? {} : { cursor: this.#cursor }),
               ...(this.#favicon !== undefined &&
               this.#faviconOrigin !== undefined &&

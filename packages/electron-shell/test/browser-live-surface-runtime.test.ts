@@ -1801,13 +1801,13 @@ describe("BrowserLiveSurfaceRuntime", () => {
       canGoBack: false,
       canGoForward: false,
     });
-    // (PT-5b3: the document it last stood at — the new window has committed none of its own yet)
+    // (PT-5c, ruling 3: the new window has committed no document of its own yet — none is said; PT-5b3 said the last
+    // one stood, at the new address)
     expect(result.runtime.summary.browser).toEqual({
       url: "https://example.test/deeper",
       loading: true,
       canGoBack: false,
       canGoForward: false,
-      document: 1,
     });
     // a load that FAILED is said with the address asked for, as PT-5a's — never mistaken for plumbing
     second?.emitNavigationState({
@@ -1884,13 +1884,12 @@ describe("BrowserLiveSurfaceRuntime", () => {
     await result.runtime.navigate({ action: "go", url: "https://example.test/third" });
     expect(result.native.windows).toHaveLength(1);
     expect(renderer.summaries.slice(said).map((summary) => summary.state)).toEqual(["hibernated"]);
-    // (PT-5b3: the last document it stood at was its second)
+    // (PT-5c, ruling 3: at rest no document of the page stands — none is said; PT-5b3 said its second, at the new address)
     expect(result.runtime.summary.browser).toEqual({
       url: "https://example.test/third",
       loading: false,
       canGoBack: false,
       canGoForward: false,
-      document: 2,
     });
     // woken: born THERE
     renderer.attachment.setDemand(demand(4, "live"));
@@ -2542,16 +2541,17 @@ describe("BrowserLiveSurfaceRuntime", () => {
         failure: { reason: "connection-refused" },
         document: 3,
       });
-      // put to rest and woken: a window made anew — its first document is ANOTHER, never the first again
+      // put to rest and woken: a window made anew — its first document is ANOTHER, never the first again. (PT-5c, ruling
+      // 3: at rest, and in the new window before its first commit, no document of the page stands — none is said)
       renderer.attachment.setDemand(demand(2, "hibernated", 0));
       await flush();
-      expect(said()).toBe(3);
+      expect(said()).toBeUndefined();
       renderer.attachment.setDemand(demand(3, "live"));
       await flush();
       const woken = result.native.windows[1];
       if (woken === undefined) throw new Error("no second window");
       woken.emitNavigationState({ ...NAV, url: "about:blank", title: "", loading: true });
-      expect(said()).toBe(3);
+      expect(said()).toBeUndefined();
       woken.emitNavigationState({ ...NAV, url: "https://dead.test/" });
       expect(woken.documents).toBe(1);
       expect(said()).toBe(4);
@@ -3748,6 +3748,81 @@ describe("BrowserLiveSurfaceRuntime", () => {
       await p.delivered();
       // the press takes its turn — then the release of what it set down
       expect(p.heard).toEqual(["touchStart", "touchEnd", "touchStart", "touchCancel"]);
+      p.result.runtime.dispose();
+    });
+
+    /** A laptop's page live at its first document (1), its window the first. */
+    const standing = async (options: Parameters<typeof setup>[0] = {}) => {
+      const result = setup(options);
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(demand(1, "live"));
+      await delivered();
+      const first = result.native.windows[0];
+      if (first === undefined) throw new Error("no window");
+      first.emitNavigationState({ ...NAV });
+      first.paint(sharedPaint().paint);
+      await delivered();
+      expect(result.runtime.summary.browser?.document).toBe(1);
+      return { result, renderer, first };
+    };
+
+    it("ruling 3 (P1c) — a window made ANEW (another density) says NO document until its own first commit — sent elsewhere meanwhile, none either, never the one its old window stood; at its commit, the next", async () => {
+      const p = await standing({
+        source: { ...source(), deviceScaleFactor: 2, emulation: LAPTOP },
+      });
+      await p.result.runtime.navigate({
+        action: "emulate",
+        emulation: { ...LAPTOP, deviceScaleFactor: 3 },
+      });
+      await delivered();
+      expect(p.result.native.windows).toHaveLength(2);
+      expect(p.result.runtime.summary.browser?.document).toBeUndefined();
+      await p.result.runtime.navigate({ action: "go", url: "https://example.test/elsewhere" });
+      await delivered();
+      expect(p.result.runtime.summary.browser).toMatchObject({
+        url: "https://example.test/elsewhere",
+        loading: true,
+      });
+      expect(p.result.runtime.summary.browser?.document).toBeUndefined();
+      const made = p.result.native.windows[1];
+      if (made === undefined) throw new Error("no window was made anew");
+      made.emitNavigationState({ ...NAV, url: "https://example.test/elsewhere" });
+      expect(p.result.runtime.summary.browser?.document).toBe(2);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 3 — a page at REST says no document; SENT ELSEWHERE at rest, none (P1b's door); woken, none until its window commits — and a load that ENDED with nothing says none", async () => {
+      const p = await standing();
+      p.renderer.attachment.setDemand(demand(2, "hibernated", 0));
+      await delivered();
+      expect(p.result.runtime.summary.state).toBe("hibernated");
+      expect(p.result.runtime.summary.browser?.document).toBeUndefined();
+      await p.result.runtime.navigate({ action: "go", url: "https://example.test/next" });
+      expect(p.result.runtime.summary.browser).toMatchObject({ url: "https://example.test/next" });
+      expect(p.result.runtime.summary.browser?.document).toBeUndefined();
+      p.renderer.attachment.setDemand(demand(3, "live"));
+      await delivered();
+      expect(p.result.runtime.summary.state).toBe("starting");
+      expect(p.result.runtime.summary.browser?.document).toBeUndefined();
+      const woken = p.result.native.windows[1];
+      if (woken === undefined) throw new Error("no window at the wake");
+      // its load ends with nothing (an attachment): still none — its blank is no page
+      const blank = (loading: boolean): void =>
+        woken.emitNavigationState({
+          url: "about:blank",
+          title: "about:blank",
+          loading,
+          canGoBack: false,
+          canGoForward: false,
+        });
+      blank(true);
+      blank(false);
+      expect(p.result.runtime.summary.browser).toMatchObject({
+        failure: { reason: "no-document" },
+      });
+      expect(p.result.runtime.summary.browser?.document).toBeUndefined();
+      woken.emitNavigationState({ ...NAV, url: "https://example.test/next" });
+      expect(p.result.runtime.summary.browser?.document).toBe(2);
       p.result.runtime.dispose();
     });
 
