@@ -1291,12 +1291,11 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   }
 
   private tellFocus(enabled: boolean): Promise<void> {
-    // (a window destroyed meanwhile: `ensureDebugger` refuses it — nothing sent)
+    // (a window destroyed meanwhile: `ensureDebugger` refuses it — nothing sent. A command of the hand like any other —
+    // M6.4b: timed from its send, so a page that hung by itself is said stopped at the bound; let go at its commit)
     return this.hand(async () => {
       await this.ensureDebugger();
-      await this.window.webContents.debugger.sendCommand("Emulation.setFocusEmulationEnabled", {
-        enabled,
-      });
+      await this.handCommand("Emulation.setFocusEmulationEnabled", { enabled }, undefined);
     });
   }
 

@@ -2369,6 +2369,29 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       }
     });
 
+    it("M9 × M6.4b — telling the page it is focused is a command of the hand: a page that hung BY ITSELF (nothing of the hand outstanding) never answers it — said hung, the bound after it was sent", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = recording(
+          (method) =>
+            method === "Emulation.setFocusEmulationEnabled" ? new Promise(() => {}) : {},
+          { hungInputMs: BOUND },
+        );
+        const hung: (string | undefined)[] = [];
+        r.native.onInputHung((frame) => hung.push(frame));
+        await r.native.loadURL("https://host.test/a");
+        r.at("https://host.test/a");
+        r.contents.emit("did-navigate", {}, "https://host.test/a");
+        void r.native.setFocused(true).catch(() => undefined);
+        await vi.advanceTimersByTimeAsync(BOUND - 1);
+        expect(hung).toEqual([]);
+        await vi.advanceTimersByTimeAsync(2);
+        expect(hung).toEqual([undefined]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("a command never answered is said hung ONCE, the bound after it was SENT — not after its wait in the queue; a frame's with its origin; a window born without the bound says nothing", async () => {
       vi.useFakeTimers();
       try {
