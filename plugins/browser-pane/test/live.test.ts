@@ -1180,6 +1180,28 @@ describe("PT-3 — the pane in use: its hand's input, its controls, the url it f
     expect([...local.addressed()]).toEqual([[1, PAGE]]);
   });
 
+  it("PT-5d (M7 H10) — the wait ends by the page's DOCUMENT moving since the document sent it, not by a look seeing it arrive: sent from A to B, the page says B and then A between two looks (its own ‹ at once) — A is written; a page that has not moved since (its document the same, still at A) waits on", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    const PEER = "http://127.0.0.1:4321/peer";
+    const recordAt = (url: string) => {
+      const ctx = ctxOf({ url }, local);
+      k.record(k.resolve(ctx), ctx);
+    };
+    const say = (address: string, document: number) =>
+      t.faces.get(KEY)?.say({ state: { is: "live" }, info: { address, extra: { document } } });
+    recordAt(PAGE);
+    say(PAGE, 1);
+    local.tick?.(0);
+    recordAt(PEER);
+    // not moved yet: where it stood is never written over B
+    expect([...local.addressed()]).toEqual([]);
+    say(PEER, 2);
+    say(PAGE, 3);
+    local.tick?.(0);
+    expect([...local.addressed()]).toEqual([[1, PAGE]]);
+  });
+
   it("a page's CURSOR that moves asks a frame — never a remake: the record does not read it", () => {
     const t = fakeHost();
     const local = createPaneLocal(t.host);

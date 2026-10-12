@@ -1003,6 +1003,14 @@ describe("PT-5a — a page's failures are said (ruling 3)", () => {
     expect(arrived).toHaveBeenCalledTimes(2);
     expect(face.info().extra?.refused).toEqual({ what: "download", serial: 2 });
   });
+
+  it("PT-5d (M7 H10): the page's DOCUMENT, as its producer counts it, rides the face's words (`extra.document`) — the pane's wait for a page the document sent elsewhere ends by it moving; a producer that counts none says none", () => {
+    const { face, handle } = attached();
+    handle.set({ browser: { ...NAV, document: 3 } as never });
+    expect(face.info().extra).toEqual({ favicon: null, document: 3 });
+    handle.set({ browser: NAV as never });
+    expect(face.info().extra).toEqual({ favicon: null });
+  });
 });
 
 describe("PT-5a — the parked desk (ruling 5)", () => {

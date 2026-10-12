@@ -42,6 +42,7 @@ import {
   HEAD_RASTER,
   type HeadState,
   headKey,
+  pageDocument,
   pageFavicon,
   REFUSAL_WORDS,
 } from "./head";
@@ -179,6 +180,8 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
   let respecs = 0;
   /** Where each page stood when its record read a NEW url — what the page does from there is its own navigation. */
   const stoodAt = new Map<Entity, string | undefined>();
+  /** PT-5d (M7 H10): the page's document when its record read that url — the page moved once it is another. */
+  const followedAt = new Map<Entity, number | undefined>();
   let hand: PaneHandDoors | undefined;
   const navigate = (e: Entity, command: BrowserNavigationCommand): boolean => {
     const key = live.words(e)?.key;
@@ -414,20 +417,27 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
       const was = urls.get(e);
       if (was === url) return;
       urls.set(e, url);
-      const at = live.words(e)?.info.address;
+      const words = live.words(e);
+      const at = words?.info.address;
       stoodAt.set(e, at);
+      followedAt.set(e, pageDocument(words?.info));
       if (was === undefined || at === url) return;
       navigate(e, { action: "go", url });
     },
     addressed() {
       const out = new Map<Entity, string>();
       for (const [e, url] of urls) {
-        const at = live.words(e)?.info.address;
+        const info = live.words(e)?.info;
+        const at = info?.address;
         if (at === undefined) continue;
         // PT-5d (ruling 5) — THE DOCUMENT'S WAIT FOR ITS PAGE ENDS WHEN THE PAGE ARRIVES at the document's address: from
         // then on every address the page says is its own move — written, the one where it stood too. (Before: never
         // ended — a page the document sent from A to B that went back to A by itself was never written, and the document
-        // kept B: PT-5a's finding 6.)
+        // kept B: PT-5a's finding 6.) PT-5d (M7 H10): ARRIVES — its document moved since the follow, where the host counts
+        // them: a page that said B and then A between two looks (its own ‹ at once) was never seen at B.
+        const was = followedAt.get(e);
+        const now = pageDocument(info);
+        if (was !== undefined && now !== undefined && now !== was) stoodAt.delete(e);
         if (at === url) {
           stoodAt.delete(e);
           continue;
@@ -450,6 +460,7 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
       urls.delete(e);
       specs.delete(e);
       stoodAt.delete(e);
+      followedAt.delete(e);
       noticed.delete(e);
       releaseNotice(e);
     },

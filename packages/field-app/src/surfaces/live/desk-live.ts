@@ -1376,6 +1376,11 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
                 ...(state.browser.refused === undefined
                   ? {}
                   : { refused: refusalOf(state.browser.refused) }),
+                // PT-5d (M7 H10): the page's DOCUMENT, as its producer counts it — the pane's wait for a page the document
+                // sent elsewhere ends by it moving, not by a look that saw the page arrive
+                ...(typeof state.browser.document === "number"
+                  ? { document: state.browser.document }
+                  : {}),
               }),
           ...(still === undefined ? {} : { still: stillOf(still.takenAt, now()) }),
         };

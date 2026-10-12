@@ -91,6 +91,13 @@ export function pageRefusal(info: LiveInfo | undefined): LiveBrowserRefusal | un
     : undefined;
 }
 
+/** PT-5d (M7 H10) — the page's DOCUMENT as the host's face says it (`info.extra.document`: its producer's count of the
+ * documents it has committed), or undefined: the host counts none. */
+export function pageDocument(info: LiveInfo | undefined): number | undefined {
+  const said = info?.extra?.document;
+  return typeof said === "number" && Number.isFinite(said) ? said : undefined;
+}
+
 /**
  * PT-5b — what the host's face says of its texture being a STILL (`info.extra.still` — the SDK's `LiveBrowserStill`): a
  * photograph of the page, when it was taken and how long ago — or undefined: the texture is the page's own frame (or the
