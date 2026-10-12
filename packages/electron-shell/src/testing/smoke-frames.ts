@@ -1336,8 +1336,11 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     await shoot("pt-5d-frame-nested.png");
 
     // ── FRAME-HALF: the host scrolled until the frame is half out of its view; a press on its low part, in view ───────
-    // (the host's page wheeled outside its frame: below it)
+    // (the host's page wheeled outside its frame: below it. M15 C: a wheel's travel is the WINDOW's — the page scrolls by
+    // it over the pane's scale (USE's WHEEL): each wheel the page's share × that scale; before, the page's px as the
+    // window's — the host scrolled 530 for 330, the frame's low part out of view)
     const below = await inFrame(FRAMES_BOX.w / 2, FRAMES_BOX.h + 60);
+    const paneScale = held === null || view === null ? 1 : (2 * held.hx) / view[0];
     if (below !== null) {
       h.move(below.x, below.y);
       await sleep(150);
@@ -1347,7 +1350,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
           x: below.x,
           y: below.y,
           deltaX: 0,
-          deltaY: -(FRAMES_BOX.y + FRAMES_BOX.h / 2) / 4,
+          deltaY: (-(FRAMES_BOX.y + FRAMES_BOX.h / 2) / 4) * paneScale,
           canScroll: true,
         });
         await sleep(60);

@@ -922,6 +922,32 @@ describe("BrowserLiveSurfaceRuntime", () => {
     result.runtime.dispose();
   });
 
+  it("PT-5d (M15 B) — a move with a button HELD carries THAT button, as a browser's own drag and Puppeteer's do (before: `button: \"none\"` with its buttons held — product run 2: a frame's range heard 11 such moves and its thumb never followed); a hover carries none", async () => {
+    const result = setup();
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live", 30, { width: 640, height: 360 }));
+    const window = result.native.windows[0];
+    window?.paint(sharedPaint().paint);
+    await flush();
+    const revision = result.runtime.summary.geometry?.revision ?? 0;
+    for (const buttons of [0, 1, 2, 4, 3, 6, 8])
+      renderer.attachment.dispatchInput?.(
+        { kind: "pointer", action: "move", x: 20, y: 30, ...(buttons > 0 ? { buttons } : {}) },
+        revision,
+      );
+    await delivered();
+    expect(window?.mouseInputs.map((m) => [m.button, m.buttons])).toEqual([
+      ["none", undefined],
+      ["left", 1],
+      ["right", 2],
+      ["middle", 4],
+      ["left", 3],
+      ["right", 6],
+      ["none", 8],
+    ]);
+    result.runtime.dispose();
+  });
+
   it("PT-3: carries an IME composition, the buttons a drag holds, the wheel in the page's CSS px, ⏎'s char, and the page's cursor", async () => {
     const result = setup({ source: { ...source(), deviceScaleFactor: 2 } });
     const renderer = attach(result.runtime);
@@ -950,8 +976,9 @@ describe("BrowserLiveSurfaceRuntime", () => {
       { text: "にほ", caret: 2 },
       { text: "ん", caret: 1 },
     ]);
+    // (PT-5d, M15 B: the drag's move carries the button it holds)
     expect(window?.mouseInputs).toEqual([
-      { type: "mouseMoved", x: 20, y: 30, button: "none", buttons: 1 },
+      { type: "mouseMoved", x: 20, y: 30, button: "left", buttons: 1 },
       { type: "mouseWheel", x: 10, y: 12, deltaX: 3, deltaY: 40 },
     ]);
     // a key's virtual code: a special key's by its name, a letter's and a digit's by its physical key — never another's

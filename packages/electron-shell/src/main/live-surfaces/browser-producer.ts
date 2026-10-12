@@ -838,6 +838,16 @@ export function virtualKeyCodeOf(key: string, code: string): number | undefined 
   return glyph?.charCodeAt(0);
 }
 
+/** PT-5d (M15 B): the button a move holds, by DOM's mask — the primary first, then the secondary, then the middle (as
+ * Puppeteer reads the buttons pressed); none of those: none. */
+function heldButtonOf(buttons: number | undefined): BrowserSurfaceMouseButton {
+  if (buttons === undefined) return "none";
+  if ((buttons & 1) !== 0) return "left";
+  if ((buttons & 2) !== 0) return "right";
+  if ((buttons & 4) !== 0) return "middle";
+  return "none";
+}
+
 /** The Mac's editing chords and the command each means (Blink's editing commands, as CDP's `commands` names them). */
 const MAC_EDITING: ReadonlyMap<string, string> = new Map([
   ["KeyA", "selectAll"],
@@ -1860,7 +1870,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       } else await window.dispatchTouch({ type: "touchMove", touchPoints: finger });
       return;
     }
-    const button = request.type === "move" ? "none" : (request.button ?? "left");
+    // PT-5d (M15 B) — A MOVE CARRIES THE BUTTON IT HOLDS, as a browser's own drag and Puppeteer's move do: with none
+    // held, none. (Before: every move `"none"`, its buttons held — product run 2: a frame's range heard 11 such moves
+    // with its primary held, and its thumb never followed.)
+    const button =
+      request.type === "move" ? heldButtonOf(request.buttons) : (request.button ?? "left");
     await window.dispatchMouse({
       type: request.type === "move" ? "mouseMoved" : "mousePressed",
       x,
