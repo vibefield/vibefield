@@ -77,6 +77,8 @@ export const FRAMES_ROWS = {
   stuckMarginMs: 10_000,
   /** FRAME-GONE: the longest the next press may wait past the frame's going */
   goneMs: 5_000,
+  /** M20 F6: how many times STUCK presses its loop page's button for a leg's hang before the leg says it never ran */
+  hangTries: 3,
 } as const;
 
 /** The rows' driver: PT-2's, the shell window's IME (USE's), and main's windows. */
@@ -95,6 +97,8 @@ type Point = readonly [number, number];
 
 /** What the rows saw — the SMOKE_CANVAS_FRAMES line, and what the judges read. */
 export interface FramesSeen {
+  /** M16-1: where each row of the host's frame found its frame standing before it acted (the host's word of its box) */
+  readonly stood?: Readonly<Record<string, FixtureRect | null>>;
   readonly press: FramePressSeen;
   /** FRAME-PRESS's second press: the button of the frame's own child of its site (M6.1) */
   readonly same: FramePressSeen;
@@ -111,6 +115,8 @@ export interface FramesSeen {
     readonly buttonsAfter: number | null;
     /** M15 F3: the moves the frame heard with its primary button held over the drag (absent: not counted) */
     readonly movesHeld?: number | null;
+    /** M18 B: the host's OWN range dragged on the page's session — its value before and after (absent: not dragged) */
+    readonly host?: { readonly before: number | null; readonly after: number | null };
   };
   readonly wheel: {
     readonly scroller: readonly [number | null, number | null];
@@ -149,6 +155,9 @@ export interface FramesSeen {
       /** M12 J11: whether the system's colours are dark — what a frame told nothing follows (absent: not read) */
       readonly systemDark?: boolean | null;
     };
+    /** M22 D1: the tap aimed at the frame's button through the page's VISUAL viewport, its click, and A's calibration on the
+     * host's own ground (its taps on the page's own session) (absent: not aimed so) */
+    readonly press?: FramePressSeen;
   };
   readonly gone: {
     readonly went: boolean;
@@ -164,7 +173,6 @@ export interface FramesSeen {
   /** M7 H11: a press at a page scale not 1 — a phone host naming no viewport, the desk drawing a laptop's page larger */
   readonly zoomed: {
     readonly phone: FramePressSeen & { readonly scale: number | null };
-    readonly desk: FramePressSeen & { readonly scale: number | null };
   };
   readonly covered: {
     /** the frame's top and the header's bottom, in the host's view */
@@ -250,25 +258,64 @@ interface GroundSeen {
 }
 
 /** M15 A (M18): a press's calibration — presses on its host's OWN ground left and right of the frame at the frame point's
- * height (the host's view px), and the frame point's x there. */
+ * height (the host's view px), and the frame point's x there. M22 A: and one at the frame point's SAME x (below the frame,
+ * or above it) — the press's own window column. */
 export interface Calibration {
   readonly left: GroundSeen | null;
   readonly right: GroundSeen | null;
+  /** M22 A: the press on the host's ground at the frame point's own x (absent: the x error interpolated, M18) */
+  readonly column?: GroundSeen | null;
   /** the frame point's x, in the host's view px */
   readonly at: number;
 }
 
 /** M15 A (M18): the hand's own mapping error at a frame point — the calibration's two errors interpolated to its x (the
- * mapping's error varies across the width: run 2, +4 left of the frame, −2 right of it); null: a side never heard. */
+ * mapping's error varies across the width: run 2, +4 left of the frame, −2 right of it); null: a side never heard. M22 A:
+ * with its own COLUMN's press, the x error is that column's and the y error the row's (left and right, the same window y)
+ * — the window's 1.4-px quantisation is a sawtooth no line follows (run 5: an interpolation 1.1 px from its click). */
 export function mappingError(c: Calibration): readonly [number, number] | null {
-  const lc = c.left?.clicked ?? null;
-  const rc = c.right?.clicked ?? null;
-  if (c.left === null || c.right === null || lc === null || rc === null) return null;
-  const el = [lc[0] - c.left.aimed[0], lc[1] - c.left.aimed[1]] as const;
-  const er = [rc[0] - c.right.aimed[0], rc[1] - c.right.aimed[1]] as const;
+  const err = (g: GroundSeen | null): readonly [number, number] | null =>
+    g === null || g.clicked === null
+      ? null
+      : [g.clicked[0] - g.aimed[0], g.clicked[1] - g.aimed[1]];
+  if (c.column !== undefined) {
+    // (the column's x; the row's y — the sides pressed, one at least: a side out of the page's view is not pressed)
+    const column = c.column === null ? null : err(c.column);
+    const rows = [c.left, c.right].filter((g) => g !== null);
+    const heard = rows.map(err).filter((e) => e !== null);
+    if (column === null || rows.length === 0 || heard.length < rows.length) return null;
+    return [column[0], heard.reduce((sum, e) => sum + e[1], 0) / heard.length];
+  }
+  const el = err(c.left);
+  const er = err(c.right);
+  if (c.left === null || c.right === null || el === null || er === null) return null;
   const span = c.right.aimed[0] - c.left.aimed[0];
   const s = span === 0 ? 0 : (c.at - c.left.aimed[0]) / span;
   return [el[0] + (er[0] - el[0]) * s, el[1] + (er[1] - el[1]) * s];
+}
+
+/** M16-1: a row of the host's frame acts only on a frame standing where it aims — at `FRAMES_BOX`, the host at its top; a
+ * frame anywhere else (run 1: FRAME-WHEEL's chain left the host at its end, every row after it aimed at a frame out of
+ * view) and the row proved nothing, never a pass. */
+export function judgeStood(row: string, box: FixtureRect | null): string[] {
+  if (box === null)
+    return [`${row}: its frame stood nowhere the host said — the row proved nothing`];
+  return Math.abs(box.x - FRAMES_BOX.x) <= 1 && Math.abs(box.y - FRAMES_BOX.y) <= 1
+    ? []
+    : [
+        `${row}: its frame stood at ${box.x}, ${box.y}, not at ${FRAMES_BOX.x}, ${FRAMES_BOX.y} where the row aims — the row proved nothing`,
+      ];
+}
+
+/** PT-5d (M22 D1): the page size a row aims by — the VISUAL viewport, as the pane shows it: a phone's page that overflows its
+ * layout shows 402 CSS px of an 800-px layout at scale 1 (product run 5) — never its `innerWidth`; a page that says no
+ * visible size, its view. */
+export function visibleView(report: Pick<FixtureReport, "view" | "vv">): readonly [number, number] {
+  const width = report.vv?.[3];
+  const height = report.vv?.[4];
+  return width !== undefined && height !== undefined && width > 0 && height > 0
+    ? [width, height]
+    : report.view;
 }
 
 const near = (a: Point, b: Point, by: number): boolean =>
@@ -357,6 +404,17 @@ export function judgeFrameDrag(seen: FramesSeen["drag"]): string[] {
             : `the frame heard ${seen.movesHeld} moves with its button held and its thumb never followed: they reached it and did not drag`
       }`,
     );
+  // (M18 B: the host's own range — a drag on the page's own session, the defect every page had)
+  if (seen.host !== undefined) {
+    if (seen.host.before === null || seen.host.after === null)
+      out.push(
+        "FRAME-DRAG (the host's own range): the host never said its range — that leg proved nothing",
+      );
+    else if (seen.host.after < seen.host.before + 10)
+      out.push(
+        `FRAME-DRAG (the host's own range): it stood at ${seen.host.after} after the drag (from ${seen.host.before}) — a drag on the page's own session never moved it`,
+      );
+  }
   if (seen.buttonsAfter === null)
     out.push(
       "FRAME-DRAG: the frame heard no move after the release — the row proved nothing of what was left down",
@@ -441,6 +499,8 @@ export function judgeFrameTouch(seen: FramesSeen["touch"]): string[] {
       `FRAME-TOUCH: the frame heard ${seen.heard.join(", ") || "nothing"} — no touch of the phone's finger on its button`,
     );
   if (seen.clicks < 1) out.push("FRAME-TOUCH: the tap made no click in the frame");
+  // (M22 D1: where it landed, against the hand's own mapping — and the page's own taps on its ground, where aimed)
+  if (seen.press !== undefined) out.push(...judgeFramePress("FRAME-TOUCH", seen.press));
   const { frame, host } = seen.device;
   if (frame === null || host === null)
     out.push("FRAME-TOUCH: the frame or its host never said its device — that half proved nothing");
@@ -528,22 +588,26 @@ export function judgeFrameZoomed(seen: FramesSeen["zoomed"]): string[] {
       out.push(
         `${row(null)}: the page stood at scale ${seenLeg.scale ?? "nothing"} — not drawn at another: that leg proved nothing`,
       );
-    // (a window px is 1/scale of the page's own: the hand presses no nearer than that)
+    // (calibrated — M22 A — against the hand's own mapping, ±1; else: a window px is 1/scale of the page's own, the hand
+    // presses no nearer than that)
     else
       out.push(
         ...judgeFramePress(
           row(seenLeg.scale),
           seenLeg,
-          Math.max(FRAMES_ROWS.near, Math.ceil(1 / seenLeg.scale)),
+          seenLeg.calibration !== undefined
+            ? FRAMES_ROWS.near
+            : Math.max(FRAMES_ROWS.near, Math.ceil(1 / seenLeg.scale)),
         ),
       );
   };
   leg(seen.phone, (scale) =>
-    scale === null
+    scale === null || Math.abs(scale - 1) < 0.05
       ? "FRAME-ZOOMED (a phone, its page at its own scale)"
       : `FRAME-ZOOMED (a phone, its page at ${Math.round(scale * 100) / 100})`,
   );
-  leg(seen.desk, () => "FRAME-ZOOMED (the desk drawing the page larger)");
+  // (M18 E: the desk's leg is gone — no door gives a laptop's page a scale past 1 from the smoke; mouse at s ≠ 1 into a
+  // frame is ÷ s by the touch evidence on the same path, unwitnessed for mouse — carried to PT-6)
   return out;
 }
 
@@ -723,11 +787,20 @@ export function judgeStuck(seen: FramesSeen["stuck"]): string[] {
       "STUCK: its legs while stalled (↻, an address typed) ran with nothing in flight — no key left unanswered: they proved nothing",
     );
   else {
-    if (seen.reloadActed === false)
+    // M20 F6: EACH leg runs (its hang tried again, bounded) — one that never ran proved nothing: no leg passes by timing
+    if (seen.reloadActed === null)
+      out.push(
+        "STUCK: ↻ while the chain was stalled never ran (the page never hung again) — that leg proved nothing",
+      );
+    else if (seen.reloadActed === false)
       out.push(
         "STUCK: ↻ pressed while the chain was stalled asked nothing of the page (its address not asked again) — it waited behind the stalled chain",
       );
-    if (seen.typed !== undefined && seen.typed !== null) {
+    if (seen.typed === null)
+      out.push(
+        "STUCK: an address typed while the chain was stalled never ran (the page never hung again) — that leg proved nothing",
+      );
+    else if (seen.typed !== undefined) {
       if (!seen.typed.arrived)
         out.push("STUCK: an address typed while the chain was stalled never took the page there");
       else if (!seen.typed.stayed)
@@ -964,7 +1037,9 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     // (the frames' places are read off the hand's path: give them a moment once the pane is in hand)
     await sleep(800);
     const held = await heldFrame();
-    const view = at(HOST)?.view ?? null;
+    // (M22 D1: through the page's VISUAL viewport, as the pane shows it)
+    const hostWord = at(HOST);
+    const view = hostWord === null ? null : visibleView(hostWord);
     /** a frame's own point, on the window — through the host's LATEST box of it (the host scrolls) */
     const inFrame = async (x: number, y: number) => {
       const box = at(HOST)?.framed?.parts.frame ?? null;
@@ -1011,23 +1086,41 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       point: Point | null,
     ): Promise<Calibration | null> => {
       if (heldNow === null || hostView == null || box === null || point === null) return null;
-      const side = async (x: number): Promise<GroundSeen> => {
+      const ground = async (x: number, y: number): Promise<GroundSeen> => {
         const grounds0 = at(hostPath)?.framed?.grounds.length ?? 0;
-        await h.press(await onWindow(heldNow, hostView, x, point[1]));
+        await h.press(await onWindow(heldNow, hostView, x, y));
         const landed = await waitFor(
           "the host's click on its own ground",
           5_000,
           () => at(hostPath)?.framed?.grounds ?? null,
           (g) => (g?.length ?? 0) > grounds0,
         );
-        return { aimed: [x, point[1]], clicked: landed?.[grounds0] ?? null };
+        return { aimed: [x, y], clicked: landed?.[grounds0] ?? null };
       };
-      const left = await side(box.x - 20);
-      const right = await side(box.x + box.w + 20);
-      return { left, right, at: point[0] };
+      // (a side out of the page's view is not pressed — FRAME-TOUCH's phone shows 402 of its host's 800)
+      const left = box.x - 20 > 4 ? await ground(box.x - 20, point[1]) : null;
+      const right =
+        box.x + box.w + 20 < hostView[0] - 4 ? await ground(box.x + box.w + 20, point[1]) : null;
+      // (M22 A: the press's own window COLUMN — the host's ground below the frame at its x; above it if below is out of
+      // the page's view)
+      const below = box.y + box.h + 20;
+      const column = await ground(point[0], below < hostView[1] - 4 ? below : box.y - 20);
+      return { left, right, column, at: point[0] };
+    };
+
+    /** M16-1: each row of the host's frame starts from a KNOWN state — the host at its top — and says where its frame
+     * stands before it acts; a frame not where the row aims is "proved nothing" */
+    const stood: Record<string, FixtureRect | null> = {};
+    said.stood = stood;
+    const standFrame = async (row: string): Promise<void> => {
+      if ((at(HOST)?.scrollY ?? 0) !== 0) await hostToTop();
+      const box = at(HOST)?.framed?.parts.frame ?? null;
+      stood[row] = box;
+      problems.push(...judgeStood(row, box));
     };
 
     // ── FRAME-PRESS ──────────────────────────────────────────────────────────────────────────────────────────────────
+    await standFrame("FRAME-PRESS");
     const b = framed()?.parts.b ?? null;
     const aimed: Point | null = b === null ? null : centre(b);
     const clicks0 = framed()?.clicks.length ?? 0;
@@ -1094,6 +1187,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     await shoot("pt-5d-frame-press.png");
 
     // ── FRAME-HOVER ──────────────────────────────────────────────────────────────────────────────────────────────────
+    await standFrame("FRAME-HOVER");
     const l = framed()?.parts.l ?? null;
     let over: string | null = null;
     let off: string | null = null;
@@ -1135,6 +1229,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     problems.push(...judgeFrameHover({ over, off, left }));
 
     // ── FRAME-DOUBLE ─────────────────────────────────────────────────────────────────────────────────────────────────
+    await standFrame("FRAME-DOUBLE");
     const word = framed()?.parts.w ?? null;
     if (word !== null) {
       const w = await inFrame(word.x + 20, word.y + word.h / 2);
@@ -1157,6 +1252,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     problems.push(...judgeFrameDouble({ sel }));
 
     // ── FRAME-DRAG: the thumb from its left, released OUTSIDE the frame; then a hover over it ──────────────────────
+    await standFrame("FRAME-DRAG");
     const r = framed()?.parts.r ?? null;
     const rangeBefore = framed()?.range ?? null;
     const movesHeld0 = framed()?.movesHeld ?? null;
@@ -1217,16 +1313,35 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       }
     }
     const movesHeld1 = framed()?.movesHeld ?? null;
+    const frameRangeAfter = framed()?.range ?? null;
+    // (M18 B: the host's OWN range dragged — a drag on the page's own session, the defect every page had: a move carried
+    // `button: "none"`)
+    const hostRange0 = at(HOST)?.framed?.range ?? null;
+    const hr = at(HOST)?.framed?.parts.r ?? null;
+    if (hr !== null && held !== null && view !== null)
+      await h.drag(
+        await onWindow(held, view, hr.x + hr.w * 0.1, hr.y + hr.h / 2),
+        await onWindow(held, view, hr.x + hr.w * 0.9, hr.y + hr.h / 2),
+        8,
+      );
+    const hostRange1 = await waitFor(
+      "the host's own range moved",
+      3_000,
+      () => at(HOST)?.framed?.range ?? null,
+      (v) => v !== null && hostRange0 !== null && v >= hostRange0 + 10,
+    );
     const drag = {
       before: rangeBefore,
-      after: framed()?.range ?? null,
+      after: frameRangeAfter,
       buttonsAfter,
       movesHeld: movesHeld0 === null || movesHeld1 === null ? null : movesHeld1 - movesHeld0,
+      host: { before: hostRange0, after: hostRange1 },
     };
     said.drag = drag;
     problems.push(...judgeFrameDrag(drag));
 
     // ── FRAME-WHEEL: over the scroller, then past its end ──────────────────────────────────────────────────────────
+    await standFrame("FRAME-WHEEL");
     const s = framed()?.parts.s ?? null;
     const scroll0 = framed()?.scroller ?? null;
     const host0 = at(HOST)?.scrollY ?? null;
@@ -1260,6 +1375,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     await hostToTop();
 
     // ── FRAME-TYPE (M15, a stated limit): the field pressed — the typing, the IME and ⌘A each REFUSED ─────────────────
+    await standFrame("FRAME-TYPE");
     const t = framed()?.parts.t ?? null;
     const typeHeard0 = hostHeard().length;
     const frameHeard0 = framed()?.heard.length ?? 0;
@@ -1339,6 +1455,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     problems.push(...judgeFrameType(type));
 
     // ── FRAME-NESTED: the button of the frame in the frame ──────────────────────────────────────────────────────────
+    await standFrame("FRAME-NESTED");
     const n = framed()?.parts.n ?? null;
     const ib = at(INNER)?.framed?.parts.ib ?? null;
     const innerAimed: Point | null = ib === null ? null : centre(ib);
@@ -1364,6 +1481,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     problems.push(...judgeFrameNested(nested));
 
     // ── FRAME-PICKER: the nested frame's file input ─────────────────────────────────────────────────────────────────
+    await standFrame("FRAME-PICKER");
     const fileInput = at(INNER)?.framed?.parts.if ?? null;
     const windows0 = d.windows();
     const cancels0 = at(INNER)?.framed?.cancels ?? null;
@@ -1479,6 +1597,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     await sleep(600);
 
     // ── FRAME-GONE: a press held in the frame; the frame sent elsewhere under it; released; the next press ─────────────
+    await standFrame("FRAME-GONE");
     let went = false;
     let nextClicks = 0;
     let goneMs: number | null = null;
@@ -1618,7 +1737,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const inClipped = async (x: number, y: number) =>
       clippedHeld === null || clippedHost === null || cBox === null
         ? null
-        : onWindow(clippedHeld, clippedHost.view, cBox.x + x, cBox.y + y);
+        : onWindow(clippedHeld, visibleView(clippedHost), cBox.x + x, cBox.y + y);
     // its button, in its clipped half — under the header: the host's
     const cb = cFramed()?.parts.b ?? null;
     let hidden: FramesSeen["clipped"]["hidden"] = null;
@@ -1666,7 +1785,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         calibration: await calibrate(
           CLIPPED_HOST,
           clippedHeld,
-          clippedHost?.view,
+          clippedHost === null ? null : visibleView(clippedHost),
           cBox,
           shownAimed === null || cBox === null
             ? null
@@ -1707,7 +1826,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const onCovered = async (x: number, y: number) =>
       coveredHeld === null || coveredHost === null
         ? null
-        : onWindow(coveredHeld, coveredHost.view, x, y);
+        : onWindow(coveredHeld, visibleView(coveredHost), x, y);
     // the frame's button, under the header: the host's
     const vb = vFramed()?.parts.b ?? null;
     let coveredHidden: FramesSeen["covered"]["hidden"] = null;
@@ -1760,7 +1879,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         calibration: await calibrate(
           COVERED_HOST,
           coveredHeld,
-          coveredHost?.view,
+          coveredHost === null ? null : visibleView(coveredHost),
           vBox,
           coveredAimed === null || vBox === null
             ? null
@@ -1840,7 +1959,12 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       const clicks0 = at(SLY_FRAME)?.framed?.clicks.length ?? 0;
       const heard0 = at(SLY_HOST)?.framed?.heard.length ?? 0;
       await h.press(
-        await onWindow(slyHeld, slyHost.view, sBox.x + centre(slyB)[0], sBox.y + centre(slyB)[1]),
+        await onWindow(
+          slyHeld,
+          visibleView(slyHost),
+          sBox.x + centre(slyB)[0],
+          sBox.y + centre(slyB)[1],
+        ),
       );
       const heard = await waitFor(
         "the sly header's click",
@@ -1896,7 +2020,12 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         const clicks0 = oFramed()?.clicks.length ?? 0;
         const heard0 = oHostHeard().length;
         await h.press(
-          await onWindow(slotHeld, slotHost.view, oBox.x + centre(ob)[0], oBox.y + centre(ob)[1]),
+          await onWindow(
+            slotHeld,
+            visibleView(slotHost),
+            oBox.x + centre(ob)[0],
+            oBox.y + centre(ob)[1],
+          ),
         );
         const heard = await waitFor(
           "the header's click over the slot",
@@ -1914,7 +2043,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       const heard0 = oHostHeard().length;
       if (aimed !== null)
         await h.press(
-          await onWindow(slotHeld, slotHost.view, oBox.x + aimed[0], oBox.y + aimed[1]),
+          await onWindow(slotHeld, visibleView(slotHost), oBox.x + aimed[0], oBox.y + aimed[1]),
         );
       const shown = await waitFor(
         "the slot's frame's click below the header",
@@ -1935,7 +2064,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
           calibration: await calibrate(
             SLOT_HOST,
             slotHeld,
-            slotHost.view,
+            visibleView(slotHost),
             oBox,
             aimed === null ? null : [oBox.x + aimed[0], oBox.y + aimed[1]],
           ),
@@ -1994,7 +2123,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       const aimed = centre(target);
       const clicks0 = at(framePath)?.framed?.clicks.length ?? 0;
       const heard0 = host.framed?.heard.length ?? 0;
-      const w = await onWindow(heldNow, host.view, box.x + aimed[0], box.y + aimed[1]);
+      const w = await onWindow(heldNow, visibleView(host), box.x + aimed[0], box.y + aimed[1]);
       if (tap) {
         h.move(w.x, w.y);
         await sleep(40);
@@ -2013,23 +2142,21 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         clicked: landed?.clicks[clicks0] ?? null,
         hostHeard: (at(hostPath)?.framed?.heard ?? []).slice(heard0),
         scale,
+        // (M22 A: against the hand's own mapping — at 0.41 a window px is about 4 of the page's)
+        calibration: await calibrate(hostPath, heldNow, visibleView(host), box, [
+          box.x + aimed[0],
+          box.y + aimed[1],
+        ]),
       };
     };
     // a phone's host naming no viewport: laid out at 980 px, drawn whole at about 0.41
     const zp = await zoomedPane("zp", x0 + 7 * step, true, "&noviewport=1");
     const zoomedPhone = await pressPart(zp.hostPath, zp.framePath, "bm", true);
     await done();
-    // a laptop's page the desk draws LARGER (its page scale past 1 — `setPageScaleFactor`): zoomed in hand until its page
-    // says it is drawn at 2 (if the desk never draws it so, the leg says it proved nothing)
-    const zd = await zoomedPane("zd", x0 + 8 * step, false);
-    for (let i = 0; i < 6 && (at(zd.hostPath)?.vv?.[0] ?? 1) < 1.9; i += 1) {
-      await js(`globalThis.__vfFieldSmoke.zoomTo(${(await camera()).zoom * 1.4})`);
-      await settledCamera();
-      await sleep(800);
-    }
-    const zoomedDesk = await pressPart(zd.hostPath, zd.framePath, "bm", false);
-    await done();
-    const zoomed = { phone: zoomedPhone, desk: zoomedDesk };
+    // (M18 E: the leg of a laptop's page the desk drew LARGER is gone — the desk's zoom never raises a page's scale, and
+    // no door from the smoke does (runs 2, 3: six zooms, the scale 1): mouse at s ≠ 1 into a frame is ÷ s by the touch
+    // evidence on the same path, unwitnessed for mouse — carried to PT-6)
+    const zoomed = { phone: zoomedPhone };
     said.zoomed = zoomed;
     problems.push(...judgeFrameZoomed(zoomed));
 
@@ -2060,10 +2187,12 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const pBox = phoneHost?.framed?.parts.frame ?? null;
     const touchHeard0 = at(PHONE_FRAME)?.framed?.heard.length ?? 0;
     const touchClicks0 = at(PHONE_FRAME)?.framed?.clicks.length ?? 0;
+    const touchHostHeard0 = phoneHost?.framed?.heard.length ?? 0;
+    const touchAimed: Point | null = pb === null ? null : centre(pb);
     if (phoneHeld !== null && phoneHost !== null && pb !== null && pBox !== null) {
       const w = await onWindow(
         phoneHeld,
-        phoneHost.view,
+        visibleView(phoneHost),
         pBox.x + centre(pb)[0],
         pBox.y + centre(pb)[1],
       );
@@ -2098,6 +2227,22 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         frame: at(PHONE_FRAME)?.framed?.device ?? null,
         host: at(PHONE_HOST)?.framed?.device ?? null,
         systemDark,
+      },
+      // (M22 D1: aimed through the page's VISUAL viewport; where it landed against the hand's own mapping — its taps on the
+      // host's own ground, the page's session's, M22-3)
+      press: {
+        aimed: touchAimed,
+        clicked: touchSaid?.clicks[touchClicks0] ?? null,
+        hostHeard: (at(PHONE_HOST)?.framed?.heard ?? []).slice(touchHostHeard0),
+        calibration: await calibrate(
+          PHONE_HOST,
+          phoneHeld,
+          phoneHost === null ? null : visibleView(phoneHost),
+          pBox,
+          touchAimed === null || pBox === null
+            ? null
+            : [pBox.x + touchAimed[0], pBox.y + touchAimed[1]],
+        ),
       },
     };
     said.touch = touch;
@@ -2163,7 +2308,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     let reason: string | null = null;
     let reloaded = false;
     if (loopHeld !== null && loopWord !== null && lb !== null) {
-      await h.press(await onWindow(loopHeld, loopWord.view, centre(lb)[0], centre(lb)[1]));
+      await h.press(await onWindow(loopHeld, visibleView(loopWord), centre(lb)[0], centre(lb)[1]));
       await sleep(600);
       // a key the looping page never answers — the hand's chain waits on it
       const sent = Date.now();
@@ -2199,32 +2344,38 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     /** the loop page live, its button pressed: the page hangs (its asks stop) — and a key it never answers, the chain
      * stalled behind it (M12 J11: a press is answered — with nothing in flight the legs act with or without H11's let-go) */
     const hangAgain = async (): Promise<boolean> => {
-      const back = await waitFor(
-        "the loop page live again",
-        FRAMES_ROWS.withinMs,
-        () => face(loop),
-        (f) => f?.state === "live",
-      );
-      const word = await waitFor(
-        "the loop page's word again",
-        FRAMES_ROWS.withinMs,
-        () => at(LOOP),
-        (rep) => rep?.framed?.parts.b !== undefined,
-      );
-      const heldNow = await heldFrame();
-      const lbNow = word?.framed?.parts.b ?? null;
-      if (back?.state !== "live" || heldNow === null || word === null || lbNow === null)
-        return false;
-      await sleep(600);
-      await h.press(await onWindow(heldNow, word.view, centre(lbNow)[0], centre(lbNow)[1]));
-      const asked = d.fixture.reports(LOOP);
-      await sleep(1_500);
-      if (d.fixture.reports(LOOP) !== asked) return false;
-      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "q" });
-      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "q" });
-      await sleep(300);
-      stalled = true;
-      return true;
+      // (M20 F6: tried again, BOUNDED — a press that did not start the loop (its document not ready yet) is pressed once
+      // more: no leg runs, or is skipped, by chance — runs 2 and 3 ran one leg each)
+      for (let attempt = 0; attempt < FRAMES_ROWS.hangTries; attempt += 1) {
+        const back = await waitFor(
+          "the loop page live again",
+          FRAMES_ROWS.withinMs,
+          () => face(loop),
+          (f) => f?.state === "live",
+        );
+        const word = await waitFor(
+          "the loop page's word again",
+          FRAMES_ROWS.withinMs,
+          () => at(LOOP),
+          (rep) => rep?.framed?.parts.b !== undefined,
+        );
+        const heldNow = await heldFrame();
+        const lbNow = word?.framed?.parts.b ?? null;
+        if (back?.state !== "live" || heldNow === null || word === null || lbNow === null) continue;
+        await sleep(600);
+        await h.press(
+          await onWindow(heldNow, visibleView(word), centre(lbNow)[0], centre(lbNow)[1]),
+        );
+        const asked = d.fixture.reports(LOOP);
+        await sleep(1_500);
+        if (d.fixture.reports(LOOP) !== asked) continue;
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode: "q" });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode: "q" });
+        await sleep(300);
+        stalled = true;
+        return true;
+      }
+      return false;
     };
     if (reloaded && (await hangAgain())) {
       // ↻ at once, the chain stalled: the page's address asked again within three seconds (served once more)

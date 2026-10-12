@@ -25,6 +25,7 @@ import {
   FIXTURE_TITLE,
   FIXTURE_TONE,
   FRAMES_BOX,
+  FRAMES_HOST_RANGE,
   FRAMES_WORD,
   fixtureHtml,
   fixtureIcon,
@@ -657,6 +658,10 @@ describe("the live pane's fixture page", () => {
     expect(host).toContain(
       `left:${FRAMES_BOX.x}px;top:${FRAMES_BOX.y}px;width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px`,
     );
+    // (M18 B: its OWN range, right of its frame — a drag on the page's own session)
+    expect(host).toContain(
+      `<input id="r" type="range" min="0" max="100" value="10" style="left:${FRAMES_HOST_RANGE.x}px;top:${FRAMES_HOST_RANGE.y}px;width:${FRAMES_HOST_RANGE.w}px;height:${FRAMES_HOST_RANGE.h}px">`,
+    );
     const frame = await page(fixture.origin, "/frames/frame?p=a");
     expect(frame).toContain(`<iframe id="n" src="${fixture.innerOrigin}/frames/inner?p=a"`);
     expect(frame).toContain('<iframe id="c" src="/frames/same?p=a"');
@@ -743,6 +748,7 @@ describe("the live pane's fixture page", () => {
         "setInterval",
         "navigator",
         "matchMedia",
+        "visualViewport",
         script,
       )(
         { randomUUID: () => `t-${path}` },
@@ -766,6 +772,8 @@ describe("the live pane's fixture page", () => {
         },
         { userAgent: "iPhone/26", maxTouchPoints: 5 },
         (query: string) => ({ matches: query === "(prefers-color-scheme: dark)" }),
+        // (a phone's page that overflows its layout: 640 wide inside, 402 of it shown at scale 1)
+        { scale: 1, offsetLeft: 0, offsetTop: 0, width: 402, height: 874 },
       );
       const fire = (type: string, e: Record<string, unknown>): void => {
         for (const listener of on.get(type) ?? []) listener({ type, ...e });
@@ -788,6 +796,8 @@ describe("the live pane's fixture page", () => {
     frame.fire("pointermove", { buttons: 0 });
     const said = await frame.ask();
     expect(said.path).toBe("/frames/frame?p=g");
+    // (M22 D1: its visual viewport — its scale, its offset, and the width and height it shows, CSS px: what a row aims by)
+    expect((said as { vv?: unknown }).vv).toEqual([1, 0, 0, 402, 874]);
     expect(said.framed).toMatchObject({
       clicks: [[80, 42]],
       heard: ["pointerdown #b", "click #b", "keydown h"],
@@ -834,7 +844,9 @@ describe("the live pane's fixture page", () => {
       [140.3, 162.5],
       [820, 442],
     ]);
-    expect(Object.keys(hostSaid.framed.parts as Record<string, unknown>)).toEqual(["frame"]);
+    // (M18 B: and its own range — a drag on the page's own session)
+    expect(Object.keys(hostSaid.framed.parts as Record<string, unknown>)).toEqual(["frame", "r"]);
+    expect(hostSaid.framed.range).toBe(10);
     // M6.3a: the clipped host hears the hand on its header and the frame's element alone
     const clippedHost = await run(fixture.hostOrigin, "/frames/clipped?p=g");
     clippedHost.fire("pointerdown", { target: clippedHost.parts.get("hd") });

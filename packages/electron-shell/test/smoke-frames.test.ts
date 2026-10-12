@@ -25,7 +25,9 @@ import {
   judgeFrameType,
   judgeFrameWheel,
   judgeFrameZoomed,
+  judgeStood,
   judgeStuck,
+  visibleView,
 } from "../src/testing/smoke-frames";
 
 describe("PT-5d — the frames rows, as the product says them", () => {
@@ -125,6 +127,72 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
   });
 
+  it("FRAME-PRESS (M22 A, refined) — the x error measured by a host-ground press at the press's SAME window x (below the frame), the y error by presses left and right at its SAME window y: the window's quantisation is the press's own column's and row's — run 5's own-site child (68 for an interpolated 69.1) lands where its column put it", () => {
+    // run 5's child S at the host's x 700: the line between +4 and −2 says −0.9 there; its own column's press says −2
+    const refined = {
+      left: { aimed: [140, 170] as const, clicked: [144, 172] as const },
+      right: { aimed: [820, 170] as const, clicked: [818, 172] as const },
+      column: { aimed: [700, 560] as const, clicked: [698, 562] as const },
+      at: 700,
+    };
+    expect(
+      judgeFramePress("FRAME-PRESS (its own site's frame in it)", {
+        aimed: [70, 30],
+        clicked: [68, 32],
+        hostHeard: [],
+        calibration: refined,
+      }),
+    ).toEqual([]);
+    // a side out of the page's view, not pressed (FRAME-TOUCH's phone shows 402 of its host's 800): the row's y from the other
+    expect(
+      judgeFramePress("FRAME-PRESS (its own site's frame in it)", {
+        aimed: [70, 30],
+        clicked: [68, 32],
+        hostHeard: [],
+        calibration: { ...refined, right: null },
+      }),
+    ).toEqual([]);
+    // the column's press never heard: the click proved nothing
+    expect(
+      judgeFramePress("FRAME-PRESS (its own site's frame in it)", {
+        aimed: [70, 30],
+        clicked: [68, 32],
+        hostHeard: [],
+        calibration: { ...refined, column: { aimed: [700, 560], clicked: null } },
+      }),
+    ).toEqual([
+      "FRAME-PRESS (its own site's frame in it): the host's calibration beside the frame never landed — the click proved nothing",
+    ]);
+    // a click 2 px from where its column put it: the routing's
+    expect(
+      judgeFramePress("FRAME-PRESS (its own site's frame in it)", {
+        aimed: [70, 30],
+        clicked: [66, 32],
+        hostHeard: [],
+        calibration: refined,
+      }),
+    ).toEqual([
+      "FRAME-PRESS (its own site's frame in it): the frame's click landed at 66, 32, not where the hand's own mapping put the aim 70, 30 (68.0, 32.0 — the host's calibration beside it missed by -2.0, 2.0; ±1): the routing carried the point elsewhere",
+    ]);
+  });
+
+  it("M16-1 — each row of the host's frame starts from a KNOWN state and says where its frame stands: the frame where the row aims (the host at its top) — else the row proved nothing, never a pass (run 1: FRAME-WHEEL's chain left the host at its end, every row after it aimed at a frame out of view)", () => {
+    expect(judgeStood("FRAME-TYPE", { x: 160, y: 120, w: 640, h: 420 })).toEqual([]);
+    expect(judgeStood("FRAME-TYPE", { x: 160, y: -1480, w: 640, h: 420 })).toEqual([
+      "FRAME-TYPE: its frame stood at 160, -1480, not at 160, 120 where the row aims — the row proved nothing",
+    ]);
+    expect(judgeStood("FRAME-NESTED", null)).toEqual([
+      "FRAME-NESTED: its frame stood nowhere the host said — the row proved nothing",
+    ]);
+  });
+
+  it("M22 D1 — a row aims through the page's VISUAL viewport: a phone's page that overflows its layout (its layout 800, 402 of it shown) is aimed by the 402 it shows; a page naming no viewport (980 shown at 0.41), by its 980; one that says no visible size, by its view", () => {
+    expect(visibleView({ view: [800, 1739], vv: [1, 0, 0, 402, 874] })).toEqual([402, 874]);
+    expect(visibleView({ view: [980, 2130], vv: [0.41, 0, 0, 980, 2130] })).toEqual([980, 2130]);
+    expect(visibleView({ view: [1280, 800], vv: [1, 0, 0] })).toEqual([1280, 800]);
+    expect(visibleView({ view: [1280, 800] })).toEqual([1280, 800]);
+  });
+
   it("FRAME-HOVER: a pointer over the frame's link; the pointer moved OUT of the frame (M7 H15: a real leave) — the cursor no pointer, and the frame heard its link left", () => {
     expect(judgeFrameHover({ over: "pointer", off: "default", left: true })).toEqual([]);
     expect(judgeFrameHover({ over: null, off: "pointer", left: false })).toEqual([
@@ -147,6 +215,38 @@ describe("PT-5d — the frames rows, as the product says them", () => {
   it("FRAME-DRAG: the thumb moved, and after a release OUTSIDE the frame its next move holds no button; a drag that never reached it, or a button left down, says so — M15 F3: and which half failed, by the moves the frame heard with its button held", () => {
     expect(judgeFrameDrag({ before: 10, after: 84, buttonsAfter: 0 })).toEqual([]);
     expect(judgeFrameDrag({ before: 10, after: 100, buttonsAfter: 0, movesHeld: 12 })).toEqual([]);
+    // M18 B: and the host's OWN range dragged on the page's session — moved; or not (the defect every page had)
+    expect(
+      judgeFrameDrag({
+        before: 10,
+        after: 100,
+        buttonsAfter: 0,
+        movesHeld: 12,
+        host: { before: 10, after: 90 },
+      }),
+    ).toEqual([]);
+    expect(
+      judgeFrameDrag({
+        before: 10,
+        after: 100,
+        buttonsAfter: 0,
+        movesHeld: 12,
+        host: { before: 10, after: 10 },
+      }),
+    ).toEqual([
+      "FRAME-DRAG (the host's own range): it stood at 10 after the drag (from 10) — a drag on the page's own session never moved it",
+    ]);
+    expect(
+      judgeFrameDrag({
+        before: 10,
+        after: 100,
+        buttonsAfter: 0,
+        movesHeld: 12,
+        host: { before: null, after: null },
+      }),
+    ).toEqual([
+      "FRAME-DRAG (the host's own range): the host never said its range — that leg proved nothing",
+    ]);
     // M15 F3: the moves never reached the frame — or reached it, and its thumb never followed
     expect(judgeFrameDrag({ before: 10, after: 10, buttonsAfter: 0, movesHeld: 0 })).toEqual([
       "FRAME-DRAG: the range stood at 10 after the drag (from 10) — the frame heard no move with its button held: the drag's moves never reached it",
@@ -392,6 +492,43 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
   });
 
+  it("FRAME-TOUCH (M22 D1): a tap aimed through the page's VISUAL viewport (a phone's page that overflows its layout shows 402 of its 800) lands on the frame's button, where the hand's own mapping put it — the page's own taps on its ground beside the frame landing where aimed (its session's: M22-3); a tap on the host's ground, never the frame's: its click proved nothing", () => {
+    const device = {
+      frame: { ua: "iPhone/26", touch: 5, dark: false },
+      host: { ua: "iPhone/26", touch: 5, dark: false },
+      systemDark: true,
+    };
+    const calibration = {
+      left: { aimed: [140, 162] as const, clicked: [141, 163] as const },
+      right: { aimed: [820, 162] as const, clicked: [821, 163] as const },
+      column: { aimed: [250, 560] as const, clicked: [251, 561] as const },
+      at: 250,
+    };
+    const seen = {
+      heard: ["pointerdown #b", "touchstart #b", "pointerup #b", "touchend #b", "click #b"],
+      clicks: 1,
+      device,
+      press: { aimed: [90, 42] as const, clicked: [91, 43] as const, hostHeard: [], calibration },
+    };
+    expect(judgeFrameTouch(seen)).toEqual([]);
+    expect(
+      judgeFrameTouch({
+        ...seen,
+        heard: [],
+        clicks: 0,
+        press: {
+          ...seen.press,
+          clicked: null,
+          calibration: { ...calibration, column: { aimed: [250, 560], clicked: null } },
+        },
+      }),
+    ).toEqual([
+      "FRAME-TOUCH: the frame heard nothing — no touch of the phone's finger on its button",
+      "FRAME-TOUCH: the tap made no click in the frame",
+      "FRAME-TOUCH: the frame heard no click — the press never reached a frame of another site (the host heard nothing)",
+    ]);
+  });
+
   it("FRAME-TOUCH: on a phone, the touch's start and end on the frame's button, and its click — and the frame told the PHONE (M6.5b): its own agent, touch points and colours the page's; before M6.5b a laptop's", () => {
     const phone = { ua: "iPhone/26", touch: 5, dark: true };
     const told = { frame: phone, host: phone };
@@ -455,24 +592,31 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
   });
 
-  it("FRAME-ZOOMED (M7 H11): a press at a page scale not 1 — a phone host naming no viewport (drawn at 0.41), the desk drawing a laptop's page at 2 — lands where the hand pressed; a page at scale 1 proves nothing", () => {
-    const landed = { aimed: [90, 42] as const, clicked: [90, 42] as const, hostHeard: [] };
-    expect(
-      judgeFrameZoomed({ phone: { ...landed, scale: 0.41 }, desk: { ...landed, scale: 2 } }),
-    ).toEqual([]);
-    expect(
-      judgeFrameZoomed({
-        phone: { ...landed, clicked: [37, 17], scale: 0.41 },
-        desk: { ...landed, scale: 1 },
-      }),
-    ).toEqual([
-      "FRAME-ZOOMED (a phone, its page at 0.41): the frame's click landed at 37, 17, not where the hand pressed (90, 42, ±3)",
-      "FRAME-ZOOMED (the desk drawing the page larger): the page stood at scale 1 — not drawn at another: that leg proved nothing",
+  it("FRAME-ZOOMED (M7 H11; M22 D, E): a phone host naming no viewport (drawn at 0.41) — a tap into its frame lands on its target, judged against the hand's own mapping (A's calibration, ±1); a page at scale 1 proves nothing; the desk's leg is gone (E: no door gives a laptop's page a scale — carried to PT-6)", () => {
+    // run 5's tap at 0.41: on bm at 538, 171 — its column and row on the host missing by -2, +11 (a window px ≈ 4 of the page's)
+    const calibration = {
+      left: { aimed: [140, 280] as const, clicked: [143, 291] as const },
+      right: { aimed: [820, 280] as const, clicked: [817, 291] as const },
+      column: { aimed: [698, 560] as const, clicked: [696, 571] as const },
+      at: 698,
+    };
+    const phone = {
+      aimed: [540, 160] as const,
+      clicked: [538, 171] as const,
+      hostHeard: [],
+      calibration,
+      scale: 0.41,
+    };
+    expect(judgeFrameZoomed({ phone })).toEqual([]);
+    expect(judgeFrameZoomed({ phone: { ...phone, clicked: [220, 70] } })).toEqual([
+      "FRAME-ZOOMED (a phone, its page at 0.41): the frame's click landed at 220, 70, not where the hand's own mapping put the aim 540, 160 (538.0, 171.0 — the host's calibration beside it missed by -2.0, 11.0; ±1): the routing carried the point elsewhere",
     ]);
-    expect(
-      judgeFrameZoomed({ phone: { ...landed, scale: null }, desk: { ...landed, scale: 2 } }),
-    ).toEqual([
-      "FRAME-ZOOMED (a phone, its page at its own scale): the page stood at scale nothing — not drawn at another: that leg proved nothing",
+    // calibrated, the tolerance is A's ±1 — never a window px of the page's (3 at 0.41)
+    expect(judgeFrameZoomed({ phone: { ...phone, clicked: [540, 173] } })).toEqual([
+      "FRAME-ZOOMED (a phone, its page at 0.41): the frame's click landed at 540, 173, not where the hand's own mapping put the aim 540, 160 (538.0, 171.0 — the host's calibration beside it missed by -2.0, 11.0; ±1): the routing carried the point elsewhere",
+    ]);
+    expect(judgeFrameZoomed({ phone: { ...phone, scale: 1 } })).toEqual([
+      "FRAME-ZOOMED (a phone, its page at its own scale): the page stood at scale 1 — not drawn at another: that leg proved nothing",
     ]);
   });
 
@@ -543,6 +687,16 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
     expect(judgeStuck({ ...said, reloadActed: null, typed: null })).toEqual([
       "STUCK: its legs while stalled (↻, an address typed) never ran — they proved nothing",
+    ]);
+    // M20 F6: EACH leg runs (its hang tried again, bounded) — one that never ran proved nothing; no leg passes by timing
+    // (runs 2 and 3: one leg each, by chance)
+    expect(
+      judgeStuck({ ...said, reloadActed: null, typed: { arrived: true, stayed: true } }),
+    ).toEqual([
+      "STUCK: ↻ while the chain was stalled never ran (the page never hung again) — that leg proved nothing",
+    ]);
+    expect(judgeStuck({ ...said, reloadActed: true, typed: null })).toEqual([
+      "STUCK: an address typed while the chain was stalled never ran (the page never hung again) — that leg proved nothing",
     ]);
     // M12 J11: the legs prove something only with the chain STALLED — a key the hung page never answers sent before them
     // (a press is answered: with nothing in flight they act with or without the let-go)

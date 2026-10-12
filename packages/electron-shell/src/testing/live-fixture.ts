@@ -305,8 +305,10 @@ export interface FixtureReport {
   /** PT-5b3 — when each of those was heard, and when the page's hold began and ended (its own clock, ms; null: never held). */
   readonly touchAt?: readonly number[];
   readonly held?: readonly [number, number] | null;
-  /** PT-5c — its visual viewport: the scale it is drawn at, and its offset in its layout (CSS px) */
-  readonly vv?: readonly [number, number, number];
+  /** PT-5c — its visual viewport: the scale it is drawn at, and its offset in its layout (CSS px); PT-5d (M22 D1) — a frames
+   * page's, and the width and height it shows (CSS px: a phone's page that overflows its layout shows less than its
+   * `innerWidth`) */
+  readonly vv?: readonly [number, number, number, number?, number?];
   /** PT-5c2 — `/cut` alone: every keydown ("down <code>") and keyup ("up <code>") it heard, in order. */
   readonly keyLog?: readonly string[];
   /** PT-5c2 — `/unpainted` alone: what its head's script heard of the hand from the document's start (null: no such
@@ -621,6 +623,10 @@ export const pendingHtml = (name: string): string =>
 
 /** PT-5d — where the host page draws its frame, CSS px (a laptop's 1280 × 800 view): what the frames' rows press through. */
 export const FRAMES_BOX = { x: 160, y: 120, w: 640, h: 420 } as const;
+/** PT-5d (M18 B) — the host page's OWN range, right of its frame: a drag on the page's own session (the defect every page
+ * had: a move carried `button: "none"`). */
+export const FRAMES_HOST_RANGE = { x: 880, y: 300, w: 260, h: 24 } as const;
+
 /** PT-5d — the word the frame's double-click selects. */
 export const FRAMES_WORD = "alpha";
 
@@ -668,7 +674,7 @@ const framesScript = (ids: readonly string[], elementOnly?: readonly string[]): 
     field: el("t") ? el("t").value : "",
     focused: (document.activeElement && document.activeElement.id) || "",
     view: [innerWidth, innerHeight],
-    vv: (() => { try { const v = visualViewport; return v ? [v.scale, v.offsetLeft, v.offsetTop] : undefined; } catch { return undefined; } })(),
+    vv: (() => { try { const v = visualViewport; return v ? [v.scale, v.offsetLeft, v.offsetTop, v.width, v.height] : undefined; } catch { return undefined; } })(),
     framed: {
       clicks, heard, moveButtons, movesHeld, grounds, cancels, changes,
       range: el("r") ? Number(el("r").value) : null,
@@ -701,7 +707,8 @@ export const framesHostHtml = (
 <html><head><meta charset="utf-8">${viewport ? '<meta name="viewport" content="width=device-width, initial-scale=1">' : ""}<title>${FIXTURE_TITLE} — frames</title>
 ${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; height: 300vh; } iframe { position: absolute; border: 0; }</style></head>
 <body><iframe id="f" src="${frameOrigin}/frames/frame?p=${cleanName(name)}" style="left:${FRAMES_BOX.x}px;top:${FRAMES_BOX.y}px;width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px"></iframe>
-${framesScript(["f"], ["f"])}
+<input id="r" type="range" min="0" max="100" value="10" style="left:${FRAMES_HOST_RANGE.x}px;top:${FRAMES_HOST_RANGE.y}px;width:${FRAMES_HOST_RANGE.w}px;height:${FRAMES_HOST_RANGE.h}px">
+${framesScript(["f", "r"], ["f"])}
 </body></html>`;
 
 /** PT-5d — `/frames/frame?p=<name>`: the frame — its button, link, field, word, range and scroller, and a frame of
