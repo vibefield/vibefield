@@ -9477,3 +9477,57 @@ rosetta's readers skip dead pids, so it is tolerated; the fix is to arm the hand
 **Owed (the debts lane's end):** which fieldd-client callers pass a `timeoutMs` (the lead's call;
 `draft/history-finish/surveys/s-debts-fieldd.md`'s appendix); field-native's flush behind its backoff (the first part's
 entry); the rosetta finding above; smoke:canvas on the live display for N3 (the third part's).
+
+## The field dissolves under the head — the swarm's spill fades under the Stories row, diagnosed and measured first (2026-10-12; `5214ff50`, one commit through lane mvland (`mv/head-band-wall`), rebased clean from `3a48d4ed` on `ce17e858` with the same patch-id, gated on the exact tree)
+
+**Why:** at the Stories head's landing (`8c55581c`) James ruled "Merge now, diagnose after" on the swarm still reaching
+under the head's circles. The diagnosis, below, found the swarm's sizing at fault, not the band. A first fix, the band lent to
+the swarm as a wall, was refuted by its own test and never committed. James then ruled "Fade now + sizing later", and on
+the photos and the perf pair, "Fast-forward now".
+
+**What landed** (`5214ff50`):
+- `godview-head.css` masks `.vf-godview-monitor-stage` with
+  `linear-gradient(to bottom, transparent var(--vf-godview-head-fade-from), black var(--vf-godview-head-reserve))`,
+  whatever the view: clear at the head's axis (28, its 40 at top 8), whole at the reserve (56). The head's slot stands
+  beside the stage, so the head is never masked; the stage's own chrome begins at the reserve, where the mask is whole.
+- tokens.css adds `--vf-godview-head-fade-from: 28px`.
+- DESIGN.md first: §8 "Godview's head — Stories" gains "The field dissolves under the head". Its as-built "its bodies keep
+  below the head as they kept below the bar" is corrected at its source, dated, with the measurement.
+- Side effects, said in DESIGN.md: rain's own ground now fades under the head too, where it ran to the top; a view's glass
+  (spend's panels, the timeline's grayscale) blurs only the stage's own drawing, since the masked stage is a backdrop root.
+- Tests: godview-head (the mask, its two tokens, 28 = 8 + 40/2, DESIGN.md's words); godview-monitor (the head's slot is
+  never inside the stage, nor the stage inside it).
+
+**Diagnosed before it was built** (a read-only fiber walk to the swarm's render bodies at each capture, still and
+animated, on main `ce17e858`; `draft/monitor-view-sdk/evidence/swarm-probe-ce17e858/`, logs
+`lanes/mvland/logs/probe-swarm-ce17e858/`):
+- At n20, 8–9 of 27 bodies' tops stand inside the head's band in every frame; at n60 with motion, centres too.
+- **The cause is the swarm's sizing:** no body is smaller than r 50, so the crowd is bigger than its field, and its physics
+  yields at any edge. With the swarm's own SwarmPhysics (27 bodies, r 50/60/73, 1164 × 288): a 56-tall band, 9/27 inside;
+  the same band reaching 5000 above the stage, 9/27, identical; a world starting at 56, 10/27 above its own wall; the bar's
+  own field (280, no band), 8/27 above its top. Under the bar, the bar and the stage's edge hid the spill; GV-D1 runs the
+  stage to the window's top under glass.
+
+**Measured before it landed** (A = main `ce17e858`, B = `3a48d4ed`, puppeteer `dce6adb` both; `lanes/mvland/logs/vf-ab-3a48d4ed/`;
+`lanes/PERF.lock` held 09:21:36–11:14:02Z):
+- **Perf, M40 literally: no row worse** in either 7-round run (504 cells). Each run read *noisy*, and each time it was
+  the null arm that moved, not B: the first, timeline × n10 task ms/s (T₀ 3.23 of 124.35, z₀ 4.4; B z 0.1); the repeat,
+  swarm × n20 and timeline × n60 React render ms/s (z₀ 4.7 and 4.5; B z 0.1 and 0.7). Pooled over 14 rounds: pass, nothing
+  worse or noisy. The lab's job line says EXIT 1, because it asks for the repeat to pass fresh as well.
+- Weather: the History lead's one fieldd test probe overlapped the lock 09:21:36–09:22:18Z, the proof launch's build steps
+  only (no arm was measuring). Rounds 1–2's launch loads read 56–88, from no lane of ours; rounds 3–7 read 4–14.
+- **Captures, all five views** (n20, frames 2.5 and 7.9 s, both themes, motion reduced): 2 of 20 differ, both light-theme rain
+  (18.9 % of pixels against its A/A 3.6–3.8 %): rain paints its own black ground, which now dissolves into the light cover
+  across the top 28–56. Swarm differs within its A/A; list, timeline and spend are pixel-identical (nothing of theirs sits in
+  the band). The photos James ruled on: https://claude.ai/artifact/KJq8iZEFVu4RoL7sFbRqQR.
+- Not measured: the GPU's compositing of the mask (the lab reads main-thread work, React and frame pacing).
+
+**Validation:** on `3a48d4ed`, smoke and smoke:godview green on the first run; verify red once on fieldd's index-timeline
+(since proven the fake rosettad's own race and fixed, "Debts, fifth part"), then green with smoke. On the exact tree
+`5214ff50` (`lanes/mvland/logs/5214ff50/`), all green on the first run: verify `EXIT: 0`, smoke `EXIT: 0`, smoke:godview
+`EXIT 0` on run 1. This entry's commit changes nothing a gate reads (no code reads `docs/`, and `check:retired` skips it).
+
+**Owed, at puppeteer's next pin:** the swarm's sizing to its field (the r 50 floor), arrivals spawned clear of obstacles
+(`findSpawnPosition` ignores them), a manifest field for a view to keep its own ground out of the head's fade, and the
+`animations` doc comment (`view-sdk/src/view.ts:111`), which says only "no loop runs" — held still, arrivals are drawn
+where they spawn, unsolved.
