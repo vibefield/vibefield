@@ -176,7 +176,8 @@ const CONSOLE_DISCARD_MS = 1_000;
  * doubt, before it is refused — PT-5c's second for a document's scale word, the precedent. */
 const FOCUS_WORD_MS = 1_000;
 /** PT-5d (M6.5b i): how long one step of a frame's start — a guard, its device, its auto-attach — may go unanswered before
- * it, and every step after it, is abandoned and the frame resumed: a frame is never left paused. */
+ * it is abandoned: sent, never confirmed (M12 J4: every step is sent at once — one abandoned keeps none of the others
+ * unsent); the frame is resumed once every step is answered or abandoned — never left paused. */
 const FRAME_STEP_MS = 2_000;
 /**
  * PT-5d (M6.5b i) — THE PAGE'S AUTO-ATTACH AND EACH FRAME'S: flat; each frame of another site STARTS PAUSED (waiting for the
@@ -509,22 +510,19 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       );
     const cdp = this.window.webContents.debugger;
     this.#children.add(child);
-    /** one step: sent if the frame is still attached — answered, refused (each its own: one the engine refuses never keeps
-     * the guards after it off, the nested frames' least of all), or unanswered past `FRAME_STEP_MS` (false: abandoned) */
-    const step = async (work: () => Promise<unknown>): Promise<boolean> => {
-      if (!this.#children.has(child) || this.isDestroyed()) return false;
+    /** one step: sent if the frame is still attached, and waited for until it is answered, refused, or unanswered past
+     * `FRAME_STEP_MS` (abandoned: unconfirmed, not unsent). Each its own (M2): every step is sent before any is waited for
+     * (M12 J4), so none — refused or late — keeps another unsent, the nested frames' auto-attach least of all. */
+    const step = async (work: () => Promise<unknown>): Promise<void> => {
+      if (!this.#children.has(child) || this.isDestroyed()) return;
       let timer: ReturnType<typeof setTimeout> | undefined;
-      const answered = await Promise.race([
-        work().then(
-          () => true,
-          () => true,
-        ),
-        new Promise<boolean>((resolve) => {
-          timer = setTimeout(() => resolve(false), FRAME_STEP_MS);
+      await Promise.race([
+        work().catch(() => undefined),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, FRAME_STEP_MS);
         }),
       ]);
       clearTimeout(timer);
-      return answered && this.#children.has(child);
     };
     const send = (method: string, params: Record<string, unknown> = {}) =>
       step(() => cdp.sendCommand(method, params, child));
