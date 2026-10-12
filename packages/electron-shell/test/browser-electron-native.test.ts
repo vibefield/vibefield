@@ -383,6 +383,45 @@ describe("PT-5c (ruling 1) — the page SAYS its scale; the hand's commands neve
     expect(run({ binding: false }).said).toEqual([]);
   });
 
+  it("R3 — the page's console entries are DISCARDED as they come, at most once a second (with the Runtime on, every object a page logs is held until then — PT-5c's probe): a call on the page's own session sends `Runtime.discardConsoleEntries` at once, the many after it one more when the second is up; an exception the same; never behind the hand's queue; a frame's session is not this page's console", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    try {
+      const r = recording(["Input.dispatchMouseEvent"]);
+      await r.native.setEmulation(EMULATION);
+      const discards = (): number =>
+        r.methods().filter((m) => m === "Runtime.discardConsoleEntries").length;
+      const heard = (method: string, session?: string): void =>
+        r.contents.debugger.emit("message", {}, method, { type: "log", args: [] }, session);
+      // a hand's command the page has not answered: the discard never waits behind it
+      void r.native.dispatchMouse({
+        type: "mousePressed",
+        x: 1,
+        y: 1,
+        button: "left",
+        clickCount: 1,
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      heard("Runtime.consoleAPICalled");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(discards()).toBe(1);
+      for (let i = 0; i < 20; i += 1) heard("Runtime.consoleAPICalled");
+      await vi.advanceTimersByTimeAsync(999);
+      expect(discards()).toBe(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(discards()).toBe(2);
+      await vi.advanceTimersByTimeAsync(2_000);
+      heard("Runtime.exceptionThrown");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(discards()).toBe(3);
+      await vi.advanceTimersByTimeAsync(2_000);
+      heard("Runtime.consoleAPICalled", "a-frame-of-another-process");
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(discards()).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("ONE session for both queues: the hand's first command waits for the page's session and its guards, as the device's does — no input reaches a page before its guards are on, and the guards are put on once", async () => {
     const r = recording(["Page.enable"]);
     const laid = r.native.setBackingRaster(

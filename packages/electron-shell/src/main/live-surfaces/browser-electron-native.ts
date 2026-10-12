@@ -50,6 +50,9 @@ export const PAGE_SCALE_BINDING = "__vibefieldPageScale";
  */
 export const PAGE_SCALE_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(PAGE_SCALE_BINDING)}]; try { delete globalThis[${JSON.stringify(PAGE_SCALE_BINDING)}]; } catch {} if (typeof say !== "function" || window !== window.top || location.href === "about:blank") return; let last; const tell = (force) => { const viewport = globalThis.visualViewport; const scale = viewport ? viewport.scale : 1; if (!force && scale === last) return; last = scale; try { say(String(scale)); } catch {} }; tell(true); addEventListener("DOMContentLoaded", () => tell(true), { once: true }); addEventListener("load", () => tell(true), { once: true }); requestAnimationFrame(() => tell(true)); addEventListener("pageshow", (event) => { if (event.persisted) tell(true); }); globalThis.visualViewport?.addEventListener("resize", () => tell(false)); })();`;
 
+/** PT-5c (R3): the least time between two discards of the page's console entries. */
+const CONSOLE_DISCARD_MS = 1_000;
+
 /** The file picker never shown: CDP says it was asked for (`Page.fileChooserOpened`) and cancels it — the input hears `cancel`. */
 const NO_FILE_PICKER = { enabled: true, cancel: true } as const;
 
@@ -116,6 +119,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   #handTail: Promise<void> = Promise.resolve();
   /** The page's session, attached with its guards — once, shared by both queues. */
   #ready: Promise<void> | undefined;
+  /** PT-5c (R3): the discard of the page's console entries that is due, and when the last was sent. */
+  #discardTimer: ReturnType<typeof setTimeout> | null = null;
+  #discardedAt = Number.NEGATIVE_INFINITY;
   /**
    * PT-5b3 (ruling 4) — THE PAGE'S DOCUMENTS, COUNTED as the engine commits them: one more at each `did-navigate` of the
    * page's own (never the blank's) and at each main-frame load that FAILED (the engine's error page then stands in the
@@ -178,6 +184,15 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       for (const listener of [...this.#scaleListeners]) listener(scale, this.#documents);
       return;
     }
+    // PT-5c (R3) — THE RUNTIME'S COST IS MEMORY: with it on, every object the page logs (or throws) is held by the session
+    // until its entries are DISCARDED — V8's store of 1,000 messages frees none of them (PT-5c's probe `console.cjs`: 24 MB
+    // after five minutes of an object logged ten times a second, against 1 MB discarded as they came). Discarded as they
+    // come: at once, then at most once a second; sent straight on the page's session — never on the hand's queue nor the
+    // device's (its answer is awaited by nobody, and while a navigation pends the engine answers no renderer command).
+    if (method === "Runtime.consoleAPICalled" || method === "Runtime.exceptionThrown") {
+      if (sessionId === undefined || sessionId === "") this.discardConsole();
+      return;
+    }
     if (method === "Page.fileChooserOpened") {
       this.refused("file-picker");
       return;
@@ -204,6 +219,21 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     })().catch(() => undefined);
   }
 
+  /** PT-5c (R3): one discard of the page's console entries — now, or when a second has passed since the last. */
+  private discardConsole(): void {
+    if (this.#discardTimer !== null || this.isDestroyed()) return;
+    this.#discardTimer = setTimeout(
+      () => {
+        this.#discardTimer = null;
+        this.#discardedAt = Date.now();
+        const cdp = this.window.webContents.debugger;
+        if (this.isDestroyed() || !cdp.isAttached()) return;
+        void cdp.sendCommand("Runtime.discardConsoleEntries").catch(() => undefined);
+      },
+      Math.max(0, this.#discardedAt + CONSOLE_DISCARD_MS - Date.now()),
+    );
+  }
+
   loadURL(url: string): Promise<void> {
     this.#remoteLoadStarted = true;
     return this.window.loadURL(url);
@@ -214,6 +244,10 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   }
 
   destroy(): void {
+    if (this.#discardTimer !== null) {
+      clearTimeout(this.#discardTimer);
+      this.#discardTimer = null;
+    }
     if (this.isDestroyed()) return;
     if (this.#debuggerAttached && this.window.webContents.debugger.isAttached()) {
       try {
