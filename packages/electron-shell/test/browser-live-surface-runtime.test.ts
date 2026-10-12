@@ -3880,7 +3880,10 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
       // a press of the other attachment takes its turn and waits on its page (a new document, its page not yet speaking);
       // the attachment goes before it is sent: its wait ENDS there (R1 — the page never hears a gesture begin after its
-      // attachment went)
+      // attachment went). A third window shows the pane, so the page stays LIVE: its going alone ends the wait
+      const third = attach(p.result.runtime, "attachment_browser_00000003");
+      third.attachment.setDemand(demand(3, "live", 30, { width: 1206, height: 2622 }));
+      await p.delivered();
       p.window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
       const dropped = p.result.runtime.stats.inputDropped;
       other.attachment.dispatchInput?.(
@@ -3890,12 +3893,34 @@ describe("BrowserLiveSurfaceRuntime", () => {
       await p.delivered();
       other.attachment.dispose();
       await p.delivered();
+      expect(p.result.runtime.summary.state).toBe("live");
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
       expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
       // its page's word, after: nothing — the press is gone
       p.window.say(1);
       await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 2 — a press already SENT when its attachment goes (its answer not yet back) is released AFTER it: `letGo` takes its turn behind every event its attachment sent — the page never keeps a finger it pressed", async () => {
+      const p = await phone();
+      let answer: () => void = () => {};
+      p.window.dispatchTouch = (input) => {
+        p.heard.push(input.type);
+        if (input.type !== "touchStart") return Promise.resolve();
+        return new Promise<void>((resolve) => {
+          answer = resolve;
+        });
+      };
+      p.pointer("down", 20);
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart"]);
+      p.renderer.attachment.dispose();
+      await p.delivered();
+      answer();
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart", "touchCancel"]);
       p.result.runtime.dispose();
     });
 
@@ -4661,8 +4686,11 @@ describe("BrowserLiveSurfaceRuntime", () => {
       await p.delivered();
       expect(p.heard).toEqual([]);
       expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
-      // live again, at another document: its word, and the attachment's going, in one turn
+      // live again (a second window shows it too: the page stays LIVE when the first one's attachment goes), at another
+      // document: its word, and the attachment's going, in one turn
       p.renderer.attachment.setDemand(demand(3, "live", 30, size));
+      const second = attach(p.result.runtime, "attachment_browser_00000002");
+      second.attachment.setDemand(demand(4, "live", 30, size));
       p.window.emitNavigationState({ ...NAV, url: `${NEXT}/2` });
       await p.delivered();
       p.pointer("down", 20, p.result.runtime.summary.geometry?.revision ?? p.revision);
@@ -4670,6 +4698,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.window.say(1);
       p.renderer.attachment.dispose();
       await p.delivered();
+      expect(p.result.runtime.summary.state).toBe("live");
       expect(p.heard).toEqual([]);
       expect(p.result.runtime.stats.inputDropped).toBe(dropped + 2);
       p.result.runtime.dispose();
