@@ -2163,6 +2163,30 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       expect(r.hand()).toEqual(["touchStart@F 80,40", "touchMove@F 90,50", "touchEnd@F"]);
     });
 
+    it("H13 — a frame's commit is counted by ITS OWN frame's word: a frame of its own site inside it committing (on its session, another frame's id) is no commit of its — its press's release still goes to it", async () => {
+      const r = await framed();
+      await r.native.dispatchMouse({
+        type: "mousePressed",
+        x: 180,
+        y: 120,
+        button: "left",
+        clickCount: 1,
+      });
+      r.emit(
+        "Page.frameNavigated",
+        { frame: { id: "t-F-child", parentId: "t-F", url: "https://frame.test/inner" } },
+        "F",
+      );
+      await r.native.dispatchMouse({
+        type: "mouseReleased",
+        x: 180,
+        y: 120,
+        button: "left",
+        clickCount: 1,
+      });
+      expect(r.hand()).toEqual(["mousePressed@F 80,40", "mouseReleased@F 80,40"]);
+    });
+
     it("H4 — PT-5c's finger held across the PAGE's commit: its cancel still reaches the page's session (the engine holds a touch open across a commit — `across.cjs`); a frame's finger across ITS commit: its end on its session", async () => {
       const r = recording();
       await r.native.loadURL("https://host.test/a");

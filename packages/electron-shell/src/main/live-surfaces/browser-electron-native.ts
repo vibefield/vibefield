@@ -1018,7 +1018,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       const routed = this.#frames.release(button, input.x, input.y);
       return routed === null ? [] : [routed];
     }
-    if (input.type === "mouseWheel") return [this.#frames.wheel(input.x, input.y)];
+    if (input.type === "mouseWheel")
+      return [this.#frames.wheel(input.x, input.y, performance.now())];
     return this.#frames.move(input.x, input.y);
   }
 

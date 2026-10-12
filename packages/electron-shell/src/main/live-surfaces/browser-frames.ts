@@ -79,6 +79,10 @@ interface FrameRecord {
   readonly order: number;
 }
 
+/** PT-5d (M7 H7): wheels less than this apart are one gesture — latched to the target its first went to (the desk's wheel
+ * carries no phase: the ruled 100–300 ms). */
+export const WHEEL_LATCH_MS = 200;
+
 /** The pressed buttons, the finger and the held keys — each the target its gesture began on. */
 interface Hand {
   readonly buttons: Map<string, FrameTarget>;
@@ -97,6 +101,8 @@ export class BrowserFrames {
   readonly #hand: Hand = { buttons: new Map(), finger: undefined, keys: new Map() };
   /** where the last hover went — told that the pointer left it when the next goes elsewhere */
   #hover: FrameTarget | undefined;
+  /** PT-5d (M7 H7): the wheel's gesture — its target, and when its last wheel came */
+  #wheel: { readonly target: FrameTarget; at: number } | undefined;
 
   // ── the page's tree, as the native hears it ────────────────────────────────────────────────────────────────────
 
@@ -285,9 +291,22 @@ export class BrowserFrames {
     return this.to(target, x, y);
   }
 
-  /** The wheel: the frame drawn under it. */
-  wheel(x: number, y: number): FrameRouted {
-    return this.at(x, y);
+  /** The wheel: the frame drawn under it — PT-5d (M7 H7) LATCHED to its gesture's first target: a wheel less than
+   * `WHEEL_LATCH_MS` after the last goes where it went, the point carried into it (a frame the page scrolls under the
+   * pointer mid-gesture takes none of it: the page's scroll went on through every embed it passed); its target gone, a new
+   * gesture. `now`: the hand's clock (ms). */
+  wheel(x: number, y: number, now: number): FrameRouted {
+    const latched = this.#wheel;
+    if (latched !== undefined && now - latched.at < WHEEL_LATCH_MS) {
+      const routed = this.to(latched.target, x, y);
+      if (routed !== null) {
+        latched.at = now;
+        return routed;
+      }
+    }
+    const routed = this.at(x, y);
+    this.#wheel = { target: routed.target, at: now };
+    return routed;
   }
 
   /** A finger down: the frame drawn there, the finger's target remembered. */

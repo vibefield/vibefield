@@ -11,6 +11,13 @@ import {
   type FrameQuad,
 } from "../src/main/live-surfaces/browser-frames";
 
+/** M7 H7: a wheel's clock, each call a gesture of its own (a second after the last). */
+let wheelClock = 0;
+const apart = (): number => {
+  wheelClock += 1_000;
+  return wheelClock;
+};
+
 /** An axis-aligned quad: its left, top, width, height. */
 const box = (x: number, y: number, w: number, h: number): FrameQuad => [
   x,
@@ -61,15 +68,19 @@ describe("PT-5d (ruling 1) — the frame drawn at a point takes the event, on it
     const f = new BrowserFrames();
     f.pageCommitted(1);
     f.attached("A", "t-A", undefined);
-    expect(f.wheel(150, 100).target.session).toBeUndefined();
+    expect(f.wheel(150, 100, apart()).target.session).toBeUndefined();
     f.placed("A", box(100, 80, 400, 300));
     f.attached("C", "t-C", undefined);
     f.placed("C", box(300, 200, 100, 100));
-    expect(f.wheel(150, 100).target.session).toBe("A");
-    expect(f.wheel(350, 250)).toEqual({ target: { session: "C", document: 0 }, x: 50, y: 50 });
+    expect(f.wheel(150, 100, apart()).target.session).toBe("A");
+    expect(f.wheel(350, 250, apart())).toEqual({
+      target: { session: "C", document: 0 },
+      x: 50,
+      y: 50,
+    });
     // laid out no more (`display: none`): nothing lands in it
     f.placed("C", undefined);
-    expect(f.wheel(350, 250).target.session).toBe("A");
+    expect(f.wheel(350, 250, apart()).target.session).toBe("A");
   });
 
   it("a frame under a TRANSFORM: its quad is a parallelogram and its document says its own viewport — scaled by 2, a point lands at half its offset; turned a quarter, along its own axes", () => {
@@ -380,11 +391,11 @@ describe("PT-5d (M6.3a) — a frame takes a point only on its VISIBLE part: what
     });
     expect(f.move(180, 120)).toEqual([{ target: { session: "A", document: 0 }, x: 80, y: 40 }]);
     expect(f.release("left", 180, 120)?.target.session).toBe("A");
-    expect(f.wheel(180, 120).target.session).toBeUndefined();
+    expect(f.wheel(180, 120, apart()).target.session).toBeUndefined();
     expect(f.move(180, 121).map((r) => r.target.session)).toEqual(["A", undefined]);
     // scrolled out of its scroller: nothing lands in it
     f.placed("A", box(100, 80, 400, 300), { visible: [0, 0, 0, 0], covers: [] });
-    expect(f.wheel(180, 305).target.session).toBeUndefined();
+    expect(f.wheel(180, 305, apart()).target.session).toBeUndefined();
   });
 
   it("a frame in a frame, clipped in ITS parent's view: a point over its clipped part is its parent's, carried into it", () => {
@@ -417,8 +428,8 @@ describe("PT-5d (M7 H3) — what the host draws OVER a frame is the host's: a fr
     });
     expect(f.move(180, 100)).toEqual([{ target: { session: "A", document: 0 }, x: 80, y: 20 }]);
     f.release("left", 180, 100);
-    expect(f.wheel(180, 100).target.session).toBeUndefined();
-    expect(f.wheel(180, 200).target.session).toBe("A");
+    expect(f.wheel(180, 100, apart()).target.session).toBeUndefined();
+    expect(f.wheel(180, 200, apart()).target.session).toBe("A");
   });
 
   it("two frames overlapping: where B covers A (A's sight says so), B; where nothing covers A, A — whatever order they attached in", () => {
@@ -432,8 +443,8 @@ describe("PT-5d (M7 H3) — what the host draws OVER a frame is the host's: a fr
       visible: [0, 0, 1, 1],
       covers: [[0.5, 0.4, 0.75, 0.7333]],
     });
-    expect(f.wheel(350, 250).target.session).toBe("B");
-    expect(f.wheel(150, 100).target.session).toBe("A");
+    expect(f.wheel(350, 250, apart()).target.session).toBe("B");
+    expect(f.wheel(150, 100, apart()).target.session).toBe("A");
   });
 });
 
@@ -459,5 +470,31 @@ describe("PT-5d (M7 H4, H5) — what the hand holds across a commit", () => {
     f.pageCommitted(2);
     expect(f.move(30, 30)).toEqual([{ target: { session: undefined, document: 2 }, x: 30, y: 30 }]);
     expect(f.keyUp("KeyQ")).toEqual({ session: undefined, document: 2 });
+  });
+});
+
+describe("PT-5d (M7 H7) — the wheel is LATCHED to its gesture's first target", () => {
+  it("within 200 ms of the last wheel a frame scrolled under the pointer does not take it — the page keeps it, the point carried; 200 ms after, a new gesture; its latched target gone, a new gesture", () => {
+    const f = new BrowserFrames();
+    f.pageCommitted(1);
+    f.attached("A", "t-A", undefined);
+    expect(f.wheel(50, 50, 0).target.session).toBeUndefined();
+    // the page scrolled A under the pointer mid-gesture
+    f.placed("A", box(0, 0, 400, 300));
+    expect(f.wheel(50, 50, 16)).toEqual({
+      target: { session: undefined, document: 1 },
+      x: 50,
+      y: 50,
+    });
+    expect(f.wheel(50, 50, 16 + 199).target.session).toBeUndefined();
+    // a pause of 200 ms: a new gesture, on what is under the pointer
+    expect(f.wheel(50, 50, 16 + 199 + 200)).toEqual({
+      target: { session: "A", document: 0 },
+      x: 50,
+      y: 50,
+    });
+    // latched to A; A gone mid-gesture: a new gesture
+    f.detached("A");
+    expect(f.wheel(50, 50, 16 + 199 + 200 + 10).target.session).toBeUndefined();
   });
 });
