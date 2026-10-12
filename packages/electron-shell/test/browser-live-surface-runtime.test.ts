@@ -4862,6 +4862,48 @@ describe("BrowserLiveSurfaceRuntime", () => {
         expect(refused - after).toBeLessThan(500);
         p.result.runtime.dispose();
       });
+
+      it("F3 — a document's bound on its first word runs out ONCE: four wheels and a key on a page that never speaks — the first wheel waits its second, the three after it are refused AT ONCE, counted, and the key is heard by 1.5 s (before: a second each — the key at 4 s; the orchestrator's S3)", async () => {
+        vi.useFakeTimers();
+        const p = await phone();
+        p.window.emitNavigationState({ ...NAV, url: NEXT });
+        await p.delivered();
+        const dropped = p.result.runtime.stats.inputDropped;
+        for (let i = 0; i < 4; i += 1)
+          p.send({ kind: "wheel", x: 20, y: 10, deltaX: 0, deltaY: 40 });
+        p.send({ kind: "key", action: "down", key: "q", code: "KeyQ", modifiers: NONE });
+        await vi.advanceTimersByTimeAsync(1_500);
+        await p.delivered();
+        expect(p.heard).toEqual(["keyDown q"]);
+        expect(p.result.runtime.stats.inputDropped).toBe(dropped + 4);
+        p.result.runtime.dispose();
+      });
+
+      it("F3 — a WORD after the bound lifts it: once the bound has run out a press is refused at once, counted; the page speaks, and the next press goes at the scale it said", async () => {
+        vi.useFakeTimers();
+        const p = await phone();
+        p.window.emitNavigationState({ ...NAV, url: NEXT });
+        await p.delivered();
+        p.send({ kind: "wheel", x: 20, y: 10, deltaX: 0, deltaY: 40 });
+        await vi.advanceTimersByTimeAsync(1_000);
+        await p.delivered();
+        // the document's bound has run out: a press now is refused at once — never another second's wait
+        const dropped = p.result.runtime.stats.inputDropped;
+        p.pointer("down", 20);
+        await p.delivered();
+        expect(p.heard).toEqual([]);
+        expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
+        // the page speaks at last: the next press goes at its scale
+        p.window.say(0.5);
+        p.pointer("down", 20);
+        await p.delivered();
+        expect(p.heard).toEqual(["touchStart"]);
+        expect(p.window.touchInputs.at(-1)).toEqual({
+          type: "touchStart",
+          touchPoints: [{ x: 40, y: 20, id: 0 }],
+        });
+        p.result.runtime.dispose();
+      });
     });
   });
 });

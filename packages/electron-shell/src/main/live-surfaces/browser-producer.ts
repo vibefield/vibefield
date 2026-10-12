@@ -1064,6 +1064,10 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #windowDensity: number | undefined;
   /** PT-5c (ruling 1): a `mobile` page's visual-viewport scale as its page last SAID it, and the document it said it for. */
   #pageScale: { readonly value: number; readonly document: number } | undefined;
+  /** PT-5c2 (F3): the document whose bound on its first word has RUN OUT — its pointed events are refused at once until a
+   * word of it comes (see `pointScale`: a scale said for the document is read first, so the word lifts it; and documents
+   * are counted up for the surface's life, so no later document is ever this one). */
+  #silent: number | undefined;
   /** PT-5c (ruling 1): presses and moves waiting for their document's first word (see `pointScale`) — and (R1) the
    * attachment each came through, whose going ends its wait. */
   readonly #scaleWaiters = new Set<{
@@ -2064,11 +2068,17 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * when the window goes (its turn ends with it) — and (R1) at a rest, and at the going of the attachment it came through
    * (refused, counted: never sent to a page at rest, nor a gesture begun after its attachment went) — and (R2) after
    * `SCALE_WORD_MS`, refused, counted: the keys and text behind it are never held for good by a page that never speaks.
+   * PT-5c2 (F3) — A DOCUMENT'S BOUND RUNS OUT ONCE: once it has, every later pointed event of THAT document is refused at
+   * once, counted, until a word of it comes — a word lifts it, and what follows goes at the scale said. (Before: each
+   * waited its own second — a trackpad's wheel at 60 a second held the keys behind it a second an event, and a word
+   * that came late let the backlog go in a burst.)
    */
   private pointScale(document: number, by: string | undefined): Promise<number> {
     if (!this.mobile()) return Promise.resolve(1);
     const said = this.#pageScale;
     if (said !== undefined && said.document === document) return Promise.resolve(said.value);
+    if (this.#silent === document)
+      return Promise.reject(new Error("Browser page said no scale within its bound"));
     return new Promise<number>((heard, gone) => {
       const waiter = {
         document,
@@ -2076,8 +2086,10 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         heard,
         gone,
         timer: setTimeout(() => {
-          if (this.#scaleWaiters.delete(waiter))
-            gone(new Error("Browser page said no scale within its bound"));
+          if (!this.#scaleWaiters.delete(waiter)) return;
+          // (F3: this document's bound has run out — its events after this one are not waited for)
+          this.#silent = document;
+          gone(new Error("Browser page said no scale within its bound"));
         }, SCALE_WORD_MS),
       };
       this.#scaleWaiters.add(waiter);
