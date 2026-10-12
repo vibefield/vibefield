@@ -3757,6 +3757,68 @@ describe("BrowserLiveSurfaceRuntime", () => {
       return { back, move, revision };
     };
 
+    it("ruling 1 — a press waits for ITS document's word: a word the window tags with ANOTHER document (its count moved, the commit not yet heard — an order the probe never saw, every word came after its document's `did-navigate`) releases nothing; the commit then refuses the press, and the next document's events go at that word", async () => {
+      const p = await phone();
+      // a new document whose page has not said its scale: the press waits
+      p.window.emitNavigationState({ ...NAV, url: NEXT });
+      const dropped = p.result.runtime.stats.inputDropped;
+      p.pointer("down", 20);
+      await p.delivered();
+      expect(p.heard).toEqual([]);
+      p.window.documents += 1;
+      p.window.say(0.5);
+      await p.delivered();
+      expect(p.heard).toEqual([]);
+      p.window.emitNavigationState({ ...NAV, url: `${NEXT}/2`, document: p.window.documents });
+      await p.delivered();
+      expect(p.heard).toEqual([]);
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
+      p.pointer("down", 20);
+      await p.delivered();
+      expect(p.window.touchInputs.at(-1)).toEqual({
+        type: "touchStart",
+        touchPoints: [{ x: 40, y: 20, id: 0 }],
+      });
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 1 — a press whose word came in the SAME turn as another document's commit (the word, then the commit, before the press's turn goes on) is refused: the document it was sent for went before it could be sent", async () => {
+      const p = await phone();
+      p.window.emitNavigationState({ ...NAV, url: NEXT });
+      const dropped = p.result.runtime.stats.inputDropped;
+      p.pointer("down", 20);
+      await p.delivered();
+      expect(p.heard).toEqual([]);
+      p.window.say(1);
+      p.window.emitNavigationState({ ...NAV, url: `${NEXT}/2` });
+      await p.delivered();
+      expect(p.heard).toEqual([]);
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 1 — a page RECONNECTED (its renderer gone, a window made anew) follows its NEW window's word: a press there goes at the scale the new page says", async () => {
+      vi.useFakeTimers();
+      const p = await phone();
+      p.window.crash();
+      await vi.advanceTimersByTimeAsync(0);
+      const second = p.result.native.windows[1];
+      if (second === undefined) throw new Error("no window was made again");
+      await birthEnds();
+      second.emitNavigationState({ ...NAV });
+      second.say(0.5);
+      second.paint(sharedPaint(1206, 2622).paint);
+      await vi.advanceTimersByTimeAsync(0);
+      await delivered();
+      expect(p.result.runtime.summary.state).toBe("live");
+      p.pointer("down", 20, p.result.runtime.summary.geometry?.revision ?? 0);
+      await delivered();
+      expect(second.touchInputs).toEqual([
+        { type: "touchStart", touchPoints: [{ x: 40, y: 20, id: 0 }] },
+      ]);
+      p.result.runtime.dispose();
+    });
+
     it("ruling 2 (P3) — a FINGER down when the attachment that sent its press GOES is CANCELLED: the page hears its touchCancel — never a touchEnd, which would be a tap — nothing is down, and the attachment that comes back hovers", async () => {
       const p = await phone();
       p.pointer("down", 20);
@@ -3849,6 +3911,34 @@ describe("BrowserLiveSurfaceRuntime", () => {
       await p.delivered();
       // the press takes its turn — then the release of what it set down
       expect(p.heard).toEqual(["touchStart", "touchEnd", "touchStart", "touchCancel"]);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 2 — a BUTTON pressed through ANOTHER attachment stands when this one goes (a second window shows the pane): nothing is released; the other's own release lifts it, at its own point", async () => {
+      const p = await laptop();
+      const other = attach(p.result.runtime, "attachment_browser_00000002");
+      other.attachment.setDemand(demand(2, "live"));
+      await delivered();
+      const r = p.result.runtime.summary.geometry?.revision ?? 0;
+      const pointer = (action: "down" | "up"): void =>
+        other.attachment.dispatchInput?.(
+          { kind: "pointer", action, x: 12, y: 8, button: "left", clickCount: 1 },
+          r,
+        );
+      pointer("down");
+      await delivered();
+      expect(p.window.mouseInputs.map((m) => m.type)).toEqual(["mousePressed"]);
+      p.renderer.attachment.dispose();
+      await delivered();
+      expect(p.window.mouseInputs.map((m) => m.type)).toEqual(["mousePressed"]);
+      pointer("up");
+      await delivered();
+      expect(p.window.mouseInputs.at(-1)).toMatchObject({
+        type: "mouseReleased",
+        x: 12,
+        y: 8,
+        button: "left",
+      });
       p.result.runtime.dispose();
     });
 
@@ -4207,6 +4297,75 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(result.native.windows).toHaveLength(2);
       expect(result.runtime.summary.state).toBe("starting");
       result.runtime.dispose();
+    });
+
+    it("ruling 4 — the birth's layout IS the geometry's: a demand moved during the birth, its actuation not yet due — the window is laid at the new layout, and every frame's geometry says it", async () => {
+      vi.useFakeTimers();
+      const result = setup({
+        source: { ...source(), deviceScaleFactor: 2, emulation: LAPTOP },
+        rasterStabilizationMs: 60_000,
+      });
+      let told: () => void = () => {};
+      const make = result.native.createWindow.bind(result.native);
+      result.native.createWindow = (options) => {
+        const made = make(options) as FakeBrowserWindow;
+        const emulate = made.setEmulation.bind(made);
+        made.setEmulation = async (emulation) => {
+          await new Promise<void>((resolve) => {
+            told = resolve;
+          });
+          return emulate(emulation);
+        };
+        return made;
+      };
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(
+        demand(1, "live", 30, { width: 640, height: 400 }, { width: 320, height: 200 }),
+      );
+      const window = result.native.windows[0];
+      if (window === undefined) throw new Error("no window yet");
+      await vi.advanceTimersByTimeAsync(0);
+      renderer.attachment.setDemand(
+        demand(2, "live", 30, { width: 1000, height: 800 }, { width: 500, height: 400 }),
+      );
+      await vi.advanceTimersByTimeAsync(100);
+      told();
+      await vi.advanceTimersByTimeAsync(0);
+      await delivered();
+      expect(window.rasterViewports).toEqual([{ width: 500, height: 400 }]);
+      window.emitNavigationState({ ...NAV });
+      window.paint(sharedPaint(1000, 800).paint);
+      await delivered();
+      expect(result.runtime.summary.geometry?.logicalSize).toEqual({ width: 500, height: 400 });
+      result.runtime.dispose();
+    });
+
+    it("ruling 1 — a mouse press ANSWERED after another document committed is FORGOTTEN: nothing is set down — the hand's release of it sends nothing", async () => {
+      const p = await laptop();
+      const r = p.result.runtime.summary.geometry?.revision ?? 0;
+      let answer: () => void = () => {};
+      const mouse = p.window.dispatchMouse.bind(p.window);
+      p.window.dispatchMouse = (input) => {
+        if (input.type !== "mousePressed") return mouse(input);
+        p.window.mouseInputs.push(input);
+        return new Promise<void>((resolve) => {
+          answer = resolve;
+        });
+      };
+      const pointer = (action: "down" | "up"): void =>
+        p.renderer.attachment.dispatchInput?.(
+          { kind: "pointer", action, x: 10, y: 10, button: "left", clickCount: 1 },
+          r,
+        );
+      pointer("down");
+      await delivered();
+      p.window.emitNavigationState({ ...NAV, url: NEXT });
+      answer();
+      await delivered();
+      pointer("up");
+      await delivered();
+      expect(p.window.mouseInputs.map((m) => m.type)).toEqual(["mousePressed"]);
+      p.result.runtime.dispose();
     });
 
     it("ruling 2 (my T21) — a touchStart ANSWERED after its window was REPLACED sets nothing down for the window that replaced it: the new window's first move is a hover", async () => {

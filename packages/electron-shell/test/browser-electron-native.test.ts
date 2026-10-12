@@ -310,4 +310,34 @@ describe("PT-5c (ruling 1) — the page SAYS its scale; the hand's commands neve
       r.methods().indexOf("Emulation.setUserAgentOverride"),
     );
   });
+
+  it("ONE session for both queues: the hand's first command waits for the page's session and its guards, as the device's does — no input reaches a page before its guards are on, and the guards are put on once", async () => {
+    const r = recording(["Page.enable"]);
+    const laid = r.native.setBackingRaster(
+      { width: 640, height: 360 },
+      { width: 320, height: 180 },
+      2,
+      false,
+    );
+    await turns();
+    // the device's command has attached the session; its guards are on their way
+    expect(r.methods()).toEqual(["Page.enable"]);
+    const pressed = r.native.dispatchMouse({
+      type: "mousePressed",
+      x: 1,
+      y: 1,
+      button: "left",
+      clickCount: 1,
+    });
+    await turns();
+    expect(r.methods()).toEqual(["Page.enable"]);
+    r.release("Page.enable");
+    await pressed;
+    await laid;
+    const methods = r.methods();
+    expect(methods.filter((m) => m === "Page.enable")).toHaveLength(1);
+    expect(methods.indexOf("Target.setAutoAttach")).toBeLessThan(
+      methods.indexOf("Input.dispatchMouseEvent"),
+    );
+  });
 });

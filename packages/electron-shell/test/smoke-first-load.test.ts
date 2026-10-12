@@ -487,6 +487,9 @@ describe("a page's first load, in the product — what the rows read by", () => 
       "TAPS-PENDING: the link's navigation never waited at the gate — the row proved nothing",
       "TAPS-PENDING: the page the gate let through never stood (starting) — the row proved nothing",
     ]);
+    expect(judgePending({ ...seen, standing: null }, false)).toEqual([
+      "TAPS-PENDING: the page that stood said nothing",
+    ]);
     const desk: PendingSeen = {
       ...seen,
       told: true,
