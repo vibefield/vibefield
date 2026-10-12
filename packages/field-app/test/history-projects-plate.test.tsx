@@ -12,7 +12,10 @@
  * holds by its mark and name. H4's acts are drawn where they act — a `···`
  * of pin and hide in ②'s head and at each project's row end, "Not part of
  * this project" on ③'s folder rows, rename on ②'s name — and a rename asks
- * the fixture fieldd, whose refusal the room says under the name.
+ * the fixture fieldd, whose refusal the room says under the name. PJ-6 —
+ * New agent's pages over the same fixture fieldd: the project's recipe in the
+ * picker's words, Another model… turning the open rows to Work's picker, and
+ * This Mac's read that wants a sign-in.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -254,4 +257,70 @@ describe("History by project — the catalog's plate (PJ-4)", () => {
     expect([...classes(bare)].filter((name) => room.has(name))).toEqual([]);
     expect(room.has("ah-section")).toBe(true);
   });
+});
+
+describe("History's New agent — the catalog's plate (PJ-6)", () => {
+  const rows = (): HTMLButtonElement[] => [
+    ...(host?.querySelectorAll<HTMLButtonElement>(".ah-menu [role=menu] .ah-menu__item") ?? []),
+  ];
+  const another = (profile: string) => () =>
+    host?.querySelector<HTMLButtonElement>(
+      `.ah-menu__row[data-key$="\u001f${profile}"] .ah-menu__act[data-act="another"]`,
+    ) ?? null;
+
+  it("opens on the project's recipe in its picker's words, turns to Work's picker in place, and says why This Mac's cannot be read", async () => {
+    await plate();
+    const start = await until(
+      () =>
+        host?.querySelector<HTMLButtonElement>(
+          '.ah-hostact[data-place="head"][data-act="new-agent"]',
+        ),
+      "New agent",
+    );
+    await act(async () => {
+      start.click();
+    });
+    const recipe = await until(
+      () =>
+        rows().find(
+          (row) =>
+            row.getAttribute("data-key") === "recipe" &&
+            (row.textContent ?? "").includes("· Deep · high — Work"),
+        ),
+      "the recipe in the picker's words",
+    );
+    expect(recipe.getAttribute("aria-checked")).toBe("true");
+    expect(recipe.textContent).toContain("last used");
+
+    const work = await until(another("work"), "Another model… under Work");
+    await act(async () => {
+      work.click();
+    });
+    await until(
+      () => rows().find((row) => row.getAttribute("data-key") === "model\u001fdeep"),
+      "Work's picker",
+    );
+    expect(start.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      rows()
+        .filter((row) => (row.getAttribute("data-key") ?? "").startsWith("model"))
+        .map((row) => row.querySelector(".ah-menu__label")?.textContent),
+    ).toEqual(["Deep", "Quick", "Plain"]);
+    expect(rows().at(-1)?.textContent).toBe("As of 4 min ago");
+
+    const back = rows().find((row) => row.getAttribute("data-key") === "back");
+    await act(async () => {
+      back?.click();
+    });
+    const native = await until(another("native"), "Another model… under This Mac");
+    await act(async () => {
+      native.click();
+    });
+    const signIn = await until(
+      () => rows().find((row) => row.getAttribute("data-key") === "failed"),
+      "This Mac's picker",
+    );
+    expect(signIn.textContent).toBe("Sign in to see models");
+    expect(signIn.disabled).toBe(true);
+  }, 30_000);
 });

@@ -1,7 +1,9 @@
 import type { RoomSelection, RoomTarget } from "@rosetta/room";
 import {
+  type AgentProfileSet,
   type AgentProviderSummary,
   AgentProvidersResult,
+  AgentsProfileSetsListResult,
   type DeviceInfo,
   DeviceListResult,
   ProjectGetResult,
@@ -47,6 +49,7 @@ import {
 } from "./host-inputs";
 import { deviceOf, EMPTY_HOST_MODEL, type HistoryHostModel, hostModelOf } from "./host-model";
 import { readLiveRun } from "./jump";
+import { launchActs } from "./launch-acts";
 import { useHistoryOpenAt } from "./open-at";
 import { type ResumeReading, readResume } from "./resume";
 import { HistoryRoomMount } from "./room-chunk";
@@ -74,9 +77,12 @@ import { productHistoryPorts } from "./window-ports";
 // catalog port's listing), each desktop's name and OS (`device.list`), what
 // runs here now (one plain `agent.list` — P3's reading, asked per listing and
 // only while History shows: PF6) and the agents this desktop offers
-// (`agent.providers`). The room's own acts — a row's Resume or Jump to, ④'s,
-// New agent, the project's acts — are this controller's (`acts.ts`), and
-// what each came to is said on the line (`sayOnHistoryLine`).
+// (`agent.providers`) with the Agent Profiles they run in
+// (`agents.profileSets.list`, PJ-6). The room's own acts — a row's Resume or
+// Jump to, ④'s, New agent, the project's acts — are this controller's
+// (`acts.ts`), and what each came to is said on the line (`sayOnHistoryLine`).
+// PJ-6 — New agent's pages (`launch.ts`) ask each agent's own picker of fieldd
+// (`agent.models`) as a page needs it, and turn in place (`turn-page.ts`).
 
 function log() {
   return getRendererLogger().child({ component: "history" });
@@ -108,11 +114,12 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
   modelRef.current = model;
   const roster = useRef<readonly DeviceInfo[]>([]);
   const providers = useRef<readonly AgentProviderSummary[]>([]);
+  const profileSets = useRef<readonly AgentProfileSet[]>([]);
   const activeRef = useRef(active);
   activeRef.current = active;
   const gather = useCallback(async () => {
     if (ports.catalog.listing() === null) return;
-    const [devices, offered, runs] = await Promise.allSettled([
+    const [devices, offered, runs, sets] = await Promise.allSettled([
       fieldd.request("device.list", {}).then((answer) => DeviceListResult.parse(answer).devices),
       fieldd
         .request("agent.providers", {})
@@ -124,11 +131,16 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
             : undefined;
         return Array.isArray(sessions) ? (sessions as unknown[]) : [];
       }),
+      fieldd
+        .request("agents.profileSets.list", {})
+        .then((answer) => AgentsProfileSetsListResult.parse(answer).sets),
     ]);
     // a door that could not answer keeps what it said last (a desktop's name,
-    // the agents offered); what runs now is read afresh or not at all
+    // the agents offered, their profiles); what runs now is read afresh or
+    // not at all
     if (devices.status === "fulfilled") roster.current = devices.value;
     if (offered.status === "fulfilled") providers.current = offered.value;
+    if (sets.status === "fulfilled") profileSets.current = sets.value;
     const latest = ports.catalog.listing();
     if (latest === null) return;
     setModel(
@@ -137,6 +149,7 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
         roster.current,
         runs.status === "fulfilled" ? runs.value : [],
         providers.current,
+        profileSets.current,
       ),
     );
   }, [fieldd, ports]);
@@ -277,6 +290,8 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
   /** the listing each project's suggestions were last asked in, so a shown
    * project asks `project.get` once per listing */
   const asked = useRef(new Map<string, HistoryHostModel>());
+  /** PJ-6 — New agent's pages and the pickers they show (`launch-acts.ts`) */
+  const launch = useMemo(() => launchActs(fieldd, setHostState), [fieldd]);
   const showSuggestions = useCallback(
     (project: string) => {
       if (asked.current.get(project) === modelRef.current) return;
@@ -347,9 +362,14 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
         if (outcome.state === "refused") throw new Error(outcome.reason);
         sayOnHistoryLine(`Renamed to ${name}`);
       },
-      shown: (project) => showSuggestions(project),
+      shown: (project) => {
+        showSuggestions(project);
+        // PJ-6 — the recipe row says its model and effort in the picker's words
+        launch.recipeShown(modelRef.current.projects.get(project));
+      },
+      page: (next) => launch.page(next),
     }),
-    [deps, fieldd, noteRun, showSuggestions, failed],
+    [deps, fieldd, noteRun, showSuggestions, failed, launch],
   );
   const inputs = useMemo(() => historyHostInputs(model, hostState, acts), [model, hostState, acts]);
 

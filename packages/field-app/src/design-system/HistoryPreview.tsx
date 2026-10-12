@@ -14,6 +14,7 @@ import {
   NO_HOST_STATE,
 } from "../history/host-inputs";
 import { EMPTY_HOST_MODEL, hostModelOf } from "../history/host-model";
+import { launchActs } from "../history/launch-acts";
 import { FIXTURE_LINE_DOOR, fixtureClipboardStore, fixtureStillUrl } from "./ComposerLinePreview";
 import {
   FIXTURE_CHOSEN_SESSION,
@@ -62,7 +63,9 @@ function HistoryStatePreview({ state }: { state: HistoryState }): ReactElement {
  * in the product, and a rename asks the fixture fieldd through the shipping
  * intent — which refuses, so the plate shows how a refusal reads under the
  * name; an act that would ask fieldd otherwise (Resume, Jump to, New agent,
- * pin, hide, split) does nothing — a catalog acts on no one. */
+ * pin, hide, split) does nothing — a catalog acts on no one. New agent's pages
+ * turn as the product's do (PJ-6, the shipping `launchActs`), its pickers
+ * answered by the fixture fieldd: Work's read, This Mac's wanting a sign-in. */
 function HistoryProjectsPreview(): ReactElement {
   const [fixture] = useState(() => historyProjectsFixture());
   const [openAt] = useState<RoomTarget>({ sessionId: FIXTURE_CHOSEN_SESSION });
@@ -72,10 +75,17 @@ function HistoryProjectsPreview(): ReactElement {
     () =>
       listing === null
         ? EMPTY_HOST_MODEL
-        : hostModelOf(listing, fixture.roster, fixture.runs, fixture.providers),
+        : hostModelOf(
+            listing,
+            fixture.roster,
+            fixture.runs,
+            fixture.providers,
+            fixture.profileSets,
+          ),
     [listing, fixture],
   );
   const [state, setState] = useState<HistoryHostState>({ ...NO_HOST_STATE, home: "/Users/demo" });
+  const launch = useMemo(() => launchActs(fixture.client, setState), [fixture]);
   const acts = useMemo<HistoryHostActs>(
     () => ({
       setDesktop: (desktop) => setState((now) => ({ ...now, desktop })),
@@ -90,9 +100,10 @@ function HistoryProjectsPreview(): ReactElement {
         const outcome = await projectIntent(fixture.client, { key, op: "rename", name });
         if (outcome.state === "refused") throw new Error(outcome.reason);
       },
-      shown: () => undefined,
+      shown: (project) => launch.recipeShown(model.projects.get(project)),
+      page: (next) => launch.page(next),
     }),
-    [fixture],
+    [fixture, launch, model],
   );
   const inputs = useMemo(() => historyHostInputs(model, state, acts), [model, state, acts]);
   return (

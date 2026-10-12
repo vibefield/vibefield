@@ -1,4 +1,9 @@
-import { AgentSpawnResult, type ProjectIntentParams } from "@vibefield/contracts";
+import {
+  type AgentModelSelection,
+  AgentModelsResult,
+  AgentSpawnResult,
+  type ProjectIntentParams,
+} from "@vibefield/contracts";
 import type { KeyedCallClient } from "../forwarded-call";
 import { requestResolvingOutcome } from "../forwarded-call";
 import {
@@ -188,20 +193,22 @@ export type NewAgentOutcome =
   | { readonly state: "started"; readonly where: string }
   | { readonly state: "refused"; readonly reason: string };
 
-/** What New agent starts (H6, PJ-L8 until PJ-6's descriptor): the agent (the
- * catalog's id, chosen from `agent.providers` — never a literal, R23), the
- * persona it runs under, and the folder ③ shows. No model and no effort:
- * `agent.spawn` takes neither yet (PJ-6), and the menu says so. */
+/** What New agent starts (H6, PJ-L8; PJ-6): the agent (the catalog's id,
+ * chosen from `agent.providers` — never a literal, R23), the Agent Profile it
+ * runs under (Q2: never a persona), the model and its controls when one was
+ * chosen (the agent's own ids, opaque — `launch.ts`), and the folder ③ shows. */
 export interface NewAgentAsk {
   readonly provider: string;
-  readonly profileId?: string | undefined;
+  readonly profileSet?: string | undefined;
+  readonly modelSelection?: AgentModelSelection | undefined;
   readonly cwd: string;
   /** how the folder is said in the note */
   readonly where: string;
 }
 
-/** `agent.spawn {provider, cwd, profileId}` into the chosen place (PJ-L5: a
- * place acts — the project never does), then the pane shown in Godview. */
+/** `agent.spawn {provider, cwd, profileSet, modelSelection}` into the chosen
+ * place (PJ-L5: a place acts — the project never does), then the pane shown in
+ * Godview. fieldd writes the project's recipe at the confirmed birth. */
 export async function newAgent(deps: HistoryActsDeps, ask: NewAgentAsk): Promise<NewAgentOutcome> {
   let answered: unknown;
   try {
@@ -235,13 +242,30 @@ export async function newAgent(deps: HistoryActsDeps, ask: NewAgentAsk): Promise
   }
 }
 
-/** `agent.spawn`'s params for an ask: exactly the three things it takes. */
+/** `agent.spawn`'s params for an ask: exactly what it was asked to start. */
 export function spawnParamsOf(ask: NewAgentAsk): Record<string, unknown> {
   return {
     provider: ask.provider,
     cwd: ask.cwd,
-    ...(ask.profileId !== undefined ? { profileId: ask.profileId } : {}),
+    ...(ask.profileSet !== undefined ? { profileSet: ask.profileSet } : {}),
+    ...(ask.modelSelection !== undefined ? { modelSelection: ask.modelSelection } : {}),
   };
+}
+
+/** PJ-6 — one agent's own picker under one Agent Profile, as fieldd holds it
+ * (`agent.models`): answered at once from fieldd's last read, a read running
+ * behind it when that is old. A door that could not be asked rejects. */
+export async function readModels(
+  client: Pick<KeyedCallClient, "request">,
+  provider: string,
+  profileSet: string,
+): Promise<AgentModelsResult> {
+  return AgentModelsResult.parse(
+    await client.request("agent.models", {
+      provider,
+      ...(profileSet !== "" ? { profileSet } : {}),
+    }),
+  );
 }
 
 /** The words a New agent is said in. */

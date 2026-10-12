@@ -2268,13 +2268,39 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     - **New agent** is ②'s head's one primary — the `start` glyph on the room's primary fill — and
       opens the room's rows: **Starts in** names the folder ③ shows (its mark, its path, its
       branch, "1 agent is already working there"; or, dimmed, why it cannot start there: another
-      desktop's folder waits for routed acts, DS-2), then **Agent** — each agent this desktop
-      offers, one row per persona (its name at the row's end, "its own" for the agent's own
-      sign-in), the most recently used first — then **Model and effort**, one dimmed row: "Model
-      and effort can't be set from here yet (PJ-6)". A row starts the agent in that folder and the
-      window moves to Godview to show its pane; the note says **"Started in ~/…"**, or **"Could
-      not start — …"** in fieldd's words — or, for a run that started and no pane showed, why
-      (above, "An act never ends in silence").
+      desktop's folder waits for routed acts, DS-2), then the ways to start there (PJ-6, built
+      2026-10-12; Q7 "menu first" — the full launch of the record's PJ-D7 waits for the room):
+      - **Last used** — the project's recipe (PJ-D13, written by fieldd at a launch's confirmed
+        birth): the agent, the model, its effort, then the Agent Profile after a dash —
+        **"Claude Code · Opus · high — Work"** — checked, "last used" at its end; "its own" for a
+        launch that named no model. The words are the agent catalog's label and the agent's own
+        picker's (`agent.models`); until that picker is read, its ids as they are. A recipe whose
+        agent or profile is not here any more is dimmed and says why. None until a launch.
+      - **Agent** — each agent this desktop offers under each **Agent Profile** it can run in
+        (Q2: This Mac for every agent, a profile holding its sign-in for the rest — the profiles
+        Godview's launcher offers, never personas), at the agent's own model and effort: the
+        agent's label, the profile's name at the row's end, the most recently used agent first.
+        Each row carries its own act beside it, **Another model…** (`chevron`, quiet until the
+        row is under the pointer, → reaches it).
+      - **Another model…** turns the rows to that agent's and profile's **models**: "All agents"
+        first (the `chevron` turned 180), then the agent's own picker as fieldd last read it —
+        each model's label, its description under it, and at its end the effort this project
+        last chose for it; the recipe's model checked. While the first read runs one dimmed row
+        says **"Reading Claude Code's models…"**; a picker that could not be read says why,
+        dimmed — **"Sign in to see models"** for a sign-in, else the agent's own words — never an
+        empty list; the foot says the picker's age, **"As of 3 min ago"** (and "· reading again"
+        while a read runs behind it). Past nine models a filter heads them.
+      - A model with no control starts at once; one with controls turns the rows to the first
+        control's values, under its label ("Opus — Effort"): "Models" first (turned back), **its
+        own** (the agent's own effort), then each value, the one this project last chose for the
+        model checked and the agent's default saying so. A value starts it (or turns to the next
+        control). The rows turn **in place**: the room closes its rows on a choice and VibeField
+        opens them again on the next page — an interim until the room pages its own rows (a room
+        ask). Rows closed without a choice (Escape, a press outside) open on the first page again.
+      A row starts the agent in that folder and the window moves to Godview to show its pane; the
+      note says **"Started in ~/…"**, or **"Could not start — …"** in fieldd's words ("Claude Code
+      was not started at the chosen model: …" for a model it no longer offers) — or, for a run
+      that started and no pane showed, why (above, "An act never ends in silence").
     - **③'s head is the folder list** (PJ-D22): every folder of the project under its desktop's
       mark and name ("here", "asleep"), a linked worktree one step in, the shown one checked; past
       nine a filter heads it. A folder on another desktop is never opened here: ③ says **"Files

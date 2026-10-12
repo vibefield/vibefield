@@ -2,6 +2,8 @@ import type { CatalogPort, CatalogStatus, HostPort, RoomPorts } from "@rosetta/r
 import { createDemoPorts, createRoomDemo, type RoomDemo } from "@rosetta/room/fixtures";
 import {
   AGENT_CATALOG_READERS,
+  type AgentModelsResult,
+  type AgentProfileSet,
   type AgentProviderSummary,
   type DeviceInfo,
   type IndexCatalogSource,
@@ -104,6 +106,71 @@ const FIXTURE_LAPTOP = "01J9ZM0PQ7W3E6R8T2Y4U1I5O9";
 
 const keyOf = (name: string): string => `p1:demo-${name}`;
 
+/** The agent the demo's first runtime stands for, read through the catalog by
+ * its rosetta kind — never an agent id written here (R23b, AR-L1). */
+function firstAgent(demo: RoomDemo): string | undefined {
+  const kind = demo.meta.runtimes[0]?.kind;
+  return kind === undefined ? undefined : AGENT_CATALOG_READERS.idForKind(kind);
+}
+
+/** PJ-6 — the Agent Profile beside This Mac that holds the first agent's
+ * sign-in, so New agent's rows show an agent under two profiles. */
+const FIXTURE_WORK = "work";
+
+/** PJ-6 — the first agent's own picker under Work, as `agent.models` answers
+ * it: three made-up models (the plate names no vendor's), two with an effort
+ * control — and under This Mac a read that wants a sign-in, so the plate shows
+ * both what a picker says and why one is not there. */
+function fixtureModels(demo: RoomDemo, provider: string, profileSet: string): AgentModelsResult {
+  if (profileSet !== FIXTURE_WORK)
+    return {
+      provider,
+      profileSet,
+      failure: {
+        status: "auth-required",
+        code: "auth-required",
+        message: "Sign in to discover models.",
+        at: new Date(demo.now - 60_000).toISOString(),
+      },
+      refreshing: false,
+    };
+  const effort = (values: string[], defaultValue?: string) => ({
+    id: "effort",
+    label: "Effort",
+    role: "effort",
+    values: values.map((id) => ({ id, label: id })),
+    ...(defaultValue !== undefined ? { defaultValue } : {}),
+  });
+  return {
+    provider,
+    profileSet,
+    catalog: {
+      provider,
+      cwd: "/Users/demo",
+      observedAt: new Date(demo.now - 4 * 60_000).toISOString(),
+      source: { kind: "native-protocol", freshness: "live" },
+      completeness: "complete",
+      customModels: false,
+      models: [
+        {
+          id: "deep",
+          label: "Deep",
+          description: "For the long, hard ones",
+          controls: [effort(["low", "medium", "high", "max"], "medium")],
+        },
+        {
+          id: "quick",
+          label: "Quick",
+          description: "For the small things",
+          controls: [effort(["low", "high"])],
+        },
+        { id: "plain", label: "Plain", description: "No settings of its own", controls: [] },
+      ],
+    },
+    refreshing: false,
+  };
+}
+
 /** fieldd's projects over the demo's folders, as `project.list` answers a
  * window: one per demo folder (the first also holds a checkout on the asleep
  * laptop — a place the room is never handed), and this desktop's Home and
@@ -120,6 +187,7 @@ function fixtureProjects(demo: RoomDemo): ProjectSummary[] {
   });
   const counted = (projectId: string) =>
     demo.meta.sessions.filter((row) => row.project_id === projectId).length;
+  const agent = firstAgent(demo);
   const repos = demo.meta.projects.map((row, index): ProjectSummary => {
     const here = place(
       FIXTURE_DESKTOP,
@@ -149,6 +217,18 @@ function fixtureProjects(demo: RoomDemo): ProjectSummary[] {
       ],
       asOf: {},
       groupingVersion: 2,
+      // PJ-6 — the first project's last launch: Deep at high, under Work
+      ...(index === 0 && agent !== undefined
+        ? {
+            recipe: {
+              provider: agent,
+              profileSet: FIXTURE_WORK,
+              selection: { modelId: "deep" },
+              controlsByModel: { deep: { effort: "high" }, quick: { effort: "low" } },
+              at: demo.now - 3_600_000,
+            },
+          }
+        : {}),
     };
   });
   const bucket = (
@@ -304,6 +384,12 @@ export function historyProjectsClient(demo: RoomDemo): HistoryDoorClient {
           return { rows: fixtureSessions(demo), sources };
         case "index.threads":
           return { rows: [] };
+        case "agent.models":
+          return fixtureModels(
+            demo,
+            String(params["provider"]),
+            typeof params["profileSet"] === "string" ? params["profileSet"] : "",
+          );
         case "project.intent":
           // H4's acts reach no project from a catalog: the refusal's look,
           // in words that say so (the room says them under its name field)
@@ -386,6 +472,8 @@ export interface HistoryProjectsFixture {
   readonly roster: readonly DeviceInfo[];
   readonly runs: readonly unknown[];
   readonly providers: readonly AgentProviderSummary[];
+  /** PJ-6 — This Mac and Work, Work holding the first agent's sign-in */
+  readonly profileSets: readonly AgentProfileSet[];
 }
 
 export function historyProjectsFixture(now: number = Date.now()): HistoryProjectsFixture {
@@ -417,8 +505,49 @@ export function historyProjectsFixture(now: number = Date.now()): HistoryProject
     const id = AGENT_CATALOG_READERS.idForKind(kind);
     const entry = id === undefined ? undefined : AGENT_CATALOG_READERS.entry(id);
     if (id === undefined || entry === undefined) return [];
-    return [{ id, label: entry.label, available: true, resumable: true, personas: [] }];
+    return [
+      {
+        id,
+        label: entry.label,
+        available: true,
+        resumable: true,
+        personas: [],
+        offers: { spawn: true, personas: true },
+      },
+    ];
   });
+  const agent = firstAgent(demo);
+  const created = new Date(now - 30 * 86_400_000).toISOString();
+  const profileSets: AgentProfileSet[] = [
+    {
+      id: "native",
+      kind: "native",
+      label: "This Mac",
+      default: false,
+      createdAt: created,
+      personas: [],
+    },
+    {
+      id: FIXTURE_WORK,
+      kind: "managed",
+      label: "Work",
+      default: true,
+      createdAt: created,
+      personas:
+        agent === undefined
+          ? []
+          : [
+              {
+                profileId: `${agent}:work`,
+                provider: agent,
+                label: "Work",
+                kind: "managed",
+                createdAt: created,
+                set: FIXTURE_WORK,
+              },
+            ],
+    },
+  ];
   const liveKind = demo.meta.runtimes.find((runtime) => runtime.id === live?.runtime_id)?.kind;
   const liveProvider =
     liveKind === undefined ? undefined : AGENT_CATALOG_READERS.idForKind(liveKind);
@@ -441,7 +570,7 @@ export function historyProjectsFixture(now: number = Date.now()): HistoryProject
             stateChangedAt: new Date(now - 60_000).toISOString(),
           },
         ];
-  return { client, ports, catalog, roster, runs, providers };
+  return { client, ports, catalog, roster, runs, providers, profileSets };
 }
 
 /** The room's ports for one catalog state, over the package's demo. */
