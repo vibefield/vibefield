@@ -119,6 +119,37 @@ export const FRAME_WORDS_SCRIPT = `(() => { const say = globalThis[${JSON.string
 /** PT-5d (M6.1): a frame's own viewport, in its own CSS px — evaluated in its session's local root. */
 const FRAME_SIZE = 'innerWidth + "," + innerHeight';
 
+/** PT-4, PT-5d (M6.5b): what a target is told of its device — the same three commands for the page and each of its frames. */
+function emulationCommands(
+  emulation: BrowserSurfaceNativeEmulation,
+): readonly (readonly [string, Record<string, unknown>])[] {
+  return [
+    [
+      "Emulation.setUserAgentOverride",
+      {
+        userAgent: emulation.userAgent,
+        platform: emulation.navigatorPlatform,
+        userAgentMetadata: emulation.metadata,
+      },
+    ],
+    [
+      "Emulation.setTouchEmulationEnabled",
+      emulation.touchPoints > 0
+        ? { enabled: true, maxTouchPoints: emulation.touchPoints }
+        : { enabled: false },
+    ],
+    [
+      "Emulation.setEmulatedMedia",
+      {
+        features:
+          emulation.colorScheme === undefined
+            ? []
+            : [{ name: "prefers-color-scheme", value: emulation.colorScheme }],
+      },
+    ],
+  ];
+}
+
 /** PT-5d (M7 H3): a sight as the read answers it — `{ visible, covers }`, each part four fractions — or none. */
 function sightOf(value: unknown): FrameSight | undefined {
   const part = (v: unknown): v is FrameVisible =>
@@ -196,6 +227,10 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   readonly #hungListeners = new Set<(frame?: string) => void>();
   /** PT-5d (M7 H2): key-like events waiting for a word of where the focus is */
   readonly #focusWaiters = new Set<() => void>();
+  /** PT-5d (M6.5b): the device the page was last told — its frames are told the same */
+  #emulation: BrowserSurfaceNativeEmulation | undefined;
+  /** PT-5d (M6.5b): each frame's tells of the device, one behind another */
+  readonly #frameTells = new Map<string, Promise<void>>();
   /**
    * PT-5c (ruling 1) — TWO QUEUES, never one: the DEVICE's (its layout, what it is told — `Emulation.*`, the window's size)
    * and the HAND's (`Input.*`). A device command the renderer does not answer — every one, while a navigation pends — no
@@ -251,6 +286,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       // PT-5d: the frames of the document before go with it
       this.#frames.pageCommitted(this.#documents);
       this.#owners.clear();
+      this.#frameTells.clear();
       this.focusMoved();
     };
     window.webContents.on("did-navigate", (_event, url) => {
@@ -319,6 +355,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         this.#owners.delete(gone);
         this.#placing.delete(gone);
         this.#discards.delete(gone);
+        this.#frameTells.delete(gone);
         this.focusMoved();
       }
       return;
@@ -385,6 +422,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         worldName: WORDS_WORLD,
         runImmediately: true,
       });
+      // PT-5d (M6.5b): the page's device — its agent and hints, touch, the colour scheme (per target: never inherited)
+      await this.tellFrame(child);
       // PT-5d (M2) — A FRAME IN A FRAME is guarded too: auto-attach is per session, so this child's own, as the page's —
       // a frame of another site inside it attaches on this session, and the same guards are put on it here. (Before: never
       // attached — its file input, its dialogs, its `window.open` were not ours to answer: the bisect's v2.)
@@ -637,24 +676,32 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       await this.bootstrapReady;
       await this.ensureDebugger();
       const cdp = this.window.webContents.debugger;
-      await cdp.sendCommand("Emulation.setUserAgentOverride", {
-        userAgent: emulation.userAgent,
-        platform: emulation.navigatorPlatform,
-        userAgentMetadata: emulation.metadata,
-      });
-      await cdp.sendCommand(
-        "Emulation.setTouchEmulationEnabled",
-        emulation.touchPoints > 0
-          ? { enabled: true, maxTouchPoints: emulation.touchPoints }
-          : { enabled: false },
-      );
-      await cdp.sendCommand("Emulation.setEmulatedMedia", {
-        features:
-          emulation.colorScheme === undefined
-            ? []
-            : [{ name: "prefers-color-scheme", value: emulation.colorScheme }],
-      });
+      for (const [method, params] of emulationCommands(emulation))
+        await cdp.sendCommand(method, params);
+      // PT-5d (M6.5b): the page is told — each frame of another site is told again, in the device queue's order
+      this.#emulation = emulation;
+      for (const frame of this.#frames.frames()) void this.tellFrame(frame.session);
     });
+  }
+
+  /**
+   * PT-5d (M6.5b) — WHAT A FRAME OF ANOTHER SITE IS TOLD OF THE DEVICE: the page's, as last answered (emulation is per
+   * target: the page's agent, touch and colour scheme never reach a frame's own — a phone's page told its embed was a
+   * laptop). At its attach (after its guards) and at each switch the page's own answered; a frame's tells one behind
+   * another, each reading the device last answered — the last it is told is the latest. Each command its own: one
+   * refused keeps none after it off. No device told yet: none.
+   */
+  private tellFrame(session: string): Promise<void> {
+    const prior = this.#frameTells.get(session) ?? Promise.resolve();
+    const next = prior.then(async () => {
+      const emulation = this.#emulation;
+      if (emulation === undefined || this.isDestroyed()) return;
+      const cdp = this.window.webContents.debugger;
+      for (const [method, params] of emulationCommands(emulation))
+        await cdp.sendCommand(method, params, session).catch(() => undefined);
+    });
+    this.#frameTells.set(session, next);
+    return next;
   }
 
   /** PT-5c (ruling 1): the page's word of its visual viewport's scale, with the document the window counted as it came. */

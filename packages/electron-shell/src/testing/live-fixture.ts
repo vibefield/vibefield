@@ -330,6 +330,9 @@ export interface FixtureFramed {
   readonly scroller: number | null;
   /** where its parts stand in its view (the host's: `frame`, the frame's content box) */
   readonly parts: Readonly<Record<string, FixtureRect>>;
+  /** PT-5d (M6.5b): what it is told of its device — its own agent, touch points, whether its colours are dark (null:
+   * unread) */
+  readonly device: { readonly ua: string; readonly touch: number; readonly dark: boolean } | null;
 }
 
 /** A part's box in the page's view, CSS px. */
@@ -652,6 +655,7 @@ const framesScript = (ids: readonly string[], elementOnly?: readonly string[]): 
       caret: el("t") ? el("t").selectionStart : null,
       scroller: el("s") ? Math.round(el("s").scrollTop) : null,
       parts: Object.fromEntries(${JSON.stringify(ids)}.map((id) => [id === "f" ? "frame" : id, box(id)]).filter(([, b]) => b !== null)),
+      device: (() => { try { return { ua: navigator.userAgent, touch: navigator.maxTouchPoints, dark: matchMedia("(prefers-color-scheme: dark)").matches }; } catch { return null; } })(),
     },
   }));
   const ask = () => fetch("/beacon?token=" + token + "&report=" + report(), { cache: "no-store" })

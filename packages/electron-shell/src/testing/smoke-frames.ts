@@ -18,7 +18,8 @@
 //                  page's session while the frame holds the focus);
 //   FRAME-NESTED — a press on the button of the frame in the frame (a third site) lands there;
 //   FRAME-HALF   — the host scrolled until the frame is half out of its view: a press on the frame's part in view lands;
-//   FRAME-TOUCH  — on a phone, a tap on the frame's button: its touch's start and end, and the click;
+//   FRAME-TOUCH  — on a phone, a tap on the frame's button: its touch's start and end, and the click — and the frame
+//                  told the PHONE (M6.5b): its own agent, touch points and colours the page's (before: a laptop's);
 //   FRAME-GONE   — a press held in the frame and the frame sent elsewhere under it: its release goes nowhere and nothing
 //                  stalls — the next press lands in the frame's new document;
 //   FRAME-CLIPPED — M6.3a: the frame in a host's SCROLLER, its top half above the scroller's clip edge, under the host's
@@ -99,7 +100,15 @@ export interface FramesSeen {
   };
   readonly nested: FramePressSeen & { readonly third: boolean };
   readonly half: FramePressSeen & { readonly top: number | null };
-  readonly touch: { readonly heard: readonly string[] | null; readonly clicks: number };
+  readonly touch: {
+    readonly heard: readonly string[] | null;
+    readonly clicks: number;
+    /** what the frame and its host page are told of the device (M6.5b; null: unread) */
+    readonly device: {
+      readonly frame: FramesDevice | null;
+      readonly host: FramesDevice | null;
+    };
+  };
   readonly gone: {
     readonly went: boolean;
     readonly nextClicks: number;
@@ -143,6 +152,9 @@ export interface FramesSeen {
     readonly reloaded: boolean;
   };
 }
+
+/** What a page is told of its device: its own agent, touch points, whether its colours are dark. */
+type FramesDevice = NonNullable<NonNullable<FixtureReport["framed"]>["device"]>;
 
 /** A press aimed at a frame, and what came of it. */
 export interface FramePressSeen {
@@ -258,7 +270,7 @@ export function judgeFrameType(seen: FramesSeen["type"]): string[] {
   return out;
 }
 
-/** FRAME-TOUCH: the touch's start and end, and the click. */
+/** FRAME-TOUCH: the touch's start and end, and the click; the frame told the page's device (M6.5b). */
 export function judgeFrameTouch(seen: FramesSeen["touch"]): string[] {
   if (seen.heard === null)
     return ["FRAME-TOUCH: the frame never said what it heard — the row proved nothing"];
@@ -268,6 +280,25 @@ export function judgeFrameTouch(seen: FramesSeen["touch"]): string[] {
       `FRAME-TOUCH: the frame heard ${seen.heard.join(", ") || "nothing"} — no touch of the phone's finger on its button`,
     );
   if (seen.clicks < 1) out.push("FRAME-TOUCH: the tap made no click in the frame");
+  const { frame, host } = seen.device;
+  if (frame === null || host === null)
+    out.push("FRAME-TOUCH: the frame or its host never said its device — that half proved nothing");
+  else if (host.touch < 1)
+    out.push(
+      "FRAME-TOUCH: the host page was told no touch — not a phone: that half proved nothing",
+    );
+  else {
+    if (frame.ua !== host.ua)
+      out.push(
+        `FRAME-TOUCH: the frame was told another agent (${JSON.stringify(frame.ua)}), not the page's (${JSON.stringify(host.ua)})`,
+      );
+    if (frame.touch !== host.touch)
+      out.push(`FRAME-TOUCH: the frame says ${frame.touch} touch points, the page ${host.touch}`);
+    if (frame.dark !== host.dark)
+      out.push(
+        `FRAME-TOUCH: the frame's colour scheme is not the page's (dark ${frame.dark}, the page's ${host.dark})`,
+      );
+  }
   return out;
 }
 
@@ -1296,6 +1327,10 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const touch = {
       heard: touchSaid?.heard.slice(touchHeard0) ?? null,
       clicks: (touchSaid?.clicks.length ?? 0) - touchClicks0,
+      device: {
+        frame: at(PHONE_FRAME)?.framed?.device ?? null,
+        host: at(PHONE_HOST)?.framed?.device ?? null,
+      },
     };
     said.touch = touch;
     problems.push(...judgeFrameTouch(touch));

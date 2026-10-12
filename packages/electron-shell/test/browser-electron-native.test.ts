@@ -1863,6 +1863,93 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     });
   });
 
+  describe("M6.5b — a frame of another site is told the page's DEVICE: its agent with its hints, touch, the colour scheme", () => {
+    const device = (userAgent: string, touchPoints: number, colorScheme: "light" | "dark") => ({
+      userAgent,
+      navigatorPlatform: touchPoints > 0 ? "iPhone" : "MacIntel",
+      metadata: {
+        brands: [],
+        fullVersionList: [],
+        platform: touchPoints > 0 ? "iOS" : "macOS",
+        platformVersion: "26.0",
+        architecture: "",
+        model: "",
+        mobile: touchPoints > 0,
+      },
+      touchPoints,
+      colorScheme,
+    });
+    const PHONE_DEVICE = device("phone/1", 5, "dark");
+    const LAPTOP_DEVICE = device("laptop/1", 0, "light");
+    const agents = (r: ReturnType<typeof recording>, session: string): string[] =>
+      r.sent
+        .filter((c) => c.session === session && c.method === "Emulation.setUserAgentOverride")
+        .map((c) => (c.params as { userAgent: string }).userAgent);
+
+    it("(ii) at its attach — after its guards, before its own auto-attach — as the page was last told: its agent and hints, touch, the colour scheme; a frame attached before any device is told none", async () => {
+      const r = recording();
+      r.attach("E");
+      await turns();
+      expect(r.on("E").filter((m) => m.startsWith("Emulation."))).toEqual([]);
+      await r.native.setEmulation(PHONE_DEVICE);
+      r.attach("F");
+      await turns();
+      const steps = r.on("F");
+      expect(steps.filter((m) => m.startsWith("Emulation."))).toEqual([
+        "Emulation.setUserAgentOverride",
+        "Emulation.setTouchEmulationEnabled",
+        "Emulation.setEmulatedMedia",
+      ]);
+      expect(steps.indexOf("Emulation.setUserAgentOverride")).toBeGreaterThan(
+        steps.lastIndexOf("Page.addScriptToEvaluateOnNewDocument"),
+      );
+      expect(steps.indexOf("Emulation.setEmulatedMedia")).toBeLessThan(
+        steps.indexOf("Target.setAutoAttach"),
+      );
+      const on = (method: string): unknown =>
+        r.sent.find((c) => c.session === "F" && c.method === method)?.params;
+      expect(on("Emulation.setUserAgentOverride")).toEqual({
+        userAgent: "phone/1",
+        platform: "iPhone",
+        userAgentMetadata: PHONE_DEVICE.metadata,
+      });
+      expect(on("Emulation.setTouchEmulationEnabled")).toEqual({
+        enabled: true,
+        maxTouchPoints: 5,
+      });
+      expect(on("Emulation.setEmulatedMedia")).toEqual({
+        features: [{ name: "prefers-color-scheme", value: "dark" }],
+      });
+    });
+
+    it("(ii) at each switch of the page's device every attached frame is told again, once the page's own is answered; a frame attaching while a switch is in flight is told the device last answered, then the switch's — the last it is told is the latest", async () => {
+      let release: () => void = () => undefined;
+      const r = recording((method, params, session) =>
+        method === "Emulation.setUserAgentOverride" &&
+        session === undefined &&
+        (params as { userAgent: string }).userAgent === "laptop/1"
+          ? new Promise((resolve) => {
+              release = () => resolve({});
+            })
+          : {},
+      );
+      await r.native.setEmulation(PHONE_DEVICE);
+      r.attach("F");
+      await turns();
+      const switching = r.native.setEmulation(LAPTOP_DEVICE);
+      await turns();
+      // the page's switch unanswered: G attaches — told the phone, the device last answered
+      r.attach("G");
+      await turns();
+      expect(agents(r, "G")).toEqual(["phone/1"]);
+      release();
+      await switching;
+      await turns();
+      expect(agents(r, "F")).toEqual(["phone/1", "laptop/1"]);
+      expect(agents(r, "G")).toEqual(["phone/1", "laptop/1"]);
+    });
+  });
+
   describe("M6.4b — the host's bound on a page that hangs: a command of the hand timed from its SEND to its answer", () => {
     const BOUND = 20_000;
     it("200 moves queued at once, each answered 150 ms after it is sent (30 s for the last): never said hung — no command waited 20 s; every one sent", async () => {

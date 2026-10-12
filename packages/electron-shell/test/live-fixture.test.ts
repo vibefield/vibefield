@@ -717,6 +717,8 @@ describe("the live pane's fixture page", () => {
         "innerHeight",
         "fetch",
         "setInterval",
+        "navigator",
+        "matchMedia",
         script,
       )(
         { randomUUID: () => `t-${path}` },
@@ -738,6 +740,8 @@ describe("the live pane's fixture page", () => {
           every = callback;
           return 0;
         },
+        { userAgent: "iPhone/26", maxTouchPoints: 5 },
+        (query: string) => ({ matches: query === "(prefers-color-scheme: dark)" }),
       );
       const fire = (type: string, e: Record<string, unknown>): void => {
         for (const listener of on.get(type) ?? []) listener({ type, ...e });
@@ -771,6 +775,8 @@ describe("the live pane's fixture page", () => {
       changes: 0,
     });
     expect((said.framed.parts as Record<string, unknown>).b).toEqual({ x: 7, y: 9, w: 100, h: 20 });
+    // M6.5b: what it is told of its device — its own agent, touch points, colour scheme
+    expect(said.framed.device).toEqual({ ua: "iPhone/26", touch: 5, dark: true });
     // its word is kept by its address, and its asks counted by it (a page that hangs asks no more)
     expect(fixture.reportAt("/frames/frame?p=g")?.framed?.clicks).toEqual([[80, 42]]);
     expect(fixture.reports("/frames/frame?p=g")).toBe(2);

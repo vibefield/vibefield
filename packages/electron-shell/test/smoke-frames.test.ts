@@ -240,16 +240,38 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
   });
 
-  it("FRAME-TOUCH: on a phone, the touch's start and end on the frame's button, and its click", () => {
+  it("FRAME-TOUCH: on a phone, the touch's start and end on the frame's button, and its click — and the frame told the PHONE (M6.5b): its own agent, touch points and colours the page's; before M6.5b a laptop's", () => {
+    const phone = { ua: "iPhone/26", touch: 5, dark: true };
+    const told = { frame: phone, host: phone };
     expect(
       judgeFrameTouch({
         heard: ["pointerdown #b", "touchstart #b", "touchend #b", "click #b"],
         clicks: 1,
+        device: told,
       }),
     ).toEqual([]);
-    expect(judgeFrameTouch({ heard: [], clicks: 0 })).toEqual([
+    expect(judgeFrameTouch({ heard: [], clicks: 0, device: told })).toEqual([
       "FRAME-TOUCH: the frame heard nothing — no touch of the phone's finger on its button",
       "FRAME-TOUCH: the tap made no click in the frame",
+    ]);
+    const tap = { heard: ["touchstart #b", "touchend #b"], clicks: 1 };
+    expect(
+      judgeFrameTouch({
+        ...tap,
+        device: { frame: { ua: "Macintosh/150", touch: 0, dark: false }, host: phone },
+      }),
+    ).toEqual([
+      'FRAME-TOUCH: the frame was told another agent ("Macintosh/150"), not the page\'s ("iPhone/26")',
+      "FRAME-TOUCH: the frame says 0 touch points, the page 5",
+      "FRAME-TOUCH: the frame's colour scheme is not the page's (dark false, the page's true)",
+    ]);
+    expect(judgeFrameTouch({ ...tap, device: { frame: null, host: phone } })).toEqual([
+      "FRAME-TOUCH: the frame or its host never said its device — that half proved nothing",
+    ]);
+    expect(
+      judgeFrameTouch({ ...tap, device: { frame: phone, host: { ...phone, touch: 0 } } }),
+    ).toEqual([
+      "FRAME-TOUCH: the host page was told no touch — not a phone: that half proved nothing",
     ]);
   });
 
