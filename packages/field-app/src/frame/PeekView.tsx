@@ -55,6 +55,7 @@ export function PeekButtonView({
   findRef,
   token = null,
   onClearToken,
+  bar = false,
 }: {
   keys: ViewKeys;
   open: boolean;
@@ -64,6 +65,10 @@ export function PeekButtonView({
   findRef?: Ref<HTMLDivElement>;
   token?: PeekToken | null;
   onClearToken?: () => void;
+  /** Godview's terminals are maximized (GV-D11): the same button stands in
+   * their title bar, folded to it — ⌘F beside the glyph, no glass, and no
+   * filter named (there is no view for it to filter; the popup shows it). */
+  bar?: boolean;
 }): ReactElement {
   const mac = keys === "mac";
   const words =
@@ -74,7 +79,8 @@ export function PeekButtonView({
     <div
       ref={findRef}
       className="vf-peek-find no-drag"
-      data-scoped={token === null ? undefined : "true"}
+      data-scoped={token === null || bar ? undefined : "true"}
+      data-bar={bar ? "true" : undefined}
     >
       <button
         ref={buttonRef}
@@ -94,7 +100,7 @@ export function PeekButtonView({
           {keyLegend("f")}
         </kbd>
       </button>
-      {token !== null && (
+      {token !== null && !bar && (
         <span className="vf-peek-token">
           {token.desk !== null && (
             <span className="vf-peek-token-part">

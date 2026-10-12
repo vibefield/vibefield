@@ -183,6 +183,16 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(minimize?.closest(".vf-godview-terminal-deck")).not.toBeNull();
     // GV-D6: the terminals away — the monitor alone, the sheet kept, unseen and inert
     expect(container?.textContent).toContain("Deck — away: the monitor alone");
+    // GV-D11: maximized — the same stage, its bar the window's title bar: the
+    // sheet laid out at the top, a hairline, minimize and restore at its end
+    expect(container?.textContent).toContain("Deck — maximized: the bar as the title bar");
+    const full = container?.querySelector("[data-godview-maximized-catalog] .vf-godview");
+    expect(full?.getAttribute("data-godview-deck")).toBe("maximized");
+    expect(full?.getAttribute("data-godview-deck-layout")).toBe("maximized");
+    expect(full?.querySelector(".vf-godview-deck-controls > .vf-godview-deck-hair")).not.toBeNull();
+    expect(
+      full?.querySelector('button[aria-label="Restore the terminals to their place"]'),
+    ).not.toBeNull();
     const away = container?.querySelector("[data-godview-away-catalog] .vf-godview");
     expect(away?.getAttribute("data-godview-deck")).toBe("away");
     expect(away?.querySelector(".vf-godview-terminal-deck")?.hasAttribute("inert")).toBe(true);

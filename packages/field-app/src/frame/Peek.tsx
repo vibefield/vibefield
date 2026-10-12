@@ -24,6 +24,7 @@ import { openHistoryAt } from "../history/open-at";
 import { PeekReaderMount } from "../history/room-chunk";
 import { productHistoryPorts } from "../history/window-ports";
 import { getRendererLogger } from "../logging";
+import { useGodviewDeckMaximized } from "./deck-door";
 import {
   filterToken,
   type GodviewFindDoor,
@@ -337,6 +338,9 @@ export function Peek({
   // Peek's own feed while Live now shows (PK5) — and none at all otherwise.
   const liveShows = open && scope === "live";
   const inGodview = view === "godview";
+  // GV-D11: while Godview's terminals are maximized this button stands in
+  // their title bar — the same button, never a second one
+  const deckMaximized = useGodviewDeckMaximized();
   const historyFeed = useLiveFeedWhile(openLiveFeed, liveShows && !inGodview);
   // Godview's rows are listened to only while Live now shows over it: the
   // monitor makes its find join only while someone listens
@@ -612,6 +616,7 @@ export function Peek({
           findRef={findRef}
           token={token}
           onClearToken={clearToken}
+          bar={inGodview && deckMaximized}
           onPress={() => (open ? fold() : onSurfaceChange("search"))}
         />
       )}

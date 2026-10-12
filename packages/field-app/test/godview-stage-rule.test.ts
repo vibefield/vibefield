@@ -29,7 +29,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
-  DECK_HEAD_RESERVE,
+  DECK_FILL_LINE,
   DECK_MIN_HEIGHT,
   deckEdgeBounds,
   measureDeckEdge,
@@ -262,7 +262,7 @@ describe("the bar's 40px go to the monitor, and the deck's edge rests where it d
     const after = deckEdgeBounds(column(UNDER_THE_HEAD).geometry);
     expect(after).toEqual(before);
     // in the window: rest 320; the highest is the head's reserve, the lowest keeps the minimum
-    expect(320 + after.min).toBe(DECK_HEAD_RESERVE);
+    expect(320 + after.min).toBe(DECK_FILL_LINE);
     expect(320 + after.max).toBe(WINDOW - DECK_MIN_HEIGHT);
   });
 });

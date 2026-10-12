@@ -10,16 +10,28 @@ import type { GodviewDeckState } from "../frame/deck-door";
 //   call     — any session brought to the terminals (a body, a row, a column,
 //              a lane, a search result, History's acts, ⌘T, the bloom): away,
 //              they come back up AS THEY WERE LEFT; showing, nothing moves.
+//   maximize — the Lip's maximize, an edge let go above the fill line or flung
+//              up (GV-D11): the terminals take the window, their bar its
+//              title bar.
+//   restore  — the title bar's restore, a drag or a key out of it: up again.
 //
-// Both are names only. The place the viewer left the edge is the edge's
+// All are names only. The place the viewer left the edge is the edge's
 // (`deck-edge.ts`, the viewer's own memory), and neither act takes or moves
 // it — which is what "as they were left" means for the top.
 
-export type DeckAct = "minimize" | "call";
+export type DeckAct = "minimize" | "call" | "maximize" | "restore";
 
 export function deckAfter(state: GodviewDeckState, act: DeckAct): GodviewDeckState {
-  if (act === "minimize") return "away";
-  return state === "away" ? "up" : state;
+  switch (act) {
+    case "minimize":
+      return "away";
+    case "maximize":
+      return "maximized";
+    case "restore":
+      return state === "maximized" ? "up" : state;
+    case "call":
+      return state === "away" ? "up" : state;
+  }
 }
 
 /** The rise and the fall (DESIGN.md §6 "The terminals rise and fall"): the

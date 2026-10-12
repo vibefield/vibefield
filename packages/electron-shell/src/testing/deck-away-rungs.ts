@@ -477,3 +477,149 @@ async function deckEdgeSteps(
   verdict["outcomes"] = true;
   return verdict;
 }
+
+// MAXIMIZED — the rung after the edge's (round 3, W6 — GV-D11; DESIGN.md §8
+// "Maximized — the bar is the window's title bar"):
+//
+//   · the Lip's maximize: the deck says maximized, the sheet is laid out at the
+//     window's top, the terminals laid out once; the bar is a window-drag region
+//     with its grip and buttons as holes, and the frame's ONE search button
+//     stands in it (never a second one inside the stage);
+//   · that button opens the Peek over the terminals, and Escape folds it;
+//   · restore: up again at the same top, once more laid out, the same panes.
+
+/** The title bar as the page draws it. */
+const BAR_NOW = `(() => {
+  const stage = document.querySelector(".vf-cover .vf-godview");
+  const lip = stage?.querySelector(".vf-godview-deck-lip");
+  const hit = stage?.querySelector(".vf-godview-deck-grip-hit");
+  const find = document.querySelector(".vf-peek-find");
+  const region = (el) => (el ? getComputedStyle(el).getPropertyValue("-webkit-app-region").trim() : null);
+  return JSON.stringify({
+    layout: stage?.getAttribute("data-godview-deck-layout") ?? null,
+    sheetTop: stage?.querySelector(".vf-godview-terminal-deck")?.offsetTop ?? null,
+    lipRegion: region(lip),
+    gripRegion: region(hit),
+    findInBar: find?.getAttribute("data-bar") === "true",
+    findInStage: find?.closest(".vf-godview") !== null && find !== null,
+    searchButtons: document.querySelectorAll(".vf-peek-button").length,
+    head: document.querySelector(".vf-stories")?.getAttribute("data-deck") ?? null,
+  });
+})()`;
+
+interface BarNow {
+  layout: string | null;
+  sheetTop: number | null;
+  lipRegion: string | null;
+  gripRegion: string | null;
+  findInBar: boolean;
+  findInStage: boolean;
+  searchButtons: number;
+  head: string | null;
+}
+
+async function barNow(win: BrowserWindow): Promise<BarNow> {
+  return JSON.parse((await win.webContents.executeJavaScript(BAR_NOW)) as string) as BarNow;
+}
+
+/** The rung. */
+export async function deckMaximizeRung(
+  win: BrowserWindow,
+  opts: DeckAwayRungOptions,
+): Promise<Record<string, unknown>> {
+  const verdict: Record<string, unknown> = {};
+  try {
+    return await deckMaximizeSteps(win, opts, verdict);
+  } catch (error) {
+    // Leave the terminals up for whatever runs next.
+    await win.webContents
+      .executeJavaScript(
+        `(() => { document.querySelector('button[aria-label="Restore the terminals to their place"]')?.click(); return "ok"; })()`,
+      )
+      .catch(() => undefined);
+    const said = error instanceof Error ? error.message : String(error);
+    throw new Error(`${said} [read: ${JSON.stringify(verdict)}]`);
+  }
+}
+
+async function deckMaximizeSteps(
+  win: BrowserWindow,
+  opts: DeckAwayRungOptions,
+  verdict: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  opts.pressViewKey("godview");
+  await opts.deck.until(
+    (facts) => facts.active && facts.wrapper?.state === "up",
+    "Godview showing its terminals up",
+    30_000,
+  );
+  await stageAtRest(win, "the terminals up");
+  const before = await opts.settled();
+  const top = before.wrapper?.top;
+  const resizes = before.wrapper?.bodyResizes;
+  if (top === undefined || resizes === undefined) {
+    throw new Error("the deck's marker carries no wrapper facts");
+  }
+  verdict["before"] = { top, bodyResizes: resizes };
+
+  // MAXIMIZE — the Lip's button
+  await click(win, 'button[aria-label="Maximize the terminals"]', "the Lip's maximize");
+  await opts.deck.until(
+    (facts) => facts.active && facts.wrapper?.state === "maximized",
+    "maximize to fill the window (the marker: maximized)",
+    10_000,
+  );
+  await stageAtRest(win, "the rise to the top");
+  const full = await opts.settled();
+  const bar = await barNow(win);
+  const fullResizes = (full.wrapper?.bodyResizes ?? 0) - resizes;
+  verdict["maximized"] = { top: full.wrapper?.top, bodyResizes: fullResizes, bar };
+  const problems: string[] = [];
+  if (full.wrapper?.top !== 0) problems.push(`the sheet's top is ${full.wrapper?.top}, not 0`);
+  if (fullResizes > 1) problems.push(`the terminals were laid out ${fullResizes} times`);
+  if (bar.layout !== "maximized") problems.push(`the layout is ${bar.layout}`);
+  if (bar.lipRegion !== "drag") problems.push(`the bar's region is ${bar.lipRegion}, not drag`);
+  if (bar.gripRegion !== "no-drag") problems.push(`the grip's region is ${bar.gripRegion}`);
+  if (!bar.findInBar) problems.push("the frame's search button does not stand in the bar");
+  if (bar.findInStage) problems.push("a search button stands inside the stage");
+  if (bar.searchButtons !== 1) problems.push(`${bar.searchButtons} search buttons`);
+  if (problems.length > 0) {
+    throw new Error(`maximized is not the title bar: ${problems.join("; ")}`);
+  }
+
+  // SEARCH IN THE BAR — the one popup, over the terminals
+  await click(win, '.vf-peek-find[data-bar="true"] .vf-peek-button', "the bar's search");
+  const opened = (await win.webContents.executeJavaScript(
+    `new Promise((done) => { const t0 = Date.now(); const tick = () => { if (document.querySelector('.vf-peek-pop[role="dialog"]')) done(true); else if (Date.now() - t0 > 10000) done(false); else setTimeout(tick, 100); }; tick(); })`,
+  )) as boolean;
+  verdict["peekFromBar"] = opened;
+  if (!opened) throw new Error("the bar's search opened no popup");
+  win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+  win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+  await sleep(400);
+
+  // RESTORE — back to the edge
+  await click(win, 'button[aria-label="Restore the terminals to their place"]', "restore");
+  await opts.deck.until(
+    (facts) => facts.active && facts.wrapper?.state === "up",
+    "restore to bring the sheet back",
+    10_000,
+  );
+  await stageAtRest(win, "the fall back");
+  const back = await opts.settled();
+  const backResizes = (back.wrapper?.bodyResizes ?? 0) - resizes;
+  verdict["restored"] = { top: back.wrapper?.top, bodyResizes: backResizes };
+  if (back.wrapper?.top !== top) {
+    throw new Error(`restored, the top is ${back.wrapper?.top}, not ${top}`);
+  }
+  if (backResizes > 2) {
+    throw new Error(`maximized and back laid the terminals out ${backResizes} times`);
+  }
+  if (sorted(back.sessionIds).join() !== sorted(before.sessionIds).join()) {
+    throw new Error(
+      `maximized and back changed the panes: ${JSON.stringify(before.sessionIds)} → ${JSON.stringify(back.sessionIds)}`,
+    );
+  }
+  verdict["roundTripped"] = true;
+  return verdict;
+}

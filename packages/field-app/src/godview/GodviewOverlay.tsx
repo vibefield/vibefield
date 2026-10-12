@@ -276,8 +276,9 @@ export function GodviewOverlay(): ReactElement | null {
               theme={theme}
               door={remoteDoor}
               panes={monitorPanes}
-              // MV-W4: the same switch, for a ported view's own loop
-              animations={labSwitches.animations}
+              // MV-W4: the same switch, for a ported view's own loop — and
+              // under a maximized deck the view's bodies rest (GV-D11)
+              animations={labSwitches.animations && deckState !== "maximized"}
               // P2: the window's Godview lends the frame's Peek its Live now
               publishesFind
               onSelectView={monitor.selectView}

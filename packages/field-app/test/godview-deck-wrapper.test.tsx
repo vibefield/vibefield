@@ -249,10 +249,8 @@ describe("the Lip's first button: minimize (GV-D7)", () => {
     // §13: the `minimize` glyph at 14
     const glyph = button?.querySelector("svg");
     expect(glyph?.getAttribute("width")).toBe("14");
-    // maximize has no behaviour until its own slice: a button that does
-    // nothing is not drawn
-    expect(host.querySelector('button[aria-label="Maximize the terminals"]')).toBeNull();
-    expect(controls?.querySelectorAll("button")).toHaveLength(1);
+    // …and maximize after it, since W6 gave it its behaviour
+    expect(controls?.querySelectorAll("button")).toHaveLength(2);
   });
 });
 
@@ -435,6 +433,141 @@ describe("called up (GV-D5, GV-D6)", () => {
 
   it("with no Godview to answer, the ask is heard by nobody and says so", () => {
     expect(askGodviewDeckUp()).toBe(false);
+  });
+});
+
+describe("maximized — the bar is the window's title bar (round 3, W6 — GV-D11)", () => {
+  const maximizeButton = (host: ParentNode): HTMLButtonElement | null =>
+    host.querySelector<HTMLButtonElement>('button[aria-label="Maximize the terminals"]');
+  const restoreButton = (host: ParentNode): HTMLButtonElement | null =>
+    host.querySelector<HTMLButtonElement>(
+      'button[aria-label="Restore the terminals to their place"]',
+    );
+
+  it("the Lip's two buttons: minimize, then maximize — the order windows keep them", async () => {
+    const host = await mountOverlay();
+    const names = [...(host.querySelectorAll(".vf-godview-deck-controls button") ?? [])].map(
+      (button) => button.getAttribute("aria-label"),
+    );
+    expect(names).toEqual(["Minimize the terminals", "Maximize the terminals"]);
+    expect(maximizeButton(host)?.getAttribute("title")).toBe("Maximize");
+    expect(maximizeButton(host)?.querySelector("svg")?.getAttribute("width")).toBe("14");
+  });
+
+  it("maximize rises to the window's top and the door says maximized; restore falls back to the edge — the shell hears each by name once", async () => {
+    const host = await mountOverlay();
+    holdTimers();
+    await act(async () => maximizeButton(host)?.click());
+    expect(stage(host).getAttribute("data-godview-deck")).toBe("maximized");
+    expect(stage(host).getAttribute("data-godview-deck-layout")).toBe("maximized");
+    expect(stage(host).getAttribute("data-godview-deck-motion")).toBe("maximize");
+    expect(getGodviewDeck()).toBe("maximized");
+    expect(said).toEqual(["up", "maximized"]);
+    // the panes stay the deck's, drawn — maximized is up, not away
+    expect(stand.active.at(-1)).toBe(true);
+    expect(sheet(host).hasAttribute("inert")).toBe(false);
+    await advance(RISE_ENDS);
+    expect(stage(host).hasAttribute("data-godview-deck-motion")).toBe(false);
+    // the title bar's end: a hairline, minimize, restore — no maximize
+    const names = [...host.querySelectorAll(".vf-godview-deck-controls button")].map((button) =>
+      button.getAttribute("aria-label"),
+    );
+    expect(names).toEqual(["Minimize the terminals", "Restore the terminals to their place"]);
+    expect(host.querySelector(".vf-godview-deck-controls > .vf-godview-deck-hair")).not.toBeNull();
+    expect(restoreButton(host)?.getAttribute("title")).toBe("Restore");
+
+    await act(async () => restoreButton(host)?.click());
+    // up at once — the door, the head, the lights — while the sheet falls at
+    // the size it has, laid out at its edge on arrival
+    expect(stage(host).getAttribute("data-godview-deck")).toBe("up");
+    expect(getGodviewDeck()).toBe("up");
+    expect(said).toEqual(["up", "maximized", "up"]);
+    expect(stage(host).getAttribute("data-godview-deck-motion")).toBe("restore");
+    expect(stage(host).getAttribute("data-godview-deck-layout")).toBe("maximized");
+    await advance(FALL_ENDS);
+    expect(stage(host).hasAttribute("data-godview-deck-motion")).toBe(false);
+    expect(stage(host).getAttribute("data-godview-deck-layout")).toBe("up");
+  });
+
+  it("minimize from the title bar goes away, and a call brings them back up — at their edge", async () => {
+    const host = await mountOverlay();
+    holdTimers();
+    await act(async () => maximizeButton(host)?.click());
+    await advance(RISE_ENDS);
+    await minimize(host);
+    expect(stage(host).getAttribute("data-godview-deck")).toBe("away");
+    await advance(FALL_ENDS);
+    await act(async () => {
+      askGodviewDeckUp();
+    });
+    expect(stage(host).getAttribute("data-godview-deck")).toBe("up");
+    expect(stage(host).getAttribute("data-godview-deck-layout")).toBe("up");
+  });
+
+  it("a reload keeps them maximized", async () => {
+    let host = await mountOverlay();
+    holdTimers();
+    await act(async () => maximizeButton(host)?.click());
+    await advance(RISE_ENDS);
+    vi.useRealTimers();
+    await unmountOverlay();
+    resetGodviewDeckDoorForTest();
+    host = await mountOverlay();
+    expect(stage(host).getAttribute("data-godview-deck")).toBe("maximized");
+    expect(stage(host).getAttribute("data-godview-deck-layout")).toBe("maximized");
+    expect(stage(host).hasAttribute("data-godview-deck-motion")).toBe(false);
+  });
+
+  it("the stylesheet: the sheet at the window's top without corners, ring or shadow; the monitor resting; the bar a window-drag region with the grip's 168 and the buttons as holes", () => {
+    const at = '.vf-godview[data-godview-deck-edge][data-godview-deck-layout="maximized"]';
+    expect(rule(`${at} .vf-godview-terminal-deck`)).toContain("top: 0;");
+    const max = '.vf-godview[data-godview-deck="maximized"]';
+    const sheetRule = rule(`${max} .vf-godview-terminal-deck`);
+    expect(sheetRule).toContain("border-radius: 0;");
+    expect(sheetRule).toContain("box-shadow: none;");
+    expect(rule(".vf-godview-terminal-deck")).toMatch(
+      /border-radius 160ms ease,\s*box-shadow 160ms ease/,
+    );
+    expect(rule(`${max} .vf-godview-monitor-stage`)).toContain("opacity: 0;");
+    expect(rule(".vf-godview-monitor-stage")).toMatch(/transition:[^;]*opacity 260ms ease;/);
+    // the window drags by the bar; the grip's hit and the buttons are holes
+    expect(rule(`${max} .vf-godview-deck-lip`)).toContain("-webkit-app-region: drag;");
+    const hit = rule(".vf-godview-deck-grip-hit");
+    expect(hit).toContain("width: var(--vf-godview-deck-grip-hit);");
+    expect(hit).toContain("height: 100%;");
+    expect(hit).toContain("-webkit-app-region: no-drag;");
+    expect(rule(".vf-godview-deck-controls")).toContain("-webkit-app-region: no-drag;");
+    // …and the panes' area, whose rows stand under the bar inside the strip
+    expect(rule(".vf-godview-deck-well")).toContain("-webkit-app-region: no-drag;");
+    expect(rule(`${max} .vf-godview-deck-controls`)).toContain("right: 8px;");
+    const hair = rule(".vf-godview-deck-hair");
+    expect(hair).toContain("width: 1px;");
+    expect(hair).toContain("height: 14px;");
+    expect(hair).toContain("background: color-mix(in srgb, var(--deck-ink) 16%, transparent);");
+    // the rise to the top and the fall back, each a transform on the island
+    // and retract curves, the corners and shadow with them
+    expect(
+      rule('.vf-godview[data-godview-deck-motion="maximize"] .vf-godview-terminal-deck'),
+    ).toMatch(
+      /transition:\s*transform 480ms var\(--vf-ease-island\),\s*border-radius 160ms ease,\s*box-shadow 160ms ease;/,
+    );
+    const restore = rule(
+      '.vf-godview[data-godview-deck-motion="restore"] .vf-godview-terminal-deck',
+    );
+    expect(restore).toContain(
+      "transform: translateY(calc(var(--vf-godview-deck-rest) + var(--vf-godview-deck-shift, 0px)));",
+    );
+    expect(restore).toMatch(/transform 300ms cubic-bezier\(0\.4, 0, 1, 1\)/);
+    // the readout over the terminals: centred between the edge and the panes'
+    // foot, its veil from the edge down, both over the sheet
+    const words = rule('.vf-godview-deck-readout[data-readout="maximize"]');
+    expect(words).toContain("z-index: 12;");
+    expect(words).toMatch(/var\(--vf-godview-panes-foot\)/);
+    const theVeil = rule('.vf-godview-deck-veil[data-readout="maximize"]');
+    expect(theVeil).toContain("z-index: 11;");
+    expect(theVeil).toContain(
+      "clip-path: inset(calc(var(--vf-godview-deck-rest) + var(--vf-godview-deck-shift, 0px)) 0 0 0);",
+    );
   });
 });
 

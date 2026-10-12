@@ -109,6 +109,9 @@
      resolve their 35% where they are used: a flex basis and a top, each
      against the stage's height. */
   --vf-godview-deck-rest: calc(40px + max(var(--vf-monitor-stage-height, 35%), 170px));
+  /* What the well keeps clear under the panes: its 8, the covers' reserve
+     inside the cover (88, FC-D15) — where the Maximize readout centres. */
+  --vf-godview-panes-foot: 8px;
   --vf-godview-field-foot: max(
     var(--vf-godview-deck-field-floor),
     calc(
@@ -463,6 +466,12 @@
   /* The overlay owns the glass. Painting a second opaque panel here made the
      stage-opacity control visually inert. */
   background: transparent;
+  /* round 3 (GV-D11, §6): it fades out under a maximized deck and back, 260ms */
+  transition:
+    color 240ms ease,
+    border-color 240ms ease,
+    background-color 240ms ease,
+    opacity 260ms ease;
 }
 
 /* THE MONITOR MAKES ROOM (round 3, W4; DESIGN.md §8). On a stage whose edge
@@ -640,6 +649,13 @@
   z-index: 10;
   display: flex;
   flex-direction: column;
+  /* round 3 (GV-D11, §6): its top corners and shadow go and return, 160ms */
+  transition:
+    color 240ms ease,
+    border-color 240ms ease,
+    background-color 240ms ease,
+    border-radius 160ms ease,
+    box-shadow 160ms ease;
   border-radius: var(--vf-godview-deck-radius) var(--vf-godview-deck-radius) 0 0;
   background: color-mix(
     in srgb,
@@ -671,6 +687,40 @@
   right: 0;
   bottom: 0;
   left: 0;
+}
+
+/* Where the sheet rests, held still whatever the sheet does (up, maximized at
+   the window's top, travelling): the edge measures rest off it. */
+.vf-godview-deck-rest {
+  position: absolute;
+  top: var(--vf-godview-deck-rest);
+  left: 0;
+  width: 0;
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ── MAXIMIZED — THE BAR IS THE WINDOW'S TITLE BAR (round 3, W6 — GV-D11;
+   DESIGN.md §8) ──
+   Laid out at the window's top: the panes run from the bar's foot (30) to the
+   same well's foot, 8 in at each side. A fall out of maximized keeps this
+   layout until it arrives (`data-godview-deck-layout`). */
+.vf-godview[data-godview-deck-edge][data-godview-deck-layout="maximized"]
+.vf-godview-terminal-deck {
+  top: 0;
+}
+
+/* …the sheet without its top corners, its ring or its shadow (160ms), and
+   the view's bodies resting under it: its stage fades out (260ms), the cover's
+   glass stays. */
+.vf-godview[data-godview-deck="maximized"] .vf-godview-terminal-deck {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.vf-godview[data-godview-deck="maximized"] .vf-godview-monitor-stage {
+  opacity: 0;
 }
 
 /* THE LIP (GV-D7): the tab's band grown into the drag bar — 30 tall, on the
@@ -760,6 +810,28 @@
   outline-offset: 1px;
 }
 
+/* The bar moves the WINDOW, as a title bar does; its grip's 168 hit drags the
+   terminals and its buttons click — holes in the drag region. (The app's own
+   strip, the window's top 52, is left as it is: the panes' area is no-drag,
+   above, so their rows under the bar take their clicks.) */
+.vf-godview[data-godview-deck="maximized"] .vf-godview-deck-lip {
+  cursor: default;
+  -webkit-app-region: drag;
+}
+
+.vf-godview-deck-grip-hit {
+  position: relative;
+  display: grid;
+  width: var(--vf-godview-deck-grip-hit);
+  height: 100%;
+  place-items: center;
+  -webkit-app-region: no-drag;
+}
+
+.vf-godview[data-godview-deck="maximized"] .vf-godview-deck-grip-hit {
+  cursor: row-resize;
+}
+
 /* THE WELL (GV-D7): what the panes sit in, set into the frame. 8 in from the
    sheet's sides and its foot — the 8 a covered view keeps clear (FC-D15) —
    corners 10 (a selected pane's 8, the 1 gap, the 1 edge), and a rim of light
@@ -823,6 +895,21 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  -webkit-app-region: no-drag;
+}
+
+/* Maximized, 8 in: a hairline, minimize, restore. The frame's search button
+   stands before the hairline — the frame's one button in another place
+   (peek.css), never a second one here. */
+.vf-godview[data-godview-deck="maximized"] .vf-godview-deck-controls {
+  right: 8px;
+}
+
+.vf-godview-deck-hair {
+  width: 1px;
+  height: 14px;
+  margin: 0 4px;
+  background: color-mix(in srgb, var(--deck-ink) 16%, transparent);
 }
 
 .vf-godview-deck-control {
@@ -871,6 +958,27 @@
    fall it turns round had it) on the island curve. */
 .vf-godview[data-godview-deck-motion="rise"] .vf-godview-terminal-deck {
   transition: transform 480ms var(--vf-ease-island);
+}
+
+/* Maximized by its button (W6): laid out at the window's top at once and
+   travelling there from where its edge stood (the stage sets the start), on
+   the island curve — its corners and shadow going as it rises. */
+.vf-godview[data-godview-deck-motion="maximize"] .vf-godview-terminal-deck {
+  transition:
+    transform 480ms var(--vf-ease-island),
+    border-radius 160ms ease,
+    box-shadow 160ms ease;
+}
+
+/* Restored (W6): still laid out at the window's top, the sheet falls to where
+   its edge stands, at the size it has, on the retract curve — its corners and
+   shadow returning — and is laid out there on arrival. */
+.vf-godview[data-godview-deck-motion="restore"] .vf-godview-terminal-deck {
+  transform: translateY(calc(var(--vf-godview-deck-rest) + var(--vf-godview-deck-shift, 0px)));
+  transition:
+    transform 300ms cubic-bezier(0.4, 0, 1, 1),
+    border-radius 160ms ease,
+    box-shadow 160ms ease;
 }
 
 /* Away, arrived: nothing at the foot. The sheet keeps THE BOX IT HAD — it is
@@ -958,6 +1066,30 @@
 
 .vf-godview-deck-veil[data-on="true"] {
   opacity: 1;
+}
+
+/* *Maximize* the terminals (W6): written over the terminals, centred between
+   the held edge and the panes' foot (never above 150), its veil over the sheet
+   from the edge down — both over the sheet. */
+.vf-godview-deck-readout[data-readout="maximize"] {
+  z-index: 12;
+  top: max(
+    150px,
+    calc(
+      (
+        var(--vf-godview-deck-rest) +
+        var(--vf-godview-deck-shift, 0px) +
+        100% -
+        var(--vf-godview-panes-foot)
+      ) /
+      2
+    )
+  );
+}
+
+.vf-godview-deck-veil[data-readout="maximize"] {
+  z-index: 11;
+  clip-path: inset(calc(var(--vf-godview-deck-rest) + var(--vf-godview-deck-shift, 0px)) 0 0 0);
 }
 
 /* A live WebGPU canvas may be promoted above ordinary DOM overlays on macOS.
@@ -1312,6 +1444,10 @@
 
 .vf-cover .vf-godview-deck-well {
   margin-bottom: 88px;
+}
+
+.vf-cover .vf-godview {
+  --vf-godview-panes-foot: 88px;
 }
 
 /* The terminals away (GV-D6, L5): the monitor alone ends at 692 too — the

@@ -20,8 +20,9 @@ import type { GodviewDeckState } from "../frame/deck-door";
 
 export type DeckWrapperFacts = NonNullable<GodviewDeckFacts["wrapper"]>;
 
-/** The sheet between two states (`GodviewStage`): rising, falling, or still. */
-export type DeckTravel = "rise" | "fall" | null;
+/** The sheet between two states (`GodviewStage`): rising from away, falling
+ * away, rising to maximized, falling back from it — or still. */
+export type DeckTravel = "rise" | "fall" | "maximize" | "restore" | null;
 
 let facts: DeckWrapperFacts | null = null;
 const listeners = new Set<() => void>();

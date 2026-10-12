@@ -74,7 +74,7 @@ import type { ElectronLogging } from "../main/logging";
 import { sharedProfilePath } from "../main/smoke-profile";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
-import { deckAwayRung, deckEdgeRung } from "./deck-away-rungs";
+import { deckAwayRung, deckEdgeRung, deckMaximizeRung } from "./deck-away-rungs";
 import { labProfileProof } from "./godview-lab-profile";
 import {
   historyByProjectPhotos,
@@ -9287,6 +9287,11 @@ export async function runSmokeGodview(opts: {
     //      let-go there puts them away; a body brings them back at the
     //      remembered edge; a double-click rests it. From rest, back to rest.
     verdict["deckEdge"] = await deckEdgeRung(win, deckRungs);
+    // MAXIMIZED (round 3, W6; the same module): the Lip's maximize makes the
+    //      bar the title bar — laid out once, a window-drag region with the grip
+    //      and buttons as holes, the frame's one search button standing in it
+    //      and opening the Peek — and restore brings the sheet back at its top.
+    verdict["deckMaximized"] = await deckMaximizeRung(win, deckRungs);
 
     // THE WARM OPEN — the AFTER number, and the row that actually tests GT-D14.
     //

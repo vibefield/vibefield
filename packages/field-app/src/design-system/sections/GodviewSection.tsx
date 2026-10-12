@@ -113,6 +113,20 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
         </div>
       </Specimen>
       <Specimen
+        title="Deck — maximized: the bar as the title bar (the frame's search stands before the hairline in the window)"
+        source="godview/GodviewStage.tsx · godview/godview.css"
+        bleed
+      >
+        <div data-godview-maximized-catalog="">
+          <GodviewPreview
+            theme={theme}
+            deckState="maximized"
+            deckControls
+            deck={<PaneFrameDeck theme={theme} />}
+          />
+        </div>
+      </Specimen>
+      <Specimen
         title="Pane frame — what the deck draws around every terminal"
         source="@vibecook/puppeteer-views/deck/PaneFrame.tsx"
         bleed

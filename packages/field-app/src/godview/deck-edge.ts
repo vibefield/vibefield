@@ -5,7 +5,8 @@
 // and the stage runs under it).
 //
 //   shift > 0 — the edge moved DOWN; shift < 0 — it moved UP, as far as the
-//               head's reserve (`DECK_HEAD_RESERVE`, a place in the window).
+//               fill line (`DECK_FILL_LINE`, a place in the window) for a deck
+//               that is up, and on to the window's top while it is held.
 //
 // Two copies of it stand on the stage's root, for `godview.css`:
 //
@@ -19,6 +20,10 @@
 //
 // The stylesheet owns the layout. What lives here is the bounds, the outcome of
 // a let-go, and the viewer's memory of where they left the edge.
+//
+// The SHEET'S REST is read off a probe the stage keeps at it (`.vf-godview-
+// deck-rest`, `top: var(--vf-godview-deck-rest)`), so it is known whatever the
+// sheet is doing — up, maximized at the window's top, or away.
 
 /** The custom property the stage's root carries; `godview.css` reads it. */
 export const DECK_SHIFT_PROPERTY = "--vf-godview-deck-shift";
@@ -45,17 +50,15 @@ export const DECK_FLING = 1.4;
  * the let-go's own among them. */
 export const DECK_FLING_SAMPLES = 6;
 
-/** The sheet's top never stands above this, measured from the WINDOW's top:
- * the head's reserve (DESIGN.md §8 "Godview's head — Stories": "56 (the head's
- * foot at 48, plus 8)"). A place in the window, not a distance from the
- * monitor: the reach is the same 56 whether the monitor begins under the 40
- * bar or, once the head takes no band, at the window's top — where "the
- * monitor's top" would be y 0, inside the app's 52 drag strip, a lip the
- * pointer could not take back.
+/** THE FILL LINE (GV-D11; DESIGN.md §8 "A let-go decides"), from the WINDOW's
+ * top: a deck that is UP never stands above it — Home takes the edge there, ↑
+ * stops there — and an edge let go above it fills the window: the terminals
+ * maximize. A place in the window, not a distance from the monitor, and clear
+ * of the head (its foot at 48) and of the app's 52 drag strip.
  *
- * AN INTERIM (2026-10-11): the slice that maximizes the terminals restates the
- * reach as the ruled fill line (104, §8 "A drag has three outcomes"). */
-export const DECK_HEAD_RESERVE = 56;
+ * (Until round 3's W6 the reach was the head's reserve, 56, an interim: there
+ * was no maximized deck for a higher edge to become.) */
+export const DECK_FILL_LINE = 104;
 
 /** One arrow press; ⇧ multiplies it (§8). */
 export const DECK_EDGE_STEP = 24;
@@ -74,9 +77,10 @@ export interface DeckEdgeGeometry {
 }
 
 export interface DeckEdgeBounds {
-  /** The highest the edge goes: the head's reserve, `DECK_HEAD_RESERVE` from
-   * the window's top. Never below rest — a monitor so short that rest already
-   * stands above the reserve keeps the resting layout. */
+  /** The highest a deck that is UP stands: the fill line, `DECK_FILL_LINE`
+   * from the window's top — where Home takes it, and the line past which
+   * letting go maximizes. Never below rest — a monitor so short that rest
+   * already stands above the line keeps the resting layout. */
   min: number;
   /** The lowest a deck that is UP stands: 120 left above the panes' foot —
    * where End takes it, and the line past which letting go puts it away.
@@ -86,14 +90,18 @@ export interface DeckEdgeBounds {
   /** The lowest a HELD edge goes: 24 short of the panes' foot. Never above
    * `max`. */
   held: number;
+  /** The highest a HELD edge goes: the window's top, where maximized stands.
+   * Never below `min`. */
+  top: number;
 }
 
 export function deckEdgeBounds(geometry: DeckEdgeGeometry): DeckEdgeBounds {
   const foot = geometry.height - geometry.reserve;
-  const min = Math.min(0, DECK_HEAD_RESERVE - geometry.restTop);
+  const min = Math.min(0, DECK_FILL_LINE - geometry.restTop);
   const max = Math.max(0, foot - DECK_MIN_HEIGHT - geometry.restTop);
   const held = Math.max(max, foot - DECK_HELD_LEAST - geometry.restTop);
-  return { min, max, held };
+  const top = Math.min(min, -geometry.restTop);
+  return { min, max, held, top };
 }
 
 export function clampDeckShift(shift: number, bounds: { min: number; max: number }): number {
@@ -138,14 +146,16 @@ export function flingVelocity(samples: readonly DeckSample[]): number {
   return span > 0 ? (last[1] - first[1]) / span : 0;
 }
 
-/** Where a let-go takes the terminals: they stay — at the edge, remembered —
- * or they go away. Less than 120 left goes away; so does a fling down,
- * whatever is left. (A fling up, or an edge above the fill line, maximizes:
- * that is the next slice's, and until it lands the edge stays.) */
-export type DeckLetGo = "stays" | "away";
+/** Where a let-go takes the terminals (§8 "A let-go decides"): they stay —
+ * at the edge, remembered — or they go away, or they fill the window. Less
+ * than 120 left goes away, and so does a fling down, whatever is left; an
+ * edge above the fill line maximizes, and so does a fling up. */
+export type DeckLetGo = "stays" | "away" | "maximized";
 
 export function deckLetGo(shift: number, bounds: DeckEdgeBounds, velocity: number): DeckLetGo {
-  return shift > bounds.max || velocity > DECK_FLING ? "away" : "stays";
+  if (shift > bounds.max || velocity > DECK_FLING) return "away";
+  if (shift < bounds.min || velocity < -DECK_FLING) return "maximized";
+  return "stays";
 }
 
 /** The saved shift, or 0 (rest) when there is none or it cannot be read. */

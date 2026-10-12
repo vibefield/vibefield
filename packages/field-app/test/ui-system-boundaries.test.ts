@@ -835,6 +835,8 @@ describe("UI system ownership boundaries", () => {
     // GV-D6: the terminals away are the same stage handed that state — never a
     // picture of a monitor without a deck
     expect(section).toContain("Deck — away: the monitor alone");
+    expect(section).toContain("Deck — maximized: the bar as the title bar");
+    expect(section).toMatch(/<GodviewPreview\s[^>]*deckState="maximized"/);
     expect(section).toMatch(/<GodviewPreview\s[^>]*deckState="away"/);
     expect(source("design-system/GodviewPreview.tsx")).toMatch(/<GodviewStage\s/);
     const fixture = source("design-system/PaneFramePreview.tsx");

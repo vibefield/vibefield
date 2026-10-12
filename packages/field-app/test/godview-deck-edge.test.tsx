@@ -6,7 +6,7 @@
  * The layout is the stylesheet's (`godview.css` reads one custom property), so
  * this fixture emulates that one rule in the only place happy-dom lays anything
  * out — `getBoundingClientRect` — and holds the edge to the contract:
- *   1. the bounds: up to the head's reserve, 56 from the window's top, down
+ *   1. the bounds: up to the fill line, 104 from the window's top, down
  *      until the deck that is UP would drop under 120 — and a held edge on to
  *      24 short of the panes' foot
  *   2. a drag writes the shift onto the stage's root and nothing else, and the
@@ -37,8 +37,8 @@ import { DEFAULT_DECK_APPEARANCE } from "../src/godview/deck-appearance";
 import {
   clampDeckShift,
   DECK_EDGE_STORAGE_KEY,
+  DECK_FILL_LINE,
   DECK_FLING,
-  DECK_HEAD_RESERVE,
   DECK_HELD_LEAST,
   DECK_MIN_HEIGHT,
   DECK_SHIFT_PROPERTY,
@@ -120,6 +120,8 @@ let paintedScale = 1;
 // edge as last set, never above 220; the body is the panes in the well.
 function layout(this: Element): DOMRect {
   if (this.classList.contains("vf-godview")) return rect(0, windowHeight);
+  // the stage's probe at the sheet's rest (`.vf-godview-deck-rest`)
+  if (this.classList.contains("vf-godview-deck-rest")) return rect(DECK_REST, 0);
   if (this.classList.contains("vf-godview-monitor-stage")) {
     // away, the monitor alone has the window down to the covers' reserve
     if (awayMonitor) return rect(monitorTop, windowHeight - monitorTop - 88);
@@ -312,10 +314,10 @@ function key(name: string, shiftKey = false): void {
 // The lowest a deck that is UP stands: 120 left above the window's foot
 // (no reserve outside the cover) — 800 − 120 − 320
 const MAX = 800 - DECK_MIN_HEIGHT - DECK_REST;
-// the highest: the sheet's top at the head's reserve, 56 from the window's top —
-// at rest it stands at 320, so it rises by 264 (until 2026-10-11, by 280: to
-// the bar's foot)
-const MIN = DECK_HEAD_RESERVE - DECK_REST;
+// the highest an UP deck stands: the fill line, 104 from the window's top — at
+// rest it stands at 320, so it rises by 216 (W6; until then the head's reserve,
+// 56, and before 2026-10-11 the bar's foot)
+const MIN = DECK_FILL_LINE - DECK_REST;
 // the lowest a HELD edge goes: 24 short of the panes' foot (round 3, W4)
 const HELD = 800 - DECK_HELD_LEAST - DECK_REST;
 /** Where the sheet's top stands in the window, from the shift on the root. */
@@ -323,19 +325,23 @@ const sheetTop = (): number =>
   DECK_REST + (shiftOnRoot() === "" ? 0 : Number.parseFloat(shiftOnRoot()));
 
 describe("the deck edge's arithmetic", () => {
-  it("rises to the head's reserve — 56 from the window's top — and falls until the deck's minimum, a held edge on to 24 short of the foot", () => {
-    expect(DECK_HEAD_RESERVE).toBe(56);
+  it("rises to the fill line — 104 from the window's top — and falls until the deck's minimum; a held edge on to the window's top and to 24 short of the foot", () => {
+    expect(DECK_FILL_LINE).toBe(104);
     expect(DECK_MIN_HEIGHT).toBe(120);
     expect(DECK_HELD_LEAST).toBe(24);
     // rest at 320 in an 800 stage with nothing kept under the panes
     expect(deckEdgeBounds({ restTop: 320, height: 800, reserve: 0 })).toEqual({
-      min: -264,
+      min: -216,
       max: 360,
       held: 456,
+      top: -320,
     });
     // inside the cover the panes end 88 above the foot (692 in the drawing's 780)
     expect(deckEdgeBounds({ restTop: 300, height: 780, reserve: 88 })).toEqual({
-      min: -244,
+      // the fill line, 104
+      min: 104 - 300,
+      // held: the window's top, where maximized stands
+      top: -300,
       // End: 120 left — 572 in the drawing
       max: 572 - 300,
       // held: 24 short of 692
@@ -343,20 +349,22 @@ describe("the deck edge's arithmetic", () => {
     });
     for (const restTop of [320, 280, 210]) {
       const { min } = deckEdgeBounds({ restTop, height: 800, reserve: 0 });
-      expect(restTop + min, String(restTop)).toBe(56);
+      expect(restTop + min, String(restTop)).toBe(104);
     }
     // A window too short for the minimum keeps the resting layout, held too.
     expect(deckEdgeBounds({ restTop: 320, height: 340, reserve: 0 })).toEqual({
-      min: -264,
+      min: -216,
       max: 0,
       held: 0,
+      top: -320,
     });
-    // …and a monitor so short that rest already stands above the reserve keeps
-    // it too: the reserve never pushes the edge DOWN from rest
+    // …and a monitor so short that rest already stands above the line keeps
+    // it too: the line never pushes the edge DOWN from rest
     expect(deckEdgeBounds({ restTop: 40, height: 400, reserve: 0 })).toEqual({
       min: 0,
       max: 240,
       held: 336,
+      top: -40,
     });
   });
 
@@ -369,7 +377,7 @@ describe("the deck edge's arithmetic", () => {
   });
 
   it("answers the separator's keys and leaves every other key alone — and keys never go past the up deck's least", () => {
-    const bounds = { min: -280, max: 360, held: 456 };
+    const bounds = { min: -280, max: 360, held: 456, top: -320 };
     expect(deckShiftForKey("ArrowUp", false, 0, bounds)).toBe(-24);
     expect(deckShiftForKey("ArrowDown", true, 0, bounds)).toBe(96);
     expect(deckShiftForKey("Home", false, 0, bounds)).toBe(-280);
@@ -378,11 +386,11 @@ describe("the deck edge's arithmetic", () => {
     expect(deckShiftForKey("a", false, 0, bounds)).toBeNull();
   });
 
-  it("decides a let-go: less than 120 left goes away, a fling down goes away, anything else stays", () => {
-    const bounds = { min: -264, max: 360, held: 456 };
+  it("decides a let-go: less than 120 left goes away, a fling down goes away, above the fill line or a fling up maximizes, anything else stays", () => {
+    const bounds = { min: -216, max: 360, held: 456, top: -320 };
     expect(DECK_FLING).toBe(1.4);
     // stays: anywhere the up deck may stand, let go slowly
-    for (const shift of [-264, -100, 0, 200, 360]) {
+    for (const shift of [-216, -100, 0, 200, 360]) {
       expect(deckLetGo(shift, bounds, 0), String(shift)).toBe("stays");
     }
     // less than 120 left: away
@@ -391,8 +399,10 @@ describe("the deck edge's arithmetic", () => {
     // a fling decides without the distance: faster than 1.4 px/ms, down
     expect(deckLetGo(0, bounds, 1.41)).toBe("away");
     expect(deckLetGo(0, bounds, 1.4)).toBe("stays");
-    // …and a fling UP maximizes, which is the next slice's: for now it stays
-    expect(deckLetGo(-100, bounds, -3)).toBe("stays");
+    // above the fill line: maximized; a fling UP maximizes whatever is above
+    expect(deckLetGo(-217, bounds, 0)).toBe("maximized");
+    expect(deckLetGo(-320, bounds, 0)).toBe("maximized");
+    expect(deckLetGo(-100, bounds, -3)).toBe("maximized");
   });
 
   it("reads a fling from the last moves and the let-go itself, so a pause before letting go is no fling", () => {
@@ -459,17 +469,17 @@ describe("the deck edge, mounted", () => {
     expect(localStorage.getItem(DECK_EDGE_STORAGE_KEY)).toBe("-100");
   });
 
-  it("stops at the head's reserve going up and at the deck's minimum going down, where nothing can minimize it", () => {
-    // a stage with no owner to minimize (a catalog's picture) keeps today's floor
+  it("stops at the fill line going up and at the deck's minimum going down, where nothing can minimize or maximize it", () => {
+    // a stage with no owner to ask (a catalog's picture) keeps the up deck's bounds
     mount();
     dragBy(-5_000);
     expect(shiftOnRoot()).toBe(`${MIN}px`);
-    expect(sheetTop()).toBe(56);
+    expect(sheetTop()).toBe(104);
     dragBy(10_000);
     expect(shiftOnRoot()).toBe(`${MAX}px`);
   });
 
-  it("reaches the same 56 from the window's top when no bar stands above the monitor", () => {
+  it("reaches the same 104 from the window's top when no bar stands above the monitor", () => {
     // The head's owner removes the 40 bar and lets the stage begin at the
     // window's top. The reach is a place in the WINDOW, so it does not move —
     // and neither does rest (L8a: the monitor's basis takes the 40 back).
@@ -477,21 +487,21 @@ describe("the deck edge, mounted", () => {
     mount();
     expect(separator()?.getAttribute("aria-valuemin")).toBe(String(MIN));
     dragBy(-5_000);
-    expect(sheetTop()).toBe(56);
+    expect(sheetTop()).toBe(104);
     key("End");
     key("Home");
-    expect(sheetTop()).toBe(56);
+    expect(sheetTop()).toBe(104);
     key("ArrowUp", true);
-    expect(sheetTop()).toBe(56);
+    expect(sheetTop()).toBe(104);
   });
 
-  it("clamps a remembered edge that stood above the reserve, at mount", () => {
+  it("clamps a remembered edge that stood above the fill line, at mount", () => {
     // Left at the bar's foot before 2026-10-11 (−280); the memory is kept, the
-    // edge stands at the reserve.
+    // edge stands at the fill line.
     localStorage.setItem(DECK_EDGE_STORAGE_KEY, String(-REST_MONITOR));
     mount();
     expect(shiftOnRoot()).toBe(`${MIN}px`);
-    expect(sheetTop()).toBe(56);
+    expect(sheetTop()).toBe(104);
     expect(localStorage.getItem(DECK_EDGE_STORAGE_KEY)).toBe(String(-REST_MONITOR));
   });
 
@@ -831,6 +841,139 @@ describe('the edge\'s outcomes (round 3, W4 — DESIGN.md §8 "A let-go decides"
     expect(asked).toEqual(["away"]);
   });
 
+  it("let go above the fill line, the terminals maximize — at once, no travel — and the remembered edge stays the viewer's", () => {
+    localStorage.setItem(DECK_EDGE_STORAGE_KEY, "100");
+    mount({ onDeckState: owner });
+    // held up to 20 above the fill line, let go slowly (0.4 px/ms)
+    hold(MIN - 100 - 20, { steps: 6, every: 100 });
+    expect(asked).toEqual(["maximized"]);
+    expect(localStorage.getItem(DECK_EDGE_STORAGE_KEY)).toBe("100");
+    expect(fieldOnRoot()).toBe("100px");
+    // the owner says it: maximized in one layout, with no travel — the edge was
+    // already in the hand (L10)
+    mount({ deckState: "maximized", onDeckState: owner });
+    expect(stageRoot().getAttribute("data-godview-deck-layout")).toBe("maximized");
+    expect(stageRoot().hasAttribute("data-godview-deck-motion")).toBe(false);
+  });
+
+  it("a fling up maximizes, however far the fill line is", () => {
+    mount({ onDeckState: owner });
+    // 60 up in 30ms — 2 px/ms — with the edge still 156 below the line
+    hold(-60, { steps: 3, every: 10, pause: 0 });
+    expect(asked).toEqual(["maximized"]);
+  });
+
+  it("a held edge goes on up past the fill line to the window's top", () => {
+    mount({ onDeckState: owner });
+    pointer("pointerdown", 400);
+    clock += 100;
+    pointer("pointermove", 400 - 10_000);
+    expect(sheetTop()).toBe(0);
+    clock += 100;
+    pointer("pointerup", 400 - 10_000);
+    expect(asked).toEqual(["maximized"]);
+  });
+
+  it("held above the fill line, the stage says Maximize the terminals over the terminals; let go, it goes", () => {
+    mount({ onDeckState: owner });
+    pointer("pointerdown", 400);
+    clock += 100;
+    pointer("pointermove", 400 + MIN + 10);
+    expect(readout()?.getAttribute("data-on")).toBe("false");
+    clock += 100;
+    pointer("pointermove", 400 + MIN - 10);
+    expect(readout()?.getAttribute("data-on")).toBe("true");
+    expect(readout()?.getAttribute("data-readout")).toBe("maximize");
+    expect(veil()?.getAttribute("data-readout")).toBe("maximize");
+    expect(readout()?.textContent).toBe("Maximize the terminals");
+    expect(readout()?.querySelector("i")?.textContent).toBe("Maximize");
+    clock += 100;
+    pointer("pointerup", 400 + MIN - 10);
+    expect(readout()?.getAttribute("data-on")).toBe("false");
+    expect(asked).toEqual(["maximized"]);
+  });
+
+  it("the maximized grip: a drag out is the sheet again AT ONCE — up from the drag's start — and its let-go decides", () => {
+    localStorage.setItem(DECK_EDGE_STORAGE_KEY, "100");
+    mount({ onDeckState: owner });
+    mount({ deckState: "maximized", onDeckState: owner });
+    pointer("pointerdown", 15);
+    // a press alone leaves the bar where it is (a double-click's first half)
+    expect(asked).toEqual([]);
+    clock += 50;
+    pointer("pointermove", 16);
+    // the door reads up from the start of the drag: the head returns at once,
+    // and the sheet stands where the bar was, the window's top, the same box
+    expect(asked).toEqual(["up"]);
+    expect(sheetTop()).toBe(1);
+    mount({ deckState: "up", onDeckState: owner });
+    expect(stageRoot().hasAttribute("data-godview-deck-motion")).toBe(false);
+    clock += 100;
+    pointer("pointermove", 15 + DECK_REST + 50);
+    expect(sheetTop()).toBe(DECK_REST + 50);
+    clock += 200;
+    pointer("pointerup", 15 + DECK_REST + 50);
+    // stays, and that is the new place
+    expect(asked).toEqual(["up"]);
+    expect(localStorage.getItem(DECK_EDGE_STORAGE_KEY)).toBe("50");
+  });
+
+  it("a press of the maximized grip that never moves leaves the terminals maximized", () => {
+    mount({ onDeckState: owner });
+    mount({ deckState: "maximized", onDeckState: owner });
+    pointer("pointerdown", 15);
+    clock += 80;
+    pointer("pointerup", 15);
+    expect(asked).toEqual([]);
+  });
+
+  it("keys on the maximized grip take the terminals out: to the fill line, or with End to 120 left — never minimize, never maximize", () => {
+    mount({ onDeckState: owner });
+    mount({ deckState: "maximized", onDeckState: owner });
+    key("ArrowDown");
+    expect(asked).toEqual(["up"]);
+    expect(shiftOnRoot()).toBe(`${MIN}px`);
+    mount({ deckState: "maximized", onDeckState: owner });
+    key("End");
+    expect(asked).toEqual(["up", "up"]);
+    expect(shiftOnRoot()).toBe(`${MAX}px`);
+    mount({ deckState: "up", onDeckState: owner });
+    // up, Home stops at the fill line, ↑ there moves nothing
+    key("Home");
+    key("ArrowUp", true);
+    expect(shiftOnRoot()).toBe(`${MIN}px`);
+    expect(asked).toEqual(["up", "up"]);
+  });
+
+  it("a double-click on the maximized grip restores the terminals to rest — a fall — and forgets the remembered edge", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    localStorage.setItem(DECK_EDGE_STORAGE_KEY, "-100");
+    mount({ onDeckState: owner });
+    mount({ deckState: "maximized", onDeckState: owner });
+    act(() => {
+      separator()?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    });
+    expect(asked).toEqual(["up"]);
+    expect(localStorage.getItem(DECK_EDGE_STORAGE_KEY)).toBeNull();
+    mount({ deckState: "up", onDeckState: owner });
+    // a fall: laid out as it was until it arrives, then at rest
+    expect(stageRoot().getAttribute("data-godview-deck-motion")).toBe("restore");
+    expect(stageRoot().getAttribute("data-godview-deck-layout")).toBe("maximized");
+    act(() => {
+      vi.advanceTimersByTime(DECK_FALL_MS + DECK_TRAVEL_GRACE_MS);
+    });
+    expect(stageRoot().getAttribute("data-godview-deck-layout")).toBe("up");
+    expect(shiftOnRoot()).toBe("");
+    vi.useRealTimers();
+  });
+
+  it("the grip's hit in the title bar: 168 wide, the bar's full height, holding the groove", () => {
+    mount({ onDeckState: owner });
+    const hit = separator()?.querySelector(".vf-godview-deck-grip-hit") ?? null;
+    expect(hit).not.toBeNull();
+    expect(hit?.querySelector(".vf-godview-deck-grip > .vf-godview-deck-groove")).not.toBeNull();
+  });
+
   it("says no readout where nothing can minimize (a picture's edge)", () => {
     mount();
     expect(readout()).toBeNull();
@@ -1130,9 +1273,9 @@ describe("the deck sheet's stylesheet", () => {
     // GV-D11's carve, declared for good: an "up" sheet never stands in the top
     // 52, so this only bites when the terminals are maximized.
     expect(rule(".vf-godview-deck-well")).toContain("-webkit-app-region: no-drag;");
-    // …and nothing else of the wrapper declares a region yet: the bar becomes
-    // window-drag only with the slice that maximizes it
-    expect(godview.match(/^\s*-webkit-app-region:/gm)).toHaveLength(1);
+    // …and the wrapper's other regions are the maximized title bar's (W6): the
+    // bar drags the window, the grip's hit and the buttons are holes in it
+    expect(godview.match(/^\s*-webkit-app-region:/gm)).toHaveLength(4);
   });
 
   it("holds the deck's top at rest whatever the head's height: the monitor's basis gives back what the head takes (L8a)", () => {

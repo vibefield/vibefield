@@ -145,6 +145,78 @@
   font-weight: 500;
 }
 
+/* ── IN THE TERMINALS' TITLE BAR (GV-D11; DESIGN.md §8 "Search — the Peek") ──
+   While Godview's terminals are maximized the head's circle is not drawn and
+   the SAME button stands in their title bar, first at its right end, before
+   the deck's hairline (the deck's controls: 8 in, two 30s and the 1 hairline,
+   4 apart, 4 either side of it). Folded to the bar: 24 tall, corners 8, padded
+   0 8 0 7, `search` 13 with ⌘F BESIDE it, 6 from it (10.5/600, the ⌘ at 500
+   and 72%) — in the terminal's ink at 64%, the full ink on a 10% fill under
+   the pointer, as the bar's other controls are. No glass: it stands on the
+   bar. The ink is the deck's, lent on the document by Godview's stage. */
+.vf-peek-find[data-bar] {
+  top: 3px;
+  right: calc(8px + 2 * var(--vf-godview-deck-control-width) + 3 * 4px + 9px);
+  min-width: 0;
+  height: var(--vf-godview-deck-control-height);
+  border-radius: var(--vf-godview-deck-control-radius);
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.dark .vf-peek-find[data-bar] {
+  background: transparent;
+  box-shadow: none;
+}
+
+.vf-peek-find[data-bar] .vf-peek-button {
+  display: inline-flex;
+  width: auto;
+  height: var(--vf-godview-deck-control-height);
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 7px;
+  border-radius: var(--vf-godview-deck-control-radius);
+  color: color-mix(in srgb, var(--vf-godview-bar-ink, var(--vf-text-primary)) 64%, transparent);
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+}
+
+.vf-peek-find[data-bar] .vf-peek-button:hover,
+.vf-peek-find[data-bar] .vf-peek-button[aria-expanded="true"] {
+  color: var(--vf-godview-bar-ink, var(--vf-text-primary));
+  background: color-mix(
+    in srgb,
+    var(--vf-godview-bar-ink, var(--vf-text-primary)) 10%,
+    transparent
+  );
+}
+
+.vf-peek-find[data-bar] .vf-peek-button > .vf-glyph {
+  width: 13px;
+  height: 13px;
+  margin-top: 0;
+}
+
+.vf-peek-find[data-bar] .vf-peek-key {
+  position: static;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  color: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.vf-peek-find[data-bar] .vf-peek-key span {
+  color: inherit;
+  font-size: inherit;
+  font-weight: 500;
+  opacity: 0.72;
+}
+
 /* ── THE LAYER — the scrim, and the popup over it ──────────────────────────
    Above the frame (62) and below Settings (65), the palette (70) and the veil
    (80) — none of which is ever open with it. In the product it is drawn on the

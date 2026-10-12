@@ -14,6 +14,7 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
+import { DECK_FILL_LINE, deckEdgeBounds, deckLetGo } from "../src/godview/deck-edge";
 import {
   DECK_STATE_STORAGE_KEY,
   deckAfter,
@@ -43,6 +44,35 @@ describe("the terminals' two acts", () => {
   });
 });
 
+describe("maximized (round 3, W6 — GV-D11)", () => {
+  it("maximize fills from up; restore brings it up; a call while maximized moves nothing; minimize from maximized goes away", () => {
+    expect(deckAfter("up", "maximize")).toBe("maximized");
+    expect(deckAfter("maximized", "restore")).toBe("up");
+    // restore is maximized's alone: up and away are not moved by it
+    expect(deckAfter("up", "restore")).toBe("up");
+    expect(deckAfter("away", "restore")).toBe("away");
+    expect(deckAfter("maximized", "call")).toBe("maximized");
+    expect(deckAfter("maximized", "minimize")).toBe("away");
+  });
+
+  it("above 104 or a fling up fills", () => {
+    expect(DECK_FILL_LINE).toBe(104);
+    // rest at 300 in the drawing's 780 window, the panes ending at 692
+    const bounds = deckEdgeBounds({ restTop: 300, height: 780, reserve: 88 });
+    // an up deck's highest is the fill line, a held edge's the window's top
+    expect(300 + bounds.min).toBe(104);
+    expect(300 + bounds.top).toBe(0);
+    // let go above the line: maximized; at it: it stays
+    expect(deckLetGo(bounds.min - 1, bounds, 0)).toBe("maximized");
+    expect(deckLetGo(bounds.top, bounds, 0)).toBe("maximized");
+    expect(deckLetGo(bounds.min, bounds, 0)).toBe("stays");
+    // a fling up fills whatever the distance; a fling down still goes away
+    expect(deckLetGo(0, bounds, -1.41)).toBe("maximized");
+    expect(deckLetGo(0, bounds, -1.4)).toBe("stays");
+    expect(deckLetGo(0, bounds, 1.41)).toBe("away");
+  });
+});
+
 describe("the state, kept for the run (L3)", () => {
   it("a launch opens up: nothing is kept, so the terminals are up as today", () => {
     expect(sessionStorage.getItem(DECK_STATE_STORAGE_KEY)).toBeNull();
@@ -62,6 +92,11 @@ describe("the state, kept for the run (L3)", () => {
   it("is the session's, never the viewer's: nothing reaches localStorage", () => {
     storeDeckState("away");
     expect(localStorage.length).toBe(0);
+  });
+
+  it("a reload keeps the terminals maximized", () => {
+    storeDeckState("maximized");
+    expect(storedDeckState()).toBe("maximized");
   });
 
   it("reads a word it does not know as up", () => {

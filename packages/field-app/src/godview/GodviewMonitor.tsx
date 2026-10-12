@@ -291,7 +291,8 @@ export interface GodviewMonitorProps {
   /** The deck's pane facts, read-only. */
   panes?: MonitorPaneFacts;
   /** MV-W4 — the stage's animations switch, the value its owner hands
-   * `GodviewStage` (GT-3p: the lab's kill switch; the catalog's still stage).
+   * `GodviewStage` (GT-3p: the lab's kill switch; the catalog's still stage;
+   * GV-D11: the window's own Godview, off while its terminals are maximized).
    * Off, a ported view's loop holds still, as the stage's CSS loops do under
    * the attribute the stage writes from the same value. */
   animations?: boolean;
@@ -516,7 +517,8 @@ export function GodviewMonitor({
   const [stageGeometry, setStageGeometry] = useState<StageGeometry>(EMPTY_STAGE);
   // MV-W4 — the motion a view may make: none while the viewer asks for reduced
   // motion, and none while the stage's animations switch is off (the lab's
-  // kill switch, the catalog's still stage). A view's loop stops on either
+  // kill switch, the catalog's still stage, and the window's own Godview while
+  // its terminals are maximized, GV-D11). A view's loop stops on either
   // (the rain draws once per change instead, the swarm holds still and pauses
   // its physics). Both are known at the first render, so a view mounted under
   // a still stage never starts its loop.

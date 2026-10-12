@@ -43,10 +43,23 @@ export interface GodviewDeckEdgeProps {
    * asked of their owner (GV-D6; round 3, W4). Absent (a picture's edge), the
    * held edge stops at the least a deck that is up keeps, as before. */
   onMinimize?: () => void;
-  /** Held past the line, the stage says what letting go would do (§8, §9):
-   * true while it should, false when it should not any more. */
-  onReadout?: (minimize: boolean) => void;
+  /** The terminals are maximized (GV-D11): the lip is the window's title bar
+   * and only its grip drags them; the edge holds still, as away. */
+  maximized?: boolean;
+  /** Let go above the fill line, or flung up, the terminals fill the window —
+   * asked of their owner, at once: the edge was already in the hand (L10).
+   * Absent, the held edge stops at the fill line. */
+  onMaximize?: () => void;
+  /** Out of maximized, asked of the owner: at once (`fall` false) from the
+   * START of a drag of the grip, or by a key; as a fall for a double-click. */
+  onUp?: (fall: boolean) => void;
+  /** Held past either line, the stage says what letting go would do (§8,
+   * §9): which, or null when it should not any more. */
+  onReadout?: (says: DeckReadoutKind | null) => void;
 }
+
+/** What a held edge's readout says: *Minimize* or *Maximize* the terminals. */
+export type DeckReadoutKind = "minimize" | "maximize";
 
 interface Drag {
   pointerId: number;
@@ -55,6 +68,9 @@ interface Drag {
   bounds: DeckEdgeBounds;
   /** The held edge's latest positions, for a fling. */
   samples: DeckSample[];
+  /** A press of the maximized grip not yet moved: it leaves maximized on its
+   * first move. */
+  leaving: boolean;
   /** Takes the window's listeners down and lets the lip go. */
   stop: () => void;
 }
@@ -106,6 +122,9 @@ export function GodviewDeckEdge({
   monitorPresent,
   away = false,
   onMinimize,
+  maximized = false,
+  onMaximize,
+  onUp,
   onReadout,
 }: GodviewDeckEdgeProps): ReactElement {
   const lipRef = useRef<HTMLDivElement>(null);
@@ -121,13 +140,17 @@ export function GodviewDeckEdge({
   // the render that started it.
   const minimize = useRef(onMinimize);
   minimize.current = onMinimize;
+  const maximize = useRef(onMaximize);
+  maximize.current = onMaximize;
+  const up = useRef(onUp);
+  up.current = onUp;
   const readout = useRef(onReadout);
   readout.current = onReadout;
-  const said = useRef(false);
-  const say = useCallback((minimizes: boolean): void => {
-    if (said.current === minimizes) return;
-    said.current = minimizes;
-    readout.current?.(minimizes);
+  const said = useRef<DeckReadoutKind | null>(null);
+  const say = useCallback((says: DeckReadoutKind | null): void => {
+    if (said.current === says) return;
+    said.current = says;
+    readout.current?.(says);
   }, []);
 
   const stage = useCallback((): {
@@ -162,7 +185,16 @@ export function GodviewDeckEdge({
     // the line. (The well carries the foot since round 3; the body is the
     // panes, 1 in.)
     const well = found.root.querySelector(".vf-godview-deck-well");
-    return deckEdgeBounds(measureDeckEdge(found.root, found.sheet, well, applied.current));
+    // Rest is read off the stage's probe at it, which stands still whatever
+    // the sheet is doing (maximized at the window's top, travelling); a stage
+    // without one is measured off the sheet, which stands at rest + shift.
+    const rest = found.root.querySelector<HTMLElement>(":scope > .vf-godview-deck-rest");
+    const bounds = deckEdgeBounds(
+      rest === null
+        ? measureDeckEdge(found.root, found.sheet, well, applied.current)
+        : measureDeckEdge(found.root, rest, well, 0),
+    );
+    return bounds;
   }, [stage]);
 
   /** A change (a let-go that stays, a key, a double-click): remembered, the
@@ -183,9 +215,10 @@ export function GodviewDeckEdge({
   // Godview is closed; the edge rests then and comes back on the next open.
   // Away, it holds still — measured again only when the terminals come up,
   // and then laid out at the edge they come up to before the first paint of
-  // their rise (one resize, at most).
+  // their rise (one resize, at most). Maximized, it holds still too: the sheet
+  // stands at the window's top whatever the edge says.
   useLayoutEffect(() => {
-    if (away) return;
+    if (away || maximized) return;
     const found = monitorPresent ? stage() : null;
     if (!found) {
       apply(0);
@@ -215,7 +248,7 @@ export function GodviewDeckEdge({
     observer.observe(found.root);
     observer.observe(found.monitor);
     return () => observer.disconnect();
-  }, [apply, setField, measure, monitorPresent, stage, away]);
+  }, [apply, setField, measure, monitorPresent, stage, away, maximized]);
 
   // The root outlives this lip only in a fixture swap; leave it at rest, and
   // take down a drag that was still held.
@@ -238,6 +271,9 @@ export function GodviewDeckEdge({
     const measured = measure();
     if (measured === null) return;
     event.preventDefault();
+    // Out of maximized, the grip turns the bar back into the sheet AT ONCE —
+    // from the drag's start, not its let-go (GV-D11): its first move, so a
+    // click (a double-click's first half) leaves the bar where it is.
     const lip = event.currentTarget;
     const pointerId = event.pointerId;
     // The capture keeps the cursor and the events with the lip while it lasts;
@@ -248,36 +284,57 @@ export function GodviewDeckEdge({
     const move = (moved: globalThis.PointerEvent): void => {
       const current = drag.current;
       if (current === null || !ours(moved)) return;
+      if (current.leaving) {
+        // the door reads up now, so the head returns; the sheet stands where
+        // the bar was (the window's top), the same box, as the pointer takes it
+        current.leaving = false;
+        up.current?.(false);
+      }
       // a held edge goes on down past the line only where letting go there
-      // can put the terminals away
-      const lowest = minimize.current !== undefined ? current.bounds.held : current.bounds.max;
+      // can put the terminals away, and on up past the fill line only where
+      // letting go there can fill the window
+      const minimizes = minimize.current !== undefined;
+      const maximizes = maximize.current !== undefined;
       const next = clampDeckShift(current.startShift + moved.clientY - current.startY, {
-        min: current.bounds.min,
-        max: lowest,
+        min: maximizes ? current.bounds.top : current.bounds.min,
+        max: minimizes ? current.bounds.held : current.bounds.max,
       });
       current.samples.push([performance.now(), next]);
       if (current.samples.length > DECK_FLING_SAMPLES) current.samples.shift();
       if (next !== applied.current) apply(next);
-      say(minimize.current !== undefined && next > current.bounds.max);
+      say(
+        minimizes && next > current.bounds.max
+          ? "minimize"
+          : maximizes && next < current.bounds.min
+            ? "maximize"
+            : null,
+      );
     };
     const letGo = (released: globalThis.PointerEvent): void => {
       const current = drag.current;
       if (current === null || !ours(released)) return;
       current.stop();
+      // a press of the maximized grip that never moved leaves it maximized
+      if (current.leaving) return;
       const at = applied.current;
       current.samples.push([performance.now(), at]);
+      const outcome = deckLetGo(at, current.bounds, flingVelocity(current.samples));
       const toMinimize = minimize.current;
-      if (
-        toMinimize !== undefined &&
-        deckLetGo(at, current.bounds, flingVelocity(current.samples)) === "away"
-      ) {
+      if (outcome === "away" && toMinimize !== undefined) {
         // The sheet falls at the size it has; the place the viewer left the
         // edge stays the one remembered (the intent), and the field is the
         // monitor's alone once they are away.
         toMinimize();
         return;
       }
-      commit(at);
+      const toMaximize = maximize.current;
+      if (outcome === "maximized" && toMaximize !== undefined) {
+        // At once, in one layout: the remembered edge, again, is untouched —
+        // restore brings the terminals back down to it.
+        toMaximize();
+        return;
+      }
+      commit(clampDeckShift(at, current.bounds));
     };
     const stop = (): void => {
       window.removeEventListener("pointermove", move, true);
@@ -286,17 +343,20 @@ export function GodviewDeckEdge({
       drag.current = null;
       if (lip.hasPointerCapture(pointerId)) lip.releasePointerCapture(pointerId);
       setDragging(false);
-      say(false);
+      say(null);
     };
     window.addEventListener("pointermove", move, true);
     window.addEventListener("pointerup", letGo, true);
     window.addEventListener("pointercancel", letGo, true);
+    // from the bar, the drag starts at the window's top, where the bar is
+    const startShift = maximized ? measured.top : applied.current;
     drag.current = {
       pointerId,
       startY: event.clientY,
-      startShift: applied.current,
+      startShift,
       bounds: measured,
-      samples: [[performance.now(), applied.current]],
+      samples: [[performance.now(), startShift]],
+      leaving: maximized,
       stop,
     };
     setBounds(measured);
@@ -321,19 +381,46 @@ export function GodviewDeckEdge({
       onDoubleClick={() => {
         const measured = measure();
         commit(measured === null ? 0 : clampDeckShift(0, measured));
+        // on the maximized grip: the terminals fall back, to rest
+        if (maximized) up.current?.(true);
       }}
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
         const measured = measure();
         if (measured === null) return;
-        const next = deckShiftForKey(event.key, event.shiftKey, applied.current, measured);
+        // On the maximized grip the keys take the terminals out — to the fill
+        // line, or with End to 120 left — in one layout; never anywhere a key
+        // could minimize or maximize from.
+        const next = maximized
+          ? maximizedKey(event.key, measured)
+          : deckShiftForKey(event.key, event.shiftKey, applied.current, measured);
         if (next === null) return;
         event.preventDefault();
         event.stopPropagation();
         setBounds(measured);
+        if (maximized) up.current?.(false);
         commit(next);
       }}
     >
-      <DeckGroove />
+      {/* the grip's hit: the whole lip drags the edge of a sheet; in the
+          title bar only this does (GV-D11's 168), the rest moves the window */}
+      <span className="vf-godview-deck-grip-hit">
+        <DeckGroove />
+      </span>
     </div>
   );
+}
+
+/** A key on the maximized grip: out, to the fill line (↑ ↓ Home), or to 120
+ * left (End). Null for any other key. */
+function maximizedKey(key: string, bounds: DeckEdgeBounds): number | null {
+  switch (key) {
+    case "ArrowUp":
+    case "ArrowDown":
+    case "Home":
+      return bounds.min;
+    case "End":
+      return bounds.max;
+    default:
+      return null;
+  }
 }
