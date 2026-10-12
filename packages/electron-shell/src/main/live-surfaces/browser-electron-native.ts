@@ -150,6 +150,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   #pageDocument = false;
   /** PT-5c (ruling 1): who hears the page's word of its scale. */
   readonly #scaleListeners = new Set<(scale: number, document: number) => void>();
+  /** PT-5d (M6.4b): who hears that a command of the hand went unanswered past the bound. */
+  readonly #hungListeners = new Set<(frame?: string) => void>();
   /**
    * PT-5c (ruling 1) — TWO QUEUES, never one: the DEVICE's (its layout, what it is told — `Emulation.*`, the window's size)
    * and the HAND's (`Input.*`). A device command the renderer does not answer — every one, while a navigation pends — no
@@ -279,10 +281,12 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     // session is for (its target's id): a commit there, an error page's too; a late failure, an abort, a move within its
     // document say none. The page's count never moves for a frame's (the page's is counted at its own `did-navigate`).
     if (method === "Page.frameNavigated") {
-      const frame = params["frame"] as { readonly id?: unknown } | undefined;
+      const frame = params["frame"] as
+        | { readonly id?: unknown; readonly url?: unknown }
+        | undefined;
       if (sessionId === undefined || sessionId === "" || frame === undefined) return;
       if (this.#frames.frames().find((f) => f.session === sessionId)?.targetId === frame.id)
-        this.#frames.committed(sessionId);
+        this.#frames.committed(sessionId, typeof frame.url === "string" ? frame.url : undefined);
       return;
     }
     if (method === "Page.fileChooserOpened") {
@@ -297,13 +301,19 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     }
     if (method !== "Target.attachedToTarget") return;
     const info = params["targetInfo"] as
-      | { readonly type?: unknown; readonly targetId?: unknown }
+      | { readonly type?: unknown; readonly targetId?: unknown; readonly url?: unknown }
       | undefined;
     const child = params["sessionId"];
     // PT-5d (ruling 4): a FRAME of the page's tree alone — never a worker, a service worker, another page
     if (info?.type !== "iframe" || typeof child !== "string" || this.isDestroyed()) return;
     const parent = sessionId === undefined || sessionId === "" ? undefined : sessionId;
-    if (typeof info.targetId === "string") this.#frames.attached(child, info.targetId, parent);
+    if (typeof info.targetId === "string")
+      this.#frames.attached(
+        child,
+        info.targetId,
+        parent,
+        typeof info.url === "string" ? info.url : undefined,
+      );
     const cdp = this.window.webContents.debugger;
     // (each step its own: one the engine refuses never keeps the guards after it off — the nested frames' least of all)
     const send = (method: string, params: Record<string, unknown> = {}): Promise<unknown> =>
@@ -607,11 +617,10 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   dispatchTouch(input: BrowserSurfaceNativeTouchInput): Promise<void> {
     return this.hand(async () => {
       await this.ensureDebugger();
-      const cdp = this.window.webContents.debugger;
       if (input.type === "touchStart" || input.type === "touchMove") {
         const point = input.touchPoints[0];
         if (point === undefined) {
-          await cdp.sendCommand("Input.dispatchTouchEvent", input);
+          await this.handCommand("Input.dispatchTouchEvent", input, undefined);
           return;
         }
         const routed =
@@ -619,7 +628,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
             ? this.#frames.touchStart(point.x, point.y)
             : this.#frames.touchMove(point.x, point.y);
         if (routed === null) return;
-        await cdp.sendCommand(
+        await this.handCommand(
           "Input.dispatchTouchEvent",
           { ...input, touchPoints: [{ ...point, x: routed.x, y: routed.y }] },
           routed.target.session,
@@ -628,16 +637,15 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       }
       const target = this.#frames.touchEnd();
       if (target === null) return;
-      await cdp.sendCommand("Input.dispatchTouchEvent", input, target.session);
+      await this.handCommand("Input.dispatchTouchEvent", input, target.session);
     });
   }
 
   dispatchMouse(input: BrowserSurfaceNativeMouseInput): Promise<void> {
     return this.hand(async () => {
       await this.ensureDebugger();
-      const cdp = this.window.webContents.debugger;
       for (const routed of this.routeMouse(input))
-        await cdp.sendCommand(
+        await this.handCommand(
           "Input.dispatchMouseEvent",
           { ...input, x: routed.x, y: routed.y },
           routed.target.session,
@@ -651,38 +659,58 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       const target =
         input.type === "keyUp" ? this.#frames.keyUp(input.code) : this.#frames.keyDown(input.code);
       if (target === null) return;
-      await this.window.webContents.debugger.sendCommand(
-        "Input.dispatchKeyEvent",
-        input,
-        target.session,
-      );
+      await this.handCommand("Input.dispatchKeyEvent", input, target.session);
     });
   }
 
   dispatchText(text: string): Promise<void> {
     return this.hand(async () => {
       await this.ensureDebugger();
-      await this.window.webContents.debugger.sendCommand(
-        "Input.insertText",
-        { text },
-        this.#frames.focused().session,
-      );
+      await this.handCommand("Input.insertText", { text }, this.#frames.focused().session);
     });
   }
 
   dispatchCompose(text: string, caret: number): Promise<void> {
     return this.hand(async () => {
       await this.ensureDebugger();
-      await this.window.webContents.debugger.sendCommand(
+      await this.handCommand(
         "Input.imeSetComposition",
-        {
-          text,
-          selectionStart: caret,
-          selectionEnd: caret,
-        },
+        { text, selectionStart: caret, selectionEnd: caret },
         this.#frames.focused().session,
       );
     });
+  }
+
+  /** PT-5d (M6.4b): a command of the hand the page never answered, said (see `handCommand`). */
+  onInputHung(listener: (frame?: string) => void): () => void {
+    this.#hungListeners.add(listener);
+    return () => this.#hungListeners.delete(listener);
+  }
+
+  /**
+   * PT-5d (M6.4b) — EVERY COMMAND OF THE HAND goes through here: timed from its SEND to its answer — never its wait in the
+   * hand's queue behind another (the clock starts again at each answer, as the engine's own ack timeout does); unanswered
+   * past the window's `hungInputMs`, said hung once (`onInputHung`) with the origin of the frame it went to (M6.4a). Born
+   * without the bound (a page that does not say when it stops), nothing is timed.
+   */
+  private async handCommand(
+    method: string,
+    params: object,
+    session: string | undefined,
+  ): Promise<void> {
+    const bound = this.options.hungInputMs;
+    const timer =
+      bound === undefined
+        ? null
+        : setTimeout(() => {
+            const frame = this.#frames.originOf(session);
+            for (const listener of [...this.#hungListeners]) listener(frame);
+          }, bound);
+    try {
+      await this.window.webContents.debugger.sendCommand(method, params, session);
+    } finally {
+      if (timer !== null) clearTimeout(timer);
+    }
   }
 
   /** PT-5d: a pointer's event, routed — a hover that crosses into another target first tells the one it left. */

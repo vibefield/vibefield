@@ -48,6 +48,8 @@ interface FrameRecord {
   visible: FrameVisible | undefined;
   /** its own commits */
   documents: number;
+  /** its document's address, as its target and its commits say it (M6.4a: a hung frame named by its origin) */
+  url: string | undefined;
   /** its place in the order frames attach — the later one wins where two overlap */
   readonly order: number;
 }
@@ -71,8 +73,9 @@ export class BrowserFrames {
 
   // ── the page's tree, as the native hears it ────────────────────────────────────────────────────────────────────
 
-  /** A frame of the page's tree attached: its session, its target, its parent's session (`undefined`: the page's). */
-  attached(session: string, targetId: string, parent: string | undefined): void {
+  /** A frame of the page's tree attached: its session, its target, its parent's session (`undefined`: the page's), its
+   * address. */
+  attached(session: string, targetId: string, parent: string | undefined, url?: string): void {
     if (parent !== undefined && !this.#frames.has(parent)) return;
     this.#order += 1;
     this.#frames.set(session, {
@@ -84,6 +87,7 @@ export class BrowserFrames {
       placement: 0,
       visible: undefined,
       documents: 0,
+      url,
       order: this.#order,
     });
   }
@@ -98,10 +102,11 @@ export class BrowserFrames {
 
   /** A frame committed another document — its own word, on its own session. The frames of the document before go with
    * it (PT-5d, M6.2: the focus in one of them with them — the page's, as at their going). */
-  committed(session: string): void {
+  committed(session: string, url?: string): void {
     const frame = this.#frames.get(session);
     if (frame === undefined) return;
     frame.documents += 1;
+    frame.url = url;
     for (const child of [...this.#frames.values()])
       if (child.parent === session) this.detached(child.session);
   }
@@ -248,6 +253,18 @@ export class BrowserFrames {
   /** Text, a composition, a command: the focused document's session. */
   focused(): FrameTarget {
     return this.targetOf(this.#focused);
+  }
+
+  /** PT-5d (M6.4a): the origin of the frame on a session (`undefined`: the page's own, or an address with none). */
+  originOf(session: string | undefined): string | undefined {
+    const url = session === undefined ? undefined : this.#frames.get(session)?.url;
+    if (url === undefined) return undefined;
+    try {
+      const origin = new URL(url).origin;
+      return origin === "null" ? undefined : origin;
+    } catch {
+      return undefined;
+    }
   }
 
   /** Is the target still there — its session attached, its document the one it was? */

@@ -87,7 +87,7 @@ import {
   type BrowserSurfaceNavigationState,
 } from "../src/main/live-surfaces/browser-producer";
 
-const window = () => {
+const window = (options: { readonly hungInputMs?: number } = {}) => {
   const native = new ElectronBrowserSurfaceNative().createWindow({
     partition: "memory:test",
     persistent: false,
@@ -95,6 +95,7 @@ const window = () => {
     initialBackingRaster: { width: 640, height: 360 },
     deviceScaleFactor: 2,
     requestSharedTexture: true,
+    ...options,
   });
   const contents = electron.made.at(-1)?.webContents;
   if (contents === undefined) throw new Error("no window was made");
@@ -691,8 +692,9 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
   /** A window whose debugger records what it is sent, by session, and answers what the row says (else `{}`). */
   const recording = (
     answer: (method: string, params: unknown, session?: string) => object = () => ({}),
+    options: { readonly hungInputMs?: number } = {},
   ) => {
-    const w = window();
+    const w = window(options);
     const sent: { method: string; params: unknown; session?: string }[] = [];
     let attached = false;
     w.contents.debugger.isAttached = () => attached;
@@ -1433,5 +1435,129 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       "mousePressed@F 80,225",
       "mouseReleased@F 80,225",
     ]);
+  });
+
+  describe("M6.4b — the host's bound on a page that hangs: a command of the hand timed from its SEND to its answer", () => {
+    const BOUND = 20_000;
+    it("200 moves queued at once, each answered 150 ms after it is sent (30 s for the last): never said hung — no command waited 20 s; every one sent", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = recording(
+          (method) =>
+            method === "Input.dispatchMouseEvent"
+              ? new Promise((resolve) => setTimeout(() => resolve({}), 150))
+              : {},
+          { hungInputMs: BOUND },
+        );
+        const hung: (string | undefined)[] = [];
+        r.native.onInputHung((frame) => hung.push(frame));
+        const moves = Array.from({ length: 200 }, (_, i) =>
+          r.native.dispatchMouse({ type: "mouseMoved", x: i, y: 1, button: "none", buttons: 0 }),
+        );
+        await vi.advanceTimersByTimeAsync(200 * 150 + 1_000);
+        await Promise.all(moves);
+        expect(r.hand()).toHaveLength(200);
+        expect(hung).toEqual([]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("a command never answered is said hung ONCE, the bound after it was SENT — not after its wait in the queue; a frame's with its origin; a window born without the bound says nothing", async () => {
+      vi.useFakeTimers();
+      try {
+        let answerKey = true;
+        const r = recording(
+          (method, params, session) => {
+            if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };
+            if (method === "DOM.getBoxModel")
+              return { model: { content: [100, 80, 500, 80, 500, 380, 100, 380] } };
+            if (method === "Input.dispatchMouseEvent")
+              return new Promise((resolve) => setTimeout(() => resolve({}), 15_000));
+            if (method === "Input.dispatchKeyEvent" && !answerKey) return new Promise(() => {});
+            if (method === "Input.dispatchKeyEvent" && session === "F")
+              return new Promise(() => {});
+            void params;
+            return {};
+          },
+          { hungInputMs: BOUND },
+        );
+        const hung: (string | undefined)[] = [];
+        r.native.onInputHung((frame) => hung.push(frame));
+        await r.native.loadURL("https://host.test/a");
+        r.at("https://host.test/a");
+        r.contents.emit("did-navigate", {}, "https://host.test/a");
+        r.emit(
+          "Target.attachedToTarget",
+          {
+            sessionId: "F",
+            targetInfo: { type: "iframe", targetId: "t-F", url: "https://ads.example.test/x?y=1" },
+          },
+          undefined,
+        );
+        await vi.advanceTimersByTimeAsync(0);
+        // a move answered in 15 s, then a key on the page never answered: the key's 20 s run from ITS send (15 s in)
+        void r.native.dispatchMouse({
+          type: "mouseMoved",
+          x: 20,
+          y: 20,
+          button: "none",
+          buttons: 0,
+        });
+        answerKey = false;
+        void r.native.dispatchKey({ type: "keyDown", key: "q", code: "KeyQ", modifiers: 0 });
+        await vi.advanceTimersByTimeAsync(15_000 + BOUND - 1);
+        expect(hung).toEqual([]);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(hung).toEqual([undefined]);
+        await vi.advanceTimersByTimeAsync(BOUND * 3);
+        expect(hung).toEqual([undefined]);
+        // a frame's command never answered: its origin
+        const f = recording(
+          (method, _params, session) => {
+            if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };
+            if (method === "DOM.getBoxModel")
+              return { model: { content: [100, 80, 500, 80, 500, 380, 100, 380] } };
+            if (method.startsWith("Input.") && session === "F") return new Promise(() => {});
+            return {};
+          },
+          { hungInputMs: BOUND },
+        );
+        const frameHung: (string | undefined)[] = [];
+        f.native.onInputHung((frame) => frameHung.push(frame));
+        await f.native.loadURL("https://host.test/a");
+        f.at("https://host.test/a");
+        f.contents.emit("did-navigate", {}, "https://host.test/a");
+        f.emit(
+          "Target.attachedToTarget",
+          {
+            sessionId: "F",
+            targetInfo: { type: "iframe", targetId: "t-F", url: "https://ads.example.test/x?y=1" },
+          },
+          undefined,
+        );
+        await vi.advanceTimersByTimeAsync(0);
+        void f.native.dispatchMouse({
+          type: "mousePressed",
+          x: 180,
+          y: 120,
+          button: "left",
+          clickCount: 1,
+        });
+        await vi.advanceTimersByTimeAsync(BOUND);
+        expect(frameHung).toEqual(["https://ads.example.test"]);
+        // born without the bound: nothing is timed
+        const plain = recording((method) =>
+          method.startsWith("Input.") ? new Promise(() => {}) : {},
+        );
+        const plainHung: (string | undefined)[] = [];
+        plain.native.onInputHung((frame) => plainHung.push(frame));
+        void plain.native.dispatchKey({ type: "keyDown", key: "q", code: "KeyQ", modifiers: 0 });
+        await vi.advanceTimersByTimeAsync(BOUND * 3);
+        expect(plainHung).toEqual([]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

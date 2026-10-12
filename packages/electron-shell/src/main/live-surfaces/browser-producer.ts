@@ -47,7 +47,7 @@ const DEFAULT_RESTART_LIMIT = 1;
 const DEFAULT_UNRESPONSIVE_MS = 5_000;
 /** PT-5d (ruling 6): how long a command of the hand may go unanswered before a page that says when it stops is said to
  * have stopped — the engine's own delay (15 s) and PT-5a's bound (5 s): the host's own, for a page the engine never says
- * `unresponsive` of. */
+ * `unresponsive` of. PT-5d (M6.4b): timed by the native window, from each command's SEND to its answer. */
 const DEFAULT_HUNG_INPUT_MS = 20_000;
 /** How long a page with no renderer attached is kept paused before it hibernates (PT-2: a window reload's gap — the window
  * pool's own grace). */
@@ -148,6 +148,13 @@ export interface BrowserSurfaceNativeWindow {
   onScale(listener: (scale: number, document: number) => void): () => void;
   /** PT-5a: the page stopped answering its input (`true` — Electron's `unresponsive`) or answers again (`false`). */
   onUnresponsive(listener: (unresponsive: boolean) => void): () => void;
+  /**
+   * PT-5d (M6.4b) — a COMMAND OF THE HAND went unanswered past the window's `hungInputMs`, timed from its SEND to CDP —
+   * never its wait in the queue behind another (the clock starts again at each answer, as the engine's own ack timeout
+   * does); said once a command. `frame`: the origin of the frame of another site it was sent to (absent: the page's own).
+   * A window born without the bound says nothing.
+   */
+  onInputHung(listener: (frame?: string) => void): () => void;
   /** PT-5a: the page asked for something it MAY NOT have, and was answered at once (`BrowserSurfaceRefusal`); a pop-up
    * comes with the address it asked for. */
   onRefused(listener: (what: BrowserSurfaceRefusal, url?: string) => void): () => void;
@@ -271,6 +278,9 @@ export interface BrowserSurfaceNativeWindowOptions {
   readonly initialBackingRaster: LiveSurfacePixelSizeV1;
   readonly deviceScaleFactor: number;
   readonly requestSharedTexture: boolean;
+  /** PT-5d (M6.4b): the bound on a command of the hand left unanswered (`onInputHung`) — given to a page that says when it
+   * stops (`whenStopped: "say"`); absent: nothing is timed. */
+  readonly hungInputMs?: number;
 }
 
 export interface BrowserSurfaceNative {
@@ -494,6 +504,7 @@ interface SourceCallbacks {
   readonly removeRefused: () => void;
   readonly removeUnresponsive: () => void;
   readonly removeScale: () => void;
+  readonly removeInputHung: () => void;
 }
 
 function increment(value: number, name: string): number {
@@ -1430,23 +1441,14 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       this.#pending.set(window, pending);
     }
     const entries = pending;
-    // PT-5d (ruling 6) — A TURN THE PAGE NEVER ANSWERS IS BOUNDED BY THE HOST: on a page that says when it stops, a turn
-    // unanswered past `hungInputMs` says the page stopped (`inputHung`) — its window goes, this turn and every one queued
-    // behind it refused, counted, nothing left down. (Before: only the engine's `unresponsive` could — and the engine may
-    // never say it of an offscreen page whose input came by CDP: the ONE chain stalled for good.)
-    const bound =
-      this.source.whenStopped === "say"
-        ? setTimeout(() => this.inputHung(window), this.#hungInputMs)
-        : null;
+    // (PT-5d, ruling 6: a turn the page never answers is bounded by the HOST — M6.4b: by the window, per COMMAND from its
+    // send, never here per turn from its call: a turn waiting behind a slow command, or for its document's word, is no
+    // page that hangs — `onInputHung`, `inputHung`)
     return new Promise<T>((resolve, reject) => {
-      // (the window's going rejects by this entry; every way out ends the bound)
-      const end = (error: unknown): void => {
-        if (bound !== null) clearTimeout(bound);
-        reject(error);
-      };
+      // (the window's going rejects by this entry)
+      const end = (error: unknown): void => reject(error);
       const settled = (): void => {
         entries.delete(end);
-        if (bound !== null) clearTimeout(bound);
       };
       entries.add(end);
       let running: Promise<T>;
@@ -1470,13 +1472,26 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     });
   }
 
-  /** PT-5d (ruling 6): a turn of the hand on `window` went unanswered past the host's bound — the page is said to have
-   * stopped, as at the engine's own `unresponsive` past PT-5a's (the person's reload makes it anew). */
-  private inputHung(window: BrowserSurfaceNativeWindow): void {
+  /**
+   * PT-5d (ruling 6; M6.4) — a command of the hand on `window` went unanswered past the host's bound (the window timed it
+   * from its send): on a page that says when it stops, the page is said to have stopped, as at the engine's own
+   * `unresponsive` past PT-5a's — its window goes, every turn queued behind refused, counted, nothing left down; the
+   * person's reload makes it anew. A FRAME's command (M6.4a): the page the same — the engine flags the tab for a hung frame
+   * too — its reason naming the frame's origin.
+   */
+  private inputHung(window: BrowserSurfaceNativeWindow, frame?: string): void {
     // (said once: a page said stopped has no window — the engine's word after it, or another bound, finds none)
-    if (this.#closed || this.#window !== window) return;
+    if (this.#closed || this.#window !== window || this.source.whenStopped !== "say") return;
     this.#waitsForReload = true;
-    this.failSource(sourceError("frame-stalled", "Browser page stopped responding", "user-action"));
+    this.failSource(
+      sourceError(
+        "frame-stalled",
+        frame === undefined
+          ? "Browser page stopped responding"
+          : `Browser page stopped responding — its frame of ${frame}`,
+        "user-action",
+      ),
+    );
   }
 
   /**
@@ -1995,6 +2010,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       initialBackingRaster: initialRaster,
       deviceScaleFactor: this.density(),
       requestSharedTexture: this.#requestSharedTexture,
+      // PT-5d (M6.4b): the host's bound, timed by the window per command — a page that says when it stops
+      ...(this.source.whenStopped === "say" ? { hungInputMs: this.#hungInputMs } : {}),
     };
   }
 
@@ -2549,6 +2566,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       const removeScale = window.onScale((scale, counted) =>
         this.acceptScale(window, epoch, scale, counted),
       );
+      const removeInputHung = window.onInputHung((frame) => this.inputHung(window, frame));
       this.#callbacks = {
         removePaint,
         removeGone,
@@ -2559,6 +2577,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         removeRefused,
         removeUnresponsive,
         removeScale,
+        removeInputHung,
       };
       this.#producersStarted += 1;
       this.applyFrameRate();
@@ -3025,6 +3044,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         removeScale: window.onScale((scale, counted) =>
           this.acceptScale(window, epoch, scale, counted),
         ),
+        removeInputHung: window.onInputHung((frame) => this.inputHung(window, frame)),
       };
       this.#producersStarted += 1;
       this.applyFrameRate();
@@ -3106,6 +3126,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     callbacks?.removeRefused();
     callbacks?.removeUnresponsive();
     callbacks?.removeScale();
+    callbacks?.removeInputHung();
     if (this.#unresponsiveTimer !== null) {
       clearTimeout(this.#unresponsiveTimer);
       this.#unresponsiveTimer = null;

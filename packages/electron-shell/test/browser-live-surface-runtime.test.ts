@@ -280,6 +280,16 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
   hang(unresponsive: boolean): void {
     this.#events.emit("unresponsive", unresponsive);
   }
+
+  onInputHung(listener: (frame?: string) => void): () => void {
+    this.#events.on("input-hung", listener);
+    return () => this.#events.off("input-hung", listener);
+  }
+
+  /** PT-5d (M6.4b): the native timed a command of the hand past its bound — on the page's session, or a frame's (its origin). */
+  inputHung(frame?: string): void {
+    this.#events.emit("input-hung", frame);
+  }
 }
 
 class FakeNative implements BrowserSurfaceNative {
@@ -3462,22 +3472,27 @@ describe("BrowserLiveSurfaceRuntime", () => {
       return { result, renderer, window, key, press };
     };
 
-    it("its turn is ended by the HOST's bound (`hungInputMs` — the engine may never say `unresponsive` for an offscreen page whose input came by CDP): the page SAID stopped (`frame-stalled`, the person's to recover), its window gone; the turns queued behind it refused and counted, nothing sent; ↻ makes a new window — the page back", async () => {
+    it("M6.4b — the HOST's bound is the NATIVE's, timed per COMMAND from its send (the engine may never say `unresponsive` for an offscreen page whose input came by CDP): a desk page's window is born with it (`hungInputMs`); the producer times no turn of its own; at the native's word the page is SAID stopped (`frame-stalled`, the person's to recover), its window gone; the turns queued behind it refused and counted, nothing sent; ↻ makes a new window — the page back", async () => {
       vi.useFakeTimers();
       const p = await stuck();
+      expect(p.window.options.hungInputMs).toBe(400);
       // the page's renderer in an endless loop: a key's down is never answered
       p.window.dispatchKey = () => new Promise<void>(() => {});
       p.key("down", "a");
       p.key("up", "a");
       p.key("down", "b");
       p.press();
-      await vi.advanceTimersByTimeAsync(399);
+      await vi.advanceTimersByTimeAsync(5_000);
       expect(p.result.runtime.summary.state).toBe("live");
       const dropped = p.result.runtime.stats.inputDropped;
-      await vi.advanceTimersByTimeAsync(1);
+      p.window.inputHung();
       expect(p.result.runtime.summary).toMatchObject({
         state: "failed",
-        error: { code: "frame-stalled", recovery: "user-action" },
+        error: {
+          code: "frame-stalled",
+          message: "Browser page stopped responding",
+          recovery: "user-action",
+        },
         browser: { url: "https://example.test/app" },
       });
       expect(p.window.destroyed).toBe(true);
@@ -3490,7 +3505,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.result.runtime.dispose();
     });
 
-    it("a command answered LATE but within the bound (a busy page) goes on — nothing said; a source that does not say when its page stops is left alone, as the engine's word is", async () => {
+    it("M6.4b — a turn answered LATE, past the bound counted from its CALL (its wait behind a slow command, its document's word) — the native saying nothing — goes on: the page is not said stopped (before: the producer's own per-turn timer said so); a source that does not say when its page stops is born without the bound, and left alone", async () => {
       vi.useFakeTimers();
       const p = await stuck();
       let answer: () => void = () => {};
@@ -3501,18 +3516,34 @@ describe("BrowserLiveSurfaceRuntime", () => {
         });
       };
       p.key("down", "a");
-      await vi.advanceTimersByTimeAsync(399);
+      await vi.advanceTimersByTimeAsync(1_000);
       answer();
       await vi.advanceTimersByTimeAsync(1_000);
       expect(p.result.runtime.summary.state).toBe("live");
       expect(p.window.keyInputs.map((k) => k.type)).toEqual(["keyDown"]);
       p.result.runtime.dispose();
       const plain = await stuck({ source: source() });
+      expect(plain.window.options.hungInputMs).toBeUndefined();
       plain.window.dispatchKey = () => new Promise<void>(() => {});
       plain.key("down", "a");
       await vi.advanceTimersByTimeAsync(5_000);
+      plain.window.inputHung();
       expect(plain.result.runtime.summary.state).toBe("live");
       plain.result.runtime.dispose();
+    });
+
+    it("M6.4a — a FRAME's command unanswered (a frame of another site hangs): the page is said stopped, its reason naming the frame's origin", async () => {
+      vi.useFakeTimers();
+      const p = await stuck();
+      p.window.inputHung("https://ads.example.test");
+      expect(p.result.runtime.summary).toMatchObject({
+        state: "failed",
+        error: {
+          code: "frame-stalled",
+          message: "Browser page stopped responding — its frame of https://ads.example.test",
+        },
+      });
+      p.result.runtime.dispose();
     });
   });
 
