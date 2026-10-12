@@ -1024,9 +1024,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #windowDensity: number | undefined;
   /** PT-5c (ruling 1): a `mobile` page's visual-viewport scale as its page last SAID it, and the document it said it for. */
   #pageScale: { readonly value: number; readonly document: number } | undefined;
-  /** PT-5c (ruling 1): presses and moves waiting for their document's first word (see `pointScale`). */
+  /** PT-5c (ruling 1): presses and moves waiting for their document's first word (see `pointScale`) — and (R1) the
+   * attachment each came through, whose going ends its wait. */
   readonly #scaleWaiters = new Set<{
     readonly document: number;
+    readonly by: string | undefined;
     readonly heard: (scale: number) => void;
     readonly gone: (error: Error) => void;
   }>();
@@ -1373,6 +1375,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * dragged the page with its first hover: the third grade's P3.)
    */
   private letGo(by: string): void {
+    // R1: what it sent and is still WAITING for its page's word is never sent — its wait ends now, ahead of the chain
+    this.scaleWaitsEnd((waiter) => waiter.by === by, "Browser input's attachment is gone");
     const turn = this.#inputTail.then((): Promise<void> | undefined => {
       const window = this.#window;
       if (this.#closed || window === null || window.isDestroyed()) return undefined;
@@ -1409,7 +1413,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     /** the attachment it came through */
     by: string | undefined,
   ): Promise<void> {
-    if (geometry === undefined || this.#lifecycle.snapshot.state !== "live") {
+    // PT-5c (R1) — AN EVENT IS SENT ONLY WHILE ITS PAGE IS LIVE AND THE ATTACHMENT THAT SENT IT STANDS (every event but a
+    // release), read when it is sent: here for what waits for nothing, and again after a wait (below). (Before: judged
+    // live at its turn's start alone — a press queued behind a slow key went to the page after its attachment had gone,
+    // a gesture begun that its attachment would never end.)
+    if (geometry === undefined || this.#lifecycle.snapshot.state !== "live" || !this.stands(by)) {
       throw new Error("Browser surface is not available for input");
     }
     if (request.kind === "text") {
@@ -1496,8 +1504,15 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // presentation adapter has already supplied Browser logical coordinates;
     // backing-raster pixels and visibleRect offsets are presentation-only.
     // PT-5b (ruling 5c): the VIEW's — a `mobile` page shown whole at its own scale takes them over that scale
-    const scale = await this.pointScale(document);
-    if (window.isDestroyed() || this.#window !== window || this.#document !== document) {
+    const scale = await this.pointScale(document, by);
+    // (after its wait — the moment it is sent: its window, its document, the page live, its attachment standing. R1)
+    if (
+      window.isDestroyed() ||
+      this.#window !== window ||
+      this.#document !== document ||
+      this.#lifecycle.snapshot.state !== "live" ||
+      !this.stands(by)
+    ) {
       throw new Error("Browser surface is not available for input");
     }
     const x = request.x / scale;
@@ -1955,15 +1970,21 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * navigation pended it was not answered, and a tap after a link to a slow site waited for the site, then landed, with
    * the keys and the wheel behind it, on the NEXT document.) An event of a document whose page has not yet said its scale
    * — a new one — WAITS for the page's first word; that wait ends at the word, at the next commit (refused, counted), or
-   * when the window goes (its turn ends with it).
+   * when the window goes (its turn ends with it) — and (R1) at a rest, and at the going of the attachment it came through
+   * (refused, counted: never sent to a page at rest, nor a gesture begun after its attachment went).
    */
-  private pointScale(document: number): Promise<number> {
+  private pointScale(document: number, by: string | undefined): Promise<number> {
     if (!this.mobile()) return Promise.resolve(1);
     const said = this.#pageScale;
     if (said !== undefined && said.document === document) return Promise.resolve(said.value);
     return new Promise<number>((heard, gone) => {
-      this.#scaleWaiters.add({ document, heard, gone });
+      this.#scaleWaiters.add({ document, by, heard, gone });
     });
+  }
+
+  /** PT-5c (R1): the attachment an event came through still stands (an event of the runtime's own seam has none). */
+  private stands(by: string | undefined): boolean {
+    return by === undefined || this.#attachments.has(by);
   }
 
   /** PT-5c (ruling 1): the page SAID its scale — the document's word, kept; the events waiting for it go at it. */
@@ -1986,7 +2007,10 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
 
   /** PT-5c (ruling 1): at a commit — the finger cancelled on the chain, the buttons forgotten, the old document's waits ended. */
   private endDown(window: BrowserSurfaceNativeWindow): void {
-    this.scaleWaitsEnd(false);
+    this.scaleWaitsEnd(
+      (waiter) => waiter.document !== this.#document,
+      "Browser input's document is gone",
+    );
     this.#pressed.clear();
     if (!this.#touching) return;
     this.#touching = false;
@@ -2001,12 +2025,16 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#inputTail = turn.catch(() => undefined);
   }
 
-  /** PT-5c (ruling 1): the events waiting for a word of a document that is no more (or of any, `all`) wait no longer. */
-  private scaleWaitsEnd(all: boolean): void {
+  /** PT-5c (ruling 1; R1): the events waiting for a word wait no longer — those of a document that is no more (a commit),
+   * all of them (the window's going, a rest), or those of an attachment that went. */
+  private scaleWaitsEnd(
+    which: (waiter: { readonly document: number; readonly by: string | undefined }) => boolean,
+    reason: string,
+  ): void {
     for (const waiter of [...this.#scaleWaiters]) {
-      if (!all && waiter.document === this.#document) continue;
+      if (!which(waiter)) continue;
       this.#scaleWaiters.delete(waiter);
-      waiter.gone(new Error("Browser input's document is gone"));
+      waiter.gone(new Error(reason));
     }
   }
 
@@ -2578,6 +2606,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     }
     this.#window?.stopPainting();
     this.#lifecycle.transition("paused");
+    // PT-5c (R1): nothing waiting for its page's word is sent to a page at rest — every such wait ends here, refused
+    this.scaleWaitsEnd(() => true, "Browser page is at rest");
     this.publishSummary();
   }
 
@@ -2800,7 +2830,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#documentBase = this.#document;
     // PT-5c (ruling 1): nothing waits for a word of this window's documents any more (its turns end with it besides)
     this.#pageScale = undefined;
-    this.scaleWaitsEnd(true);
+    this.scaleWaitsEnd(() => true, "Browser input's window is gone");
     if (this.#startupTimer !== null) {
       clearTimeout(this.#startupTimer);
       this.#startupTimer = null;

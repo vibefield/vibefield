@@ -151,15 +151,6 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
     this.order.push("emulate");
   }
 
-  /** PT-5b: the page's visual-viewport scale as the engine says it, and how many times it was READ — PT-5c (ruling 1):
-   * nothing reads it any more (the producer follows the page's word, `say`); the count is the rows' tripwire. */
-  scale = 1;
-  scaleReads = 0;
-  async visualScale(): Promise<number> {
-    this.scaleReads += 1;
-    return this.scale;
-  }
-
   /** PT-5c (ruling 1): the page SAYS its scale (its guard's word), tagged with the document the window counts now. */
   onScale(listener: (scale: number, document: number) => void): () => void {
     this.#events.on("scale", listener);
@@ -167,7 +158,6 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
   }
 
   say(scale: number): void {
-    this.scale = scale;
     this.#events.emit("scale", scale, this.documents);
   }
 
@@ -1970,8 +1960,6 @@ describe("BrowserLiveSurfaceRuntime", () => {
     window.say(Number.NaN);
     await send({ kind: "pointer", action: "down", x: 50, y: 50, button: "left", clickCount: 1 });
     expect(window.touchInputs.at(-1)?.touchPoints[0]).toEqual({ x: 50, y: 50, id: 0 });
-    // nothing was READ on the hand's path
-    expect(window.scaleReads).toBe(0);
     result.runtime.dispose();
 
     // a laptop's page: laid out at the view's width, its scale forced — nothing is asked, the points pass as they are
@@ -1993,7 +1981,6 @@ describe("BrowserLiveSurfaceRuntime", () => {
     );
     await flush();
     await flush();
-    expect(plain.scaleReads).toBe(0);
     expect(plain.mouseInputs.at(-1)).toMatchObject({ x: 10, y: 20 });
     laptop.runtime.dispose();
   });
@@ -2623,7 +2610,6 @@ describe("BrowserLiveSurfaceRuntime", () => {
         type: "touchStart",
         touchPoints: [{ x: 30, y: 10, id: 0 }],
       });
-      expect(window.scaleReads).toBe(0);
       result.runtime.dispose();
     });
   });
@@ -2867,7 +2853,6 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.pointer("move", 30);
       await p.delivered();
       expect(p.heard).toHaveLength(4);
-      expect(p.window.scaleReads).toBe(0);
       p.result.runtime.dispose();
     });
 
@@ -2883,7 +2868,6 @@ describe("BrowserLiveSurfaceRuntime", () => {
       await p.delivered();
       expect(p.heard).toEqual(["mousePressed", "mouseReleased"]);
       expect(p.window.mouseInputs.at(-1)).toMatchObject({ type: "mouseReleased", x: 60, y: 20 });
-      expect(p.window.scaleReads).toBe(0);
       p.result.runtime.dispose();
     });
 
@@ -3686,7 +3670,6 @@ describe("BrowserLiveSurfaceRuntime", () => {
 
     it("ruling 1 — the scale is FOLLOWED: the page SAYS it (its guard's word) and nothing reads the engine on the hand's path — a press goes at the scale said; a zoom the page makes (a double tap it answers by zooming) is said, and the next press goes at it", async () => {
       const p = await phone();
-      const reads = p.window.scaleReads;
       p.window.say(0.5);
       p.pointer("down", 20);
       p.pointer("up", 20);
@@ -3701,7 +3684,6 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(
         p.window.touchInputs.filter((t) => t.type === "touchStart").at(-1)?.touchPoints[0],
       ).toMatchObject({ x: 10, y: 5 });
-      expect(p.window.scaleReads).toBe(reads);
       p.result.runtime.dispose();
     });
 
@@ -3873,7 +3855,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.result.runtime.dispose();
     });
 
-    it("ruling 2 — a gesture pressed through ANOTHER attachment is not released when this one goes (a second window shows the pane); and a press of the going attachment still on the chain takes its turn, then is released", async () => {
+    it("ruling 2 — a gesture pressed through ANOTHER attachment is not released when this one goes (a second window shows the pane); R1 — a press of the going attachment still WAITING for its page's word is never sent: its wait ends, refused, counted", async () => {
       const p = await phone();
       // the second window's attachment presses
       const other = attach(p.result.runtime, "attachment_browser_00000002");
@@ -3897,8 +3879,10 @@ describe("BrowserLiveSurfaceRuntime", () => {
       await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
       // a press of the other attachment takes its turn and waits on its page (a new document, its page not yet speaking);
-      // the attachment goes before it is sent
+      // the attachment goes before it is sent: its wait ENDS there (R1 — the page never hears a gesture begin after its
+      // attachment went)
       p.window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
+      const dropped = p.result.runtime.stats.inputDropped;
       other.attachment.dispatchInput?.(
         { kind: "pointer", action: "down", x: 20, y: 10, button: "left", clickCount: 1 },
         p.revision,
@@ -3907,10 +3891,11 @@ describe("BrowserLiveSurfaceRuntime", () => {
       other.attachment.dispose();
       await p.delivered();
       expect(p.heard).toEqual(["touchStart", "touchEnd"]);
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
+      // its page's word, after: nothing — the press is gone
       p.window.say(1);
       await p.delivered();
-      // the press takes its turn — then the release of what it set down
-      expect(p.heard).toEqual(["touchStart", "touchEnd", "touchStart", "touchCancel"]);
+      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
       p.result.runtime.dispose();
     });
 
@@ -4399,6 +4384,88 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.pointer("move", 30, p.result.runtime.summary.geometry?.revision ?? 0);
       await p.delivered();
       expect(made.touchInputs).toEqual([]);
+      p.result.runtime.dispose();
+    });
+
+    it("R1 — an event whose attachment GOES before its turn is refused at its turn: a press and a word typed, queued behind a key the page was slow to take, are never sent — counted (the page live all along: a second window shows it)", async () => {
+      const p = await laptop();
+      // a second window shows the pane: the page stays live when the first one's attachment goes
+      const other = attach(p.result.runtime, "attachment_browser_00000002");
+      other.attachment.setDemand(demand(2, "live"));
+      await delivered();
+      const r = p.result.runtime.summary.geometry?.revision ?? 0;
+      // the page takes its first key when the row says
+      let answer: () => void = () => {};
+      let held = true;
+      const key = p.window.dispatchKey.bind(p.window);
+      p.window.dispatchKey = (input) => {
+        if (!held) return key(input);
+        held = false;
+        p.window.keyInputs.push(input);
+        return new Promise<void>((resolve) => {
+          answer = resolve;
+        });
+      };
+      p.key("down", r, "a");
+      await delivered();
+      p.renderer.attachment.dispatchInput?.(
+        { kind: "pointer", action: "down", x: 10, y: 10, button: "left", clickCount: 1 },
+        r,
+      );
+      p.renderer.attachment.dispatchInput?.({ kind: "text", text: "zz" }, r);
+      await delivered();
+      const dropped = p.result.runtime.stats.inputDropped;
+      p.renderer.attachment.dispose();
+      answer();
+      await delivered();
+      expect(p.result.runtime.summary.state).toBe("live");
+      expect(p.window.mouseInputs).toEqual([]);
+      expect(p.window.textInputs).toEqual([]);
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 2);
+      p.result.runtime.dispose();
+    });
+
+    it("R1 — a press WAITING for its document's word ends at a REST: refused, counted — the page at rest never hears it, nor the page woken after", async () => {
+      const p = await phone();
+      p.window.emitNavigationState({ ...NAV, url: NEXT });
+      const dropped = p.result.runtime.stats.inputDropped;
+      p.pointer("down", 20);
+      await p.delivered();
+      expect(p.heard).toEqual([]);
+      p.renderer.attachment.setDemand(demand(2, "paused", 30, { width: 1206, height: 2622 }));
+      await p.delivered();
+      expect(p.result.runtime.summary.state).toBe("paused");
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
+      p.window.say(1);
+      p.renderer.attachment.setDemand(demand(3, "live", 30, { width: 1206, height: 2622 }));
+      await p.delivered();
+      expect(p.heard).toEqual([]);
+      p.result.runtime.dispose();
+    });
+
+    it("R1 — read AT THE SEND: a press whose word came in the same turn as a REST is refused; so is one whose word came in the same turn as its attachment's GOING", async () => {
+      const p = await phone();
+      const size = { width: 1206, height: 2622 };
+      p.window.emitNavigationState({ ...NAV, url: NEXT });
+      const dropped = p.result.runtime.stats.inputDropped;
+      p.pointer("down", 20);
+      await p.delivered();
+      p.window.say(1);
+      p.renderer.attachment.setDemand(demand(2, "paused", 30, size));
+      await p.delivered();
+      expect(p.heard).toEqual([]);
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
+      // live again, at another document: its word, and the attachment's going, in one turn
+      p.renderer.attachment.setDemand(demand(3, "live", 30, size));
+      p.window.emitNavigationState({ ...NAV, url: `${NEXT}/2` });
+      await p.delivered();
+      p.pointer("down", 20, p.result.runtime.summary.geometry?.revision ?? p.revision);
+      await p.delivered();
+      p.window.say(1);
+      p.renderer.attachment.dispose();
+      await p.delivered();
+      expect(p.heard).toEqual([]);
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 2);
       p.result.runtime.dispose();
     });
   });
