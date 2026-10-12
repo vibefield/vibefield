@@ -57,6 +57,12 @@
 //   ?tidy=1      — on any page, on the smoke's word (`tidy(path)`: the next ask of a page at `path` is answered
 //                  `tidy`): its script takes `tidy` out of its own address with `history.replaceState` — a move WITHIN
 //                  the document — and paints nothing (TIDY).
+// PT-5c2 — a page whose load fails AFTER its document committed:
+//   /cut         — the page, its keys and its touches logged (`keyLog`, `touchLog`), whose BODY NEVER ENDS: answered at
+//                  once and held open until the smoke CUTS it (`cut(path)`: its socket destroyed mid-body — the engine's
+//                  load fails late, ERR_INCOMPLETE_CHUNKED_ENCODING, the document standing — its parser stopped, so neither
+//                  its DOMContentLoaded nor its `load` ever fires, and its page says no word of its scale after: PT-5c2's
+//                  probes `f1.cjs`, `cut.cjs`) (LATE-FAIL).
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { type AddressInfo, createServer as createTcpServer } from "node:net";
@@ -170,6 +176,9 @@ export interface LiveFixture {
   /** PT-5b3 — the next ask of a page whose path begins with `path` is answered `tidy`: the page takes `tidy` out of its
    * own address (`history.replaceState`), within its document. Once. */
   tidy(path: string): void;
+  /** PT-5c2 — every page at a path that begins with `path` whose body `/cut` holds open is CUT (its socket destroyed
+   * mid-body); how many were. */
+  cut(path: string): number;
   /** PT-5a — an address whose connection is REFUSED (a port nobody listens on) until `open()` serves the page there. */
   refusing(): Promise<FixtureRefusing>;
   close(): Promise<void>;
@@ -252,6 +261,8 @@ export interface FixtureReport {
   readonly held?: readonly [number, number] | null;
   /** PT-5c — its visual viewport: the scale it is drawn at, and its offset in its layout (CSS px) */
   readonly vv?: readonly [number, number, number];
+  /** PT-5c2 — `/cut` alone: every keydown ("down <code>") and keyup ("up <code>") it heard, in order. */
+  readonly keyLog?: readonly string[];
 }
 
 /** A part's box in the page's view, CSS px. */
@@ -366,6 +377,7 @@ export function fixtureHtml(path: "/page" | "/next" | "/legacy" = "/page"): stri
     title: document.title,
     touchLog: window.__touchLog || [],
     touchAt: window.__touchAt || [],
+    keyLog: window.__keyLog || [],
     held: window.__held || null,
     vv: window.visualViewport
       ? [visualViewport.scale, Math.round(visualViewport.offsetLeft), Math.round(visualViewport.offsetTop)]
@@ -446,6 +458,18 @@ const touchLogScript = (busyMs: number): string => `<script>
   }, { capture: true, passive: true });
 </script>
 </body></html>`;
+
+/** PT-5c2 — the script that logs the keys a page hears (`keyLog`, said with each ask): "down <code>", "up <code>". */
+const KEY_LOG = `<script>
+  window.__keyLog = [];
+  addEventListener("keydown", (e) => { window.__keyLog.push("down " + e.code); }, true);
+  addEventListener("keyup", (e) => { window.__keyLog.push("up " + e.code); }, true);
+</script>`;
+
+/** PT-5c2 — `/cut`: the page, logging its keys and its touches (its thread free). Its BODY is the fixture's to end — it
+ * never does: the smoke cuts it (`cut`). */
+export const cutHtml = (): string =>
+  fixtureHtml("/page").replace("</body></html>", `${KEY_LOG}\n${touchLogScript(0)}`);
 
 /** PT-5b2 — `/busy`: the page, keeping its thread busy at each touchstart and logging every touch it hears. */
 export const busyHtml = (): string =>
@@ -627,6 +651,8 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   /** PT-5b2: how many times each pathname was asked for; and the answers that never come (`/hang.png`). */
   const asks = new Map<string, number>();
   const hung = new Set<ServerResponse>();
+  /** PT-5c2: the bodies `/cut` holds open, by the address each was asked at (its path and query). */
+  const cutting = new Map<ServerResponse, string>();
   /** PT-5b3: the hold, and the tidying, owed to the next ask of a page at this path. */
   let holding: { readonly path: string; readonly ms: number } | null = null;
   let tidying: string | null = null;
@@ -646,6 +672,18 @@ export async function startLiveFixture(): Promise<LiveFixture> {
       // never answered: whoever waits on it never finishes loading (closed with the fixture)
       hung.add(res);
       res.on("close", () => hung.delete(res));
+      return;
+    }
+    if (url.pathname === "/cut") {
+      // PT-5c2: the page at once — and its body never ended: held until the smoke cuts it (closed with the fixture)
+      cookies.set(url.pathname + url.search, req.headers.cookie ?? "");
+      res.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+      });
+      res.write(cutHtml());
+      cutting.set(res, url.pathname + url.search);
+      res.on("close", () => cutting.delete(res));
       return;
     }
     if (url.pathname === "/zoom") {
@@ -827,6 +865,16 @@ export async function startLiveFixture(): Promise<LiveFixture> {
     hold: (path, ms) => {
       holding = { path, ms };
     },
+    cut: (path) => {
+      let cut = 0;
+      for (const [res, at] of [...cutting]) {
+        if (!at.startsWith(path)) continue;
+        cutting.delete(res);
+        res.socket?.destroy();
+        cut += 1;
+      }
+      return cut;
+    },
     tidy: (path) => {
       tidying = path;
     },
@@ -859,6 +907,7 @@ export async function startLiveFixture(): Promise<LiveFixture> {
       gateOpen = true;
       for (const answer of [...atGate]) answer();
       for (const res of [...hung]) res.destroy();
+      for (const res of [...cutting.keys()]) res.destroy();
       for (const s of [server, ...revived])
         await new Promise<void>((resolve) => {
           s.closeAllConnections?.();

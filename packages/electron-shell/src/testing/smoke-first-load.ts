@@ -28,6 +28,11 @@
 //                    `history.replaceState`, a move WITHIN the document, nothing painted): put down, its still is kept
 //                    under the address NOW; put to rest and the window RELOADED with the gate shut, the pane shows that
 //                    still before its page's first frame.
+// PT-5c2 (F1):
+//   LATE-FAIL      — a laptop pane on a page whose BODY is cut after it committed (`/cut`, cut on the smoke's word): a key
+//                    held across the cut (the page's own listener says its keydown) is let up and the page hears its keyup
+//                    — the same document stands, live, its load ended, no failure said; a phone pane: a tap after the cut
+//                    lands at once (never a second's refusal for a word of "another" document).
 // Then the panes are removed and the board is as found. `--first-load` beside `--smoke-canvas` runs these rows alone
 // after the boot's (the author's loop).
 
@@ -195,6 +200,8 @@ export interface FirstLoadSeen {
   /** PT-5c (ruling 1) — ZOOMED: the scale the page says it is drawn at after its double tap; where a tap at its drawn field
    * put its focus. */
   readonly zoomed: { readonly scale: number | null; readonly focused: string };
+  /** PT-5c2 (F1) — LATE-FAIL. */
+  readonly lateFail: LateFailSeen;
   /** PT-5c (ruling 2) — DOWN-GONE. */
   readonly downGone: {
     /** the page's touch log with the finger down, before the window reloaded; after the pane was back and hovered */
@@ -227,6 +234,25 @@ export interface PendingSeen {
     readonly path: string;
   } | null;
   readonly face: FirstFace | null;
+}
+
+/** PT-5c2 (F1) — LATE-FAIL: a page whose body is cut after its document committed. */
+export interface LateFailSeen {
+  /** the laptop pane: how many held bodies the fixture cut; the keys its page said with the key held, before the cut,
+   * and at the end; its face once its load had ended after the cut */
+  readonly laptop: {
+    readonly cut: number;
+    readonly before: readonly string[];
+    readonly keys: readonly string[];
+    readonly face: FirstFace | null;
+  };
+  /** the phone pane: how many held bodies were cut; what its page heard of the tap sent after the cut, and how long after
+   * the send the page said it (null: it never did) */
+  readonly phone: {
+    readonly cut: number;
+    readonly log: readonly string[];
+    readonly heardMs: number | null;
+  };
 }
 
 const word = (reason: string | null): string => (reason ?? "").split(": ")[0] ?? "";
@@ -612,6 +638,46 @@ export function judgeZoomed(seen: FirstLoadSeen["zoomed"]): string[] {
       `ZOOMED: a tap where its field is drawn put its focus on ${seen.focused === "" ? "nothing" : seen.focused} — the press did not go at the scale the page said after it zoomed`,
     ];
   return [];
+}
+
+/** PT-5c2 (F1) — LATE-FAIL: a document's late failure is not another document, nor the page's failure. */
+export function judgeLateFail(seen: LateFailSeen): string[] {
+  const out: string[] = [];
+  const said = (log: readonly string[]): string => (log.length === 0 ? "nothing" : log.join(", "));
+  const l = seen.laptop;
+  if (l.cut < 1)
+    out.push("LATE-FAIL: the fixture cut no body under the laptop pane — the row proved nothing");
+  if (!l.before.includes("down KeyQ"))
+    out.push(
+      `LATE-FAIL: the page never said its key down (it heard ${said(l.before)}) — the row proved nothing`,
+    );
+  const f = l.face;
+  if (f === null || f.state !== "live" || f.reason !== null)
+    out.push(
+      `LATE-FAIL: once its body was cut the laptop pane is ${f?.state ?? "without a face"} (${f?.reason ?? "no reason"}) — a document's late failure was said as the page's (the page stands, showing what came)`,
+    );
+  else if (f.loading)
+    out.push(
+      "LATE-FAIL: once its body was cut the laptop pane still says it is loading — its load's end was never said",
+    );
+  if (l.before.includes("down KeyQ") && !l.keys.includes("up KeyQ"))
+    out.push(
+      `LATE-FAIL: the key held across the cut was never let up in the page (it heard ${said(l.keys)}) — a late failure forgot what was down`,
+    );
+  const p = seen.phone;
+  if (p.cut < 1)
+    out.push(
+      "LATE-FAIL (phone): the fixture cut no body under the phone pane — the row proved nothing",
+    );
+  if (p.heardMs === null || p.log.join(",") !== "start,end")
+    out.push(
+      `LATE-FAIL (phone): the tap sent after the cut was heard as ${said(p.log)}, not start, end — refused: it waited for a word of a document that never came`,
+    );
+  else if (p.heardMs >= 1_000)
+    out.push(
+      `LATE-FAIL (phone): the page said the tap sent after the cut ${p.heardMs} ms after it was sent — it waited (a second's bound) for a word of a document that never came`,
+    );
+  return out;
 }
 
 /** PT-5c (ruling 2) — DOWN-GONE: a finger down when its attachment went is ended for it; the attachment back hovers. */
@@ -1656,6 +1722,123 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
     };
     said.downGone = downGone;
     problems.push(...judgeDownGone(downGone));
+
+    // ── LATE-FAIL (PT-5c2, F1): a page whose body is CUT after its document committed — the same document stands ──────
+    const keysOf = (r: FixtureReport | null): readonly string[] => r?.keyLog ?? [];
+    const cutPane = await lay("/cut?p=k", x0 + 5 * step, y0);
+    await frame([cutPane]);
+    await waitFor(
+      "the cut page live",
+      FIRST_ROWS.withinMs,
+      () => face(cutPane),
+      (f) => f !== null && f.state === "live" && f.presented >= 1,
+    );
+    const cutWord = await waitFor(
+      "the cut page's word",
+      FIRST_ROWS.withinMs,
+      () => at(cutPane),
+      (r) => r !== null,
+    );
+    await pickUp(cutPane);
+    const cutFrame = await heldFrame();
+    let lateBefore: readonly string[] = [];
+    let lateCut = 0;
+    let lateFace: FirstFace | null = null;
+    if (cutFrame !== null && cutWord !== null) {
+      // its ground pressed (the document takes the keys), then a key HELD across the cut
+      const view = cutWord.view;
+      const q = pageOnWindow(cutFrame, view, await h.deskAt(), view[0] * 0.85, view[1] * 0.3);
+      await h.press({ x: Math.round(q.x), y: Math.round(q.y) });
+      await sleep(300);
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "q" });
+      lateBefore = await waitFor(
+        "the page's word of its key down",
+        5_000,
+        () => keysOf(at(cutPane)),
+        (log) => log.includes("down KeyQ"),
+      );
+      // its body cut mid-stream: the engine's load fails AFTER its document committed
+      lateCut = d.fixture.cut("/cut?p=k");
+      lateFace = await waitFor(
+        "the cut page's load ended",
+        10_000,
+        () => face(cutPane),
+        (f) => f !== null && !f.loading,
+      );
+      await sleep(600);
+      lateFace = (await face(cutPane)) ?? lateFace;
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "q" });
+      await waitFor(
+        "the page's word of its key up",
+        5_000,
+        () => keysOf(at(cutPane)),
+        (log) => log.includes("up KeyQ"),
+      );
+      await sleep(500);
+    }
+    const lateKeys = keysOf(at(cutPane));
+    await shoot("pt-5c2-late-fail.png");
+    await done();
+    // the phone: a tap after the cut — the page's scale is the document's that stands, said at its start
+    const cutPhone = await lay("/cut?p=t", x0 + 5 * step, y2, {
+      w: PANE.phoneCut.w,
+      h: PANE.phoneCut.h,
+      props: { device: "phone" },
+    });
+    await frame([cutPhone]);
+    await waitFor(
+      "the cut phone page live",
+      FIRST_ROWS.withinMs,
+      () => face(cutPhone),
+      (f) => f !== null && f.state === "live" && f.presented >= 1,
+    );
+    const phoneWord = await waitFor(
+      "the cut phone page's word",
+      FIRST_ROWS.withinMs,
+      () => at(cutPhone),
+      (r) => r !== null,
+    );
+    await pickUp(cutPhone);
+    const phoneFrame = await heldFrame();
+    let phoneCut = 0;
+    let phoneLog: readonly string[] = [];
+    let heardMs: number | null = null;
+    if (phoneFrame !== null && phoneWord !== null) {
+      const view = phoneWord.view;
+      const q = pageOnWindow(phoneFrame, view, await h.deskAt(), view[0] * 0.85, view[1] * 0.3);
+      const point = { x: Math.round(q.x), y: Math.round(q.y) };
+      h.move(point.x, point.y);
+      await sleep(200);
+      phoneCut = d.fixture.cut("/cut?p=t");
+      // (the engine's word of the late failure, and whatever its page says after it, landed)
+      await sleep(1_000);
+      const before = (at(cutPhone)?.touchLog ?? []).length;
+      const sent = Date.now();
+      win.webContents.sendInputEvent({
+        type: "mouseDown",
+        ...point,
+        button: "left",
+        clickCount: 1,
+      });
+      await sleep(FIRST_ROWS.tap.held);
+      win.webContents.sendInputEvent({ type: "mouseUp", ...point, button: "left", clickCount: 1 });
+      const log = await waitFor(
+        "the tap after the cut heard",
+        5_000,
+        () => at(cutPhone)?.touchLog ?? [],
+        (l) => l.length >= before + 2,
+      );
+      if (log.length >= before + 2) heardMs = Date.now() - sent;
+      await sleep(600);
+      phoneLog = (at(cutPhone)?.touchLog ?? []).slice(before);
+    }
+    await done();
+    const lateFail: LateFailSeen = {
+      laptop: { cut: lateCut, before: lateBefore, keys: lateKeys, face: lateFace },
+      phone: { cut: phoneCut, log: phoneLog, heardMs },
+    };
+    said.lateFail = lateFail;
+    problems.push(...judgeLateFail(lateFail));
   } catch (error) {
     // a step that cannot go on ends the rows — never what the rows before it found (they are said with it)
     problems.push(`PT-5b2 FIRST: ${error instanceof Error ? error.message : String(error)}`);

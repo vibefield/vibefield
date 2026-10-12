@@ -12,6 +12,7 @@ import {
   type FirstLoadSeen,
   judgeClick,
   judgeDownGone,
+  judgeLateFail,
   judgeNoDocument,
   judgePending,
   judgeRedirect,
@@ -21,6 +22,7 @@ import {
   judgeTapsCold,
   judgeTidy,
   judgeZoomed,
+  type LateFailSeen,
   type PendingSeen,
   runOf,
 } from "../src/testing/smoke-first-load";
@@ -536,6 +538,54 @@ describe("a page's first load, in the product — what the rows read by", () => 
     ]);
     expect(judgeDownGone({ ...seen, kept: false })).toEqual([
       "DOWN-GONE: the pane's page was not kept through the window's reload (another document) — the row proved nothing",
+    ]);
+  });
+
+  it("LATE-FAIL (PT-5c2, F1): a page whose body is cut after its document committed stands — live, its load ended, no failure said; a key held across the cut is let up in the page; on a phone a tap after the cut lands at once", () => {
+    const seen: LateFailSeen = {
+      laptop: {
+        cut: 1,
+        before: ["down KeyQ"],
+        keys: ["down KeyQ", "up KeyQ"],
+        face: face({ address: `${O}/cut?p=k`, presented: 3 }),
+      },
+      phone: { cut: 1, log: ["start", "end"], heardMs: 312 },
+    };
+    expect(judgeLateFail(seen)).toEqual([]);
+    // the lane before PT-5c2: the native counted the late failure as another document and said its failure — the key was
+    // forgotten, the face said the page failed, and the phone's tap waited for a word of the "new" document and was refused
+    expect(
+      judgeLateFail({
+        laptop: {
+          ...seen.laptop,
+          keys: ["down KeyQ"],
+          face: face({ state: "failed", reason: "failed: the page could not load" }),
+        },
+        phone: { cut: 1, log: [], heardMs: null },
+      }),
+    ).toEqual([
+      "LATE-FAIL: once its body was cut the laptop pane is failed (failed: the page could not load) — a document's late failure was said as the page's (the page stands, showing what came)",
+      "LATE-FAIL: the key held across the cut was never let up in the page (it heard down KeyQ) — a late failure forgot what was down",
+      "LATE-FAIL (phone): the tap sent after the cut was heard as nothing, not start, end — refused: it waited for a word of a document that never came",
+    ]);
+    expect(judgeLateFail({ ...seen, phone: { ...seen.phone, heardMs: 1_180 } })).toEqual([
+      "LATE-FAIL (phone): the page said the tap sent after the cut 1180 ms after it was sent — it waited (a second's bound) for a word of a document that never came",
+    ]);
+    expect(
+      judgeLateFail({ ...seen, laptop: { ...seen.laptop, face: face({ loading: true }) } }),
+    ).toEqual([
+      "LATE-FAIL: once its body was cut the laptop pane still says it is loading — its load's end was never said",
+    ]);
+    // rows that proved nothing
+    expect(
+      judgeLateFail({
+        laptop: { cut: 0, before: [], keys: [], face: seen.laptop.face },
+        phone: { ...seen.phone, cut: 0 },
+      }),
+    ).toEqual([
+      "LATE-FAIL: the fixture cut no body under the laptop pane — the row proved nothing",
+      "LATE-FAIL: the page never said its key down (it heard nothing) — the row proved nothing",
+      "LATE-FAIL (phone): the fixture cut no body under the phone pane — the row proved nothing",
     ]);
   });
 

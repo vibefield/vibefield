@@ -582,6 +582,64 @@ describe("the live pane's fixture page", () => {
     expect(page.__touchLog).toEqual(["start", "move", "cancel", "start", "end"]);
   });
 
+  it("PT-5c2: `/cut` is the page whose BODY NEVER ENDS — answered at once (the page, its key log, its touch log) and held open until the smoke CUTS it: `cut(path)` destroys each body held at that path mid-stream and counts it; the key log, run, says each key down and up", async () => {
+    fixture = await startLiveFixture();
+    /** the page as far as `</html>` — its body, as it stands, never ended */
+    const pageOf = async (at: string) => {
+      const res = await fetch(`${fixture?.origin}${at}`);
+      expect(res.status).toBe(200);
+      const reader = res.body?.getReader();
+      if (reader === undefined) throw new Error("no body");
+      let page = "";
+      while (!page.includes("</html>")) {
+        const { done, value } = await reader.read();
+        if (done) throw new Error("the body ENDED");
+        page += new TextDecoder().decode(value);
+      }
+      return { page, reader };
+    };
+    const { page, reader } = await pageOf("/cut?p=k");
+    expect(page).toContain("#1d6fd8");
+    expect(page).toContain("window.__keyLog = [];");
+    expect(page).toContain("window.__touchLog = [];");
+    expect(fixture.asked("/cut")).toBe(1);
+    // the body is held: nothing more comes, and it does not end
+    let ended: string | null = null;
+    const next = reader.read().then(
+      ({ done }) => {
+        ended = done ? "ended" : "more";
+      },
+      () => {
+        ended = "cut";
+      },
+    );
+    await new Promise((r) => setTimeout(r, 150));
+    expect(ended).toBe(null);
+    // another path is not cut; this one is — mid-body: the reader fails, it never ends
+    expect(fixture.cut("/cut?p=other")).toBe(0);
+    expect(fixture.cut("/cut?p=k")).toBe(1);
+    await next;
+    expect(ended).toBe("cut");
+    expect(fixture.cut("/cut?p=k")).toBe(0);
+    // two bodies held at two paths: each cut by its own, and a path's prefix cuts every one under it
+    await pageOf("/cut?p=t");
+    await pageOf("/cut?p=u");
+    expect(fixture.cut("/cut?p=t")).toBe(1);
+    expect(fixture.cut("/cut?p=")).toBe(1);
+    // the key log, run
+    const script = /<script>\s*(window\.__keyLog = \[\];[\s\S]*?)<\/script>/.exec(page)?.[1];
+    if (script === undefined) throw new Error("the cut page carries no key script");
+    const heard = new Map<string, (e: { code: string }) => void>();
+    const win = { __keyLog: [] as string[] };
+    new Function("window", "addEventListener", script)(
+      win,
+      (type: string, listener: (e: { code: string }) => void) => heard.set(type, listener),
+    );
+    heard.get("keydown")?.({ code: "KeyQ" });
+    heard.get("keyup")?.({ code: "KeyQ" });
+    expect(win.__keyLog).toEqual(["down KeyQ", "up KeyQ"]);
+  });
+
   it("PT-5c: `/zoom` is a phone's page that ZOOMS ITSELF at a double tap (its viewport's minimum scale set to 2), its field near its top-left; and every page says its visual viewport (scale, offset) with its report", async () => {
     fixture = await startLiveFixture();
     const zoom = await (await fetch(`${fixture.origin}/zoom?p=z`)).text();
