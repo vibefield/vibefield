@@ -246,7 +246,13 @@ const S2 = Array.from({ length: 150 }, (_, i) =>
 interface World {
   daemon: FielddDaemon;
   mock: MockMgmtServer;
+  /** the READS fieldd made, in order */
   asked(): string[];
+  /** the fake's session-socket events (opened, resync fired, drop fired,
+   * closed), stamped — what it SENT, for a row that waited on a frame */
+  sockets(): string[];
+  /** fieldd's own `fieldd.index.*` log lines */
+  indexLog(): string[];
   timeline(rows: unknown[]): void;
   control(value: Record<string, unknown>): void;
 }
@@ -287,8 +293,10 @@ async function setup(opts: { rosettad?: boolean; timeline?: unknown[] } = {}): P
   cleanup.push(() => mock.stop());
   const home = join(dataDir, "home");
   mkdirSync(home, { recursive: true });
+  const logRoot = join(dataDir, "logs");
   const daemon = await bootstrap({
     dataDir,
+    logRoot,
     controlPort: 0,
     dataPort: 0,
     ...(opts.rosettad === false
@@ -296,14 +304,27 @@ async function setup(opts: { rosettad?: boolean; timeline?: unknown[] } = {}): P
       : { rosettadBin: "/stand-in/rosettad", rosettadSpawn: fakeRosettad, rosettadHome: home }),
   });
   cleanup.push(() => daemon.stop());
+  const requestLines = () =>
+    readFileSync(files.requests, "utf8")
+      .split("\n")
+      .filter((line) => line !== "");
+  const isSocketEvent = (line: string) => line.slice(line.indexOf(" ") + 1).startsWith("ws ");
   return {
     daemon,
     mock,
     asked: () =>
-      readFileSync(files.requests, "utf8")
-        .split("\n")
-        .filter((line) => line !== "")
+      requestLines()
+        .filter((line) => !isSocketEvent(line))
         .map((line) => line.slice(line.indexOf(" ") + 1)),
+    sockets: () => requestLines().filter(isSocketEvent),
+    indexLog: () => {
+      const file = join(logRoot, "system", "fieldd.ndjson");
+      return existsSync(file)
+        ? readFileSync(file, "utf8")
+            .split("\n")
+            .filter((line) => line.includes('"fieldd.index.'))
+        : [];
+    },
     timeline: (rows) => writeFileSync(files.timeline, JSON.stringify(rows)),
     control: (value) => writeFileSync(files.control, JSON.stringify(value)),
   };
@@ -667,20 +688,38 @@ describe("index.session.subscribe — the live tail as rows (SP-6)", () => {
     await ready(world.daemon);
     const win = await windowOf(world.daemon);
     const sub = await tail(win, { sessionId: "s1" });
+    // Four reds at 10.4 s on loaded gates: the barrier's `.snapshot` frame
+    // never came, and nothing said which side lost it. A wait that expires now
+    // says what each side held: the frames this window got, fieldd's tail
+    // (rosetta's client status, the generation, each chain's gap), what the
+    // fake sent on the socket, and fieldd's own index log.
+    const waitFor = async (fn: () => boolean, ms: number, label: string) => {
+      const started = Date.now();
+      await until(fn, ms, label).catch((error: Error) => {
+        const said = {
+          waitedFrom: started,
+          frames: sub.frames(),
+          tail: world.daemon.indexTail.tailState("s1"),
+          fake: world.sockets(),
+          fieldd: world.indexLog(),
+        };
+        throw new Error(`${error.message}\n${JSON.stringify(said, null, 1)}`);
+      });
+    };
     world.control({ watermark: "w-2", resync: 1 });
-    await until(() => sub.resets().length >= 1, 10_000);
+    await waitFor(() => sub.resets().length >= 1, 10_000, "the barrier's .snapshot frame");
     const reset = sub.resets()[0];
     expect(reset?.epoch).toBe(sub.snapshot.epoch);
     expect(reset?.revision).toBeGreaterThanOrEqual(sub.snapshot.revision);
     expect(reset?.rows.map((row) => row.ordinal)).toEqual([1, 2, 3, 4, 5, 6, 7]);
     // a change after the reset chains from it
     world.timeline([...S1, entry("s1", 8, "agent"), ...S2]);
-    await until(() => sub.deltas().length >= 1, 10_000);
+    await waitFor(() => sub.deltas().length >= 1, 10_000, "the delta after the reset");
     expect(sub.deltas()[0]?.since).toBe(reset?.revision);
     // the socket drops: rosetta's client re-dials and re-snapshots; the copy is replaced
     const before = sub.resets().length;
     world.control({ watermark: "w-2", resync: 1, drop: 1 });
-    await until(() => sub.resets().length > before, 15_000);
+    await waitFor(() => sub.resets().length > before, 15_000, "the re-dial's .snapshot frame");
     expect(
       sub
         .resets()

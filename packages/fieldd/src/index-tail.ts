@@ -80,6 +80,25 @@ export interface IndexTailSubscription {
   dispose: () => void;
 }
 
+/** One subscriber's chain, for a reader asking why a frame did not come. */
+export interface IndexTailSubscriberState {
+  started: boolean;
+  /** the next frame replaces the subscriber's copy */
+  gapped: boolean;
+  revision: number;
+}
+
+/** One session's tail as fieldd holds it (`IndexTailService.tailState`). */
+export interface IndexTailState {
+  /** rosetta's client: connecting · syncing · live · resyncing · closed */
+  status: SubscriptionStatus | null;
+  /** how many times rosetta replaced the table (a snapshot, a reset) */
+  generation: number;
+  rows: number;
+  closed: boolean;
+  subscribers: IndexTailSubscriberState[];
+}
+
 type Frame = SnapshotFrame<IndexTimelineRow> | DeltaFrame<IndexTimelineRow>;
 
 /** The one socket of one session, shared by its subscribers. */
@@ -92,6 +111,8 @@ class SessionTail {
   status: SubscriptionStatus | null = null;
   readonly subscribers = new Set<() => void>();
   readonly resets = new Set<() => void>();
+  /** each subscriber's chain as it stands (`IndexTailService.tailState`) */
+  readonly probes = new Set<() => IndexTailSubscriberState>();
   readonly #client: RosettaClient;
   readonly #subscription: SessionSubscription;
   readonly #logger: Logger;
@@ -289,6 +310,22 @@ export class IndexTailService {
     return this.#tails.size;
   }
 
+  /** One session's tail as it stands, or null with no socket open for it
+   * (tests, diagnostics): what a reader waiting on a frame dumps when it does
+   * not come — whether rosetta's client replaced the table, and whether each
+   * subscriber's chain is still owed a replacement. */
+  tailState(sessionId: string): IndexTailState | null {
+    const tail = this.#tails.get(sessionId);
+    if (tail === undefined) return null;
+    return {
+      status: tail.status,
+      generation: tail.generation,
+      rows: tail.entries.length,
+      closed: tail.closed,
+      subscribers: [...tail.probes].map((probe) => probe()),
+    };
+  }
+
   /** The subscriber's open answer now (rosetta's newest rows, bounded), then
    * frames at its floor. Refuses UNAVAILABLE with the index's phase while the
    * daemon is not ready, INCOMPATIBLE naming both protocol numbers when the
@@ -385,14 +422,21 @@ export class IndexTailService {
       DeltaFrame<IndexTimelineRow>
     > | null = null;
     const onReset = () => subscription?.resnapshot();
+    const probe = (): IndexTailSubscriberState => ({
+      started,
+      gapped: subscription?.gapped ?? false,
+      revision: subscription?.revision ?? -1,
+    });
     subscription = new RevisionedSubscription({
       view,
       subscribe: (signal) => {
         tail.subscribers.add(signal);
         tail.resets.add(onReset);
+        tail.probes.add(probe);
         return () => {
           tail.subscribers.delete(signal);
           tail.resets.delete(onReset);
+          tail.probes.delete(probe);
         };
       },
       emit: (frame, kind) => {

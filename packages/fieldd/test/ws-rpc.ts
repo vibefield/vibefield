@@ -76,12 +76,21 @@ export class WsRpc {
   }
 }
 
-export function until(fn: () => boolean, ms = 4000): Promise<void> {
+/** Polls `fn` every 25 ms until it holds. `label` names the wait in the
+ * timeout's error, so a row with several waits says which one expired. */
+export function until(fn: () => boolean, ms = 4000, label?: string): Promise<void> {
   const deadline = Date.now() + ms;
   return new Promise((resolve, reject) => {
     const tick = () => {
       if (fn()) return resolve();
-      if (Date.now() > deadline) return reject(new Error("until: condition timeout"));
+      if (Date.now() > deadline)
+        return reject(
+          new Error(
+            label === undefined
+              ? "until: condition timeout"
+              : `until: ${label} — not met within ${ms} ms`,
+          ),
+        );
       setTimeout(tick, 25);
     };
     tick();
