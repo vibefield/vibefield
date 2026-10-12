@@ -838,6 +838,9 @@ describe("UI system ownership boundaries", () => {
     expect(section).toContain("Deck — maximized: the bar as the title bar");
     expect(section).toMatch(/<GodviewPreview\s[^>]*deckState="maximized"/);
     expect(section).toMatch(/<GodviewPreview\s[^>]*deckState="away"/);
+    // W7: a launch opens away, and the stage's own specimen says up explicitly
+    // so it shows the deck and its Lip, never by a default
+    expect(section).toMatch(/<GodviewPreview\s[^>]*systemControl[^>]*deckState="up"/);
     expect(source("design-system/GodviewPreview.tsx")).toMatch(/<GodviewStage\s/);
     const fixture = source("design-system/PaneFramePreview.tsx");
     expect(fixture).toMatch(/export function PaneFrameDeck\(/);

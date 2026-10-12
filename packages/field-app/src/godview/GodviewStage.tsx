@@ -49,6 +49,9 @@ export interface GodviewStageProps {
    * as `publishesFind` does for the monitor: the catalog's stage and Settings'
    * miniature draw a state and say nothing. */
   publishesDeck?: boolean;
+  /** W7 — the window's witness says when a lab's call (the markers' seam,
+   * `deck-state.ts`) raised the terminals from away. */
+  deckRaisedBy?: "lab" | null;
   className?: string;
 }
 
@@ -68,6 +71,7 @@ export function GodviewStage({
   deckState = "up",
   onDeckState,
   publishesDeck = false,
+  deckRaisedBy = null,
   className = "",
 }: GodviewStageProps): ReactElement {
   const monitorPresent = monitor !== undefined && monitor !== null && monitor !== false;
@@ -130,6 +134,7 @@ export function GodviewStage({
     enabled: publishesDeck,
     state: deckState,
     travel,
+    raisedBy: deckRaisedBy,
     deck: deckRef,
     body: bodyRef,
   });

@@ -256,6 +256,12 @@ function ContextProbe({
   return null;
 }
 
+/** W7 — how long a verb that called the terminals up waits for the workspace
+ * the call mounts: the deck's own bound on a read of a floor (the pool's
+ * `TERMINAL_FLOOR_READ_TIMEOUT_MS`), counted only while no one is being asked
+ * — a person reading the restore question is their time, not the deck's. */
+const DECK_CALL_WAIT_MS = 10_000;
+
 /** Poll a predicate across event-loop turns until it holds or `ms` elapse —
  * the workspace commits its state in effects, so a mount or an activation is
  * observable only a turn later. Returns whether it held. */
@@ -308,6 +314,13 @@ export interface GodviewDeckProps {
    * and are decoded, which is why the screen is current the instant it comes
    * back; what stops is all render and GPU work. */
   active: boolean;
+  /** W7 (GV-D5, N14 (a)) — whether the terminals have been CALLED. A launch
+   * opens Godview on the monitor alone, and until the first call the deck is
+   * its door and nothing else: no restore question, no workspace, no birth
+   * (the transport may open on a saved pane — a transport is no session).
+   * Called, it asks and mounts as it always has, and a verb that called it
+   * waits for the workspace the call brings up. Absent: called. */
+  called?: boolean;
   /** The reference app's local light/dark mode. It changes terminal colors but
    * never the renderer-owned alpha in the appearance store. */
   theme?: GodviewTheme;
@@ -333,6 +346,7 @@ export interface GodviewDeckProps {
 
 export function GodviewDeck({
   active,
+  called = true,
   theme: godviewTheme = "light",
   onRendererBackend,
   onRemoteDoor,
@@ -379,6 +393,10 @@ export function GodviewDeck({
    * publishes a fresh one on every pane change — so an attach reads the current
    * one at call time instead of closing over whichever existed at build time. */
   const workspaceRef = useRef<GhostteaWorkspaceContext>(undefined);
+  /** L20 (W7) — the opening shell this deck asked fieldd for itself, when the
+   * pool had nothing to rejoin and no shell policy yet (the first connection,
+   * below). Ghosttea's own opening birth it knows itself (`sessionCreatedHere`). */
+  const openingBirth = useRef<string | null>(null);
   const [terminalVisualIds, setTerminalVisualIds] = useState<ReadonlyMap<string, string>>(
     () => new Map(),
   );
@@ -518,8 +536,10 @@ export function GodviewDeck({
     [publish],
   );
 
-  // THE RESTORE GATE (GT-3, GT-D8 as amended). Runs ONCE per deck mount, and
-  // finishes BEFORE the workspace is allowed to mount.
+  // THE RESTORE GATE (GT-3, GT-D8 as amended). Runs ONCE per deck mount — at
+  // its first call since W7: a launch opens on the monitor alone, and nothing
+  // is asked of a person who has not called the terminals — and finishes
+  // BEFORE the workspace is allowed to mount.
   //
   // It has to happen here and not inside `onRehydratePane`, because by the time
   // the workspace asks about a dead pane it has already committed to restoring
@@ -553,6 +573,7 @@ export function GodviewDeck({
   // REFUSES a placement key at parse. The pool performs the read because the
   // pool holds the client; what arrives here is already placement-free.
   useEffect(() => {
+    if (!called) return;
     let cancelled = false;
     void (async () => {
       if (savedPanes.length === 0) {
@@ -592,7 +613,11 @@ export function GodviewDeck({
     return () => {
       cancelled = true;
     };
-  }, [savedPanes]);
+  }, [savedPanes, called]);
+  /** The question is up: the person's time, which no bound counts (W7). */
+  const asking = consent !== null && consent !== "go";
+  const askingRef = useRef(asking);
+  askingRef.current = asking;
 
   // THE COLD-OPEN TRACE (GT-3p). Four stations are stamped from here; the other
   // three belong to owners that ran before this component existed (the prewarm)
@@ -653,9 +678,12 @@ export function GodviewDeck({
       try {
         // The deck's opening shell: a refusal here leaves nothing else to draw,
         // so it faults the pool (SB-3 keeps that for the opening birth alone).
-        await createTerminalSession({ workloadClass: "interactive" }, godviewColdOpen, {
-          opening: true,
-        });
+        const opened = await createTerminalSession(
+          { workloadClass: "interactive" },
+          godviewColdOpen,
+          { opening: true },
+        );
+        openingBirth.current = opened.sessionId;
       } catch (cause) {
         // The pool has already published the fault and the deck is already
         // drawing its face; this only says so in the log with the deck's voice.
@@ -789,6 +817,7 @@ export function GodviewDeck({
       godviewColdOpen.mark("frame");
       const report = godviewColdOpen.report();
       emitGodviewColdOpenMarker({
+        zero: report.zero,
         totalMs: report.totalMs,
         phases: report.phases as Record<string, number>,
         warm: report.warm,
@@ -1176,6 +1205,45 @@ export function GodviewDeck({
     [],
   );
 
+  /**
+   * W7 — THE WORKSPACE A CALL BRINGS UP (GV-D5, N14 (a)). A launch opens
+   * Godview on the monitor alone, so a verb's call can be the deck's first:
+   * the restore question may be asked, the workspace mounts with last run's
+   * panes, and only then is there a pane to place by. Resolves at once for a
+   * deck whose workspace is mounted — with a pane or without one, it answers
+   * as it stands — and otherwise when the call's workspace has a focused pane,
+   * the pool faults (its face says so), or `DECK_CALL_WAIT_MS` of the deck's
+   * own time pass. The person's time reading the question is not counted.
+   * Refs only: the door holds it without being rebuilt.
+   */
+  const workspaceReady = useCallback(async (): Promise<void> => {
+    // read through a function: the ref moves under the awaits below
+    const context = (): GhostteaWorkspaceContext | undefined => workspaceRef.current;
+    if (context() !== undefined) return;
+    let left = DECK_CALL_WAIT_MS;
+    let last = Date.now();
+    while (context()?.activePaneId === undefined) {
+      if (terminalPoolSnapshot().fault !== null) return;
+      await new Promise<void>((resolve) => setTimeout(resolve, 16));
+      const now = Date.now();
+      if (!askingRef.current) left -= now - last;
+      last = now;
+      if (left <= 0) return;
+    }
+  }, []);
+
+  /** L20 (W7) — the workspace's own opening shell, when the deck a call
+   * brought up holds that and nothing else: one pane, born here (ghosttea's
+   * opening birth, or this deck's first connection), never typed into. */
+  const openingShellOf = useCallback(
+    (context: GhostteaWorkspaceContext): string | null => {
+      const only = context.panes.length === 1 ? context.panes[0]?.session.id : undefined;
+      if (runtime === null || only === undefined || runtime.sessionHasInput(only)) return null;
+      return bornInThisView(runtime)(only) || openingBirth.current === only ? only : null;
+    },
+    [runtime],
+  );
+
   // THE DOOR (GT-D17). Two verbs, built where the runtime and the workspace
   // already are, so the monitor beside this deck can list the mesh and mount
   // one of its sessions without ever touching either.
@@ -1189,6 +1257,12 @@ export function GodviewDeck({
   // at call time (ghosttea republishes it on every pane change, and a door
   // rebuilt that often would restart the monitor's poll for no reason), while a
   // new runtime is a new control connection and genuinely a different door.
+  //
+  // W7: the door is there before the terminals' first call — the deck mounts
+  // with the monitor and its claim makes the runtime at once (a transport is
+  // no session) — so the monitor reads through it while the terminals have
+  // never been called, and its verbs call them up and wait for the workspace
+  // that brings (`workspaceReady`).
   const door = useMemo<MonitorDoor | null>(() => {
     if (runtime === null) return null;
     const doorClient = {
@@ -1229,7 +1303,7 @@ export function GodviewDeck({
         // a call (GV-D5, GV-D6): the terminals come up as they were left —
         // at the call, not after the floor answers; a failure is said in words
         askGodviewDeckUp();
-        const run = mountQueue.current.then(() => attachRemoteNow(request));
+        const run = mountQueue.current.then(workspaceReady).then(() => attachRemoteNow(request));
         mountQueue.current = run.then(
           () => undefined,
           () => undefined,
@@ -1238,13 +1312,25 @@ export function GodviewDeck({
       },
       createTerminal: async (request) => {
         askGodviewDeckUp(); // a call: ⌘T, the bloom's birth (GV-D6)
+        // W7: the call may be the deck's first; it waits for what that mounts
+        const first = workspaceRef.current === undefined;
+        await workspaceReady();
         const context = workspaceRef.current;
         if (context?.activeSession === undefined) return { state: "no-pane" };
+        // L20 (W7): the first call after a launch is this create, and the deck
+        // it called up had nothing to bring back — the workspace's opening
+        // shell IS the terminal asked for: one pane, never a second beside it.
+        // Asked under an Agent Profile, the ask is born in that shell's place
+        // instead, and the opening shell, never used, is released as every
+        // unused born shell is (a refused profile then faults nothing, SB-3).
+        const opening = first ? openingShellOf(context) : null;
+        if (opening !== null && request?.profileSet === undefined)
+          return { state: "mounted", sessionId: opening };
         // GV-D4: a new terminal is placed as a session with no pane is — it
         // can be in no pane yet, so it opens beside the focused pane while
         // fewer than three show and takes its place after.
-        const placement = deckPlacement(deckShape(context));
-        if (placement.kind !== "beside" && placement.kind !== "replace")
+        const placement = opening === null ? deckPlacement(deckShape(context)) : null;
+        if (placement !== null && placement.kind !== "beside" && placement.kind !== "replace")
           return { state: "no-pane" };
         // SB-3: the ask rides the pending-birth ref into the override (above).
         const birth: PendingBirth = { profileSet: request?.profileSet };
@@ -1254,14 +1340,14 @@ export function GodviewDeck({
           // its split of the active pane (⌘D's own — the new pane to the
           // right, the row equalized) or its birth in the active pane. Its
           // createSplitSession override puts both through the product door.
-          const opening =
-            placement.kind === "beside"
+          const birthing =
+            placement?.kind === "beside"
               ? context.splitActive()
               : context.createSessionInActivePane();
           // A birth ghosttea fenced (another one in flight) never reached the
           // override, and its ask must not wait there for the next ⌘D.
           if (pendingBirth.current === birth) pendingBirth.current = null;
-          const session = await opening;
+          const session = await birthing;
           if (!session) {
             // A refusal is fieldd's to word, and the override kept its words.
             return {
@@ -1271,12 +1357,13 @@ export function GodviewDeck({
           }
           // Only a birth that LANDED leaves a fullscreen it landed behind: a
           // refused one changes nothing a person can see.
-          leaveZoomFor(placement);
+          if (placement !== null) leaveZoomFor(placement);
           const bound = terminalSessionProfileSet(session.id);
           return {
             state: "mounted",
             sessionId: session.id,
-            placement: placement.kind,
+            // the opening shell's place (L20) is no rule's: the deck's first pane
+            ...(placement !== null ? { placement: placement.kind } : {}),
             ...(bound !== undefined ? { profileSet: bound } : {}),
           };
         } catch (cause) {
@@ -1296,8 +1383,11 @@ export function GodviewDeck({
         // frame would otherwise race each other for the single active-pane
         // slot the workspace mounts into, and the second's activation would
         // capture the first's mount. A placement (GV-D4) reads the focused
-        // pane and the pane count, so it waits its turn in the same queue.
-        const run = mountQueue.current.then(() => mountLocalNow(sessionId, options));
+        // pane and the pane count, so it waits its turn in the same queue —
+        // and a call waits there for the workspace it brings up (W7).
+        const run = mountQueue.current
+          .then(options?.replacing === undefined ? workspaceReady : undefined)
+          .then(() => mountLocalNow(sessionId, options));
         mountQueue.current = run.then(
           () => undefined,
           () => undefined,
@@ -1390,7 +1480,16 @@ export function GodviewDeck({
         };
       }
     }
-  }, [runtime, fieldd, mountSummaryNow, placeSessionNow, leaveZoomFor, observeRoster]);
+  }, [
+    runtime,
+    fieldd,
+    mountSummaryNow,
+    placeSessionNow,
+    leaveZoomFor,
+    observeRoster,
+    workspaceReady,
+    openingShellOf,
+  ]);
 
   useEffect(() => {
     onRemoteDoor?.(door);
@@ -1485,8 +1584,11 @@ export function GodviewDeck({
         door === null
           ? { state: "refused", reason: "the deck has no connection yet" }
           : newTerminalOutcome(await door.mountLocal(sessionId)),
+      // W7 — the restore question is up: an act racing the deck waits with
+      // the person, and the line says what for (`deckAnswerWithin`)
+      waitsOnPerson: asking,
     });
-  }, [linePanesKey, active, door]);
+  }, [linePanesKey, active, door, asking]);
   useEffect(() => () => publishGodviewLineDoor(null), []);
 
   useCompletedAgentPanes(

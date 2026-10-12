@@ -33,7 +33,7 @@ Three surface families, one physics:
 
 ### 1.1 Godview visual source
 
-*Status 2026-10-11: ruled, built but for the launch. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11). Not built: the monitor alone at launch (GV-D5) — until it lands a launch opens the terminals up.*
+*Status 2026-10-12: ruled and built, but for rest on other heights (N15) and ⌘W on the last pane (N16), ruled 2026-10-11 and to build. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)).*
 
 Godview is the deliberate control-room exception to the iOS-widget chrome around it. Its
 visual source of truth is `p008/chopsticks/apps/godview`: a flat 40px instrument bar, compact
@@ -554,7 +554,7 @@ One more plain curve, with its reason: a **retract** goes back along the way it 
 stylesheet said 200ms, its constants table 180, and the table is the authority) — it accelerates
 home, the pop's reverse (M4). Leaving things never wait out an entrance's reveal delay.
 
-*Status 2026-10-11: ruled, built but for the launch. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11). Not built: the monitor alone at launch (GV-D5) — until it lands a launch opens the terminals up.*
+*Status 2026-10-12: ruled and built, but for rest on other heights (N15) and ⌘W on the last pane (N16), ruled 2026-10-11 and to build. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)).*
 **The terminals rise and fall** (Godview's deck, §8; One Frame §22 "Shared mechanics" and §23 —
 GV-D5, GV-D6, GV-D7 and GV-D11, ruled 2026-10-02; built 2026-10-11): two durations, no new
 curve. The deck **rises** — called up from away, or maximized by its button — over **480ms on
@@ -1774,10 +1774,12 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   panes while it is not away and places the window's lights by it — a word kept while another
   view shows, since main composes it with the view it owns, and withdrawn only with the page.
   **The door takes one ask:** bring the terminals up, as a call does (below) — the deck's own
-  doors ask it at every call, and a lab asks it before it measures them. **It is kept for the
-  run:** a renderer reload finds the state it left — away, up or maximized — in the window's
-  session storage; a launch opens the terminals up, as before round 3 (the monitor alone at
-  launch is still to build, below).
+  doors ask it at every call. A lab asks it before it measures them, through the Godview markers'
+  own seam (`window.__vfGodviewDeck.up()`: there only while the markers are on, read by no
+  product code, safe at any time, answering nothing), and the deck's marker says when that call
+  is what raised them (`raisedBy: "lab"`). **It is kept for the run:** a renderer reload finds
+  the state it left — away, up or maximized — in the window's session storage; a launch opens
+  Godview on the monitor alone (below).
   **Minimized** (GV-D6 — "Nothing, fully away"; built 2026-10-11): the Lip's minimize puts the
   terminals **fully away**: no tab, no sliver, nothing at the foot. **Every session keeps
   running** — a pane is a viewport, never the session — and the button's title says so (§9).
@@ -1795,6 +1797,19 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   words. A call while they are up moves nothing, and a call from another view (History's acts)
   raises them for the return. A hand-over — the fold moving a PTY into the pane it replaces —
   selects nothing, and raises nothing.
+  **The monitor alone at launch, then as you left it** (GV-D5; N14 (a), ruled 2026-10-11; built
+  2026-10-12). A launch opens Godview on the monitor alone: the terminals
+  away, and nothing asked of them — no restore question, no pane, no shell born — until something
+  calls them. **The first call brings last run's panes back with the session it called**, placed
+  by the rule for a session with no pane (below): beside the focused pane, or in its place with
+  three showing. Panes whose sessions ended still ask first ("this deck had N panes last time" ·
+  restore · start clean); while that question waits, an act that called the terminals waits with
+  the person, and its bound is the deck's time, never theirs (§8 "History"). **A first call that
+  is a new terminal** — ⌘T, the bloom's birth — on a deck with nothing to bring back finds the
+  workspace's own first shell, and that shell is the terminal: one pane, never a second born
+  beside it (asked under an Agent Profile, the profile's shell is born in its place). Within a
+  run — the view left and come back to, or the window reloaded — the terminals are as they were
+  left: away, up at their edge, or maximized.
   **Maximized — the bar is the window's title bar** (GV-D11 — "it looks kind of awkward having
   the search button there blocking the terminal from becoming fullscreen and having the big gap
   at top", James, 2 Oct; built 2026-10-11). The maximize button, an edge let go above 104, or a fling up: the
@@ -1830,7 +1845,7 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   deck leaves maximized. Away from maximized, a call brings the terminals back up at their edge.
   The pane frame's own fullscreen (its two diagonal arrows, ⌘⇧↵) stays the pane's, and macOS
   full screen stays the green light's.
-  *Status 2026-10-11: ruled, built but for the launch. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11). Not built: the monitor alone at launch (GV-D5) — until it lands a launch opens the terminals up.*
+  *Status 2026-10-12: ruled and built, but for rest on other heights (N15) and ⌘W on the last pane (N16), ruled 2026-10-11 and to build. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)).*
   **Round 3 redraws the wrapper around these panes, and nothing inside it** (One Frame §22 "Shared
   mechanics", §23 and §23.1–§23.3; GV-D2 — "keep the current terminal pane design as is … what i
   want you to redesign is the wrapper", James, 2 Oct; GV-D4, GV-D5, GV-D6, GV-D7, GV-D11 and GV-D12
@@ -1839,20 +1854,16 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   called up and maximized, and the edge's three outcomes among it since 2026-10-11. The items
   below are the ruling still to build, and each says which shipped sentence, if any, it replaces
   on the day it lands. The numbers are the ruled drawing's, in its 1180 × 780 window; the
-  values are §2.7's. Three questions are open with James and are written as open: N14, N15, N16.
+  values are §2.7's. James ruled the three questions written here as open on 2026-10-11: N14 (a)
+  is built (above, "The monitor alone at launch"); N15 (a) and N16 (a) are to build, and their
+  items below still say what ships until they do.
   - **Rest:** the edge rests **300** from the window's top in the drawing's 780-tall window —
     where the sheet's top corners clear the edges' slivers (332–428) — so the lip is 300–330 and
-    the panes 330–692. **What rest is on a window of another height — always 300, or the same
-    share — is N15, open with James;** nothing here decides it, and the shipped rest
-    (`Monitor height`, 35%, 170px floor) stands until he rules.
-  - **Godview opens on the monitor alone at launch, then as you left it** (GV-D5): within a run —
-    the view left and come back to, or the window reloaded — the deck is in the state it was left
-    in, away, up at its edge, or maximized (built — above); a launch starts away.
-    *Replaces* a launch that opens the terminals up, mounted with a pane as Godview opens. **What
-    the FIRST call after a launch brings back — last run's panes with the called session, or the
-    called session alone — is N14, open with James.** **⌘W on the last pane** asks for Canvas
-    today; **whether it should instead minimize the terminals and stay in Godview is N16, open
-    with James.**
+    the panes 330–692. **On a window of another height it is the same share, above a floor —
+    N15 (a), ruled 2026-10-11 — to build;** until it lands the shipped rest (`Monitor height`, 35%, 170px floor)
+    stands.
+  - **⌘W on the last pane** asks for Canvas today; **N16 (a), ruled 2026-10-11: it minimizes
+    the terminals and stays in Godview** — to build.
   - **A session with no pane** (GV-D4 — *built 2026-10-11, the first of these items to ship*): it
     opens **beside the focused pane, up to three panes**; with three or more showing it **takes
     the focused pane's place** (the session it displaces keeps running); a session already in a
@@ -2163,7 +2174,11 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     throws anywhere is still refused in its own verb's words, "Could not start — ‹why›"; each is
     logged too (`renderer.history.unplaced`, `renderer.history.act_failed`). The deck's own turns
     end too (§8, the deck, "A session with no pane": a read of a floor that never answers fails
-    its own door in 10 s), so an act's turn queued behind one still comes inside its 20 s.
+    its own door in 10 s), so an act's turn queued behind one still comes inside its 20 s. **The
+    person's time is never the deck's** (W7): an act whose call brought the terminals up from a
+    launch can meet the restore question (§8, the deck, "The monitor alone at launch"); while it
+    is asked the act's clock stands, the note says **"Waiting in Godview — restore last time's
+    panes, or start clean"**, and once answered the clock runs on from where it stood.
   - **Its honest states are said inside the frame** (§9; the tolerant reader). An index that cannot
     answer keeps the room's own **"rosettad is not answering"** (or "Connecting to rosettad") with
     fieldd's own words under it — "The agent index is starting", "The agent index is failed: …",
@@ -2520,7 +2535,7 @@ numbers and provenance — "syncing history…", "external terminal — state on
 and what to do next; they don't apologize and they're never vague. No filler, no lorem:
 demo content is real-shaped (AAPL, San Francisco, 64°).
 
-*Status 2026-10-11: ruled, built but for the launch. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11). Not built: the monitor alone at launch (GV-D5) — until it lands a launch opens the terminals up.*
+*Status 2026-10-12: ruled and built, but for rest on other heights (N15) and ⌘W on the last pane (N16), ruled 2026-10-11 and to build. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)).*
 **The terminals' wrapper says the window's own words** (Godview, §8, the deck; One Frame §23.2 —
 "for close button, replace it with a minimize - button … for fill button, replace it with a
 maximize button", James, 2 Oct; ruled 2026-10-02; built 2026-10-11). **The two readouts** while the edge is held are

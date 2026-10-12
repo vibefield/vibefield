@@ -35,7 +35,8 @@ export function publishDeckWrapperFacts(next: DeckWrapperFacts | null): void {
       facts !== null &&
       next.state === facts.state &&
       next.top === facts.top &&
-      next.bodyResizes === facts.bodyResizes)
+      next.bodyResizes === facts.bodyResizes &&
+      next.raisedBy === facts.raisedBy)
   ) {
     return;
   }
@@ -81,10 +82,12 @@ export function useDeckWrapperWitness(options: {
   /** A travel moves the sheet by `transform`, which no observer hears: the
    * facts are read again when it ends, so `top` is where the sheet came to. */
   travel?: DeckTravel;
+  /** W7 — the lab's call raised the terminals (said as `raisedBy`). */
+  raisedBy?: "lab" | null;
   deck: RefObject<HTMLElement | null>;
   body: RefObject<HTMLElement | null>;
 }): void {
-  const { enabled, state, travel = null, deck, body } = options;
+  const { enabled, state, travel = null, raisedBy = null, deck, body } = options;
   const box = useRef<string | null>(null);
   const resizes = useRef(0);
   useEffect(() => {
@@ -99,7 +102,12 @@ export function useDeckWrapperWitness(options: {
       box.current = size;
       // the sheet's offset parent is the stage's root (positioned): its top,
       // from the stage's top, as laid out
-      publishDeckWrapperFacts({ state, top: section.offsetTop, bodyResizes: resizes.current });
+      publishDeckWrapperFacts({
+        state,
+        top: section.offsetTop,
+        bodyResizes: resizes.current,
+        ...(raisedBy !== null ? { raisedBy } : {}),
+      });
     };
     measure();
     if (typeof ResizeObserver === "undefined") return;
@@ -108,7 +116,7 @@ export function useDeckWrapperWitness(options: {
     observer.observe(section);
     observer.observe(pane);
     return () => observer.disconnect();
-  }, [enabled, state, travel, deck, body]);
+  }, [enabled, state, travel, raisedBy, deck, body]);
   useEffect(() => {
     if (!enabled) return;
     return () => publishDeckWrapperFacts(null);

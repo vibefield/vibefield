@@ -25,7 +25,12 @@
  * the last and by far the smallest part of the interval. A breakdown that cannot
  * separate a wait from the work it waits for will always blame the work. */
 export const COLD_OPEN_PHASES = [
-  /** The renderer learned the overlay is open. Time zero for everything below. */
+  /** The terminals' first call while Godview shows (W7, GV-D5): a launch
+   * opens Godview on the monitor alone, and the deck's open begins when
+   * something first calls it up (a reload that finds them up was called
+   * before: its zero is Godview's open). Time zero for everything below.
+   * (Until round 3's W7 it was always the view's open — a comparison across
+   * W7 must name which, `ColdOpenReport.zero`.) */
   "open",
   /** The deck claimed the pool. React's commit is behind this stamp. */
   "claim",
@@ -55,6 +60,9 @@ export const COLD_OPEN_PHASES = [
 export type ColdOpenPhase = (typeof COLD_OPEN_PHASES)[number];
 
 export interface ColdOpenReport {
+  /** What time zero is: the terminals' first call since round 3's W7 (the
+   * view's open before it). Say it in any comparison across W7. */
+  zero: "first-call";
   /** Milliseconds from `open` to `frame`, the number a user would recognize. */
   totalMs: number;
   /** Per-phase milliseconds from `open`. A phase stamped before the open is 0. */
@@ -94,7 +102,7 @@ export class ColdOpenTrace {
   report(): ColdOpenReport {
     const open = this.stamps.get("open");
     if (open === undefined) {
-      return { totalMs: 0, phases: {}, warm: [], complete: false };
+      return { zero: "first-call", totalMs: 0, phases: {}, warm: [], complete: false };
     }
     const phases: Partial<Record<ColdOpenPhase, number>> = {};
     const warm: ColdOpenPhase[] = [];
@@ -113,6 +121,7 @@ export class ColdOpenTrace {
     }
     const frame = phases.frame;
     return {
+      zero: "first-call",
       totalMs: frame ?? 0,
       phases,
       warm,

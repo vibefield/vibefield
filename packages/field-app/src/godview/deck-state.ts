@@ -1,3 +1,4 @@
+import { emitGodviewDeckLabMarker, godviewMarkersEnabled } from "../development-console";
 import type { GodviewDeckState } from "../frame/deck-door";
 
 // THE TERMINALS' STATE (Godview round 3 — GV-D5, GV-D6; DESIGN.md §8
@@ -51,22 +52,66 @@ export const DECK_STATE_STORAGE_KEY = "vf-godview-deck-state-v1";
 
 const STATES: readonly GodviewDeckState[] = ["away", "up", "maximized"];
 
-/** What this run left, or up — what a launch opens with, as today. (GV-D5's
- * "monitor alone at launch" is the launch slice's, W7.) */
+/** What this run left, or away — what a launch opens with (GV-D5, W7: the
+ * monitor alone at launch, then as you left it). */
 export function storedDeckState(): GodviewDeckState {
   try {
     const raw = sessionStorage.getItem(DECK_STATE_STORAGE_KEY);
-    return STATES.find((state) => state === raw) ?? "up";
+    return STATES.find((state) => state === raw) ?? "away";
   } catch {
-    return "up";
+    return "away";
   }
 }
 
 export function storeDeckState(state: GodviewDeckState): void {
   try {
-    if (state === "up") sessionStorage.removeItem(DECK_STATE_STORAGE_KEY);
+    if (state === "away") sessionStorage.removeItem(DECK_STATE_STORAGE_KEY);
     else sessionStorage.setItem(DECK_STATE_STORAGE_KEY, state);
   } catch {
     // A storage that refuses costs the reload its memory, never the state.
   }
+}
+
+// THE LAB'S CALL (W7 — the MV lead's three conditions, 2026-10-12). A launch
+// opens on the monitor alone, so a lab that measures the terminals brings them
+// up first, as any call does — through this, and only under the Godview
+// markers (the smokes and the labs): product code never reads it. It is there
+// from the overlay's mount, which is the frame's — before Godview first shows.
+// `up()` is safe to call at any time and any number of times (up while up or
+// maximized moves nothing), never throws (a throw inside is said on the
+// markers, GODVIEW_DECK_LAB) and answers nothing a lab could lean on: a lab
+// judges the deck by its marker, GODVIEW_DECK, whose wrapper says
+// `raisedBy: "lab"` when this call is what brought the terminals up from away,
+// and whose `consent` and `error` say what stands between the call and a pane.
+
+export interface GodviewDeckLab {
+  up(): void;
+}
+
+declare global {
+  interface Window {
+    __vfGodviewDeck?: GodviewDeckLab;
+  }
+}
+
+/** Install the lab's call while the Godview markers are on; the return takes
+ * it away again (and only it). Off, nothing is installed. */
+export function installGodviewDeckLab(up: () => void): () => void {
+  if (typeof window === "undefined" || !godviewMarkersEnabled()) return () => undefined;
+  const lab: GodviewDeckLab = {
+    up: () => {
+      try {
+        up();
+      } catch (cause) {
+        emitGodviewDeckLabMarker({
+          up: "threw",
+          reason: cause instanceof Error ? cause.message : String(cause),
+        });
+      }
+    },
+  };
+  window.__vfGodviewDeck = lab;
+  return () => {
+    if (window.__vfGodviewDeck === lab) delete window.__vfGodviewDeck;
+  };
 }

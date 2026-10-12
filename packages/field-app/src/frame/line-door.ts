@@ -61,6 +61,11 @@ export interface LineViewDoor {
    * `sessionId` becomes the active one, or, when no pane shows it, it is
    * placed by the same rule through the door's serialized mount (AR-4b). */
   reveal(sessionId: string): Promise<NewTerminalOutcome>;
+  /** W7 (GV-D5) — the deck is asking the person something before it can
+   * place anything: the restore question a launch's first call can bring up
+   * (last time's panes, some ended). An act racing the deck (`deckAnswerWithin`)
+   * reads it: its bound waits while the person decides. Absent: no one. */
+  readonly waitsOnPerson?: boolean;
 }
 
 let godview: LineViewDoor | null = null;
@@ -112,20 +117,56 @@ export function resetGodviewLineDoorForTest(): void {
  * end (2026-10-11 — New agent's run started and the line said nothing). */
 export type DeckAnswer = NewTerminalOutcome | { readonly state: "late" };
 
-/** The deck's answer, or `late` once `timeoutMs` pass. A throw is the act's. */
+/** What the line says while an act waits on the person's answer in Godview
+ * (W7): the restore question's own two buttons, "restore" and "start clean". */
+export const WAITING_ON_PERSON_NOTE =
+  "Waiting in Godview — restore last time's panes, or start clean";
+
+/** The deck's answer, or `late` once `timeoutMs` pass. A throw is the act's.
+ *
+ * W7 (GV-D5): the bound is the DECK'S time, never the person's. While the
+ * published deck waits on the person (`waitsOnPerson` — the restore question a
+ * launch's first call can bring up), its clock stands, and the line says once
+ * what the act is waiting for (`onWaiting`, default: `WAITING_ON_PERSON_NOTE`
+ * on the line); answered, the clock runs on from where it stood. */
 export async function deckAnswerWithin(
   answer: Promise<NewTerminalOutcome>,
   timeoutMs: number,
+  onWaiting: () => void = () => {
+    sayOnLine(WAITING_ON_PERSON_NOTE);
+  },
 ): Promise<DeckAnswer> {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let stop = (): void => undefined;
   try {
     return await Promise.race([
       answer,
       new Promise<DeckAnswer>((resolve) => {
-        timer = setTimeout(() => resolve({ state: "late" }), timeoutMs);
+        let left = timeoutMs;
+        let since = 0;
+        let said = false;
+        const read = (): void => {
+          if (godview?.waitsOnPerson === true) {
+            if (timer !== undefined) {
+              clearTimeout(timer);
+              timer = undefined;
+              left -= Date.now() - since;
+            }
+            if (!said) {
+              said = true;
+              onWaiting();
+            }
+          } else if (timer === undefined) {
+            since = Date.now();
+            timer = setTimeout(() => resolve({ state: "late" }), Math.max(0, left));
+          }
+        };
+        stop = subscribe(read);
+        read();
       }),
     ]);
   } finally {
+    stop();
     if (timer !== undefined) clearTimeout(timer);
   }
 }

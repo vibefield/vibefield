@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { answerGodviewDeckUp, type GodviewDeckState } from "../frame/deck-door";
@@ -14,7 +15,7 @@ import { useActiveView } from "../frame/view-state";
 import { prewarmTerminalPool, terminalPoolConfigured } from "../terminal/pool";
 import { godviewColdOpen } from "./cold-open";
 import { useDeckAppearance } from "./deck-appearance";
-import { deckAfter, storeDeckState, storedDeckState } from "./deck-state";
+import { deckAfter, installGodviewDeckLab, storeDeckState, storedDeckState } from "./deck-state";
 import { godviewTerminalGroundStyle } from "./deck-theme";
 import { GodviewDeck } from "./GodviewDeck";
 import { GodviewMonitor } from "./GodviewMonitor";
@@ -121,11 +122,34 @@ export function GodviewOverlay(): ReactElement | null {
    * change (the Lip's minimize); a call — any session brought to the
    * terminals, through the deck's doors or the frame's deck door — brings them
    * up as they were left. Kept for the run (L3): a reload finds what was left,
-   * a launch opens up as today. */
+   * a launch opens on the monitor alone, the terminals away (W7). */
   const [deckState, setDeckState] = useState<GodviewDeckState>(storedDeckState);
   useEffect(() => storeDeckState(deckState), [deckState]);
   const callTerminalsUp = useCallback(() => setDeckState((state) => deckAfter(state, "call")), []);
   useEffect(() => answerGodviewDeckUp(callTerminalsUp), [callTerminalsUp]);
+  /** THE FIRST CALL (W7 — GV-D5, N14 (a)). A launch opens Godview on the
+   * monitor alone: the deck is mounted — its door is the monitor's — but not
+   * CALLED, so it asks no restore question, mounts no workspace and births no
+   * shell. The first call brings last run's panes up with the session it
+   * called; from then on the deck stays called (minimized, its panes stay
+   * mounted, as before W7). A reload into up or maximized was called before. */
+  const [called, setCalled] = useState(() => deckState !== "away");
+  if (!called && deckState !== "away") setCalled(true);
+  /** W7 — the lab's call, under the Godview markers only (`deck-state.ts`):
+   * the witness says when it raised the terminals from away, until they next
+   * go away. */
+  const [raisedBy, setRaisedBy] = useState<"lab" | null>(null);
+  if (raisedBy !== null && deckState === "away") setRaisedBy(null);
+  const deckStateNow = useRef(deckState);
+  deckStateNow.current = deckState;
+  useEffect(
+    () =>
+      installGodviewDeckLab(() => {
+        if (deckStateNow.current === "away") setRaisedBy("lab");
+        callTerminalsUp();
+      }),
+    [callTerminalsUp],
+  );
 
   const changeTuning = useCallback((patch: Partial<GodviewTuning>) => {
     setTuning((current) => ({ ...current, ...patch }));
@@ -133,13 +157,17 @@ export function GodviewOverlay(): ReactElement | null {
   const resetTuning = useCallback(() => setTuning(defaultGodviewTuning(theme)), [theme]);
 
   useEffect(() => {
-    if (open) {
-      // Time zero for the cold-open trace, taken before any React work the open
-      // causes — this effect runs on the commit that first saw `open`.
-      godviewColdOpen.mark("open");
-      setEverOpened(true);
-    } else setTuningOpen(false);
+    if (open) setEverOpened(true);
+    else setTuningOpen(false);
   }, [open]);
+
+  // Time zero for the cold-open trace, taken before any React work the open
+  // causes — this effect runs on the commit that first saw the terminals
+  // called while Godview shows. Since W7 that is their first call, not the
+  // view's open (the report says so, `zero: "first-call"`).
+  useEffect(() => {
+    if (open && called) godviewColdOpen.mark("open");
+  }, [open, called]);
 
   // GV-D1 — System control is the palette's act now (the instrument bar that
   // held its control left VibeField): while Godview is the window's view it
@@ -309,6 +337,7 @@ export function GodviewOverlay(): ReactElement | null {
         deckState={deckState}
         onDeckState={setDeckState}
         publishesDeck
+        deckRaisedBy={raisedBy}
         deck={
           terminalAvailable ? (
             <ChromeBoundary name="Deck" retryKey={deckRetryKey}>
@@ -316,6 +345,8 @@ export function GodviewOverlay(): ReactElement | null {
                 // Away, the terminals take no demand, as a closed Godview's
                 // do: every session runs on the floor, nothing is drawn (PF6)
                 active={open && deckState !== "away"}
+                // W7: until the first call the deck is a door and nothing else
+                called={called}
                 theme={theme}
                 onRendererBackend={setRendererBackend}
                 onRemoteDoor={setRemoteDoor}

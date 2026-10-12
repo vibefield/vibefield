@@ -15,10 +15,13 @@
  *      up moves nothing
  *   5. the word: the frame's door says away and up while Godview shows, and the
  *      shell (`host.deck.set`) hears each change once
- *   6. the state is kept for the run (a reload) and a launch opens up
+ *   6. the state is kept for the run (a reload), and a launch opens on the
+ *      monitor alone: the deck is not called until the first call (W7)
+ *   7. the lab's call (W7): under the Godview markers alone, safe at any time,
+ *      answering nothing, and said in the wrapper's facts when it raised them
  */
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FrameViewState, GodviewDeckState, WindowLightsState } from "@vibefield/contracts";
@@ -38,6 +41,7 @@ import {
   DECK_STATE_STORAGE_KEY,
   DECK_TRAVEL_GRACE_MS,
 } from "../src/godview/deck-state";
+import { getDeckWrapperFacts } from "../src/godview/deck-wrapper-witness";
 import type { MonitorDoor } from "../src/godview/monitor/remote-door";
 import { type FieldHost, setHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
@@ -66,13 +70,14 @@ const RISE_ENDS = DECK_RISE_MS + DECK_TRAVEL_GRACE_MS;
 
 /** The deck, stood in: it says each `active` it is handed, and holds a pane's
  * input the way ghosttea's pane does, so focus can be put in it. */
-const stand = vi.hoisted(() => ({ active: [] as boolean[], mounts: 0 }));
+const stand = vi.hoisted(() => ({ active: [] as boolean[], called: [] as boolean[], mounts: 0 }));
 
 vi.mock("../src/godview/GodviewDeck", async () => {
   const { useEffect } = await import("react");
   return {
-    GodviewDeck: ({ active }: { active: boolean }) => {
+    GodviewDeck: ({ active, called }: { active: boolean; called?: boolean }) => {
       stand.active.push(active);
+      stand.called.push(called === true);
       useEffect(() => {
         stand.mounts += 1;
       }, []);
@@ -176,10 +181,14 @@ async function minimize(host: HTMLElement): Promise<void> {
 
 beforeEach(() => {
   stand.active = [];
+  stand.called = [];
   stand.mounts = 0;
   said = [];
   localStorage.clear();
   sessionStorage.clear();
+  // a run whose terminals were already called up: most rows below begin there
+  // (the launch's own rows clear it — W7)
+  sessionStorage.setItem(DECK_STATE_STORAGE_KEY, "up");
   for (const [name, value] of Object.entries(TOKENS)) {
     document.documentElement.style.setProperty(name, value);
   }
@@ -608,13 +617,14 @@ describe("the word (L2; the shell's lights and ⌘W, W5)", () => {
 });
 
 describe("as you left it, for the run (L3)", () => {
-  it("a reload keeps the terminals away; a launch opens them up", async () => {
+  it("a reload keeps the terminals away; a launch opens them away too", async () => {
     let host = await mountOverlay();
     holdTimers();
     await minimize(host);
     await advance(FALL_ENDS);
     vi.useRealTimers();
-    expect(sessionStorage.getItem(DECK_STATE_STORAGE_KEY)).toBe("away");
+    // away is what a launch opens with: it keeps nothing of its own
+    expect(sessionStorage.getItem(DECK_STATE_STORAGE_KEY)).toBeNull();
 
     // the renderer reloads: the same session's storage
     await unmountOverlay();
@@ -626,10 +636,146 @@ describe("as you left it, for the run (L3)", () => {
     expect(getGodviewDeck()).toBe("away");
     expect(stand.active.every((active) => !active)).toBe(true);
 
-    // a launch: a new session's storage, and the terminals up as today
+    // a launch: a new session's storage, and the monitor alone (GV-D5)
     await unmountOverlay();
     sessionStorage.clear();
     host = await mountOverlay();
+    expect(stage(host).getAttribute("data-godview-deck")).toBe("away");
+  });
+});
+
+describe("the monitor alone at launch, then as you left it (round 3, W7 — GV-D5, N14 (a))", () => {
+  it("a launch opens away, and the deck is not called — no restore, no workspace, no birth — until the first call", async () => {
+    sessionStorage.clear();
+    const host = await mountOverlay();
+    expect(stage(host).getAttribute("data-godview-deck")).toBe("away");
+    expect(stage(host).hasAttribute("data-godview-deck-motion")).toBe(false);
+    expect(getGodviewDeck()).toBe("away");
+    expect(said).toEqual(["away"]);
+    // the deck is mounted (its door is the monitor's) but not called
+    expect(stand.mounts).toBe(1);
+    expect(stand.called.length).toBeGreaterThan(0);
+    expect(stand.called.every((called) => !called)).toBe(true);
+    expect(stand.active.every((active) => !active)).toBe(true);
+    // the first call: up, rising from the foot, the deck called from now on
+    holdTimers();
+    await act(async () => {
+      askGodviewDeckUp();
+    });
     expect(stage(host).getAttribute("data-godview-deck")).toBe("up");
+    expect(stage(host).getAttribute("data-godview-deck-motion")).toBe("rise");
+    expect(stand.called.at(-1)).toBe(true);
+    expect(stand.active.at(-1)).toBe(true);
+    await advance(RISE_ENDS);
+    // minimized again, the deck stays called: its panes keep their workspace
+    await minimize(host);
+    await advance(FALL_ENDS);
+    expect(stand.called.at(-1)).toBe(true);
+    expect(stand.mounts).toBe(1);
+  });
+
+  it("a reload into up or maximized finds the deck called; a reload into away waits for the next call", async () => {
+    sessionStorage.setItem(DECK_STATE_STORAGE_KEY, "maximized");
+    let host = await mountOverlay();
+    expect(stage(host).getAttribute("data-godview-deck")).toBe("maximized");
+    expect(stand.called.every((called) => called)).toBe(true);
+    await unmountOverlay();
+    resetGodviewDeckDoorForTest();
+    stand.called = [];
+    sessionStorage.removeItem(DECK_STATE_STORAGE_KEY);
+    host = await mountOverlay();
+    expect(stage(host).getAttribute("data-godview-deck")).toBe("away");
+    expect(stand.called.every((called) => !called)).toBe(true);
+  });
+});
+
+// W7 — THE LAB'S CALL (the MV lead's three conditions, 2026-10-12). A launch
+// opens on the monitor alone, so a lab that measures the terminals brings them
+// up first: `window.__vfGodviewDeck.up()`, there only under the Godview
+// markers, read by no product code, safe at any time, answering nothing — and
+// the deck's marker trail says when it was this call that raised them.
+describe("the lab's call, under the Godview markers only (W7)", () => {
+  // the suite's page carries the markers (`vitest.config.ts`); a case that
+  // needs them off says so, and the page is given back as it was
+  const page = location.href;
+  const plain = location.pathname;
+  afterEach(() => {
+    history.replaceState(null, "", page);
+  });
+
+  it("is not there without the markers, and no product code names it but its installer", async () => {
+    history.replaceState(null, "", plain);
+    sessionStorage.clear();
+    await mountOverlay();
+    expect(window.__vfGodviewDeck).toBeUndefined();
+    const naming = (readdirSync(join(PACKAGE_ROOT, "src"), { recursive: true }) as string[])
+      .filter((file) => /\.tsx?$/.test(file))
+      .filter((file) =>
+        readFileSync(join(PACKAGE_ROOT, "src", file), "utf8").includes("__vfGodviewDeck"),
+      );
+    expect(naming).toEqual([join("godview", "deck-state.ts")]);
+  });
+
+  it("is there from the overlay's mount — the frame's — before Godview has ever shown", async () => {
+    history.replaceState(null, "", `${plain}?godviewMarkers=1`);
+    sessionStorage.clear();
+    container = document.createElement("div");
+    container.className = "vf-cover";
+    document.body.append(container);
+    root = createRoot(container, { onCaughtError: vi.fn(), onUncaughtError: vi.fn() });
+    await act(async () => root?.render(<GodviewOverlay />));
+    // no view has been set: Godview has not shown, and the call is already there
+    expect(container.querySelector(".vf-godview")).toBeNull();
+    expect(window.__vfGodviewDeck).toBeDefined();
+    // called before Godview shows, it raises them for the open
+    await act(async () => {
+      window.__vfGodviewDeck?.up();
+    });
+    await setView("godview");
+    expect(stage(container).getAttribute("data-godview-deck")).toBe("up");
+    expect(stand.called.every((called) => called)).toBe(true);
+  });
+
+  it("raises the terminals from away and says so; twice, or while up, it moves nothing and answers nothing", async () => {
+    history.replaceState(null, "", `${plain}?godviewMarkers=1`);
+    sessionStorage.clear();
+    const host = await mountOverlay();
+    const lab = window.__vfGodviewDeck;
+    if (lab === undefined) throw new Error("the markers' lab call is not installed");
+    expect(getDeckWrapperFacts()).toMatchObject({ state: "away" });
+    expect(getDeckWrapperFacts()?.raisedBy).toBeUndefined();
+    const answers: unknown[] = [];
+    holdTimers();
+    await act(async () => {
+      answers.push(lab.up());
+      answers.push(lab.up());
+    });
+    expect(answers).toEqual([undefined, undefined]);
+    expect(stage(host).getAttribute("data-godview-deck")).toBe("up");
+    expect(said).toEqual(["away", "up"]);
+    await advance(RISE_ENDS);
+    // the marker trail: this call raised them
+    expect(getDeckWrapperFacts()).toMatchObject({ state: "up", raisedBy: "lab" });
+    // up while up: nothing moves, nothing more is said
+    await act(async () => {
+      answers.push(lab.up());
+    });
+    expect(answers).toEqual([undefined, undefined, undefined]);
+    expect(said).toEqual(["away", "up"]);
+    // away, the word goes with them; a product call raises them unsaid
+    await minimize(host);
+    await advance(FALL_ENDS);
+    expect(getDeckWrapperFacts()).toMatchObject({ state: "away" });
+    expect(getDeckWrapperFacts()?.raisedBy).toBeUndefined();
+    await act(async () => {
+      askGodviewDeckUp();
+    });
+    await advance(RISE_ENDS);
+    expect(getDeckWrapperFacts()).toMatchObject({ state: "up" });
+    expect(getDeckWrapperFacts()?.raisedBy).toBeUndefined();
+    // the page going away takes the call with it
+    vi.useRealTimers();
+    await unmountOverlay();
+    expect(window.__vfGodviewDeck).toBeUndefined();
   });
 });

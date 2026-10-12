@@ -10,14 +10,18 @@
  *      `godview-deck-wrapper.test.tsx`)
  *   2. a call brings them up from away, and a call while up moves nothing
  *   3. the state is kept for the run (L3: the session's storage, so a reload
- *      keeps it and a launch does not), and a launch opens up, as today
+ *      keeps it and a launch does not), and a launch opens on the monitor
+ *      alone — the terminals away (GV-D5, W7)
+ *   4. the lab's call (W7): installed only under the Godview markers, never
+ *      throwing to the lab, answering nothing
  */
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DECK_FILL_LINE, deckEdgeBounds, deckLetGo } from "../src/godview/deck-edge";
 import {
   DECK_STATE_STORAGE_KEY,
   deckAfter,
+  installGodviewDeckLab,
   storeDeckState,
   storedDeckState,
 } from "../src/godview/deck-state";
@@ -74,23 +78,23 @@ describe("maximized (round 3, W6 — GV-D11)", () => {
 });
 
 describe("the state, kept for the run (L3)", () => {
-  it("a launch opens up: nothing is kept, so the terminals are up as today", () => {
+  it("a launch opens on the monitor alone: nothing is kept, so the terminals are away (GV-D5)", () => {
     expect(sessionStorage.getItem(DECK_STATE_STORAGE_KEY)).toBeNull();
-    expect(storedDeckState()).toBe("up");
+    expect(storedDeckState()).toBe("away");
   });
 
-  it("a reload keeps what was left: away comes back away, up comes back up", () => {
-    storeDeckState("away");
-    expect(sessionStorage.getItem(DECK_STATE_STORAGE_KEY)).toBe("away");
-    expect(storedDeckState()).toBe("away");
+  it("a reload keeps what was left: up comes back up, away comes back away", () => {
     storeDeckState("up");
-    // up is what a launch opens with, so it keeps nothing of its own
-    expect(sessionStorage.getItem(DECK_STATE_STORAGE_KEY)).toBeNull();
+    expect(sessionStorage.getItem(DECK_STATE_STORAGE_KEY)).toBe("up");
     expect(storedDeckState()).toBe("up");
+    storeDeckState("away");
+    // away is what a launch opens with, so it keeps nothing of its own
+    expect(sessionStorage.getItem(DECK_STATE_STORAGE_KEY)).toBeNull();
+    expect(storedDeckState()).toBe("away");
   });
 
   it("is the session's, never the viewer's: nothing reaches localStorage", () => {
-    storeDeckState("away");
+    storeDeckState("up");
     expect(localStorage.length).toBe(0);
   });
 
@@ -99,8 +103,49 @@ describe("the state, kept for the run (L3)", () => {
     expect(storedDeckState()).toBe("maximized");
   });
 
-  it("reads a word it does not know as up", () => {
+  it("reads a word it does not know as a launch does: away", () => {
     sessionStorage.setItem(DECK_STATE_STORAGE_KEY, "sideways");
-    expect(storedDeckState()).toBe("up");
+    expect(storedDeckState()).toBe("away");
+  });
+});
+
+describe("the lab's call (W7 — the MV lead's conditions)", () => {
+  // the suite's page carries the markers (`vitest.config.ts`); a case that
+  // needs them off says so, and the page is given back as it was
+  const page = location.href;
+  const plain = location.pathname;
+  afterEach(() => {
+    history.replaceState(null, "", page);
+    vi.restoreAllMocks();
+  });
+
+  it("is installed only under the Godview markers, and taken away by its own removal", () => {
+    history.replaceState(null, "", plain);
+    const none = installGodviewDeckLab(() => undefined);
+    expect(window.__vfGodviewDeck).toBeUndefined();
+    none();
+    history.replaceState(null, "", `${plain}?godviewMarkers=1`);
+    const remove = installGodviewDeckLab(() => undefined);
+    expect(window.__vfGodviewDeck).toBeDefined();
+    remove();
+    expect(window.__vfGodviewDeck).toBeUndefined();
+  });
+
+  it("never throws to the lab and answers nothing: a throw inside it is said on the markers", () => {
+    history.replaceState(null, "", `${plain}?godviewMarkers=1`);
+    const lines: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((line: unknown) => {
+      lines.push(String(line));
+    });
+    const remove = installGodviewDeckLab(() => {
+      throw new Error("the overlay is gone");
+    });
+    let answer: unknown = "unset";
+    expect(() => {
+      answer = window.__vfGodviewDeck?.up();
+    }).not.toThrow();
+    expect(answer).toBeUndefined();
+    expect(lines).toEqual(['GODVIEW_DECK_LAB {"up":"threw","reason":"the overlay is gone"}']);
+    remove();
   });
 });

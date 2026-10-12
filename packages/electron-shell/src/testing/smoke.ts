@@ -3769,8 +3769,14 @@ interface DeckFacts {
    * absence would be failing on a stale bundle rather than on a behaviour. */
   zoom?: { phase: "idle" | "entering" | "zoomed" | "leaving"; commits: number };
   /** Round 3: the wrapper around the terminals — its state, its top, and how
-   * many times the box the panes fill has been laid out (only grows). */
-  wrapper?: { state: "away" | "up" | "maximized"; top: number; bodyResizes: number };
+   * many times the box the panes fill has been laid out (only grows); W7:
+   * `raisedBy: "lab"` while the lab's call is what raised them from away. */
+  wrapper?: {
+    state: "away" | "up" | "maximized";
+    top: number;
+    bodyResizes: number;
+    raisedBy?: "lab";
+  };
 }
 
 interface DirectTerminalFacts {
@@ -4730,6 +4736,26 @@ const VIEW_DIGIT: Readonly<Record<FrameView, string>> = {
 
 function pressViewKey(win: BrowserWindow, view: FrameView): void {
   pressProductChord(win, VIEW_DIGIT[view]);
+}
+
+/** W7 (GV-D5, N14 (a)) — a launch opens Godview on the monitor alone, the
+ * terminals away and the deck asked nothing until a call. A row that needs
+ * them calls them as a lab does: the Godview markers' own seam
+ * (`window.__vfGodviewDeck.up()`, `godview/deck-state.ts`), which answers
+ * nothing — the deck's marker says what came of it. The window's session
+ * storage keeps them up across the run's reloads (L3), so the run's first
+ * open is the one row that calls. */
+async function callTerminalsUp(win: BrowserWindow): Promise<void> {
+  const until = Date.now() + 10_000;
+  while (
+    (await win.webContents.executeJavaScript(
+      "window.__vfGodviewDeck === undefined ? false : (window.__vfGodviewDeck.up(), true)",
+    )) !== true
+  ) {
+    if (Date.now() > until)
+      throw new Error("the Godview markers' lab call (window.__vfGodviewDeck) never appeared");
+    await sleep(100);
+  }
 }
 
 /** The window's view as the frame draws it (the views track's `data-view`). */
@@ -6511,11 +6537,38 @@ export async function runSmokeGodview(opts: {
     //    birth, a sampler can only ever record the destination.
     const persistence = new PersistenceSampler(opts.handle);
     pressViewKey(win, "godview");
+    // W7 (GV-D5, N14 (a)): a launch opens on the monitor alone — the terminals
+    // away, and the deck asked nothing: no question, no workspace, no birth.
+    const alone = await deck.until(
+      (facts) => facts.wrapper?.state === "away",
+      "Godview to open on the monitor alone, the terminals away",
+      30_000,
+    );
+    if (alone.active || alone.panes !== 0 || alone.consent !== undefined) {
+      throw new Error(
+        `the launch's Godview did more than show the monitor: ${JSON.stringify({
+          active: alone.active,
+          panes: alone.panes,
+          consent: alone.consent ?? null,
+        })}`,
+      );
+    }
+    verdict["launchAlone"] = { state: "away", panes: alone.panes };
+    // …until the first call, which this run makes as a lab does
+    await callTerminalsUp(win);
     const opened = await deck.until(
       (facts) => facts.active && facts.panes >= 1,
       "the overlay to open with the workspace's own first pane",
       90_000,
     );
+    // the marker trail names the call that raised them (the MV lead's third)
+    if (opened.wrapper?.raisedBy !== "lab") {
+      throw new Error(
+        `the deck came up, but its marker does not say the lab's call raised it: ${JSON.stringify(
+          opened.wrapper ?? null,
+        )}`,
+      );
+    }
     const freeShell = opened.sessionIds[0]!;
     // "React mounted a workspace" and "the deck draws" are different claims,
     // and only the second is worth recording — the render worker names its

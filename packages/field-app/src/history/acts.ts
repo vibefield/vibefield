@@ -30,7 +30,10 @@ import { type ResumeReading, readResume, resumeNative } from "./resume";
 // has answered, everything that follows is inside the act's own try, and the
 // deck's place or reveal is raced against a bound: its mounts wait their turn
 // (AR-4b), and a turn that never ends is said ("no pane took it in 20 s") and
-// logged (`unplaced`), as a throw is, in its own words.
+// logged (`unplaced`), as a throw is, in its own words. The bound is the
+// deck's time, never the person's (W7): while the deck an act called up asks
+// whether to restore last time's panes, its clock stands and the line says what
+// it waits on (`deckAnswerWithin`).
 
 /** How long an act waits for Godview's deck — mounted on Godview's first
  * open — to be able to place what it started, and then for the deck to place

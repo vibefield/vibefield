@@ -16,7 +16,9 @@
  *   · Resume refusing a gone folder with the reason, and a session another
  *     desktop holds (the host key);
  *   · an act never ending in silence (2026-10-11): a deck that never answers,
- *     an answer that cannot be read and a throw are each refused in words.
+ *     an answer that cannot be read and a throw are each refused in words;
+ *   · and never refused for the person's time (W7): while the deck asks the
+ *     restore question its bound stands, and the line says what it waits on.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -32,7 +34,14 @@ import {
 import { projectInk } from "@vibefield/design-kit/project-ink";
 import { isValidElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
-import type { LineViewDoor } from "../src/frame/line-door";
+import {
+  hearLineSays,
+  type LineViewDoor,
+  type NewTerminalOutcome,
+  publishGodviewLineDoor,
+  resetGodviewLineDoorForTest,
+  WAITING_ON_PERSON_NOTE,
+} from "../src/frame/line-door";
 import {
   deviceOfHostKey,
   HISTORY_DECK_WAIT_MS,
@@ -664,6 +673,113 @@ describe("the acts", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // W7 (GV-D5, N14 (a)): a launch opens Godview on the monitor alone, so an
+  // act's call can be the one that brings last time's panes back — and with
+  // some of them ended, the deck asks the person first. Their time is never
+  // the deck's: the bound waits while they decide, and the line says so.
+  describe("while the deck asks the person (W7)", () => {
+    const AGENT = { provider: "claude", cwd: "/w", where: "~/w" };
+
+    it("waits with the person past any bound, says what it waits on once, then lands", async () => {
+      const client = resumeClient(true);
+      const { door } = deck();
+      let land: (outcome: NewTerminalOutcome) => void = () => undefined;
+      const place = (): Promise<NewTerminalOutcome> =>
+        new Promise((resolve) => {
+          land = resolve;
+        });
+      const heard: string[] = [];
+      const stop = hearLineSays((text) => heard.push(text));
+      vi.useFakeTimers();
+      try {
+        // the call brought the deck up asking: restore last time's panes?
+        publishGodviewLineDoor({ ...door, place, waitsOnPerson: true });
+        const pending = newAgent(depsOf(client, { ...door, place }), AGENT);
+        await vi.advanceTimersByTimeAsync(HISTORY_DECK_WAIT_MS * 3);
+        expect(await settledBy(pending), "the person's time ran the deck's bound").toBe(
+          STILL_WAITING,
+        );
+        expect(heard).toEqual([WAITING_ON_PERSON_NOTE]);
+        // they answer; the deck places it
+        publishGodviewLineDoor({ ...door, place, waitsOnPerson: false });
+        land({ state: "opened" });
+        expect(await pending).toEqual({ state: "started", where: "~/w" });
+        expect(heard).toEqual([WAITING_ON_PERSON_NOTE]);
+      } finally {
+        vi.useRealTimers();
+        stop();
+        resetGodviewLineDoorForTest();
+      }
+    });
+
+    it("Resume and Jump to never say their 20 s while the person decides — only 20 s of the deck's own time after", async () => {
+      const { door } = deck();
+      const unplaced = vi.fn();
+      const asking = { ...door, place: neverAnswers, reveal: neverAnswers };
+      vi.useFakeTimers();
+      try {
+        publishGodviewLineDoor({ ...asking, waitsOnPerson: true });
+        const resumed = resumeTarget({ ...depsOf(resumeClient(true), asking), unplaced }, TARGET);
+        const running = answering(resumeClient(true), "agent.list", () => ({
+          sessions: [{ ...SUMMARY, sessionId: TARGET.nativeSessionId }],
+        }));
+        const jumped = jumpTarget({ ...depsOf(running, asking), unplaced }, TARGET);
+        // a minute of the person's time: neither act is refused for it
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(await settledBy(resumed)).toBe(STILL_WAITING);
+        expect(await settledBy(jumped)).toBe(STILL_WAITING);
+        expect(unplaced).not.toHaveBeenCalled();
+        // answered: the deck's own 20 s run from here
+        publishGodviewLineDoor({ ...asking, waitsOnPerson: false });
+        await vi.advanceTimersByTimeAsync(HISTORY_DECK_WAIT_MS - 1_000);
+        expect(await settledBy(resumed)).toBe(STILL_WAITING);
+        expect(await settledBy(jumped)).toBe(STILL_WAITING);
+        await vi.advanceTimersByTimeAsync(2_000);
+        expect(await settledBy(resumed)).toEqual({
+          state: "refused",
+          reason: "it resumed, but no pane took it in 20 s",
+        });
+        expect(await settledBy(jumped)).toEqual({
+          state: "refused",
+          reason: "no pane showed it in 20 s",
+        });
+      } finally {
+        vi.useRealTimers();
+        resetGodviewLineDoorForTest();
+      }
+    });
+
+    it("runs its bound on from where it stood once the person has answered", async () => {
+      const client = resumeClient(true);
+      const { door } = deck();
+      const unplaced = vi.fn();
+      vi.useFakeTimers();
+      try {
+        publishGodviewLineDoor({ ...door, place: neverAnswers });
+        const pending = newAgent(
+          { ...depsOf(client, { ...door, place: neverAnswers }), unplaced },
+          AGENT,
+        );
+        await vi.advanceTimersByTimeAsync(15_000);
+        // the deck's 15 s spent; now the question, for a minute
+        publishGodviewLineDoor({ ...door, place: neverAnswers, waitsOnPerson: true });
+        await vi.advanceTimersByTimeAsync(60_000);
+        publishGodviewLineDoor({ ...door, place: neverAnswers, waitsOnPerson: false });
+        await vi.advanceTimersByTimeAsync(4_000);
+        expect(await settledBy(pending)).toBe(STILL_WAITING);
+        await vi.advanceTimersByTimeAsync(2_000);
+        expect(await settledBy(pending)).toEqual({
+          state: "refused",
+          reason: "it started, but no pane took it in 20 s",
+        });
+        expect(unplaced).toHaveBeenCalledExactlyOnceWith("spawn", "no pane took it in 20 s");
+      } finally {
+        vi.useRealTimers();
+        resetGodviewLineDoorForTest();
+      }
+    });
   });
 });
 

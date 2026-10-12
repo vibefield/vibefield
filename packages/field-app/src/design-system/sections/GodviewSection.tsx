@@ -31,7 +31,9 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
         source="godview/GodviewStage.tsx · godview/GodviewHeadView.tsx"
         bleed
       >
-        <GodviewPreview theme={theme} systemControl />
+        {/* the terminals up, though a launch opens away (W7, GV-D5): the stage's
+            specimen shows the deck and its Lip, which away would hide */}
+        <GodviewPreview theme={theme} systemControl deckState="up" />
       </Specimen>
       <Specimen
         title="Timeline — the swarm through time: five runs from their births to now, runtime only"

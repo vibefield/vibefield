@@ -25,7 +25,11 @@ import { act, useEffect, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
-import { getGodviewDeck, resetGodviewDeckDoorForTest } from "../src/frame/deck-door";
+import {
+  askGodviewDeckUp,
+  getGodviewDeck,
+  resetGodviewDeckDoorForTest,
+} from "../src/frame/deck-door";
 import { getGodviewFindDoor, resetGodviewFindDoorForTest } from "../src/frame/find-door";
 import {
   getSystemControlDoor,
@@ -217,6 +221,8 @@ beforeEach(() => {
   stand.door = fakeDoor();
   markers = [];
   localStorage.clear();
+  // each case is a launch: the terminals' state is kept for the run (L3)
+  sessionStorage.clear();
   for (const [name, value] of Object.entries(TOKENS)) {
     document.documentElement.style.setProperty(name, value);
   }
@@ -390,7 +396,7 @@ describe("the overlay's chrome cannot take down the monitor (M49)", () => {
     expect(getGodviewFindDoor()).toBeNull();
   });
 
-  it("says its terminals are up while Godview is the window's view, and nothing once it is not or is gone (round 3, L2 — the deck's door)", async () => {
+  it("says its terminals' state while Godview is the window's view — away at a launch (W7) — and nothing once it is not or is gone (round 3, L2 — the deck's door)", async () => {
     // before Godview has ever shown, nobody has spoken for the window
     container = document.createElement("div");
     document.body.append(container);
@@ -399,9 +405,15 @@ describe("the overlay's chrome cannot take down the monitor (M49)", () => {
     expect(getGodviewDeck()).toBeNull();
 
     await setView("godview");
-    // the deck is always up today: the state on the stage's root and the
-    // door's word are the same fact
+    // a launch opens on the monitor alone (W7, GV-D5): the state on the
+    // stage's root and the door's word are the same fact
     const stage = container.querySelector(".vf-godview");
+    expect(stage?.getAttribute("data-godview-deck")).toBe("away");
+    expect(getGodviewDeck()).toBe("away");
+    // a call brings them up
+    await act(async () => {
+      askGodviewDeckUp();
+    });
     expect(stage?.getAttribute("data-godview-deck")).toBe("up");
     expect(getGodviewDeck()).toBe("up");
 

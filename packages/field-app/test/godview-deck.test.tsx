@@ -1794,6 +1794,211 @@ describe("a session with no pane is placed by the rule (GV-D4)", () => {
   });
 });
 
+// W7 — GV-D5 and N14 (a), James 2026-10-11 (DESIGN.md §8 "Godview opens on the
+// monitor alone at launch"): a launch shows the monitor alone, and the deck is
+// mounted — its door is the monitor's — but NOT CALLED: no restore question, no
+// workspace, no birth. The first call brings the last run's panes up WITH the
+// session it called, placed by GV-D4; ended ones ask to resume, as before.
+describe("the monitor alone at launch: the deck waits for its first call (W7 — GV-D5, N14 (a))", () => {
+  const TWO: readonly ProbePane[] = [
+    { id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } },
+    { id: "pane-2", session: { id: "other-pty", cols: 100, rows: 30 } },
+  ];
+
+  /** The deck mounted uncalled; the answer calls it (or not) again. */
+  async function mountUncalled(): Promise<{
+    call: () => Promise<void>;
+    door: () => RemoteSessionDoor | null;
+  }> {
+    const captured: { door: RemoteSessionDoor | null } = { door: null };
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    const draw = async (called: boolean): Promise<void> => {
+      await act(async () => {
+        root?.render(
+          <GodviewAgentsProvider door={null}>
+            <GodviewDeck
+              active={called}
+              called={called}
+              theme="light"
+              onRemoteDoor={(next) => {
+                captured.door = next;
+              }}
+            />
+          </GodviewAgentsProvider>,
+        );
+      });
+      await settle();
+    };
+    await draw(false);
+    return { call: () => draw(true), door: () => captured.door };
+  }
+
+  it("opens on the monitor alone: no restore question, no workspace, no birth, until called", async () => {
+    saveLayout(["alive-1", "dead-1"]);
+    floor = [{ sessionId: "alive-1" }];
+    const deck = await mountUncalled();
+    expect(workspaceMounts, "no workspace before the first call").toHaveLength(0);
+    expect(latest().consent, "no question before the first call").toBeUndefined();
+    expect(container?.textContent).not.toContain("last time");
+    expect(requests, "no birth before the first call").not.toContain("terminal.create");
+    // the door is the monitor's from the start: a body can call
+    expect(deck.door()).not.toBeNull();
+    // the first call: the last run's panes come back, and an ended one asks
+    await deck.call();
+    expect(latest().consent).toEqual({ saved: 2, alive: 1, dead: 1 });
+    expect(container?.textContent).toContain("this deck had 2 panes last time");
+  });
+
+  it("with nothing to ask, the first call mounts the workspace on the last run's panes", async () => {
+    saveLayout(["alive-1", "alive-2"]);
+    floor = [{ sessionId: "alive-1" }, { sessionId: "alive-2" }];
+    const deck = await mountUncalled();
+    expect(workspaceMounts).toHaveLength(0);
+    await deck.call();
+    expect(workspaceMounts.length).toBeGreaterThan(0);
+  });
+
+  it("the first call brings the last run's panes WITH the called one — beside the focused pane", async () => {
+    const store = workspaceProbe({ panes: TWO, activePaneId: "pane-1" });
+    floor = [...floor, { sessionId: "listed-pty" }];
+    const deck = await mountUncalled();
+    const door = deck.door();
+    if (door === null) throw new Error("the uncalled deck handed no door over");
+    // a body is picked while the terminals are away: the door waits for the
+    // workspace the call brings up, then places the session by the rule
+    let outcome: unknown = null;
+    const placing = door.mountLocal("listed-pty").then((answer) => {
+      outcome = answer;
+    });
+    await settle();
+    expect(outcome, "nothing can be placed before the workspace is up").toBeNull();
+    await deck.call();
+    const Sidebar = workspaceMounts[0]?.["sidebar"] as ComponentType<{ workspace: unknown }>;
+    const probe = document.createElement("div");
+    document.body.appendChild(probe);
+    const probeRoot = createRoot(probe);
+    await act(async () => {
+      probeRoot.render(<ProbeSidebar store={store} Sidebar={Sidebar} />);
+    });
+    await act(async () => {
+      await placing;
+    });
+    expect(outcome).toEqual({ state: "mounted", sessionId: "listed-pty", placement: "beside" });
+    expect(store.panes.map((pane) => pane.session.id)).toEqual([
+      "user-pty",
+      "listed-pty",
+      "other-pty",
+    ]);
+    await act(async () => probeRoot.unmount());
+    probe.remove();
+  });
+
+  /** The workspace the call mounted, published through its sidebar slot. */
+  async function probeOn(store: WorkspaceProbe): Promise<() => Promise<void>> {
+    const Sidebar = workspaceMounts[0]?.["sidebar"] as ComponentType<{ workspace: unknown }>;
+    const probe = document.createElement("div");
+    document.body.appendChild(probe);
+    const probeRoot = createRoot(probe);
+    await act(async () => {
+      probeRoot.render(<ProbeSidebar store={store} Sidebar={Sidebar} />);
+    });
+    return async () => {
+      await act(async () => probeRoot.unmount());
+      probe.remove();
+    };
+  }
+
+  /** The workspace's opening shell, as the floor reports it: a born shell's
+   * whole summary (the deck reads its `activity` when it tends the shells it
+   * birthed, and releases this one once it leaves its pane unused). */
+  const OPENING: ProbePane = {
+    id: "pane-1",
+    session: bornSummary("opening-pty") as ProbePane["session"],
+  };
+
+  /** ghosttea's receipt for its own births: the workspace's opening shell */
+  function createdHere(sessionId: string): void {
+    const runtime = runtimeObjects[runtimeObjects.length - 1] as {
+      sessionCreatedHere: (id: string) => boolean;
+    };
+    runtime.sessionCreatedHere = (id) => id === sessionId;
+  }
+
+  // L20 (the lead's, 2026-10-12): the first call is a create — ⌘T, the
+  // bloom's birth — and the deck it called up had nothing to bring back. The
+  // workspace's opening shell is the terminal asked for: one pane, never a
+  // second shell born beside it.
+  it("L20: a first call that creates is answered by the workspace's opening shell, and nothing is born beside it", async () => {
+    const store = workspaceProbe({ panes: [OPENING], activePaneId: "pane-1" });
+    const deck = await mountUncalled();
+    const door = deck.door();
+    if (door === null) throw new Error("the uncalled deck handed no door over");
+    createdHere("opening-pty");
+    let outcome: unknown = null;
+    const creating = door.createTerminal().then((answer) => {
+      outcome = answer;
+    });
+    await settle();
+    expect(outcome, "nothing can be opened before the workspace is up").toBeNull();
+    await deck.call();
+    const dispose = await probeOn(store);
+    await act(async () => {
+      await creating;
+    });
+    expect(outcome).toEqual({ state: "mounted", sessionId: "opening-pty" });
+    expect(store.log, "a second shell was born beside the opening one").toEqual([]);
+    expect(store.panes.map((pane) => pane.session.id)).toEqual(["opening-pty"]);
+    await dispose();
+  });
+
+  it("L20: asked under an Agent Profile, the terminal is born in the opening shell's place", async () => {
+    const store = workspaceProbe({ panes: [OPENING], activePaneId: "pane-1" });
+    const deck = await mountUncalled();
+    const door = deck.door();
+    if (door === null) throw new Error("the uncalled deck handed no door over");
+    createdHere("opening-pty");
+    let outcome: unknown = null;
+    const creating = door.createTerminal({ profileSet: "work" }).then((answer) => {
+      outcome = answer;
+    });
+    await deck.call();
+    const dispose = await probeOn(store);
+    await act(async () => {
+      await creating;
+    });
+    const born = (outcome as { sessionId: string }).sessionId;
+    // one pane: the bound shell in the opening shell's place, which no rule placed
+    expect(outcome).toEqual({ state: "mounted", sessionId: born, profileSet: "work" });
+    expect(store.log).toEqual([`create:${born}`]);
+    expect(store.panes.map((pane) => pane.session.id)).toEqual([born]);
+    await dispose();
+  });
+
+  it("L20 is the first call's alone, and only for a shell born here: last run's pane gets a new one beside it (GV-D4)", async () => {
+    const store = workspaceProbe({
+      panes: [{ id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } }],
+      activePaneId: "pane-1",
+    });
+    const deck = await mountUncalled();
+    const door = deck.door();
+    if (door === null) throw new Error("the uncalled deck handed no door over");
+    let outcome: unknown = null;
+    const creating = door.createTerminal().then((answer) => {
+      outcome = answer;
+    });
+    await deck.call();
+    const dispose = await probeOn(store);
+    await act(async () => {
+      await creating;
+    });
+    expect(outcome).toMatchObject({ state: "mounted", placement: "beside" });
+    expect(store.panes).toHaveLength(2);
+    await dispose();
+  });
+});
+
 // GV-D5, GV-D6 (DESIGN.md §8 "Called up"): any session brings the terminals
 // back. Every caller reaches the deck through one of its doors — a body, a list
 // row, a rain column, a timeline lane and a spend row through the monitor's
