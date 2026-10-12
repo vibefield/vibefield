@@ -7012,16 +7012,54 @@ export async function runSmokeGodview(opts: {
           })()`,
           true,
         );
+      // Who holds the keyboard rides every reading (`focusPane`, `focusClass`, beside the split's
+      // own `splitPane`), so a red names what took the focus.
       const launcherState = `(() => {
         const host = ${launcher};
         const block = host?.querySelector('.vf-pane-launcher');
+        const active = document.activeElement;
         return {
           shown: block != null,
           open: block?.classList.contains('is-open') ?? false,
           agents: host?.querySelectorAll('.vf-pane-launcher-agent').length ?? 0,
-          focusInField: document.activeElement?.closest('.vf-pane-launcher') != null,
+          focusInField: active?.closest('.vf-pane-launcher') != null,
+          focusPane: active?.closest('.ghostty-pane')?.getAttribute('data-pane-id') ?? null,
+          focusClass: active?.getAttribute('class') ?? active?.tagName ?? null,
+          splitPane: host?.closest('.ghostty-pane')?.getAttribute('data-pane-id') ?? null,
         };
       })()`;
+      // THE FOCUS RACE (the launcher rung's two reds, land3 86a49d68 and mvland 8c55581c; the
+      // debts survey §3). The field is open only while it holds the keyboard — its blur closes
+      // it, and ⎋ with the field closed dismisses the launcher — and ghosttea moves the keyboard
+      // back to a pane's terminal on the frame after a pane activates (its focus scheduler), as
+      // a surface becomes active or mounts, and on window focus. The rung pressed ⌥↵ straight
+      // after ⌘D's activation, so a move still queued could close the field before the first
+      // poll, or before ⎋. No retry: the rung lets the split's activation settle first, then
+      // asks that the field HOLD the keyboard, and checks again just before each ⎋.
+      const heldFor = (condition: string): string =>
+        `new Promise((done) => {
+          let frames = 0;
+          const give = setTimeout(() => done(false), 1000);
+          const tick = () => {
+            const s = ${launcherState};
+            if (!(${condition})) { clearTimeout(give); done(false); return; }
+            if (frames === 2) { clearTimeout(give); done(true); return; }
+            frames += 1;
+            requestAnimationFrame(tick);
+          };
+          tick();
+        })`;
+      const stillHolds = async (before: string, condition: string): Promise<void> => {
+        const state = (await win.webContents.executeJavaScript(
+          `(() => { const s = ${launcherState}; return { holds: ${condition}, s }; })()`,
+          true,
+        )) as { holds: boolean; s: unknown };
+        if (!state.holds) {
+          throw new Error(
+            `just before ${before} the launcher no longer held: ${JSON.stringify(state.s)}`,
+          );
+        }
+      };
       await waitForRendererFact(
         win,
         `the split pane ${splitSession} to show the empty pane launcher`,
@@ -7029,22 +7067,67 @@ export async function runSmokeGodview(opts: {
         `${launcher}?.querySelector('.vf-pane-launcher') != null`,
         launcherState,
       );
+      // (1) the split session's OWN input gate (the line-send rung's, 6bde8506): its activation
+      // has applied a scene and admits input, so its mount-time focus moves are behind it
+      const gateBegan = Date.now();
+      await direct.until(
+        () => gateOpen(latestGate(direct.history(), splitSession)),
+        `the split pane's input to be open before ⌥↵ (${splitSession})`,
+        15_000,
+      );
+      const gateWaitedMs = Date.now() - gateBegan;
+      // (2) the keyboard in the split pane's terminal, held for two frames: a focus there queues
+      // ghosttea's own focus of the pane for the next frame, and two frames drain it
+      const terminalHeld = (await win.webContents.executeJavaScript(
+        `new Promise((done) => {
+          const pane = ${launcher}?.closest('.ghostty-pane');
+          const input = pane?.querySelector('.terminal-input') ?? pane?.querySelector('textarea');
+          if (!input) { done({ held: false, frames: 0, refocused: 0, state: ${launcherState} }); return; }
+          input.focus({ preventScroll: true });
+          let frames = 0;
+          let run = 0;
+          let refocused = 0;
+          const give = setTimeout(() => done({ held: false, frames, refocused, state: ${launcherState} }), 3000);
+          const tick = () => {
+            frames += 1;
+            if (document.activeElement === input) run += 1;
+            else { run = 0; refocused += 1; input.focus({ preventScroll: true }); }
+            if (run >= 2) { clearTimeout(give); done({ held: true, frames, refocused }); return; }
+            requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        })`,
+        true,
+      )) as { held: boolean; frames: number; refocused: number; state?: unknown };
+      if (!terminalHeld.held) {
+        throw new Error(
+          `the split pane's terminal did not keep the keyboard for two frames: ${JSON.stringify(terminalHeld)}`,
+        );
+      }
+      verdict["launcherSettle"] = {
+        gateWaitedMs,
+        terminalHeldAfterFrames: terminalHeld.frames,
+        refocused: terminalHeld.refocused,
+      };
       await press("Enter", "Enter", true);
+      // (3) open, with the keyboard in the field, across two frames
       await waitForRendererFact(
         win,
-        "⌥↵ to open the launcher's field and take the keyboard into it",
+        "⌥↵ to open the launcher's field and keep the keyboard in it for two frames",
         10_000,
-        `(() => { const s = ${launcherState}; return s.open && s.focusInField; })()`,
+        heldFor("s.open && s.focusInField"),
         launcherState,
       );
+      await stillHolds("the first ⎋", "s.open && s.focusInField");
       await press("Escape", "Escape", false);
       await waitForRendererFact(
         win,
         "⎋ to close the launcher's field",
         10_000,
-        `(() => { const s = ${launcherState}; return s.shown && !s.open; })()`,
+        heldFor("s.shown && !s.open"),
         launcherState,
       );
+      await stillHolds("the second ⎋", "s.shown && !s.open");
       await press("Escape", "Escape", false);
       await waitForRendererFact(
         win,
