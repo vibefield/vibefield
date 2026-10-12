@@ -9058,3 +9058,93 @@ It is TL-D8's successor under the laws of 2026-10-03: Godview records nothing, o
 - The perf lab measures no lent history: both arms run the `no-record` door. With a record the window walks the rows once per publish and its watch runs when a status moves; that path has no reading.
 - Petition (rosetta): a `.gitignore` line for `crates/*/bindings/`.
 - Nothing is pushed in any repo. The pins `2a91bf0` and `c20a07d` are on no remote branch, so the lock cannot fetch them elsewhere.
+
+## GV round 3, the terminals' wrapper — the deck's door, the Lip, where a session opens, the window's lights door, minimize, the let-go and maximized as the title bar; and three honest-states fixes the gates turned up (2026-10-11/12; main `874ca4fa` → `d5f1f836` in five sets through lane land3, each gated on its exact tree)
+
+**Why:** James ruled all twelve Godview marks on 2026-10-02 (One Frame §23.3); only search was built. On 2026-10-11 he
+ruled N12 (a) and N13 (a) in the MV lead's session ("go with your lean, communicate with history lead, and then plan
+and go ahead"): the Stories head is the MV lead's, the terminals' wrapper and the maximized title bar are the History
+lead's, `DESIGN.md` first. The plan is `draft/godview-round3/build-wrapper.md`; the lead's decisions L1–L19 are
+`build-wrapper-lead.md` beside it. The Stories head and TV-8 landed first, as the MV lead's own entry
+("GV-D1 + TV-8 + MV lab debts — Godview's head is the Stories row …", 2026-10-12, `8c55581c`); the fifth set below was rebased onto it.
+
+**What landed:**
+- **Docs first.** `4b949459` the rulings (DECISIONS' One Frame row, the TV row, SV-D15…D19; ROADMAP). `874ca4fa`
+  DESIGN.md says round 3 before any code: the MV lead's five places for the head and the wrapper's lines, each block
+  under a dated "ruled, not built" line, narrowed by each commit that builds part of it.
+- **First set** (`86a49d68`): `ced5f1ec` the deck's door (`frame/deck-door.ts`: `away · up · maximized`, owned and
+  published by `GodviewOverlay` alone, `useGodviewDeckMaximized()` for the frame's readers) · `25583c83` the wrapper's
+  tokens and the glyphs `minimize` · `maximize` · `restore` (60 → 63) · `5e616eed` a DESIGN.md line for the door ·
+  `86a49d68` the deck's highest reach is the head's reserve, 56 from the window's top (`DECK_HEAD_RESERVE`; an
+  interim until maximize restates it as 104).
+- **Second set** (`1df99e30`): `e83d38ab` the Lip's look — a 30 bar holding the 40 × 6 groove in its 22 pill, the sheet
+  on the frame tone (11 % ink by day, 9 % by night), the panes in a well (corners 10, clipped at 9, edge and shade drawn
+  over them, a rim under the foot); the shared stage rule in the MV lead's exact text; every pane 18 px shorter at the
+  same edge and 2 px narrower · `1df99e30` `restore` at 2-unit corners on its 8-unit squares (L16: at 14 px the
+  3-unit corner read as a ring with a hook).
+- **Third set** (`d166ecf2`, rebased once over James's icon commit `969feb77`, the same patch): `c9606b90` the
+  window's lights door `deck.set` (the page says its deck by name; main owns the two positions, `12 · 9` only while
+  the view is Godview and the deck is maximized, back at `18 · 22` in the same step as a view change; ⌘W is lent to
+  the panes by the same word) · `52c3b2e6` GV-D4: a session with no pane opens beside the focused pane, up to three;
+  a fourth takes its place (`godview/deck-placement.ts`; ghosttea's own split; "… in a new pane") · `626bec38` the
+  line never says "Pasted into …" for a paste the pane dropped ("Copied — ‹name›'s pane is not taking input") ·
+  `6bde8506` the line-send rung waits for the pane's input · `d166ecf2` History's rungs press what is there.
+- **Fourth set** (`79ca676d`): `2034141a` the deck's queued floor reads are bounded at 10 s and settle as failed
+  (one-at-a-time mounting kept) · `79ca676d` History's acts never end in silence (place / reveal raced against 20 s;
+  "Could not start — it started, but no pane took it in 20 s"; every act caught and logged).
+- **Fifth set** (`d5f1f836`, on the MV lead's `8c55581c`): `16395a53` W3 — the Lip's minimize puts the terminals fully
+  away, every session running, and any session called brings them up as they were left (`godview/deck-state.ts`,
+  kept for the run in session storage; the door's `away` and its ask `askGodviewDeckUp()`; `host.deck.set` once per
+  change; every door verb that brings a session asks at the call; the fall 300 ms on the retract curve, the rise
+  480 ms island, the sheet's transform alone, so the terminals are laid out once per change; away the sheet is
+  `inert` and the deck inactive) · `288936b7` the wrapper's witness reads the layout, not the painted box · `7dedf1bd` W4 — the let-go decides: less than 120 left or a fling down (> 1.4 px/ms) puts them away, anything else stays
+  and is remembered; a held edge goes on to 24 short of the foot with the *Minimize* readout; keys never minimize;
+  a lost pointer capture ends nothing; the sheet is PLACED at its edge and the monitor's field ends 12 above it as
+  last set (floor 220). The MV lead's `godview-stage-rule.test.ts` moved into W4 (the shift term left the shared
+  stage rule; the sheet's place and the field are held equal under the bar and under the head) · `d5f1f836` W6 — maximized:
+  the Lip's maximize, a let-go above the fill line (104, which replaces the interim 56) or a fling up makes the
+  Lip the window's title bar (the sheet at top 0 without its corners, the bar a window-drag region with the grip
+  and the buttons as holes, a hairline, minimize and restore at its end); the frame's one search button stands in
+  the bar; the monitor fades and its loops rest; restore, a drag out, a key or a double-click on the grip brings
+  the sheet back; *Maximize* the terminals is said while the edge is held above the line.
+
+**Found:**
+- The line-send intermittent (seven sightings since 10-03) was one of the rung's four inputs never reaching the shell:
+  ghosttea drops routed input silently while the pane's `inputAllowed` is false after a return to Godview, and the line
+  still said "Pasted into …" (`draft/history-finish/line-send-diagnosis.md`). Upstream ask (ghosttea): `paste()` /
+  `sendKey()` / `sendText()` return whether they sent; `onPaste` claims the event only then.
+- History's New agent could end in silence (`draft/history-finish/new-agent-silence.md`): a throw after fieldd's answer
+  was unhandled, and the deck's mount queue had two unbounded floor reads.
+- W3's first smoke run: the witness read painted boxes, so the cover's 1.012 settle read 313 as 316. The edge's own
+  measure had the same latent 1.2 % error at Godview's open; W4 measures layout too.
+- The gates themselves: wait loops counted `pgrep -f "pnpm verify"`, which matched polling shells, and waited on a load
+  average this Mac keeps at 70–350 with the CPU 60 % idle; both fixed in every lane script.
+- Canvas's head (its name pill, its zoom readout) showed through History's 72 % cover since One Frame; this lane's
+  photos of 10-09 had it and its reviews missed it. The MV lead's tree hides it under any cover.
+
+**Validation:** each set's exact tree: `pnpm verify`, `pnpm smoke`, `pnpm smoke:godview` (offscreen; a bounded loop of
+at most five runs, stopping at the first EXIT 0 or when the same rung fails twice), every red kept by name under
+`/Volumes/SamsungRed/lanes/land3/logs/<sha>/`. A control of three smoke:godview runs on a tree without the first set
+(`lanes/tv8h/control-a0403c0e/`) went red twice at old rungs: the lottery was the machine and the rungs' timing holes.
+After the third set's rung fixes, smoke:godview passed on its first run three sets running. W3/W4 also ran whole on
+their first base (`lanes/p2/w4-*.log`: field-app 2187, electron-shell 1173, tsc, walls, smoke:godview run 1), and
+their smoke rungs read: away and back 313 → 313 with zero resizes, the monitor alone to 692 of 780; the edge stays
+373 (the field foot 361), the readout on past the line, away with the memory kept, back at 373.
+
+**Owed:**
+- fieldd's suite fails a different timing test on most loaded runs (`doc-holders-stop`, `doc-sync-service`
+  ENOTEMPTY ×2, `audit-retention`, `audit-service`, `project-library`, `workspace-engine`, `index-timeline`,
+  `terminal-kill-matrix`), and field-native's logging flush (4 s): a debts lane.
+- Still unbounded: routed `readInventory` coalesces per device; fieldd-client requests have no timeout of their own.
+- smoke:godview's empty-pane launcher rung (⌥↵ opens the field, ⎋ closes it, ⎋ puts it away; `smoke.ts` ~6970) failed
+  twice, at two different steps, on trees that touch no launcher code: the field never opened
+  (`lanes/land3/logs/86a49d68/smoke-godview-run4.log`, 2026-10-11) and the launcher was gone after the first ⎋
+  (`lanes/mvland/logs/8c55581c/smoke-godview-run1.log`, 2026-10-12). Both loaded, canvas2d; for the debts lane, with
+  the line-send miss's family (input closed after a return to Godview) the first reading to rule out.
+- Not seen on a real window: the lights' move (smoke windows have the default title bar), the well's shade and the
+  away travel over live WebGPU panes, `host.deck.set` reaching main, a fling by a real hand, the title bar dragging a real window.
+- The next wrapper slices: the launch (W7, after N14); the bar's search stepping out in 120 ms (it changes place
+  at once today); rest on other heights (N15) and ⌘W on the last pane (N16) are with James.
+- Maximized, the monitor's loops rest (its `animations` off), but it still renders on every model publish under the
+  title bar: the ruled "its loops stop" is met; no monitor work at all while maximized would be a new mark, which
+  the MV lead's perf lab can measure.
