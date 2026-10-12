@@ -489,6 +489,43 @@ describe("node logging writer lifecycle", () => {
     await service.close();
   });
 
+  it("bounds flush's drain by its timeoutMs, and by 2 s when none is given", async () => {
+    const logRoot = await root();
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const service = await logging(logRoot, {
+      testHooks: {
+        async beforeWrite() {
+          await held;
+        },
+      },
+    });
+    service.logger.info("fieldd.test.held", "a write the disk holds");
+    const started = Date.now();
+    const settledAt = (flush: Promise<void>) =>
+      flush.then(
+        () => ({ ok: true, ms: Date.now() - started }),
+        (error: Error) => ({ ok: false, ms: Date.now() - started, message: error.message }),
+      );
+    const short = settledAt(service.flush({ timeoutMs: 50 }));
+    const byDefault = settledAt(service.flush());
+    const long = settledAt(service.flush({ timeoutMs: 10_000 }));
+    // past the default's 2 s, well inside the long one's 10 s
+    setTimeout(release, 2_300);
+
+    const [shortResult, defaultResult, longResult] = await Promise.all([short, byDefault, long]);
+    expect(shortResult).toMatchObject({ ok: false, message: "logging flush deadline exceeded" });
+    expect(shortResult.ms).toBeLessThan(1_000);
+    expect(defaultResult).toMatchObject({ ok: false, message: "logging flush deadline exceeded" });
+    expect(defaultResult.ms).toBeGreaterThanOrEqual(1_950);
+    expect(longResult.ok).toBe(true);
+    expect(longResult.ms).toBeGreaterThanOrEqual(2_250);
+    expect(service.health().queue.records).toBe(0);
+    await service.close();
+  });
+
   it("uses one emergency fallback across persistent write retries", async () => {
     const logRoot = await root();
     let fail = true;

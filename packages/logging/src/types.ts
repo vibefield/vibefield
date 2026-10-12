@@ -165,6 +165,12 @@ export interface NodeLogging {
   subscribeWriterState(listener: (state: LoggingHealthV1["writerState"]) => void): () => void;
   replaceDiagnosticLeases(leases: readonly DiagnosticLeaseV1[]): void;
   setLevel(level: LogLevelNameV1): void;
-  flush(): Promise<void>;
+  flush(options?: NodeLoggingFlushOptions): Promise<void>;
   close(): Promise<void>;
+}
+
+export interface NodeLoggingFlushOptions {
+  /** How long the queue may take to drain before the flush rejects
+   * ("logging flush deadline exceeded"). The product's default is 2 s. */
+  timeoutMs?: number;
 }

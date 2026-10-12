@@ -57,7 +57,9 @@ describe("audit retention independence", () => {
     for (let index = 0; index < 20; index += 1) {
       logging.logger.info("fieldd.retention.segment_filled", `${index}:${"x".repeat(260)}`);
     }
-    await logging.flush();
+    // twenty fsync'd writes with rotation and janitor deletes: a loaded host
+    // overran the product's 2 s drain, which is not what this row measures
+    await logging.flush({ timeoutMs: 15_000 });
     expect(logging.health().counters.cleanupDeletions).toBeGreaterThan(0);
     await logging.close();
 
