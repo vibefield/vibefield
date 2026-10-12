@@ -4007,6 +4007,109 @@ describe("BrowserLiveSurfaceRuntime", () => {
       ended.result.runtime.dispose();
     });
 
+    /** A live page whose renderer crashed: RECONNECTING, its window made anew (a `restart` source), its blank told. */
+    const reconnecting = async () => {
+      vi.useFakeTimers();
+      const result = setup();
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(demand(1, "live"));
+      await vi.advanceTimersByTimeAsync(0);
+      const first = result.native.windows[0];
+      if (first === undefined) throw new Error("no window");
+      first.emitNavigationState({ ...NAV });
+      first.paint(sharedPaint().paint);
+      await vi.advanceTimersByTimeAsync(0);
+      first.crash();
+      await vi.advanceTimersByTimeAsync(0);
+      const second = result.native.windows[1];
+      if (second === undefined) throw new Error("no window was made again");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(result.runtime.summary.state).toBe("reconnecting");
+      const blank = (loading: boolean): void =>
+        second.emitNavigationState({
+          url: "about:blank",
+          title: "about:blank",
+          loading,
+          canGoBack: false,
+          canGoForward: false,
+        });
+      const loads = (): number =>
+        result.native.windows.reduce((n, w) => n + w.loadedUrls.length, 0);
+      return { result, renderer, second, blank, loads };
+    };
+
+    it("ruling 6 (P6) — a page RECONNECTING whose load ENDS with nothing is not stuck: it says so, with no document of its own, and ↻ asks for the address again; its paint makes it live", async () => {
+      const p = await reconnecting();
+      p.blank(true);
+      p.blank(false);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(p.result.runtime.summary.state).toBe("reconnecting");
+      expect(p.result.runtime.summary.browser).toMatchObject({
+        failure: { reason: "no-document" },
+      });
+      expect(p.result.runtime.summary.browser?.document).toBeUndefined();
+      const before = p.loads();
+      const dropped = p.result.runtime.stats.navigationDropped;
+      p.renderer.attachment.navigate?.({ action: "reload" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(p.loads()).toBe(before + 1);
+      expect(p.second.loadedUrls.at(-1)).toBe("https://example.test/app");
+      expect(p.result.runtime.stats.navigationDropped).toBe(dropped);
+      p.second.emitNavigationState({ ...NAV });
+      p.second.paint(sharedPaint().paint);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(p.result.runtime.summary.state).toBe("live");
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 6 — a page reconnecting takes a person's go and stop as a starting page does, and a REST lets it go at once — its window too", async () => {
+      const p = await reconnecting();
+      p.blank(true);
+      // sent elsewhere while its load is under way: that address is loaded
+      p.renderer.attachment.navigate?.({ action: "go", url: "https://example.test/elsewhere" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(p.second.loadedUrls.at(-1)).toBe("https://example.test/elsewhere");
+      expect(p.result.runtime.summary.browser).toMatchObject({
+        url: "https://example.test/elsewhere",
+        loading: true,
+      });
+      // stopped: the engine is asked, and the page says `stopped` when its load ends
+      p.renderer.attachment.navigate?.({ action: "stop" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(p.second.navigations).toEqual(["stop"]);
+      p.blank(false);
+      expect(p.result.runtime.summary.browser).toMatchObject({ failure: { reason: "stopped" } });
+      // put to rest: let go at once
+      p.renderer.attachment.setDemand(demand(2, "hibernated", 0));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(p.result.runtime.summary.state).toBe("hibernated");
+      expect(p.second.destroyed).toBe(true);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 6 — a page reconnecting with NO window yet (the reconnect's tick) asked to REST goes to rest; its reconnect does not come", async () => {
+      vi.useFakeTimers();
+      const result = setup();
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(demand(1, "live"));
+      await vi.advanceTimersByTimeAsync(0);
+      const first = result.native.windows[0];
+      if (first === undefined) throw new Error("no window");
+      first.paint(sharedPaint().paint);
+      first.crash();
+      expect(result.runtime.summary.state).toBe("reconnecting");
+      renderer.attachment.setDemand(demand(2, "hibernated", 0));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(result.runtime.summary.state).toBe("hibernated");
+      expect(result.native.windows).toHaveLength(1);
+      // woken: born again, as a page at rest is
+      renderer.attachment.setDemand(demand(3, "live"));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(result.native.windows).toHaveLength(2);
+      expect(result.runtime.summary.state).toBe("starting");
+      result.runtime.dispose();
+    });
+
     it("ruling 2 (my T21) — a touchStart ANSWERED after its window was REPLACED sets nothing down for the window that replaced it: the new window's first move is a hover", async () => {
       const p = await phone();
       // the press's dispatch answers when the row says

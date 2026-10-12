@@ -1612,11 +1612,14 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // PT-5b2 (ruling 3) — A PAGE THAT IS STARTING has a window: it can be sent elsewhere, stopped, and loaded again. (Before:
     // all three were refused until its first frame — and since PT-5b a page is `starting` for as long as its first address
     // takes to answer: a pane on a slow host could be neither stopped nor sent anywhere.)
+    // PT-5c (ruling 6) — and a page RECONNECTING is a page starting again (its renderer went; a window made anew): once
+    // born it is sent, stopped and loaded again as a starting page is. (Before: every verb was refused while it
+    // reconnected — and a reconnect whose load ended with nothing was stuck for good, its ↻ dead: the third grade's P6.)
     if (
       this.#closed ||
       window === null ||
       window.isDestroyed() ||
-      (state !== "live" && state !== "starting")
+      (state !== "live" && state !== "starting" && state !== "reconnecting")
     ) {
       throw new Error("Browser surface is not available for navigation");
     }
@@ -2161,7 +2164,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // PT-5b — a page put to REST while it is still STARTING (its server slow to answer) is let go AT ONCE: it would be
     // discarded at its first frame anyway, and meanwhile it held a slot of the desk's cap for as long as its load took.
     // (A page asked `paused` while starting still loads on — its pane is only out of view, and finds it loaded.)
-    if (state === "starting" && this.#window !== null) {
+    // PT-5c (ruling 6) — and a page RECONNECTING the same, its window made or still to be made (its reconnect's tick:
+    // the reconnect is not made). Before, a rest was ignored while it reconnected.
+    if ((state === "starting" && this.#window !== null) || state === "reconnecting") {
       this.clearSourceTimers();
       for (const step of ["live", "paused", "hibernated"] as const)
         this.#lifecycle.transition(step);
