@@ -226,6 +226,14 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         { source: PAGE_GUARD_SCRIPT },
         child,
       );
+      // PT-5d (M2) — A FRAME IN A FRAME is guarded too: auto-attach is per session, so this child's own, as the page's —
+      // a frame of another site inside it attaches on this session, and the same guards are put on it here. (Before: never
+      // attached — its file input, its dialogs, its `window.open` were not ours to answer: the bisect's v2.)
+      await cdp.sendCommand(
+        "Target.setAutoAttach",
+        { autoAttach: true, waitForDebuggerOnStart: false, flatten: true },
+        child,
+      );
     })().catch(() => undefined);
   }
 

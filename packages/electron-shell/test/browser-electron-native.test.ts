@@ -680,3 +680,61 @@ describe("PT-5c2 (F1) — the producer over this adapter: a document's LATE fail
     runtime.dispose();
   });
 });
+
+describe("PT-5d (M2) — every frame of another site is guarded, a frame in a frame too", () => {
+  /** A window whose debugger records what it is sent, by session. */
+  const recording = () => {
+    const w = window();
+    const sent: { method: string; params: unknown; session?: string }[] = [];
+    let attached = false;
+    w.contents.debugger.isAttached = () => attached;
+    w.contents.debugger.attach = () => {
+      attached = true;
+    };
+    w.contents.debugger.sendCommand = async (
+      method?: string,
+      params?: unknown,
+      session?: string,
+    ) => {
+      sent.push({ method: method ?? "", params, ...(session === undefined ? {} : { session }) });
+      return {};
+    };
+    const attach = (session: string, parent?: string): void =>
+      w.contents.debugger.emit(
+        "message",
+        {},
+        "Target.attachedToTarget",
+        { sessionId: session, targetInfo: { type: "iframe", targetId: `t-${session}`, url: "" } },
+        parent,
+      );
+    const on = (session: string): string[] =>
+      sent.filter((c) => c.session === session).map((c) => c.method);
+    return { ...w, sent, attach, on };
+  };
+  const turns = async (): Promise<void> => {
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+  };
+
+  it("a child session's attach puts the guards on it AND its own auto-attach (flat, as the page's) — so a frame of another site inside it is attached, and guarded, before it runs", async () => {
+    const r = recording();
+    r.attach("frame-1");
+    await turns();
+    expect(r.on("frame-1")).toEqual([
+      "Page.enable",
+      "Page.setInterceptFileChooserDialog",
+      "Page.addScriptToEvaluateOnNewDocument",
+      "Target.setAutoAttach",
+    ]);
+    expect(
+      r.sent.find((c) => c.session === "frame-1" && c.method === "Target.setAutoAttach")?.params,
+    ).toEqual({
+      autoAttach: true,
+      waitForDebuggerOnStart: false,
+      flatten: true,
+    });
+    // the frame in it attaches on ITS session: guarded the same
+    r.attach("frame-2", "frame-1");
+    await turns();
+    expect(r.on("frame-2")).toEqual(r.on("frame-1"));
+  });
+});
