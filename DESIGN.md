@@ -1702,7 +1702,10 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   own 14px blur, feathered by its own mask (`linear-gradient(#000 72%, transparent)`), over the
   cover's glass, on every head the room draws as `.ah-day` (a list's days and its section heads
   alike); the override keeps only **the transcript's top fade**, which stays the cover's tint. The
-  ruling asks the frost's cost to be measured under a cover before it lands.
+  ruling asks the frost's cost to be measured under a cover before it lands. *Measured 2026-10-12* (lane dui,
+  offscreen at 60 fps, History under its cover, 181 rows and 45 day heads scrolled 8 s an arm, paired A/B with a null
+  A/A): no frame cost (rAF p95 16.7 ms in both arms, no long frames); the GPU process about 5 points of a core higher
+  (+37 %) while the list scrolls, every pair above the null's spread; a still list costs nothing.
   Over the monitor the card occludes the bodies exactly as much as Godview occludes the field.
   **The Lip** (GV-D7; built 2026-10-11) is the lip grown into the drag bar: **30** tall, on the
   frame's tone. **The groove** (GV-D12 — James's pick over the lean: "i like the groove one")

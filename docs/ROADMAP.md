@@ -20,7 +20,7 @@
 >
 > **James ruled the whole *After Wave 2 Docket* on 2026-10-12** (republished under his current account, https://claude.ai/artifact/RvcaxJnoLhXMz3HcKHZx1G; DECISIONS, the N row): every mark at the lean but N7. **Pushes stay held (N7 (b)).** truffle's egress release this week (N11 (a)); after round 3, a debts lane beside PJ-6, then PJ-7 (N10 (a)). N2 (PK2) closed: the Stories head ended it. Upstream, for ghosttea: `paste()` / `sendKey()` / `sendText()` say whether they sent.
 >
-> Debts: the debts lane is building (N10 (a); lanes dfd and dui). Two parts are landed: "Debts, first part" (fieldd's honest budgets, doc-sync's teardown, kill-matrix row 6) and "Debts, second part" (Godview's filter kept for the run, N4 (a); the search's 120 ms step, round 3's last mark; the launcher rung's focus race). Next: index-timeline's lost frame and two unbounded waits in dfd; History's day heads frost (N3 (a)), measured first, in dui. "Open debts" below. **Every push is still HELD.**
+> Debts: the debts lane is building (N10 (a); lanes dfd and dui). Three parts are landed: "Debts, first part" (fieldd's honest budgets, doc-sync's teardown, kill-matrix row 6), "Debts, second part" (Godview's filter kept for the run, N4 (a); the search's 120 ms step, round 3's last mark; the launcher rung's focus race) and "Debts, third part" (History's day heads frost, N3 (a), measured first). Next in dfd: index-timeline's lost frame (instrumented), every kill-matrix create through the retry, and two unbounded waits. "Open debts" below. **Every push is still HELD.**
 > Previous rewrite, kept for continuity — **2026-10-10 — HISTORY LISTS YOUR PROJECTS, AND GODVIEW'S TIMELINE READS THE PAST (`0e020306`).**
 > Wave 2 of the History finish is on main: four slices since the 10-09 rewrite. James ruled docket v9 on 2026-10-09, every mark at its lean (DECISIONS, the AR-8 finish row). Nothing is pushed.
 > - **PJ-4 phase A** (`36295d77`, 2026-10-10): fieldd tags every session with its project key. Figures merge across folders and desktops and say when they are partial. Project inks deal on the cool half (DESIGN.md §2.9).
@@ -492,8 +492,9 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 **History and Godview's past — wave 2 is landed; nothing of the History finish is in build.** The plan of record
 is `draft/history-finish/build-hf.md` (§6 has each lane's state). Ruled 2026-10-12 (the docket's N3, N4), for the debts lane
 after round 3 (N10 (a)):
-- History's stuck day heads frost (N3 (a)): DESIGN.md §6 first, the cost measured under a cover before it lands.
-- Godview's filter is kept while the app runs and cleared at launch (N4 (a)).
+- History's stuck day heads frost (N3 (a)): BUILT `b73ff700` (DESIGN.md first; measured under a cover first: no frame cost,
+  about 5 points of a core in the GPU process while the list scrolls).
+- Godview's filter is kept while the app runs and cleared at launch (N4 (a)): BUILT `6a0e808c`.
 
 **Godview round 3 — BUILT (2026-10-11/12).** The Stories head (GV-D1) and TV-8 landed at `8c55581c` (the MV lead's);
 the wrapper at `d5f1f836` (the History lead's, lane land3; GV-D4, the Lip GV-D7/D12, minimize and away GV-D5's call

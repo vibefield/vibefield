@@ -9359,3 +9359,35 @@ width is the bar's until the step ends; visible only if the row was clipped). sm
 guard read nothing: that smoke stages no person, so History had no day head to read (N3's slice changes it).
 
 **Owed:** History's day heads frost (N3 (a)), its cost measured under a cover first (lane dui, next).
+
+## Debts, third part — History's stuck day heads frost under the cover, measured first (2026-10-12; `791cf2c5` · `b73ff700` through lane land3, gated on the exact tree)
+
+**Why:** James ruled N3 (a) on 2026-10-12 (the After Wave 2 Docket): History's stuck day heads frost, DESIGN.md first,
+the cost measured under a cover before it lands. Since DK-15 (2026-10-07) both of the room's paper fades had been the
+cover's tint on the desk. Lane dui (`debts/ui`, brief `draft/history-finish/briefs/debts-ui.md`).
+
+**What landed:**
+- `791cf2c5` DESIGN.md first: the DK-15 note gains a dated N3 (a) carve-out (the sticky day heads keep the room's own
+  14 px blur and mask; the transcript's top fade stays the tint); §8 History's "both fades frost", untrue since DK-15,
+  corrected at its source; a dated pointer at §8 "The covers over the desk". The landing adds the measurement to the
+  carve-out.
+- `b73ff700` `history-room-glass.css` keeps only the transcript's `.tr-frost::before` in its override, so every head the
+  room draws as `.ah-day` (a list's days and its section heads) frosts; the two guards flipped: the boundaries test, and
+  smoke:canvas's COVER HISTORY row, which reads a stuck day head when one exists and otherwise a probe of that class in
+  the room's frame, and says which it read (the old "frosts" guard read nothing: that smoke stages no person).
+
+**Measured before it landed** (lane-local harness, never for main: branch `debts/ui-frost-lab-wip` `1c5046da`; data
+`/Volumes/SamsungRed/lanes/dui/frost-run1.json`, `frost-run2.json`, `frost-large.json`, `frost-null.json`; the lock
+`lanes/PERF.lock` held 12:08:34–12:17:05Z): the lane's build, offscreen at 60 fps, scale 2, 1180 × 780 and 1512 × 982;
+a throwaway person seeded with 180 sessions over 45 days; History under its cover (opacity 1 over the desk's still), the
+project open (181 rows, 45 day heads); the arms switched in memory by exactly this change and checked by a stuck head's
+computed `::before`; each arm 8 s of scripted scrolling; six paired A/B per launch, plus a null A/A launch.
+- **Frames: unaffected.** rAF p50 and p95 16.7 ms in every arm, frames over 25 ms 0–1 per 8 s in both, no long
+  animation frames, 480 paints per 8 s in both.
+- **GPU process: about 5 points of a core more while the list scrolls** (+4.65 and +4.95 at 1180 × 780, +6.6 at
+  1512 × 982; the null +0.10, spread −0.5…+0.6): about +37 % of that process's CPU, every one of the 16 pairs above the
+  null's whole spread. The renderer's CPU and main thread stay inside the null's spread, as a compositor filter should.
+- Caveats: offscreen, not the live display; one host, quiet; a still list costs nothing (only movement re-blurs).
+
+**Validation:** red and green logs under `/Volumes/SamsungRed/lanes/dui/`; then the landing gate on the exact tree
+(`lanes/land3/logs/`, under this landing's sha).
