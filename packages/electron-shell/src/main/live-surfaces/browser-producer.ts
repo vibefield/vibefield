@@ -1771,15 +1771,29 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   }
 
   /** A window's first layout, its page told its device BEFORE it loads — a source that names none is told nothing (the
-   * engine as Electron has it). */
+   * engine as Electron has it).
+   * PT-5c (ruling 4) — LAID AT THE LAYOUT THE PAGE SHOULD HAVE NOW: the demand's viewport and raster as they stand when
+   * the layout is ASKED — never those the producer started with — and the geometry then says what was laid, as the
+   * actuation's does. The layout is asked only once the device is told, and that waits on the window's bootstrap — past
+   * the demand's debounce on a busy Mac: the demand moved meanwhile, its actuation laid the new layout first, and the
+   * start's was laid LAST (the window at the old size while every frame's geometry said the new: presses landed
+   * elsewhere). A re-birth (a device switched to during the birth) laid the start's again, last — my probe O. */
   private bornOn(
     window: BrowserSurfaceNativeWindow,
-    raster: LiveSurfacePixelSizeV1,
-    viewport: LiveSurfaceBrowserSourceV1["logicalViewport"],
+    epoch: number,
   ): Promise<LiveSurfacePixelSizeV1> {
     const e = this.#emulation;
-    const laid = (): Promise<LiveSurfacePixelSizeV1> =>
-      window.setBackingRaster(raster, viewport, this.density(), this.mobile());
+    const laid = (): Promise<LiveSurfacePixelSizeV1> => {
+      const viewport = this.wantedViewport();
+      const raster =
+        this.#effectiveDemand?.targetRasterSize ?? defaultRaster(viewport, this.density());
+      return window
+        .setBackingRaster(raster, viewport, this.density(), this.mobile())
+        .then((size) => {
+          if (this.isCurrent(window, epoch)) this.#viewport = viewport;
+          return size;
+        });
+    };
     return e === undefined ? laid() : window.setEmulation(this.nativeEmulation(e)).then(laid);
   }
 
@@ -1790,19 +1804,13 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * or NOT asked for, where the person stopped it before the birth: the page says `stopped` at its address, and ↻
    * loads it. `failed`: the window could not be laid out or told its device — THAT is the source's.
    */
-  private born(
-    window: BrowserSurfaceNativeWindow,
-    epoch: number,
-    raster: LiveSurfacePixelSizeV1,
-    viewport: LiveSurfaceBrowserSourceV1["logicalViewport"],
-    failed: () => void,
-  ): void {
+  private born(window: BrowserSurfaceNativeWindow, epoch: number, failed: () => void): void {
     const told = this.#emulation;
-    void this.bornOn(window, raster, viewport).then(
+    void this.bornOn(window, epoch).then(
       () => {
         if (!this.isCurrent(window, epoch)) return;
         if (this.#emulation !== told) {
-          this.born(window, epoch, raster, viewport, failed);
+          this.born(window, epoch, failed);
           return;
         }
         this.#born = true;
@@ -2210,7 +2218,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         () => this.handleStartupTimeout(window, epoch),
         this.#startupTimeoutMs,
       );
-      this.born(window, epoch, initialRaster, viewport, () =>
+      this.born(window, epoch, () =>
         this.failSource(
           sourceError("source-not-found", "Browser source could not load", "user-action"),
         ),
@@ -2671,7 +2679,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         () => this.handleStartupTimeout(window, epoch),
         this.#startupTimeoutMs,
       );
-      this.born(window, epoch, initialRaster, viewport, () =>
+      this.born(window, epoch, () =>
         this.failSource(
           sourceError("source-not-found", "Browser source could not reconnect", "user-action"),
         ),

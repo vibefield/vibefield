@@ -477,9 +477,11 @@ async function delivered(): Promise<void> {
 }
 
 /** A window's BIRTH ends (PT-5b3, ruling 1): once the layout the row held answers — its device told, its layout laid, its
- * address asked for — a few turns of the fake's promises. */
+ * address asked for — a few turns of the fake's promises. (PT-5c, ruling 4: the layout now says what it laid when it
+ * answers — a turn more — and a re-birth runs the device and the layout again: the re-birth's row needs 10 now, where
+ * PT-5b3's 8 sufficed; 12.) */
 async function birthEnds(): Promise<void> {
-  for (let i = 0; i < 8; i += 1) await Promise.resolve();
+  for (let i = 0; i < 12; i += 1) await Promise.resolve();
 }
 
 afterEach(() => {
@@ -3824,6 +3826,100 @@ describe("BrowserLiveSurfaceRuntime", () => {
       woken.emitNavigationState({ ...NAV, url: "https://example.test/next" });
       expect(p.result.runtime.summary.browser?.document).toBe(2);
       p.result.runtime.dispose();
+    });
+
+    it("ruling 4 (my O) — a device switch DURING a window's birth (another device of the same density, its pane re-shaped): the re-birth lays the window out at the layout the page should have NOW — never the one asked before the switch, last", async () => {
+      vi.useFakeTimers();
+      const result = setup({
+        source: { ...source(), deviceScaleFactor: 2, emulation: LAPTOP },
+        rasterStabilizationMs: 50,
+      });
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(
+        demand(1, "live", 30, { width: 640, height: 400 }, { width: 320, height: 200 }),
+      );
+      const window = result.native.windows[0];
+      if (window === undefined) throw new Error("no window yet");
+      // the birth's own layout answers when the row says (its first ask only)
+      let born: () => void = () => {};
+      let held = true;
+      const raster = window.setBackingRaster.bind(window);
+      window.setBackingRaster = (async (...args: Parameters<typeof raster>) => {
+        if (held) {
+          held = false;
+          await new Promise<void>((resolve) => {
+            born = resolve;
+          });
+        }
+        return raster(...args);
+      }) as typeof window.setBackingRaster;
+      await vi.advanceTimersByTimeAsync(0);
+      // during the birth the pane becomes a tablet — the same density, another device, its view re-shaped
+      renderer.attachment.setDemand(
+        demand(2, "live", 30, { width: 1640, height: 2360 }, { width: 820, height: 1180 }),
+      );
+      await result.runtime.navigate({ action: "emulate", emulation: TABLET });
+      // the new layout's own debounce runs out while the birth is still held
+      await vi.advanceTimersByTimeAsync(100);
+      born();
+      await vi.advanceTimersByTimeAsync(0);
+      await delivered();
+      await vi.advanceTimersByTimeAsync(500);
+      await delivered();
+      expect(window.rasterViewports.at(-1)).toEqual({ width: 820, height: 1180 });
+      expect(window.backingRasters.at(-1)).toEqual({ width: 1640, height: 2360 });
+      window.emitNavigationState({ ...NAV });
+      window.paint(sharedPaint(1640, 2360).paint);
+      await delivered();
+      expect(result.runtime.summary.geometry?.logicalSize).toEqual({ width: 820, height: 1180 });
+      result.runtime.dispose();
+    });
+
+    it("ruling 4 — the FIRST birth's own order (the reviewer's caveat): its device told only after the bootstrap — past the demand's debounce on a busy Mac — then its layout; the demand moved meanwhile and its actuation laid first: the birth lays the layout as it stands, never the start's last", async () => {
+      vi.useFakeTimers();
+      const result = setup({
+        source: { ...source(), deviceScaleFactor: 2, emulation: LAPTOP },
+        rasterStabilizationMs: 50,
+      });
+      // the bootstrap is slow: the window's device is told when the row says (held from the window's making)
+      let told: () => void = () => {};
+      const make = result.native.createWindow.bind(result.native);
+      result.native.createWindow = (options) => {
+        const made = make(options) as FakeBrowserWindow;
+        const emulate = made.setEmulation.bind(made);
+        made.setEmulation = async (emulation) => {
+          await new Promise<void>((resolve) => {
+            told = resolve;
+          });
+          return emulate(emulation);
+        };
+        return made;
+      };
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(
+        demand(1, "live", 30, { width: 640, height: 400 }, { width: 320, height: 200 }),
+      );
+      const window = result.native.windows[0];
+      if (window === undefined) throw new Error("no window yet");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(window.rasterViewports).toEqual([]);
+      // the pane is re-shaped; its actuation lays the new layout while the birth still waits on its device
+      renderer.attachment.setDemand(
+        demand(2, "live", 30, { width: 1000, height: 800 }, { width: 500, height: 400 }),
+      );
+      await vi.advanceTimersByTimeAsync(100);
+      expect(window.rasterViewports).toEqual([{ width: 500, height: 400 }]);
+      told();
+      await vi.advanceTimersByTimeAsync(0);
+      await delivered();
+      expect(window.loadedUrls).toEqual(["https://example.test/app"]);
+      expect(window.rasterViewports.at(-1)).toEqual({ width: 500, height: 400 });
+      expect(window.backingRasters.at(-1)).toEqual({ width: 1000, height: 800 });
+      window.emitNavigationState({ ...NAV });
+      window.paint(sharedPaint(1000, 800).paint);
+      await delivered();
+      expect(result.runtime.summary.geometry?.logicalSize).toEqual({ width: 500, height: 400 });
+      result.runtime.dispose();
     });
 
     it("ruling 2 (my T21) — a touchStart ANSWERED after its window was REPLACED sets nothing down for the window that replaced it: the new window's first move is a hover", async () => {
