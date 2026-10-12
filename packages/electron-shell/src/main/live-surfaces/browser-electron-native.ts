@@ -1,5 +1,10 @@
 import { BrowserWindow, session } from "electron";
-import { BrowserFrames, type FrameQuad, type FrameRouted } from "./browser-frames";
+import {
+  BrowserFrames,
+  type FrameQuad,
+  type FrameRouted,
+  type FrameVisible,
+} from "./browser-frames";
 import {
   type BrowserSurfaceAgent,
   type BrowserSurfaceIcon,
@@ -59,17 +64,30 @@ export const PAGE_SCALE_SCRIPT = `(() => { const say = globalThis[${JSON.stringi
 export const FRAME_WORDS_BINDING = "__vibefieldFrameWords";
 
 /**
+ * PT-5d (M6.3a) — THE VISIBLE PART OF A FRAME, as its parent's document draws it: the part of its owner's content box (as
+ * drawn — a transform's scale in it) left in view by every containing block up its chain whose overflow clips (or that
+ * contains its paint), and by the view — the visual viewport's part of it; as fractions of the box ([u0, v0, u1, v1];
+ * none: [0, 0, 0, 0]). A positioned holder skips the static blocks between it and an absolute frame; a fixed frame is
+ * held by the view but for a transformed (or filtered, or contained) block; the root's clip, and the body's when it is
+ * the view's, is the view. Called on the owner element (`this`): read with the quad (`Runtime.callFunctionOn`), and in the
+ * words script's look, so a clip that changes with the frame not moving says `moved`. Occlusion — the host drawing over
+ * a frame — is NOT seen: a stated limit of PT-5d (M6.3b).
+ */
+export const FRAME_VISIBLE_PART = `function () { const el = this; const none = [0, 0, 0, 0]; const css = (e) => getComputedStyle(e); const px = (v) => parseFloat(v) || 0; const num = (v, or) => (typeof v === "number" && Number.isFinite(v) ? v : or); const r = el.getBoundingClientRect(); if (!(r.width > 0 && r.height > 0)) return none; const s = css(el); const kx = el.offsetWidth > 0 ? r.width / el.offsetWidth : 1; const ky = el.offsetHeight > 0 ? r.height / el.offsetHeight : 1; const left = r.left + (px(s.borderLeftWidth) + px(s.paddingLeft)) * kx; const top = r.top + (px(s.borderTopWidth) + px(s.paddingTop)) * ky; const right = r.right - (px(s.borderRightWidth) + px(s.paddingRight)) * kx; const bottom = r.bottom - (px(s.borderBottomWidth) + px(s.paddingBottom)) * ky; if (!(right > left && bottom > top)) return none; let x0 = left, y0 = top, x1 = right, y1 = bottom; const paints = (t) => /paint|strict|content/.test(t.contain || ""); const holdsFixed = (t) => t.transform !== "none" || t.perspective !== "none" || t.filter !== "none" || paints(t) || /layout/.test(t.contain || ""); const holder = (e) => { const position = css(e).position; for (let a = e.parentElement; a && a !== document.documentElement; a = a.parentElement) { const t = css(a); if (position === "fixed") { if (holdsFixed(t)) return a; } else if (position === "absolute") { if (t.position !== "static" || holdsFixed(t)) return a; } else return a; } return null; }; const root = css(document.documentElement); const bodyIsView = root.overflowX === "visible" && root.overflowY === "visible"; for (let a = holder(el); a; a = holder(a)) { if (a === document.body && bodyIsView) continue; const t = css(a); const cx = t.overflowX !== "visible" || paints(t); const cy = t.overflowY !== "visible" || paints(t); if (!cx && !cy) continue; const b = a.getBoundingClientRect(); const ax = a.offsetWidth > 0 ? b.width / a.offsetWidth : 1; const ay = a.offsetHeight > 0 ? b.height / a.offsetHeight : 1; const cl = b.left + a.clientLeft * ax; const ct = b.top + a.clientTop * ay; if (cx) { x0 = Math.max(x0, cl); x1 = Math.min(x1, cl + a.clientWidth * ax); } if (cy) { y0 = Math.max(y0, ct); y1 = Math.min(y1, ct + a.clientHeight * ay); } } const v = globalThis.visualViewport; const vx = num(v && v.offsetLeft, 0); const vy = num(v && v.offsetTop, 0); x0 = Math.max(x0, vx); y0 = Math.max(y0, vy); x1 = Math.min(x1, vx + num(v && v.width, innerWidth)); y1 = Math.min(y1, vy + num(v && v.height, innerHeight)); if (!(x1 > x0 && y1 > y0)) return none; const w = right - left; const h = bottom - top; const q = (n) => Math.round(n * 1e4) / 1e4; return [q((x0 - left) / w), q((y0 - top) / h), q((x1 - left) / w), q((y1 - top) / h)]; }`;
+
+/**
  * PT-5d (rulings 1, M3) — said to every document of every session (the page's and its frames'): it takes the binding for
  * itself and deletes it from the page's reach, then SAYS
  *  - `focus` and `blur` of its OWN window — where the keys, text, a composition and a command go (the frame whose window has
  *    the focus; the page's when none has; a blur moves nothing — M6.2);
- *  - `moved` — its frames' boxes changed (a scroll of any of its scrollers, a resize, its visual viewport, a transition's
- *    or an animation's end, a load — and, for what no event says, a look every half second while it holds a frame), once
- *    an animation frame at most, and only when they did: main then reads their quads again, off the hand's path.
+ *  - `moved` — its frames' boxes, or their visible parts (M6.3a: `FRAME_VISIBLE_PART`), changed (a scroll of any of its
+ *    scrollers, a resize, its visual viewport, a transition's or an animation's end, a load — and, for what no event says,
+ *    a look every half second while it holds a frame), once an animation frame at most, and only when they did: main
+ *    then reads their quads and visible parts again, off the hand's path.
  * Never the bootstrap blank. Never its size (M6.1): every document of a frame's process says its words on the frame's
  * session — its own children of its site too — so a frame's viewport is READ of its local root, beside its quad.
  */
-export const FRAME_WORDS_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; try { delete globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; } catch {} if (typeof say !== "function" || location.href === "about:blank") return; const tell = (word) => { try { say(word); } catch {} }; addEventListener("focus", (e) => { if (e.target === window) tell("focus"); }); addEventListener("blur", (e) => { if (e.target === window) tell("blur"); }); let drawn = ""; const boxes = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { const r = f.getBoundingClientRect(); out += r.left + "," + r.top + "," + r.width + "," + r.height + ";"; } return out; }; let due = false; const look = () => { due = false; const now = boxes(); if (now !== drawn) { drawn = now; tell("moved"); } }; const moved = () => { if (due) return; due = true; requestAnimationFrame(look); }; addEventListener("scroll", moved, { capture: true, passive: true }); addEventListener("resize", moved); addEventListener("load", moved); for (const t of ["DOMContentLoaded", "transitionend", "animationend"]) addEventListener(t, moved, true); globalThis.visualViewport?.addEventListener("resize", moved); globalThis.visualViewport?.addEventListener("scroll", moved); setInterval(() => { if (document.querySelector("iframe, frame")) moved(); }, 500); moved(); })();`;
+export const FRAME_WORDS_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; try { delete globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; } catch {} if (typeof say !== "function" || location.href === "about:blank") return; const tell = (word) => { try { say(word); } catch {} }; addEventListener("focus", (e) => { if (e.target === window) tell("focus"); }); addEventListener("blur", (e) => { if (e.target === window) tell("blur"); }); let drawn = ""; const part = ${FRAME_VISIBLE_PART}; const seen = (f) => { try { return part.call(f).join(","); } catch { return ""; } }; const boxes = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { const r = f.getBoundingClientRect(); out += r.left + "," + r.top + "," + r.width + "," + r.height + ":" + seen(f) + ";"; } return out; }; let due = false; const look = () => { due = false; const now = boxes(); if (now !== drawn) { drawn = now; tell("moved"); } }; const moved = () => { if (due) return; due = true; requestAnimationFrame(look); }; addEventListener("scroll", moved, { capture: true, passive: true }); addEventListener("resize", moved); addEventListener("load", moved); for (const t of ["DOMContentLoaded", "transitionend", "animationend"]) addEventListener(t, moved, true); globalThis.visualViewport?.addEventListener("resize", moved); globalThis.visualViewport?.addEventListener("scroll", moved); setInterval(() => { if (document.querySelector("iframe, frame")) moved(); }, 500); moved(); })();`;
 
 /** PT-5d (M6.1): a frame's own viewport, in its own CSS px — evaluated in its session's local root. */
 const FRAME_SIZE = 'innerWidth + "," + innerHeight';
@@ -339,7 +357,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * session's local root (`Runtime.evaluate` in its own frame), never said by a document of it: every document of its
    * process speaks on its session, its own children of its site too. Not awaited by the placement (a frame busy with its
    * own load, or hung, holds no placement up): until it answers the frame is taken at its quad's own size, and an answer
-   * for a quad no longer current is dropped.
+   * for a quad no longer current is dropped. PT-5d (M6.3a): and its VISIBLE part (`FRAME_VISIBLE_PART`, called on its
+   * owner in its parent's document — the object released after), placed with the quad: a point on the part an ancestor
+   * clips is the parent's. Unread (refused), the whole box — as before M6.3a.
    */
   private placeFrame(session: string): void {
     const inFlight = this.#placing.get(session);
@@ -374,7 +394,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         Array.isArray(content) && content.length === 8 && content.every(Number.isFinite)
           ? (content as unknown as FrameQuad)
           : undefined;
-      const placement = this.#frames.placed(session, quad);
+      const visible = quad === undefined ? undefined : await this.visiblePart(frame.parent, owner);
+      const placement = this.#frames.placed(session, quad, visible);
       if (quad === undefined) return;
       void cdp
         .sendCommand("Runtime.evaluate", { expression: FRAME_SIZE, returnByValue: true }, session)
@@ -395,6 +416,36 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         this.#placing.delete(session);
         if (mark.again) this.placeFrame(session);
       });
+  }
+
+  /** PT-5d (M6.3a): the visible part of a frame's owner, read in its parent's document; unread (refused), none said. */
+  private async visiblePart(
+    parent: string | undefined,
+    owner: number,
+  ): Promise<FrameVisible | undefined> {
+    const cdp = this.window.webContents.debugger;
+    try {
+      const node = (await cdp.sendCommand("DOM.resolveNode", { backendNodeId: owner }, parent)) as {
+        readonly object?: { readonly objectId?: unknown };
+      };
+      const objectId = node.object?.objectId;
+      if (typeof objectId !== "string") return undefined;
+      try {
+        const out = (await cdp.sendCommand(
+          "Runtime.callFunctionOn",
+          { objectId, functionDeclaration: FRAME_VISIBLE_PART, returnByValue: true },
+          parent,
+        )) as { readonly result?: { readonly value?: unknown } };
+        const value = out.result?.value;
+        return Array.isArray(value) && value.length === 4 && value.every(Number.isFinite)
+          ? (value as unknown as FrameVisible)
+          : undefined;
+      } finally {
+        void cdp.sendCommand("Runtime.releaseObject", { objectId }, parent).catch(() => undefined);
+      }
+    } catch {
+      return undefined;
+    }
   }
 
   /** PT-5c (R3): one discard of a session's console entries (`""`: the page's) — now, or when a second has passed since

@@ -269,3 +269,40 @@ describe("PT-5d (rulings 1, M3) — keys, text, a composition and a command go t
     expect(f.focused().session).toBeUndefined();
   });
 });
+
+describe("PT-5d (M6.3a) — a frame takes a point only on its VISIBLE part: what an ancestor's overflow clips is drawn by the one it is in", () => {
+  it("a press on the part a scroller clips goes to the page; on the part in view, to the frame; a drag out of view stays with its press; a hover and the wheel over the clipped part are the page's; a frame wholly clipped takes nothing", () => {
+    const f = new BrowserFrames();
+    f.pageCommitted(1);
+    f.attached("A", "t-A", undefined);
+    // 400 × 300 at 100, 80 — its top half under its scroller's clip edge: in view from halfway down
+    f.placed("A", box(100, 80, 400, 300), [0, 0.5, 1, 1]);
+    expect(f.press("left", 180, 120).target.session).toBeUndefined();
+    f.release("left", 180, 120);
+    expect(f.press("left", 180, 305)).toEqual({
+      target: { session: "A", document: 0 },
+      x: 80,
+      y: 225,
+    });
+    expect(f.move(180, 120)).toEqual([{ target: { session: "A", document: 0 }, x: 80, y: 40 }]);
+    expect(f.release("left", 180, 120)?.target.session).toBe("A");
+    expect(f.wheel(180, 120).target.session).toBeUndefined();
+    expect(f.move(180, 121).map((r) => r.target.session)).toEqual(["A", undefined]);
+    // scrolled out of its scroller: nothing lands in it
+    f.placed("A", box(100, 80, 400, 300), [0, 0, 0, 0]);
+    expect(f.wheel(180, 305).target.session).toBeUndefined();
+  });
+
+  it("a frame in a frame, clipped in ITS parent's view: a point over its clipped part is its parent's, carried into it", () => {
+    const f = page();
+    // B's right half clipped in A's view
+    f.placed("B", box(250, 190, 120, 90), [0, 0, 0.5, 1]);
+    expect(f.press("left", 360, 285).target.session).toBe("B");
+    f.release("left", 360, 285);
+    expect(f.press("left", 460, 285)).toEqual({
+      target: { session: "A", document: 0 },
+      x: 360,
+      y: 205,
+    });
+  });
+});

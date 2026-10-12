@@ -17,6 +17,9 @@
 /** A frame's content quad in its PARENT's viewport (CSS px): its corners from its top-left, clockwise (CDP's `DOM.Quad`). */
 export type FrameQuad = readonly [number, number, number, number, number, number, number, number];
 
+/** PT-5d (M6.3a): the part of a frame's content box in view, as fractions of it: [u0, v0, u1, v1]. */
+export type FrameVisible = readonly [number, number, number, number];
+
 /** Where an event goes — the page's own session (`undefined`) or a frame's — and the document it is for. */
 export interface FrameTarget {
   readonly session: string | undefined;
@@ -41,6 +44,8 @@ interface FrameRecord {
   size: readonly [number, number] | undefined;
   /** its placements, counted: a size read with a quad no longer current is dropped */
   placement: number;
+  /** the part of it in view, read with its quad (none: all of it) — M6.3a */
+  visible: FrameVisible | undefined;
   /** its own commits */
   documents: number;
   /** its place in the order frames attach — the later one wins where two overlap */
@@ -77,6 +82,7 @@ export class BrowserFrames {
       quad: undefined,
       size: undefined,
       placement: 0,
+      visible: undefined,
       documents: 0,
       order: this.#order,
     });
@@ -112,14 +118,16 @@ export class BrowserFrames {
    * A frame's quad as its parent's session said it (`undefined`: it is not laid out — no box, nothing lands in it); the
    * placement's count, for the read of its own size that goes with it. PT-5d (M6.1): a quad DRAWN AT ANOTHER SIZE (its
    * owner resized, its transform changed) unsays the size read before — the quad's own until its own is read; a quad that
-   * only moved (a scroll) keeps it.
+   * only moved (a scroll) keeps it. PT-5d (M6.3a): with its VISIBLE part (none: all of it) — a point on a part an
+   * ancestor of its owner clips is not the frame's.
    */
-  placed(session: string, quad: FrameQuad | undefined): number {
+  placed(session: string, quad: FrameQuad | undefined, visible?: FrameVisible): number {
     const frame = this.#frames.get(session);
     if (frame === undefined) return 0;
     if (quad === undefined || frame.quad === undefined || !sameDrawnSize(frame.quad, quad))
       frame.size = undefined;
     frame.quad = quad;
+    frame.visible = visible;
     frame.placement += 1;
     return frame.placement;
   }
@@ -251,7 +259,8 @@ export class BrowserFrames {
 
   // ── where a point is ───────────────────────────────────────────────────────────────────────────────────────────
 
-  /** The innermost frame drawn at a page point (its quad known), and the point in its viewport. */
+  /** The innermost frame drawn at a page point (its quad known) — on its VISIBLE part (M6.3a) — and the point in its
+   * viewport. */
   at(x: number, y: number): FrameRouted {
     let session: string | undefined;
     let px = x;
@@ -262,7 +271,7 @@ export class BrowserFrames {
       for (const frame of this.#frames.values()) {
         if (frame.parent !== session || frame.quad === undefined) continue;
         const local = carry(frame, px, py);
-        if (local === undefined || !within(frame, local)) continue;
+        if (local === undefined || !within(frame, local) || !inView(frame, local)) continue;
         if (inner === undefined || frame.order > inner.order) {
           inner = frame;
           carried = local;
@@ -333,13 +342,24 @@ function carry(frame: FrameRecord, x: number, y: number): readonly [number, numb
   return [u * w, v * h];
 }
 
+/** A frame's own viewport: its size read (M6.1), else its quad's own. */
+function sizeOf(frame: FrameRecord, q: FrameQuad): readonly [number, number] {
+  return frame.size ?? [Math.hypot(q[2] - q[0], q[3] - q[1]), Math.hypot(q[6] - q[0], q[7] - q[1])];
+}
+
 /** Is a point of a frame's own viewport inside it? */
 function within(frame: FrameRecord, [x, y]: readonly [number, number]): boolean {
   const q = frame.quad;
   if (q === undefined) return false;
-  const [w, h] = frame.size ?? [
-    Math.hypot(q[2] - q[0], q[3] - q[1]),
-    Math.hypot(q[6] - q[0], q[7] - q[1]),
-  ];
+  const [w, h] = sizeOf(frame, q);
   return x >= 0 && y >= 0 && x < w && y < h;
+}
+
+/** PT-5d (M6.3a): is a point of a frame's own viewport on the part of it in view? */
+function inView(frame: FrameRecord, [x, y]: readonly [number, number]): boolean {
+  const q = frame.quad;
+  const v = frame.visible;
+  if (q === undefined || v === undefined) return true;
+  const [w, h] = sizeOf(frame, q);
+  return x >= v[0] * w && y >= v[1] * h && x < v[2] * w && y < v[3] * h;
 }
