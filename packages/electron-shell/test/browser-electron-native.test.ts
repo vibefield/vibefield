@@ -2676,6 +2676,128 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     }
   });
 
+  describe("M22 D — an input on a frame of another site's session at the page's scale s is its carried CSS point ÷ s (product run 3: F takes its input × s — at 0.41 a tap aimed at its button landed on its body; run 5: ÷ s, on its button)", () => {
+    /** the page at `framed`, its own word of its scale said */
+    const scaled = async (s: number) => {
+      const r = await framed();
+      r.emit("Runtime.bindingCalled", {
+        name: PAGE_SCALE_BINDING,
+        payload: String(s),
+        executionContextId: 1,
+      });
+      return r;
+    };
+    /** each command of the hand: its type, its session, its point */
+    const points = (r: Awaited<ReturnType<typeof framed>>) =>
+      r.hand().map((h) => {
+        const [what, at] = h.split(" ");
+        const [x, y] = (at ?? "").split(",").map(Number);
+        return { what, x, y };
+      });
+
+    it("a finger at s = 0.41: its start and its move on F's session at the carried point ÷ 0.41; its end as ever", async () => {
+      const r = await scaled(0.41);
+      await r.native.dispatchTouch({
+        type: "touchStart",
+        touchPoints: [{ x: 141, y: 100.5, id: 0 }],
+      });
+      await r.native.dispatchTouch({
+        type: "touchMove",
+        touchPoints: [{ x: 145.1, y: 104.6, id: 0 }],
+      });
+      await r.native.dispatchTouch({ type: "touchEnd", touchPoints: [] });
+      const [start, move, end] = points(r);
+      expect([start?.what, move?.what, end?.what]).toEqual([
+        "touchStart@F",
+        "touchMove@F",
+        "touchEnd@F",
+      ]);
+      expect(start?.x).toBeCloseTo(100, 6);
+      expect(start?.y).toBeCloseTo(50, 6);
+      expect(move?.x).toBeCloseTo(110, 6);
+      expect(move?.y).toBeCloseTo(60, 6);
+    });
+
+    it("a mouse at s = 2: its press and its release on F's session at the carried point ÷ 2; a move off F onto the page goes on the page's session as the producer sent it", async () => {
+      const r = await scaled(2);
+      await r.native.dispatchMouse({
+        type: "mousePressed",
+        x: 180,
+        y: 120,
+        button: "left",
+        clickCount: 1,
+      });
+      await r.native.dispatchMouse({
+        type: "mouseReleased",
+        x: 180,
+        y: 120,
+        button: "left",
+        clickCount: 1,
+      });
+      await r.native.dispatchMouse({
+        type: "mouseMoved",
+        x: 10,
+        y: 10,
+        button: "none",
+        buttons: 0,
+      });
+      expect(r.hand()).toEqual([
+        "mousePressed@F 40,20",
+        "mouseReleased@F 40,20",
+        "mouseMoved@F -45,-35",
+        "mouseMoved@page 10,10",
+      ]);
+    });
+
+    it("the wheel at s = 0.41 over F: its point ÷ 0.41, its travel as it came; at s = 1 every point as carried", async () => {
+      const r = await scaled(0.41);
+      await r.native.dispatchMouse({
+        type: "mouseWheel",
+        x: 141,
+        y: 100.5,
+        deltaX: 0,
+        deltaY: 120,
+      });
+      const [wheel] = points(r);
+      expect(wheel?.what).toBe("mouseWheel@F");
+      expect(wheel?.x).toBeCloseTo(100, 6);
+      expect(wheel?.y).toBeCloseTo(50, 6);
+      expect(r.sent.find((c) => c.method === "Input.dispatchMouseEvent")?.params).toMatchObject({
+        deltaX: 0,
+        deltaY: 120,
+      });
+      const one = await scaled(1);
+      await one.native.dispatchTouch({
+        type: "touchStart",
+        touchPoints: [{ x: 180, y: 120, id: 0 }],
+      });
+      expect(one.hand()).toEqual(["touchStart@F 80,40"]);
+    });
+
+    it("a scale said of the document BEFORE is not this one's: the page commits, a frame of the new document — its input as carried until the new document says its own", async () => {
+      const r = await scaled(0.5);
+      r.at("https://host.test/b");
+      r.contents.emit("did-navigate", {}, "https://host.test/b");
+      r.attach("F");
+      await turns();
+      await r.native.dispatchTouch({
+        type: "touchStart",
+        touchPoints: [{ x: 180, y: 120, id: 0 }],
+      });
+      await r.native.dispatchTouch({ type: "touchEnd", touchPoints: [] });
+      r.emit("Runtime.bindingCalled", {
+        name: PAGE_SCALE_BINDING,
+        payload: "0.5",
+        executionContextId: 1,
+      });
+      await r.native.dispatchTouch({
+        type: "touchStart",
+        touchPoints: [{ x: 180, y: 120, id: 0 }],
+      });
+      expect(r.hand()).toEqual(["touchStart@F 80,40", "touchEnd@F", "touchStart@F 160,80"]);
+    });
+  });
+
   describe("M7 H4, H9, H13 — a finger on the page and in a frame", () => {
     it("H13 — a finger down over F goes on F's session at the point carried into it; its moves and its end too", async () => {
       const r = await framed();

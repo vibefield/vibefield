@@ -278,6 +278,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   #pageDocument = false;
   /** PT-5c (ruling 1): who hears the page's word of its scale. */
   readonly #scaleListeners = new Set<(scale: number, document: number) => void>();
+  /** PT-5d (M22 D): the page's own last word of its scale, and the document it was said of — an input on a frame's session
+   * is carried ÷ it (`onSession`) */
+  #pageScale: { readonly value: number; readonly document: number } | undefined;
   /** PT-5d (M6.4b): who hears that a command of the hand went unanswered past the bound. */
   readonly #hungListeners = new Set<(frame?: string) => void>();
   /** PT-5d (M7 H2): key-like events waiting for a word of where the focus is */
@@ -433,6 +436,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         return;
       const scale = Number(params["payload"]);
       if (!Number.isFinite(scale) || scale <= 0) return;
+      this.#pageScale = { value: scale, document: this.#documents };
       for (const listener of [...this.#scaleListeners]) listener(scale, this.#documents);
       return;
     }
@@ -1021,7 +1025,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         if (routed === null) return;
         await this.handCommand(
           "Input.dispatchTouchEvent",
-          { ...input, touchPoints: [{ ...point, x: routed.x, y: routed.y }] },
+          { ...input, touchPoints: [{ ...point, ...this.onSession(routed) }] },
           routed.target.session,
         );
         return;
@@ -1045,7 +1049,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         await this.hinted(input.type === "mousePressed", () =>
           this.handCommand(
             "Input.dispatchMouseEvent",
-            { ...input, x: routed.x, y: routed.y },
+            { ...input, ...this.onSession(routed) },
             routed.target.session,
           ),
         ).catch((error: unknown) => {
@@ -1201,6 +1205,20 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       if (letGo !== undefined) this.#inFlight.delete(letGo);
       if (timer !== null) clearTimeout(timer);
     }
+  }
+
+  /**
+   * PT-5d (M22 D) — AN INPUT'S POINT ON ITS TARGET'S SESSION. A frame of another site takes its input × the page's scale s
+   * (product run 3: at 0.41 a tap aimed at its button landed on its body; run 5: sent ÷ s, on its button): its carried
+   * CSS point goes ÷ s — a finger's, a pointer's and the wheel's point alike (one path; mouse at s ≠ 1 unwitnessed: no door
+   * gives a laptop's page a scale). The page's own session as the producer sent it (its own ÷ s, PT-5b). s: the page's
+   * last word of its CURRENT document; none yet: 1.
+   */
+  private onSession(routed: FrameRouted): { readonly x: number; readonly y: number } {
+    if (routed.target.session === undefined) return { x: routed.x, y: routed.y };
+    const said = this.#pageScale;
+    const s = said !== undefined && said.document === this.#documents ? said.value : 1;
+    return { x: routed.x / s, y: routed.y / s };
   }
 
   /** PT-5d: a pointer's event, routed — a hover that crosses into another target first tells the one it left; a wheel by
