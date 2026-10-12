@@ -20,6 +20,9 @@
 //   FRAME-TOUCH  — on a phone, a tap on the frame's button: its touch's start and end, and the click;
 //   FRAME-GONE   — a press held in the frame and the frame sent elsewhere under it: its release goes nowhere and nothing
 //                  stalls — the next press lands in the frame's new document;
+//   FRAME-CLIPPED — M6.3a: the frame in a host's SCROLLER, its top half above the scroller's clip edge, under the host's
+//                  header: a press on the clipped part is the host's (its header heard it; the frame nothing), a press on
+//                  the part in view the frame's (before M6.3a the frame took both);
 //   FRAME-PICKER — the file input in the NESTED frame pressed (M2): no panel, its `cancel` heard, main's windows as they were;
 //   BACK-WRITTEN — ruling 5: a pane the document sent from A to B, the page's own ‹ back to A: the document's url is A again;
 //   STUCK        — ruling 6: a page whose button starts an endless loop, pressed, then a key it never answers: the face says
@@ -91,6 +94,15 @@ export interface FramesSeen {
     readonly went: boolean;
     readonly nextClicks: number;
     readonly ms: number | null;
+  };
+  readonly clipped: {
+    /** the frame's top and its scroller's, in the host's view */
+    readonly top: number | null;
+    readonly edge: number | null;
+    /** the press on its clipped part: what the host heard of it, and the frame's clicks */
+    readonly hidden: { readonly hostHeard: readonly string[]; readonly frameClicks: number } | null;
+    /** the press on its part in view */
+    readonly shown: FramePressSeen;
   };
   readonly picker: {
     readonly cancels: number | null;
@@ -243,6 +255,32 @@ export function judgeFrameGone(seen: FramesSeen["gone"]): string[] {
         `FRAME-GONE: the next press landed ${seen.ms} ms after it was sent — it waited on the gone document`,
       ]
     : [];
+}
+
+/** FRAME-CLIPPED (M6.3a): a press on the frame's clipped part is the host's — it draws there; on its part in view, the
+ * frame's. */
+export function judgeFrameClipped(seen: FramesSeen["clipped"]): string[] {
+  if (seen.top === null || seen.edge === null || seen.top >= seen.edge)
+    return [
+      `FRAME-CLIPPED: the frame's top stood at ${seen.top ?? "nothing"}, its scroller's at ${seen.edge ?? "nothing"} — it was not clipped: the row proved nothing`,
+    ];
+  const out: string[] = [];
+  if (seen.hidden === null)
+    out.push(
+      "FRAME-CLIPPED: the frame's clipped part could not be aimed at — that half proved nothing",
+    );
+  else {
+    if (seen.hidden.frameClicks > 0)
+      out.push(
+        `FRAME-CLIPPED: the press on the frame's clipped part went to the FRAME (${seen.hidden.frameClicks} click) — the host draws there`,
+      );
+    if (!seen.hidden.hostHeard.includes("click #hd"))
+      out.push(
+        `FRAME-CLIPPED: the host heard ${seen.hidden.hostHeard.join(", ") || "nothing"} — not the press on its header, which it draws over the frame's clipped part`,
+      );
+  }
+  out.push(...judgeFramePress("FRAME-CLIPPED (its part in view)", seen.shown));
+  return out;
 }
 
 /** FRAME-PICKER: the nested frame's file input: cancelled, nothing chosen, no window more. */
@@ -921,6 +959,85 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     said.gone = gone;
     problems.push(...judgeFrameGone(gone));
 
+    await done();
+
+    // ── FRAME-CLIPPED (M6.3a): the frame in a scroller, its top half clipped under the host's header ───────────────────
+    const clippedPane = await lay(`${d.fixture.hostOrigin}/frames/clipped?p=c`, x0 + 4 * step, y0);
+    await frame([clippedPane]);
+    await live(clippedPane);
+    const CLIPPED_HOST = "/frames/clipped?p=c";
+    const CLIPPED_FRAME = "/frames/frame?p=c";
+    await waitFor(
+      "the clipped host's word",
+      FRAMES_ROWS.withinMs,
+      () => at(CLIPPED_HOST),
+      (rep) => rep?.framed?.parts.frame !== undefined && rep?.framed?.parts.sc !== undefined,
+    );
+    await waitFor(
+      "the clipped frame's word",
+      FRAMES_ROWS.withinMs,
+      () => at(CLIPPED_FRAME),
+      (rep) => rep?.framed?.parts.b !== undefined,
+    );
+    await pickUp(clippedPane);
+    await sleep(800);
+    const clippedHeld = await heldFrame();
+    const clippedHost = at(CLIPPED_HOST);
+    const cBox = clippedHost?.framed?.parts.frame ?? null;
+    const cFramed = () => at(CLIPPED_FRAME)?.framed ?? null;
+    const cHostHeard = () => at(CLIPPED_HOST)?.framed?.heard ?? [];
+    const inClipped = async (x: number, y: number) =>
+      clippedHeld === null || clippedHost === null || cBox === null
+        ? null
+        : onWindow(clippedHeld, clippedHost.view, cBox.x + x, cBox.y + y);
+    // its button, in its clipped half — under the header: the host's
+    const cb = cFramed()?.parts.b ?? null;
+    let hidden: FramesSeen["clipped"]["hidden"] = null;
+    if (cb !== null) {
+      const hiddenClicks0 = cFramed()?.clicks.length ?? 0;
+      const hiddenHeard0 = cHostHeard().length;
+      const w = await inClipped(centre(cb)[0], centre(cb)[1]);
+      if (w !== null) {
+        await h.press(w);
+        const heard = await waitFor(
+          "the header's click",
+          5_000,
+          () => cHostHeard().slice(hiddenHeard0),
+          (got) => got.includes("click #hd"),
+        );
+        // (a click in the frame, had it gone there, says so in its next ask)
+        await sleep(600);
+        hidden = { hostHeard: heard, frameClicks: (cFramed()?.clicks.length ?? 0) - hiddenClicks0 };
+      }
+    }
+    // its low button, in view: the frame's
+    const cbl = cFramed()?.parts.bl ?? null;
+    const shownAimed: Point | null = cbl === null ? null : centre(cbl);
+    const shownClicks0 = cFramed()?.clicks.length ?? 0;
+    const shownHeard0 = cHostHeard().length;
+    if (shownAimed !== null) {
+      const w = await inClipped(shownAimed[0], shownAimed[1]);
+      if (w !== null) await h.press(w);
+    }
+    const shownSaid = await waitFor(
+      "the clipped frame's click in view",
+      5_000,
+      () => cFramed(),
+      (f) => (f?.clicks.length ?? 0) > shownClicks0,
+    );
+    const clipped = {
+      top: cBox?.y ?? null,
+      edge: clippedHost?.framed?.parts.sc?.y ?? null,
+      hidden,
+      shown: {
+        aimed: shownAimed,
+        clicked: shownSaid?.clicks[shownClicks0] ?? null,
+        hostHeard: cHostHeard().slice(shownHeard0),
+      },
+    };
+    said.clipped = clipped;
+    problems.push(...judgeFrameClipped(clipped));
+    await shoot("pt-5d-frame-clipped.png");
     await done();
 
     // ── FRAME-TOUCH: a phone's pane on the host; a tap on the frame's button ────────────────────────────────────────

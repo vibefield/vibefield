@@ -666,6 +666,11 @@ describe("the live pane's fixture page", () => {
     const inner = await page(fixture.innerOrigin, "/frames/inner?p=a");
     expect(inner).toContain('id="ib"');
     expect(inner).toContain('type="file"');
+    // M6.3a: a frame in a SCROLLER under a header, scrolled so the frame's top half is clipped
+    const clipped = await page(fixture.hostOrigin, "/frames/clipped?p=a");
+    expect(clipped).toContain(`<iframe id="f" src="${fixture.origin}/frames/frame?p=a"`);
+    for (const id of ["hd", "sc"]) expect(clipped).toContain(`id="${id}"`);
+    expect(clipped).toContain("scrollTop = 610");
     expect(await page(fixture.origin, "/frames/next?p=a")).toContain('id="b2"');
     expect(await page(fixture.origin, "/frames/loop?p=a")).toContain("for (;;) {}");
     expect((await fetch(`${fixture.origin}/frames/elsewhere`)).status).toBe(404);
@@ -679,7 +684,7 @@ describe("the live pane's fixture page", () => {
       if (script === undefined) throw new Error(`${path} carries no frames script`);
       const on = new Map<string, ((e: Record<string, unknown>) => void)[]>();
       const parts = new Map<string, Record<string, unknown>>();
-      for (const id of ["b", "t", "r", "s", "f", "if", "ib", "sb"])
+      for (const id of ["b", "t", "r", "s", "f", "if", "ib", "sb", "hd", "sc"])
         parts.set(id, {
           id,
           value: id === "r" ? "10" : id === "t" ? "héllo" : "",
@@ -782,6 +787,18 @@ describe("the live pane's fixture page", () => {
     const hostSaid = await host.ask();
     expect(hostSaid.framed.heard).toEqual(["pointerdown #f"]);
     expect(Object.keys(hostSaid.framed.parts as Record<string, unknown>)).toEqual(["frame"]);
+    // M6.3a: the clipped host hears the hand on its header and the frame's element alone
+    const clippedHost = await run(fixture.hostOrigin, "/frames/clipped?p=g");
+    clippedHost.fire("pointerdown", { target: clippedHost.parts.get("hd") });
+    clippedHost.fire("pointerdown", { target: clippedHost.parts.get("sc") });
+    clippedHost.fire("pointerdown", { target: clippedHost.parts.get("f") });
+    const clippedSaid = await clippedHost.ask();
+    expect(clippedSaid.framed.heard).toEqual(["pointerdown #hd", "pointerdown #f"]);
+    expect(Object.keys(clippedSaid.framed.parts as Record<string, unknown>)).toEqual([
+      "frame",
+      "hd",
+      "sc",
+    ]);
   });
 
   it("PT-5c2: `/topaint` links to `/unpainted`, the page whose FIRST PAINT the fixture holds — its head's stylesheet answered only once the smoke says `paint(name)` (and at once after), its head's script hearing the hand before it", async () => {

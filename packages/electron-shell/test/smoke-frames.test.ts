@@ -10,6 +10,7 @@ import { FRAMES_WORD } from "../src/testing/live-fixture";
 import {
   FRAMES_ROWS,
   judgeBackWritten,
+  judgeFrameClipped,
   judgeFrameDouble,
   judgeFrameDrag,
   judgeFrameGone,
@@ -127,6 +128,49 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     expect(judgeFrameHalf({ ...landed, top: -210 })).toEqual([]);
     expect(judgeFrameHalf({ ...landed, top: 120 })).toEqual([
       "FRAME-HALF: the frame's top stood at 120 — it was not half out of the view: the row proved nothing",
+    ]);
+  });
+
+  it("FRAME-CLIPPED (M6.3a): the frame half under its scroller's clip edge — a press on its clipped part is the HOST's (its header, drawn there), on its part in view the frame's; before M6.3a the frame took both; a frame not clipped, or a part not aimed at, proves nothing", () => {
+    const shown = { aimed: [90, 352] as const, clicked: [90, 352] as const, hostHeard: [] };
+    const header = ["pointerdown #hd", "mousedown #hd", "mouseup #hd", "click #hd"];
+    expect(
+      judgeFrameClipped({
+        top: 90,
+        edge: 300,
+        hidden: { hostHeard: header, frameClicks: 0 },
+        shown,
+      }),
+    ).toEqual([]);
+    expect(
+      judgeFrameClipped({ top: 90, edge: 300, hidden: { hostHeard: [], frameClicks: 1 }, shown }),
+    ).toEqual([
+      "FRAME-CLIPPED: the press on the frame's clipped part went to the FRAME (1 click) — the host draws there",
+      "FRAME-CLIPPED: the host heard nothing — not the press on its header, which it draws over the frame's clipped part",
+    ]);
+    expect(
+      judgeFrameClipped({
+        top: 90,
+        edge: 300,
+        hidden: { hostHeard: header, frameClicks: 0 },
+        shown: { aimed: [90, 352], clicked: null, hostHeard: ["pointerdown #f"] },
+      }),
+    ).toEqual([
+      "FRAME-CLIPPED (its part in view): the frame heard no click — the press never reached a frame of another site (the host heard pointerdown #f)",
+      "FRAME-CLIPPED (its part in view): the host page heard the press on the frame's element (pointerdown #f) — it went down the page's own session",
+    ]);
+    expect(
+      judgeFrameClipped({
+        top: 300,
+        edge: 300,
+        hidden: { hostHeard: header, frameClicks: 0 },
+        shown,
+      }),
+    ).toEqual([
+      "FRAME-CLIPPED: the frame's top stood at 300, its scroller's at 300 — it was not clipped: the row proved nothing",
+    ]);
+    expect(judgeFrameClipped({ top: 90, edge: 300, hidden: null, shown })).toEqual([
+      "FRAME-CLIPPED: the frame's clipped part could not be aimed at — that half proved nothing",
     ]);
   });
 

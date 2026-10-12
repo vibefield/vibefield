@@ -75,6 +75,10 @@
 //                   (FRAME-NESTED), and a frame of its OWN site: `/frames/same` (M6.1 — a document of its process, so on its
 //                   session, drawn at another size); on the smoke's word (`goFrame`) it goes to `/frames/next` (FRAME-GONE);
 //   /frames/same  — the frame's own child of its site: a button (its clicks and point — FRAME-PRESS presses it too);
+//   /frames/clipped — at `hostOrigin`: a header across the top and, under it, a SCROLLER holding the frame
+//                   (`/frames/frame`), scrolled so the frame's top half sits above the scroller's clip edge — under the
+//                   header (FRAME-CLIPPED, M6.3a: a press there is the host's); it hears the hand on its header and the
+//                   frame's element alone;
 //   /frames/inner — the nested frame: a button (its clicks and point) and a file input counting its `cancel` and `change`
 //                   (FRAME-PICKER — M2: the picker intercepted in a frame inside a frame);
 //   /frames/next  — where the frame goes: a button, its clicks;
@@ -606,14 +610,14 @@ export const FRAMES_BOX = { x: 160, y: 120, w: 640, h: 420 } as const;
 export const FRAMES_WORD = "alpha";
 
 /** PT-5d — a frames page's own script: what it hears of the hand, said with every ask; `go` sends it elsewhere. */
-const framesScript = (ids: readonly string[], elementOnly?: string): string => `<script>
+const framesScript = (ids: readonly string[], elementOnly?: readonly string[]): string => `<script>
   const token = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
   const heard = [], clicks = [];
   let moveButtons = null, cancels = 0, changes = 0;
   const el = (id) => document.getElementById(id);
   const named = (t) => (t && t.id ? "#" + t.id : t && t.tagName ? t.tagName.toLowerCase() : "?");
   const only = ${JSON.stringify(elementOnly ?? null)};
-  const hear = (e, what) => { if ((only === null || (e.target && e.target.id === only)) && heard.length < 300) heard.push(what); };
+  const hear = (e, what) => { if ((only === null || (e.target && only.includes(e.target.id))) && heard.length < 300) heard.push(what); };
   for (const type of ["pointerdown", "mousedown", "mouseup", "click", "dblclick", "touchstart", "touchend", "touchcancel"])
     addEventListener(type, (e) => {
       hear(e, e.type + " " + named(e.target));
@@ -665,7 +669,7 @@ export const framesHostHtml = (name: string, frameOrigin: string): string => `<!
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${FIXTURE_TITLE} — frames</title>
 ${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; height: 300vh; } iframe { position: absolute; border: 0; }</style></head>
 <body><iframe id="f" src="${frameOrigin}/frames/frame?p=${cleanName(name)}" style="left:${FRAMES_BOX.x}px;top:${FRAMES_BOX.y}px;width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px"></iframe>
-${framesScript(["f"], "f")}
+${framesScript(["f"], ["f"])}
 </body></html>`;
 
 /** PT-5d — `/frames/frame?p=<name>`: the frame — its button, link, field, word, range and scroller, and a frame of
@@ -692,6 +696,23 @@ export const framesInnerHtml = (): string => `<!doctype html>
 <body><button id="ib" style="left:0;top:0;width:140px;height:80px">inner</button>
 <input id="if" type="file" style="left:150px;top:10px;width:120px;height:40px">
 ${framesScript(["ib", "if"])}
+</body></html>`;
+
+/** PT-5d (M6.3a) — FRAME-CLIPPED's host page: where its scroller stands, and how far it is scrolled (the frame's top half
+ * then sits above the scroller's top edge, under the header). */
+export const FRAMES_CLIPPED = { x: 160, y: 300, w: 680, h: 420, scrolled: 610 } as const;
+
+/** PT-5d (M6.3a) — `/frames/clipped?p=<name>` at `hostOrigin`: a header across the top (80 → 300) and, under it, a
+ * SCROLLER (`FRAMES_CLIPPED`) holding a frame of `frameOrigin` 400 px down its content, scrolled so the frame's top half
+ * is clipped — where the header is drawn; it hears the hand on its header and the frame's element alone. */
+export const framesClippedHtml = (name: string, frameOrigin: string): string => `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${FIXTURE_TITLE} — clipped</title>
+${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; } iframe { display: block; border: 0; }
+#sc { position: absolute; left: ${FRAMES_CLIPPED.x}px; top: ${FRAMES_CLIPPED.y}px; width: ${FRAMES_CLIPPED.w}px; height: ${FRAMES_CLIPPED.h}px; overflow: auto; background: #fff; }</style></head>
+<body><button id="hd" style="left:0;top:80px;width:100%;height:220px">header</button>
+<div id="sc"><div style="height:400px"></div><iframe id="f" src="${frameOrigin}/frames/frame?p=${cleanName(name)}" style="width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px"></iframe><div style="height:400px"></div></div>
+<script>document.getElementById("sc").scrollTop = ${FRAMES_CLIPPED.scrolled};</script>
+${framesScript(["f", "hd", "sc"], ["f", "hd"])}
 </body></html>`;
 
 /** PT-5d (M6.1) — `/frames/same?p=<name>`: the frame's own child of its site — a document of the frame's process, so
@@ -934,17 +955,19 @@ export async function startLiveFixture(): Promise<LiveFixture> {
       const page =
         url.pathname === "/frames/host"
           ? framesHostHtml(name, frameOrigin)
-          : url.pathname === "/frames/frame"
-            ? framesFrameHtml(name, innerOrigin)
-            : url.pathname === "/frames/inner"
-              ? framesInnerHtml()
-              : url.pathname === "/frames/same"
-                ? framesSameHtml()
-                : url.pathname === "/frames/next"
-                  ? framesNextHtml()
-                  : url.pathname === "/frames/loop"
-                    ? framesLoopHtml()
-                    : null;
+          : url.pathname === "/frames/clipped"
+            ? framesClippedHtml(name, frameOrigin)
+            : url.pathname === "/frames/frame"
+              ? framesFrameHtml(name, innerOrigin)
+              : url.pathname === "/frames/inner"
+                ? framesInnerHtml()
+                : url.pathname === "/frames/same"
+                  ? framesSameHtml()
+                  : url.pathname === "/frames/next"
+                    ? framesNextHtml()
+                    : url.pathname === "/frames/loop"
+                      ? framesLoopHtml()
+                      : null;
       if (page === null) {
         res.writeHead(404);
         res.end();
