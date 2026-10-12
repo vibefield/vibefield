@@ -1140,6 +1140,17 @@ if (mode === "silent") {
         })}\n`,
       );
     }
+    // The guard is armed BEFORE the ready line: a parent that reads the line
+    // may stop the daemon at once, and a SIGINT that lands while no listener
+    // is installed takes Node's default — the process dies without cleanup,
+    // its announce file outliving it (two gate reds, ~0.3 s rows, 2026-10-12).
+    const cleanup = () => {
+      if (announce !== null) rmSync(announce, { force: true });
+    };
+    process.on("SIGINT", () => {
+      cleanup();
+      process.exit(0);
+    });
     const origin =
       mode === "bad-origin" ? `http://example.com:${port}` : `http://127.0.0.1:${port}`;
     const ready = {
@@ -1157,13 +1168,6 @@ if (mode === "silent") {
     if (phase === "awaiting_consent") {
       process.stdout.write("no enrolled agents — choose in the app (or pass --all-agents)\n");
     }
-    const cleanup = () => {
-      if (announce !== null) rmSync(announce, { force: true });
-    };
-    process.on("SIGINT", () => {
-      cleanup();
-      process.exit(0);
-    });
     if (mode === "crash-after-ready") {
       setTimeout(() => {
         // a crash keeps its announce file behind, exactly like a real SIGKILL
