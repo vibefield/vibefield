@@ -370,6 +370,7 @@ export function Head({
 
   return (
     <HeadView
+      covered={view !== "canvas"}
       place={{
         name: held !== undefined ? IN_MEMORY_NAME : (state.doc?.name ?? "…"),
         path,

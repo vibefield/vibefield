@@ -124,10 +124,27 @@ interface HeadNow {
   usage: HeadBox | null;
   label: HeadBox | null;
   bar: boolean;
+  canvasHead: CanvasHeadNow;
   gap: number | null;
   offCentre: number | null;
   offAxis: number | null;
 }
+
+/** The canvas's own head under a cover (DESIGN.md §8 "The covers over the
+ * desk"): the computed visibility of its name pill and its zoom readout, each
+ * `hidden` once the cover has faded in — never left sharp under the tint. */
+interface CanvasHeadNow {
+  place: string;
+  tools: string;
+}
+const CANVAS_HEAD_NOW_EXPR = `(() => {
+  const seen = (element) => (element === null ? "absent" : getComputedStyle(element).visibility);
+  return { place: seen(document.querySelector(".vf-head-place")), tools: seen(document.querySelector(".vf-head-tools")) };
+})()`;
+const CANVAS_HEAD_NOW = `JSON.stringify(${CANVAS_HEAD_NOW_EXPR})`;
+const canvasHeadHidden = (head: CanvasHeadNow): boolean =>
+  head.place === "hidden" && head.tools === "hidden";
+
 const HEAD_NOW = `(() => {
   const rect = (element) => {
     if (element === null) return null;
@@ -148,6 +165,7 @@ const HEAD_NOW = `(() => {
     window: { width: window.innerWidth, height: window.innerHeight },
     search, views, circles, stage, claims, usage, label,
     bar: document.querySelector(".vf-godview .vf-godview-header") !== null,
+    canvasHead: ${CANVAS_HEAD_NOW_EXPR},
     gap: search && Number.isFinite(right) ? search.x - right : null,
     offCentre: views ? views.x + views.width / 2 - window.innerWidth / 2 : null,
     offAxis: search && views ? views.y + views.height / 2 - (search.y + search.height / 2) : null,
@@ -163,6 +181,11 @@ function headProblems(head: HeadNow): string[] {
   const near = (value: number | null, target: number): boolean =>
     value !== null && Math.abs(value - target) <= 0.5;
   if (head.bar) problems.push("the instrument bar is still mounted");
+  if (!canvasHeadHidden(head.canvasHead)) {
+    problems.push(
+      `the canvas's head shows under the cover: the name pill ${head.canvasHead.place}, the zoom readout ${head.canvasHead.tools} (hidden)`,
+    );
+  }
   if (head.views === null) return [...problems, "the Stories row is not drawn"];
   if (!near(head.views.y, 8) || !near(head.views.height, 40)) {
     problems.push(`the row stands at y ${head.views.y}, ${head.views.height} tall (8, 40)`);
@@ -334,6 +357,16 @@ const settled = (now: PeekNow): boolean => {
 export async function peekGeometryRung(win: BrowserWindow): Promise<Record<string, unknown>> {
   const before = JSON.parse(await win.webContents.executeJavaScript(PEEK_NOW)) as PeekNow;
   if (before.button === null) throw new Error("the frame's search button is not in History");
+  // the canvas's head goes with the canvas under History's cover too, so its
+  // pill and readout never stand sharp behind the button (DESIGN.md §8 "The
+  // covers over the desk"); the cover's fade has long ended by this rung
+  await untilValue(
+    win,
+    "the canvas's head hidden under History's cover",
+    CANVAS_HEAD_NOW,
+    5_000,
+    (value) => canvasHeadHidden(JSON.parse(value) as CanvasHeadNow),
+  );
   chord(win, "f");
   const open = JSON.parse(
     await untilValue(win, "⌘F opening the Peek, settled", PEEK_NOW, 10_000, (value) =>

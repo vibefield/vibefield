@@ -5,6 +5,30 @@
    the ready fill is the foreground at 8% (14% where it is pressed), as the
    line mixes it. The menus' rows are menu.css's. */
 
+/* ── UNDER A COVER (§8 "The covers over the desk") ─────────────────────────
+   The head is the canvas's chrome, and under any cover the canvas is a still
+   blurred once beneath the cover's 72% tint. The head is DOM over the desk, so
+   the tint alone would leave its pill and readout sharp, about 28% through.
+   It goes with the canvas instead: hidden by `visibility` once the cover has
+   faded in (the cover's 240ms, 120 under reduced motion), and shown at once as
+   the cover lowers. `visibility` keeps every box, so the measured side and the
+   Peek's `--vf-peek-find-width` read the same. The wrapper has no box of its
+   own: the pieces inherit the visibility and keep their places. */
+.vf-head {
+  display: contents;
+}
+
+.vf-head[data-covered] {
+  visibility: hidden;
+  transition: visibility 0s linear 240ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-head[data-covered] {
+    transition: visibility 0s linear 120ms;
+  }
+}
+
 /* ── THE NAME PILL ⇄ THE FIELDS EXPLORER — one element (M1) ───────────────
    Closed, the pill is as wide as what it says, centred on the window, and
    never wider than the window less the wider side's slot on both sides

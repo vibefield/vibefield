@@ -1414,7 +1414,13 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   arrives — never a blank; the still recedes to 0.98 over **560ms**, transform only — the cover's
   settle (One Frame §12; §6's 600 for the field is the island curve's morph, not this recede); a
   covered view's content ends at **692** (FC-D15, §10). Back to Canvas: thaw first, the live canvas
-  shown at once under the lowering cover, the still dropped. A resize or a theme change while
+  shown at once under the lowering cover, the still dropped. **The canvas's head is hidden under
+  any cover** (§8 "The head"; Godview, History): it is DOM over the desk, never in the still, so the
+  tint alone would leave its name pill and zoom readout sharp at 28 % on the head's row, behind a
+  covered view's own head (the Stories row, the Peek's button). So it goes with the canvas, by
+  `visibility`, once the cover has faded in (240ms, 120 under reduced motion), and shows at once as
+  the cover lowers. *(Built with the Stories head. Until then Godview's bar hid it, and History,
+  which has no bar, showed it.)* A resize or a theme change while
   covered re-captures: thaw → one frame → capture → freeze (R16). A capture that answers nothing (a
   lost device) covers the mat's ground as the theme lights it — `--vf-mat-ground`, `#3D5A30` by day
   and `#313C40` by night (§2.1's lit values; the token is DK-15's to add) — and says so once in the
