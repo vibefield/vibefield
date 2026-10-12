@@ -50,6 +50,8 @@ import {
   type AgentInterruptResult,
   type AgentListResult,
   type AgentModelSelection,
+  type AgentModelsParams,
+  type AgentModelsResult,
   type AgentMonitorMirror,
   type AgentPersona,
   type AgentProfileFailure,
@@ -83,6 +85,7 @@ import { AgentExtensionStore } from "./agent-extension-store";
 import { AgentExtensionService } from "./agent-extensions";
 import { createTerminalAgentHost, type TerminalAgentHost } from "./agent-host";
 import type { IndexService } from "./agent-index";
+import { AgentModelCatalogs } from "./agent-models";
 import {
   AgentProfileService,
   failureToError,
@@ -545,6 +548,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   readonly extensions: AgentExtensionService;
   /** AR-S4d — what each profile keeps once for its agents: definitions, value names, what each agent was given */
   private readonly extensionStore: AgentExtensionStore;
+  /** PJ-6 — each agent's own model picker, per Agent Profile, as last read */
+  private readonly modelCatalogs: AgentModelCatalogs;
   private readonly records: SessionRecordStore;
   private readonly home: string;
   private readonly logger: Logger;
@@ -712,6 +717,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // createBuiltinAgentRuntime's own two steps, spelled out because it does
     // not thread `executables` through to the providers.
     this.runtime = createAgentRuntime(runtimeOptions);
+    this.modelCatalogs = new AgentModelCatalogs({
+      discover: (options) => this.runtime.discoverModels(options),
+      logger: this.logger,
+    });
     this.distribution = new AgentDistributionService({
       runtime: this.runtime,
       catalog: this.catalog,
@@ -1036,6 +1045,38 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * agent visible, not offered: a deprecated agent's sessions still resume. */
   private requireVisible(provider: string, act: string): void {
     visibleBy(this.catalog, provider, act);
+  }
+
+  /** PJ-6 — `agent.models`: the agent's own model picker under one Agent
+   * Profile, held from the last read (agent-models.ts). Only an agent the
+   * catalog offers to spawn is read; the folder must be one on this device. */
+  async models(params: AgentModelsParams): Promise<AgentModelsResult> {
+    this.requireOffered(params.provider, "spawn");
+    const cwd = params.cwd ?? this.home;
+    if (!isAbsolute(cwd) || !isDirectory(cwd)) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the folder to read the models in is not a folder on this device",
+        false,
+        { provider: params.provider, reason: "missing-cwd", cwd },
+      );
+    }
+    try {
+      return await this.modelCatalogs.read({
+        provider: params.provider,
+        profileSet: params.profileSet,
+        cwd,
+        refresh: params.refresh,
+      });
+    } catch (error) {
+      // a read that THREW (the runtime stopping) is not the agent's answer
+      throw new RpcCallError("UNAVAILABLE", "the agent's models could not be read now", true, {
+        service: "agents",
+        state: "model-discovery-failed",
+        provider: params.provider,
+        error: error instanceof Error ? error.message.slice(0, 200) : String(error),
+      });
+    }
   }
 
   /** A managed session born in a PTY on this device's floor. The answer is

@@ -85,6 +85,8 @@ import {
 } from "../src/agent-index";
 import {
   AgentListResult,
+  AgentModelsParams,
+  AgentModelsResult,
   AgentMonitorMirror,
   AgentProvidersResult,
   AgentResumeParams,
@@ -415,6 +417,12 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "agent-spawn": AgentSpawnResult,
   // PJ-6 — a launch at a model: the agent's own ids, passed opaque (AR-L1)
   "agent-spawn-params": AgentSpawnParams,
+  // PJ-6 — the agent's own picker for one Agent Profile: the ask, a catalog
+  // with per-model effort, a read that needs a sign-in, and an older catalog
+  // beside a timed-out read with one running behind it (a control role and a
+  // key from a newer daemon ride through)
+  "agent-models-params": AgentModelsParams,
+  "agent-models": AgentModelsResult,
   // QL-D10 — both arms of agent.resume's params: a run (the record's), and a
   // conversation by its native id with the persona whose root holds it.
   "agent-resume-params": AgentResumeParams,

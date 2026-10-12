@@ -37,6 +37,7 @@ import {
   type AgentCatalogEntry,
   type AgentCatalogResult,
   type AgentDistributionRecord,
+  AgentModelsResult,
   type AgentProvidersResult,
   AgentsExtensionsActResult,
   AgentsExtensionsAddResult,
@@ -2159,4 +2160,75 @@ describe("the catalog (AC-3) — the doors answer from the table, the roll call 
     expect(providers.find((p) => p.id === "claude")).toMatchObject({ history: "indexed" });
     // its own two 15 s waits, the 1.2 s census window and a rosettad bounce
   }, 30_000);
+});
+
+describe("PJ-6 — agent.models: each agent's own picker, held per Agent Profile", () => {
+  it("reads the scripted claude's own picker (its stream-json initialize): each model with its own effort levels and the read's time; asked again it answers at once from what it holds, `refresh` reads again; a window needs agent.spawn", async () => {
+    const { daemon } = await setup();
+    const win = await window(daemon, ["agent.spawn"], "m1");
+    const first = AgentModelsResult.parse(await win.call("agent.models", { provider: "claude" }));
+    expect(first.failure).toBeUndefined();
+    expect(first.refreshing).toBe(false);
+    expect(first.catalog?.models.map((model) => [model.id, model.label])).toEqual([
+      ["fake-model-a", "Fake Model A"],
+      ["fake-model-b", "Fake Model B"],
+    ]);
+    expect(first.catalog?.models[0]?.controls).toEqual([
+      {
+        id: "effort",
+        label: "Effort",
+        role: "effort",
+        values: [
+          { id: "low", label: "low" },
+          { id: "high", label: "high" },
+        ],
+      },
+    ]);
+    expect(first.catalog?.models[1]?.controls).toEqual([]);
+    expect(first.catalog?.source).toMatchObject({
+      kind: "native-protocol",
+      nativeVersion: "2.1.0",
+    });
+
+    // held: the same read, at once, and nothing behind it while it is young
+    const again = AgentModelsResult.parse(await win.call("agent.models", { provider: "claude" }));
+    expect(again.catalog?.observedAt).toBe(first.catalog?.observedAt);
+    expect(again.refreshing).toBe(false);
+    // asked to, it waits for a fresh read
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const fresh = AgentModelsResult.parse(
+      await win.call("agent.models", { provider: "claude", refresh: true }),
+    );
+    expect(Date.parse(fresh.catalog?.observedAt ?? "")).toBeGreaterThan(
+      Date.parse(first.catalog?.observedAt ?? ""),
+    );
+
+    const denied = await window(daemon, ["agent.observe"], "m1b");
+    expect((await denied.callErr("agent.models", { provider: "claude" })).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
+  });
+
+  it("a picker that cannot be read is its failure in puppeteer's words, never an empty list; an agent with no row is NOT_FOUND, and a folder that is not one is refused before anything runs", async () => {
+    const { daemon, root } = await setup();
+    const win = await window(daemon, ["agent.spawn"], "m2");
+    // codex is pinned to an executable that does not exist (no developer's codex runs)
+    const codex = AgentModelsResult.parse(await win.call("agent.models", { provider: "codex" }));
+    expect(codex.catalog).toBeUndefined();
+    expect(codex.failure).toMatchObject({
+      status: "unavailable",
+      code: "not-found",
+      message: "The native agent could not be started.",
+    });
+    expect(codex.refreshing).toBe(false);
+
+    expect((await win.callErr("agent.models", { provider: "nope" })).data?.kind).toBe("NOT_FOUND");
+    const elsewhere = await win.callErr("agent.models", {
+      provider: "claude",
+      cwd: join(root, "not-a-folder"),
+    });
+    expect(elsewhere.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(elsewhere.data?.details).toMatchObject({ reason: "missing-cwd" });
+    expect((await win.callErr("agent.models", {})).data?.kind).toBe("PRECONDITION_FAILED");
+  });
 });

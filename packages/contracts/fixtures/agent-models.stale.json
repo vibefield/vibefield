@@ -1,0 +1,148 @@
+{
+  "provider": "claude",
+  "profileSet": "work-7f3a",
+  "catalog": {
+    "provider": "claude",
+    "profileId": "claude:work-1c7e",
+    "cwd": "/Users/test/Projects/vibe-field",
+    "observedAt": "2026-10-12T18:07:17.797Z",
+    "source": {
+      "kind": "native-protocol",
+      "freshness": "cached",
+      "nativeVersion": "2.1.296"
+    },
+    "completeness": "complete",
+    "customModels": true,
+    "models": [
+      {
+        "id": "default",
+        "label": "Default (recommended)",
+        "description": "Use the default model",
+        "controls": [
+          {
+            "id": "effort",
+            "label": "Effort",
+            "role": "effort",
+            "values": [
+              {
+                "id": "low",
+                "label": "low"
+              },
+              {
+                "id": "medium",
+                "label": "medium"
+              },
+              {
+                "id": "high",
+                "label": "high"
+              },
+              {
+                "id": "xhigh",
+                "label": "xhigh"
+              },
+              {
+                "id": "max",
+                "label": "max"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "opus",
+        "label": "Opus",
+        "description": "Best for everyday, complex tasks",
+        "controls": [
+          {
+            "id": "effort",
+            "label": "Effort",
+            "role": "effort",
+            "values": [
+              {
+                "id": "low",
+                "label": "low"
+              },
+              {
+                "id": "medium",
+                "label": "medium"
+              },
+              {
+                "id": "high",
+                "label": "high"
+              },
+              {
+                "id": "xhigh",
+                "label": "xhigh"
+              },
+              {
+                "id": "max",
+                "label": "max"
+              }
+            ]
+          },
+          {
+            "id": "thinking",
+            "label": "Thinking",
+            "role": "some-future-role",
+            "values": [
+              {
+                "id": "on",
+                "label": "On"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "sonnet",
+        "label": "Sonnet",
+        "description": "Efficient for routine tasks",
+        "controls": [
+          {
+            "id": "effort",
+            "label": "Effort",
+            "role": "effort",
+            "values": [
+              {
+                "id": "low",
+                "label": "low"
+              },
+              {
+                "id": "medium",
+                "label": "medium"
+              },
+              {
+                "id": "high",
+                "label": "high"
+              },
+              {
+                "id": "xhigh",
+                "label": "xhigh"
+              },
+              {
+                "id": "max",
+                "label": "max"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "haiku",
+        "label": "Haiku",
+        "description": "Fastest for quick answers",
+        "controls": []
+      }
+    ]
+  },
+  "refreshing": true,
+  "failure": {
+    "status": "unavailable",
+    "code": "timeout",
+    "message": "Model discovery timed out.",
+    "at": "2026-10-12T19:30:00.000Z"
+  },
+  "later": {
+    "kept": true
+  }
+}

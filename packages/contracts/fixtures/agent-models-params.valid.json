@@ -1,0 +1,6 @@
+{
+  "provider": "claude",
+  "profileSet": "work-7f3a",
+  "cwd": "/Users/test/Projects/vibe-field",
+  "refresh": true
+}

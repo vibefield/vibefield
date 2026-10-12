@@ -387,6 +387,110 @@ export const AgentModelSelection = z
   .passthrough();
 export type AgentModelSelection = z.infer<typeof AgentModelSelection>;
 
+/** PJ-6 — agent.models: one agent's own model picker under one Agent Profile,
+ * as fieldd last read it (puppeteer's `runtime.discoverModels`, the agent's
+ * own protocol or command — never a list of ours, Q1). `profileSet` is the
+ * Agent Profile a launch would run under (absent: the default, as a spawn);
+ * `cwd` the folder the read runs in (absent: home). The answer is the catalog
+ * fieldd holds at once, and a read runs behind it when that is old;
+ * `refresh: true` waits for a fresh read, bounded by the read's own deadline. */
+export const AgentModelsParams = z
+  .object({
+    provider: AgentProviderId,
+    profileSet: AgentProfileSetId.optional(),
+    cwd: z.string().optional(),
+    refresh: z.boolean().optional(),
+  })
+  .passthrough();
+export type AgentModelsParams = z.infer<typeof AgentModelsParams>;
+
+/** One of a model's own controls (puppeteer `AgentModelControl`): `role` names
+ * what it is — `effort`, `thinking` or `variant` today, an OPEN string to a
+ * reader (a role a newer agent adds is drawn by its label, never refused) —
+ * and `values` are the only ids a selection may carry for it. A
+ * `defaultValue` is what the catalog shows; puppeteer never applies it. */
+export const AgentModelControl = z
+  .object({
+    id: z.string().min(1).max(1024),
+    label: z.string().min(1),
+    role: z.string().min(1).max(32),
+    values: z.array(
+      z.object({ id: z.string().min(1).max(1024), label: z.string().min(1) }).passthrough(),
+    ),
+    defaultValue: z.string().min(1).max(1024).optional(),
+  })
+  .passthrough();
+export type AgentModelControl = z.infer<typeof AgentModelControl>;
+
+/** One model the agent's picker offers (puppeteer `AgentModelChoice`): its id
+ * is what a selection names, its label what a person reads. */
+export const AgentModelChoice = z
+  .object({
+    id: z.string().min(1).max(1024),
+    label: z.string().min(1),
+    description: z.string().optional(),
+    group: z.string().optional(),
+    controls: z.array(AgentModelControl),
+  })
+  .passthrough();
+export type AgentModelChoice = z.infer<typeof AgentModelChoice>;
+
+/** The picker as one read found it (puppeteer `AgentModelCatalog`).
+ * `observedAt` is the read's own time; `source.freshness` says whether the
+ * agent answered from its own cache. `completeness` and `freshness` are OPEN
+ * strings to a reader. A model listed is what the picker offers, never a
+ * promise of access. */
+export const AgentModelCatalog = z
+  .object({
+    provider: AgentProviderId,
+    /** the persona (puppeteer's account) the read ran in; absent: the agent's own folder */
+    profileId: z.string().min(1).optional(),
+    cwd: z.string(),
+    observedAt: z.string().min(1),
+    source: z
+      .object({
+        kind: z.string().min(1),
+        freshness: z.string().min(1),
+        nativeVersion: z.string().optional(),
+      })
+      .passthrough(),
+    completeness: z.string().min(1),
+    customModels: z.boolean(),
+    models: z.array(AgentModelChoice),
+  })
+  .passthrough();
+export type AgentModelCatalog = z.infer<typeof AgentModelCatalog>;
+
+/** A read that found no picker, in puppeteer's words (its
+ * `AgentModelDiscoveryFailure`): `status` (`auth-required`, `unsupported`,
+ * `unavailable`, `requires-session`, `error`, `cancelled`), `code`, and the
+ * adapter's own sentence; `at` is when the read ended. OPEN strings. */
+export const AgentModelsFailure = z
+  .object({
+    status: z.string().min(1).max(32),
+    code: z.string().min(1).max(32),
+    message: z.string(),
+    at: z.string().min(1),
+  })
+  .passthrough();
+export type AgentModelsFailure = z.infer<typeof AgentModelsFailure>;
+
+/** agent.models' answer. `catalog` is the last picker a read found, with its
+ * own `observedAt`; `failure` says the LAST read failed and why (an older
+ * catalog may stand beside it); `refreshing` that a read is running now, so a
+ * later ask may answer newer. A failed read is a `failure`, never an empty
+ * list. */
+export const AgentModelsResult = z
+  .object({
+    provider: AgentProviderId,
+    profileSet: AgentProfileSetId.optional(),
+    catalog: AgentModelCatalog.optional(),
+    failure: AgentModelsFailure.optional(),
+    refreshing: z.boolean(),
+  })
+  .passthrough();
+export type AgentModelsResult = z.infer<typeof AgentModelsResult>;
+
 /** agent.spawn — a managed session born in a PTY on this device's floor
  * (workload class `agent`, a clean allow-listed environment). `cwd` defaults
  * to the OS user's home; `profileId` selects the persona (its root is bound

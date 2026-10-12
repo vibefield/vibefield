@@ -10,6 +10,7 @@ import {
   AGENT_FIELD,
   AgentCatalogParams,
   AgentInterruptParams,
+  AgentModelsParams,
   AgentRecordedLanesParams,
   AgentReportShownParams,
   type AgentReportShownResult,
@@ -2924,6 +2925,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { surface? }", false);
       return agents.visibleCatalog(parsed.data.surface);
+    });
+    // PJ-6 — the agent's own model picker for one Agent Profile (agent-models.ts):
+    // a read, unaudited like agent.providers
+    api.register("agent.models", async (_ctx, params) => {
+      const parsed = AgentModelsParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { provider, profileSet?, cwd?, refresh? }",
+          false,
+        );
+      return await agents.models(parsed.data);
     });
     api.register("agent.spawn", async (ctx, params) => {
       const parsed = AgentSpawnParams.safeParse(params);
