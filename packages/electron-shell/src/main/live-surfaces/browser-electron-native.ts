@@ -1,6 +1,7 @@
 import { BrowserWindow, session } from "electron";
 import {
   BrowserFrames,
+  type FrameAncestor,
   type FrameQuad,
   type FrameRouted,
   type FrameSight,
@@ -158,6 +159,13 @@ function emulationCommands(
 /** PT-5d (M8): a frame whose sight cannot be read in the words' world — it takes nothing (the host's, as before PT-5d). */
 const UNSEEN = { visible: [0, 0, 0, 0], covers: [] } as const satisfies FrameSight;
 
+/** PT-5d: a content quad as `DOM.getBoxModel` answers it — eight finite numbers — or none (not laid out). */
+function quadOf(content: unknown): FrameQuad | undefined {
+  return Array.isArray(content) && content.length === 8 && content.every(Number.isFinite)
+    ? (content as unknown as FrameQuad)
+    : undefined;
+}
+
 /** PT-5d (M7 H3): a sight as the read answers it — `{ visible, covers }`, each part four fractions — or none. */
 function sightOf(value: unknown): FrameSight | undefined {
   const part = (v: unknown): v is FrameVisible =>
@@ -294,6 +302,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   readonly #frames = new BrowserFrames();
   /** PT-5d: each frame's owner element in its parent's document (`DOM.getFrameOwner`), asked once. */
   readonly #owners = new Map<string, number>();
+  /** PT-5d (M12 J5): each same-process frame's owner element, by its frame — asked once (see `ancestorsOf`). */
+  readonly #slotOwners = new Map<string, number>();
   /** PT-5d: the quad reads in flight, by frame — another asked meanwhile is read once it answers. */
   readonly #placing = new Map<string, { again: boolean }>();
   /**
@@ -335,6 +345,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       // PT-5d: the frames of the document before go with it
       this.#frames.pageCommitted(this.#documents);
       this.#owners.clear();
+      this.#slotOwners.clear();
       // (M7 H15: the frames of the document before — a detach that never came keeps no discard of theirs)
       for (const session of [...this.#discards.keys()])
         if (session !== "") this.forgetDiscard(session);
@@ -596,7 +607,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * own load, or hung, holds no placement up): until it answers the frame is taken at its quad's own size, and an answer
    * for a quad no longer current is dropped. PT-5d (M6.3a, M7 H3): and its SIGHT (`FRAME_SIGHT`, called on its owner in
    * its parent's document — the object released after) — its visible part and what covers it — placed with the quad: a
-   * point on a part an ancestor clips, or the host draws over, is the parent's. Unread (refused), the whole box.
+   * point on a part an ancestor clips, or the host draws over, is the parent's. Unread (refused), the whole box. PT-5d
+   * (M12 J5): and the sight of every SAME-PROCESS frame its owner's document is in, up to its session's root
+   * (`ancestorsOf`) — what the page draws over an about:blank slot holding the frame, or clips of it, is the page's.
    */
   private placeFrame(session: string): void {
     const inFlight = this.#placing.get(session);
@@ -626,11 +639,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         { backendNodeId: owner },
         frame.parent,
       )) as { readonly model?: { readonly content?: unknown } };
-      const content = box.model?.content;
-      const quad =
-        Array.isArray(content) && content.length === 8 && content.every(Number.isFinite)
-          ? (content as unknown as FrameQuad)
-          : undefined;
+      const quad = quadOf(box.model?.content);
       // (M8: in the isolated world of the document that holds its owner — that world unknown, or the read refused: the
       // frame takes nothing, the host's as before PT-5d — never a sight the page's own scripts could have written)
       const world = this.#worlds
@@ -641,7 +650,15 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
           ? undefined
           : ((world === undefined ? undefined : await this.sightOf(frame.parent, owner, world)) ??
             UNSEEN);
-      const placement = this.#frames.placed(session, quad, sight);
+      // (M12 J5: and each same-process frame its owner's document is in — one unreadable, the frame takes nothing, by M8's
+      // rule)
+      const ancestors = quad === undefined || sight === UNSEEN ? [] : await this.ancestorsOf(frame);
+      const placement = this.#frames.placed(
+        session,
+        quad,
+        ancestors === undefined ? UNSEEN : sight,
+        ancestors ?? [],
+      );
       if (quad === undefined) return;
       // (M8: its own size in its own document's isolated world — not known yet: the quad's own until it is)
       const own = this.#worlds.get(session)?.get(frame.targetId);
@@ -669,6 +686,61 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         this.#placing.delete(session);
         if (mark.again) this.placeFrame(session);
       });
+  }
+
+  /**
+   * PT-5d (M12 J5) — THE SAME-PROCESS FRAMES A FRAME IS IN: from the frame whose document holds its owner, up the frames'
+   * parents (`Page.frameAttached`) to its session's ROOT — a frame session's own frame, or a frame with no parent heard
+   * (the page's main frame); each between them a frame of that session's process with no session of its own (an
+   * about:blank ad slot, a `srcdoc`, a same-origin widget). Each read as the frame's own is: its owner (`DOM.getFrameOwner`,
+   * once), its quad and its SIGHT, on the frame's parent session, in the isolated world of the document holding that
+   * owner (M8). All read: the list (none: its owner is in the root's document); one unread — its world unknown, a read
+   * refused, not laid out: undefined (the frame takes nothing). (Before: the slot's own document alone was read — the
+   * page's header over an ad slot sent its press, hover and wheel into the ad inside: H3's defect, and M8's door, one
+   * level down.)
+   */
+  private async ancestorsOf(frame: {
+    readonly targetId: string;
+    readonly parent: string | undefined;
+  }): Promise<readonly FrameAncestor[] | undefined> {
+    const cdp = this.window.webContents.debugger;
+    const root =
+      frame.parent === undefined
+        ? undefined
+        : this.#frames.frames().find((f) => f.session === frame.parent)?.targetId;
+    const ancestors: FrameAncestor[] = [];
+    try {
+      for (let at = this.#parentFrames.get(frame.targetId); at !== undefined && at !== root; ) {
+        const above = this.#parentFrames.get(at);
+        if (above === undefined) break;
+        let owner = this.#slotOwners.get(at);
+        if (owner === undefined) {
+          const found = (await cdp.sendCommand(
+            "DOM.getFrameOwner",
+            { frameId: at },
+            frame.parent,
+          )) as { readonly backendNodeId?: unknown };
+          if (typeof found.backendNodeId !== "number") return undefined;
+          owner = found.backendNodeId;
+          this.#slotOwners.set(at, owner);
+        }
+        const box = (await cdp.sendCommand(
+          "DOM.getBoxModel",
+          { backendNodeId: owner },
+          frame.parent,
+        )) as { readonly model?: { readonly content?: unknown } };
+        const quad = quadOf(box.model?.content);
+        const world = this.#worlds.get(frame.parent ?? "")?.get(above);
+        if (quad === undefined || world === undefined) return undefined;
+        const sight = await this.sightOf(frame.parent, owner, world);
+        if (sight === undefined) return undefined;
+        ancestors.push({ quad, sight });
+        at = above;
+      }
+    } catch {
+      return undefined;
+    }
+    return ancestors;
   }
 
   /** PT-5d (M6.3a, M7 H3, M8): the sight of a frame's owner, read in its parent's document's isolated world; unread

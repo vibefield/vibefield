@@ -1894,6 +1894,151 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     expect(unknown.hand()).toEqual(["mousePressed@page 180,120"]);
   });
 
+  /** M12 J5: owners by frame, quads by owner, and each sight by the WORLD it is read in and the owner it is read of
+   * (`w<context>-<owner>`): only the reads named cover anything. */
+  const slotAnswers =
+    (
+      owners: Record<string, number>,
+      quads: Record<number, number[]>,
+      covers: Record<string, number[][]>,
+    ) =>
+    (method: string, params: unknown): object => {
+      if (method === "DOM.getFrameOwner")
+        return { backendNodeId: owners[(params as { frameId: string }).frameId] ?? 0 };
+      if (method === "DOM.getBoxModel")
+        return { model: { content: quads[(params as { backendNodeId: number }).backendNodeId] } };
+      if (method === "DOM.resolveNode") {
+        const p = params as { backendNodeId: number; executionContextId?: number };
+        return { object: { objectId: `w${p.executionContextId}-${p.backendNodeId}` } };
+      }
+      if (method === "Runtime.callFunctionOn")
+        return {
+          result: {
+            value: {
+              visible: [0, 0, 1, 1],
+              covers: covers[(params as { objectId: string }).objectId] ?? [],
+            },
+          },
+        };
+      return {};
+    };
+  const pressAt = async (r: ReturnType<typeof recording>, x: number, y: number) => {
+    await r.native.dispatchMouse({ type: "mousePressed", x, y, button: "left", clickCount: 1 });
+    await r.native.dispatchMouse({ type: "mouseReleased", x, y, button: "left", clickCount: 1 });
+  };
+
+  it("M12 J5 — a frame F of another site inside a SAME-PROCESS frame S of the page (an about:blank slot): what the PAGE draws over S is the page's — S's sight READ in the page's document's isolated world, F's in S's; a point is F's only if both admit it; the page's world unknown, F takes nothing", async () => {
+    const slotted = async (pageWorld: boolean) => {
+      const r = recording(
+        slotAnswers(
+          { S: 6, "t-F": 7 },
+          { 6: [100, 80, 500, 80, 500, 380, 100, 380], 7: [100, 80, 500, 80, 500, 380, 100, 380] },
+          // the page's fixed header over S's top quarter, read in the page's world (41); nothing over F in S's (42)
+          { "w41-6": [[0, 0, 1, 0.25]] },
+        ),
+        { worlds: false },
+      );
+      await r.native.loadURL("https://host.test/a");
+      r.at("https://host.test/a");
+      r.contents.emit("did-navigate", {}, "https://host.test/a");
+      if (pageWorld)
+        r.emit("Runtime.executionContextCreated", {
+          context: { id: 41, name: WORDS_WORLD, auxData: { frameId: "main" } },
+        });
+      // S: a frame of the page's own process — no session of its own; its document's isolated world
+      r.emit("Page.frameAttached", { frameId: "S", parentFrameId: "main" });
+      r.emit("Runtime.executionContextCreated", {
+        context: { id: 42, name: WORDS_WORLD, auxData: { frameId: "S" } },
+      });
+      // F: of another site, its owner in S's document — attached on the page's session
+      r.emit("Page.frameAttached", { frameId: "t-F", parentFrameId: "S" });
+      r.emit("Target.attachedToTarget", {
+        sessionId: "F",
+        targetInfo: { type: "iframe", targetId: "t-F", url: "" },
+      });
+      await turns();
+      await pressAt(r, 180, 100);
+      await pressAt(r, 180, 200);
+      return r;
+    };
+    const r = await slotted(true);
+    const resolved = r.sent.filter((c) => c.method === "DOM.resolveNode").map((c) => c.params);
+    expect(resolved).toContainEqual({ backendNodeId: 6, executionContextId: 41 });
+    expect(resolved).toContainEqual({ backendNodeId: 7, executionContextId: 42 });
+    expect(r.hand()).toEqual([
+      "mousePressed@page 180,100",
+      "mouseReleased@page 180,100",
+      "mousePressed@F 80,120",
+      "mouseReleased@F 80,120",
+    ]);
+    // the page's words say its frames moved: F is read again — S's sight with it; S's owner asked once
+    r.emit("Runtime.bindingCalled", {
+      name: FRAME_WORDS_BINDING,
+      payload: "moved",
+      executionContextId: 41,
+    });
+    await turns();
+    const of = (method: string, key: string, value: unknown) =>
+      r.sent.filter(
+        (c) => c.method === method && (c.params as Record<string, unknown>)[key] === value,
+      ).length;
+    expect(of("DOM.resolveNode", "backendNodeId", 6)).toBe(2);
+    expect(of("DOM.getFrameOwner", "frameId", "S")).toBe(1);
+    // S's sight cannot be read as the engine's (its parent document's isolated world unknown): F takes nothing
+    const unknown = await slotted(false);
+    expect(unknown.hand()).toEqual([
+      "mousePressed@page 180,100",
+      "mouseReleased@page 180,100",
+      "mousePressed@page 180,200",
+      "mouseReleased@page 180,200",
+    ]);
+  });
+
+  it("M12 J5 — a frame G inside a same-process frame S′ of ANOTHER frame E of another site (on E's session): S′'s sight is read on E's session, in E's document's isolated world — what E draws over S′ is E's, the point carried into E", async () => {
+    const r = recording(
+      slotAnswers(
+        { "t-E": 5, S2: 6, "t-G": 7 },
+        {
+          5: [100, 80, 500, 80, 500, 380, 100, 380],
+          6: [0, 0, 400, 0, 400, 300, 0, 300],
+          7: [0, 0, 400, 0, 400, 300, 0, 300],
+        },
+        // E's banner over S′'s top quarter, read in E's document's world (101 — E's own, on E's session)
+        { "w101-6": [[0, 0, 1, 0.25]] },
+      ),
+    );
+    await r.native.loadURL("https://host.test/a");
+    r.at("https://host.test/a");
+    r.contents.emit("did-navigate", {}, "https://host.test/a");
+    r.attach("E");
+    r.emit("Page.frameAttached", { frameId: "S2", parentFrameId: "t-E" }, "E");
+    r.emit(
+      "Runtime.executionContextCreated",
+      { context: { id: 102, name: WORDS_WORLD, auxData: { frameId: "S2" } } },
+      "E",
+    );
+    r.emit("Page.frameAttached", { frameId: "t-G", parentFrameId: "S2" }, "E");
+    r.emit(
+      "Target.attachedToTarget",
+      { sessionId: "G", targetInfo: { type: "iframe", targetId: "t-G", url: "" } },
+      "E",
+    );
+    await turns();
+    expect(
+      r.sent
+        .filter((c) => c.method === "DOM.resolveNode" && c.session === "E")
+        .map((c) => c.params),
+    ).toContainEqual({ backendNodeId: 6, executionContextId: 101 });
+    await pressAt(r, 180, 100);
+    await pressAt(r, 180, 200);
+    expect(r.hand()).toEqual([
+      "mousePressed@E 80,20",
+      "mouseReleased@E 80,20",
+      "mousePressed@G 80,120",
+      "mouseReleased@G 80,120",
+    ]);
+  });
+
   it("M6.3a — a frame's VISIBLE part is READ beside its quad, of its owner in its parent's document (`Runtime.callFunctionOn` on the parent's session, its object released): a press on the part its scroller clips is the page's, on the part in view the frame's", async () => {
     const r = recording((method) => {
       if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };

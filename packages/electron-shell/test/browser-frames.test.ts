@@ -494,6 +494,71 @@ describe("PT-5d (M7 H3) — what the host draws OVER a frame is the host's: a fr
   });
 });
 
+describe("PT-5d (M12 J5) — a frame inside a SAME-PROCESS frame takes a point only if EVERY ancestor document's sight admits it", () => {
+  it("F's owner in an about:blank slot S of the page (no session of S's own): where the PAGE draws its header over S, or its scroller clips S, the page's — F's own sight (S's document's) says nothing of either; below, F's; a drag begun in F stays F's under the header", () => {
+    const f = new BrowserFrames();
+    f.pageCommitted(1);
+    f.attached("F", "t-F", undefined);
+    // S 400 × 300 at 100, 80 of the page, F filling it; the page's fixed header over S's top quarter (75 px); nothing in
+    // S's own document over F
+    f.placed("F", box(100, 80, 400, 300), { visible: [0, 0, 1, 1], covers: [] }, [
+      { quad: box(100, 80, 400, 300), sight: { visible: [0, 0, 1, 1], covers: [[0, 0, 1, 0.25]] } },
+    ]);
+    expect(f.press("left", 180, 100).target.session).toBeUndefined();
+    f.release("left", 180, 100);
+    expect(f.press("left", 180, 200)).toEqual({
+      target: { session: "F", document: 0 },
+      x: 80,
+      y: 120,
+    });
+    expect(f.move(180, 100)).toEqual([{ target: { session: "F", document: 0 }, x: 80, y: 20 }]);
+    f.release("left", 180, 100);
+    expect(f.move(181, 100).map((r) => r.target.session)).toEqual(["F", undefined]);
+    expect(f.wheel(180, 100, apart()).target.session).toBeUndefined();
+    expect(f.touchStart(180, 100).target.session).toBeUndefined();
+    f.touchEnd();
+    // the page's scroller clips S's top half: a point there is the page's, one below F's
+    f.placed("F", box(100, 80, 400, 300), { visible: [0, 0, 1, 1], covers: [] }, [
+      { quad: box(100, 80, 400, 300), sight: { visible: [0, 0.5, 1, 1], covers: [] } },
+    ]);
+    expect(f.wheel(180, 200, apart()).target.session).toBeUndefined();
+    expect(f.wheel(180, 300, apart()).target.session).toBe("F");
+  });
+
+  it("two same-process levels (F in S in S2): each admits it, or the page's; and under another frame E of another site, F's owner in E's own slot S′: what E's document draws over S′ is E's — the point carried into E", () => {
+    const f = new BrowserFrames();
+    f.pageCommitted(1);
+    f.attached("F", "t-F", undefined);
+    // S2 600 × 500 at 50, 50, its right half under a page's panel; S 400 × 300 at 100, 80 in it, F filling S
+    f.placed("F", box(100, 80, 400, 300), { visible: [0, 0, 1, 1], covers: [] }, [
+      { quad: box(100, 80, 400, 300), sight: { visible: [0, 0, 1, 1], covers: [] } },
+      { quad: box(50, 50, 600, 500), sight: { visible: [0, 0, 1, 1], covers: [[0.5, 0, 1, 1]] } },
+    ]);
+    expect(f.wheel(450, 200, apart()).target.session).toBeUndefined();
+    expect(f.wheel(180, 200, apart()).target.session).toBe("F");
+    // E of another site at the page's 100, 80; G in E's slot S′ (E's 0, 0, 400 × 300), E's banner over S′'s top quarter
+    const g = new BrowserFrames();
+    g.pageCommitted(1);
+    g.attached("E", "t-E", undefined);
+    g.placed("E", box(100, 80, 400, 300));
+    g.attached("G", "t-G", "E");
+    g.placed("G", box(0, 0, 400, 300), { visible: [0, 0, 1, 1], covers: [] }, [
+      { quad: box(0, 0, 400, 300), sight: { visible: [0, 0, 1, 1], covers: [[0, 0, 1, 0.25]] } },
+    ]);
+    expect(g.press("left", 180, 100)).toEqual({
+      target: { session: "E", document: 0 },
+      x: 80,
+      y: 20,
+    });
+    g.release("left", 180, 100);
+    expect(g.press("left", 180, 200)).toEqual({
+      target: { session: "G", document: 0 },
+      x: 80,
+      y: 120,
+    });
+  });
+});
+
 describe("PT-5d (M7 H4, H5) — what the hand holds across a commit", () => {
   it("H4 — a finger's end goes to its SESSION while it stands, whatever its document (the engine holds a touch open across a commit): across A's commit, A's; across the page's commit, the page's; its session gone, nowhere", () => {
     const f = page();

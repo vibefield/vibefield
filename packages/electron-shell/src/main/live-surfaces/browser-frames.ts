@@ -29,6 +29,16 @@ export interface FrameSight {
 }
 
 /**
+ * PT-5d (M12 J5): a frame of the SAME PROCESS as its parent document between a frame and its session's root — an
+ * about:blank ad slot, a `srcdoc`, a same-origin widget — which has no session and no record of its own: its owner's
+ * quad in the session root's viewport (where the frame's own quad is), and its sight in ITS parent document.
+ */
+export interface FrameAncestor {
+  readonly quad: FrameQuad;
+  readonly sight: FrameSight;
+}
+
+/**
  * PT-5d (M7 H2): where a document SAYS the focus is, after a trusted event in it — `here`: in its own process (its active
  * element, through every child it can see into, is no frame); `inner`: in a frame it cannot see into (another process or
  * origin — whose own word says which); `away`: not in it at all.
@@ -71,6 +81,8 @@ interface FrameRecord {
   placement: number;
   /** its sight, read with its quad (none: all of it in view, nothing over it) — M6.3a, M7 H3 */
   sight: FrameSight | undefined;
+  /** the same-process frames between it and its session's root, each read with its quad (M12 J5) */
+  ancestors: readonly FrameAncestor[];
   /** its own commits */
   documents: number;
   /** its document's address, as its target and its commits say it (M6.4a: a hung frame named by its origin) */
@@ -127,6 +139,7 @@ export class BrowserFrames {
       size: undefined,
       placement: 0,
       sight: undefined,
+      ancestors: [],
       documents: 0,
       url,
       order: this.#order,
@@ -175,15 +188,24 @@ export class BrowserFrames {
    * placement's count, for the read of its own size that goes with it. PT-5d (M6.1): a quad DRAWN AT ANOTHER SIZE (its
    * owner resized, its transform changed) unsays the size read before — the quad's own until its own is read; a quad that
    * only moved (a scroll) keeps it. PT-5d (M6.3a, M7 H3): with its SIGHT (none: all of it, nothing over it) — a point on a
-   * part an ancestor of its owner clips, or the host draws over, is not the frame's.
+   * part an ancestor of its owner clips, or the host draws over, is not the frame's. PT-5d (M12 J5): and the sight of
+   * each SAME-PROCESS frame between its owner's document and its session's root — a point is the frame's only if every
+   * one admits it too (before: the slot's own document alone was read, and the page's header over an ad slot sent its
+   * press into the ad inside).
    */
-  placed(session: string, quad: FrameQuad | undefined, sight?: FrameSight): number {
+  placed(
+    session: string,
+    quad: FrameQuad | undefined,
+    sight?: FrameSight,
+    ancestors: readonly FrameAncestor[] = [],
+  ): number {
     const frame = this.#frames.get(session);
     if (frame === undefined) return 0;
     if (quad === undefined || frame.quad === undefined || !sameDrawnSize(frame.quad, quad))
       frame.size = undefined;
     frame.quad = quad;
     frame.sight = sight;
+    frame.ancestors = ancestors;
     frame.placement += 1;
     return frame.placement;
   }
@@ -392,8 +414,8 @@ export class BrowserFrames {
 
   // ── where a point is ───────────────────────────────────────────────────────────────────────────────────────────
 
-  /** The innermost frame drawn at a page point (its quad known) — on its VISIBLE part (M6.3a) — and the point in its
-   * viewport. */
+  /** The innermost frame drawn at a page point (its quad known) — on its VISIBLE part (M6.3a), admitted by every
+   * same-process frame it is in (M12 J5) — and the point in its viewport. */
   at(x: number, y: number): FrameRouted {
     let session: string | undefined;
     let px = x;
@@ -404,7 +426,13 @@ export class BrowserFrames {
       for (const frame of this.#frames.values()) {
         if (frame.parent !== session || frame.quad === undefined) continue;
         const local = carry(frame, px, py);
-        if (local === undefined || !within(frame, local) || !inView(frame, local)) continue;
+        if (
+          local === undefined ||
+          !within(frame, local) ||
+          !inView(frame, local) ||
+          !admitted(frame, px, py)
+        )
+          continue;
         if (inner === undefined || frame.order > inner.order) {
           inner = frame;
           carried = local;
@@ -478,6 +506,14 @@ const same = (a: FrameTarget, b: FrameTarget): boolean =>
 function carry(frame: FrameRecord, x: number, y: number): readonly [number, number] | undefined {
   const q = frame.quad;
   if (q === undefined) return undefined;
+  const along = fractionsOf(q, x, y);
+  if (along === undefined) return undefined;
+  const [w, h] = sizeOf(frame, q);
+  return [along[0] * w, along[1] * h];
+}
+
+/** Where a point is along a quad's top edge and down its left, as fractions of them (undefined: a quad with no area). */
+function fractionsOf(q: FrameQuad, x: number, y: number): readonly [number, number] | undefined {
   const [x1, y1, x2, y2, , , x4, y4] = q;
   const ax = x2 - x1;
   const ay = y2 - y1;
@@ -487,10 +523,7 @@ function carry(frame: FrameRecord, x: number, y: number): readonly [number, numb
   if (!Number.isFinite(det) || Math.abs(det) < 1e-9) return undefined;
   const dx = x - x1;
   const dy = y - y1;
-  const u = (dx * by - dy * bx) / det;
-  const v = (ax * dy - ay * dx) / det;
-  const [w, h] = sizeOf(frame, q);
-  return [u * w, v * h];
+  return [(dx * by - dy * bx) / det, (ax * dy - ay * dx) / det];
 }
 
 /** A frame's own viewport: its size read (M6.1), else its quad's own. */
@@ -516,4 +549,16 @@ function inView(frame: FrameRecord, [x, y]: readonly [number, number]): boolean 
   const on = (r: FrameVisible): boolean =>
     x >= r[0] * w && y >= r[1] * h && x < r[2] * w && y < r[3] * h;
   return on(sight.visible) && !sight.covers.some(on);
+}
+
+/** PT-5d (M12 J5): is a point of a frame's PARENT session's viewport (where its quad, and its ancestors', are) admitted by
+ * every same-process frame between it and that session's root — on each one's visible part, under none of its covers? */
+function admitted(frame: FrameRecord, x: number, y: number): boolean {
+  return frame.ancestors.every(({ quad, sight }) => {
+    const along = fractionsOf(quad, x, y);
+    if (along === undefined) return false;
+    const [u, v] = along;
+    const on = (r: FrameVisible): boolean => u >= r[0] && v >= r[1] && u < r[2] && v < r[3];
+    return on(sight.visible) && !sight.covers.some(on);
+  });
 }
