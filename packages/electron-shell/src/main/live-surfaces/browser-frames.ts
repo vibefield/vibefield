@@ -481,7 +481,7 @@ function carry(frame: FrameRecord, x: number, y: number): readonly [number, numb
   const dy = y - y1;
   const u = (dx * by - dy * bx) / det;
   const v = (ax * dy - ay * dx) / det;
-  const [w, h] = frame.size ?? [Math.hypot(ax, ay), Math.hypot(bx, by)];
+  const [w, h] = sizeOf(frame, q);
   return [u * w, v * h];
 }
 

@@ -1711,8 +1711,9 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     expect(sight(frame, headed)).toEqual({ visible: [0, 0, 1, 1], covers: [[0, 0, 1, 0.1905]] });
     // an overlay with `pointer-events: none`: the hit test passes through it — nothing covers
     expect(sight(frame, bare)).toEqual({ visible: [0, 0, 1, 1], covers: [] });
-    // its rounded corners: the hit test finds its ANCESTOR there — no cover
-    const rounded = (x: number, y: number): unknown => (x < 172 && y < 72 ? body : bare(x, y));
+    // its rounded corners (40 px): the hit test finds its ANCESTOR there — the whole look's points hit it — no cover
+    const rounded = (x: number, y: number): unknown => (x < 200 && y < 100 ? body : bare(x, y));
+    now = 5_000;
     expect(sight(frame, rounded)).toEqual({ visible: [0, 0, 1, 1], covers: [] });
     // the frame itself `pointer-events: none`: covered whole by what is under it
     const deaf = el(
@@ -1743,6 +1744,15 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     expect(typeof plain).toBe("string");
     expect(sight(frame, headed, true)).not.toBe(plain);
     expect(sight(frame, bare, true)).toBe(plain);
+    // a cover smaller than the whole look's spacing (4 × 4), between its points but on the quick look's first: a cover
+    const dot = el({ left: 222, top: 100, width: 4, height: 4 }, { position: "absolute" }, body);
+    const dotted = (x: number, y: number): unknown =>
+      x >= 222 && x < 226 && y >= 100 && y < 104 ? dot : bare(x, y);
+    now = 30_000;
+    expect(sight(frame, dotted)).toEqual({
+      visible: [0, 0, 1, 1],
+      covers: [[0.0969, 0.0952, 0.1031, 0.1048]],
+    });
   });
 
   it("M7 H3 — a frame's COVERS are read with its quad: a press on the part a fixed header covers is the page's, below it the frame's", async () => {
@@ -1959,6 +1969,33 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       await r.native.dispatchMouse({ type: "mousePressed", x, y, button: "left", clickCount: 1 });
       await r.native.dispatchMouse({ type: "mouseReleased", x, y, button: "left", clickCount: 1 });
     };
+
+    it("a press is a HINT: a key sent right after a press into F WAITS for the word of where the focus went — F's `here`, and it goes to F (never the page's, where the focus was before)", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = await framed();
+        await r.native.dispatchMouse({
+          type: "mousePressed",
+          x: 180,
+          y: 120,
+          button: "left",
+          clickCount: 1,
+        });
+        const key = r.native.dispatchKey({
+          type: "keyDown",
+          key: "h",
+          code: "KeyH",
+          modifiers: NONE,
+        });
+        await vi.advanceTimersByTimeAsync(200);
+        expect(r.hand()).toEqual(["mousePressed@F 80,40"]);
+        word(r, "here", "F");
+        expect(await settle(key)).toBe("sent");
+        expect(r.hand()).toEqual(["mousePressed@F 80,40", "keyDown@F"]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
 
     it("(a) a Tab on the page whose default moves the focus into F: its up goes to F — never the page's session", async () => {
       const r = await framed();

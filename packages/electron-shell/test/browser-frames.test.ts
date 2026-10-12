@@ -398,6 +398,35 @@ describe("PT-5d (M6.3a) — a frame takes a point only on its VISIBLE part: what
     expect(f.wheel(180, 305, apart()).target.session).toBeUndefined();
   });
 
+  it("a frame drawn at ANOTHER SCALE than its own viewport (a transform, a mobile layout zoomed out): its visible part and its covers are fractions of its OWN viewport, as its point is", () => {
+    const f = new BrowserFrames();
+    f.pageCommitted(1);
+    f.attached("S", "t-S", undefined);
+    // 200 × 100 of its own drawn at 400 × 200 from the page's 100, 100: its left half in view, its top-left quarter of
+    // that under a cover
+    f.sized(
+      "S",
+      200,
+      100,
+      f.placed("S", box(100, 100, 400, 200), {
+        visible: [0, 0, 0.5, 1],
+        covers: [[0, 0, 0.25, 0.5]],
+      }),
+    );
+    // three quarters across: clipped — the page's
+    expect(f.press("left", 400, 250).target.session).toBeUndefined();
+    f.release("left", 400, 250);
+    // a quarter across, below the cover: S's, at its own 50, 75
+    expect(f.press("left", 200, 250)).toEqual({
+      target: { session: "S", document: 0 },
+      x: 50,
+      y: 75,
+    });
+    f.release("left", 200, 250);
+    // under the cover: the page's
+    expect(f.wheel(150, 150, apart()).target.session).toBeUndefined();
+  });
+
   it("a frame in a frame, clipped in ITS parent's view: a point over its clipped part is its parent's, carried into it", () => {
     const f = page();
     // B's right half clipped in A's view
