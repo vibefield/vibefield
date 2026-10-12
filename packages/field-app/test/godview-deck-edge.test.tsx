@@ -90,6 +90,12 @@ function rect(top: number, height: number): DOMRect {
 const LIP = 30;
 const WELL_FOOT = 8;
 
+/** A transform on an ancestor — the cover settling from 1.012, the Peek's
+ * recede to 0.98 — scales what is PAINTED about the stage's top, never the
+ * layout. `getBoundingClientRect` answers the painted box; `offset*` the laid
+ * out one. */
+let paintedScale = 1;
+
 // `godview.css`'s monitor rule, in the one place happy-dom measures — and, for
 // the wrapper's witness, where that rule puts the deck and the body in its well.
 function layout(this: Element): DOMRect {
@@ -107,6 +113,29 @@ function layout(this: Element): DOMRect {
     return rect(deckTop + LIP + 1, windowHeight - deckTop - LIP - WELL_FOOT - 2);
   }
   return rect(0, 0);
+}
+
+/** The painted box: the layout, scaled about the stage's top. */
+function painted(this: Element): DOMRect {
+  const box = layout.call(this);
+  if (paintedScale === 1) return box;
+  return {
+    ...box,
+    y: box.top * paintedScale,
+    top: box.top * paintedScale,
+    width: box.width * paintedScale,
+    height: box.height * paintedScale,
+    bottom: (box.top + box.height) * paintedScale,
+    right: box.width * paintedScale,
+    toJSON: () => ({}),
+  } as DOMRect;
+}
+
+/** The laid-out box, as `offset*` answers it (the stage's root is the offset
+ * parent of the deck; the body's is the well, whose top is its own). */
+function laidOut(element: Element): { top: number; width: number; height: number } {
+  const box = layout.call(element);
+  return { top: Math.round(box.top), width: Math.round(box.width), height: Math.round(box.height) };
 }
 
 const observers: { callback: ResizeObserverCallback }[] = [];
@@ -142,7 +171,23 @@ beforeEach(() => {
   awayMonitor = false;
   localStorage.clear();
   resetDeckWrapperFactsForTest();
-  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(layout);
+  paintedScale = 1;
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(painted);
+  vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return laidOut(this).top;
+  });
+  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return laidOut(this).width;
+  });
+  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return laidOut(this).height;
+  });
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
   const captured = new Set<number>();
@@ -461,6 +506,22 @@ describe("the deck edge, mounted", () => {
     act(() => root?.unmount());
     root = null;
     expect(getDeckWrapperFacts()).toBeNull();
+  });
+
+  it("reads the LAYOUT, never the painted box: a transform on an ancestor moves no top and lays nothing out", () => {
+    // The cover settles from 1.012 as Godview opens, and the Peek recedes the
+    // view to 0.98 while it stands: what is painted is scaled, the box the
+    // terminals fill is not. A witness reading the painted box said the deck's
+    // top moved 313 → 316 (smoke:godview, 2026-10-11) and would count a resize
+    // the terminals never had.
+    mount({ publishesDeck: true });
+    expect(getDeckWrapperFacts()).toEqual({ state: "up", top: 320, bodyResizes: 0 });
+    paintedScale = 1.012;
+    resizeWindow(800);
+    expect(getDeckWrapperFacts()).toEqual({ state: "up", top: 320, bodyResizes: 0 });
+    paintedScale = 0.98;
+    resizeWindow(800);
+    expect(getDeckWrapperFacts()).toEqual({ state: "up", top: 320, bodyResizes: 0 });
   });
 
   it("a stage that is not the window's measures nothing for the marker", () => {

@@ -130,25 +130,28 @@ export async function deckAwayRung(
   win: BrowserWindow,
   opts: DeckAwayRungOptions,
 ): Promise<Record<string, unknown>> {
+  const verdict: Record<string, unknown> = {};
   try {
-    return await deckAwaySteps(win, opts);
+    return await deckAwaySteps(win, opts, verdict);
   } catch (error) {
-    // Leave the deck up for whatever runs next, then say what failed.
+    // Leave the deck up for whatever runs next, then say what failed, with
+    // what the rung had read until then.
     const now = await stageNow(win).catch(() => null);
     if (now?.state === "away") {
       await click(win, ACTIVE_BODY, "calling the terminals back after a failure").catch(
         () => undefined,
       );
     }
-    throw error;
+    const said = error instanceof Error ? error.message : String(error);
+    throw new Error(`${said} [read: ${JSON.stringify(verdict)}; now: ${JSON.stringify(now)}]`);
   }
 }
 
 async function deckAwaySteps(
   win: BrowserWindow,
   opts: DeckAwayRungOptions,
+  verdict: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  const verdict: Record<string, unknown> = {};
   opts.pressViewKey("godview");
   await opts.deck.until(
     (facts) => facts.active && facts.panes >= 1 && facts.wrapper?.state === "up",

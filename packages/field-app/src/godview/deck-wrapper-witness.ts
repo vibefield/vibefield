@@ -64,6 +64,14 @@ export function resetDeckWrapperFactsForTest(): void {
  * The stage's measuring: the deck section's top against the stage's, and the
  * body's box, re-read whenever either is laid out again. The first reading is
  * the baseline; every later one that finds the body's box another size counts.
+ *
+ * The LAYOUT, never the painted box (`offset*`, not `getBoundingClientRect`):
+ * a transform — the sheet's own rise and fall, the cover settling from 1.012
+ * as Godview opens, the Peek's recede to 0.98 — moves and scales what is
+ * painted and never the box the terminals fill. Until 2026-10-11 the painted
+ * box was read, and a smoke saw the top "move" 313 → 316 under the cover's
+ * settle. Away, the top is where the sheet is laid out (its box is kept), and
+ * the state says it is away.
  */
 export function useDeckWrapperWitness(options: {
   /** Only the window's stage (`publishesDeck`) — never a fixture's. */
@@ -85,15 +93,12 @@ export function useDeckWrapperWitness(options: {
     const root = section?.closest<HTMLElement>(".vf-godview") ?? null;
     if (section === null || pane === null || root === null) return;
     const measure = (): void => {
-      const rect = pane.getBoundingClientRect();
-      const size = `${Math.round(rect.width)}x${Math.round(rect.height)}`;
+      const size = `${pane.offsetWidth}x${pane.offsetHeight}`;
       if (box.current !== null && box.current !== size) resizes.current += 1;
       box.current = size;
-      publishDeckWrapperFacts({
-        state,
-        top: Math.round(section.getBoundingClientRect().top - root.getBoundingClientRect().top),
-        bodyResizes: resizes.current,
-      });
+      // the sheet's offset parent is the stage's root (positioned): its top,
+      // from the stage's top, as laid out
+      publishDeckWrapperFacts({ state, top: section.offsetTop, bodyResizes: resizes.current });
     };
     measure();
     if (typeof ResizeObserver === "undefined") return;
