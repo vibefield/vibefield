@@ -1053,9 +1053,15 @@ if (mode === "silent") {
             );
             return page.entries.length;
           };
-          snapshot();
+          // The baseline the poll diffs against is read BEFORE the snapshot
+          // goes out: a client that has the snapshot may change the scripted
+          // files at once (a test's next line), and a baseline read after that
+          // change takes it for the starting state — a resync asked for was
+          // then never fired (index-timeline's barrier row, 2026-10-12: the
+          // socket "opened" with resync already in its control).
           let last = new Map(timelineRows(id).map((row) => [row.timeline_id, JSON.stringify(row)]));
           let control = { ...timelineControl() };
+          snapshot();
           logSocket(`${socketId} opened epoch=${epoch} control=${JSON.stringify(control)}`);
           const poll = setInterval(() => {
             if (ws.readyState !== 1) return;
