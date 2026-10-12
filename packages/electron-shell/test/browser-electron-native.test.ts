@@ -2424,6 +2424,27 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       }
     });
 
+    it("M12 J6 (unfrozen at M15) — a key WAITING for a word when the PAGE commits is refused (its document is gone), never sent into the new one", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = await framed();
+        word(r, "inner");
+        const key = r.native.dispatchKey({
+          type: "keyDown",
+          key: "a",
+          code: "KeyA",
+          modifiers: NONE,
+        });
+        await vi.advanceTimersByTimeAsync(100);
+        r.at("https://host.test/b");
+        r.contents.emit("did-navigate", {}, "https://host.test/b");
+        expect(await settle(key)).toBe("refused: Browser input's document is gone");
+        expect(r.hand()).not.toContain("keyDown@page");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("M15 J13 — a key's UP whose down went to the page: to the page while the PAGE holds the focus (its word); in doubt it WAITS like the rest — the word comes, and it goes; a frame of another site holding the focus: REFUSED at once — a stated limit (the page keeps that key down until its next up)", async () => {
       vi.useFakeTimers();
       try {
@@ -2468,27 +2489,6 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     // focused and reach it, the doubt and M3's ban go, and these with them; if it crashes, they are built against the
     // run's facts. Each row is RED as the code stands (said in the note), and unskipped by that build.
     describe.skip("PT-5d (M12, FROZEN) — run 4's v9b: H2's doubt, as built", () => {
-      it("J6 — a key WAITING for a word when the PAGE commits is refused (its document is gone), never sent into the new one", async () => {
-        vi.useFakeTimers();
-        try {
-          const r = await framed();
-          word(r, "inner");
-          const key = r.native.dispatchKey({
-            type: "keyDown",
-            key: "a",
-            code: "KeyA",
-            modifiers: NONE,
-          });
-          await vi.advanceTimersByTimeAsync(100);
-          r.at("https://host.test/b");
-          r.contents.emit("did-navigate", {}, "https://host.test/b");
-          expect(await settle(key)).toMatch(/^refused/);
-          expect(r.hand()).not.toContain("keyDown@page");
-        } finally {
-          vi.useRealTimers();
-        }
-      });
-
       it("J7 — the doubt's bound is ONE: five key-like events in a doubt no word ends are refused within its second — a move behind them is not held five seconds", async () => {
         vi.useFakeTimers();
         try {

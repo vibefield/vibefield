@@ -281,7 +281,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   /** PT-5d (M6.4b): who hears that a command of the hand went unanswered past the bound. */
   readonly #hungListeners = new Set<(frame?: string) => void>();
   /** PT-5d (M7 H2): key-like events waiting for a word of where the focus is */
-  readonly #focusWaiters = new Set<() => void>();
+  readonly #focusWaiters = new Set<{ known(): void; refuse(error: Error): void }>();
   /** PT-5d (M6.5b): the device the page was last told — its frames are told the same */
   #emulation: BrowserSurfaceNativeEmulation | undefined;
   /** PT-5d (M6.5b): each frame's tells of the device, one behind another */
@@ -360,6 +360,10 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       this.#documents += 1;
       // (M7 H9: the new document has not painted yet)
       this.#painted = false;
+      // (M12 J6: a key-like event waiting for a word of where the focus was is refused — its document is gone; before: the
+      // commit ended the doubt and woke it into the NEW document, its down there unrecorded)
+      for (const waiter of [...this.#focusWaiters])
+        waiter.refuse(new Error("Browser input's document is gone"));
       // (M7 H11: a command the document before never answered is let go — its turn refused; the chain goes on)
       for (const letGo of [...this.#inFlight.keys()]) letGo("Browser input's document is gone");
       this.#inFlight.clear();
@@ -1114,23 +1118,30 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   private focusSettled(): Promise<void> {
     if (!this.#frames.inDoubt()) return Promise.resolve();
     return new Promise<void>((resolve, reject) => {
-      const known = (): void => {
-        if (this.#frames.inDoubt()) return;
-        clearTimeout(timer);
-        this.#focusWaiters.delete(known);
-        resolve();
+      const waiter = {
+        known: (): void => {
+          if (this.#frames.inDoubt()) return;
+          clearTimeout(timer);
+          this.#focusWaiters.delete(waiter);
+          resolve();
+        },
+        refuse: (error: Error): void => {
+          clearTimeout(timer);
+          this.#focusWaiters.delete(waiter);
+          reject(error);
+        },
       };
-      const timer = setTimeout(() => {
-        this.#focusWaiters.delete(known);
-        reject(new Error("Browser input's focus is in doubt"));
-      }, FOCUS_WORD_MS);
-      this.#focusWaiters.add(known);
+      const timer = setTimeout(
+        () => waiter.refuse(new Error("Browser input's focus is in doubt")),
+        FOCUS_WORD_MS,
+      );
+      this.#focusWaiters.add(waiter);
     });
   }
 
   /** PT-5d (M7 H2): where the focus is may have changed — each waiting key-like event looks again. */
   private focusMoved(): void {
-    for (const known of [...this.#focusWaiters]) known();
+    for (const waiter of [...this.#focusWaiters]) waiter.known();
   }
 
   /** PT-5d (M6.4b): a command of the hand the page never answered, said (see `handCommand`). */
