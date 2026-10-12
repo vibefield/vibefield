@@ -131,3 +131,30 @@ describe("where a session with no pane opens (GV-D4)", () => {
     });
   });
 });
+
+// N16 (a), the lead's rule (2026-10-12): ⌘W on the last pane empties it — a
+// fresh shell with the launcher over it — and the next call takes that pane.
+describe("an empty pane ⌘W left takes the next session in its place (N16 (a))", () => {
+  it("replaces the empty focused pane instead of opening beside it", () => {
+    expect(deckPlacement({ panes: ONE, focusedPaneId: "p1", emptyPaneId: "p1" }, "x")).toEqual({
+      kind: "replace",
+      paneId: "p1",
+    });
+    // a new terminal too
+    expect(deckPlacement({ panes: ONE, focusedPaneId: "p1", emptyPaneId: "p1" })).toEqual({
+      kind: "replace",
+      paneId: "p1",
+    });
+  });
+
+  it("only while the empty pane is the focused one, and never over a pane already showing it", () => {
+    expect(deckPlacement({ panes: TWO, focusedPaneId: "p2", emptyPaneId: "p1" }, "x")).toEqual({
+      kind: "beside",
+      paneId: "p2",
+    });
+    expect(deckPlacement({ panes: TWO, focusedPaneId: "p1", emptyPaneId: "p1" }, "b")).toEqual({
+      kind: "focus",
+      paneId: "p2",
+    });
+  });
+});

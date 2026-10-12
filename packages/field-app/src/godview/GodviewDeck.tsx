@@ -41,7 +41,7 @@ import {
   type GodviewDeckFacts,
 } from "../development-console";
 import { askGodviewDeckUp } from "../frame/deck-door";
-import { type LinePane, publishGodviewLineDoor } from "../frame/line-door";
+import { type LinePane, publishGodviewLineDoor, sayOnLine } from "../frame/line-door";
 import { requestView } from "../frame/view-state";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
@@ -277,10 +277,11 @@ async function settled(predicate: () => boolean, ms: number): Promise<boolean> {
 /** The deck as the placement rule reads it (GV-D4, `deck-placement.ts`): the
  * panes ghosttea lays out and the one it calls active — read at CALL time, off
  * the context the workspace last published. */
-function deckShape(context: GhostteaWorkspaceContext): DeckShape {
+function deckShape(context: GhostteaWorkspaceContext, emptyPaneId?: string): DeckShape {
   return {
     panes: context.panes.map((pane) => ({ id: pane.id, sessionId: pane.session.id })),
     focusedPaneId: context.activePaneId,
+    ...(emptyPaneId !== undefined ? { emptyPaneId } : {}),
   };
 }
 
@@ -342,6 +343,12 @@ export interface GodviewDeckProps {
    * actually showing somewhere. Read-only in both directions of meaning: the
    * monitor never drives panes with them. */
   onPanes?: (facts: MonitorPaneFacts) => void;
+  /** N16 (a) — ⌘W on the last pane: ghosttea keeps the pane and asks its
+   * platform to close the window; the terminals' owner minimizes them and
+   * Godview stays the view, and the deck empties the pane (`emptyLastPane`).
+   * Absent (a deck no overlay owns), the old answer: the frame is asked for
+   * Canvas. */
+  onLastPaneClose?: () => void;
 }
 
 export function GodviewDeck({
@@ -351,6 +358,7 @@ export function GodviewDeck({
   onRendererBackend,
   onRemoteDoor,
   onPanes,
+  onLastPaneClose,
 }: GodviewDeckProps): ReactElement | null {
   const fieldd = useFielddClient();
   /** THE POOL (TP-S0b), claimed and read.
@@ -397,6 +405,15 @@ export function GodviewDeck({
    * pool had nothing to rejoin and no shell policy yet (the first connection,
    * below). Ghosttea's own opening birth it knows itself (`sessionCreatedHere`). */
   const openingBirth = useRef<string | null>(null);
+  /** N16 — read when ghosttea asks, so the platform object (keyed on the shell
+   * policy alone: a new one re-initializes the workspace) never rebuilds. */
+  const lastPaneClose = useRef(onLastPaneClose);
+  lastPaneClose.current = onLastPaneClose;
+  /** N16 (a) — the pane ⌘W on the last pane EMPTIED, and the fresh shell it
+   * holds: the next call takes its place (`deck-placement.ts`). Held in memory
+   * only, and read through `emptyPaneOf`, which forgets it once the pane shows
+   * anything else or the shell has been typed into. */
+  const emptyPane = useRef<{ paneId: string; sessionId: string } | null>(null);
   const [terminalVisualIds, setTerminalVisualIds] = useState<ReadonlyMap<string, string>>(
     () => new Map(),
   );
@@ -1086,6 +1103,22 @@ export function GodviewDeck({
     if (placement.kind === "beside" || zoomed !== placement.paneId) deckZoom.current.reset();
   }, []);
 
+  /** N16 (a) — the empty pane, while it still is one: still showing the fresh
+   * shell ⌘W gave it, never typed into. Anything else forgets it. */
+  const emptyPaneOf = useCallback(
+    (context: GhostteaWorkspaceContext): string | undefined => {
+      const mark = emptyPane.current;
+      if (mark === null) return undefined;
+      const still = context.panes.some(
+        (pane) => pane.id === mark.paneId && pane.session.id === mark.sessionId,
+      );
+      if (still && runtime?.sessionHasInput(mark.sessionId) !== true) return mark.paneId;
+      emptyPane.current = null;
+      return undefined;
+    },
+    [runtime],
+  );
+
   /**
    * A SESSION WITH NO PANE, PLACED (GV-D4, James 2026-10-02; DESIGN.md §8 "A
    * session with no pane"; the rule is `deck-placement.ts`). Every door that
@@ -1109,8 +1142,11 @@ export function GodviewDeck({
     async (sessionId: string, summary: SessionSummary | undefined): Promise<LocalMountOutcome> => {
       const context = workspaceRef.current;
       if (context === undefined || context.activePaneId === undefined) return { state: "no-pane" };
-      const placement = deckPlacement(deckShape(context), sessionId);
+      const empty = emptyPaneOf(context);
+      const placement = deckPlacement(deckShape(context, empty), sessionId);
       if (placement.kind === "none") return { state: "no-pane" };
+      // the empty pane is taken (or the session was already shown): it is empty no more
+      if (empty !== undefined && placement.kind !== "beside") emptyPane.current = null;
       leaveZoomFor(placement);
       if (placement.kind === "focus") {
         if (context.activePaneId !== placement.paneId) {
@@ -1134,7 +1170,7 @@ export function GodviewDeck({
         ? { state: "mounted", sessionId, placement: placement.kind }
         : { state: "failed", reason: "the workspace did not take the mount" };
     },
-    [leaveZoomFor],
+    [leaveZoomFor, emptyPaneOf],
   );
 
   /**
@@ -1326,10 +1362,24 @@ export function GodviewDeck({
         const opening = first ? openingShellOf(context) : null;
         if (opening !== null && request?.profileSet === undefined)
           return { state: "mounted", sessionId: opening };
+        // N16 (a): the focused pane is the one ⌘W emptied — its fresh shell IS
+        // the terminal asked for (under an Agent Profile, the profile's shell is
+        // born in its place by the rule below, and the fresh one released)
+        const empty = opening === null ? emptyPaneOf(context) : undefined;
+        const fresh = emptyPane.current?.sessionId;
+        if (
+          empty !== undefined &&
+          empty === context.activePaneId &&
+          fresh !== undefined &&
+          request?.profileSet === undefined
+        ) {
+          emptyPane.current = null;
+          return { state: "mounted", sessionId: fresh, placement: "replace" };
+        }
         // GV-D4: a new terminal is placed as a session with no pane is — it
         // can be in no pane yet, so it opens beside the focused pane while
         // fewer than three show and takes its place after.
-        const placement = opening === null ? deckPlacement(deckShape(context)) : null;
+        const placement = opening === null ? deckPlacement(deckShape(context, empty)) : null;
         if (placement !== null && placement.kind !== "beside" && placement.kind !== "replace")
           return { state: "no-pane" };
         // SB-3: the ask rides the pending-birth ref into the override (above).
@@ -1489,6 +1539,7 @@ export function GodviewDeck({
     observeRoster,
     workspaceReady,
     openingShellOf,
+    emptyPaneOf,
   ]);
 
   useEffect(() => {
@@ -1641,6 +1692,61 @@ export function GodviewDeck({
         );
     });
   }, []);
+
+  /**
+   * N16 (a) and the lead's rule (2026-10-12) — ⌘W ON THE LAST PANE EMPTIES IT.
+   * ⌘W means "close this pane", and ghosttea keeps its last pane — every pane
+   * holds a session, so it cannot hold none. So the pane is emptied the way
+   * VibeField empties one, as a cleanly exited agent's pane is returned
+   * (`useCompletedAgentPanes` below): a fresh shell born in the closed
+   * session's folder — the agent's own if one ran there, else the shell's last
+   * (`createSplitSession` reads it on this machine, home for a peer's or none)
+   * — under the pane's own Agent Profile, swapped in by ghosttea's atomic
+   * `replaceSession`; the launcher shows over it. The closed session leaves the
+   * layout and goes the way ⌘W sends any pane's: the unused-shell reaper
+   * releases a shell never used, and a running one runs on. The pane is marked
+   * empty, so the next call takes its place (`deck-placement.ts`). One birth
+   * per last-pane ⌘W.
+   *
+   * Refused, the pane keeps its session, and the line says so in fieldd's words
+   * and ours; the terminals go away regardless (the owner already minimized
+   * them). A swap the workspace no longer allows (the pane changed under the
+   * birth) releases the shell it would have shown.
+   */
+  const emptyLastPane = useCallback(async (): Promise<void> => {
+    const context = workspaceRef.current;
+    const pane = context?.panes.find((entry) => entry.id === context.activePaneId);
+    if (context === undefined || pane === undefined) return;
+    const closed = pane.session;
+    let fresh: SessionSummary;
+    try {
+      fresh = await createSplitSession({
+        ...closed,
+        cwd: paneAgents.agents.get(closed.id)?.cwd ?? closed.cwd,
+      });
+    } catch (cause) {
+      const words = cause instanceof Error ? cause.message : String(cause);
+      sayOnLine(
+        `Terminals minimized — the last pane still shows its session: a new shell could not be opened (${words})`,
+      );
+      getRendererLogger()
+        .child({ component: "godview" })
+        .error(
+          "renderer.godview.last_pane_shell_failed",
+          "Could not empty the last pane: no new shell",
+          cause,
+        );
+      return;
+    }
+    if (workspaceRef.current?.replaceSession?.(closed.id, fresh) !== true) {
+      releaseUnusedShell(fresh.id);
+      return;
+    }
+    emptyPane.current = { paneId: pane.id, sessionId: fresh.id };
+  }, [createSplitSession, paneAgents.agents, releaseUnusedShell]);
+  const emptyLastPaneNow = useRef(emptyLastPane);
+  emptyLastPaneNow.current = emptyLastPane;
+
   useLayoutEffect(() => {
     if (runtime === null || workspace === undefined) return;
     const bornHere = bornInThisView(runtime);
@@ -2203,12 +2309,23 @@ export function GodviewDeck({
             showContextMenu: () => undefined,
             toggleFullscreen: () => undefined,
             // The deck's "window" is Godview. Ghosttea calls this when the
-            // LAST pane closes, and taking the Electron window down there would
-            // close the canvas because a terminal ran out — so it goes back to
-            // the canvas instead, which is what the gesture meant (FR-1: the
-            // view's one owner is asked, the same door ⌘1 knocks on).
+            // LAST pane closes (⌘W; it keeps the pane), and taking the Electron
+            // window down there would close the canvas because a terminal ran
+            // out. N16 (a), 2026-10-11: the terminals are minimized, Godview
+            // stays, and the pane is emptied — a fresh shell with the launcher,
+            // the closed session gone the way ⌘W sends one (`emptyLastPane`).
+            // Until N16 it went back to the canvas (FR-1's door), which is
+            // still the answer of a deck no overlay owns.
             closeWindow: () => {
-              void requestView("canvas");
+              const minimize = lastPaneClose.current;
+              if (minimize === undefined) {
+                void requestView("canvas");
+                return;
+              }
+              // away at once; then the pane is emptied, never re-shown (the
+              // lead's rule: ⌘W closed its session)
+              minimize();
+              void emptyLastPaneNow.current();
             },
             onMenuAction: () => () => undefined,
           },

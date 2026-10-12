@@ -19,6 +19,7 @@
  *      monitor alone: the deck is not called until the first call (W7)
  *   7. the lab's call (W7): under the Godview markers alone, safe at any time,
  *      answering nothing, and said in the wrapper's facts when it raised them
+ *   8. ⌘W on the last pane (N16 (a)): the terminals go away and Godview stays
  */
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -70,14 +71,29 @@ const RISE_ENDS = DECK_RISE_MS + DECK_TRAVEL_GRACE_MS;
 
 /** The deck, stood in: it says each `active` it is handed, and holds a pane's
  * input the way ghosttea's pane does, so focus can be put in it. */
-const stand = vi.hoisted(() => ({ active: [] as boolean[], called: [] as boolean[], mounts: 0 }));
+const stand = vi.hoisted(() => ({
+  active: [] as boolean[],
+  called: [] as boolean[],
+  mounts: 0,
+  /** what the deck is handed for ⌘W on its last pane (N16) */
+  lastPaneClose: undefined as (() => void) | undefined,
+}));
 
 vi.mock("../src/godview/GodviewDeck", async () => {
   const { useEffect } = await import("react");
   return {
-    GodviewDeck: ({ active, called }: { active: boolean; called?: boolean }) => {
+    GodviewDeck: ({
+      active,
+      called,
+      onLastPaneClose,
+    }: {
+      active: boolean;
+      called?: boolean;
+      onLastPaneClose?: () => void;
+    }) => {
       stand.active.push(active);
       stand.called.push(called === true);
+      stand.lastPaneClose = onLastPaneClose;
       useEffect(() => {
         stand.mounts += 1;
       }, []);
@@ -104,6 +120,8 @@ let container: HTMLElement | null = null;
 let publishView: ((state: FrameViewState) => void) | null = null;
 /** Every word the shell was told, in order. */
 let said: (GodviewDeckState | null)[] = [];
+/** every view the page asked the shell for */
+let asked: FrameViewState["view"][] = [];
 
 function fakeDoor(): MonitorDoor {
   board = scriptedModelBoard({
@@ -184,6 +202,8 @@ beforeEach(() => {
   stand.called = [];
   stand.mounts = 0;
   said = [];
+  asked = [];
+  stand.lastPaneClose = undefined;
   localStorage.clear();
   sessionStorage.clear();
   // a run whose terminals were already called up: most rows below begin there
@@ -214,7 +234,10 @@ beforeEach(() => {
     logger: {} as RendererLogger,
     platform: "darwin",
     view: {
-      set: (view: FrameViewState["view"]) => Promise.resolve({ view }),
+      set: (view: FrameViewState["view"]) => {
+        asked.push(view);
+        return Promise.resolve({ view });
+      },
       onState: (handler: (state: FrameViewState) => void) => {
         publishView = handler;
         return () => undefined;
@@ -777,5 +800,42 @@ describe("the lab's call, under the Godview markers only (W7)", () => {
     vi.useRealTimers();
     await unmountOverlay();
     expect(window.__vfGodviewDeck).toBeUndefined();
+  });
+});
+
+// N16 (a), James 2026-10-11 (DESIGN.md §8 "Minimized"): ⌘W on the last pane
+// minimizes the terminals and stays in Godview. Ghosttea keeps its last pane
+// and calls its platform's `closeWindow`; the deck hands that to the
+// terminals' owner, which puts them away — never the Canvas it asked for
+// until N16. The pane stays, so a call brings it back as it was.
+describe("⌘W on the last pane minimizes the terminals and stays in Godview (N16 (a))", () => {
+  it("puts them away with the fall, asks for no other view, and a call brings the same deck back", async () => {
+    const host = await mountOverlay();
+    expect(stage(host).getAttribute("data-godview-deck")).toBe("up");
+    const close = stand.lastPaneClose;
+    if (close === undefined) throw new Error("the deck was handed nothing for its last pane");
+    holdTimers();
+    await act(async () => close());
+    expect(stage(host).getAttribute("data-godview-deck")).toBe("away");
+    expect(stage(host).getAttribute("data-godview-deck-motion")).toBe("fall");
+    expect(getGodviewDeck()).toBe("away");
+    expect(said.at(-1)).toBe("away");
+    expect(asked, "the last pane's ⌘W asked for another view").toEqual([]);
+    await advance(FALL_ENDS);
+    // the pane was kept: a call brings the same deck up, never a new one
+    await act(async () => {
+      askGodviewDeckUp();
+    });
+    expect(stage(host).getAttribute("data-godview-deck")).toBe("up");
+    expect(stand.mounts).toBe(1);
+  });
+
+  it("puts them away from maximized too", async () => {
+    sessionStorage.setItem(DECK_STATE_STORAGE_KEY, "maximized");
+    const host = await mountOverlay();
+    expect(stage(host).getAttribute("data-godview-deck")).toBe("maximized");
+    await act(async () => stand.lastPaneClose?.());
+    expect(stage(host).getAttribute("data-godview-deck")).toBe("away");
+    expect(asked).toEqual([]);
   });
 });

@@ -126,6 +126,11 @@ export function GodviewOverlay(): ReactElement | null {
   const [deckState, setDeckState] = useState<GodviewDeckState>(storedDeckState);
   useEffect(() => storeDeckState(deckState), [deckState]);
   const callTerminalsUp = useCallback(() => setDeckState((state) => deckAfter(state, "call")), []);
+  // N16 (a): ⌘W on the last pane minimizes them, and Godview stays the view
+  const minimizeTerminals = useCallback(
+    () => setDeckState((state) => deckAfter(state, "minimize")),
+    [],
+  );
   useEffect(() => answerGodviewDeckUp(callTerminalsUp), [callTerminalsUp]);
   /** THE FIRST CALL (W7 — GV-D5, N14 (a)). A launch opens Godview on the
    * monitor alone: the deck is mounted — its door is the monitor's — but not
@@ -347,6 +352,7 @@ export function GodviewOverlay(): ReactElement | null {
                 active={open && deckState !== "away"}
                 // W7: until the first call the deck is a door and nothing else
                 called={called}
+                onLastPaneClose={minimizeTerminals}
                 theme={theme}
                 onRendererBackend={setRendererBackend}
                 onRemoteDoor={setRemoteDoor}

@@ -245,7 +245,13 @@ function viewItems(
  * answer ⌘W, exactly as History is — so there the item is History's: the role,
  * its ⌘W, the window closes. No third behaviour was invented for it. With
  * nothing said of the deck the lend is what FR-1 made it, so a page that never
- * speaks (every build before the deck's state slices) changes nothing. */
+ * speaks (every build before the deck's state slices) changes nothing.
+ *
+ * *Note (2026-10-12, N16 (a)):* ⌘W on the deck's LAST pane is the page's to
+ * answer, and it minimizes the terminals (ghosttea keeps the pane and asks its
+ * platform to close the window; the deck hands that to the terminals' owner).
+ * The deck then says away, so the item is History's again: a second ⌘W closes
+ * the window. Nothing here changed for it. */
 function closeWindowItem(state: AppMenuState, actions: AppMenuActions): AppMenuItem {
   // Keyed on GODVIEW being the view, not on "covered": History has no panes to
   // lend ⌘W to, so there it closes the window as it always did — and so does

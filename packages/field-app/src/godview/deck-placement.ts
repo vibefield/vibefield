@@ -22,6 +22,10 @@
 //
 // The cap is this rule's alone (the lead's L4): ⌘D still splits without
 // limit, and past three panes a session with no pane replaces the focused one.
+//
+// One pane is EMPTY (N16 (a), the lead's rule, 2026-10-12): the last pane ⌘W
+// emptied — a fresh, unused shell with the launcher over it. While it is the
+// focused pane, the next session, or a new terminal, takes its place.
 
 /** How many panes a session with no pane is opened beside: with this many
  * showing, the next takes the focused pane's place. */
@@ -39,6 +43,8 @@ export interface DeckShape {
    * one is still a pane: the cap counts the layout, not what a zoom covers. */
   readonly panes: readonly DeckPaneShown[];
   readonly focusedPaneId: string | undefined;
+  /** The pane ⌘W on the last pane emptied (N16 (a)), while it still is. */
+  readonly emptyPaneId?: string | undefined;
 }
 
 export type DeckPlacement =
@@ -69,6 +75,7 @@ export function deckPlacement(shape: DeckShape, sessionId?: string): DeckPlaceme
     if (showing !== undefined) return { kind: "focus", paneId: showing.id };
   }
   if (focused === undefined) return { kind: "none" };
+  if (focused.id === shape.emptyPaneId) return { kind: "replace", paneId: focused.id };
   return shape.panes.length < DECK_PLACEMENT_PANES
     ? { kind: "beside", paneId: focused.id }
     : { kind: "replace", paneId: focused.id };

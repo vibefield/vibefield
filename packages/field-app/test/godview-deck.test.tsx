@@ -23,7 +23,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewDeckFacts } from "../src/development-console";
 import type { FieldHost } from "../src/host";
-import { setHost } from "../src/host";
+import { getHost, setHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
 import { setRendererLogger } from "../src/logging";
 import { bornSummary, routedTicket } from "./routed-terminal-fixture";
@@ -43,6 +43,8 @@ const workspaceMounts: Array<Record<string, unknown>> = [];
  * facts that reached a minted runtime, in order. */
 const providerRuntimes: unknown[] = [];
 const runtimeObjects: unknown[] = [];
+/** Sessions ghosttea says it created (`sessionCreatedHere`). */
+const bornHere = vi.hoisted(() => new Set<string>());
 const geometryCalls: unknown[][] = [];
 /** DS-4e — the options every runtime was minted with: the routed HOST the pool
  * handed ghosttea rides in them, and a row asks it what the runtime would. */
@@ -103,7 +105,8 @@ vi.mock("@vibecook/ghosttea-react", () => ({
         return Promise.resolve({ id: `replica-${deviceId}-${remoteSessionId}`, readWrite: true });
       },
       terminate: () => undefined,
-      sessionCreatedHere: () => false,
+      // ghosttea's receipt for its own births (N16's cases name theirs)
+      sessionCreatedHere: (id: string) => bornHere.has(id),
       // DS-4 — the geometry verbs a surface sends, recorded rather than acted on
       claimResizeControl: (...args: unknown[]) => geometryCalls.push(["claim", ...args]),
       releaseResizeControl: (...args: unknown[]) => geometryCalls.push(["release", ...args]),
@@ -182,7 +185,7 @@ const { GodviewDeck } = await import("../src/godview/GodviewDeck");
 const { GodviewAgentsProvider } = await import("../src/godview/monitor/GodviewAgentsProvider");
 const { paneCwd, readDeviceHost } = await import("../src/godview/deck-restore");
 type RemoteSessionDoor = import("../src/godview/monitor/remote-door").RemoteSessionDoor;
-const { getGodviewLineDoor } = await import("../src/frame/line-door");
+const { getGodviewLineDoor, hearLineSays } = await import("../src/frame/line-door");
 const { answerGodviewDeckUp } = await import("../src/frame/deck-door");
 const { publishDeckWrapperFacts, resetDeckWrapperFactsForTest } = await import(
   "../src/godview/deck-wrapper-witness"
@@ -362,6 +365,7 @@ beforeEach(() => {
   workspaceMounts.length = 0;
   providerRuntimes.length = 0;
   runtimeObjects.length = 0;
+  bornHere.clear();
   geometryCalls.length = 0;
   markers = [];
   resetDeckWrapperFactsForTest();
@@ -1315,6 +1319,18 @@ function workspaceProbe(initial: {
       mountInActive(session);
       return session;
     },
+    /** ghosttea's atomic swap: the expected session's panes show `session` */
+    replaceSession(expectedId: string, session: { id: string }): boolean {
+      if (!panes.some((pane) => pane.session.id === expectedId)) return false;
+      log.push(`replace:${expectedId}→${session.id}`);
+      panes = panes.map((pane) =>
+        pane.session.id === expectedId
+          ? { ...pane, session: { ...pane.session, ...session } }
+          : pane,
+      );
+      changed();
+      return true;
+    },
     activateSession(sessionId: string): void {
       log.push(`activate:${sessionId}`);
       if (initial.activatable === false) return;
@@ -1350,6 +1366,7 @@ function ProbeSidebar({
         addSession: store.addSession,
         splitActive: store.splitActive,
         createSessionInActivePane: store.createSessionInActivePane,
+        replaceSession: store.replaceSession,
       }}
     />
   );
@@ -1359,6 +1376,7 @@ function ProbeSidebar({
  * needs. Returns the door and the teardown for the probe's own root. */
 async function mountDeckWithDoor(
   store: WorkspaceProbe,
+  props: { onLastPaneClose?: () => void } = {},
 ): Promise<{ door: RemoteSessionDoor; dispose: () => Promise<void> }> {
   const captured: { door: RemoteSessionDoor | null } = { door: null };
   container = document.createElement("div");
@@ -1373,6 +1391,7 @@ async function mountDeckWithDoor(
           onRemoteDoor={(next) => {
             captured.door = next;
           }}
+          {...props}
         />
       </GodviewAgentsProvider>,
     );
@@ -1996,6 +2015,216 @@ describe("the monitor alone at launch: the deck waits for its first call (W7 —
     expect(outcome).toMatchObject({ state: "mounted", placement: "beside" });
     expect(store.panes).toHaveLength(2);
     await dispose();
+  });
+});
+
+// N16 (a), James 2026-10-11: ⌘W on the last pane. Ghosttea keeps its last pane
+// and calls the platform's `closeWindow` (Workspace.tsx's `closePane`); the
+// deck hands that to the terminals' owner, which minimizes them and stays in
+// Godview. A deck with no owner (a fixture's, the catalog's) asks for Canvas,
+// as every deck did before N16.
+describe("⌘W on the last pane goes to the terminals' owner (N16 (a))", () => {
+  function closeWindowOf(): () => void {
+    const platform = workspaceMounts[workspaceMounts.length - 1]?.["platform"] as
+      | { closeWindow: () => void }
+      | undefined;
+    if (platform === undefined) throw new Error("no workspace was mounted");
+    return platform.closeWindow;
+  }
+
+  function hearViews(): string[] {
+    const views: string[] = [];
+    setHost({
+      ...getHost(),
+      view: {
+        set: (view: string) => {
+          views.push(view);
+          return Promise.resolve({ view });
+        },
+        onState: () => () => undefined,
+      },
+    } as unknown as FieldHost);
+    return views;
+  }
+
+  it("minimizes through the owner and asks for no view", async () => {
+    const minimized = vi.fn();
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={null}>
+          <GodviewDeck active theme="light" onLastPaneClose={minimized} />
+        </GodviewAgentsProvider>,
+      );
+    });
+    await settle();
+    const views = hearViews();
+    await act(async () => closeWindowOf()());
+    expect(minimized).toHaveBeenCalledTimes(1);
+    expect(views).toEqual([]);
+  });
+
+  it("with no owner, asks for Canvas as before", async () => {
+    await mountDeck();
+    const views = hearViews();
+    await act(async () => closeWindowOf()());
+    expect(views).toEqual(["canvas"]);
+  });
+
+  // The lead's rule (2026-10-12): ⌘W means "close this pane", so the terminals
+  // never come back showing the session ⌘W closed. Ghosttea keeps its last pane
+  // and every pane holds a session, so the pane is EMPTIED the way VibeField
+  // empties one — a fresh, unused shell with the launcher over it, as a cleanly
+  // exited agent's pane returns — and the closed session goes the way ⌘W sends
+  // any pane's: an unused shell released, a running one running on.
+  describe("the last pane is emptied, never re-shown (the lead's rule)", () => {
+    const creates = (): unknown[] =>
+      calls.filter(([method]) => method === "terminal.create").map(([, params]) => params);
+    const terminated = (): string[] =>
+      calls
+        .filter(([method]) => method === "terminal.terminate")
+        .map(([, params]) => (params as { sessionId: string }).sessionId);
+
+    /** One pane, the deck's owner listening for ⌘W on it. */
+    async function lastPane(session: Record<string, unknown>) {
+      const minimized = vi.fn();
+      const store = workspaceProbe({
+        panes: [{ id: "pane-1", session: session as ProbePane["session"] }],
+        activePaneId: "pane-1",
+      });
+      floor = [...floor, { sessionId: session["id"] as string }];
+      const { door, dispose } = await mountDeckWithDoor(store, { onLastPaneClose: minimized });
+      return { minimized, store, door, dispose };
+    }
+
+    /** ⌘W on it, and the emptying's birth landed (or refused). */
+    async function closeLast(store: WorkspaceProbe, closed: string): Promise<void> {
+      await act(async () => closeWindowOf()());
+      await act(async () => {
+        await vi.waitFor(() => {
+          if (
+            store.panes[0]?.session.id === closed &&
+            !said.some((line) => line.startsWith("Terminals minimized"))
+          )
+            throw new Error("the pane is not emptied yet");
+        });
+      });
+      await settle();
+    }
+
+    let said: string[] = [];
+    let stopHearing = (): void => undefined;
+    beforeEach(() => {
+      said = [];
+      stopHearing = hearLineSays((line) => said.push(line));
+    });
+    afterEach(() => stopHearing());
+
+    it("minimizes at once, and a fresh shell in the closed session's folder takes the pane", async () => {
+      const { minimized, store, dispose } = await lastPane(
+        bornSummary("user-pty", { cwd: "/repo/api" }),
+      );
+      const before = creates().length;
+      await closeLast(store, "user-pty");
+      expect(minimized).toHaveBeenCalledTimes(1);
+      // one birth, in the closed pane's folder, as a cleanly exited agent's pane gets
+      expect(creates().slice(before)).toEqual([
+        expect.objectContaining({ cwd: "/repo/api", workloadClass: "interactive" }),
+      ]);
+      const fresh = store.panes[0]?.session.id as string;
+      expect(store.panes.map((pane) => pane.id)).toEqual(["pane-1"]);
+      expect(fresh).not.toBe("user-pty");
+      expect(store.log).toEqual([`replace:user-pty→${fresh}`]);
+      await dispose();
+    });
+
+    it("an unused shell it closed is released, as ⌘W releases one", async () => {
+      bornHere.add("unused-pty");
+      const { store, dispose } = await lastPane(bornSummary("unused-pty"));
+      await closeLast(store, "unused-pty");
+      expect(terminated()).toContain("unused-pty");
+      await dispose();
+    });
+
+    it("a session that ran there runs on: one this view did not birth is never released", async () => {
+      const { store, dispose } = await lastPane(bornSummary("agent-pty"));
+      await closeLast(store, "agent-pty");
+      expect(terminated()).not.toContain("agent-pty");
+      await dispose();
+    });
+
+    it("the next call takes the empty pane's place, and the fresh shell is released", async () => {
+      const { store, door, dispose } = await lastPane(bornSummary("user-pty"));
+      await closeLast(store, "user-pty");
+      const fresh = store.panes[0]?.session.id as string;
+      floor = [...floor, { sessionId: "listed-pty" }];
+      expect(await act(async () => door.mountLocal("listed-pty"))).toEqual({
+        state: "mounted",
+        sessionId: "listed-pty",
+        placement: "replace",
+      });
+      await settle();
+      // one pane, the called session in it — never the closed one beside it
+      expect(store.panes.map((pane) => pane.session.id)).toEqual(["listed-pty"]);
+      expect(terminated()).toContain(fresh);
+      await dispose();
+    });
+
+    it("nothing re-shows the closed session unless it is the one called — then it takes the empty pane", async () => {
+      const { store, door, dispose } = await lastPane(bornSummary("agent-pty"));
+      await closeLast(store, "agent-pty");
+      expect(store.panes.map((pane) => pane.session.id)).not.toContain("agent-pty");
+      expect(await act(async () => door.mountLocal("agent-pty"))).toEqual({
+        state: "mounted",
+        sessionId: "agent-pty",
+        placement: "replace",
+      });
+      expect(store.panes.map((pane) => pane.session.id)).toEqual(["agent-pty"]);
+      await dispose();
+    });
+
+    it("⌘T after it opens its terminal in the empty pane: that fresh shell, and no second birth", async () => {
+      const { store, door, dispose } = await lastPane(bornSummary("user-pty"));
+      await closeLast(store, "user-pty");
+      const fresh = store.panes[0]?.session.id as string;
+      const before = creates().length;
+      expect(await act(async () => door.createTerminal())).toEqual({
+        state: "mounted",
+        sessionId: fresh,
+        placement: "replace",
+      });
+      expect(creates()).toHaveLength(before);
+      expect(store.panes.map((pane) => pane.session.id)).toEqual([fresh]);
+      await dispose();
+    });
+
+    it("a refused shell: the terminals still go away, the pane keeps its session, and the line says so in fieldd's words", async () => {
+      const answer = fieldd.request;
+      vi.spyOn(fieldd, "request").mockImplementation(
+        (method: string, params?: unknown): Promise<unknown> =>
+          method === "terminal.create"
+            ? Promise.reject(
+                new FielddRpcError(
+                  "UNAVAILABLE",
+                  "the floor holds as many terminals as it may",
+                  false,
+                  {},
+                  -32004,
+                ),
+              )
+            : answer(method, params),
+      );
+      const { minimized, store, dispose } = await lastPane(bornSummary("user-pty"));
+      await closeLast(store, "user-pty");
+      expect(minimized).toHaveBeenCalledTimes(1);
+      expect(store.panes.map((pane) => pane.session.id)).toEqual(["user-pty"]);
+      expect(said).toHaveLength(1);
+      expect(said[0]).toContain("the floor holds as many terminals as it may");
+      expect(said[0]).toMatch(/^Terminals minimized — /);
+      await dispose();
+    });
   });
 });
 
