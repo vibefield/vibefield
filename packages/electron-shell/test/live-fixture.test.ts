@@ -28,6 +28,7 @@ import {
   fixtureIcon,
   type LiveFixture,
   startLiveFixture,
+  ZOOM_SCALE,
 } from "../src/testing/live-fixture";
 
 let fixture: LiveFixture | undefined;
@@ -545,6 +546,77 @@ describe("the live pane's fixture page", () => {
     // every page says its touches' times and its hold with its report
     expect(fixtureHtml("/page")).toContain("touchAt: window.__touchAt || []");
     expect(fixtureHtml("/page")).toContain("held: window.__held || null");
+  });
+
+  it("PT-5c: `/pending?p=<name>` is the page whose LINK goes to the gate (`/gate?p=pending-<name>`), its field beside it its own; and the touch log hears a finger's MOVE and its CANCEL too", async () => {
+    fixture = await startLiveFixture();
+    const pending = await (await fetch(`${fixture.origin}/pending?p=phone`)).text();
+    expect(pending).toContain('<a id="next" href="/gate?p=pending-phone">');
+    expect(pending).not.toContain('href="/next"');
+    expect(pending).toContain('<input id="field"');
+    expect(fixture.asked("/pending")).toBe(1);
+    // its name is the fixture's to keep: nothing but letters, digits and dashes reaches the page
+    const named = await (
+      await fetch(`${fixture.origin}/pending?p=${encodeURIComponent('x"><b>')}`)
+    ).text();
+    expect(named).toContain('<a id="next" href="/gate?p=pending-xb">');
+    // the touch log, run: a move and a cancel heard among the rest
+    const cold = await (await fetch(`${fixture.origin}/cold?p=c`)).text();
+    const script = /<script>\s*(window\.__touchLog = \[\];[\s\S]*?)<\/script>/.exec(cold)?.[1];
+    if (script === undefined) throw new Error("the cold page carries no touch script");
+    const heard = new Map<string, () => void>();
+    const page = { __touchLog: [] as string[], __touchAt: [] as number[] };
+    let clock = 1_000;
+    new Function("window", "addEventListener", "performance", script)(
+      page,
+      (type: string, listener: () => void) => heard.set(type, listener),
+      {
+        now: () => {
+          clock += 10;
+          return clock;
+        },
+      },
+    );
+    for (const type of ["touchstart", "touchmove", "touchcancel", "touchstart", "touchend"])
+      heard.get(type)?.();
+    expect(page.__touchLog).toEqual(["start", "move", "cancel", "start", "end"]);
+  });
+
+  it("PT-5c: `/zoom` is a phone's page that ZOOMS ITSELF at a double tap (its viewport's minimum scale set to 2), its field near its top-left; and every page says its visual viewport (scale, offset) with its report", async () => {
+    fixture = await startLiveFixture();
+    const zoom = await (await fetch(`${fixture.origin}/zoom?p=z`)).text();
+    expect(zoom).toContain('<meta name="viewport" content="width=device-width, initial-scale=1">');
+    expect(zoom).toContain("#field { left: 5% !important; top: 4vh !important; }");
+    expect(fixture.asked("/zoom")).toBe(1);
+    // its script, run: one touch's end is no double tap; a second within 400 ms zooms it; one long after the first does not
+    const script = /<script>\s*(let lastEnd = -1000;[\s\S]*?)<\/script>/.exec(zoom)?.[1];
+    if (script === undefined) throw new Error("the zoom page carries no double tap");
+    const heard = new Map<string, () => void>();
+    const meta = { content: "width=device-width, initial-scale=1" };
+    let clock = 1_000;
+    const run = new Function("addEventListener", "performance", "document", script);
+    run(
+      (type: string, listener: () => void) => heard.set(type, listener),
+      { now: () => clock },
+      {
+        querySelector: () => ({
+          setAttribute: (_name: string, value: string) => {
+            meta.content = value;
+          },
+        }),
+      },
+    );
+    heard.get("touchend")?.();
+    expect(meta.content).toBe("width=device-width, initial-scale=1");
+    clock += 900;
+    heard.get("touchend")?.();
+    expect(meta.content).toBe("width=device-width, initial-scale=1");
+    clock += 120;
+    heard.get("touchend")?.();
+    expect(meta.content).toBe(
+      `width=device-width, initial-scale=${ZOOM_SCALE}, minimum-scale=${ZOOM_SCALE}`,
+    );
+    expect(fixtureHtml("/page")).toContain("vv: window.visualViewport");
   });
 
   it("PT-5b3: `?tidy=1` — on the smoke's word (`tidy(path)`, told with the next ask of a page at that path, once) the page takes `tidy` out of its own address with `history.replaceState` (a move WITHIN the document), keeping the rest of its query; untold, or not asked to tidy, it leaves its address alone", async () => {

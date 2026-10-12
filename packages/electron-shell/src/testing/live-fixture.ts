@@ -250,6 +250,8 @@ export interface FixtureReport {
   /** PT-5b3 — when each of those was heard, and when the page's hold began and ended (its own clock, ms; null: never held). */
   readonly touchAt?: readonly number[];
   readonly held?: readonly [number, number] | null;
+  /** PT-5c — its visual viewport: the scale it is drawn at, and its offset in its layout (CSS px) */
+  readonly vv?: readonly [number, number, number];
 }
 
 /** A part's box in the page's view, CSS px. */
@@ -365,6 +367,9 @@ export function fixtureHtml(path: "/page" | "/next" | "/legacy" = "/page"): stri
     touchLog: window.__touchLog || [],
     touchAt: window.__touchAt || [],
     held: window.__held || null,
+    vv: window.visualViewport
+      ? [visualViewport.scale, Math.round(visualViewport.offsetLeft), Math.round(visualViewport.offsetTop)]
+      : [1, 0, 0],
   }));
   // PT-5b3 — HELD on the server's word: the page says it began (a beacon: it leaves though the thread is kept), keeps its
   // thread for as long as it was told, and says when the hold began and ended
@@ -430,6 +435,15 @@ const touchLogScript = (busyMs: number): string => `<script>
     window.__touchLog.push("end");
     window.__touchAt.push(Math.round(performance.now()));
   }, { capture: true, passive: true });
+  // PT-5c: a finger's move ("move") and a gesture ended for it ("cancel") are heard too
+  addEventListener("touchmove", () => {
+    window.__touchLog.push("move");
+    window.__touchAt.push(Math.round(performance.now()));
+  }, { capture: true, passive: true });
+  addEventListener("touchcancel", () => {
+    window.__touchLog.push("cancel");
+    window.__touchAt.push(Math.round(performance.now()));
+  }, { capture: true, passive: true });
 </script>
 </body></html>`;
 
@@ -440,6 +454,42 @@ export const busyHtml = (): string =>
 /** PT-5b3 — `/cold`: the page, logging every touch it hears and when — its thread kept only on the smoke's word (`hold`). */
 export const coldHtml = (): string =>
   fixtureHtml("/page").replace("</body></html>", touchLogScript(0));
+
+/**
+ * PT-5c (ruling 1) — `/pending?p=<name>`: the page whose LINK goes to the fixture's gate (`/gate?p=pending-<name>`), its
+ * field beside it the page's own — a tap or a click on the link while the gate is shut leaves a navigation PENDING, the
+ * page standing; what reaches the field then (its focus, its words, its touches) the page says with its report, and the
+ * page the gate lets through says its own. `name`: letters, digits and dashes only.
+ */
+export const ZOOM_SCALE = 2;
+
+/**
+ * PT-5c (ruling 1) — `/zoom`: a phone's page that ZOOMS ITSELF at a double tap (two touches ended within 400 ms): it
+ * rewrites its viewport (a minimum scale of 2 — the engine draws it at 2, its visual viewport says so with a `resize`:
+ * PT-5c's probe `zoom.cjs`); its field stands near its top-left, where the zoomed page still shows it.
+ */
+export const zoomHtml = (): string =>
+  fixtureHtml("/page")
+    .replace("</style>", "  #field { left: 5% !important; top: 4vh !important; }\n</style>")
+    .replace(
+      "</body></html>",
+      `<script>
+  let lastEnd = -1000;
+  addEventListener("touchend", () => {
+    const now = performance.now();
+    if (now - lastEnd < 400)
+      document.querySelector('meta[name="viewport"]').setAttribute("content", "width=device-width, initial-scale=${ZOOM_SCALE}, minimum-scale=${ZOOM_SCALE}");
+    lastEnd = now;
+  }, { capture: true, passive: true });
+</script>
+</body></html>`,
+    );
+
+export const pendingHtml = (name: string): string =>
+  fixtureHtml("/page").replace(
+    '<a id="next" href="/next">',
+    `<a id="next" href="/gate?p=pending-${name.replace(/[^a-z0-9-]/giu, "")}">`,
+  );
 
 /**
  * PT-5a — `/acts`: what a page may ask for, each a control at a known place (a row of boxes on the fixture's ground, the
@@ -596,6 +646,16 @@ export async function startLiveFixture(): Promise<LiveFixture> {
       // never answered: whoever waits on it never finishes loading (closed with the fixture)
       hung.add(res);
       res.on("close", () => hung.delete(res));
+      return;
+    }
+    if (url.pathname === "/zoom") {
+      cookies.set(url.pathname + url.search, req.headers.cookie ?? "");
+      html(res, zoomHtml());
+      return;
+    }
+    if (url.pathname === "/pending") {
+      cookies.set(url.pathname + url.search, req.headers.cookie ?? "");
+      html(res, pendingHtml(url.searchParams.get("p") ?? ""));
       return;
     }
     if (

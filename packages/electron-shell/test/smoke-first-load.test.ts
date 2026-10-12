@@ -11,13 +11,17 @@ import {
   type FirstFace,
   type FirstLoadSeen,
   judgeClick,
+  judgeDownGone,
   judgeNoDocument,
+  judgePending,
   judgeRedirect,
   judgeStarting,
   judgeSwitch,
   judgeTaps,
   judgeTapsCold,
   judgeTidy,
+  judgeZoomed,
+  type PendingSeen,
   runOf,
 } from "../src/testing/smoke-first-load";
 import type { PageSeen } from "../src/testing/smoke-last-still";
@@ -452,5 +456,98 @@ describe("a page's first load, in the product — what the rows read by", () => 
     expect(held + between).toBeLessThan(FIXTURE_BUSY_MS);
     // TAPS-COLD: press, release, press, release — sent inside the hold with half of it to spare
     expect(held + between + held).toBeLessThan(FIXTURE_HOLD_MS / 2);
+  });
+
+  it("TAPS-PENDING (PT-5c, ruling 1): a link to the shut gate pressed, then at once the page's own field — the page that STOOD hears the tap (its focus on its field), the page the gate lets through hears nothing of it; and its desktop twin: a click and a key behind the pane's scheme, told meanwhile", () => {
+    const seen: PendingSeen = {
+      asked: 1,
+      told: false,
+      standing: { touches: 2, focused: "field", field: "" },
+      next: { touches: 0, focused: "", field: "", path: "/gate?p=pending-phone" },
+      face: face({ address: `${O}/gate?p=pending-phone` }),
+    };
+    expect(judgePending(seen, false)).toEqual([]);
+    // the lane before PT-5c: the tap waited on a read the engine does not answer while a navigation pends — and landed on
+    // the next page
+    expect(
+      judgePending(
+        {
+          ...seen,
+          standing: { touches: 1, focused: "", field: "" },
+          next: { touches: 1, focused: "field", field: "", path: "/gate?p=pending-phone" },
+        },
+        false,
+      ),
+    ).toEqual([
+      "TAPS-PENDING: the page that stood heard 1 touches, its focus on nothing — the tap on its own field did not reach it while the link's navigation pended",
+      "TAPS-PENDING: the next page heard 1 touches, its focus on field — a tap aimed at the page that stood was delivered to the one that replaced it",
+    ]);
+    // rows that proved nothing: the link never waited at the gate; the next page never stood
+    expect(judgePending({ ...seen, asked: 0, face: face({ state: "starting" }) }, false)).toEqual([
+      "TAPS-PENDING: the link's navigation never waited at the gate — the row proved nothing",
+      "TAPS-PENDING: the page the gate let through never stood (starting) — the row proved nothing",
+    ]);
+    const desk: PendingSeen = {
+      ...seen,
+      told: true,
+      standing: { touches: 0, focused: "field", field: "q" },
+      next: { touches: 0, focused: "", field: "", path: "/gate?p=pending-laptop" },
+    };
+    expect(judgePending(desk, true)).toEqual([]);
+    expect(
+      judgePending(
+        {
+          ...desk,
+          told: false,
+          standing: { touches: 0, focused: "", field: "" },
+          next: { touches: 0, focused: "field", field: "q", path: "/gate?p=pending-laptop" },
+        },
+        true,
+      ),
+    ).toEqual([
+      "TAPS-PENDING (desktop): the pane's scheme was not told — no device command pended: the row proved nothing",
+      "TAPS-PENDING (desktop): the page that stood has \"\" in its field, its focus on nothing — the click and the key sent behind the scheme's command did not reach it while the link's navigation pended",
+      'TAPS-PENDING (desktop): the next page has "q" in its field, its focus on field — the click and the key were delivered to the page that replaced the one they were aimed at',
+    ]);
+  });
+
+  it("DOWN-GONE (PT-5c, ruling 2): a finger down when the app's window reloads is ENDED for it (a cancel), and the pane back hovers — the page hears no move", () => {
+    const seen: FirstLoadSeen["downGone"] = {
+      before: ["start"],
+      after: ["start", "cancel"],
+      reloaded: true,
+      kept: true,
+    };
+    expect(judgeDownGone(seen)).toEqual([]);
+    // the lane before PT-5c: nothing ended the finger; the attachment back dragged the page with its first hover
+    expect(judgeDownGone({ ...seen, after: ["start", "move", "move"] })).toEqual([
+      "DOWN-GONE: after the window came back the page heard start, move, move — its finger was left down, and the first hover dragged the page",
+    ]);
+    expect(judgeDownGone({ ...seen, after: ["start"] })).toEqual([
+      "DOWN-GONE: the page heard start — its finger was never ended when the attachment that pressed it went",
+    ]);
+    // rows that proved nothing
+    expect(judgeDownGone({ before: [], after: [], reloaded: false, kept: false })).toEqual([
+      "DOWN-GONE: the page never heard its finger down — the row proved nothing",
+      "DOWN-GONE: the app's window did not come back — the row proved nothing",
+    ]);
+    expect(judgeDownGone({ ...seen, kept: false })).toEqual([
+      "DOWN-GONE: the pane's page was not kept through the window's reload (another document) — the row proved nothing",
+    ]);
+  });
+
+  it("ZOOMED (PT-5c, ruling 1): a phone's page that zooms itself at a double tap SAYS so, and a tap where its field is drawn puts the focus on the field — the press went at the scale the page said", () => {
+    expect(judgeZoomed({ scale: 2, focused: "field" })).toEqual([]);
+    // the scale never followed (no word after the zoom): the press went at 1 — twice as far — and missed the field
+    expect(judgeZoomed({ scale: 2, focused: "" })).toEqual([
+      "ZOOMED: a tap where its field is drawn put its focus on nothing — the press did not go at the scale the page said after it zoomed",
+    ]);
+    // the page that did not zoom proves nothing
+    expect(judgeZoomed({ scale: 1, focused: "field" })).toEqual([
+      "ZOOMED: the page says it is drawn at 1, not 2 — it did not zoom at the double tap: the row proved nothing",
+    ]);
+    expect(judgeZoomed({ scale: null, focused: "" })).toEqual([
+      "ZOOMED: the page says it is drawn at no scale, not 2 — it did not zoom at the double tap: the row proved nothing",
+    ]);
   });
 });

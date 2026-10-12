@@ -33,7 +33,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { FIXTURE_HOLD_MS, type FixtureReport } from "./live-fixture";
+import { FIXTURE_HOLD_MS, type FixtureReport, ZOOM_SCALE } from "./live-fixture";
 import { PANE, type PaneHands, paneHands } from "./smoke-browser-pane";
 import {
   type MainPage,
@@ -189,6 +189,44 @@ export interface FirstLoadSeen {
     readonly log: readonly string[];
     readonly at: readonly number[];
   };
+  /** PT-5c (ruling 1) — TAPS-PENDING, on a phone (`pending`) and its desktop twin (`pendingDesk`). */
+  readonly pending: PendingSeen;
+  readonly pendingDesk: PendingSeen;
+  /** PT-5c (ruling 1) — ZOOMED: the scale the page says it is drawn at after its double tap; where a tap at its drawn field
+   * put its focus. */
+  readonly zoomed: { readonly scale: number | null; readonly focused: string };
+  /** PT-5c (ruling 2) — DOWN-GONE. */
+  readonly downGone: {
+    /** the page's touch log with the finger down, before the window reloaded; after the pane was back and hovered */
+    readonly before: readonly string[];
+    readonly after: readonly string[];
+    readonly reloaded: boolean;
+    /** the same document before and after (its token): the page was kept through the reload's grace */
+    readonly kept: boolean;
+  };
+}
+
+/** PT-5c (ruling 1) — a link to the fixture's shut gate pressed, then at once the page's own field. */
+export interface PendingSeen {
+  /** how many times the gate was asked since the link's press: the navigation PENDED there */
+  readonly asked: number;
+  /** the desktop twin: a device command told meanwhile (the pane's own scheme — the engine answers none while the navigation
+   * pends) */
+  readonly told: boolean;
+  /** the page that stood, after the press on its field: its touchstarts, what has its focus, its field's words */
+  readonly standing: {
+    readonly touches: number;
+    readonly focused: string;
+    readonly field: string;
+  } | null;
+  /** the page the gate let through, once it stood: the same */
+  readonly next: {
+    readonly touches: number;
+    readonly focused: string;
+    readonly field: string;
+    readonly path: string;
+  } | null;
+  readonly face: FirstFace | null;
 }
 
 const word = (reason: string | null): string => (reason ?? "").split(": ")[0] ?? "";
@@ -522,6 +560,78 @@ export function judgeTapsCold(seen: FirstLoadSeen["tapsCold"]): string[] {
   else if (seen.hold !== null && (seen.at[0] ?? Number.NEGATIVE_INFINITY) < seen.hold[1])
     out.push(
       `TAPS-COLD: the page heard its first touch at ${seen.at[0]} ms, before its hold ended (${seen.hold[1]}) — the taps did not arrive while it was held: the row proved nothing`,
+    );
+  return out;
+}
+
+/** PT-5c (ruling 1) — TAPS-PENDING: the page that STOOD hears what was aimed at it while its link's navigation pended; the
+ * page that replaced it hears nothing of it. `desk`: the desktop twin (a click and a key, behind a device command). */
+export function judgePending(seen: PendingSeen, desk: boolean): string[] {
+  const row = desk ? "TAPS-PENDING (desktop)" : "TAPS-PENDING";
+  const out: string[] = [];
+  if (seen.asked < 1)
+    out.push(`${row}: the link's navigation never waited at the gate — the row proved nothing`);
+  if (desk && !seen.told)
+    out.push(
+      `${row}: the pane's scheme was not told — no device command pended: the row proved nothing`,
+    );
+  const s = seen.standing;
+  if (s === null) out.push(`${row}: the page that stood said nothing`);
+  else if (!desk && (s.touches < 2 || s.focused !== "field"))
+    out.push(
+      `${row}: the page that stood heard ${s.touches} touches, its focus on ${s.focused === "" ? "nothing" : s.focused} — the tap on its own field did not reach it while the link's navigation pended`,
+    );
+  else if (desk && (s.field !== "q" || s.focused !== "field"))
+    out.push(
+      `${row}: the page that stood has "${s.field}" in its field, its focus on ${s.focused === "" ? "nothing" : s.focused} — the click and the key sent behind the scheme's command did not reach it while the link's navigation pended`,
+    );
+  const n = seen.next;
+  if (n === null || seen.face?.state !== "live")
+    out.push(
+      `${row}: the page the gate let through never stood (${seen.face?.state ?? "no face"}) — the row proved nothing`,
+    );
+  else if (!desk && (n.touches > 0 || n.focused === "field"))
+    out.push(
+      `${row}: the next page heard ${n.touches} touches, its focus on ${n.focused === "" ? "nothing" : n.focused} — a tap aimed at the page that stood was delivered to the one that replaced it`,
+    );
+  else if (desk && (n.field !== "" || n.focused === "field"))
+    out.push(
+      `${row}: the next page has "${n.field}" in its field, its focus on ${n.focused === "" ? "nothing" : n.focused} — the click and the key were delivered to the page that replaced the one they were aimed at`,
+    );
+  return out;
+}
+
+/** PT-5c (ruling 1) — ZOOMED: a page that zooms itself says so, and the hand's next tap goes at the scale it said. */
+export function judgeZoomed(seen: FirstLoadSeen["zoomed"]): string[] {
+  if (seen.scale === null || seen.scale < ZOOM_SCALE - 0.01)
+    return [
+      `ZOOMED: the page says it is drawn at ${seen.scale ?? "no scale"}, not ${ZOOM_SCALE} — it did not zoom at the double tap: the row proved nothing`,
+    ];
+  if (seen.focused !== "field")
+    return [
+      `ZOOMED: a tap where its field is drawn put its focus on ${seen.focused === "" ? "nothing" : seen.focused} — the press did not go at the scale the page said after it zoomed`,
+    ];
+  return [];
+}
+
+/** PT-5c (ruling 2) — DOWN-GONE: a finger down when its attachment went is ended for it; the attachment back hovers. */
+export function judgeDownGone(seen: FirstLoadSeen["downGone"]): string[] {
+  const out: string[] = [];
+  if (!seen.before.includes("start"))
+    out.push("DOWN-GONE: the page never heard its finger down — the row proved nothing");
+  if (!seen.reloaded)
+    out.push("DOWN-GONE: the app's window did not come back — the row proved nothing");
+  else if (!seen.kept)
+    out.push(
+      "DOWN-GONE: the pane's page was not kept through the window's reload (another document) — the row proved nothing",
+    );
+  if (seen.after.includes("move"))
+    out.push(
+      `DOWN-GONE: after the window came back the page heard ${seen.after.join(", ")} — its finger was left down, and the first hover dragged the page`,
+    );
+  else if (seen.before.includes("start") && !seen.after.includes("cancel"))
+    out.push(
+      `DOWN-GONE: the page heard ${seen.after.join(", ")} — its finger was never ended when the attachment that pressed it went`,
     );
   return out;
 }
@@ -1272,6 +1382,272 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
     };
     said.tidy = tidy;
     problems.push(...judgeTidy(tidy));
+
+    // ── TAPS-PENDING (PT-5c, ruling 1): a link to the shut gate pressed, then at once the page's own field ────────────
+    const pendingRow = async (
+      name: "phone" | "laptop",
+      over: { w?: number; h?: number; props?: Record<string, string> },
+      at3: { x: number; y: number },
+    ): Promise<PendingSeen> => {
+      d.fixture.gate(false);
+      const pane = await lay(`/pending?p=${name}`, at3.x, at3.y, over);
+      await frame([pane]);
+      await waitFor(
+        `the ${name}'s pending page live`,
+        FIRST_ROWS.withinMs,
+        () => face(pane),
+        (f) => f !== null && f.state === "live" && f.presented >= 1,
+      );
+      const word0 = await waitFor(
+        `the ${name}'s pending page's word`,
+        FIRST_ROWS.withinMs,
+        () => at(pane),
+        (r) => r !== null,
+      );
+      await pickUp(pane);
+      const held = await heldFrame();
+      const asked0 = d.fixture.gated().asked;
+      let told = false;
+      if (held !== null && word0 !== null) {
+        const off = await h.deskAt();
+        const onWindow = (r: { x: number; y: number; w: number; h: number }) => {
+          const q = pageOnWindow(held, word0.view, off, r.x + r.w / 2, r.y + r.h / 2);
+          return { x: Math.round(q.x), y: Math.round(q.y) };
+        };
+        await h.press(onWindow(word0.parts.link));
+        await waitFor(
+          "the link's navigation waiting at the gate",
+          10_000,
+          () => d.fixture.gated().asked - asked0,
+          (n) => n >= 1,
+        );
+        if (name === "laptop") {
+          // a device command the engine leaves unanswered while the navigation pends: the pane's own scheme
+          const e = await entityOf(pane);
+          told = await js<boolean>(`globalThis.__vfDesk.writeProps(${e}, { scheme: "dark" })`);
+          await sleep(500);
+        }
+        await h.press(onWindow(word0.parts.field));
+        if (name === "laptop") {
+          await sleep(150);
+          win.webContents.sendInputEvent({ type: "keyDown", keyCode: "q" });
+          win.webContents.sendInputEvent({ type: "char", keyCode: "q" });
+          win.webContents.sendInputEvent({ type: "keyUp", keyCode: "q" });
+        }
+        // the page that stands says what reached it (every quarter second): waited for, then a little longer
+        await waitFor(
+          `the ${name}'s standing page's word of its field`,
+          4_000,
+          () => at(pane),
+          (r) =>
+            r !== null &&
+            r.focused === "field" &&
+            (name === "phone" ? r.touches >= 2 : r.field === "q"),
+        );
+        await sleep(800);
+      }
+      const standing = at(pane);
+      d.fixture.gate(true);
+      const nextPath = `/gate?p=pending-${name}`;
+      const opened = await waitFor(
+        `the ${name}'s next page live`,
+        FIRST_ROWS.withinMs,
+        () => face(pane),
+        (f) => f !== null && f.state === "live" && f.address?.endsWith(nextPath) === true,
+      );
+      await waitFor(
+        `the ${name}'s next page's word`,
+        FIRST_ROWS.withinMs,
+        () => d.fixture.reportAt(nextPath),
+        (r) => r !== null,
+      );
+      // a press delivered late lands a moment after the page stands: waited for
+      await sleep(1_500);
+      const next = d.fixture.reportAt(nextPath);
+      await shoot(`pt-5c-pending-${name}.png`);
+      await done();
+      return {
+        asked: d.fixture.gated().asked - asked0,
+        told,
+        standing:
+          standing === null
+            ? null
+            : { touches: standing.touches, focused: standing.focused, field: standing.field },
+        next:
+          next === null
+            ? null
+            : { touches: next.touches, focused: next.focused, field: next.field, path: next.path },
+        face: opened,
+      };
+    };
+    const pending = await pendingRow(
+      "phone",
+      { w: PANE.phoneCut.w, h: PANE.phoneCut.h, props: { device: "phone" } },
+      { x: x0 + 3 * step, y: y2 },
+    );
+    said.pending = pending;
+    problems.push(...judgePending(pending, false));
+    const pendingDesk = await pendingRow("laptop", {}, { x: x0 + 3 * step, y: y0 });
+    said.pendingDesk = pendingDesk;
+    problems.push(...judgePending(pendingDesk, true));
+
+    // ── ZOOMED (PT-5c, ruling 1): a phone's page that zooms itself at a double tap — a tap after it lands where it is drawn
+    const zoomPane = await lay("/zoom?p=z", x0 + 4 * step, y0, {
+      w: PANE.phoneCut.w,
+      h: PANE.phoneCut.h,
+      props: { device: "phone" },
+    });
+    await frame([zoomPane]);
+    await waitFor(
+      "the zooming page live",
+      FIRST_ROWS.withinMs,
+      () => face(zoomPane),
+      (f) => f !== null && f.state === "live" && f.presented >= 1,
+    );
+    const zoomWord = await waitFor(
+      "the zooming page's word",
+      FIRST_ROWS.withinMs,
+      () => at(zoomPane),
+      (r) => r !== null,
+    );
+    await pickUp(zoomPane);
+    const zoomFrame = await heldFrame();
+    if (zoomFrame !== null && zoomWord !== null) {
+      const view = zoomWord.view;
+      const off = await h.deskAt();
+      const onWindow = (x: number, y: number) => {
+        const q = pageOnWindow(zoomFrame, view, off, x, y);
+        return { x: Math.round(q.x), y: Math.round(q.y) };
+      };
+      // a double tap on its ground: the page zooms itself
+      const ground = onWindow(view[0] * 0.7, view[1] * 0.6);
+      h.move(ground.x, ground.y);
+      await sleep(120);
+      for (let tap = 0; tap < 2; tap += 1) {
+        win.webContents.sendInputEvent({
+          type: "mouseDown",
+          ...ground,
+          button: "left",
+          clickCount: 1,
+        });
+        await sleep(FIRST_ROWS.tap.held);
+        win.webContents.sendInputEvent({
+          type: "mouseUp",
+          ...ground,
+          button: "left",
+          clickCount: 1,
+        });
+        if (tap === 0) await sleep(FIRST_ROWS.tap.between);
+      }
+      const zoomedWord = await waitFor(
+        "the page zoomed",
+        5_000,
+        () => at(zoomPane),
+        (r) => (r?.vv?.[0] ?? 1) >= ZOOM_SCALE - 0.01,
+      );
+      await sleep(500);
+      const vv = zoomedWord?.vv;
+      const field = zoomedWord?.parts.field;
+      if (vv !== undefined && field !== undefined) {
+        // where the field is DRAWN now: its point in the page's layout, less the visual viewport's offset, at its scale
+        await h.press(
+          onWindow(
+            (field.x + field.w / 2 - vv[1]) * vv[0],
+            (field.y + field.h / 2 - vv[2]) * vv[0],
+          ),
+        );
+        await waitFor(
+          "the zoomed page's focus",
+          3_000,
+          () => at(zoomPane),
+          (r) => r?.focused === "field",
+        );
+        await sleep(400);
+      }
+    }
+    const zoomSaid = at(zoomPane);
+    const zoomed: FirstLoadSeen["zoomed"] = {
+      scale: zoomSaid?.vv?.[0] ?? null,
+      focused: zoomSaid?.focused ?? "",
+    };
+    said.zoomed = zoomed;
+    problems.push(...judgeZoomed(zoomed));
+    await shoot("pt-5c-zoomed.png");
+    await done();
+
+    // ── DOWN-GONE (PT-5c, ruling 2): a finger down on a phone pane, the app's window reloaded, the pane back ────────────
+    const downPane = await lay("/cold?p=down", x0 + 4 * step, y2, {
+      w: PANE.phoneCut.w,
+      h: PANE.phoneCut.h,
+      props: { device: "phone" },
+    });
+    await frame([downPane]);
+    await waitFor(
+      "the down page live",
+      FIRST_ROWS.withinMs,
+      () => face(downPane),
+      (f) => f !== null && f.state === "live" && f.presented >= 1,
+    );
+    const downWord = await waitFor(
+      "the down page's word",
+      FIRST_ROWS.withinMs,
+      () => at(downPane),
+      (r) => r !== null,
+    );
+    await pickUp(downPane);
+    const downFrame = await heldFrame();
+    let downBefore: readonly string[] = [];
+    let downReloaded = false;
+    const downToken = downWord?.token ?? null;
+    if (downFrame !== null && downWord !== null) {
+      const view = downWord.view;
+      const q = pageOnWindow(downFrame, view, await h.deskAt(), view[0] * 0.85, view[1] * 0.3);
+      const point = { x: Math.round(q.x), y: Math.round(q.y) };
+      h.move(point.x, point.y);
+      await sleep(200);
+      // a finger down — and never lifted: the app's window reloads under it
+      win.webContents.sendInputEvent({
+        type: "mouseDown",
+        ...point,
+        button: "left",
+        clickCount: 1,
+      });
+      downBefore = await waitFor(
+        "the finger down in the page",
+        5_000,
+        () => at(downPane)?.touchLog ?? [],
+        (log) => log.includes("start"),
+      );
+      downReloaded = await d.reload();
+      h = paneHands(d);
+      // the pane back: the same page (kept through the grace), picked up again, a hover over it
+      await frame([downPane]);
+      await waitFor(
+        "the down page live again",
+        FIRST_ROWS.withinMs,
+        () => face(downPane),
+        (f) => f !== null && f.state === "live",
+      );
+      await pickUp(downPane);
+      const again = await heldFrame();
+      if (again !== null) {
+        const r = pageOnWindow(again, view, await h.deskAt(), view[0] * 0.5, view[1] * 0.5);
+        h.move(Math.round(r.x), Math.round(r.y));
+        await sleep(120);
+        h.move(Math.round(r.x) + 24, Math.round(r.y) + 24);
+      }
+      await sleep(1_500);
+      await done();
+    }
+    const downSaid = at(downPane);
+    const downGone: FirstLoadSeen["downGone"] = {
+      before: downBefore,
+      after: downSaid?.touchLog ?? [],
+      reloaded: downReloaded,
+      kept: downToken !== null && downSaid?.token === downToken,
+    };
+    said.downGone = downGone;
+    problems.push(...judgeDownGone(downGone));
   } catch (error) {
     // a step that cannot go on ends the rows — never what the rows before it found (they are said with it)
     problems.push(`PT-5b2 FIRST: ${error instanceof Error ? error.message : String(error)}`);
