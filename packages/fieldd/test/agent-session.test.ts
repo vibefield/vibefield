@@ -267,11 +267,16 @@ function withoutExtensionReads(provider: AgentProvider): AgentProvider {
  * `fail` makes the read fail the way a signed-out agent's does; `reads`
  * counts the reads (a launch at a model discovers again; one without does
  * not); `options` is what each launch was handed to start at — puppeteer's
- * translation of the selection, the adapter's private options. */
+ * translation of the selection, the adapter's private options. PJ-6 (Q4) —
+ * `resumeSelection`: whether its resume takes a selection (fixed at boot);
+ * `discovered`: the account each read ran in (a resume's must be the
+ * session's own). */
 interface ScriptedModels {
   fail: boolean;
   reads: number;
   options: unknown[];
+  resumeSelection: boolean;
+  discovered: Array<string | undefined>;
 }
 
 const SCRIPTED_MODELS = [
@@ -295,9 +300,15 @@ const SCRIPTED_MODELS = [
 
 function scriptedModels(state: ScriptedModels): AgentModelService {
   return defineModelService({
-    provider: { id: "scripted", label: "Scripted", discovery: "prelaunch" },
+    provider: {
+      id: "scripted",
+      label: "Scripted",
+      discovery: "prelaunch",
+      resumeSelection: state.resumeSelection,
+    },
     async discover(context) {
       state.reads += 1;
+      state.discovered.push(context.profile?.id);
       if (state.fail)
         return {
           status: "auth-required",
@@ -459,6 +470,8 @@ interface SetupConfig {
   catalog?: readonly AgentCatalogEntry[];
   /** Replace every real quota reader; only the fake Claude service remains. */
   usage?: AccountUsageService;
+  /** PJ-6 (Q4) — whether the scripted agent's resume takes a model (default yes) */
+  resumeSelection?: boolean;
 }
 
 /** Boot fieldd: over the mock mgmt server (no floor) or the REAL field-native. */
@@ -527,7 +540,13 @@ async function setup(config: SetupConfig): Promise<Box> {
   const sessions: ScriptedSession[] = restart?.sessions ?? [];
   const seen: Array<AgentProfile | undefined> = restart?.seen ?? [];
   const attached: ScriptedAttach[] = restart?.attached ?? [];
-  const models: ScriptedModels = restart?.models ?? { fail: false, reads: 0, options: [] };
+  const models: ScriptedModels = restart?.models ?? {
+    fail: false,
+    reads: 0,
+    options: [],
+    resumeSelection: config.resumeSelection ?? true,
+    discovered: [],
+  };
   const daemon = await bootstrap({
     dataDir,
     controlPort: 0,
@@ -1900,6 +1919,116 @@ describe("PJ-6 — a launch at a model the agent offers (agent.spawn {modelSelec
 
     await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
     await win.call("terminal.terminate", { sessionId: plain.terminal.sessionId });
+  }, 60_000);
+
+  /** A run launched at model-a/high under `profileSet`, then ended. */
+  async function launchedAndEnded(box: Box, win: WsRpc, profileSet: string) {
+    const spawned = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+      profileSet,
+      modelSelection: { modelId: "model-a", controls: { effort: "high" } },
+    })) as AgentSpawnResult;
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    await poll(
+      async () =>
+        readRecord(box.dataDir, spawned.session.runtimeRunId).exited !== undefined
+          ? true
+          : undefined,
+      15_000,
+    );
+    return spawned;
+  }
+
+  it("Q4 — a resume starts at the session's own launch model again, discovered in the account it was launched in; the answer and the ledger say applied, and the successor keeps it", async () => {
+    const box = await setup({ floor: "real", profiles: true });
+    const { daemon, dataDir, sessions, models } = box;
+    const win = await window(daemon, DECK, "pj6d");
+    const made = (await win.call("agents.profileSets.create", {
+      label: "Work",
+    })) as AgentsProfileSetsSetResult;
+    const { persona } = (await win.call("agents.profiles.create", {
+      set: made.set.id,
+      provider: "scripted",
+    })) as AgentsProfilesCreateResult;
+    const spawned = await launchedAndEnded(box, win, made.set.id);
+    expect(models.discovered).toEqual([persona.profileId]);
+
+    const resumed = (await win.call("agent.resume", {
+      runtimeRunId: spawned.session.runtimeRunId,
+    })) as AgentSpawnResult;
+    // the same conversation, continued — at the model and the effort it was
+    // launched at, the picker read again in the session's own account
+    expect(sessions.at(-1)?.resume).toBe(spawned.session.sessionId);
+    expect(models.options.at(-1)).toEqual({ model: "model-a", effort: "high" });
+    expect(models.discovered).toEqual([persona.profileId, persona.profileId]);
+    expect(resumed.modelSelection).toEqual({ state: "applied" });
+    expect(readRecord(dataDir, resumed.session.runtimeRunId).modelSelection).toEqual({
+      modelId: "model-a",
+      controls: { effort: "high" },
+    });
+    const act = await auditAct(
+      dataDir,
+      (entry) =>
+        entry.action === "agent.session.resume" && entry.target.id === spawned.session.runtimeRunId,
+    );
+    expect(act.outcome.attrs?.["modelSelection"]).toBe("applied");
+    expect(auditText(dataDir)).not.toContain("model-a");
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+  }, 60_000);
+
+  it("Q4 — a launch model the picker can no longer give is refused on resume, in fieldd's words with puppeteer's code — never dropped to the agent's own", async () => {
+    const box = await setup({ floor: "real" });
+    const { daemon, sessions, models } = box;
+    const win = await window(daemon, DECK, "pj6e");
+    const spawned = await launchedAndEnded(box, win, "native");
+    const born = sessions.length;
+    models.fail = true;
+    const refused = await win.callErr("agent.resume", {
+      runtimeRunId: spawned.session.runtimeRunId,
+    });
+    expect(refused.data?.kind).toBe("UNAVAILABLE");
+    expect(refused.message).toContain(
+      "Scripted was not resumed at the model the session was launched at",
+    );
+    expect(refused.data?.details).toMatchObject({ refusal: "MODEL_DISCOVERY_UNAVAILABLE" });
+    expect(sessions).toHaveLength(born);
+  }, 60_000);
+
+  it("Q4 — an agent whose resume cannot take a model resumes at its own, and the answer says so in fieldd's words", async () => {
+    const box = await setup({ floor: "real", resumeSelection: false });
+    const { daemon, models } = box;
+    const win = await window(daemon, DECK, "pj6f");
+    const spawned = await launchedAndEnded(box, win, "native");
+    const reads = models.reads;
+    const resumed = (await win.call("agent.resume", {
+      runtimeRunId: spawned.session.runtimeRunId,
+    })) as AgentSpawnResult;
+    // no selection asked of puppeteer (which would refuse it): its own settings
+    expect(models.options.at(-1)).toBeUndefined();
+    expect(models.reads).toBe(reads);
+    expect(resumed.modelSelection).toEqual({
+      state: "own",
+      reason: "at Scripted's own model — it can't start a resumed session at a chosen one",
+    });
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+  }, 60_000);
+
+  it("Q4 — a conversation resumed by its native id starts at the model its newest run of ours was launched at", async () => {
+    const box = await setup({ floor: "real", catalog: FILED_CATALOG });
+    const { daemon, sessions, models } = box;
+    const win = await window(daemon, DECK, "pj6g");
+    const spawned = await launchedAndEnded(box, win, "native");
+    fileConversations(box, [spawned.session.sessionId]);
+    const resumed = (await win.call("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: spawned.session.sessionId,
+      cwd: box.envOut,
+    })) as AgentSpawnResult;
+    expect(sessions.at(-1)?.resume).toBe(spawned.session.sessionId);
+    expect(models.options.at(-1)).toEqual({ model: "model-a", effort: "high" });
+    expect(resumed.modelSelection).toEqual({ state: "applied" });
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
   }, 60_000);
 });
 

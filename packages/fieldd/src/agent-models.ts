@@ -16,6 +16,11 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 // failure, in puppeteer's words — never as an empty list — beside the last
 // catalog a read did find.
 //
+// Held per (agent, Agent Profile), never per folder: what it answers is the
+// menu's, and puppeteer discovers again in the launch's own folder (and
+// account) before it starts anything, so a choice the folder does not offer is
+// refused there, never launched.
+//
 // In memory, per fieldd run: a restart reads again at the first ask, which
 // waits for it. (Persisting the catalogs would open a restarted desktop's menu
 // at once; it is not built — the lead's call.)

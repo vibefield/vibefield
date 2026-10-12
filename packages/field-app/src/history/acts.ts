@@ -147,6 +147,7 @@ export async function resumeTarget(
       return {
         state: "resumed",
         ...(placed.placement !== undefined ? { placement: placed.placement } : {}),
+        ...(answer.own !== undefined ? { own: answer.own } : {}),
       };
     if (placed.state === "late") {
       const late = lateReason("took", HISTORY_DECK_WAIT_MS);

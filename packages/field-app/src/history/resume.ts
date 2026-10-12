@@ -121,7 +121,13 @@ export function readingOf(
  * one-run law's refusal (a run already continues the conversation — Jump to's,
  * P3), or another refusal in the launcher's words. */
 export type ResumeAnswer =
-  | { readonly state: "started"; readonly terminal: unknown }
+  | {
+      readonly state: "started";
+      readonly terminal: unknown;
+      /** PJ-6 (Q4) — fieldd's words when the session's launch model could not
+       * be taken by its agent's resume */
+      readonly own?: string | undefined;
+    }
   | { readonly state: "running" }
   | { readonly state: "refused"; readonly reason: string };
 
@@ -148,7 +154,9 @@ export async function resumeNative(
       ...(facts.profileId !== undefined ? { profileId: facts.profileId } : {}),
       ...(facts.title !== undefined ? { title: facts.title } : {}),
     });
-    return { state: "started", terminal: AgentSpawnResult.parse(answered).terminal };
+    const answer = AgentSpawnResult.parse(answered);
+    const own = answer.modelSelection?.state === "own" ? answer.modelSelection.reason : undefined;
+    return { state: "started", terminal: answer.terminal, ...(own !== undefined ? { own } : {}) };
   } catch (cause) {
     if (conversationRunning(cause)) return { state: "running" };
     return { state: "refused", reason: refusalReason(cause) };

@@ -1267,6 +1267,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       );
     }
     const identity = this.identity();
+    // PJ-6 (Q4) — a conversation a run of ours launched at a model resumes at
+    // it, in the account the index files it under
+    const launched = this.launchedSelection(params.provider, params.nativeSessionId, profileId);
+    const selection = this.resumeSelection(params.provider, launched);
     const entry = await this.creation(profileId ?? null, async () => {
       const result = await this.runtime.resume({
         continuation: {
@@ -1279,11 +1283,21 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         ...(profileId !== undefined ? { profile: profileId } : {}),
         creationRequestId: identity.creationRequestId,
         ingress: identity.ingress,
+        ...(selection.pass !== undefined ? { modelSelection: selection.pass } : {}),
       });
-      if (isSessionFailure(result)) throw this.sessionFailureToError(result, params.provider);
-      return this.enter(result, { cwd, title: params.title, ...identity.launched() });
+      if (isSessionFailure(result))
+        throw this.sessionFailureToError(result, params.provider, "resume");
+      return this.enter(result, {
+        cwd,
+        title: params.title,
+        ...identity.launched(),
+        ...(launched !== undefined ? { modelSelection: launched } : {}),
+      });
     });
-    return this.ticketed(entry, principal, terminals, forwardedFor);
+    return {
+      ...this.ticketed(entry, principal, terminals, forwardedFor),
+      ...(selection.outcome !== undefined ? { modelSelection: selection.outcome } : {}),
+    };
   }
 
   /** QL-D10 — the persona a native resume runs under: the one named, or the
@@ -1413,7 +1427,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         );
       }
       const entry = await this.track(this.replacePending(pending, params.cwd, "manual"));
-      return this.ticketed(entry, principal, terminals, forwardedFor);
+      const said = this.resumeSelection(record.provider, record.modelSelection).outcome;
+      return {
+        ...this.ticketed(entry, principal, terminals, forwardedFor),
+        ...(said !== undefined ? { modelSelection: said } : {}),
+      };
     }
     const live = this.managed.get(record.runtimeRunId);
     // MF-1f — a STAMPED record means the process is over, so its PTY still
@@ -1473,7 +1491,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // The ticket FIRST: the successor exists and is answerable before anything
     // is destroyed, so a birth that failed above leaves the dead pane and its
     // final screen exactly where they were.
-    const answer = this.ticketed(entry, principal, terminals, forwardedFor);
+    const said = this.resumeSelection(record.provider, record.modelSelection).outcome;
+    const answer = {
+      ...this.ticketed(entry, principal, terminals, forwardedFor),
+      ...(said !== undefined ? { modelSelection: said } : {}),
+    };
     // MF-1g — then the husk goes. Ordered like AR-4b's own replacement (the
     // pending path terminates the old PTY before its door answers, and the
     // deck's hand-over is built for precisely that), so nothing lingers once
@@ -2430,6 +2452,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     };
     const cwd = cwdOverride ?? record.cwd;
     const identity = this.identity();
+    // PJ-6 (Q4) — the session's own launch model, where its resume takes one;
+    // the account it was launched in rides with it (discovery runs there)
+    const selection = this.resumeSelection(record.provider, record.modelSelection);
     return this.creation(record.profileId ?? null, async () => {
       const result = await this.runtime.resume({
         continuation,
@@ -2439,10 +2464,74 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         workspace: restoredWorkspaceRequest(record.workspace, record.cwd),
         creationRequestId: identity.creationRequestId,
         ingress: identity.ingress,
+        ...(selection.pass !== undefined ? { modelSelection: selection.pass } : {}),
       });
-      if (isSessionFailure(result)) throw this.sessionFailureToError(result, record.provider);
-      return this.enter(result, { cwd, title: record.title, ...identity.launched(), replaced });
+      if (isSessionFailure(result))
+        throw this.sessionFailureToError(result, record.provider, "resume");
+      return this.enter(result, {
+        cwd,
+        title: record.title,
+        ...identity.launched(),
+        replaced,
+        // the successor keeps the session's launch model, so its own resume
+        // starts there too
+        ...(record.modelSelection !== undefined ? { modelSelection: record.modelSelection } : {}),
+      });
     });
+  }
+
+  /** PJ-6 (Q4) — what a resume of a session launched at `launched` passes and
+   * says: the selection (its three keys) where the agent's resume takes one
+   * (`runtime.modelProviders()[].resumeSelection`), else none, and the words
+   * for a resume at the agent's own settings. Nothing when the session named no
+   * model. */
+  private resumeSelection(
+    provider: string,
+    launched: AgentModelSelection | undefined,
+  ): {
+    pass?: ReturnType<typeof modelSelectionOf>;
+    outcome?: NonNullable<AgentSpawnResult["modelSelection"]>;
+  } {
+    if (launched === undefined) return {};
+    const takes = this.runtime
+      .modelProviders()
+      .some((candidate) => candidate.id === provider && candidate.resumeSelection === true);
+    if (takes) return { pass: modelSelectionOf(launched), outcome: { state: "applied" } };
+    const label = this.labelFor(provider, provider);
+    return {
+      outcome: {
+        state: "own",
+        reason: `at ${label}'s own model — it can't start a resumed session at a chosen one`,
+      },
+    };
+  }
+
+  /** PJ-6 (Q4) — the model a conversation's newest run of ours was launched
+   * at, in the account the resume names: a native resume of a session fieldd
+   * launched starts where its record says it did. Verified records only. */
+  private launchedSelection(
+    provider: string,
+    nativeSessionId: string,
+    profileId: string | undefined,
+  ): AgentModelSelection | undefined {
+    let records: AgentSessionRecord[];
+    try {
+      records = this.records.list();
+    } catch {
+      return undefined;
+    }
+    let newest: AgentSessionRecord | undefined;
+    for (const record of records) {
+      if (
+        record.continuation.providerId !== provider ||
+        record.continuation.nativeSessionId !== nativeSessionId ||
+        record.profileId !== profileId ||
+        record.modelSelection === undefined
+      )
+        continue;
+      if (newest === undefined || record.createdAt > newest.createdAt) newest = record;
+    }
+    return newest?.modelSelection;
   }
 
   // ── internals: the re-attach (AR-4) ──
@@ -3555,17 +3644,27 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   /** puppeteer folds a host refusal into `AGENT_SESSION_CREATE_FAILED` with
    * the message; a typed refusal from the floor (no cell, the cap, an absent
    * executable) is worth more than the message, so the door says it. */
-  private sessionFailureToError(failure: AgentSessionFailure, provider: string): RpcCallError {
+  private sessionFailureToError(
+    failure: AgentSessionFailure,
+    provider: string,
+    /** PJ-6 — what the refused act was: a launch at a chosen model, or a
+     * resume at the session's own launch model */
+    act: "launch" | "resume" = "launch",
+  ): RpcCallError {
     const details = { provider, code: failure.error.code, runtimeRunId: failure.runtimeRunId };
     // PJ-6 — the adapter's refusal keeps its code; the two a model selection
     // meets are said in fieldd's words, around puppeteer's sentence
     const refusal = failure.error.refusal?.code;
     if (failure.error.code === "AGENT_LAUNCH_REFUSED" && refusal !== undefined) {
       const label = this.labelFor(provider, provider);
+      const notAt =
+        act === "launch"
+          ? `${label} was not started at the chosen model`
+          : `${label} was not resumed at the model the session was launched at`;
       if (refusal === MODEL_REFUSALS.INVALID) {
         return new RpcCallError(
           "PRECONDITION_FAILED",
-          `${label} was not started at the chosen model: ${failure.error.message}`,
+          `${notAt}: ${failure.error.message}`,
           false,
           { ...details, refusal, reason: "invalid-model-selection" },
         );
@@ -3573,7 +3672,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       if (refusal === MODEL_REFUSALS.UNDISCOVERED) {
         return new RpcCallError(
           "UNAVAILABLE",
-          `${label} was not started at the chosen model: it could not list its models (${failure.error.message})`,
+          `${notAt}: it could not list its models (${failure.error.message})`,
           true,
           { service: "agents", state: "model-discovery-unavailable", ...details, refusal },
         );

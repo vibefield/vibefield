@@ -113,6 +113,14 @@ describe("the line's words around Jump to (P3)", () => {
     expect(resumeNote({ state: "resumed" })).toBe("Resumed in the active pane");
   });
 
+  it("PJ-6 (Q4): a resume at the agent's own model, its launch model not taken, says so in fieldd's words", () => {
+    const own = "at OpenCode's own model — it can't start a resumed session at a chosen one";
+    expect(resumeNote({ state: "resumed", placement: "beside", own })).toBe(
+      `Resumed in a new pane, ${own}`,
+    );
+    expect(resumeNote({ state: "resumed", own })).toBe(`Resumed in the active pane, ${own}`);
+  });
+
   it("says where the deck's rule placed a resume and a new terminal (GV-D4)", () => {
     // beside the focused pane while fewer than three panes show
     expect(resumeNote({ state: "resumed", placement: "beside" })).toBe("Resumed in a new pane");

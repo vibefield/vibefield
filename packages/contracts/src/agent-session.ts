@@ -527,6 +527,16 @@ export const AgentSpawnResult = z
   .object({
     session: AgentSessionSummary,
     terminal: TerminalCreateOpenResult,
+    /** PJ-6 (Q4) — on a RESUME of a session launched at a model: `applied`, it
+     * starts at that model again; `own`, it starts at the agent's own settings
+     * because its resume cannot take one, and `reason` says so in fieldd's words
+     * ("at OpenCode's own model — it can't start a resumed session at a chosen
+     * one"). Absent: no model was involved. `state` is an OPEN string to a
+     * reader. */
+    modelSelection: z
+      .object({ state: z.string().min(1).max(32), reason: z.string().optional() })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 export type AgentSpawnResult = z.infer<typeof AgentSpawnResult>;

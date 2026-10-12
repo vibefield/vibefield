@@ -345,6 +345,30 @@ describe("History in the frame (AR-8c)", () => {
     expect(host?.querySelector(".vf-line-note")?.textContent).toBe("Resumed in the active pane");
   });
 
+  it("PJ-6 (Q4): a Resume fieldd answers at the agent's own model — the session's launch model not taken by its resume — says so on the line", async () => {
+    const own = "at Claude Code's own model — it can't start a resumed session at a chosen one";
+    const client = fieldd(() => ({ ...SPAWNED, modelSelection: { state: "own", reason: own } }));
+    publishGodviewLineDoor({
+      panes: [],
+      onScreen: false,
+      newTerminal: async () => ({ state: "opened" }),
+      paste: () => false,
+      canPlace: true,
+      place: async () => ({ state: "opened" }),
+      reveal: async () => ({ state: "opened" }),
+    });
+    mount(client);
+    to("history");
+    await choose();
+    await until(() => (create().hasAttribute("aria-disabled") ? null : true), "Resume to wake");
+    await act(async () => {
+      create().click();
+    });
+    expect(await until(() => host?.querySelector(".vf-line-note")?.textContent, "the note")).toBe(
+      `Resumed in the active pane, ${own}`,
+    );
+  });
+
   it("a refusal is said on the line in the launcher's words, and the window stays in History", async () => {
     const client = fieldd(() => {
       throw Object.assign(new Error("persona signed out"), {

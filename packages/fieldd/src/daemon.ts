@@ -3021,6 +3021,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             ...(result.session.terminal?.replaced !== undefined
               ? { how: "manual", replaced: result.session.terminal.replaced }
               : {}),
+            // PJ-6 — the session's launch model applied again, or the agent's
+            // own (its resume cannot take one); never which model
+            ...(result.modelSelection !== undefined
+              ? { modelSelection: result.modelSelection.state }
+              : {}),
           },
         }),
       );
