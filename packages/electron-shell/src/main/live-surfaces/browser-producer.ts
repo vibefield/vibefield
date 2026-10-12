@@ -45,6 +45,10 @@ const DEFAULT_CPU_FALLBACK_PAINTS = 3;
 const DEFAULT_RESTART_LIMIT = 1;
 /** PT-5a: how long past Electron's own `unresponsive` a page may hang before it is said to have stopped. */
 const DEFAULT_UNRESPONSIVE_MS = 5_000;
+/** PT-5d (ruling 6): how long a command of the hand may go unanswered before a page that says when it stops is said to
+ * have stopped — the engine's own delay (15 s) and PT-5a's bound (5 s): the host's own, for a page the engine never says
+ * `unresponsive` of. */
+const DEFAULT_HUNG_INPUT_MS = 20_000;
 /** How long a page with no renderer attached is kept paused before it hibernates (PT-2: a window reload's gap — the window
  * pool's own grace). */
 const DEFAULT_DETACHED_HIBERNATE_MS = 60_000;
@@ -430,6 +434,9 @@ export interface BrowserLiveSurfaceRuntimeOptions {
   /** PT-5a: how long a page may stay unresponsive before a `whenStopped: "say"` source is said to have stopped (5 s past
    * the engine's own word — Chromium says `unresponsive` only after an input went unanswered for its own delay). */
   readonly unresponsiveMs?: number;
+  /** PT-5d (ruling 6): how long one of the hand's commands may go unanswered before a `whenStopped: "say"` source is said
+   * to have stopped (20 s; a test door lowers it — the engine's own delay never moves). */
+  readonly hungInputMs?: number;
   /** How long the page is kept PAUSED once no renderer is attached before it hibernates (default 60 s): a renderer that
    * re-attaches within it — a window reload's next document, re-bound by main's custody — finds the SAME page. 0: at once. */
   readonly detachedHibernateMs?: number;
@@ -1108,6 +1115,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #waitsForReload = false;
   #unresponsiveTimer: ReturnType<typeof setTimeout> | null = null;
   readonly #unresponsiveMs: number;
+  readonly #hungInputMs: number;
 
   constructor(options: BrowserLiveSurfaceRuntimeOptions) {
     this.surfaceId = LiveSurfaceIdV1.parse(options.surfaceId);
@@ -1126,6 +1134,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#cpuFallbackPaints = options.cpuFallbackPaints ?? DEFAULT_CPU_FALLBACK_PAINTS;
     this.#restartLimit = options.restartLimit ?? DEFAULT_RESTART_LIMIT;
     this.#unresponsiveMs = options.unresponsiveMs ?? DEFAULT_UNRESPONSIVE_MS;
+    this.#hungInputMs = options.hungInputMs ?? DEFAULT_HUNG_INPUT_MS;
     this.#detachedHibernateMs = options.detachedHibernateMs ?? DEFAULT_DETACHED_HIBERNATE_MS;
     this.#onPaintCallbackDurationUs = options.onPaintCallbackDurationUs;
     if (
@@ -1421,27 +1430,53 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       this.#pending.set(window, pending);
     }
     const entries = pending;
+    // PT-5d (ruling 6) — A TURN THE PAGE NEVER ANSWERS IS BOUNDED BY THE HOST: on a page that says when it stops, a turn
+    // unanswered past `hungInputMs` says the page stopped (`inputHung`) — its window goes, this turn and every one queued
+    // behind it refused, counted, nothing left down. (Before: only the engine's `unresponsive` could — and the engine may
+    // never say it of an offscreen page whose input came by CDP: the ONE chain stalled for good.)
+    const bound =
+      this.source.whenStopped === "say"
+        ? setTimeout(() => this.inputHung(window), this.#hungInputMs)
+        : null;
     return new Promise<T>((resolve, reject) => {
-      entries.add(reject);
+      // (the window's going rejects by this entry; every way out ends the bound)
+      const end = (error: unknown): void => {
+        if (bound !== null) clearTimeout(bound);
+        reject(error);
+      };
+      const settled = (): void => {
+        entries.delete(end);
+        if (bound !== null) clearTimeout(bound);
+      };
+      entries.add(end);
       let running: Promise<T>;
       try {
         running = turn();
       } catch (error) {
-        entries.delete(reject);
+        settled();
         reject(error);
         return;
       }
       running.then(
         (value) => {
-          entries.delete(reject);
+          settled();
           resolve(value);
         },
         (error: unknown) => {
-          entries.delete(reject);
+          settled();
           reject(error);
         },
       );
     });
+  }
+
+  /** PT-5d (ruling 6): a turn of the hand on `window` went unanswered past the host's bound — the page is said to have
+   * stopped, as at the engine's own `unresponsive` past PT-5a's (the person's reload makes it anew). */
+  private inputHung(window: BrowserSurfaceNativeWindow): void {
+    if (this.#closed || this.#window !== window || this.#lifecycle.snapshot.state === "failed")
+      return;
+    this.#waitsForReload = true;
+    this.failSource(sourceError("frame-stalled", "Browser page stopped responding", "user-action"));
   }
 
   /**

@@ -3432,6 +3432,104 @@ describe("BrowserLiveSurfaceRuntime", () => {
     plain.runtime.dispose();
   });
 
+  describe("PT-5d (ruling 6) — STUCK: a page that never answers the hand's command", () => {
+    /** A desk page (it says when it stops), live at its first document; its keys answered when the row says. */
+    const stuck = async (options: Parameters<typeof setup>[0] = {}) => {
+      const result = setup({
+        source: { ...source(), whenStopped: "say" },
+        hungInputMs: 400,
+        ...options,
+      });
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(demand(1, "live"));
+      await vi.advanceTimersByTimeAsync(0);
+      const window = result.native.windows[0];
+      if (window === undefined) throw new Error("no window");
+      window.paint(sharedPaint().paint);
+      window.emitNavigationState(NAV);
+      await vi.advanceTimersByTimeAsync(0);
+      const r = result.runtime.summary.geometry?.revision ?? 0;
+      const key = (action: "down" | "up", k: string): void =>
+        renderer.attachment.dispatchInput?.(
+          { kind: "key", action, key: k, code: `Key${k.toUpperCase()}`, modifiers: NONE },
+          r,
+        );
+      const press = (): void =>
+        renderer.attachment.dispatchInput?.(
+          { kind: "pointer", action: "down", x: 10, y: 10, button: "left", clickCount: 1 },
+          r,
+        );
+      return { result, renderer, window, key, press };
+    };
+
+    it("its turn is ended by the HOST's bound (`hungInputMs` — the engine may never say `unresponsive` for an offscreen page whose input came by CDP): the page SAID stopped (`frame-stalled`, the person's to recover), its window gone; the turns queued behind it refused and counted, nothing sent; ↻ makes a new window — the page back", async () => {
+      vi.useFakeTimers();
+      const p = await stuck();
+      // the page's renderer in an endless loop: a key's down is never answered
+      p.window.dispatchKey = () => new Promise<void>(() => {});
+      p.key("down", "a");
+      p.key("up", "a");
+      p.key("down", "b");
+      p.press();
+      await vi.advanceTimersByTimeAsync(399);
+      expect(p.result.runtime.summary.state).toBe("live");
+      const dropped = p.result.runtime.stats.inputDropped;
+      await vi.advanceTimersByTimeAsync(1);
+      expect(p.result.runtime.summary).toMatchObject({
+        state: "failed",
+        error: { code: "frame-stalled", recovery: "user-action" },
+        browser: { url: "https://example.test/app" },
+      });
+      expect(p.window.destroyed).toBe(true);
+      await vi.advanceTimersByTimeAsync(0);
+      // the stuck key's turn and the three behind it: refused, counted — nothing reached the page
+      expect(p.result.runtime.stats.inputDropped - dropped).toBe(4);
+      expect(p.window.mouseInputs).toEqual([]);
+      p.renderer.attachment.navigate?.({ action: "reload" });
+      expect(p.result.native.windows).toHaveLength(2);
+      p.result.runtime.dispose();
+    });
+
+    it("a command answered LATE but within the bound (a busy page) goes on — nothing said; a source that does not say when its page stops is left alone, as the engine's word is", async () => {
+      vi.useFakeTimers();
+      const p = await stuck();
+      let answer: () => void = () => {};
+      p.window.dispatchKey = (input) => {
+        p.window.keyInputs.push(input);
+        return new Promise<void>((resolve) => {
+          answer = resolve;
+        });
+      };
+      p.key("down", "a");
+      await vi.advanceTimersByTimeAsync(399);
+      answer();
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(p.result.runtime.summary.state).toBe("live");
+      expect(p.window.keyInputs.map((k) => k.type)).toEqual(["keyDown"]);
+      p.result.runtime.dispose();
+      const plain = await stuck({ source: source() });
+      plain.window.dispatchKey = () => new Promise<void>(() => {});
+      plain.key("down", "a");
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(plain.result.runtime.summary.state).toBe("live");
+      plain.result.runtime.dispose();
+    });
+
+    it("the engine's `unresponsive` and the host's bound: whichever comes first says it — once", async () => {
+      vi.useFakeTimers();
+      const p = await stuck({ unresponsiveMs: 100 });
+      p.window.dispatchKey = () => new Promise<void>(() => {});
+      p.key("down", "a");
+      p.window.hang(true);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(p.result.runtime.summary.state).toBe("failed");
+      const said = p.renderer.summaries.filter((s) => s.state === "failed").length;
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(p.renderer.summaries.filter((s) => s.state === "failed")).toHaveLength(said);
+      p.result.runtime.dispose();
+    });
+  });
+
   it("PT-5a: a page UNRESPONSIVE past the bound is said to have stopped (`frame-stalled`, the person's to recover) — one that answers again within it is not; a source that does not say is left alone", async () => {
     vi.useFakeTimers();
     const result = setup({
