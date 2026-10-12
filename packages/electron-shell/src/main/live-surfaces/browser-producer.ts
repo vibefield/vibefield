@@ -1720,15 +1720,18 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // PT-5c (ruling 6) — and a page RECONNECTING is a page starting again (its renderer went; a window made anew): once
     // born it is sent, stopped and loaded again as a starting page is. (Before: every verb was refused while it
     // reconnected — and a reconnect whose load ended with nothing was stuck for good, its ↻ dead: the third grade's P6.)
+    // PT-5c (R6) — and a page reconnecting with NO WINDOW (the reconnect's tick; or paused at it, its window waiting for a
+    // live ask) takes the verbs as a window not yet born does, below: a go heads it there — the reconnect loads THAT — a
+    // stop is remembered, a ↻ is nothing. (Before: refused — a go meanwhile, a peer's or an undo, was dropped.)
+    const windowless = window === null || window.isDestroyed();
     if (
       this.#closed ||
-      window === null ||
-      window.isDestroyed() ||
+      (windowless && state !== "reconnecting") ||
       (state !== "live" && state !== "starting" && state !== "reconnecting")
     ) {
       throw new Error("Browser surface is not available for navigation");
     }
-    if (!this.#born) {
+    if (!this.#born || windowless) {
       // PT-5b3 (ruling 1) — THE WINDOW IS NOT BORN YET: nothing is asked of it. A GO says where the page is headed — the
       // born window loads THAT, once; a RELOAD is nothing (the load it asks for has not begun, and will — a stop
       // remembered before it is forgotten: ↻ after Stop is the load after all); a STOP is remembered — the born window is

@@ -4316,6 +4316,72 @@ describe("BrowserLiveSurfaceRuntime", () => {
       return { result, renderer, second, blank, loads };
     };
 
+    it("R6 — a page RECONNECTING with NO window takes the verbs as a window not yet born does: a go heads it there (at the reconnect's tick, and paused at it — its window waiting for a live ask) and the reconnect loads THAT; a stop is remembered — born, not loaded, `stopped`; a ↻ is nothing", async () => {
+      vi.useFakeTimers();
+      const ELSEWHERE = "https://example.test/elsewhere";
+      /** A live page whose renderer crashed: reconnecting, its window not yet made (the reconnect's tick). */
+      const crashed = async () => {
+        const result = setup();
+        const renderer = attach(result.runtime);
+        renderer.attachment.setDemand(demand(1, "live"));
+        await vi.advanceTimersByTimeAsync(0);
+        const first = result.native.windows[0];
+        if (first === undefined) throw new Error("no window");
+        first.emitNavigationState({ ...NAV });
+        first.paint(sharedPaint().paint);
+        await vi.advanceTimersByTimeAsync(0);
+        first.crash();
+        expect(result.runtime.summary.state).toBe("reconnecting");
+        expect(result.native.windows).toHaveLength(1);
+        return { result, renderer, dropped: result.runtime.stats.navigationDropped };
+      };
+      // a go at the tick: the reconnect loads THAT
+      const go = await crashed();
+      go.renderer.attachment.navigate?.({ action: "go", url: ELSEWHERE });
+      await delivered();
+      expect(go.result.runtime.stats.navigationDropped).toBe(go.dropped);
+      expect(go.result.runtime.summary.browser?.url).toBe(ELSEWHERE);
+      await vi.advanceTimersByTimeAsync(0);
+      await delivered();
+      expect(go.result.native.windows[1]?.loadedUrls).toEqual([ELSEWHERE]);
+      go.result.runtime.dispose();
+      // paused at the tick: the window waits for a live ask; a go meanwhile (a peer's, an undo) is kept
+      const paused = await crashed();
+      paused.renderer.attachment.setDemand(demand(2, "paused"));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(paused.result.native.windows).toHaveLength(1);
+      paused.renderer.attachment.navigate?.({ action: "go", url: ELSEWHERE });
+      await delivered();
+      expect(paused.result.runtime.stats.navigationDropped).toBe(paused.dropped);
+      paused.renderer.attachment.setDemand(demand(3, "live"));
+      await vi.advanceTimersByTimeAsync(0);
+      await delivered();
+      expect(paused.result.native.windows[1]?.loadedUrls).toEqual([ELSEWHERE]);
+      paused.result.runtime.dispose();
+      // a stop at the tick: born, not loaded, `stopped`
+      const stop = await crashed();
+      stop.renderer.attachment.navigate?.({ action: "stop" });
+      await delivered();
+      expect(stop.result.runtime.stats.navigationDropped).toBe(stop.dropped);
+      await vi.advanceTimersByTimeAsync(0);
+      await delivered();
+      expect(stop.result.native.windows[1]?.loadedUrls).toEqual([]);
+      expect(stop.result.runtime.summary.browser).toMatchObject({
+        loading: false,
+        failure: { reason: "stopped" },
+      });
+      stop.result.runtime.dispose();
+      // a ↻ at the tick: nothing — the reconnect loads the address it would have
+      const reload = await crashed();
+      reload.renderer.attachment.navigate?.({ action: "reload" });
+      await delivered();
+      expect(reload.result.runtime.stats.navigationDropped).toBe(reload.dropped);
+      await vi.advanceTimersByTimeAsync(0);
+      await delivered();
+      expect(reload.result.native.windows[1]?.loadedUrls).toEqual(["https://example.test/app"]);
+      reload.result.runtime.dispose();
+    });
+
     it("ruling 6 (P6) — a page RECONNECTING whose load ENDS with nothing is not stuck: it says so, with no document of its own, and ↻ asks for the address again; its paint makes it live", async () => {
       const p = await reconnecting();
       p.blank(true);
