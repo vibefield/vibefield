@@ -9289,3 +9289,39 @@ field-app test unless a case turns them off; a test pane session without `activi
 real last pane and the second ⌘W closing the window, the rest on other heights and the floor on a short window; the
 bar's search stepping out in 120 ms (it changes place at once). The builder ran ~7 s of tests under the MV lead's
 proof-launch PERF.lock (22:40 PDT; the proof grades nothing, no re-run); the lock test now sits in the run command.
+
+## Debts, first part — fieldd's suite keeps honest budgets on a loaded host, doc-sync stops racing its own teardown, kill-matrix row 6 outlives a lost cell birth, and the logging flush takes a deadline (2026-10-12; `7b3e858a` · `41a558f8` · `98170109` · `c1d87e09` through lane land3, gated on the exact tree)
+
+**Why:** James ruled N10 (a) on 2026-10-12 (the After Wave 2 Docket): after Godview round 3, a debts lane beside PJ-6.
+Every gate of round 3 had met a different fieldd timing red ("Owed" in the wrapper's entry above), and the closing
+landing met two in a row. A read-only survey diagnosed each from its code and its red log
+(`draft/history-finish/surveys/s-debts-fieldd.md`); lane dfd (`debts/fieldd`, brief
+`draft/history-finish/briefs/debts-fieldd.md`) builds the fixes. These are its first four; the index-timeline
+row and the two unbounded waits follow.
+
+**What landed:**
+- `7b3e858a` the budgets: fieldd's vitest `testTimeout`/`hookTimeout` 30 s (vitest's 5 s/10 s defaults are not a
+  product budget; one gate failed four fsync-heavy files at once, each normally under 0.6 s); the catalog census row
+  its own 30 s (its body waits up to 15 s twice); doc-holders-stop's CONTROL row waits 10 s on a real ledger flush
+  (the never-settling rows keep 100 ms); field-native's logging `flush(4 s)` test 15 s.
+- `41a558f8` `NodeLogging.flush({timeoutMs})`: the product keeps 2 s; audit-retention gives its janitor 15 s. Red first.
+- `98170109` doc-sync-service: a row waits on the commit it expects (`onCommit`), never a fixed 60 ms; afterEach stops
+  the routing and disposes the store before the directory goes (`rmSync`'s retries stay as a backstop). Red first: the
+  old wait tightened to 0 went ENOTEMPTY in 3 of 10 on the sightings' own two rows; fixed with the backstop REMOVED,
+  0 of 10.
+- `c1d87e09` terminal-kill-matrix row 6: a create refused UNAVAILABLE + retryable is asked again, 250 ms apart, for 30 s
+  of the row's 60 s, each refusal printed, and the field-native log's tail printed before cleanup deletes it. Red first:
+  the row forced to lose the birth race went red 5 of 5 with the sighting's words; fixed, 0 of 5. A dead floor still
+  fails loudly at the budget.
+
+**Validation:** the lane's red and green logs under `/Volumes/SamsungRed/lanes/dfd/` (`red-2-flush-timeout.log`,
+`red-3-docsync-tightened.log`, `s3-docsync-fixed-no-backstop.log`, `red-4-killmatrix-birthrace.log`,
+`probe-4-loud-failure.log`); then the landing gate on the exact tree (`lanes/land3/logs/`, under this landing's sha).
+
+**Found:** field-native's logging worker waits out its retry backoff (250 ms × 2^attempt, capped 30 s;
+`logging/mod.rs:1130-1135`) before it looks at a requested flush (:940-951, :961), so the fatal path's
+`flush(500 ms)` (:1431) can never write once two writes in a row have failed. Whether a requested flush cuts the
+backoff short is the field-native owner's question.
+
+**Owed:** index-timeline's lost `.snapshot` (four sightings: not a budget — the frame never came; instrumented next);
+fieldd-client requests and the routed inventory read still have no bound of their own (lane dfd, next).
