@@ -182,10 +182,12 @@ export interface BrowserSurfaceNavigationState {
   readonly canGoForward: boolean;
   /** PT-5b3 (ruling 4): how many DOCUMENTS of the page this window has committed (0: none yet) — one more at a
    * navigation's commit and at a failed load's error page; never at a move within a document (a hash, `pushState`,
-   * `replaceState`), a load that only began, or one that was aborted. */
+   * `replaceState`), a load that only began, or one that was aborted — nor (PT-5c2, F1) at a committed document's load
+   * failing late (its body cut: the same document stands). */
   readonly document: number;
-  /** PT-5a: the main frame's last load FAILED — the engine's net error code (`-102` a refused connection); absent once a
-   * page commits. `url` is then the address that was asked for (Electron's own word: the probe). */
+  /** PT-5a: the main frame's last load FAILED — the engine's net error code (`-102` a refused connection) — its error page
+   * stands; absent once a page commits. `url` is then the address that was asked for (Electron's own word: the probe).
+   * PT-5c2 (F1): never a committed document's late failure — that page stands, and says its load ended. */
   readonly failure?: number;
 }
 
@@ -1778,7 +1780,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * PT-5b2 (ruling 6) — A LOAD IS ASKED, AND ITS PROMISE SAYS NOTHING OF THE SOURCE. Electron settles `loadURL` at
    * `did-finish-load` and REJECTS it for anything else — a script's redirect or a link clicked before `load`
    * (ERR_ABORTED −3, the page standing fine where it went), an attachment or an empty answer (ERR_FAILED −2), a refused
-   * connection. A page's load failures are the engine's EVENTS (a main-frame `did-fail-load` → `browser.failure`), a
+   * connection. A page's load failures are the engine's EVENTS (its error page's commit, a main-frame
+   * `did-fail-provisional-load` → `browser.failure`: PT-5c2, F1), a
    * window that never comes up is the startup deadline's, and an aborted load is nothing by itself: the navigation that
    * took its place speaks for the page. A rejection that is not an abort is one more word that the load ENDED (see
    * `loadEnded` — an engine that says nothing else).

@@ -4,6 +4,9 @@
  * (`did-navigate-in-page`: a hash, `pushState`, `replaceState`) does not; a load that failed — the engine's error page
  * standing in the asked address's place, with no `did-navigate` (PT-5a's probe) — does; an aborted one does not. Electron
  * is a fake here: a window whose WebContents says the events the row emits.
+ * PT-5c2 (F1): an error page is counted by its own word, `did-fail-provisional-load` (Electron says it only where the
+ * engine's error page COMMITTED); a committed document's LATE failure — `did-fail-load` alone, its body cut — is the same
+ * document, and no failure of the page: the producer over this adapter lets a key held across it up.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -63,7 +66,10 @@ const electron = vi.hoisted(() => {
 });
 
 vi.mock("electron", () => ({ BrowserWindow: electron.BrowserWindow, session: electron.session }));
-vi.mock("../src/main/live-surfaces/browser-security", () => ({
+// (the guards are the session's and the contents' — not this suite's; the policy is the real one: PT-5c2 runs the
+// producer over this adapter)
+vi.mock("../src/main/live-surfaces/browser-security", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/main/live-surfaces/browser-security")>()),
   installGuardedBrowserSurfaceContents: () => undefined,
   installGuardedBrowserSurfaceSession: () => undefined,
 }));
@@ -73,7 +79,10 @@ import {
   PAGE_SCALE_BINDING,
   PAGE_SCALE_SCRIPT,
 } from "../src/main/live-surfaces/browser-electron-native";
-import type { BrowserSurfaceNavigationState } from "../src/main/live-surfaces/browser-producer";
+import {
+  BrowserLiveSurfaceRuntime,
+  type BrowserSurfaceNavigationState,
+} from "../src/main/live-surfaces/browser-producer";
 
 const window = () => {
   const native = new ElectronBrowserSurfaceNative().createWindow({
@@ -125,13 +134,41 @@ describe("the Electron adapter counts the page's documents (PT-5b3, ruling 4)", 
     w.contents.emit("did-navigate", {}, "https://example.test/b");
     expect(w.said.at(-1)?.document).toBe(2);
     // a load that is ABORTED (a stop, a download, a navigation that replaced it) is no document
+    w.contents.emit(
+      "did-fail-provisional-load",
+      {},
+      -3,
+      "ERR_ABORTED",
+      "https://example.test/c",
+      true,
+    );
     w.contents.emit("did-fail-load", {}, -3, "ERR_ABORTED", "https://example.test/c", true);
     expect(w.said.at(-1)?.document).toBe(2);
     // a frame's failure is not the page's
+    w.contents.emit(
+      "did-fail-provisional-load",
+      {},
+      -102,
+      "ERR_CONNECTION_REFUSED",
+      "https://ad.test/",
+      false,
+    );
     w.contents.emit("did-fail-load", {}, -102, "ERR_CONNECTION_REFUSED", "https://ad.test/", false);
     expect(w.said.at(-1)?.document).toBe(2);
-    // a load that FAILED: the engine's error page stands in the asked address's place — with no `did-navigate`
+    // a load that FAILED: the engine's error page stands in the asked address's place — with no `did-navigate`. PT-5c2
+    // (F1): Electron's real order — `did-fail-provisional-load` (the error page COMMITTED), then `did-fail-load`, the same
+    // millisecond (PT-5c2's probe `f1.cjs`: a refused connection) — counted, and the failure said, at the first
     w.at("https://dead.test/");
+    w.contents.emit(
+      "did-fail-provisional-load",
+      {},
+      -102,
+      "ERR_CONNECTION_REFUSED",
+      "https://dead.test/",
+      true,
+    );
+    expect(w.said.at(-1)).toMatchObject({ url: "https://dead.test/", failure: -102, document: 3 });
+    // …and its `did-fail-load` is the same error page: nothing more is counted
     w.contents.emit(
       "did-fail-load",
       {},
@@ -168,6 +205,47 @@ describe("the Electron adapter counts the page's documents (PT-5b3, ruling 4)", 
       loading: false,
       document: 1,
     });
+  });
+
+  it("PT-5c2 (F1): a document whose load FAILS AFTER IT COMMITTED — its body cut mid-stream: Electron's `did-fail-load` with no `did-fail-provisional-load` before it (−101, −355, −337) — is the SAME document, still standing: no other is counted, no failure said; the state that follows says its load ended", async () => {
+    const w = window();
+    await w.native.loadURL("https://example.test/a");
+    w.contents.loading = true;
+    w.contents.emit("did-start-loading");
+    w.at("https://example.test/a");
+    w.contents.emit("did-navigate", {}, "https://example.test/a");
+    expect(w.said.at(-1)).toMatchObject({ url: "https://example.test/a", document: 1 });
+    // its body is cut: the engine says the load failed — and nothing else (the probe: no did-fail-provisional-load, no
+    // did-navigate; the page stands, showing what came)
+    w.contents.emit(
+      "did-fail-load",
+      {},
+      -101,
+      "ERR_CONNECTION_RESET",
+      "https://example.test/a",
+      true,
+    );
+    expect(w.said.at(-1)?.document).toBe(1);
+    expect(w.said.at(-1)?.failure).toBeUndefined();
+    w.contents.loading = false;
+    w.contents.emit("did-stop-loading");
+    expect(w.said.at(-1)).toEqual({
+      url: "https://example.test/a",
+      title: "a title",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      document: 1,
+    });
+    // a chunked body cut short (the probe's: −355), an HTTP/2 stream reset (−337): the same
+    for (const [code, name] of [
+      [-355, "ERR_INCOMPLETE_CHUNKED_ENCODING"],
+      [-337, "ERR_HTTP2_PROTOCOL_ERROR"],
+    ] as const) {
+      w.contents.emit("did-fail-load", {}, code, name, "https://example.test/a", true);
+      expect(w.said.at(-1)?.document).toBe(1);
+      expect(w.said.at(-1)?.failure).toBeUndefined();
+    }
   });
 
   it("a window made anew counts its own from none", async () => {
@@ -450,5 +528,155 @@ describe("PT-5c (ruling 1) — the page SAYS its scale; the hand's commands neve
     expect(methods.indexOf("Target.setAutoAttach")).toBeLessThan(
       methods.indexOf("Input.dispatchMouseEvent"),
     );
+  });
+});
+
+describe("PT-5c2 (F1) — the producer over this adapter: a document's LATE failure is not another document", () => {
+  it("a key held across its document's late failure (its body cut mid-stream) has its up SENT: the same document stands, saying its load ended and no failure — the page never keeps a key down for good", async () => {
+    const adapter = new ElectronBrowserSurfaceNative();
+    const sent: { method: string; params: unknown }[] = [];
+    let made: (typeof electron.made)[number] | undefined;
+    const runtime = new BrowserLiveSurfaceRuntime({
+      surfaceId: "browser_surface_0123456789",
+      source: {
+        kind: "browser",
+        initialUrl: "https://example.test/a",
+        profile: { mode: "memory", ref: "pt-5c2" },
+        logicalViewport: { width: 320, height: 180 },
+        deviceScaleFactor: 1,
+      },
+      native: {
+        createWindow: (options) => {
+          const native = adapter.createWindow(options);
+          made = electron.made.at(-1);
+          if (made !== undefined) {
+            // what the producer asks of Electron's window that this fake does not say: nothing here
+            Object.assign(made, { destroy: () => undefined });
+            Object.assign(made.webContents, {
+              setFrameRate: () => undefined,
+              startPainting: () => undefined,
+              stopPainting: () => undefined,
+              invalidate: () => undefined,
+              setAudioMuted: () => undefined,
+            });
+            let attached = false;
+            made.webContents.debugger.isAttached = () => attached;
+            made.webContents.debugger.attach = () => {
+              attached = true;
+            };
+            made.webContents.debugger.sendCommand = async (method?: string, params?: unknown) => {
+              sent.push({ method: method ?? "", params });
+              return {};
+            };
+          }
+          return native;
+        },
+        monotonicNowUs: () => adapter.monotonicNowUs(),
+        engineAgent: () => adapter.engineAgent(),
+      },
+    });
+    const attachment = runtime.attach({
+      attachmentId: "attachment_browser_00000001",
+      rendererGeneration: 1,
+      operations: ["view", "pointer", "keyboard"],
+      publishSummary: () => undefined,
+      publishCpuFrame: () => true,
+      offerTextureFrame: (frame) => {
+        frame.releaseSource("imported");
+        frame.allReferencesReleased("released");
+        return { kind: "accepted", transfer: Promise.resolve() };
+      },
+    });
+    const turns = async (): Promise<void> => {
+      for (let i = 0; i < 48; i += 1) await Promise.resolve();
+    };
+    attachment.setDemand({
+      revision: 1,
+      mode: "live",
+      targetFps: 30,
+      priority: 50,
+      interactive: true,
+    });
+    await turns();
+    const w = made;
+    if (w === undefined) throw new Error("no window was made");
+    // born: its blank, then its address asked for
+    expect(w.loads).toEqual(["about:blank", "https://example.test/a"]);
+    const contents = w.webContents;
+    contents.loading = true;
+    contents.emit("did-start-loading");
+    contents.url = "https://example.test/a";
+    contents.emit("did-navigate", {}, "https://example.test/a");
+    // its first frame: the page is live
+    contents.emit(
+      "paint",
+      {
+        texture: {
+          release: () => undefined,
+          textureInfo: {
+            widgetType: "frame",
+            pixelFormat: "bgra",
+            codedSize: { width: 320, height: 180 },
+            colorSpace: { matrix: "rgb", primaries: "bt709", range: "full", transfer: "srgb" },
+            visibleRect: { x: 0, y: 0, width: 320, height: 180 },
+            contentRect: { x: 0, y: 0, width: 320, height: 180 },
+            timestamp: 42,
+            metadata: {},
+            handle: {},
+          },
+        },
+      },
+      { x: 0, y: 0, width: 320, height: 180 },
+      {
+        getSize: () => ({ width: 320, height: 180 }),
+        toBitmap: () => new Uint8Array(320 * 180 * 4),
+      },
+    );
+    await turns();
+    expect(runtime.summary.state).toBe("live");
+    expect(runtime.summary.browser?.document).toBe(1);
+    const revision = runtime.summary.geometry?.revision ?? 0;
+    const space = (action: "down" | "up"): void =>
+      attachment.dispatchInput?.(
+        {
+          kind: "key",
+          action,
+          key: " ",
+          code: "Space",
+          modifiers: { shift: false, alt: false, ctrl: false, meta: false },
+        },
+        revision,
+      );
+    // Space held — a design tool's page pans while it is down
+    space("down");
+    await turns();
+    // the page's body is cut mid-stream: Electron says the load failed, that alone (PT-5c2's probe), and that it stopped
+    contents.emit(
+      "did-fail-load",
+      {},
+      -355,
+      "ERR_INCOMPLETE_CHUNKED_ENCODING",
+      "https://example.test/a",
+      true,
+    );
+    contents.loading = false;
+    contents.emit("did-stop-loading");
+    await turns();
+    expect(runtime.summary.browser).toMatchObject({
+      url: "https://example.test/a",
+      loading: false,
+      document: 1,
+    });
+    expect(runtime.summary.browser?.failure).toBeUndefined();
+    space("up");
+    await turns();
+    const keys = sent
+      .filter((c) => c.method === "Input.dispatchKeyEvent")
+      .map((c) => {
+        const k = c.params as { type: string; code: string };
+        return `${k.type} ${k.code}`;
+      });
+    expect(keys).toEqual(["keyDown Space", "keyUp Space"]);
+    runtime.dispose();
   });
 });

@@ -128,6 +128,13 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * asked address's place, with no `did-navigate` — PT-5a's probe); never at a move WITHIN a document
    * (`did-navigate-in-page`: a hash, `pushState`, `replaceState`), a load that only began, or one that was aborted. Said
    * with every navigation state: whoever asks "is this another document?" asks this, not the address.
+   * PT-5c2 (F1) — AN ERROR PAGE IS COUNTED BY ITS OWN WORD: `did-fail-provisional-load` on the main frame (code ≠ −3),
+   * which Electron says only where the engine's error page COMMITTED. A `did-fail-load` with no such word before it is a
+   * committed document's load failing LATE — its body cut mid-stream (−101, −355, −337): the SAME document, standing,
+   * showing what came (PT-5c2's probe `f1.cjs`: a refused connection says `did-fail-provisional-load −102` then
+   * `did-fail-load −102`, the same millisecond; a cut body says `did-navigate`, then `did-fail-load −355` alone). (Before:
+   * counted at every main-frame `did-fail-load` — a cut body was another document, and what was down in the page that
+   * stood was forgotten: a key held across it was never let up.)
    */
   #documents = 0;
 
@@ -148,9 +155,12 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     window.webContents.on("did-navigate", (_event, url) => {
       if (this.#remoteLoadStarted && url !== "about:blank") committed();
     });
-    window.webContents.on("did-fail-load", (_event, code, _description, _url, isMainFrame) => {
-      if (this.#remoteLoadStarted && isMainFrame && code !== -3) committed();
-    });
+    window.webContents.on(
+      "did-fail-provisional-load",
+      (_event, code, _description, _url, isMainFrame) => {
+        if (this.#remoteLoadStarted && isMainFrame && code !== -3) committed();
+      },
+    );
   }
 
   /** PT-5a: the page asked for what it may not have — told to the producer (the guards have already answered the page). */
@@ -430,10 +440,14 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         ...(this.#loadFailure === undefined ? {} : { failure: this.#loadFailure }),
       });
     };
-    // PT-5a — A LOAD THAT FAILED (probed): Electron says `did-fail-load` with the net error and the address ASKED for, then
-    // commits its own error page under that address with NO `did-navigate`; `getURL()` stays the asked address. So a failure
-    // stands from `did-fail-load` until the next `did-navigate` (a page that committed). −3 is an aborted load (a stop, a
-    // download, a navigation that replaced it): not a failure.
+    // PT-5a — A LOAD THAT FAILED (probed): Electron says it with the net error and the address ASKED for, and commits its
+    // own error page under that address with NO `did-navigate`; `getURL()` stays the asked address. So a failure stands
+    // from then until the next `did-navigate` (a page that committed). −3 is an aborted load (a stop, a download, a
+    // navigation that replaced it): not a failure.
+    // PT-5c2 (F1) — said at the error page's own word, `did-fail-provisional-load` (its `did-fail-load` follows in the same
+    // millisecond). A `did-fail-load` alone is a committed document's LATE failure (its body cut): no failure of the page —
+    // the document stands, showing what came, as Chrome shows it, and `did-stop-loading` says its load ended. (Before: said
+    // at every `did-fail-load` — over a page that stood.)
     const failed = (
       _event: Electron.Event,
       code: number,
@@ -464,14 +478,14 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       emit();
     };
     contents.on("did-navigate", committed);
-    contents.on("did-fail-load", failed);
+    contents.on("did-fail-provisional-load", failed);
     contents.on("did-navigate-in-page", emit);
     contents.on("page-title-updated", emit);
     contents.on("did-start-loading", emit);
     contents.on("did-stop-loading", stopped);
     return () => {
       contents.off("did-navigate", committed);
-      contents.off("did-fail-load", failed);
+      contents.off("did-fail-provisional-load", failed);
       contents.off("did-navigate-in-page", emit);
       contents.off("page-title-updated", emit);
       contents.off("did-start-loading", emit);
