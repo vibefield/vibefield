@@ -3634,5 +3634,155 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
       p.result.runtime.dispose();
     });
+
+    /** A second attachment of the same page, live, its first frame laid again — what the attachment that comes back is. */
+    const again = async (
+      runtime: BrowserLiveSurfaceRuntime,
+      window: FakeBrowserWindow,
+      size: { width: number; height: number },
+    ) => {
+      const back = attach(runtime, "attachment_browser_00000002");
+      back.attachment.setDemand(demand(2, "live", 30, size));
+      await delivered();
+      window.paint(sharedPaint(size.width, size.height).paint);
+      await delivered();
+      const revision = runtime.summary.geometry?.revision ?? 0;
+      const move = (x: number): void =>
+        back.attachment.dispatchInput?.(
+          { kind: "pointer", action: "move", x, y: 10, clickCount: 1 },
+          revision,
+        );
+      return { back, move, revision };
+    };
+
+    it("ruling 2 (P3) — a FINGER down when the attachment that sent its press GOES is CANCELLED: the page hears its touchCancel — never a touchEnd, which would be a tap — nothing is down, and the attachment that comes back hovers", async () => {
+      const p = await phone();
+      p.pointer("down", 20);
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart"]);
+      // the app's window reloads: the attachment goes, the page is kept through the grace (paused) — and told
+      p.renderer.attachment.dispose();
+      await p.delivered();
+      expect(p.result.runtime.summary.state).toBe("paused");
+      expect(p.heard).toEqual(["touchStart", "touchCancel"]);
+      expect(p.window.touchInputs.at(-1)).toEqual({ type: "touchCancel", touchPoints: [] });
+      // the attachment that comes back: its first move is a hover — on a touch page, nothing
+      const b = await again(p.result.runtime, p.window, { width: 1206, height: 2622 });
+      b.move(30);
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart", "touchCancel"]);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 2 — a BUTTON down when the attachment that sent its press goes is released at its press's point and scale with NO click (the person never let go over the page); the next move has no button down", async () => {
+      const p = await laptop();
+      const r = p.result.runtime.summary.geometry?.revision ?? 0;
+      p.renderer.attachment.dispatchInput?.(
+        { kind: "pointer", action: "down", x: 12, y: 8, button: "left", clickCount: 1 },
+        r,
+      );
+      await delivered();
+      expect(p.window.mouseInputs.map((m) => m.type)).toEqual(["mousePressed"]);
+      p.renderer.attachment.dispose();
+      await delivered();
+      expect(p.window.mouseInputs.at(-1)).toEqual({
+        type: "mouseReleased",
+        x: 12,
+        y: 8,
+        button: "left",
+        clickCount: 0,
+      });
+      const b = await again(p.result.runtime, p.window, { width: 640, height: 360 });
+      b.move(30);
+      await delivered();
+      expect(p.window.mouseInputs.map((m) => m.type)).toEqual([
+        "mousePressed",
+        "mouseReleased",
+        "mouseMoved",
+      ]);
+      // a release the hand sends later — of a press it no longer holds — is nothing
+      b.back.attachment.dispatchInput?.(
+        { kind: "pointer", action: "up", x: 30, y: 10, button: "left", clickCount: 1 },
+        b.revision,
+      );
+      await delivered();
+      expect(p.window.mouseInputs).toHaveLength(3);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 2 — a gesture pressed through ANOTHER attachment is not released when this one goes (a second window shows the pane); and a press of the going attachment still on the chain takes its turn, then is released", async () => {
+      const p = await phone();
+      // the second window's attachment presses
+      const other = attach(p.result.runtime, "attachment_browser_00000002");
+      other.attachment.setDemand(demand(2, "live", 30, { width: 1206, height: 2622 }));
+      await p.delivered();
+      other.attachment.dispatchInput?.(
+        { kind: "pointer", action: "down", x: 20, y: 10, button: "left", clickCount: 1 },
+        p.revision,
+      );
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart"]);
+      // the FIRST window's attachment goes: the finger is the other's — nothing is sent
+      p.renderer.attachment.dispose();
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart"]);
+      // the other lifts it: the page hears its end
+      other.attachment.dispatchInput?.(
+        { kind: "pointer", action: "up", x: 20, y: 10, button: "left", clickCount: 1 },
+        p.revision,
+      );
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
+      // a press of the other attachment takes its turn and waits on its page; the attachment goes before it is sent
+      p.busy();
+      other.attachment.dispatchInput?.(
+        { kind: "pointer", action: "down", x: 20, y: 10, button: "left", clickCount: 1 },
+        p.revision,
+      );
+      await p.delivered();
+      expect(p.answers).toHaveLength(1);
+      other.attachment.dispose();
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart", "touchEnd"]);
+      p.answers[0]?.(1);
+      await p.delivered();
+      // the press takes its turn — then the release of what it set down
+      expect(p.heard).toEqual(["touchStart", "touchEnd", "touchStart", "touchCancel"]);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 2 (my T21) — a touchStart ANSWERED after its window was REPLACED sets nothing down for the window that replaced it: the new window's first move is a hover", async () => {
+      const p = await phone();
+      // the press's dispatch answers when the row says
+      let answer: () => void = () => {};
+      p.window.dispatchTouch = (input) => {
+        p.heard.push(input.type);
+        return new Promise<void>((resolve) => {
+          answer = resolve;
+        });
+      };
+      p.pointer("down", 20);
+      await p.delivered();
+      expect(p.heard).toEqual(["touchStart"]);
+      // the device moves to another density: the window is made anew (its pending turn ends with the old one)
+      await p.result.runtime.navigate({
+        action: "emulate",
+        emulation: { ...PHONE, deviceScaleFactor: 2 },
+      });
+      await p.delivered();
+      const made = p.result.native.windows[1];
+      if (made === undefined) throw new Error("no window was made anew");
+      // the old window's touchStart answers only now
+      answer();
+      await p.delivered();
+      made.emitNavigationState({ ...NAV });
+      made.paint(sharedPaint(804, 1748).paint);
+      await p.delivered();
+      expect(p.result.runtime.summary.state).toBe("live");
+      p.pointer("move", 30, p.result.runtime.summary.geometry?.revision ?? 0);
+      await p.delivered();
+      expect(made.touchInputs).toEqual([]);
+      p.result.runtime.dispose();
+    });
   });
 });

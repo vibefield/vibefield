@@ -240,8 +240,9 @@ export interface BrowserSurfaceNativeEmulation extends BrowserSurfaceAgent {
 }
 
 export interface BrowserSurfaceNativeTouchInput {
-  readonly type: "touchStart" | "touchMove" | "touchEnd";
-  /** The fingers down after this event (none for an end). */
+  /** PT-5c: a `touchCancel` ends a gesture the person did not finish (its attachment gone, its document gone) — never a tap. */
+  readonly type: "touchStart" | "touchMove" | "touchEnd" | "touchCancel";
+  /** The fingers down after this event (none for an end or a cancel). */
   readonly touchPoints: readonly { readonly x: number; readonly y: number; readonly id: number }[];
 }
 
@@ -932,9 +933,20 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * PT-4, PT-5b3 (ruling 5) — WHAT THE PAGE HAS BEEN TOLD IS DOWN: the finger (a press began a touch; its moves and its
    * release are the touch's), and each mouse button with the scale its press went at. A release of what is down is
    * ALWAYS sent; a release of nothing is nothing. Gone with the window.
+   * PT-5c (ruling 2) — and WHO pressed it: the attachment its press came through (none, for the runtime's own seam). When
+   * that attachment goes, what it pressed is released (`letGo`).
    */
   #touching = false;
-  readonly #pressed = new Map<string, number>();
+  #touchingBy: string | undefined;
+  readonly #pressed = new Map<
+    string,
+    {
+      readonly scale: number;
+      readonly x: number;
+      readonly y: number;
+      readonly by: string | undefined;
+    }
+  >();
   /** PT-4: the favicon the page last named and the ORIGIN it named it under — published with the browser state while the
    * page stands on that origin (a page that names the same icons as the one before says nothing, so a reload and a walk
    * within a site keep it; a page of another origin has none until it names its own); the count that names the word whose
@@ -1186,9 +1198,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       dispatchInput(input, geometryRevision) {
         if (disposed || !record.active) return;
         runtime.#inputRequests += 1;
-        void runtime.dispatchInput(browserInputRequest(input, geometryRevision)).catch(() => {
-          runtime.#inputDropped += 1;
-        });
+        void runtime
+          .dispatchInput(browserInputRequest(input, geometryRevision), context.attachmentId)
+          .catch(() => {
+            runtime.#inputDropped += 1;
+          });
       },
       navigate(command) {
         if (disposed || !record.active) return;
@@ -1203,6 +1217,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         record.active = false;
         runtime.#attachments.delete(context.attachmentId);
         runtime.reconcileDemand();
+        // PT-5c (ruling 2): a gesture ends when the attachment that took its press goes
+        runtime.letGo(context.attachmentId);
       },
     };
   }
@@ -1231,7 +1247,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * down, and every hover after it was a drag.) What the window IS — standing, live — is still read at the turn. And A
    * RELEASE IS NEVER JUDGED BY ITS GEOMETRY: of what is down it is always sent (`release`).
    */
-  dispatchInput(request: BrowserSurfaceInputRequest): Promise<void> {
+  dispatchInput(
+    request: BrowserSurfaceInputRequest,
+    /** the attachment it came through (none: the runtime's own seam) — what it presses is its own */
+    by?: string,
+  ): Promise<void> {
     const geometry = this.#geometry;
     // PT-5b3 (ruling 5) — AN EVENT IS FOR THE WINDOW THAT STOOD WHEN IT WAS SENT. The chain is one a page and outlives a
     // window — a remake, a rest and its wake, a crash and its restart — and a geometry's revision is not a window's: at
@@ -1251,7 +1271,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       this.onWindow(window, (standing) =>
         release
           ? this.release(request, standing)
-          : this.dispatchInTurn(request, geometry, standing),
+          : this.dispatchInTurn(request, geometry, standing, by),
       ),
     );
     this.#inputTail = turn.catch(() => undefined);
@@ -1298,11 +1318,12 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     if (this.#touching) {
       if (request.button !== undefined && request.button !== "left") return;
       this.#touching = false;
+      this.#touchingBy = undefined;
       await window.dispatchTouch({ type: "touchEnd", touchPoints: [] });
       return;
     }
     const button = request.button ?? "left";
-    const scale = this.#pressed.get(button);
+    const scale = this.#pressed.get(button)?.scale;
     if (scale === undefined) return;
     this.#pressed.delete(button);
     const clicks = request.clickCount;
@@ -1318,12 +1339,52 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     });
   }
 
+  /**
+   * PT-5c (ruling 2) — A GESTURE ENDS WHEN THE ATTACHMENT THAT TOOK ITS PRESS GOES (the app's window reloaded or closed,
+   * its renderer gone, the face let go): what it pressed in the page is released, on the chain — behind every event it
+   * sent before it went, read at the release's turn — and nothing of it is left down. The attachment that comes back
+   * starts with nothing down: its first move is a hover. A FINGER is CANCELLED, never ended: from a short touch the engine
+   * makes a tap — a click the person never made. A BUTTON is released where its press went, at its scale, with NO click
+   * (`clickCount` 0): the person never let go over the page. What another attachment pressed stands. (Before: nothing ended
+   * a gesture at an attachment's going — the window lives on through the grace, and the attachment that came back
+   * dragged the page with its first hover: the third grade's P3.)
+   */
+  private letGo(by: string): void {
+    const turn = this.#inputTail.then((): Promise<void> | undefined => {
+      const window = this.#window;
+      if (this.#closed || window === null || window.isDestroyed()) return undefined;
+      return Promise.race([this.letGoOn(window, by), this.goneOf(window)]);
+    });
+    this.#inputTail = turn.catch(() => undefined);
+  }
+
+  private async letGoOn(window: BrowserSurfaceNativeWindow, by: string): Promise<void> {
+    if (this.#touching && this.#touchingBy === by) {
+      this.#touching = false;
+      this.#touchingBy = undefined;
+      await window.dispatchTouch({ type: "touchCancel", touchPoints: [] });
+    }
+    for (const [button, down] of [...this.#pressed]) {
+      if (down.by !== by) continue;
+      this.#pressed.delete(button);
+      await window.dispatchMouse({
+        type: "mouseReleased",
+        x: down.x / down.scale,
+        y: down.y / down.scale,
+        button: button as Exclude<BrowserSurfaceMouseButton, "none">,
+        clickCount: 0,
+      });
+    }
+  }
+
   private async dispatchInTurn(
     request: BrowserSurfaceInputRequest,
     /** the geometry that stood when the event ARRIVED — the one it was judged against, and its bounds */
     geometry: LiveSurfaceGeometryV1 | undefined,
     /** the window it was sent for — standing, the chain's turn has made sure */
     window: BrowserSurfaceNativeWindow,
+    /** the attachment it came through */
+    by: string | undefined,
   ): Promise<void> {
     if (geometry === undefined || this.#lifecycle.snapshot.state !== "live") {
       throw new Error("Browser surface is not available for input");
@@ -1457,8 +1518,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       const finger = [{ x, y, id: 0 }];
       if (request.type === "down") {
         await window.dispatchTouch({ type: "touchStart", touchPoints: finger });
-        // (told: the finger is DOWN — on the window that heard it)
-        if (this.#window === window) this.#touching = true;
+        // (told: the finger is DOWN — on the window that heard it, by the attachment that sent it)
+        if (this.#window === window) {
+          this.#touching = true;
+          this.#touchingBy = by;
+        }
       } else await window.dispatchTouch({ type: "touchMove", touchPoints: finger });
       return;
     }
@@ -1472,7 +1536,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       ...(request.buttons === undefined ? {} : { buttons: request.buttons }),
     });
     // (told: the button is DOWN, at the scale its press went at — its release goes there)
-    if (request.type === "down" && this.#window === window) this.#pressed.set(button, scale);
+    if (request.type === "down" && this.#window === window)
+      this.#pressed.set(button, { scale, x: request.x, y: request.y, by });
   }
 
   /**
@@ -2667,6 +2732,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     }
     this.#cursor = undefined;
     this.#touching = false;
+    this.#touchingBy = undefined;
     this.#pressed.clear();
     if (window === null) return;
     this.#controlTargets?.revoke(this.surfaceId, window.controlContents);
