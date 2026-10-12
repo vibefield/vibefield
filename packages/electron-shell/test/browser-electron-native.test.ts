@@ -2498,6 +2498,7 @@ describe("PT-5d (M9) — a page TOLD it is focused while its pane takes the hand
   const two = () => {
     const adapter = new ElectronBrowserSurfaceNative();
     const sent: string[] = [];
+    const pages: (typeof electron.made)[number]["webContents"][] = [];
     const make = (name: string) => {
       const native = adapter.createWindow({
         partition: "memory:test",
@@ -2515,6 +2516,7 @@ describe("PT-5d (M9) — a page TOLD it is focused while its pane takes the hand
       made.destroy = () => {
         made.isDestroyed = () => true;
       };
+      pages.push(made.webContents);
       let attached = false;
       contents.debugger.isAttached = () => attached;
       contents.debugger.attach = () => {
@@ -2534,7 +2536,7 @@ describe("PT-5d (M9) — a page TOLD it is focused while its pane takes the hand
       };
       return native;
     };
-    return { a: make("A"), b: make("B"), sent };
+    return { a: make("A"), b: make("B"), sent, pages };
   };
 
   it("told: `Emulation.setFocusEmulationEnabled` on the PAGE's session, in the hand's queue — the key queued after it sent at once, never waiting on a word; told again: nothing; ANOTHER window told: this one untold first; untold: `enabled: false`, once; a window destroyed is told nothing", async () => {
@@ -2552,5 +2554,24 @@ describe("PT-5d (M9) — a page TOLD it is focused while its pane takes the hand
     w.a.destroy();
     await w.b.setFocused(true);
     expect(w.sent.slice(5)).toEqual(["A true", "B true"]);
+  });
+
+  // PT-5d (M11.2): for RUN 4's F-h2 — the page's focus emulation across its commits. If a commit drops it, `focusFor`
+  // becomes the window's document (one line) and this row is unskipped.
+  describe.skip("PT-5d (M11.2) — run 4's F-h2: a commit DROPS the page's focus emulation", () => {
+    it("told, the page commits another document, the hand takes it again: told again — one telling a document; taken twice within one, nothing; its own retelling never untells it first", async () => {
+      const w = two();
+      const page = w.pages[0];
+      if (page === undefined) throw new Error("no window");
+      await w.a.loadURL("https://host.test/a");
+      page.url = "https://host.test/a";
+      page.emit("did-navigate", {}, "https://host.test/a");
+      await w.a.setFocused(true);
+      await w.a.setFocused(true);
+      page.url = "https://elsewhere.test/b";
+      page.emit("did-navigate", {}, "https://elsewhere.test/b");
+      await w.a.setFocused(true);
+      expect(w.sent).toEqual(["A true", "A true"]);
+    });
   });
 });

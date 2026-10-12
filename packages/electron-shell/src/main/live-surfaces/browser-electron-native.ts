@@ -230,6 +230,8 @@ function safeEffectiveRaster(
 /** PT-5d (M9): the window of a native told it is focused — one at a time, as a browser has one focused window. */
 interface FocusHolder {
   window: ElectronBrowserSurfaceWindow | undefined;
+  /** PT-5d (M11.2): what its telling holds for, beside the window (`focusFor`) */
+  told: number | undefined;
 }
 
 class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
@@ -314,7 +316,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     readonly options: BrowserSurfaceNativeWindowOptions,
     readonly bootstrapReady: Promise<void>,
     /** PT-5d (M9): its native's focused window */
-    readonly focus: FocusHolder = { window: undefined },
+    readonly focus: FocusHolder = { window: undefined, told: undefined },
   ) {
     this.controlContents = window.webContents;
     window.webContents.debugger.on("message", (_event, method, params, sessionId) =>
@@ -1279,15 +1281,27 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   setFocused(focused: boolean): Promise<void> {
     const holder = this.focus;
     if (focused) {
-      if (holder.window === this) return Promise.resolve();
+      const told = this.focusFor();
+      if (holder.window === this && holder.told === told) return Promise.resolve();
       const was = holder.window;
       holder.window = this;
-      if (was !== undefined) void was.tellFocus(false).catch(() => undefined);
+      holder.told = told;
+      if (was !== undefined && was !== this) void was.tellFocus(false).catch(() => undefined);
       return this.tellFocus(true);
     }
     if (holder.window !== this) return Promise.resolve();
     holder.window = undefined;
+    holder.told = undefined;
     return this.tellFocus(false);
+  }
+
+  /**
+   * PT-5d (M11.2) — WHAT A TELLING HOLDS FOR, beside its window: nothing while the page's focus emulation survives its
+   * commits. If run 4's F-h2 says a commit drops it, this is the one line that changes — `return this.#documents;` — and
+   * the first taking after each commit tells the page again (its row waits in a `describe.skip` named for the run).
+   */
+  private focusFor(): number {
+    return 0;
   }
 
   private tellFocus(enabled: boolean): Promise<void> {
@@ -1364,7 +1378,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
 /** Pinned Electron 43 Browser OSR adapter. */
 export class ElectronBrowserSurfaceNative implements BrowserSurfaceNative {
   /** PT-5d (M9): the one window of this native told it is focused */
-  readonly #focus: FocusHolder = { window: undefined };
+  readonly #focus: FocusHolder = { window: undefined, told: undefined };
 
   createWindow(options: BrowserSurfaceNativeWindowOptions): BrowserSurfaceNativeWindow {
     // PT-4: a persistent profile lives under its USER's data (`LAYOUT.BROWSER_PROFILES_DIR`) when the runtime names where;
