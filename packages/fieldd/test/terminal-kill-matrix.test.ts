@@ -5,7 +5,7 @@
 // through the D6 ticket; churn leaves no residue. Row 2 (field-native's own
 // SIGTERM sweep) is pinned Rust-side in field-native/tests/terminal_unit.rs.
 import { type ChildProcess, spawn } from "node:child_process";
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import { nativeBinPath, shortTmpRoot, waitForMgmtEndpoint } from "./native-harness";
-import { helloAs, WsRpc } from "./ws-rpc";
+import { helloAs, type RpcErrorShape, WsRpc } from "./ws-rpc";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const BIN = nativeBinPath(ROOT);
@@ -95,6 +95,69 @@ function udsEndpoints(daemon: FielddDaemon): TerminalEndpoints {
   const ep = daemon.native.terminalEndpoints;
   if (ep === undefined) throw new Error("the paired floor reported no terminal endpoints");
   return ep;
+}
+
+/** The native log's last lines, read while the data dir still exists (cleanup
+ * deletes it): the one witness that tells a slow cell from a crashed one. */
+function nativeLogTail(dir: string, lines = 40): string {
+  const root = join(dir, "logs", "system");
+  try {
+    const text = readdirSync(root)
+      .filter((name) => name.startsWith("field-native") && name.endsWith(".ndjson"))
+      .sort()
+      .map((name) => readFileSync(join(root, name), "utf8"))
+      .join("");
+    return `--- field-native log, last ${lines} lines ---\n${text.trimEnd().split("\n").slice(-lines).join("\n")}`;
+  } catch (error) {
+    return `--- no field-native log: ${(error as Error).message} ---`;
+  }
+}
+
+/** `terminal.create`, retried while it is refused UNAVAILABLE and retryable —
+ * the honest answer while the class's cell is still being born — until
+ * `budgetMs` has passed; any other refusal fails at once. The create waits for
+ * the birth up to CELL_SUPERVISION.HELLO_DEADLINE_MS, the same 15 s
+ * field-native gives the cell before it kills it, so on a loaded host a cell
+ * that slow loses that race every time and its replacement is the one that
+ * serves. Every refusal is printed, one line each, and a create that landed
+ * only after refusals prints the native log's tail — a cell that lost the
+ * deadline is loud even when its replacement serves; the budget's end throws,
+ * and `withNativeLog` prints the tail with that. */
+async function createRetrying(
+  rpc: WsRpc,
+  params: Record<string, unknown>,
+  native: NativeHandle,
+  budgetMs: number,
+): Promise<{ sessionId: string }> {
+  const deadline = Date.now() + budgetMs;
+  for (let attempt = 1; ; attempt++) {
+    const started = Date.now();
+    try {
+      const created = (await rpc.call("terminal.create", params)) as { sessionId: string };
+      if (attempt > 1)
+        console.warn(`terminal.create landed on attempt ${attempt}\n${nativeLogTail(native.dir)}`);
+      return created;
+    } catch (error) {
+      const data = (error as { rpc?: RpcErrorShape }).rpc?.data;
+      const said = `terminal.create attempt ${attempt} refused after ${Date.now() - started} ms: ${(error as Error).message} ${JSON.stringify(data)}`;
+      if (data?.kind !== "UNAVAILABLE" || data.retryable !== true || Date.now() > deadline) {
+        throw new Error(said);
+      }
+      console.warn(`${said}; retrying`);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+}
+
+/** A row's body, and if it throws, the native log's tail printed first —
+ * cleanup deletes the data dir, and the only witness with it. */
+async function withNativeLog(native: NativeHandle, body: () => Promise<void>): Promise<void> {
+  try {
+    await body();
+  } catch (error) {
+    console.error(nativeLogTail(native.dir));
+    throw error;
+  }
 }
 
 async function poll<T>(fn: () => Promise<T | undefined>, ms = 5_000): Promise<T> {
@@ -253,52 +316,54 @@ describe("the kill matrix (NF-4, real field-native)", () => {
 
   it("row 6: the env strip holds through the real spawn path (EL7)", async () => {
     const native = await spawnNative();
-    const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
-    cleanup.push(() => daemon.stop());
-    const rpc = await connect(daemon);
+    await withNativeLog(native, async () => {
+      const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      cleanup.push(() => daemon.stop());
+      const rpc = await connect(daemon);
 
-    const created = (await rpc.call("terminal.create", { shell: SH })) as {
-      sessionId: string;
-    };
-    await poll(async () =>
-      (await listOf(rpc)).some((t) => t.sessionId === created.sessionId) ? true : undefined,
-    );
-    const uds = udsEndpoints(daemon);
-    const client = new GhostteaAutomationClient(
-      { controlSocket: uds.controlSocket, authToken: uds.authToken },
-      { clientBuild: "kill-matrix" },
-    );
-    cleanup.push(() => client.dispose());
-    await client.connect();
+      // a loaded host's cell can lose its birth race (15,489 ms, d166ecf2):
+      // retried inside the row's 60 s, loud either way
+      const created = await createRetrying(rpc, { shell: SH }, native, 30_000);
+      await poll(async () =>
+        (await listOf(rpc)).some((t) => t.sessionId === created.sessionId) ? true : undefined,
+      );
+      const uds = udsEndpoints(daemon);
+      const client = new GhostteaAutomationClient(
+        { controlSocket: uds.controlSocket, authToken: uds.authToken },
+        { clientBuild: "kill-matrix" },
+      );
+      cleanup.push(() => client.dispose());
+      await client.connect();
 
-    const out = join(native.dir, "smuggle.txt");
-    // dump the child env: `env` on unix, cmd's `set` on Windows.
-    const input = await client.pasteAndSubmit(
-      created.sessionId,
-      WIN ? `set > ${out}` : `env > ${out}`,
-    );
-    expect(input.accepted).toBe(true);
-    const env = await poll(async () => {
-      try {
-        const text = readFileSync(out, "utf8");
-        return text.length > 0 ? text : undefined;
-      } catch {
-        return undefined;
-      }
+      const out = join(native.dir, "smuggle.txt");
+      // dump the child env: `env` on unix, cmd's `set` on Windows.
+      const input = await client.pasteAndSubmit(
+        created.sessionId,
+        WIN ? `set > ${out}` : `env > ${out}`,
+      );
+      expect(input.accepted).toBe(true);
+      const env = await poll(async () => {
+        try {
+          const text = readFileSync(out, "utf8");
+          return text.length > 0 ? text : undefined;
+        } catch {
+          return undefined;
+        }
+      });
+      // the bait planted in field-native's own environment never reaches a PTY;
+      // ordinary vars do (inherit-minus-strip, NF-D6). SCOPE HONESTY (review):
+      // this proves the PREFIX classes (FIELD_/FIELDD_/GHOSTTEA_/...) — the
+      // upstream strip is an exact-prefix list, so a NON-prefixed secret in the
+      // daemon's env would pass into inherit-mode shells. That is spec-sanctioned
+      // (EL7 registers prefixes precisely so secrets are namable), not proof
+      // that arbitrary secrets can't ride the daemon env.
+      expect(env).not.toContain("FIELD_SMUGGLE");
+      expect(env).not.toContain("FIELDD_SMUGGLE");
+      expect(env).not.toContain("GHOSTTEA_");
+      // an ordinary (non-prefixed) var survives the strip: HOME on unix, the user
+      // profile path on Windows (the strip is exact-prefix, so both are untouched).
+      expect(env).toContain(WIN ? "USERPROFILE=" : "HOME=");
     });
-    // the bait planted in field-native's own environment never reaches a PTY;
-    // ordinary vars do (inherit-minus-strip, NF-D6). SCOPE HONESTY (review):
-    // this proves the PREFIX classes (FIELD_/FIELDD_/GHOSTTEA_/...) — the
-    // upstream strip is an exact-prefix list, so a NON-prefixed secret in the
-    // daemon's env would pass into inherit-mode shells. That is spec-sanctioned
-    // (EL7 registers prefixes precisely so secrets are namable), not proof
-    // that arbitrary secrets can't ride the daemon env.
-    expect(env).not.toContain("FIELD_SMUGGLE");
-    expect(env).not.toContain("FIELDD_SMUGGLE");
-    expect(env).not.toContain("GHOSTTEA_");
-    // an ordinary (non-prefixed) var survives the strip: HOME on unix, the user
-    // profile path on Windows (the strip is exact-prefix, so both are untouched).
-    expect(env).toContain(WIN ? "USERPROFILE=" : "HOME=");
   }, 60_000);
 
   // WIN-6 / G13: the exact-case prefixes are stripped (row 6). This probes the
