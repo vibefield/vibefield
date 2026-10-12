@@ -534,33 +534,34 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     // left paused (a dead embed). A frame whose session went meanwhile is sent nothing more.
     void (async () => {
       try {
-        const done =
-          (await send("Page.enable")) &&
-          (await send("Page.setInterceptFileChooserDialog", NO_FILE_PICKER)) &&
+        // PT-5d (M12 J4): every step sent at once, each with its own bound — one the engine never answers keeps none of the
+        // others from going (before: the steps after it were abandoned, the frame resumed unguarded); the resume after
+        // them all. The residual: a guard the engine never answers is unconfirmed, not unsent.
+        await Promise.all([
+          send("Page.enable"),
+          send("Page.setInterceptFileChooserDialog", NO_FILE_PICKER),
           // PT-5d: its words (its focus, its frames) through its own binding — heard with its Runtime on; the binding and
           // the words in the words' own world (M7 H1), the guard in its own
-          (await send("Runtime.enable")) &&
-          (await send("Runtime.addBinding", {
+          send("Runtime.enable"),
+          send("Runtime.addBinding", {
             name: FRAME_WORDS_BINDING,
             executionContextName: WORDS_WORLD,
-          })) &&
+          }),
           // (PT-5d: and at once in the document it holds as it attaches, whatever it is)
-          (await send("Page.addScriptToEvaluateOnNewDocument", {
+          send("Page.addScriptToEvaluateOnNewDocument", {
             source: PAGE_GUARD_SCRIPT,
             runImmediately: true,
-          })) &&
-          (await send("Page.addScriptToEvaluateOnNewDocument", {
+          }),
+          send("Page.addScriptToEvaluateOnNewDocument", {
             source: FRAME_WORDS_SCRIPT,
             worldName: WORDS_WORLD,
             runImmediately: true,
-          })) &&
+          }),
           // PT-5d (M6.5b): the page's device — its agent and hints, touch, the colour scheme (per target: never inherited)
-          (await step(() => this.tellFrame(child))) &&
+          step(() => this.tellFrame(child)),
           // PT-5d (M2) — A FRAME IN A FRAME is guarded too: auto-attach is per session, so this child's own, as the page's
-          // — a frame of another site inside it attaches on this session, and the same guards are put on it here, as it
-          // starts paused. (Before: never attached — its file input, its dialogs, its `window.open` were not ours.)
-          (await send("Target.setAutoAttach", AUTO_ATTACH));
-        void done;
+          send("Target.setAutoAttach", AUTO_ATTACH),
+        ]);
       } finally {
         if (this.#children.has(child) && !this.isDestroyed())
           void cdp.sendCommand("Runtime.runIfWaitingForDebugger", {}, child).catch(() => undefined);

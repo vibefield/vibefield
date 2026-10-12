@@ -882,7 +882,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     expect(r.on("frame-1").at(-1)).toBe("Runtime.runIfWaitingForDebugger");
   });
 
-  it("M6.5b (i) — a frame STARTS PAUSED: the page's auto-attach and each frame's wait for the debugger, FILTERED to frames (no worker is ever attached, paused or sent anything); each step before the resume BOUNDED (2 s): one never answered is abandoned with the steps after it, and the frame resumed; a frame whose session went meanwhile is sent nothing more", async () => {
+  it("M6.5b (i) — a frame STARTS PAUSED: the page's auto-attach and each frame's wait for the debugger, FILTERED to frames (no worker is ever attached, paused or sent anything); each step before the resume sent INDEPENDENTLY and BOUNDED (2 s): one never answered keeps none of the others from going (M12 J4 — its guard script, its words, its device, its own auto-attach all sent), and the frame is resumed after them all; a frame whose session went meanwhile is not resumed", async () => {
     vi.useFakeTimers();
     try {
       const r = recording((method, _params, session) =>
@@ -910,28 +910,26 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       });
       r.attach("F");
       await vi.advanceTimersByTimeAsync(1_999);
-      expect(r.on("F")).toEqual([
+      const steps = r.on("F");
+      expect(steps.slice(0, 6)).toEqual([
         "Page.enable",
         "Page.setInterceptFileChooserDialog",
         "Runtime.enable",
+        "Runtime.addBinding",
+        "Page.addScriptToEvaluateOnNewDocument",
+        "Page.addScriptToEvaluateOnNewDocument",
       ]);
+      expect(steps).toContain("Target.setAutoAttach");
+      expect(steps).toContain("Emulation.setEmulatedMedia");
+      expect(steps).not.toContain("Runtime.runIfWaitingForDebugger");
       await vi.advanceTimersByTimeAsync(1);
-      expect(r.on("F")).toEqual([
-        "Page.enable",
-        "Page.setInterceptFileChooserDialog",
-        "Runtime.enable",
-        "Runtime.runIfWaitingForDebugger",
-      ]);
+      expect(r.on("F").at(-1)).toBe("Runtime.runIfWaitingForDebugger");
       // gone while its step hung: nothing more, not even the resume
       r.attach("G");
       await vi.advanceTimersByTimeAsync(500);
       r.emit("Target.detachedFromTarget", { sessionId: "G", targetId: "t-G" });
       await vi.advanceTimersByTimeAsync(5_000);
-      expect(r.on("G")).toEqual([
-        "Page.enable",
-        "Page.setInterceptFileChooserDialog",
-        "Runtime.enable",
-      ]);
+      expect(r.on("G")).not.toContain("Runtime.runIfWaitingForDebugger");
     } finally {
       vi.useRealTimers();
     }
@@ -2141,8 +2139,11 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       expect(steps.indexOf("Emulation.setUserAgentOverride")).toBeGreaterThan(
         steps.lastIndexOf("Page.addScriptToEvaluateOnNewDocument"),
       );
+      // (M12 J4: the steps go independently — the device and the frame's own auto-attach in either order, both before
+      // the resume)
+      expect(steps).toContain("Target.setAutoAttach");
       expect(steps.indexOf("Emulation.setEmulatedMedia")).toBeLessThan(
-        steps.indexOf("Target.setAutoAttach"),
+        steps.indexOf("Runtime.runIfWaitingForDebugger"),
       );
       const on = (method: string): unknown =>
         r.sent.find((c) => c.session === "F" && c.method === method)?.params;
