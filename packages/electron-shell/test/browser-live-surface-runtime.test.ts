@@ -4827,8 +4827,15 @@ describe("BrowserLiveSurfaceRuntime", () => {
     });
 
     describe("PT-5c2 — the chain's edges: what PT-5c's grade found", () => {
-      it("F2 — NOTHING IS KEPT PER EVENT: 10,000 moves over a laptop's page leave no promise behind them — each turn's race against its window's going is let go when the turn is done, sent or refused (before: a reaction a turn on a promise as old as the window — 10,000 kept)", async () => {
+      it("F2 — NOTHING IS KEPT PER EVENT: 10,000 moves over a laptop's page leave no promise behind them, and no heap — each turn's race against its window's going is let go when the turn is done, sent or refused (before: a reaction a turn on a promise as old as the window — 10,000 kept, 266 B an event)", async () => {
         const { queryObjects } = await import("node:v8");
+        // main's live promises and heap, each read after a full collection (`queryObjects` collects first) — the heap too:
+        // a turn's entry kept after it settled keeps no promise (V8 lets a settled promise go from its resolving
+        // functions) but 138 B an event (PT-5c2's red-proof, `f2-keep-sent`)
+        const read = (): { readonly promises: number; readonly heap: number } => {
+          const promises = queryObjects(Promise, { format: "count" }) as number;
+          return { promises, heap: process.memoryUsage().heapUsed };
+        };
         const p = await laptop();
         const r = p.result.runtime.summary.geometry?.revision ?? 0;
         const drained = async (): Promise<void> => {
@@ -4846,20 +4853,26 @@ describe("BrowserLiveSurfaceRuntime", () => {
           await drained();
         };
         await moves(100);
-        const before = queryObjects(Promise, { format: "count" }) as number;
-        const heard = p.window.mouseInputs.length;
+        // (the fake keeps every input it heard — the test's own objects, let go before each read)
+        p.window.mouseInputs.length = 0;
+        const before = read();
         await moves(10_000);
-        const after = queryObjects(Promise, { format: "count" }) as number;
-        expect(p.window.mouseInputs.length - heard).toBe(10_000);
-        expect(after - before).toBeLessThan(500);
+        const heard = p.window.mouseInputs.length;
+        p.window.mouseInputs.length = 0;
+        const after = read();
+        expect(heard).toBe(10_000);
+        expect(after.promises - before.promises).toBeLessThan(500);
+        expect(after.heap - before.heap).toBeLessThan(500_000);
         // …and 10,000 REFUSED at their turn (the page at rest: never sent, each counted)
         p.renderer.attachment.setDemand(demand(2, "paused"));
         await delivered();
         const dropped = p.result.runtime.stats.inputDropped;
+        const resting = read();
         await moves(10_000);
-        const refused = queryObjects(Promise, { format: "count" }) as number;
+        const refused = read();
         expect(p.result.runtime.stats.inputDropped - dropped).toBe(10_000);
-        expect(refused - after).toBeLessThan(500);
+        expect(refused.promises - resting.promises).toBeLessThan(500);
+        expect(refused.heap - resting.heap).toBeLessThan(500_000);
         p.result.runtime.dispose();
       });
 
