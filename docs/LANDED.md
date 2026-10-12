@@ -9531,3 +9531,58 @@ animated, on main `ce17e858`; `draft/monitor-view-sdk/evidence/swarm-probe-ce17e
 (`findSpawnPosition` ignores them), a manifest field for a view to keep its own ground out of the head's fade, and the
 `animations` doc comment (`view-sdk/src/view.ts:111`), which says only "no loop runs" — held still, arrivals are drawn
 where they spawn, unsolved.
+
+## PJ-6, the launch — History's New agent starts an agent at a model and an effort the agent itself offers, and the project remembers what it started at (2026-10-12; `df135def` · `646699f4` · `ad699f8e` · `07f4d985` · `ca4749ac` · `1538c900` through lane land3, gated on the exact tree)
+
+**Why:** PJ-6 (`thinking-project-places.md` :352, PJ-L8, PJ-D13, PJ-D14). James ruled its seven open questions on
+2026-10-12 ("go with your lean", after puppeteer `cbc6e01`, his, the same day: each agent's own model picker read live,
+and launches validated against it); the record is the design's "Delta 2026-10-12", the plan
+`draft/project-places/build-pj6.md`, the survey `draft/history-finish/surveys/s-pj6.md`. Lane pj6
+(`pj/6-launch-recipes`, brief `draft/project-places/briefs/pj6.md`).
+
+**What landed:**
+- `df135def` EL8: puppeteer `dce6adb` → `cbc6e01` (the sha line; `siblings:pin` green, R23 green, consumers' typecheck
+  green).
+- `646699f4` `agent.spawn` carries puppeteer's `modelSelection {modelId, custom?, controls?}`, opaque (AR-L1); fieldd
+  hands puppeteer only its three keys; refusals keep their codes (`INVALID_MODEL_SELECTION` → PRECONDITION_FAILED "<Agent>
+  was not started at the chosen model: …"; `MODEL_DISCOVERY_UNAVAILABLE` → UNAVAILABLE, retryable). The audit says a
+  selection was applied, never its ids.
+- `ad699f8e` `agent.models {provider, profileSet?, cwd?, refresh?}` (scope `agent.spawn`, idempotent, federate): each
+  agent's own picker under one Agent Profile, held in memory per (agent, Agent Profile) so a menu opens at once and a
+  read runs behind it (a held catalog re-read after 60 s; a held failure behind every ask; a first ask waits for a read
+  bounded at 20 s). A failure is puppeteer's words, never an empty list. Keyed by agent and profile, not folder: the
+  launch discovers again in its own folder before it starts.
+- `07f4d985` the recipe: a CONFIRMED birth from VibeField's launch writes the project's recipe through the birth hook
+  (`enter` → `onPlace` → `actedIn`) — the selection and each model's last controls, a switch of agent starting the map
+  afresh; never a refusal, a resume, a re-attach, a typed run (Q6) or Temporary. `ProjectSummary.recipe?`; the session
+  record keeps its launch's `modelSelection` (an older reader still verifies a record carrying it). PJ-2's callerless
+  keyed `setRecipe` removed (a birth knows its folder, not its key).
+- `ca4749ac` History's New agent (DESIGN.md §8 first): the project's recipe first ("Claude Code · Opus · high — Work",
+  last used), then each agent under each Agent Profile at its own model and effort (Q2: the Agent Profiles, never
+  personas), each with "Another model…" turning the rows to that agent's own picker (models with this project's last
+  effort for each; "Reading …'s models…"; "Sign in to see models" or the agent's own words; the catalog's age), then
+  the chosen model's controls ("its own" first). **Interim:** the room closes its rows on every choice and pages
+  nothing (ROOM API v3), so `history/turn-page.ts` presses the room's own New agent trigger again once its rows have
+  closed after a turning choice, to open the next page in place — one DOM reach into the room, tested against the real
+  room, degrading to "press New agent again"; rows closed without a turn open on the first page again.
+- `1538c900` the witness: the typed stub answers its picker's `initialize`; smoke:godview's new History rung starts it
+  from New agent → Another model… → a model → an effort and finds the stub's own launch argv carrying `--model …
+  --effort …` and fieldd's fold row at `model {intent: configured}`, `effort {value, configured, intent: configured}`.
+
+**Validation:** the lane's red and green logs under `/Volumes/SamsungRed/lanes/pj6/` (red-2…red-6, green-2…green-6;
+the smoke's red with slice 5 reverted, `red-6-smoke-godview.log`); the lane's gate green on `318ba907`; then the
+landing gate on the exact tree (`lanes/land3/logs/`, under this landing's sha).
+
+**Found:** fieldd's daemon tests and the smokes root under the OS temp, so every place there is Temporary and writes no
+recipe; the recipe's write is witnessed in fieldd's project-records test (the real library and grouping). The lane's
+first gate met agent-session "MF-1f/MF-1g — the pane stays and the row with it" ("the terminal floor is not
+available", load ~200): the birth-race class the debts lane cured in the kill matrix, here in another file.
+
+**Owed:**
+- Resume at the session's own selection (Q4): puppeteer `vf/pj6-resume-selection` `c57fe53` (built: resume takes a
+  selection; Claude, Codex, Copilot, Grok, Kimi, Pi, Antigravity can; OpenCode and Hermes refuse honestly) — lane pj6's
+  slice 7, on the second pin;
+- the room ask that retires `turn-page.ts`: `RoomMenuItem.menu?`, a row that pages the open menu (rosetta);
+- the catalogs held across a fieldd restart (the first menu after a restart waits ~2.5 s for Claude) — not built;
+- agent-session MF-1f/MF-1g's create, through the retry the kill matrix got;
+- the phone's launch rows (PJ-7); the full launch dialog (a room ask).

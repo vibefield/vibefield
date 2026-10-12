@@ -16,7 +16,7 @@
 >   - and its close (`ecfd7388` · `81ccb8da` · `f377f0e7`; LANDED "GV round 3, finished"): a launch opens on the monitor alone and the first call brings the last run's panes (N14 (a)); ⌘W on the last pane puts the terminals away (N16 (a)); the rest is 5/13 of any window, floor 232, the slider retired (N15 (a)).
 > - **Honest states the gates turned up:** the line never says "Pasted into …" for a paste the pane dropped; History's acts never end in silence; the deck's queued floor reads are bounded.
 >
-> Left of round 3: a look on a real window at what the offscreen smokes cannot see (the lights' move, a real fling, the launch's first call, ⌘W on a last pane, other heights). Next: the debts lane beside PJ-6, then PJ-7 (N10 (a)); the swarm's sizing to its field is puppeteer's, at its next pin.
+> Left of round 3: a look on a real window at what the offscreen smokes cannot see (the lights' move, a real fling, the launch's first call, ⌘W on a last pane, other heights). Next: PJ-6's Resume at the session's own model, then PJ-7 (N10 (a); the debts lane and PJ-6's launch are landed); the swarm's sizing to its field is puppeteer's, at its next pin.
 >
 > **James ruled the whole *After Wave 2 Docket* on 2026-10-12** (republished under his current account, https://claude.ai/artifact/RvcaxJnoLhXMz3HcKHZx1G; DECISIONS, the N row): every mark at the lean but N7. **Pushes stay held (N7 (b)).** truffle's egress release this week (N11 (a)); after round 3, a debts lane beside PJ-6, then PJ-7 (N10 (a)). N2 (PK2) closed: the Stories head ended it. Upstream, for ghosttea: `paste()` / `sendKey()` / `sendText()` say whether they sent.
 >
@@ -36,7 +36,7 @@
 >
 > Next for History:
 > - DS-7/SP-7 (other desktops' sessions and transcripts, the phone's) wait on truffle's egress release. Until then History lists this desktop's sessions, with marks for the rest (H3).
-> - PJ-6 (model and effort in New agent) and PJ-7 (the phone over `project.*`).
+> - PJ-6 (model and effort in New agent): the launch LANDED (LANDED "PJ-6, the launch"); Resume at the session's own selection is in build (lane pj6, on puppeteer `vf/pj6-resume-selection`). Then PJ-7 (the phone over `project.*`, with the phone's launch rows).
 > - The past for other desktops (B-D4) and for the phone (B-D5).
 >
 > Open with James, none decided by this landing (N2–N4 on his page *After Wave 2 Docket*, published 2026-10-10 with the lead's leans):
@@ -1065,8 +1065,8 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
     the rest (`f377f0e7`), the search's 120 ms step (`8c6982f0`, the debts lane). Left: a look on a real window.
   - **Waiting on truffle's egress release:** DS-7 and SP-7, which bring other desktops' sessions and transcripts
     into History and onto the phone. History lists this desktop's sessions until then (H3).
-  - **Not waiting on a release (order unruled):** PJ-6 (launch recipes: model and effort in New agent) · PJ-7
-    (the phone over `project.*`) · the room's batched figures and the repository's address (R8, R9: built
+  - **Not waiting on a release:** PJ-6's Resume at a selection (in build; its launch LANDED) · PJ-7
+    (the phone over `project.*`, with the phone's launch rows) · the room's batched figures and the repository's address (R8, R9: built
     upstream, not yet passed) · the past for other desktops and the phone (B-D4, B-D5).
 - **DS — after wave 2 (LANDED 2026-10-01 `fa31207f`; LANDED §DS wave 2; `work/ds-wave2-2026-10-01.md`).** The plane is
   built, consumed on this side and hardened; the phone's ground (SP-1, SP-2, DS-4b) is laid. **James's (unchanged):** merge, release
