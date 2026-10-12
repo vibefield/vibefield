@@ -52,6 +52,8 @@ const CPU_FALLBACK_MAX_FPS = 10;
 /** PT-5b (ruling 5c): how long a `mobile` page's visual-viewport scale, once read, serves a move, a hover or a wheel
  * (a press always reads it afresh). */
 const POINT_SCALE_MS = 250;
+/** PT-5c (ruling 2): where a button is let go that the person never let go over the page — outside its view (CSS px). */
+const OUTSIDE_THE_VIEW = { x: -1000, y: -1000 } as const;
 const CPU_FALLBACK_MAX_PIXELS = 1280 * 720;
 
 const BROWSER_CAPABILITIES = {
@@ -1351,8 +1353,10 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * its renderer gone, the face let go): what it pressed in the page is released, on the chain — behind every event it
    * sent before it went, read at the release's turn — and nothing of it is left down. The attachment that comes back
    * starts with nothing down: its first move is a hover. A FINGER is CANCELLED, never ended: from a short touch the engine
-   * makes a tap — a click the person never made. A BUTTON is released where its press went, at its scale, with NO click
-   * (`clickCount` 0): the person never let go over the page. What another attachment pressed stands. (Before: nothing ended
+   * makes a tap — a click the person never made. A BUTTON is released OUTSIDE the page's view: the page hears its mouseup
+   * (a drag it tracks ends) and its click lands on the page's root — never on what the person pressed and never let go
+   * over (released at its press's point the engine clicks it, `clickCount` 0 or not: PT-5c's probe `release.cjs`). What
+   * another attachment pressed stands. (Before: nothing ended
    * a gesture at an attachment's going — the window lives on through the grace, and the attachment that came back
    * dragged the page with its first hover: the third grade's P3.)
    */
@@ -1376,10 +1380,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       this.#pressed.delete(button);
       await window.dispatchMouse({
         type: "mouseReleased",
-        x: down.x / down.scale,
-        y: down.y / down.scale,
+        ...OUTSIDE_THE_VIEW,
         button: button as Exclude<BrowserSurfaceMouseButton, "none">,
-        clickCount: 0,
       });
     }
   }

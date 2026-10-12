@@ -3676,7 +3676,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.result.runtime.dispose();
     });
 
-    it("ruling 2 — a BUTTON down when the attachment that sent its press goes is released at its press's point and scale with NO click (the person never let go over the page); the next move has no button down", async () => {
+    it("ruling 2 — a BUTTON down when the attachment that sent its press goes is released OUTSIDE the page's view — never over what was pressed (at its point, even with clickCount 0, the engine clicks it: the probe); the next move has no button down", async () => {
       const p = await laptop();
       const r = p.result.runtime.summary.geometry?.revision ?? 0;
       p.renderer.attachment.dispatchInput?.(
@@ -3689,10 +3689,9 @@ describe("BrowserLiveSurfaceRuntime", () => {
       await delivered();
       expect(p.window.mouseInputs.at(-1)).toEqual({
         type: "mouseReleased",
-        x: 12,
-        y: 8,
+        x: -1000,
+        y: -1000,
         button: "left",
-        clickCount: 0,
       });
       const b = await again(p.result.runtime, p.window, { width: 640, height: 360 });
       b.move(30);
