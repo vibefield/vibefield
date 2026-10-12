@@ -1818,12 +1818,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * started again behind the person five seconds later, then failed as a source (`frame-stalled`).
    */
   private loadEnded(): void {
-    // (the deadline is met however it ended — R4: a window born under the person's stop, the page saying `stopped` already)
+    if (this.#documentStands || this.#browserState?.failure !== undefined) return;
     if (this.#startupTimer !== null) {
       clearTimeout(this.#startupTimer);
       this.#startupTimer = null;
     }
-    if (this.#documentStands || this.#browserState?.failure !== undefined) return;
     this.#browserState = {
       url: this.#resumeUrl ?? this.source.initialUrl,
       loading: false,
@@ -1928,8 +1927,15 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         this.#controlTargets?.associate(this.surfaceId, epoch, window.controlContents);
         // PT-5a: a load the page itself said FAILED is not a failed SOURCE — its window lives, its state says why, and a
         // reload asks again. PT-5b2 (ruling 6): and NOTHING of the source is read off this load's promise (`load`)
-        if (this.#stopAsked) this.loadEnded();
-        else this.load(window, this.#resumeUrl ?? this.source.initialUrl);
+        if (this.#stopAsked) {
+          // PT-5c (R4): born under the person's stop — the window is up (the startup deadline is met), nothing is loaded,
+          // and the page says `stopped` (already, when its last window said so)
+          if (this.#startupTimer !== null) {
+            clearTimeout(this.#startupTimer);
+            this.#startupTimer = null;
+          }
+          this.loadEnded();
+        } else this.load(window, this.#resumeUrl ?? this.source.initialUrl);
       },
       () => {
         if (this.isCurrent(window, epoch)) failed();
