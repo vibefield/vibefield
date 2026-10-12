@@ -4904,6 +4904,73 @@ describe("BrowserLiveSurfaceRuntime", () => {
         });
         p.result.runtime.dispose();
       });
+
+      it("F5 — `letGo` sends nothing from a stale snapshot: an attachment holding two KEYS goes, and another document commits while the first key's up is unanswered — the second key, forgotten at the commit, is never let up into the new document (the orchestrator's S5)", async () => {
+        const p = await laptop();
+        const other = attach(p.result.runtime, "attachment_browser_00000002");
+        other.attachment.setDemand(demand(2, "live"));
+        await delivered();
+        const r = p.result.runtime.summary.geometry?.revision ?? 0;
+        const keys = (): string[] => p.window.keyInputs.map((k) => `${k.type} ${k.key}`);
+        p.key("down", r, "a");
+        p.key("down", r, "b");
+        await delivered();
+        expect(keys()).toEqual(["keyDown a", "keyDown b"]);
+        // the first key's up is answered when the row says
+        let answer: () => void = () => {};
+        const send = p.window.dispatchKey.bind(p.window);
+        p.window.dispatchKey = async (input) => {
+          await send(input);
+          if (input.type === "keyUp" && input.key === "a")
+            await new Promise<void>((resolve) => {
+              answer = resolve;
+            });
+        };
+        p.renderer.attachment.dispose();
+        await delivered();
+        // while it is unanswered, another document commits
+        p.window.emitNavigationState({ ...NAV, url: NEXT });
+        await delivered();
+        answer();
+        await delivered();
+        expect(keys()).toEqual(["keyDown a", "keyDown b", "keyUp a"]);
+        p.result.runtime.dispose();
+      });
+
+      it("F5 — … and two BUTTONS: the second is never released into the new document", async () => {
+        const p = await laptop();
+        const other = attach(p.result.runtime, "attachment_browser_00000002");
+        other.attachment.setDemand(demand(2, "live"));
+        await delivered();
+        const r = p.result.runtime.summary.geometry?.revision ?? 0;
+        const press = (button: "left" | "right"): void =>
+          p.renderer.attachment.dispatchInput?.(
+            { kind: "pointer", action: "down", x: 10, y: 10, button, clickCount: 1 },
+            r,
+          );
+        const mouse = (): string[] => p.window.mouseInputs.map((m) => `${m.type} ${m.button}`);
+        press("left");
+        press("right");
+        await delivered();
+        expect(mouse()).toEqual(["mousePressed left", "mousePressed right"]);
+        let answer: () => void = () => {};
+        const send = p.window.dispatchMouse.bind(p.window);
+        p.window.dispatchMouse = async (input) => {
+          await send(input);
+          if (input.type === "mouseReleased" && input.button === "left")
+            await new Promise<void>((resolve) => {
+              answer = resolve;
+            });
+        };
+        p.renderer.attachment.dispose();
+        await delivered();
+        p.window.emitNavigationState({ ...NAV, url: NEXT });
+        await delivered();
+        answer();
+        await delivered();
+        expect(mouse()).toEqual(["mousePressed left", "mousePressed right", "mouseReleased left"]);
+        p.result.runtime.dispose();
+      });
     });
   });
 });

@@ -1453,6 +1453,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   }
 
   private async letGoOn(window: BrowserSurfaceNativeWindow, by: string): Promise<void> {
+    // PT-5c2 (F5) — NOTHING FROM A STALE SNAPSHOT: before each dispatch, what it lets go must still be DOWN — the SAME
+    // entry (an entry is its window's and its document's: a commit and a window's going forget every one, so an entry made
+    // since is another), else it is skipped: another document committed between two dispatches, another door let it up,
+    // the window went. (Before: the snapshot's next key went up into the NEW document — the stray keyUp ruling 1 warns of —
+    // and a second button's mouseup the same.)
     if (this.#touching && this.#touchingBy === by) {
       this.#touching = false;
       this.#touchingBy = undefined;
@@ -1460,6 +1465,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     }
     for (const [button, down] of [...this.#pressed]) {
       if (down.by !== by) continue;
+      if (this.#pressed.get(button) !== down) continue;
       this.#pressed.delete(button);
       await window.dispatchMouse({
         type: "mouseReleased",
@@ -1470,6 +1476,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // R8: a KEY it holds down is let up, as a button
     for (const [code, down] of [...this.#keysDown]) {
       if (down.by !== by) continue;
+      if (this.#keysDown.get(code) !== down) continue;
       this.#keysDown.delete(code);
       await window.dispatchKey(keyUpOf(down, down.key, undefined));
     }
