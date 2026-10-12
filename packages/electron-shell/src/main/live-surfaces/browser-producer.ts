@@ -1018,6 +1018,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * DOCUMENT of the page stands in the window (it committed, or the engine's error page stands in a failed address's
    * place); the window was heard LOADING (its remote load is under way — a stop-loading before that is the bootstrap's);
    * and the person asked the load to STOP while nothing of the page stood.
+   * PT-5c (R4) — that stop is THE PERSON'S, and holds until the person asks again (↻, a go) or a document of the page
+   * stands: kept across every window's going — a remake under any ask, a rest and its wake, a crash and its restart — a
+   * window made anew is born and not loaded, and the page says `stopped` all along, never `loading` between.
    */
   #documentStands = false;
   #heardLoading = false;
@@ -1671,6 +1674,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         }
         this.#resumeUrl = command.url;
       }
+      // (R4: the person asked again — a stop of theirs is forgotten)
+      this.#stopAsked = false;
       this.#waitsForReload = false;
       this.#restartAttempts = 0;
       if (this.#effectiveDemand?.mode === "live") this.startProducer();
@@ -1688,6 +1693,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       }
       if (state === "hibernated" || state === "created") {
         this.#resumeUrl = command.url;
+        // (R4: a go forgets the person's stop — the page is born there, and loads it)
+        this.#stopAsked = false;
         if (this.#browserState !== undefined) {
           this.#browserState = {
             url: command.url,
@@ -1808,11 +1815,12 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * started again behind the person five seconds later, then failed as a source (`frame-stalled`).
    */
   private loadEnded(): void {
-    if (this.#documentStands || this.#browserState?.failure !== undefined) return;
+    // (the deadline is met however it ended — R4: a window born under the person's stop, the page saying `stopped` already)
     if (this.#startupTimer !== null) {
       clearTimeout(this.#startupTimer);
       this.#startupTimer = null;
     }
+    if (this.#documentStands || this.#browserState?.failure !== undefined) return;
     this.#browserState = {
       url: this.#resumeUrl ?? this.source.initialUrl,
       loading: false,
@@ -1821,7 +1829,6 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       ...(this.#browserState?.refused === undefined ? {} : { refused: this.#browserState.refused }),
       failure: { reason: this.#stopAsked ? "stopped" : "no-document" },
     };
-    this.#stopAsked = false;
     this.publishSummary();
   }
 
@@ -2004,23 +2011,20 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   private remakeWindow(): void {
     this.#windowsRemade += 1;
     this.clearSourceTimers();
-    // PT-5c (ruling 5) — A PERSON'S STOP SURVIVES A REMAKE: one asked before the birth, one asked while the first load
-    // was under way (the engine's stop not yet answered), one SAID (`stopped`). The window made anew is born and NOT
-    // loaded; the page says `stopped` at its address, and ↻ loads it on the new device. (Before: the going forgot it, and
-    // the new window loaded the address — my probe R.) A page that said `no-document` had no stop of the person's: it
-    // is asked for again. Under an ask that is not live the remake puts the page to rest — its wake is a rest's.
-    const stopped = this.#stopAsked || this.#browserState?.failure?.reason === "stopped";
+    // PT-5c (ruling 5, R4) — A PERSON'S STOP SURVIVES A REMAKE: one asked before the birth, one asked while the first load
+    // was under way (the engine's stop not yet answered), one SAID (`stopped`) — the person's stop is the page's until the
+    // person asks again (`#stopAsked`, which no window's going forgets). The window made anew is born and NOT loaded,
+    // under any ask; the page says `stopped` at its address all along, and ↻ loads it on the new device. (Before: the going
+    // forgot it, and the new window loaded the address — my probe R; under an ask that was not live, its wake loaded it.)
+    // A page that said `no-document` had no stop of the person's: it is asked for again.
     // to rest by the table's own steps, silently
     for (const step of ["live", "paused", "hibernated"] as const) {
       if (this.#lifecycle.snapshot.state !== step && this.#lifecycle.canTransition(step))
         this.#lifecycle.transition(step);
     }
     this.destroyWindow();
-    if (this.#effectiveDemand?.mode === "live") {
-      this.startProducer();
-      // (read at the birth's end: `born`)
-      if (stopped) this.#stopAsked = true;
-    } else this.publishSummary();
+    if (this.#effectiveDemand?.mode === "live") this.startProducer();
+    else this.publishSummary();
   }
 
   /**
@@ -2905,7 +2909,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#windowDensity = undefined;
     this.#documentStands = false;
     this.#heardLoading = false;
-    this.#stopAsked = false;
+    // (R4: the person's stop — `#stopAsked` — is the page's, not the window's: kept)
     this.#born = false;
     this.#documentBase = this.#document;
     // PT-5c (ruling 1): nothing waits for a word of this window's documents any more (its turns end with it besides)
@@ -2966,8 +2970,21 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
 
   private resetProducerObservations(): void {
     // PT-5a: a new window's page keeps the last one's address and says it is LOADING, with nowhere to go yet — the last
-    // window's history and its failed load are not this one's
-    if (this.#browserState !== undefined) this.#browserState = loadingAgain(this.#browserState);
+    // window's history and its failed load are not this one's. PT-5c (R4): under the person's stop it says STOPPED — it
+    // will not load — never `loading` between.
+    if (this.#browserState !== undefined)
+      this.#browserState = this.#stopAsked
+        ? {
+            url: this.#resumeUrl ?? this.source.initialUrl,
+            loading: false,
+            canGoBack: false,
+            canGoForward: false,
+            ...(this.#browserState.refused === undefined
+              ? {}
+              : { refused: this.#browserState.refused }),
+            failure: { reason: "stopped" },
+          }
+        : loadingAgain(this.#browserState);
     this.#transport = undefined;
     this.#geometry = undefined;
     this.#geometryKey = "";

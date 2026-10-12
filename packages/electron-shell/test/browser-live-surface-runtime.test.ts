@@ -4181,6 +4181,110 @@ describe("BrowserLiveSurfaceRuntime", () => {
       ended.result.runtime.dispose();
     });
 
+    /** R4: every state a page published from `from` on says it is STOPPED — never loading, never anything else. */
+    const allStopped = (
+      renderer: { summaries: LiveSurfaceRuntimeSummaryV1[] },
+      from: number,
+    ): void => {
+      const said = renderer.summaries.slice(from).map((summary) => summary.browser);
+      expect(said.length).toBeGreaterThan(0);
+      for (const browser of said)
+        expect(browser).toMatchObject({ loading: false, failure: { reason: "stopped" } });
+    };
+
+    it("R4 — a person's STOP holds until the person asks again: across a remake under a LIVE ask the window made anew is born and not loaded, and EVERY state published says `stopped` — never `loading`", async () => {
+      const p = await starting({ source: laptopAt2() });
+      await delivered();
+      p.renderer.attachment.navigate?.({ action: "stop" });
+      await delivered();
+      p.blank(false);
+      const from = p.renderer.summaries.length;
+      await p.result.runtime.navigate({ action: "emulate", emulation: ANOTHER_DENSITY });
+      await delivered();
+      expect(p.result.native.windows[1]?.loadedUrls).toEqual([]);
+      allStopped(p.renderer, from);
+      p.result.runtime.dispose();
+    });
+
+    it("R4 — … across a remake under an ask that is NOT live (the page goes to rest), and its wake: born, not loaded, `stopped` — never `loading`", async () => {
+      const p = await starting({ source: laptopAt2() });
+      await delivered();
+      p.renderer.attachment.navigate?.({ action: "stop" });
+      await delivered();
+      p.blank(false);
+      p.renderer.attachment.setDemand(demand(2, "paused"));
+      await delivered();
+      const from = p.renderer.summaries.length;
+      await p.result.runtime.navigate({ action: "emulate", emulation: ANOTHER_DENSITY });
+      await delivered();
+      expect(p.result.native.windows).toHaveLength(1);
+      p.renderer.attachment.setDemand(demand(3, "live"));
+      await delivered();
+      const made = p.result.native.windows[1];
+      if (made === undefined) throw new Error("no window was made at the wake");
+      expect(made.loadedUrls).toEqual([]);
+      allStopped(p.renderer, from);
+      p.result.runtime.dispose();
+    });
+
+    it("R4 — … across a REST and its wake: born, not loaded, `stopped` — never `loading`; then ↻ loads it (the person asked again)", async () => {
+      const p = await starting();
+      await delivered();
+      p.renderer.attachment.navigate?.({ action: "stop" });
+      await delivered();
+      p.blank(false);
+      const from = p.renderer.summaries.length;
+      p.renderer.attachment.setDemand(demand(2, "hibernated", 0));
+      await delivered();
+      expect(p.result.runtime.summary.state).toBe("hibernated");
+      p.renderer.attachment.setDemand(demand(3, "live"));
+      await delivered();
+      const woken = p.result.native.windows[1];
+      if (woken === undefined) throw new Error("no window was made at the wake");
+      expect(woken.loadedUrls).toEqual([]);
+      allStopped(p.renderer, from);
+      p.renderer.attachment.navigate?.({ action: "reload" });
+      await delivered();
+      expect(woken.loadedUrls).toEqual([FIRST]);
+      p.result.runtime.dispose();
+    });
+
+    it("R4 — … across a CRASH of its window and the restart: the window made again is born and not loaded, `stopped`", async () => {
+      vi.useFakeTimers();
+      const p = await starting({ restartLimit: 2 });
+      await vi.advanceTimersByTimeAsync(0);
+      p.renderer.attachment.navigate?.({ action: "stop" });
+      await vi.advanceTimersByTimeAsync(0);
+      p.blank(false);
+      const from = p.renderer.summaries.length;
+      p.window.crash();
+      await vi.advanceTimersByTimeAsync(5_000);
+      const again = p.result.native.windows[1];
+      if (again === undefined) throw new Error("no window was made again");
+      expect(again.loadedUrls).toEqual([]);
+      expect(p.result.runtime.summary.browser).toMatchObject({
+        loading: false,
+        failure: { reason: "stopped" },
+      });
+      allStopped(p.renderer, from);
+      p.result.runtime.dispose();
+    });
+
+    it("R4's neighbour — a GO forgets the person's stop (the person asked again): a stopped page sent elsewhere at rest is born THERE at its wake, and loads it", async () => {
+      const p = await starting();
+      await delivered();
+      p.renderer.attachment.navigate?.({ action: "stop" });
+      await delivered();
+      p.blank(false);
+      p.renderer.attachment.setDemand(demand(2, "hibernated", 0));
+      await delivered();
+      await p.result.runtime.navigate({ action: "go", url: "https://example.test/elsewhere" });
+      p.renderer.attachment.setDemand(demand(3, "live"));
+      await delivered();
+      expect(p.result.native.windows[1]?.loadedUrls).toEqual(["https://example.test/elsewhere"]);
+      p.result.runtime.dispose();
+    });
+
     /** A live page whose renderer crashed: RECONNECTING, its window made anew (a `restart` source), its blank told. */
     const reconnecting = async () => {
       vi.useFakeTimers();
