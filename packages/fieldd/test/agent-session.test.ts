@@ -609,31 +609,48 @@ const auditEntries = (dataDir: string): AuditEntry[] =>
  * (carrying the mutation's own attrs — `how`, the provider, the PTY) and the
  * `outcome` sharing its operationId (carrying the result's). Disjoint greps
  * over the concatenated ledger cannot say that the words came from the same
- * act, or the same ACTOR; this can, and it says what it saw when it cannot. */
-function auditAct(
+ * act, or the same ACTOR; this can, and it says what it saw when it cannot.
+ *
+ * WAITED FOR, up to `ms` (the debts lane, 2026-10-12): the outcome is appended
+ * after the act's effect resolves (AuditService.requiredAs — attempt, effect,
+ * outcome), and a daemon's own act (the boot's re-attach) shows its effect —
+ * the row, the record — before its fsync'd outcome lands. Four gates read the
+ * ledger in that gap ("never got an outcome record"); an outcome that is late
+ * is not one that is missing, and one that never comes still fails here. */
+async function auditAct(
   dataDir: string,
   where: (entry: AuditEntry) => boolean,
-): { attempt: AuditEntry; outcome: AuditEntry } {
-  const entries = auditEntries(dataDir);
-  const attempt = entries.find((entry) => entry.phase === "attempt" && where(entry));
-  if (attempt === undefined) {
-    const seen = entries.map((entry) => ({
-      action: entry.action,
-      phase: entry.phase,
-      outcome: entry.outcome,
-      actor: entry.actor.kind,
-      target: entry.target.id,
-      attrs: entry.attrs,
-    }));
-    throw new Error(`no audit attempt matched; the ledger holds ${JSON.stringify(seen)}`);
+  ms = 10_000,
+): Promise<{ attempt: AuditEntry; outcome: AuditEntry }> {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    const entries = auditEntries(dataDir);
+    const attempt = entries.find((entry) => entry.phase === "attempt" && where(entry));
+    const outcome =
+      attempt === undefined
+        ? undefined
+        : entries.find(
+            (entry) => entry.phase === "outcome" && entry.operationId === attempt.operationId,
+          );
+    if (attempt !== undefined && outcome !== undefined) return { attempt, outcome };
+    if (Date.now() > deadline) {
+      if (attempt === undefined) {
+        const seen = entries.map((entry) => ({
+          action: entry.action,
+          phase: entry.phase,
+          outcome: entry.outcome,
+          actor: entry.actor.kind,
+          target: entry.target.id,
+          attrs: entry.attrs,
+        }));
+        throw new Error(`no audit attempt matched; the ledger holds ${JSON.stringify(seen)}`);
+      }
+      throw new Error(
+        `the audit attempt ${attempt.operationId} never got an outcome record within ${ms} ms`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  const outcome = entries.find(
-    (entry) => entry.phase === "outcome" && entry.operationId === attempt.operationId,
-  );
-  if (outcome === undefined) {
-    throw new Error(`the audit attempt ${attempt.operationId} never got an outcome record`);
-  }
-  return { attempt, outcome };
 }
 
 /** EL7 as a SET, not as a list of suspicions.
@@ -877,7 +894,7 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
     expect(existsSync(join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR))).toBe(false);
     // the ledger, as records: the door's own act, the provider it was for,
     // and the floor's refusal kind as the outcome's reason
-    const refusal = auditAct(dataDir, (entry) => entry.action === "agent.session.spawn");
+    const refusal = await auditAct(dataDir, (entry) => entry.action === "agent.session.spawn");
     expect(refusal.attempt.attrs?.["provider"]).toBe("scripted");
     expect(refusal.attempt.actor.kind).toBe("local-token");
     expect(refusal.outcome.outcome).toBe("failed");
@@ -907,7 +924,7 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
       capability: "resume",
     });
     // the attempt is ledgered as the native form names it: a conversation, no run yet
-    const act = auditAct(
+    const act = await auditAct(
       dataDir,
       (entry) =>
         entry.action === "agent.session.resume" && entry.attrs?.["nativeSessionId"] === "conv-1",
@@ -1166,7 +1183,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     expect(typed).toContain("hello-floor");
 
     // ── the audit ──
-    const spawnAct = auditAct(dataDir, (entry) => entry.action === "agent.session.spawn");
+    const spawnAct = await auditAct(dataDir, (entry) => entry.action === "agent.session.spawn");
     expect(spawnAct.attempt.target.kind).toBe("agent-session");
     expect(spawnAct.attempt.attrs?.["provider"]).toBe("scripted");
     expect(spawnAct.outcome.outcome).toBe("succeeded");
@@ -1213,7 +1230,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     expect(second.creationRequestId).not.toBe(record.creationRequestId);
     expect(sessions[1]?.ingress).toEqual({ port: 40_002, token: "bearer-2" });
     expect(second.ingress).toEqual(sessions[1]?.ingress);
-    const resumeAct = auditAct(dataDir, (entry) => entry.action === "agent.session.resume");
+    const resumeAct = await auditAct(dataDir, (entry) => entry.action === "agent.session.resume");
     expect(resumeAct.attempt.target.id).toBe(runId);
     expect(resumeAct.attempt.actor.kind).toBe("local-token");
     expect(resumeAct.outcome.outcome).toBe("succeeded");
@@ -1299,7 +1316,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     });
     expect(record.cwd).toBe(envOut);
     expect(record.exited).toBeUndefined();
-    const act = auditAct(
+    const act = await auditAct(
       dataDir,
       // the ledger redacts a temp root, so the one with a folder is the one sent with a folder
       (entry) => entry.action === "agent.session.resume" && entry.attrs?.["cwd"] !== undefined,
@@ -1778,7 +1795,7 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
     expect(refused.data?.kind).toBe("NOT_FOUND");
     expect(refused.message).toContain("Empty has no scripted account");
     expect(seen.length).toBe(before);
-    const act = auditAct(
+    const act = await auditAct(
       dataDir,
       (entry) =>
         entry.action === "agent.session.spawn" && entry.attrs?.["profileSet"] === made.set.id,
@@ -2262,7 +2279,7 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     // ── the ledger: this device's own act, on the run, with its outcome ──
     // (the attempt is written BEFORE the effect, so the refusals above are in
     // the ledger too — the act is matched by its target, not by being first)
-    const act = auditAct(
+    const act = await auditAct(
       dataDir,
       (entry) => entry.action === "agent.session.interrupt" && entry.target.id === runId,
     );
@@ -2272,7 +2289,7 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     expect(act.outcome.attrs?.["accepted"]).toBe(true);
     // an interrupt aimed at a run that does not exist is ledgered as an
     // ATTEMPT that failed — a reach for someone else's session leaves a trace
-    const missed = auditAct(
+    const missed = await auditAct(
       dataDir,
       (entry) => entry.action === "agent.session.interrupt" && entry.target.id === "run-none",
     );
@@ -2401,7 +2418,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     expect(after.ingress).toEqual(record.ingress);
     // the daemon's own act, read as records: the system actor, the epoch it
     // found on the attempt and the epoch it reached on the outcome
-    const reattachAct = auditAct(
+    const reattachAct = await auditAct(
       first.dataDir,
       (entry) => entry.action === "agent.session.reattach" && entry.target.id === runId,
     );
@@ -2487,7 +2504,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     expect(readRecord(first.dataDir, runId).reattach).toMatchObject({ state: "unsupported" });
     // the boot's own act, as records: it tried, and the adapter's "I cannot"
     // is the outcome's CODE (a daemon act's reasonCode is a code, not prose)
-    const held = auditAct(
+    const held = await auditAct(
       first.dataDir,
       (entry) => entry.action === "agent.session.reattach" && entry.target.id === runId,
     );
@@ -2562,7 +2579,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     // no second, system-actor copy: that one is reserved for the resume it
     // decides on by itself, and two entries for one act is a double ledger,
     // not corroboration.
-    const byDoor = auditAct(
+    const byDoor = await auditAct(
       first.dataDir,
       (entry) => entry.action === "agent.session.resume" && entry.target.id === runId,
     );
@@ -2686,7 +2703,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
       replacedBy: replaced.runtimeRunId,
     });
     // the ledger: ONE act, the daemon's own, and it says how it decided
-    const byIdle = auditAct(
+    const byIdle = await auditAct(
       first.dataDir,
       (entry) =>
         entry.action === "agent.session.resume" &&
@@ -2916,7 +2933,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     expect(readRecord(first.dataDir, bad.session.runtimeRunId).reattach).toMatchObject({
       state: "failed",
     });
-    const trouble = auditAct(
+    const trouble = await auditAct(
       first.dataDir,
       (entry) =>
         entry.action === "agent.session.reattach" && entry.target.id === bad.session.runtimeRunId,
