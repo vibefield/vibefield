@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PROJECT_DOORS } from "@vibefield/contracts";
+import { PROJECT_DOORS, ProjectRecipe } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { RpcCallError } from "../native-link";
 import type { GroupedProject, GroupingIntents } from "./grouping";
@@ -32,6 +32,9 @@ import type { ProjectWrite } from "./records-doc";
 //   dismiss {with}          bound to the PAIR OF RECORDS (D3), so both
 //                           projects get one
 //   acted (a launch/resume) the place joins the record's places acted in (D6)
+//   recipe (a launch)       PJ-6: what a launch from VibeField's own controls
+//                           chose, merged into the project's recipe (each
+//                           model's controls kept), last writer wins
 //
 // Temporary is a bucket, not a project (PJ-L4): an act on it is refused, and
 // a launch there makes no record. A desktop's Home is a project (J11,
@@ -49,6 +52,52 @@ export type ProjectIntentOp =
   | { readonly op: "link"; readonly place: string }
   | { readonly op: "split"; readonly place: string }
   | { readonly op: "dismiss"; readonly with: string };
+
+/** PJ-6 — what one launch from VibeField's own controls chose (never a typed
+ * launch's flags, Q6): the agent, the Agent Profile it ran under, and the
+ * model with its controls when it was started at one. The ids are the agent's
+ * own, opaque. */
+export interface LaunchRecipe {
+  readonly provider: string;
+  readonly profileSet: string;
+  readonly selection?:
+    | {
+        readonly modelId: string;
+        readonly custom?: boolean | undefined;
+        readonly controls?: Readonly<Record<string, string>> | undefined;
+      }
+    | undefined;
+}
+
+/** PJ-6 (Q3, PJ-D13 (a)) — the project's recipe after a launch: the launch's
+ * agent, profile and model, and every model's controls as last chosen — the
+ * launch's model takes its controls as launched (`{}`: its own), the rest are
+ * kept while the agent stays the same (another agent's model ids mean nothing
+ * to this one, so a switch of agent starts the map afresh). */
+export function recipeAfter(prior: unknown, launch: LaunchRecipe, at: number): ProjectRecipe {
+  const held = ProjectRecipe.safeParse(prior);
+  const kept =
+    held.success && held.data.provider === launch.provider ? held.data.controlsByModel : {};
+  const controlsByModel: Record<string, Record<string, string>> = Object.fromEntries(
+    Object.entries(kept).map(([model, controls]) => [model, { ...controls }]),
+  );
+  const selection = launch.selection;
+  if (selection !== undefined) controlsByModel[selection.modelId] = { ...selection.controls };
+  return {
+    provider: launch.provider,
+    profileSet: launch.profileSet,
+    ...(selection !== undefined
+      ? {
+          selection: {
+            modelId: selection.modelId,
+            ...(selection.custom !== undefined ? { custom: selection.custom } : {}),
+          },
+        }
+      : {}),
+    controlsByModel,
+    at,
+  };
+}
 
 /** Why an act was not written. */
 export type ProjectRefusalCode =
@@ -118,6 +167,12 @@ export const PROJECT_NAME_MAX = 200;
 /** Launches whose place is not known yet, held at most this many. */
 const PENDING_ACTS_MAX = 256;
 
+interface PendingAct {
+  readonly cwd: string;
+  readonly at: number;
+  readonly recipe?: LaunchRecipe;
+}
+
 const byStrength = (a: string, b: string): number => {
   const rank = (x: string) => (x.startsWith("root:") ? 0 : x.startsWith("remote:") ? 1 : 2);
   return rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0);
@@ -132,7 +187,7 @@ export class ProjectRecords {
   /** keys an act moved (a project's first record), old → new */
   readonly #moved = new Map<string, string>();
   /** launches into folders no grouped place holds yet */
-  #pending: Array<{ cwd: string; at: number }> = [];
+  #pending: PendingAct[] = [];
   readonly #offComputed: () => void;
   #disposed = false;
 
@@ -162,23 +217,16 @@ export class ProjectRecords {
     return this.#serial(() => this.#intent(key, op, by));
   }
 
-  /** PJ-6's seam: the recipe a confirmed launch used, kept on the record. */
-  setRecipe(key: string, recipe: unknown, by: string): Promise<ProjectActResult> {
-    return this.#serial(async () => {
-      const { library, project } = this.#resolve(key);
-      const at = this.#now();
-      const { recordId, writes } = this.#ensure(project, at);
-      writes.push({ kind: "recipe", record: recordId, recipe });
-      return this.#write(library, key, recordId, writes, by);
-    });
-  }
-
   /** D6 — a person's launch or resume ran in `cwd` at `at` (epoch ms): the
    * place holding it joins its project's record. A folder no grouped place
-   * holds yet waits for the grouping that has it. */
-  actedIn(cwd: string, at: number): void {
+   * holds yet waits for the grouping that has it. PJ-6 — a launch from
+   * VibeField's own controls brings its `recipe`, merged into the project's
+   * (`recipeAfter`) in the same commit; Temporary records neither. (This is
+   * the recipe's one writer: PJ-2's keyed `setRecipe` seam is gone — a birth
+   * knows its folder, not its project's key.) */
+  actedIn(cwd: string, at: number, recipe?: LaunchRecipe): void {
     if (this.#disposed) return;
-    this.#pending.push({ cwd, at });
+    this.#pending.push({ cwd, at, ...(recipe !== undefined ? { recipe } : {}) });
     if (this.#pending.length > PENDING_ACTS_MAX) this.#pending.shift();
     void this.#serial(() => this.#drainActs()).catch(() => {});
   }
@@ -342,9 +390,11 @@ export class ProjectRecords {
     const snapshot = this.#opts.groups.regroupNow();
     const placeOf = this.#opts.placeOf;
     if (library === null || snapshot === null || placeOf === undefined) return;
-    const waiting: Array<{ cwd: string; at: number }> = [];
+    const waiting: PendingAct[] = [];
     const writes: ProjectWrite[] = [];
     const ensured = new Map<GroupedProject, string>();
+    /** PJ-6 — each project's recipe as this drain's earlier launches left it */
+    const recipes = new Map<GroupedProject, unknown>();
     let recorded = 0;
     for (const act of this.#pending) {
       const placeId = placeOf(act.cwd);
@@ -367,6 +417,15 @@ export class ProjectRecords {
         writes.push(...ensure.writes);
       }
       writes.push({ kind: "acted", record: recordId, place: placeId, at: act.at });
+      if (act.recipe !== undefined) {
+        const recipe = recipeAfter(
+          recipes.has(project) ? recipes.get(project) : project.recipe,
+          act.recipe,
+          act.at,
+        );
+        recipes.set(project, recipe);
+        writes.push({ kind: "recipe", record: recordId, recipe });
+      }
       recorded += 1;
     }
     this.#pending = waiting;

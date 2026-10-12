@@ -222,6 +222,28 @@ export const AgentSessionSummary = z
   .passthrough();
 export type AgentSessionSummary = z.infer<typeof AgentSessionSummary>;
 
+/** PJ-6 (`draft/project-places/build-pj6.md`; PJ-D14 as amended 2026-10-12) —
+ * a launch's model, puppeteer's `AgentModelSelection` carried OPAQUE (AR-L1):
+ * `modelId` and every control's id and value are the agent's own words from
+ * its catalog (`agent.models`), which VibeField passes on and never reads for
+ * meaning. Absent, the agent starts at its own settings; a control left out
+ * is the agent's own too (puppeteer applies no displayed default). `custom`
+ * asks for a model the catalog does not list, only where the catalog says
+ * `customModels`. puppeteer discovers again at the launch and refuses a
+ * selection its agent no longer offers (`INVALID_MODEL_SELECTION`) or cannot
+ * read (`MODEL_DISCOVERY_UNAVAILABLE`). Passthrough at its own depth: the
+ * session record keeps it under the record's HMAC, so a key a newer fieldd
+ * adds must reach an older reader whole (a stripped key breaks the
+ * signature). */
+export const AgentModelSelection = z
+  .object({
+    modelId: z.string().min(1).max(1024),
+    custom: z.boolean().optional(),
+    controls: z.record(z.string().min(1).max(1024), z.string().min(1).max(1024)).optional(),
+  })
+  .passthrough();
+export type AgentModelSelection = z.infer<typeof AgentModelSelection>;
+
 // ── the persisted continuation (`users/<fuid>/agents/sessions/<runtimeRunId>.json`) ──
 
 export const AGENT_SESSION_RECORD_FORMAT = 1;
@@ -310,6 +332,13 @@ export const AgentSessionRecord = z
       .object({ pid: z.number().int().positive(), startedAt: z.string().min(1) })
       .passthrough()
       .optional(),
+    /** PJ-6 (Q4) — the model the run was LAUNCHED at, as the launch asked for
+     * it (opaque, AR-L1), so a Resume starts at it again. Absent: the agent's
+     * own settings, and every record written before PJ-6. Optional and
+     * passthrough at its depth, so a record carrying it canonicalises — and
+     * verifies — the same under an older fieldd, whose passthrough keeps the
+     * key it does not know. */
+    modelSelection: AgentModelSelection.optional(),
   })
   .passthrough();
 export type AgentSessionRecord = z.infer<typeof AgentSessionRecord>;
@@ -364,28 +393,6 @@ export const AgentProvidersResult = z
   .object({ providers: z.array(AgentProviderSummary) })
   .passthrough();
 export type AgentProvidersResult = z.infer<typeof AgentProvidersResult>;
-
-/** PJ-6 (`draft/project-places/build-pj6.md`; PJ-D14 as amended 2026-10-12) —
- * a launch's model, puppeteer's `AgentModelSelection` carried OPAQUE (AR-L1):
- * `modelId` and every control's id and value are the agent's own words from
- * its catalog (`agent.models`), which VibeField passes on and never reads for
- * meaning. Absent, the agent starts at its own settings; a control left out
- * is the agent's own too (puppeteer applies no displayed default). `custom`
- * asks for a model the catalog does not list, only where the catalog says
- * `customModels`. puppeteer discovers again at the launch and refuses a
- * selection its agent no longer offers (`INVALID_MODEL_SELECTION`) or cannot
- * read (`MODEL_DISCOVERY_UNAVAILABLE`). Passthrough at its own depth: the
- * session record keeps it under the record's HMAC, so a key a newer fieldd
- * adds must reach an older reader whole (a stripped key breaks the
- * signature). */
-export const AgentModelSelection = z
-  .object({
-    modelId: z.string().min(1).max(1024),
-    custom: z.boolean().optional(),
-    controls: z.record(z.string().min(1).max(1024), z.string().min(1).max(1024)).optional(),
-  })
-  .passthrough();
-export type AgentModelSelection = z.infer<typeof AgentModelSelection>;
 
 /** PJ-6 — agent.models: one agent's own model picker under one Agent Profile,
  * as fieldd last read it (puppeteer's `runtime.discoverModels`, the agent's

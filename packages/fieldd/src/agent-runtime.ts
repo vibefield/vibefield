@@ -114,6 +114,7 @@ import type { AccountUsageRuntime } from "./agent-usage";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError } from "./native-link";
 import { createDarwinSecretStore, type SecretStore } from "./plugin-settings";
+import type { LaunchRecipe } from "./projects/project-records";
 import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
 import type { GrantPrincipal } from "./terminal-grants";
 import { bornWithoutTicket, type TerminalService } from "./terminal-service";
@@ -403,8 +404,15 @@ export interface AgentRuntimeServiceOptions {
    * folder a PLACE, or moves its `lastActiveAt`. Called after the record is
    * written; a listener that throws is logged and the run goes on. PJ-2 (D6)
    * — `system` when the daemon itself brought the run back (AR-4's re-attach
-   * at boot): no act of the person's. */
-  onPlace?: (cwd: string, at: string, how?: { system: boolean }) => void;
+   * at boot): no act of the person's. PJ-6 — `recipe` when the run is a
+   * launch from VibeField's own controls (`agent.spawn`), what it chose: the
+   * project's recipe takes it. A resume, a re-attach and a typed run carry
+   * none (Q6). */
+  onPlace?: (
+    cwd: string,
+    at: string,
+    how?: { system: boolean; recipe?: LaunchRecipe | undefined },
+  ) => void;
   now?: () => Date;
   logger?: Logger;
 }
@@ -1110,7 +1118,26 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         ingress: identity.ingress,
       });
       if (isSessionFailure(result)) throw this.sessionFailureToError(result, params.provider);
-      return this.enter(result, { cwd, title: params.title, ...identity.launched() });
+      // PJ-6 — CONFIRMED: the run is born. Its record keeps the selection (a
+      // Resume starts at it again, Q4) and its project takes the recipe
+      const selection =
+        params.modelSelection !== undefined ? modelSelectionOf(params.modelSelection) : undefined;
+      const profileSet = params.profileSet ?? result.info.profileSetId;
+      return this.enter(result, {
+        cwd,
+        title: params.title,
+        ...identity.launched(),
+        ...(selection !== undefined ? { modelSelection: selection } : {}),
+        ...(profileSet !== undefined
+          ? {
+              recipe: {
+                provider: params.provider,
+                profileSet,
+                ...(selection !== undefined ? { selection } : {}),
+              },
+            }
+          : {}),
+      });
     });
     return this.ticketed(entry, principal, terminals, forwardedFor);
   }
@@ -2103,6 +2130,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       adopted?:
         | { process: { pid: number; startedAt: string }; terminal?: TerminalInfo | undefined }
         | undefined;
+      /** PJ-6 — the model the launch started at, kept on the record */
+      modelSelection?: AgentModelSelection | undefined;
+      /** PJ-6 — a launch from VibeField's own controls: what its project's
+       * recipe takes (agent.spawn only) */
+      recipe?: LaunchRecipe | undefined;
     },
   ): ManagedEntry {
     const info = agent.info;
@@ -2118,6 +2150,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           ingress: launch.ingress,
           replaced: launch.replaced,
           adopted: launch.adopted?.process,
+          modelSelection: launch.modelSelection,
         }),
       );
     } else {
@@ -2131,7 +2164,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     // FS-1a — the folder this run works in is a place of the files service
     try {
-      this.opts.onPlace?.(launch.cwd, now, { system: launch.reattached !== undefined });
+      this.opts.onPlace?.(launch.cwd, now, {
+        system: launch.reattached !== undefined,
+        ...(launch.recipe !== undefined ? { recipe: launch.recipe } : {}),
+      });
     } catch (error) {
       this.logger.warn("fieldd.agents.place_failed", "A run's folder could not be made a place", {
         error: error instanceof Error ? error.message : String(error),

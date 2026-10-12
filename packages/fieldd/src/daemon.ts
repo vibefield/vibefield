@@ -611,6 +611,9 @@ export interface FielddDaemon {
   /** PJ-1/PJ-3 — the projects this desktop groups (the `project.*` doors'
    * source); tests regroup it directly rather than wait out the settle. */
   projects: ProjectGroups;
+  /** PJ-2/PJ-6 — the person's acts on projects, written as records; a launch
+   * reaches it through the agents' birth hook (tests watch what it is told). */
+  projectRecords: ProjectRecords;
   /** SP-6 — the session tails (`index.session.subscribe`): one rosetta socket
    * per tailed session, shared by its subscribers; tests count them. */
   indexTail: IndexTailService;
@@ -975,9 +978,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // FS-1a (L2) — every run's folder is a place of the files service; PJ-2
     // (D6) — and a run started there (not one the daemon re-attached at
     // boot) is an act in its place
+    // — PJ-6 — and a launch from VibeField's own controls brings its recipe
     onPlace: (cwd, at, how) => {
       workspace.registry.touchPlace(cwd, at);
-      if (how?.system !== true) projectRecords.actedIn(cwd, Date.parse(at));
+      if (how?.system !== true) projectRecords.actedIn(cwd, Date.parse(at), how?.recipe);
     },
     ...(config.agentGateway?.processTable !== undefined
       ? { processTable: config.agentGateway.processTable }
@@ -6166,6 +6170,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       indexTail,
       indexMesh: indexMesh as IndexMesh,
       projects: projectGroups,
+      projectRecords,
       agents,
       agentUsage,
       agentGateway: gateway,

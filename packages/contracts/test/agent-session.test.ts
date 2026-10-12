@@ -370,6 +370,23 @@ describe("SessionSummary v2 and the doors", () => {
     ).toBe(false);
   });
 
+  it("PJ-6 (Q4): the record keeps the model the run was launched at, opaque; a record without one is every record before PJ-6", () => {
+    const record = AgentSessionRecord.parse(fixture("agent-session-record.valid.json"));
+    expect(record.modelSelection).toBeUndefined();
+    const launched = AgentSessionRecord.parse({
+      ...record,
+      modelSelection: { modelId: "model-card-v2", controls: { effort: "high" } },
+    });
+    expect(launched.modelSelection).toEqual({
+      modelId: "model-card-v2",
+      controls: { effort: "high" },
+    });
+    // the field is the launch's shape, typed: a record naming no model is not one
+    expect(
+      AgentSessionRecord.safeParse({ ...record, modelSelection: { modelId: "" } }).success,
+    ).toBe(false);
+  });
+
   it("AR-4: the row says whether it was re-attached, or is pending a resume at its next idle", () => {
     const summary = AgentSessionSummary.parse(fixture("agent-session-summary.valid.json"));
     expect(summary.continuation).toEqual({ persisted: true, resumable: false, reattached: true });

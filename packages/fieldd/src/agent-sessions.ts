@@ -14,6 +14,7 @@ import type { AgentMonitorState } from "@vibecook/puppeteer-core";
 import type { AgentSessionInfo } from "@vibecook/puppeteer-runtime";
 import {
   AGENT_SESSION_RECORD_FORMAT,
+  type AgentModelSelection,
   AgentMonitorMirror,
   type AgentSessionRecord,
   AgentSessionRecord as AgentSessionRecordSchema,
@@ -336,6 +337,9 @@ export function recordForRun(input: {
    * compares before it re-attaches. The record then says where the run came
    * from; a run a door started says nothing, which reads `app`. */
   adopted?: { pid: number; startedAt: string } | undefined;
+  /** PJ-6 (Q4) — the model the launch started at (its three keys, as
+   * puppeteer took them), so a Resume starts at it again */
+  modelSelection?: AgentModelSelection | undefined;
 }): AgentSessionRecord {
   const { info } = input;
   return {
@@ -365,6 +369,7 @@ export function recordForRun(input: {
           process: { pid: input.adopted.pid, startedAt: input.adopted.startedAt },
         }
       : {}),
+    ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
   };
 }
 

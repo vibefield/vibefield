@@ -705,6 +705,49 @@ describe("PJ-4 — the join column (A-D4): every catalog session carries its pro
     expect(pinned).toMatchObject({ pinned: true, hidden: true });
   });
 
+  it("PJ-6: a project's launch recipe rides its summary from its record; one this daemon cannot read is left off — never a refused list", () => {
+    const w = world();
+    const recipe = {
+      provider: "scripted",
+      profileSet: "work",
+      selection: { modelId: "model-a" },
+      controlsByModel: { "model-a": { effort: "high" }, "model-b": {} },
+      at: 1_759_276_800_000,
+    };
+    const answerWith = (held: unknown) => {
+      const groups = new ProjectGroups({
+        deviceId: () => "dev-a",
+        local: { projects: w.projects, sessions: w.sessions },
+        peers: () => w.peers,
+        intents: () => ({
+          records: [{ id: "rec1", anchors: ["place:pl-app"], recipe: held, createdAt: 1 }],
+        }),
+      });
+      const doors = new ProjectDoors({
+        groups,
+        deviceId: () => "dev-a",
+        localSessions: () => w.sessions.rows(),
+        peerSessions: () => w.peers,
+        sources: () => [],
+      });
+      groups.regroupNow();
+      return ProjectListResult.parse(doors.list({}, WINDOW_VIEW, 100)).rows.find(
+        (row) => row.key === "r:rec1",
+      );
+    };
+    expect(answerWith(recipe)?.recipe).toEqual(recipe);
+    // a newer desktop's shape this daemon cannot read: no recipe, the row stands
+    const unreadable = answerWith({ provider: "scripted", profileSet: "work", v: 2 });
+    expect(unreadable).toBeDefined();
+    expect(unreadable).not.toHaveProperty("recipe");
+    // no recipe on the record, none on the row
+    w.groups.regroupNow();
+    const plain = ProjectListResult.parse(w.doors.list({}, WINDOW_VIEW, 100)).rows.find((row) =>
+      row.places.some((p) => p.ref.placeId === "pl-app"),
+    );
+    expect(plain).not.toHaveProperty("recipe");
+  });
+
   it("leaves the column off a row no place holds, and never trusts one a row arrived with", () => {
     const w = world();
     w.groups.regroupNow();

@@ -1844,6 +1844,63 @@ describe("PJ-6 — a launch at a model the agent offers (agent.spawn {modelSelec
     await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
     await win.call("terminal.terminate", { sessionId: plain.terminal.sessionId });
   }, 60_000);
+
+  it("a CONFIRMED birth hands its project the launch's recipe and keeps the selection on its record; a refusal hands nothing, a resume no recipe", async () => {
+    const { daemon, dataDir, envOut, records } = await setup({ floor: "real", profiles: true });
+    const win = await window(daemon, DECK, "pj6c");
+    const acted = vi.spyOn(daemon.projectRecords, "actedIn");
+    const spawned = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      profileSet: "native",
+      modelSelection: { modelId: "model-a", controls: { effort: "high" } },
+    })) as AgentSpawnResult;
+    expect(acted).toHaveBeenCalledTimes(1);
+    expect(acted.mock.calls[0]?.[0]).toBe(envOut);
+    expect(acted.mock.calls[0]?.[2]).toEqual({
+      provider: "scripted",
+      profileSet: "native",
+      selection: { modelId: "model-a", controls: { effort: "high" } },
+    });
+    // the record keeps what the launch asked for, signed
+    const record = readRecord(dataDir, spawned.session.runtimeRunId);
+    expect(record.modelSelection).toEqual({ modelId: "model-a", controls: { effort: "high" } });
+    expect(records.verifies(record)).toBe(true);
+
+    // a refused launch: no birth, no act
+    await win.callErr("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      profileSet: "native",
+      modelSelection: { modelId: "model-x" },
+    });
+    expect(acted).toHaveBeenCalledTimes(1);
+
+    // the agent's own settings: a recipe with no model, and none on the record
+    const plain = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      profileSet: "native",
+    })) as AgentSpawnResult;
+    expect(acted.mock.calls[1]?.[2]).toEqual({ provider: "scripted", profileSet: "native" });
+    expect(readRecord(dataDir, plain.session.runtimeRunId)).not.toHaveProperty("modelSelection");
+
+    // a resume is an act in its place, never a recipe (Q6: only a launch writes one)
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    await poll(
+      async () =>
+        readRecord(dataDir, spawned.session.runtimeRunId).exited !== undefined ? true : undefined,
+      15_000,
+    );
+    const resumed = (await win.call("agent.resume", {
+      runtimeRunId: spawned.session.runtimeRunId,
+    })) as AgentSpawnResult;
+    expect(acted).toHaveBeenCalledTimes(3);
+    expect(acted.mock.calls[2]?.[2]).toBeUndefined();
+
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+    await win.call("terminal.terminate", { sessionId: plain.terminal.sessionId });
+  }, 60_000);
 });
 
 describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins", () => {

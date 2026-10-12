@@ -230,6 +230,87 @@ describe("PJ-2 — ProjectRecords: a record is made by an act", () => {
     expect(d.of("h")).toMatchObject({ name: "Home", provisional: false });
   });
 
+  it("PJ-6 — a launch from VibeField's controls leaves the project's recipe: the agent, its profile, the model, and each model's own controls remembered; a launch without one keeps them; another agent starts afresh; Temporary keeps none", async () => {
+    const d = await desktop([
+      repo("a", "/p/app", APP),
+      place("t", "/private/tmp/x", { kind: "temp" }),
+    ]);
+    d.folders.set("/p/app", "a");
+    d.folders.set("/private/tmp/x", "t");
+    const recipe = () => d.library.projectIntents().records[0]?.recipe;
+    const launch = (
+      at: number,
+      selection?: { modelId: string; controls?: Record<string, string> },
+    ) =>
+      d.records.actedIn("/p/app", at, {
+        provider: "scripted",
+        profileSet: "work",
+        ...(selection !== undefined ? { selection } : {}),
+      });
+
+    launch(5_000, { modelId: "model-a", controls: { effort: "high" } });
+    await until(() => recipe() !== undefined, "the first recipe");
+    expect(recipe()).toEqual({
+      provider: "scripted",
+      profileSet: "work",
+      selection: { modelId: "model-a" },
+      controlsByModel: { "model-a": { effort: "high" } },
+      at: 5_000,
+    });
+    // the grouping reads it back on the project
+    expect(d.of("a").recipe).toEqual(recipe());
+
+    // another model: its own controls ({} — its own effort), the first's kept
+    launch(5_001, { modelId: "model-b" });
+    await until(() => (recipe() as { at?: number }).at === 5_001, "the second recipe");
+    expect(recipe()).toMatchObject({
+      selection: { modelId: "model-b" },
+      controlsByModel: { "model-a": { effort: "high" }, "model-b": {} },
+    });
+    // back to the first at another effort, then the agent's own settings: the
+    // map keeps every model's last choice, and an own-settings launch names none
+    launch(5_002, { modelId: "model-a", controls: { effort: "low" } });
+    launch(5_003);
+    await until(() => (recipe() as { at?: number }).at === 5_003, "the own-settings recipe");
+    expect(recipe()).toEqual({
+      provider: "scripted",
+      profileSet: "work",
+      controlsByModel: { "model-a": { effort: "low" }, "model-b": {} },
+      at: 5_003,
+    });
+    // a launch with no recipe (a resume, a typed run) records the place only
+    d.records.actedIn("/p/app", 5_004);
+    await until(
+      () => d.library.projectIntents().records[0]?.places?.[0]?.at === 5_004,
+      "the recipe-less act",
+    );
+    expect((recipe() as { at?: number }).at).toBe(5_003);
+    // another agent: its model ids mean nothing to the last one's map
+    d.records.actedIn("/p/app", 5_005, {
+      provider: "other",
+      profileSet: "native",
+      selection: { modelId: "o-1", controls: { thinking: "on" } },
+    });
+    await until(() => (recipe() as { at?: number }).at === 5_005, "the other agent's recipe");
+    expect(recipe()).toEqual({
+      provider: "other",
+      profileSet: "native",
+      selection: { modelId: "o-1" },
+      controlsByModel: { "o-1": { thinking: "on" } },
+      at: 5_005,
+    });
+
+    // Temporary: no record, so no recipe (the act after it is drained after it)
+    d.records.actedIn("/private/tmp/x", 5_006, { provider: "scripted", profileSet: "work" });
+    d.records.actedIn("/p/app", 5_007);
+    await until(
+      () => d.library.projectIntents().records[0]?.places?.[0]?.at === 5_007,
+      "the act after Temporary's",
+    );
+    expect(d.library.projectIntents().records).toHaveLength(1);
+    expect(d.of("t").recordId).toBeUndefined();
+  });
+
   it("refuses an act on Temporary, an unknown key, a place not the project's, a bad name, itself, Home's links", async () => {
     const d = await desktop([
       repo("a", "/p/app", APP),
