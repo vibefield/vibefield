@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("electron", () => ({ app: {} }));
 vi.mock("../src/main/windows", () => ({ createMainWindow: vi.fn(), loadRenderer: vi.fn() }));
 
+import { ASK_GODVIEW_DECK_UP, READ_GODVIEW_DECK_ASK } from "../src/testing/godview-deck-up";
 import type { LabDeckState } from "../src/testing/godview-lab-readiness";
 import {
   collectedHeap,
@@ -34,12 +35,25 @@ const healthy = {
 };
 const opening = { ...healthy, panes: 0, sessions: 0, poolPhase: "opening", rosterState: "unread" };
 
-/** A lab window as far as the wait reads it: a deck tail over a page's console. */
-function lab(): { lab: LabWindow; say(facts: Record<string, unknown>): void } {
-  const webContents = new EventEmitter();
+/** A lab window as far as the wait reads it: a deck tail over a page's console,
+ * and the page's scripts as the wait runs them (W7's ask for the terminals). */
+function lab(askRecord: string | null = null): {
+  lab: LabWindow;
+  scripts: string[];
+  say(facts: Record<string, unknown>): void;
+} {
+  const scripts: string[] = [];
+  const webContents = Object.assign(new EventEmitter(), {
+    executeJavaScript: async (script: string) => {
+      scripts.push(script);
+      // the page's record of what the ask did, as a failed wait reads it
+      return script === READ_GODVIEW_DECK_ASK ? (askRecord ?? "null") : true;
+    },
+  });
   const deck = new MarkerTail<LabDeckState>({ webContents } as never, "GODVIEW_DECK ");
   return {
-    lab: { deck } as unknown as LabWindow,
+    lab: { deck, win: { webContents } } as unknown as LabWindow,
+    scripts,
     // Electron hands the listener an event whose `message` is the console line
     say: (facts) =>
       void webContents.emit("console-message", {
@@ -71,6 +85,17 @@ describe("the lab's wait for its deck", () => {
     expect(await waited(wait)).toBeNull();
   });
 
+  it("asks for the terminals first, as a first call would (W7), and still judges by the deck", async () => {
+    const { lab: window, scripts, say } = lab();
+    const wait = waitForLabDeck(window);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(scripts).toEqual([ASK_GODVIEW_DECK_UP]);
+    // the ask is no readiness: the wait still ends on the deck's own word
+    say({ ...healthy, sessionIds: ["s-1"] });
+    expect(await waited(wait)).toBeNull();
+    expect(scripts).toHaveLength(1);
+  });
+
   it("times out saying the deck's last state and what that state still lacked", async () => {
     const { lab: window, say } = lab();
     say({ ...healthy, panes: 0, sessions: 0, poolPhase: "warming", rosterState: "unread" });
@@ -80,6 +105,14 @@ describe("the lab's wait for its deck", () => {
         '"rosterState":"unread","rendererBackend":"webgpu","sessionIds":[]}; still missing: ' +
         'a pane (panes 0), a session (sessions 0), an open pool (poolPhase "opening"), ' +
         'an observed roster (rosterState "unread")',
+    );
+  });
+
+  it("times out saying the deck's up() threw, when it did (a W7 bug reads as itself)", async () => {
+    const { lab: window } = lab('{"state":"threw","error":"the deck\'s door is not open"}');
+    expect(await waited(waitForLabDeck(window))).toBe(
+      `${WAITING} — the deck last said no GODVIEW_DECK marker; still missing: a GODVIEW_DECK marker (none was read)` +
+        "; the deck's up() threw: the deck's door is not open",
     );
   });
 

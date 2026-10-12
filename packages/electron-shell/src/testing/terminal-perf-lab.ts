@@ -50,6 +50,7 @@ import {
 import { app, type BrowserWindow, contentTracing, screen } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
+import { askGodviewDeckUp, sayingDeckAsk } from "./godview-deck-up";
 import {
   type ElectronProcessSample,
   type ProcessResourceSample,
@@ -1134,10 +1135,17 @@ export async function runTerminalPerfLab(opts: {
     }
 
     opts.setView("godview");
-    const opened = await deck.until(
-      (facts) => facts.active && facts.panes >= 1,
-      "the overlay to open with its first pane",
-      120_000,
+    // since W7 the terminals start away: ask for them as a first call would
+    // (`godview-deck-up.ts`; nothing to ask before W7), and say a throw from
+    // the deck's `up()` if the wait fails
+    await askGodviewDeckUp(win);
+    const opened = await sayingDeckAsk(
+      win,
+      deck.until(
+        (facts) => facts.active && facts.panes >= 1,
+        "the overlay to open with its first pane",
+        120_000,
+      ),
     );
     emit({ kind: "opened", at: Date.now(), panes: opened.panes, backend: opened.rendererBackend });
     // Non-fatal and bounded: the stations are evidence about HOW the open went,

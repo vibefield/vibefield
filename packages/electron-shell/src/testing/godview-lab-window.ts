@@ -4,6 +4,7 @@ import { gunzipSync } from "node:zlib";
 import { app, type BrowserWindow } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
+import { askGodviewDeckUp, sayingDeckAsk } from "./godview-deck-up";
 import type { HeapSample, PageMetrics } from "./godview-lab-measures";
 import { type LabProfile, labProfileProof } from "./godview-lab-profile";
 import {
@@ -416,18 +417,25 @@ export async function openLabWindow(opts: {
  * its own worker-readiness contract; it does not measure a terminal workload.
  * A wait that fails says what it saw — the deck's last state (bounded) and the
  * readiness conditions that state still lacked: a launch was lost to this wait
- * on 2026-10-10 with a bare "timed out" and no reason to read. */
+ * on 2026-10-10 with a bare "timed out" and no reason to read. Since W7 the
+ * terminals start away, so the wait first asks for them as a first call would
+ * (`godview-deck-up.ts`; nothing to ask before W7), and a wait that fails after
+ * the deck's `up()` threw says so. */
 export async function waitForLabDeck(lab: LabWindow): Promise<void> {
-  await lab.deck.until(
-    (state) => {
-      if (state.error !== undefined) {
-        throw new Error(`Terminal deck: ${state.error} — the deck said ${labDeckSeen(state)}`);
-      }
-      return labDeckReady(state);
-    },
-    "the terminal deck to open a pane with an observed roster and WebGPU",
-    60_000,
-    labDeckTimeout,
+  await askGodviewDeckUp(lab.win);
+  await sayingDeckAsk(
+    lab.win,
+    lab.deck.until(
+      (state) => {
+        if (state.error !== undefined) {
+          throw new Error(`Terminal deck: ${state.error} — the deck said ${labDeckSeen(state)}`);
+        }
+        return labDeckReady(state);
+      },
+      "the terminal deck to open a pane with an observed roster and WebGPU",
+      60_000,
+      labDeckTimeout,
+    ),
   );
 }
 
