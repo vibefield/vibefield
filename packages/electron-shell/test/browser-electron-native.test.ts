@@ -2369,6 +2369,44 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       }
     });
 
+    it("M12 J2 — a page with NO frame of another site has no doubt: a press its renderer answers late (busy after the click), the keys behind it — every one sent, in order, on the page's session, none waiting, none refused (as at 8dd23597)", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = recording(
+          (method) =>
+            method === "Input.dispatchMouseEvent"
+              ? new Promise((resolve) => setTimeout(() => resolve({}), 3_000))
+              : {},
+          { hungInputMs: BOUND },
+        );
+        await r.native.loadURL("https://host.test/a");
+        r.at("https://host.test/a");
+        r.contents.emit("did-navigate", {}, "https://host.test/a");
+        void r.native.dispatchMouse({
+          type: "mousePressed",
+          x: 20,
+          y: 20,
+          button: "left",
+          clickCount: 1,
+        });
+        const keys = ["a", "b", "c"].map((k) =>
+          r.native
+            .dispatchKey({ type: "keyDown", key: k, code: `Key${k.toUpperCase()}`, modifiers: 0 })
+            .then(
+              () => `${k} sent`,
+              (error: unknown) =>
+                `${k} refused: ${error instanceof Error ? error.message : String(error)}`,
+            ),
+        );
+        // (past the press's answer and three of the doubt's waits: a refusal is said, never a hang)
+        await vi.advanceTimersByTimeAsync(8_000);
+        expect(await Promise.all(keys)).toEqual(["a sent", "b sent", "c sent"]);
+        expect(r.hand().filter((h) => h.startsWith("keyDown"))).toHaveLength(3);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("M9 × M6.4b — telling the page it is focused is a command of the hand: a page that hung BY ITSELF (nothing of the hand outstanding) never answers it — said hung, the bound after it was sent", async () => {
       vi.useFakeTimers();
       try {

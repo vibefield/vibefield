@@ -102,6 +102,9 @@ export class BrowserFrames {
   #focused: string | undefined;
   /** PT-5d (M7 H2): the focus in doubt (`null`: known) */
   #doubt: Doubt | null = null;
+  /** PT-5d (M12 J2): a frame of another site was attached in the page's document — the doubt applies (an OOPIF may be in
+   * transit while none is attached: a frame's own cross-site navigation swaps its session) */
+  #framed = false;
   readonly #hand: Hand = { buttons: new Map(), finger: undefined, keys: new Map() };
   /** where the last hover went — told that the pointer left it when the next goes elsewhere */
   #hover: FrameTarget | undefined;
@@ -114,6 +117,7 @@ export class BrowserFrames {
    * address. */
   attached(session: string, targetId: string, parent: string | undefined, url?: string): void {
     if (parent !== undefined && !this.#frames.has(parent)) return;
+    this.#framed = true;
     this.#order += 1;
     this.#frames.set(session, {
       session,
@@ -156,6 +160,7 @@ export class BrowserFrames {
    * H5): the buttons and keys held go with it too — the producer forgets them, and no release follows: kept, every hover of
    * the new document went to a press's target that no longer stands. The finger is kept: its end goes to its session (H4). */
   pageCommitted(document: number): void {
+    this.#framed = false;
     this.#pageDocument = document;
     this.#frames.clear();
     this.#focused = undefined;
@@ -238,9 +243,12 @@ export class BrowserFrames {
     if (doubt.heard && doubt.base !== null) this.settle(doubt.base);
   }
 
-  /** PT-5d (M7 H2): is the focus in doubt — nothing key-like may be sent until a word settles it? */
+  /** PT-5d (M7 H2): is the focus in doubt — nothing key-like may be sent until a word settles it? PT-5d (M12 J2): only in
+   * a document that has held a frame of another site — a page that never did keeps its keys on its own session, in order,
+   * never waiting (as at `8dd23597`): no OOPIF, no M3 hazard. (One whose frames all went keeps the doubt: a frame's own
+   * cross-site navigation leaves none attached while its new session comes.) */
   inDoubt(): boolean {
-    return this.#doubt !== null;
+    return this.#doubt !== null && this.#framed;
   }
 
   /** The frames of the page's tree, by session, and their parents: what the native reads their quads by. */

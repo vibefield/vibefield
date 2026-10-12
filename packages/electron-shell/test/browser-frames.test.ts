@@ -375,6 +375,23 @@ describe("PT-5d (rulings 1, M3; M7 H2) — keys, text, a composition and a comma
   });
 });
 
+describe("PT-5d (M12 J2) — the doubt is the frames' alone: a document that never held a frame of another site has none", () => {
+  it("a press on a frameless page is no doubt; a frame attached, it is; the page commits a frameless document — none again; its frames all gone, the document keeps it (a frame's session swaps through none)", () => {
+    const f = new BrowserFrames();
+    f.pageCommitted(1);
+    f.handSent();
+    expect(f.inDoubt()).toBe(false);
+    f.attached("A", "t-A", undefined);
+    f.handSent();
+    expect(f.inDoubt()).toBe(true);
+    f.detached("A");
+    expect(f.inDoubt()).toBe(true);
+    f.pageCommitted(2);
+    f.handSent();
+    expect(f.inDoubt()).toBe(false);
+  });
+});
+
 describe("PT-5d (M6.3a) — a frame takes a point only on its VISIBLE part: what an ancestor's overflow clips is drawn by the one it is in", () => {
   it("a press on the part a scroller clips goes to the page; on the part in view, to the frame; a drag out of view stays with its press; a hover and the wheel over the clipped part are the page's; a frame wholly clipped takes nothing", () => {
     const f = new BrowserFrames();
