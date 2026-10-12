@@ -1169,7 +1169,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     expect(r.hand()).toEqual(["mousePressed@page 1,1"]);
   });
 
-  it("rulings 1, M3, M7 H2 — a document's WORDS, run: it takes the binding out of the page's reach; says WHERE THE FOCUS IS (`here`, `inner`, `away`) after each trusted event — one word a task, once its default actions are done — and `moved` only when its frames' boxes or their VISIBLE parts changed (M6.3a), once an animation frame; never its size (M6.1); a document holding no frame never says moved; the page's blank and a document with no binding say nothing — a FRAME's blank speaks", () => {
+  it("rulings 1, M3, M7 H2 — a document's WORDS, run: it takes the binding out of the page's reach; says WHERE THE FOCUS IS (`here`, `inner`, `away`) after each trusted event — one word a task, once its default actions are done — and `moved` only when its frames' boxes or their VISIBLE parts changed (M6.3a), once an animation frame; never its size (M6.1); a document holding no frame never says moved; the page's blank and a document with no binding say nothing — a FRAME's blank speaks; M12 J10 — what no event says is LOOKED for: a cover between the quick look's points, or the frame's own `pointer-events`, seen within the deep look's bound", () => {
     const run = (options: { href?: string; binding?: boolean; top?: boolean } = {}) => {
       const said: string[] = [];
       const on = new Map<string, ((event?: { target?: unknown; isTrusted?: boolean }) => void)[]>();
@@ -1211,38 +1211,61 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
           return this.box.height;
         },
       };
+      /** each frame's element, made once by its place in the document (as a document's are), its box the row's as it is
+       * now; its style the row's (M12 J10) */
+      const frameStyle: Record<string, string> = {};
       const laid = new Map<number, unknown>();
-      const laidOut = (
-        r: { left: number; top: number; width: number; height: number },
-        i: number,
-      ): unknown => {
+      const laidOut = (_r: unknown, i: number): unknown => {
+        const made = laid.get(i);
+        if (made !== undefined) return made;
+        const box = () => rects[i] ?? { left: 0, top: 0, width: 0, height: 0 };
         const e = {
           parentElement: holder,
-          style: {},
-          getBoundingClientRect: () => ({
-            ...r,
-            right: r.left + r.width,
-            bottom: r.top + r.height,
-          }),
-          offsetWidth: r.width,
-          offsetHeight: r.height,
+          style: frameStyle,
+          isConnected: true,
+          getBoundingClientRect: () => {
+            const r = box();
+            return { ...r, right: r.left + r.width, bottom: r.top + r.height };
+          },
+          get offsetWidth() {
+            return box().width;
+          },
+          get offsetHeight() {
+            return box().height;
+          },
           clientLeft: 0,
           clientTop: 0,
-          clientWidth: r.width,
-          clientHeight: r.height,
+          get clientWidth() {
+            return box().width;
+          },
+          get clientHeight() {
+            return box().height;
+          },
           contains: (other: unknown) => other === e,
         };
         laid.set(i, e);
         return e;
       };
-      /** M7 H3: what the host draws over its frames (the hit test finds it first), by the row */
-      const drawn: { cover: ((x: number, y: number) => boolean) | null } = { cover: null };
+      /** M7 H3: what the host draws over its frames (the hit test finds it first), and its box, by the row */
+      const drawn: {
+        cover: ((x: number, y: number) => boolean) | null;
+        rect: { left: number; top: number; width: number; height: number };
+      } = { cover: null, rect: { left: 300, top: 100, width: 200, height: 280 } };
       const cover = {
         parentElement: holder,
         style: {},
+        isConnected: true,
+        getBoundingClientRect: () => {
+          const r = drawn.rect;
+          return { ...r, right: r.left + r.width, bottom: r.top + r.height };
+        },
         contains: (other: unknown) => other === cover,
       };
+      /** M12 J10: the document's clock (`performance.now()`), by the row */
+      const clock = { ms: 0 };
       const computed = (e: { style?: Record<string, string> }) => ({
+        pointerEvents: "auto",
+        visibility: "visible",
         position: "static",
         overflowX: "visible",
         overflowY: "visible",
@@ -1272,6 +1295,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         "innerHeight",
         "getComputedStyle",
         "setTimeout",
+        "performance",
         FRAME_WORDS_SCRIPT,
       )(
         g,
@@ -1303,6 +1327,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         (callback: () => void) => {
           later.push(callback);
         },
+        { now: () => clock.ms },
       );
       const fire = (type: string, event?: { target?: unknown; isTrusted?: boolean }): void => {
         for (const listener of on.get(type) ?? []) listener(event);
@@ -1324,6 +1349,8 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         holder,
         focus,
         drawn,
+        frameStyle,
+        clock,
         fire,
         tick,
         after,
@@ -1387,9 +1414,10 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     d.every();
     d.tick();
     expect(d.said.filter((w) => w === "moved")).toHaveLength(3);
-    // M7 H3: nothing moved, nothing clipped anew — the host drew a MENU over its frame: moved
+    // M7 H3: nothing moved, nothing clipped anew — the host drew a MENU over its frame: moved, at once — an event's look is
+    // the QUICK one (its transition's end; the half-second's deep look, M12 J10, would find it too)
     d.drawn.cover = (x, y) => x > 300 && y > 100;
-    d.every();
+    d.fire("transitionend");
     d.tick();
     expect(d.said.filter((w) => w === "moved")).toHaveLength(4);
     // the page's blank, a document with no binding: nothing; a FRAME's blank (an editor's) speaks (M7 H2)
@@ -1405,6 +1433,33 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     editor.fire("keydown", { isTrusted: true });
     editor.after();
     expect(editor.said).toEqual(["here"]);
+    // M12 J10 — what no event says is LOOKED for. A badge 16 × 16 — smaller than the quick look's cell — appears BETWEEN
+    // its points (x 130, 190; y 102, 146) with nothing else moving: the half-second's DEEP look (the frame's whole sight,
+    // its whole grid at most a second old — the grid's point 160, 140 lands on it) says moved within a second and a half;
+    // it goes: moved again. The frame's own `pointer-events` toggled by no mutation (a stylesheet's rule): the next look.
+    const j = run();
+    j.rects.push({ left: 100, top: 80, width: 400, height: 300 });
+    j.every();
+    j.tick();
+    expect(j.said).toEqual(["moved"]);
+    const halfSeconds = (n: number): void => {
+      for (let i = 0; i < n; i += 1) {
+        j.clock.ms += 500;
+        j.every();
+        j.tick();
+      }
+    };
+    j.drawn.cover = (x, y) => x >= 160 && x < 176 && y >= 130 && y < 146;
+    j.drawn.rect = { left: 160, top: 130, width: 16, height: 16 };
+    halfSeconds(3);
+    expect(j.said).toEqual(["moved", "moved"]);
+    j.drawn.cover = null;
+    halfSeconds(3);
+    expect(j.said).toEqual(["moved", "moved", "moved"]);
+    j.frameStyle.pointerEvents = "none";
+    j.fire("transitionend");
+    j.tick();
+    expect(j.said).toEqual(["moved", "moved", "moved", "moved"]);
   });
 
   it("ruling 1 — where a frame is drawn is read again when its parent's document says its frames MOVED (its words, on its own session): one read in flight a frame; the quad read next is where the hand's next press lands", async () => {
