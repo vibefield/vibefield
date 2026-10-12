@@ -304,6 +304,11 @@ function writePersonTranscript(
   person: string,
   work: string,
   row: (typeof AGENT_CATALOG)[number],
+  conversation: { sessionId: string; asked: string; said: string } = {
+    sessionId: randomUUID(),
+    asked: "Where are the lanterns?",
+    said: HISTORY_SEED_WORDS,
+  },
 ): { kind: string; nativeSessionId: string } {
   const kind = row.seams.rosetta?.kind;
   const layoutRoot = row.layoutRoot;
@@ -312,7 +317,7 @@ function writePersonTranscript(
       "the typed agent's catalog row names no rosetta kind or home layout: History has nothing to seed",
     );
   }
-  const sessionId = randomUUID();
+  const { sessionId } = conversation;
   const prompt = randomUUID();
   const reply = randomUUID();
   const at = (secondsAgo: number) => new Date(Date.now() - secondsAgo * 1_000).toISOString();
@@ -331,7 +336,7 @@ function writePersonTranscript(
       type: "user",
       uuid: prompt,
       timestamp: at(60),
-      message: { role: "user", content: "Where are the lanterns?" },
+      message: { role: "user", content: conversation.asked },
     },
     {
       ...common,
@@ -344,7 +349,7 @@ function writePersonTranscript(
         type: "message",
         role: "assistant",
         model: "claude-opus-5",
-        content: [{ type: "text", text: `${HISTORY_SEED_WORDS}.` }],
+        content: [{ type: "text", text: `${conversation.said}.` }],
         stop_reason: "end_turn",
         stop_sequence: null,
         stop_details: null,
@@ -375,6 +380,22 @@ function writePersonTranscript(
     `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`,
   );
   return { kind, nativeSessionId: sessionId };
+}
+
+/** PJ-6 (Q4) — a conversation the stub "had" in a session it was launched
+ * into: the agent keeps a transcript for every session, and its resume refuses
+ * one that is not on disk ("…is not on disk under <home>/.claude/projects; it
+ * cannot be resumed", the Claude adapter). The stub keeps none of its own, so
+ * a rung that resumes a stub session writes the transcript the agent would
+ * have — the person's, in the agent's own layout, under that session's id. */
+export function writeTypedAgentConversation(
+  staged: Pick<StagedTypedAgent, "person" | "work">,
+  sessionId: string,
+  words: { asked: string; said: string },
+): void {
+  const row = AGENT_CATALOG.find((entry) => entry.id === TYPED_AGENT_ID);
+  if (row === undefined) throw new Error("the typed agent's catalog row is gone");
+  writePersonTranscript(staged.person, staged.work, row, { sessionId, ...words });
 }
 
 /** What `stageTypedAgent` put in place, for the step that types. */

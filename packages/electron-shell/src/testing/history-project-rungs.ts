@@ -1,9 +1,19 @@
 import { existsSync, mkdirSync, realpathSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { AgentListResult, IndexSessionsResult, ProjectListResult } from "@vibefield/contracts";
+import {
+  AgentListResult,
+  AgentSpawnResult,
+  IndexSessionsResult,
+  ProjectListResult,
+} from "@vibefield/contracts";
 import type { FielddHandle } from "@vibefield/fieldd-supervisor";
 import type { BrowserWindow } from "electron";
-import { readTypedAgentCalls, type StagedTypedAgent, TYPED_AGENT_MODELS } from "./typed-agent";
+import {
+  readTypedAgentCalls,
+  type StagedTypedAgent,
+  TYPED_AGENT_MODELS,
+  writeTypedAgentConversation,
+} from "./typed-agent";
 
 // HISTORY BY PROJECT's RUNG in `pnpm smoke:godview` (PJ-4, H1 (a): "we map,
 // the room draws"). It rides the History rung, after that rung opened the
@@ -513,11 +523,13 @@ export async function historyNewAgentAtModelRung(
     const deadline = Date.now() + 30_000;
     let seen = "no new run";
     let row: Record<string, unknown> | undefined;
+    let floor: string | undefined;
     while (Date.now() < deadline) {
       const after = AgentListResult.parse(await opts.handle.client.request("agent.list", {}));
       const fresh = after.sessions.find(
         (candidate) => candidate.kind === staged.agentId && !runsBefore.has(candidate.runtimeRunId),
       );
+      floor = fresh?.terminal?.runtimeSessionId;
       const monitor = fresh?.monitor as
         | { model?: { id?: string; intent?: string }; effort?: { value?: string; intent?: string } }
         | undefined;
@@ -554,11 +566,137 @@ export async function historyNewAgentAtModelRung(
       page: page.title,
       note,
       run: row,
+      // what `historyResumeAtModelRung` ends and resumes, after the deck's rungs
+      ...(floor !== undefined ? { floor } : {}),
       launched: { model: flag("--model"), effort: flag("--effort") },
       pickerReads: reads,
     };
   } finally {
     await evaluate(NOTES_OFF).catch(() => undefined);
+  }
+}
+
+/**
+ * PJ-6 (Q4) — THE SAME SESSION RESUMED STARTS AT THEM AGAIN: the run
+ * `historyNewAgentAtModelRung` started at a model and an effort has its pane
+ * ended, then its record is resumed (`agent.resume {runtimeRunId}`, the deck's
+ * Resume): fieldd passes the record's launch selection with its account,
+ * puppeteer discovers and validates it again, and the stub's resume is
+ * launched with the model and the effort — its own record says so, the answer
+ * says `applied`, and the successor's fold row shows them at `intent:
+ * configured`. Its PTY is ended after. It runs AFTER the deck's rungs, whose
+ * swarm calls the terminals up through that live run's body.
+ */
+export async function historyResumeAtModelRung(
+  opts: HistoryActRungOptions,
+  atModel: Record<string, unknown> | undefined,
+): Promise<Record<string, unknown>> {
+  const staged = opts.staged;
+  const run = atModel?.["run"] as { runtimeRunId?: string } | undefined;
+  const floor = atModel?.["floor"];
+  const launchedAt = atModel?.["launched"] as { model?: string; effort?: string } | undefined;
+  if (
+    staged === undefined ||
+    run?.runtimeRunId === undefined ||
+    typeof floor !== "string" ||
+    launchedAt?.model === undefined ||
+    launchedAt.effort === undefined
+  )
+    return { unavailable: "no run was started at a model in this run" };
+  return await resumedAtModel(opts, staged, {
+    runId: run.runtimeRunId,
+    floor,
+    model: launchedAt.model,
+    effort: launchedAt.effort,
+  });
+}
+
+async function resumedAtModel(
+  opts: HistoryActRungOptions,
+  staged: StagedTypedAgent,
+  started: { runId: string; floor: string; model: string; effort: string },
+): Promise<Record<string, unknown>> {
+  await opts.handle.client.request("terminal.terminate", { sessionId: started.floor });
+  // the conversation the agent would have kept for the session (its resume
+  // refuses one not on disk): the session id its launch was given
+  const launched = readTypedAgentCalls(staged.calls)
+    .reverse()
+    .find((candidate) => candidate.argv.includes("--session-id"));
+  const conversation = launched?.argv[launched.argv.indexOf("--session-id") + 1];
+  if (conversation === undefined) throw new Error("the stub's launch named no session id");
+  writeTypedAgentConversation(staged, conversation, {
+    asked: "Which lamp is lit?",
+    said: "The third lamp on the left is lit",
+  });
+  const callsBefore = readTypedAgentCalls(staged.calls).length;
+  // the record is stamped once the run's exit is heard: until then fieldd
+  // refuses a resume of a run whose terminal it still holds alive
+  const deadline = Date.now() + 30_000;
+  let answer: AgentSpawnResult | undefined;
+  let refusal = "";
+  while (Date.now() < deadline && answer === undefined) {
+    try {
+      answer = AgentSpawnResult.parse(
+        await opts.handle.client.request("agent.resume", { runtimeRunId: started.runId }),
+      );
+    } catch (error) {
+      refusal = error instanceof Error ? error.message : String(error);
+      await sleep(250);
+    }
+  }
+  if (answer === undefined) throw new Error(`the run's resume was refused: ${refusal}`);
+  const successor = answer.session.runtimeRunId;
+  try {
+    if (answer.modelSelection?.state !== "applied")
+      throw new Error(`the resume answered ${JSON.stringify(answer.modelSelection ?? null)}`);
+    let seen = "";
+    let row: Record<string, unknown> | undefined;
+    const until = Date.now() + 30_000;
+    while (Date.now() < until) {
+      const listed = AgentListResult.parse(await opts.handle.client.request("agent.list", {}));
+      const run = listed.sessions.find((candidate) => candidate.runtimeRunId === successor);
+      const monitor = run?.monitor as
+        | { model?: { id?: string; intent?: string }; effort?: { value?: string; intent?: string } }
+        | undefined;
+      seen = JSON.stringify({ model: monitor?.model, effort: monitor?.effort });
+      if (
+        monitor?.model?.id === started.model &&
+        monitor.model.intent === "configured" &&
+        monitor.effort?.value === started.effort &&
+        monitor.effort.intent === "configured"
+      ) {
+        row = { runtimeRunId: successor, model: monitor.model, effort: monitor.effort };
+        break;
+      }
+      await sleep(250);
+    }
+    if (row === undefined)
+      throw new Error(`the resumed run's fold row does not show the model and the effort: ${seen}`);
+    // the stub's own record of its resumed launch, once its process has run
+    let launch: { argv: string[] } | undefined;
+    const ran = Date.now() + 15_000;
+    while (Date.now() < ran && launch === undefined) {
+      launch = readTypedAgentCalls(staged.calls)
+        .slice(callsBefore)
+        .find((candidate) => candidate.argv.includes("--resume"));
+      if (launch === undefined) await sleep(250);
+    }
+    const flag = (name: string): string | undefined => {
+      const at = launch?.argv.indexOf(name) ?? -1;
+      return at < 0 ? undefined : launch?.argv[at + 1];
+    };
+    if (flag("--model") !== started.model || flag("--effort") !== started.effort)
+      throw new Error(`the stub was resumed with ${JSON.stringify(launch?.argv ?? null)}`);
+    return {
+      answer: answer.modelSelection,
+      run: row,
+      launched: { resume: flag("--resume"), model: flag("--model"), effort: flag("--effort") },
+    };
+  } finally {
+    const floor = answer.terminal.sessionId;
+    await opts.handle.client
+      .request("terminal.terminate", { sessionId: floor })
+      .catch(() => undefined);
   }
 }
 

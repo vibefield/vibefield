@@ -82,6 +82,7 @@ import {
   historyGoneFolderRung,
   historyNewAgentAtModelRung,
   historyNewAgentRung,
+  historyResumeAtModelRung,
 } from "./history-project-rungs";
 import { jumpToRung } from "./jump-rungs";
 import { LiveSurfaceFixtureRuntime } from "./live-surface-fixture-runtime";
@@ -9433,6 +9434,13 @@ export async function runSmokeGodview(opts: {
     //      and buttons as holes, the frame's one search button standing in it
     //      and opening the Peek — and restore brings the sheet back at its top.
     verdict["deckMaximized"] = await deckMaximizeRung(win, deckRungs);
+    // PJ-6 (Q4) — the run New agent started at a model, ended and resumed by
+    //      its record: it starts at the model and the effort again. After the
+    //      deck's rungs, whose swarm calls the terminals up through its body.
+    verdict["historyResumeAtModel"] = await historyResumeAtModelRung(
+      historyActs,
+      verdict["historyNewAgentAtModel"] as Record<string, unknown> | undefined,
+    );
 
     // THE WARM OPEN — the AFTER number, and the row that actually tests GT-D14.
     //
