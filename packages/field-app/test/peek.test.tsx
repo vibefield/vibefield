@@ -30,8 +30,18 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createCanvasEngine } from "@vibecook/ice";
-import type { HistoryPort, HistorySearchResponse } from "@vibecook/puppeteer-views";
-import type { FrameView, FrameViewState, ShellPlatform } from "@vibefield/contracts";
+import {
+  type HistoryPort,
+  type HistorySearchResponse,
+  monitorParameterDefaults,
+  monitorViewFor,
+} from "@vibecook/puppeteer-views";
+import type {
+  AgentProfileSet,
+  FrameView,
+  FrameViewState,
+  ShellPlatform,
+} from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act, type ReactElement, useEffect, useState } from "react";
@@ -59,6 +69,9 @@ import { FramePeek } from "../src/frame/Peek";
 import { ViewFrame } from "../src/frame/ViewFrame";
 import { resetActiveViewForTest, useActiveView } from "../src/frame/view-state";
 import { viewKeysOf } from "../src/frame/views";
+import { GodviewMonitor } from "../src/godview/GodviewMonitor";
+import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
+import type { MonitorDoor } from "../src/godview/monitor/remote-door";
 import { HistoryView } from "../src/history/HistoryView";
 import { getHistoryOpenAt, resetHistoryOpenAtForTest } from "../src/history/open-at";
 import { type FieldHost, getHost, setHost } from "../src/host";
@@ -66,6 +79,7 @@ import { CommandPalette } from "../src/hud/CommandPalette";
 import { ClipboardStore } from "../src/hud/edge-tray/clipboard-store";
 import { ClipboardTray } from "../src/hud/edge-tray/EdgeTray";
 import { type RendererLogger, setRendererLogger } from "../src/logging";
+import { scriptedModelBoard } from "./model-board-fixture";
 
 vi.mock("../src/plugin-host/plugin-registry-store", () => ({
   usePluginRegistrySnapshot: () => null,
@@ -185,6 +199,8 @@ beforeEach(() => {
   surfaceNow = null;
   viewAsked = [];
   window.localStorage.clear();
+  // N4 (a): Godview's monitor keeps its filters here for the run
+  window.sessionStorage.clear();
   setRendererLogger({
     child: () => ({ error: () => undefined, info: () => undefined }) as unknown as RendererLogger,
     error: () => undefined,
@@ -261,7 +277,7 @@ function fieldd(
  * and the frame's Peek over the window's client. */
 function mount(
   client: ReturnType<typeof fieldd>,
-  opts: { openLiveFeed?: OpenLiveFeed } = {},
+  opts: { openLiveFeed?: OpenLiveFeed; godview?: ReactElement } = {},
 ): void {
   const engine = createCanvasEngine({});
   const clipboard = new ClipboardStore(() => 0);
@@ -288,7 +304,7 @@ function mount(
           {...(opts.openLiveFeed !== undefined ? { openLiveFeed: opts.openLiveFeed } : {})}
         />
         <ViewFrame
-          godview={<div data-testid="godview-content" />}
+          godview={opts.godview ?? <div data-testid="godview-content" />}
           history={(active) => <HistoryView active={active} />}
           surface={surface}
           onSurfaceChange={setSurface}
@@ -1132,6 +1148,82 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
     act(() => godview.door().setDesk("studio"));
     await openHistory();
     expect(host?.querySelector(".vf-peek-token")).toBeNull();
+  });
+
+  it("wears the filter again when Godview opens after a close: the monitor keeps the choice for the run (docket N4 (a))", async () => {
+    // the real monitor, mounted only while Godview is open, as the overlay mounts it
+    const at = "2026-10-12T09:00:00.000Z";
+    const sets: AgentProfileSet[] = [
+      {
+        id: "native",
+        kind: "native",
+        label: "This Mac",
+        default: true,
+        createdAt: at,
+        personas: [],
+      },
+      { id: "work", kind: "managed", label: "Work", default: false, createdAt: at, personas: [] },
+    ];
+    const board = scriptedModelBoard({ rows: [], profiles: sets });
+    const door: MonitorDoor = {
+      model: board.port,
+      profiles: {
+        subscribe: (next) => {
+          next(sets);
+          return () => undefined;
+        },
+      },
+      attach: async () => ({ state: "attached", sessionId: "r", readWrite: true }),
+      createTerminal: async () => ({ state: "mounted", sessionId: "born" }),
+      mountLocal: async (sessionId) => ({ state: "mounted", sessionId }),
+      transcripts: liveHistory([]),
+      usage: {
+        snapshot: async () => ({ refreshedAt: at, entries: [] }),
+        subscribe: () => () => {},
+      },
+    };
+    const view = monitorViewFor("list");
+    let showGodview: (open: boolean) => void = () => undefined;
+    function Godview(): ReactElement | null {
+      const [open, setOpen] = useState(true);
+      showGodview = setOpen;
+      return open ? (
+        <GodviewAgentsProvider door={door}>
+          <GodviewMonitor
+            view={view}
+            parameters={monitorParameterDefaults(view.parameterGroups)}
+            door={door}
+            publishesFind
+          />
+        </GodviewAgentsProvider>
+      ) : null;
+    }
+    try {
+      mount(fieldd(), { godview: <Godview /> });
+      to("godview");
+      await openPeek();
+      await until(() => liveDropdown("profile"), "the profile dropdown");
+      act(() => liveDropdown("profile")?.click());
+      act(() => menuRow("Work")?.click());
+      press(field() ?? document.body, { key: "Escape" });
+      const tokenParts = (): string[] =>
+        [...(host?.querySelectorAll(".vf-peek-token-part") ?? [])].map(
+          (part) => part.textContent ?? "",
+        );
+      expect(tokenParts()).toEqual(["Work"]);
+      // closed: the stage and its door are gone, and the button wears nothing
+      act(() => showGodview(false));
+      expect(host?.querySelector(".vf-peek-token")).toBeNull();
+      // open again: the same filter, on the button and in the scope row
+      act(() => showGodview(true));
+      await until(() => host?.querySelector(".vf-peek-token"), "the token again", 2_000);
+      expect(tokenParts()).toEqual(["Work"]);
+      await openPeek();
+      expect(liveDropdown("profile")?.textContent).toBe("Work");
+    } finally {
+      act(() => showGodview(false));
+      board.dispose();
+    }
   });
 
   it("listens for the monitor's rows only while Live now shows, holds the stage's keys while open (QL-D2), and yields ⌘F to a view that holds them (SB-3)", async () => {

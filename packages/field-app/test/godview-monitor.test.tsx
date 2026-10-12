@@ -74,6 +74,7 @@ import {
   resetGodviewDeckDoorForTest,
 } from "../src/frame/deck-door";
 import { getGodviewFindDoor, resetGodviewFindDoorForTest } from "../src/frame/find-door";
+import { GODVIEW_FILTERS_STORAGE_KEY } from "../src/godview/filter-state";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import { usagePortOver } from "../src/godview/monitor/doors";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
@@ -314,6 +315,8 @@ beforeEach(() => {
   openedIntervals = [];
   clearedIntervals = [];
   localStorage.clear();
+  // N4 (a): the window's stage keeps its filters here for the run
+  sessionStorage.clear();
   for (const [name, value] of Object.entries(TOKENS)) {
     document.documentElement.style.setProperty(name, value);
   }
@@ -1929,6 +1932,133 @@ describe("the profile filter (AR-S5; in search's Live now since P2, GV-D3)", () 
     expect(chosenTab(host)).toBe("all");
     expect(host.querySelector(".vf-monitor-profile-empty")).toBeNull();
     expect(listRows(host).some((row) => row.receded)).toBe(false);
+  });
+});
+
+// ---- N4 (a) — the filters kept for the run --------------------------------------
+//
+// Docket N4 (a), 2026-10-12: Godview's filter is kept while the app runs and
+// cleared at launch. The window's stage keeps its two choices in the window's
+// session storage (`filter-state.ts`), so closing Godview — which unmounts this
+// stage (`GodviewOverlay`) — and opening it again finds them; a launch, whose
+// window starts with empty storage, finds none; a catalog stage never touches
+// them.
+
+/** Work's tabs, and a desktop beside this one: both filters have a choice. */
+function filterDoor(): TabDoor {
+  const door = tabDoor();
+  board?.peer({
+    device: "studio",
+    name: "Studio",
+    platform: "darwin",
+    rows: [
+      managedSummary({ runtimeRunId: "run-studio", kind: "codex", label: "Codex", cwd: "/x" }),
+    ],
+  });
+  return door;
+}
+const chooseDesk = async (id: string | null): Promise<void> => {
+  await act(async () => getGodviewFindDoor()?.setDesk(id));
+};
+/** The two filters as the Peek reads them off the door (its token is these). */
+const doorFilters = (): { desk: string | null; profile: string | null } => ({
+  desk: getGodviewFindDoor()?.filters.desk ?? null,
+  profile: getGodviewFindDoor()?.filters.profile ?? null,
+});
+const keptFilters = (): unknown =>
+  JSON.parse(sessionStorage.getItem(GODVIEW_FILTERS_STORAGE_KEY) ?? "null");
+/** Godview closed: the overlay unmounts its stage. */
+function closeGodview(): void {
+  act(() => root?.unmount());
+  container?.remove();
+  root = null;
+  container = null;
+}
+
+describe("the filters kept for the run (docket N4 (a))", () => {
+  it("finds the chosen desktop and profile again when Godview opens after a close, and keeps nothing once both are cleared", async () => {
+    const door = filterDoor();
+    await mountMonitor("list", door);
+    expect(getGodviewFindDoor()?.filters.desks.map((desk) => desk.id)).toContain("studio");
+    await chooseDesk("studio");
+    await chooseProfile("work");
+    expect(doorFilters()).toEqual({ desk: "studio", profile: "work" });
+    closeGodview();
+    expect(keptFilters()).toEqual({ desk: "studio", profile: "work" });
+
+    await mountMonitor("list", door);
+    expect(doorFilters()).toEqual({ desk: "studio", profile: "work" });
+    expect(latest().profileTab).toBe("work");
+
+    // the token's ×: both cleared, nothing is kept
+    await chooseDesk(null);
+    await chooseProfile("all");
+    expect(sessionStorage.getItem(GODVIEW_FILTERS_STORAGE_KEY)).toBeNull();
+    closeGodview();
+    await mountMonitor("list", door);
+    expect(doorFilters()).toEqual({ desk: null, profile: null });
+  });
+
+  it("opens on everything after a launch: the window's session storage starts empty", async () => {
+    const door = filterDoor();
+    await mountMonitor("list", door);
+    await chooseDesk("studio");
+    await chooseProfile("work");
+    closeGodview();
+    sessionStorage.clear();
+    await mountMonitor("list", door);
+    expect(doorFilters()).toEqual({ desk: null, profile: null });
+    expect(latest().profileTab).toBe("all");
+  });
+
+  it("shows no filter for a kept id the board or the feed no longer has — never a false token", async () => {
+    sessionStorage.setItem(
+      GODVIEW_FILTERS_STORAGE_KEY,
+      JSON.stringify({ desk: "gone", profile: "deleted" }),
+    );
+    await mountMonitor("list", filterDoor());
+    expect(doorFilters()).toEqual({ desk: null, profile: null });
+    expect(latest().profileTab).toBe("all");
+    // unreadable words are none, never a throw
+    closeGodview();
+    sessionStorage.setItem(GODVIEW_FILTERS_STORAGE_KEY, "{not json");
+    await mountMonitor("list", filterDoor());
+    expect(doorFilters()).toEqual({ desk: null, profile: null });
+  });
+
+  it("a catalog stage neither reads the window's filters nor writes its own", async () => {
+    const kept = JSON.stringify({ desk: "studio", profile: "work" });
+    sessionStorage.setItem(GODVIEW_FILTERS_STORAGE_KEY, kept);
+    const catalogStage = async (initialProfile: string | null): Promise<void> => {
+      const door = filterDoor();
+      const view = monitorViewFor("list");
+      syncBoard(PANES);
+      container = document.createElement("div");
+      document.body.appendChild(container);
+      root = createRoot(container);
+      await act(async () => {
+        root?.render(
+          <GodviewAgentsProvider door={door}>
+            <GodviewMonitor
+              view={view}
+              parameters={monitorParameterDefaults(view.parameterGroups)}
+              door={door}
+              panes={PANES}
+              initialProfile={initialProfile}
+            />
+          </GodviewAgentsProvider>,
+        );
+      });
+      await settle();
+    };
+    await catalogStage("native");
+    expect(latest().profileTab).toBe("native");
+    expect(sessionStorage.getItem(GODVIEW_FILTERS_STORAGE_KEY)).toBe(kept);
+    closeGodview();
+    sessionStorage.clear();
+    await catalogStage("work");
+    expect(latest().profileTab).toBe("work");
+    expect(sessionStorage.getItem(GODVIEW_FILTERS_STORAGE_KEY)).toBeNull();
   });
 });
 

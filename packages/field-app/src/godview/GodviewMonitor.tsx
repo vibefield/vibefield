@@ -43,6 +43,7 @@ import {
   type LiveFindAgent,
   publishGodviewFindDoor,
 } from "../frame/find-door";
+import { type GodviewFilters, storedGodviewFilters, storeGodviewFilters } from "./filter-state";
 import { GodviewHeadView } from "./GodviewHeadView";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import { HEAD_RESERVE } from "./head-row";
@@ -338,7 +339,14 @@ export function GodviewMonitor({
   /** Whether the feed has answered at all: until it has, the spawn menu's
    * desktop is `reading` — an empty list is an answer, and not the same one. */
   const [profileSetsRead, setProfileSetsRead] = useState(false);
-  const [profileTab, setProfileTab] = useState<string | null>(initialProfile);
+  // N4 (a) — the two filters are the run's (`filter-state.ts`): the window's
+  // stage opens on what this run left, so a Godview closed and opened again
+  // (which unmounts this stage) wears the same filter. A catalog's stage reads
+  // only its own `initialProfile`.
+  const [opened] = useState<GodviewFilters>(() =>
+    publishesFind ? storedGodviewFilters() : { desk: null, profile: initialProfile },
+  );
+  const [profileTab, setProfileTab] = useState<string | null>(opened.profile);
   const profilesPort = door?.profiles;
   useEffect(() => {
     setProfileSetsRead(false);
@@ -359,7 +367,14 @@ export function GodviewMonitor({
   // default). A desktop that leaves the board falls back to all. It is chosen
   // in search's Live now since P2 (GV-D3), which offers it only when there is
   // a choice to make — two desktops or more.
-  const [deviceChoice, setDeviceChoice] = useState<string | null>(null);
+  const [deviceChoice, setDeviceChoice] = useState<string | null>(opened.desk);
+  // Kept as chosen, never as standing: a desktop that left, or a profile
+  // deleted, falls back where it is read, and a desktop that returns is chosen
+  // again — as it was before the choice outlived the stage.
+  useEffect(() => {
+    if (!publishesFind) return;
+    storeGodviewFilters({ desk: deviceChoice, profile: profileTab });
+  }, [publishesFind, deviceChoice, profileTab]);
   /** P2 — whether the Peek listens for Live now's rows (the find door's
    * `subscribeRows`): the find join is made only while it does. */
   const [findWanted, setFindWanted] = useState(false);
