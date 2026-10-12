@@ -298,6 +298,12 @@ export class BrowserFrames {
     return routed;
   }
 
+  /** PT-5d (M12 J12): a press whose command was refused — let go at its frame's detach, or refused by the engine: down for
+   * nobody (the producer never told it down, and no release follows it) — nothing holds its button. */
+  unpressed(button: string): void {
+    this.#hand.buttons.delete(button);
+  }
+
   /**
    * A move: with a button down, to that press's target wherever the point is (a drag — nowhere once it is gone); else a
    * HOVER, to the frame drawn there — and, where the hover crosses from one target into another, first to the one it

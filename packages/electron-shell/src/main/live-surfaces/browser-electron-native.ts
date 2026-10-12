@@ -166,6 +166,11 @@ function emulationCommands(
 /** PT-5d (M8): a frame whose sight cannot be read in the words' world — it takes nothing (the host's, as before PT-5d). */
 const UNSEEN = { visible: [0, 0, 0, 0], covers: [] } as const satisfies FrameSight;
 
+/** PT-5d: the button a pointer's event is of — a move's none, the left: the frames' hand keeps a press by its button. */
+function buttonOf(input: BrowserSurfaceNativeMouseInput): string {
+  return input.button === undefined || input.button === "none" ? "left" : input.button;
+}
+
 /** PT-5d: a content quad as `DOM.getBoxModel` answers it — eight finite numbers — or none (not laid out). */
 function quadOf(content: unknown): FrameQuad | undefined {
   return Array.isArray(content) && content.length === 8 && content.every(Number.isFinite)
@@ -286,8 +291,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   #painted = true;
   /** PT-5d (M7 H9): touch commands whose bound starts at the page's next paint */
   readonly #atPaint = new Set<() => void>();
-  /** PT-5d (M7 H11): the hand's commands in flight — let go at the page's commit */
-  readonly #atCommit = new Set<() => void>();
+  /** PT-5d (M7 H11, M12 J12): the hand's commands in flight, by the session each went to (`undefined`: the page's) — all
+   * let go at the page's commit, a frame's at its session's detach */
+  readonly #inFlight = new Map<(why: string) => void, string | undefined>();
   /**
    * PT-5c (ruling 1) — TWO QUEUES, never one: the DEVICE's (its layout, what it is told — `Emulation.*`, the window's size)
    * and the HAND's (`Input.*`). A device command the renderer does not answer — every one, while a navigation pends — no
@@ -347,8 +353,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       // (M7 H9: the new document has not painted yet)
       this.#painted = false;
       // (M7 H11: a command the document before never answered is let go — its turn refused; the chain goes on)
-      for (const letGo of [...this.#atCommit]) letGo();
-      this.#atCommit.clear();
+      for (const letGo of [...this.#inFlight.keys()]) letGo("Browser input's document is gone");
+      this.#inFlight.clear();
       // PT-5d: the frames of the document before go with it
       this.#frames.pageCommitted(this.#documents);
       this.#owners.clear();
@@ -431,6 +437,13 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       if (typeof gone === "string") {
         this.#children.delete(gone);
         this.#frames.detached(gone);
+        // (M12 J12: a command in flight on a session the detach took — its, and the frames' in it — is let go, as at a
+        // commit: the engine may never answer a session torn down mid-command, and the chain stalled to the bound said the
+        // WHOLE page stopped, naming no frame, for a frame that merely went)
+        const standing = new Set(this.#frames.frames().map((f) => f.session));
+        for (const [letGo, session] of [...this.#inFlight])
+          if (session !== undefined && !standing.has(session))
+            letGo("Browser input's frame is gone");
         this.#owners.delete(gone);
         this.#placing.delete(gone);
         // (M7 H15: its console's discard, if one is due, sent nowhere)
@@ -1004,7 +1017,13 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
             { ...input, x: routed.x, y: routed.y },
             routed.target.session,
           ),
-        );
+        ).catch((error: unknown) => {
+          // PT-5d (M12 J12): a press refused — let go at its frame's detach, or refused by the engine — is down for
+          // nobody: the producer never told it down, and no release follows it; nothing holds its button (kept, every move
+          // after it went to a press target that no longer stands, until the next press)
+          if (input.type === "mousePressed") this.#frames.unpressed(buttonOf(input));
+          throw error;
+        });
     });
   }
 
@@ -1109,12 +1128,13 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     if (atPaint) this.#atPaint.add(arm);
     else arm();
     // PT-5d (M7 H11): the page's commit lets it go — a document that hung and was left (an address typed, ↻ at last) keeps
-    // the chain stalled no longer, and its command's bound says nothing of the document after it
-    let letGo: (() => void) | undefined;
+    // the chain stalled no longer, and its command's bound says nothing of the document after it; PT-5d (M12 J12): and a
+    // frame's command, its frame's detach
+    let letGo: ((why: string) => void) | undefined;
     const gone = new Promise<never>((_, reject) => {
-      letGo = () => reject(new Error("Browser input's document is gone"));
+      letGo = (why) => reject(new Error(why));
     });
-    if (letGo !== undefined) this.#atCommit.add(letGo);
+    if (letGo !== undefined) this.#inFlight.set(letGo, session);
     try {
       await Promise.race([
         this.window.webContents.debugger.sendCommand(method, params, session),
@@ -1122,7 +1142,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       ]);
     } finally {
       this.#atPaint.delete(arm);
-      if (letGo !== undefined) this.#atCommit.delete(letGo);
+      if (letGo !== undefined) this.#inFlight.delete(letGo);
       if (timer !== null) clearTimeout(timer);
     }
   }
@@ -1133,7 +1153,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     input: BrowserSurfaceNativeMouseInput,
     arrived: number,
   ): readonly FrameRouted[] {
-    const button = input.button === undefined || input.button === "none" ? "left" : input.button;
+    const button = buttonOf(input);
     if (input.type === "mousePressed") return [this.#frames.press(button, input.x, input.y)];
     if (input.type === "mouseReleased") {
       const routed = this.#frames.release(button, input.x, input.y);

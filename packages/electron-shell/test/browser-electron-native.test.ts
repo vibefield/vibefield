@@ -2615,6 +2615,120 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       }
     });
 
+    it("M12 J12 — a command in flight on a FRAME's session when that session DETACHES is let go, as at a commit: its turn refused, never said hung (the whole page stopped for a frame that merely went); the chain goes on; a press so refused holds no button — the next move is a hover, and reaches the page", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = recording(
+          (method, _params, session) => {
+            if (method === "Input.dispatchMouseEvent" && session === "F")
+              return new Promise(() => {});
+            if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };
+            if (method === "DOM.getBoxModel")
+              return { model: { content: [100, 80, 500, 80, 500, 380, 100, 380] } };
+            return {};
+          },
+          { hungInputMs: BOUND },
+        );
+        const hung: (string | undefined)[] = [];
+        r.native.onInputHung((frame) => hung.push(frame));
+        await r.native.loadURL("https://host.test/a");
+        r.at("https://host.test/a");
+        r.contents.emit("did-navigate", {}, "https://host.test/a");
+        r.attach("F");
+        await vi.advanceTimersByTimeAsync(0);
+        let press = "pending";
+        void r.native
+          .dispatchMouse({ type: "mousePressed", x: 180, y: 120, button: "left", clickCount: 1 })
+          .then(
+            () => {
+              press = "sent";
+            },
+            (error: unknown) => {
+              press = `refused: ${error instanceof Error ? error.message : String(error)}`;
+            },
+          );
+        await vi.advanceTimersByTimeAsync(10);
+        r.emit("Target.detachedFromTarget", { sessionId: "F", targetId: "t-F" });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(press).toBe("refused: Browser input's frame is gone");
+        void r.native.dispatchMouse({
+          type: "mouseMoved",
+          x: 20,
+          y: 20,
+          button: "none",
+          buttons: 0,
+        });
+        await vi.advanceTimersByTimeAsync(BOUND * 2);
+        expect(hung).toEqual([]);
+        expect(r.hand()).toEqual(["mousePressed@F 80,40", "mouseMoved@page 20,20"]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("M12 J12 — only what the detach took is let go: a command in flight on ANOTHER frame's session, or the page's own, is untouched by a frame's going — and still timed", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = recording(
+          (method, params) => {
+            if (method === "Input.dispatchMouseEvent") return new Promise(() => {});
+            if (method === "DOM.getFrameOwner")
+              return { backendNodeId: (params as { frameId: string }).frameId === "t-F" ? 7 : 8 };
+            if (method === "DOM.getBoxModel")
+              return (params as { backendNodeId: number }).backendNodeId === 7
+                ? { model: { content: [100, 80, 500, 80, 500, 380, 100, 380] } }
+                : { model: { content: [600, 80, 900, 80, 900, 380, 600, 380] } };
+            return {};
+          },
+          { hungInputMs: BOUND },
+        );
+        const hung: (string | undefined)[] = [];
+        r.native.onInputHung((frame) => hung.push(frame));
+        await r.native.loadURL("https://host.test/a");
+        r.at("https://host.test/a");
+        r.contents.emit("did-navigate", {}, "https://host.test/a");
+        r.attach("F");
+        r.attach("G");
+        await vi.advanceTimersByTimeAsync(0);
+        const pressed = (x: number, y: number) => {
+          const said = { now: "pending" };
+          void r.native
+            .dispatchMouse({ type: "mousePressed", x, y, button: "left", clickCount: 1 })
+            .then(
+              () => {
+                said.now = "sent";
+              },
+              (error: unknown) => {
+                said.now = `refused: ${error instanceof Error ? error.message : String(error)}`;
+              },
+            );
+          return said;
+        };
+        // G's press in flight; F goes — G's is not F's
+        const g = pressed(700, 120);
+        await vi.advanceTimersByTimeAsync(10);
+        r.emit("Target.detachedFromTarget", { sessionId: "F", targetId: "t-F" });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(g.now).toBe("pending");
+        r.emit("Target.detachedFromTarget", { sessionId: "G", targetId: "t-G" });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(g.now).toBe("refused: Browser input's frame is gone");
+        // the page's own press in flight; another frame goes — the page's is untouched, and its bound still says it
+        const page = pressed(50, 50);
+        await vi.advanceTimersByTimeAsync(10);
+        r.attach("H");
+        await vi.advanceTimersByTimeAsync(0);
+        r.emit("Target.detachedFromTarget", { sessionId: "H", targetId: "t-H" });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(page.now).toBe("pending");
+        await vi.advanceTimersByTimeAsync(BOUND);
+        expect(hung).toEqual([undefined]);
+        expect(r.hand()).toEqual(["mousePressed@G 100,40", "mousePressed@page 50,50"]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("M12 J2 — a page with NO frame of another site has no doubt: a press its renderer answers late (busy after the click), the keys behind it — every one sent, in order, on the page's session, none waiting, none refused (as at 8dd23597)", async () => {
       vi.useFakeTimers();
       try {
