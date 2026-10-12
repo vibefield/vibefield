@@ -636,10 +636,12 @@ const framesScript = (ids: readonly string[], elementOnly?: readonly string[]): 
     el("if").addEventListener("cancel", () => { cancels += 1; });
     el("if").addEventListener("change", () => { changes += 1; });
   }
+  // (its own rect, as the engine's: a page that replaces its DOM's methods later — FRAME-COVERED's sly leg — hides nothing from this)
+  const rectOf = (() => { try { return Element.prototype.getBoundingClientRect; } catch { return null; } })();
   const box = (id) => {
     const n = el(id);
     if (!n) return null;
-    const r = n.getBoundingClientRect();
+    const r = rectOf ? rectOf.call(n) : n.getBoundingClientRect();
     return { x: Math.round(r.left + n.clientLeft), y: Math.round(r.top + n.clientTop), w: Math.round(n.clientWidth || r.width), h: Math.round(n.clientHeight || r.height) };
   };
   const report = () => encodeURIComponent(JSON.stringify({
@@ -728,8 +730,15 @@ export const FRAMES_COVERED = { x: 160, y: 60, header: 140 } as const;
 
 /** PT-5d (M7 H3) — `/frames/covered?p=<name>` at `hostOrigin`: a frame of `frameOrigin` at `FRAMES_COVERED`, a FIXED header
  * across the top drawn over the frame's top, and a menu button that opens a dropdown (`#mn`) over the frame, its item
- * (`#mi`) over the frame's right; it hears the hand on its header, its menu's button and item, and the frame's element. */
-export const framesCoveredHtml = (name: string, frameOrigin: string): string => `<!doctype html>
+ * (`#mi`) over the frame's right; it hears the hand on its header, its menu's button and item, and the frame's element.
+ * `&sly=1` (M8): the page replaces its OWN world's DOM methods to hide its header from a read — `getBoundingClientRect`
+ * says nothing of it, `elementFromPoint` names the frame where the header is, `elementsFromPoint` drops it (after its
+ * own words are set up: what it says of itself stays true). */
+export const framesCoveredHtml = (
+  name: string,
+  frameOrigin: string,
+  sly = false,
+): string => `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${FIXTURE_TITLE} — covered</title>
 ${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; } iframe { position: absolute; border: 0; } #mn { position: absolute; display: none; z-index: 3; background: #fff; box-shadow: 0 4px 16px #0004; }</style></head>
 <body><iframe id="f" src="${frameOrigin}/frames/frame?p=${cleanName(name)}" style="left:${FRAMES_COVERED.x}px;top:${FRAMES_COVERED.y}px;width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px"></iframe>
@@ -738,7 +747,19 @@ ${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; } iframe { positio
 <div id="mn" style="left:600px;top:240px;width:240px;height:200px"><button id="mi" style="left:20px;top:80px;width:200px;height:40px">item</button></div>
 <script>const mn = document.getElementById("mn"); document.getElementById("mb").addEventListener("click", () => { mn.style.display = mn.style.display === "block" ? "none" : "block"; });</script>
 ${framesScript(["f", "hd", "mb", "mn", "mi"], ["f", "hd", "mb", "mi"])}
+${sly ? SLY_SCRIPT : ""}
 </body></html>`;
+
+/** PT-5d (M8) — a host page's own world lying about its header: what a read in the page's world would believe. */
+const SLY_SCRIPT = `<script>(() => {
+  const hd = document.getElementById("hd"), f = document.getElementById("f");
+  const rect = Element.prototype.getBoundingClientRect;
+  Element.prototype.getBoundingClientRect = function () { return this === hd ? new DOMRect(0, 0, 0, 0) : rect.call(this); };
+  const one = Document.prototype.elementFromPoint;
+  Document.prototype.elementFromPoint = function (x, y) { const t = one.call(this, x, y); return t === hd ? f : t; };
+  const all = Document.prototype.elementsFromPoint;
+  Document.prototype.elementsFromPoint = function (x, y) { return all.call(this, x, y).filter((t) => t !== hd); };
+})();</script>`;
 
 /** PT-5d (M6.1) — `/frames/same?p=<name>`: the frame's own child of its site — a document of the frame's process, so
  * speaking on the frame's session, its viewport another size than the frame's — a button. */
@@ -983,7 +1004,7 @@ export async function startLiveFixture(): Promise<LiveFixture> {
           : url.pathname === "/frames/clipped"
             ? framesClippedHtml(name, frameOrigin)
             : url.pathname === "/frames/covered"
-              ? framesCoveredHtml(name, frameOrigin)
+              ? framesCoveredHtml(name, frameOrigin, url.searchParams.get("sly") === "1")
               : url.pathname === "/frames/frame"
                 ? framesFrameHtml(name, innerOrigin)
                 : url.pathname === "/frames/inner"

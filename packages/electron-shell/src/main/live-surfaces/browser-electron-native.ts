@@ -91,9 +91,14 @@ export const FRAME_WORDS_BINDING = "__vibefieldFrameWords";
  * As fractions of the content box ([u0, v0, u1, v1]; none: [0, 0, 0, 0]): `{ visible, covers }`. With `quick`, the WORDS'
  * look instead (`moved`): the visible part and the quick look's 25 hits, a string — a clip or a cover that changes with
  * the frame not moving says `moved`. Read beside the quad (`Runtime.callFunctionOn`): a word cannot name the frame's
- * session — the read binds the sight to its owner. Limits: a cover smaller than the quick look's cell that appears with
- * nothing else moving is seen at the next read; a cover an ancestor's pseudo-element draws is none (its element is the
- * frame's ancestor); a perspective transform's quad is taken by three corners (H15).
+ * session — the read binds the sight to its owner. PT-5d (M8): read in the words' ISOLATED WORLD — the owner resolved in
+ * the isolated context of the document that holds it — on that world's own DOM bindings, never the page's main world:
+ * there a page can replace `elementFromPoint` or `getBoundingClientRect` to hide its own overlay, and the person's press
+ * on what they see would be routed into the embed under it (clickjacking a third party's frame); the layout itself is
+ * real — what is drawn is what is hit. Limits: a cover smaller than the whole look's spacing, between its points, is
+ * missed (M8.3); a cover smaller than the quick look's cell that appears with nothing else moving is seen at the next
+ * read; a cover an ancestor's pseudo-element draws is none (its element is the frame's ancestor); a perspective
+ * transform's quad is taken by three corners (H15).
  */
 export const FRAME_SIGHT = `function (quick) { const el = this; const none = [0, 0, 0, 0]; const css = (e) => getComputedStyle(e); const px = (v) => parseFloat(v) || 0; const num = (v, or) => (typeof v === "number" && Number.isFinite(v) ? v : or); const r = el.getBoundingClientRect(); if (!(r.width > 0 && r.height > 0)) return quick ? "none" : { visible: none, covers: [] }; const s = css(el); const kx = el.offsetWidth > 0 ? r.width / el.offsetWidth : 1; const ky = el.offsetHeight > 0 ? r.height / el.offsetHeight : 1; const left = r.left + (px(s.borderLeftWidth) + px(s.paddingLeft)) * kx; const top = r.top + (px(s.borderTopWidth) + px(s.paddingTop)) * ky; const right = r.right - (px(s.borderRightWidth) + px(s.paddingRight)) * kx; const bottom = r.bottom - (px(s.borderBottomWidth) + px(s.paddingBottom)) * ky; if (!(right > left && bottom > top)) return quick ? "none" : { visible: none, covers: [] }; let x0 = left, y0 = top, x1 = right, y1 = bottom; const paints = (t) => /paint|strict|content/.test(t.contain || ""); const holdsFixed = (t) => t.transform !== "none" || t.perspective !== "none" || t.filter !== "none" || paints(t) || /layout/.test(t.contain || ""); const holder = (e) => { const position = css(e).position; for (let a = e.parentElement; a && a !== document.documentElement; a = a.parentElement) { const t = css(a); if (position === "fixed") { if (holdsFixed(t)) return a; } else if (position === "absolute") { if (t.position !== "static" || holdsFixed(t)) return a; } else return a; } return null; }; const root = css(document.documentElement); const bodyIsView = root.overflowX === "visible" && root.overflowY === "visible"; for (let a = holder(el); a; a = holder(a)) { if (a === document.body && bodyIsView) continue; const t = css(a); const cx = t.overflowX !== "visible" || paints(t); const cy = t.overflowY !== "visible" || paints(t); if (!cx && !cy) continue; const b = a.getBoundingClientRect(); const ax = a.offsetWidth > 0 ? b.width / a.offsetWidth : 1; const ay = a.offsetHeight > 0 ? b.height / a.offsetHeight : 1; const cl = b.left + a.clientLeft * ax; const ct = b.top + a.clientTop * ay; if (cx) { x0 = Math.max(x0, cl); x1 = Math.min(x1, cl + a.clientWidth * ax); } if (cy) { y0 = Math.max(y0, ct); y1 = Math.min(y1, ct + a.clientHeight * ay); } } const v = globalThis.visualViewport; const vx = num(v && v.offsetLeft, 0); const vy = num(v && v.offsetTop, 0); x0 = Math.max(x0, vx); y0 = Math.max(y0, vy); x1 = Math.min(x1, vx + num(v && v.width, innerWidth)); y1 = Math.min(y1, vy + num(v && v.height, innerHeight)); if (!(x1 > x0 && y1 > y0)) return quick ? "none" : { visible: none, covers: [] }; const w = right - left; const h = bottom - top; const q = (n) => Math.round(n * 1e4) / 1e4; const frac = (a, b, c, d) => [q((a - left) / w), q((b - top) / h), q((c - left) / w), q((d - top) / h)]; const visible = frac(x0, y0, x1, y1); const hit = (x, y) => { try { return document.elementFromPoint(x, y); } catch { return null; } }; const inside = (c, t) => { try { return c === t || c.contains(t); } catch { return false; } }; const over = (t) => t !== null && t !== el && !inside(t, el); const at = (i, j) => [x0 + ((i + 0.5) * (x1 - x0)) / 5, y0 + ((j + 0.5) * (y1 - y0)) / 5]; if (quick) { let bits = ""; for (let j = 0; j < 5; j += 1) for (let i = 0; i < 5; i += 1) { const [x, y] = at(i, j); bits += over(hit(x, y)) ? "1" : "0"; } return visible.join(",") + "|" + bits; } if (s.pointerEvents === "none" || s.visibility !== "visible") return { visible, covers: [visible] }; const key = Symbol.for("vibefield.sight"); const memo = globalThis[key] instanceof WeakMap ? globalThis[key] : (globalThis[key] = new WeakMap()); const was = memo.get(el) || { covers: [], at: -Infinity }; const covers = []; const known = (t) => covers.some((c) => inside(c, t)); const cut = (c) => { const b = c.getBoundingClientRect(); const a = [Math.max(x0, b.left), Math.max(y0, b.top), Math.min(x1, b.right), Math.min(y1, b.bottom)]; return a[2] > a[0] && a[3] > a[1] ? a : null; }; for (const c of was.covers) { if (!c.isConnected) continue; const a = cut(c); if (a === null) continue; const t = hit((a[0] + a[2]) / 2, (a[1] + a[3]) / 2); if (t !== null && inside(c, t)) covers.push(c); } let fresh = false; for (let j = 0; j < 5; j += 1) for (let i = 0; i < 5; i += 1) { const [x, y] = at(i, j); const t = hit(x, y); if (over(t) && !known(t)) { covers.push(t); fresh = true; } } const now = performance.now(); let looked = was.at; if (fresh || now - was.at >= 1000) { const step = Math.max(24, Math.sqrt(((x1 - x0) * (y1 - y0)) / 600)); for (let y = y0 + step / 2; y < y1; y += step) for (let x = x0 + step / 2; x < x1; x += step) { const t = hit(x, y); if (over(t) && !known(t)) covers.push(t); } looked = now; } memo.set(el, { covers, at: looked }); const out = []; for (const c of covers) { const a = cut(c); if (a !== null) out.push(frac(a[0], a[1], a[2], a[3])); } return { visible, covers: out }; }`;
 
@@ -149,6 +154,9 @@ function emulationCommands(
     ],
   ];
 }
+
+/** PT-5d (M8): a frame whose sight cannot be read in the words' world — it takes nothing (the host's, as before PT-5d). */
+const UNSEEN = { visible: [0, 0, 0, 0], covers: [] } as const satisfies FrameSight;
 
 /** PT-5d (M7 H3): a sight as the read answers it — `{ visible, covers }`, each part four fractions — or none. */
 function sightOf(value: unknown): FrameSight | undefined {
@@ -247,6 +255,10 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   readonly #frameTells = new Map<string, Promise<void>>();
   /** PT-5d (M6.5b i): the frames attached under this page's debugger, and not gone */
   readonly #children = new Set<string>();
+  /** PT-5d (M8): by session (`""`: the page's), each document's context of the words' isolated world, by its frame */
+  readonly #worlds = new Map<string, Map<string, number>>();
+  /** PT-5d (M8): each frame's parent frame — the document that holds its owner element */
+  readonly #parentFrames = new Map<string, string>();
   /**
    * PT-5c (ruling 1) — TWO QUEUES, never one: the DEVICE's (its layout, what it is told — `Emulation.*`, the window's size)
    * and the HAND's (`Input.*`). A device command the renderer does not answer — every one, while a navigation pends — no
@@ -303,6 +315,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       this.#frames.pageCommitted(this.#documents);
       this.#owners.clear();
       this.#frameTells.clear();
+      this.#parentFrames.clear();
       this.focusMoved();
     };
     window.webContents.on("did-navigate", (_event, url) => {
@@ -373,6 +386,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         this.#placing.delete(gone);
         this.#discards.delete(gone);
         this.#frameTells.delete(gone);
+        this.#worlds.delete(gone);
         this.focusMoved();
       }
       return;
@@ -387,6 +401,54 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       if (sessionId === undefined || sessionId === "" || frame === undefined) return;
       if (this.#frames.frames().find((f) => f.session === sessionId)?.targetId === frame.id)
         this.#frames.committed(sessionId, typeof frame.url === "string" ? frame.url : undefined);
+      return;
+    }
+    // PT-5d (M8): THE WORDS' ISOLATED WORLD, by document — where a frame's sight and size are read: never the page's main
+    // world, where its scripts can replace the DOM's methods (a page hiding its own overlay from the read would send the
+    // person's press into the embed under it). Each document's context of the words' world, kept by its frame; and each
+    // frame's parent frame (the document that holds its owner element).
+    if (method === "Runtime.executionContextCreated") {
+      const context = params["context"] as
+        | {
+            readonly id?: unknown;
+            readonly name?: unknown;
+            readonly auxData?: { readonly frameId?: unknown };
+          }
+        | undefined;
+      const frameId = context?.auxData?.frameId;
+      if (
+        context?.name !== WORDS_WORLD ||
+        typeof context.id !== "number" ||
+        typeof frameId !== "string"
+      )
+        return;
+      const key = sessionId ?? "";
+      let worlds = this.#worlds.get(key);
+      if (worlds === undefined) {
+        worlds = new Map();
+        this.#worlds.set(key, worlds);
+      }
+      worlds.set(frameId, context.id);
+      // (a frame's own document's world, at last: its size can be read in it)
+      if (key !== "" && this.#frames.frames().find((f) => f.session === key)?.targetId === frameId)
+        this.placeFrame(key);
+      return;
+    }
+    if (method === "Runtime.executionContextDestroyed") {
+      const worlds = this.#worlds.get(sessionId ?? "");
+      for (const [frameId, id] of [...(worlds ?? [])])
+        if (id === params["executionContextId"]) worlds?.delete(frameId);
+      return;
+    }
+    if (method === "Runtime.executionContextsCleared") {
+      this.#worlds.delete(sessionId ?? "");
+      return;
+    }
+    if (method === "Page.frameAttached") {
+      const frameId = params["frameId"];
+      const parentFrameId = params["parentFrameId"];
+      if (typeof frameId === "string" && typeof parentFrameId === "string")
+        this.#parentFrames.set(frameId, parentFrameId);
       return;
     }
     if (method === "Page.fileChooserOpened") {
@@ -539,11 +601,27 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         Array.isArray(content) && content.length === 8 && content.every(Number.isFinite)
           ? (content as unknown as FrameQuad)
           : undefined;
-      const sight = quad === undefined ? undefined : await this.sightOf(frame.parent, owner);
+      // (M8: in the isolated world of the document that holds its owner — that world unknown, or the read refused: the
+      // frame takes nothing, the host's as before PT-5d — never a sight the page's own scripts could have written)
+      const world = this.#worlds
+        .get(frame.parent ?? "")
+        ?.get(this.#parentFrames.get(frame.targetId) ?? "");
+      const sight =
+        quad === undefined
+          ? undefined
+          : ((world === undefined ? undefined : await this.sightOf(frame.parent, owner, world)) ??
+            UNSEEN);
       const placement = this.#frames.placed(session, quad, sight);
       if (quad === undefined) return;
+      // (M8: its own size in its own document's isolated world — not known yet: the quad's own until it is)
+      const own = this.#worlds.get(session)?.get(frame.targetId);
+      if (own === undefined) return;
       void cdp
-        .sendCommand("Runtime.evaluate", { expression: FRAME_SIZE, returnByValue: true }, session)
+        .sendCommand(
+          "Runtime.evaluate",
+          { expression: FRAME_SIZE, contextId: own, returnByValue: true },
+          session,
+        )
         .then(
           (answer) => {
             const value = (answer as { readonly result?: { readonly value?: unknown } }).result
@@ -563,16 +641,21 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       });
   }
 
-  /** PT-5d (M6.3a, M7 H3): the sight of a frame's owner, read in its parent's document; unread (refused), none said. */
+  /** PT-5d (M6.3a, M7 H3, M8): the sight of a frame's owner, read in its parent's document's isolated world; unread
+   * (refused), none said. */
   private async sightOf(
     parent: string | undefined,
     owner: number,
+    world: number,
   ): Promise<FrameSight | undefined> {
     const cdp = this.window.webContents.debugger;
     try {
-      const node = (await cdp.sendCommand("DOM.resolveNode", { backendNodeId: owner }, parent)) as {
-        readonly object?: { readonly objectId?: unknown };
-      };
+      // (M8: resolved in the words' isolated world — the sight runs there, on that world's own DOM bindings)
+      const node = (await cdp.sendCommand(
+        "DOM.resolveNode",
+        { backendNodeId: owner, executionContextId: world },
+        parent,
+      )) as { readonly object?: { readonly objectId?: unknown } };
       const objectId = node.object?.objectId;
       if (typeof objectId !== "string") return undefined;
       try {

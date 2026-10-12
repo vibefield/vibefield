@@ -676,6 +676,12 @@ describe("the live pane's fixture page", () => {
     expect(covered).toContain(`<iframe id="f" src="${fixture.origin}/frames/frame?p=a"`);
     for (const id of ["hd", "mb", "mn", "mi"]) expect(covered).toContain(`id="${id}"`);
     expect(covered).toContain("position:fixed");
+    expect(covered).not.toContain("getBoundingClientRect = function");
+    // M8: its sly form replaces its own world's DOM methods to hide its header from a read
+    const sly = await page(fixture.hostOrigin, "/frames/covered?p=a&sly=1");
+    expect(sly).toContain("Element.prototype.getBoundingClientRect = function");
+    expect(sly).toContain("Document.prototype.elementFromPoint = function");
+    expect(sly).toContain("Document.prototype.elementsFromPoint = function");
     expect(await page(fixture.origin, "/frames/next?p=a")).toContain('id="b2"');
     expect(await page(fixture.origin, "/frames/loop?p=a")).toContain("for (;;) {}");
     expect((await fetch(`${fixture.origin}/frames/elsewhere`)).status).toBe(404);

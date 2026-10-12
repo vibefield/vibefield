@@ -26,7 +26,8 @@
 //                  header: a press on the clipped part is the host's (its header heard it; the frame nothing), a press on
 //                  the part in view the frame's (before M6.3a the frame took both);
 //   FRAME-COVERED — M7 H3: a FIXED header drawn over the frame's top: a press on the header there is the host's, one below
-//                  it the frame's (before H3 the frame took both — a regression of PT-5d's routing);
+//                  it the frame's (before H3 the frame took both — a regression of PT-5d's routing); M8: and a page that
+//                  hides its header from a read in its own world (its DOM's methods replaced) — still the host's;
 //   FRAME-MENU   — M7 H3: the host's dropdown opened over the frame: its item's press is the host's, the frame hears
 //                  nothing;
 //   FRAME-PICKER — the file input in the NESTED frame pressed (M2): no panel, its `cancel` heard, main's windows as they were;
@@ -122,6 +123,8 @@ export interface FramesSeen {
     readonly hidden: { readonly hostHeard: readonly string[]; readonly frameClicks: number } | null;
     /** the press below the header */
     readonly shown: FramePressSeen;
+    /** M8: the press on the header of a page that hides it from a read in its own world (absent: the leg not run) */
+    readonly sly?: { readonly hostHeard: readonly string[]; readonly frameClicks: number } | null;
   };
   readonly menu: {
     /** the host's dropdown open over the frame */
@@ -368,6 +371,20 @@ export function judgeFrameCovered(seen: FramesSeen["covered"]): string[] {
       );
   }
   out.push(...judgeFramePress("FRAME-COVERED (below the header)", seen.shown));
+  if (seen.sly === null)
+    out.push(
+      "FRAME-COVERED (a page hiding its header from the read): its press could not be aimed — that leg proved nothing",
+    );
+  else if (seen.sly !== undefined) {
+    if (seen.sly.frameClicks > 0)
+      out.push(
+        `FRAME-COVERED (a page hiding its header from the read): the press on the header went INTO the frame (${seen.sly.frameClicks} click) — the read believed the page's own world`,
+      );
+    if (!seen.sly.hostHeard.includes("click #hd"))
+      out.push(
+        `FRAME-COVERED (a page hiding its header from the read): the host heard ${seen.sly.hostHeard.join(", ") || "nothing"} — not the press on its header`,
+      );
+  }
   return out;
 }
 
@@ -1215,7 +1232,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       () => vFramed(),
       (f) => (f?.clicks.length ?? 0) > coveredClicks0,
     );
-    const covered = {
+    const coveredSeen = {
       top: vBox?.y ?? null,
       edge: (() => {
         const hd = coveredHost?.framed?.parts.hd ?? null;
@@ -1228,8 +1245,6 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         hostHeard: vHostHeard().slice(coveredHeard0),
       },
     };
-    said.covered = covered;
-    problems.push(...judgeFrameCovered(covered));
     // FRAME-MENU: the host's menu opened over the frame; its item pressed
     const mb = at(COVERED_HOST)?.framed?.parts.mb ?? null;
     let opened = false;
@@ -1267,6 +1282,58 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     said.menu = menu;
     problems.push(...judgeFrameMenu(menu));
     await shoot("pt-5d-frame-covered.png");
+    await done();
+
+    // ── FRAME-COVERED's sly leg (M8): the page hides its header from a read in its own world ─────────────────────────
+    const slyPane = await lay(
+      `${d.fixture.hostOrigin}/frames/covered?p=s&sly=1`,
+      x0 + 6 * step,
+      y0,
+    );
+    await frame([slyPane]);
+    await live(slyPane);
+    const SLY_HOST = "/frames/covered?p=s&sly=1";
+    const SLY_FRAME = "/frames/frame?p=s";
+    await waitFor(
+      "the sly host's word",
+      FRAMES_ROWS.withinMs,
+      () => at(SLY_HOST),
+      (rep) => rep?.framed?.parts.frame !== undefined,
+    );
+    await waitFor(
+      "the sly host's frame's word",
+      FRAMES_ROWS.withinMs,
+      () => at(SLY_FRAME),
+      (rep) => rep?.framed?.parts.b !== undefined,
+    );
+    await pickUp(slyPane);
+    await sleep(800);
+    const slyHeld = await heldFrame();
+    const slyHost = at(SLY_HOST);
+    const sBox = slyHost?.framed?.parts.frame ?? null;
+    const slyB = at(SLY_FRAME)?.framed?.parts.b ?? null;
+    let sly: FramesSeen["covered"]["sly"] = null;
+    if (slyHeld !== null && slyHost !== null && sBox !== null && slyB !== null) {
+      const clicks0 = at(SLY_FRAME)?.framed?.clicks.length ?? 0;
+      const heard0 = at(SLY_HOST)?.framed?.heard.length ?? 0;
+      await h.press(
+        await onWindow(slyHeld, slyHost.view, sBox.x + centre(slyB)[0], sBox.y + centre(slyB)[1]),
+      );
+      const heard = await waitFor(
+        "the sly header's click",
+        5_000,
+        () => (at(SLY_HOST)?.framed?.heard ?? []).slice(heard0),
+        (got) => got.includes("click #hd"),
+      );
+      await sleep(600);
+      sly = {
+        hostHeard: heard,
+        frameClicks: (at(SLY_FRAME)?.framed?.clicks.length ?? 0) - clicks0,
+      };
+    }
+    const covered = { ...coveredSeen, sly };
+    said.covered = covered;
+    problems.push(...judgeFrameCovered(covered));
     await done();
 
     // ── FRAME-TOUCH: a phone's pane on the host; a tap on the frame's button ────────────────────────────────────────

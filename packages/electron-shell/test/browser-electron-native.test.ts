@@ -708,10 +708,15 @@ describe("PT-5c2 (F1) — the producer over this adapter: a document's LATE fail
 });
 
 describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's events routed to the target that takes them (rulings 1, 3, 4)", () => {
-  /** A window whose debugger records what it is sent, by session, and answers what the row says (else `{}`). */
+  /**
+   * A window whose debugger records what it is sent, by session, and answers what the row says (else `{}` — and, M8, a
+   * frame's sight read as the engine draws it: its owner resolved, all of it in view, nothing over it). The page's
+   * document has its words' isolated world (M8: where every sight is read); each frame attached is in the document
+   * that holds it (`Page.frameAttached`), and has its own world.
+   */
   const recording = (
     answer: (method: string, params: unknown, session?: string) => object = () => ({}),
-    options: { readonly hungInputMs?: number } = {},
+    options: { readonly hungInputMs?: number; readonly worlds?: boolean } = {},
   ) => {
     const w = window(options);
     const sent: { method: string; params: unknown; session?: string }[] = [];
@@ -726,16 +731,47 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       session?: string,
     ) => {
       sent.push({ method: method ?? "", params, ...(session === undefined ? {} : { session }) });
-      return answer(method ?? "", params, session);
+      const answered = answer(method ?? "", params, session);
+      if (!(answered instanceof Promise) && Object.keys(answered).length === 0) {
+        if (method === "DOM.resolveNode") return { object: { objectId: "owner" } };
+        if (method === "Runtime.callFunctionOn")
+          return { result: { value: { visible: [0, 0, 1, 1], covers: [] } } };
+      }
+      return answered;
     };
     const emit = (method: string, params: unknown, session?: string): void =>
       w.contents.debugger.emit("message", {}, method, params, session);
-    const attach = (session: string, parent?: string, type = "iframe"): void =>
+    const world = (id: number, frameId: string, session?: string): void =>
+      emit(
+        "Runtime.executionContextCreated",
+        {
+          context: {
+            id,
+            name: WORDS_WORLD,
+            auxData: { frameId, isDefault: false, type: "isolated" },
+          },
+        },
+        session,
+      );
+    let worlds = 100;
+    if (options.worlds !== false) world(41, "main");
+    const attach = (session: string, parent?: string, type = "iframe"): void => {
+      if (options.worlds !== false)
+        emit(
+          "Page.frameAttached",
+          { frameId: `t-${session}`, parentFrameId: parent === undefined ? "main" : `t-${parent}` },
+          parent,
+        );
       emit(
         "Target.attachedToTarget",
         { sessionId: session, targetInfo: { type, targetId: `t-${session}`, url: "" } },
         parent,
       );
+      if (options.worlds !== false && type === "iframe") {
+        worlds += 1;
+        world(worlds, `t-${session}`, session);
+      }
+    };
     const on = (session: string): string[] =>
       sent.filter((c) => c.session === session).map((c) => c.method);
     /** what the hand sent: `method@session x,y` (a key's type, text's, a composition's) */
@@ -1385,7 +1421,8 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     r.contents.emit("did-navigate", {}, "https://host.test/a");
     r.attach("F");
     await turns();
-    // the page scrolled by 50: its words say so — F is read again, once however many words come
+    // the page scrolled by 50: its words say so — F is read again, once however many words come (one in flight, one after)
+    const before = r.sent.filter((c) => c.method === "DOM.getBoxModel").length;
     at = [100, 30, 500, 30, 500, 330, 100, 330];
     for (let i = 0; i < 3; i += 1)
       r.emit("Runtime.bindingCalled", {
@@ -1394,7 +1431,9 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         executionContextId: 1,
       });
     await turns();
-    expect(r.sent.filter((c) => c.method === "DOM.getBoxModel").length).toBeLessThanOrEqual(3);
+    expect(
+      r.sent.filter((c) => c.method === "DOM.getBoxModel").length - before,
+    ).toBeLessThanOrEqual(2);
     await r.native.dispatchMouse({
       type: "mousePressed",
       x: 180,
@@ -1745,6 +1784,108 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     ]);
   });
 
+  it("M8 — the frame's sight and its size are read in the WORDS' ISOLATED WORLD, never the page's main world (a page replacing the DOM's methods there could hide its overlay — a press on it sent into the embed under it): its owner resolved in the isolated context of the document that holds it, its own size evaluated in its own; that context unknown — the frame takes nothing", async () => {
+    const r = recording(
+      (method, params) => {
+        if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };
+        if (method === "DOM.getBoxModel")
+          return { model: { content: [100, 80, 500, 80, 500, 380, 100, 380] } };
+        if (method === "DOM.resolveNode")
+          return (params as { executionContextId?: number }).executionContextId === 41
+            ? { object: { objectId: "owner-7" } }
+            : { object: { objectId: "owner-7-main" } };
+        if (method === "Runtime.callFunctionOn")
+          return { result: { value: { visible: [0, 0, 1, 1], covers: [] } } };
+        if (method === "Runtime.evaluate") return { result: { type: "string", value: "400,300" } };
+        return {};
+      },
+      { worlds: false },
+    );
+    await r.native.loadURL("https://host.test/a");
+    r.at("https://host.test/a");
+    r.contents.emit("did-navigate", {}, "https://host.test/a");
+    // the page's document's isolated world (the words'), and its main world; F's owner in that document
+    r.emit("Runtime.executionContextCreated", {
+      context: { id: 40, name: "", auxData: { frameId: "main", isDefault: true, type: "default" } },
+    });
+    r.emit("Runtime.executionContextCreated", {
+      context: {
+        id: 41,
+        name: WORDS_WORLD,
+        auxData: { frameId: "main", isDefault: false, type: "isolated" },
+      },
+    });
+    r.emit("Page.frameAttached", { frameId: "t-F", parentFrameId: "main" });
+    r.attach("F");
+    // F's own document's isolated world, on F's session (a re-read of its place follows: its size in it)
+    r.emit(
+      "Runtime.executionContextCreated",
+      {
+        context: {
+          id: 7,
+          name: WORDS_WORLD,
+          auxData: { frameId: "t-F", isDefault: false, type: "isolated" },
+        },
+      },
+      "F",
+    );
+    await turns();
+    expect(
+      r.sent.filter((c) => c.method === "DOM.resolveNode").map((c) => c.params),
+    ).toContainEqual({
+      backendNodeId: 7,
+      executionContextId: 41,
+    });
+    expect(
+      r.sent.filter((c) => c.method === "DOM.resolveNode").map((c) => c.params),
+    ).not.toContainEqual({ backendNodeId: 7 });
+    expect(
+      r.sent
+        .filter((c) => c.method === "Runtime.evaluate" && c.session === "F")
+        .map((c) => c.params),
+    ).toContainEqual({
+      expression: 'innerWidth + "," + innerHeight',
+      contextId: 7,
+      returnByValue: true,
+    });
+    await r.native.dispatchMouse({
+      type: "mousePressed",
+      x: 180,
+      y: 120,
+      button: "left",
+      clickCount: 1,
+    });
+    expect(r.hand()).toEqual(["mousePressed@F 80,40"]);
+    // a frame whose owner's document's isolated world is not known: its sight cannot be read as the engine's — it takes
+    // nothing (the host's, as before PT-5d)
+    const unknown = recording(
+      (method) => {
+        if (method === "DOM.getFrameOwner") return { backendNodeId: 9 };
+        if (method === "DOM.getBoxModel")
+          return { model: { content: [100, 80, 500, 80, 500, 380, 100, 380] } };
+        if (method === "DOM.resolveNode") return { object: { objectId: "owner-9-main" } };
+        if (method === "Runtime.callFunctionOn")
+          return { result: { value: { visible: [0, 0, 1, 1], covers: [] } } };
+        return {};
+      },
+      { worlds: false },
+    );
+    await unknown.native.loadURL("https://host.test/a");
+    unknown.at("https://host.test/a");
+    unknown.contents.emit("did-navigate", {}, "https://host.test/a");
+    unknown.attach("F");
+    await turns();
+    expect(unknown.sent.filter((c) => c.method === "DOM.resolveNode")).toEqual([]);
+    await unknown.native.dispatchMouse({
+      type: "mousePressed",
+      x: 180,
+      y: 120,
+      button: "left",
+      clickCount: 1,
+    });
+    expect(unknown.hand()).toEqual(["mousePressed@page 180,120"]);
+  });
+
   it("M6.3a — a frame's VISIBLE part is READ beside its quad, of its owner in its parent's document (`Runtime.callFunctionOn` on the parent's session, its object released): a press on the part its scroller clips is the page's, on the part in view the frame's", async () => {
     const r = recording((method) => {
       if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };
@@ -2060,6 +2201,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         await r.native.loadURL("https://host.test/a");
         r.at("https://host.test/a");
         r.contents.emit("did-navigate", {}, "https://host.test/a");
+        r.emit("Page.frameAttached", { frameId: "t-F", parentFrameId: "main" });
         r.emit(
           "Target.attachedToTarget",
           {
@@ -2101,6 +2243,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         await f.native.loadURL("https://host.test/a");
         f.at("https://host.test/a");
         f.contents.emit("did-navigate", {}, "https://host.test/a");
+        f.emit("Page.frameAttached", { frameId: "t-F", parentFrameId: "main" });
         f.emit(
           "Target.attachedToTarget",
           {

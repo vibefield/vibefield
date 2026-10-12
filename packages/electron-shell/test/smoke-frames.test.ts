@@ -215,6 +215,39 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     expect(judgeFrameCovered({ top: 60, edge: 140, hidden: null, shown })).toEqual([
       "FRAME-COVERED: the frame's covered part could not be aimed at — that half proved nothing",
     ]);
+    // M8: the leg whose page HIDES its header from the read (its own world's DOM methods replaced): still the host's
+    expect(
+      judgeFrameCovered({
+        top: 60,
+        edge: 140,
+        hidden: { hostHeard: header, frameClicks: 0 },
+        shown,
+        sly: { hostHeard: header, frameClicks: 0 },
+      }),
+    ).toEqual([]);
+    expect(
+      judgeFrameCovered({
+        top: 60,
+        edge: 140,
+        hidden: { hostHeard: header, frameClicks: 0 },
+        shown,
+        sly: { hostHeard: [], frameClicks: 1 },
+      }),
+    ).toEqual([
+      "FRAME-COVERED (a page hiding its header from the read): the press on the header went INTO the frame (1 click) — the read believed the page's own world",
+      "FRAME-COVERED (a page hiding its header from the read): the host heard nothing — not the press on its header",
+    ]);
+    expect(
+      judgeFrameCovered({
+        top: 60,
+        edge: 140,
+        hidden: { hostHeard: header, frameClicks: 0 },
+        shown,
+        sly: null,
+      }),
+    ).toEqual([
+      "FRAME-COVERED (a page hiding its header from the read): its press could not be aimed — that leg proved nothing",
+    ]);
   });
 
   it("FRAME-MENU (M7 H3): the host's dropdown opened over the frame — its item's press is the host's, the frame hears nothing; before H3 the frame took it; a menu never opened proves nothing", () => {
