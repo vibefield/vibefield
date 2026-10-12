@@ -63,6 +63,21 @@
 //                  load fails late, ERR_INCOMPLETE_CHUNKED_ENCODING, the document standing — its parser stopped, so neither
 //                  its DOMContentLoaded nor its `load` ever fires, and its page says no word of its scale after: PT-5c2's
 //                  probes `f1.cjs`, `cut.cjs`) (LATE-FAIL).
+// PT-5d — PAGES OF THREE SITES, a frame of one in a page of another (the hand reaches every frame — another site's frame
+// is another process, reached on its own session):
+//   /frames/host  — at `hostOrigin` (`localhost`): the fixture's ground and, drawn at `FRAMES_BOX`, a frame of the fixture's
+//                   own origin (`127.0.0.1`, another site): `/frames/frame`; a page three views tall (FRAME-HALF); what IT
+//                   heard of the hand on the frame's element (`framed.heard` — a press the frame's own session took is
+//                   never heard here: PT-5d's probe had the host hear every press over the frame, on its element);
+//   /frames/frame — the frame: a button (its click and its point: FRAME-PRESS), a link (FRAME-HOVER), a field (FRAME-TYPE),
+//                   a word (FRAME-DOUBLE), a range and the buttons its last move held (FRAME-DRAG), a scroller (FRAME-WHEEL),
+//                   its touches (FRAME-TOUCH), and a frame of a THIRD site (`[::1]`, `innerOrigin`): `/frames/inner`
+//                   (FRAME-NESTED); on the smoke's word (`goFrame`) it goes to `/frames/next` (FRAME-GONE);
+//   /frames/inner — the nested frame: a button (its clicks and point) and a file input counting its `cancel` and `change`
+//                   (FRAME-PICKER — M2: the picker intercepted in a frame inside a frame);
+//   /frames/next  — where the frame goes: a button, its clicks;
+//   /frames/loop  — a page whose button starts an ENDLESS LOOP (STUCK).
+// Each says what it saw with every ask (`framed`), its parts where they stand in its own view.
 // PT-5c2 — a page whose FIRST PAINT the fixture holds:
 //   /topaint     — the page, its link going to `/unpainted` (its name with it: `?p=<name>`);
 //   /unpainted   — the page with a stylesheet in its head (`/held.css?p=<name>`) answered only on the smoke's word
@@ -143,6 +158,11 @@ export function fixtureIcon(size = 32): Buffer {
 export interface LiveFixture {
   /** `http://127.0.0.1:<port>` */
   readonly origin: string;
+  /** PT-5d — `http://localhost:<port>`: the frames' host page's site (another than `origin`'s). */
+  readonly hostOrigin: string;
+  /** PT-5d — `http://[::1]:<port>`: the nested frame's site (a third), where the loopback speaks IPv6 — else `hostOrigin`
+   * (the nested frame then of the host's site: the rows say so). */
+  readonly innerOrigin: string;
   /** The page's address. */
   readonly url: string;
   /** The page's pace from its next ask on: the runner crossing it ~30 times a second, or still. */
@@ -188,6 +208,10 @@ export interface LiveFixture {
   unpainted(name: string): number;
   /** PT-5c2 — `name`'s held stylesheets answered, and every later one at once: its page may paint. */
   paint(name: string): void;
+  /** PT-5d — the next ask of the page at `path` (its path and query) is answered `go: to`: the page goes there. Once. */
+  goFrame(path: string, to: string): void;
+  /** PT-5d — how many times the page at `path` (its path and query) has asked: a page that hangs asks no more. */
+  reports(path: string): number;
   /** PT-5a — an address whose connection is REFUSED (a port nobody listens on) until `open()` serves the page there. */
   refusing(): Promise<FixtureRefusing>;
   close(): Promise<void>;
@@ -275,6 +299,28 @@ export interface FixtureReport {
   /** PT-5c2 — `/unpainted` alone: what its head's script heard of the hand from the document's start (null: no such
    * script — any other page). */
   readonly heard?: readonly string[] | null;
+  /** PT-5d — a page of the frames' rows alone: what it saw of the hand. */
+  readonly framed?: FixtureFramed;
+}
+
+/** PT-5d — what a page of the frames' rows saw of the hand (its own CSS px, its own view). */
+export interface FixtureFramed {
+  /** its buttons' clicks (`#b`, `#bl`, `#ib`, `#b2`), each at its point */
+  readonly clicks: readonly (readonly [number, number])[];
+  /** what its document heard, in order (`pointerdown #b`, `keydown h`, `touchstart #b`…) — the host's: on the frame's
+   * element alone */
+  readonly heard: readonly string[];
+  /** the buttons its last pointermove held (null: none came) */
+  readonly moveButtons: number | null;
+  /** its file input's `cancel` and `change` (the nested frame's) */
+  readonly cancels: number;
+  readonly changes: number;
+  /** its range's value, its field's caret, its scroller's scroll (null: it has none) */
+  readonly range: number | null;
+  readonly caret: number | null;
+  readonly scroller: number | null;
+  /** where its parts stand in its view (the host's: `frame`, the frame's content box) */
+  readonly parts: Readonly<Record<string, FixtureRect>>;
 }
 
 /** A part's box in the page's view, CSS px. */
@@ -552,6 +598,115 @@ export const pendingHtml = (name: string): string =>
     `<a id="next" href="/gate?p=pending-${name.replace(/[^a-z0-9-]/giu, "")}">`,
   );
 
+/** PT-5d — where the host page draws its frame, CSS px (a laptop's 1280 × 800 view): what the frames' rows press through. */
+export const FRAMES_BOX = { x: 160, y: 120, w: 640, h: 420 } as const;
+/** PT-5d — the word the frame's double-click selects. */
+export const FRAMES_WORD = "alpha";
+
+/** PT-5d — a frames page's own script: what it hears of the hand, said with every ask; `go` sends it elsewhere. */
+const framesScript = (ids: readonly string[], elementOnly?: string): string => `<script>
+  const token = (crypto.randomUUID && crypto.randomUUID()) || String(Math.random()).slice(2);
+  const heard = [], clicks = [];
+  let moveButtons = null, cancels = 0, changes = 0;
+  const el = (id) => document.getElementById(id);
+  const named = (t) => (t && t.id ? "#" + t.id : t && t.tagName ? t.tagName.toLowerCase() : "?");
+  const only = ${JSON.stringify(elementOnly ?? null)};
+  const hear = (e, what) => { if ((only === null || (e.target && e.target.id === only)) && heard.length < 300) heard.push(what); };
+  for (const type of ["pointerdown", "mousedown", "mouseup", "click", "dblclick", "touchstart", "touchend", "touchcancel"])
+    addEventListener(type, (e) => {
+      hear(e, e.type + " " + named(e.target));
+      if (e.type === "click" && e.target && ["b", "bl", "ib", "b2"].includes(e.target.id))
+        clicks.push([Math.round(e.clientX), Math.round(e.clientY)]);
+    }, { capture: true, passive: true });
+  addEventListener("keydown", (e) => hear(e, "keydown " + e.key), true);
+  addEventListener("pointermove", (e) => { moveButtons = e.buttons; }, true);
+  if (el("if")) {
+    el("if").addEventListener("cancel", () => { cancels += 1; });
+    el("if").addEventListener("change", () => { changes += 1; });
+  }
+  const box = (id) => {
+    const n = el(id);
+    if (!n) return null;
+    const r = n.getBoundingClientRect();
+    return { x: Math.round(r.left + n.clientLeft), y: Math.round(r.top + n.clientTop), w: Math.round(n.clientWidth || r.width), h: Math.round(n.clientHeight || r.height) };
+  };
+  const report = () => encodeURIComponent(JSON.stringify({
+    path: location.pathname + location.search,
+    scrollY: Math.round(scrollY),
+    sel: String(getSelection() || ""),
+    field: el("t") ? el("t").value : "",
+    focused: (document.activeElement && document.activeElement.id) || "",
+    view: [innerWidth, innerHeight],
+    framed: {
+      clicks, heard, moveButtons, cancels, changes,
+      range: el("r") ? Number(el("r").value) : null,
+      caret: el("t") ? el("t").selectionStart : null,
+      scroller: el("s") ? Math.round(el("s").scrollTop) : null,
+      parts: Object.fromEntries(${JSON.stringify(ids)}.map((id) => [id === "f" ? "frame" : id, box(id)]).filter(([, b]) => b !== null)),
+    },
+  }));
+  const ask = () => fetch("/beacon?token=" + token + "&report=" + report(), { cache: "no-store" })
+    .then((r) => r.json()).then((a) => { if (typeof a.go === "string") location.href = a.go; }).catch(() => {});
+  ask();
+  setInterval(ask, ${FIXTURE_ASK_MS});
+</script>`;
+
+const FRAMES_STYLE = `<style>
+  html, body { margin: 0; }
+  html { scrollbar-width: none; }
+  button, a, input, p { position: absolute; margin: 0; box-sizing: border-box; font: 600 18px sans-serif; }
+</style>`;
+
+/** PT-5d — `/frames/host?p=<name>` at `hostOrigin`: the ground and a frame of `frameOrigin` at `FRAMES_BOX`, three views tall;
+ * it hears the hand on the frame's element alone. */
+export const framesHostHtml = (name: string, frameOrigin: string): string => `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${FIXTURE_TITLE} — frames</title>
+${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; height: 300vh; } iframe { position: absolute; border: 0; }</style></head>
+<body><iframe id="f" src="${frameOrigin}/frames/frame?p=${cleanName(name)}" style="left:${FRAMES_BOX.x}px;top:${FRAMES_BOX.y}px;width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px"></iframe>
+${framesScript(["f"], "f")}
+</body></html>`;
+
+/** PT-5d — `/frames/frame?p=<name>`: the frame — its button, link, field, word, range and scroller, and a frame of
+ * `innerOrigin` in it. Its document never scrolls (a wheel past its scroller's end is the host page's). */
+export const framesFrameHtml = (name: string, innerOrigin: string): string => `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>frame</title>
+${FRAMES_STYLE}<style>body { background: #e9f0fb; height: 100vh; overflow: hidden; } iframe { position: absolute; border: 0; }</style></head>
+<body>
+<button id="b" style="left:20px;top:20px;width:140px;height:44px">press</button>
+<button id="bl" style="left:20px;top:330px;width:140px;height:44px">low</button>
+<a id="l" href="#l" style="left:20px;top:84px;font-size:20px">a link here</a>
+<input id="t" type="text" autocomplete="off" spellcheck="false" style="left:20px;top:130px;width:260px;height:36px">
+<p id="w" style="left:20px;top:190px;font-size:28px;line-height:34px">${FRAMES_WORD} bravo</p>
+<input id="r" type="range" min="0" max="100" value="10" style="left:20px;top:250px;width:260px;height:24px">
+<div id="s" style="position:absolute;left:320px;top:20px;width:140px;height:180px;overflow:auto;background:#fff"><div style="height:1200px"></div></div>
+<iframe id="n" src="${innerOrigin}/frames/inner?p=${cleanName(name)}" style="left:320px;top:230px;width:280px;height:160px"></iframe>
+${framesScript(["b", "bl", "l", "t", "w", "r", "s", "n"])}
+</body></html>`;
+
+/** PT-5d — `/frames/inner?p=<name>`: the nested frame — a button and a file input. */
+export const framesInnerHtml = (): string => `<!doctype html>
+<html><head><meta charset="utf-8"><title>inner</title>${FRAMES_STYLE}<style>body { background: #ffd34d; }</style></head>
+<body><button id="ib" style="left:0;top:0;width:140px;height:80px">inner</button>
+<input id="if" type="file" style="left:150px;top:10px;width:120px;height:40px">
+${framesScript(["ib", "if"])}
+</body></html>`;
+
+/** PT-5d — `/frames/next?p=<name>`: where the frame goes on the smoke's word — a button. */
+export const framesNextHtml = (): string => `<!doctype html>
+<html><head><meta charset="utf-8"><title>next frame</title>${FRAMES_STYLE}<style>body { background: #d8f0d8; }</style></head>
+<body><button id="b2" style="left:20px;top:20px;width:140px;height:44px">again</button>
+${framesScript(["b2"])}
+</body></html>`;
+
+/** PT-5d — `/frames/loop?p=<name>`: a page whose button starts an ENDLESS LOOP — its thread never answers again. */
+export const framesLoopHtml = (): string => `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${FIXTURE_TITLE} — loop</title>
+${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; }</style></head>
+<body><button id="b" style="left:120px;top:120px;width:220px;height:64px">loop</button>
+<script>document.getElementById("b").addEventListener("click", () => { for (;;) {} });</script>
+${framesScript(["b"])}
+</body></html>`;
+
 /**
  * PT-5a — `/acts`: what a page may ask for, each a control at a known place (a row of boxes on the fixture's ground, the
  * page's own word for where each stands), and what came of it said with every ask. Its report is the page's whole word
@@ -685,6 +840,8 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   /** PT-5a: the servers opened on once-refusing ports, closed with the fixture. */
   const revived: Server[] = [];
   const lastAt = new Map<string, FixtureReport>();
+  /** PT-5d: how many times each page asked, by its path and query. */
+  const reportsAt = new Map<string, number>();
   /** PT-5b2: how many times each pathname was asked for; and the answers that never come (`/hang.png`). */
   const asks = new Map<string, number>();
   const hung = new Set<ServerResponse>();
@@ -696,6 +853,11 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   /** PT-5b3: the hold, and the tidying, owed to the next ask of a page at this path. */
   let holding: { readonly path: string; readonly ms: number } | null = null;
   let tidying: string | null = null;
+  /** PT-5d: where the page at a path is sent at its next ask (`goFrame`). */
+  const going = new Map<string, string>();
+  /** PT-5d: the three sites' origins — known once the server listens. */
+  let frameOrigin = "";
+  let innerOrigin = "";
   const cookies = new Map<string, string>();
   const agents = new Map<string, string>();
   const tokens: string[] = [];
@@ -752,6 +914,30 @@ export async function startLiveFixture(): Promise<LiveFixture> {
       res.write(cutHtml());
       cutting.set(res, url.pathname + url.search);
       res.on("close", () => cutting.delete(res));
+      return;
+    }
+    if (url.pathname.startsWith("/frames/")) {
+      // PT-5d: the pages of three sites
+      cookies.set(url.pathname + url.search, req.headers.cookie ?? "");
+      const name = url.searchParams.get("p") ?? "";
+      const page =
+        url.pathname === "/frames/host"
+          ? framesHostHtml(name, frameOrigin)
+          : url.pathname === "/frames/frame"
+            ? framesFrameHtml(name, innerOrigin)
+            : url.pathname === "/frames/inner"
+              ? framesInnerHtml()
+              : url.pathname === "/frames/next"
+                ? framesNextHtml()
+                : url.pathname === "/frames/loop"
+                  ? framesLoopHtml()
+                  : null;
+      if (page === null) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      html(res, page);
       return;
     }
     if (url.pathname === "/zoom") {
@@ -875,6 +1061,7 @@ export async function startLiveFixture(): Promise<LiveFixture> {
           const r = JSON.parse(said) as Omit<FixtureReport, "token">;
           last = { ...r, token };
           lastAt.set(last.path, last);
+          reportsAt.set(last.path, (reportsAt.get(last.path) ?? 0) + 1);
         } catch {
           /* a report the page did not finish: the last one stands */
         }
@@ -900,9 +1087,17 @@ export async function startLiveFixture(): Promise<LiveFixture> {
         tidy = true;
         tidying = null;
       }
+      // PT-5d: a page sent elsewhere on the smoke's word is told with this answer, once
+      const go = last !== null && last.token === token ? going.get(last.path) : undefined;
+      if (go !== undefined && last !== null) going.delete(last.path);
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
       res.end(
-        JSON.stringify({ play: playing, ...(hold > 0 ? { hold } : {}), ...(tidy ? { tidy } : {}) }),
+        JSON.stringify({
+          play: playing,
+          ...(hold > 0 ? { hold } : {}),
+          ...(tidy ? { tidy } : {}),
+          ...(go === undefined ? {} : { go }),
+        }),
       );
       return;
     }
@@ -913,8 +1108,19 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
   const origin = `http://127.0.0.1:${port}`;
+  // PT-5d: the same pages on IPv6's loopback too — `[::1]`, a third site — and `localhost` reaches either
+  const v6 = createServer(handle);
+  const spoke6 = await new Promise<boolean>((resolve) => {
+    v6.once("error", () => resolve(false));
+    v6.listen(port, "::1", () => resolve(true));
+  });
+  const hostOrigin = `http://localhost:${port}`;
+  frameOrigin = origin;
+  innerOrigin = spoke6 ? `http://[::1]:${port}` : hostOrigin;
   return {
     origin,
+    hostOrigin,
+    innerOrigin,
     url: `${origin}/page`,
     setPlaying: (on) => {
       playing = on;
@@ -951,6 +1157,10 @@ export async function startLiveFixture(): Promise<LiveFixture> {
     tidy: (path) => {
       tidying = path;
     },
+    goFrame: (path, to) => {
+      going.set(path, to);
+    },
+    reports: (path) => reportsAt.get(path) ?? 0,
     gate: (open) => {
       gateOpen = open;
       if (open) for (const answer of [...atGate]) answer();
@@ -982,7 +1192,7 @@ export async function startLiveFixture(): Promise<LiveFixture> {
       for (const res of [...hung]) res.destroy();
       for (const res of [...cutting.keys()]) res.destroy();
       for (const answer of [...sheets.keys()]) answer();
-      for (const s of [server, ...revived])
+      for (const s of [server, ...(spoke6 ? [v6] : []), ...revived])
         await new Promise<void>((resolve) => {
           s.closeAllConnections?.();
           s.close(() => resolve());

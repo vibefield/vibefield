@@ -24,6 +24,8 @@ import {
   FIXTURE_SLOW_MS,
   FIXTURE_TITLE,
   FIXTURE_TONE,
+  FRAMES_BOX,
+  FRAMES_WORD,
   fixtureHtml,
   fixtureIcon,
   type LiveFixture,
@@ -638,6 +640,142 @@ describe("the live pane's fixture page", () => {
     heard.get("keydown")?.({ code: "KeyQ" });
     heard.get("keyup")?.({ code: "KeyQ" });
     expect(win.__keyLog).toEqual(["down KeyQ", "up KeyQ"]);
+  });
+
+  it("PT-5d: pages of THREE SITES — `/frames/host` at `hostOrigin` (localhost) drawing a frame of the fixture's own origin (127.0.0.1) at `FRAMES_BOX`, that frame drawing one of `innerOrigin` ([::1]); each served at every origin, its name kept clean; `/frames/next` and `/frames/loop` (an endless loop on its button)", async () => {
+    fixture = await startLiveFixture();
+    const port = new URL(fixture.origin).port;
+    expect(fixture.hostOrigin).toBe(`http://localhost:${port}`);
+    expect([`http://[::1]:${port}`, fixture.hostOrigin]).toContain(fixture.innerOrigin);
+    const page = async (origin: string, path: string): Promise<string> => {
+      const res = await fetch(`${origin}${path}`);
+      expect(res.status).toBe(200);
+      return res.text();
+    };
+    const host = await page(fixture.hostOrigin, "/frames/host?p=a<b>");
+    expect(host).toContain(`<iframe id="f" src="${fixture.origin}/frames/frame?p=ab"`);
+    expect(host).toContain(
+      `left:${FRAMES_BOX.x}px;top:${FRAMES_BOX.y}px;width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px`,
+    );
+    const frame = await page(fixture.origin, "/frames/frame?p=a");
+    expect(frame).toContain(`<iframe id="n" src="${fixture.innerOrigin}/frames/inner?p=a"`);
+    for (const id of ["b", "bl", "l", "t", "w", "r", "s"]) expect(frame).toContain(`id="${id}"`);
+    expect(frame).toContain(FRAMES_WORD);
+    const inner = await page(fixture.innerOrigin, "/frames/inner?p=a");
+    expect(inner).toContain('id="ib"');
+    expect(inner).toContain('type="file"');
+    expect(await page(fixture.origin, "/frames/next?p=a")).toContain('id="b2"');
+    expect(await page(fixture.origin, "/frames/loop?p=a")).toContain("for (;;) {}");
+    expect((await fetch(`${fixture.origin}/frames/elsewhere`)).status).toBe(404);
+  });
+
+  it("PT-5d: a frames page RUN says what it heard of the hand — its clicks at their points, every press and key in order, the buttons its last move held, its range, caret and scroller, its parts' boxes — and goes where the smoke sends it (`goFrame`), once; the host hears the hand on the frame's ELEMENT alone", async () => {
+    fixture = await startLiveFixture();
+    const run = async (origin: string, path: string) => {
+      const page = await (await fetch(`${origin}${path}`)).text();
+      const script = /<script>\s*(const token =[\s\S]*?)<\/script>/.exec(page)?.[1];
+      if (script === undefined) throw new Error(`${path} carries no frames script`);
+      const on = new Map<string, ((e: Record<string, unknown>) => void)[]>();
+      const parts = new Map<string, Record<string, unknown>>();
+      for (const id of ["b", "t", "r", "s", "f", "if", "ib"])
+        parts.set(id, {
+          id,
+          value: id === "r" ? "10" : id === "t" ? "héllo" : "",
+          selectionStart: 5,
+          scrollTop: 40,
+          clientLeft: 0,
+          clientTop: 0,
+          clientWidth: 100,
+          clientHeight: 20,
+          getBoundingClientRect: () => ({ left: 7, top: 9, width: 100, height: 20 }),
+          addEventListener: () => undefined,
+        });
+      let asked = "";
+      let answered: Promise<unknown> = Promise.resolve();
+      let every: () => void = () => undefined;
+      const location = { pathname: path.split("?")[0], search: `?${path.split("?")[1]}`, href: "" };
+      new Function(
+        "crypto",
+        "document",
+        "addEventListener",
+        "location",
+        "scrollY",
+        "getSelection",
+        "innerWidth",
+        "innerHeight",
+        "fetch",
+        "setInterval",
+        script,
+      )(
+        { randomUUID: () => `t-${path}` },
+        { getElementById: (id: string) => parts.get(id) ?? null, activeElement: parts.get("t") },
+        (type: string, listener: (e: Record<string, unknown>) => void) =>
+          on.set(type, [...(on.get(type) ?? []), listener]),
+        location,
+        0,
+        () => "alpha",
+        640,
+        420,
+        (url: string) => {
+          asked = url;
+          const reply = fetch(`${origin}${url}`);
+          answered = reply.then(() => new Promise((r) => setTimeout(r, 5)));
+          return reply;
+        },
+        (callback: () => void) => {
+          every = callback;
+          return 0;
+        },
+      );
+      const fire = (type: string, e: Record<string, unknown>): void => {
+        for (const listener of on.get(type) ?? []) listener({ type, ...e });
+      };
+      /** its next ask, and what it said */
+      const ask = async (): Promise<{ path: string; framed: Record<string, unknown> }> => {
+        every();
+        await answered;
+        const report = new URL(`http://x${asked}`).searchParams.get("report") ?? "null";
+        return JSON.parse(report) as { path: string; framed: Record<string, unknown> };
+      };
+      return { fire, ask, parts, location };
+    };
+    const frame = await run(fixture.origin, "/frames/frame?p=g");
+    const b = frame.parts.get("b");
+    frame.fire("pointerdown", { target: b });
+    frame.fire("click", { target: b, clientX: 80.4, clientY: 41.6 });
+    frame.fire("keydown", { target: frame.parts.get("t"), key: "h" });
+    frame.fire("pointermove", { buttons: 1 });
+    frame.fire("pointermove", { buttons: 0 });
+    const said = await frame.ask();
+    expect(said.path).toBe("/frames/frame?p=g");
+    expect(said.framed).toMatchObject({
+      clicks: [[80, 42]],
+      heard: ["pointerdown #b", "click #b", "keydown h"],
+      moveButtons: 0,
+      range: 10,
+      caret: 5,
+      scroller: 40,
+      cancels: 0,
+      changes: 0,
+    });
+    expect((said.framed.parts as Record<string, unknown>).b).toEqual({ x: 7, y: 9, w: 100, h: 20 });
+    // its word is kept by its address, and its asks counted by it (a page that hangs asks no more)
+    expect(fixture.reportAt("/frames/frame?p=g")?.framed?.clicks).toEqual([[80, 42]]);
+    expect(fixture.reports("/frames/frame?p=g")).toBe(2);
+    // the smoke sends it elsewhere: told with its next ask's answer — it goes — and once
+    fixture.goFrame("/frames/frame?p=g", "/frames/next?p=g");
+    await frame.ask();
+    expect(frame.location.href).toBe("/frames/next?p=g");
+    frame.location.href = "";
+    await frame.ask();
+    expect(frame.location.href).toBe("");
+    // the host hears the hand on the frame's ELEMENT alone; its frame's box is its `frame`
+    const host = await run(fixture.hostOrigin, "/frames/host?p=g");
+    host.fire("pointerdown", { target: host.parts.get("b") });
+    host.fire("pointerdown", { target: host.parts.get("f") });
+    const hostSaid = await host.ask();
+    expect(hostSaid.framed.heard).toEqual(["pointerdown #f"]);
+    expect(Object.keys(hostSaid.framed.parts as Record<string, unknown>)).toEqual(["frame"]);
   });
 
   it("PT-5c2: `/topaint` links to `/unpainted`, the page whose FIRST PAINT the fixture holds — its head's stylesheet answered only once the smoke says `paint(name)` (and at once after), its head's script hearing the hand before it", async () => {

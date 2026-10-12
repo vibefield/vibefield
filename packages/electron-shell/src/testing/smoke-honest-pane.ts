@@ -646,10 +646,8 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
   const before = await census();
   const panes: number[] = [];
   const ACTS = "/acts";
-  /** The acts page as the pane is at it now: its path, with the visit's own query (each return to it is a NEW address —
-   * the document's url must move for the page to be sent there). */
-  let actsPath: string = ACTS;
-  let visits = 0;
+  /** The acts page as the pane is at it now: its path (PT-5d: a return to it is the page's own ‹ — ruling 5 writes it). */
+  const actsPath: string = ACTS;
   let paneKey = "";
 
   const report = (): FixtureReport | null => d.fixture.report();
@@ -997,12 +995,12 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
     problems.push(...judgeBar(bar));
 
     // ── POPUP: a target=_blank link, then window.open — the same pane goes there; no window, no page, no pane more ────
-    /** Back at the acts page BY AN ADDRESS OF ITS OWN (the visit's query) — never the history's back, never the address
-     * the document already says: a row that left the page elsewhere (or nowhere) must not strand the rows after it. */
+    /** Back at the acts page by the page's OWN ‹ — PT-5d (ruling 5): a page that goes back by itself is WRITTEN (the
+     * document's wait for its page ends when the page arrives). (PT-5a returned by a fresh address of its own, `?visit=N`:
+     * a page the document had sent to the acts page that went to `/next` by its own link was never written there, and
+     * the document kept the acts page — PT-5a's finding 6.) */
     const toActs = async (): Promise<void> => {
-      visits += 1;
-      actsPath = `${ACTS}?visit=${visits}`;
-      await goTo(d.fixture.origin + actsPath);
+      await pressTool("back");
       await hear("the acts page again", (r) => r.path === actsPath && r.acts !== undefined);
       await current("the acts page's frame on the face again", d.fixture.origin + actsPath);
       await sleep(600);

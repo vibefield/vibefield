@@ -140,6 +140,7 @@ import { removeSmokeRoot, SMOKE_RUN_ENV, stopRunDaemons } from "./smoke-daemons"
 import { deskRigRows } from "./smoke-desk-rig";
 import { DEVICE_FLAG, type DeviceRowsDriver, devicePaneRows } from "./smoke-device-pane";
 import { FIRST_FLAG, type FirstLoadDriver, firstLoadRows } from "./smoke-first-load";
+import { FRAMES_FLAG, type FramesDriver, framesRows as framesPaneRows } from "./smoke-frames";
 import { HONEST_FLAG, type HonestRowsDriver, honestPaneRows } from "./smoke-honest-pane";
 import { type LastStillDriver, lastStillRows, STILL_FLAG } from "./smoke-last-still";
 import {
@@ -1172,6 +1173,10 @@ export async function runSmokeCanvas(opts: {
         // PT-5b2 — a page's first load, its rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs
         // --smoke-canvas --first-load` on smoke:canvas's build); smoke:canvas runs them below
         problems.push(...(await firstRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
+      } else if (process.argv.includes(FRAMES_FLAG)) {
+        // PT-5d — the hand into every frame, BACK-WRITTEN and STUCK, their rows ALONE after the boot's (the author's loop:
+        // `node packaging/run-smoke.mjs --smoke-canvas --frames-pane` on smoke:canvas's build); smoke:canvas runs them below
+        problems.push(...(await framesRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
       } else if (process.argv.includes(PANE_FLAG)) {
         // PT-1 — the browser pane's rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs
         // --smoke-canvas --browser-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
@@ -1369,6 +1374,11 @@ export async function runSmokeCanvas(opts: {
         // finished, an address that is no page, a pane still starting sent elsewhere and stopped, and two quick taps on
         // a busy phone page heard in order (testing/smoke-first-load.ts)
         problems.push(...(await firstRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
+        // PT-5d — the hand reaches every frame (a frame of another site on its own session: a press, a hover, a double-click,
+        // a drag released outside it, the wheel, keys and a composition, a frame in a frame, a frame half out of view, a
+        // phone's tap, a frame gone under a held press, the nested frame's file input), a page that goes back by itself
+        // written, and a page that hangs (testing/smoke-frames.ts)
+        problems.push(...(await framesRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
         // DK-9: last — it leaves the desk on its card
         problems.push(...(await deskRefusalRow(win, opts.viteUrl)));
       }
@@ -2082,6 +2092,56 @@ async function firstRows(
   } catch (error) {
     return [`PT-5b2 FIRST: ${error instanceof Error ? error.message : String(error)}`];
   } finally {
+    await fixture.close();
+  }
+}
+
+/** PT-5d's rows on the smoke's fixture (testing/smoke-frames.ts): PT-2's driver, the shell's IME as USE drives it, and main's
+ * windows that are not offscreen (a file panel would be one more). */
+async function framesRows(
+  win: BrowserWindow,
+  shotDir: string | undefined,
+  viteUrl: string,
+  liveSurfaces: (() => { readonly runtimes: number; readonly owners: number } | null) | undefined,
+): Promise<string[]> {
+  const fixture = await startLiveFixture();
+  const dbg = win.webContents.debugger;
+  let attachedHere = false;
+  const cdp = async (method: string, params: Record<string, unknown>): Promise<void> => {
+    if (!dbg.isAttached()) {
+      dbg.attach("1.3");
+      attachedHere = true;
+    }
+    await dbg.sendCommand(method, params);
+  };
+  try {
+    const driver: FramesDriver = {
+      win,
+      shotDir,
+      say: (line) => console.log(line),
+      fixture,
+      custody: () => liveSurfaces?.() ?? null,
+      reload: async () => {
+        const ready = waitForConsole(win, "DESK_READY ", 60_000);
+        await loadRenderer(win, "smoke-canvas", viteUrl, { presenceRelay: "1", deskFaults: "1" });
+        try {
+          await ready;
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      compose: (text, caret) =>
+        cdp("Input.imeSetComposition", { text, selectionStart: caret, selectionEnd: caret }),
+      commit: (text) => cdp("Input.insertText", { text }),
+      windows: () =>
+        BrowserWindow.getAllWindows().filter((w) => !w.webContents.isOffscreen()).length,
+    };
+    return await framesPaneRows(driver);
+  } catch (error) {
+    return [`PT-5d FRAMES: ${error instanceof Error ? error.message : String(error)}`];
+  } finally {
+    if (attachedHere && dbg.isAttached()) dbg.detach();
     await fixture.close();
   }
 }
