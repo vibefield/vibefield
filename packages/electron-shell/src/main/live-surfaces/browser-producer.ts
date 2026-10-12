@@ -1646,7 +1646,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // `setEmitTouchEventsForMouse` a dispatched mouse event is swallowed and its command never answers (the PT-4 probe),
     // and the commands queued behind it never run. The wheel stays the page's scroll (below).
     // (F9: the device the page was TOLD — never one asked and not yet answered)
-    const touch = (this.#told?.touchPoints ?? 0) > 0;
+    const told = this.#told;
+    const touch = (told?.touchPoints ?? 0) > 0;
     if (touch && request.kind === "mouse") {
       if (request.type === "move" && !this.#touching) return;
       if (request.type === "down" && request.button !== undefined && request.button !== "left")
@@ -1666,6 +1667,12 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       !this.stands(by)
     ) {
       throw new Error("Browser surface is not available for input");
+    }
+    // PT-5d (G4) — AND THE DEVICE IT WAS READ AS: a switch answered while it waited moved what the page is told (a finger
+    // or a mouse, a `mobile` page's scale) — refused, counted; its release is then a release of nothing. (Before: sent as
+    // the device read before the wait — a touch to a page told it is a laptop.)
+    if (toldKey(this.#told) !== toldKey(told)) {
+      throw new Error("Browser input's device moved while it waited");
     }
     const x = request.x / scale;
     const y = request.y / scale;

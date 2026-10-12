@@ -5269,6 +5269,41 @@ describe("BrowserLiveSurfaceRuntime", () => {
         expect(reloads() - before).toBe(1);
         p.result.runtime.dispose();
       });
+
+      it("G4 — an event goes as the device the page is told when it is SENT: a phone's page, a switch to a laptop of its density asked while its commands go unanswered, a commit, a press waiting for the new document's word — the switch is answered meanwhile: the press is REFUSED, counted, and its release is a release of nothing; the next press goes as the laptop (before: a touch to a page told it is a laptop)", async () => {
+        const p = await phone();
+        let answered: () => void = () => {};
+        const emulate = p.window.setEmulation.bind(p.window);
+        p.window.setEmulation = async (emulation) => {
+          await new Promise<void>((resolve) => {
+            answered = resolve;
+          });
+          return emulate(emulation);
+        };
+        await p.result.runtime.navigate({
+          action: "emulate",
+          emulation: { ...LAPTOP, deviceScaleFactor: 3 },
+        });
+        await p.delivered();
+        p.window.emitNavigationState({ ...NAV, url: NEXT });
+        await p.delivered();
+        const dropped = p.result.runtime.stats.inputDropped;
+        p.pointer("down", 20);
+        await p.delivered();
+        answered();
+        await p.delivered();
+        p.window.say(1);
+        await p.delivered();
+        p.pointer("up", 20);
+        await p.delivered();
+        expect(p.heard).toEqual([]);
+        expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
+        p.pointer("down", 20);
+        p.pointer("up", 20);
+        await p.delivered();
+        expect(p.heard).toEqual(["mousePressed", "mouseReleased"]);
+        p.result.runtime.dispose();
+      });
     });
   });
 });
