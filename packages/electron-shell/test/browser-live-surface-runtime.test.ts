@@ -4918,6 +4918,28 @@ describe("BrowserLiveSurfaceRuntime", () => {
         p.result.runtime.dispose();
       });
 
+      it("F3 — the bound is THAT document's: a page silent past its bound, then ANOTHER document — its press waits for its own word as any new document's does, and goes at it, nothing refused (the self-review's unit)", async () => {
+        vi.useFakeTimers();
+        const p = await phone();
+        p.window.emitNavigationState({ ...NAV, url: NEXT });
+        await p.delivered();
+        p.send({ kind: "wheel", x: 20, y: 10, deltaX: 0, deltaY: 40 });
+        await vi.advanceTimersByTimeAsync(1_000);
+        await p.delivered();
+        // that document is silent; ANOTHER commits — its page not yet speaking
+        p.window.emitNavigationState({ ...NAV, url: `${NEXT}/2` });
+        await p.delivered();
+        const dropped = p.result.runtime.stats.inputDropped;
+        p.pointer("down", 20);
+        await p.delivered();
+        expect(p.heard).toEqual([]);
+        p.window.say(1);
+        await p.delivered();
+        expect(p.heard).toEqual(["touchStart"]);
+        expect(p.result.runtime.stats.inputDropped).toBe(dropped);
+        p.result.runtime.dispose();
+      });
+
       it("F5 — `letGo` sends nothing from a stale snapshot: an attachment holding two KEYS goes, and another document commits while the first key's up is unanswered — the second key, forgotten at the commit, is never let up into the new document (the orchestrator's S5)", async () => {
         const p = await laptop();
         const other = attach(p.result.runtime, "attachment_browser_00000002");
