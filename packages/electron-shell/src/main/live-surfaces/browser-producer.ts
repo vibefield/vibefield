@@ -53,6 +53,9 @@ const CPU_FALLBACK_MAX_FPS = 10;
  * (a press always reads it afresh). */
 /** PT-5c (ruling 2): where a button is let go that the person never let go over the page — outside its view (CSS px). */
 const OUTSIDE_THE_VIEW = { x: -1000, y: -1000 } as const;
+/** PT-5c (R2): how long an event waits for its document's first word of its scale before it is refused — the net under the
+ * hand: no page that never speaks is known, and none holds the events behind it for good. */
+const SCALE_WORD_MS = 1_000;
 const CPU_FALLBACK_MAX_PIXELS = 1280 * 720;
 
 const BROWSER_CAPABILITIES = {
@@ -1061,6 +1064,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     readonly by: string | undefined;
     readonly heard: (scale: number) => void;
     readonly gone: (error: Error) => void;
+    /** R2: its bound */
+    readonly timer: ReturnType<typeof setTimeout>;
   }>();
   /** PT-5a: the page's refusals by kind, and the last one a person is told of (its serial counts them for the page's life). */
   readonly #refusals: Record<BrowserSurfaceRefusal, number> = {
@@ -2031,14 +2036,25 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * the keys and the wheel behind it, on the NEXT document.) An event of a document whose page has not yet said its scale
    * — a new one — WAITS for the page's first word; that wait ends at the word, at the next commit (refused, counted), or
    * when the window goes (its turn ends with it) — and (R1) at a rest, and at the going of the attachment it came through
-   * (refused, counted: never sent to a page at rest, nor a gesture begun after its attachment went).
+   * (refused, counted: never sent to a page at rest, nor a gesture begun after its attachment went) — and (R2) after
+   * `SCALE_WORD_MS`, refused, counted: the keys and text behind it are never held for good by a page that never speaks.
    */
   private pointScale(document: number, by: string | undefined): Promise<number> {
     if (!this.mobile()) return Promise.resolve(1);
     const said = this.#pageScale;
     if (said !== undefined && said.document === document) return Promise.resolve(said.value);
     return new Promise<number>((heard, gone) => {
-      this.#scaleWaiters.add({ document, by, heard, gone });
+      const waiter = {
+        document,
+        by,
+        heard,
+        gone,
+        timer: setTimeout(() => {
+          if (this.#scaleWaiters.delete(waiter))
+            gone(new Error("Browser page said no scale within its bound"));
+        }, SCALE_WORD_MS),
+      };
+      this.#scaleWaiters.add(waiter);
     });
   }
 
@@ -2061,6 +2077,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     for (const waiter of [...this.#scaleWaiters]) {
       if (waiter.document !== document) continue;
       this.#scaleWaiters.delete(waiter);
+      clearTimeout(waiter.timer);
       waiter.heard(value);
     }
   }
@@ -2096,6 +2113,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     for (const waiter of [...this.#scaleWaiters]) {
       if (!which(waiter)) continue;
       this.#scaleWaiters.delete(waiter);
+      clearTimeout(waiter.timer);
       waiter.gone(new Error(reason));
     }
   }

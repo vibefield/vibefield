@@ -2871,7 +2871,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.result.runtime.dispose();
     });
 
-    it("ruling 6, PT-5c (ruling 1) — a press on a document whose page has not yet SAID its scale waits, as long as its page takes, and lands at the scale it says — its release behind it; nothing is dropped while it waits", async () => {
+    it("ruling 6, PT-5c (ruling 1) — a press on a document whose page has not yet SAID its scale waits — within its second (R2: the net; a page silent past it has the press refused, its own row) — and lands at the scale it says; its release behind it; nothing is dropped while it waits", async () => {
       vi.useFakeTimers();
       vi.setSystemTime(2_000_000);
       const p = await phone();
@@ -2880,7 +2880,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       const dropped = p.result.runtime.stats.inputDropped;
       p.pointer("down", 20);
       p.pointer("up", 20);
-      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.advanceTimersByTimeAsync(900);
       expect(p.heard).toEqual([]);
       expect(p.result.runtime.stats.inputDropped).toBe(dropped);
       p.window.say(0.25);
@@ -4525,6 +4525,25 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.key("up", r, "a");
       await delivered();
       expect(p.window.keyInputs.map((k) => `${k.type} ${k.key}`)).toEqual(["keyDown a"]);
+      p.result.runtime.dispose();
+    });
+
+    it("R2 — the net under the hand: a press waiting for a word its page NEVER says is refused after a second, counted — and the key behind it is delivered", async () => {
+      vi.useFakeTimers();
+      const p = await phone();
+      p.window.emitNavigationState({ ...NAV, url: NEXT });
+      const dropped = p.result.runtime.stats.inputDropped;
+      p.pointer("down", 20);
+      p.send({ kind: "key", action: "down", key: "a", code: "KeyA", modifiers: NONE });
+      await p.delivered();
+      expect(p.heard).toEqual([]);
+      await vi.advanceTimersByTimeAsync(999);
+      await p.delivered();
+      expect(p.heard).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1);
+      await p.delivered();
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
+      expect(p.heard).toEqual(["keyDown a"]);
       p.result.runtime.dispose();
     });
   });

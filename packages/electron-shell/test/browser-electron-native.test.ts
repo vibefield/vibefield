@@ -71,6 +71,7 @@ vi.mock("../src/main/live-surfaces/browser-security", () => ({
 import {
   ElectronBrowserSurfaceNative,
   PAGE_SCALE_BINDING,
+  PAGE_SCALE_SCRIPT,
 } from "../src/main/live-surfaces/browser-electron-native";
 import type { BrowserSurfaceNavigationState } from "../src/main/live-surfaces/browser-producer";
 
@@ -309,6 +310,77 @@ describe("PT-5c (ruling 1) — the page SAYS its scale; the hand's commands neve
     expect(r.methods().indexOf("Emulation.setDeviceMetricsOverride")).toBeLessThan(
       r.methods().indexOf("Emulation.setUserAgentOverride"),
     );
+  });
+
+  it("R2 — the page's guard, RUN: it takes the binding out of the page's reach and says its scale at its start, DOMContentLoaded, load and its first frame; a change of its visual viewport once; a page the back/forward cache RESTORES says it again (`pageshow`, persisted); a frame, the blank and a page with no binding say nothing", () => {
+    const run = (options: { href?: string; frame?: boolean; binding?: boolean } = {}) => {
+      const said: string[] = [];
+      const on = new Map<string, (event?: { persisted?: boolean }) => void>();
+      const resized: (() => void)[] = [];
+      let frame: (() => void) | undefined;
+      const viewport = {
+        scale: 1,
+        addEventListener: (type: string, listener: () => void) => {
+          if (type === "resize") resized.push(listener);
+        },
+      };
+      const g: Record<string, unknown> = { visualViewport: viewport };
+      if (options.binding !== false) g[PAGE_SCALE_BINDING] = (word: string) => said.push(word);
+      const self: { top?: unknown } = {};
+      self.top = options.frame === true ? {} : self;
+      new Function(
+        "globalThis",
+        "window",
+        "location",
+        "addEventListener",
+        "requestAnimationFrame",
+        PAGE_SCALE_SCRIPT,
+      )(
+        g,
+        self,
+        { href: options.href ?? "https://example.test/a" },
+        (type: string, listener: (event?: { persisted?: boolean }) => void) =>
+          on.set(type, listener),
+        (callback: () => void) => {
+          frame = callback;
+        },
+      );
+      return {
+        said,
+        g,
+        on,
+        viewport,
+        resize: () => {
+          for (const listener of resized) listener();
+        },
+        frame: () => frame?.(),
+      };
+    };
+    const page = run();
+    // the binding is the guard's: the page's own scripts never see it
+    expect(PAGE_SCALE_BINDING in page.g).toBe(false);
+    expect(page.said).toEqual(["1"]);
+    page.on.get("DOMContentLoaded")?.();
+    page.on.get("load")?.();
+    page.frame();
+    expect(page.said).toEqual(["1", "1", "1", "1"]);
+    // a resize that is no change of scale says nothing; a zoom says it once
+    page.resize();
+    page.viewport.scale = 2;
+    page.resize();
+    page.resize();
+    expect(page.said).toEqual(["1", "1", "1", "1", "2"]);
+    // its first show is no restore; a RESTORE from the back/forward cache says the scale again
+    page.on.get("pageshow")?.({ persisted: false });
+    expect(page.said).toHaveLength(5);
+    page.on.get("pageshow")?.({ persisted: true });
+    expect(page.said).toEqual(["1", "1", "1", "1", "2", "2"]);
+    // a frame, the bootstrap blank, a page with no binding: nothing said (and the binding taken all the same)
+    const frame = run({ frame: true });
+    expect(frame.said).toEqual([]);
+    expect(PAGE_SCALE_BINDING in frame.g).toBe(false);
+    expect(run({ href: "about:blank" }).said).toEqual([]);
+    expect(run({ binding: false }).said).toEqual([]);
   });
 
   it("ONE session for both queues: the hand's first command waits for the page's session and its guards, as the device's does — no input reaches a page before its guards are on, and the guards are put on once", async () => {
