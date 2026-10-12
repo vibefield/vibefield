@@ -3922,6 +3922,91 @@ describe("BrowserLiveSurfaceRuntime", () => {
       result.runtime.dispose();
     });
 
+    const laptopAt2 = () => ({ ...source(), deviceScaleFactor: 2, emulation: LAPTOP });
+    const ANOTHER_DENSITY: LiveSurfaceBrowserEmulationV1 = { ...LAPTOP, deviceScaleFactor: 3 };
+
+    it("ruling 5 (my R) — a page the person STOPPED while its first load was under way, its device switched (the same density) before the engine said the load ended, stays stopped: the window made anew is born and NOT loaded, the page says `stopped` at its address, and ↻ loads it on the new device", async () => {
+      const p = await starting();
+      await delivered();
+      p.renderer.attachment.navigate?.({ action: "stop" });
+      await delivered();
+      expect(p.window.navigations).toEqual(["stop"]);
+      await p.result.runtime.navigate({
+        action: "emulate",
+        emulation: { ...PHONE, deviceScaleFactor: 1 },
+      });
+      await delivered();
+      expect(p.result.native.windows).toHaveLength(2);
+      const made = p.result.native.windows[1];
+      if (made === undefined) throw new Error("no window was made anew");
+      expect(made.loadedUrls).toEqual([]);
+      expect(p.result.runtime.summary.state).toBe("starting");
+      expect(p.result.runtime.summary.browser).toMatchObject({
+        url: FIRST,
+        loading: false,
+        failure: { reason: "stopped" },
+      });
+      // ↻ loads it — on the new device
+      p.renderer.attachment.navigate?.({ action: "reload" });
+      await delivered();
+      expect(made.loadedUrls).toEqual([FIRST]);
+      expect(made.emulations.at(-1)?.userAgent).toBe(IPHONE_UA);
+      p.result.runtime.dispose();
+    });
+
+    it("ruling 5 — a stop asked BEFORE the birth survives a density switch that makes the unborn window anew: the new window is born and not loaded, `stopped` said", async () => {
+      const result = setup({ source: laptopAt2() });
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(demand(1, "live"));
+      const first = result.native.windows[0];
+      if (first === undefined) throw new Error("no window yet");
+      // its birth's layout is held: the window is not born
+      const raster = first.setBackingRaster.bind(first);
+      first.setBackingRaster = (async (...args: Parameters<typeof raster>) => {
+        await new Promise<void>(() => {});
+        return raster(...args);
+      }) as typeof first.setBackingRaster;
+      await flush();
+      renderer.attachment.navigate?.({ action: "stop" });
+      await flush();
+      await result.runtime.navigate({ action: "emulate", emulation: ANOTHER_DENSITY });
+      await delivered();
+      const made = result.native.windows[1];
+      if (made === undefined) throw new Error("no window was made anew");
+      expect(first.loadedUrls).toEqual([]);
+      expect(made.loadedUrls).toEqual([]);
+      expect(result.runtime.summary.browser).toMatchObject({ failure: { reason: "stopped" } });
+      result.runtime.dispose();
+    });
+
+    it("ruling 5 — a page that SAID `stopped` stays stopped across a density switch (its window made anew, not loaded); one that said `no-document` — no stop of the person's — is asked for again there, as before", async () => {
+      const stopped = await starting({ source: laptopAt2() });
+      await delivered();
+      stopped.renderer.attachment.navigate?.({ action: "stop" });
+      await delivered();
+      stopped.blank(false);
+      expect(stopped.result.runtime.summary.browser).toMatchObject({
+        failure: { reason: "stopped" },
+      });
+      await stopped.result.runtime.navigate({ action: "emulate", emulation: ANOTHER_DENSITY });
+      await delivered();
+      expect(stopped.result.native.windows[1]?.loadedUrls).toEqual([]);
+      expect(stopped.result.runtime.summary.browser).toMatchObject({
+        failure: { reason: "stopped" },
+      });
+      stopped.result.runtime.dispose();
+      const ended = await starting({ source: laptopAt2() });
+      await delivered();
+      ended.blank(false);
+      expect(ended.result.runtime.summary.browser).toMatchObject({
+        failure: { reason: "no-document" },
+      });
+      await ended.result.runtime.navigate({ action: "emulate", emulation: ANOTHER_DENSITY });
+      await delivered();
+      expect(ended.result.native.windows[1]?.loadedUrls).toEqual([FIRST]);
+      ended.result.runtime.dispose();
+    });
+
     it("ruling 2 (my T21) — a touchStart ANSWERED after its window was REPLACED sets nothing down for the window that replaced it: the new window's first move is a hover", async () => {
       const p = await phone();
       // the press's dispatch answers when the row says

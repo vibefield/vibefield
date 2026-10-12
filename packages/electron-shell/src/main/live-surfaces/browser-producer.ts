@@ -1903,14 +1903,23 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   private remakeWindow(): void {
     this.#windowsRemade += 1;
     this.clearSourceTimers();
+    // PT-5c (ruling 5) — A PERSON'S STOP SURVIVES A REMAKE: one asked before the birth, one asked while the first load
+    // was under way (the engine's stop not yet answered), one SAID (`stopped`). The window made anew is born and NOT
+    // loaded; the page says `stopped` at its address, and ↻ loads it on the new device. (Before: the going forgot it, and
+    // the new window loaded the address — my probe R.) A page that said `no-document` had no stop of the person's: it
+    // is asked for again. Under an ask that is not live the remake puts the page to rest — its wake is a rest's.
+    const stopped = this.#stopAsked || this.#browserState?.failure?.reason === "stopped";
     // to rest by the table's own steps, silently
     for (const step of ["live", "paused", "hibernated"] as const) {
       if (this.#lifecycle.snapshot.state !== step && this.#lifecycle.canTransition(step))
         this.#lifecycle.transition(step);
     }
     this.destroyWindow();
-    if (this.#effectiveDemand?.mode === "live") this.startProducer();
-    else this.publishSummary();
+    if (this.#effectiveDemand?.mode === "live") {
+      this.startProducer();
+      // (read at the birth's end: `born`)
+      if (stopped) this.#stopAsked = true;
+    } else this.publishSummary();
   }
 
   /**
