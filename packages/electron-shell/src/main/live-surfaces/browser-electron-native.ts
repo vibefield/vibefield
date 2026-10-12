@@ -259,6 +259,10 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   readonly #worlds = new Map<string, Map<string, number>>();
   /** PT-5d (M8): each frame's parent frame — the document that holds its owner element */
   readonly #parentFrames = new Map<string, string>();
+  /** PT-5d (M7 H9): the page's document now has painted (true before its first: nothing waits) */
+  #painted = true;
+  /** PT-5d (M7 H9): touch commands whose bound starts at the page's next paint */
+  readonly #atPaint = new Set<() => void>();
   /**
    * PT-5c (ruling 1) — TWO QUEUES, never one: the DEVICE's (its layout, what it is told — `Emulation.*`, the window's size)
    * and the HAND's (`Input.*`). A device command the renderer does not answer — every one, while a navigation pends — no
@@ -311,6 +315,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     const committed = (): void => {
       this.#pageDocument = true;
       this.#documents += 1;
+      // (M7 H9: the new document has not painted yet)
+      this.#painted = false;
       // PT-5d: the frames of the document before go with it
       this.#frames.pageCommitted(this.#documents);
       this.#owners.clear();
@@ -318,6 +324,13 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       this.#parentFrames.clear();
       this.focusMoved();
     };
+    // PT-5d (M7 H9): the page's document painted — a touch waiting for it is timed from now
+    window.webContents.on("paint", () => {
+      if (this.#painted) return;
+      this.#painted = true;
+      for (const arm of [...this.#atPaint]) arm();
+      this.#atPaint.clear();
+    });
     window.webContents.on("did-navigate", (_event, url) => {
       if (this.#remoteLoadStarted && url !== "about:blank") committed();
     });
@@ -968,7 +981,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * PT-5d (M6.4b) — EVERY COMMAND OF THE HAND goes through here: timed from its SEND to its answer — never its wait in the
    * hand's queue behind another (the clock starts again at each answer, as the engine's own ack timeout does); unanswered
    * past the window's `hungInputMs`, said hung once (`onInputHung`) with the origin of the frame it went to (M6.4a). Born
-   * without the bound (a page that does not say when it stops), nothing is timed.
+   * without the bound (a page that does not say when it stops), nothing is timed. PT-5d (M7 H9): a TOUCH sent to a
+   * document that has not painted since it committed is timed from that paint — the engine answers a touch at a paint
+   * (F7): a page whose first paint a stylesheet holds is loading, not stopped.
    */
   private async handCommand(
     method: string,
@@ -976,16 +991,21 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     session: string | undefined,
   ): Promise<void> {
     const bound = this.options.hungInputMs;
-    const timer =
-      bound === undefined
-        ? null
-        : setTimeout(() => {
-            const frame = this.#frames.originOf(session);
-            for (const listener of [...this.#hungListeners]) listener(frame);
-          }, bound);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const arm = (): void => {
+      if (bound === undefined) return;
+      timer = setTimeout(() => {
+        const frame = this.#frames.originOf(session);
+        for (const listener of [...this.#hungListeners]) listener(frame);
+      }, bound);
+    };
+    const atPaint = method === "Input.dispatchTouchEvent" && !this.#painted;
+    if (atPaint) this.#atPaint.add(arm);
+    else arm();
     try {
       await this.window.webContents.debugger.sendCommand(method, params, session);
     } finally {
+      this.#atPaint.delete(arm);
       if (timer !== null) clearTimeout(timer);
     }
   }

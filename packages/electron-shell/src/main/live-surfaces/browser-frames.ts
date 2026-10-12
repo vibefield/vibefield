@@ -142,13 +142,17 @@ export class BrowserFrames {
       if (child.parent === session) this.detached(child.session);
   }
 
-  /** The PAGE committed another document: every frame of the one before goes with it; the focus is the page's. */
+  /** The PAGE committed another document: every frame of the one before goes with it; the focus is the page's. PT-5d (M7
+   * H5): the buttons and keys held go with it too — the producer forgets them, and no release follows: kept, every hover of
+   * the new document went to a press's target that no longer stands. The finger is kept: its end goes to its session (H4). */
   pageCommitted(document: number): void {
     this.#pageDocument = document;
     this.#frames.clear();
     this.#focused = undefined;
     this.#doubt = null;
     this.#hover = undefined;
+    this.#hand.buttons.clear();
+    this.#hand.keys.clear();
   }
 
   /**
@@ -299,11 +303,15 @@ export class BrowserFrames {
     return finger === undefined ? null : this.to(finger, x, y);
   }
 
-  /** The finger lifted or cancelled: to its target if it stands; it is let go either way. */
+  /** The finger lifted or cancelled: PT-5d (M7 H4) to its SESSION while that stands, whatever its document — the engine
+   * holds a touch open across a commit (PT-5c's `across.cjs`: the next document deaf to its first tap until the end comes);
+   * its session gone, nowhere. It is let go either way. (Buttons and keys keep the document rule.) */
   touchEnd(): FrameTarget | null {
     const finger = this.#hand.finger;
     this.#hand.finger = undefined;
-    return finger !== undefined && this.stands(finger) ? finger : null;
+    if (finger === undefined) return null;
+    if (finger.session === undefined) return this.targetOf(undefined);
+    return this.#frames.has(finger.session) ? this.targetOf(finger.session) : null;
   }
 
   /** A key's down: the focused document's session; its target remembered by its code. */

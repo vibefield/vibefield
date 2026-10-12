@@ -194,14 +194,19 @@ describe("PT-5d (ruling 3) — a gesture ends where it began", () => {
     expect(f.touchEnd()).toBeNull();
   });
 
-  it("the PAGE commits another document: every frame goes with the one before, nothing pressed in them is released anywhere, and the focus is the page's", () => {
+  it("the PAGE commits another document: every frame goes with the one before, what was held in them is forgotten with it (M7 H5 — the producer forgets it, no release follows; one that still came is the new document's, as any release no press was seen for), and the focus is the page's", () => {
     const f = page();
     f.press("left", 180, 120);
+    f.where("A", "here");
     f.keyDown("KeyQ");
     f.pageCommitted(2);
     expect(f.frames()).toEqual([]);
-    expect(f.release("left", 180, 120)).toBeNull();
-    expect(f.keyUp("KeyQ")).toBeNull();
+    expect(f.release("left", 180, 120)).toEqual({
+      target: { session: undefined, document: 2 },
+      x: 180,
+      y: 120,
+    });
+    expect(f.keyUp("KeyQ")).toEqual({ session: undefined, document: 2 });
     expect(f.focused()).toEqual({ session: undefined, document: 2 });
   });
 });
@@ -429,5 +434,30 @@ describe("PT-5d (M7 H3) — what the host draws OVER a frame is the host's: a fr
     });
     expect(f.wheel(350, 250).target.session).toBe("B");
     expect(f.wheel(150, 100).target.session).toBe("A");
+  });
+});
+
+describe("PT-5d (M7 H4, H5) — what the hand holds across a commit", () => {
+  it("H4 — a finger's end goes to its SESSION while it stands, whatever its document (the engine holds a touch open across a commit): across A's commit, A's; across the page's commit, the page's; its session gone, nowhere", () => {
+    const f = page();
+    f.touchStart(180, 120);
+    f.committed("A");
+    expect(f.touchEnd()?.session).toBe("A");
+    f.touchStart(20, 20);
+    f.pageCommitted(2);
+    expect(f.touchEnd()).toEqual({ session: undefined, document: 2 });
+    const g = page();
+    g.touchStart(360, 285);
+    g.detached("B");
+    expect(g.touchEnd()).toBeNull();
+  });
+
+  it("H5 — a button and a key held across the PAGE's commit are forgotten with it (the producer forgets them; no release follows): the next document's hover reaches the page", () => {
+    const f = page();
+    f.press("left", 20, 20);
+    f.keyDown("KeyQ");
+    f.pageCommitted(2);
+    expect(f.move(30, 30)).toEqual([{ target: { session: undefined, document: 2 }, x: 30, y: 30 }]);
+    expect(f.keyUp("KeyQ")).toEqual({ session: undefined, document: 2 });
   });
 });

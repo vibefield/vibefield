@@ -2151,6 +2151,72 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     });
   });
 
+  describe("M7 H4, H9, H13 — a finger on the page and in a frame", () => {
+    it("H13 — a finger down over F goes on F's session at the point carried into it; its moves and its end too", async () => {
+      const r = await framed();
+      await r.native.dispatchTouch({
+        type: "touchStart",
+        touchPoints: [{ x: 180, y: 120, id: 0 }],
+      });
+      await r.native.dispatchTouch({ type: "touchMove", touchPoints: [{ x: 190, y: 130, id: 0 }] });
+      await r.native.dispatchTouch({ type: "touchEnd", touchPoints: [] });
+      expect(r.hand()).toEqual(["touchStart@F 80,40", "touchMove@F 90,50", "touchEnd@F"]);
+    });
+
+    it("H4 — PT-5c's finger held across the PAGE's commit: its cancel still reaches the page's session (the engine holds a touch open across a commit — `across.cjs`); a frame's finger across ITS commit: its end on its session", async () => {
+      const r = recording();
+      await r.native.loadURL("https://host.test/a");
+      r.at("https://host.test/a");
+      r.contents.emit("did-navigate", {}, "https://host.test/a");
+      await r.native.dispatchTouch({ type: "touchStart", touchPoints: [{ x: 10, y: 10, id: 0 }] });
+      r.at("https://host.test/b");
+      r.contents.emit("did-navigate", {}, "https://host.test/b");
+      await r.native.dispatchTouch({ type: "touchCancel", touchPoints: [] });
+      expect(r.hand()).toEqual(["touchStart@page 10,10", "touchCancel@page"]);
+      const f = await framed();
+      await f.native.dispatchTouch({
+        type: "touchStart",
+        touchPoints: [{ x: 180, y: 120, id: 0 }],
+      });
+      f.emit("Page.frameNavigated", { frame: { id: "t-F", url: "https://frame.test/next" } }, "F");
+      await f.native.dispatchTouch({ type: "touchEnd", touchPoints: [] });
+      expect(f.hand()).toEqual(["touchStart@F 80,40", "touchEnd@F"]);
+    });
+
+    it("H9 — a touch waiting for its new document's FIRST PAINT (the engine answers a touch at a paint — F7) is not timed by the host's bound until that paint", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = recording(
+          (method) => (method === "Input.dispatchTouchEvent" ? new Promise(() => {}) : {}),
+          {
+            hungInputMs: 20_000,
+          },
+        );
+        const hung: (string | undefined)[] = [];
+        r.native.onInputHung((frame) => hung.push(frame));
+        await r.native.loadURL("https://host.test/a");
+        r.at("https://host.test/a");
+        r.contents.emit("did-navigate", {}, "https://host.test/a");
+        void r.native.dispatchTouch({ type: "touchStart", touchPoints: [{ x: 10, y: 10, id: 0 }] });
+        await vi.advanceTimersByTimeAsync(30_000);
+        expect(hung).toEqual([]);
+        // its first paint: from now the bound runs
+        r.contents.emit(
+          "paint",
+          {},
+          { x: 0, y: 0, width: 1, height: 1 },
+          { getSize: () => ({ width: 1, height: 1 }) },
+        );
+        await vi.advanceTimersByTimeAsync(19_999);
+        expect(hung).toEqual([]);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(hung).toEqual([undefined]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   describe("M6.4b — the host's bound on a page that hangs: a command of the hand timed from its SEND to its answer", () => {
     const BOUND = 20_000;
     it("200 moves queued at once, each answered 150 ms after it is sent (30 s for the last): never said hung — no command waited 20 s; every one sent", async () => {
