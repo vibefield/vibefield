@@ -9586,3 +9586,39 @@ available", load ~200): the birth-race class the debts lane cured in the kill ma
 - the catalogs held across a fieldd restart (the first menu after a restart waits ~2.5 s for Claude) — not built;
 - agent-session MF-1f/MF-1g's create, through the retry the kill matrix got;
 - the phone's launch rows (PJ-7); the full launch dialog (a room ask).
+
+## PJ-6, Resume — a resumed session starts at the model and the effort it was launched at, or says why it cannot (2026-10-12; `7c9eae57` · `3f627f69` · `fa9819dc` through lane land3, gated on the exact tree)
+
+**Why:** James ruled PJ-6's Q4 on 2026-10-12: Resume starts at the session's own launch selection — reversing one line
+of puppeteer `cbc6e01` ("selections apply only to new sessions"). Lane pj6pu built it upstream on puppeteer branch
+`vf/pj6-resume-selection` (`c57fe53`, five commits on `cbc6e01`; puppeteer's `pnpm test` EXIT 0, 4,417 passed): a resume
+carrying a selection discovers again in the account it names and validates and translates it as a launch does; a new
+core field `AgentModelProvider.resumeSelection` says which agents' native resume can take one (Claude, Codex — wired and
+probed live —, Copilot, Grok, Kimi, Pi, Antigravity; not OpenCode, whose session model is set only at creation, nor
+Hermes, whose `session.resume` reads none). Lane pj6 built VibeField's half (plan `draft/project-places/build-pj6.md`).
+
+**What landed:**
+- `7c9eae57` EL8: puppeteer `cbc6e01` → `c57fe53` — **an unmerged branch commit; James merges `vf/pj6-resume-selection`
+  into puppeteer's main.**
+- `3f627f69` Resume at the session's own selection: the record form (and the pending replacement, resume-when-idle)
+  passes the record's `modelSelection` WITH its account (`profile`); the native form (History's and the launcher's
+  Resume) takes it from the newest verified record of that conversation in the same account. An agent whose resume
+  cannot take one (`resumeSelection` false) resumes at its own settings and the answer says so — History's line
+  "Resumed in a new pane, at <Agent>'s own model — it can't start a resumed session at a chosen one"; a stale selection
+  is refused, never dropped ("<Agent> was not resumed at the model the session was launched at: …", puppeteer's code
+  kept). The successor's record keeps the selection; the audit carries `modelSelection: applied | own`, never its ids.
+- `fa9819dc` the witness: smoke:godview's `historyResumeAtModel` ends the run the launch rung started at a model, resumes
+  it by its record, and finds the answer `applied`, the successor's row at `model` and `effort` `intent: configured`, and
+  the stub's own argv `--resume <id> --model … --effort …`.
+
+**Validation:** red first (`/Volumes/SamsungRed/lanes/pj6/red-7-*.log`, the smoke's red resuming with no flags); the
+lane's gate green on `02797936`; then the landing gate on the exact tree (`lanes/land3/logs/`, under this landing's
+sha).
+
+**Found:** Claude's adapter refuses to resume a conversation whose transcript is not on disk, so the rung writes the one
+the agent would have kept; ending the launch rung's run before the deck's rungs turned `deckAway` red (the swarm calls
+the terminals up through that run's body), so the Resume rung runs after them.
+
+**Owed:** a live native resume for Claude, Kimi, Pi, Copilot, Antigravity and Grok (their evidence is help text and
+argv; Codex's was probed live); the PJ-6 entry above's list (the room ask retiring `turn-page.ts`, the catalogs across a
+restart, agent-session MF-1f/MF-1g's create).
