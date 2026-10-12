@@ -4971,6 +4971,57 @@ describe("BrowserLiveSurfaceRuntime", () => {
         expect(mouse()).toEqual(["mousePressed left", "mousePressed right", "mouseReleased left"]);
         p.result.runtime.dispose();
       });
+
+      it("F6 — a stop asked while the first load is under way, NOT YET SAID, then the page put to REST: the page says `stopped` at once — every state published from the rest on; never `loading` at rest (the orchestrator's S6)", async () => {
+        const p = await starting();
+        await delivered();
+        p.renderer.attachment.navigate?.({ action: "stop" });
+        await delivered();
+        expect(p.window.navigations).toEqual(["stop"]);
+        const from = p.renderer.summaries.length;
+        p.renderer.attachment.setDemand(demand(2, "hibernated", 0));
+        await delivered();
+        expect(p.result.runtime.summary.state).toBe("hibernated");
+        allStopped(p.renderer, from);
+        // woken: born, not loaded — `stopped` all along
+        p.renderer.attachment.setDemand(demand(3, "live"));
+        await delivered();
+        expect(p.result.native.windows[1]?.loadedUrls).toEqual([]);
+        allStopped(p.renderer, from);
+        p.result.runtime.dispose();
+      });
+
+      it("F6 — … the same at a REMAKE under an ask that is not live (another density, the pane out of view) and its wake: `stopped` at once, born and not loaded", async () => {
+        const p = await starting({ source: laptopAt2() });
+        await delivered();
+        p.renderer.attachment.navigate?.({ action: "stop" });
+        await delivered();
+        p.renderer.attachment.setDemand(demand(2, "paused"));
+        await delivered();
+        const from = p.renderer.summaries.length;
+        await p.result.runtime.navigate({ action: "emulate", emulation: ANOTHER_DENSITY });
+        await delivered();
+        expect(p.result.native.windows).toHaveLength(1);
+        p.renderer.attachment.setDemand(demand(3, "live"));
+        await delivered();
+        expect(p.result.native.windows[1]?.loadedUrls).toEqual([]);
+        allStopped(p.renderer, from);
+        p.result.runtime.dispose();
+      });
+
+      it("F6 — … and at a CRASH of its window (a source that starts again): `stopped` at once, through the restart — born and not loaded", async () => {
+        vi.useFakeTimers();
+        const p = await starting({ restartLimit: 2 });
+        await vi.advanceTimersByTimeAsync(0);
+        p.renderer.attachment.navigate?.({ action: "stop" });
+        await vi.advanceTimersByTimeAsync(0);
+        const from = p.renderer.summaries.length;
+        p.window.crash();
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(p.result.native.windows[1]?.loadedUrls).toEqual([]);
+        allStopped(p.renderer, from);
+        p.result.runtime.dispose();
+      });
     });
   });
 });

@@ -2955,6 +2955,10 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#documentStands = false;
     this.#heardLoading = false;
     // (R4: the person's stop — `#stopAsked` — is the page's, not the window's: kept)
+    // PT-5c2 (F6) — A STOP THE PERSON ASKED AND THE ENGINE NEVER SAID IS SAID AS THE WINDOW GOES (a rest, a remake under an
+    // ask that is not live, a crash): the page says `stopped` at once — never `loading` at rest. (Before: the window's going
+    // published the state before the stop — `hibernated`, `loading: true`, no `stopped` — until the wake.)
+    if (this.#stopAsked && this.#browserState !== undefined) this.#browserState = this.stopped();
     this.#born = false;
     this.#documentBase = this.#document;
     // PT-5c (ruling 1): nothing waits for a word of this window's documents any more (its turns end with it besides)
@@ -3013,23 +3017,24 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     );
   }
 
+  /** PT-5c (R4): the page under the person's stop — at its address, loading nothing, `stopped`. */
+  private stopped(): LiveSurfaceBrowserStateV1 {
+    return {
+      url: this.#resumeUrl ?? this.source.initialUrl,
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      ...(this.#browserState?.refused === undefined ? {} : { refused: this.#browserState.refused }),
+      failure: { reason: "stopped" },
+    };
+  }
+
   private resetProducerObservations(): void {
     // PT-5a: a new window's page keeps the last one's address and says it is LOADING, with nowhere to go yet — the last
     // window's history and its failed load are not this one's. PT-5c (R4): under the person's stop it says STOPPED — it
     // will not load — never `loading` between.
     if (this.#browserState !== undefined)
-      this.#browserState = this.#stopAsked
-        ? {
-            url: this.#resumeUrl ?? this.source.initialUrl,
-            loading: false,
-            canGoBack: false,
-            canGoForward: false,
-            ...(this.#browserState.refused === undefined
-              ? {}
-              : { refused: this.#browserState.refused }),
-            failure: { reason: "stopped" },
-          }
-        : loadingAgain(this.#browserState);
+      this.#browserState = this.#stopAsked ? this.stopped() : loadingAgain(this.#browserState);
     this.#transport = undefined;
     this.#geometry = undefined;
     this.#geometryKey = "";
