@@ -911,6 +911,10 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
     until(`the face ${is}`, ms, `${FACE_ROW(paneKey)}?.state?.is === ${JSON.stringify(is)}`).catch(
       () => undefined,
     );
+  /** PT-5c2 (F7): the face shows the page as it stands — a frame of the document NOW, so the hand's input goes (the desk
+   * sends nothing through a frame of a document the page has left): a press after a navigation waits for it. */
+  const current = (label: string): Promise<void> =>
+    until(label, 10_000, `${FACE_ROW(paneKey)}?.current === true`);
 
   try {
     // ── the pane laid alone on clear ground, at actual size, brought to the middle, pointed at the fixture, live ───────
@@ -971,6 +975,7 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
     if ((await hear("the acts page", (r) => r.acts !== undefined, atActs)) === null)
       throw new Error("the acts page never spoke");
     await hear("the acts page the page in hand", (r) => r.path === ACTS);
+    await current("the acts page's frame on the face");
     await sleep(600);
     await press(await onAct("slow"));
     const loading = await toolIs("reload", (t) => t.label === "Stop");
@@ -998,6 +1003,7 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
       actsPath = `${ACTS}?visit=${visits}`;
       await goTo(d.fixture.origin + actsPath);
       await hear("the acts page again", (r) => r.path === actsPath && r.acts !== undefined);
+      await current("the acts page's frame on the face again");
       await sleep(600);
     };
     const windows0 = d.windows();

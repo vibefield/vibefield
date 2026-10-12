@@ -214,6 +214,10 @@ export interface DeskLiveFaceRow {
    * asked for and was refused (0: nothing). */
   readonly veiled: boolean;
   readonly refused: number;
+  /** PT-5c2 (F7): the texture shown is of the document the page is at NOW — the hand's input goes. False between a
+   * commit and the new document's first frame (the face still showing the one before), through a still, and with nothing
+   * shown: a smoke that presses after a navigation waits for it. */
+  readonly current: boolean;
   /** PT-5a (ruling 8): how many times a favicon's BYTES arrived on the page's attachment — once a key, whatever the summaries. */
   readonly faviconBytes: number;
   /** PT-5b: its page is ALIVE as the cap counts it; the service put it to REST. */
@@ -891,6 +895,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         texture: undefined,
         veiled: false,
         refused: 0,
+        current: false,
         faviconBytes: 0,
         alive: false,
         rested: false,
@@ -1493,6 +1498,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
                 },
           veiled,
           refused: handle.state.browser?.refused?.serial ?? 0,
+          current: shown !== undefined && ofNow(),
           faviconBytes: handle.faviconArrivals ?? 0,
           alive: alive(),
           rested,

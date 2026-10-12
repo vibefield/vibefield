@@ -260,6 +260,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         texture: undefined,
         veiled: false,
         refused: 0,
+        current: false,
         faviconBytes: 0,
         alive: true,
         rested: false,
@@ -302,6 +303,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         texture: { width: 2560, height: 1600, revision: 1, epoch: 0, bytes: 0 },
         veiled: false,
         refused: 0,
+        current: true,
         faviconBytes: 0,
         alive: true,
         rested: false,
@@ -331,6 +333,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         texture: undefined,
         veiled: false,
         refused: 0,
+        current: false,
         faviconBytes: 0,
         alive: false,
         rested: false,
@@ -514,6 +517,7 @@ describe("PT-3 — the face in use: its input, the page's cursor, a page navigat
         count: 1,
         phase: "down",
       });
+    expect(live.faces()[0]?.current).toBe(true);
     press();
     expect(handle.inputs).toHaveLength(1);
     // another document commits (the page followed its link): no frame of it yet — the face shows the one before
@@ -523,9 +527,12 @@ describe("PT-3 — the face in use: its input, the page's cursor, a page navigat
     face.input?.({ kind: "key", key: "a", code: "KeyA", phase: "down", mods: 0, repeat: false });
     expect(handle.inputs).toHaveLength(1);
     expect(live.stats().inputsUnsent).toBe(unsent + 2);
+    // (the face's row says so: not current — what a smoke that presses after a navigation waits on)
+    expect(live.faces()[0]?.current).toBe(false);
     // its first frame: the face shows the page as it stands — the hand goes again
     presentation.land(documentOf(NEXT));
     expect(face.take()).toBe(true);
+    expect(live.faces()[0]?.current).toBe(true);
     press();
     expect(handle.inputs).toHaveLength(2);
   });

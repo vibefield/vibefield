@@ -707,6 +707,12 @@ export async function usePaneRows(d: UseRowsDriver): Promise<string[]> {
     problems.push(...judgeTools(tools));
 
     // ── EDIT: the page's own editing chords in its field — ⌘A then a letter replaces, ⌘Z takes it back ──────────────────
+    // (PT-5c2, F7: the typed address's page on the face first — the desk sends nothing through a frame of the page before)
+    await until(
+      "the typed page's frame on the face",
+      10_000,
+      `${FACE_ROW(paneKey)}?.current === true`,
+    );
     await press(await part("field"));
     await hear("the field focused for the chords", (r) => r.focused === "field");
     await typeChars(USE_ROWS.editTyped);
