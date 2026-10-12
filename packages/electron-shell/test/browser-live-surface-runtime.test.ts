@@ -5184,5 +5184,43 @@ describe("BrowserLiveSurfaceRuntime", () => {
         p.result.runtime.dispose();
       });
     });
+
+    describe("PT-5d (ruling 0) — the chain's last edges: what PT-5c2's grade found", () => {
+      it("G1 (main's half) — a key and a button main HEARS after a commit (sent before the renderer heard of it) go to the NEW document and are down there: their ups, sent through the frame before, let them up; a key heard BEFORE the commit was forgotten with it — its up is nothing", async () => {
+        const p = await laptop();
+        const r = p.result.runtime.summary.geometry?.revision ?? 0;
+        const pointer = (action: "down" | "up"): void =>
+          p.renderer.attachment.dispatchInput?.(
+            { kind: "pointer", action, x: 10, y: 10, button: "left", clickCount: 1 },
+            r,
+          );
+        p.key("down", r, "a");
+        await delivered();
+        // main's commit — no frame of the new document yet
+        p.window.emitNavigationState({ ...NAV, url: NEXT });
+        await delivered();
+        // sent before the renderer heard of the commit, heard by main after it: the NEW document's
+        p.key("down", r, "q");
+        pointer("down");
+        await delivered();
+        expect(p.window.keyInputs.map((k) => `${k.type} ${k.key}`)).toEqual([
+          "keyDown a",
+          "keyDown q",
+        ]);
+        expect(p.window.mouseInputs.map((m) => m.type)).toEqual(["mousePressed"]);
+        // their ups, through the frame before (the desk's commit gate lets a release through)
+        p.key("up", r, "a");
+        p.key("up", r, "q");
+        pointer("up");
+        await delivered();
+        expect(p.window.keyInputs.map((k) => `${k.type} ${k.key}`)).toEqual([
+          "keyDown a",
+          "keyDown q",
+          "keyUp q",
+        ]);
+        expect(p.window.mouseInputs.map((m) => m.type)).toEqual(["mousePressed", "mouseReleased"]);
+        p.result.runtime.dispose();
+      });
+    });
   });
 });

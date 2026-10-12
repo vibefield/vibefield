@@ -1409,11 +1409,15 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         // an event aimed at it lands on the NEW document: PT-5c2's probe `f7.cjs` (Electron 43.1.1, offscreen, the next
         // document's first paint held by its stylesheet) had a press, its release and a key sent after the commit and
         // before that paint heard by the new document at once, and a touch the moment it painted — as a tap. Unsent,
-        // counted; its first frame, and the hand goes again. (A release unsent here is nothing lost: at a commit the
-        // page's producer forgets what was down.)
+        // counted; its first frame, and the hand goes again.
+        // PT-5d (G1) — A RELEASE PASSES THAT GATE (a pointer's up, a key's up; it still needs a frame to map its point):
+        // a press the renderer sent before it heard of the commit, and main heard after it, went to the NEW document and
+        // is down there — held back, its up left the key, the button or the finger down in the new page. Main lets up
+        // only what it holds down, so the up of a press the commit forgot is nothing.
         const at = shown;
         const events = at === undefined ? [] : liveInputEvents(e, at.logical);
-        if (at === undefined || events.length === 0 || !ofNow()) {
+        const release = (e.kind === "pointer" || e.kind === "key") && e.phase === "up";
+        if (at === undefined || events.length === 0 || (!release && !ofNow())) {
           counts.inputsUnsent += 1;
           return;
         }

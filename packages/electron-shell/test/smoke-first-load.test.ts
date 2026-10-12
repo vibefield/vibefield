@@ -603,6 +603,7 @@ describe("a page's first load, in the product — what the rows read by", () => 
       held: 1,
       framesBetween: 0,
       unsent: 4,
+      sent: 2,
       heard: [],
       face: face({ address: `${O}/unpainted?p=h`, presented: 4 }),
     };
@@ -625,6 +626,7 @@ describe("a page's first load, in the product — what the rows read by", () => 
         held: 0,
         framesBetween: 1,
         unsent: null,
+        sent: null,
         heard: null,
         face: face({ state: "starting" }),
       }),
@@ -634,6 +636,23 @@ describe("a page's first load, in the product — what the rows read by", () => 
       `HELD-PAINT: let paint, the pane is starting at ${O}/next — the next page never stood: the row proved nothing`,
       "HELD-PAINT: the next page never said what its head heard — the row proved nothing",
       "HELD-PAINT: the desk counted no inputs unsent over the click and the key — it sent them through a frame of the page it had left",
+      "HELD-PAINT: the desk sent none of the click's and the key's two releases — a release held back by the commit gate leaves what main heard pressed after the commit DOWN in the new page",
+    ]);
+  });
+
+  it("HELD-PAINT (PT-5d, G1): the click's and the key's RELEASES pass the commit gate — sent; main holds nothing down for them, so they are nothing, and the next page hears nothing", () => {
+    const seen: HeldPaintSeen = {
+      held: 1,
+      framesBetween: 0,
+      unsent: 3,
+      sent: 2,
+      heard: [],
+      face: face({ address: `${O}/unpainted?p=h`, presented: 4 }),
+    };
+    expect(judgeHeldPaint(seen)).toEqual([]);
+    // PT-5c2's desk: the commit gate held back every input, the releases too (G1)
+    expect(judgeHeldPaint({ ...seen, unsent: 5, sent: 0 })).toEqual([
+      "HELD-PAINT: the desk sent 0 of the click's and the key's two releases — a release held back by the commit gate leaves what main heard pressed after the commit DOWN in the new page",
     ]);
   });
 

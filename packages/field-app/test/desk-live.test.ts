@@ -537,6 +537,64 @@ describe("PT-3 — the face in use: its input, the page's cursor, a page navigat
     expect(handle.inputs).toHaveLength(2);
   });
 
+  it("PT-5d (G1): a RELEASE is never held back by the commit gate — a key and a button pressed while the face is current, another document commits (no frame of it yet): a move and another key's down stay unsent, and the two UPS ARE SENT (main lets up only what it holds down: a press it heard after the commit went to the new document)", () => {
+    const NEXT = "http://127.0.0.1:4321/next";
+    const { live, face, presentation, handle } = attached();
+    handle.set({ browser: browserAt(PAGE.url) as never });
+    face.demand(SEEN);
+    presentation.land(documentOf(PAGE.url));
+    expect(face.take()).toBe(true);
+    const key = (code: string, phase: "down" | "up"): void =>
+      face.input?.({
+        kind: "key",
+        key: code.slice(-1).toLowerCase(),
+        code,
+        phase,
+        mods: 0,
+        repeat: false,
+      });
+    const pointer = (phase: "down" | "move" | "up"): void =>
+      face.input?.({
+        kind: "pointer",
+        x: 640,
+        y: 400,
+        button: phase === "move" ? -1 : 0,
+        buttons: phase === "up" ? 0 : 1,
+        count: phase === "move" ? 0 : 1,
+        phase,
+      });
+    key("KeyQ", "down");
+    pointer("down");
+    expect(handle.inputs).toHaveLength(2);
+    // another document commits (a redirect, a script's navigation): the face shows the one before
+    handle.set({ browser: browserAt(NEXT) as never });
+    const unsent = live.stats().inputsUnsent;
+    pointer("move");
+    key("KeyW", "down");
+    expect(handle.inputs).toHaveLength(2);
+    expect(live.stats().inputsUnsent).toBe(unsent + 2);
+    // the releases go — through the frame shown, stamped with its revision
+    key("KeyQ", "up");
+    pointer("up");
+    expect(handle.inputs.slice(2)).toEqual([
+      {
+        event: {
+          kind: "key",
+          action: "up",
+          key: "q",
+          code: "KeyQ",
+          modifiers: { alt: false, ctrl: false, meta: false, shift: false },
+        },
+        revision: 1,
+      },
+      {
+        event: { kind: "pointer", action: "up", x: 640, y: 400, button: "left", clickCount: 1 },
+        revision: 1,
+      },
+    ]);
+    expect(live.stats().inputsUnsent).toBe(unsent + 2);
+  });
+
   it("maps what the wire can carry, and says what it cannot as the wire can say it", () => {
     const L = [1280, 800] as const;
     // the secondary button by DOM's number; a click count past the wire's three held to three

@@ -275,6 +275,9 @@ export interface HeldPaintSeen {
   readonly framesBetween: number | null;
   /** how many more inputs the desk counted unsent over the click and the key (null: not read) */
   readonly unsent: number | null;
+  /** PT-5d (G1): how many more inputs the desk SENT over them — their releases: a release passes the commit gate (null: not
+   * read) */
+  readonly sent: number | null;
   /** what the next page's head heard of the hand before it painted, as its own word says (null: it never said) */
   readonly heard: readonly string[] | null;
   /** the pane once the next page painted */
@@ -740,6 +743,10 @@ export function judgeHeldPaint(seen: HeldPaintSeen): string[] {
   if (seen.unsent === null || seen.unsent < 2)
     out.push(
       `HELD-PAINT: the desk counted ${seen.unsent ?? "no"} inputs unsent over the click and the key — it sent them through a frame of the page it had left`,
+    );
+  if (seen.sent === null || seen.sent < 2)
+    out.push(
+      `HELD-PAINT: the desk sent ${seen.sent ?? "none"} of the click's and the key's two releases — a release held back by the commit gate leaves what main heard pressed after the commit DOWN in the new page`,
     );
   return out;
 }
@@ -1913,6 +1920,9 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
     const unsentNow = async (): Promise<number> =>
       (await js<Record<string, number>>("globalThis.__vfDesk.live()?.stats ?? {}")).inputsUnsent ??
       0;
+    // (PT-5d, G1: and what it SENT — the releases go through the commit gate)
+    const sentNow = async (): Promise<number> =>
+      (await js<Record<string, number>>("globalThis.__vfDesk.live()?.stats ?? {}")).inputs ?? 0;
     const paintPane = await lay("/topaint?p=h", x0 + 6 * step, y0);
     await frame([paintPane]);
     await waitFor(
@@ -1932,6 +1942,7 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
     let paintHeld = 0;
     let framesBetween: number | null = null;
     let unsent: number | null = null;
+    let paintSent: number | null = null;
     let paintHeard: readonly string[] | null = null;
     let paintFace: FirstFace | null = null;
     if (paintFrame !== null && paintWord !== null) {
@@ -1950,6 +1961,7 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
       );
       await sleep(600);
       const unsent0 = await unsentNow();
+      const sent0 = await sentNow();
       const presented0 = (await face(paintPane))?.presented ?? 0;
       // a click and a key aimed at the pane as the desk shows it — the document before's last frame
       await h.press(onWindow(paintWord.parts.field));
@@ -1959,6 +1971,7 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
       await sleep(600);
       paintHeld = d.fixture.unpainted("h");
       unsent = (await unsentNow()) - unsent0;
+      paintSent = (await sentNow()) - sent0;
       framesBetween = ((await face(paintPane))?.presented ?? 0) - presented0;
       // the page may paint: its first frame, its own script, its word
       d.fixture.paint("h");
@@ -1983,6 +1996,7 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
       held: paintHeld,
       framesBetween,
       unsent,
+      sent: paintSent,
       heard: paintHeard,
       face: paintFace,
     };
