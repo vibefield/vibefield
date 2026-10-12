@@ -318,8 +318,13 @@ export function judgeGone(seen: LiveSeen["gone"]): string[] {
 /** The rows' driver: PT-1's, the fixture, main's custody read, and the renderer's replacement. */
 export interface LiveRowsDriver extends PaneRowsDriver {
   readonly fixture: LiveFixture;
-  /** Main's live-surface custody (`LiveSurfaceAuthority.state()`); null where none is installed. */
-  readonly custody: () => { readonly runtimes: number; readonly owners: number } | null;
+  /** Main's live-surface custody (`LiveSurfaceAuthority.state()`); null where none is installed. PT-5c2 (F4): with the
+   * device switches its browser pages took (each producer's `stats.emulations`) — main's own count. */
+  readonly custody: () => {
+    readonly runtimes: number;
+    readonly owners: number;
+    readonly emulations?: number;
+  } | null;
   /** The window's renderer replaced (a reload), resolved once the desk says DESK_READY again. */
   readonly reload: () => Promise<boolean>;
 }

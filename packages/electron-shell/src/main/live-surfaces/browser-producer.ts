@@ -1196,6 +1196,12 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     };
   }
 
+  /** PT-5c2 (F4): the device switches this page took (`stats.emulations`) — main's census counts them
+   * (`LiveSurfaceAuthority.state()`). */
+  emulations(): number {
+    return this.#emulations;
+  }
+
   supportSnapshot(): LiveSurfaceRuntimeSupportSnapshot {
     const stats = this.stats;
     return createLiveSurfaceRuntimeSupportSnapshot({

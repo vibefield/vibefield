@@ -218,8 +218,11 @@ export interface PendingSeen {
   /** how many times the gate was asked since the link's press: the navigation PENDED there */
   readonly asked: number;
   /** the desktop twin: a device command told meanwhile (the pane's own scheme — the engine answers none while the navigation
-   * pends): main's own count of devices told MOVED after the gate was asked (PT-5c R5) */
-  readonly told: boolean;
+   * pends): how far MAIN's own count of the device switches its pages took moved after the gate was asked and before the
+   * click — the producer's `stats.emulations`, read through main's census (PT-5c R5; PT-5c2 F4: R5's guard at `c848e65a`
+   * read the DESK's count, which moves when the desk's lane takes the write); null: main's count could not be read (the
+   * phone's row asks none: 0) */
+  readonly told: number | null;
   /** the page that stood, after the press on its field: its touchstarts, what has its focus, its field's words */
   readonly standing: {
     readonly touches: number;
@@ -597,10 +600,16 @@ export function judgePending(seen: PendingSeen, desk: boolean): string[] {
   const out: string[] = [];
   if (seen.asked < 1)
     out.push(`${row}: the link's navigation never waited at the gate — the row proved nothing`);
-  if (desk && !seen.told)
-    out.push(
-      `${row}: the pane's scheme was not told — no device command pended: the row proved nothing`,
-    );
+  if (desk) {
+    if (seen.told === null)
+      out.push(
+        `${row}: main's count of the device switches its pages took could not be read — the row proved nothing`,
+      );
+    else if (seen.told < 1)
+      out.push(
+        `${row}: the pane's scheme was not told — no device command pended: the row proved nothing`,
+      );
+  }
   const s = seen.standing;
   if (s === null) out.push(`${row}: the page that stood said nothing`);
   else if (!desk && (s.touches < 2 || s.focused !== "field"))
@@ -1473,7 +1482,7 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
       await pickUp(pane);
       const held = await heldFrame();
       const asked0 = d.fixture.gated().asked;
-      let told = false;
+      let told: number | null = 0;
       if (held !== null && word0 !== null) {
         const off = await h.deskAt();
         const onWindow = (r: { x: number; y: number; w: number; h: number }) => {
@@ -1489,16 +1498,21 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
         );
         if (name === "laptop") {
           // a device command the engine leaves unanswered while the navigation pends: the pane's own scheme — TOLD when
-          // main's own count of devices told has moved (R5: never the desk's write answering — a run where no device
-          // command went out says it proved nothing)
+          // MAIN's own count of the device switches its pages took has moved (R5; PT-5c2 F4: the producer's
+          // `stats.emulations`, through main's census — this driver runs in main — read after the gate was asked and
+          // before the click; never the desk's count, which moves when its lane takes the write) — a run where no device
+          // command went out says it proved nothing
           const e = await entityOf(pane);
-          const emulations = async (): Promise<number> =>
-            (await js<Record<string, number>>("globalThis.__vfDesk.live()?.stats ?? {}"))
-              .emulations ?? 0;
-          const told0 = await emulations();
+          const emulations = (): number | undefined => d.custody()?.emulations;
+          const told0 = emulations();
           await js<boolean>(`globalThis.__vfDesk.writeProps(${e}, { scheme: "dark" })`);
-          told =
-            (await waitFor("the pane's scheme told", 3_000, emulations, (n) => n > told0)) > told0;
+          const told1 = await waitFor(
+            "the pane's scheme told (main's count)",
+            3_000,
+            emulations,
+            (n) => n !== undefined && told0 !== undefined && n > told0,
+          );
+          told = told0 === undefined || told1 === undefined ? null : told1 - told0;
           await sleep(500);
         }
         await h.press(onWindow(word0.parts.field));

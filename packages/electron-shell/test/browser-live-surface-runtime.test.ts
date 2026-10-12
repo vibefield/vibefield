@@ -781,7 +781,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       custody.dispose();
       expect(quit.window?.destroyed).toBe(true);
       expect(quit.runtime.summary.state).toBe("closed");
-      expect(custody.state()).toEqual({ runtimes: 0, owners: 0 });
+      expect(custody.state()).toEqual({ runtimes: 0, owners: 0, emulations: 0 });
       // no grace's timer outlives the runtimes it was for
       expect(vi.getTimerCount()).toBe(0);
       // an explicit `hibernated` demand from a renderer that comes back: at once, the grace or not
@@ -5020,6 +5020,23 @@ describe("BrowserLiveSurfaceRuntime", () => {
         await vi.advanceTimersByTimeAsync(5_000);
         expect(p.result.native.windows[1]?.loadedUrls).toEqual([]);
         allStopped(p.renderer, from);
+        p.result.runtime.dispose();
+      });
+
+      it("F4 — the runtime says main's census the device switches its page took: `emulations()` is its `stats.emulations`, each switch counted once, the same device again nothing", async () => {
+        const p = await standing({ source: laptopAt2() });
+        expect(p.result.runtime.emulations()).toBe(0);
+        await p.result.runtime.navigate({
+          action: "emulate",
+          emulation: { ...LAPTOP, colorScheme: "dark" },
+        });
+        await p.result.runtime.navigate({
+          action: "emulate",
+          emulation: { ...LAPTOP, colorScheme: "dark" },
+        });
+        await p.result.runtime.navigate({ action: "emulate", emulation: TABLET });
+        expect(p.result.runtime.emulations()).toBe(2);
+        expect(p.result.runtime.emulations()).toBe(p.result.runtime.stats.emulations);
         p.result.runtime.dispose();
       });
     });

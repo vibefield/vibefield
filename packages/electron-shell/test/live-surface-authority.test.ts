@@ -99,6 +99,36 @@ function mintParams(
 }
 
 describe("LiveSurfaceAuthority", () => {
+  it("PT-5c2 (F4): the census counts the device switches its browser pages took — each runtime's own count, those let go included (it only grows): main's word that a device was told, the smoke's to read", () => {
+    const switched = new Map<string, number>();
+    const runtime = (surfaceId: string): LiveSurfaceRuntimeHandle => ({
+      surfaceId,
+      attach: () => {
+        throw new Error("attach is the control session's job, not this suite's");
+      },
+      dispose: () => undefined,
+      emulations: () => switched.get(surfaceId) ?? 0,
+    });
+    const { authority, windows } = fixture({
+      factories: { browser: runtime, sckWindow: runtime, iosSimulator: runtime },
+    });
+    const alice = participant("window-1", "document-1");
+    windows.set(alice.incarnation, { webContentsId: 7 });
+    const a = authority.mint(mintParams(alice, BROWSER_SOURCE));
+    const b = authority.mint(mintParams(alice, BROWSER_SOURCE));
+    expect(authority.state()).toEqual({ runtimes: 2, owners: 2, emulations: 0 });
+    switched.set(a.surfaceId, 2);
+    switched.set(b.surfaceId, 1);
+    expect(authority.state().emulations).toBe(3);
+    // a page let go keeps its count in the census
+    expect(authority.release({ rendererParticipant: alice, surfaceId: a.surfaceId })).toEqual({
+      released: true,
+    });
+    expect(authority.state()).toEqual({ runtimes: 1, owners: 1, emulations: 3 });
+    switched.set(b.surfaceId, 2);
+    expect(authority.state().emulations).toBe(4);
+  });
+
   it("mints a browser runtime and issues a window-bound interaction ticket", () => {
     const { authority, factories, issued, windows } = fixture();
     const alice = participant("window-1", "document-1");
@@ -205,13 +235,13 @@ describe("LiveSurfaceAuthority", () => {
     windows.delete(before.incarnation);
     windows.set(after.incarnation, { webContentsId: 7 });
     authority.mint(mintParams(after, BROWSER_SOURCE, { reuseKey: "entity-42" }));
-    expect(authority.state()).toEqual({ runtimes: 1, owners: 1 });
+    expect(authority.state()).toEqual({ runtimes: 1, owners: 1, emulations: 0 });
 
     expect(authority.release({ rendererParticipant: after, surfaceId: first.surfaceId })).toEqual({
       released: true,
     });
     expect(disposed).toEqual([first.surfaceId]);
-    expect(authority.state()).toEqual({ runtimes: 0, owners: 0 });
+    expect(authority.state()).toEqual({ runtimes: 0, owners: 0, emulations: 0 });
   });
 
   it("sweeps un-keyed runtimes whose minting document is gone", () => {
@@ -238,7 +268,7 @@ describe("LiveSurfaceAuthority", () => {
     authority.releaseAllForWebContents(7);
 
     expect(new Set(disposed)).toEqual(new Set([a.surfaceId, b.surfaceId]));
-    expect(authority.state()).toEqual({ runtimes: 0, owners: 0 });
+    expect(authority.state()).toEqual({ runtimes: 0, owners: 0, emulations: 0 });
   });
 
   it("returns released:false for unknown surfaces and non-owners", () => {
@@ -280,7 +310,7 @@ describe("LiveSurfaceAuthority", () => {
       expect.objectContaining({ kind: "UNAVAILABLE" }),
     );
     expect(disposed).toHaveLength(1);
-    expect(authority.state()).toEqual({ runtimes: 0, owners: 0 });
+    expect(authority.state()).toEqual({ runtimes: 0, owners: 0, emulations: 0 });
   });
 
   it("maps ticket capacity onto RESOURCE_EXHAUSTED", () => {

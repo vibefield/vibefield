@@ -463,7 +463,7 @@ describe("a page's first load, in the product — what the rows read by", () => 
   it("TAPS-PENDING (PT-5c, ruling 1): a link to the shut gate pressed, then at once the page's own field — the page that STOOD hears the tap (its focus on its field), the page the gate lets through hears nothing of it; and its desktop twin: a click and a key behind the pane's scheme, told meanwhile", () => {
     const seen: PendingSeen = {
       asked: 1,
-      told: false,
+      told: 0,
       standing: { touches: 2, focused: "field", field: "" },
       next: { touches: 0, focused: "", field: "", path: "/gate?p=pending-phone" },
       face: face({ address: `${O}/gate?p=pending-phone` }),
@@ -494,7 +494,7 @@ describe("a page's first load, in the product — what the rows read by", () => 
     ]);
     const desk: PendingSeen = {
       ...seen,
-      told: true,
+      told: 1,
       standing: { touches: 0, focused: "field", field: "q" },
       next: { touches: 0, focused: "", field: "", path: "/gate?p=pending-laptop" },
     };
@@ -503,7 +503,7 @@ describe("a page's first load, in the product — what the rows read by", () => 
       judgePending(
         {
           ...desk,
-          told: false,
+          told: 0,
           standing: { touches: 0, focused: "", field: "" },
           next: { touches: 0, focused: "field", field: "q", path: "/gate?p=pending-laptop" },
         },
@@ -513,6 +513,10 @@ describe("a page's first load, in the product — what the rows read by", () => 
       "TAPS-PENDING (desktop): the pane's scheme was not told — no device command pended: the row proved nothing",
       "TAPS-PENDING (desktop): the page that stood has \"\" in its field, its focus on nothing — the click and the key sent behind the scheme's command did not reach it while the link's navigation pended",
       'TAPS-PENDING (desktop): the next page has "q" in its field, its focus on field — the click and the key were delivered to the page that replaced the one they were aimed at',
+    ]);
+    // PT-5c2 (F4): main's count of device switches unread — the guard proves nothing, and says so
+    expect(judgePending({ ...desk, told: null }, true)).toEqual([
+      "TAPS-PENDING (desktop): main's count of the device switches its pages took could not be read — the row proved nothing",
     ]);
   });
 
