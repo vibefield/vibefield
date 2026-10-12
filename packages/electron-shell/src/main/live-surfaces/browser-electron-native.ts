@@ -227,6 +227,11 @@ function safeEffectiveRaster(
   };
 }
 
+/** PT-5d (M9): the window of a native told it is focused — one at a time, as a browser has one focused window. */
+interface FocusHolder {
+  window: ElectronBrowserSurfaceWindow | undefined;
+}
+
 class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   readonly controlContents;
   #remoteLoadStarted = false;
@@ -308,6 +313,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     readonly window: BrowserWindow,
     readonly options: BrowserSurfaceNativeWindowOptions,
     readonly bootstrapReady: Promise<void>,
+    /** PT-5d (M9): its native's focused window */
+    readonly focus: FocusHolder = { window: undefined },
   ) {
     this.controlContents = window.webContents;
     window.webContents.debugger.on("message", (_event, method, params, sessionId) =>
@@ -1262,6 +1269,37 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   }
 
   /** PT-5c (ruling 1): the HAND's queue — its input, one behind another, never behind the device's. */
+  /**
+   * PT-5d (M9) — see `BrowserSurfaceNativeWindow.setFocused`: `Emulation.setFocusEmulationEnabled` on the PAGE's session —
+   * the page behaves as focused (`document.hasFocus()`, its window's `focus`), whatever the app's own activation — in the
+   * hand's queue. Another window of the native told before is untold first (in its own queue: never waited on — a page
+   * that hangs keeps no other from its focus). A frame of another site is not told: its own renderer holds its focus,
+   * and the run's F-h says whether each frame's session needs its own (M9).
+   */
+  setFocused(focused: boolean): Promise<void> {
+    const holder = this.focus;
+    if (focused) {
+      if (holder.window === this) return Promise.resolve();
+      const was = holder.window;
+      holder.window = this;
+      if (was !== undefined) void was.tellFocus(false).catch(() => undefined);
+      return this.tellFocus(true);
+    }
+    if (holder.window !== this) return Promise.resolve();
+    holder.window = undefined;
+    return this.tellFocus(false);
+  }
+
+  private tellFocus(enabled: boolean): Promise<void> {
+    // (a window destroyed meanwhile: `ensureDebugger` refuses it — nothing sent)
+    return this.hand(async () => {
+      await this.ensureDebugger();
+      await this.window.webContents.debugger.sendCommand("Emulation.setFocusEmulationEnabled", {
+        enabled,
+      });
+    });
+  }
+
   private hand<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.#handTail.then(operation, operation);
     this.#handTail = result.then(
@@ -1326,6 +1364,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
 
 /** Pinned Electron 43 Browser OSR adapter. */
 export class ElectronBrowserSurfaceNative implements BrowserSurfaceNative {
+  /** PT-5d (M9): the one window of this native told it is focused */
+  readonly #focus: FocusHolder = { window: undefined };
+
   createWindow(options: BrowserSurfaceNativeWindowOptions): BrowserSurfaceNativeWindow {
     // PT-4: a persistent profile lives under its USER's data (`LAYOUT.BROWSER_PROFILES_DIR`) when the runtime names where;
     // else — and for a memory profile — Electron's own partition by name
@@ -1368,7 +1409,7 @@ export class ElectronBrowserSurfaceNative implements BrowserSurfaceNative {
       told.refused?.(what, url),
     );
     const bootstrapReady = window.loadURL("about:blank");
-    const surface = new ElectronBrowserSurfaceWindow(window, options, bootstrapReady);
+    const surface = new ElectronBrowserSurfaceWindow(window, options, bootstrapReady, this.#focus);
     told.refused = (what, url) => surface.refused(what, url);
     return surface;
   }

@@ -2469,3 +2469,65 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     });
   });
 });
+
+describe("PT-5d (M9) — a page TOLD it is focused while its pane takes the hand: the native keeps ONE focused window, as a browser does", () => {
+  /** Two windows of one native; what each is told of its focus, its keys and its presses, in order. */
+  const two = () => {
+    const adapter = new ElectronBrowserSurfaceNative();
+    const sent: string[] = [];
+    const make = (name: string) => {
+      const native = adapter.createWindow({
+        partition: "memory:test",
+        persistent: false,
+        logicalViewport: { width: 320, height: 180 },
+        initialBackingRaster: { width: 640, height: 360 },
+        deviceScaleFactor: 2,
+        requestSharedTexture: true,
+      });
+      const made = electron.made.at(-1) as
+        | ((typeof electron.made)[number] & { isDestroyed: () => boolean; destroy?: () => void })
+        | undefined;
+      const contents = made?.webContents;
+      if (made === undefined || contents === undefined) throw new Error("no window was made");
+      made.destroy = () => {
+        made.isDestroyed = () => true;
+      };
+      let attached = false;
+      contents.debugger.isAttached = () => attached;
+      contents.debugger.attach = () => {
+        attached = true;
+      };
+      contents.debugger.sendCommand = async (
+        method?: string,
+        params?: unknown,
+        session?: string,
+      ) => {
+        const at = session === undefined ? "" : `@${session}`;
+        const p = params as { enabled?: boolean; type?: string };
+        if (method === "Emulation.setFocusEmulationEnabled") sent.push(`${name} ${p.enabled}${at}`);
+        if (method === "Input.dispatchMouseEvent" || method === "Input.dispatchKeyEvent")
+          sent.push(`${name} ${p.type}${at}`);
+        return {};
+      };
+      return native;
+    };
+    return { a: make("A"), b: make("B"), sent };
+  };
+
+  it("told: `Emulation.setFocusEmulationEnabled` on the PAGE's session, in the hand's queue — the key queued after it sent at once, never waiting on a word; told again: nothing; ANOTHER window told: this one untold first; untold: `enabled: false`, once; a window destroyed is told nothing", async () => {
+    const w = two();
+    void w.a.setFocused(true);
+    await w.a.dispatchKey({ type: "keyDown", key: "a", code: "KeyA", modifiers: 0 });
+    await w.a.setFocused(true);
+    expect(w.sent).toEqual(["A true", "A keyDown"]);
+    await w.b.setFocused(true);
+    expect(w.sent.slice(2)).toEqual(["A false", "B true"]);
+    await w.b.setFocused(false);
+    await w.b.setFocused(false);
+    expect(w.sent.slice(4)).toEqual(["B false"]);
+    await w.a.setFocused(true);
+    w.a.destroy();
+    await w.b.setFocused(true);
+    expect(w.sent.slice(5)).toEqual(["A true", "B true"]);
+  });
+});

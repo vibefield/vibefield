@@ -123,6 +123,13 @@ export interface BrowserSurfaceNativeWindow {
   dispatchText(text: string): Promise<void>;
   /** PT-3: an IME composition as it runs — its text and the caret within it (CDP `Input.imeSetComposition`). */
   dispatchCompose(text: string, caret: number): Promise<void>;
+  /**
+   * PT-5d (M9) — TELL THE PAGE IT IS FOCUSED, or no longer: an offscreen window holds no window's focus of its own, and a
+   * document's own word of where its focus is (`here`, `away`) is the only one the hand's keys follow. In the hand's
+   * queue — ahead of the event queued after it. ONE window of a native at a time, as a browser has one focused window:
+   * telling one untells the one before. Told again, or untold while not told: nothing.
+   */
+  setFocused(focused: boolean): Promise<void>;
   /** History/loading navigation. `go` rides `loadURL` so the initial-load and
    * chrome-navigation paths share one policy gate. */
   navigate(action: "back" | "forward" | "reload" | "stop"): void;
@@ -1127,6 +1134,15 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #unresponsiveTimer: ReturnType<typeof setTimeout> | null = null;
   readonly #unresponsiveMs: number;
   readonly #hungInputMs: number;
+  /**
+   * PT-5d (M9) — THE HAND HOLDS THE PAGE: the window it was told focused on and the attachment whose press, tap or key took
+   * it — until the hand leaves (the pane put down, that attachment gone, the window gone). `#held`: the effective demand
+   * is a held pane's (live and interactive — the desk's own word of the pane in hand).
+   */
+  #taken:
+    | { readonly window: BrowserSurfaceNativeWindow; readonly by: string | undefined }
+    | undefined;
+  #held = false;
 
   constructor(options: BrowserLiveSurfaceRuntimeOptions) {
     this.surfaceId = LiveSurfaceIdV1.parse(options.surfaceId);
@@ -1561,6 +1577,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   private letGo(by: string): void {
     // (F8: its gesture ends with it)
     this.#gestures.delete(by);
+    // PT-5d (M9): the attachment that took the page goes — the hand has left it
+    if (this.#taken !== undefined && this.#taken.by === by) this.leave();
     // R1: what it sent and is still WAITING for its page's word is never sent — its wait ends now, ahead of the chain
     this.scaleWaitsEnd((waiter) => waiter.by === by, "Browser input's attachment is gone");
     const turn = this.#inputTail.then((): Promise<void> | undefined => {
@@ -1569,6 +1587,21 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       return this.whileStanding(window, () => this.letGoOn(window, by));
     });
     this.#inputTail = turn.catch(() => undefined);
+  }
+
+  /** PT-5d (M9): the hand takes the page — told it is focused (the native sends nothing if it is already its focused
+   * window). A refusal is the window's: the event is sent all the same. */
+  private async take(window: BrowserSurfaceNativeWindow, by: string | undefined): Promise<void> {
+    this.#taken = { window, by };
+    await window.setFocused(true).catch(() => undefined);
+  }
+
+  /** PT-5d (M9): the hand has left the page — told so, on the window it was told on, if that still stands. */
+  private leave(): void {
+    const taken = this.#taken;
+    if (taken === undefined) return;
+    this.#taken = undefined;
+    if (!taken.window.isDestroyed()) void taken.window.setFocused(false).catch(() => undefined);
   }
 
   private async letGoOn(window: BrowserSurfaceNativeWindow, by: string): Promise<void> {
@@ -1619,6 +1652,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     if (geometry === undefined || this.#lifecycle.snapshot.state !== "live" || !this.stands(by)) {
       throw new Error("Browser surface is not available for input");
     }
+    // PT-5d (M9) — THE HAND TAKES THE PAGE: a press, a tap or a key's down tells it it is focused BEFORE it is sent — the
+    // engine's word after it can say the focus is the page's (an offscreen page told nothing says `away`: every key would
+    // wait for a word and be refused)
+    if ((request.kind === "mouse" && request.type === "down") || request.kind === "key")
+      await this.take(window, by);
     if (request.kind === "text") {
       if (request.text.length === 0 || request.text.length > 16_384) {
         throw new Error("Browser text input is outside the bounded contract");
@@ -2462,6 +2500,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#effectiveDemand = aggregateDemand(this.#attachments.values());
     const demand = this.#effectiveDemand;
     const state = this.#lifecycle.snapshot.state;
+    // PT-5d (M9): the pane PUT DOWN — its demand a held pane's, now not — the hand has left the page (a demand never held
+    // changes nothing: a page the hand took through the runtime's own seam keeps its focus until another takes it)
+    const held = demand !== null && demand.mode === "live" && demand.interactive;
+    if (this.#held && !held) this.leave();
+    this.#held = held;
     if (demand === null) {
       // No renderer attached — a window reload's gap, or its last face gone: the page PAUSES and is KEPT, so a renderer that
       // re-attaches within the grace (main's custody re-binds the surface by its reuse key) finds the SAME page, its memory

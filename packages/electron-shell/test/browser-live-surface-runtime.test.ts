@@ -161,15 +161,25 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
     this.#events.emit("scale", scale, this.documents);
   }
 
+  /** PT-5d (M9): what the hand told the page — its focus — in order with its presses, touches and keys. */
+  readonly hand: string[] = [];
+
+  async setFocused(focused: boolean): Promise<void> {
+    this.hand.push(`focus ${focused}`);
+  }
+
   async dispatchTouch(input: BrowserSurfaceNativeTouchInput): Promise<void> {
+    this.hand.push(`touch ${input.type}`);
     this.touchInputs.push(input);
   }
 
   async dispatchMouse(input: BrowserSurfaceNativeMouseInput): Promise<void> {
+    this.hand.push(`mouse ${input.type}`);
     this.mouseInputs.push(input);
   }
 
   async dispatchKey(input: BrowserSurfaceNativeKeyInput): Promise<void> {
+    this.hand.push(`key ${input.type}`);
     this.keyInputs.push(input);
   }
 
@@ -3631,6 +3641,113 @@ describe("BrowserLiveSurfaceRuntime", () => {
     const unrooted = await born({ source: desk });
     expect(unrooted?.profilePath).toBeUndefined();
     expect(unrooted?.partition).toMatch(/^persist:vibefield-live-surface:[a-f0-9]{40}$/u);
+  });
+
+  describe("PT-5d (M9) — THE HAND TAKES THE PAGE: told it is focused while its pane takes the hand's input", () => {
+    /** A live page held by `ids` (each attachment's demand live and held); a press and a key through each. */
+    const held = async (ids: readonly string[] = ["attachment_browser_00000001"]) => {
+      const result = setup();
+      const renderers = ids.map((id) => attach(result.runtime, id));
+      for (const r of renderers) r.attachment.setDemand(demand(1, "live"));
+      await vi.advanceTimersByTimeAsync(0);
+      const window = result.native.windows[0];
+      if (window === undefined) throw new Error("no window");
+      window.paint(sharedPaint().paint);
+      window.emitNavigationState(NAV);
+      await vi.advanceTimersByTimeAsync(0);
+      const revision = (): number => result.runtime.summary.geometry?.revision ?? 0;
+      const press = async (i = 0): Promise<void> => {
+        for (const action of ["down", "up"] as const)
+          renderers[i]?.attachment.dispatchInput?.(
+            { kind: "pointer", action, x: 10, y: 10, button: "left", clickCount: 1 },
+            revision(),
+          );
+        await vi.advanceTimersByTimeAsync(0);
+      };
+      const key = async (k: string, i = 0): Promise<void> => {
+        for (const action of ["down", "up"] as const)
+          renderers[i]?.attachment.dispatchInput?.(
+            { kind: "key", action, key: k, code: `Key${k.toUpperCase()}`, modifiers: NONE },
+            revision(),
+          );
+        await vi.advanceTimersByTimeAsync(0);
+      };
+      return { result, renderers, window, press, key };
+    };
+
+    it("a held pane's first press TELLS its page it is focused before the press is sent; each press tells it again (its native sends nothing while it is still its focused window — another page may have taken it since); the pane PUT DOWN (its demand held, then not) untells it; a demand never held changes nothing", async () => {
+      vi.useFakeTimers();
+      const p = await held();
+      await p.press();
+      expect(p.window.hand).toEqual(["focus true", "mouse mousePressed", "mouse mouseReleased"]);
+      await p.press();
+      expect(p.window.hand.slice(3)).toEqual([
+        "focus true",
+        "mouse mousePressed",
+        "mouse mouseReleased",
+      ]);
+      p.renderers[0]?.attachment.setDemand({ ...demand(2, "live"), interactive: false });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(p.window.hand.at(-1)).toBe("focus false");
+      p.renderers[0]?.attachment.setDemand({ ...demand(3, "live", 15), interactive: false });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(p.window.hand.filter((h) => h.startsWith("focus"))).toEqual([
+        "focus true",
+        "focus true",
+        "focus false",
+      ]);
+      // taken again: told again
+      await p.press();
+      expect(p.window.hand.filter((h) => h.startsWith("focus")).at(-1)).toBe("focus true");
+      p.result.runtime.dispose();
+    });
+
+    it("a key's down takes it too: the first key after the taking is sent, after the page was told — never waiting on a word", async () => {
+      vi.useFakeTimers();
+      const p = await held();
+      await p.key("a");
+      expect(p.window.hand).toEqual(["focus true", "key keyDown", "key keyUp"]);
+      p.result.runtime.dispose();
+    });
+
+    it("the attachment that TOOK it goes — the pane still held by another: untold; another attachment's going: nothing", async () => {
+      vi.useFakeTimers();
+      const p = await held([
+        "attachment_browser_00000001",
+        "attachment_browser_00000002",
+        "attachment_browser_00000003",
+      ]);
+      await p.press(0);
+      p.renderers[2]?.attachment.dispose();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(p.window.hand.filter((h) => h.startsWith("focus"))).toEqual(["focus true"]);
+      p.renderers[0]?.attachment.dispose();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(p.window.hand.filter((h) => h.startsWith("focus"))).toEqual([
+        "focus true",
+        "focus false",
+      ]);
+      p.result.runtime.dispose();
+    });
+
+    it("its window GOES (a crash; made again): the one gone is told nothing more, the new one nothing until the hand takes it", async () => {
+      vi.useFakeTimers();
+      const p = await held();
+      await p.press();
+      p.window.crash();
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(0);
+      const next = p.result.native.windows[1];
+      if (next === undefined) throw new Error("no second window");
+      next.paint(sharedPaint().paint);
+      next.emitNavigationState(NAV);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(p.window.hand.filter((h) => h.startsWith("focus"))).toEqual(["focus true"]);
+      expect(next.hand).toEqual([]);
+      await p.press();
+      expect(next.hand).toEqual(["focus true", "mouse mousePressed", "mouse mouseReleased"]);
+      p.result.runtime.dispose();
+    });
   });
 
   describe("PT-5c — the chain finished: every event for the document it was sent to; what the third grade found", () => {
