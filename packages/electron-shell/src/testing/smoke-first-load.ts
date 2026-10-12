@@ -159,6 +159,9 @@ export interface FirstLoadSeen {
     /** in hand, its page live: the face before its page tidied its address, and after (no frame since: `presented`) */
     readonly before: FirstFace | null;
     readonly after: FirstFace | null;
+    /** PT-5c (ruling 7): the face read again AT THE PUT-DOWN — still no frame since the tidy (the pointer leaving the pane
+     * for the bar can make a page repaint: a frame there would be of the address now, and the row green by any law) */
+    readonly down: FirstFace | null;
     /** the document's own word for its address once the page tidied it (the pane follows its page's own moves) */
     readonly url: string | null;
     /** put down: the still the shelf keeps of it — the address it is filed under */
@@ -449,6 +452,10 @@ export function judgeTidy(seen: FirstLoadSeen["tidy"]): string[] {
   else if (b !== null && a.presented !== b.presented)
     out.push(
       `TIDY: ${a.presented - b.presented} frames landed after the page tidied its address — its texture is of the address NOW whatever the law: the row proved nothing`,
+    );
+  else if (b !== null && seen.down !== null && seen.down.presented !== b.presented)
+    out.push(
+      `TIDY: ${seen.down.presented - b.presented} frames landed between the page's tidy and the put-down — the still is of the address NOW whatever the law: the row proved nothing`,
     );
   if (seen.url?.endsWith("/gate?p=t") !== true)
     out.push(
@@ -1206,6 +1213,8 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
     );
     const takenWas = (await stillOf(tidyPane))?.takenAt ?? 0;
     await done();
+    // (the guard read again at the put-down: no frame since the tidy through the take)
+    const tidyDown = await face(tidyPane);
     const tidyKept = await waitFor(
       "the put-down's still on the shelf",
       15_000,
@@ -1249,6 +1258,7 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
     const tidy: FirstLoadSeen["tidy"] = {
       before: tidyBefore,
       after: tidyAfter,
+      down: tidyDown,
       url: tidyUrl,
       kept: tidyKept,
       rested: tidyRest.f?.rested === true && tidyRest.pages === 0,

@@ -325,6 +325,7 @@ describe("a page's first load, in the product — its rows", () => {
     const seen: FirstLoadSeen["tidy"] = {
       before: inHand,
       after: { ...inHand, address: at("/gate?p=t") },
+      down: { ...inHand, address: at("/gate?p=t") },
       url: at("/gate?p=t"),
       kept: {
         address: at("/gate?p=t"),
@@ -395,6 +396,10 @@ describe("a page's first load, in the product — its rows", () => {
     ]);
     expect(judgeTidy({ ...seen, after: { ...seen.after, presented: 3 } as FirstFace })).toEqual([
       "TIDY: 1 frames landed after the page tidied its address — its texture is of the address NOW whatever the law: the row proved nothing",
+    ]);
+    // PT-5c (ruling 7): a frame between the tidy and the put-down (the pointer leaving for the bar repainted the page)
+    expect(judgeTidy({ ...seen, down: { ...seen.down, presented: 4 } as FirstFace })).toEqual([
+      "TIDY: 2 frames landed between the page's tidy and the put-down — the still is of the address NOW whatever the law: the row proved nothing",
     ]);
   });
 

@@ -6,7 +6,9 @@
  * hand-over's frames read as runs. PT-5b2: SWEEP and EVICTED; a photograph's ground held to the live page's at THE LAW'S DIM
  * (REST, STILL — a still through the wrong transfer curve does not pass); what EVICTED's watcher saw, read.
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { FIXTURE_HUE } from "../src/testing/live-fixture";
 import {
@@ -980,9 +982,27 @@ describe("the last still and the many — what the rows read by", () => {
     const { deviceDpr, most } = STILL_ROWS.evicted;
     const large = bytes(2560 * deviceDpr, 1600 * deviceDpr);
     expect(large).toBe(87_381_272);
-    // the desk's budget (ICE's 256 MiB): the row's ceiling of large panes, each at its top rung, passes it with a large
-    // pane to spare
-    expect(most * large).toBeGreaterThan(268_435_456 + large);
+    // the desk's budget — ICE's OWN constant, read off ICE's build as the field app resolves it (the shell may not import
+    // ICE; PT-5c, ruling 7: never a literal): the row's ceiling of large panes, each at its top rung, passes it with a
+    // large pane to spare
+    const ice = dirname(
+      createRequire(new URL("../../field-app/package.json", import.meta.url)).resolve(
+        "@vibecook/ice/package.json",
+      ),
+    );
+    const budgets = readdirSync(join(ice, "dist"))
+      .filter((name) => name.endsWith(".js"))
+      .map(
+        (name) =>
+          /\bDEFAULT_RASTER_BUDGET = ([0-9 *]+);/u.exec(
+            readFileSync(join(ice, "dist", name), "utf8"),
+          )?.[1],
+      )
+      .filter((said): said is string => said !== undefined)
+      .map((said) => said.split("*").reduce((product, n) => product * Number(n.trim()), 1));
+    expect(new Set(budgets).size).toBe(1);
+    const budget = budgets[0] ?? Number.NaN;
+    expect(most * large).toBeGreaterThan(budget + large);
     // the pane lies out of the large panes' view
     expect(STILL_ROWS.evicted.away).toBeGreaterThan(4 * STILL_ROWS.evicted.big.h);
   });

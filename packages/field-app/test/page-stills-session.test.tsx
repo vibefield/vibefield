@@ -3,7 +3,8 @@
  * (field/use-workspace-session.ts → surfaces/live/live-eyes.ts `sweepDocumentStills`): once, at the open of a board that
  * is WHOLE — this device's own saved copy, its journal applied, writable — by the board's id, with the keys of the
  * objects that stand. Never on the word of a NEW board (its objects may only not have arrived yet), a QUARANTINED blank,
- * a board refused from before the desk, or a DEGRADED one. The shelf is a spy; the engine and the documents are real.
+ * a READ-ONLY one (PT-5c), a board refused from before the desk, or a DEGRADED one. The shelf is a spy; the engine and the
+ * documents are real.
  */
 import {
   createCanvasEngine,
@@ -55,6 +56,25 @@ function boardOfTwo(): { bytes: Uint8Array; keys: string[] } {
   const bytes = session.exportEnvelope(1);
   ce.dispose();
   return { bytes, keys: keys.sort() };
+}
+
+/** PT-5c (ruling 7): a board written by a NEWER build — a pack marker newer than this app's (`desk.note` at a version it
+ * does not have) — which this app opens READ-ONLY. */
+function newerBoard(): Uint8Array {
+  const ce = createCanvasEngine(DESK_ENGINE);
+  const session = ce.docs.create();
+  ce.ops.spawnWidget("desk.note", { x: 0, y: 0, w: 200, h: 200, props: {} });
+  ce.world.sync();
+  session.store.metaTransaction((meta) => meta.set("engine.pack.desk.note.999", true));
+  const bytes = session.exportEnvelope(1);
+  ce.dispose();
+  // (it is what the row says it is: the desk's engine opens it read-only)
+  const reader = createCanvasEngine(DESK_ENGINE);
+  const opened = reader.docs.open(bytes);
+  if (!opened.ok || !opened.session.readOnly)
+    throw new Error("the newer board did not open read-only");
+  reader.dispose();
+  return bytes;
 }
 
 /** A board from before the desk: an untyped engine's, rooted at `ice.default`. */
@@ -133,6 +153,10 @@ describe("the boards whose page stills the session sweeps (PT-5b2 ruling 2, PT-5
 
   it("a QUARANTINED board sweeps nothing: its blank stand-in holds none of its objects", async () => {
     expect(await open({ initialBytes: new Uint8Array([1, 2, 3, 4, 5]) })).toEqual([]);
+  });
+
+  it("a READ-ONLY board (written by a newer build) sweeps nothing: the session returns before the sweep, its objects unprojected — PT-5c (ruling 7)", async () => {
+    expect(await open({ initialBytes: newerBoard() })).toEqual([]);
   });
 
   it("a board refused from before the desk, and a DEGRADED one (no lane to fieldd), sweep nothing", async () => {
