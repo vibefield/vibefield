@@ -9241,3 +9241,51 @@ a first call would, ahead of W7 (N14 (a): Godview opens with its terminals away)
 - **`ChromeLayer` drops `runSystemControl()`'s false:** a known no-op (the palette re-renders the act as waiting in the same update), owed its words the next time the frame's acts are touched.
 - **puppeteer `view-sdk/src/view.ts:111`:** "(the lab's and the catalog's)" gains the window's maximized deck, at the next pin.
 - **The launcher rung's two sightings:** the debts lane (N10 (a)).
+
+## GV round 3, finished — Godview opens on the monitor alone, ⌘W on the last pane puts the terminals away, and the deck rests at the drawing's share on every height (2026-10-12; `ecfd7388` · `81ccb8da` · `f377f0e7` through lane land3, gated on the exact tree)
+
+**Why:** James ruled the *After Wave 2 Docket* on 2026-10-12 (DECISIONS, the N row): N14 (a) the first call after a
+launch brings the last run's panes with the called one; N16 (a) ⌘W on the last pane minimizes the terminals and stays
+in Godview; N15 (a) the terminals' rest at one share of any window, the "Monitor height" slider retired. With GV-D5's
+launch they were the last of round 3. The plan is `draft/godview-round3/build-wrapper.md` (W7) and the lead's L20,
+L21 in `build-wrapper-lead.md`.
+
+**What landed:**
+- `ecfd7388` W7 — GV-D5's launch (N14 (a)): a launch opens on the monitor alone, the terminals away, and nothing of the
+  deck mounts — no restore gate, no workspace, no birth — until the first call; that call brings the last run's
+  panes with the called session (ended sessions ask to resume, as before) and the door's placement (GV-D4) puts it
+  in. A reload keeps the state (session storage). L20: when the first call is a create, the opening shell is the
+  created terminal (unbound: one birth; under a profile the profiled shell takes the opening shell's place, two
+  births, one pane — an opening refusal would fault the pool, SB-3). The door's verbs wait for the workspace at most
+  10 s of the deck's own time, and History's 20 s race (`deckAnswerWithin`) holds its clock while the restore
+  question waits on the person, saying once "Waiting in Godview — restore last time's panes, or start clean". The
+  cold-open trace's time zero is the first call (`ColdOpenReport.zero: "first-call"`): **a comparison across W7
+  names it.** A lab seam, `window.__vfGodviewDeck = { up }`, exists only under the Godview markers (idempotent,
+  never throws, the trail says `raisedBy: "lab"`); the MV lead's labs call it (their lane before this one).
+- `81ccb8da` N16 — ⌘W on the last pane: ghosttea keeps its last pane and asks the window to close; the deck's owner
+  answers by minimizing (from up or maximized) and stays in Godview. A ghosttea pane always holds a session, so the
+  kept pane is given a fresh shell in its folder with the launcher over it — VibeField's empty pane, as a cleanly
+  exited agent's pane returns — and the closed session goes the way ⌘W sends it (an unused shell released, a running
+  agent left running): it never comes back unless it is the one called. The next call takes that pane; ⌘T's terminal
+  is its shell. One extra birth per last-pane ⌘W; a refused birth keeps the closed session, minimizes anyway and says
+  so on the line. A deck no overlay owns still asks for Canvas; with the deck away ⌘W closes the window, as
+  main's lend already did.
+- `f377f0e7` N15 — the rest: `max(5/13 of the stage, 232 px)` from the stage's top (5/13 is the drawing's 300 of 780,
+  the ruling's "38.5 %" made exact; 232 is the field's floor 220 plus its gap 12, so the field never runs under the
+  sheet at rest); the basis is the rest less the head's height. The "Monitor height" slider, `stageHeight` and the
+  overlay's `--vf-monitor-stage-height` are retired, and a height an older build stored is dropped on load. The MV
+  lead's `godview-stage-rule.test.ts` moved with the rule (its evaluator learned `*` and `/`, with a case of its own). **A perf pair that
+  straddles N15 compares different stage sizes** (at 780: the monitor 300 tall where it was 313) and names it.
+
+**Validation:** each slice red first on the slice before it (`lanes/p2/red-w7-*`, `red-n16-*`, `red-n15-*`), its
+targeted files and both tsc runs green, one smoke:godview offscreen each (launchAlone; rest 300, field foot 288, the
+edge staying 360 and resting 300, away 300 → 300 with 0 resizes, maximized and restored at 300); then the landing gate
+on the exact tree (`lanes/land3/logs/`, under this landing's own sha).
+
+**Found:** vitest's page URL carries `?godviewMarkers=1` (`vitest.config.ts`), so the markers are on in every
+field-app test unless a case turns them off; a test pane session without `activity` crashes the unused-shell reaper.
+
+**Owed:** not seen on a real window — a person's first call at a real launch, the waiting note on a live line, ⌘W on a
+real last pane and the second ⌘W closing the window, the rest on other heights and the floor on a short window; the
+bar's search stepping out in 120 ms (it changes place at once). The builder ran ~7 s of tests under the MV lead's
+proof-launch PERF.lock (22:40 PDT; the proof grades nothing, no re-run); the lock test now sits in the run command.
