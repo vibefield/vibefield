@@ -2293,6 +2293,45 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       }
     });
 
+    it("M7 H11 — a command the document before never answered is LET GO at the page's commit (an address typed while the chain stalled took it elsewhere): its turn refused at once, its bound never said; the next event goes to the new document", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = recording(
+          (method) => (method === "Input.dispatchKeyEvent" ? new Promise(() => {}) : {}),
+          { hungInputMs: BOUND },
+        );
+        const hung: (string | undefined)[] = [];
+        r.native.onInputHung((frame) => hung.push(frame));
+        await r.native.loadURL("https://host.test/a");
+        r.at("https://host.test/a");
+        r.contents.emit("did-navigate", {}, "https://host.test/a");
+        const stalled = r.native
+          .dispatchKey({ type: "keyDown", key: "q", code: "KeyQ", modifiers: 0 })
+          .then(
+            () => "sent",
+            (error: unknown) =>
+              `refused: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        await vi.advanceTimersByTimeAsync(1_000);
+        r.at("https://elsewhere.test/b");
+        r.contents.emit("did-navigate", {}, "https://elsewhere.test/b");
+        await vi.advanceTimersByTimeAsync(0);
+        expect(await stalled).toBe("refused: Browser input's document is gone");
+        await r.native.dispatchMouse({
+          type: "mouseMoved",
+          x: 5,
+          y: 5,
+          button: "none",
+          buttons: 0,
+        });
+        expect(r.hand().at(-1)).toBe("mouseMoved@page 5,5");
+        await vi.advanceTimersByTimeAsync(BOUND * 2);
+        expect(hung).toEqual([]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("a command never answered is said hung ONCE, the bound after it was SENT — not after its wait in the queue; a frame's with its origin; a window born without the bound says nothing", async () => {
       vi.useFakeTimers();
       try {

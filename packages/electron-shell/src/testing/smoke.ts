@@ -2139,8 +2139,14 @@ async function framesRows(
       compose: (text, caret) =>
         cdp("Input.imeSetComposition", { text, selectionStart: caret, selectionEnd: caret }),
       commit: (text) => cdp("Input.insertText", { text }),
-      windows: () =>
-        BrowserWindow.getAllWindows().filter((w) => !w.webContents.isOffscreen()).length,
+      windows: () => {
+        const shown = BrowserWindow.getAllWindows().filter((w) => !w.webContents.isOffscreen());
+        return {
+          count: shown.length,
+          focused: BrowserWindow.getFocusedWindow()?.id ?? null,
+          ids: shown.map((w) => w.id),
+        };
+      },
     };
     return await framesPaneRows(driver);
   } catch (error) {

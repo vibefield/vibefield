@@ -263,6 +263,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   #painted = true;
   /** PT-5d (M7 H9): touch commands whose bound starts at the page's next paint */
   readonly #atPaint = new Set<() => void>();
+  /** PT-5d (M7 H11): the hand's commands in flight — let go at the page's commit */
+  readonly #atCommit = new Set<() => void>();
   /**
    * PT-5c (ruling 1) — TWO QUEUES, never one: the DEVICE's (its layout, what it is told — `Emulation.*`, the window's size)
    * and the HAND's (`Input.*`). A device command the renderer does not answer — every one, while a navigation pends — no
@@ -317,6 +319,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       this.#documents += 1;
       // (M7 H9: the new document has not painted yet)
       this.#painted = false;
+      // (M7 H11: a command the document before never answered is let go — its turn refused; the chain goes on)
+      for (const letGo of [...this.#atCommit]) letGo();
+      this.#atCommit.clear();
       // PT-5d: the frames of the document before go with it
       this.#frames.pageCommitted(this.#documents);
       this.#owners.clear();
@@ -1013,10 +1018,21 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     const atPaint = method === "Input.dispatchTouchEvent" && !this.#painted;
     if (atPaint) this.#atPaint.add(arm);
     else arm();
+    // PT-5d (M7 H11): the page's commit lets it go — a document that hung and was left (an address typed, ↻ at last) keeps
+    // the chain stalled no longer, and its command's bound says nothing of the document after it
+    let letGo: (() => void) | undefined;
+    const gone = new Promise<never>((_, reject) => {
+      letGo = () => reject(new Error("Browser input's document is gone"));
+    });
+    if (letGo !== undefined) this.#atCommit.add(letGo);
     try {
-      await this.window.webContents.debugger.sendCommand(method, params, session);
+      await Promise.race([
+        this.window.webContents.debugger.sendCommand(method, params, session),
+        gone,
+      ]);
     } finally {
       this.#atPaint.delete(arm);
+      if (letGo !== undefined) this.#atCommit.delete(letGo);
       if (timer !== null) clearTimeout(timer);
     }
   }

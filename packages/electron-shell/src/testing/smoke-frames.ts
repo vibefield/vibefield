@@ -19,6 +19,8 @@
 //                  page's session while the frame holds the focus);
 //   FRAME-NESTED — a press on the button of the frame in the frame (a third site) lands there;
 //   FRAME-HALF   — the host scrolled until the frame is half out of its view: a press on the frame's part in view lands;
+//   FRAME-ZOOMED — M7 H11: a press at a page scale not 1 — a phone's host naming no viewport (drawn whole at about 0.41),
+//                  a laptop's page the desk draws larger (its page scale 2) — lands in the frame where the hand pressed;
 //   FRAME-TOUCH  — on a phone, a tap on the frame's button: its touch's start and end, and the click — and the frame
 //                  told the PHONE (M6.5b): its own agent, touch points and colours the page's (before: a laptop's);
 //   FRAME-GONE   — a press held in the frame and the frame sent elsewhere under it: its release goes nowhere and nothing
@@ -34,7 +36,9 @@
 //   FRAME-PICKER — the file input in the NESTED frame pressed (M2): no panel, its `cancel` heard, main's windows as they were;
 //   BACK-WRITTEN — ruling 5: a pane the document sent from A to B, the page's own ‹ back to A: the document's url is A again;
 //   STUCK        — ruling 6: a page whose button starts an endless loop, pressed, then a key it never answers: the face says
-//                  the page stopped responding within the host's bound; ↻ brings it back.
+//                  the page stopped responding within the host's bound; ↻ brings it back. M7 H11: and WHILE the chain is
+//                  stalled ↻ asks the page again at once, and an address of another site typed takes the page there — and
+//                  the stalled command of the document before is let go (the page there is never said stopped).
 // Then the panes are removed and the board is as found. `--frames-pane` beside `--smoke-canvas` runs these rows alone after
 // the boot's (the author's loop).
 
@@ -42,6 +46,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { type FixtureRect, type FixtureReport, FRAMES_BOX, FRAMES_WORD } from "./live-fixture";
 import { PANE, type PaneHands, paneHands } from "./smoke-browser-pane";
+import type { WindowsSeen } from "./smoke-honest-pane";
 import type { LiveRowsDriver } from "./smoke-live-pane";
 import { type HeldFrameSeen, pageOnWindow } from "./smoke-use-pane";
 
@@ -71,8 +76,9 @@ export const FRAMES_ROWS = {
 export interface FramesDriver extends LiveRowsDriver {
   compose(text: string, caret: number): Promise<void>;
   commit(text: string): Promise<void>;
-  /** main's windows that are not offscreen (a file panel would be one more) */
-  windows(): number;
+  /** main's windows that are not offscreen, and which has the focus (M7 H11: a BrowserWindow panel is one more; a native
+   * panel is none — it takes the app's focus) */
+  windows(): WindowsSeen;
 }
 
 /** A point in a frame's own CSS px. */
@@ -120,6 +126,17 @@ export interface FramesSeen {
     readonly went: boolean;
     readonly nextClicks: number;
     readonly ms: number | null;
+    /** M7 H11: the leg whose frame goes to ANOTHER SITE under the held press — its session swapped (absent: not run) */
+    readonly swap?: {
+      readonly went: boolean;
+      readonly nextClicks: number;
+      readonly ms: number | null;
+    } | null;
+  };
+  /** M7 H11: a press at a page scale not 1 — a phone host naming no viewport, the desk drawing a laptop's page larger */
+  readonly zoomed: {
+    readonly phone: FramePressSeen & { readonly scale: number | null };
+    readonly desk: FramePressSeen & { readonly scale: number | null };
   };
   readonly covered: {
     /** the frame's top and the header's bottom, in the host's view */
@@ -151,7 +168,9 @@ export interface FramesSeen {
   readonly picker: {
     readonly cancels: number | null;
     readonly changes: number | null;
-    readonly windows: readonly [number, number];
+    /** M7 H11: the app's windows it did not have before the press, and its focused window before and after */
+    readonly raised: number;
+    readonly focused: readonly [number | null, number | null];
   };
   readonly back: { readonly a: string; readonly arrived: boolean; readonly url: string | null };
   readonly stuck: {
@@ -159,6 +178,10 @@ export interface FramesSeen {
     readonly saidMs: number | null;
     readonly reason: string | null;
     readonly reloaded: boolean;
+    /** M7 H11: ↻ pressed while the chain was stalled asked the page's address again (null: the leg not run) */
+    readonly reloadActed?: boolean | null;
+    /** M7 H11: an address of another site typed while the chain was stalled — the page arrived there, and stayed live */
+    readonly typed?: { readonly arrived: boolean; readonly stayed: boolean } | null;
   };
 }
 
@@ -179,7 +202,11 @@ const near = (a: Point, b: Point, by: number): boolean =>
   Math.abs(a[0] - b[0]) <= by && Math.abs(a[1] - b[1]) <= by;
 
 /** FRAME-PRESS, FRAME-NESTED, FRAME-HALF: the click lands in the frame where the hand pressed; the host hears nothing of it. */
-export function judgeFramePress(row: string, seen: FramePressSeen): string[] {
+export function judgeFramePress(
+  row: string,
+  seen: FramePressSeen,
+  by: number = FRAMES_ROWS.near,
+): string[] {
   if (seen.aimed === null)
     return [`${row}: the frame's part could not be aimed at — the row proved nothing`];
   const out: string[] = [];
@@ -187,9 +214,9 @@ export function judgeFramePress(row: string, seen: FramePressSeen): string[] {
     out.push(
       `${row}: the frame heard no click — the press never reached a frame of another site (the host heard ${seen.hostHeard.join(", ") || "nothing"})`,
     );
-  else if (!near(seen.clicked, seen.aimed, FRAMES_ROWS.near))
+  else if (!near(seen.clicked, seen.aimed, by))
     out.push(
-      `${row}: the frame's click landed at ${seen.clicked.join(", ")}, not where the hand pressed (${seen.aimed.map((v) => Math.round(v)).join(", ")}, ±${FRAMES_ROWS.near})`,
+      `${row}: the frame's click landed at ${seen.clicked.join(", ")}, not where the hand pressed (${seen.aimed.map((v) => Math.round(v)).join(", ")}, ±${by})`,
     );
   if (seen.hostHeard.length > 0)
     out.push(
@@ -319,19 +346,77 @@ export function judgeFrameTouch(seen: FramesSeen["touch"]): string[] {
 
 /** FRAME-GONE: the frame went; nothing stalled — the next press landed in its new document. */
 export function judgeFrameGone(seen: FramesSeen["gone"]): string[] {
-  if (!seen.went)
-    return [
-      "FRAME-GONE: the frame never went elsewhere under the held press — the row proved nothing",
-    ];
-  if (seen.nextClicks < 1 || seen.ms === null)
-    return [
-      "FRAME-GONE: the next press never landed in the frame's new document — the hand stalled on the gone one",
-    ];
-  return seen.ms > FRAMES_ROWS.goneMs
-    ? [
-        `FRAME-GONE: the next press landed ${seen.ms} ms after it was sent — it waited on the gone document`,
-      ]
-    : [];
+  const leg = (
+    row: string,
+    went: boolean,
+    nextClicks: number,
+    ms: number | null,
+    nothing: string,
+    stalled: string,
+  ): string[] => {
+    if (!went) return [`${row}: ${nothing}`];
+    if (nextClicks < 1 || ms === null) return [`${row}: ${stalled}`];
+    return ms > FRAMES_ROWS.goneMs
+      ? [
+          `${row}: the next press landed ${ms} ms after it was sent — it waited on the gone document`,
+        ]
+      : [];
+  };
+  const out = leg(
+    "FRAME-GONE",
+    seen.went,
+    seen.nextClicks,
+    seen.ms,
+    "the frame never went elsewhere under the held press — the row proved nothing",
+    "the next press never landed in the frame's new document — the hand stalled on the gone one",
+  );
+  const swap = seen.swap;
+  if (swap !== undefined) {
+    const row = "FRAME-GONE (to another site — its session swapped)";
+    if (swap === null) out.push(`${row}: its press could not be aimed — that leg proved nothing`);
+    else
+      out.push(
+        ...leg(
+          row,
+          swap.went,
+          swap.nextClicks,
+          swap.ms,
+          "the frame never went there under the held press — that leg proved nothing",
+          "the next press never landed in its new document — the hand stalled on the gone session",
+        ),
+      );
+  }
+  return out;
+}
+
+/** FRAME-ZOOMED (M7 H11): a press at a page scale not 1 lands in the frame where the hand pressed. */
+export function judgeFrameZoomed(seen: FramesSeen["zoomed"]): string[] {
+  const out: string[] = [];
+  const leg = (
+    seenLeg: FramesSeen["zoomed"]["phone"],
+    row: (scale: number | null) => string,
+  ): void => {
+    if (seenLeg.scale === null || Math.abs(seenLeg.scale - 1) < 0.05)
+      out.push(
+        `${row(null)}: the page stood at scale ${seenLeg.scale ?? "nothing"} — not drawn at another: that leg proved nothing`,
+      );
+    // (a window px is 1/scale of the page's own: the hand presses no nearer than that)
+    else
+      out.push(
+        ...judgeFramePress(
+          row(seenLeg.scale),
+          seenLeg,
+          Math.max(FRAMES_ROWS.near, Math.ceil(1 / seenLeg.scale)),
+        ),
+      );
+  };
+  leg(seen.phone, (scale) =>
+    scale === null
+      ? "FRAME-ZOOMED (a phone, its page at its own scale)"
+      : `FRAME-ZOOMED (a phone, its page at ${Math.round(scale * 100) / 100})`,
+  );
+  leg(seen.desk, () => "FRAME-ZOOMED (the desk drawing the page larger)");
+  return out;
 }
 
 /** FRAME-CLIPPED (M6.3a): a press on the frame's clipped part is the host's — it draws there; on its part in view, the
@@ -416,20 +501,28 @@ export function judgeFrameMenu(seen: FramesSeen["menu"]): string[] {
   return out;
 }
 
-/** FRAME-PICKER: the nested frame's file input: cancelled, nothing chosen, no window more. */
+/**
+ * FRAME-PICKER: the nested frame's file input — cancelled, nothing chosen. What can see a native panel (M7 H11): its
+ * `cancel` never heard (the panel may be up), the app's focused window moved (a native panel takes it), a window more (a
+ * BrowserWindow panel — a native NSOpenPanel is none: this alone cannot see one).
+ */
 export function judgeFramePicker(seen: FramesSeen["picker"]): string[] {
   const out: string[] = [];
   if (seen.cancels === null)
     return ["FRAME-PICKER: the nested frame never said its file input — the row proved nothing"];
   if (seen.cancels < 1)
     out.push(
-      "FRAME-PICKER: the nested frame's file input heard no `cancel` — its picker was not intercepted in a frame inside a frame",
+      "FRAME-PICKER: the nested frame's file input heard no `cancel` — its picker was not intercepted in a frame inside a frame (a panel may be up)",
     );
   if ((seen.changes ?? 0) > 0)
     out.push("FRAME-PICKER: a file was CHOSEN in the nested frame — a real panel answered");
-  if (seen.windows[1] !== seen.windows[0])
+  if (seen.raised !== 0)
     out.push(
-      `FRAME-PICKER: main's windows went from ${seen.windows[0]} to ${seen.windows[1]} — a panel opened`,
+      `FRAME-PICKER: the app has ${seen.raised} window${seen.raised === 1 ? "" : "s"} it did not have before — a panel opened`,
+    );
+  if (seen.focused[1] !== seen.focused[0])
+    out.push(
+      `FRAME-PICKER: the focused window is ${seen.focused[1] ?? "none"}, not ${seen.focused[0] ?? "none"} as before the press — a panel took the app's focus`,
     );
   return out;
 }
@@ -461,6 +554,23 @@ export function judgeStuck(seen: FramesSeen["stuck"]): string[] {
       `STUCK: it was said ${seen.saidMs} ms after the key — past the host's bound (${FRAMES_ROWS.hungMs} ms) and its margin`,
     );
   if (!seen.reloaded) out.push("STUCK: ↻ did not bring the page back");
+  // M7 H11: ↻ and an address typed WHILE the chain was stalled — never on the hand's chain
+  if (seen.reloadActed === null && seen.typed === null)
+    out.push("STUCK: its legs while stalled (↻, an address typed) never ran — they proved nothing");
+  else {
+    if (seen.reloadActed === false)
+      out.push(
+        "STUCK: ↻ pressed while the chain was stalled asked nothing of the page (its address not asked again) — it waited behind the stalled chain",
+      );
+    if (seen.typed !== undefined && seen.typed !== null) {
+      if (!seen.typed.arrived)
+        out.push("STUCK: an address typed while the chain was stalled never took the page there");
+      else if (!seen.typed.stayed)
+        out.push(
+          "STUCK: the page at the address typed while stalled was said stopped after — the stalled command of the document before outlived it",
+        );
+    }
+  }
   return out;
 }
 
@@ -976,10 +1086,12 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       () => at(INNER)?.framed ?? null,
       (f) => (f?.cancels ?? 0) > (cancels0 ?? 0),
     );
+    const windows1 = d.windows();
     const picker = {
       cancels: pickerSaid === null || cancels0 === null ? null : pickerSaid.cancels - cancels0,
       changes: pickerSaid?.changes ?? null,
-      windows: [windows0, d.windows()] as const,
+      raised: windows1.ids.filter((id) => !windows0.ids.includes(id)).length,
+      focused: [windows0.focused, windows1.focused] as const,
     };
     said.picker = picker;
     problems.push(...judgeFramePicker(picker));
@@ -1103,7 +1215,61 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         }
       }
     }
-    const gone = { went, nextClicks, ms: goneMs };
+    // M7 H11: … and to ANOTHER SITE under a held press — its session swapped: the release goes nowhere, nothing stalls
+    let swap: FramesSeen["gone"]["swap"] = null;
+    const heldB2 = at(b2Path)?.framed?.parts.b2 ?? null;
+    if (heldB2 !== null) {
+      const w = await inFrame(centre(heldB2)[0], centre(heldB2)[1]);
+      if (w !== null) {
+        const swapPath = "/frames/next?p=fx";
+        h.move(w.x, w.y);
+        await sleep(40);
+        win.webContents.sendInputEvent({
+          type: "mouseDown",
+          x: w.x,
+          y: w.y,
+          button: "left",
+          clickCount: 1,
+        });
+        await sleep(100);
+        d.fixture.goFrame(b2Path, `${d.fixture.innerOrigin}${swapPath}`);
+        const swapped =
+          (await waitFor(
+            "the frame gone to another site",
+            10_000,
+            () => at(swapPath),
+            (rep) => rep !== null,
+          )) !== null;
+        win.webContents.sendInputEvent({
+          type: "mouseUp",
+          x: w.x,
+          y: w.y,
+          button: "left",
+          clickCount: 1,
+        });
+        await sleep(300);
+        let swapClicks = 0;
+        let swapMs: number | null = null;
+        const sb2 = at(swapPath)?.framed?.parts.b2 ?? null;
+        if (sb2 !== null) {
+          const w2 = await inFrame(centre(sb2)[0], centre(sb2)[1]);
+          if (w2 !== null) {
+            const sent = Date.now();
+            await h.press(w2);
+            const landed = await waitFor(
+              "the next press in its new site's document",
+              FRAMES_ROWS.goneMs * 2,
+              () => at(swapPath)?.framed ?? null,
+              (f) => (f?.clicks.length ?? 0) >= 1,
+            );
+            swapClicks = landed?.clicks.length ?? 0;
+            swapMs = swapClicks > 0 ? Date.now() - sent : null;
+          }
+        }
+        swap = { went: swapped, nextClicks: swapClicks, ms: swapMs };
+      }
+    }
+    const gone = { went, nextClicks, ms: goneMs, swap };
     said.gone = gone;
     problems.push(...judgeFrameGone(gone));
 
@@ -1358,6 +1524,91 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     problems.push(...judgeFrameCovered(covered));
     await done();
 
+    // ── FRAME-ZOOMED (M7 H11): a press at a page scale not 1 ───────────────────────────────────────────────────────────
+    /** a pane on a frames host, live, its words in, in hand; its host's word and box of its frame */
+    const zoomedPane = async (name: string, at0: number, phone: boolean, query = "") => {
+      const pane = await lay(
+        `${d.fixture.hostOrigin}/frames/host?p=${name}${query}`,
+        at0,
+        y0,
+        phone ? { w: PANE.phoneCut.w, h: PANE.phoneCut.h, props: { device: "phone" } } : {},
+      );
+      await frame([pane]);
+      await live(pane);
+      const hostPath = `/frames/host?p=${name}${query}`;
+      const framePath = `/frames/frame?p=${name}`;
+      await waitFor(
+        `the ${name} host's word`,
+        FRAMES_ROWS.withinMs,
+        () => at(hostPath),
+        (rep) => rep?.framed?.parts.frame !== undefined,
+      );
+      await waitFor(
+        `the ${name} frame's word`,
+        FRAMES_ROWS.withinMs,
+        () => at(framePath),
+        (rep) => rep?.framed?.parts.bm !== undefined,
+      );
+      await pickUp(pane);
+      await sleep(800);
+      return { pane, hostPath, framePath };
+    };
+    /** a press on a frame's part, where the host draws it now; its click, the host's word of its scale */
+    const pressPart = async (
+      hostPath: string,
+      framePath: string,
+      part: string,
+      tap: boolean,
+    ): Promise<FramesSeen["zoomed"]["phone"]> => {
+      const heldNow = await heldFrame();
+      const host = at(hostPath);
+      const box = host?.framed?.parts.frame ?? null;
+      const target = at(framePath)?.framed?.parts[part] ?? null;
+      const scale = host?.vv?.[0] ?? null;
+      if (heldNow === null || host === null || box === null || target === null)
+        return { aimed: null, clicked: null, hostHeard: [], scale };
+      const aimed = centre(target);
+      const clicks0 = at(framePath)?.framed?.clicks.length ?? 0;
+      const heard0 = host.framed?.heard.length ?? 0;
+      const w = await onWindow(heldNow, host.view, box.x + aimed[0], box.y + aimed[1]);
+      if (tap) {
+        h.move(w.x, w.y);
+        await sleep(40);
+        win.webContents.sendInputEvent({ type: "mouseDown", ...w, button: "left", clickCount: 1 });
+        await sleep(30);
+        win.webContents.sendInputEvent({ type: "mouseUp", ...w, button: "left", clickCount: 1 });
+      } else await h.press(w);
+      const landed = await waitFor(
+        `the ${part} click at its scale`,
+        5_000,
+        () => at(framePath)?.framed ?? null,
+        (f) => (f?.clicks.length ?? 0) > clicks0,
+      );
+      return {
+        aimed,
+        clicked: landed?.clicks[clicks0] ?? null,
+        hostHeard: (at(hostPath)?.framed?.heard ?? []).slice(heard0),
+        scale,
+      };
+    };
+    // a phone's host naming no viewport: laid out at 980 px, drawn whole at about 0.41
+    const zp = await zoomedPane("zp", x0 + 7 * step, true, "&noviewport=1");
+    const zoomedPhone = await pressPart(zp.hostPath, zp.framePath, "bm", true);
+    await done();
+    // a laptop's page the desk draws LARGER (its page scale past 1 — `setPageScaleFactor`): zoomed in hand until its page
+    // says it is drawn at 2 (if the desk never draws it so, the leg says it proved nothing)
+    const zd = await zoomedPane("zd", x0 + 8 * step, false);
+    for (let i = 0; i < 6 && (at(zd.hostPath)?.vv?.[0] ?? 1) < 1.9; i += 1) {
+      await js(`globalThis.__vfFieldSmoke.zoomTo(${(await camera()).zoom * 1.4})`);
+      await settledCamera();
+      await sleep(800);
+    }
+    const zoomedDesk = await pressPart(zd.hostPath, zd.framePath, "bm", false);
+    await done();
+    const zoomed = { phone: zoomedPhone, desk: zoomedDesk };
+    said.zoomed = zoomed;
+    problems.push(...judgeFrameZoomed(zoomed));
+
     // ── FRAME-TOUCH: a phone's pane on the host; a tap on the frame's button ────────────────────────────────────────
     const phone = await lay(`${d.fixture.hostOrigin}/frames/host?p=t`, x0 + step, y0, {
       w: PANE.phoneCut.w,
@@ -1513,7 +1764,85 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
           )
         )?.state === "live";
     }
-    const stuck = { hung, saidMs, reason, reloaded };
+    // M7 H11: ↻ and an address typed WHILE the chain is stalled — never on the hand's chain: they act
+    let reloadActed: boolean | null = null;
+    let typed: FramesSeen["stuck"]["typed"] = null;
+    /** the loop page live, its button pressed: the page hangs (its asks stop) */
+    const hangAgain = async (): Promise<boolean> => {
+      const back = await waitFor(
+        "the loop page live again",
+        FRAMES_ROWS.withinMs,
+        () => face(loop),
+        (f) => f?.state === "live",
+      );
+      const word = await waitFor(
+        "the loop page's word again",
+        FRAMES_ROWS.withinMs,
+        () => at(LOOP),
+        (rep) => rep?.framed?.parts.b !== undefined,
+      );
+      const heldNow = await heldFrame();
+      const lbNow = word?.framed?.parts.b ?? null;
+      if (back?.state !== "live" || heldNow === null || word === null || lbNow === null)
+        return false;
+      await sleep(600);
+      await h.press(await onWindow(heldNow, word.view, centre(lbNow)[0], centre(lbNow)[1]));
+      const asked = d.fixture.reports(LOOP);
+      await sleep(1_500);
+      return d.fixture.reports(LOOP) === asked;
+    };
+    if (reloaded && (await hangAgain())) {
+      // ↻ at once, the chain stalled: the page's address asked again within three seconds (served once more)
+      const served0 = d.fixture.framesServed(LOOP);
+      const asked0 = d.fixture.reports(LOOP);
+      await pressTool("reload");
+      reloadActed =
+        (await waitFor(
+          "the loop page asked again by ↻",
+          3_000,
+          () => d.fixture.framesServed(LOOP),
+          (n) => n > served0,
+        )) > served0;
+      // (whatever the engine made of it: the page back — or said stopped at the host's bound, then ↻)
+      const after = await waitFor(
+        "the loop page back or said stopped",
+        FRAMES_ROWS.hungMs + FRAMES_ROWS.stuckMarginMs,
+        () => face(loop),
+        (f) => f?.state === "failed" || (f?.state === "live" && d.fixture.reports(LOOP) > asked0),
+      );
+      if (after?.state === "failed") await pressTool("reload");
+    }
+    if (reloaded && (await hangAgain())) {
+      // an address of ANOTHER site typed (⌘L, the address, ⏎), the chain stalled: the page goes there, and stays live
+      const typedPath = "/page?stuck=typed";
+      await h.key("l", [process.platform === "darwin" ? "meta" : "control"]);
+      await sleep(400);
+      for (const ch of `${d.fixture.innerOrigin}${typedPath}`) {
+        win.webContents.sendInputEvent({ type: "char", keyCode: ch });
+        await sleep(8);
+      }
+      await sleep(200);
+      await h.key("Return");
+      const arrived =
+        (await waitFor(
+          "the page at the address typed while stalled",
+          FRAMES_ROWS.withinMs,
+          () => at(typedPath),
+          (rep) => rep !== null,
+        )) !== null;
+      let stayed = false;
+      if (arrived) {
+        const failed = await waitFor(
+          "the page at the typed address said stopped",
+          FRAMES_ROWS.hungMs + FRAMES_ROWS.stuckMarginMs,
+          () => face(loop),
+          (f) => f?.state === "failed",
+        );
+        stayed = failed?.state !== "failed";
+      }
+      typed = { arrived, stayed };
+    }
+    const stuck = { hung, saidMs, reason, reloaded, reloadActed, typed };
     said.stuck = stuck;
     problems.push(...judgeStuck(stuck));
     await done();

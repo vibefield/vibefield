@@ -683,6 +683,15 @@ describe("the live pane's fixture page", () => {
     expect(sly).toContain("Document.prototype.elementFromPoint = function");
     expect(sly).toContain("Document.prototype.elementsFromPoint = function");
     expect(await page(fixture.origin, "/frames/next?p=a")).toContain('id="b2"');
+    // M7 H11: each frames page's loads counted by its path and query (a reload of a page that hangs is one more)
+    expect(fixture.framesServed("/frames/next?p=a")).toBe(1);
+    await page(fixture.origin, "/frames/next?p=a");
+    expect(fixture.framesServed("/frames/next?p=a")).toBe(2);
+    // M7 H11: a host naming no viewport (FRAME-ZOOMED's phone)
+    expect(await page(fixture.hostOrigin, "/frames/host?p=a&noviewport=1")).not.toContain(
+      'name="viewport"',
+    );
+    expect(await page(fixture.hostOrigin, "/frames/host?p=a")).toContain('name="viewport"');
     expect(await page(fixture.origin, "/frames/loop?p=a")).toContain("for (;;) {}");
     expect((await fetch(`${fixture.origin}/frames/elsewhere`)).status).toBe(404);
   });

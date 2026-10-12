@@ -24,6 +24,7 @@ import {
   judgeFrameTouch,
   judgeFrameType,
   judgeFrameWheel,
+  judgeFrameZoomed,
   judgeStuck,
 } from "../src/testing/smoke-frames";
 
@@ -323,16 +324,47 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     expect(judgeFrameGone({ went: false, nextClicks: 0, ms: null })).toEqual([
       "FRAME-GONE: the frame never went elsewhere under the held press — the row proved nothing",
     ]);
+    // M7 H11: its leg whose frame goes to ANOTHER SITE under the held press — its session swapped
+    const landed = { went: true, nextClicks: 1, ms: 120 };
+    expect(judgeFrameGone({ ...landed, swap: { went: true, nextClicks: 1, ms: 300 } })).toEqual([]);
+    expect(judgeFrameGone({ ...landed, swap: { went: true, nextClicks: 0, ms: null } })).toEqual([
+      "FRAME-GONE (to another site — its session swapped): the next press never landed in its new document — the hand stalled on the gone session",
+    ]);
+    expect(judgeFrameGone({ ...landed, swap: { went: false, nextClicks: 0, ms: null } })).toEqual([
+      "FRAME-GONE (to another site — its session swapped): the frame never went there under the held press — that leg proved nothing",
+    ]);
   });
 
-  it("FRAME-PICKER (M2): the nested frame's file input cancelled, nothing chosen, main's windows as they were", () => {
-    expect(judgeFramePicker({ cancels: 1, changes: 0, windows: [1, 1] })).toEqual([]);
-    expect(judgeFramePicker({ cancels: 0, changes: 1, windows: [1, 2] })).toEqual([
-      "FRAME-PICKER: the nested frame's file input heard no `cancel` — its picker was not intercepted in a frame inside a frame",
-      "FRAME-PICKER: a file was CHOSEN in the nested frame — a real panel answered",
-      "FRAME-PICKER: main's windows went from 1 to 2 — a panel opened",
+  it("FRAME-ZOOMED (M7 H11): a press at a page scale not 1 — a phone host naming no viewport (drawn at 0.41), the desk drawing a laptop's page at 2 — lands where the hand pressed; a page at scale 1 proves nothing", () => {
+    const landed = { aimed: [90, 42] as const, clicked: [90, 42] as const, hostHeard: [] };
+    expect(
+      judgeFrameZoomed({ phone: { ...landed, scale: 0.41 }, desk: { ...landed, scale: 2 } }),
+    ).toEqual([]);
+    expect(
+      judgeFrameZoomed({
+        phone: { ...landed, clicked: [37, 17], scale: 0.41 },
+        desk: { ...landed, scale: 1 },
+      }),
+    ).toEqual([
+      "FRAME-ZOOMED (a phone, its page at 0.41): the frame's click landed at 37, 17, not where the hand pressed (90, 42, ±3)",
+      "FRAME-ZOOMED (the desk drawing the page larger): the page stood at scale 1 — not drawn at another: that leg proved nothing",
     ]);
-    expect(judgeFramePicker({ cancels: null, changes: null, windows: [1, 1] })).toEqual([
+    expect(
+      judgeFrameZoomed({ phone: { ...landed, scale: null }, desk: { ...landed, scale: 2 } }),
+    ).toEqual([
+      "FRAME-ZOOMED (a phone, its page at its own scale): the page stood at scale nothing — not drawn at another: that leg proved nothing",
+    ]);
+  });
+
+  it("FRAME-PICKER (M2; M7 H11): the nested frame's file input cancelled, nothing chosen — and what can see a native panel: its `cancel` (none heard: a panel may be up), the app's focused window (a panel takes it), a window more (a BrowserWindow panel — a native one is none, so this alone cannot see it)", () => {
+    expect(judgeFramePicker({ cancels: 1, changes: 0, raised: 0, focused: [3, 3] })).toEqual([]);
+    expect(judgeFramePicker({ cancels: 0, changes: 1, raised: 1, focused: [3, null] })).toEqual([
+      "FRAME-PICKER: the nested frame's file input heard no `cancel` — its picker was not intercepted in a frame inside a frame (a panel may be up)",
+      "FRAME-PICKER: a file was CHOSEN in the nested frame — a real panel answered",
+      "FRAME-PICKER: the app has 1 window it did not have before — a panel opened",
+      "FRAME-PICKER: the focused window is none, not 3 as before the press — a panel took the app's focus",
+    ]);
+    expect(judgeFramePicker({ cancels: null, changes: null, raised: 0, focused: [3, 3] })).toEqual([
       "FRAME-PICKER: the nested frame never said its file input — the row proved nothing",
     ]);
   });
@@ -372,6 +404,25 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
     expect(judgeStuck({ hung: false, saidMs: null, reason: null, reloaded: false })).toEqual([
       "STUCK: the page never stopped answering — the row proved nothing",
+    ]);
+    // M7 H11: ↻ and an address typed WHILE the chain is stalled — never on the hand's chain: they act
+    const said = { hung: true, saidMs: 21_000, reason, reloaded: true };
+    expect(
+      judgeStuck({ ...said, reloadActed: true, typed: { arrived: true, stayed: true } }),
+    ).toEqual([]);
+    expect(
+      judgeStuck({ ...said, reloadActed: false, typed: { arrived: false, stayed: false } }),
+    ).toEqual([
+      "STUCK: ↻ pressed while the chain was stalled asked nothing of the page (its address not asked again) — it waited behind the stalled chain",
+      "STUCK: an address typed while the chain was stalled never took the page there",
+    ]);
+    expect(
+      judgeStuck({ ...said, reloadActed: true, typed: { arrived: true, stayed: false } }),
+    ).toEqual([
+      "STUCK: the page at the address typed while stalled was said stopped after — the stalled command of the document before outlived it",
+    ]);
+    expect(judgeStuck({ ...said, reloadActed: null, typed: null })).toEqual([
+      "STUCK: its legs while stalled (↻, an address typed) never ran — they proved nothing",
     ]);
   });
 });

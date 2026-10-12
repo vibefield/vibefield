@@ -221,6 +221,9 @@ export interface LiveFixture {
   goFrame(path: string, to: string): void;
   /** PT-5d — how many times the page at `path` (its path and query) has asked: a page that hangs asks no more. */
   reports(path: string): number;
+  /** PT-5d (M7 H11) — how many times a frames page at `path` (its path and query) was served: a reload asked of a page that
+   * hangs is served again though its document never comes. */
+  framesServed(path: string): number;
   /** PT-5a — an address whose connection is REFUSED (a port nobody listens on) until `open()` serves the page there. */
   refusing(): Promise<FixtureRefusing>;
   close(): Promise<void>;
@@ -627,7 +630,7 @@ const framesScript = (ids: readonly string[], elementOnly?: readonly string[]): 
   for (const type of ["pointerdown", "mousedown", "mouseup", "click", "dblclick", "touchstart", "touchend", "touchcancel"])
     addEventListener(type, (e) => {
       hear(e, e.type + " " + named(e.target));
-      if (e.type === "click" && e.target && ["b", "bl", "ib", "b2", "sb"].includes(e.target.id))
+      if (e.type === "click" && e.target && ["b", "bl", "bm", "ib", "b2", "sb"].includes(e.target.id))
         clicks.push([Math.round(e.clientX), Math.round(e.clientY)]);
     }, { capture: true, passive: true });
   addEventListener("keydown", (e) => hear(e, "keydown " + e.key), true);
@@ -653,6 +656,7 @@ const framesScript = (ids: readonly string[], elementOnly?: readonly string[]): 
     field: el("t") ? el("t").value : "",
     focused: (document.activeElement && document.activeElement.id) || "",
     view: [innerWidth, innerHeight],
+    vv: (() => { try { const v = visualViewport; return v ? [v.scale, v.offsetLeft, v.offsetTop] : undefined; } catch { return undefined; } })(),
     framed: {
       clicks, heard, moveButtons, cancels, changes,
       range: el("r") ? Number(el("r").value) : null,
@@ -674,10 +678,15 @@ const FRAMES_STYLE = `<style>
   button, a, input, p { position: absolute; margin: 0; box-sizing: border-box; font: 600 18px sans-serif; }
 </style>`;
 
-/** PT-5d — `/frames/host?p=<name>` at `hostOrigin`: the ground and a frame of `frameOrigin` at `FRAMES_BOX`, three views tall;
+/** PT-5d — `/frames/host?p=<name>` at `hostOrigin` (`&noviewport=1`, M7 H11: naming no viewport — a phone lays it out at
+ * 980 px and draws it whole, at about 0.41): the ground and a frame of `frameOrigin` at `FRAMES_BOX`, three views tall;
  * it hears the hand on the frame's element alone. */
-export const framesHostHtml = (name: string, frameOrigin: string): string => `<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${FIXTURE_TITLE} — frames</title>
+export const framesHostHtml = (
+  name: string,
+  frameOrigin: string,
+  viewport = true,
+): string => `<!doctype html>
+<html><head><meta charset="utf-8">${viewport ? '<meta name="viewport" content="width=device-width, initial-scale=1">' : ""}<title>${FIXTURE_TITLE} — frames</title>
 ${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; height: 300vh; } iframe { position: absolute; border: 0; }</style></head>
 <body><iframe id="f" src="${frameOrigin}/frames/frame?p=${cleanName(name)}" style="left:${FRAMES_BOX.x}px;top:${FRAMES_BOX.y}px;width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px"></iframe>
 ${framesScript(["f"], ["f"])}
@@ -691,6 +700,7 @@ ${FRAMES_STYLE}<style>body { background: #e9f0fb; height: 100vh; overflow: hidde
 <body>
 <button id="b" style="left:20px;top:20px;width:140px;height:44px">press</button>
 <button id="bl" style="left:20px;top:330px;width:140px;height:44px">low</button>
+<button id="bm" style="left:470px;top:140px;width:140px;height:40px">middle</button>
 <a id="l" href="#l" style="left:20px;top:84px;font-size:20px">a link here</a>
 <input id="t" type="text" autocomplete="off" spellcheck="false" style="left:20px;top:130px;width:260px;height:36px">
 <p id="w" style="left:20px;top:190px;font-size:28px;line-height:34px">${FRAMES_WORD} bravo</p>
@@ -698,7 +708,7 @@ ${FRAMES_STYLE}<style>body { background: #e9f0fb; height: 100vh; overflow: hidde
 <div id="s" style="position:absolute;left:320px;top:20px;width:140px;height:180px;overflow:auto;background:#fff"><div style="height:1200px"></div></div>
 <iframe id="n" src="${innerOrigin}/frames/inner?p=${cleanName(name)}" style="left:320px;top:230px;width:280px;height:160px"></iframe>
 <iframe id="c" src="/frames/same?p=${cleanName(name)}" style="left:470px;top:20px;width:160px;height:100px"></iframe>
-${framesScript(["b", "bl", "l", "t", "w", "r", "s", "n", "c"])}
+${framesScript(["b", "bl", "bm", "l", "t", "w", "r", "s", "n", "c"])}
 </body></html>`;
 
 /** PT-5d — `/frames/inner?p=<name>`: the nested frame — a button and a file input. */
@@ -922,6 +932,7 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   const lastAt = new Map<string, FixtureReport>();
   /** PT-5d: how many times each page asked, by its path and query. */
   const reportsAt = new Map<string, number>();
+  const framesLoads = new Map<string, number>();
   /** PT-5b2: how many times each pathname was asked for; and the answers that never come (`/hang.png`). */
   const asks = new Map<string, number>();
   const hung = new Set<ServerResponse>();
@@ -999,10 +1010,14 @@ export async function startLiveFixture(): Promise<LiveFixture> {
     if (url.pathname.startsWith("/frames/")) {
       // PT-5d: the pages of three sites
       cookies.set(url.pathname + url.search, req.headers.cookie ?? "");
+      framesLoads.set(
+        url.pathname + url.search,
+        (framesLoads.get(url.pathname + url.search) ?? 0) + 1,
+      );
       const name = url.searchParams.get("p") ?? "";
       const page =
         url.pathname === "/frames/host"
-          ? framesHostHtml(name, frameOrigin)
+          ? framesHostHtml(name, frameOrigin, url.searchParams.get("noviewport") !== "1")
           : url.pathname === "/frames/clipped"
             ? framesClippedHtml(name, frameOrigin)
             : url.pathname === "/frames/covered"
@@ -1247,6 +1262,7 @@ export async function startLiveFixture(): Promise<LiveFixture> {
       going.set(path, to);
     },
     reports: (path) => reportsAt.get(path) ?? 0,
+    framesServed: (path) => framesLoads.get(path) ?? 0,
     gate: (open) => {
       gateOpen = open;
       if (open) for (const answer of [...atGate]) answer();
