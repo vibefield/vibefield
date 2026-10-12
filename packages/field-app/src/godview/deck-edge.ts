@@ -1,8 +1,8 @@
 // THE DECK'S EDGE (DESIGN.md §8, 2026-09-28): where the terminal sheet's top
 // edge stands, as ONE signed number — the SHIFT, in CSS pixels, from the edge's
-// resting place (the head's 40 and the monitor's tuned basis below the stage's
-// top, whatever the head — L8a; since the Stories head the head takes no height
-// and the stage runs under it).
+// resting place (rest: the drawing's share of the stage above a floor, from the
+// stage's top whatever the head — L8a, N15 (a); since the Stories head the head
+// takes no height and the stage runs under it).
 //
 //   shift > 0 — the edge moved DOWN; shift < 0 — it moved UP, as far as the
 //               fill line (`DECK_FILL_LINE`, a place in the window) for a deck

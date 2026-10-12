@@ -1091,8 +1091,9 @@ describe("the deck sheet's stylesheet", () => {
     // per frame — so the field follows the edge as it was let go (the field
     // shift, set by the edge at each change), never the held one.
     const root = rule(".vf-godview");
+    // rest (N15 (a)): the drawing's share of the stage, never above its floor
     expect(root).toMatch(
-      /--vf-godview-deck-rest: calc\(40px \+ max\(var\(--vf-monitor-stage-height, 35%\), 170px\)\);/,
+      /--vf-godview-deck-rest: max\(\s*var\(--vf-godview-deck-rest-share\),\s*var\(--vf-godview-deck-rest-floor\)\s*\);/,
     );
     expect(root).toMatch(
       /--vf-godview-field-foot: max\(\s*var\(--vf-godview-deck-field-floor\),\s*calc\(\s*var\(--vf-godview-deck-rest\) \+\s+var\(--vf-godview-field-shift, 0px\) -\s*var\(--vf-godview-deck-field-gap\)\s*\)\s*\);/,
@@ -1279,16 +1280,16 @@ describe("the deck sheet's stylesheet", () => {
   });
 
   it("holds the deck's top at rest whatever the head's height: the monitor's basis gives back what the head takes (L8a)", () => {
-    // The sheet stands at rest + the shift, rest = 40 + the tuned basis — a
-    // place in the stage that names no head. The monitor's basis is the field's
-    // foot less the head's height: with the head at 40 (the instrument bar,
-    // today) nothing moves; at 0 (the Stories head) the monitor is exactly 40
-    // taller and the deck's top is where it was.
+    // The sheet stands at rest + the shift, rest the drawing's share of the
+    // stage above its floor (N15 (a)) — a place in the stage that names no
+    // head. The monitor's basis is the field's foot less the head's height:
+    // with the head at 40 (the instrument bar) nothing moves; at 0 (the Stories
+    // head) the monitor is exactly 40 taller and the deck's top is where it was.
     expect(rule(`${placed} .vf-godview-monitor-stage`)).toContain(
       "flex-basis: calc(var(--vf-godview-field-foot) - var(--vf-godview-head-height, 40px));",
     );
     expect(rule(".vf-godview-monitor-stage")).toMatch(
-      /flex: 0 0\s+calc\(\s*max\(var\(--vf-monitor-stage-height, 35%\), 170px\) \+\s*\(40px - var\(--vf-godview-head-height, 40px\)\)\s*\);/,
+      /flex: 0 0\s+calc\(\s*var\(--vf-godview-deck-rest\) - var\(--vf-godview-head-height, 40px\)\s*\);/,
     );
     // The variable is set NOWHERE in this sheet: its default is the 40px inside
     // those `var()`s, and the head's owner sets it — to 0px, on the stage's
@@ -1298,16 +1299,17 @@ describe("the deck sheet's stylesheet", () => {
     // the arithmetic: the monitor ends at the field's foot whatever the head,
     // and the deck's top never names the head
     const monitorFoot = (head: number, foot: number): number => head + (foot - head);
-    const deckTop = (tuned: number, shift: number): number => 40 + Math.max(tuned, 170) + shift;
-    for (const [tuned, shift] of [
-      [280, 0],
-      [120, 0],
-      [280, 96],
+    const deckTop = (stage: number, shift: number): number =>
+      Math.max((stage * 5) / 13, 232) + shift;
+    for (const [stage, shift] of [
+      [780, 0],
+      [520, 0],
+      [780, 96],
     ] as const) {
-      const foot = Math.max(220, deckTop(tuned, shift) - 12);
+      const foot = Math.max(220, deckTop(stage, shift) - 12);
       expect(monitorFoot(0, foot)).toBe(monitorFoot(40, foot));
-      // 12 above the edge — or the field at its floor, the sheet over it
-      expect(foot === 220 || deckTop(tuned, shift) - foot === 12, `${tuned}/${shift}`).toBe(true);
+      // 12 above the edge — at rest always, the floor being the field's and its gap
+      expect(deckTop(stage, shift) - foot, `${stage}/${shift}`).toBeCloseTo(12, 6);
     }
   });
 
@@ -1324,6 +1326,8 @@ describe("the deck sheet's stylesheet", () => {
       "--vf-godview-deck-grip-pill",
       "--vf-godview-deck-grip-pill-pad",
       "--vf-godview-deck-well-radius",
+      "--vf-godview-deck-rest-share",
+      "--vf-godview-deck-rest-floor",
       "--vf-godview-launcher-clearing-floor",
     ]) {
       expect(tokens, token).toMatch(new RegExp(`^\\s*${token}:`, "m"));

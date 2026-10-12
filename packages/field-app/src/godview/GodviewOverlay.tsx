@@ -279,7 +279,6 @@ export function GodviewOverlay(): ReactElement | null {
     // The deck sheet is the frame: the terminal's own ground mixed toward the
     // terminal's own ink, so the root is handed both (DESIGN.md §8, GV-D7).
     ...godviewTerminalGroundStyle(appearance, theme),
-    "--vf-monitor-stage-height": `${monitor.stageHeight}%`,
     "--vf-scanline-density": `${stage[SCANLINE_DENSITY_KEY] ?? 2}px`,
     "--vf-scanline-opacity": stage[SCANLINE_OPACITY_KEY] ?? 0.4,
     "--vf-vignette-opacity": stage[VIGNETTE_OPACITY_KEY] ?? 1,

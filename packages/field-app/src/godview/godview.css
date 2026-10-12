@@ -100,15 +100,17 @@
      where a host hands none, Godview's own text main. */
   --deck-ink: var(--vf-godview-terminal-ink, var(--text-main));
   --deck-frame: color-mix(in srgb, var(--deck-ink) var(--deck-frame-ink), var(--deck-ground));
-  /* THE DECK'S PLACE (DESIGN.md §8; round 3, L8a and W4). Its top at rest,
-     from the stage's top: the head's 40 and the monitor's tuned basis — a
-     place in the stage that names no head, so it holds when the head's band
+  /* THE DECK'S PLACE (DESIGN.md §8 "Rest"; round 3, L8a, W4 and N15 (a)). Its
+     top at rest, from the stage's top: the drawing's share of the stage — 300
+     of its 780 — never above the floor, 232 (the field's floor and its gap) —
+     a place in the stage that names no head, so it holds when the head's band
      goes. And the monitor's field foot: 12 above the edge as last SET (the
      edge writes `--vf-godview-field-shift` once per change, never per frame of
      a drag), never above the field's floor, 220 from the window's top. Both
-     resolve their 35% where they are used: a flex basis and a top, each
-     against the stage's height. */
-  --vf-godview-deck-rest: calc(40px + max(var(--vf-monitor-stage-height, 35%), 170px));
+     resolve the share's percent where they are used: a flex basis and a top,
+     each against the stage's height. (Until N15 rest was the head's 40 and a
+     tuned `Monitor height`, 35% above a 170 floor.) */
+  --vf-godview-deck-rest: max(var(--vf-godview-deck-rest-share), var(--vf-godview-deck-rest-floor));
   /* What the well keeps clear under the panes: its 8, the covers' reserve
      inside the cover (88, FC-D15) — where the Maximize readout centres. */
   --vf-godview-panes-foot: 8px;
@@ -438,15 +440,15 @@
   background: var(--control-hover-bg);
 }
 
-/* The monitor's height is its TUNED height (the floor, 170px under it) — a
-   picture's (Settings' miniature draws its own). No bottom rule of its own —
-   the deck sheet's ring is the one edge between the two, and a straight line
+/* The monitor's height is rest less the head's height (N15 (a)) — a
+   picture's too (Settings' miniature draws its own). No bottom rule of its own
+   — the deck sheet's ring is the one edge between the two, and a straight line
    here would cut across the sheet's rounded corners.
 
    THE DECK'S TOP AT REST IS THE INVARIANT (round 3, agreed with the head's
-   owner): it stands 40 + the tuned height below the stage's top, whatever
-   stands above the monitor. So the basis gives back what the head does not
-   take of that 40 — `40px − --vf-godview-head-height`. Its default, in the
+   owner): it stands at rest below the stage's top, whatever stands above the
+   monitor. So the basis is rest less what the head takes of it —
+   `rest − --vf-godview-head-height`. Its default, in the
    `var()`s, is the bar's 40, so a stage with no head (the Settings
    miniature, a catalog plate) moves nothing; since the Stories head the head's
    own sheet sets it to 0px on the stage's root (`godview-head.css`), in the same
@@ -457,11 +459,7 @@
   position: relative;
   width: 100%;
   min-height: 0;
-  flex: 0 0
-    calc(
-      max(var(--vf-monitor-stage-height, 35%), 170px) +
-      (40px - var(--vf-godview-head-height, 40px))
-    );
+  flex: 0 0 calc(var(--vf-godview-deck-rest) - var(--vf-godview-head-height, 40px));
   overflow: hidden;
   /* The overlay owns the glass. Painting a second opaque panel here made the
      stage-opacity control visually inert. */

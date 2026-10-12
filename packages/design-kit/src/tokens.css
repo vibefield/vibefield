@@ -237,6 +237,12 @@
      shorter than the floor */
   --vf-godview-deck-field-gap: 12px;
   --vf-godview-deck-field-floor: 220px;
+  /* §8 "Rest" (N15 (a)): the deck rests at the drawing's share of the stage —
+     300 of its 780 — never above the floor, the field's floor and its gap (so
+     at rest the field always ends the gap above the edge). The share's percent
+     resolves where it is used, against the stage's height. */
+  --vf-godview-deck-rest-share: calc(100% * 5 / 13);
+  --vf-godview-deck-rest-floor: 232px;
   /* §8 "Godview's head — Stories" (GV-D1): the stage runs under the head, and a
      view keeps its words and controls clear of the head's reserve — the head's
      foot at 48, plus 8. The stage's own chrome begins at it. */

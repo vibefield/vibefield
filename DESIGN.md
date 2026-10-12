@@ -33,7 +33,7 @@ Three surface families, one physics:
 
 ### 1.1 Godview visual source
 
-*Status 2026-10-12: ruled and built, but for rest on other heights (N15), ruled 2026-10-11 and to build. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)); ⌘W on the last pane minimizing them (N16 (a)).*
+*Status 2026-10-12: ruled and built. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)); ⌘W on the last pane minimizing them (N16 (a)); rest, the drawing's share above a floor on every height (N15 (a)).*
 
 Godview is the deliberate control-room exception to the iOS-widget chrome around it. Its
 visual source of truth is `p008/chopsticks/apps/godview`: a flat 40px instrument bar, compact
@@ -230,7 +230,9 @@ half that, 11) with `--vf-godview-deck-grip-pill-pad` 12px at each side; the gri
 maximized title bar `--vf-godview-deck-grip-hit` 168px; the two controls
 `--vf-godview-deck-control-width` / `--vf-godview-deck-control-height` /
 `--vf-godview-deck-control-radius` 30px / 24px / 8px; the monitor's field
-`--vf-godview-deck-field-gap` 12px and `--vf-godview-deck-field-floor` 220px.
+`--vf-godview-deck-field-gap` 12px and `--vf-godview-deck-field-floor` 220px; the deck's rest
+(N15 (a), §8) `--vf-godview-deck-rest-share` 5/13 of the stage — 300 of the drawing's 780 — and
+`--vf-godview-deck-rest-floor` 232px, the field's floor and its gap.
 
 **How the wrapper is drawn** (GV-D7 the Lip and GV-D12 the groove, ruled 2026-10-02 and locked as
 drawn; built 2026-10-11; §8, the deck). **The frame** is the sheet's ground: the terminal's
@@ -554,7 +556,7 @@ One more plain curve, with its reason: a **retract** goes back along the way it 
 stylesheet said 200ms, its constants table 180, and the table is the authority) — it accelerates
 home, the pop's reverse (M4). Leaving things never wait out an entrance's reveal delay.
 
-*Status 2026-10-12: ruled and built, but for rest on other heights (N15), ruled 2026-10-11 and to build. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)); ⌘W on the last pane minimizing them (N16 (a)).*
+*Status 2026-10-12: ruled and built. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)); ⌘W on the last pane minimizing them (N16 (a)); rest, the drawing's share above a floor on every height (N15 (a)).*
 **The terminals rise and fall** (Godview's deck, §8; One Frame §22 "Shared mechanics" and §23 —
 GV-D5, GV-D6, GV-D7 and GV-D11, ruled 2026-10-02; built 2026-10-11): two durations, no new
 curve. The deck **rises** — called up from away, or maximized by its button — over **480ms on
@@ -1708,9 +1710,17 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   and 6 above it so it can be caught from the monitor — `row-resize` over it, `grabbing` while
   held. A drag reads the person's own moves at the window, so a pointer capture the browser
   drops ends nothing (One Frame §23, "Found while driving it"; 2026-10-11). The sheet is
-  **placed at its edge**: rest — the head's 40 and the monitor's tuned height (`Monitor height`,
-  35%, 170px floor) below the stage's top, whatever the head — plus the edge's move, so the
-  terminals' box follows the edge alone. A deck that is up rises to **the fill line, 104 from the
+  **placed at its edge**: rest plus the edge's move, so the terminals' box follows the edge
+  alone. **Rest** (N15 (a), ruled 2026-10-11; built 2026-10-12 — *replaced* "the head's 40 and
+  the monitor's tuned height, `Monitor height`, 35%, 170px floor", a slider that is gone): **300
+  from the stage's top in the drawing's 780-tall window** — where the sheet's top corners clear
+  the edges' slivers (332–428), so the lip is 300–330 and the panes 330–692 — **and the same
+  share, 5/13, on any other height, never above 232** (L21): 5/13 is the ruling's 38.5% made
+  exact, the drawing's 300 of 780; 232 is the field's floor and its 12, so at rest the
+  monitor's field always ends 12 above the edge. A height the old slider stored is read past,
+  removed from storage on load, and never applies. The floor holds below a 603-tall stage.
+  Rest names no head: the monitor's basis is rest less the head's height, whatever stands above
+  it. A deck that is up rises to **the fill line, 104 from the
   window's top** — Home takes it there, ↑ stops there — the bodies still moving beneath; a HELD
   edge goes on up to the window's top. *(2026-10-11: until round 3's W6 the reach was the head's
   reserve, 56 — an interim, with nothing for a higher edge to become — and before that the bar's
@@ -1855,23 +1865,18 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   deck leaves maximized. Away from maximized, a call brings the terminals back up at their edge.
   The pane frame's own fullscreen (its two diagonal arrows, ⌘⇧↵) stays the pane's, and macOS
   full screen stays the green light's.
-  *Status 2026-10-12: ruled and built, but for rest on other heights (N15), ruled 2026-10-11 and to build. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)); ⌘W on the last pane minimizing them (N16 (a)).*
+  *Status 2026-10-12: ruled and built. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)); ⌘W on the last pane minimizing them (N16 (a)); rest, the drawing's share above a floor on every height (N15 (a)).*
   **Round 3 redraws the wrapper around these panes, and nothing inside it** (One Frame §22 "Shared
   mechanics", §23 and §23.1–§23.3; GV-D2 — "keep the current terminal pane design as is … what i
   want you to redesign is the wrapper", James, 2 Oct; GV-D4, GV-D5, GV-D6, GV-D7, GV-D11 and GV-D12
   ruled 2026-10-02; to be built, N12 (a), ruled 2026-10-11). Everything above that status line is
   what ships — the Lip and its buttons, the groove, the frame, the well, the terminals away,
   called up and maximized, and the edge's three outcomes among it since 2026-10-11. The items
-  below are the ruling still to build, and each says which shipped sentence, if any, it replaces
-  on the day it lands. The numbers are the ruled drawing's, in its 1180 × 780 window; the
-  values are §2.7's. James ruled the three questions written here as open on 2026-10-11: N14 (a)
-  and N16 (a) are built (above, "The monitor alone at launch" and "Minimized"); N15 (a) is to
-  build, and its item below still says what ships until it does.
-  - **Rest:** the edge rests **300** from the window's top in the drawing's 780-tall window —
-    where the sheet's top corners clear the edges' slivers (332–428) — so the lip is 300–330 and
-    the panes 330–692. **On a window of another height it is the same share, above a floor —
-    N15 (a), ruled 2026-10-11 — to build;** until it lands the shipped rest (`Monitor height`, 35%, 170px floor)
-    stands.
+  below were the ruling still to build, each saying which shipped sentence it replaced on the
+  day it landed. The numbers are the ruled drawing's, in its 1180 × 780 window; the values are
+  §2.7's. James ruled the three questions written here as open on 2026-10-11, and all three are
+  built: N14 (a) "The monitor alone at launch", N16 (a) in "Minimized", N15 (a) in "Rest" (all
+  above).
   - **A session with no pane** (GV-D4 — *built 2026-10-11, the first of these items to ship*): it
     opens **beside the focused pane, up to three panes**; with three or more showing it **takes
     the focused pane's place** (the session it displaces keeps running); a session already in a
@@ -2544,7 +2549,7 @@ numbers and provenance — "syncing history…", "external terminal — state on
 and what to do next; they don't apologize and they're never vague. No filler, no lorem:
 demo content is real-shaped (AAPL, San Francisco, 64°).
 
-*Status 2026-10-12: ruled and built, but for rest on other heights (N15), ruled 2026-10-11 and to build. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)); ⌘W on the last pane minimizing them (N16 (a)).*
+*Status 2026-10-12: ruled and built. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)); ⌘W on the last pane minimizing them (N16 (a)); rest, the drawing's share above a floor on every height (N15 (a)).*
 **The terminals' wrapper says the window's own words** (Godview, §8, the deck; One Frame §23.2 —
 "for close button, replace it with a minimize - button … for fill button, replace it with a
 maximize button", James, 2 Oct; ruled 2026-10-02; built 2026-10-11). **The two readouts** while the edge is held are

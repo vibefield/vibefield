@@ -81,7 +81,6 @@ export function GodviewPreview({
   const screenStyle = {
     ...godviewTuningStyle(tuning),
     ...godviewTerminalGroundStyle(appearance, theme),
-    "--vf-monitor-stage-height": "35%",
     "--vf-scanline-density": "2px",
     "--vf-scanline-opacity": 0.4,
     "--vf-vignette-opacity": 1,

@@ -20,6 +20,8 @@
  *   7. the lab's call (W7): under the Godview markers alone, safe at any time,
  *      answering nothing, and said in the wrapper's facts when it raised them
  *   8. ⌘W on the last pane (N16 (a)): the terminals go away and Godview stays
+ *   9. rest is no tuning (N15 (a)): a Monitor height an older build stored
+ *      reaches nothing on the stage
  */
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -837,5 +839,19 @@ describe("⌘W on the last pane minimizes the terminals and stays in Godview (N1
     await act(async () => stand.lastPaneClose?.());
     expect(stage(host).getAttribute("data-godview-deck")).toBe("away");
     expect(asked).toEqual([]);
+  });
+});
+
+// N15 (a), L21's addition: the retired `Monitor height` slider left values in
+// people's storage. A stored 60% must change nothing — the stage is handed no
+// height, and its stylesheet reads none (`godview-stage-rule.test.ts`).
+describe("a Monitor height an older build stored changes nothing (N15 (a))", () => {
+  it("hands the stage no height, whatever the old slider saved", async () => {
+    localStorage.setItem("vf-godview-monitor-stage-v1", JSON.stringify({ stageHeight: 60 }));
+    const host = await mountOverlay();
+    expect(stage(host).style.getPropertyValue("--vf-monitor-stage-height")).toBe("");
+    expect(stage(host).getAttribute("style") ?? "").not.toContain("stage-height");
+    // and the load wrote the bag back without it
+    expect(localStorage.getItem("vf-godview-monitor-stage-v1") ?? "").not.toContain("stageHeight");
   });
 });

@@ -209,8 +209,8 @@ export function GodviewDeckEdge({
     [apply, setField, persist],
   );
 
-  // Place the edge, and keep it placed while the window and the monitor's
-  // tuned height move. A layout effect, so the first paint of an open
+  // Place the edge, and keep it placed while the window moves (rest is its
+  // share of the stage, N15 (a)). A layout effect, so the first paint of an open
   // already stands where the viewer left it. The monitor unmounts while
   // Godview is closed; the edge rests then and comes back on the next open.
   // Away, it holds still — measured again only when the terminals come up,

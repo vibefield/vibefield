@@ -10,10 +10,16 @@
  * wording here.
  *
  * Since round 3's W4 the deck's edge is a PLACE: on a stage whose edge moves the
- * sheet stands at `--vf-godview-deck-rest` (40 + the tuned basis, naming no
- * head) plus the shift, and the monitor's field ends 12 above the edge as last
- * set (`--vf-godview-field-foot`), never above its floor. The shift moves the
+ * sheet stands at `--vf-godview-deck-rest` (naming no head) plus the shift, and
+ * the monitor's field ends 12 above the edge as last set
+ * (`--vf-godview-field-foot`), never above its floor. The shift moves the
  * sheet, never the monitor's basis.
+ *
+ * Since N15 (a) (James 2026-10-11; built 2026-10-12) rest is no tuning: it is
+ * the drawing's share of the stage — 300 of its 780, 5/13 — never above the
+ * floor, 232 (the field's floor and its 12 gap), and the monitor's basis is
+ * rest less the head's height. The `Monitor height` slider and its 35% / 170px
+ * rule are gone, and this file moved with the rule.
  *
  * What is under test is the rule AS WRITTEN: this evaluates the stylesheet's
  * own expressions — no layout engine runs in a test — and measures the column
@@ -47,7 +53,7 @@ function evaluateLength(
   variables: Readonly<Record<string, string>>,
   percentOf: number,
 ): number {
-  const tokens = expression.match(/--[\w-]+|[a-z]+|\d+(?:\.\d+)?(?:px|%)?|[(),+-]/g) ?? [];
+  const tokens = expression.match(/--[\w-]+|[a-z]+|\d+(?:\.\d+)?(?:px|%)?|[(),+*/-]/g) ?? [];
   let at = 0;
   const peek = (): string | undefined => tokens[at];
   const take = (expected?: string): string => {
@@ -59,10 +65,20 @@ function evaluateLength(
     return token;
   };
   const sum = (): number => {
-    let value = term();
+    let value = product();
     while (peek() === "+" || peek() === "-") {
       const sign = take() === "+" ? 1 : -1;
-      value += sign * term();
+      value += sign * product();
+    }
+    return value;
+  };
+  // N15: rest's share is written as the drawing's fraction, `100% * 5 / 13`
+  const product = (): number => {
+    let value = term();
+    while (peek() === "*" || peek() === "/") {
+      const multiply = take() === "*";
+      const by = term();
+      value = multiply ? value * by : value / by;
     }
     return value;
   };
@@ -140,15 +156,18 @@ const basis = declared(ruleBody(godview, ".vf-godview-monitor-stage"), "flex").r
 /** On a stage whose edge moves: the monitor's basis, and the sheet's top. */
 const edgeBasis = declared(ruleBody(godview, `${EDGE} .vf-godview-monitor-stage`), "flex-basis");
 const sheetTop = declared(ruleBody(godview, `${EDGE} .vf-godview-terminal-deck`), "top");
-/** The root's two places, and the kit's two field numbers they read. */
+/** The root's two places, and the kit's four numbers they read. */
 const PLACES = {
   "--vf-godview-deck-rest": declared(godview, "--vf-godview-deck-rest"),
   "--vf-godview-field-foot": declared(godview, "--vf-godview-field-foot"),
+  "--vf-godview-deck-rest-share": declared(tokens, "--vf-godview-deck-rest-share"),
+  "--vf-godview-deck-rest-floor": declared(tokens, "--vf-godview-deck-rest-floor"),
   "--vf-godview-deck-field-floor": declared(tokens, "--vf-godview-deck-field-floor"),
   "--vf-godview-deck-field-gap": declared(tokens, "--vf-godview-deck-field-gap"),
 };
 
-const WINDOW = 800;
+/** The ruled drawing's window: rest is 300 in it (N15 (a)). */
+const WINDOW = 780;
 /** The column before the head: the bar's 40 in it, the head's height unset (the
  * rule's 40px fallback). */
 const UNDER_THE_BAR = { bar: 40, variables: {} as Record<string, string> };
@@ -166,19 +185,22 @@ function laidOut(offsetTop: number, offsetHeight: number): HTMLElement {
  * stands, `set` the edge as last set (the field's). */
 function column(
   { bar, variables }: { bar: number; variables: Record<string, string> },
-  { shift = 0, set = shift, tuned = "35%" }: { shift?: number; set?: number; tuned?: string } = {},
+  {
+    shift = 0,
+    set = shift,
+    window = WINDOW,
+  }: { shift?: number; set?: number; window?: number } = {},
 ) {
   const scope = {
     ...PLACES,
-    "--vf-monitor-stage-height": tuned,
     "--vf-godview-deck-shift": `${shift}px`,
     "--vf-godview-field-shift": `${set}px`,
     ...variables,
   };
-  const pictureMonitor = evaluateLength(basis, scope, WINDOW);
-  const edgeMonitor = evaluateLength(edgeBasis, scope, WINDOW);
-  const sheet = evaluateLength(sheetTop, scope, WINDOW);
-  const geometry = measureDeckEdge(laidOut(0, WINDOW), laidOut(sheet, WINDOW - sheet), null, shift);
+  const pictureMonitor = evaluateLength(basis, scope, window);
+  const edgeMonitor = evaluateLength(edgeBasis, scope, window);
+  const sheet = evaluateLength(sheetTop, scope, window);
+  const geometry = measureDeckEdge(laidOut(0, window), laidOut(sheet, window - sheet), null, shift);
   return {
     geometry,
     pictureMonitor,
@@ -191,15 +213,29 @@ function column(
   };
 }
 
+describe("the rule's evaluator, on its own", () => {
+  it("multiplies and divides left to right, before it adds, so a slip fails here and not in the rule", () => {
+    expect(evaluateLength("calc(100% * 5 / 13)", {}, WINDOW)).toBeCloseTo(300, 6);
+    expect(evaluateLength("calc(100% / 13 * 5)", {}, WINDOW)).toBeCloseTo(300, 6);
+    expect(evaluateLength("calc(78px / 13 / 2)", {}, WINDOW)).toBeCloseTo(3, 6);
+    expect(evaluateLength("calc(12px + 100% * 5 / 13 - 2px)", {}, WINDOW)).toBeCloseTo(310, 6);
+    expect(evaluateLength("calc(-264px + 100% * 5 / 13)", {}, WINDOW)).toBeCloseTo(36, 6);
+  });
+});
+
 describe("the bar's 40px go to the monitor, and the deck's edge rests where it did (GV-D1)", () => {
   it("writes the stage rule in the one wording the two lanes share", () => {
-    expect(basis).toBe(
-      "calc(max(var(--vf-monitor-stage-height, 35%), 170px) + (40px - var(--vf-godview-head-height, 40px)))",
-    );
+    // N15 (a): the monitor's basis is rest less the head's height
+    expect(basis).toBe("calc(var(--vf-godview-deck-rest) - var(--vf-godview-head-height, 40px))");
     // the deck's place at rest names no head: it holds whatever stands above the monitor (L8a)
+    // — the drawing's share of the stage, never above the floor (N15 (a))
     expect(PLACES["--vf-godview-deck-rest"]).toBe(
-      "calc(40px + max(var(--vf-monitor-stage-height, 35%), 170px))",
+      "max(var(--vf-godview-deck-rest-share), var(--vf-godview-deck-rest-floor))",
     );
+    expect(PLACES["--vf-godview-deck-rest-share"]).toBe("calc(100% * 5 / 13)");
+    expect(PLACES["--vf-godview-deck-rest-floor"]).toBe("232px");
+    // no tuned height is left to read: the slider and its 35% / 170px went with N15
+    expect(godview).not.toContain("--vf-monitor-stage-height");
     expect(sheetTop).toBe("calc(var(--vf-godview-deck-rest) + var(--vf-godview-deck-shift, 0px))");
     // the head's height is the basis's to give back on a stage whose edge moves too
     expect(edgeBasis).toBe(
@@ -214,26 +250,35 @@ describe("the bar's 40px go to the monitor, and the deck's edge rests where it d
     expect(godview).not.toContain("vf-godview-header");
   });
 
-  it("gives the monitor exactly the bar's 40 at rest, so the deck's top edge stands where it stood", () => {
+  it("rests at the drawing's 300, gives the monitor the bar's 40 back, and holds the same share on any height (N15 (a))", () => {
     const before = column(UNDER_THE_BAR);
     const after = column(UNDER_THE_HEAD);
-    // 35% of 800, and the 40 the bar gave up
-    expect(before.pictureMonitor).toBe(280);
-    expect(after.pictureMonitor).toBe(320);
-    // 40 + 280 under the bar, 0 + 320 under the head — and the placed sheet's rest is that foot
-    expect(before.pictureEdge).toBe(320);
-    expect(after.pictureEdge).toBe(before.pictureEdge);
-    expect(after.edge).toBe(320);
-    expect(before.edge).toBe(after.edge);
-    // the floor is the monitor's own (170), and the bar's 40 ride on top of it too
-    expect(column(UNDER_THE_BAR, { tuned: "10%" }).pictureEdge).toBe(40 + 170);
-    expect(column(UNDER_THE_HEAD, { tuned: "10%" }).pictureEdge).toBe(210);
-    expect(column(UNDER_THE_HEAD, { tuned: "10%" }).edge).toBe(210);
-    // a tall tuning: 60% of 800
-    expect(column(UNDER_THE_HEAD, { tuned: "60%" }).pictureEdge).toBe(
-      column(UNDER_THE_BAR, { tuned: "60%" }).pictureEdge,
-    );
-    expect(column(UNDER_THE_HEAD, { tuned: "60%" }).edge).toBe(40 + 480);
+    // rest 300 of 780; the monitor is rest less the 40 the bar takes, or all of it under the head
+    expect(before.pictureMonitor).toBeCloseTo(260, 6);
+    expect(after.pictureMonitor).toBeCloseTo(300, 6);
+    // 40 + 260 under the bar, 0 + 300 under the head — and the placed sheet's rest is that foot
+    expect(before.pictureEdge).toBeCloseTo(300, 6);
+    expect(after.pictureEdge).toBeCloseTo(before.pictureEdge, 6);
+    expect(after.edge).toBeCloseTo(300, 6);
+    expect(before.edge).toBeCloseTo(after.edge, 6);
+    // the same share on another height: 5/13 of the stage
+    for (const window of [650, 1040, 1300]) {
+      expect(column(UNDER_THE_HEAD, { window }).edge, `${window}`).toBeCloseTo(
+        (window * 5) / 13,
+        6,
+      );
+      expect(column(UNDER_THE_BAR, { window }).pictureEdge, `${window}`).toBeCloseTo(
+        (window * 5) / 13,
+        6,
+      );
+    }
+    // never above the floor, 232 — below a 603-tall stage the share would be
+    for (const window of [600, 520, 400]) {
+      expect(column(UNDER_THE_HEAD, { window }).edge, `${window}`).toBe(232);
+      expect(column(UNDER_THE_BAR, { window }).pictureEdge, `${window}`).toBe(232);
+      // the floor's reason: at rest the field still ends 12 above the edge
+      expect(column(UNDER_THE_HEAD, { window }).fieldFoot, `${window}`).toBe(232 - 12);
+    }
   });
 
   it("keeps the sheet and the field where they stood at every shift, and measures back to the same rest", () => {
@@ -241,28 +286,28 @@ describe("the bar's 40px go to the monitor, and the deck's edge rests where it d
       const before = column(UNDER_THE_BAR, { shift });
       const after = column(UNDER_THE_HEAD, { shift });
       // the shift moves the sheet, whatever the head
-      expect(after.edge, `shift ${shift}`).toBe(before.edge);
-      expect(after.edge, `shift ${shift}`).toBe(320 + shift);
+      expect(after.edge, `shift ${shift}`).toBeCloseTo(before.edge, 6);
+      expect(after.edge, `shift ${shift}`).toBeCloseTo(300 + shift, 6);
       // the field ends 12 above the edge as set, never above its floor (220)
-      expect(after.fieldFoot, `shift ${shift}`).toBe(before.fieldFoot);
-      expect(after.fieldFoot, `shift ${shift}`).toBe(Math.max(220, 320 + shift - 12));
+      expect(after.fieldFoot, `shift ${shift}`).toBeCloseTo(before.fieldFoot, 6);
+      expect(after.fieldFoot, `shift ${shift}`).toBeCloseTo(Math.max(220, 300 + shift - 12), 6);
       // the shift is taken back out (`measureDeckEdge`'s idempotence), so a re-measure after
       // the edge moved still finds the rest
-      expect(after.geometry.restTop, `shift ${shift}`).toBe(320);
-      expect(before.geometry.restTop, `shift ${shift}`).toBe(320);
+      expect(after.geometry.restTop, `shift ${shift}`).toBeCloseTo(300, 6);
+      expect(before.geometry.restTop, `shift ${shift}`).toBeCloseTo(300, 6);
     }
     // a held edge moves the sheet, never the field: the field follows the edge as last set
     const held = column(UNDER_THE_HEAD, { shift: 200, set: 0 });
-    expect(held.edge).toBe(520);
-    expect(held.fieldFoot).toBe(308);
+    expect(held.edge).toBeCloseTo(500, 6);
+    expect(held.fieldFoot).toBeCloseTo(288, 6);
   });
 
   it("leaves the edge's bounds where they were: the head's reserve above, 120 above the foot below", () => {
     const before = deckEdgeBounds(column(UNDER_THE_BAR).geometry);
     const after = deckEdgeBounds(column(UNDER_THE_HEAD).geometry);
     expect(after).toEqual(before);
-    // in the window: rest 320; the highest is the head's reserve, the lowest keeps the minimum
-    expect(320 + after.min).toBe(DECK_FILL_LINE);
-    expect(320 + after.max).toBe(WINDOW - DECK_MIN_HEIGHT);
+    // in the window: rest 300; the highest is the fill line, the lowest keeps the minimum
+    expect(300 + after.min).toBeCloseTo(DECK_FILL_LINE, 6);
+    expect(300 + after.max).toBeCloseTo(WINDOW - DECK_MIN_HEIGHT, 6);
   });
 });
