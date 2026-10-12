@@ -1002,6 +1002,17 @@ export async function expectDeskUnavailableCard(
  * what the rows write (the theme file, the stills, the print's bytes) is never put back.
  * Teardown runs on EVERY path — the old failure path leaked the spawned daemons (slice-0
  * finding 3). */
+/**
+ * PT-2, PT-5c2 (F4), PT-5d (M7 H14) — main's live-surface custody as the rows read it (`LiveSurfaceAuthority.state()`): its
+ * runtimes (the live rows' GONE), its owners, and the device switches it accepted (TAPS-PENDING's guard) — one type for
+ * the run and every row helper, so a census rebuilt to a helper's type keeps them all (G7's case one hop down).
+ */
+export interface LiveCensus {
+  readonly runtimes: number;
+  readonly owners: number;
+  readonly emulations: number;
+}
+
 export async function runSmokeCanvas(opts: {
   handle: FielddHandle;
   supervisor: FielddSupervisor;
@@ -1014,11 +1025,7 @@ export async function runSmokeCanvas(opts: {
   /** PT-2 — main's live-surface custody (`LiveSurfaceAuthority.state()`): the live rows' GONE reads its runtimes;
    * PT-5c2 (F4) TAPS-PENDING's guard its count of the device switches main accepted (PT-5d, G7: named here, so a census
    * built to this type keeps it). */
-  liveSurfaces?: () => {
-    readonly runtimes: number;
-    readonly owners: number;
-    readonly emulations: number;
-  } | null;
+  liveSurfaces?: () => LiveCensus | null;
 }): Promise<void> {
   const gpu = !process.argv.includes("--disable-gpu");
   // DK-16: the GPU kept and the page given no `navigator.gpu` (`--smoke-no-webgpu`, as a remote desktop has none —
@@ -1782,7 +1789,7 @@ async function liveRows(
   win: BrowserWindow,
   shotDir: string | undefined,
   viteUrl: string,
-  liveSurfaces: (() => { readonly runtimes: number; readonly owners: number } | null) | undefined,
+  liveSurfaces: (() => LiveCensus | null) | undefined,
 ): Promise<string[]> {
   const fixture = await startLiveFixture();
   try {
@@ -1818,7 +1825,7 @@ async function useRows(
   win: BrowserWindow,
   shotDir: string | undefined,
   viteUrl: string,
-  liveSurfaces: (() => { readonly runtimes: number; readonly owners: number } | null) | undefined,
+  liveSurfaces: (() => LiveCensus | null) | undefined,
 ): Promise<string[]> {
   const fixture = await startLiveFixture();
   const dbg = win.webContents.debugger;
@@ -1867,7 +1874,7 @@ async function deviceRows(
   win: BrowserWindow,
   shotDir: string | undefined,
   viteUrl: string,
-  liveSurfaces: (() => { readonly runtimes: number; readonly owners: number } | null) | undefined,
+  liveSurfaces: (() => LiveCensus | null) | undefined,
   root: string,
 ): Promise<string[]> {
   const fixture = await startLiveFixture();
@@ -1923,7 +1930,7 @@ async function honestRows(
   win: BrowserWindow,
   shotDir: string | undefined,
   viteUrl: string,
-  liveSurfaces: (() => { readonly runtimes: number; readonly owners: number } | null) | undefined,
+  liveSurfaces: (() => LiveCensus | null) | undefined,
 ): Promise<string[]> {
   const fixture = await startLiveFixture();
   const pageAt = (prefix: string): WebContents | null =>
@@ -1987,9 +1994,7 @@ async function stillRows(
     readonly viteUrl: string;
     readonly preloadPath: string;
     readonly registry: WindowRegistry;
-    readonly liveSurfaces?:
-      | (() => { readonly runtimes: number; readonly owners: number } | null)
-      | undefined;
+    readonly liveSurfaces?: (() => LiveCensus | null) | undefined;
     /** What main does for each window of the run (its live-surface host among it): the second window needs it too. */
     readonly onWindow?: ((window: BrowserWindow) => void) | undefined;
   },
@@ -2061,7 +2066,7 @@ async function firstRows(
   win: BrowserWindow,
   shotDir: string | undefined,
   viteUrl: string,
-  liveSurfaces: (() => { readonly runtimes: number; readonly owners: number } | null) | undefined,
+  liveSurfaces: (() => LiveCensus | null) | undefined,
 ): Promise<string[]> {
   const fixture = await startLiveFixture();
   const doors = { presenceRelay: "1", deskFaults: "1" };
@@ -2102,7 +2107,7 @@ async function framesRows(
   win: BrowserWindow,
   shotDir: string | undefined,
   viteUrl: string,
-  liveSurfaces: (() => { readonly runtimes: number; readonly owners: number } | null) | undefined,
+  liveSurfaces: (() => LiveCensus | null) | undefined,
 ): Promise<string[]> {
   const fixture = await startLiveFixture();
   const dbg = win.webContents.debugger;

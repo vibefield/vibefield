@@ -7,8 +7,9 @@
 //                  its element — PT-5d's probe — and the frame heard none); then on the button of the frame's own child of
 //                  its site, the same (M6.1: that child's words, on the frame's session, once set the frame's size — every
 //                  press into the frame then landed elsewhere);
-//   FRAME-HOVER  — the cursor a pointer over the frame's link, not off it (the frame's cursor comes through the page's own
-//                  `cursor-changed`);
+//   FRAME-HOVER  — the cursor a pointer over the frame's link; the pointer then moved OUT of the frame onto the host (M7
+//                  H15: a real leave) — the cursor no pointer, and the frame heard its link left (the frame's cursor comes
+//                  through the page's own `cursor-changed`);
 //   FRAME-DOUBLE — a double-click selects the frame's word;
 //   FRAME-DRAG   — the range's thumb dragged, released OUTSIDE the frame: its value moved, and no button is left down (the
 //                  next move over the frame holds none — it hovers, it does not drag);
@@ -82,7 +83,12 @@ export interface FramesSeen {
   readonly press: FramePressSeen;
   /** FRAME-PRESS's second press: the button of the frame's own child of its site (M6.1) */
   readonly same: FramePressSeen;
-  readonly hover: { readonly over: string | null; readonly off: string | null };
+  readonly hover: {
+    readonly over: string | null;
+    readonly off: string | null;
+    /** the frame heard the pointer leave its link once it moved out of the frame (null: it never said) */
+    readonly left: boolean | null;
+  };
   readonly double: { readonly sel: string | null };
   readonly drag: {
     readonly before: number | null;
@@ -192,7 +198,7 @@ export function judgeFramePress(row: string, seen: FramePressSeen): string[] {
   return out;
 }
 
-/** FRAME-HOVER: the frame's link's cursor over it, not off it. */
+/** FRAME-HOVER: the frame's link's cursor over it; out of the frame, not — and the frame heard its link left. */
 export function judgeFrameHover(seen: FramesSeen["hover"]): string[] {
   const out: string[] = [];
   if (seen.over !== "pointer")
@@ -201,7 +207,13 @@ export function judgeFrameHover(seen: FramesSeen["hover"]): string[] {
     );
   if (seen.off === "pointer")
     out.push(
-      "FRAME-HOVER: off the link the cursor is still a pointer — the hover's leave never reached the frame",
+      "FRAME-HOVER: out of the frame the cursor is still a pointer — the hover's leave never reached the frame",
+    );
+  if (seen.left === null)
+    out.push("FRAME-HOVER: the frame never said what it heard — the leave proved nothing");
+  else if (!seen.left)
+    out.push(
+      "FRAME-HOVER: the frame never heard the pointer leave its link — the hover's leave never reached it",
     );
   return out;
 }
@@ -739,6 +751,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const l = framed()?.parts.l ?? null;
     let over: string | null = null;
     let off: string | null = null;
+    let left: boolean | null = null;
     if (l !== null) {
       const w = await inFrame(l.x + l.w / 2, l.y + l.h / 2);
       if (w !== null) h.move(w.x, w.y);
@@ -751,20 +764,29 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
             (f) => f?.cursor === "pointer",
           )
         )?.cursor ?? null;
-      const plain = await inFrame(300, 400);
-      if (plain !== null) h.move(plain.x, plain.y);
+      // (M7 H15: OUT of the frame — onto the host's ground beside it: a real leave)
+      const heard0 = framed()?.heard.length ?? 0;
+      const beside = await inFrame(-60, l.y + l.h / 2);
+      if (beside !== null) h.move(beside.x, beside.y);
       off =
         (
           await waitFor(
-            "the frame's own cursor",
+            "the host's own cursor",
             5_000,
             () => face(host),
             (f) => f?.cursor !== "pointer",
           )
         )?.cursor ?? null;
+      const leftWord = await waitFor(
+        "the frame's link left",
+        5_000,
+        () => framed()?.heard ?? null,
+        (heard) => heard?.slice(heard0).includes("mouseout #l") === true,
+      );
+      left = leftWord === null ? null : leftWord.slice(heard0).includes("mouseout #l");
     }
-    said.hover = { over, off };
-    problems.push(...judgeFrameHover({ over, off }));
+    said.hover = { over, off, left };
+    problems.push(...judgeFrameHover({ over, off, left }));
 
     // ── FRAME-DOUBLE ─────────────────────────────────────────────────────────────────────────────────────────────────
     const word = framed()?.parts.w ?? null;

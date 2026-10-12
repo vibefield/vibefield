@@ -647,7 +647,9 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
   const panes: number[] = [];
   const ACTS = "/acts";
   /** The acts page as the pane is at it now: its path (PT-5d: a return to it is the page's own ‹ — ruling 5 writes it). */
-  const actsPath: string = ACTS;
+  let actsPath: string = ACTS;
+  /** M7 H12: the acts page's visits by an address of its own (`?visit=N`) */
+  let visits = 0;
   let paneKey = "";
 
   const report = (): FixtureReport | null => d.fixture.report();
@@ -1001,7 +1003,22 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
      * the document kept the acts page — PT-5a's finding 6.) */
     const toActs = async (): Promise<void> => {
       await pressTool("back");
-      await hear("the acts page again", (r) => r.path === actsPath && r.acts !== undefined);
+      // (PT-5d, M7 H12: ‹ lands at the acts page only where the row before left the page at an address after it — one that
+      // left it at the acts page itself, or nowhere, goes elsewhere: then the acts page by an address of its own, the
+      // visit's query, so that a row gone wrong strands none after it)
+      const back = await hear(
+        "the acts page again, by ‹",
+        (r) => r.path === actsPath && r.acts !== undefined,
+        report,
+        HONEST_ROWS.quietMs * 4,
+      );
+      if (back === null) {
+        visits += 1;
+        actsPath = `${ACTS}?visit=${visits}`;
+        say(`SMOKE_CANVAS_HONEST_TO_ACTS ${JSON.stringify({ by: "address", at: actsPath })}`);
+        await goTo(d.fixture.origin + actsPath);
+        await hear("the acts page again", (r) => r.path === actsPath && r.acts !== undefined);
+      }
       await current("the acts page's frame on the face again", d.fixture.origin + actsPath);
       await sleep(600);
     };

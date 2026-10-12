@@ -65,11 +65,15 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
   });
 
-  it("FRAME-HOVER: a pointer over the frame's link, not off it", () => {
-    expect(judgeFrameHover({ over: "pointer", off: "default" })).toEqual([]);
-    expect(judgeFrameHover({ over: null, off: "pointer" })).toEqual([
+  it("FRAME-HOVER: a pointer over the frame's link; the pointer moved OUT of the frame (M7 H15: a real leave) — the cursor no pointer, and the frame heard its link left", () => {
+    expect(judgeFrameHover({ over: "pointer", off: "default", left: true })).toEqual([]);
+    expect(judgeFrameHover({ over: null, off: "pointer", left: false })).toEqual([
       "FRAME-HOVER: over the frame's link the cursor is nothing, not a pointer — the hover never reached the frame",
-      "FRAME-HOVER: off the link the cursor is still a pointer — the hover's leave never reached the frame",
+      "FRAME-HOVER: out of the frame the cursor is still a pointer — the hover's leave never reached the frame",
+      "FRAME-HOVER: the frame never heard the pointer leave its link — the hover's leave never reached it",
+    ]);
+    expect(judgeFrameHover({ over: "pointer", off: "default", left: null })).toEqual([
+      "FRAME-HOVER: the frame never said what it heard — the leave proved nothing",
     ]);
   });
 

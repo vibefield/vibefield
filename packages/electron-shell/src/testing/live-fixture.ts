@@ -631,6 +631,8 @@ const framesScript = (ids: readonly string[], elementOnly?: readonly string[]): 
         clicks.push([Math.round(e.clientX), Math.round(e.clientY)]);
     }, { capture: true, passive: true });
   addEventListener("keydown", (e) => hear(e, "keydown " + e.key), true);
+  // (M7 H15: the pointer leaving its link — FRAME-HOVER's real leave)
+  addEventListener("mouseout", (e) => { if (e.target && e.target.id === "l") hear(e, "mouseout #l"); }, true);
   addEventListener("pointermove", (e) => { moveButtons = e.buttons; }, true);
   if (el("if")) {
     el("if").addEventListener("cancel", () => { cancels += 1; });

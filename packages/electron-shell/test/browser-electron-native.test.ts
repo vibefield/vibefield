@@ -2151,6 +2151,32 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     });
   });
 
+  it("M7 H15 — a frame's session gone with its console's discard due: none is sent to it (its timer cleared); the page's own kept", async () => {
+    vi.useFakeTimers();
+    try {
+      const r = await framed();
+      // (its debugger on: a hand's first event attaches it)
+      await r.native.dispatchMouse({ type: "mouseMoved", x: 1, y: 1, button: "none", buttons: 0 });
+      const log = (session?: string): void =>
+        r.emit("Runtime.consoleAPICalled", { type: "log", args: [] }, session);
+      log("F");
+      await vi.advanceTimersByTimeAsync(0);
+      log("F");
+      log();
+      await vi.advanceTimersByTimeAsync(0);
+      log();
+      r.emit("Target.detachedFromTarget", { sessionId: "F", targetId: "t-F" });
+      await vi.advanceTimersByTimeAsync(2_000);
+      const discards = (session?: string): number =>
+        r.sent.filter((c) => c.method === "Runtime.discardConsoleEntries" && c.session === session)
+          .length;
+      expect(discards("F")).toBe(1);
+      expect(discards()).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   describe("M7 H4, H9, H13 — a finger on the page and in a frame", () => {
     it("H13 — a finger down over F goes on F's session at the point carried into it; its moves and its end too", async () => {
       const r = await framed();

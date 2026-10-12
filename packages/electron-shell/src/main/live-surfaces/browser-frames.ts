@@ -463,8 +463,9 @@ const same = (a: FrameTarget, b: FrameTarget): boolean =>
 
 /**
  * A point of a frame's parent carried into the frame's own viewport: where it is along the quad's top edge and down its
- * left (a quad under a transform is a parallelogram), times the frame's own viewport (its document's word — else the
- * quad's own size). Undefined: a quad with no area.
+ * left (a quad under a 2D transform is a parallelogram), times the frame's own viewport (its size read — else the quad's
+ * own). Undefined: a quad with no area. A stated limit (PT-5d, M7 H15): under a PERSPECTIVE (3D) transform a frame's quad
+ * is a general one — taken by three of its corners, the point carried as if it were a parallelogram.
  */
 function carry(frame: FrameRecord, x: number, y: number): readonly [number, number] | undefined {
   const q = frame.quad;

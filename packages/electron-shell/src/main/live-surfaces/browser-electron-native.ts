@@ -320,6 +320,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       // PT-5d: the frames of the document before go with it
       this.#frames.pageCommitted(this.#documents);
       this.#owners.clear();
+      // (M7 H15: the frames of the document before — a detach that never came keeps no discard of theirs)
+      for (const session of [...this.#discards.keys()])
+        if (session !== "") this.forgetDiscard(session);
       this.#frameTells.clear();
       this.#parentFrames.clear();
       this.focusMoved();
@@ -397,7 +400,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         this.#frames.detached(gone);
         this.#owners.delete(gone);
         this.#placing.delete(gone);
-        this.#discards.delete(gone);
+        // (M7 H15: its console's discard, if one is due, sent nowhere)
+        this.forgetDiscard(gone);
         this.#frameTells.delete(gone);
         this.#worlds.delete(gone);
         this.focusMoved();
@@ -689,6 +693,13 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     } catch {
       return undefined;
     }
+  }
+
+  /** PT-5d (M7 H15): a session gone — its discard, if one is due, never sent. */
+  private forgetDiscard(session: string): void {
+    const due = this.#discards.get(session);
+    if (due?.timer !== null && due?.timer !== undefined) clearTimeout(due.timer);
+    this.#discards.delete(session);
   }
 
   /** PT-5c (R3): one discard of a session's console entries (`""`: the page's) — now, or when a second has passed since
