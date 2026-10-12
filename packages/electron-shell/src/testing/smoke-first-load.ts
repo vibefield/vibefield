@@ -32,7 +32,8 @@
 //   LATE-FAIL      — a laptop pane on a page whose BODY is cut after it committed (`/cut`, cut on the smoke's word): a key
 //                    held across the cut (the page's own listener says its keydown) is let up and the page hears its keyup
 //                    — the same document stands, live, its load ended, no failure said; a phone pane: a tap after the cut
-//                    lands at once (never a second's refusal for a word of "another" document).
+//                    lands — never refused after a second's wait for a word of "another" document (how long it took is
+//                    said, not judged: main's clock under a gate's load).
 // PT-5c2 (F7):
 //   HELD-PAINT     — a pane in hand on a page whose link goes to a page whose FIRST PAINT the fixture holds (`/topaint` →
 //                    `/unpainted`): the link pressed, the next document commits and does not paint; a click and a key
@@ -257,7 +258,8 @@ export interface LateFailSeen {
     readonly face: FirstFace | null;
   };
   /** the phone pane: how many held bodies were cut; what its page heard of the tap sent after the cut, and how long after
-   * the send the page said it (null: it never did) */
+   * the send the page said it (null: it never did) — said, not judged: main's wall clock under a gate's load says main's
+   * load; the refusal F1's count caused is a tap never heard */
   readonly phone: {
     readonly cut: number;
     readonly log: readonly string[];
@@ -709,10 +711,6 @@ export function judgeLateFail(seen: LateFailSeen): string[] {
   if (p.heardMs === null || p.log.join(",") !== "start,end")
     out.push(
       `LATE-FAIL (phone): the tap sent after the cut was heard as ${said(p.log)}, not start, end — refused: it waited for a word of a document that never came`,
-    );
-  else if (p.heardMs >= 1_000)
-    out.push(
-      `LATE-FAIL (phone): the page said the tap sent after the cut ${p.heardMs} ms after it was sent — it waited (a second's bound) for a word of a document that never came`,
     );
   return out;
 }

@@ -551,7 +551,7 @@ describe("a page's first load, in the product — what the rows read by", () => 
     ]);
   });
 
-  it("LATE-FAIL (PT-5c2, F1): a page whose body is cut after its document committed stands — live, its load ended, no failure said; a key held across the cut is let up in the page; on a phone a tap after the cut lands at once", () => {
+  it("LATE-FAIL (PT-5c2, F1): a page whose body is cut after its document committed stands — live, its load ended, no failure said; a key held across the cut is let up in the page; on a phone a tap after the cut lands, never refused", () => {
     const seen: LateFailSeen = {
       laptop: {
         cut: 1,
@@ -578,9 +578,8 @@ describe("a page's first load, in the product — what the rows read by", () => 
       "LATE-FAIL: the key held across the cut was never let up in the page (it heard down KeyQ) — a late failure forgot what was down",
       "LATE-FAIL (phone): the tap sent after the cut was heard as nothing, not start, end — refused: it waited for a word of a document that never came",
     ]);
-    expect(judgeLateFail({ ...seen, phone: { ...seen.phone, heardMs: 1_180 } })).toEqual([
-      "LATE-FAIL (phone): the page said the tap sent after the cut 1180 ms after it was sent — it waited (a second's bound) for a word of a document that never came",
-    ]);
+    // a tap HEARD late is main's load, not F1's failure: said, never judged (the self-review)
+    expect(judgeLateFail({ ...seen, phone: { ...seen.phone, heardMs: 1_180 } })).toEqual([]);
     expect(
       judgeLateFail({ ...seen, laptop: { ...seen.laptop, face: face({ loading: true }) } }),
     ).toEqual([
