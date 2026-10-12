@@ -4825,5 +4825,43 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(p.heard).toEqual(["keyDown a"]);
       p.result.runtime.dispose();
     });
+
+    describe("PT-5c2 — the chain's edges: what PT-5c's grade found", () => {
+      it("F2 — NOTHING IS KEPT PER EVENT: 10,000 moves over a laptop's page leave no promise behind them — each turn's race against its window's going is let go when the turn is done, sent or refused (before: a reaction a turn on a promise as old as the window — 10,000 kept)", async () => {
+        const { queryObjects } = await import("node:v8");
+        const p = await laptop();
+        const r = p.result.runtime.summary.geometry?.revision ?? 0;
+        const drained = async (): Promise<void> => {
+          for (let k = 0; k < 6; k += 1)
+            await new Promise<void>((resolve) => setImmediate(resolve));
+        };
+        const moves = async (n: number): Promise<void> => {
+          for (let i = 0; i < n; i += 1) {
+            p.renderer.attachment.dispatchInput?.(
+              { kind: "pointer", action: "move", x: 1 + (i % 100), y: 10 },
+              r,
+            );
+            if (i % 100 === 99) await drained();
+          }
+          await drained();
+        };
+        await moves(100);
+        const before = queryObjects(Promise, { format: "count" }) as number;
+        const heard = p.window.mouseInputs.length;
+        await moves(10_000);
+        const after = queryObjects(Promise, { format: "count" }) as number;
+        expect(p.window.mouseInputs.length - heard).toBe(10_000);
+        expect(after - before).toBeLessThan(500);
+        // …and 10,000 REFUSED at their turn (the page at rest: never sent, each counted)
+        p.renderer.attachment.setDemand(demand(2, "paused"));
+        await delivered();
+        const dropped = p.result.runtime.stats.inputDropped;
+        await moves(10_000);
+        const refused = queryObjects(Promise, { format: "count" }) as number;
+        expect(p.result.runtime.stats.inputDropped - dropped).toBe(10_000);
+        expect(refused - after).toBeLessThan(500);
+        p.result.runtime.dispose();
+      });
+    });
   });
 });

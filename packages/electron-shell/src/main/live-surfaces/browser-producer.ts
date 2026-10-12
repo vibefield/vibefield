@@ -1048,15 +1048,17 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   /** PT-5b2 (ruling 4) — ONE CHAIN a page: the hand's events take their turn here, in the order they were sent. */
   #inputTail: Promise<void> = Promise.resolve();
   /**
-   * PT-5b3 (ruling 5) — each window's GOING, as a promise that rejects when the producer lets that window go (a remake, a
-   * rest, a crash and its restart, a failure, the end): a turn pending on a window that has gone ends with it. (The
-   * engine rejects a command pending at a detach or a destroy — "target closed while handling command" — but NOT at a
-   * crash, where it stays pending until the window is destroyed: the probe. Nothing here leans on either.)
+   * PT-5b3 (ruling 5) — A TURN PENDING ON A WINDOW ENDS WHEN THE PRODUCER LETS THAT WINDOW GO (a remake, a rest, a crash
+   * and its restart, a failure, the end). (The engine rejects a command pending at a detach or a destroy — "target closed
+   * while handling command" — but NOT at a crash, where it stays pending until the window is destroyed: the probe.
+   * Nothing here leans on either.)
+   * PT-5c2 (F2) — AND NOTHING IS KEPT OF A TURN ONCE IT SETTLES: each turn pending on a window is ONE entry here (its
+   * rejecter), taken out the moment the turn settles; the window's going rejects whatever remains. (Before: one promise a
+   * window, pending for the window's whole life and raced by every turn — each race left a reaction on it until the
+   * window went: 10,000 promises and 2.7 MB of main's heap kept over 10,000 moves, 266 B an event (PT-5c2's heap probe;
+   * the reviewer's 256 B) — a pane hovered for an hour, ~100 MB.)
    */
-  readonly #going = new WeakMap<
-    BrowserSurfaceNativeWindow,
-    { readonly gone: Promise<never>; readonly go: (reason: Error) => void }
-  >();
+  readonly #pending = new WeakMap<BrowserSurfaceNativeWindow, Set<(reason: Error) => void>>();
   #bootstrapPaints = 0;
   /** PT-5b (ruling 5a): the density the page's window was BORN at — an offscreen window's density is its own for life. */
   #windowDensity: number | undefined;
@@ -1350,23 +1352,31 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     if (this.#document !== document) {
       return Promise.reject(new Error("Browser input's document is gone"));
     }
-    return Promise.race([turn(window), this.goneOf(window)]);
+    return this.whileStanding(window, () => turn(window));
   }
 
-  /** PT-5b3 (ruling 5): a promise that rejects when the producer lets `window` go. */
-  private goneOf(window: BrowserSurfaceNativeWindow): Promise<never> {
-    let going = this.#going.get(window);
-    if (going === undefined) {
-      let go: (reason: Error) => void = () => {};
-      const gone = new Promise<never>((_resolve, reject) => {
-        go = reject;
-      });
-      // (a going nobody waits on is no unhandled rejection)
-      gone.catch(() => undefined);
-      going = { gone, go };
-      this.#going.set(window, going);
+  /** PT-5b3 (ruling 5), PT-5c2 (F2): `turn` on `window` — ended (rejected) if the producer lets the window go first; its
+   * entry taken out the moment it settles, whichever way. */
+  private whileStanding<T>(window: BrowserSurfaceNativeWindow, turn: () => Promise<T>): Promise<T> {
+    let pending = this.#pending.get(window);
+    if (pending === undefined) {
+      pending = new Set();
+      this.#pending.set(window, pending);
     }
-    return going.gone;
+    const entries = pending;
+    return new Promise<T>((resolve, reject) => {
+      entries.add(reject);
+      turn().then(
+        (value) => {
+          entries.delete(reject);
+          resolve(value);
+        },
+        (error: unknown) => {
+          entries.delete(reject);
+          reject(error);
+        },
+      );
+    });
   }
 
   /**
@@ -1433,7 +1443,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     const turn = this.#inputTail.then((): Promise<void> | undefined => {
       const window = this.#window;
       if (this.#closed || window === null || window.isDestroyed()) return undefined;
-      return Promise.race([this.letGoOn(window, by), this.goneOf(window)]);
+      return this.whileStanding(window, () => this.letGoOn(window, by));
     });
     this.#inputTail = turn.catch(() => undefined);
   }
@@ -2112,10 +2122,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#touchingBy = undefined;
     const turn = this.#inputTail.then((): Promise<void> | undefined => {
       if (this.#closed || window.isDestroyed() || this.#window !== window) return undefined;
-      return Promise.race([
+      return this.whileStanding(window, () =>
         window.dispatchTouch({ type: "touchCancel", touchPoints: [] }),
-        this.goneOf(window),
-      ]);
+      );
     });
     this.#inputTail = turn.catch(() => undefined);
   }
@@ -2913,8 +2922,13 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     const callbacks = this.#callbacks;
     this.#window = null;
     this.#callbacks = null;
-    // PT-5b3 (ruling 5): a turn pending on this window ends with it
-    if (window !== null) this.#going.get(window)?.go(new Error("Browser input's window is gone"));
+    // PT-5b3 (ruling 5): a turn pending on this window ends with it — PT-5c2 (F2): each by its own entry
+    if (window !== null) {
+      const pending = this.#pending.get(window);
+      this.#pending.delete(window);
+      for (const reject of [...(pending ?? [])])
+        reject(new Error("Browser input's window is gone"));
+    }
     // the next window is born with its sound (it is made only under a LIVE ask — every caller of `startProducer` and
     // `createReconnectingProducer` says so: a page woken is born as its ask says), at its own density, its scale unread
     this.#muted = false;
