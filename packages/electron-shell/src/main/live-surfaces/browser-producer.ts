@@ -1240,7 +1240,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // ENDS when its window goes: the next window's first event never waits behind a command sent to one that is no more.
     const window = this.#window;
     const release = request.kind === "mouse" && request.type === "up";
-    if (!release && geometry !== undefined && request.geometryRevision !== geometry.revision) {
+    // PT-5c (ruling 1) — AN EVENT WITH NO POINT IS NEVER JUDGED BY A GEOMETRY: a key, text and a composition are judged
+    // by their window and their document alone. (Before: refused when a frame of another size had landed since their own
+    // — a desk zoom that moved the raster's rung, a pane resized — and a `keyUp` refused left the key down in the page.)
+    const pointed = (request.kind === "mouse" && !release) || request.kind === "wheel";
+    if (pointed && geometry !== undefined && request.geometryRevision !== geometry.revision) {
       return Promise.reject(new Error("Browser input named a stale geometry revision"));
     }
     const turn = this.#inputTail.then(() =>

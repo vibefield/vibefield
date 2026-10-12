@@ -3585,4 +3585,54 @@ describe("BrowserLiveSurfaceRuntime", () => {
     expect(unrooted?.profilePath).toBeUndefined();
     expect(unrooted?.partition).toMatch(/^persist:vibefield-live-surface:[a-f0-9]{40}$/u);
   });
+
+  describe("PT-5c — the chain finished: every event for the document it was sent to; what the third grade found", () => {
+    /** A laptop's page, live, its first frame shown: its window, its geometry's revision, a key sent under a revision. */
+    const laptop = async () => {
+      const result = setup();
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(demand(1, "live"));
+      await delivered();
+      const window = result.native.windows[0];
+      if (window === undefined) throw new Error("no window");
+      window.emitNavigationState({ ...NAV });
+      window.paint(sharedPaint().paint);
+      await delivered();
+      const key = (action: "down" | "up", under: number, key = "a"): void =>
+        renderer.attachment.dispatchInput?.(
+          { kind: "key", action, key, code: `Key${key.toUpperCase()}`, modifiers: NONE },
+          under,
+        );
+      return { result, renderer, window, key };
+    };
+
+    it("ruling 1 (P4) — an event with NO POINT is never judged by a geometry: a key's release, a word typed and a composition sent under the frame before one of another size landed all reach the page — no key is left down", async () => {
+      const p = await laptop();
+      const r = p.result.runtime.summary.geometry?.revision ?? 0;
+      p.key("down", r);
+      await delivered();
+      // a frame of another size lands (a desk zoom moved the raster's rung, the pane was resized)
+      p.window.paint(sharedPaint(603, 1311).paint);
+      await delivered();
+      expect(p.result.runtime.summary.geometry?.revision).toBe(r + 1);
+      const dropped = p.result.runtime.stats.inputDropped;
+      p.key("up", r);
+      p.renderer.attachment.dispatchInput?.({ kind: "text", text: "é" }, r);
+      p.renderer.attachment.dispatchInput?.({ kind: "compose", text: "か", caret: 1 }, r);
+      await delivered();
+      expect(p.window.keyInputs.map((k) => k.type)).toEqual(["keyDown", "keyUp"]);
+      expect(p.window.textInputs).toEqual(["é"]);
+      expect(p.window.compositions).toEqual([{ text: "か", caret: 1 }]);
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped);
+      // a press aimed at the frame before is still refused: its point names a place in a frame that is not there
+      p.renderer.attachment.dispatchInput?.(
+        { kind: "pointer", action: "down", x: 10, y: 10, button: "left", clickCount: 1 },
+        r,
+      );
+      await delivered();
+      expect(p.window.mouseInputs).toEqual([]);
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 1);
+      p.result.runtime.dispose();
+    });
+  });
 });
