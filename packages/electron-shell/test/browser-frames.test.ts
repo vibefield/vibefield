@@ -498,3 +498,20 @@ describe("PT-5d (M7 H7) — the wheel is LATCHED to its gesture's first target",
     expect(f.wheel(50, 50, 16 + 199 + 200 + 10).target.session).toBeUndefined();
   });
 });
+
+describe("PT-5d (M7 H8) — a release of what is down is always sent, never judged by a geometry", () => {
+  it("a press in A, A's quad then unread (`display: none`, a read refused): its release still goes to A — at a point outside its view, as the producer's `letGoOn`; A gone: nowhere", () => {
+    const f = page();
+    f.press("left", 180, 120);
+    f.placed("A", undefined);
+    expect(f.release("left", 180, 120)).toEqual({
+      target: { session: "A", document: 0 },
+      x: -1000,
+      y: -1000,
+    });
+    f.placed("A", box(100, 80, 400, 300));
+    f.press("left", 180, 120);
+    f.detached("A");
+    expect(f.release("left", 180, 120)).toBeNull();
+  });
+});

@@ -79,6 +79,10 @@ interface FrameRecord {
   readonly order: number;
 }
 
+/** PT-5d (M7 H8): where a release goes that cannot be carried into its target — outside its view (CSS px), as the producer's
+ * `letGoOn` lets a button go. */
+const OUTSIDE = -1000;
+
 /** PT-5d (M7 H7): wheels less than this apart are one gesture — latched to the target its first went to (the desk's wheel
  * carries no phase: the ruled 100–300 ms). */
 export const WHEEL_LATCH_MS = 200;
@@ -284,11 +288,14 @@ export class BrowserFrames {
   }
 
   /** A button's release: to its press's target if it still stands, wherever the point is; else nowhere. (A release the
-   * frames never saw pressed — pressed before they were known — is the page's, as every event was before PT-5d.) */
+   * frames never saw pressed — pressed before they were known — is the page's, as every event was before PT-5d.) PT-5d
+   * (M7 H8): never judged by a geometry — a point that cannot be carried into its target (its quad unread: `display:
+   * none`, a read refused) goes outside the target's view; dropped, its renderer kept the button down. */
   release(button: string, x: number, y: number): FrameRouted | null {
     const target = this.#hand.buttons.get(button) ?? this.targetOf(undefined);
     this.#hand.buttons.delete(button);
-    return this.to(target, x, y);
+    if (!this.stands(target)) return null;
+    return this.to(target, x, y) ?? { target, x: OUTSIDE, y: OUTSIDE };
   }
 
   /** The wheel: the frame drawn under it — PT-5d (M7 H7) LATCHED to its gesture's first target: a wheel less than
