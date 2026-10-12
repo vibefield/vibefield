@@ -824,9 +824,16 @@ describe("the live pane's fixture page", () => {
     host.fire("pointerdown", { target: host.parts.get("f") });
     // (M15 F1: a click on its own ground — its point said, to the tenth: the window↔page mapping's own error, measured)
     host.fire("click", { target: { tagName: "HTML" }, clientX: 140.26, clientY: 162.5 });
+    // (M18 A: any of its own ground — a scroller's too; never the frame's element, never a control)
+    host.fire("click", { target: { tagName: "DIV", id: "sc" }, clientX: 820, clientY: 442 });
+    host.fire("click", { target: host.parts.get("f"), clientX: 300, clientY: 200 });
+    host.fire("click", { target: { tagName: "BUTTON", id: "hd" }, clientX: 300, clientY: 100 });
     const hostSaid = await host.ask();
-    expect(hostSaid.framed.heard).toEqual(["pointerdown #f"]);
-    expect(hostSaid.framed.grounds).toEqual([[140.3, 162.5]]);
+    expect(hostSaid.framed.heard).toEqual(["pointerdown #f", "click #f"]);
+    expect(hostSaid.framed.grounds).toEqual([
+      [140.3, 162.5],
+      [820, 442],
+    ]);
     expect(Object.keys(hostSaid.framed.parts as Record<string, unknown>)).toEqual(["frame"]);
     // M6.3a: the clipped host hears the hand on its header and the frame's element alone
     const clippedHost = await run(fixture.hostOrigin, "/frames/clipped?p=g");

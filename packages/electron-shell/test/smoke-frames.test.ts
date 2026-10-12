@@ -66,6 +66,65 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
   });
 
+  it("FRAME-PRESS (M15 A, M18) — a frame's click judged against the HAND's own mapping: the host's calibration left and right of the frame at the frame point's height, its errors interpolated to the point's x, ±1; a side never heard: the click proved nothing", () => {
+    // run 2's numbers: the host's own clicks miss by +4, +2 left of the frame and −2, +2 right of it
+    const calibration = (at: number, y: number) => ({
+      left: { aimed: [140, y] as const, clicked: [144, y + 2] as const },
+      right: { aimed: [820, y] as const, clicked: [818, y + 2] as const },
+      at,
+    });
+    // F's button at the host's x 250: the mapping's error there +3.0, +2.0 — its click at 93, 44 is where the hand put it
+    expect(
+      judgeFramePress("FRAME-PRESS", {
+        aimed: [90, 42],
+        clicked: [93, 44],
+        hostHeard: [],
+        calibration: calibration(250, 162),
+      }),
+    ).toEqual([]);
+    // its own-site child's at the host's x 700: −0.9, +2.0 — 69, 32 is where the hand put it
+    expect(
+      judgeFramePress("FRAME-PRESS (its own site's frame in it)", {
+        aimed: [70, 30],
+        clicked: [69, 32],
+        hostHeard: [],
+        calibration: calibration(700, 170),
+      }),
+    ).toEqual([]);
+    // a click 3 px from where the hand's mapping put it: the routing's
+    expect(
+      judgeFramePress("FRAME-PRESS", {
+        aimed: [90, 42],
+        clicked: [96, 44],
+        hostHeard: [],
+        calibration: calibration(250, 162),
+      }),
+    ).toEqual([
+      "FRAME-PRESS: the frame's click landed at 96, 44, not where the hand's own mapping put the aim 90, 42 (93.0, 44.0 — the host's calibration beside it missed by 3.0, 2.0; ±1): the routing carried the point elsewhere",
+    ]);
+    // a calibration side never heard; none taken
+    expect(
+      judgeFramePress("FRAME-PRESS", {
+        aimed: [90, 42],
+        clicked: [93, 44],
+        hostHeard: [],
+        calibration: { ...calibration(250, 162), right: { aimed: [820, 162], clicked: null } },
+      }),
+    ).toEqual([
+      "FRAME-PRESS: the host's calibration beside the frame never landed — the click proved nothing",
+    ]);
+    expect(
+      judgeFramePress("FRAME-PRESS", {
+        aimed: [90, 42],
+        clicked: [93, 44],
+        hostHeard: [],
+        calibration: null,
+      }),
+    ).toEqual([
+      "FRAME-PRESS: the host's calibration beside the frame never landed — the click proved nothing",
+    ]);
+  });
+
   it("FRAME-HOVER: a pointer over the frame's link; the pointer moved OUT of the frame (M7 H15: a real leave) — the cursor no pointer, and the frame heard its link left", () => {
     expect(judgeFrameHover({ over: "pointer", off: "default", left: true })).toEqual([]);
     expect(judgeFrameHover({ over: null, off: "pointer", left: false })).toEqual([

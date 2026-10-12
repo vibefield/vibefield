@@ -327,7 +327,8 @@ export interface FixtureFramed {
   readonly moveButtons: number | null;
   /** PT-5d (M15 F3): how many pointermoves it heard with its primary button held (a drag's) */
   readonly movesHeld: number;
-  /** PT-5d (M15 F1): its clicks on its own ground (`html`, `body`), each at its point to the tenth of a CSS px */
+  /** PT-5d (M15 F1, M18 A): its clicks on its own ground (not the frame's element, not a control), each at its point to the
+   * tenth of a CSS px */
   readonly grounds: readonly (readonly [number, number])[];
   /** its file input's `cancel` and `change` (the nested frame's) */
   readonly cancels: number;
@@ -638,8 +639,9 @@ const framesScript = (ids: readonly string[], elementOnly?: readonly string[]): 
       hear(e, e.type + " " + named(e.target));
       if (e.type === "click" && e.target && ["b", "bl", "bm", "ib", "b2", "sb"].includes(e.target.id))
         clicks.push([Math.round(e.clientX), Math.round(e.clientY)]);
-      // (M15 F1: a click on its own ground, to the tenth — the window↔page mapping's own error, measured)
-      else if (e.type === "click" && ["html", "body"].includes(named(e.target)) && grounds.length < 50)
+      // (M15 F1, M18 A: a click on its own ground — never the frame's element, never a control; a scroller's is ground
+      // too — to the tenth: the window↔page mapping's own error, measured)
+      else if (e.type === "click" && e.target && e.target.id !== "f" && !["BUTTON", "A", "INPUT", "SELECT", "TEXTAREA", "IFRAME"].includes(e.target.tagName) && grounds.length < 50)
         grounds.push([Math.round(e.clientX * 10) / 10, Math.round(e.clientY * 10) / 10]);
     }, { capture: true, passive: true });
   addEventListener("keydown", (e) => hear(e, "keydown " + e.key), true);

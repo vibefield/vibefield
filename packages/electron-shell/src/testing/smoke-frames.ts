@@ -238,15 +238,37 @@ export interface FramePressSeen {
   readonly clicked: Point | null;
   /** what the host page heard on the frame's element over the press */
   readonly hostHeard: readonly string[];
-  /** M15 F1: a press on the HOST's own ground beside the frame — where it was aimed and where the host's click landed, in
-   * its view's px: the window↔page mapping's own error, measured (absent: none pressed; null clicked: none came) */
-  readonly ground?: GroundSeen | null;
+  /** M15 A (M18): the hand's own window↔page mapping beside the frame, measured on its host (absent: not calibrated — the
+   * aim is the judge's; null: the calibration could not be taken) */
+  readonly calibration?: Calibration | null;
 }
 
 /** M15 F1: a press on a host's own ground: where it was aimed, and where its click landed (null: none came). */
 interface GroundSeen {
   readonly aimed: Point;
   readonly clicked: Point | null;
+}
+
+/** M15 A (M18): a press's calibration — presses on its host's OWN ground left and right of the frame at the frame point's
+ * height (the host's view px), and the frame point's x there. */
+export interface Calibration {
+  readonly left: GroundSeen | null;
+  readonly right: GroundSeen | null;
+  /** the frame point's x, in the host's view px */
+  readonly at: number;
+}
+
+/** M15 A (M18): the hand's own mapping error at a frame point — the calibration's two errors interpolated to its x (the
+ * mapping's error varies across the width: run 2, +4 left of the frame, −2 right of it); null: a side never heard. */
+export function mappingError(c: Calibration): readonly [number, number] | null {
+  const lc = c.left?.clicked ?? null;
+  const rc = c.right?.clicked ?? null;
+  if (c.left === null || c.right === null || lc === null || rc === null) return null;
+  const el = [lc[0] - c.left.aimed[0], lc[1] - c.left.aimed[1]] as const;
+  const er = [rc[0] - c.right.aimed[0], rc[1] - c.right.aimed[1]] as const;
+  const span = c.right.aimed[0] - c.left.aimed[0];
+  const s = span === 0 ? 0 : (c.at - c.left.aimed[0]) / span;
+  return [el[0] + (er[0] - el[0]) * s, el[1] + (er[1] - el[1]) * s];
 }
 
 const near = (a: Point, b: Point, by: number): boolean =>
@@ -265,7 +287,21 @@ export function judgeFramePress(
     out.push(
       `${row}: the frame heard no click — the press never reached a frame of another site (the host heard ${seen.hostHeard.join(", ") || "nothing"})`,
     );
-  else if (!near(seen.clicked, seen.aimed, by))
+  // M15 A (M18): against the aim moved by the hand's own mapping error there, measured on the host (uncalibrated: the aim)
+  else if (seen.calibration !== undefined) {
+    const error = seen.calibration === null ? null : mappingError(seen.calibration);
+    if (error === null)
+      out.push(
+        `${row}: the host's calibration beside the frame never landed — the click proved nothing`,
+      );
+    else {
+      const want: Point = [seen.aimed[0] + error[0], seen.aimed[1] + error[1]];
+      if (!near(seen.clicked, want, by))
+        out.push(
+          `${row}: the frame's click landed at ${seen.clicked.join(", ")}, not where the hand's own mapping put the aim ${seen.aimed.map((v) => Math.round(v)).join(", ")} (${want.map((v) => v.toFixed(1)).join(", ")} — the host's calibration beside it missed by ${error.map((v) => v.toFixed(1)).join(", ")}; ±${by}): the routing carried the point elsewhere`,
+        );
+    }
+  } else if (!near(seen.clicked, seen.aimed, by))
     out.push(
       `${row}: the frame's click landed at ${seen.clicked.join(", ")}, not where the hand pressed (${seen.aimed.map((v) => Math.round(v)).join(", ")}, ±${by})`,
     );
@@ -965,18 +1001,30 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       await sleep(400);
     };
 
-    /** M15 F1: a press on the host's OWN ground at a point of its view — where the host's click landed (its view's px) */
-    const groundPress = async (x: number, y: number): Promise<GroundSeen | null> => {
-      if (held === null || view === null) return null;
-      const grounds0 = at(HOST)?.framed?.grounds.length ?? 0;
-      await h.press(await onWindow(held, view, x, y));
-      const landed = await waitFor(
-        "the host's click on its ground",
-        5_000,
-        () => at(HOST)?.framed?.grounds ?? null,
-        (g) => (g?.length ?? 0) > grounds0,
-      );
-      return { aimed: [x, y], clicked: landed?.[grounds0] ?? null };
+    /** M15 A (M18): the hand's own mapping beside a frame — a press on the host's OWN ground LEFT and RIGHT of the frame's
+     * box at the frame point's height (the host's view px), where the host's own listener heard each */
+    const calibrate = async (
+      hostPath: string,
+      heldNow: HeldFrameSeen | null,
+      hostView: readonly [number, number] | null | undefined,
+      box: FixtureRect | null,
+      point: Point | null,
+    ): Promise<Calibration | null> => {
+      if (heldNow === null || hostView == null || box === null || point === null) return null;
+      const side = async (x: number): Promise<GroundSeen> => {
+        const grounds0 = at(hostPath)?.framed?.grounds.length ?? 0;
+        await h.press(await onWindow(heldNow, hostView, x, point[1]));
+        const landed = await waitFor(
+          "the host's click on its own ground",
+          5_000,
+          () => at(hostPath)?.framed?.grounds ?? null,
+          (g) => (g?.length ?? 0) > grounds0,
+        );
+        return { aimed: [x, point[1]], clicked: landed?.[grounds0] ?? null };
+      };
+      const left = await side(box.x - 20);
+      const right = await side(box.x + box.w + 20);
+      return { left, right, at: point[0] };
     };
 
     // ── FRAME-PRESS ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -994,16 +1042,19 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       () => framed(),
       (f) => (f?.clicks.length ?? 0) > clicks0,
     );
-    // (F1: the mapping's own error beside it — the host's ground 20 px left of the frame, at the button's height)
+    // (A: the hand's own mapping beside it — the host's ground left and right of the frame, at the button's height)
     const hostBox = at(HOST)?.framed?.parts.frame ?? null;
     const press: FramePressSeen = {
       aimed,
       clicked: afterPress?.clicks[clicks0] ?? null,
       hostHeard: hostHeard().slice(heard0),
-      ground:
-        aimed === null || hostBox === null
-          ? null
-          : await groundPress(hostBox.x - 20, hostBox.y + aimed[1]),
+      calibration: await calibrate(
+        HOST,
+        held,
+        view,
+        hostBox,
+        aimed === null || hostBox === null ? null : [hostBox.x + aimed[0], hostBox.y + aimed[1]],
+      ),
     };
     said.press = press;
     problems.push(...judgeFramePress("FRAME-PRESS", press));
@@ -1023,15 +1074,20 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       () => at(SAME)?.framed ?? null,
       (f) => (f?.clicks.length ?? 0) > sameClicks0,
     );
-    // (F1: beside it — the host's ground 20 px right of the frame, at the child's button's height)
+    // (A: beside it — the host's ground left and right of the frame, at the child's button's height)
     const same: FramePressSeen = {
       aimed: sameAimed,
       clicked: afterSame?.clicks[sameClicks0] ?? null,
       hostHeard: hostHeard().slice(heardSame),
-      ground:
+      calibration: await calibrate(
+        HOST,
+        held,
+        view,
+        hostBox,
         c === null || sameAimed === null || hostBox === null
           ? null
-          : await groundPress(hostBox.x + hostBox.w + 20, hostBox.y + c.y + sameAimed[1]),
+          : [hostBox.x + c.x + sameAimed[0], hostBox.y + c.y + sameAimed[1]],
+      ),
     };
     said.same = same;
     problems.push(...judgeFramePress("FRAME-PRESS (its own site's frame in it)", same));
@@ -1379,11 +1435,22 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       () => framed(),
       (f) => (f?.clicks.length ?? 0) > halfClicks0,
     );
+    // (A: the hand's own mapping beside it, the host as it stands scrolled)
+    const halfBox = at(HOST)?.framed?.parts.frame ?? null;
     const half = {
       aimed: halfAimed,
       clicked: halfLanded?.clicks[halfClicks0] ?? null,
       hostHeard: hostHeard().slice(heard2),
       top,
+      calibration: await calibrate(
+        HOST,
+        held,
+        view,
+        halfBox,
+        halfAimed === null || halfBox === null
+          ? null
+          : [halfBox.x + halfAimed[0], halfBox.y + halfAimed[1]],
+      ),
     };
     said.half = half;
     problems.push(...judgeFrameHalf(half));
@@ -1595,6 +1662,16 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         aimed: shownAimed,
         clicked: shownSaid?.clicks[shownClicks0] ?? null,
         hostHeard: cHostHeard().slice(shownHeard0),
+        // (A: the hand's own mapping beside it — CLIPPED's right side lands in its scroller, its own ground)
+        calibration: await calibrate(
+          CLIPPED_HOST,
+          clippedHeld,
+          clippedHost?.view,
+          cBox,
+          shownAimed === null || cBox === null
+            ? null
+            : [cBox.x + shownAimed[0], cBox.y + shownAimed[1]],
+        ),
       },
     };
     said.clipped = clipped;
@@ -1679,6 +1756,16 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         aimed: coveredAimed,
         clicked: coveredShown?.clicks[coveredClicks0] ?? null,
         hostHeard: vHostHeard().slice(coveredHeard0),
+        // (A: the hand's own mapping beside it)
+        calibration: await calibrate(
+          COVERED_HOST,
+          coveredHeld,
+          coveredHost?.view,
+          vBox,
+          coveredAimed === null || vBox === null
+            ? null
+            : [vBox.x + coveredAimed[0], vBox.y + coveredAimed[1]],
+        ),
       },
     };
     // FRAME-MENU: the host's menu opened over the frame; its item pressed
@@ -1844,6 +1931,14 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
           aimed,
           clicked: shown?.clicks[clicks0] ?? null,
           hostHeard: oHostHeard().slice(heard0),
+          // (A: the hand's own mapping beside the slot)
+          calibration: await calibrate(
+            SLOT_HOST,
+            slotHeld,
+            slotHost.view,
+            oBox,
+            aimed === null ? null : [oBox.x + aimed[0], oBox.y + aimed[1]],
+          ),
         },
       };
     }
