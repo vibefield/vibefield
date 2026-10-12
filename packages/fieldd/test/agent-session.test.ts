@@ -38,15 +38,17 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type {
-  AccountUsageService,
-  AgentAdapterBinding,
-  AgentHost,
-  AgentProfile,
-  BoundIngress,
-  ExtensionService,
-  PromptReceipt,
-  PromptSubmission,
+import {
+  type AccountUsageService,
+  type AgentAdapterBinding,
+  type AgentHost,
+  type AgentModelService,
+  type AgentProfile,
+  type BoundIngress,
+  defineModelService,
+  type ExtensionService,
+  type PromptReceipt,
+  type PromptSubmission,
 } from "@vibecook/puppeteer-core";
 import type {
   AgentProvider,
@@ -260,22 +262,96 @@ function withoutExtensionReads(provider: AgentProvider): AgentProvider {
   };
 }
 
+/** PJ-6 — the scripted agent's own model picker, as an adapter declares one:
+ * two models, the first with an effort control, read per account and folder.
+ * `fail` makes the read fail the way a signed-out agent's does; `reads`
+ * counts the reads (a launch at a model discovers again; one without does
+ * not); `options` is what each launch was handed to start at — puppeteer's
+ * translation of the selection, the adapter's private options. */
+interface ScriptedModels {
+  fail: boolean;
+  reads: number;
+  options: unknown[];
+}
+
+const SCRIPTED_MODELS = [
+  {
+    id: "model-a",
+    label: "Model A",
+    controls: [
+      {
+        id: "effort",
+        label: "Effort",
+        role: "effort" as const,
+        values: [
+          { id: "low", label: "low" },
+          { id: "high", label: "high" },
+        ],
+      },
+    ],
+  },
+  { id: "model-b", label: "Model B", controls: [] },
+];
+
+function scriptedModels(state: ScriptedModels): AgentModelService {
+  return defineModelService({
+    provider: { id: "scripted", label: "Scripted", discovery: "prelaunch" },
+    async discover(context) {
+      state.reads += 1;
+      if (state.fail)
+        return {
+          status: "auth-required",
+          provider: "scripted",
+          code: "auth-required",
+          message: "Sign in to discover models.",
+        };
+      return {
+        status: "available",
+        catalog: {
+          provider: "scripted",
+          ...(context.profile !== undefined ? { profileId: context.profile.id } : {}),
+          cwd: context.cwd,
+          observedAt: new Date().toISOString(),
+          source: { kind: "native-protocol", freshness: "live" },
+          completeness: "complete",
+          customModels: false,
+          models: SCRIPTED_MODELS,
+        },
+      };
+    },
+    toAgentOptions: (selection) => ({
+      model: selection.modelId,
+      ...(selection.controls?.["effort"] !== undefined
+        ? { effort: selection.controls["effort"] }
+        : {}),
+    }),
+  });
+}
+
 function scriptedProvider(
   envOut: string,
   sessions: ScriptedSession[],
   attach: { records: ScriptedAttach[] } | undefined,
-  extra: { profiles?: boolean; seen?: Array<AgentProfile | undefined>; signInMark?: string } = {},
+  extra: {
+    profiles?: boolean;
+    seen?: Array<AgentProfile | undefined>;
+    signInMark?: string;
+    models?: ScriptedModels;
+  } = {},
 ): AgentProvider {
   let counter = 0;
   return {
     descriptor: { id: "scripted", label: "Scripted" },
     ...(extra.profiles === true ? { profiles: scriptedProfiles() } : {}),
     ...(extra.signInMark !== undefined ? { extensions: scriptedExtensions(extra.signInMark) } : {}),
+    ...(extra.models !== undefined ? { models: scriptedModels(extra.models) } : {}),
     async createSession(options: AgentProviderSessionOptions): Promise<AgentAdapterBinding> {
       const bornAt = Date.now();
       const n = ++counter;
       // AR-S2 — the account a spawn was bound to, as the runtime resolved it
       extra.seen?.push(options.profile);
+      // PJ-6 — what the launch was handed to start at
+      extra.models?.options.push(options.agentOptions);
       const out = join(envOut, `session-${n}.env`);
       const typedOut = join(envOut, `session-${n}.typed`);
       // the stable-ingress contract, from the adapter's side: bound, then
@@ -357,6 +433,8 @@ interface Box {
   records: SessionRecordStore;
   /** AR-S2 — the account each scripted spawn was bound to, in order */
   seen: Array<AgentProfile | undefined>;
+  /** PJ-6 — the scripted agent's model picker and what each launch started at */
+  models: ScriptedModels;
 }
 
 interface SetupConfig {
@@ -449,6 +527,7 @@ async function setup(config: SetupConfig): Promise<Box> {
   const sessions: ScriptedSession[] = restart?.sessions ?? [];
   const seen: Array<AgentProfile | undefined> = restart?.seen ?? [];
   const attached: ScriptedAttach[] = restart?.attached ?? [];
+  const models: ScriptedModels = restart?.models ?? { fail: false, reads: 0, options: [] };
   const daemon = await bootstrap({
     dataDir,
     controlPort: 0,
@@ -478,6 +557,7 @@ async function setup(config: SetupConfig): Promise<Box> {
           profiles: config.profiles === true,
           seen,
           ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
+          models,
         }),
       ];
     },
@@ -511,6 +591,7 @@ async function setup(config: SetupConfig): Promise<Box> {
     requestLog,
     records,
     seen,
+    models,
   };
 }
 
@@ -1656,6 +1737,112 @@ describe("a server's values over the REAL floor (AR-S4d)", () => {
     expect(record).not.toContain(secret);
     expect(auditText(dataDir)).not.toContain(secret);
     await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+  }, 60_000);
+});
+
+describe("PJ-6 — a launch at a model the agent offers (agent.spawn {modelSelection})", () => {
+  /** The spawn params fixture's selection (EL9: the reader's side of the
+   * contract's own file), aimed at the scripted agent, which does not list it. */
+  const FIXTURE_PARAMS = JSON.parse(
+    readFileSync(
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        "../../contracts/fixtures/agent-spawn-params.model-selection.json",
+      ),
+      "utf8",
+    ),
+  ) as { modelSelection: { modelId: string; controls: Record<string, string> } };
+
+  it("refuses a model or a control the agent does not offer, and a picker it cannot read, before anything starts — in fieldd's words, keeping puppeteer's codes", async () => {
+    const { daemon, dataDir, models } = await setup({ floor: "mock" });
+    const win = await window(daemon, DECK, "pj6a");
+
+    // the contract fixture's model is not one the scripted agent lists
+    const unlisted = await win.callErr("agent.spawn", {
+      provider: "scripted",
+      modelSelection: FIXTURE_PARAMS.modelSelection,
+    });
+    expect(unlisted.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(unlisted.message).toContain("Scripted was not started at the chosen model");
+    expect(unlisted.data?.details).toMatchObject({
+      provider: "scripted",
+      code: "AGENT_LAUNCH_REFUSED",
+      refusal: "INVALID_MODEL_SELECTION",
+      reason: "invalid-model-selection",
+    });
+
+    // a listed model at a value its control does not offer
+    const value = await win.callErr("agent.spawn", {
+      provider: "scripted",
+      modelSelection: { modelId: "model-a", controls: { effort: "max" } },
+    });
+    expect(value.data?.details).toMatchObject({ refusal: "INVALID_MODEL_SELECTION" });
+
+    // the picker cannot be read: the launch is refused as unavailable, never
+    // started at the agent's own settings behind the person's back
+    models.fail = true;
+    const unread = await win.callErr("agent.spawn", {
+      provider: "scripted",
+      modelSelection: { modelId: "model-a" },
+    });
+    expect(unread.data?.kind).toBe("UNAVAILABLE");
+    expect(unread.data?.retryable).toBe(true);
+    expect(unread.message).toContain("Sign in to discover models.");
+    expect(unread.data?.details).toMatchObject({
+      service: "agents",
+      state: "model-discovery-unavailable",
+      refusal: "MODEL_DISCOVERY_UNAVAILABLE",
+    });
+
+    // each refusal read the picker once and launched nothing
+    expect(models.reads).toBe(3);
+    expect(models.options).toEqual([]);
+    expect(existsSync(join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR))).toBe(false);
+    const act = await auditAct(
+      dataDir,
+      (entry) => entry.action === "agent.session.spawn" && entry.attrs?.["modelSelection"] === true,
+    );
+    expect(act.outcome.outcome).toBe("failed");
+    // a malformed selection never reaches puppeteer: the door's own refusal
+    const malformed = await win.callErr("agent.spawn", {
+      provider: "scripted",
+      modelSelection: { modelId: "" },
+    });
+    expect(malformed.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(models.reads).toBe(3);
+  });
+
+  it("starts at the model and the control chosen: the adapter is handed them, the row is born, and the ledger says a selection was applied without naming it", async () => {
+    const { daemon, dataDir, envOut, models } = await setup({ floor: "real" });
+    const win = await window(daemon, DECK, "pj6b");
+    const spawned = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      // a key a newer caller adds rides the contract, and never reaches
+      // puppeteer's strict schema (which would call the selection malformed)
+      modelSelection: { modelId: "model-a", controls: { effort: "high" }, later: 1 },
+    })) as AgentSpawnResult;
+    expect(models.options).toEqual([{ model: "model-a", effort: "high" }]);
+    expect(models.reads).toBe(1);
+    expect(spawned.session.runtimeRunId).toBeDefined();
+    const act = await auditAct(
+      dataDir,
+      (entry) => entry.action === "agent.session.spawn" && entry.attrs?.["modelSelection"] === true,
+    );
+    expect(act.outcome.outcome).toBe("succeeded");
+    expect(act.outcome.attrs?.["modelSelection"]).toBe("applied");
+    expect(auditText(dataDir)).not.toContain("model-a");
+
+    // no selection: the agent's own settings, and no picker read
+    const plain = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+    })) as AgentSpawnResult;
+    expect(models.options).toEqual([{ model: "model-a", effort: "high" }, undefined]);
+    expect(models.reads).toBe(1);
+
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    await win.call("terminal.terminate", { sessionId: plain.terminal.sessionId });
   }, 60_000);
 });
 

@@ -2930,9 +2930,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { provider, cwd?, profileId?, profileSet?, title? }",
+          "expected { provider, cwd?, profileId?, profileSet?, title?, modelSelection? }",
           false,
         );
+      // PJ-6 — the ledger says a launch asked for a model and that it was
+      // applied, never which: the ids are the agent's own words (AR-L1)
+      const selected = parsed.data.modelSelection !== undefined;
       return await audit.required(
         ctx,
         {
@@ -2944,6 +2947,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             ...(parsed.data.profileId !== undefined ? { profileId: parsed.data.profileId } : {}),
             ...(parsed.data.profileSet !== undefined ? { profileSet: parsed.data.profileSet } : {}),
             ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
+            ...(selected ? { modelSelection: true } : {}),
           },
         },
         () => agents.spawn(parsed.data, ctx.principal, ctx.onBehalfOf),
@@ -2952,6 +2956,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           attrs: {
             runtimeRunId: result.session.runtimeRunId,
             sessionId: result.terminal.sessionId,
+            ...(selected ? { modelSelection: "applied" } : {}),
           },
         }),
       );

@@ -365,6 +365,28 @@ export const AgentProvidersResult = z
   .passthrough();
 export type AgentProvidersResult = z.infer<typeof AgentProvidersResult>;
 
+/** PJ-6 (`draft/project-places/build-pj6.md`; PJ-D14 as amended 2026-10-12) —
+ * a launch's model, puppeteer's `AgentModelSelection` carried OPAQUE (AR-L1):
+ * `modelId` and every control's id and value are the agent's own words from
+ * its catalog (`agent.models`), which VibeField passes on and never reads for
+ * meaning. Absent, the agent starts at its own settings; a control left out
+ * is the agent's own too (puppeteer applies no displayed default). `custom`
+ * asks for a model the catalog does not list, only where the catalog says
+ * `customModels`. puppeteer discovers again at the launch and refuses a
+ * selection its agent no longer offers (`INVALID_MODEL_SELECTION`) or cannot
+ * read (`MODEL_DISCOVERY_UNAVAILABLE`). Passthrough at its own depth: the
+ * session record keeps it under the record's HMAC, so a key a newer fieldd
+ * adds must reach an older reader whole (a stripped key breaks the
+ * signature). */
+export const AgentModelSelection = z
+  .object({
+    modelId: z.string().min(1).max(1024),
+    custom: z.boolean().optional(),
+    controls: z.record(z.string().min(1).max(1024), z.string().min(1).max(1024)).optional(),
+  })
+  .passthrough();
+export type AgentModelSelection = z.infer<typeof AgentModelSelection>;
+
 /** agent.spawn — a managed session born in a PTY on this device's floor
  * (workload class `agent`, a clean allow-listed environment). `cwd` defaults
  * to the OS user's home; `profileId` selects the persona (its root is bound
@@ -372,7 +394,8 @@ export type AgentProvidersResult = z.infer<typeof AgentProvidersResult>;
  * AR-S5 — `profileSet` runs it under that Agent Profile's sign-in for the
  * agent (`native`: the agent's own folder), refused when the profile holds
  * none; with neither, the default profile's sign-in, else the agent's own
- * folder. */
+ * folder. PJ-6 — `modelSelection` starts it at that model and those controls
+ * (absent: the agent's own settings). */
 export const AgentSpawnParams = z
   .object({
     provider: AgentProviderId,
@@ -380,6 +403,7 @@ export const AgentSpawnParams = z
     profileId: AgentProfileId.optional(),
     profileSet: AgentProfileSetId.optional(),
     title: z.string().max(256).optional(),
+    modelSelection: AgentModelSelection.optional(),
   })
   .passthrough();
 export type AgentSpawnParams = z.infer<typeof AgentSpawnParams>;

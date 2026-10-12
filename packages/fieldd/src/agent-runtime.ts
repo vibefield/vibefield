@@ -49,6 +49,7 @@ import {
   type AgentInterruptParams,
   type AgentInterruptResult,
   type AgentListResult,
+  type AgentModelSelection,
   type AgentMonitorMirror,
   type AgentPersona,
   type AgentProfileFailure,
@@ -1059,6 +1060,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         // AR-S5 — that profile's sign-in for the agent; puppeteer refuses a
         // profile that holds none, and a plain spawn takes the default's
         ...(params.profileSet !== undefined ? { profileSet: params.profileSet } : {}),
+        // PJ-6 — the model and its controls, opaque: puppeteer discovers again
+        // in the run's account and folder, validates, and translates
+        ...(params.modelSelection !== undefined
+          ? { modelSelection: modelSelectionOf(params.modelSelection) }
+          : {}),
         creationRequestId: identity.creationRequestId,
         ingress: identity.ingress,
       });
@@ -3474,6 +3480,32 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * executable) is worth more than the message, so the door says it. */
   private sessionFailureToError(failure: AgentSessionFailure, provider: string): RpcCallError {
     const details = { provider, code: failure.error.code, runtimeRunId: failure.runtimeRunId };
+    // PJ-6 — the adapter's refusal keeps its code; the two a model selection
+    // meets are said in fieldd's words, around puppeteer's sentence
+    const refusal = failure.error.refusal?.code;
+    if (failure.error.code === "AGENT_LAUNCH_REFUSED" && refusal !== undefined) {
+      const label = this.labelFor(provider, provider);
+      if (refusal === MODEL_REFUSALS.INVALID) {
+        return new RpcCallError(
+          "PRECONDITION_FAILED",
+          `${label} was not started at the chosen model: ${failure.error.message}`,
+          false,
+          { ...details, refusal, reason: "invalid-model-selection" },
+        );
+      }
+      if (refusal === MODEL_REFUSALS.UNDISCOVERED) {
+        return new RpcCallError(
+          "UNAVAILABLE",
+          `${label} was not started at the chosen model: it could not list its models (${failure.error.message})`,
+          true,
+          { service: "agents", state: "model-discovery-unavailable", ...details, refusal },
+        );
+      }
+      return new RpcCallError("PRECONDITION_FAILED", failure.error.message, false, {
+        ...details,
+        refusal,
+      });
+    }
     switch (failure.error.code) {
       case "AGENT_NOT_FOUND":
       case "AGENT_PROFILE_NOT_FOUND":
@@ -3502,6 +3534,28 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     const refusal = this.terminalHost?.lastRefusal();
     return refusal ?? fallback;
   }
+}
+
+/** PJ-6 — puppeteer's launch refusals for a model selection
+ * (`docs/agent-management-api.html` §"Model discovery & launch selection"). */
+const MODEL_REFUSALS = {
+  INVALID: "INVALID_MODEL_SELECTION",
+  UNDISCOVERED: "MODEL_DISCOVERY_UNAVAILABLE",
+} as const;
+
+/** PJ-6 — the selection as puppeteer's strict schema takes it: its three keys
+ * and nothing else (a key a newer caller adds would read as malformed there).
+ * The values pass as they came — the agent's own ids, never read here. */
+function modelSelectionOf(selection: AgentModelSelection): {
+  modelId: string;
+  custom?: boolean;
+  controls?: Record<string, string>;
+} {
+  return {
+    modelId: selection.modelId,
+    ...(selection.custom !== undefined ? { custom: selection.custom } : {}),
+    ...(selection.controls !== undefined ? { controls: { ...selection.controls } } : {}),
+  };
 }
 
 /** puppeteer's workspace request for a resumed run (Godview's own rule): a

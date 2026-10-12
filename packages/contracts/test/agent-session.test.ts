@@ -235,6 +235,38 @@ describe("SessionSummary v2 and the doors", () => {
     expect(AgentSpawnParams.safeParse({}).success).toBe(false);
   });
 
+  it("PJ-6 — a spawn at a model carries the agent's own ids opaque: any id, any control, nothing read for meaning", () => {
+    const params = AgentSpawnParams.parse(fixture("agent-spawn-params.model-selection.json"));
+    expect(params.modelSelection).toEqual({
+      modelId: "model-card-v2",
+      controls: { effort: "high" },
+    });
+    // an unlisted model is the caller's explicit opt-in, and a key a newer
+    // caller adds rides through whole (the record signs the selection)
+    const custom = AgentSpawnParams.parse({
+      provider: "claude",
+      modelSelection: { modelId: "vendor/model:variant", custom: true, later: { kept: 1 } },
+    });
+    expect(custom.modelSelection).toEqual({
+      modelId: "vendor/model:variant",
+      custom: true,
+      later: { kept: 1 },
+    });
+    for (const bad of [
+      { modelId: "" },
+      { controls: { effort: "high" } },
+      { modelId: "m", controls: { effort: 3 } },
+      { modelId: "m", controls: { "": "high" } },
+      { modelId: "m", custom: "yes" },
+      "model-card-v2",
+    ]) {
+      expect(
+        AgentSpawnParams.safeParse({ provider: "claude", modelSelection: bad }).success,
+        JSON.stringify(bad),
+      ).toBe(false);
+    }
+  });
+
   it("QL-D10 — resume params: a run, or a conversation by its native id; the run is the more specific claim", () => {
     const run = AgentResumeParams.parse(fixture("agent-resume-params.valid.json"));
     expect("runtimeRunId" in run && run.runtimeRunId).toBe("run-01J8Z3K9");
