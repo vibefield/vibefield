@@ -912,6 +912,45 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     ]);
   });
 
+  it("M6.2 — a `blur` moves nothing: F's own window's blur and its own child's `focus` come on F's session — a key between the two words goes on F's, never the page's (M3); the page's own `focus` takes the keys back", async () => {
+    const r = await framed();
+    const word = (payload: string, session?: string): void =>
+      r.emit(
+        "Runtime.bindingCalled",
+        { name: FRAME_WORDS_BINDING, payload, executionContextId: 1 },
+        session,
+      );
+    await r.native.dispatchMouse({
+      type: "mousePressed",
+      x: 180,
+      y: 120,
+      button: "left",
+      clickCount: 1,
+    });
+    await r.native.dispatchMouse({
+      type: "mouseReleased",
+      x: 180,
+      y: 120,
+      button: "left",
+      clickCount: 1,
+    });
+    word("blur", "F");
+    await r.native.dispatchKey({ type: "keyDown", key: "h", code: "KeyH", modifiers: NONE });
+    await r.native.dispatchKey({ type: "keyUp", key: "h", code: "KeyH", modifiers: NONE });
+    word("focus", "F");
+    await r.native.dispatchText("é");
+    word("focus");
+    await r.native.dispatchText("x");
+    expect(r.hand()).toEqual([
+      "mousePressed@F 80,40",
+      "mouseReleased@F 80,40",
+      "keyDown@F",
+      "keyUp@F",
+      "insertText@F é",
+      "insertText@page x",
+    ]);
+  });
+
   it("ruling 3 — what a frame took ends where it began: its press released once its session has GONE is sent nowhere (never a command to a gone session); once it committed ANOTHER document (its own word, `Page.frameNavigated` of its frame), nowhere; a key held in it the same", async () => {
     const r = await framed();
     await r.native.dispatchMouse({

@@ -87,10 +87,14 @@ export class BrowserFrames {
     if (this.#focused === session) this.#focused = undefined;
   }
 
-  /** A frame committed another document — its own word, on its own session. */
+  /** A frame committed another document — its own word, on its own session. The frames of the document before go with
+   * it (PT-5d, M6.2: the focus in one of them with them — the page's, as at their going). */
   committed(session: string): void {
     const frame = this.#frames.get(session);
-    if (frame !== undefined) frame.documents += 1;
+    if (frame === undefined) return;
+    frame.documents += 1;
+    for (const child of [...this.#frames.values()])
+      if (child.parent === session) this.detached(child.session);
   }
 
   /** The PAGE committed another document: every frame of the one before goes with it; the focus is the page's. */
@@ -114,11 +118,16 @@ export class BrowserFrames {
     frame.size = [width, height];
   }
 
-  /** A document's window said `focus` (`true`) or `blur` (`false`) — on its own session (`undefined`: the page's). */
+  /**
+   * A document's window said `focus` (`true`) or `blur` (`false`) — on its own session (`undefined`: the page's, its main
+   * document's or any of its process's). PT-5d (M6.2): A BLUR MOVES NOTHING — a frame's window blurs as the focus goes to
+   * its own child of its site (whose `focus` comes on the same session after it), or as the whole page loses the focus:
+   * taken as the page's, the keys went on the page's session with a frame of another site focused between the two words
+   * (M3's banned path). Only a `focus`, the hand's press or finger, or the focused frame's going moves the keys.
+   */
   focus(session: string | undefined, focused: boolean): void {
-    if (session !== undefined && !this.#frames.has(session)) return;
-    if (focused) this.#focused = session;
-    else if (this.#focused === session) this.#focused = undefined;
+    if (!focused || (session !== undefined && !this.#frames.has(session))) return;
+    this.#focused = session;
   }
 
   /** The frames of the page's tree, by session, and their parents: what the native reads their quads by. */

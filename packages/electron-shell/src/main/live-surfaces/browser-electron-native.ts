@@ -313,9 +313,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   }
 
   /**
-   * PT-5d (rulings 1, M3) — a document's word, on its own session (`undefined`: the page's): its window's focus or blur —
-   * where the keys go; its frames moved — their quads read again; its viewport's size (a frame's: under a transform it
-   * is drawn at another).
+   * PT-5d (rulings 1, M3) — a document's word, on its own session (`undefined`: the page's): its window's focus — where
+   * the keys go (its blur moves nothing: M6.2); its frames moved — their quads read again; its viewport's size (a
+   * frame's: under a transform it is drawn at another).
    */
   private frameWord(session: string | undefined, word: string): void {
     if (word === "focus" || word === "blur") {

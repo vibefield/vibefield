@@ -188,19 +188,44 @@ describe("PT-5d (rulings 1, M3) — keys, text, a composition and a command go t
     expect(f.keyDown("KeyH").session).toBeUndefined();
   });
 
-  it("the focus as each document SAYS it of its own window: B's `focus` (a script focused its field), the page's own; a `blur` of the one focused leaves the page's; a word of a session the page does not hold is nothing", () => {
+  it("the focus as each document SAYS it of its own window: B's `focus` (a script focused its field), the page's own; a `blur` moves nothing (M6.2); a word of a session the page does not hold is nothing", () => {
     const f = page();
     f.focus("B", true);
     expect(f.focused().session).toBe("B");
     f.focus("A", false);
     expect(f.focused().session).toBe("B");
     f.focus("B", false);
-    expect(f.focused().session).toBeUndefined();
+    expect(f.focused().session).toBe("B");
     f.focus("A", true);
     f.focus("elsewhere", true);
     expect(f.focused().session).toBe("A");
     f.focus(undefined, true);
     expect(f.focused().session).toBeUndefined();
+  });
+
+  it("M6.2 — a `blur` moves NOTHING: A's own window's blur as the focus goes to A's own child of its site (its `focus` follows on A's session) — A throughout, never the page between the two words; the whole page losing its focus — A still; the page's own `focus` takes the keys back", () => {
+    const f = page();
+    f.press("left", 180, 120);
+    f.release("left", 180, 120);
+    f.focus("A", false);
+    expect(f.keyDown("KeyH")).toEqual({ session: "A", document: 0 });
+    f.keyUp("KeyH");
+    f.focus("A", true);
+    expect(f.focused().session).toBe("A");
+    // the whole page loses its focus: A's window blurs, no other takes it — the engine still sends keys to A
+    f.focus("A", false);
+    expect(f.focused().session).toBe("A");
+    f.focus(undefined, true);
+    expect(f.focused().session).toBeUndefined();
+  });
+
+  it("M6.2 — a frame's COMMIT takes the frames of its document before: B focused in A, A commits — B is no target, the keys are the page's, and a press where B was is A's new document's", () => {
+    const f = page();
+    f.focus("B", true);
+    f.committed("A");
+    expect(f.frames().map((x) => x.session)).toEqual(["A"]);
+    expect(f.focused()).toEqual({ session: undefined, document: 1 });
+    expect(f.press("left", 360, 285).target).toEqual({ session: "A", document: 1 });
   });
 
   it("a key's UP goes where its down went though the focus moved since (R8: a key's up is a release); gone or of another document since — nowhere", () => {
