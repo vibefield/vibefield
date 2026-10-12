@@ -4285,6 +4285,42 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.result.runtime.dispose();
     });
 
+    it("R4 — a window born under the person's stop MEETS its startup deadline: nothing restarts it, nothing fails it — it stands, `stopped`, until the person asks", async () => {
+      vi.useFakeTimers();
+      const p = await starting({ startupTimeoutMs: 1_000, restartLimit: 2 });
+      await vi.advanceTimersByTimeAsync(0);
+      p.renderer.attachment.navigate?.({ action: "stop" });
+      await vi.advanceTimersByTimeAsync(0);
+      p.blank(false);
+      p.renderer.attachment.setDemand(demand(2, "hibernated", 0));
+      await vi.advanceTimersByTimeAsync(0);
+      p.renderer.attachment.setDemand(demand(3, "live"));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(p.result.native.windows).toHaveLength(2);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(p.result.native.windows).toHaveLength(2);
+      expect(p.result.native.windows[1]?.loadedUrls).toEqual([]);
+      expect(p.result.runtime.summary.state).toBe("starting");
+      expect(p.result.runtime.summary.error).toBeUndefined();
+      expect(p.result.runtime.summary.browser).toMatchObject({ failure: { reason: "stopped" } });
+      p.result.runtime.dispose();
+    });
+
+    it("R4's neighbour — ↻ on a stopped page that FAILED as a source (its renderer gone, a source that says so) is the person asking again: the window started anew LOADS the address", async () => {
+      const p = await starting({ source: { ...source(), whenStopped: "say" } });
+      await delivered();
+      p.renderer.attachment.navigate?.({ action: "stop" });
+      await delivered();
+      p.blank(false);
+      p.window.crash();
+      await delivered();
+      expect(p.result.runtime.summary.state).toBe("failed");
+      p.renderer.attachment.navigate?.({ action: "reload" });
+      await delivered();
+      expect(p.result.native.windows[1]?.loadedUrls).toEqual([FIRST]);
+      p.result.runtime.dispose();
+    });
+
     /** A live page whose renderer crashed: RECONNECTING, its window made anew (a `restart` source), its blank told. */
     const reconnecting = async () => {
       vi.useFakeTimers();
@@ -4696,6 +4732,50 @@ describe("BrowserLiveSurfaceRuntime", () => {
       await delivered();
       expect(p.window.keyInputs.map((k) => `${k.type} ${k.key}`)).toEqual(["keyDown a"]);
       p.result.runtime.dispose();
+    });
+
+    it("R8 — a key down ANSWERED after another document committed is forgotten, as a mouse press: its late up is nothing", async () => {
+      const p = await laptop();
+      const r = p.result.runtime.summary.geometry?.revision ?? 0;
+      let answer: () => void = () => {};
+      const key = p.window.dispatchKey.bind(p.window);
+      p.window.dispatchKey = (input) => {
+        if (input.type !== "keyDown") return key(input);
+        p.window.keyInputs.push(input);
+        return new Promise<void>((resolve) => {
+          answer = resolve;
+        });
+      };
+      p.key("down", r, "a");
+      await delivered();
+      p.window.emitNavigationState({ ...NAV, url: NEXT });
+      answer();
+      await delivered();
+      p.key("up", r, "a");
+      await delivered();
+      expect(p.window.keyInputs.map((k) => k.type)).toEqual(["keyDown"]);
+      p.result.runtime.dispose();
+    });
+
+    it("R8 — keys down when their WINDOW goes (a remake: another density) are forgotten with it: the hand's up, sent to the window made anew, is nothing", async () => {
+      const s = await standing({ source: laptopAt2() });
+      const r = s.result.runtime.summary.geometry?.revision ?? 0;
+      const key = (action: "down" | "up"): void =>
+        s.renderer.attachment.dispatchInput?.(
+          { kind: "key", action, key: "a", code: "KeyA", modifiers: NONE },
+          r,
+        );
+      key("down");
+      await delivered();
+      expect(s.first.keyInputs.map((k) => k.type)).toEqual(["keyDown"]);
+      await s.result.runtime.navigate({ action: "emulate", emulation: ANOTHER_DENSITY });
+      await delivered();
+      const made = s.result.native.windows[1];
+      if (made === undefined) throw new Error("no window was made anew");
+      key("up");
+      await delivered();
+      expect(made.keyInputs).toEqual([]);
+      s.result.runtime.dispose();
     });
 
     it("R2 — the net under the hand: a press waiting for a word its page NEVER says is refused after a second, counted — and the key behind it is delivered", async () => {
