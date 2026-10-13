@@ -127,9 +127,6 @@ export interface PaneLocal extends KindLocal {
   ): { readonly G: PaneGeometry; readonly ext: PaneExtent; readonly zoom: number } | undefined;
   /** PT-3 — send `e`'s page an input (the hand's lease: keys, text, the IME); false — no face, or a view-only one. */
   send(e: Entity, input: LiveInput): boolean;
-  /** PT-6a (M7 C1) — when `e`'s page last STIRRED its pane (a frame of it arrived, an input was sent it; `performance.now()`
-   * ms), or undefined: no face. */
-  stirred(e: Entity): number | undefined;
   /** PT-3 — navigate `e`'s page through the host's `BROWSER_NAVIGATION`, by its face's key; false — none lent, no page. */
   navigate(e: Entity, command: BrowserNavigationCommand): boolean;
   /** PT-3 — a control's act: back, forward, reload (stop while the page loads), the address (the hand's). */
@@ -356,7 +353,6 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
     },
     layout: (e) => laidOut.get(e),
     send: (e, input) => live.send(e, input),
-    stirred: (e) => live.stirred(e),
     navigate,
     act,
     // THE HAND'S INPUT (ruling 3): its page's press, the press's moves and release wherever they go, the hover and the wheel over

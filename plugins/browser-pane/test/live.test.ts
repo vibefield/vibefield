@@ -25,7 +25,7 @@ import {
   type SlotContext,
 } from "@vibefield/plugin-sdk/desk";
 import { productPalette } from "@vibefield/plugin-sdk/testing";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   BROWSER,
   BROWSER_PANE_KIND,
@@ -342,35 +342,6 @@ describe("the pane's live page — its faces", () => {
     expect(opener.face(1 as Entity, spec, S)?.texture()?.width).toBe(2560);
     expect(opener.faces()).toMatchObject({ opened: 1, landed: 1 });
     expect(held.n).toEqual({ wake: 0, redraw: 0, remake: [] });
-  });
-
-  it("PT-6a (M7, C1) — the local says when a pane's page last STIRRED it (what the hand reads to let a held, still page's desk sleep): a frame's arrival, and an input sent; nothing for a pane with no face", () => {
-    const now = vi.spyOn(performance, "now").mockReturnValue(1_000);
-    try {
-      const t = fakeHost();
-      const local = createPaneLocal(t.host);
-      expect(local.stirred(1 as Entity)).toBeUndefined();
-      local.face(1 as Entity, spec, S);
-      expect(local.stirred(1 as Entity)).toBe(Number.NEGATIVE_INFINITY);
-      const face = t.faces.get("13918995204487956201-1");
-      now.mockReturnValue(2_000);
-      face?.land();
-      expect(local.stirred(1 as Entity)).toBe(2_000);
-      now.mockReturnValue(3_500);
-      expect(
-        local.send(1 as Entity, {
-          kind: "key",
-          key: "a",
-          code: "KeyA",
-          phase: "down",
-          mods: 0,
-          repeat: false,
-        }),
-      ).toBe(true);
-      expect(local.stirred(1 as Entity)).toBe(3_500);
-    } finally {
-      now.mockRestore();
-    }
   });
 
   it("an ARRIVAL wakes the desk; the tick TAKES — a frame in the same texture asks a REDRAW, a new texture or new words a REMAKE — and answers false", () => {

@@ -22,7 +22,6 @@ import {
   judgeParked,
   judgePicker,
   judgePopup,
-  judgeSleep,
   judgeStopped,
   NOTICE_CLASSIFY,
   noticeCapsule,
@@ -256,53 +255,6 @@ describe("the page's honest life — its rows", () => {
     expect(judgeDownload({ ...DOWNLOAD, asked: 0, path: "/file.bin" })).toEqual([
       "DOWNLOAD: the download was never asked for",
       "DOWNLOAD: the page is at /file.bin, not the page that asked",
-    ]);
-  });
-
-  it("PT-6a (M7 C1) SLEEP: a held page that is still lets the desk sleep — asleep a second after its field blurred; after a key or a wheel asleep again after the hand's quiet (not before it, not long after); after the lease's end and the page's last frame within their bounds; each stir wakes it", () => {
-    const ok = {
-      still: true,
-      after: {
-        key: { woke: true, ms: 262 },
-        wheel: { woke: true, ms: 270 },
-        lease: { woke: true, ms: 24 },
-        arrival: { woke: true, ms: 290 },
-      },
-    };
-    expect(judgeSleep(ok)).toEqual([]);
-    // before C1: a held page never let the desk sleep
-    expect(
-      judgeSleep({
-        still: false,
-        after: {
-          key: { woke: false, ms: null },
-          wheel: { woke: false, ms: null },
-          lease: { woke: false, ms: null },
-          arrival: { woke: false, ms: null },
-        },
-      }),
-    ).toEqual([
-      "SLEEP: a held page with nothing moving — its field blurred, a second gone — keeps the desk awake: it steps every frame for nothing",
-      "SLEEP: the key did not wake the desk — what it moved was never drawn",
-      "SLEEP: the wheel did not wake the desk — what it moved was never drawn",
-      "SLEEP: the lease did not wake the desk — what it moved was never drawn",
-      "SLEEP: the arrival did not wake the desk — what it moved was never drawn",
-    ]);
-    // asleep too soon after a key; too late after a wheel; never again after the page's frames
-    expect(
-      judgeSleep({
-        ...ok,
-        after: {
-          ...ok.after,
-          key: { woke: true, ms: 40 },
-          wheel: { woke: true, ms: 900 },
-          arrival: { woke: true, ms: null },
-        },
-      }),
-    ).toEqual([
-      `SLEEP: after the key the desk slept 40 ms later — before the hand's quiet (${HONEST_ROWS.sleepNotBeforeMs})`,
-      `SLEEP: after the wheel the desk slept 900 ms later, not within ${HONEST_ROWS.sleepWithinMs}`,
-      `SLEEP: after the arrival the desk was still awake ${HONEST_ROWS.sleepWatchMs} ms later, not within ${HONEST_ROWS.sleepArrivalWithinMs}`,
     ]);
   });
 
