@@ -673,6 +673,20 @@ interface Lane {
   went(url: string): void;
 }
 
+/** The service's timers (the host's, or a test's clock). */
+type LiveTimers = NonNullable<DeskLiveDeps["timers"]>;
+
+/**
+ * PT-6a (M7 B6) — THE WINDOW'S forget timers: by its shelf of page stills (one a window, `pageStills()`), each pane's key's ONE
+ * timer — the newest delete's, whichever mount made it, with the clock that set it. An open in ANY mount cancels it. (Before:
+ * each mount kept its own; a pane deleted, its mount gone, undone and deleted again in the next mount left the first timer
+ * to forget the still ten seconds into the second grace.)
+ */
+const forgetTimers = new WeakMap<
+  object,
+  Map<string, { readonly timers: LiveTimers; handle: unknown }>
+>();
+
 export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
   /** PT-5a: the desk's loop is parked — every page is held paused until it runs again. */
   let parked = false;
@@ -720,7 +734,16 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     return work;
   };
   /** PT-5b: deleted panes' stills, each forgotten when its page's grace lapses (an undo within it cancels). */
-  const forgetting = new Map<string, unknown>();
+  const forgetting = ((): Map<string, { readonly timers: LiveTimers; handle: unknown }> => {
+    const shelf = deps.stills;
+    if (shelf === undefined) return new Map();
+    let held = forgetTimers.get(shelf);
+    if (held === undefined) {
+      held = new Map();
+      forgetTimers.set(shelf, held);
+    }
+    return held;
+  })();
   /**
    * PT-5b — THE PAGES LET GO: a face that closes lets its lane go, and the pool's grace keeps the page (a deleted pane's, an
    * undo away; another mount's) — ALIVE, so counted. What this service knows of each it let go (when it was last seen,
@@ -935,7 +958,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     // PT-5b: the pane is on the desk again (an undo within its page's grace): its still is not forgotten
     const owed = forgetting.get(key);
     if (owed !== undefined) {
-      timers.clear(owed);
+      owed.timers.clear(owed.handle);
       forgetting.delete(key);
     }
     const opened = liveBrowserSpec(spec);
@@ -1487,15 +1510,17 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         const stills = deps.stills;
         const docId = deps.docId?.();
         if (stills !== undefined && docId !== undefined && deps.exists?.(key) === false) {
-          forgetting.set(
-            key,
-            timers.set(() => {
-              forgetting.delete(key);
-              if (deps.exists?.(key) !== false || deps.docId?.() !== docId) return;
-              counts.stillsForgotten += 1;
-              void track(stills.forget(docId, key).catch(() => undefined));
-            }, graceMs()),
-          );
+          // (PT-6a, M7 B6: the newest delete owns the key's one timer — another's, of any mount, is cleared)
+          const was = forgetting.get(key);
+          if (was !== undefined) was.timers.clear(was.handle);
+          const entry: { readonly timers: LiveTimers; handle: unknown } = { timers, handle: null };
+          entry.handle = timers.set(() => {
+            forgetting.delete(key);
+            if (deps.exists?.(key) !== false || deps.docId?.() !== docId) return;
+            counts.stillsForgotten += 1;
+            void track(stills.forget(docId, key).catch(() => undefined));
+          }, graceMs());
+          forgetting.set(key, entry);
         }
         // its lane's slot may be another's now
         replan();

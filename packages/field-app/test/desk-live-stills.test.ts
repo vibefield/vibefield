@@ -499,6 +499,76 @@ describe("PT-5b — the still is FORGOTTEN with its pane (ruling 1)", () => {
     expect(u.shelf.stills.forget).not.toHaveBeenCalled();
   });
 
+  it("PT-6a (M7, B6) — ONE forget timer per key in the WINDOW, the newest delete's: deleted in mount 1, undone and deleted again in mount 2 — mount 1's timer forgets nothing (the undo cancelled it, in any mount); the still is forgotten when the SECOND grace lapses, once (before: mount 1's timer forgot it 10 s into the second grace)", async () => {
+    const a = stage({ graceMs: () => 10_000 });
+    a.shelf.shelf.set(`${DOC}/${KEY}`, stillOf());
+    const first = a.open();
+    a.exists.value = false;
+    first.face.close();
+    // the mount goes (a plugin toggled): its timer stands (PT-5b2: the undo's grace, not the mount's)
+    a.live.dispose();
+    // mount 2: the same window — its clock, its shelf, its document
+    const b = stage({
+      graceMs: () => 10_000,
+      now: a.clock.now,
+      timers: a.clock.timers,
+      stills: a.shelf.stills,
+      takeStill: a.shelf.takeStill as never,
+      decodeStill: a.shelf.decodeStill as never,
+      exists: () => a.exists.value,
+    });
+    a.clock.advance(2_000);
+    // ⌘Z in mount 2: the face opens there
+    a.exists.value = true;
+    const again = b.open(KEY, false);
+    a.clock.advance(4_000);
+    // deleted AGAIN, six seconds after the first delete: its grace runs from THIS delete
+    a.exists.value = false;
+    again.face.close();
+    // ten seconds after the FIRST delete: nothing forgotten
+    a.clock.advance(4_000);
+    await b.live.settled();
+    expect(a.shelf.stills.forget).not.toHaveBeenCalled();
+    a.clock.advance(5_999);
+    await b.live.settled();
+    expect(a.shelf.stills.forget).not.toHaveBeenCalled();
+    // ten seconds after the SECOND: forgotten, once
+    a.clock.advance(1);
+    await b.live.settled();
+    expect(a.shelf.stills.forget).toHaveBeenCalledTimes(1);
+    a.clock.advance(60_000);
+    await b.live.settled();
+    expect(a.shelf.stills.forget).toHaveBeenCalledTimes(1);
+    // two desks of one window SHOWING the pane at its delete (the board and an inside view): each face closes — one timer
+    // stands, the newest's; the still is forgotten once, at ITS lapse
+    const c = stage({ graceMs: () => 10_000 });
+    c.shelf.shelf.set(`${DOC}/${KEY}`, stillOf());
+    const e = stage({
+      graceMs: () => 10_000,
+      now: c.clock.now,
+      timers: c.clock.timers,
+      stills: c.shelf.stills,
+      takeStill: c.shelf.takeStill as never,
+      decodeStill: c.shelf.decodeStill as never,
+      exists: () => c.exists.value,
+    });
+    const onC = c.open();
+    const onE = e.open(KEY, false);
+    c.exists.value = false;
+    onC.face.close();
+    c.clock.advance(1_000);
+    onE.face.close();
+    c.clock.advance(9_000);
+    await e.live.settled();
+    expect(c.shelf.stills.forget).not.toHaveBeenCalled();
+    c.clock.advance(1_000);
+    await e.live.settled();
+    expect(c.shelf.stills.forget).toHaveBeenCalledTimes(1);
+    c.clock.advance(60_000);
+    await e.live.settled();
+    expect(c.shelf.stills.forget).toHaveBeenCalledTimes(1);
+  });
+
   it("UNDONE within the grace: the pane's face opens again — its still is kept, and shown; the MOUNT going takes no grace away (PT-5b2: the timer is the undo's, not the mount's)", async () => {
     const s = stage();
     s.shelf.shelf.set(`${DOC}/${KEY}`, stillOf());
