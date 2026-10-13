@@ -48,10 +48,10 @@
 //   FRAME-BUSY   — PT-6a (K1): a page holding an AD-LIKE frame of another site, busy after a press (a laptop's) or a tap
 //                  (a phone's) on its OWN field: every key typed meanwhile lands in order — never refused (the page's own
 //                  doubt holds its keys until its word, the host's bound); the page says whether the hint's word waited
-//                  behind its busy task with the hint's gesture already answered (K1's path) or not; a KEY leg too (the
-//                  field's own first keydown posting the task). Runs 6–10: no leg can force K1's order (the page's word
-//                  comes before a task its handler posts; a release or a tap's end waits for the task) — K1's witness is
-//                  its units, the legs say only that the keys land in order;
+//                  behind its busy task with the hint's gesture already answered (K1's path) or not; and K1's own leg —
+//                  a KEY whose keydown requests a RENDER (run 11: the render runs ahead of the page's word): its down
+//                  answered, its text waits on the word past the second, K1 holds it — required of that leg. (A posted
+//                  task never holds the word; a press's release and a tap's end wait for the task — runs 6–11);
 //   PRESS-ANSWER — PT-6a (K1, the engine's fact): a press on a FRAMELESS page whose own mousedown holds its thread — how
 //                  long main's count of the hand's commands in flight stayed up after it: is a press answered before its
 //                  handler (PT-5b3's probe said so), or after?
@@ -278,7 +278,7 @@ export interface FramesSeen {
   readonly busy?: {
     readonly press: FrameBusySeen | null;
     readonly tap: FrameBusySeen | null;
-    /** PT-6a (run 6): the page busy after a KEY on its field (absent: not run) — its keys land in order; K1 not reached (run 10) */
+    /** PT-6a (run 11): the page RENDERING after a KEY on its field — K1's hold reached and required (absent: not run) */
     readonly key?: FrameBusySeen | null;
   };
   /** PT-6a (K1, the engine's fact): a press on a frameless page whose own mousedown holds its thread (absent: not run; null:
@@ -1009,6 +1009,11 @@ export function judgeFrameBusy(seen: NonNullable<FramesSeen["busy"]>): string[] 
     else if (s.field !== s.typed)
       out.push(
         `FRAME-BUSY (${leg}): the keys typed while the page was busy after ${hint} on its field landed as "${s.field ?? "nothing"}", not "${s.typed}" in order — refused, or lost`,
+      );
+    // (run 11: the key's leg is K1's witness — its render held the page's word past the second, its down answered first)
+    else if (leg === "key" && s.held !== true)
+      out.push(
+        "FRAME-BUSY (key): the page's word did not wait behind its render (or was never read) — K1's hold was never reached: the leg proved nothing",
       );
   }
   return out;

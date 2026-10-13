@@ -865,10 +865,12 @@ export const FRAMES_BUSY = {
  * It says (`busy`, with every ask): each spin (when it began, how long, of a press or a tap), when its own timer fired,
  * and when its field heard each click — so a row knows whether the WORD of the hint waited behind the spin (its timer
  * after the spin) with the hint's gesture already answered (its click before the spin). `on: "key"` (`&on=key`): a press
- * or a tap posts nothing; the field's FIRST key's `keydown` posts the task (once) and says when it came (`keys`) — a
- * key's down is answered at once, so the keys after it meet the page's doubt while it is busy, with nothing of the hand
- * in flight before them (run 6: a press's release and a tap's end are answered only after the task — the keys waited
- * behind them, never on the word).
+ * or a tap posts nothing; the field's FIRST key's `keydown` requests a RENDER (`requestAnimationFrame`, busy
+ * `FRAMES_BUSY_MS`, once) and says when it came (`keys`) — a key's down is answered at once, and Chromium runs the render
+ * AHEAD of the words' 0-ms timer posted before it (run 11: "here@1465"), so the keys after it meet the page's doubt while
+ * its word waits behind the render, nothing of the hand in flight before them: K1's hold. (A posted `MessageChannel` task
+ * runs after the words' timer — runs 10, 11: the word first; a press's release and a tap's end are answered only after
+ * the task, so their keys wait behind them, never on the word.)
  */
 export const framesBusyHtml = (
   name: string,
@@ -889,11 +891,12 @@ ${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; } iframe { positio
     ch.port1.onmessage = () => { const at = performance.now(); while (performance.now() - at < ${FRAMES_BUSY_MS}) {} busy.spins.push([Math.round(at), Math.round(performance.now() - at), why]); };
     ch.port2.postMessage(0);
   };
+  const render = (why) => requestAnimationFrame(() => { const at = performance.now(); while (performance.now() - at < ${FRAMES_BUSY_MS}) {} busy.spins.push([Math.round(at), Math.round(performance.now() - at), why]); });
   const t = document.getElementById("t");
   if (${JSON.stringify(on)} === "key") {
     let keyed = false;
     globalThis.addEventListener("keydown", (e) => { if (e.target === t && !keyed) mark(); }, true);
-    t.addEventListener("keydown", () => { if (keyed) return; keyed = true; busy.keys.push(now()); hold("key"); });
+    t.addEventListener("keydown", () => { if (keyed) return; keyed = true; busy.keys.push(now()); render("key"); });
   } else {
     globalThis.addEventListener("pointerdown", (e) => { if (e.target === t && e.pointerType !== "touch") mark(); }, true);
     globalThis.addEventListener("touchend", (e) => { if (e.target === t) mark(); }, true);

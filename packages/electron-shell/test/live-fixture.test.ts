@@ -754,7 +754,16 @@ describe("the live pane's fixture page", () => {
           if (capture === true) captures.set(type, [...(captures.get(type) ?? []), listener]);
         },
       };
-      new Function("globalThis", "document", "MessageChannel", "performance", "setTimeout", script)(
+      const frames: (() => void)[] = [];
+      new Function(
+        "globalThis",
+        "document",
+        "MessageChannel",
+        "performance",
+        "setTimeout",
+        "requestAnimationFrame",
+        script,
+      )(
         global,
         { getElementById: () => field },
         class {
@@ -771,13 +780,17 @@ describe("the live pane's fixture page", () => {
           order.push("timer");
           timers.push(callback);
         },
+        (callback: () => void) => {
+          order.push("render");
+          frames.push(callback);
+        },
       );
       const fire = (type: string, e: Record<string, unknown> = {}): void => {
         const event = { ...e, target: field };
         for (const listener of captures.get(type) ?? []) listener(event);
         for (const listener of listeners.get(type) ?? []) listener(event);
       };
-      return { global, order, posted, timers, fire };
+      return { global, order, posted, timers, frames, fire };
     };
     let clock = 0;
     const { global, order, posted, timers, fire } = page(own);
@@ -816,10 +829,12 @@ describe("the live pane's fixture page", () => {
     expect(keyed.timers).toHaveLength(0);
     keyFire("keydown");
     keyFire("keydown");
-    expect(keyed.posted).toHaveLength(1);
+    // (run 11: the key's busy work is a RENDER — requested, never posted)
+    expect(keyed.posted).toHaveLength(0);
+    expect(keyed.frames).toHaveLength(1);
     expect(keyed.timers).toHaveLength(1);
-    expect(keyed.order).toEqual(["timer", "post"]);
-    keyed.posted.shift()?.();
+    expect(keyed.order).toEqual(["timer", "render"]);
+    keyed.frames.shift()?.();
     expect((keyed.global.__vfBusy?.spins[0] as [number, number, string] | undefined)?.[2]).toBe(
       "key",
     );
