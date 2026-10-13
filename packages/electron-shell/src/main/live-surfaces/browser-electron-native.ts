@@ -1302,8 +1302,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * `FOCUS_WORD_MS` — at once, in a document already PULL-ONLY — ASKS the page where its focus is: the words' own `where()`
    * in their isolated world of the main frame, after a 0-ms timer (`PULL_WORD_EXPRESSION`), off the hand's chain. Its
    * answer settles the doubt it was asked for as a pushed word does (`here`: the held keys go, in order; `inner`, `away`: as
-   * J7), stamped at the ask's send (J3) — and only while that doubt still awaits its word: one a push, a frame's word, a
-   * later hint or a commit has ended, it comes second, and is stale. The answer that settles a doubt marks the document
+   * J7) — and only while that doubt still awaits its word: one a push, a frame's word, a later hint or a commit has ended,
+   * it comes second, and is stale (M6: so no J3 stamp — the ask always goes after its doubt's hint, and none could be read). The answer that settles a doubt marks the document
    * PULL-ONLY until its next commit (its push never came). A busy page answers once it turns (its word comes first); a hung
    * one never: K1's hold and its bound stand. Asked once each time the doubt's word is timed (`timeWord`).
    */
@@ -1326,7 +1326,6 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   private askWhere(due: object): void {
     const context = this.#worlds.get("")?.get(this.#mainFrame ?? "");
     if (context === undefined || this.isDestroyed()) return;
-    const sent = performance.now();
     // (refused, or its session gone: the doubt holds as K1 holds — its word, or the bound)
     void this.window.webContents.debugger
       .sendCommand("Runtime.evaluate", {
@@ -1341,7 +1340,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
             ?.result?.value;
           if (this.isDestroyed() || this.#frames.pageWord() !== due) return;
           if (where !== "here" && where !== "inner" && where !== "away") return;
-          this.#frames.where(undefined, where, sent);
+          this.#frames.where(undefined, where);
           if (this.#frames.pageWord() !== due) this.#frames.markPullOnly();
           this.focusMoved();
         },
