@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { FRAMES_WORD } from "../src/testing/live-fixture";
 import {
   FRAMES_ROWS,
+  type HeldEyeSeen,
   judgeBackWritten,
   judgeFrameBusy,
   judgeFrameClipped,
@@ -29,8 +30,14 @@ import {
   judgePressAnswer,
   judgeStood,
   judgeStuck,
+  pageOfWindow,
+  pageThroughEye,
   visibleView,
 } from "../src/testing/smoke-frames";
+import { pageOnWindow } from "../src/testing/smoke-use-pane";
+
+/** A point in a page's own CSS px. */
+type Point = readonly [number, number];
 
 describe("PT-5d — the frames rows, as the product says them", () => {
   it("FRAME-PRESS: the frame's click where the hand pressed (±1 CSS px), the host hearing nothing on the frame's element; before PT-5d the host heard the press on the element and the frame nothing", () => {
@@ -53,7 +60,7 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     expect(
       judgeFramePress("FRAME-PRESS", { aimed: [90, 42], clicked: [96, 42], hostHeard: [] }),
     ).toEqual([
-      "FRAME-PRESS: the frame's click landed at 96, 42, not where the hand pressed (90, 42, ±1)",
+      "FRAME-PRESS: the frame's click landed at 96, 42, not where the hand pressed (90.0, 42.0, ±1): the routing carried the point elsewhere",
     ]);
     expect(judgeFramePress("FRAME-PRESS", { aimed: null, clicked: null, hostHeard: [] })).toEqual([
       "FRAME-PRESS: the frame's part could not be aimed at — the row proved nothing",
@@ -66,116 +73,114 @@ describe("PT-5d — the frames rows, as the product says them", () => {
         hostHeard: [],
       }),
     ).toEqual([
-      "FRAME-PRESS (its own site's frame in it): the frame's click landed at 17, 7, not where the hand pressed (70, 30, ±1)",
+      "FRAME-PRESS (its own site's frame in it): the frame's click landed at 17, 7, not where the hand pressed (70.0, 30.0, ±1): the routing carried the point elsewhere",
     ]);
   });
 
-  it("FRAME-PRESS (M15 A, M18) — a frame's click judged against the HAND's own mapping: the host's calibration left and right of the frame at the frame point's height, its errors interpolated to the point's x, ±1; a side never heard: the click proved nothing", () => {
-    // run 2's numbers: the host's own clicks miss by +4, +2 left of the frame and −2, +2 right of it
-    const calibration = (at: number, y: number) => ({
-      left: { aimed: [140, y] as const, clicked: [144, y + 2] as const },
-      right: { aimed: [820, y] as const, clicked: [818, y + 2] as const },
-      at,
+  it("FRAME-PRESS (PT-6a, ruling 3) — the hand aims THROUGH THE PANE'S OWN EYE, both ways: the frame's click judged at the point its WHOLE window point presses (±1) — M18's interpolation and M22 A's column gone; the host's own presses beside the frame each within ±1 of theirs (what the calibration reads), else the aim is off: the click proved nothing; a press taken never heard, or none, or no calibration: the click proved nothing", () => {
+    const ground = (aimed: Point, pressed: Point, clicked: Point | null) => ({
+      aimed,
+      pressed,
+      clicked,
     });
-    // F's button at the host's x 250: the mapping's error there +3.0, +2.0 — its click at 93, 44 is where the hand put it
-    expect(
-      judgeFramePress("FRAME-PRESS", {
-        aimed: [90, 42],
-        clicked: [93, 44],
-        hostHeard: [],
-        calibration: calibration(250, 162),
-      }),
-    ).toEqual([]);
-    // its own-site child's at the host's x 700: −0.9, +2.0 — 69, 32 is where the hand put it
-    expect(
-      judgeFramePress("FRAME-PRESS (its own site's frame in it)", {
-        aimed: [70, 30],
-        clicked: [69, 32],
-        hostHeard: [],
-        calibration: calibration(700, 170),
-      }),
-    ).toEqual([]);
-    // a click 3 px from where the hand's mapping put it: the routing's
-    expect(
-      judgeFramePress("FRAME-PRESS", {
-        aimed: [90, 42],
-        clicked: [96, 44],
-        hostHeard: [],
-        calibration: calibration(250, 162),
-      }),
-    ).toEqual([
-      "FRAME-PRESS: the frame's click landed at 96, 44, not where the hand's own mapping put the aim 90, 42 (93.0, 44.0 — the host's calibration beside it missed by 3.0, 2.0; ±1): the routing carried the point elsewhere",
+    const calibration = {
+      left: ground([140, 162], [140.3, 161.8], [140, 162]),
+      right: ground([820, 162], [819.6, 162.2], [820, 162]),
+      column: ground([250, 560], [250.2, 559.7], [250, 560]),
+      at: 250,
+    };
+    const press = {
+      aimed: [90, 42] as const,
+      pressed: [89.7, 42.3] as const,
+      clicked: [90, 42] as const,
+      hostHeard: [],
+      calibration,
+    };
+    expect(judgeFramePress("FRAME-PRESS", press)).toEqual([]);
+    // a click 3 px from where the hand pressed, its calibration within ±1: the routing's
+    expect(judgeFramePress("FRAME-PRESS", { ...press, clicked: [93, 42] })).toEqual([
+      "FRAME-PRESS: the frame's click landed at 93, 42, not where the hand pressed (89.7, 42.3, ±1; the host's calibration beside it within 0.4, 0.3): the routing carried the point elsewhere",
     ]);
-    // a calibration side never heard; none taken
+    // run 1's flat aim, as its calibration read it (+4, +2 left of the frame): the aim is off — the click proved nothing
     expect(
       judgeFramePress("FRAME-PRESS", {
-        aimed: [90, 42],
+        ...press,
         clicked: [93, 44],
-        hostHeard: [],
-        calibration: { ...calibration(250, 162), right: { aimed: [820, 162], clicked: null } },
+        calibration: { ...calibration, left: ground([140, 162], [140, 162], [144, 164]) },
       }),
     ).toEqual([
-      "FRAME-PRESS: the host's calibration beside the frame never landed — the click proved nothing",
+      "FRAME-PRESS: the hand's aim missed the host's own ground beside the frame by 4.0, 2.0 (±1) — the aim is off: the click proved nothing",
     ]);
+    // a side out of the page's view, not pressed (FRAME-TOUCH's phone shows 402 of its host's 800): read from the presses taken
+    expect(
+      judgeFramePress("FRAME-PRESS", { ...press, calibration: { ...calibration, right: null } }),
+    ).toEqual([]);
+    // a press taken never heard; none taken; none at all
+    for (const c of [
+      { ...calibration, column: ground([250, 560], [250.4, 559.7], null) },
+      { left: null, right: null, at: 250 },
+      null,
+    ])
+      expect(judgeFramePress("FRAME-PRESS", { ...press, calibration: c })).toEqual([
+        "FRAME-PRESS: the host's calibration beside the frame never landed — the click proved nothing",
+      ]);
+    // a ground press saying no point pressed is read at its aim
     expect(
       judgeFramePress("FRAME-PRESS", {
-        aimed: [90, 42],
-        clicked: [93, 44],
-        hostHeard: [],
-        calibration: null,
+        ...press,
+        calibration: { ...calibration, left: { aimed: [140, 162], clicked: [142, 162] } },
       }),
     ).toEqual([
-      "FRAME-PRESS: the host's calibration beside the frame never landed — the click proved nothing",
+      "FRAME-PRESS: the hand's aim missed the host's own ground beside the frame by 2.0, 0.3 (±1) — the aim is off: the click proved nothing",
     ]);
   });
 
-  it("FRAME-PRESS (M22 A, refined) — the x error measured by a host-ground press at the press's SAME window x (below the frame), the y error by presses left and right at its SAME window y: the window's quantisation is the press's own column's and row's — run 5's own-site child (68 for an interpolated 69.1) lands where its column put it", () => {
-    // run 5's child S at the host's x 700: the line between +4 and −2 says −0.9 there; its own column's press says −2
-    const refined = {
-      left: { aimed: [140, 170] as const, clicked: [144, 172] as const },
-      right: { aimed: [820, 170] as const, clicked: [818, 172] as const },
-      column: { aimed: [700, 560] as const, clicked: [698, 562] as const },
-      at: 700,
-    };
-    expect(
-      judgeFramePress("FRAME-PRESS (its own site's frame in it)", {
-        aimed: [70, 30],
-        clicked: [68, 32],
-        hostHeard: [],
-        calibration: refined,
-      }),
-    ).toEqual([]);
-    // a side out of the page's view, not pressed (FRAME-TOUCH's phone shows 402 of its host's 800): the row's y from the other
-    expect(
-      judgeFramePress("FRAME-PRESS (its own site's frame in it)", {
-        aimed: [70, 30],
-        clicked: [68, 32],
-        hostHeard: [],
-        calibration: { ...refined, right: null },
-      }),
-    ).toEqual([]);
-    // the column's press never heard: the click proved nothing
-    expect(
-      judgeFramePress("FRAME-PRESS (its own site's frame in it)", {
-        aimed: [70, 30],
-        clicked: [68, 32],
-        hostHeard: [],
-        calibration: { ...refined, column: { aimed: [700, 560], clicked: null } },
-      }),
-    ).toEqual([
-      "FRAME-PRESS (its own site's frame in it): the host's calibration beside the frame never landed — the click proved nothing",
-    ]);
-    // a click 2 px from where its column put it: the routing's
-    expect(
-      judgeFramePress("FRAME-PRESS (its own site's frame in it)", {
-        aimed: [70, 30],
-        clicked: [66, 32],
-        hostHeard: [],
-        calibration: refined,
-      }),
-    ).toEqual([
-      "FRAME-PRESS (its own site's frame in it): the frame's click landed at 66, 32, not where the hand's own mapping put the aim 70, 30 (68.0, 32.0 — the host's calibration beside it missed by -2.0, 2.0; ±1): the routing carried the point elsewhere",
-    ]);
+  it("PT-6a (ruling 3) — the aim THROUGH THE PANE'S OWN EYE: an eye infinitely high aims as the flat map (`pageOnWindow`) does; the product's eye, over its rect's centre, the face a lift above the mat, aims k = h / (h − z) farther from the eye's foot; and the product's own way back (core's held input, the law's `facePoint`, `pagePoint`) returns the page point", () => {
+    // a laptop's pane laid as the law lays it: its rect at 1000, 500; its page 1280 × 800 CSS px on a face 640 × 400 units,
+    // centred 20 below the rect's centre (the head above it), the pane's half height 230 — its open extent −230 … 220, its
+    // centre 5 above the rect's; the desk drew that extent at 700, 420, 1.5 CSS px a unit, the desk 10, 30 into the window
+    const view = [1280, 800] as const;
+    const off = { left: 10, top: 30 };
+    const held = (h: number): HeldEyeSeen => ({
+      cx: 700,
+      cy: 420,
+      hx: 320 * 1.5,
+      hy: 225 * 1.5,
+      s: 1.5,
+      settled: true,
+      eye: { ex: 1000, ey: 500, h },
+      centre: [1000, 500, 24.6],
+      axes: [
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+      ],
+      page: [0, 20, 320, 200],
+      ext: [1000, 495],
+    });
+    const points = [
+      [140, 162],
+      [820, 162],
+      [250, 560],
+      [640, 400],
+    ] as const;
+    for (const [px, py] of points) {
+      const flat = pageOnWindow(held(1e12), view, off, px, py);
+      const far = pageThroughEye(held(1e12), view, off, px, py);
+      expect(far.x).toBeCloseTo(flat.x, 6);
+      expect(far.y).toBeCloseTo(flat.y, 6);
+      // the eye's foot on the window: the rect's centre, 5 units below the extent's — 710, 457.5
+      const k = 1636.6 / (1636.6 - 24.6);
+      const aim = pageThroughEye(held(1636.6), view, off, px, py);
+      expect(aim.x - 710).toBeCloseTo((flat.x - 710) * k, 6);
+      expect(aim.y - 457.5).toBeCloseTo((flat.y - 457.5) * k, 6);
+      const back = pageOfWindow(held(1636.6), view, off, aim.x, aim.y);
+      expect(back[0]).toBeCloseTo(px, 9);
+      expect(back[1]).toBeCloseTo(py, 9);
+    }
+    // the page's 140, 375 window px left of the eye's foot: drawn and pressed 1.5 % farther out — 5.7 px left of the flat aim
+    const flat = pageOnWindow(held(1636.6), view, off, 140, 162);
+    expect(pageThroughEye(held(1636.6), view, off, 140, 162).x - flat.x).toBeCloseTo(-5.72, 2);
   });
 
   it("M16-1 — each row of the host's frame starts from a KNOWN state and says where its frame stands: the frame where the row aims (the host at its top) — else the row proved nothing, never a pass (run 1: FRAME-WHEEL's chain left the host at its end, every row after it aimed at a frame out of view)", () => {
@@ -633,28 +638,46 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
   });
 
-  it("FRAME-ZOOMED (M7 H11; M22 D, E): a phone host naming no viewport (drawn at 0.41) — a tap into its frame lands on its target, judged against the hand's own mapping (A's calibration, ±1); a page at scale 1 proves nothing; the desk's leg is gone (E: no door gives a laptop's page a scale — carried to PT-6)", () => {
-    // run 5's tap at 0.41: on bm at 538, 171 — its column and row on the host missing by -2, +11 (a window px ≈ 4 of the page's)
+  it("FRAME-ZOOMED (M7 H11; M22 D, E; PT-6a ruling 3): a phone host naming no viewport (drawn at 0.41) — a tap into its frame lands where its WHOLE window point pressed, through the pane's own eye (±1: a window px is ~3 of the page's — the aim's rounding judged, never tolerated); run 5's flat aim, as its calibration read it: the aim is off — the click proved nothing; a page at scale 1 proves nothing", () => {
+    const ground = (aimed: Point, pressed: Point, clicked: Point) => ({ aimed, pressed, clicked });
     const calibration = {
-      left: { aimed: [140, 280] as const, clicked: [143, 291] as const },
-      right: { aimed: [820, 280] as const, clicked: [817, 291] as const },
-      column: { aimed: [698, 560] as const, clicked: [696, 571] as const },
+      left: ground([140, 280], [141.2, 279.1], [141, 279]),
+      right: ground([820, 280], [818.9, 281.3], [819, 281]),
+      column: ground([698, 560], [697.4, 561.5], [697, 562]),
       at: 698,
     };
     const phone = {
       aimed: [540, 160] as const,
-      clicked: [538, 171] as const,
+      pressed: [541.4, 158.8] as const,
+      // (2, −2 from the aim: within ±1 of where its whole window point pressed)
+      clicked: [542, 158] as const,
       hostHeard: [],
       calibration,
       scale: 0.41,
     };
     expect(judgeFrameZoomed({ phone })).toEqual([]);
     expect(judgeFrameZoomed({ phone: { ...phone, clicked: [220, 70] } })).toEqual([
-      "FRAME-ZOOMED (a phone, its page at 0.41): the frame's click landed at 220, 70, not where the hand's own mapping put the aim 540, 160 (538.0, 171.0 — the host's calibration beside it missed by -2.0, 11.0; ±1): the routing carried the point elsewhere",
+      "FRAME-ZOOMED (a phone, its page at 0.41): the frame's click landed at 220, 70, not where the hand pressed (541.4, 158.8, ±1; the host's calibration beside it within -0.4, 0.5): the routing carried the point elsewhere",
     ]);
-    // calibrated, the tolerance is A's ±1 — never a window px of the page's (3 at 0.41)
-    expect(judgeFrameZoomed({ phone: { ...phone, clicked: [540, 173] } })).toEqual([
-      "FRAME-ZOOMED (a phone, its page at 0.41): the frame's click landed at 540, 173, not where the hand's own mapping put the aim 540, 160 (538.0, 171.0 — the host's calibration beside it missed by -2.0, 11.0; ±1): the routing carried the point elsewhere",
+    // ±1 of where it pressed — never a window px of the page's (3 at 0.41)
+    expect(judgeFrameZoomed({ phone: { ...phone, clicked: [544, 159] } })).toEqual([
+      "FRAME-ZOOMED (a phone, its page at 0.41): the frame's click landed at 544, 159, not where the hand pressed (541.4, 158.8, ±1; the host's calibration beside it within -0.4, 0.5): the routing carried the point elsewhere",
+    ]);
+    // run 5's flat aim at 0.41: its host's own taps missed by −3 … +3, +11
+    expect(
+      judgeFrameZoomed({
+        phone: {
+          ...phone,
+          calibration: {
+            left: { aimed: [140, 280] as const, clicked: [143, 291] as const },
+            right: { aimed: [820, 280] as const, clicked: [817, 291] as const },
+            column: { aimed: [698, 560] as const, clicked: [696, 571] as const },
+            at: 698,
+          },
+        },
+      }),
+    ).toEqual([
+      "FRAME-ZOOMED (a phone, its page at 0.41): the hand's aim missed the host's own ground beside the frame by 3.0, 11.0 (±1) — the aim is off: the click proved nothing",
     ]);
     expect(judgeFrameZoomed({ phone: { ...phone, scale: 1 } })).toEqual([
       "FRAME-ZOOMED (a phone, its page at its own scale): the page stood at scale 1 — not drawn at another: that leg proved nothing",

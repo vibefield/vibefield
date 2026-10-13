@@ -68,7 +68,7 @@ import {
 import { PANE, type PaneHands, paneHands } from "./smoke-browser-pane";
 import type { WindowsSeen } from "./smoke-honest-pane";
 import type { LiveRowsDriver } from "./smoke-live-pane";
-import { type HeldFrameSeen, pageOnWindow } from "./smoke-use-pane";
+import type { HeldFrameSeen } from "./smoke-use-pane";
 
 /** The flag beside `--smoke-canvas` that runs these rows alone after the boot's (the author's loop). */
 export const FRAMES_FLAG = "--frames-pane";
@@ -306,6 +306,8 @@ type FramesDevice = NonNullable<NonNullable<FixtureReport["framed"]>["device"]>;
 export interface FramePressSeen {
   /** where the hand pressed, in the frame's own px (null: it could not be aimed) */
   readonly aimed: Point | null;
+  /** PT-6a (ruling 3): the frame's point its ROUNDED window point presses, through the pane's own eye (absent: the aim) */
+  readonly pressed?: Point;
   /** the frame's click there (null: none came) */
   readonly clicked: Point | null;
   /** what the host page heard on the frame's element over the press */
@@ -315,9 +317,11 @@ export interface FramePressSeen {
   readonly calibration?: Calibration | null;
 }
 
-/** M15 F1: a press on a host's own ground: where it was aimed, and where its click landed (null: none came). */
+/** M15 F1: a press on a host's own ground: where it was aimed, the point its rounded window point presses through the pane's
+ * own eye (PT-6a, ruling 3; absent: the aim), and where its click landed (null: none came). */
 interface GroundSeen {
   readonly aimed: Point;
+  readonly pressed?: Point;
   readonly clicked: Point | null;
 }
 
@@ -333,29 +337,102 @@ export interface Calibration {
   readonly at: number;
 }
 
-/** M15 A (M18): the hand's own mapping error at a frame point — the calibration's two errors interpolated to its x (the
- * mapping's error varies across the width: run 2, +4 left of the frame, −2 right of it); null: a side never heard. M22 A:
- * with its own COLUMN's press, the x error is that column's and the y error the row's (left and right, the same window y)
- * — the window's 1.4-px quantisation is a sawtooth no line follows (run 5: an interpolation 1.1 px from its click). */
-export function mappingError(c: Calibration): readonly [number, number] | null {
-  const err = (g: GroundSeen | null): readonly [number, number] | null =>
-    g === null || g.clicked === null
-      ? null
-      : [g.clicked[0] - g.aimed[0], g.clicked[1] - g.aimed[1]];
-  if (c.column !== undefined) {
-    // (the column's x; the row's y — the sides pressed, one at least: a side out of the page's view is not pressed)
-    const column = c.column === null ? null : err(c.column);
-    const rows = [c.left, c.right].filter((g) => g !== null);
-    const heard = rows.map(err).filter((e) => e !== null);
-    if (column === null || rows.length === 0 || heard.length < rows.length) return null;
-    return [column[0], heard.reduce((sum, e) => sum + e[1], 0) / heard.length];
+/** PT-6a (ruling 3): what the calibration READS — each press on the host's own ground beside the frame against the point it
+ * pressed, the largest miss each way. The hand aims through the pane's own eye now, both ways: the flat aim's error is gone,
+ * and with it M18's interpolation across the width and M22 A's column (the window's quantisation no longer in the aim's
+ * error — each press judged at the point its rounded window point presses). Null: a press taken never heard, or none
+ * taken (a side out of the page's view is not pressed). */
+export function calibrationMiss(c: Calibration): readonly [number, number] | null {
+  const taken = [c.left, c.right, c.column ?? null].filter((g) => g !== null);
+  if (taken.length === 0) return null;
+  let miss: [number, number] = [0, 0];
+  for (const g of taken) {
+    if (g.clicked === null) return null;
+    const at = g.pressed ?? g.aimed;
+    const dx = g.clicked[0] - at[0];
+    const dy = g.clicked[1] - at[1];
+    miss = [
+      Math.abs(dx) > Math.abs(miss[0]) ? dx : miss[0],
+      Math.abs(dy) > Math.abs(miss[1]) ? dy : miss[1],
+    ];
   }
-  const el = err(c.left);
-  const er = err(c.right);
-  if (c.left === null || c.right === null || el === null || er === null) return null;
-  const span = c.right.aimed[0] - c.left.aimed[0];
-  const s = span === 0 ? 0 : (c.at - c.left.aimed[0]) / span;
-  return [el[0] + (er[0] - el[0]) * s, el[1] + (er[1] - el[1]) * s];
+  return miss;
+}
+
+/** PT-6a (ruling 3): the pane in hand as the product draws and presses it — where the desk drew its open extent (core's held
+ * frame: the desk view's CSS px, `s` of them a desk unit) and, as its kind laid it (`local(type).layout(e)`), the pane's LOCAL
+ * eye, its face's centre and axes (u, v, its normal), the page's place on the face (centre, half extents), and the open
+ * extent's centre the hand's points are measured from. */
+export interface HeldEyeSeen extends HeldFrameSeen {
+  readonly eye: { readonly ex: number; readonly ey: number; readonly h: number };
+  readonly centre: Vec3;
+  readonly axes: readonly [Vec3, Vec3, Vec3];
+  readonly page: readonly [number, number, number, number];
+  readonly ext: readonly [number, number];
+}
+
+type Vec3 = readonly [number, number, number];
+const dot3 = (a: Vec3, b: Vec3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+/**
+ * PT-6a (ruling 3) — a point of the PAGE (the CSS px of the part it shows) on the window, THROUGH THE PANE'S OWN EYE, as the
+ * product presses it, inverted: the page point onto the face (the law's `faceOfPage`, at the size the page shows — the kind
+ * scales its `pagePoint` by the displayed frame's size), the face into the world (`pointAt`, on its top face), the world as
+ * the eye sees it on the desk (`seen`), the desk into the hand's frame and onto the desk's view (core's held input:
+ * `(screen − c) / s` from the open extent's centre). Before: `pageOnWindow`, as if flat — the face rides a lift above the
+ * mat, and its eye draws and presses it ~0.9 % farther from the eye's foot (run 1: +4 px at the laptop page's left, −2 at
+ * its right).
+ */
+export function pageThroughEye(
+  held: HeldEyeSeen,
+  view: readonly [number, number],
+  deskOff: { readonly left: number; readonly top: number },
+  px: number,
+  py: number,
+): { readonly x: number; readonly y: number } {
+  const [pcx, pcy, phx, phy] = held.page;
+  const u = pcx - phx + (px / view[0]) * 2 * phx;
+  const v = pcy - phy + (py / view[1]) * 2 * phy;
+  const [ex, ey] = held.axes;
+  const P: Vec3 = [
+    held.centre[0] + ex[0] * u + ey[0] * v,
+    held.centre[1] + ex[1] * u + ey[1] * v,
+    held.centre[2] + ex[2] * u + ey[2] * v,
+  ];
+  const k = held.eye.h / Math.max(held.eye.h - P[2], 1e-3);
+  const dx = held.eye.ex + (P[0] - held.eye.ex) * k;
+  const dy = held.eye.ey + (P[1] - held.eye.ey) * k;
+  return {
+    x: deskOff.left + held.cx + (dx - held.ext[0]) * held.s,
+    y: deskOff.top + held.cy + (dy - held.ext[1]) * held.s,
+  };
+}
+
+/** PT-6a (ruling 3) — the product's own way back: a window point → the hand's point (core's held input) → the desk → the face,
+ * cast from the pane's eye (the law's `facePoint`) → the page (`pagePoint`, at the size the page shows). Where a press at a
+ * WHOLE window point lands on the page — the aim's own rounding, judged. */
+export function pageOfWindow(
+  held: HeldEyeSeen,
+  view: readonly [number, number],
+  deskOff: { readonly left: number; readonly top: number },
+  wx: number,
+  wy: number,
+): Point {
+  const x = held.ext[0] + (wx - deskOff.left - held.cx) / Math.max(held.s, 1e-9);
+  const y = held.ext[1] + (wy - deskOff.top - held.cy) / Math.max(held.s, 1e-9);
+  const [ax, ay, n] = held.axes;
+  const O: Vec3 = [
+    held.eye.ex - held.centre[0],
+    held.eye.ey - held.centre[1],
+    held.eye.h - held.centre[2],
+  ];
+  const D: Vec3 = [x - held.eye.ex, y - held.eye.ey, -held.eye.h];
+  const dz = dot3(D, n);
+  const t = Math.abs(dz) > 1e-9 ? -dot3(O, n) / dz : 0;
+  const u = dot3(O, ax) + dot3(D, ax) * t;
+  const v = dot3(O, ay) + dot3(D, ay) * t;
+  const [pcx, pcy, phx, phy] = held.page;
+  return [((u - pcx + phx) / (2 * phx)) * view[0], ((v - pcy + phy) / (2 * phy)) * view[1]];
 }
 
 /** M16-1: a row of the host's frame acts only on a frame standing where it aims — at `FRAMES_BOX`, the host at its top; a
@@ -405,27 +482,28 @@ export function judgeFramePress(
   if (seen.aimed === null)
     return [`${row}: the frame's part could not be aimed at — the row proved nothing`];
   const out: string[] = [];
+  // PT-6a (ruling 3): where the hand pressed — the point its rounded window point presses, through the pane's own eye
+  const pressed = seen.pressed ?? seen.aimed;
+  const miss =
+    seen.calibration === undefined || seen.calibration === null
+      ? null
+      : calibrationMiss(seen.calibration);
   if (seen.clicked === null)
     out.push(
       `${row}: the frame heard no click — the press never reached a frame of another site (the host heard ${seen.hostHeard.join(", ") || "nothing"})`,
     );
-  // M15 A (M18): against the aim moved by the hand's own mapping error there, measured on the host (uncalibrated: the aim)
-  else if (seen.calibration !== undefined) {
-    const error = seen.calibration === null ? null : mappingError(seen.calibration);
-    if (error === null)
-      out.push(
-        `${row}: the host's calibration beside the frame never landed — the click proved nothing`,
-      );
-    else {
-      const want: Point = [seen.aimed[0] + error[0], seen.aimed[1] + error[1]];
-      if (!near(seen.clicked, want, by))
-        out.push(
-          `${row}: the frame's click landed at ${seen.clicked.join(", ")}, not where the hand's own mapping put the aim ${seen.aimed.map((v) => Math.round(v)).join(", ")} (${want.map((v) => v.toFixed(1)).join(", ")} — the host's calibration beside it missed by ${error.map((v) => v.toFixed(1)).join(", ")}; ±${by}): the routing carried the point elsewhere`,
-        );
-    }
-  } else if (!near(seen.clicked, seen.aimed, by))
+  // (calibrated: the aim witnessed on the host's own ground beside the frame — its presses each within ±1 of theirs)
+  else if (seen.calibration !== undefined && miss === null)
     out.push(
-      `${row}: the frame's click landed at ${seen.clicked.join(", ")}, not where the hand pressed (${seen.aimed.map((v) => Math.round(v)).join(", ")}, ±${by})`,
+      `${row}: the host's calibration beside the frame never landed — the click proved nothing`,
+    );
+  else if (miss !== null && (Math.abs(miss[0]) > by || Math.abs(miss[1]) > by))
+    out.push(
+      `${row}: the hand's aim missed the host's own ground beside the frame by ${miss.map((v) => v.toFixed(1)).join(", ")} (±${by}) — the aim is off: the click proved nothing`,
+    );
+  else if (!near(seen.clicked, pressed, by))
+    out.push(
+      `${row}: the frame's click landed at ${seen.clicked.join(", ")}, not where the hand pressed (${pressed.map((v) => v.toFixed(1)).join(", ")}, ±${by}${miss === null ? "" : `; the host's calibration beside it within ${miss.map((v) => v.toFixed(1)).join(", ")}`}): the routing carried the point elsewhere`,
     );
   if (seen.hostHeard.length > 0)
     out.push(
@@ -1063,8 +1141,18 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     await h.until("the pane put down by Done", 5_000, "globalThis.__vfDesk.held() === null");
     await settledCamera();
   };
-  const heldFrame = (): Promise<HeldFrameSeen | null> =>
-    js<HeldFrameSeen | null>("globalThis.__vfDesk.held()?.frame ?? null");
+  /** the pane in hand: where the desk drew it — and (PT-6a, ruling 3) its own geometry as its kind laid it, what its own
+   * `held` presses through (null: nothing held, or not laid yet) */
+  const heldFrame = (): Promise<HeldEyeSeen | null> =>
+    js<HeldEyeSeen | null>(`(() => {
+      const d = globalThis.__vfDesk;
+      const h = d.held();
+      if (h === null || h.frame === null) return null;
+      const l = d.local(${JSON.stringify(PANE.type)})?.layout?.(h.entity);
+      if (l === undefined) return null;
+      const G = l.G;
+      return { ...h.frame, eye: { ex: G.eye.ex, ey: G.eye.ey, h: G.eye.h }, centre: G.centre, axes: [G.ex, G.ey, G.n], page: G.shape.page, ext: [l.ext.cx, l.ext.cy] };
+    })()`);
   const pressTool = (tool: string): Promise<void> =>
     h.pressSelector(`[data-selection-bar] [data-face-row="hand"] [data-tool="${tool}"]`);
   const shoot = async (name: string): Promise<void> => {
@@ -1104,16 +1192,14 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     );
   };
   /** The window point of a host page's point (its client coordinates), the pane in hand — through the part it shows, less
-   * that part's offset (PT-6a, K7). */
-  const onWindow = async (held: HeldFrameSeen, view: VisibleView, x: number, y: number) => {
-    const q = pageOnWindow(
-      held,
-      view.size,
-      await h.deskAt(),
-      x - view.offset[0],
-      y - view.offset[1],
-    );
-    return { x: Math.round(q.x), y: Math.round(q.y) };
+   * that part's offset (PT-6a, K7), and through the pane's own eye (ruling 3) — with `at`, the page's point its WHOLE
+   * window point presses (the same eye, back). */
+  const onWindow = async (held: HeldEyeSeen, view: VisibleView, x: number, y: number) => {
+    const off = await h.deskAt();
+    const q = pageThroughEye(held, view.size, off, x - view.offset[0], y - view.offset[1]);
+    const w = { x: Math.round(q.x), y: Math.round(q.y) };
+    const p = pageOfWindow(held, view.size, off, w.x, w.y);
+    return { ...w, at: [p[0] + view.offset[0], p[1] + view.offset[1]] as Point };
   };
 
   try {
@@ -1166,12 +1252,13 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     // (M22 D1: through the page's VISUAL viewport, as the pane shows it)
     const hostWord = at(HOST);
     const view = hostWord === null ? null : visibleView(hostWord);
-    /** a frame's own point, on the window — through the host's LATEST box of it (the host scrolls) */
+    /** a frame's own point, on the window — through the host's LATEST box of it (the host scrolls); `at` in the frame's own
+     * px (ruling 3) */
     const inFrame = async (x: number, y: number) => {
       const box = at(HOST)?.framed?.parts.frame ?? null;
-      return held === null || box === null || view === null
-        ? null
-        : onWindow(held, view, box.x + x, box.y + y);
+      if (held === null || box === null || view === null) return null;
+      const w = await onWindow(held, view, box.x + x, box.y + y);
+      return { ...w, at: [w.at[0] - box.x, w.at[1] - box.y] as Point };
     };
     const framed = () => at(FRAME)?.framed ?? null;
     const hostHeard = () => at(HOST)?.framed?.heard ?? [];
@@ -1208,10 +1295,11 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     };
 
     /** M15 A (M18): the hand's own mapping beside a frame — a press on the host's OWN ground LEFT and RIGHT of the frame's
-     * box at the frame point's height (the host's view px), where the host's own listener heard each */
+     * box at the frame point's height (the host's view px), where the host's own listener heard each — PT-6a (ruling 3): each
+     * against the point its whole window point presses through the pane's own eye */
     const calibrate = async (
       hostPath: string,
-      heldNow: HeldFrameSeen | null,
+      heldNow: HeldEyeSeen | null,
       hostView: VisibleView | null | undefined,
       box: FixtureRect | null,
       point: Point | null,
@@ -1219,14 +1307,15 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       if (heldNow === null || hostView == null || box === null || point === null) return null;
       const ground = async (x: number, y: number): Promise<GroundSeen> => {
         const grounds0 = at(hostPath)?.framed?.grounds.length ?? 0;
-        await h.press(await onWindow(heldNow, hostView, x, y));
+        const w = await onWindow(heldNow, hostView, x, y);
+        await h.press(w);
         const landed = await waitFor(
           "the host's click on its own ground",
           5_000,
           () => at(hostPath)?.framed?.grounds ?? null,
           (g) => (g?.length ?? 0) > grounds0,
         );
-        return { aimed: [x, y], clicked: landed?.[grounds0] ?? null };
+        return { aimed: [x, y], pressed: w.at, clicked: landed?.[grounds0] ?? null };
       };
       // (a side out of the page's view is not pressed — FRAME-TOUCH's phone shows 402 of its host's 800)
       const left = box.x - 20 > hostView.offset[0] + 4 ? await ground(box.x - 20, point[1]) : null;
@@ -1261,9 +1350,13 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const aimed: Point | null = b === null ? null : centre(b);
     const clicks0 = framed()?.clicks.length ?? 0;
     const heard0 = hostHeard().length;
+    let pressed: Point | undefined;
     if (aimed !== null) {
       const w = await inFrame(aimed[0], aimed[1]);
-      if (w !== null) await h.press(w);
+      if (w !== null) {
+        pressed = w.at;
+        await h.press(w);
+      }
     }
     const afterPress = await waitFor(
       "the frame's click",
@@ -1275,6 +1368,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const hostBox = at(HOST)?.framed?.parts.frame ?? null;
     const press: FramePressSeen = {
       aimed,
+      ...(pressed === undefined ? {} : { pressed }),
       clicked: afterPress?.clicks[clicks0] ?? null,
       hostHeard: hostHeard().slice(heard0),
       calibration: await calibrate(
@@ -1293,9 +1387,13 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const sameAimed: Point | null = c === null || sb === null ? null : centre(sb);
     const sameClicks0 = at(SAME)?.framed?.clicks.length ?? 0;
     const heardSame = hostHeard().length;
+    let samePressed: Point | undefined;
     if (c !== null && sameAimed !== null) {
       const w = await inFrame(c.x + sameAimed[0], c.y + sameAimed[1]);
-      if (w !== null) await h.press(w);
+      if (w !== null) {
+        samePressed = [w.at[0] - c.x, w.at[1] - c.y];
+        await h.press(w);
+      }
     }
     const afterSame = await waitFor(
       "the own-site child's click",
@@ -1306,6 +1404,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     // (A: beside it — the host's ground left and right of the frame, at the child's button's height)
     const same: FramePressSeen = {
       aimed: sameAimed,
+      ...(samePressed === undefined ? {} : { pressed: samePressed }),
       clicked: afterSame?.clicks[sameClicks0] ?? null,
       hostHeard: hostHeard().slice(heardSame),
       calibration: await calibrate(
@@ -1625,9 +1724,13 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const innerAimed: Point | null = ib === null ? null : centre(ib);
     const innerClicks0 = at(INNER)?.framed?.clicks.length ?? 0;
     const heard1 = hostHeard().length;
+    let innerPressed: Point | undefined;
     if (n !== null && innerAimed !== null) {
       const w = await inFrame(n.x + innerAimed[0], n.y + innerAimed[1]);
-      if (w !== null) await h.press(w);
+      if (w !== null) {
+        innerPressed = [w.at[0] - n.x, w.at[1] - n.y];
+        await h.press(w);
+      }
     }
     const innerAfter = await waitFor(
       "the nested frame's click",
@@ -1637,6 +1740,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     );
     const nested = {
       aimed: innerAimed,
+      ...(innerPressed === undefined ? {} : { pressed: innerPressed }),
       clicked: innerAfter?.clicks[innerClicks0] ?? null,
       hostHeard: hostHeard().slice(heard1),
       third: d.fixture.innerOrigin !== d.fixture.hostOrigin,
@@ -1706,10 +1810,14 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const halfClicks0 = framed()?.clicks.length ?? 0;
     const heard2 = hostHeard().length;
     let halfAimed: Point | null = null;
+    let halfPressed: Point | undefined;
     if (bl !== null && top !== null && top + centre(bl)[1] > 0) {
       halfAimed = centre(bl);
       const w = await inFrame(halfAimed[0], halfAimed[1]);
-      if (w !== null) await h.press(w);
+      if (w !== null) {
+        halfPressed = w.at;
+        await h.press(w);
+      }
     }
     const halfLanded = await waitFor(
       "the half frame's click",
@@ -1721,6 +1829,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const halfBox = at(HOST)?.framed?.parts.frame ?? null;
     const half = {
       aimed: halfAimed,
+      ...(halfPressed === undefined ? {} : { pressed: halfPressed }),
       clicked: halfLanded?.clicks[halfClicks0] ?? null,
       hostHeard: hostHeard().slice(heard2),
       top,
@@ -1927,9 +2036,13 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const shownAimed: Point | null = cbl === null ? null : centre(cbl);
     const shownClicks0 = cFramed()?.clicks.length ?? 0;
     const shownHeard0 = cHostHeard().length;
-    if (shownAimed !== null) {
+    let shownPressed: Point | undefined;
+    if (shownAimed !== null && cBox !== null) {
       const w = await inClipped(shownAimed[0], shownAimed[1]);
-      if (w !== null) await h.press(w);
+      if (w !== null) {
+        shownPressed = [w.at[0] - cBox.x, w.at[1] - cBox.y];
+        await h.press(w);
+      }
     }
     const shownSaid = await waitFor(
       "the clipped frame's click in view",
@@ -1943,6 +2056,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       hidden,
       shown: {
         aimed: shownAimed,
+        ...(shownPressed === undefined ? {} : { pressed: shownPressed }),
         clicked: shownSaid?.clicks[shownClicks0] ?? null,
         hostHeard: cHostHeard().slice(shownHeard0),
         // (A: the hand's own mapping beside it — CLIPPED's right side lands in its scroller, its own ground)
@@ -2018,9 +2132,13 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const coveredAimed: Point | null = vbl === null ? null : centre(vbl);
     const coveredClicks0 = vFramed()?.clicks.length ?? 0;
     const coveredHeard0 = vHostHeard().length;
+    let coveredPressed: Point | undefined;
     if (coveredAimed !== null && vBox !== null) {
       const w = await onCovered(vBox.x + coveredAimed[0], vBox.y + coveredAimed[1]);
-      if (w !== null) await h.press(w);
+      if (w !== null) {
+        coveredPressed = [w.at[0] - vBox.x, w.at[1] - vBox.y];
+        await h.press(w);
+      }
     }
     const coveredShown = await waitFor(
       "the covered frame's click below the header",
@@ -2037,6 +2155,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       hidden: coveredHidden,
       shown: {
         aimed: coveredAimed,
+        ...(coveredPressed === undefined ? {} : { pressed: coveredPressed }),
         clicked: coveredShown?.clicks[coveredClicks0] ?? null,
         hostHeard: vHostHeard().slice(coveredHeard0),
         // (A: the hand's own mapping beside it)
@@ -2205,10 +2324,17 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       const aimed: Point | null = obl === null ? null : centre(obl);
       const clicks0 = oFramed()?.clicks.length ?? 0;
       const heard0 = oHostHeard().length;
-      if (aimed !== null)
-        await h.press(
-          await onWindow(slotHeld, visibleView(slotHost), oBox.x + aimed[0], oBox.y + aimed[1]),
+      let slotPressed: Point | undefined;
+      if (aimed !== null) {
+        const w = await onWindow(
+          slotHeld,
+          visibleView(slotHost),
+          oBox.x + aimed[0],
+          oBox.y + aimed[1],
         );
+        slotPressed = [w.at[0] - oBox.x, w.at[1] - oBox.y];
+        await h.press(w);
+      }
       const shown = await waitFor(
         "the slot's frame's click below the header",
         5_000,
@@ -2222,6 +2348,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         hidden,
         shown: {
           aimed,
+          ...(slotPressed === undefined ? {} : { pressed: slotPressed }),
           clicked: shown?.clicks[clicks0] ?? null,
           hostHeard: oHostHeard().slice(heard0),
           // (A: the hand's own mapping beside the slot)
@@ -2291,9 +2418,21 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       if (tap) {
         h.move(w.x, w.y);
         await sleep(40);
-        win.webContents.sendInputEvent({ type: "mouseDown", ...w, button: "left", clickCount: 1 });
+        win.webContents.sendInputEvent({
+          type: "mouseDown",
+          x: w.x,
+          y: w.y,
+          button: "left",
+          clickCount: 1,
+        });
         await sleep(30);
-        win.webContents.sendInputEvent({ type: "mouseUp", ...w, button: "left", clickCount: 1 });
+        win.webContents.sendInputEvent({
+          type: "mouseUp",
+          x: w.x,
+          y: w.y,
+          button: "left",
+          clickCount: 1,
+        });
       } else await h.press(w);
       const landed = await waitFor(
         `the ${part} click at its scale`,
@@ -2303,6 +2442,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       );
       return {
         aimed,
+        pressed: [w.at[0] - box.x, w.at[1] - box.y],
         clicked: landed?.clicks[clicks0] ?? null,
         hostHeard: (at(hostPath)?.framed?.heard ?? []).slice(heard0),
         scale,
@@ -2353,6 +2493,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const touchClicks0 = at(PHONE_FRAME)?.framed?.clicks.length ?? 0;
     const touchHostHeard0 = phoneHost?.framed?.heard.length ?? 0;
     const touchAimed: Point | null = pb === null ? null : centre(pb);
+    let touchPressed: Point | undefined;
     if (phoneHeld !== null && phoneHost !== null && pb !== null && pBox !== null) {
       const w = await onWindow(
         phoneHeld,
@@ -2360,6 +2501,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         pBox.x + centre(pb)[0],
         pBox.y + centre(pb)[1],
       );
+      touchPressed = [w.at[0] - pBox.x, w.at[1] - pBox.y];
       h.move(w.x, w.y);
       await sleep(40);
       win.webContents.sendInputEvent({
@@ -2396,6 +2538,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       // host's own ground, the page's session's, M22-3)
       press: {
         aimed: touchAimed,
+        ...(touchPressed === undefined ? {} : { pressed: touchPressed }),
         clicked: touchSaid?.clicks[touchClicks0] ?? null,
         hostHeard: (at(PHONE_HOST)?.framed?.heard ?? []).slice(touchHostHeard0),
         calibration: await calibrate(
