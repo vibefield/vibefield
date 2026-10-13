@@ -9,6 +9,8 @@ import {
   BrowserFrames,
   type FocusWhere,
   type FrameQuad,
+  WHEEL_BUBBLED_MS,
+  WHEEL_LATCH_MS,
 } from "../src/main/live-surfaces/browser-frames";
 
 /** M7 H7: a wheel's clock, each call a gesture of its own (a second after the last). */
@@ -688,6 +690,29 @@ describe("PT-5d (M7 H7) — the wheel is LATCHED to its gesture's first target",
     // latched to A; A gone mid-gesture: a new gesture
     f.detached("A");
     expect(f.wheel(50, 50, 16 + 199 + 200 + 10).target.session).toBeUndefined();
+  });
+});
+
+describe("PT-6a (M1) — a wheel a FRAME answers late has BUBBLED: the rest of its gesture goes to the frame's PARENT, the point carried into it", () => {
+  it("B in A: B's answer past `WHEEL_BUBBLED_MS` moves the latch to A — the next wheel A's, the point carried through A's quad; A's late, to the page; on time (to the ms), the latch kept; the page's late, nothing moves (no parent); a late answer of a target the latch no longer holds moves nothing; a pause, a new gesture by its point", () => {
+    const f = page();
+    // the page's 360, 285 is B's 10, 15 — and A's 260, 205
+    const b = f.wheel(360, 285, 0);
+    expect(b).toEqual({ target: { session: "B", document: 0 }, x: 10, y: 15 });
+    f.wheelAnswered(b.target, WHEEL_BUBBLED_MS);
+    expect(f.wheel(360, 285, 40)).toEqual(b);
+    f.wheelAnswered(b.target, WHEEL_BUBBLED_MS + 1);
+    const a = f.wheel(360, 285, 80);
+    expect(a).toEqual({ target: { session: "A", document: 0 }, x: 260, y: 205 });
+    f.wheelAnswered(a.target, 1_000);
+    const top = f.wheel(360, 285, 120);
+    expect(top).toEqual({ target: { session: undefined, document: 1 }, x: 360, y: 285 });
+    f.wheelAnswered(top.target, 1_000);
+    expect(f.wheel(360, 285, 160)).toEqual(top);
+    // B's late answer again: the latch holds the page, not B
+    f.wheelAnswered(b.target, 1_000);
+    expect(f.wheel(360, 285, 200)).toEqual(top);
+    expect(f.wheel(360, 285, 200 + WHEEL_LATCH_MS)).toEqual(b);
   });
 });
 

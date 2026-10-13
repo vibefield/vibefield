@@ -109,6 +109,11 @@ export const WORD_TOLERANCE_MS = 2;
  * to the target its first went to (the desk's wheel carries no phase: the ruled 100–300 ms). */
 export const WHEEL_LATCH_MS = 200;
 
+/** PT-6a (M1): a FRAME's wheel answered later than this after its SEND has BUBBLED — the frame could not take it, and the
+ * engine carried it to the frame's parent across processes, answering on a ~1016-ms cadence in an offscreen window (run 4:
+ * 526–1018 ms; a frame's ordinary answer 0.3–9.2 ms, the page's own ≤ 34 ms). */
+export const WHEEL_BUBBLED_MS = 250;
+
 /** The pressed buttons, the finger and the held keys — each the target its gesture began on. */
 interface Hand {
   readonly buttons: Map<string, FrameTarget>;
@@ -133,7 +138,7 @@ export class BrowserFrames {
   /** where the last hover went — told that the pointer left it when the next goes elsewhere */
   #hover: FrameTarget | undefined;
   /** PT-5d (M7 H7): the wheel's gesture — its target, and when its last wheel came */
-  #wheel: { readonly target: FrameTarget; at: number } | undefined;
+  #wheel: { target: FrameTarget; at: number } | undefined;
 
   // ── the page's tree, as the native hears it ────────────────────────────────────────────────────────────────────
 
@@ -389,7 +394,8 @@ export class BrowserFrames {
   /** The wheel: the frame drawn under it — PT-5d (M7 H7) LATCHED to its gesture's first target: a wheel less than
    * `WHEEL_LATCH_MS` after the last goes where it went, the point carried into it (a frame the page scrolls under the
    * pointer mid-gesture takes none of it: the page's scroll went on through every embed it passed); its target gone, a new
-   * gesture. `now`: when the wheel ARRIVED (ms) — M12 J9: never when its turn ran. */
+   * gesture; a frame's late answer moves it to the frame's parent (PT-6a M1, `wheelAnswered`). `now`: when the wheel
+   * ARRIVED (ms) — M12 J9: never when its turn ran. */
   wheel(x: number, y: number, now: number): FrameRouted {
     const latched = this.#wheel;
     if (latched !== undefined && now - latched.at < WHEEL_LATCH_MS) {
@@ -402,6 +408,19 @@ export class BrowserFrames {
     const routed = this.at(x, y);
     this.#wheel = { target: routed.target, at: now };
     return routed;
+  }
+
+  /** PT-6a (M1): a wheel `target` answered `took` ms after its send — a FRAME's past `WHEEL_BUBBLED_MS` bubbled: its
+   * gesture's latch moves to the frame's PARENT (the page, or a parent frame), and the rest of the gesture goes there at once,
+   * the point carried into its viewport — as the engine's own chain would after the bubble (before: every further wheel to
+   * the frame, each bubbled again: the hand's one chain held a second a wheel). The page's, on time, or a target the latch no
+   * longer holds: nothing moves. */
+  wheelAnswered(target: FrameTarget, took: number): void {
+    const latched = this.#wheel;
+    if (took <= WHEEL_BUBBLED_MS || target.session === undefined) return;
+    if (latched === undefined || !same(latched.target, target)) return;
+    const frame = this.#frames.get(target.session);
+    if (frame !== undefined) latched.target = this.targetOf(frame.parent);
   }
 
   /** A finger down: the frame drawn there, the finger's target remembered. */

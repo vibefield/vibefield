@@ -13,7 +13,9 @@
 //   FRAME-DOUBLE — a double-click selects the frame's word;
 //   FRAME-DRAG   — the range's thumb dragged, released OUTSIDE the frame: its value moved, and no button is left down (the
 //                  next move over the frame holds none — it hovers, it does not drag);
-//   FRAME-WHEEL  — the wheel over the frame's scroller scrolls it; at its end, the host page;
+//   FRAME-WHEEL  — the wheel over the frame's scroller scrolls it; at its end, the host page — PT-6a (M1): the whole
+//                  leg drained within two bubbles past its sending (a frame's late answer moves the rest of the
+//                  gesture to its parent), never one a wheel;
 //   FRAME-TYPE   — M15, a STATED LIMIT: the frame's field pressed (its focus the frame's, by its own word), then "héllo"
 //                  typed, a syllable composed and committed, and ⌘A: its field left EMPTY, no key heard by the host or by
 //                  the frame, and main counting each leg's refusals — typing into a frame of another site is OFF (through
@@ -98,6 +100,14 @@ export const FRAMES_ROWS = {
   busyTyped: "abc",
   busyBeatMs: 150,
   answerLookMs: 20,
+  /** PT-6a (M1): FRAME-WHEEL's wheels, how far apart the hand sends them (ms), and the frame's late answers' period (run 4:
+   * ~1016 ms) — the leg drains within its sending, two periods (a first late answer under the threshold is followed by one
+   * sent right after it, which waits a whole period) and the slack; looked for until `drainWithinMs` from its first wheel */
+  wheels: 30,
+  wheelApartMs: 40,
+  bubbleMs: 1_020,
+  drainSlackMs: 600,
+  drainWithinMs: 25_000,
 } as const;
 
 /** The rows' driver: PT-2's, the shell window's IME (USE's), and main's windows. */
@@ -140,6 +150,10 @@ export interface FramesSeen {
   readonly wheel: {
     readonly scroller: readonly [number | null, number | null];
     readonly host: readonly [number | null, number | null];
+    /** PT-6a (M1): the leg's time — over how long the hand sent its wheels, and from its first until main's count of the
+     * hand's commands in flight was back where it began (the chain drained; null: not within `drainWithinMs`). Null: its
+     * wheels never sent */
+    readonly leg: { readonly sentMs: number; readonly drainedMs: number | null } | null;
   };
   readonly type: {
     /** the frame's field took the focus at the press — what the legs type at */
@@ -487,7 +501,8 @@ export function judgeFrameDrag(seen: FramesSeen["drag"]): string[] {
   return out;
 }
 
-/** FRAME-WHEEL: the frame's scroller scrolled; past its end, the host page. */
+/** FRAME-WHEEL: the frame's scroller scrolled; past its end, the host page — PT-6a (M1): and the leg's whole time bounded,
+ * one bubble, never one a wheel. */
 export function judgeFrameWheel(seen: FramesSeen["wheel"]): string[] {
   const [s0, s1] = seen.scroller;
   const [h0, h1] = seen.host;
@@ -502,6 +517,15 @@ export function judgeFrameWheel(seen: FramesSeen["wheel"]): string[] {
     out.push(
       `FRAME-WHEEL: past the scroller's end the host stood at ${h1} (from ${h0}) — the wheel did not chain to the page`,
     );
+  const leg = seen.leg;
+  if (leg === null) out.push("FRAME-WHEEL: its wheels were never sent — the row proved nothing");
+  else {
+    const bound = leg.sentMs + 2 * FRAMES_ROWS.bubbleMs + FRAMES_ROWS.drainSlackMs;
+    if (leg.drainedMs === null || leg.drainedMs > bound)
+      out.push(
+        `FRAME-WHEEL: the hand's chain drained ${leg.drainedMs === null ? `not within ${FRAMES_ROWS.drainWithinMs}` : leg.drainedMs} ms after the first wheel (its wheels sent over ${leg.sentMs} ms; at most ${bound}: two bubbles past the sending) — the frame held the chain a bubble a wheel`,
+      );
+  }
   return out;
 }
 
@@ -1461,12 +1485,15 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const s = framed()?.parts.s ?? null;
     const scroll0 = framed()?.scroller ?? null;
     const host0 = at(HOST)?.scrollY ?? null;
+    let wheelLeg: FramesSeen["wheel"]["leg"] = null;
     if (s !== null) {
       const w = await inFrame(s.x + s.w / 2, s.y + s.h / 2);
       if (w !== null) {
         h.move(w.x, w.y);
         await sleep(150);
-        for (let i = 0; i < 30; i += 1) {
+        const base = d.custody()?.handInFlight ?? null;
+        const first = Date.now();
+        for (let i = 0; i < FRAMES_ROWS.wheels; i += 1) {
           win.webContents.sendInputEvent({
             type: "mouseWheel",
             x: w.x,
@@ -1475,14 +1502,35 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
             deltaY: -120,
             canScroll: true,
           });
-          await sleep(40);
+          await sleep(FRAMES_ROWS.wheelApartMs);
         }
+        const sentMs = Date.now() - first;
+        // PT-6a (M1): the chain drained — main's count back where it began three looks running, once the desk has handed
+        // on the last wheel (at its next frame)
+        await sleep(100);
+        let drainedMs: number | null = null;
+        let quietSince = 0;
+        let quietLooks = 0;
+        while (
+          base !== null &&
+          drainedMs === null &&
+          Date.now() - first < FRAMES_ROWS.drainWithinMs
+        ) {
+          const n = d.custody()?.handInFlight ?? null;
+          if (n === null) break;
+          if (n > base) quietLooks = 0;
+          else if (quietLooks++ === 0) quietSince = Date.now();
+          if (quietLooks === 3) drainedMs = quietSince - first;
+          await sleep(FRAMES_ROWS.answerLookMs);
+        }
+        wheelLeg = { sentMs, drainedMs };
       }
     }
     await sleep(800);
     const wheel = {
       scroller: [scroll0, framed()?.scroller ?? null] as const,
       host: [host0, at(HOST)?.scrollY ?? null] as const,
+      leg: wheelLeg,
     };
     said.wheel = wheel;
     problems.push(...judgeFrameWheel(wheel));

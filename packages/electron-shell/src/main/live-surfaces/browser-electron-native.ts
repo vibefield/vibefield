@@ -1082,7 +1082,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     const arrived = heardAt ?? performance.now();
     return this.hand(async () => {
       await this.ensureDebugger();
-      for (const routed of this.routeMouse(input, arrived))
+      for (const routed of this.routeMouse(input, arrived)) {
+        const sent = performance.now();
         await this.hinted(input.type === "mousePressed", routed.target.session === undefined, () =>
           this.handCommand(
             "Input.dispatchMouseEvent",
@@ -1096,6 +1097,10 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
           if (input.type === "mousePressed") this.#frames.unpressed(buttonOf(input));
           throw error;
         });
+        // PT-6a (M1): how late its target answered — timed from its SEND, never its wait in the chain
+        if (input.type === "mouseWheel")
+          this.#frames.wheelAnswered(routed.target, performance.now() - sent);
+      }
     });
   }
 

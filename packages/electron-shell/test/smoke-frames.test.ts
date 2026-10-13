@@ -282,14 +282,39 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
   });
 
-  it("FRAME-WHEEL: the frame's scroller scrolled, and past its end the host page", () => {
-    expect(judgeFrameWheel({ scroller: [0, 1020], host: [0, 400] })).toEqual([]);
-    expect(judgeFrameWheel({ scroller: [0, 0], host: [0, 0] })).toEqual([
+  it("FRAME-WHEEL: the frame's scroller scrolled, and past its end the host page — PT-6a (M1): the leg's whole time bounded, two bubbles past its sending at most, never one a wheel", () => {
+    const leg = { sentMs: 1_300, drainedMs: 1_800 };
+    expect(judgeFrameWheel({ scroller: [0, 1020], host: [0, 400], leg })).toEqual([]);
+    expect(judgeFrameWheel({ scroller: [0, 0], host: [0, 0], leg })).toEqual([
       "FRAME-WHEEL: the frame's scroller stood at 0 (from 0) — the wheel never reached the frame",
       "FRAME-WHEEL: past the scroller's end the host stood at 0 (from 0) — the wheel did not chain to the page",
     ]);
-    expect(judgeFrameWheel({ scroller: [null, 0], host: [0, 0] })).toEqual([
+    expect(judgeFrameWheel({ scroller: [null, 0], host: [0, 0], leg })).toEqual([
       "FRAME-WHEEL: the scroller or the host never said its scroll — the row proved nothing",
+    ]);
+    // two bubbles past the sending, to the ms; past it — run 4's chain, a bubble a wheel; never drained; never sent
+    const bound = 1_300 + 2 * 1_020 + 600;
+    expect(
+      judgeFrameWheel({ scroller: [0, 1020], host: [0, 400], leg: { ...leg, drainedMs: bound } }),
+    ).toEqual([]);
+    expect(
+      judgeFrameWheel({
+        scroller: [0, 1020],
+        host: [0, 400],
+        leg: { ...leg, drainedMs: bound + 1 },
+      }),
+    ).toEqual([
+      "FRAME-WHEEL: the hand's chain drained 3941 ms after the first wheel (its wheels sent over 1300 ms; at most 3940: two bubbles past the sending) — the frame held the chain a bubble a wheel",
+    ]);
+    expect(
+      judgeFrameWheel({ scroller: [0, 1020], host: [0, 400], leg: { ...leg, drainedMs: null } }),
+    ).toEqual([
+      "FRAME-WHEEL: the hand's chain drained not within 25000 ms after the first wheel (its wheels sent over 1300 ms; at most 3940: two bubbles past the sending) — the frame held the chain a bubble a wheel",
+    ]);
+    expect(judgeFrameWheel({ scroller: [0, 0], host: [0, 0], leg: null })).toEqual([
+      "FRAME-WHEEL: the frame's scroller stood at 0 (from 0) — the wheel never reached the frame",
+      "FRAME-WHEEL: past the scroller's end the host stood at 0 (from 0) — the wheel did not chain to the page",
+      "FRAME-WHEEL: its wheels were never sent — the row proved nothing",
     ]);
   });
 

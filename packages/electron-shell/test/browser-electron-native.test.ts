@@ -2407,6 +2407,82 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     }
   });
 
+  it("PT-6a (M1) — a frame's wheel answered LATE (past `WHEEL_BUBBLED_MS` after its send: its scroller at its end, the engine bubbling it) — the rest of its gesture goes to the PAGE's session at once, at the page's point; answered on time, the frame keeps it; a pause, a new gesture by its point (F again)", async () => {
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date", "performance"],
+    });
+    try {
+      // F answers its wheels at once — then, its scroller at its end, a second after each is sent (run 2's ~1017 ms)
+      let answerMs = 5;
+      const r = await framed({}, (method, _params, session) =>
+        method === "Input.dispatchMouseEvent" && session === "F"
+          ? new Promise((resolve) => setTimeout(() => resolve({}), answerMs))
+          : undefined,
+      );
+      const wheel = () =>
+        void r.native.dispatchMouse({
+          type: "mouseWheel",
+          x: 180,
+          y: 120,
+          deltaX: 0,
+          deltaY: 10,
+        });
+      wheel();
+      await vi.advanceTimersByTimeAsync(40);
+      wheel();
+      await vi.advanceTimersByTimeAsync(40);
+      answerMs = 1_000;
+      wheel();
+      // (40 ms apart as the hand sends them — one gesture — while F holds the chain)
+      for (let i = 0; i < 3; i += 1) {
+        await vi.advanceTimersByTimeAsync(40);
+        wheel();
+      }
+      await vi.advanceTimersByTimeAsync(2_000);
+      answerMs = 5;
+      wheel();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(r.hand()).toEqual([
+        "mouseWheel@F 80,40",
+        "mouseWheel@F 80,40",
+        "mouseWheel@F 80,40",
+        "mouseWheel@page 180,120",
+        "mouseWheel@page 180,120",
+        "mouseWheel@page 180,120",
+        "mouseWheel@F 80,40",
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("PT-6a (M1) — late is measured from a wheel's SEND, never its arrival: F answering each in 150 ms while the hand's wheels, 40 ms apart, wait behind each other in the chain — every one F's", async () => {
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date", "performance"],
+    });
+    try {
+      const r = await framed({}, (method, _params, session) =>
+        method === "Input.dispatchMouseEvent" && session === "F"
+          ? new Promise((resolve) => setTimeout(() => resolve({}), 150))
+          : undefined,
+      );
+      for (let i = 0; i < 8; i += 1) {
+        void r.native.dispatchMouse({
+          type: "mouseWheel",
+          x: 180,
+          y: 120,
+          deltaX: 0,
+          deltaY: 10,
+        });
+        await vi.advanceTimersByTimeAsync(40);
+      }
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(r.hand()).toEqual(Array.from({ length: 8 }, () => "mouseWheel@F 80,40"));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("M6.3a — a frame's VISIBLE part is READ beside its quad, of its owner in its parent's document (`Runtime.callFunctionOn` on the parent's session, its object released): a press on the part its scroller clips is the page's, on the part in view the frame's", async () => {
     const r = recording((method) => {
       if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };
