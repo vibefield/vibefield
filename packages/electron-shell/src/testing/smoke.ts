@@ -2152,6 +2152,12 @@ async function framesRows(
       },
       systemDark: () => nativeTheme.shouldUseDarkColors,
     };
+    // PT-5d (M25, F6): the shell's debugger attached at the RUN's start — never lazily in one row (FRAME-TYPE's IME once
+    // attached it, and its CDP focused the shell's widget: the rows after it ran in a focused document, a run without
+    // that row did not) — and the shell's page TOLD it is focused, as a person's window is when they use it. On a shared
+    // Mac the smoke's window is not the system's key window: in its unfocused page a press on the bar's ↻ took the focus
+    // from the desk's editor, no focus event gave it back, and STUCK's keys after it went to the button.
+    await cdp("Emulation.setFocusEmulationEnabled", { enabled: true });
     return await framesPaneRows(driver);
   } catch (error) {
     return [`PT-5d FRAMES: ${error instanceof Error ? error.message : String(error)}`];
