@@ -25,7 +25,10 @@ import {
   FIXTURE_TITLE,
   FIXTURE_TONE,
   FRAMES_BOX,
+  FRAMES_BUSY,
+  FRAMES_BUSY_MS,
   FRAMES_HOST_RANGE,
+  FRAMES_SPIN_MS,
   FRAMES_WORD,
   fixtureHtml,
   fixtureIcon,
@@ -708,6 +711,69 @@ describe("the live pane's fixture page", () => {
     expect(await page(fixture.hostOrigin, "/frames/host?p=a")).toContain('name="viewport"');
     expect(await page(fixture.origin, "/frames/loop?p=a")).toContain("for (;;) {}");
     expect((await fetch(`${fixture.origin}/frames/elsewhere`)).status).toBe(404);
+  });
+
+  it("PT-6a (K1): `/frames/busy` — at `hostOrigin`, an AD-LIKE frame of another site and a field of its own; a press on the field POSTS a task that keeps its thread `FRAMES_BUSY_MS` (a tap's end the same), a timer of its own beside it, its clicks said — and `/frames/spin`, FRAMELESS, its button's own mousedown holding its thread `FRAMES_SPIN_MS`: each says what kept it (`busy`) with every ask", async () => {
+    fixture = await startLiveFixture();
+    const busy = await (await fetch(`${fixture.hostOrigin}/frames/busy?p=a<b>`)).text();
+    expect(busy).toContain(`<iframe id="f" src="${fixture.origin}/frames/next?p=ab"`);
+    expect(busy).toContain(
+      `left:${FRAMES_BUSY.ad.x}px;top:${FRAMES_BUSY.ad.y}px;width:${FRAMES_BUSY.ad.w}px;height:${FRAMES_BUSY.ad.h}px`,
+    );
+    expect(busy).toContain(
+      `<input id="t" type="text" autocomplete="off" spellcheck="false" style="left:${FRAMES_BUSY.field.x}px;top:${FRAMES_BUSY.field.y}px`,
+    );
+    const spin = await (await fetch(`${fixture.origin}/frames/spin?p=a`)).text();
+    expect(spin).not.toContain("<iframe");
+    expect(spin).toContain('id="b"');
+    expect(spin).toContain(`performance.now() - at < ${FRAMES_SPIN_MS}`);
+    // the busy page's own script, RUN: a press posts the spin — a task after the press's own handlers — and a timer
+    // beside it; a tap's end the same; its clicks said
+    const scripts = [...busy.matchAll(/<script>([\s\S]*?)<\/script>/gu)].map((m) => m[1] ?? "");
+    const own = scripts.find((s) => s.includes("__vfBusy = busy"));
+    if (own === undefined) throw new Error("the busy page carries no busy script");
+    const listeners = new Map<string, ((e: Record<string, unknown>) => void)[]>();
+    const posted: (() => void)[] = [];
+    const timers: (() => void)[] = [];
+    let clock = 0;
+    const global: { __vfBusy?: { spins: unknown[]; timers: number[]; clicks: number[] } } = {};
+    new Function("globalThis", "document", "MessageChannel", "performance", "setTimeout", own)(
+      global,
+      {
+        getElementById: () => ({
+          addEventListener: (type: string, listener: (e: Record<string, unknown>) => void) =>
+            listeners.set(type, [...(listeners.get(type) ?? []), listener]),
+        }),
+      },
+      class {
+        port1: { onmessage: (() => void) | null } = { onmessage: null };
+        port2 = { postMessage: () => posted.push(() => this.port1.onmessage?.()) };
+      },
+      { now: () => (clock += 1) },
+      (callback: () => void) => timers.push(callback),
+    );
+    const fire = (type: string, e: Record<string, unknown> = {}): void => {
+      for (const listener of listeners.get(type) ?? []) listener(e);
+    };
+    fire("pointerdown", { pointerType: "mouse" });
+    fire("pointerdown", { pointerType: "touch" });
+    expect(posted).toHaveLength(1);
+    expect(timers).toHaveLength(1);
+    posted.shift()?.();
+    timers.shift()?.();
+    const said = global.__vfBusy;
+    expect(said?.spins).toHaveLength(1);
+    const [at, ms, why] = (said?.spins[0] ?? []) as [number, number, string];
+    expect(why).toBe("press");
+    expect(ms).toBeGreaterThanOrEqual(FRAMES_BUSY_MS);
+    expect(said?.timers[0]).toBeGreaterThanOrEqual(at + ms);
+    fire("touchend");
+    posted.shift()?.();
+    expect((said?.spins[1] as [number, number, string] | undefined)?.[2]).toBe("tap");
+    fire("click");
+    expect(said?.clicks).toHaveLength(1);
+    // what kept it is said with its ask (the frames script's report, beside its own word)
+    expect(scripts.some((s) => s.includes("busy: globalThis.__vfBusy"))).toBe(true);
   });
 
   it("PT-5d: a frames page RUN says what it heard of the hand — its clicks at their points, every press and key in order, the buttons its last move held, its range, caret and scroller, its parts' boxes — and goes where the smoke sends it (`goFrame`), once; the host hears the hand on the frame's ELEMENT alone", async () => {

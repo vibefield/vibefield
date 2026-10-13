@@ -1014,6 +1014,8 @@ export interface LiveCensus {
   readonly emulations: number;
   /** PT-5d (M15): the key-like events main's pages refused because a frame of another site held the focus (FRAME-TYPE) */
   readonly frameKeysRefused: number;
+  /** PT-6a (K5): the hand's commands main's pages have SENT and not had answered, now (STUCK: its chain stalled) */
+  readonly handInFlight: number;
 }
 
 export async function runSmokeCanvas(opts: {

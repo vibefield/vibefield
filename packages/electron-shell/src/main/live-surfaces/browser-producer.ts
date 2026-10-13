@@ -133,6 +133,9 @@ export interface BrowserSurfaceNativeWindow {
    * telling one untells the one before. Told again, or untold while not told: nothing.
    */
   setFocused(focused: boolean): Promise<void>;
+  /** PT-6a (K5): how many of the hand's commands this window has SENT and not had answered (nor let go) — main's census
+   * counts them (a row reads it to know a page's chain is stalled). Absent: none counted. */
+  handInFlight?(): number;
   /** History/loading navigation. `go` rides `loadURL` so the initial-load and
    * chrome-navigation paths share one policy gate. */
   navigate(action: "back" | "forward" | "reload" | "stop"): void;
@@ -1287,6 +1290,13 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * sums them (typing into such a frame is off). */
   frameKeysRefused(): number {
     return this.#frameKeysRefused;
+  }
+
+  /** PT-6a (K5): the hand's commands its window has SENT and not had answered — counted by main's census, NOW (its window
+   * gone: none): a row reads it to know the page's chain is stalled, never the smoke's own word that it sent a key. */
+  handInFlight(): number {
+    const window = this.#window;
+    return window === null || window.isDestroyed() ? 0 : (window.handInFlight?.() ?? 0);
   }
 
   supportSnapshot(): LiveSurfaceRuntimeSupportSnapshot {

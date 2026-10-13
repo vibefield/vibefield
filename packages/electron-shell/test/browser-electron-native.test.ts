@@ -3878,6 +3878,64 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         vi.useRealTimers();
       }
     });
+
+    it("PT-6a (K5) — the hand's commands SENT and not yet answered, counted (`handInFlight` — main's census reads it): one while unanswered; none once answered, let go at its frame's detach, or let go at the page's commit", async () => {
+      vi.useFakeTimers();
+      try {
+        let answer: () => void = () => undefined;
+        const r = recording(
+          (method, params, session) => {
+            if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };
+            if (method === "DOM.getBoxModel")
+              return { model: { content: [100, 80, 500, 80, 500, 380, 100, 380] } };
+            if (method !== "Input.dispatchMouseEvent") return {};
+            const x = (params as { x: number }).x;
+            if (session === "F" || x === 30) return new Promise(() => {});
+            if (x === 20)
+              return new Promise((resolve) => {
+                answer = () => resolve({});
+              });
+            return {};
+          },
+          { hungInputMs: BOUND },
+        );
+        await r.native.loadURL("https://host.test/a");
+        r.at("https://host.test/a");
+        r.contents.emit("did-navigate", {}, "https://host.test/a");
+        r.attach("F");
+        await vi.advanceTimersByTimeAsync(0);
+        const move = (x: number, y: number): void => {
+          void r.native
+            .dispatchMouse({ type: "mouseMoved", x, y, button: "none", buttons: 0 })
+            .catch(() => undefined);
+        };
+        expect(r.native.handInFlight?.()).toBe(0);
+        // the page's, unanswered — then answered
+        move(20, 20);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(r.native.handInFlight?.()).toBe(1);
+        answer();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(r.native.handInFlight?.()).toBe(0);
+        // F's, never answered — let go at F's detach
+        move(180, 120);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(r.native.handInFlight?.()).toBe(1);
+        r.emit("Target.detachedFromTarget", { sessionId: "F", targetId: "t-F" });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(r.native.handInFlight?.()).toBe(0);
+        // the page's, never answered — let go at the page's commit
+        move(30, 30);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(r.native.handInFlight?.()).toBe(1);
+        r.at("https://host.test/b");
+        r.contents.emit("did-navigate", {}, "https://host.test/b");
+        await vi.advanceTimersByTimeAsync(0);
+        expect(r.native.handInFlight?.()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });
 

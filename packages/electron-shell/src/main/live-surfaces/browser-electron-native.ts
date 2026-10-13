@@ -1250,6 +1250,12 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     return () => this.#hungListeners.delete(listener);
   }
 
+  /** PT-6a (K5): the hand's commands SENT and not yet answered, nor let go (at the page's commit, at their frame's detach) —
+   * main's census counts them. */
+  handInFlight(): number {
+    return this.#inFlight.size;
+  }
+
   /**
    * PT-5d (M6.4b) — EVERY COMMAND OF THE HAND goes through here: timed from its SEND to its answer — never its wait in the
    * hand's queue behind another (the clock starts again at each answer, as the engine's own ack timeout does); unanswered

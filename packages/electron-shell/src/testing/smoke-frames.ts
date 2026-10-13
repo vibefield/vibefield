@@ -43,12 +43,26 @@
 //                  the page stopped responding within the host's bound; ↻ brings it back. M7 H11: and WHILE the chain is
 //                  stalled ↻ asks the page again at once, and an address of another site typed takes the page there — and
 //                  the stalled command of the document before is let go (the page there is never said stopped).
+//   FRAME-BUSY   — PT-6a (K1): a page holding an AD-LIKE frame of another site, busy after a press (a laptop's) or a tap
+//                  (a phone's) on its OWN field: every key typed meanwhile lands in order — never refused (the page's own
+//                  doubt holds its keys until its word, the host's bound); the page says whether the hint's word waited
+//                  behind its busy task with the hint's gesture already answered (K1's path) or not;
+//   PRESS-ANSWER — PT-6a (K1, the engine's fact): a press on a FRAMELESS page whose own mousedown holds its thread — how
+//                  long main's count of the hand's commands in flight stayed up after it: is a press answered before its
+//                  handler (PT-5b3's probe said so), or after?
 // Then the panes are removed and the board is as found. `--frames-pane` beside `--smoke-canvas` runs these rows alone after
 // the boot's (the author's loop).
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type FixtureRect, type FixtureReport, FRAMES_BOX, FRAMES_WORD } from "./live-fixture";
+import {
+  type FixtureBusy,
+  type FixtureRect,
+  type FixtureReport,
+  FRAMES_BOX,
+  FRAMES_SPIN_MS,
+  FRAMES_WORD,
+} from "./live-fixture";
 import { PANE, type PaneHands, paneHands } from "./smoke-browser-pane";
 import type { WindowsSeen } from "./smoke-honest-pane";
 import type { LiveRowsDriver } from "./smoke-live-pane";
@@ -79,6 +93,9 @@ export const FRAMES_ROWS = {
   goneMs: 5_000,
   /** M20 F6: how many times STUCK presses its loop page's button for a leg's hang before the leg says it never ran */
   hangTries: 3,
+  /** PT-6a (K1): what FRAME-BUSY types while its page is busy; how often PRESS-ANSWER looks at main's count (ms) */
+  busyTyped: "abc",
+  answerLookMs: 20,
 } as const;
 
 /** The rows' driver: PT-2's, the shell window's IME (USE's), and main's windows. */
@@ -230,9 +247,40 @@ export interface FramesSeen {
     /** M7 H11: an address of another site typed while the chain was stalled — the page arrived there, and stayed live */
     readonly typed?: { readonly arrived: boolean; readonly stayed: boolean } | null;
     /** M12 J11: a key the hung page never answers was sent before those legs — the chain stalled behind it (absent: not
-     * said) */
+     * said). PT-6a (K5): MAIN's word — the census's count of the hand's commands in flight, read 300 ms after each leg's hang
+     * (`inFlight`, a leg each): every leg's above none */
     readonly stalled?: boolean;
+    readonly inFlight?: readonly (number | null)[];
   };
+  /** PT-6a (K1): a page holding an ad-like frame of another site, busy after a press (a laptop's pane) or a tap (a
+   * phone's) on its own field — the keys typed meanwhile (absent: not run; a leg null: it could not be aimed) */
+  readonly busy?: { readonly press: FrameBusySeen | null; readonly tap: FrameBusySeen | null };
+  /** PT-6a (K1, the engine's fact): a press on a frameless page whose own mousedown holds its thread (absent: not run; null:
+   * it could not be aimed) */
+  readonly answer?: PressAnswerSeen | null;
+}
+
+/** PT-6a (K1): FRAME-BUSY's leg — what was typed, what the field holds after, what kept the page's thread and when. */
+export interface FrameBusySeen {
+  readonly typed: string;
+  /** the field's value after the typing (null: unread) */
+  readonly field: string | null;
+  /** the page's own word of its spins, its timer beside each, its field's clicks (its clock) — null: unread */
+  readonly busy: FixtureBusy | null;
+  /** K1's path: the hint's WORD waited behind the spin (the page's own timer, beside the words', fired after it) with the
+   * hint's gesture already answered (a press: its click before the spin; a tap: its end is the hint) — null: unread */
+  readonly held: boolean | null;
+}
+
+/** PT-6a (K1, the engine's fact): PRESS-ANSWER — the page's own mousedown, and main's count of the hand's commands in flight
+ * after the press. */
+export interface PressAnswerSeen {
+  /** its mousedown: when it began and how long it held the thread (its clock); null: it never ran */
+  readonly down: readonly [number, number] | null;
+  /** how long main's count stayed above what it was before the press, from the press sent (ms; 0: never seen up — the press
+   * answered within one look); null: the count never read */
+  readonly answerMs: number | null;
+  readonly lookMs: number;
 }
 
 /** What a page is told of its device: its own agent, touch points, whether its colours are dark. */
@@ -307,15 +355,26 @@ export function judgeStood(row: string, box: FixtureRect | null): string[] {
       ];
 }
 
+/** PT-5d (M22 D1), PT-6a (K7): the part of a page a row aims through — its VISUAL viewport, as the pane shows it. */
+export interface VisibleView {
+  /** its width and height (CSS px) */
+  readonly size: readonly [number, number];
+  /** where it stands in the page's layout (its offset, CSS px): a page's client point is shown at that point less it */
+  readonly offset: readonly [number, number];
+}
+
 /** PT-5d (M22 D1): the page size a row aims by — the VISUAL viewport, as the pane shows it: a phone's page that overflows its
  * layout shows 402 CSS px of an 800-px layout at scale 1 (product run 5) — never its `innerWidth`; a page that says no
- * visible size, its view. */
-export function visibleView(report: Pick<FixtureReport, "view" | "vv">): readonly [number, number] {
+ * visible size, its view. PT-6a (K7): and its OFFSET — a pinch-panned page shows its layout from there (M23: "less its
+ * offset"; dropped, every aim on such a page was off by it). */
+export function visibleView(report: Pick<FixtureReport, "view" | "vv">): VisibleView {
   const width = report.vv?.[3];
   const height = report.vv?.[4];
-  return width !== undefined && height !== undefined && width > 0 && height > 0
-    ? [width, height]
-    : report.view;
+  const shown = width !== undefined && height !== undefined && width > 0 && height > 0;
+  return {
+    size: shown ? [width, height] : report.view,
+    offset: shown ? [report.vv?.[1] ?? 0, report.vv?.[2] ?? 0] : [0, 0],
+  };
 }
 
 const near = (a: Point, b: Point, by: number): boolean =>
@@ -781,10 +840,10 @@ export function judgeStuck(seen: FramesSeen["stuck"]): string[] {
   // M7 H11: ↻ and an address typed WHILE the chain was stalled — never on the hand's chain
   if (seen.reloadActed === null && seen.typed === null)
     out.push("STUCK: its legs while stalled (↻, an address typed) never ran — they proved nothing");
-  // M12 J11: with nothing in flight (a press is answered) they act with or without the let-go
+  // M12 J11: with nothing in flight they act with or without the let-go — PT-6a (K5): by MAIN's count
   else if (seen.stalled === false)
     out.push(
-      "STUCK: its legs while stalled (↻, an address typed) ran with nothing in flight — no key left unanswered: they proved nothing",
+      "STUCK: its legs while stalled (↻, an address typed) ran with nothing of the hand in flight (main's count) — no command left unanswered: they proved nothing",
     );
   else {
     // M20 F6: EACH leg runs (its hang tried again, bounded) — one that never ran proved nothing: no leg passes by timing
@@ -810,6 +869,40 @@ export function judgeStuck(seen: FramesSeen["stuck"]): string[] {
     }
   }
   return out;
+}
+
+/** PT-6a (K1): FRAME-BUSY — each leg's keys, typed while the page was busy after the hint on its field, land in order. */
+export function judgeFrameBusy(seen: NonNullable<FramesSeen["busy"]>): string[] {
+  const out: string[] = [];
+  for (const [leg, hint, s] of [
+    ["press", "a press", seen.press],
+    ["tap", "a tap", seen.tap],
+  ] as const) {
+    if (s === null) {
+      out.push(`FRAME-BUSY (${leg}): its field could not be aimed at — the leg proved nothing`);
+      continue;
+    }
+    if ((s.busy?.spins?.length ?? 0) === 0)
+      out.push(
+        `FRAME-BUSY (${leg}): the page never got busy after ${hint} on its field — the leg proved nothing`,
+      );
+    else if (s.field !== s.typed)
+      out.push(
+        `FRAME-BUSY (${leg}): the keys typed while the page was busy after ${hint} on its field landed as "${s.field ?? "nothing"}", not "${s.typed}" in order — refused, or lost`,
+      );
+  }
+  return out;
+}
+
+/** PT-6a (K1, the engine's fact): PRESS-ANSWER says how long a press waited for its page — judged only for having measured. */
+export function judgePressAnswer(seen: PressAnswerSeen | null): string[] {
+  if (seen === null)
+    return ["PRESS-ANSWER: the page's button could not be aimed at — the row proved nothing"];
+  if (seen.down === null)
+    return ["PRESS-ANSWER: the page's own mousedown never ran — the press proved nothing"];
+  if (seen.answerMs === null)
+    return ["PRESS-ANSWER: main's count was never read — the row proved nothing"];
+  return [];
 }
 
 /** FRAME-NESTED: a third site's frame in the frame — its button's click where the hand pressed. */
@@ -877,6 +970,8 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     ms: number,
     read: () => Promise<T> | T,
     ok: (v: T) => boolean,
+    /** PT-6a: a NEGATIVE wait — what it waits for must NOT come: its timing out is the pass (said as held, never UNMET) */
+    negative = false,
   ): Promise<T> => {
     const deadline = Date.now() + ms;
     let last = await read();
@@ -884,7 +979,10 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       await sleep(80);
       last = await read();
     }
-    if (!ok(last)) say(`SMOKE_CANVAS_FRAMES_UNMET ${JSON.stringify({ label, last })}`);
+    if (!ok(last))
+      say(
+        `${negative ? "SMOKE_CANVAS_FRAMES_HELD" : "SMOKE_CANVAS_FRAMES_UNMET"} ${JSON.stringify({ label, last })}`,
+      );
     return last;
   };
   const camera = (): Promise<{ x: number; y: number; zoom: number }> =>
@@ -979,14 +1077,16 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       (f) => f !== null && f.state === "live" && f.presented >= 1,
     );
   };
-  /** The window point of a host page's point, the pane in hand. */
-  const onWindow = async (
-    held: HeldFrameSeen,
-    view: readonly [number, number],
-    x: number,
-    y: number,
-  ) => {
-    const q = pageOnWindow(held, view, await h.deskAt(), x, y);
+  /** The window point of a host page's point (its client coordinates), the pane in hand — through the part it shows, less
+   * that part's offset (PT-6a, K7). */
+  const onWindow = async (held: HeldFrameSeen, view: VisibleView, x: number, y: number) => {
+    const q = pageOnWindow(
+      held,
+      view.size,
+      await h.deskAt(),
+      x - view.offset[0],
+      y - view.offset[1],
+    );
     return { x: Math.round(q.x), y: Math.round(q.y) };
   };
 
@@ -1053,7 +1153,12 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
      * would take the wheel), until it says it stands at 0 */
     const hostToTop = async (): Promise<void> => {
       if (held === null || view === null) return;
-      const ground = await onWindow(held, view, FRAMES_BOX.x + FRAMES_BOX.w + 200, view[1] / 2);
+      const ground = await onWindow(
+        held,
+        view,
+        FRAMES_BOX.x + FRAMES_BOX.w + 200,
+        view.offset[1] + view.size[1] / 2,
+      );
       h.move(ground.x, ground.y);
       await sleep(150);
       for (let i = 0; i < 12; i += 1) {
@@ -1081,7 +1186,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const calibrate = async (
       hostPath: string,
       heldNow: HeldFrameSeen | null,
-      hostView: readonly [number, number] | null | undefined,
+      hostView: VisibleView | null | undefined,
       box: FixtureRect | null,
       point: Point | null,
     ): Promise<Calibration | null> => {
@@ -1098,13 +1203,18 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         return { aimed: [x, y], clicked: landed?.[grounds0] ?? null };
       };
       // (a side out of the page's view is not pressed — FRAME-TOUCH's phone shows 402 of its host's 800)
-      const left = box.x - 20 > 4 ? await ground(box.x - 20, point[1]) : null;
+      const left = box.x - 20 > hostView.offset[0] + 4 ? await ground(box.x - 20, point[1]) : null;
       const right =
-        box.x + box.w + 20 < hostView[0] - 4 ? await ground(box.x + box.w + 20, point[1]) : null;
+        box.x + box.w + 20 < hostView.offset[0] + hostView.size[0] - 4
+          ? await ground(box.x + box.w + 20, point[1])
+          : null;
       // (M22 A: the press's own window COLUMN — the host's ground below the frame at its x; above it if below is out of
       // the page's view)
       const below = box.y + box.h + 20;
-      const column = await ground(point[0], below < hostView[1] - 4 ? below : box.y - 20);
+      const column = await ground(
+        point[0],
+        below < hostView.offset[1] + hostView.size[1] - 4 ? below : box.y - 20,
+      );
       return { left, right, column, at: point[0] };
     };
 
@@ -1324,12 +1434,16 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         await onWindow(held, view, hr.x + hr.w * 0.9, hr.y + hr.h / 2),
         8,
       );
-    const hostRange1 = await waitFor(
-      "the host's own range moved",
+    // (PT-6a K7: its value AFTER the release — two more of the host's asks once the drag is over; the first report past
+    // +10 could be one taken mid-drag)
+    const dragAsked = d.fixture.reports(HOST);
+    await waitFor(
+      "two of the host's asks after the drag",
       3_000,
-      () => at(HOST)?.framed?.range ?? null,
-      (v) => v !== null && hostRange0 !== null && v >= hostRange0 + 10,
+      () => d.fixture.reports(HOST),
+      (n) => n >= dragAsked + 2,
     );
+    const hostRange1 = at(HOST)?.framed?.range ?? null;
     const drag = {
       before: rangeBefore,
       after: frameRangeAfter,
@@ -1514,7 +1628,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     // it over the pane's scale (USE's WHEEL): each wheel the page's share × that scale; before, the page's px as the
     // window's — the host scrolled 530 for 330, the frame's low part out of view)
     const below = await inFrame(FRAMES_BOX.w / 2, FRAMES_BOX.h + 60);
-    const paneScale = held === null || view === null ? 1 : (2 * held.hx) / view[0];
+    const paneScale = held === null || view === null ? 1 : (2 * held.hx) / view.size[0];
     if (below !== null) {
       h.move(below.x, below.y);
       await sleep(150);
@@ -2288,6 +2402,151 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     problems.push(...judgeBackWritten(back));
     await done();
 
+    // ── PRESS-ANSWER (PT-6a, K1: the engine's fact): a press on a FRAMELESS page whose own mousedown holds its thread ─
+    // (its press alone — its release after — so main's count of the hand's commands in flight is the press's own)
+    const spinPane = await lay(`${d.fixture.origin}/frames/spin?p=a`, x0 + 4 * step, y0);
+    await frame([spinPane]);
+    await live(spinPane);
+    const SPIN = "/frames/spin?p=a";
+    await waitFor(
+      "the spin page's word",
+      FRAMES_ROWS.withinMs,
+      () => at(SPIN),
+      (rep) => rep?.framed?.parts.b !== undefined,
+    );
+    await pickUp(spinPane);
+    await sleep(600);
+    const spinHeld = await heldFrame();
+    const spinWord = at(SPIN);
+    const spinButton = spinWord?.framed?.parts.b ?? null;
+    let answer: PressAnswerSeen | null = null;
+    if (spinHeld !== null && spinWord !== null && spinButton !== null) {
+      const p = await onWindow(
+        spinHeld,
+        visibleView(spinWord),
+        centre(spinButton)[0],
+        centre(spinButton)[1],
+      );
+      h.move(p.x, p.y);
+      await sleep(300);
+      const base = d.custody()?.handInFlight ?? null;
+      const sent = Date.now();
+      win.webContents.sendInputEvent({
+        type: "mouseDown",
+        x: p.x,
+        y: p.y,
+        button: "left",
+        clickCount: 1,
+      });
+      let lastUp: number | null = null;
+      let read = base !== null;
+      while (Date.now() - sent < FRAMES_SPIN_MS + 1_500) {
+        const n = d.custody()?.handInFlight ?? null;
+        if (n === null) read = false;
+        else if (base !== null && n > base) lastUp = Date.now() - sent;
+        await sleep(FRAMES_ROWS.answerLookMs);
+      }
+      win.webContents.sendInputEvent({
+        type: "mouseUp",
+        x: p.x,
+        y: p.y,
+        button: "left",
+        clickCount: 1,
+      });
+      const downs = await waitFor(
+        "the spin page's word of its mousedown",
+        10_000,
+        () => at(SPIN)?.busy?.downs ?? [],
+        (ds) => ds.length > 0,
+      );
+      answer = {
+        down: downs[0] ?? null,
+        answerMs: read ? (lastUp ?? 0) : null,
+        lookMs: FRAMES_ROWS.answerLookMs,
+      };
+    }
+    said.answer = answer;
+    problems.push(...judgePressAnswer(answer));
+    await done();
+
+    // ── FRAME-BUSY (PT-6a, K1): a page holding an ad-like frame of another site, busy after a press or a tap on its own field ─
+    /** the hint's word waited behind the spin (the page's own timer, beside the words', after it) with the hint's gesture
+     * answered before it (a press: its click before the spin) */
+    const heldOf = (busy: FixtureBusy | null | undefined, why: "press" | "tap"): boolean | null => {
+      const spin = busy?.spins?.find((s) => s[2] === why);
+      const timer = busy?.timers?.[0];
+      if (spin === undefined || timer === undefined) return null;
+      const [began, ms] = spin;
+      const clicked = busy?.clicks?.[0];
+      return timer >= began + ms && (why === "tap" || (clicked !== undefined && clicked < began));
+    };
+    const busyLeg = async (
+      name: string,
+      phone: boolean,
+      lane: number,
+    ): Promise<FrameBusySeen | null> => {
+      const pane = await lay(
+        `${d.fixture.hostOrigin}/frames/busy?p=${name}`,
+        x0 + lane * step,
+        y0,
+        phone ? { w: PANE.phoneCut.w, h: PANE.phoneCut.h, props: { device: "phone" } } : {},
+      );
+      await frame([pane]);
+      await live(pane);
+      const BUSY = `/frames/busy?p=${name}`;
+      await waitFor(
+        `the busy page's word (${name})`,
+        FRAMES_ROWS.withinMs,
+        () => at(BUSY),
+        (rep) => rep?.framed?.parts.t !== undefined,
+      );
+      // (its ad: a frame of another site attached — the page's own doubt is the one that holds its keys)
+      await waitFor(
+        `its ad's word (${name})`,
+        FRAMES_ROWS.withinMs,
+        () => at(`/frames/next?p=${name}`),
+        (rep) => rep !== null,
+      );
+      await pickUp(pane);
+      await sleep(800);
+      const heldNow = await heldFrame();
+      const word = at(BUSY);
+      const field = word?.framed?.parts.t ?? null;
+      let leg: FrameBusySeen | null = null;
+      if (heldNow !== null && word !== null && field !== null) {
+        await h.press(
+          await onWindow(heldNow, visibleView(word), centre(field)[0], centre(field)[1]),
+        );
+        // typed at once — while the page is busy after the hint
+        for (const ch of FRAMES_ROWS.busyTyped) {
+          win.webContents.sendInputEvent({ type: "keyDown", keyCode: ch });
+          win.webContents.sendInputEvent({ type: "char", keyCode: ch });
+          win.webContents.sendInputEvent({ type: "keyUp", keyCode: ch });
+          await sleep(30);
+        }
+        // (its word taken after the typing: two more of its asks once it answers again)
+        const asked = d.fixture.reports(BUSY);
+        await waitFor(
+          `two of the busy page's asks after the typing (${name})`,
+          10_000,
+          () => d.fixture.reports(BUSY),
+          (n) => n >= asked + 2,
+        );
+        const after = at(BUSY);
+        leg = {
+          typed: FRAMES_ROWS.busyTyped,
+          field: after?.field ?? null,
+          busy: after?.busy ?? null,
+          held: heldOf(after?.busy, phone ? "tap" : "press"),
+        };
+      }
+      await done();
+      return leg;
+    };
+    const busy = { press: await busyLeg("k", false, 5), tap: await busyLeg("m", true, 6) };
+    said.busy = busy;
+    problems.push(...judgeFrameBusy(busy));
+
     // ── STUCK: a page whose button starts an endless loop; a key it never answers; ↻ ───────────────────────────────
     const loop = await lay(`${d.fixture.origin}/frames/loop?p=s`, x0 + 3 * step, y0);
     await frame([loop]);
@@ -2340,7 +2599,8 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     // M7 H11: ↻ and an address typed WHILE the chain is stalled — never on the hand's chain: they act
     let reloadActed: boolean | null = null;
     let typed: FramesSeen["stuck"]["typed"] = null;
-    let stalled = false;
+    /** PT-6a (K5): MAIN's count of the hand's commands in flight, 300 ms after each leg's hang */
+    const inFlight: (number | null)[] = [];
     /** the loop page live, its button pressed: the page hangs (its asks stop) — and a key it never answers, the chain
      * stalled behind it (M12 J11: a press is answered — with nothing in flight the legs act with or without H11's let-go) */
     const hangAgain = async (): Promise<boolean> => {
@@ -2372,7 +2632,9 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         win.webContents.sendInputEvent({ type: "keyDown", keyCode: "q" });
         win.webContents.sendInputEvent({ type: "keyUp", keyCode: "q" });
         await sleep(300);
-        stalled = true;
+        // (PT-6a K5: stalled by MAIN's word — a command of the hand the hung page has not answered; here the click's
+        // release, its loop in its click — never the smoke's own word that it sent a key)
+        inFlight.push(d.custody()?.handInFlight ?? null);
         return true;
       }
       return false;
@@ -2423,12 +2685,14 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
           FRAMES_ROWS.hungMs + FRAMES_ROWS.stuckMarginMs,
           () => face(loop),
           (f) => f?.state === "failed",
+          true,
         );
         stayed = failed?.state !== "failed";
       }
       typed = { arrived, stayed };
     }
-    const stuck = { hung, saidMs, reason, reloaded, reloadActed, typed, stalled };
+    const stalled = inFlight.length > 0 && inFlight.every((n) => n !== null && n > 0);
+    const stuck = { hung, saidMs, reason, reloaded, reloadActed, typed, stalled, inFlight };
     said.stuck = stuck;
     problems.push(...judgeStuck(stuck));
     await done();

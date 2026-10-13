@@ -87,6 +87,12 @@
 //                   (FRAME-PICKER — M2: the picker intercepted in a frame inside a frame);
 //   /frames/next  — where the frame goes: a button, its clicks;
 //   /frames/loop  — a page whose button starts an ENDLESS LOOP (STUCK).
+// PT-6a (K1) — and the busy page and the engine's fact:
+//   /frames/busy  — at `hostOrigin`: a page holding an AD-LIKE frame of another site and a field of its own, busy
+//                   `FRAMES_BUSY_MS` in a task its field's press or tap POSTS (FRAME-BUSY: keys typed meanwhile land in
+//                   order);
+//   /frames/spin  — a FRAMELESS page whose button holds its thread `FRAMES_SPIN_MS` in its own mousedown (PRESS-ANSWER:
+//                   is a press answered before its handler, or after?).
 // Each says what it saw with every ask (`framed`), its parts where they stand in its own view.
 // PT-5c2 — a page whose FIRST PAINT the fixture holds:
 //   /topaint     — the page, its link going to `/unpainted` (its name with it: `?p=<name>`);
@@ -316,6 +322,18 @@ export interface FixtureReport {
   readonly heard?: readonly string[] | null;
   /** PT-5d — a page of the frames' rows alone: what it saw of the hand. */
   readonly framed?: FixtureFramed;
+  /** PT-6a (K1) — `/frames/busy` and `/frames/spin` alone: what kept their thread, and when (their own clock, ms). */
+  readonly busy?: FixtureBusy;
+}
+
+/** PT-6a (K1) — what kept a page's thread: each spin a press or a tap posted ([began, ms, "press" | "tap"]), when its own
+ * timer beside it fired, when its field heard each click (`/frames/busy`); each spin in its button's own mousedown
+ * ([began, ms] — `/frames/spin`). */
+export interface FixtureBusy {
+  readonly spins?: readonly (readonly [number, number, string])[];
+  readonly timers?: readonly number[];
+  readonly clicks?: readonly number[];
+  readonly downs?: readonly (readonly [number, number])[];
 }
 
 /** PT-5d — what a page of the frames' rows saw of the hand (its own CSS px, its own view). */
@@ -675,6 +693,7 @@ const framesScript = (ids: readonly string[], elementOnly?: readonly string[]): 
     focused: (document.activeElement && document.activeElement.id) || "",
     view: [innerWidth, innerHeight],
     vv: (() => { try { const v = visualViewport; return v ? [v.scale, v.offsetLeft, v.offsetTop, v.width, v.height] : undefined; } catch { return undefined; } })(),
+    busy: globalThis.__vfBusy,
     framed: {
       clicks, heard, moveButtons, movesHeld, grounds, cancels, changes,
       range: el("r") ? Number(el("r").value) : null,
@@ -821,6 +840,63 @@ export const framesNextHtml = (): string => `<!doctype html>
 <html><head><meta charset="utf-8"><title>next frame</title>${FRAMES_STYLE}<style>body { background: #d8f0d8; }</style></head>
 <body><button id="b2" style="left:20px;top:20px;width:140px;height:44px">again</button>
 ${framesScript(["b2"])}
+</body></html>`;
+
+/** PT-6a (K1) — how long `/frames/busy` keeps its thread after a press or a tap on its field (its own task, posted as a
+ * framework's scheduler posts a render: after the press's handlers, before its word), and how long `/frames/spin`'s button
+ * holds its thread in its OWN mousedown (ms). */
+export const FRAMES_BUSY_MS = 1_500;
+export const FRAMES_SPIN_MS = 3_000;
+/** PT-6a (K1) — `/frames/busy`'s field and its ad-like frame of another site (its view's CSS px). */
+export const FRAMES_BUSY = {
+  field: { x: 40, y: 60, w: 320, h: 44 },
+  ad: { x: 40, y: 160, w: 300, h: 250 },
+} as const;
+
+/**
+ * PT-6a (K1) — `/frames/busy?p=<name>` at `hostOrigin`: a page holding an AD-LIKE frame of another site (`frameOrigin`'s
+ * `/frames/next`) and a field of its OWN — a press on the field (its `pointerdown`), or a tap's end (`touchend`), POSTS
+ * a task (a `MessageChannel` message, as a framework's scheduler posts its render) that keeps the thread
+ * `FRAMES_BUSY_MS`, and a timer of its own beside it (`setTimeout(0)`, as the words' is — the words' fired before it).
+ * It says (`busy`, with every ask): each spin (when it began, how long, of a press or a tap), when its own timer fired,
+ * and when its field heard each click — so a row knows whether the WORD of the hint waited behind the spin (its timer
+ * after the spin) with the hint's gesture already answered (its click before the spin).
+ */
+export const framesBusyHtml = (name: string, frameOrigin: string): string => `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${FIXTURE_TITLE} — busy</title>
+${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; } iframe { position: absolute; border: 0; }</style></head>
+<body><input id="t" type="text" autocomplete="off" spellcheck="false" style="left:${FRAMES_BUSY.field.x}px;top:${FRAMES_BUSY.field.y}px;width:${FRAMES_BUSY.field.w}px;height:${FRAMES_BUSY.field.h}px">
+<iframe id="f" src="${frameOrigin}/frames/next?p=${cleanName(name)}" style="left:${FRAMES_BUSY.ad.x}px;top:${FRAMES_BUSY.ad.y}px;width:${FRAMES_BUSY.ad.w}px;height:${FRAMES_BUSY.ad.h}px"></iframe>
+<script>(() => {
+  const busy = { spins: [], timers: [], clicks: [] };
+  globalThis.__vfBusy = busy;
+  const now = () => Math.round(performance.now());
+  const hold = (why) => {
+    const ch = new MessageChannel();
+    ch.port1.onmessage = () => { const at = performance.now(); while (performance.now() - at < ${FRAMES_BUSY_MS}) {} busy.spins.push([Math.round(at), Math.round(performance.now() - at), why]); };
+    ch.port2.postMessage(0);
+    setTimeout(() => { busy.timers.push(now()); }, 0);
+  };
+  const t = document.getElementById("t");
+  t.addEventListener("pointerdown", (e) => { if (e.pointerType !== "touch") hold("press"); });
+  t.addEventListener("touchend", () => hold("tap"));
+  t.addEventListener("click", () => { busy.clicks.push(now()); });
+})();</script>
+${framesScript(["t", "f"])}
+</body></html>`;
+
+/** PT-6a (K1, the engine's fact) — `/frames/spin?p=<name>`: a FRAMELESS page whose button holds its thread
+ * `FRAMES_SPIN_MS` in its OWN `mousedown`; it says (`busy.downs`) when each began and how long it ran. */
+export const framesSpinHtml = (): string => `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${FIXTURE_TITLE} — spin</title>
+${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; }</style></head>
+<body><button id="b" style="left:120px;top:120px;width:220px;height:64px">spin</button>
+<script>(() => {
+  const busy = { downs: [] };
+  globalThis.__vfBusy = busy;
+  document.getElementById("b").addEventListener("mousedown", () => { const at = performance.now(); while (performance.now() - at < ${FRAMES_SPIN_MS}) {} busy.downs.push([Math.round(at), Math.round(performance.now() - at)]); });
+})();</script>
+${framesScript(["b"])}
 </body></html>`;
 
 /** PT-5d — `/frames/loop?p=<name>`: a page whose button starts an ENDLESS LOOP — its thread never answers again. */
@@ -1072,7 +1148,11 @@ export async function startLiveFixture(): Promise<LiveFixture> {
                       ? framesNextHtml()
                       : url.pathname === "/frames/loop"
                         ? framesLoopHtml()
-                        : null;
+                        : url.pathname === "/frames/busy"
+                          ? framesBusyHtml(name, frameOrigin)
+                          : url.pathname === "/frames/spin"
+                            ? framesSpinHtml()
+                            : null;
       if (page === null) {
         res.writeHead(404);
         res.end();

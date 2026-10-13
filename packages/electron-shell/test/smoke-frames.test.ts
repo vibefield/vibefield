@@ -10,6 +10,7 @@ import { FRAMES_WORD } from "../src/testing/live-fixture";
 import {
   FRAMES_ROWS,
   judgeBackWritten,
+  judgeFrameBusy,
   judgeFrameClipped,
   judgeFrameCovered,
   judgeFrameDouble,
@@ -25,6 +26,7 @@ import {
   judgeFrameType,
   judgeFrameWheel,
   judgeFrameZoomed,
+  judgePressAnswer,
   judgeStood,
   judgeStuck,
   visibleView,
@@ -187,10 +189,24 @@ describe("PT-5d — the frames rows, as the product says them", () => {
   });
 
   it("M22 D1 — a row aims through the page's VISUAL viewport: a phone's page that overflows its layout (its layout 800, 402 of it shown) is aimed by the 402 it shows; a page naming no viewport (980 shown at 0.41), by its 980; one that says no visible size, by its view", () => {
-    expect(visibleView({ view: [800, 1739], vv: [1, 0, 0, 402, 874] })).toEqual([402, 874]);
-    expect(visibleView({ view: [980, 2130], vv: [0.41, 0, 0, 980, 2130] })).toEqual([980, 2130]);
-    expect(visibleView({ view: [1280, 800], vv: [1, 0, 0] })).toEqual([1280, 800]);
-    expect(visibleView({ view: [1280, 800] })).toEqual([1280, 800]);
+    expect(visibleView({ view: [800, 1739], vv: [1, 0, 0, 402, 874] }).size).toEqual([402, 874]);
+    expect(visibleView({ view: [980, 2130], vv: [0.41, 0, 0, 980, 2130] }).size).toEqual([
+      980, 2130,
+    ]);
+    expect(visibleView({ view: [1280, 800], vv: [1, 0, 0] }).size).toEqual([1280, 800]);
+    expect(visibleView({ view: [1280, 800] }).size).toEqual([1280, 800]);
+  });
+
+  it("PT-6a (K7) — the part a row aims through KEEPS its offset: a pinch-panned page shows its layout from there — a page's client point is aimed less it (M23: \"less its offset\"); a page at its layout's origin, or one saying no visible size, offset 0", () => {
+    expect(visibleView({ view: [1280, 800], vv: [2, 300, 120, 640, 400] })).toEqual({
+      size: [640, 400],
+      offset: [300, 120],
+    });
+    expect(visibleView({ view: [800, 1739], vv: [1, 0, 0, 402, 874] })).toEqual({
+      size: [402, 874],
+      offset: [0, 0],
+    });
+    expect(visibleView({ view: [1280, 800] })).toEqual({ size: [1280, 800], offset: [0, 0] });
   });
 
   it("FRAME-HOVER: a pointer over the frame's link; the pointer moved OUT of the frame (M7 H15: a real leave) — the cursor no pointer, and the frame heard its link left", () => {
@@ -703,7 +719,37 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     const legs = { reloadActed: true, typed: { arrived: true, stayed: true } };
     expect(judgeStuck({ ...said, ...legs, stalled: true })).toEqual([]);
     expect(judgeStuck({ ...said, ...legs, stalled: false })).toEqual([
-      "STUCK: its legs while stalled (↻, an address typed) ran with nothing in flight — no key left unanswered: they proved nothing",
+      "STUCK: its legs while stalled (↻, an address typed) ran with nothing of the hand in flight (main's count) — no command left unanswered: they proved nothing",
+    ]);
+  });
+
+  it("PT-6a (K1) FRAME-BUSY: on a page holding an ad-like frame of another site, busy after a press (a laptop's) or a tap (a phone's) on its own field, the keys typed meanwhile land in ORDER — refused or lost, said; a page that never got busy, or a field never aimed at, proves nothing", () => {
+    const spun = { spins: [[100, 1500, "press"] as const], timers: [1601], clicks: [60] };
+    const ok = { typed: "abc", field: "abc", busy: spun, held: true };
+    expect(judgeFrameBusy({ press: ok, tap: { ...ok, held: false } })).toEqual([]);
+    expect(judgeFrameBusy({ press: { ...ok, field: "" }, tap: { ...ok, field: "bc" } })).toEqual([
+      'FRAME-BUSY (press): the keys typed while the page was busy after a press on its field landed as "", not "abc" in order — refused, or lost',
+      'FRAME-BUSY (tap): the keys typed while the page was busy after a tap on its field landed as "bc", not "abc" in order — refused, or lost',
+    ]);
+    expect(
+      judgeFrameBusy({ press: { ...ok, busy: { spins: [], timers: [], clicks: [] } }, tap: null }),
+    ).toEqual([
+      "FRAME-BUSY (press): the page never got busy after a press on its field — the leg proved nothing",
+      "FRAME-BUSY (tap): its field could not be aimed at — the leg proved nothing",
+    ]);
+  });
+
+  it("PT-6a (K1, the engine's fact) PRESS-ANSWER: judged only for having MEASURED — the page's own mousedown ran and main's count was read; how long the press waited is the fact, said", () => {
+    expect(judgePressAnswer({ down: [100, 3000], answerMs: 3010, lookMs: 20 })).toEqual([]);
+    expect(judgePressAnswer({ down: [100, 3000], answerMs: 0, lookMs: 20 })).toEqual([]);
+    expect(judgePressAnswer({ down: null, answerMs: 0, lookMs: 20 })).toEqual([
+      "PRESS-ANSWER: the page's own mousedown never ran — the press proved nothing",
+    ]);
+    expect(judgePressAnswer({ down: [100, 3000], answerMs: null, lookMs: 20 })).toEqual([
+      "PRESS-ANSWER: main's count was never read — the row proved nothing",
+    ]);
+    expect(judgePressAnswer(null)).toEqual([
+      "PRESS-ANSWER: the page's button could not be aimed at — the row proved nothing",
     ]);
   });
 });

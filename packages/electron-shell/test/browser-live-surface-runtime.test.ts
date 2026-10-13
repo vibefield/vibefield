@@ -165,6 +165,13 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
   /** PT-5d (M9): what the hand told the page — its focus — in order with its presses, touches and keys. */
   readonly hand: string[] = [];
 
+  /** PT-6a (K5): the hand's commands sent and unanswered, as the row sets them. */
+  inFlight = 0;
+
+  handInFlight(): number {
+    return this.inFlight;
+  }
+
   async setFocused(focused: boolean): Promise<void> {
     this.hand.push(`focus ${focused}`);
   }
@@ -807,6 +814,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
         owners: 0,
         emulations: 0,
         frameKeysRefused: 0,
+        handInFlight: 0,
       });
       // no grace's timer outlives the runtimes it was for
       expect(vi.getTimerCount()).toBe(0);
@@ -3830,6 +3838,16 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(p.result.runtime.stats.frameKeysRefused).toBe(2);
       expect(p.result.runtime.stats.inputDropped).toBe(dropped + 3);
       expect(p.result.runtime.frameKeysRefused()).toBe(2);
+      p.result.runtime.dispose();
+    });
+
+    it("PT-6a (K5) — the runtime says its window's hand commands SENT and unanswered to main's census (`handInFlight()`): its window's own count; its window gone, none", async () => {
+      const p = await laptop();
+      expect(p.result.runtime.handInFlight()).toBe(0);
+      p.window.inFlight = 2;
+      expect(p.result.runtime.handInFlight()).toBe(2);
+      p.window.destroyed = true;
+      expect(p.result.runtime.handInFlight()).toBe(0);
       p.result.runtime.dispose();
     });
 

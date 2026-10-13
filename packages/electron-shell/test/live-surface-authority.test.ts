@@ -121,6 +121,7 @@ describe("LiveSurfaceAuthority", () => {
       owners: 2,
       emulations: 0,
       frameKeysRefused: 0,
+      handInFlight: 0,
     });
     switched.set(a.surfaceId, 2);
     switched.set(b.surfaceId, 1);
@@ -134,6 +135,7 @@ describe("LiveSurfaceAuthority", () => {
       owners: 1,
       emulations: 3,
       frameKeysRefused: 0,
+      handInFlight: 0,
     });
     switched.set(b.surfaceId, 2);
     expect(authority.state().emulations).toBe(4);
@@ -164,6 +166,33 @@ describe("LiveSurfaceAuthority", () => {
       released: true,
     });
     expect(authority.state().frameKeysRefused).toBe(6);
+  });
+
+  it("PT-6a (K5): the census counts the hand's commands its browser pages have SENT and not yet had answered — each runtime's own count NOW (a page that went keeps none in flight): what a row reads to know a page's chain is stalled", () => {
+    const inFlight = new Map<string, number>();
+    const runtime = (surfaceId: string): LiveSurfaceRuntimeHandle => ({
+      surfaceId,
+      attach: () => {
+        throw new Error("attach is the control session's job, not this suite's");
+      },
+      dispose: () => undefined,
+      handInFlight: () => inFlight.get(surfaceId) ?? 0,
+    });
+    const { authority, windows } = fixture({
+      factories: { browser: runtime, sckWindow: runtime, iosSimulator: runtime },
+    });
+    const alice = participant("window-1", "document-1");
+    windows.set(alice.incarnation, { webContentsId: 7 });
+    const a = authority.mint(mintParams(alice, BROWSER_SOURCE));
+    const b = authority.mint(mintParams(alice, BROWSER_SOURCE));
+    expect(authority.state().handInFlight).toBe(0);
+    inFlight.set(a.surfaceId, 1);
+    inFlight.set(b.surfaceId, 2);
+    expect(authority.state().handInFlight).toBe(3);
+    expect(authority.release({ rendererParticipant: alice, surfaceId: a.surfaceId })).toEqual({
+      released: true,
+    });
+    expect(authority.state().handInFlight).toBe(2);
   });
 
   it("mints a browser runtime and issues a window-bound interaction ticket", () => {
@@ -277,6 +306,7 @@ describe("LiveSurfaceAuthority", () => {
       owners: 1,
       emulations: 0,
       frameKeysRefused: 0,
+      handInFlight: 0,
     });
 
     expect(authority.release({ rendererParticipant: after, surfaceId: first.surfaceId })).toEqual({
@@ -288,6 +318,7 @@ describe("LiveSurfaceAuthority", () => {
       owners: 0,
       emulations: 0,
       frameKeysRefused: 0,
+      handInFlight: 0,
     });
   });
 
@@ -320,6 +351,7 @@ describe("LiveSurfaceAuthority", () => {
       owners: 0,
       emulations: 0,
       frameKeysRefused: 0,
+      handInFlight: 0,
     });
   });
 
@@ -367,6 +399,7 @@ describe("LiveSurfaceAuthority", () => {
       owners: 0,
       emulations: 0,
       frameKeysRefused: 0,
+      handInFlight: 0,
     });
   });
 

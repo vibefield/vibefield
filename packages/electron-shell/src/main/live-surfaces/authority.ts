@@ -55,6 +55,9 @@ export interface LiveSurfaceRuntimeHandle extends LiveSurfaceRuntimeAuthority {
   /** PT-5d (M15): the key-like events its page refused because a frame of another site held the focus (a browser page's
    * `stats.frameKeysRefused`) — counted by the census. */
   frameKeysRefused?(): number;
+  /** PT-6a (K5): the hand's commands its page has SENT and not had answered, now (a browser page's window's) — counted by
+   * the census. */
+  handInFlight?(): number;
 }
 
 /** Injectable producer construction; production binds the three real runtime
@@ -294,18 +297,33 @@ export class LiveSurfaceAuthority {
    * runtimes accepted (a switch asked of a born, live page is told at once; one asked of a window not yet born, at its
    * birth; one that moves the density remakes the window). The smoke's TAPS-PENDING reads it of a born, live page — where a
    * moved count is a device command sent; the desk's own count moves when its lane takes the write, sent or not. */
-  state(): { runtimes: number; owners: number; emulations: number; frameKeysRefused: number } {
+  state(): {
+    runtimes: number;
+    owners: number;
+    emulations: number;
+    frameKeysRefused: number;
+    handInFlight: number;
+  } {
     let owners = 0;
     let emulations = this.#emulationsGone;
     // PT-5d (M15): and the key-like events refused because a frame of another site held the focus — typing into such a
     // frame is off; the smoke's FRAME-TYPE reads that it was refused
     let frameKeysRefused = this.#frameKeysRefusedGone;
+    // PT-6a (K5): and the hand's commands its pages have SENT and not had answered, NOW — a page that went keeps none
+    let handInFlight = 0;
     for (const entry of this.#bySurfaceId.values()) {
       owners += entry.owners.size;
       emulations += entry.runtime.emulations?.() ?? 0;
       frameKeysRefused += entry.runtime.frameKeysRefused?.() ?? 0;
+      handInFlight += entry.runtime.handInFlight?.() ?? 0;
     }
-    return { runtimes: this.#bySurfaceId.size, owners, emulations, frameKeysRefused };
+    return {
+      runtimes: this.#bySurfaceId.size,
+      owners,
+      emulations,
+      frameKeysRefused,
+      handInFlight,
+    };
   }
 
   dispose(): void {
