@@ -58,6 +58,8 @@ export interface LiveSurfaceRuntimeHandle extends LiveSurfaceRuntimeAuthority {
   /** PT-6a (K5): the hand's commands its page has SENT and not had answered, now (a browser page's window's) — counted by
    * the census. */
   handInFlight?(): number;
+  /** PT-6a (M4 — F1): whether its page's current document is PULL-ONLY (1) — counted by the census. */
+  pullOnly?(): number;
 }
 
 /** Injectable producer construction; production binds the three real runtime
@@ -303,6 +305,7 @@ export class LiveSurfaceAuthority {
     emulations: number;
     frameKeysRefused: number;
     handInFlight: number;
+    pullOnly: number;
   } {
     let owners = 0;
     let emulations = this.#emulationsGone;
@@ -311,11 +314,14 @@ export class LiveSurfaceAuthority {
     let frameKeysRefused = this.#frameKeysRefusedGone;
     // PT-6a (K5): and the hand's commands its pages have SENT and not had answered, NOW — a page that went keeps none
     let handInFlight = 0;
+    // PT-6a (M4 — F1): and its pages whose current document is PULL-ONLY (a mute document, asked for its words)
+    let pullOnly = 0;
     for (const entry of this.#bySurfaceId.values()) {
       owners += entry.owners.size;
       emulations += entry.runtime.emulations?.() ?? 0;
       frameKeysRefused += entry.runtime.frameKeysRefused?.() ?? 0;
       handInFlight += entry.runtime.handInFlight?.() ?? 0;
+      pullOnly += entry.runtime.pullOnly?.() ?? 0;
     }
     return {
       runtimes: this.#bySurfaceId.size,
@@ -323,6 +329,7 @@ export class LiveSurfaceAuthority {
       emulations,
       frameKeysRefused,
       handInFlight,
+      pullOnly,
     };
   }
 

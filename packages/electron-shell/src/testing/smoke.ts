@@ -1016,6 +1016,8 @@ export interface LiveCensus {
   readonly frameKeysRefused: number;
   /** PT-6a (K5): the hand's commands main's pages have SENT and not had answered, now (STUCK: its chain stalled) */
   readonly handInFlight: number;
+  /** PT-6a (M4 — F1): main's pages whose current document is PULL-ONLY (FRAME-OPENED) */
+  readonly pullOnly: number;
 }
 
 export async function runSmokeCanvas(opts: {

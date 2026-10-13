@@ -136,6 +136,8 @@ export interface BrowserSurfaceNativeWindow {
   /** PT-6a (K5): how many of the hand's commands this window has SENT and not had answered (nor let go) — main's census
    * counts them (a row reads it to know a page's chain is stalled). Absent: none counted. */
   handInFlight?(): number;
+  /** PT-6a (M4 — F1): whether its page's current document is PULL-ONLY (1) — main's census counts them. Absent: none. */
+  pullOnly?(): number;
   /** History/loading navigation. `go` rides `loadURL` so the initial-load and
    * chrome-navigation paths share one policy gate. */
   navigate(action: "back" | "forward" | "reload" | "stop"): void;
@@ -1297,6 +1299,13 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   handInFlight(): number {
     const window = this.#window;
     return window === null || window.isDestroyed() ? 0 : (window.handInFlight?.() ?? 0);
+  }
+
+  /** PT-6a (M4 — F1): whether its page's current document is PULL-ONLY (it answered a pulled word its push never sent) —
+   * counted by main's census (its window gone: none). */
+  pullOnly(): number {
+    const window = this.#window;
+    return window === null || window.isDestroyed() ? 0 : (window.pullOnly?.() ?? 0);
   }
 
   supportSnapshot(): LiveSurfaceRuntimeSupportSnapshot {

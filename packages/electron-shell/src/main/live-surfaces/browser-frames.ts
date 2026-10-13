@@ -137,6 +137,9 @@ export class BrowserFrames {
   readonly #hand: Hand = { buttons: new Map(), finger: undefined, keys: new Map() };
   /** where the last hover went — told that the pointer left it when the next goes elsewhere */
   #hover: FrameTarget | undefined;
+  /** PT-6a (M4, M5 — F1): the page's current document answered a PULLED word for a doubt its own word never settled — a
+   * MUTE document: PULL-ONLY until its next commit (its later page-born doubts ask at once) */
+  #pullOnly = false;
   /** PT-5d (M7 H7): the wheel's gesture — its target, and when its last wheel came */
   #wheel: { target: FrameTarget; at: number } | undefined;
 
@@ -192,6 +195,7 @@ export class BrowserFrames {
    * the new document went to a press's target that no longer stands. The finger is kept: its end goes to its session (H4). */
   pageCommitted(document: number): void {
     this.#framed = false;
+    this.#pullOnly = false;
     this.#pageDocument = document;
     this.#frames.clear();
     this.#focused = undefined;
@@ -286,6 +290,16 @@ export class BrowserFrames {
       spent: false,
       page: page && (was === null ? this.#focused === undefined : was.page && !was.heard),
     };
+  }
+
+  /** PT-6a (M4, M5 — F1): is the page's current document PULL-ONLY (mute: its doubts ask for their word)? */
+  pullOnly(): boolean {
+    return this.#pullOnly;
+  }
+
+  /** PT-6a (F1): the page's current document answered a pulled word its own push never sent — pull-only until its commit. */
+  markPullOnly(): void {
+    this.#pullOnly = true;
   }
 
   /** PT-6a (K1): the hint's command was REFUSED (let go at a commit, refused by the engine) — nothing of it reached the page,

@@ -1365,6 +1365,83 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     expect(r.hand()).toEqual(["mousePressed@page 1,1"]);
   });
 
+  it("PT-6a (M4, M5 — F1) — the words RE-ARM their window's listeners when its document is OPENED (the document-open steps erase them, the focus words' too): their MutationObserver sees the root replaced, and adds each again — never twice; and they name their own `where()` in their isolated world, for a PULLED word", () => {
+    const said: string[] = [];
+    type Heard = (event: { isTrusted: boolean; timeStamp: number }) => void;
+    let on = new Map<string, Heard[]>();
+    let observed: (() => void) | undefined;
+    const later: (() => void)[] = [];
+    const self: { top?: unknown } = {};
+    self.top = self;
+    const g: Record<string, unknown> = { [FRAME_WORDS_BINDING]: (word: string) => said.push(word) };
+    const doc = {
+      documentElement: { id: "first" } as unknown,
+      hasFocus: () => true,
+      activeElement: { localName: "input" },
+      querySelector: () => null,
+      querySelectorAll: () => [],
+    };
+    new Function(
+      "globalThis",
+      "window",
+      "location",
+      "addEventListener",
+      "requestAnimationFrame",
+      "setInterval",
+      "document",
+      "setTimeout",
+      "performance",
+      "MutationObserver",
+      FRAME_WORDS_SCRIPT,
+    )(
+      g,
+      self,
+      { href: "https://example.test/a" },
+      (type: string, listener: Heard) => {
+        const list = on.get(type) ?? [];
+        if (!list.includes(listener)) on.set(type, [...list, listener]);
+      },
+      () => undefined,
+      () => undefined,
+      doc,
+      (callback: () => void) => later.push(callback),
+      { now: () => 0 },
+      class {
+        constructor(callback: () => void) {
+          observed = callback;
+        }
+        observe(): void {}
+      },
+    );
+    const key = (): void => {
+      for (const listener of on.get("keydown") ?? []) listener({ isTrusted: true, timeStamp: 0 });
+      for (const callback of later.splice(0)) callback();
+    };
+    key();
+    expect(said).toEqual(["here@0"]);
+    // the words' own `where()`, named in their world — what a pulled word evaluates
+    expect((g.__vibefield_where as () => string)()).toBe("here");
+    // the document OPENED: every listener of its window erased — a key there says nothing
+    on = new Map();
+    key();
+    expect(said).toEqual(["here@0"]);
+    // its MutationObserver (it survives the open) sees the root replaced: each listener added again
+    doc.documentElement = { id: "second" };
+    observed?.();
+    key();
+    expect(said).toEqual(["here@0", "here@0"]);
+    expect(on.get("scroll")).toHaveLength(1);
+    // a mutation that replaces no root adds nothing twice
+    observed?.();
+    expect(on.get("keydown")).toHaveLength(1);
+    // a root replaced WITHOUT an open (its window's listeners standing): each added again, and still each once — the same
+    // listener, which the window keeps one of
+    doc.documentElement = { id: "third" };
+    observed?.();
+    expect(on.get("keydown")).toHaveLength(1);
+    expect(on.get("scroll")).toHaveLength(1);
+  });
+
   it("rulings 1, M3, M7 H2 — a document's WORDS, run: it takes the binding out of the page's reach; says WHERE THE FOCUS IS (`here`, `inner`, `away`) after each trusted event — one word a task, once its default actions are done — and `moved` only when its frames' boxes or their VISIBLE parts changed (M6.3a), once an animation frame; never its size (M6.1); a document holding no frame never says moved; the page's blank and a document with no binding say nothing — a FRAME's blank speaks; M12 J10 — what no event says is LOOKED for: a cover between the quick look's points, or the frame's own `pointer-events`, seen within the deep look's bound", () => {
     const run = (options: { href?: string; binding?: boolean; top?: boolean } = {}) => {
       const said: string[] = [];
@@ -3144,6 +3221,272 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       } finally {
         vi.useRealTimers();
       }
+    });
+
+    describe("PT-6a (M4, M5 — F1) — a missing word is never by itself a hang, and a document that cannot speak is never waited on: its top at `about:blank` resets as a commit resets the frames; a page-born doubt without its word by the second ASKS the page where its focus is (a PULLED word)", () => {
+      /** the words' own `where()`, PULLED: the page's session, its main frame's words world */
+      const isPull = (method: string, params: unknown, session?: string): boolean =>
+        method === "Runtime.evaluate" &&
+        session === undefined &&
+        String((params as { expression?: unknown }).expression).includes("__vibefield_where");
+      /** a framed page whose pushed words never come (a MUTE document); its pulled word answered as the row says */
+      const mute = (answer: () => Promise<unknown>) =>
+        framed({ hungInputMs: BOUND }, (method, params, session) =>
+          isPull(method, params, session) ? (answer() as Promise<object>) : undefined,
+        );
+      const asksOf = (r: Awaited<ReturnType<typeof framed>>) =>
+        r.sent.filter((c) => isPull(c.method, c.params, c.session));
+      const typed = (
+        r: Awaited<ReturnType<typeof framed>>,
+        keys: string[],
+        said: string[],
+      ): void => {
+        for (const k of keys)
+          void key(r, k).then(
+            () => said.push(`${k} sent`),
+            () => said.push(`${k} refused`),
+          );
+      };
+
+      it("review F1 — a framed page whose TOP goes to `about:blank` after its remote load (no words run there): its frames reset as at a commit — the doubt, `#framed`, the hand — so a press there waits for no word: its key sent at once, the page never said hung", async () => {
+        vi.useFakeTimers();
+        try {
+          const r = await framed({ hungInputMs: BOUND });
+          const hung = hungOf(r);
+          // (a key waiting for the word of a press on the page before: refused with its document, as at a commit — J6)
+          await pressAt(r, 20, 20);
+          const before: string[] = [];
+          typed(r, ["z"], before);
+          await vi.advanceTimersByTimeAsync(0);
+          expect(before).toEqual([]);
+          r.at("about:blank");
+          r.contents.emit("did-navigate", {}, "about:blank");
+          await vi.advanceTimersByTimeAsync(0);
+          expect(before).toEqual(["z refused"]);
+          r.emit("Target.detachedFromTarget", { sessionId: "F", targetId: "t-F" });
+          await pressAt(r, 20, 20);
+          const said: string[] = [];
+          typed(r, ["a"], said);
+          await vi.advanceTimersByTimeAsync(0);
+          expect(said).toEqual(["a sent"]);
+          await vi.advanceTimersByTimeAsync(BOUND * 2);
+          expect(hung).toEqual([]);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it("M5 — a MUTE document: at the second without a word the page is ASKED — the words' own `where()` in their isolated world of the MAIN frame, after a 0-ms timer, off the hand's chain; `here` sends the held keys in order; the page never said hung; the document then PULL-ONLY (main's census counts it): the next doubt asks at once", async () => {
+        vi.useFakeTimers();
+        try {
+          const r = await mute(() => Promise.resolve({ result: { value: "here" } }));
+          const hung = hungOf(r);
+          await pressAt(r, 20, 20);
+          const said: string[] = [];
+          typed(r, ["a", "b", "c"], said);
+          await vi.advanceTimersByTimeAsync(999);
+          expect(said).toEqual([]);
+          expect(asksOf(r)).toHaveLength(0);
+          await vi.advanceTimersByTimeAsync(1);
+          await vi.advanceTimersByTimeAsync(0);
+          expect(said).toEqual(["a sent", "b sent", "c sent"]);
+          const [first] = asksOf(r);
+          expect(first?.params).toMatchObject({
+            contextId: 41,
+            awaitPromise: true,
+            returnByValue: true,
+          });
+          expect(
+            String((first?.params as { expression?: unknown } | undefined)?.expression),
+          ).toContain("setTimeout");
+          // (each key's down a hint of its own — the last key's too, which no key waits on: the document pull-only, each
+          // asked at once; the press's at the second)
+          expect(asksOf(r)).toHaveLength(4);
+          expect(r.native.pullOnly?.()).toBe(1);
+          await pressAt(r, 30, 20);
+          typed(r, ["d"], said);
+          await vi.advanceTimersByTimeAsync(0);
+          expect(said).toEqual(["a sent", "b sent", "c sent", "d sent"]);
+          await vi.advanceTimersByTimeAsync(BOUND * 2);
+          expect(hung).toEqual([]);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it("M5 — the PULL-ONLY mark lasts until the document's next COMMIT: the new document's doubts wait their second for a pushed word again before they ask (main's census back to none)", async () => {
+        vi.useFakeTimers();
+        try {
+          const r = await mute(() => Promise.resolve({ result: { value: "here" } }));
+          await pressAt(r, 20, 20);
+          await vi.advanceTimersByTimeAsync(1_000);
+          expect(r.native.pullOnly?.()).toBe(1);
+          r.at("https://host.test/b");
+          r.contents.emit("did-navigate", {}, "https://host.test/b");
+          expect(r.native.pullOnly?.()).toBe(0);
+          r.attach("G");
+          await turns();
+          const asked = asksOf(r).length;
+          await pressAt(r, 20, 20);
+          const said: string[] = [];
+          typed(r, ["a"], said);
+          await vi.advanceTimersByTimeAsync(999);
+          expect(asksOf(r)).toHaveLength(asked);
+          expect(said).toEqual([]);
+          await vi.advanceTimersByTimeAsync(1);
+          await vi.advanceTimersByTimeAsync(0);
+          // (the press's at the second; the key's own down at once — the new document pull-only in its turn)
+          expect(asksOf(r)).toHaveLength(asked + 2);
+          expect(said).toEqual(["a sent"]);
+          expect(r.native.pullOnly?.()).toBe(1);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it("M5 — a pull answering `inner` or `away` settles nothing (the focus unknown): as J7 — the held key refused a second after the answer, never sent blind; the page never said hung", async () => {
+        vi.useFakeTimers();
+        try {
+          for (const where of ["inner", "away"]) {
+            const r = await mute(() => Promise.resolve({ result: { value: where } }));
+            const hung = hungOf(r);
+            await pressAt(r, 20, 20);
+            const said: string[] = [];
+            typed(r, ["a"], said);
+            await vi.advanceTimersByTimeAsync(1_000);
+            expect(asksOf(r)).toHaveLength(1);
+            expect(said).toEqual([]);
+            await vi.advanceTimersByTimeAsync(1_000);
+            expect(said).toEqual(["a refused"]);
+            expect(r.hand().filter((h) => h.startsWith("keyDown"))).toEqual([]);
+            await vi.advanceTimersByTimeAsync(BOUND * 2);
+            expect(hung).toEqual([]);
+          }
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it("K1 (a) unchanged — a BUSY page: the pull waits on its event loop and answers nothing; its pushed word, late, ends the hold (and a word for each key once it is free) — the keys sent in order, nothing marked pull-only, never said hung", async () => {
+        vi.useFakeTimers();
+        try {
+          let speak: (() => void) | undefined;
+          const r = await framed({ hungInputMs: BOUND }, (method, params, session) => {
+            // (once free, the page says where its focus is after each key it hears)
+            if (method === "Input.dispatchKeyEvent" && session === undefined) speak?.();
+            return isPull(method, params, session) ? new Promise(() => {}) : undefined;
+          });
+          const hung = hungOf(r);
+          await pressAt(r, 20, 20);
+          const said: string[] = [];
+          typed(r, ["a", "b"], said);
+          await vi.advanceTimersByTimeAsync(1_500);
+          expect(asksOf(r)).toHaveLength(1);
+          expect(said).toEqual([]);
+          speak = () => word(r, "here");
+          word(r, "here");
+          await vi.advanceTimersByTimeAsync(0);
+          expect(said).toEqual(["a sent", "b sent"]);
+          expect(r.native.pullOnly?.()).toBe(0);
+          await vi.advanceTimersByTimeAsync(BOUND * 2);
+          expect(hung).toEqual([]);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it("K1 (b) unchanged — a HUNG page (no word, the pull never answered) is said hung at the host's bound; so is one whose ask is REFUSED, and one whose main frame's words world is gone (no ask sent) — one ask a doubt, never a storm", async () => {
+        vi.useFakeTimers();
+        try {
+          for (const answer of [
+            () => new Promise(() => {}),
+            () => Promise.reject(new Error("refused")),
+          ]) {
+            const r = await mute(answer);
+            const hung = hungOf(r);
+            await pressAt(r, 20, 20);
+            const said: string[] = [];
+            typed(r, ["a"], said);
+            await vi.advanceTimersByTimeAsync(BOUND - 1);
+            expect(said).toEqual([]);
+            expect(asksOf(r)).toHaveLength(1);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(hung).toEqual([undefined]);
+          }
+          const gone = await mute(() => Promise.resolve({ result: { value: "here" } }));
+          const hung = hungOf(gone);
+          gone.emit("Runtime.executionContextsCleared", {});
+          await pressAt(gone, 20, 20);
+          typed(gone, ["a"], []);
+          await vi.advanceTimersByTimeAsync(BOUND);
+          expect(asksOf(gone)).toHaveLength(0);
+          expect(hung).toEqual([undefined]);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it("M5 — a pushed word and a pulled answer race: whichever comes second is stale — the push first, the late answer (of the same truth) settles nothing new and marks nothing; an answer stamped before a LATER hint is ignored (J3)", async () => {
+        vi.useFakeTimers();
+        try {
+          let release: ((value: object) => void) | undefined;
+          const held = () =>
+            new Promise<object>((resolve) => {
+              release = resolve;
+            });
+          const r = await mute(held);
+          await pressAt(r, 20, 20);
+          const said: string[] = [];
+          typed(r, ["a"], said);
+          await vi.advanceTimersByTimeAsync(1_000);
+          expect(asksOf(r)).toHaveLength(1);
+          word(r, "here");
+          await vi.advanceTimersByTimeAsync(0);
+          expect(said).toEqual(["a sent"]);
+          release?.({ result: { value: "here" } });
+          await vi.advanceTimersByTimeAsync(0);
+          expect(r.native.pullOnly?.()).toBe(0);
+          // a press whose word never comes: asked at the second; another press meanwhile — the first ask's answer, stamped
+          // before it, moves nothing and marks nothing; the second's own doubt still awaits its word
+          const later = await mute(held);
+          await pressAt(later, 20, 20);
+          await vi.advanceTimersByTimeAsync(1_000);
+          expect(asksOf(later)).toHaveLength(1);
+          const first = release;
+          await vi.advanceTimersByTimeAsync(100);
+          await pressAt(later, 25, 20);
+          first?.({ result: { value: "here" } });
+          await vi.advanceTimersByTimeAsync(0);
+          expect(later.native.pullOnly?.()).toBe(0);
+          const said2: string[] = [];
+          typed(later, ["b"], said2);
+          await vi.advanceTimersByTimeAsync(0);
+          expect(said2).toEqual([]);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it("`destroy()` lets the pull's timer go, and refuses the focus waiters at once (the reviewer's note): no ask after it, nothing said hung", async () => {
+        vi.useFakeTimers();
+        try {
+          const r = await mute(() => new Promise(() => {}));
+          Object.assign(electron.made.at(-1) ?? {}, { destroy: () => undefined });
+          const hung = hungOf(r);
+          await pressAt(r, 20, 20);
+          const said: string[] = [];
+          typed(r, ["a"], said);
+          await vi.advanceTimersByTimeAsync(10);
+          r.native.destroy();
+          await vi.advanceTimersByTimeAsync(0);
+          expect(said).toEqual(["a refused"]);
+          await vi.advanceTimersByTimeAsync(BOUND * 2);
+          expect(asksOf(r)).toHaveLength(0);
+          expect(hung).toEqual([]);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
     });
   });
 

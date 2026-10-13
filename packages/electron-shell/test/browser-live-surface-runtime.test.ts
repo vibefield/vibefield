@@ -172,6 +172,13 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
     return this.inFlight;
   }
 
+  /** PT-6a (M4, M5 — F1): whether the window's current document is pull-only (1) or not (0), as the row sets it. */
+  pulled = 0;
+
+  pullOnly(): number {
+    return this.pulled;
+  }
+
   async setFocused(focused: boolean): Promise<void> {
     this.hand.push(`focus ${focused}`);
   }
@@ -815,6 +822,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
         emulations: 0,
         frameKeysRefused: 0,
         handInFlight: 0,
+        pullOnly: 0,
       });
       // no grace's timer outlives the runtimes it was for
       expect(vi.getTimerCount()).toBe(0);
@@ -3848,6 +3856,16 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(p.result.runtime.handInFlight()).toBe(2);
       p.window.destroyed = true;
       expect(p.result.runtime.handInFlight()).toBe(0);
+      p.result.runtime.dispose();
+    });
+
+    it("PT-6a (M4, M5 — F1) — the runtime says whether its window's current document is PULL-ONLY to main's census (`pullOnly()`): its window's own count; its window gone, none", async () => {
+      const p = await laptop();
+      expect(p.result.runtime.pullOnly()).toBe(0);
+      p.window.pulled = 1;
+      expect(p.result.runtime.pullOnly()).toBe(1);
+      p.window.destroyed = true;
+      expect(p.result.runtime.pullOnly()).toBe(0);
       p.result.runtime.dispose();
     });
 

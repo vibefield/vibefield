@@ -49,6 +49,15 @@ const PAGE_GUARD_SCRIPT =
  */
 export const WORDS_WORLD = "__vibefield_words";
 
+/** PT-6a (M4, M5 — F1): the name the words give their own `where()` in THEIR isolated world (never the page's) — what a
+ * PULLED word evaluates. */
+export const WORDS_WHERE = "__vibefield_where";
+
+/** PT-6a (M5 — F1): a PULLED word — the words' own `where()`, evaluated in their isolated world AFTER a 0-ms timer, so it
+ * answers only once the page's event loop has turned (a page that can speak has spoken by then: its word's timer was queued
+ * first, in the event's own dispatch); a hung page never answers. */
+export const PULL_WORD_EXPRESSION = `new Promise((resolve) => setTimeout(() => { try { const where = globalThis[${JSON.stringify(WORDS_WHERE)}]; resolve(typeof where === "function" ? where() : null); } catch { resolve(null); } }, 0))`;
+
 /**
  * PT-5c (ruling 1) — THE PAGE SAYS ITS SCALE. The binding the page's own session adds (`Runtime.addBinding` — heard only
  * with the Runtime on: PT-5c's probe) through which the guard below says the page's visual-viewport scale: nothing reads
@@ -132,7 +141,7 @@ export const FRAME_SIGHT = `function (quick) { const el = this; const none = [0,
  * must say where the focus went). Never its size (M6.1): every document of a frame's process says its words on the frame's
  * session — its own children of its site too — so a frame's viewport is READ of its local root, beside its quad.
  */
-export const FRAME_WORDS_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; try { delete globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; } catch {} if (typeof say !== "function" || (window === window.top && location.href === "about:blank")) return; const tell = (word) => { try { say(word); } catch {} }; const where = () => { try { if (!document.hasFocus()) return "away"; let d = document; for (let i = 0; i < 32; i += 1) { const a = d.activeElement; const n = a ? a.localName : ""; if (n !== "iframe" && n !== "frame" && n !== "object" && n !== "embed" && n !== "fencedframe") return "here"; let inner = null; try { inner = a.contentDocument; } catch {} if (!inner) return "inner"; d = inner; } return "inner"; } catch { return "away"; } }; let asked = false; let newest = -Infinity; const ask = (e) => { if (!e.isTrusted) return; newest = Math.max(newest, typeof e.timeStamp === "number" ? e.timeStamp : performance.now()); if (asked) return; asked = true; setTimeout(() => { asked = false; const age = Math.max(0, Math.round(performance.now() - newest)); newest = -Infinity; tell(where() + "@" + age); }, 0); }; for (const t of ["pointerdown", "mousedown", "keydown", "touchend", "click", "focus", "blur", "focusin", "focusout"]) addEventListener(t, ask, true); let drawn = "", sights = "", deep = false; const part = ${FRAME_SIGHT}; const seen = (f) => { try { return String(part.call(f, true)); } catch { return ""; } }; const boxes = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { const r = f.getBoundingClientRect(); out += r.left + "," + r.top + "," + r.width + "," + r.height + ":" + seen(f) + ";"; } return out; }; const whole = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { let v = ""; try { v = JSON.stringify(part.call(f, false)); } catch {} out += v + ";"; } return out; }; let due = false; const look = () => { due = false; const now = boxes(); let changed = now !== drawn; drawn = now; if (deep) { deep = false; const all = whole(); if (all !== sights) { sights = all; changed = true; } } if (changed) tell("moved"); }; const moved = () => { if (due) return; due = true; requestAnimationFrame(look); }; addEventListener("scroll", moved, { capture: true, passive: true }); addEventListener("resize", moved); addEventListener("load", moved); for (const t of ["DOMContentLoaded", "transitionend", "animationend"]) addEventListener(t, moved, true); globalThis.visualViewport?.addEventListener("resize", moved); globalThis.visualViewport?.addEventListener("scroll", moved); try { new MutationObserver(() => { if (document.querySelector("iframe, frame")) moved(); }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["class", "style", "hidden", "open"] }); } catch {} setInterval(() => { if (document.querySelector("iframe, frame")) { deep = true; moved(); } }, 500); moved(); })();`;
+export const FRAME_WORDS_SCRIPT = `(() => { const say = globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; try { delete globalThis[${JSON.stringify(FRAME_WORDS_BINDING)}]; } catch {} if (typeof say !== "function" || (window === window.top && location.href === "about:blank")) return; const tell = (word) => { try { say(word); } catch {} }; const where = () => { try { if (!document.hasFocus()) return "away"; let d = document; for (let i = 0; i < 32; i += 1) { const a = d.activeElement; const n = a ? a.localName : ""; if (n !== "iframe" && n !== "frame" && n !== "object" && n !== "embed" && n !== "fencedframe") return "here"; let inner = null; try { inner = a.contentDocument; } catch {} if (!inner) return "inner"; d = inner; } return "inner"; } catch { return "away"; } }; try { globalThis[${JSON.stringify(WORDS_WHERE)}] = where; } catch {} let asked = false; let newest = -Infinity; const ask = (e) => { if (!e.isTrusted) return; newest = Math.max(newest, typeof e.timeStamp === "number" ? e.timeStamp : performance.now()); if (asked) return; asked = true; setTimeout(() => { asked = false; const age = Math.max(0, Math.round(performance.now() - newest)); newest = -Infinity; tell(where() + "@" + age); }, 0); }; let drawn = "", sights = "", deep = false; const part = ${FRAME_SIGHT}; const seen = (f) => { try { return String(part.call(f, true)); } catch { return ""; } }; const boxes = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { const r = f.getBoundingClientRect(); out += r.left + "," + r.top + "," + r.width + "," + r.height + ":" + seen(f) + ";"; } return out; }; const whole = () => { let out = ""; for (const f of document.querySelectorAll("iframe, frame")) { let v = ""; try { v = JSON.stringify(part.call(f, false)); } catch {} out += v + ";"; } return out; }; let due = false; const look = () => { due = false; const now = boxes(); let changed = now !== drawn; drawn = now; if (deep) { deep = false; const all = whole(); if (all !== sights) { sights = all; changed = true; } } if (changed) tell("moved"); }; const moved = () => { if (due) return; due = true; requestAnimationFrame(look); }; const arm = () => { for (const t of ["pointerdown", "mousedown", "keydown", "touchend", "click", "focus", "blur", "focusin", "focusout"]) addEventListener(t, ask, true); addEventListener("scroll", moved, { capture: true, passive: true }); addEventListener("resize", moved); addEventListener("load", moved); for (const t of ["DOMContentLoaded", "transitionend", "animationend"]) addEventListener(t, moved, true); }; arm(); globalThis.visualViewport?.addEventListener("resize", moved); globalThis.visualViewport?.addEventListener("scroll", moved); let root = document.documentElement; try { new MutationObserver(() => { if (document.documentElement !== root) { root = document.documentElement; arm(); } if (document.querySelector("iframe, frame")) moved(); }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["class", "style", "hidden", "open"] }); } catch {} setInterval(() => { if (document.querySelector("iframe, frame")) { deep = true; moved(); } }, 500); moved(); })();`;
 
 /** PT-5d (M6.1): a frame's own viewport, in its own CSS px — evaluated in its session's local root. */
 const FRAME_SIZE = 'innerWidth + "," + innerHeight';
@@ -301,6 +310,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   readonly #focusWaiters = new Set<{ known(): void; refuse(error: Error): void }>();
   /** PT-6a (K1 b): the page's own word awaited, timed — the doubt it is of (`BrowserFrames.pageWord`), and its timer */
   #wordDue: { readonly due: object; readonly timer: ReturnType<typeof setTimeout> } | undefined;
+  /** PT-6a (M5 — F1): the page's word to be PULLED — the doubt it is for (`BrowserFrames.pageWord`), and its timer */
+  #pullDue: { readonly due: object; readonly timer: ReturnType<typeof setTimeout> } | undefined;
   /** PT-5d (M6.5b): the device the page was last told — its frames are told the same */
   #emulation: BrowserSurfaceNativeEmulation | undefined;
   /** PT-5d (M6.5b): each frame's tells of the device, one behind another */
@@ -382,23 +393,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       this.#documents += 1;
       // (M7 H9: the new document has not painted yet)
       this.#painted = false;
-      // (M12 J6: a key-like event waiting for a word of where the focus was is refused — its document is gone; before: the
-      // commit ended the doubt and woke it into the NEW document, its down there unrecorded)
-      for (const waiter of [...this.#focusWaiters])
-        waiter.refuse(new Error("Browser input's document is gone"));
-      // (M7 H11: a command the document before never answered is let go — its turn refused; the chain goes on)
-      for (const letGo of [...this.#inFlight.keys()]) letGo("Browser input's document is gone");
-      this.#inFlight.clear();
-      // PT-5d: the frames of the document before go with it
-      this.#frames.pageCommitted(this.#documents);
-      this.#owners.clear();
-      this.#slotOwners.clear();
-      // (M7 H15: the frames of the document before — a detach that never came keeps no discard of theirs)
-      for (const session of [...this.#discards.keys()])
-        if (session !== "") this.forgetDiscard(session);
-      this.#frameTells.clear();
-      this.#parentFrames.clear();
-      this.focusMoved();
+      this.documentGone();
     };
     // PT-5d (M7 H9): the page's document painted — a touch waiting for it is timed from now. PT-5d (M12 J14): and a frame's
     // committed since — the window paints as ONE image (the offscreen view composites every frame): a paint after a
@@ -413,6 +408,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     });
     window.webContents.on("did-navigate", (_event, url) => {
       if (this.#remoteLoadStarted && url !== "about:blank") committed();
+      // PT-6a (M4 — F1): the top at `about:blank` after a remote load runs no words (their own guard): what the document
+      // before held goes with it, as at a commit — but it is no navigation document (not counted), and no paint is awaited
+      else if (this.#remoteLoadStarted) this.documentGone();
     });
     window.webContents.on(
       "did-fail-provisional-load",
@@ -905,6 +903,11 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     this.#discards.clear();
     if (this.#wordDue !== undefined) clearTimeout(this.#wordDue.timer);
     this.#wordDue = undefined;
+    // PT-6a (F1): and the pull's — and the key-like events still waiting for a word, refused (their timers go with them)
+    if (this.#pullDue !== undefined) clearTimeout(this.#pullDue.timer);
+    this.#pullDue = undefined;
+    for (const waiter of [...this.#focusWaiters])
+      waiter.refuse(new Error("Browser input's window is gone"));
     if (this.isDestroyed()) return;
     if (this.#debuggerAttached && this.window.webContents.debugger.isAttached()) {
       try {
@@ -1247,6 +1250,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       for (const listener of [...this.#hungListeners]) listener(undefined);
     }, bound);
     this.#wordDue = { due, timer };
+    // PT-6a (M5 — F1): and the page asked for it, should it not come — a doubt no key waits on is asked too (a mute
+    // document's last hint is no hang)
+    this.pullWord();
   }
 
   /** PT-5d (M6.4b): a command of the hand the page never answered, said (see `handCommand`). */
@@ -1259,6 +1265,87 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * main's census counts them. */
   handInFlight(): number {
     return this.#inFlight.size;
+  }
+
+  /** PT-6a (M4 — F1): whether the page's current document is PULL-ONLY (1) — main's census counts them. */
+  pullOnly(): number {
+    return this.#frames.pullOnly() ? 1 : 0;
+  }
+
+  /**
+   * PT-6a (M4, M5 — F1) — THE NET FOR A DOCUMENT THAT CANNOT SPEAK: a page-born doubt whose word has not come by
+   * `FOCUS_WORD_MS` — at once, in a document already PULL-ONLY — ASKS the page where its focus is: the words' own `where()`
+   * in their isolated world of the main frame, after a 0-ms timer (`PULL_WORD_EXPRESSION`), off the hand's chain. Its
+   * answer settles the doubt it was asked for as a pushed word does (`here`: the held keys go, in order; `inner`, `away`: as
+   * J7), stamped at the ask's send (J3) — and only while that doubt still awaits its word: one a push, a frame's word, a
+   * later hint or a commit has ended, it comes second, and is stale. The answer that settles a doubt marks the document
+   * PULL-ONLY until its next commit (its push never came). A busy page answers once it turns (its word comes first); a hung
+   * one never: K1's hold and its bound stand. Asked once each time the doubt's word is timed (`timeWord`).
+   */
+  private pullWord(): void {
+    const due = this.#frames.pageWord();
+    if (due === undefined || this.#pullDue?.due === due) return;
+    if (this.#pullDue !== undefined) clearTimeout(this.#pullDue.timer);
+    this.#pullDue = undefined;
+    if (this.#frames.pullOnly()) {
+      this.askWhere(due);
+      return;
+    }
+    const timer = setTimeout(() => {
+      this.#pullDue = undefined;
+      if (this.#frames.pageWord() === due) this.askWhere(due);
+    }, FOCUS_WORD_MS);
+    this.#pullDue = { due, timer };
+  }
+
+  private askWhere(due: object): void {
+    const context = this.#worlds.get("")?.get(this.#mainFrame ?? "");
+    if (context === undefined || this.isDestroyed()) return;
+    const sent = performance.now();
+    // (refused, or its session gone: the doubt holds as K1 holds — its word, or the bound)
+    void this.window.webContents.debugger
+      .sendCommand("Runtime.evaluate", {
+        expression: PULL_WORD_EXPRESSION,
+        contextId: context,
+        awaitPromise: true,
+        returnByValue: true,
+      })
+      .then(
+        (answer: unknown) => {
+          const where = (answer as { readonly result?: { readonly value?: unknown } } | undefined)
+            ?.result?.value;
+          if (this.isDestroyed() || this.#frames.pageWord() !== due) return;
+          if (where !== "here" && where !== "inner" && where !== "away") return;
+          this.#frames.where(undefined, where, sent);
+          if (this.#frames.pageWord() !== due) this.#frames.markPullOnly();
+          this.focusMoved();
+        },
+        () => undefined,
+      );
+  }
+
+  /** The page's document went — at the page's commit of another, and PT-6a (M4 — F1) at its top's `about:blank` after a
+   * remote load (no words run there: `#framed`, the doubt and the hand of the document before outlived it, and a press there
+   * waited for a word that never came). What the document held for the frames and the hand goes with it; the commit alone
+   * counts a document (the face's history and state) and awaits its paint. */
+  private documentGone(): void {
+    // (M12 J6: a key-like event waiting for a word of where the focus was is refused — its document is gone; before: the
+    // commit ended the doubt and woke it into the NEW document, its down there unrecorded)
+    for (const waiter of [...this.#focusWaiters])
+      waiter.refuse(new Error("Browser input's document is gone"));
+    // (M7 H11: a command the document before never answered is let go — its turn refused; the chain goes on)
+    for (const letGo of [...this.#inFlight.keys()]) letGo("Browser input's document is gone");
+    this.#inFlight.clear();
+    // PT-5d: the frames of the document before go with it
+    this.#frames.pageCommitted(this.#documents);
+    this.#owners.clear();
+    this.#slotOwners.clear();
+    // (M7 H15: the frames of the document before — a detach that never came keeps no discard of theirs)
+    for (const session of [...this.#discards.keys()])
+      if (session !== "") this.forgetDiscard(session);
+    this.#frameTells.clear();
+    this.#parentFrames.clear();
+    this.focusMoved();
   }
 
   /**

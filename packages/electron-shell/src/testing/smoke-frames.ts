@@ -1041,6 +1041,9 @@ export interface FrameOpenedSeen {
   readonly stoppedMs: number | null;
   readonly watchedMs: number;
   readonly opens: number | null;
+  /** main's census of PULL-ONLY pages at the watch's end (null: no census) — said, never judged: 0 when the opened
+   * document's own words spoke (re-armed at its open), 1 when only the pulled word carried its keys */
+  readonly pullOnly: number | null;
 }
 
 /** PT-6a (M4, M5 — F1): FRAME-OPENED — the text typed into an editor frame that cannot speak lands, and its page is never said
@@ -2880,6 +2883,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         await sleep(100);
       }
       const opens = at(OPENED)?.opened?.opens ?? null;
+      const pullOnly = d.custody()?.pullOnly ?? null;
       await done();
       return {
         typed: FRAMES_ROWS.busyTyped,
@@ -2888,6 +2892,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         stoppedMs,
         watchedMs: FRAMES_ROWS.openedWatchMs,
         opens,
+        pullOnly,
       };
     };
     const openedSeen = await openedRow();

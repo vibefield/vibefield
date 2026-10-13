@@ -830,8 +830,11 @@ describe("PT-5d — the frames rows, as the product says them", () => {
       stoppedMs: null,
       watchedMs: 23_000,
       opens: 1,
+      pullOnly: 0,
     };
     expect(judgeFrameOpened(ok)).toEqual([]);
+    // the census's pull-only count is said, never judged: the pulled word carrying the keys is the net working
+    expect(judgeFrameOpened({ ...ok, pullOnly: 1 })).toEqual([]);
     // F1 as the row reads it: the keys held the host's bound, then the page said stopped
     expect(judgeFrameOpened({ ...ok, value: "", landedMs: null, stoppedMs: 20_350 })).toEqual([
       'FRAME-OPENED: the keys typed into the opened editor had not landed 23000 ms after the typing (its field holds ""), not within 3000 — a document that cannot speak was waited on',
