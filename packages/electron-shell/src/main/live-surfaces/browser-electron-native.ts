@@ -311,6 +311,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   readonly #worlds = new Map<string, Map<string, number>>();
   /** PT-5d (M8): each frame's parent frame — the document that holds its owner element */
   readonly #parentFrames = new Map<string, string>();
+  /** PT-6a (K8): the page's main frame, by its own word (a commit of the page's: `Page.frameNavigated` of a frame with no
+   * parent) — the root of the page's session's frames */
+  #mainFrame: string | undefined;
   /** PT-5d (M7 H9): the page's document now has painted (true before its first: nothing waits) */
   #painted = true;
   /** PT-5d (M12 J14): the frames whose OWN document committed since the window last painted — a touch to one is timed from
@@ -495,8 +498,15 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     // document say none. The page's count never moves for a frame's (the page's is counted at its own `did-navigate`).
     if (method === "Page.frameNavigated") {
       const frame = params["frame"] as
-        | { readonly id?: unknown; readonly url?: unknown }
+        | { readonly id?: unknown; readonly url?: unknown; readonly parentId?: unknown }
         | undefined;
+      // PT-6a (K8): the page's main frame says it is — the root of its session's frames (J5's walk)
+      if (
+        (sessionId === undefined || sessionId === "") &&
+        typeof frame?.id === "string" &&
+        frame.parentId === undefined
+      )
+        this.#mainFrame = frame.id;
       if (sessionId === undefined || sessionId === "" || frame === undefined) return;
       if (this.#frames.frames().find((f) => f.session === sessionId)?.targetId === frame.id) {
         this.#frames.committed(sessionId, typeof frame.url === "string" ? frame.url : undefined);
@@ -764,7 +774,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * owner (M8). All read: the list (none: its owner is in the root's document); one unread — its world unknown, a read
    * refused, not laid out: undefined (the frame takes nothing). (Before: the slot's own document alone was read — the
    * page's header over an ad slot sent its press, hover and wheel into the ad inside: H3's defect, and M8's door, one
-   * level down.)
+   * level down.) PT-6a (K8) — the page's main frame is the root by its OWN word (`#mainFrame`); a frame on the way whose
+   * parent link was never heard (a debugger re-attach mid-document: `Page.enable` replays no `frameAttached`) is no root:
+   * the walk fails CLOSED — the frame takes nothing (before: taken for the root — its slot's sight unread, F admitted).
    */
   private async ancestorsOf(frame: {
     readonly targetId: string;
@@ -773,13 +785,13 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     const cdp = this.window.webContents.debugger;
     const root =
       frame.parent === undefined
-        ? undefined
+        ? this.#mainFrame
         : this.#frames.frames().find((f) => f.session === frame.parent)?.targetId;
     const ancestors: FrameAncestor[] = [];
     try {
       for (let at = this.#parentFrames.get(frame.targetId); at !== undefined && at !== root; ) {
         const above = this.#parentFrames.get(at);
-        if (above === undefined) break;
+        if (above === undefined) return undefined;
         let owner = this.#slotOwners.get(at);
         if (owner === undefined) {
           const found = (await cdp.sendCommand(

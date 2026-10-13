@@ -820,7 +820,9 @@ describe("PT-6a (K2) — the producer over this adapter: a wheel's gesture is me
       );
       await vi.advanceTimersByTimeAsync(0);
       expect(runtime.summary.state).toBe("live");
-      // the page's words' world (M8: where F's sight is read — without it F is UNSEEN, and the row passes for that alone)
+      // the page's words' world (M8: where F's sight is read — without it F is UNSEEN, and the row passes for that alone),
+      // and its main frame by its commit's word (K8: the root of the page's frames)
+      emit("Page.frameNavigated", { frame: { id: "main", url: "https://example.test/a" } });
       emit("Runtime.executionContextCreated", {
         context: { id: 41, name: WORDS_WORLD, auxData: { frameId: "main" } },
       });
@@ -863,11 +865,17 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
    * A window whose debugger records what it is sent, by session, and answers what the row says (else `{}` — and, M8, a
    * frame's sight read as the engine draws it: its owner resolved, all of it in view, nothing over it). The page's
    * document has its words' isolated world (M8: where every sight is read); each frame attached is in the document
-   * that holds it (`Page.frameAttached`), and has its own world.
+   * that holds it (`Page.frameAttached`), and has its own world. PT-6a (K8): the page's main frame said by its own
+   * commit (`Page.frameNavigated` of a frame with no parent, on the page's session — the engine says it at every commit
+   * of the page), unless the row says not (`main: false`).
    */
   const recording = (
     answer: (method: string, params: unknown, session?: string) => object = () => ({}),
-    options: { readonly hungInputMs?: number; readonly worlds?: boolean } = {},
+    options: {
+      readonly hungInputMs?: number;
+      readonly worlds?: boolean;
+      readonly main?: boolean;
+    } = {},
   ) => {
     const w = window(options);
     const sent: { method: string; params: unknown; session?: string }[] = [];
@@ -905,6 +913,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         session,
       );
     let worlds = 100;
+    if (options.main !== false) emit("Page.frameNavigated", { frame: { id: "main", url: "" } });
     if (options.worlds !== false) world(41, "main");
     const attach = (session: string, parent?: string, type = "iframe"): void => {
       if (options.worlds !== false)
@@ -2294,6 +2303,62 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       "mouseReleased@E 80,20",
       "mousePressed@G 80,120",
       "mouseReleased@G 80,120",
+    ]);
+  });
+
+  it("PT-6a (K8) — J5's walk fails CLOSED: F's owner in a same-process frame S whose OWN parent link was never heard (a debugger re-attach mid-document — `Page.enable` replays no `frameAttached`) takes nothing; the walk's root is the page's main frame, said by its own commit — not said yet, the page's frames take nothing", async () => {
+    const slot = async (
+      linked: boolean,
+      main: boolean,
+      // (the page's cover over all of S, and S's own commit said — with its parent)
+      slotCommits = false,
+    ): Promise<string[]> => {
+      const r = recording(
+        slotAnswers(
+          { S: 6, "t-F": 7 },
+          { 6: [100, 80, 500, 80, 500, 380, 100, 380], 7: [100, 80, 500, 80, 500, 380, 100, 380] },
+          slotCommits ? { "w41-6": [[0, 0, 1, 1]] } : {},
+        ),
+        { worlds: false, main },
+      );
+      await r.native.loadURL("https://host.test/a");
+      r.at("https://host.test/a");
+      r.contents.emit("did-navigate", {}, "https://host.test/a");
+      r.emit("Runtime.executionContextCreated", {
+        context: { id: 41, name: WORDS_WORLD, auxData: { frameId: "main" } },
+      });
+      if (linked) r.emit("Page.frameAttached", { frameId: "S", parentFrameId: "main" });
+      if (slotCommits)
+        r.emit("Page.frameNavigated", { frame: { id: "S", parentId: "main", url: "about:blank" } });
+      r.emit("Runtime.executionContextCreated", {
+        context: { id: 42, name: WORDS_WORLD, auxData: { frameId: "S" } },
+      });
+      r.emit("Page.frameAttached", { frameId: "t-F", parentFrameId: "S" });
+      r.emit("Target.attachedToTarget", {
+        sessionId: "F",
+        targetInfo: { type: "iframe", targetId: "t-F", url: "" },
+      });
+      await turns();
+      await pressAt(r, 180, 200);
+      return r.hand();
+    };
+    // S linked to the page's main frame — the root: F admitted (J5)
+    expect(await slot(true, true)).toEqual(["mousePressed@F 80,120", "mouseReleased@F 80,120"]);
+    // S's own link never heard: F takes nothing — the host's (before: admitted, S's sight unread)
+    expect(await slot(false, true)).toEqual([
+      "mousePressed@page 180,200",
+      "mouseReleased@page 180,200",
+    ]);
+    // the page's main frame not said yet: the page's frames take nothing
+    expect(await slot(true, false)).toEqual([
+      "mousePressed@page 180,200",
+      "mouseReleased@page 180,200",
+    ]);
+    // S's own commit (said WITH its parent) is no main frame: the walk still reads S — the page's cover over S keeps the
+    // press the page's
+    expect(await slot(true, true, true)).toEqual([
+      "mousePressed@page 180,200",
+      "mouseReleased@page 180,200",
     ]);
   });
 
