@@ -3833,6 +3833,50 @@ describe("BrowserLiveSurfaceRuntime", () => {
       p.result.runtime.dispose();
     });
 
+    it("PT-6a (K6) — the attachment that held keys GOES while a frame of another site holds the focus: EACH key's up is tried and each refusal counted (`frameKeysRefused`, and `inputDropped`) — the loop never stops at the first; a button's release refused keeps no key held either", async () => {
+      const p = await laptop();
+      const r = p.result.runtime.summary.geometry?.revision ?? 0;
+      p.key("down", r, "a");
+      p.key("down", r, "b");
+      await delivered();
+      expect(p.window.keyInputs.map((k) => `${k.type} ${k.key}`)).toEqual([
+        "keyDown a",
+        "keyDown b",
+      ]);
+      const ups: string[] = [];
+      p.window.dispatchKey = (input) => {
+        ups.push(`${input.type} ${input.key}`);
+        return Promise.reject(new BrowserFrameKeysRefused());
+      };
+      const refused = p.result.runtime.stats.frameKeysRefused;
+      const dropped = p.result.runtime.stats.inputDropped;
+      p.renderer.attachment.dispose();
+      await delivered();
+      expect(ups).toEqual(["keyUp a", "keyUp b"]);
+      expect(p.result.runtime.stats.frameKeysRefused).toBe(refused + 2);
+      expect(p.result.runtime.stats.inputDropped).toBe(dropped + 2);
+      p.result.runtime.dispose();
+      // a button's release refused at the going: the key it held after it is still let up
+      const q = await laptop();
+      const s = q.result.runtime.summary.geometry?.revision ?? 0;
+      q.renderer.attachment.dispatchInput?.(
+        { kind: "pointer", action: "down", x: 10, y: 10, button: "left", clickCount: 1 },
+        s,
+      );
+      q.key("down", s, "c");
+      await delivered();
+      q.window.dispatchMouse = () => Promise.reject(new Error("Browser input's window is gone"));
+      const letUp: string[] = [];
+      q.window.dispatchKey = (input) => {
+        letUp.push(`${input.type} ${input.key}`);
+        return Promise.resolve();
+      };
+      q.renderer.attachment.dispose();
+      await delivered();
+      expect(letUp).toEqual(["keyUp c"]);
+      q.result.runtime.dispose();
+    });
+
     it("ruling 1 (P4) — an event with NO POINT is never judged by a geometry: a key's release, a word typed and a composition sent under the frame before one of another size landed all reach the page — no key is left down", async () => {
       const p = await laptop();
       const r = p.result.runtime.summary.geometry?.revision ?? 0;

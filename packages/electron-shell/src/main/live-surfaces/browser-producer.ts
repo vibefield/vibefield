@@ -1657,24 +1657,39 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     if (this.#touching && this.#touchingBy === by) {
       this.#touching = false;
       this.#touchingBy = undefined;
-      await window.dispatchTouch({ type: "touchCancel", touchPoints: [] });
+      await this.letGoOne(() => window.dispatchTouch({ type: "touchCancel", touchPoints: [] }));
     }
     for (const [button, down] of [...this.#pressed]) {
       if (down.by !== by) continue;
       if (this.#pressed.get(button) !== down) continue;
       this.#pressed.delete(button);
-      await window.dispatchMouse({
-        type: "mouseReleased",
-        ...OUTSIDE_THE_VIEW,
-        button: button as Exclude<BrowserSurfaceMouseButton, "none">,
-      });
+      await this.letGoOne(() =>
+        window.dispatchMouse({
+          type: "mouseReleased",
+          ...OUTSIDE_THE_VIEW,
+          button: button as Exclude<BrowserSurfaceMouseButton, "none">,
+        }),
+      );
     }
     // R8: a KEY it holds down is let up, as a button
     for (const [code, down] of [...this.#keysDown]) {
       if (down.by !== by) continue;
       if (this.#keysDown.get(code) !== down) continue;
       this.#keysDown.delete(code);
-      await window.dispatchKey(keyUpOf(down, down.key, undefined));
+      await this.letGoOne(() => window.dispatchKey(keyUpOf(down, down.key, undefined)));
+    }
+  }
+
+  /** PT-6a (K6) — ONE of `letGoOn`'s releases: refused, it keeps none of the rest from going (before: the loop stopped at the
+   * first — the keys after it never tried); a key's up refused because a frame of another site holds the focus (M15) is
+   * counted as the hand's own refusals are (`frameKeysRefused`, and `inputDropped`) — `letGo`'s turn swallowed it unsaid. */
+  private async letGoOne(release: () => Promise<void>): Promise<void> {
+    try {
+      await release();
+    } catch (error) {
+      if (!(error instanceof BrowserFrameKeysRefused)) return;
+      this.#inputDropped += 1;
+      this.#frameKeysRefused += 1;
     }
   }
 
