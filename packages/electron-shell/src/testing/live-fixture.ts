@@ -93,6 +93,10 @@
 //                   order) — `&on=key`: its field's first KEY posts it instead (K1's hold, reached);
 //   /frames/spin  — a FRAMELESS page whose button holds its thread `FRAMES_SPIN_MS` in its own mousedown (PRESS-ANSWER:
 //                   is a press answered before its handler, or after?).
+// PT-6a (M4, M5 — F1) — and a page whose editor cannot speak:
+//   /frames/opened — at `hostOrigin`: a page holding an AD-LIKE frame of another site and a same-site EDITOR frame its
+//                    script writes by `open()`/`write()`/`close()` after its load (FRAME-OPENED: the text typed into the
+//                    editor's field lands, and the page is never said stopped).
 // Each says what it saw with every ask (`framed`), its parts where they stand in its own view.
 // PT-5c2 — a page whose FIRST PAINT the fixture holds:
 //   /topaint     — the page, its link going to `/unpainted` (its name with it: `?p=<name>`);
@@ -324,6 +328,9 @@ export interface FixtureReport {
   readonly framed?: FixtureFramed;
   /** PT-6a (K1) — `/frames/busy` and `/frames/spin` alone: what kept their thread, and when (their own clock, ms). */
   readonly busy?: FixtureBusy;
+  /** PT-6a (F1) — `/frames/opened` alone: how often it wrote its editor frame, and what the editor's field holds (null:
+   * unread) */
+  readonly opened?: { readonly opens: number; readonly value: string | null };
 }
 
 /** PT-6a (K1) — what kept a page's thread: each spin a press or a tap posted ([began, ms, "press" | "tap"]), when its own
@@ -696,6 +703,7 @@ const framesScript = (ids: readonly string[], elementOnly?: readonly string[]): 
     view: [innerWidth, innerHeight],
     vv: (() => { try { const v = visualViewport; return v ? [v.scale, v.offsetLeft, v.offsetTop, v.width, v.height] : undefined; } catch { return undefined; } })(),
     busy: globalThis.__vfBusy,
+    opened: globalThis.__vfOpened ? { opens: globalThis.__vfOpened.opens, value: (() => { try { const n = el("ed").contentDocument.getElementById("e"); return n ? n.value : null; } catch { return null; } })() } : undefined,
     framed: {
       clicks, heard, moveButtons, movesHeld, grounds, cancels, changes,
       range: el("r") ? Number(el("r").value) : null,
@@ -906,6 +914,43 @@ ${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; } iframe { positio
   t.addEventListener("click", () => { busy.clicks.push(now()); });
 })();</script>
 ${framesScript(["t", "f"])}
+</body></html>`;
+
+/** PT-6a (M4, M5 — F1) — `/frames/opened`'s editor frame (same-site, written after the load), its field inside it (the
+ * editor's own px), and its ad-like frame of another site (its view's CSS px). */
+export const FRAMES_OPENED = {
+  editor: { x: 40, y: 40, w: 400, h: 120 },
+  field: { x: 10, y: 20, w: 360, h: 40 },
+  ad: { x: 40, y: 300, w: 300, h: 200 },
+} as const;
+
+/**
+ * PT-6a (M4, M5 — F1) — `/frames/opened?p=<name>` at `hostOrigin`: a page holding an AD-LIKE frame of another site
+ * (`frameOrigin`'s `/frames/next` — the page is framed: its page-born doubts wait for a word) and a same-site EDITOR
+ * frame its script WRITES by `open()`/`write()`/`close()` once the page has loaded — an iframe editor's way, an ad slot's
+ * way. The document-open steps erase every listener of that frame's window (the focus words' too), so a press into its
+ * field and the keys after it are heard there by no word. It says (`opened`, with every ask) how often it wrote the editor
+ * and what the editor's field holds.
+ */
+export const framesOpenedHtml = (name: string, frameOrigin: string): string => `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${FIXTURE_TITLE} — opened</title>
+${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; } iframe { position: absolute; border: 0; }</style></head>
+<body><iframe id="ed" style="left:${FRAMES_OPENED.editor.x}px;top:${FRAMES_OPENED.editor.y}px;width:${FRAMES_OPENED.editor.w}px;height:${FRAMES_OPENED.editor.h}px;background:#fff"></iframe>
+<iframe id="f" src="${frameOrigin}/frames/next?p=${cleanName(name)}" style="left:${FRAMES_OPENED.ad.x}px;top:${FRAMES_OPENED.ad.y}px;width:${FRAMES_OPENED.ad.w}px;height:${FRAMES_OPENED.ad.h}px"></iframe>
+<script>(() => {
+  const opened = { opens: 0 };
+  globalThis.__vfOpened = opened;
+  const write = () => {
+    const d = document.getElementById("ed").contentDocument;
+    d.open();
+    d.write('<!doctype html><html><body style="margin:0;background:#fff"><input id="e" type="text" autocomplete="off" spellcheck="false" style="position:absolute;left:${FRAMES_OPENED.field.x}px;top:${FRAMES_OPENED.field.y}px;width:${FRAMES_OPENED.field.w}px;height:${FRAMES_OPENED.field.h}px;box-sizing:border-box;font:600 18px sans-serif"></body></html>');
+    d.close();
+    opened.opens += 1;
+  };
+  if (document.readyState === "complete") setTimeout(write, 0);
+  else addEventListener("load", () => setTimeout(write, 0));
+})();</script>
+${framesScript(["f", "ed"])}
 </body></html>`;
 
 /** PT-6a (K1, the engine's fact) — `/frames/spin?p=<name>`: a FRAMELESS page whose button holds its thread
@@ -1179,7 +1224,9 @@ export async function startLiveFixture(): Promise<LiveFixture> {
                             )
                           : url.pathname === "/frames/spin"
                             ? framesSpinHtml()
-                            : null;
+                            : url.pathname === "/frames/opened"
+                              ? framesOpenedHtml(name, frameOrigin)
+                              : null;
       if (page === null) {
         res.writeHead(404);
         res.end();

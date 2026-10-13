@@ -55,6 +55,10 @@
 //   PRESS-ANSWER — PT-6a (K1, the engine's fact): a press on a FRAMELESS page whose own mousedown holds its thread — how
 //                  long main's count of the hand's commands in flight stayed up after it: is a press answered before its
 //                  handler (PT-5b3's probe said so), or after?
+//   FRAME-OPENED — PT-6a (M4, M5 — F1): a page holding a frame of another site and a same-site EDITOR frame its script
+//                  writes by open()/write()/close() after its load (whose window's listeners, the focus words' too, the
+//                  open erases): its field pressed and typed — the text lands within `openedLandMs`, and the page is never
+//                  said stopped over a watch past the host's bound (a document that cannot speak is never waited on);
 // Then the panes are removed and the board is as found. `--frames-pane` beside `--smoke-canvas` runs these rows alone after
 // the boot's (the author's loop).
 
@@ -65,6 +69,7 @@ import {
   type FixtureRect,
   type FixtureReport,
   FRAMES_BOX,
+  FRAMES_OPENED,
   FRAMES_SPIN_MS,
   FRAMES_WORD,
 } from "./live-fixture";
@@ -104,6 +109,10 @@ export const FRAMES_ROWS = {
   busyBeatMs: 150,
   /** PT-6a (run 6): FRAME-BUSY's key leg — how long after the press it types (the press's own word come and gone) */
   busyFocusMs: 600,
+  /** PT-6a (F1): FRAME-OPENED — how soon the text typed into the opened editor must land (ms from the typing), and how long
+   * the row watches the page after it (past the host's bound, `hungMs`: a page said stopped by a missing word shows) */
+  openedLandMs: 3_000,
+  openedWatchMs: 23_000,
   answerLookMs: 20,
   /** PT-6a (M1): FRAME-WHEEL's wheels, how far apart the hand sends them (ms), and the frame's late answers' period (run 4:
    * ~1016 ms) — the leg drains within its sending, two periods (a first late answer under the threshold is followed by one
@@ -284,6 +293,8 @@ export interface FramesSeen {
   /** PT-6a (K1, the engine's fact): a press on a frameless page whose own mousedown holds its thread (absent: not run; null:
    * it could not be aimed) */
   readonly answer?: PressAnswerSeen | null;
+  /** PT-6a (F1): FRAME-OPENED (absent: not run; null: its editor's field could not be aimed at) */
+  readonly opened?: FrameOpenedSeen | null;
 }
 
 /** PT-6a (K1): FRAME-BUSY's leg — what was typed, what the field holds after, what kept the page's thread and when. */
@@ -1020,6 +1031,39 @@ export function judgeFrameBusy(seen: NonNullable<FramesSeen["busy"]>): string[] 
 }
 
 /** PT-6a (K1, the engine's fact): PRESS-ANSWER says how long a press waited for its page — judged only for having measured. */
+/** PT-6a (F1): FRAME-OPENED — what was typed into the opened editor, what its field held, when the text landed and when
+ * (if ever) the page was said stopped, both from the typing (ms; null: not within the watch), and how often the page wrote
+ * its editor. */
+export interface FrameOpenedSeen {
+  readonly typed: string;
+  readonly value: string | null;
+  readonly landedMs: number | null;
+  readonly stoppedMs: number | null;
+  readonly watchedMs: number;
+  readonly opens: number | null;
+}
+
+/** PT-6a (M4, M5 — F1): FRAME-OPENED — the text typed into an editor frame that cannot speak lands, and its page is never said
+ * stopped for a missing word. */
+export function judgeFrameOpened(seen: FrameOpenedSeen | null): string[] {
+  if (seen === null)
+    return ["FRAME-OPENED: its editor's field could not be aimed at — the row proved nothing"];
+  if ((seen.opens ?? 0) < 1)
+    return [
+      "FRAME-OPENED: the page never wrote its editor frame (open, write, close) — the row proved nothing",
+    ];
+  const out: string[] = [];
+  if (seen.landedMs === null || seen.landedMs > FRAMES_ROWS.openedLandMs)
+    out.push(
+      `FRAME-OPENED: the keys typed into the opened editor ${seen.landedMs === null ? `had not landed ${seen.watchedMs} ms after the typing (its field holds ${JSON.stringify(seen.value)})` : `landed ${seen.landedMs} ms after the typing`}, not within ${FRAMES_ROWS.openedLandMs} — a document that cannot speak was waited on`,
+    );
+  if (seen.stoppedMs !== null)
+    out.push(
+      `FRAME-OPENED: the page was said stopped ${seen.stoppedMs} ms after the typing — a missing word taken for a hang`,
+    );
+  return out;
+}
+
 export function judgePressAnswer(seen: PressAnswerSeen | null): string[] {
   if (seen === null)
     return ["PRESS-ANSWER: the page's button could not be aimed at — the row proved nothing"];
@@ -2778,6 +2822,77 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     };
     said.busy = busy;
     problems.push(...judgeFrameBusy(busy));
+
+    // ── FRAME-OPENED (PT-6a, M4/M5 — F1): an editor frame written by open()/write()/close(), its field pressed and typed ──
+    const openedRow = async (): Promise<FrameOpenedSeen | null> => {
+      const OPENED = "/frames/opened?p=e1";
+      const pane = await lay(`${d.fixture.hostOrigin}${OPENED}`, x0 + 11 * step, y0);
+      await frame([pane]);
+      await live(pane);
+      await waitFor(
+        "the opened page's editor written",
+        FRAMES_ROWS.withinMs,
+        () => at(OPENED),
+        (rep) => (rep?.opened?.opens ?? 0) >= 1 && rep?.framed?.parts.ed !== undefined,
+      );
+      await waitFor(
+        "its ad's word (opened)",
+        FRAMES_ROWS.withinMs,
+        () => at("/frames/next?p=e1"),
+        (rep) => rep !== null,
+      );
+      await pickUp(pane);
+      await sleep(800);
+      const heldNow = await heldFrame();
+      const word = at(OPENED);
+      const editor = word?.framed?.parts.ed ?? null;
+      if (heldNow === null || word === null || editor === null) {
+        await done();
+        return null;
+      }
+      const f = FRAMES_OPENED.field;
+      await h.press(
+        await onWindow(
+          heldNow,
+          visibleView(word),
+          editor.x + f.x + f.w / 2,
+          editor.y + f.y + f.h / 2,
+        ),
+      );
+      // (typed once the press's own word could have come — a person's pause before typing)
+      await sleep(FRAMES_ROWS.busyFocusMs);
+      const sent = Date.now();
+      for (const ch of FRAMES_ROWS.busyTyped) {
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode: ch });
+        win.webContents.sendInputEvent({ type: "char", keyCode: ch });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode: ch });
+        await sleep(30);
+      }
+      // (watched past the host's bound: when the text lands, and whether the page is ever said stopped)
+      let value: string | null = null;
+      let landedMs: number | null = null;
+      let stoppedMs: number | null = null;
+      while (Date.now() - sent < FRAMES_ROWS.openedWatchMs) {
+        value = at(OPENED)?.opened?.value ?? null;
+        if (landedMs === null && value === FRAMES_ROWS.busyTyped) landedMs = Date.now() - sent;
+        if (stoppedMs === null && (await face(pane))?.state === "failed")
+          stoppedMs = Date.now() - sent;
+        await sleep(100);
+      }
+      const opens = at(OPENED)?.opened?.opens ?? null;
+      await done();
+      return {
+        typed: FRAMES_ROWS.busyTyped,
+        value,
+        landedMs,
+        stoppedMs,
+        watchedMs: FRAMES_ROWS.openedWatchMs,
+        opens,
+      };
+    };
+    const openedSeen = await openedRow();
+    said.opened = openedSeen;
+    problems.push(...judgeFrameOpened(openedSeen));
 
     // ── STUCK: a page whose button starts an endless loop; a key it never answers; ↻ ───────────────────────────────
     const loop = await lay(`${d.fixture.origin}/frames/loop?p=s`, x0 + 3 * step, y0);

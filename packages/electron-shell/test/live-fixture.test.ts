@@ -28,6 +28,7 @@ import {
   FRAMES_BUSY,
   FRAMES_BUSY_MS,
   FRAMES_HOST_RANGE,
+  FRAMES_OPENED,
   FRAMES_SPIN_MS,
   FRAMES_WORD,
   fixtureHtml,
@@ -711,6 +712,55 @@ describe("the live pane's fixture page", () => {
     expect(await page(fixture.hostOrigin, "/frames/host?p=a")).toContain('name="viewport"');
     expect(await page(fixture.origin, "/frames/loop?p=a")).toContain("for (;;) {}");
     expect((await fetch(`${fixture.origin}/frames/elsewhere`)).status).toBe(404);
+  });
+
+  it("PT-6a (M4, M5 — F1): `/frames/opened` — at `hostOrigin`, an AD-LIKE frame of another site and a same-site EDITOR frame the page WRITES by open()/write()/close() once it has loaded (its field inside); it says how often it wrote it and what the field holds, with every ask", async () => {
+    fixture = await startLiveFixture();
+    const page = await (await fetch(`${fixture.hostOrigin}/frames/opened?p=o<1>`)).text();
+    expect(page).toContain(`<iframe id="f" src="${fixture.origin}/frames/next?p=o1"`);
+    expect(page).toContain(
+      `<iframe id="ed" style="left:${FRAMES_OPENED.editor.x}px;top:${FRAMES_OPENED.editor.y}px;width:${FRAMES_OPENED.editor.w}px;height:${FRAMES_OPENED.editor.h}px`,
+    );
+    expect(page).toContain(
+      `<input id="e" type="text" autocomplete="off" spellcheck="false" style="position:absolute;left:${FRAMES_OPENED.field.x}px;top:${FRAMES_OPENED.field.y}px;width:${FRAMES_OPENED.field.w}px;height:${FRAMES_OPENED.field.h}px`,
+    );
+    // its own script, RUN in a fake page still loading: nothing written until the load; then the editor opened, written,
+    // closed — once
+    const scripts = [...page.matchAll(/<script>([\s\S]*?)<\/script>/gu)].map((m) => m[1] ?? "");
+    const own = scripts.find((s) => s.includes("__vfOpened = opened"));
+    if (own === undefined) throw new Error("the opened page carries no script of its own");
+    const calls: string[] = [];
+    const loads: (() => void)[] = [];
+    const timers: (() => void)[] = [];
+    const global: { __vfOpened?: { opens: number } } = {};
+    new Function("globalThis", "document", "addEventListener", "setTimeout", own)(
+      global,
+      {
+        readyState: "loading",
+        getElementById: (id: string) =>
+          id === "ed"
+            ? {
+                contentDocument: {
+                  open: () => calls.push("open"),
+                  write: (html: string) =>
+                    calls.push(html.includes('<input id="e"') ? "write e" : "write"),
+                  close: () => calls.push("close"),
+                },
+              }
+            : null,
+      },
+      (type: string, listener: () => void) => {
+        if (type === "load") loads.push(listener);
+      },
+      (callback: () => void) => timers.push(callback),
+    );
+    expect(calls).toEqual([]);
+    for (const load of loads) load();
+    for (const timer of timers.splice(0)) timer();
+    expect(calls).toEqual(["open", "write e", "close"]);
+    expect(global.__vfOpened?.opens).toBe(1);
+    // what it wrote and the editor's field are said with its ask
+    expect(scripts.some((s) => s.includes("opened: globalThis.__vfOpened ?"))).toBe(true);
   });
 
   it("PT-6a (K1): `/frames/busy` — at `hostOrigin`, an AD-LIKE frame of another site and a field of its own; a press on the field POSTS a task that keeps its thread `FRAMES_BUSY_MS` (a tap's end the same), a timer of its own beside it, its clicks said — and `/frames/spin`, FRAMELESS, its button's own mousedown holding its thread `FRAMES_SPIN_MS`: each says what kept it (`busy`) with every ask", async () => {

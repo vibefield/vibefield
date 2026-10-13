@@ -21,6 +21,7 @@ import {
   judgeFrameHover,
   judgeFrameMenu,
   judgeFrameNested,
+  judgeFrameOpened,
   judgeFramePicker,
   judgeFramePress,
   judgeFrameTouch,
@@ -818,6 +819,32 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
     expect(judgeFrameBusy({ press: ok, tap: ok, key: null })).toEqual([
       "FRAME-BUSY (key): its field could not be aimed at — the leg proved nothing",
+    ]);
+  });
+
+  it("PT-6a (M4, M5 — F1) FRAME-OPENED: the text typed into an editor frame written by open()/write()/close() lands within `openedLandMs`, and the page is never said stopped over the watch; a page that never wrote its editor, or a field never aimed at, proves nothing", () => {
+    const ok = {
+      typed: "abc",
+      value: "abc",
+      landedMs: 400,
+      stoppedMs: null,
+      watchedMs: 23_000,
+      opens: 1,
+    };
+    expect(judgeFrameOpened(ok)).toEqual([]);
+    // F1 as the row reads it: the keys held the host's bound, then the page said stopped
+    expect(judgeFrameOpened({ ...ok, value: "", landedMs: null, stoppedMs: 20_350 })).toEqual([
+      'FRAME-OPENED: the keys typed into the opened editor had not landed 23000 ms after the typing (its field holds ""), not within 3000 — a document that cannot speak was waited on',
+      "FRAME-OPENED: the page was said stopped 20350 ms after the typing — a missing word taken for a hang",
+    ]);
+    expect(judgeFrameOpened({ ...ok, landedMs: 3_001 })).toEqual([
+      "FRAME-OPENED: the keys typed into the opened editor landed 3001 ms after the typing, not within 3000 — a document that cannot speak was waited on",
+    ]);
+    expect(judgeFrameOpened({ ...ok, opens: 0 })).toEqual([
+      "FRAME-OPENED: the page never wrote its editor frame (open, write, close) — the row proved nothing",
+    ]);
+    expect(judgeFrameOpened(null)).toEqual([
+      "FRAME-OPENED: its editor's field could not be aimed at — the row proved nothing",
     ]);
   });
 
