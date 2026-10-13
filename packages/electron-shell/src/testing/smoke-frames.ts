@@ -61,6 +61,10 @@
 //                  said stopped over a watch past the host's bound (a document that cannot speak is never waited on);
 //   FRAME-SESSIONS — PT-6a (M8 — C5): a page with a frame of another site holding a frame of a THIRD, navigated three
 //                  times: after each, main holds the current document's frame sessions — never one more a load;
+//   FRAME-ROTATED — PT-6a (M14 — R4): a frame holding a frame holding a FOURTH level, the frame sent three times to
+//                  another document of its OWN site (its session stays): after each, the pane holds the first document's
+//                  frame sessions — never one more a rotation (a grandchild's session kept when its frame's own commit
+//                  dropped the records first);
 //   FRAME-SHADOW — PT-6a (M14 — R2): the frame held in a web component's OPEN SHADOW ROOT, its field pressed and "abc"
 //                  typed: the press reaches the frame (its host is never its cover), and the keys are REFUSED (M15's
 //                  limit) — never sent down the page's session (`where()` read the host as `here`); main alive. Run only on
@@ -310,6 +314,8 @@ export interface FramesSeen {
   readonly sessions?: FrameSessionsSeen;
   /** PT-6a (M14 — R2): FRAME-SHADOW (absent: not run; null: its field could not be aimed at) */
   readonly shadow?: FrameShadowSeen | null;
+  /** PT-6a (M14 — R4): FRAME-ROTATED (absent: not run) */
+  readonly rotated?: FrameRotatedSeen;
 }
 
 /** PT-6a (K1): FRAME-BUSY's leg — what was typed, what the field holds after, what kept the page's thread and when. */
@@ -1088,6 +1094,40 @@ export function judgeFrameSessions(seen: FrameSessionsSeen): string[] {
     if (n !== first)
       out.push(
         `FRAME-SESSIONS: after navigation ${i + 1} main's census holds ${n ?? "no count of"} child sessions, not the first document's ${first} — a frame's session outlived its document`,
+      );
+  });
+  return out;
+}
+
+/** PT-6a (M14 — R4): FRAME-ROTATED — whether the nested frame is of a third site (so its fourth level is another session),
+ * and the pane's OWN frame sessions (main's census by its surface) at its frame's first document and after each of three
+ * rotations to another document of the frame's own site (null: no count). */
+export interface FrameRotatedSeen {
+  readonly third: boolean;
+  readonly counts: readonly (number | null)[];
+}
+
+/** PT-6a (M14 — R4): FRAME-ROTATED — after each rotation the pane holds its first document's frame sessions (its frame, the
+ * frame in it, the fourth level: three), never one more: a grandchild's session goes with its parent's document. */
+export function judgeFrameRotated(seen: FrameRotatedSeen): string[] {
+  if (!seen.third)
+    return [
+      "FRAME-ROTATED: the nested frame is not of a third site (no IPv6 loopback) — the row proved nothing",
+    ];
+  const [first, ...after] = seen.counts;
+  if (first === undefined || first === null || after.length < 3)
+    return [
+      `FRAME-ROTATED: the pane's frame sessions were read ${seen.counts.length} times, not four (the first document and three more) — the row proved nothing`,
+    ];
+  if (first < 3)
+    return [
+      `FRAME-ROTATED: the pane holds ${first} frame sessions at its frame's first document, not 3 (its frame, the frame in it, the fourth level) — the row proved nothing`,
+    ];
+  const out: string[] = [];
+  after.forEach((n, i) => {
+    if (n !== first)
+      out.push(
+        `FRAME-ROTATED: after rotation ${i + 1} the pane holds ${n ?? "no count of"} frame sessions, not the first document's ${first} — a nested frame's session outlived its parent's document`,
       );
   });
   return out;
@@ -3032,6 +3072,38 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const sessions = await sessionsRow();
     said.sessions = sessions;
     problems.push(...judgeFrameSessions(sessions));
+
+    // ── FRAME-ROTATED (PT-6a, M14 — R4): F holds N, N holds M (a fourth level); F sent three times to another document of
+    // its OWN site (its session stays): the pane's own frame sessions back to the first document's each time ──
+    const rotatedRow = async (): Promise<FrameRotatedSeen> => {
+      const third = d.fixture.innerOrigin !== d.fixture.hostOrigin;
+      const names = ["r4a", "r4b", "r4c", "r4d"];
+      const framePath = (name: string): string => `/frames/frame?p=${name}&deep=1`;
+      const pane = await lay(
+        `${d.fixture.hostOrigin}/frames/host?p=r4a&deep=1`,
+        x0 + 14 * step,
+        y0,
+      );
+      await frame([pane]);
+      await live(pane);
+      const counts: (number | null)[] = [];
+      for (const [i, name] of names.entries()) {
+        const was = names[i - 1];
+        if (was !== undefined) d.fixture.goFrame(framePath(was), framePath(name));
+        await waitFor(
+          `the fourth level's word (${name})`,
+          FRAMES_ROWS.withinMs,
+          () => at(`/frames/deep?p=${name}`),
+          (r) => r !== null,
+        );
+        await sleep(FRAMES_ROWS.sessionsSettleMs);
+        counts.push(await ownSessions(pane));
+      }
+      return { third, counts };
+    };
+    const rotated = await rotatedRow();
+    said.rotated = rotated;
+    problems.push(...judgeFrameRotated(rotated));
 
     // ── FRAME-SHADOW (PT-6a, M14 — R2): the frame in a web component's OPEN SHADOW ROOT; its field pressed, "abc" typed ──
     // (run only on the fixed code: on the unfixed, `where()` read the host as `here`, and the keys went down the page's

@@ -75,6 +75,8 @@
 //                   (FRAME-NESTED), and a frame of its OWN site: `/frames/same` (M6.1 — a document of its process, so on its
 //                   session, drawn at another size); on the smoke's word (`goFrame`) it goes to `/frames/next` (FRAME-GONE);
 //   /frames/same  — the frame's own child of its site: a button (its clicks and point — FRAME-PRESS presses it too);
+//   `&deep=1` (PT-6a M14 — R4) on the host, the frame and the inner: the inner holds a FOURTH level, `/frames/deep` at
+//                   `hostOrigin` — another site than its parent's, so another session under the inner's (FRAME-ROTATED);
 //   /frames/covered — at `hostOrigin` (M7 H3): the frame under a FIXED header drawn over its top (FRAME-COVERED), and a
 //                   menu button that opens a dropdown over the frame, its item (FRAME-MENU); it hears the hand on its
 //                   header, its menu's button and item, and the frame's element; `&slot=1` (M12 J5): the frame held in
@@ -735,14 +737,15 @@ export const framesHostHtml = (
   frameOrigin: string,
   viewport = true,
   shadow = false,
+  deep = false,
 ): string => `<!doctype html>
 <html><head><meta charset="utf-8">${viewport ? '<meta name="viewport" content="width=device-width, initial-scale=1">' : ""}<title>${FIXTURE_TITLE} — frames</title>
 ${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; height: 300vh; } iframe, x-embed { position: absolute; display: block; border: 0; }</style></head>
 <body>${
   shadow
     ? `<x-embed id="f" style="left:${FRAMES_BOX.x}px;top:${FRAMES_BOX.y}px;width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px"></x-embed>
-<script>{ const frame = document.createElement("iframe"); frame.src = ${JSON.stringify(`${frameOrigin}/frames/frame?p=${cleanName(name)}`)}; frame.style.cssText = "position:absolute;left:0;top:0;width:100%;height:100%;border:0"; document.getElementById("f").attachShadow({ mode: "open" }).append(frame); }</script>`
-    : `<iframe id="f" src="${frameOrigin}/frames/frame?p=${cleanName(name)}" style="left:${FRAMES_BOX.x}px;top:${FRAMES_BOX.y}px;width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px"></iframe>`
+<script>{ const frame = document.createElement("iframe"); frame.src = ${JSON.stringify(`${frameOrigin}/frames/frame?p=${cleanName(name)}${deep ? "&deep=1" : ""}`)}; frame.style.cssText = "position:absolute;left:0;top:0;width:100%;height:100%;border:0"; document.getElementById("f").attachShadow({ mode: "open" }).append(frame); }</script>`
+    : `<iframe id="f" src="${frameOrigin}/frames/frame?p=${cleanName(name)}${deep ? "&deep=1" : ""}" style="left:${FRAMES_BOX.x}px;top:${FRAMES_BOX.y}px;width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px"></iframe>`
 }
 <input id="r" type="range" min="0" max="100" value="10" style="left:${FRAMES_HOST_RANGE.x}px;top:${FRAMES_HOST_RANGE.y}px;width:${FRAMES_HOST_RANGE.w}px;height:${FRAMES_HOST_RANGE.h}px">
 ${framesScript(["f", "r"], ["f"])}
@@ -750,7 +753,11 @@ ${framesScript(["f", "r"], ["f"])}
 
 /** PT-5d — `/frames/frame?p=<name>`: the frame — its button, link, field, word, range and scroller, and a frame of
  * `innerOrigin` in it. Its document never scrolls (a wheel past its scroller's end is the host page's). */
-export const framesFrameHtml = (name: string, innerOrigin: string): string => `<!doctype html>
+export const framesFrameHtml = (
+  name: string,
+  innerOrigin: string,
+  deep = false,
+): string => `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>frame</title>
 ${FRAMES_STYLE}<style>body { background: #e9f0fb; height: 100vh; overflow: hidden; } iframe { position: absolute; border: 0; }</style></head>
 <body>
@@ -762,17 +769,25 @@ ${FRAMES_STYLE}<style>body { background: #e9f0fb; height: 100vh; overflow: hidde
 <p id="w" style="left:20px;top:190px;font-size:28px;line-height:34px">${FRAMES_WORD} bravo</p>
 <input id="r" type="range" min="0" max="100" value="10" style="left:20px;top:250px;width:260px;height:24px">
 <div id="s" style="position:absolute;left:320px;top:20px;width:140px;height:180px;overflow:auto;background:#fff"><div style="height:1200px"></div></div>
-<iframe id="n" src="${innerOrigin}/frames/inner?p=${cleanName(name)}" style="left:320px;top:230px;width:280px;height:160px"></iframe>
+<iframe id="n" src="${innerOrigin}/frames/inner?p=${cleanName(name)}${deep ? "&deep=1" : ""}" style="left:320px;top:230px;width:280px;height:160px"></iframe>
 <iframe id="c" src="/frames/same?p=${cleanName(name)}" style="left:470px;top:20px;width:160px;height:100px"></iframe>
 ${framesScript(["b", "bl", "bm", "l", "t", "w", "r", "s", "n", "c"])}
 </body></html>`;
 
-/** PT-5d — `/frames/inner?p=<name>`: the nested frame — a button and a file input. */
-export const framesInnerHtml = (): string => `<!doctype html>
-<html><head><meta charset="utf-8"><title>inner</title>${FRAMES_STYLE}<style>body { background: #ffd34d; }</style></head>
+/** PT-5d — `/frames/inner?p=<name>`: the nested frame — a button and a file input. PT-6a (M14 — R4): `deep`, the address of
+ * a FOURTH level it holds (`&deep=1`). */
+export const framesInnerHtml = (deep?: string): string => `<!doctype html>
+<html><head><meta charset="utf-8"><title>inner</title>${FRAMES_STYLE}<style>body { background: #ffd34d; } iframe { position: absolute; border: 0; }</style></head>
 <body><button id="ib" style="left:0;top:0;width:140px;height:80px">inner</button>
 <input id="if" type="file" style="left:150px;top:10px;width:120px;height:40px">
-${framesScript(["ib", "if"])}
+${deep === undefined ? "" : `<iframe id="dp" src="${deep}" style="left:150px;top:60px;width:120px;height:90px"></iframe>\n`}${framesScript(["ib", "if"])}
+</body></html>`;
+
+/** PT-6a (M14 — R4) — `/frames/deep?p=<name>`: the FOURTH level, its word said with every ask. */
+export const framesDeepHtml = (): string => `<!doctype html>
+<html><head><meta charset="utf-8"><title>deep</title>${FRAMES_STYLE}<style>body { background: #c8e6ff; }</style></head>
+<body>
+${framesScript([])}
 </body></html>`;
 
 /** PT-5d (M6.3a) — FRAME-CLIPPED's host page: where its scroller stands, and how far it is scrolled (the frame's top half
@@ -1136,6 +1151,8 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   /** PT-5d: the three sites' origins — known once the server listens. */
   let frameOrigin = "";
   let innerOrigin = "";
+  /** PT-6a (M14 — R4): the fourth level's site (`hostOrigin`: another than the inner's) */
+  let deepOrigin = "";
   const cookies = new Map<string, string>();
   const agents = new Map<string, string>();
   const tokens: string[] = [];
@@ -1209,6 +1226,7 @@ export async function startLiveFixture(): Promise<LiveFixture> {
               frameOrigin,
               url.searchParams.get("noviewport") !== "1",
               url.searchParams.get("shadow") === "1",
+              url.searchParams.get("deep") === "1",
             )
           : url.pathname === "/frames/clipped"
             ? framesClippedHtml(name, frameOrigin)
@@ -1220,26 +1238,32 @@ export async function startLiveFixture(): Promise<LiveFixture> {
                   url.searchParams.get("slot") === "1",
                 )
               : url.pathname === "/frames/frame"
-                ? framesFrameHtml(name, innerOrigin)
+                ? framesFrameHtml(name, innerOrigin, url.searchParams.get("deep") === "1")
                 : url.pathname === "/frames/inner"
-                  ? framesInnerHtml()
-                  : url.pathname === "/frames/same"
-                    ? framesSameHtml()
-                    : url.pathname === "/frames/next"
-                      ? framesNextHtml()
-                      : url.pathname === "/frames/loop"
-                        ? framesLoopHtml()
-                        : url.pathname === "/frames/busy"
-                          ? framesBusyHtml(
-                              name,
-                              frameOrigin,
-                              url.searchParams.get("on") === "key" ? "key" : "press",
-                            )
-                          : url.pathname === "/frames/spin"
-                            ? framesSpinHtml()
-                            : url.pathname === "/frames/opened"
-                              ? framesOpenedHtml(name, frameOrigin)
-                              : null;
+                  ? framesInnerHtml(
+                      url.searchParams.get("deep") === "1"
+                        ? `${deepOrigin}/frames/deep?p=${cleanName(name)}`
+                        : undefined,
+                    )
+                  : url.pathname === "/frames/deep"
+                    ? framesDeepHtml()
+                    : url.pathname === "/frames/same"
+                      ? framesSameHtml()
+                      : url.pathname === "/frames/next"
+                        ? framesNextHtml()
+                        : url.pathname === "/frames/loop"
+                          ? framesLoopHtml()
+                          : url.pathname === "/frames/busy"
+                            ? framesBusyHtml(
+                                name,
+                                frameOrigin,
+                                url.searchParams.get("on") === "key" ? "key" : "press",
+                              )
+                            : url.pathname === "/frames/spin"
+                              ? framesSpinHtml()
+                              : url.pathname === "/frames/opened"
+                                ? framesOpenedHtml(name, frameOrigin)
+                                : null;
       if (page === null) {
         res.writeHead(404);
         res.end();
@@ -1425,6 +1449,7 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   const hostOrigin = `http://localhost:${port}`;
   frameOrigin = origin;
   innerOrigin = spoke6 ? `http://[::1]:${port}` : hostOrigin;
+  deepOrigin = hostOrigin;
   return {
     origin,
     hostOrigin,

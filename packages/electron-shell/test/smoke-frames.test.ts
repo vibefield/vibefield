@@ -24,6 +24,7 @@ import {
   judgeFrameOpened,
   judgeFramePicker,
   judgeFramePress,
+  judgeFrameRotated,
   judgeFrameSessions,
   judgeFrameShadow,
   judgeFrameTouch,
@@ -869,6 +870,28 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
     expect(judgeFrameSessions({ third: true, counts: [2, 2] })).toEqual([
       "FRAME-SESSIONS: main's census was read 2 times, not four (the first document and three more) — the row proved nothing",
+    ]);
+  });
+
+  it("PT-6a (M14 — R4) FRAME-ROTATED: after each of three rotations of its frame to another document of its own site, the pane holds its first document's frame sessions (3: its frame, the frame in it, the fourth level) — never one more; a nested frame of no third site, a pane read fewer than four times, or a first document without its fourth level, proves nothing", () => {
+    expect(judgeFrameRotated({ third: true, counts: [3, 3, 3, 3] })).toEqual([]);
+    // R4 as the reviewer read it: the grandchild's session kept at each rotation
+    expect(judgeFrameRotated({ third: true, counts: [3, 4, 5, 6] })).toEqual([
+      "FRAME-ROTATED: after rotation 1 the pane holds 4 frame sessions, not the first document's 3 — a nested frame's session outlived its parent's document",
+      "FRAME-ROTATED: after rotation 2 the pane holds 5 frame sessions, not the first document's 3 — a nested frame's session outlived its parent's document",
+      "FRAME-ROTATED: after rotation 3 the pane holds 6 frame sessions, not the first document's 3 — a nested frame's session outlived its parent's document",
+    ]);
+    expect(judgeFrameRotated({ third: true, counts: [3, 3, null, 3] })).toEqual([
+      "FRAME-ROTATED: after rotation 2 the pane holds no count of frame sessions, not the first document's 3 — a nested frame's session outlived its parent's document",
+    ]);
+    expect(judgeFrameRotated({ third: false, counts: [2, 2, 2, 2] })).toEqual([
+      "FRAME-ROTATED: the nested frame is not of a third site (no IPv6 loopback) — the row proved nothing",
+    ]);
+    expect(judgeFrameRotated({ third: true, counts: [3, 3] })).toEqual([
+      "FRAME-ROTATED: the pane's frame sessions were read 2 times, not four (the first document and three more) — the row proved nothing",
+    ]);
+    expect(judgeFrameRotated({ third: true, counts: [2, 2, 2, 2] })).toEqual([
+      "FRAME-ROTATED: the pane holds 2 frame sessions at its frame's first document, not 3 (its frame, the frame in it, the fourth level) — the row proved nothing",
     ]);
   });
 

@@ -733,6 +733,32 @@ describe("the live pane's fixture page", () => {
     );
   });
 
+  it("PT-6a (M14, R4): `&deep=1` — the host's frame, and the frame's inner, carry it down; the inner then holds a FOURTH level, `/frames/deep` at `hostOrigin` (another site than its parent's), which says its word with every ask", async () => {
+    fixture = await startLiveFixture();
+    const page = async (origin: string, path: string): Promise<string> =>
+      (await fetch(`${origin}${path}`)).text();
+    expect(await page(fixture.hostOrigin, "/frames/host?p=r4<a>&deep=1")).toContain(
+      `<iframe id="f" src="${fixture.origin}/frames/frame?p=r4a&deep=1"`,
+    );
+    expect(await page(fixture.hostOrigin, "/frames/host?p=r4a&shadow=1&deep=1")).toContain(
+      `frame.src = ${JSON.stringify(`${fixture.origin}/frames/frame?p=r4a&deep=1`)}`,
+    );
+    expect(await page(fixture.origin, "/frames/frame?p=r4a&deep=1")).toContain(
+      `<iframe id="n" src="${fixture.innerOrigin}/frames/inner?p=r4a&deep=1"`,
+    );
+    expect(await page(fixture.innerOrigin, "/frames/inner?p=r4a&deep=1")).toContain(
+      `<iframe id="dp" src="${fixture.hostOrigin}/frames/deep?p=r4a"`,
+    );
+    // without it, as before: no fourth level
+    expect(await page(fixture.innerOrigin, "/frames/inner?p=r4a")).not.toContain('id="dp"');
+    expect(await page(fixture.origin, "/frames/frame?p=r4a")).toContain(
+      `<iframe id="n" src="${fixture.innerOrigin}/frames/inner?p=r4a"`,
+    );
+    const deep = await page(fixture.hostOrigin, "/frames/deep?p=r4a");
+    expect(deep).toContain("<title>deep</title>");
+    expect(deep).toContain("<script>");
+  });
+
   it("PT-6a (M4, M5 — F1): `/frames/opened` — at `hostOrigin`, an AD-LIKE frame of another site and a same-site EDITOR frame the page WRITES by open()/write()/close() once it has loaded (its field inside); it says how often it wrote it and what the field holds, with every ask", async () => {
     fixture = await startLiveFixture();
     const page = await (await fetch(`${fixture.hostOrigin}/frames/opened?p=o<1>`)).text();
