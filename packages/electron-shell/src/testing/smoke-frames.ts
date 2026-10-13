@@ -48,7 +48,9 @@
 //   FRAME-BUSY   — PT-6a (K1): a page holding an AD-LIKE frame of another site, busy after a press (a laptop's) or a tap
 //                  (a phone's) on its OWN field: every key typed meanwhile lands in order — never refused (the page's own
 //                  doubt holds its keys until its word, the host's bound); the page says whether the hint's word waited
-//                  behind its busy task with the hint's gesture already answered (K1's path) or not;
+//                  behind its busy task with the hint's gesture already answered (K1's path) or not — run 6: a press's
+//                  and a tap's legs never reach K1 (their release and end are answered after the task); its KEY leg (the
+//                  field's own first keydown posting the task) does, and must;
 //   PRESS-ANSWER — PT-6a (K1, the engine's fact): a press on a FRAMELESS page whose own mousedown holds its thread — how
 //                  long main's count of the hand's commands in flight stayed up after it: is a press answered before its
 //                  handler (PT-5b3's probe said so), or after?
@@ -99,6 +101,8 @@ export const FRAMES_ROWS = {
    * looks at main's count (ms) */
   busyTyped: "abc",
   busyBeatMs: 150,
+  /** PT-6a (run 6): FRAME-BUSY's key leg — how long after the press it types (the press's own word come and gone) */
+  busyFocusMs: 600,
   answerLookMs: 20,
   /** PT-6a (M1): FRAME-WHEEL's wheels, how far apart the hand sends them (ms), and the frame's late answers' period (run 4:
    * ~1016 ms) — the leg drains within its sending, two periods (a first late answer under the threshold is followed by one
@@ -270,7 +274,12 @@ export interface FramesSeen {
   };
   /** PT-6a (K1): a page holding an ad-like frame of another site, busy after a press (a laptop's pane) or a tap (a
    * phone's) on its own field — the keys typed meanwhile (absent: not run; a leg null: it could not be aimed) */
-  readonly busy?: { readonly press: FrameBusySeen | null; readonly tap: FrameBusySeen | null };
+  readonly busy?: {
+    readonly press: FrameBusySeen | null;
+    readonly tap: FrameBusySeen | null;
+    /** PT-6a (run 6): the page busy after a KEY on its field — K1's hold reached (absent: not run) */
+    readonly key?: FrameBusySeen | null;
+  };
   /** PT-6a (K1, the engine's fact): a press on a frameless page whose own mousedown holds its thread (absent: not run; null:
    * it could not be aimed) */
   readonly answer?: PressAnswerSeen | null;
@@ -284,7 +293,8 @@ export interface FrameBusySeen {
   /** the page's own word of its spins, its timer beside each, its field's clicks (its clock) — null: unread */
   readonly busy: FixtureBusy | null;
   /** K1's path: the hint's WORD waited behind the spin (the page's own timer, beside the words', fired after it) with the
-   * hint's gesture already answered (a press: its click before the spin; a tap: its end is the hint) — null: unread */
+   * hint's gesture already answered (a press: its click before the spin; a tap: its end is the hint; a key: its keydown
+   * before the spin) — null: unread. Run 6: for a press or a tap it says the WORD was late, not that a key waited on it */
   readonly held: boolean | null;
 }
 
@@ -340,8 +350,10 @@ export interface Calibration {
 /** PT-6a (ruling 3): what the calibration READS — each press on the host's own ground beside the frame against the point it
  * pressed, the largest miss each way. The hand aims through the pane's own eye now, both ways: the flat aim's error is gone,
  * and with it M18's interpolation across the width and M22 A's column (the window's quantisation no longer in the aim's
- * error — each press judged at the point its rounded window point presses). Null: a press taken never heard, or none
- * taken (a side out of the page's view is not pressed). */
+ * error — each press judged at the point its rounded window point presses). What it witnesses is that READING (the
+ * product's way back, re-said: `pageOfWindow`), against the page's own ear — the aim only picks the window point (run 6:
+ * the aim flattened, every row green). Null: a press taken never heard, or none taken (a side out of the page's view is
+ * not pressed). */
 export function calibrationMiss(c: Calibration): readonly [number, number] | null {
   const taken = [c.left, c.right, c.column ?? null].filter((g) => g !== null);
   if (taken.length === 0) return null;
@@ -492,14 +504,15 @@ export function judgeFramePress(
     out.push(
       `${row}: the frame heard no click — the press never reached a frame of another site (the host heard ${seen.hostHeard.join(", ") || "nothing"})`,
     );
-  // (calibrated: the aim witnessed on the host's own ground beside the frame — its presses each within ±1 of theirs)
+  // (calibrated: the smoke's READING of the hand witnessed on the host's own ground beside the frame — each of its clicks
+  // within ±1 of where the reading says it pressed; the aim only picks a whole window point — run 6's R3)
   else if (seen.calibration !== undefined && miss === null)
     out.push(
       `${row}: the host's calibration beside the frame never landed — the click proved nothing`,
     );
   else if (miss !== null && (Math.abs(miss[0]) > by || Math.abs(miss[1]) > by))
     out.push(
-      `${row}: the hand's aim missed the host's own ground beside the frame by ${miss.map((v) => v.toFixed(1)).join(", ")} (±${by}) — the aim is off: the click proved nothing`,
+      `${row}: the host's own clicks beside the frame landed ${miss.map((v) => v.toFixed(1)).join(", ")} from where the hand pressed them (±${by}) — the smoke's reading of the hand is off: the click proved nothing`,
     );
   else if (!near(seen.clicked, pressed, by))
     out.push(
@@ -981,6 +994,7 @@ export function judgeFrameBusy(seen: NonNullable<FramesSeen["busy"]>): string[] 
   for (const [leg, hint, s] of [
     ["press", "a press", seen.press],
     ["tap", "a tap", seen.tap],
+    ...(seen.key === undefined ? [] : [["key", "a key", seen.key] as const]),
   ] as const) {
     if (s === null) {
       out.push(`FRAME-BUSY (${leg}): its field could not be aimed at — the leg proved nothing`);
@@ -993,6 +1007,11 @@ export function judgeFrameBusy(seen: NonNullable<FramesSeen["busy"]>): string[] 
     else if (s.field !== s.typed)
       out.push(
         `FRAME-BUSY (${leg}): the keys typed while the page was busy after ${hint} on its field landed as "${s.field ?? "nothing"}", not "${s.typed}" in order — refused, or lost`,
+      );
+    // (run 6: the key's leg is K1's witness — the page's word must have come after its task, the key's down before it)
+    else if (leg === "key" && s.held !== true)
+      out.push(
+        "FRAME-BUSY (key): the page's word did not wait behind its busy task (or was never read) — K1's hold was never reached: the leg proved nothing",
       );
   }
   return out;
@@ -2665,28 +2684,38 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     // ── FRAME-BUSY (PT-6a, K1): a page holding an ad-like frame of another site, busy after a press or a tap on its own field ─
     /** the hint's word waited behind the spin (the page's own timer, beside the words', after it) with the hint's gesture
      * answered before it (a press: its click before the spin) */
-    const heldOf = (busy: FixtureBusy | null | undefined, why: "press" | "tap"): boolean | null => {
+    const heldOf = (
+      busy: FixtureBusy | null | undefined,
+      why: "press" | "tap" | "key",
+    ): boolean | null => {
       const spin = busy?.spins?.find((s) => s[2] === why);
       const timer = busy?.timers?.[0];
       if (spin === undefined || timer === undefined) return null;
       const [began, ms] = spin;
+      if (why === "tap") return timer >= began + ms;
+      // (a key's keydown and the spin it posts can fall in one millisecond of the page's clock)
+      if (why === "key") {
+        const keyed = busy?.keys?.[0];
+        return timer >= began + ms && keyed !== undefined && keyed <= began;
+      }
       const clicked = busy?.clicks?.[0];
-      return timer >= began + ms && (why === "tap" || (clicked !== undefined && clicked < began));
+      return timer >= began + ms && clicked !== undefined && clicked < began;
     };
     const busyLeg = async (
       name: string,
       phone: boolean,
       lane: number,
+      on: "press" | "key" = "press",
     ): Promise<FrameBusySeen | null> => {
+      const BUSY = `/frames/busy?p=${name}${on === "key" ? "&on=key" : ""}`;
       const pane = await lay(
-        `${d.fixture.hostOrigin}/frames/busy?p=${name}`,
+        `${d.fixture.hostOrigin}${BUSY}`,
         x0 + lane * step,
         y0,
         phone ? { w: PANE.phoneCut.w, h: PANE.phoneCut.h, props: { device: "phone" } } : {},
       );
       await frame([pane]);
       await live(pane);
-      const BUSY = `/frames/busy?p=${name}`;
       await waitFor(
         `the busy page's word (${name})`,
         FRAMES_ROWS.withinMs,
@@ -2712,8 +2741,9 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         );
         // typed after a person's beat — the hint's gesture whole at main (the desk delivers a pointer's up at its next frame,
         // keys at once: typed 0 ms after, a phone's first key reached the page before its tap's end focused the field —
-        // run 3) — while the page is still busy after the hint
-        await sleep(FRAMES_ROWS.busyBeatMs);
+        // run 3) — while the page is still busy after the hint; a key's leg: once the press's own word has come (the field
+        // focused, the page not busy), the first key making it busy
+        await sleep(on === "key" ? FRAMES_ROWS.busyFocusMs : FRAMES_ROWS.busyBeatMs);
         for (const ch of FRAMES_ROWS.busyTyped) {
           win.webContents.sendInputEvent({ type: "keyDown", keyCode: ch });
           win.webContents.sendInputEvent({ type: "char", keyCode: ch });
@@ -2733,13 +2763,17 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
           typed: FRAMES_ROWS.busyTyped,
           field: after?.field ?? null,
           busy: after?.busy ?? null,
-          held: heldOf(after?.busy, phone ? "tap" : "press"),
+          held: heldOf(after?.busy, on === "key" ? "key" : phone ? "tap" : "press"),
         };
       }
       await done();
       return leg;
     };
-    const busy = { press: await busyLeg("k", false, 5), tap: await busyLeg("m", true, 6) };
+    const busy = {
+      press: await busyLeg("k", false, 5),
+      tap: await busyLeg("m", true, 6),
+      key: await busyLeg("q", false, 8, "key"),
+    };
     said.busy = busy;
     problems.push(...judgeFrameBusy(busy));
 

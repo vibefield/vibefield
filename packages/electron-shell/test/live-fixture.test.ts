@@ -774,6 +774,46 @@ describe("the live pane's fixture page", () => {
     expect(said?.clicks).toHaveLength(1);
     // what kept it is said with its ask (the frames script's report, beside its own word)
     expect(scripts.some((s) => s.includes("busy: globalThis.__vfBusy"))).toBe(true);
+    // PT-6a (run 6) — `&on=key`: a press and a tap post nothing; the field's FIRST key posts the spin (once), said
+    const keyPage = await (await fetch(`${fixture.hostOrigin}/frames/busy?p=q&on=key`)).text();
+    const keyOwn = [...keyPage.matchAll(/<script>([\s\S]*?)<\/script>/gu)]
+      .map((m) => m[1] ?? "")
+      .find((s) => s.includes("__vfBusy = busy"));
+    if (keyOwn === undefined) throw new Error("the key's busy page carries no busy script");
+    const keyListeners = new Map<string, ((e: Record<string, unknown>) => void)[]>();
+    const keyPosted: (() => void)[] = [];
+    const keyTimers: (() => void)[] = [];
+    const keyGlobal: { __vfBusy?: { spins: unknown[]; keys: number[] } } = {};
+    new Function("globalThis", "document", "MessageChannel", "performance", "setTimeout", keyOwn)(
+      keyGlobal,
+      {
+        getElementById: () => ({
+          addEventListener: (type: string, listener: (e: Record<string, unknown>) => void) =>
+            keyListeners.set(type, [...(keyListeners.get(type) ?? []), listener]),
+        }),
+      },
+      class {
+        port1: { onmessage: (() => void) | null } = { onmessage: null };
+        port2 = { postMessage: () => keyPosted.push(() => this.port1.onmessage?.()) };
+      },
+      { now: () => (clock += 1) },
+      (callback: () => void) => keyTimers.push(callback),
+    );
+    const keyFire = (type: string, e: Record<string, unknown> = {}): void => {
+      for (const listener of keyListeners.get(type) ?? []) listener(e);
+    };
+    keyFire("pointerdown", { pointerType: "mouse" });
+    keyFire("touchend");
+    expect(keyPosted).toHaveLength(0);
+    keyFire("keydown");
+    keyFire("keydown");
+    expect(keyPosted).toHaveLength(1);
+    expect(keyTimers).toHaveLength(1);
+    keyPosted.shift()?.();
+    expect((keyGlobal.__vfBusy?.spins[0] as [number, number, string] | undefined)?.[2]).toBe("key");
+    expect(keyGlobal.__vfBusy?.keys).toHaveLength(1);
+    // the press's page posts on its press, never on a key
+    expect(busy).toContain('if ("press" === "key")');
   });
 
   it("PT-5d: a frames page RUN says what it heard of the hand — its clicks at their points, every press and key in order, the buttons its last move held, its range, caret and scroller, its parts' boxes — and goes where the smoke sends it (`goFrame`), once; the host hears the hand on the frame's ELEMENT alone", async () => {

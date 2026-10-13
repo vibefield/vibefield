@@ -90,7 +90,7 @@
 // PT-6a (K1) — and the busy page and the engine's fact:
 //   /frames/busy  — at `hostOrigin`: a page holding an AD-LIKE frame of another site and a field of its own, busy
 //                   `FRAMES_BUSY_MS` in a task its field's press or tap POSTS (FRAME-BUSY: keys typed meanwhile land in
-//                   order);
+//                   order) — `&on=key`: its field's first KEY posts it instead (K1's hold, reached);
 //   /frames/spin  — a FRAMELESS page whose button holds its thread `FRAMES_SPIN_MS` in its own mousedown (PRESS-ANSWER:
 //                   is a press answered before its handler, or after?).
 // Each says what it saw with every ask (`framed`), its parts where they stand in its own view.
@@ -334,6 +334,8 @@ export interface FixtureBusy {
   readonly timers?: readonly number[];
   readonly clicks?: readonly number[];
   readonly downs?: readonly (readonly [number, number])[];
+  /** PT-6a (K1): when the field heard the key that made it busy (`&on=key`) */
+  readonly keys?: readonly number[];
 }
 
 /** PT-5d — what a page of the frames' rows saw of the hand (its own CSS px, its own view). */
@@ -860,15 +862,23 @@ export const FRAMES_BUSY = {
  * `FRAMES_BUSY_MS`, and a timer of its own beside it (`setTimeout(0)`, as the words' is — the words' fired before it).
  * It says (`busy`, with every ask): each spin (when it began, how long, of a press or a tap), when its own timer fired,
  * and when its field heard each click — so a row knows whether the WORD of the hint waited behind the spin (its timer
- * after the spin) with the hint's gesture already answered (its click before the spin).
+ * after the spin) with the hint's gesture already answered (its click before the spin). `on: "key"` (`&on=key`): a press
+ * or a tap posts nothing; the field's FIRST key's `keydown` posts the task (once) and says when it came (`keys`) — a
+ * key's down is answered at once, so the keys after it meet the page's doubt while it is busy, with nothing of the hand
+ * in flight before them (run 6: a press's release and a tap's end are answered only after the task — the keys waited
+ * behind them, never on the word).
  */
-export const framesBusyHtml = (name: string, frameOrigin: string): string => `<!doctype html>
+export const framesBusyHtml = (
+  name: string,
+  frameOrigin: string,
+  on: "press" | "key" = "press",
+): string => `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${FIXTURE_TITLE} — busy</title>
 ${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; } iframe { position: absolute; border: 0; }</style></head>
 <body><input id="t" type="text" autocomplete="off" spellcheck="false" style="left:${FRAMES_BUSY.field.x}px;top:${FRAMES_BUSY.field.y}px;width:${FRAMES_BUSY.field.w}px;height:${FRAMES_BUSY.field.h}px">
 <iframe id="f" src="${frameOrigin}/frames/next?p=${cleanName(name)}" style="left:${FRAMES_BUSY.ad.x}px;top:${FRAMES_BUSY.ad.y}px;width:${FRAMES_BUSY.ad.w}px;height:${FRAMES_BUSY.ad.h}px"></iframe>
 <script>(() => {
-  const busy = { spins: [], timers: [], clicks: [] };
+  const busy = { spins: [], timers: [], clicks: [], keys: [] };
   globalThis.__vfBusy = busy;
   const now = () => Math.round(performance.now());
   const hold = (why) => {
@@ -878,8 +888,13 @@ ${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; } iframe { positio
     setTimeout(() => { busy.timers.push(now()); }, 0);
   };
   const t = document.getElementById("t");
-  t.addEventListener("pointerdown", (e) => { if (e.pointerType !== "touch") hold("press"); });
-  t.addEventListener("touchend", () => hold("tap"));
+  if (${JSON.stringify(on)} === "key") {
+    let keyed = false;
+    t.addEventListener("keydown", () => { if (keyed) return; keyed = true; busy.keys.push(now()); hold("key"); });
+  } else {
+    t.addEventListener("pointerdown", (e) => { if (e.pointerType !== "touch") hold("press"); });
+    t.addEventListener("touchend", () => hold("tap"));
+  }
   t.addEventListener("click", () => { busy.clicks.push(now()); });
 })();</script>
 ${framesScript(["t", "f"])}
@@ -1149,7 +1164,11 @@ export async function startLiveFixture(): Promise<LiveFixture> {
                       : url.pathname === "/frames/loop"
                         ? framesLoopHtml()
                         : url.pathname === "/frames/busy"
-                          ? framesBusyHtml(name, frameOrigin)
+                          ? framesBusyHtml(
+                              name,
+                              frameOrigin,
+                              url.searchParams.get("on") === "key" ? "key" : "press",
+                            )
                           : url.pathname === "/frames/spin"
                             ? framesSpinHtml()
                             : null;

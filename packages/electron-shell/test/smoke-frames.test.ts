@@ -109,7 +109,7 @@ describe("PT-5d — the frames rows, as the product says them", () => {
         calibration: { ...calibration, left: ground([140, 162], [140, 162], [144, 164]) },
       }),
     ).toEqual([
-      "FRAME-PRESS: the hand's aim missed the host's own ground beside the frame by 4.0, 2.0 (±1) — the aim is off: the click proved nothing",
+      "FRAME-PRESS: the host's own clicks beside the frame landed 4.0, 2.0 from where the hand pressed them (±1) — the smoke's reading of the hand is off: the click proved nothing",
     ]);
     // a side out of the page's view, not pressed (FRAME-TOUCH's phone shows 402 of its host's 800): read from the presses taken
     expect(
@@ -131,7 +131,7 @@ describe("PT-5d — the frames rows, as the product says them", () => {
         calibration: { ...calibration, left: { aimed: [140, 162], clicked: [142, 162] } },
       }),
     ).toEqual([
-      "FRAME-PRESS: the hand's aim missed the host's own ground beside the frame by 2.0, 0.3 (±1) — the aim is off: the click proved nothing",
+      "FRAME-PRESS: the host's own clicks beside the frame landed 2.0, 0.3 from where the hand pressed them (±1) — the smoke's reading of the hand is off: the click proved nothing",
     ]);
   });
 
@@ -677,7 +677,7 @@ describe("PT-5d — the frames rows, as the product says them", () => {
         },
       }),
     ).toEqual([
-      "FRAME-ZOOMED (a phone, its page at 0.41): the hand's aim missed the host's own ground beside the frame by 3.0, 11.0 (±1) — the aim is off: the click proved nothing",
+      "FRAME-ZOOMED (a phone, its page at 0.41): the host's own clicks beside the frame landed 3.0, 11.0 from where the hand pressed them (±1) — the smoke's reading of the hand is off: the click proved nothing",
     ]);
     expect(judgeFrameZoomed({ phone: { ...phone, scale: 1 } })).toEqual([
       "FRAME-ZOOMED (a phone, its page at its own scale): the page stood at scale 1 — not drawn at another: that leg proved nothing",
@@ -784,6 +784,31 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ).toEqual([
       "FRAME-BUSY (press): the page never got busy after a press on its field — the leg proved nothing",
       "FRAME-BUSY (tap): its field could not be aimed at — the leg proved nothing",
+    ]);
+  });
+
+  it("PT-6a (run 6) FRAME-BUSY's KEY leg — K1's witness: the page busy after a KEY on its own field (its keydown posts the task, its down answered at once), the keys after it land in order — and its word must have waited behind the task (K1's hold reached), else the leg proved nothing; the press's and the tap's legs never reach K1 and are judged as before", () => {
+    const keyed = {
+      spins: [[200, 1500, "key"] as const],
+      timers: [1701],
+      clicks: [120],
+      keys: [190],
+    };
+    const key = { typed: "abc", field: "abc", busy: keyed, held: true };
+    const spun = { spins: [[100, 1500, "press"] as const], timers: [1601], clicks: [60] };
+    const ok = { typed: "abc", field: "abc", busy: spun, held: false };
+    expect(judgeFrameBusy({ press: ok, tap: ok, key })).toEqual([]);
+    // run 6's K1 red-proof, as the key's leg would read it: the text refused at the second, the doubt spent
+    expect(judgeFrameBusy({ press: ok, tap: ok, key: { ...key, field: "" } })).toEqual([
+      'FRAME-BUSY (key): the keys typed while the page was busy after a key on its field landed as "", not "abc" in order — refused, or lost',
+    ]);
+    // the word came before the task (or was never read): K1 never reached
+    for (const held of [false, null])
+      expect(judgeFrameBusy({ press: ok, tap: ok, key: { ...key, held } })).toEqual([
+        "FRAME-BUSY (key): the page's word did not wait behind its busy task (or was never read) — K1's hold was never reached: the leg proved nothing",
+      ]);
+    expect(judgeFrameBusy({ press: ok, tap: ok, key: null })).toEqual([
+      "FRAME-BUSY (key): its field could not be aimed at — the leg proved nothing",
     ]);
   });
 
