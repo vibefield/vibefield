@@ -56,6 +56,9 @@ interface Doubt {
   /** PT-5d (M12 J7): a key-like event has waited this doubt's whole bound — the next are refused at once, until a word or a
    * new hint (a new doubt) renews it */
   spent: boolean;
+  /** PT-6a (K1): born of a hint the PAGE's own session took while the page held the focus by its word — until a word comes,
+   * its key-like events are HELD (the host's bound, never the second) and its word is timed */
+  page: boolean;
 }
 
 /** Where an event goes — the page's own session (`undefined`) or a frame's — and the document it is for. */
@@ -165,7 +168,7 @@ export class BrowserFrames {
     if (this.#doubt !== null) {
       if (this.#doubt.base === session) this.#doubt.base = null;
     } else if (this.#focused === session)
-      this.#doubt = { base: null, heard: true, answered: true, spent: false };
+      this.#doubt = { base: null, heard: true, answered: true, spent: false, page: false };
   }
 
   /** A frame committed another document — its own word, on its own session. The frames of the document before go with
@@ -252,7 +255,8 @@ export class BrowserFrames {
         typeof base === "string" && base !== session && this.under(base, session) ? base : null;
     else next = base === null || base === session || this.under(base, session) ? null : base;
     if (doubt === null) {
-      if (next === null) this.#doubt = { base: null, heard: true, answered: true, spent: false };
+      if (next === null)
+        this.#doubt = { base: null, heard: true, answered: true, spent: false, page: false };
       else this.#focused = next;
       return;
     }
@@ -265,15 +269,32 @@ export class BrowserFrames {
 
   /** PT-5d (M7 H2): a HINT — a press, a key's down, a tap — sent to a document: the focus may move; in doubt until a word
    * heard with or after its answer says where it went. `at`: when it was sent (main's clock — M12 J3: the words of
-   * events before it move nothing). */
-  handSent(at?: number): void {
+   * events before it move nothing). PT-6a (K1): `page` — it went on the PAGE's own session; with the focus the page's by
+   * its word before it (or a doubt of the page's still awaiting its word), the doubt is the page's own: held for its word. */
+  handSent(at?: number, page = false): void {
     if (at !== undefined) this.#hintAt = at;
+    const was = this.#doubt;
     this.#doubt = {
-      base: this.#doubt === null ? this.#focused : this.#doubt.base,
+      base: was === null ? this.#focused : was.base,
       heard: false,
       answered: false,
       spent: false,
+      page: page && (was === null ? this.#focused === undefined : was.page && !was.heard),
     };
+  }
+
+  /** PT-6a (K1): the hint's command was REFUSED (let go at a commit, refused by the engine) — nothing of it reached the page,
+   * so no word of it comes: its doubt holds nothing for one (J7's second, as before). */
+  handRefused(): void {
+    if (this.#doubt !== null) this.#doubt.page = false;
+  }
+
+  /** PT-6a (K1): the doubt that awaits its PAGE's own word — born of a hint the page's own session took while the page held
+   * the focus, no word heard since, in a document that held a frame of another site (where key-like events wait for it):
+   * an opaque token of it (the native times the word by it), or undefined. */
+  pageWord(): object | undefined {
+    const doubt = this.#doubt;
+    return doubt !== null && this.#framed && doubt.page && !doubt.heard ? doubt : undefined;
   }
 
   /** PT-5d (M7 H2): the hint's command answered — a word heard since settles the doubt; else the next word will. */

@@ -285,6 +285,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   readonly #hungListeners = new Set<(frame?: string) => void>();
   /** PT-5d (M7 H2): key-like events waiting for a word of where the focus is */
   readonly #focusWaiters = new Set<{ known(): void; refuse(error: Error): void }>();
+  /** PT-6a (K1 b): the page's own word awaited, timed — the doubt it is of (`BrowserFrames.pageWord`), and its timer */
+  #wordDue: { readonly due: object; readonly timer: ReturnType<typeof setTimeout> } | undefined;
   /** PT-5d (M6.5b): the device the page was last told — its frames are told the same */
   #emulation: BrowserSurfaceNativeEmulation | undefined;
   /** PT-5d (M6.5b): each frame's tells of the device, one behind another */
@@ -875,6 +877,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   destroy(): void {
     for (const due of this.#discards.values()) if (due.timer !== null) clearTimeout(due.timer);
     this.#discards.clear();
+    if (this.#wordDue !== undefined) clearTimeout(this.#wordDue.timer);
+    this.#wordDue = undefined;
     if (this.isDestroyed()) return;
     if (this.#debuggerAttached && this.window.webContents.debugger.isAttached()) {
       try {
@@ -1033,7 +1037,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       const target = this.#frames.touchEnd();
       if (target === null) return;
       // (a tap's end: its document may move the focus — a hint)
-      await this.hinted(input.type === "touchEnd", () =>
+      await this.hinted(input.type === "touchEnd", target.session === undefined, () =>
         this.handCommand("Input.dispatchTouchEvent", input, target.session),
       );
     });
@@ -1046,7 +1050,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     return this.hand(async () => {
       await this.ensureDebugger();
       for (const routed of this.routeMouse(input, arrived))
-        await this.hinted(input.type === "mousePressed", () =>
+        await this.hinted(input.type === "mousePressed", routed.target.session === undefined, () =>
           this.handCommand(
             "Input.dispatchMouseEvent",
             { ...input, ...this.onSession(routed) },
@@ -1072,7 +1076,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       // PT-5d (M15): a frame of another site holding the focus — the key's down or up REFUSED, sent to no session: typing
       // there is off (a key's up so refused, J13's stated limit: the page keeps that key down until its next up)
       if (target.session !== undefined) throw new BrowserFrameKeysRefused();
-      await this.hinted(input.type !== "keyUp", () =>
+      await this.hinted(input.type !== "keyUp", target.session === undefined, () =>
         this.handCommand("Input.dispatchKeyEvent", input, target.session),
       );
     });
@@ -1105,15 +1109,21 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   }
 
   /** PT-5d (M7 H2): a command that may move the focus (a press, a key's down, a tap's end) — a HINT: the focus in doubt from
-   * its send until a word heard with or after its answer says where it went. */
-  private async hinted(hint: boolean, send: () => Promise<void>): Promise<void> {
+   * its send until a word heard with or after its answer says where it went. PT-6a (K1): `page` — it goes on the page's own
+   * session; a command refused never reached the page (its doubt holds nothing for a word); one answered of the page's
+   * own has its word timed (`timeWord`). */
+  private async hinted(hint: boolean, page: boolean, send: () => Promise<void>): Promise<void> {
     if (!hint) return send();
     // (M12 J3: numbered by when it was sent, on main's clock — a word of an event before it moves nothing)
-    this.#frames.handSent(performance.now());
+    this.#frames.handSent(performance.now(), page);
+    let answered = false;
     try {
       await send();
+      answered = true;
     } finally {
+      if (!answered) this.#frames.handRefused();
       this.#frames.handAnswered();
+      this.timeWord();
       this.focusMoved();
     }
   }
@@ -1121,15 +1131,39 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   /** PT-5d (M7 H2): the focus known — at once, or when a word settles it; refused once `FOCUS_WORD_MS` have passed. PT-5d
    * (M12 J7): ONE bound a doubt — once a key-like event has waited it out, the next are refused at once until a word or a
    * new hint renews it (before: each waited its own second on the hand's one queue — five typed into a frame whose word
-   * never comes held the moves behind them five seconds, and were refused anyway). */
+   * never comes held the moves behind them five seconds, and were refused anyway). PT-6a (K1 a): a doubt of the PAGE's own
+   * awaiting its word (`BrowserFrames.pageWord`) HOLDS the event until that word — bounded by the host's own bound
+   * (`hungInputMs`), never the second: a page busy past a second after the press's handlers (a render its scheduler
+   * posted, a queued hydration) has the keys typed meanwhile typed, in order, once it speaks (before: refused — at
+   * `8dd23597` they were typed). The word that comes and leaves the focus unknown (`inner`, `away`) ends the hold: the
+   * frame's word awaited J7's second from it. A window born without the bound (a `restart` source) keeps the second. */
   private focusSettled(): Promise<void> {
     if (!this.#frames.inDoubt()) return Promise.resolve();
     if (this.#frames.doubtSpent())
       return Promise.reject(new Error("Browser input's focus is in doubt"));
     return new Promise<void>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let holding = false;
+      const arm = (): void => {
+        if (timer !== undefined) clearTimeout(timer);
+        const bound = this.options.hungInputMs;
+        const hold =
+          bound !== undefined && this.#frames.pageWord() !== undefined ? bound : undefined;
+        holding = hold !== undefined;
+        // (b: a word awaited, and not yet timed — a frame attached after its hint's answer: timed from this wait)
+        if (holding && this.#wordDue?.due !== this.#frames.pageWord()) this.timeWord();
+        timer = setTimeout(() => {
+          this.#frames.spendDoubt();
+          waiter.refuse(new Error("Browser input's focus is in doubt"));
+        }, hold ?? FOCUS_WORD_MS);
+      };
       const waiter = {
         known: (): void => {
-          if (this.#frames.inDoubt()) return;
+          if (this.#frames.inDoubt()) {
+            // (the page's word came and left the focus unknown: the hold ends — the doubt's second from it, J7)
+            if (holding && this.#frames.pageWord() === undefined) arm();
+            return;
+          }
           clearTimeout(timer);
           this.#focusWaiters.delete(waiter);
           resolve();
@@ -1140,10 +1174,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
           reject(error);
         },
       };
-      const timer = setTimeout(() => {
-        this.#frames.spendDoubt();
-        waiter.refuse(new Error("Browser input's focus is in doubt"));
-      }, FOCUS_WORD_MS);
+      arm();
       this.#focusWaiters.add(waiter);
     });
   }
@@ -1151,6 +1182,30 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   /** PT-5d (M7 H2): where the focus is may have changed — each waiting key-like event looks again. */
   private focusMoved(): void {
     for (const waiter of [...this.#focusWaiters]) waiter.known();
+  }
+
+  /**
+   * PT-6a (K1 b) — THE HINT'S WORD IS TIMED: a hint the PAGE's own session took and ANSWERED while the page held the focus,
+   * on a page holding a frame of another site — where key-like events wait for its word — whose word does not come within
+   * the host's bound (`hungInputMs`, from its answer): the page is said hung (`onInputHung`, its own: no frame), as an
+   * unanswered command is. (Before: a page hung after a press it answered never said it stopped — its keys refused before
+   * they were sent, nothing in flight to time — review 3's K1 b.) A hint into a frame, or with a frame focused before it,
+   * is not timed (a frame's word may never come: one sandboxed without scripts); nor a frameless page (its keys are sent,
+   * and timed as commands — J2); nor a window born without the bound. One timing a window: each hint's answer times its
+   * own (or none); a word heard, another hint, the page's commit — the doubt timed is no longer awaited when it fires.
+   */
+  private timeWord(): void {
+    if (this.#wordDue !== undefined) clearTimeout(this.#wordDue.timer);
+    this.#wordDue = undefined;
+    const bound = this.options.hungInputMs;
+    const due = this.#frames.pageWord();
+    if (bound === undefined || due === undefined) return;
+    const timer = setTimeout(() => {
+      this.#wordDue = undefined;
+      if (this.#frames.pageWord() !== due) return;
+      for (const listener of [...this.#hungListeners]) listener(undefined);
+    }, bound);
+    this.#wordDue = { due, timer };
   }
 
   /** PT-5d (M6.4b): a command of the hand the page never answered, said (see `handCommand`). */

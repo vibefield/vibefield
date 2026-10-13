@@ -795,9 +795,17 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
   const turns = async (): Promise<void> => {
     for (let i = 0; i < 200; i += 1) await Promise.resolve();
   };
-  /** A page at its first document, frame F (its owner element 7 of the page, drawn 400 × 300 at 100, 80) placed. */
-  const framed = async () => {
-    const r = recording((method, params) => {
+  /** A page at its first document, frame F (its owner element 7 of the page, drawn 400 × 300 at 100, 80) placed. PT-6a: born
+   * with the host's bound when the row says so (`hungInputMs` — every desk page is), and answering first what the row's
+   * page answers (`also`). */
+  const framed = async (
+    options: { readonly hungInputMs?: number } = {},
+    also: (method: string, params: unknown, session?: string) => object | undefined = () =>
+      undefined,
+  ) => {
+    const r = recording((method, params, session) => {
+      const answered = also(method, params, session);
+      if (answered !== undefined) return answered;
       if (method === "DOM.getFrameOwner")
         return { backendNodeId: (params as { frameId: string }).frameId === "t-F" ? 7 : 8 };
       if (method === "DOM.getBoxModel")
@@ -805,7 +813,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
           ? { model: { content: [100, 80, 500, 80, 500, 380, 100, 380] } }
           : { model: { content: [250, 190, 370, 190, 370, 280, 250, 280] } };
       return {};
-    });
+    }, options);
     await r.native.loadURL("https://host.test/a");
     r.at("https://host.test/a");
     r.contents.emit("did-navigate", {}, "https://host.test/a");
@@ -2554,6 +2562,266 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         await vi.advanceTimersByTimeAsync(0);
         expect(said).toEqual(["a refused", "b refused", "c refused", "d refused", "e sent"]);
         expect(r.hand().filter((h) => h.startsWith("insertText"))).toEqual(["insertText@page e"]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe("PT-6a (K1) — a doubt born of the PAGE's own press, the page holding the focus: its key-like events HELD until the page's word (the host's bound, never the second); the word itself timed", () => {
+    const BOUND = 20_000;
+    const word = (r: Awaited<ReturnType<typeof framed>>, payload: string, session?: string): void =>
+      r.emit(
+        "Runtime.bindingCalled",
+        { name: FRAME_WORDS_BINDING, payload, executionContextId: 1 },
+        session,
+      );
+    const key = (r: Awaited<ReturnType<typeof framed>>, k: string): Promise<void> =>
+      r.native.dispatchKey({
+        type: "keyDown",
+        key: k,
+        code: `Key${k.toUpperCase()}`,
+        modifiers: NONE,
+      });
+    const pressAt = (r: Awaited<ReturnType<typeof framed>>, x: number, y: number): Promise<void> =>
+      r.native.dispatchMouse({ type: "mousePressed", x, y, button: "left", clickCount: 1 });
+    const hungOf = (r: Awaited<ReturnType<typeof framed>>): (string | undefined)[] => {
+      const hung: (string | undefined)[] = [];
+      r.native.onInputHung((frame) => hung.push(frame));
+      return hung;
+    };
+
+    it("review 3's K1 (a) — a page holding a frame of another site, busy after a press on its OWN field (its word late past the second): the keys typed meanwhile are HELD, then typed in order — never refused (as at 8dd23597); each key's own word said as a page says it", async () => {
+      vi.useFakeTimers();
+      try {
+        let speak: (() => void) | undefined;
+        const r = await framed({ hungInputMs: BOUND }, (method, _params, session) => {
+          // (a page says where its focus is after each key it hears — its thread free again by then)
+          if (method === "Input.dispatchKeyEvent" && session === undefined) speak?.();
+          return undefined;
+        });
+        speak = () => word(r, "here");
+        // the page's own field — answered at once; the page's word not yet said
+        await pressAt(r, 20, 20);
+        const said: string[] = [];
+        for (const k of ["a", "b", "c"])
+          void key(r, k).then(
+            () => said.push(`${k} sent`),
+            () => said.push(`${k} refused`),
+          );
+        await vi.advanceTimersByTimeAsync(1_500);
+        expect(said).toEqual([]);
+        // the thread frees: the page's word
+        word(r, "here");
+        await vi.advanceTimersByTimeAsync(0);
+        expect(said).toEqual(["a sent", "b sent", "c sent"]);
+        expect(r.hand().filter((h) => h.startsWith("keyDown"))).toEqual([
+          "keyDown@page",
+          "keyDown@page",
+          "keyDown@page",
+        ]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("review 3's K1 (b) — ruling 6 × M12 J2: a page holding a frame of another site, hung after its press was ANSWERED (its word never comes) — the key typed is held, never sent, and the page is SAID hung at the host's bound", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = await framed({ hungInputMs: BOUND }, (method) =>
+          method === "Input.dispatchKeyEvent" ? new Promise(() => {}) : undefined,
+        );
+        const hung = hungOf(r);
+        await pressAt(r, 20, 20);
+        void key(r, "q").catch(() => undefined);
+        await vi.advanceTimersByTimeAsync(25_000);
+        expect(hung).toEqual([undefined]);
+        expect(r.hand().filter((h) => h.startsWith("keyDown"))).toEqual([]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("the hold's edges: the page's word that says the focus LEFT it (`inner`) ends the hold — the frame's word awaited J7's second from it; a press the engine REFUSED holds nothing (its second); a window born without the host's bound keeps the second", async () => {
+      vi.useFakeTimers();
+      try {
+        const tell = (said: string[], k: string, sent: Promise<void>): void => {
+          void sent.then(
+            () => said.push(`${k} sent`),
+            (error: unknown) =>
+              said.push(`${k} refused: ${error instanceof Error ? error.message : String(error)}`),
+          );
+        };
+        // the page's `inner`: held past the second until it, then the second from it
+        const r = await framed({ hungInputMs: BOUND });
+        await pressAt(r, 20, 20);
+        const said: string[] = [];
+        tell(said, "a", key(r, "a"));
+        await vi.advanceTimersByTimeAsync(1_500);
+        expect(said).toEqual([]);
+        word(r, "inner");
+        await vi.advanceTimersByTimeAsync(900);
+        expect(said).toEqual([]);
+        await vi.advanceTimersByTimeAsync(200);
+        expect(said).toEqual(["a refused: Browser input's focus is in doubt"]);
+        // a press the engine refused: nothing reached the page — no hold
+        const q = await framed({ hungInputMs: BOUND }, (method) =>
+          method === "Input.dispatchMouseEvent" ? Promise.reject(new Error("refused")) : undefined,
+        );
+        await pressAt(q, 20, 20).catch(() => undefined);
+        const refusedPress: string[] = [];
+        tell(refusedPress, "b", key(q, "b"));
+        await vi.advanceTimersByTimeAsync(1_100);
+        expect(refusedPress).toEqual(["b refused: Browser input's focus is in doubt"]);
+        // born without the host's bound: the second
+        const plain = await framed();
+        await pressAt(plain, 20, 20);
+        const unbound: string[] = [];
+        tell(unbound, "c", key(plain, "c"));
+        await vi.advanceTimersByTimeAsync(1_100);
+        expect(unbound).toEqual(["c refused: Browser input's focus is in doubt"]);
+        // a press on the page while F held the focus (its word): no doubt of the page's own — J7's second
+        const s = await framed({ hungInputMs: BOUND });
+        await pressAt(s, 180, 120);
+        word(s, "here", "F");
+        await pressAt(s, 20, 20);
+        const fromFrame: string[] = [];
+        tell(fromFrame, "d", key(s, "d"));
+        await vi.advanceTimersByTimeAsync(1_100);
+        expect(fromFrame).toEqual(["d refused: Browser input's focus is in doubt"]);
+        // the page's `inner` heard, then another press on the page: the focus before it was not the page's — J7's second
+        const t = await framed({ hungInputMs: BOUND });
+        await pressAt(t, 20, 20);
+        word(t, "inner");
+        await pressAt(t, 30, 30);
+        const afterInner: string[] = [];
+        tell(afterInner, "e", key(t, "e"));
+        await vi.advanceTimersByTimeAsync(1_100);
+        expect(afterInner).toEqual(["e refused: Browser input's focus is in doubt"]);
+        // a KEY's own down is a hint of the page's own too: its word late past the second, the next key held until it
+        const u = await framed({ hungInputMs: BOUND });
+        await pressAt(u, 20, 20);
+        word(u, "here");
+        const ordered: string[] = [];
+        tell(ordered, "f", key(u, "f"));
+        tell(ordered, "g", key(u, "g"));
+        await vi.advanceTimersByTimeAsync(1_500);
+        expect(ordered).toEqual(["f sent"]);
+        word(u, "here");
+        await vi.advanceTimersByTimeAsync(0);
+        expect(ordered).toEqual(["f sent", "g sent"]);
+        // a TAP's end on the page is one too (a finger on the page's ground, its word late)
+        const v = await framed({ hungInputMs: BOUND });
+        await v.native.dispatchTouch({
+          type: "touchStart",
+          touchPoints: [{ x: 20, y: 20, id: 0 }],
+        });
+        await v.native.dispatchTouch({ type: "touchEnd", touchPoints: [] });
+        const tapped: string[] = [];
+        tell(tapped, "h", key(v, "h"));
+        await vi.advanceTimersByTimeAsync(1_500);
+        expect(tapped).toEqual([]);
+        word(v, "here");
+        await vi.advanceTimersByTimeAsync(0);
+        expect(tapped).toEqual(["h sent"]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("(b)'s edges: a word within the bound, the page's commit, a press INTO the frame, a frameless page — nothing said; a second press before the bound times its OWN word from its answer; a frame attached after the answer — timed from the first key that waits for it", async () => {
+      vi.useFakeTimers();
+      try {
+        // a word within the bound
+        const a = await framed({ hungInputMs: BOUND });
+        const saidA = hungOf(a);
+        await pressAt(a, 20, 20);
+        await vi.advanceTimersByTimeAsync(5_000);
+        word(a, "here");
+        await vi.advanceTimersByTimeAsync(BOUND * 2);
+        expect(saidA).toEqual([]);
+        // the page's commit
+        const b = await framed({ hungInputMs: BOUND });
+        const saidB = hungOf(b);
+        await pressAt(b, 20, 20);
+        await vi.advanceTimersByTimeAsync(5_000);
+        b.at("https://host.test/b");
+        b.contents.emit("did-navigate", {}, "https://host.test/b");
+        await vi.advanceTimersByTimeAsync(BOUND * 2);
+        expect(saidB).toEqual([]);
+        // a press into the frame, whose word never comes
+        const c = await framed({ hungInputMs: BOUND });
+        const saidC = hungOf(c);
+        await pressAt(c, 180, 120);
+        await vi.advanceTimersByTimeAsync(BOUND * 2);
+        expect(saidC).toEqual([]);
+        expect(c.hand()).toEqual(["mousePressed@F 80,40"]);
+        // a frameless page
+        const d = recording(() => ({}), { hungInputMs: BOUND });
+        const saidD: (string | undefined)[] = [];
+        d.native.onInputHung((frame) => saidD.push(frame));
+        await d.native.loadURL("https://host.test/a");
+        d.at("https://host.test/a");
+        d.contents.emit("did-navigate", {}, "https://host.test/a");
+        await d.native.dispatchMouse({
+          type: "mousePressed",
+          x: 20,
+          y: 20,
+          button: "left",
+          clickCount: 1,
+        });
+        await vi.advanceTimersByTimeAsync(BOUND * 2);
+        expect(saidD).toEqual([]);
+        // a second press 15 s in: the first's timing gone, the second's from its answer
+        const e = await framed({ hungInputMs: BOUND });
+        const saidE = hungOf(e);
+        await pressAt(e, 20, 20);
+        await vi.advanceTimersByTimeAsync(15_000);
+        await pressAt(e, 30, 30);
+        await vi.advanceTimersByTimeAsync(BOUND - 1);
+        expect(saidE).toEqual([]);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(saidE).toEqual([undefined]);
+        // a frame attached after the press was answered: timed from the first key that waits for its word
+        const f = recording(
+          (method, params) => {
+            if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };
+            if (method === "DOM.getBoxModel")
+              return (params as { backendNodeId: number }).backendNodeId === 7
+                ? { model: { content: [100, 80, 500, 80, 500, 380, 100, 380] } }
+                : {};
+            return {};
+          },
+          { hungInputMs: BOUND },
+        );
+        const saidF: (string | undefined)[] = [];
+        f.native.onInputHung((frame) => saidF.push(frame));
+        await f.native.loadURL("https://host.test/a");
+        f.at("https://host.test/a");
+        f.contents.emit("did-navigate", {}, "https://host.test/a");
+        await f.native.dispatchMouse({
+          type: "mousePressed",
+          x: 20,
+          y: 20,
+          button: "left",
+          clickCount: 1,
+        });
+        await vi.advanceTimersByTimeAsync(1_000);
+        f.attach("F");
+        await vi.advanceTimersByTimeAsync(0);
+        void f.native
+          .dispatchKey({ type: "keyDown", key: "q", code: "KeyQ", modifiers: NONE })
+          .catch(() => undefined);
+        await vi.advanceTimersByTimeAsync(BOUND - 1);
+        expect(saidF).toEqual([]);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(saidF).toEqual([undefined]);
+        // ONE timing a window: ten presses whose words never come keep one timer, never ten
+        const g = await framed({ hungInputMs: BOUND });
+        await pressAt(g, 20, 20);
+        const timers = vi.getTimerCount();
+        for (let i = 0; i < 10; i += 1) await pressAt(g, 20 + i, 20);
+        expect(vi.getTimerCount()).toBe(timers);
       } finally {
         vi.useRealTimers();
       }
