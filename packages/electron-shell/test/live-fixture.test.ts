@@ -938,7 +938,7 @@ describe("the live pane's fixture page", () => {
     expect(busy).toContain('if ("press" === "key")');
   });
 
-  it("PT-5d: a frames page RUN says what it heard of the hand — its clicks at their points, every press and key in order, the buttons its last move held, its range, caret and scroller, its parts' boxes — and goes where the smoke sends it (`goFrame`), once; the host hears the hand on the frame's ELEMENT alone", async () => {
+  it("PT-5d: a frames page RUN says what it heard of the hand — its clicks at their points, every press and key in order, the buttons its last move held, its range, caret and scroller, its parts' boxes — and goes where the smoke sends it (`goFrame`), once; the host hears the hand on the frame's ELEMENT alone; PT-6a (M15): and moves its focus in by its OWN script (`focusIn`), once — a host onto its frame's element, in its open root where it is shadowed; a frame onto its field", async () => {
     fixture = await startLiveFixture();
     const run = async (origin: string, path: string) => {
       const page = await (await fetch(`${origin}${path}`)).text();
@@ -1052,6 +1052,18 @@ describe("the live pane's fixture page", () => {
     frame.location.href = "";
     await frame.ask();
     expect(frame.location.href).toBe("");
+    // PT-6a (M15): the smoke moves a frame's focus onto its field by the frame's OWN script (`focusIn`), once — no press
+    // (the frame page holds no `#f`: the run's parts are every page's, so its own are made so)
+    frame.parts.delete("f");
+    let fieldFocused = 0;
+    (frame.parts.get("t") as Record<string, unknown>).focus = () => {
+      fieldFocused += 1;
+    };
+    fixture.focusIn("/frames/frame?p=g");
+    await frame.ask();
+    expect(fieldFocused).toBe(1);
+    await frame.ask();
+    expect(fieldFocused).toBe(1);
     // the frame's own child of its site says its clicks at their points too (M6.1)
     const same = await run(fixture.origin, "/frames/same?p=g");
     same.fire("click", { target: same.parts.get("sb"), clientX: 70.2, clientY: 30.4 });
@@ -1075,6 +1087,38 @@ describe("the live pane's fixture page", () => {
     // (M18 B: and its own range — a drag on the page's own session)
     expect(Object.keys(hostSaid.framed.parts as Record<string, unknown>)).toEqual(["frame", "r"]);
     expect(hostSaid.framed.range).toBe(10);
+    // PT-6a (M15): `focusIn` — a host moves its focus onto its frame's element, once; a shadowed host onto the frame in its
+    // open root (its own `#f` is the web component then)
+    let frameFocused = 0;
+    (host.parts.get("f") as Record<string, unknown>).focus = () => {
+      frameFocused += 1;
+    };
+    fixture.focusIn("/frames/host?p=g");
+    await host.ask();
+    expect(frameFocused).toBe(1);
+    await host.ask();
+    expect(frameFocused).toBe(1);
+    const shadowHost = await run(fixture.hostOrigin, "/frames/host?p=g2&shadow=1");
+    let innerFocused = 0;
+    let componentFocused = 0;
+    Object.assign(shadowHost.parts.get("f") as Record<string, unknown>, {
+      focus: () => {
+        componentFocused += 1;
+      },
+      shadowRoot: {
+        querySelector: (q: string) =>
+          q === "iframe"
+            ? {
+                focus: () => {
+                  innerFocused += 1;
+                },
+              }
+            : null,
+      },
+    });
+    fixture.focusIn("/frames/host?p=g2&shadow=1");
+    await shadowHost.ask();
+    expect([innerFocused, componentFocused]).toEqual([1, 0]);
     // M6.3a: the clipped host hears the hand on its header and the frame's element alone
     const clippedHost = await run(fixture.hostOrigin, "/frames/clipped?p=g");
     clippedHost.fire("pointerdown", { target: clippedHost.parts.get("hd") });

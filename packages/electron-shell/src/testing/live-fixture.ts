@@ -232,6 +232,9 @@ export interface LiveFixture {
   paint(name: string): void;
   /** PT-5d — the next ask of the page at `path` (its path and query) is answered `go: to`: the page goes there. Once. */
   goFrame(path: string, to: string): void;
+  /** PT-6a (M15) — the next ask of the page at `path` is answered `focus`: the page moves its focus in by its OWN script — a
+   * host its frame's element (in its open root, where it is shadowed), a frame its field. Once. No press is made. */
+  focusIn(path: string): void;
   /** PT-5d — how many times the page at `path` (its path and query) has asked: a page that hangs asks no more. */
   reports(path: string): number;
   /** PT-5d (M7 H11) — how many times a frames page at `path` (its path and query) was served: a reload asked of a page that
@@ -715,8 +718,11 @@ const framesScript = (ids: readonly string[], elementOnly?: readonly string[]): 
       device: (() => { try { return { ua: navigator.userAgent, touch: navigator.maxTouchPoints, dark: matchMedia("(prefers-color-scheme: dark)").matches }; } catch { return null; } })(),
     },
   }));
+  // PT-6a (M15): the focus moved in by the page's OWN script, on the smoke's word — a host its frame's element (in its open
+  // root, where it is shadowed), a frame its field
+  const focusIn = () => { try { const f = el("f"); if (f) { const inner = f.shadowRoot ? f.shadowRoot.querySelector("iframe") : f; if (inner) inner.focus(); return; } if (el("t")) el("t").focus(); } catch {} };
   const ask = () => fetch("/beacon?token=" + token + "&report=" + report(), { cache: "no-store" })
-    .then((r) => r.json()).then((a) => { if (typeof a.go === "string") location.href = a.go; }).catch(() => {});
+    .then((r) => r.json()).then((a) => { if (typeof a.go === "string") location.href = a.go; if (a.focus === true) focusIn(); }).catch(() => {});
   ask();
   setInterval(ask, ${FIXTURE_ASK_MS});
 </script>`;
@@ -1148,6 +1154,8 @@ export async function startLiveFixture(): Promise<LiveFixture> {
   let tidying: string | null = null;
   /** PT-5d: where the page at a path is sent at its next ask (`goFrame`). */
   const going = new Map<string, string>();
+  /** PT-6a (M15): the pages told to move their focus in at their next ask (`focusIn`). */
+  const focusing = new Set<string>();
   /** PT-5d: the three sites' origins — known once the server listens. */
   let frameOrigin = "";
   let innerOrigin = "";
@@ -1422,6 +1430,8 @@ export async function startLiveFixture(): Promise<LiveFixture> {
       // PT-5d: a page sent elsewhere on the smoke's word is told with this answer, once
       const go = last !== null && last.token === token ? going.get(last.path) : undefined;
       if (go !== undefined && last !== null) going.delete(last.path);
+      // PT-6a (M15): and a page told to move its focus in, once
+      const focus = last !== null && last.token === token && focusing.delete(last.path);
       res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
       res.end(
         JSON.stringify({
@@ -1429,6 +1439,7 @@ export async function startLiveFixture(): Promise<LiveFixture> {
           ...(hold > 0 ? { hold } : {}),
           ...(tidy ? { tidy } : {}),
           ...(go === undefined ? {} : { go }),
+          ...(focus ? { focus } : {}),
         }),
       );
       return;
@@ -1492,6 +1503,9 @@ export async function startLiveFixture(): Promise<LiveFixture> {
     },
     goFrame: (path, to) => {
       going.set(path, to);
+    },
+    focusIn: (path) => {
+      focusing.add(path);
     },
     reports: (path) => reportsAt.get(path) ?? 0,
     framesServed: (path) => framesLoads.get(path) ?? 0,

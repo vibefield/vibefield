@@ -895,7 +895,7 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
   });
 
-  it("PT-6a (M14 — R2) FRAME-SHADOW: the frame in a web component's open shadow root — a press reaches it (its field focused), and the keys typed are REFUSED, its field empty, heard by neither page; a field never aimed at, or never focused, proves nothing", () => {
+  it("PT-6a (M14 — R2) FRAME-SHADOW: the frame in a web component's open shadow root — (M15) the focus moved into its field without a press, the keys typed are REFUSED, its field empty, heard by neither page; a page never read, or a field never focused, proves nothing", () => {
     const refused = {
       focused: true,
       refused: 3,
@@ -927,9 +927,9 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     expect(judgeFrameShadow({ ...refused, alive: false })).toEqual([
       "FRAME-SHADOW: main's census no longer answers after the typing",
     ]);
-    // the sight's half: a press that never reached the frame (its host read as its cover)
+    // M15: the focus the pages' own scripts moved in never reached the field — the row proved nothing (no press is made)
     expect(judgeFrameShadow({ ...refused, focused: false })).toEqual([
-      "FRAME-SHADOW: the frame's field never took the focus — the press never reached a frame in a shadow root (its host read as its cover)",
+      "FRAME-SHADOW: the frame's field never took the focus the pages' own scripts moved in (no press) — the row proved nothing: `where()`'s descent rests on its units alone",
     ]);
     expect(judgeFrameShadow(null)).toEqual([
       "FRAME-SHADOW: the shadowed frame's field could not be aimed at — the row proved nothing",

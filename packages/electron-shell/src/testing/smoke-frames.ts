@@ -65,10 +65,12 @@
 //                  another document of its OWN site (its session stays): after each, the pane holds the first document's
 //                  frame sessions — never one more a rotation (a grandchild's session kept when its frame's own commit
 //                  dropped the records first);
-//   FRAME-SHADOW — PT-6a (M14 — R2): the frame held in a web component's OPEN SHADOW ROOT, its field pressed and "abc"
-//                  typed: the press reaches the frame (its host is never its cover), and the keys are REFUSED (M15's
-//                  limit) — never sent down the page's session (`where()` read the host as `here`); main alive. Run only on
-//                  the fixed code: on the unfixed it drove page-session keys at a focused frame of another site;
+//   FRAME-SHADOW — PT-6a (M14 — R2; re-scoped M15): the frame held in a web component's OPEN SHADOW ROOT, the focus
+//                  moved into its field WITHOUT a press (the pages' own scripts: the host focuses its frame's element, the
+//                  frame its field — the frame is never pressed: since M15 it is its host's, unpressable), then "abc"
+//                  typed: the keys are REFUSED (M15's limit), never sent down the page's session (`where()` read the host as
+//                  `here`); main alive. Run only on the fixed code: on the unfixed it drove page-session keys at a focused
+//                  frame of another site;
 // Then the panes are removed and the board is as found. `--frames-pane` beside `--smoke-canvas` runs these rows alone after
 // the boot's (the author's loop).
 
@@ -1133,9 +1135,9 @@ export function judgeFrameRotated(seen: FrameRotatedSeen): string[] {
   return out;
 }
 
-/** PT-6a (M14 — R2): FRAME-SHADOW — the frame held in a web component's open shadow root: whether a press focused its field
- * (its own word), how many key-like events main refused over what was typed, what its field holds after, the keys the host
- * and the frame heard, and whether main's census still answered after. */
+/** PT-6a (M14 — R2; M15): FRAME-SHADOW — the frame held in a web component's open shadow root: whether the focus moved into
+ * its field without a press (its own word), how many key-like events main refused over what was typed, what its field holds
+ * after, the keys the host and the frame heard, and whether main's census still answered after. */
 export interface FrameShadowSeen {
   readonly focused: boolean;
   readonly refused: number | null;
@@ -1145,8 +1147,8 @@ export interface FrameShadowSeen {
   readonly alive: boolean;
 }
 
-/** PT-6a (M14 — R2): FRAME-SHADOW — a frame of another site focused inside a web component's open root is the FRAME's: a press
- * reaches it, and the keys typed are refused (M15's limit), never sent down the page's session. */
+/** PT-6a (M14 — R2; M15): FRAME-SHADOW — a frame of another site focused inside a web component's open root (by the pages'
+ * own scripts, never a press) is the FRAME's: the keys typed are refused (M15's limit), never sent down the page's session. */
 export function judgeFrameShadow(seen: FrameShadowSeen | null): string[] {
   if (seen === null)
     return [
@@ -1154,7 +1156,7 @@ export function judgeFrameShadow(seen: FrameShadowSeen | null): string[] {
     ];
   if (!seen.focused)
     return [
-      "FRAME-SHADOW: the frame's field never took the focus — the press never reached a frame in a shadow root (its host read as its cover)",
+      "FRAME-SHADOW: the frame's field never took the focus the pages' own scripts moved in (no press) — the row proved nothing: `where()`'s descent rests on its units alone",
     ];
   const out: string[] = [];
   if (!seen.alive) out.push("FRAME-SHADOW: main's census no longer answers after the typing");
@@ -3105,7 +3107,8 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     said.rotated = rotated;
     problems.push(...judgeFrameRotated(rotated));
 
-    // ── FRAME-SHADOW (PT-6a, M14 — R2): the frame in a web component's OPEN SHADOW ROOT; its field pressed, "abc" typed ──
+    // ── FRAME-SHADOW (PT-6a, M14 — R2; M15): the frame in a web component's OPEN SHADOW ROOT; the focus moved into its field
+    // by the pages' OWN scripts (never a press: the frame is its host's), "abc" typed ──
     // (run only on the fixed code: on the unfixed, `where()` read the host as `here`, and the keys went down the page's
     // session at a focused frame of another site — the class M15 made a limit after main crashed)
     const shadowRow = async (): Promise<FrameShadowSeen | null> => {
@@ -3121,23 +3124,23 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         (rep) => rep?.framed?.parts.t !== undefined,
       );
       await pickUp(pane);
-      const heldNow = await heldFrame();
       const hostSaid = at(SH_HOST);
-      const box = hostSaid?.framed?.parts.frame ?? null;
-      const field = at(SH_FRAME)?.framed?.parts.t ?? null;
-      if (heldNow === null || hostSaid === null || box === null || field === null) {
+      if (hostSaid === null) {
         await done();
         return null;
       }
       const hostHeard0 = hostSaid.framed?.heard.length ?? 0;
       const frameHeard0 = at(SH_FRAME)?.framed?.heard.length ?? 0;
-      const w = await onWindow(
-        heldNow,
-        visibleView(hostSaid),
-        box.x + field.x + field.w / 2,
-        box.y + field.y + field.h / 2,
+      // the host moves its focus onto its frame's element (in its open root), then the frame onto its field — each by its
+      // own script, at its next ask: no press
+      d.fixture.focusIn(SH_HOST);
+      await waitFor(
+        "the host's focus on its frame's element",
+        5_000,
+        () => at(SH_HOST),
+        (rep) => rep?.focused === "f",
       );
-      await h.press(w);
+      d.fixture.focusIn(SH_FRAME);
       const focused =
         (
           await waitFor(
