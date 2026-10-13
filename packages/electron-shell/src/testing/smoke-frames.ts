@@ -2577,13 +2577,13 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
           win.webContents.sendInputEvent({ type: "keyUp", keyCode: ch });
           await sleep(30);
         }
-        // (its word taken after the typing: two more of its asks once it answers again)
-        const asked = d.fixture.reports(BUSY);
+        // (its word taken once its field holds what was typed — bounded: a key refused or lost reads short at the bound.
+        // Run 4: two of its asks counted from the typing fell before the last key reached a page busy until then — "ab")
         await waitFor(
-          `two of the busy page's asks after the typing (${name})`,
-          10_000,
-          () => d.fixture.reports(BUSY),
-          (n) => n >= asked + 2,
+          `the busy page's field holding what was typed (${name})`,
+          5_000,
+          () => at(BUSY)?.field ?? null,
+          (v) => v === FRAMES_ROWS.busyTyped,
         );
         const after = at(BUSY);
         leg = {
