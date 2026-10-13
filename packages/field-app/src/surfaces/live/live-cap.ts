@@ -36,6 +36,9 @@ export interface CapFace {
   readonly fixed?: boolean;
   /** Its lane is still being attached: whether its page is alive is not known yet. */
   readonly unknown?: boolean;
+  /** PT-6a (M7 B7): a page LET GO — its face closed (a deleted pane's, kept by the pool's grace for an undo; another mount's)
+   * — that rests before any lane, by rule, whatever its stamp. */
+  readonly ghost?: boolean;
 }
 
 /** What the service does next: these put to rest (in order), then these woken — each when a slot IS free (a page that is
@@ -49,6 +52,10 @@ export interface CapPlan {
 const byKey = (a: CapFace, b: CapFace): number => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
 /** Least recently seen first. */
 const stalest = (a: CapFace, b: CapFace): number => a.seenAt - b.seenAt || byKey(a, b);
+/** PT-6a (M7 B7): the let-go pages first, then the lanes — each the least recently seen first (before: by the stamp alone, so a
+ * pane picked up and then deleted outlived a lane panned away earlier — its stamp the fresher). */
+const ghostsFirst = (a: CapFace, b: CapFace): number =>
+  (a.ghost === true ? 0 : 1) - (b.ghost === true ? 0 : 1) || stalest(a, b);
 /** Nearest the view's centre first; of two as near, the more recently seen. */
 const nearest = (a: CapFace, b: CapFace): number =>
   (a.far === b.far ? 0 : a.far < b.far ? -1 : 1) || b.seenAt - a.seenAt || byKey(a, b);
@@ -64,9 +71,9 @@ export function capPlan(faces: readonly CapFace[], cap: number = LIVE_PAGES_MAX)
   const rest: string[] = [];
   const wake: string[] = [];
   const waiting: string[] = [];
-  /** The unseen pages still alive, least recently seen first — each may give its slot. */
+  /** The unseen pages still alive, the let-go ones first, each the least recently seen first — each may give its slot. */
   const spare = (): CapFace | undefined =>
-    faces.filter((f) => f.want === "unseen" && alive.has(f.key)).sort(stalest)[0];
+    faces.filter((f) => f.want === "unseen" && alive.has(f.key)).sort(ghostsFirst)[0];
   /** The seen page farthest from the view's centre — the last to give its slot. */
   const farthest = (): CapFace | undefined =>
     faces.filter((f) => f.want === "seen" && alive.has(f.key)).sort((a, b) => nearest(b, a))[0];

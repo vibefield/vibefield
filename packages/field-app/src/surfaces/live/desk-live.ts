@@ -768,7 +768,13 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       kept.add(key);
       if (lanes.has(key)) continue;
       const seenAt = gone.get(key)?.seenAt ?? Number.NEGATIVE_INFINITY;
-      const row = { key, want: "unseen", seenAt, far: Number.POSITIVE_INFINITY } as const;
+      const row = {
+        key,
+        want: "unseen",
+        seenAt,
+        far: Number.POSITIVE_INFINITY,
+        ghost: true,
+      } as const;
       if (ghostsResting.has(key)) {
         rows.push({ ...row, alive: true, fixed: true });
         continue;

@@ -120,6 +120,30 @@ describe("PT-5b — the cap's plan (ruling 3)", () => {
     expect(plan.waiting).toEqual(["s2"]);
   });
 
+  it("PT-6a (M7, B7) — over the cap, a LET-GO page (a ghost: a deleted pane's page in the pool's grace, or another mount's) rests before ANY lane, whatever its stamp: a ghost asked live a moment before its delete still goes before a lane panned away long ago; of two ghosts, the stalest first", () => {
+    const plan = capPlan(
+      [
+        face("s", "seen", true, { far: 1, seenAt: 10_000 }),
+        face("lane", "unseen", true, { seenAt: 1_000, far: 5 }),
+        face("ghost", "unseen", true, { seenAt: 9_000, ghost: true }),
+        face("old", "unseen", true, { seenAt: 2_000, ghost: true }),
+      ],
+      2,
+    );
+    expect(plan.rest).toEqual(["old", "ghost"]);
+    // and a seen page that waits takes a ghost's slot before a lane's
+    const woke = capPlan(
+      [
+        face("lane", "unseen", true, { seenAt: 1_000, far: 5 }),
+        face("ghost", "unseen", true, { seenAt: 9_000, ghost: true }),
+        face("new", "seen", false, { far: 1 }),
+      ],
+      2,
+    );
+    expect(woke.rest).toEqual(["ghost"]);
+    expect(woke.wake).toEqual(["new"]);
+  });
+
   it("a page being put to rest (`fixed`, alive) is LEAVING: its slot is planned as free — the page it makes room for is to be woken, and NO second page is rested for it; a stopped page has nothing planned", () => {
     // a is leaving for c: c is to be woken (the service holds that wake until a is gone) — b, unseen, is not rested too
     expect(

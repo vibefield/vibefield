@@ -345,6 +345,35 @@ describe("PT-5b — six pages alive at most (ruling 3)", () => {
     expect(f.wire()).toBe("live");
   });
 
+  it("PT-6a (M7, B7) — a LET-GO page rests before any lane, whatever its stamp: a pane asked live a moment before its delete (its page kept by the pool's grace) gives its slot before a lane panned away long before (before: the lane's — its stamp the older)", async () => {
+    const s = stage();
+    s.live.cap(2);
+    const lane = s.open("l", true, "created");
+    lane.face.demand(SEEN);
+    await s.pump();
+    s.clock.advance(1_000);
+    // panned away: alive, unseen — its stamp its last live ask's
+    lane.face.demand(UNSEEN);
+    await s.pump();
+    const a = s.open("a", true, "created");
+    s.clock.advance(8_000);
+    // asked live just now (picked up), then deleted: a let-go page, its stamp the fresher
+    a.face.demand(SEEN);
+    await s.pump();
+    s.exists.value = false;
+    a.face.close();
+    s.exists.value = true;
+    const before = s.handles.length;
+    const c = s.open("c", true, "created");
+    c.face.demand(SEEN);
+    await s.pump();
+    // the let-go page went to rest — asked hibernated through a lane of the service's own — and the lane's page stands
+    const ghost = s.handles.slice(before).find((h) => h.key === "desk:a");
+    expect(ghost?.opts.initialDemand).toMatchObject({ mode: "hibernated" });
+    expect(lane.wire()).toBe("paused");
+    expect(c.wire()).toBe("live");
+  });
+
   it("a PARKED desk plans nothing and wakes nothing; running again the plan is made and each page asked, within the cap", async () => {
     const s = stage();
     s.live.cap(1);
