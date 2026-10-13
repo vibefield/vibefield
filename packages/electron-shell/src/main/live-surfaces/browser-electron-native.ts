@@ -204,6 +204,20 @@ const FOCUS_WORD_MS = 1_000;
  * it is abandoned: sent, never confirmed (M12 J4: every step is sent at once — one abandoned keeps none of the others
  * unsent); the frame is resumed once every step is answered or abandoned — never left paused. */
 const FRAME_STEP_MS = 2_000;
+
+/** PT-6a (K4): a command sent, waited for until it is answered or refused — or `ms` pass: abandoned (unconfirmed, not
+ * unsent). */
+async function answeredWithin(sent: Promise<unknown>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    sent.catch(() => undefined),
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, ms);
+    }),
+  ]);
+  clearTimeout(timer);
+}
+
 /**
  * PT-5d (M6.5b i) — THE PAGE'S AUTO-ATTACH AND EACH FRAME'S: flat; each frame of another site STARTS PAUSED (waiting for the
  * debugger) until its guards and its device are on; FILTERED to frames — no worker or service worker is ever attached,
@@ -976,7 +990,10 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * target: the page's agent, touch and colour scheme never reach a frame's own — a phone's page told its embed was a
    * laptop). At its attach (after its guards) and at each switch the page's own answered; a frame's tells one behind
    * another, each reading the device last answered — the last it is told is the latest. Each command its own: one
-   * refused keeps none after it off. No device told yet: none.
+   * refused keeps none after it off. No device told yet: none. PT-6a (K4) — the three SENT AT ONCE (one session runs
+   * its commands in order: the order kept), each waited for to its own bound (`FRAME_STEP_MS`: abandoned — unconfirmed,
+   * not unsent), as J4's steps: an agent the frame never answers keeps touch and the colour scheme unsent at its resume
+   * no longer (its first document ran as a laptop in the system's colours), nor its next tell waiting for good.
    */
   private tellFrame(session: string): Promise<void> {
     const prior = this.#frameTells.get(session) ?? Promise.resolve();
@@ -984,8 +1001,11 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       const emulation = this.#emulation;
       if (emulation === undefined || this.isDestroyed()) return;
       const cdp = this.window.webContents.debugger;
-      for (const [method, params] of emulationCommands(emulation))
-        await cdp.sendCommand(method, params, session).catch(() => undefined);
+      await Promise.all(
+        emulationCommands(emulation).map(([method, params]) =>
+          answeredWithin(cdp.sendCommand(method, params, session), FRAME_STEP_MS),
+        ),
+      );
     });
     this.#frameTells.set(session, next);
     return next;

@@ -3094,6 +3094,52 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       expect(agents(r, "F")).toEqual(["phone/1", "laptop/1"]);
       expect(agents(r, "G")).toEqual(["phone/1", "laptop/1"]);
     });
+
+    it("PT-6a (K4) — review 3's: an AGENT the frame never answers at its attach keeps none of the device's others unsent at its resume — touch and the colour scheme go with it, before the frame runs", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = recording((method, _p, session) =>
+          method === "Emulation.setUserAgentOverride" && session === "F"
+            ? new Promise(() => {})
+            : {},
+        );
+        await r.native.setEmulation(PHONE_DEVICE);
+        r.attach("F");
+        await vi.advanceTimersByTimeAsync(2_000);
+        const steps = r.on("F");
+        const resume = steps.indexOf("Runtime.runIfWaitingForDebugger");
+        expect(resume).toBeGreaterThan(-1);
+        expect(steps.indexOf("Emulation.setTouchEmulationEnabled")).toBeGreaterThan(-1);
+        expect(steps.indexOf("Emulation.setTouchEmulationEnabled")).toBeLessThan(resume);
+        expect(steps.indexOf("Emulation.setEmulatedMedia")).toBeLessThan(resume);
+        expect(steps.indexOf("Emulation.setEmulatedMedia")).toBeGreaterThan(-1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("PT-6a (K4) — each of a tell's commands BOUNDED: a switch whose agent the frame never answers keeps no LATER switch from being told (its tells chained) — told within the bound", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = recording((method, params, session) =>
+          method === "Emulation.setUserAgentOverride" &&
+          session === "F" &&
+          (params as { userAgent: string }).userAgent === "laptop/1"
+            ? new Promise(() => {})
+            : {},
+        );
+        await r.native.setEmulation(PHONE_DEVICE);
+        r.attach("F");
+        await vi.advanceTimersByTimeAsync(0);
+        await r.native.setEmulation(LAPTOP_DEVICE);
+        await vi.advanceTimersByTimeAsync(0);
+        await r.native.setEmulation(PHONE_DEVICE);
+        await vi.advanceTimersByTimeAsync(2_100);
+        expect(agents(r, "F")).toEqual(["phone/1", "laptop/1", "phone/1"]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   it("M7 H15 — a frame's session gone with its console's discard due: none is sent to it (its timer cleared); the page's own kept", async () => {
