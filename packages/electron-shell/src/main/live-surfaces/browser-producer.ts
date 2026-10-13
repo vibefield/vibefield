@@ -138,6 +138,8 @@ export interface BrowserSurfaceNativeWindow {
   handInFlight?(): number;
   /** PT-6a (M4 — F1): whether its page's current document is PULL-ONLY (1) — main's census counts them. Absent: none. */
   pullOnly?(): number;
+  /** PT-6a (M8 — C5): the sessions of its page's frames of other sites it holds — main's census counts them. Absent: none. */
+  childSessions?(): number;
   /** History/loading navigation. `go` rides `loadURL` so the initial-load and
    * chrome-navigation paths share one policy gate. */
   navigate(action: "back" | "forward" | "reload" | "stop"): void;
@@ -1306,6 +1308,13 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   pullOnly(): number {
     const window = this.#window;
     return window === null || window.isDestroyed() ? 0 : (window.pullOnly?.() ?? 0);
+  }
+
+  /** PT-6a (M8 — C5): the sessions of its page's frames of other sites its window holds — counted by main's census (its
+   * window gone: none). */
+  childSessions(): number {
+    const window = this.#window;
+    return window === null || window.isDestroyed() ? 0 : (window.childSessions?.() ?? 0);
   }
 
   supportSnapshot(): LiveSurfaceRuntimeSupportSnapshot {

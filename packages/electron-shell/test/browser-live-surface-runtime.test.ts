@@ -179,6 +179,13 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
     return this.pulled;
   }
 
+  /** PT-6a (M8 — C5): the sessions of its page's frames of other sites, as the row sets them. */
+  sessions = 0;
+
+  childSessions(): number {
+    return this.sessions;
+  }
+
   async setFocused(focused: boolean): Promise<void> {
     this.hand.push(`focus ${focused}`);
   }
@@ -876,6 +883,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
         frameKeysRefused: 0,
         handInFlight: 0,
         pullOnly: 0,
+        childSessions: 0,
       });
       // no grace's timer outlives the runtimes it was for
       expect(vi.getTimerCount()).toBe(0);
@@ -3919,6 +3927,16 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(p.result.runtime.pullOnly()).toBe(1);
       p.window.destroyed = true;
       expect(p.result.runtime.pullOnly()).toBe(0);
+      p.result.runtime.dispose();
+    });
+
+    it("PT-6a (M8 — C5) — the runtime says the sessions of its window's frames of other sites to main's census (`childSessions()`): its window's own count; its window gone, none", async () => {
+      const p = await laptop();
+      expect(p.result.runtime.childSessions()).toBe(0);
+      p.window.sessions = 2;
+      expect(p.result.runtime.childSessions()).toBe(2);
+      p.window.destroyed = true;
+      expect(p.result.runtime.childSessions()).toBe(0);
       p.result.runtime.dispose();
     });
 

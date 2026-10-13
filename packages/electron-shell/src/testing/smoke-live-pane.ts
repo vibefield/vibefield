@@ -330,6 +330,8 @@ export interface LiveRowsDriver extends PaneRowsDriver {
     readonly handInFlight?: number;
     /** PT-6a (M4 — F1): main's pages whose current document is PULL-ONLY (FRAME-OPENED) */
     readonly pullOnly?: number;
+    /** PT-6a (M8 — C5): the sessions of main's pages' frames of other sites (FRAME-SESSIONS) */
+    readonly childSessions?: number;
   } | null;
   /** The window's renderer replaced (a reload), resolved once the desk says DESK_READY again. */
   readonly reload: () => Promise<boolean>;

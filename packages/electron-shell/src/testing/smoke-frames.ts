@@ -113,6 +113,9 @@ export const FRAMES_ROWS = {
    * the row watches the page after it (past the host's bound, `hungMs`: a page said stopped by a missing word shows) */
   openedLandMs: 3_000,
   openedWatchMs: 23_000,
+  /** PT-6a (M8 — C5): FRAME-SESSIONS — how long after a document's nested frame speaks its sessions are counted (the old
+   * document's detaches come before its commit, the new frames' attaches ~1 s after it: r2kids) */
+  sessionsSettleMs: 1_500,
   answerLookMs: 20,
   /** PT-6a (M1): FRAME-WHEEL's wheels, how far apart the hand sends them (ms), and the frame's late answers' period (run 4:
    * ~1016 ms) — the leg drains within its sending, two periods (a first late answer under the threshold is followed by one
@@ -295,6 +298,8 @@ export interface FramesSeen {
   readonly answer?: PressAnswerSeen | null;
   /** PT-6a (F1): FRAME-OPENED (absent: not run; null: its editor's field could not be aimed at) */
   readonly opened?: FrameOpenedSeen | null;
+  /** PT-6a (M8 — C5): FRAME-SESSIONS (absent: not run) */
+  readonly sessions?: FrameSessionsSeen;
 }
 
 /** PT-6a (K1): FRAME-BUSY's leg — what was typed, what the field holds after, what kept the page's thread and when. */
@@ -1048,6 +1053,35 @@ export interface FrameOpenedSeen {
 
 /** PT-6a (M4, M5 — F1): FRAME-OPENED — the text typed into an editor frame that cannot speak lands, and its page is never said
  * stopped for a missing word. */
+/** PT-6a (M8 — C5): FRAME-SESSIONS — whether the nested frame is of a THIRD site, and main's census of child sessions after
+ * the page's first document and after each of three navigations (null: no census). */
+export interface FrameSessionsSeen {
+  readonly third: boolean;
+  readonly counts: readonly (number | null)[];
+}
+
+/** PT-6a (M8 — C5): FRAME-SESSIONS — after each navigation main holds the current document's frame sessions, never one more:
+ * a nested frame's session goes with its document (the engine never says its detach). */
+export function judgeFrameSessions(seen: FrameSessionsSeen): string[] {
+  if (!seen.third)
+    return [
+      "FRAME-SESSIONS: the nested frame is not of a third site (no IPv6 loopback) — the row proved nothing",
+    ];
+  const [first, ...after] = seen.counts;
+  if (first === undefined || first === null || after.length < 3)
+    return [
+      `FRAME-SESSIONS: main's census was read ${seen.counts.length} times, not four (the first document and three more) — the row proved nothing`,
+    ];
+  const out: string[] = [];
+  after.forEach((n, i) => {
+    if (n !== first)
+      out.push(
+        `FRAME-SESSIONS: after navigation ${i + 1} main's census holds ${n ?? "no count of"} child sessions, not the first document's ${first} — a frame's session outlived its document`,
+      );
+  });
+  return out;
+}
+
 export function judgeFrameOpened(seen: FrameOpenedSeen | null): string[] {
   if (seen === null)
     return ["FRAME-OPENED: its editor's field could not be aimed at — the row proved nothing"];
@@ -2898,6 +2932,38 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const openedSeen = await openedRow();
     said.opened = openedSeen;
     problems.push(...judgeFrameOpened(openedSeen));
+
+    // ── FRAME-SESSIONS (PT-6a, M8 — C5): a frame of another site holding a frame of a THIRD, its page navigated three times ──
+    const sessionsRow = async (): Promise<FrameSessionsSeen> => {
+      const third = d.fixture.innerOrigin !== d.fixture.hostOrigin;
+      const names = ["c5a", "c5b", "c5c", "c5d"];
+      const address = (name: string): string => `${d.fixture.hostOrigin}/frames/host?p=${name}`;
+      const pane = await lay(address("c5a"), x0 + 12 * step, y0);
+      await frame([pane]);
+      await live(pane);
+      const counts: (number | null)[] = [];
+      for (const [i, name] of names.entries()) {
+        if (i > 0) {
+          const e = (await rowsNow()).find((r) => r.key === pane.key)?.entity;
+          if (e === undefined) break;
+          await js(
+            `globalThis.__vfDesk.writeProps(${e}, { url: ${JSON.stringify(address(name))} })`,
+          );
+        }
+        await waitFor(
+          `the nested frame's word (${name})`,
+          FRAMES_ROWS.withinMs,
+          () => at(`/frames/inner?p=${name}`),
+          (r) => r !== null,
+        );
+        await sleep(FRAMES_ROWS.sessionsSettleMs);
+        counts.push(d.custody()?.childSessions ?? null);
+      }
+      return { third, counts };
+    };
+    const sessions = await sessionsRow();
+    said.sessions = sessions;
+    problems.push(...judgeFrameSessions(sessions));
 
     // ── STUCK: a page whose button starts an endless loop; a key it never answers; ↻ ───────────────────────────────
     const loop = await lay(`${d.fixture.origin}/frames/loop?p=s`, x0 + 3 * step, y0);

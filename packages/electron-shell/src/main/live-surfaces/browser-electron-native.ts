@@ -472,7 +472,11 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     if (method === "Target.detachedFromTarget") {
       const gone = params["sessionId"];
       if (typeof gone === "string") {
-        this.#children.delete(gone);
+        // PT-6a (M8 — C5): its DESCENDANTS go with it — the engine never says a nested frame's detach once its parent's
+        // session has gone (r2kids: CNN's frame in a frame, one more session kept at each load), so each is forgotten here,
+        // by the frames' parent links read before the frames' own cascade
+        const going = [gone, ...this.descendantsOf(gone)];
+        for (const session of going) this.#children.delete(session);
         this.#frames.detached(gone);
         // (M12 J12: a command in flight on a session the detach took — its, and the frames' in it — is let go, as at a
         // commit: the engine may never answer a session torn down mid-command, and the chain stalled to the bound said the
@@ -481,12 +485,14 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         for (const [letGo, session] of [...this.#inFlight])
           if (session !== undefined && !standing.has(session))
             letGo("Browser input's frame is gone");
-        this.#owners.delete(gone);
-        this.#placing.delete(gone);
-        // (M7 H15: its console's discard, if one is due, sent nowhere)
-        this.forgetDiscard(gone);
-        this.#frameTells.delete(gone);
-        this.#worlds.delete(gone);
+        for (const session of going) {
+          this.#owners.delete(session);
+          this.#placing.delete(session);
+          // (M7 H15: its console's discard, if one is due, sent nowhere)
+          this.forgetDiscard(session);
+          this.#frameTells.delete(session);
+          this.#worlds.delete(session);
+        }
         this.focusMoved();
       }
       return;
@@ -1270,6 +1276,25 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   /** PT-6a (M4 — F1): whether the page's current document is PULL-ONLY (1) — main's census counts them. */
   pullOnly(): number {
     return this.#frames.pullOnly() ? 1 : 0;
+  }
+
+  /** PT-6a (M8 — C5): the sessions of the page's frames of other sites it holds — main's census counts them. */
+  childSessions(): number {
+    return this.#children.size;
+  }
+
+  /** PT-6a (M8 — C5): the frames under a frame's session, at any depth — by the frames' parent links. */
+  private descendantsOf(session: string): string[] {
+    const frames = this.#frames.frames();
+    const out: string[] = [];
+    const under = [session];
+    for (let parent = under.shift(); parent !== undefined; parent = under.shift())
+      for (const f of frames)
+        if (f.parent === parent && !out.includes(f.session)) {
+          out.push(f.session);
+          under.push(f.session);
+        }
+    return out;
   }
 
   /**

@@ -4298,6 +4298,39 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       }
     });
 
+    it("PT-6a (M8 — C5) — the sessions of the page's frames of other sites, counted (`childSessions` — main's census reads it): each attach one more, each detach one less", async () => {
+      const r = recording();
+      expect(r.native.childSessions?.()).toBe(0);
+      r.attach("F");
+      r.attach("E");
+      r.attach("N", "F");
+      await turns();
+      expect(r.native.childSessions?.()).toBe(3);
+      r.emit("Target.detachedFromTarget", { sessionId: "E", targetId: "t-E" });
+      expect(r.native.childSessions?.()).toBe(2);
+      // a nested frame's own detach before its parent's (as the engine says it when it does)
+      r.emit("Target.detachedFromTarget", { sessionId: "N", targetId: "t-N" }, "F");
+      r.emit("Target.detachedFromTarget", { sessionId: "F", targetId: "t-F" });
+      expect(r.native.childSessions?.()).toBe(0);
+    });
+
+    it("PT-6a (M8 — C5) — a NESTED frame's session goes with its PARENT's: the engine says the parent's detach, never the nested one's (CNN's frame in a frame, r2kids) — every descendant is forgotten at its ancestor's detach, its words' world and its owner with it; a late detach of its own is nothing", async () => {
+      const r = recording();
+      r.attach("F");
+      r.attach("N", "F");
+      r.attach("M", "N");
+      r.attach("E");
+      await turns();
+      expect(r.native.childSessions?.()).toBe(4);
+      r.emit("Target.detachedFromTarget", { sessionId: "F", targetId: "t-F" });
+      expect(r.native.childSessions?.()).toBe(1);
+      // the nested one's own word, late: nothing more to forget
+      r.emit("Target.detachedFromTarget", { sessionId: "N", targetId: "t-N" }, "F");
+      expect(r.native.childSessions?.()).toBe(1);
+      r.emit("Target.detachedFromTarget", { sessionId: "E", targetId: "t-E" });
+      expect(r.native.childSessions?.()).toBe(0);
+    });
+
     it("PT-6a (K5) — the hand's commands SENT and not yet answered, counted (`handInFlight` — main's census reads it): one while unanswered; none once answered, let go at its frame's detach, or let go at the page's commit", async () => {
       vi.useFakeTimers();
       try {

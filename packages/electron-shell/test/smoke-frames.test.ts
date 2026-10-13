@@ -24,6 +24,7 @@ import {
   judgeFrameOpened,
   judgeFramePicker,
   judgeFramePress,
+  judgeFrameSessions,
   judgeFrameTouch,
   judgeFrameType,
   judgeFrameWheel,
@@ -848,6 +849,25 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
     expect(judgeFrameOpened(null)).toEqual([
       "FRAME-OPENED: its editor's field could not be aimed at — the row proved nothing",
+    ]);
+  });
+
+  it("PT-6a (M8 — C5) FRAME-SESSIONS: after each of three navigations main's census holds the first document's frame sessions — never one more a load (a nested frame's session kept for good); a nested frame of no third site, or a census read fewer than four times, proves nothing", () => {
+    expect(judgeFrameSessions({ third: true, counts: [2, 2, 2, 2] })).toEqual([]);
+    // C5 as the soak found it: one session more at each load
+    expect(judgeFrameSessions({ third: true, counts: [2, 3, 4, 5] })).toEqual([
+      "FRAME-SESSIONS: after navigation 1 main's census holds 3 child sessions, not the first document's 2 — a frame's session outlived its document",
+      "FRAME-SESSIONS: after navigation 2 main's census holds 4 child sessions, not the first document's 2 — a frame's session outlived its document",
+      "FRAME-SESSIONS: after navigation 3 main's census holds 5 child sessions, not the first document's 2 — a frame's session outlived its document",
+    ]);
+    expect(judgeFrameSessions({ third: true, counts: [2, 2, null, 2] })).toEqual([
+      "FRAME-SESSIONS: after navigation 2 main's census holds no count of child sessions, not the first document's 2 — a frame's session outlived its document",
+    ]);
+    expect(judgeFrameSessions({ third: false, counts: [1, 1, 1, 1] })).toEqual([
+      "FRAME-SESSIONS: the nested frame is not of a third site (no IPv6 loopback) — the row proved nothing",
+    ]);
+    expect(judgeFrameSessions({ third: true, counts: [2, 2] })).toEqual([
+      "FRAME-SESSIONS: main's census was read 2 times, not four (the first document and three more) — the row proved nothing",
     ]);
   });
 
