@@ -2648,11 +2648,21 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       if (state === "live") this.pauseProducer();
       return;
     }
-    // PT-5b — a page put to REST while it is still STARTING (its server slow to answer) is let go AT ONCE: it would be
-    // discarded at its first frame anyway, and meanwhile it held a slot of the desk's cap for as long as its load took.
-    // (A page asked `paused` while starting still loads on — its pane is only out of view, and finds it loaded.)
-    // PT-5c (ruling 6) — and a page RECONNECTING the same, its window made or still to be made (its reconnect's tick:
-    // the reconnect is not made). Before, a rest was ignored while it reconnected.
+    this.letPageGo();
+  }
+
+  /**
+   * A page nobody wants is let go: put to REST, or its renderers gone past the grace (PT-6a, ruling 2 D: the lapse let go
+   * only a live or paused page — one starting or reconnecting kept its window with nobody attached).
+   *
+   * PT-5b — a page still STARTING (its server slow to answer) is let go AT ONCE: it would be discarded at its first frame
+   * anyway, and meanwhile it held a slot of the desk's cap for as long as its load took. (A page asked `paused` while
+   * starting still loads on — its pane is only out of view, and finds it loaded.) PT-5c (ruling 6) — and a page
+   * RECONNECTING the same, its window made or still to be made (its reconnect's tick: the reconnect is not made). Before,
+   * a rest was ignored while it reconnected.
+   */
+  private letPageGo(): void {
+    const state = this.#lifecycle.snapshot.state;
     if ((state === "starting" && this.#window !== null) || state === "reconnecting") {
       this.clearSourceTimers();
       for (const step of ["live", "paused", "hibernated"] as const)
@@ -3025,16 +3035,15 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
 
   private armDetachedHibernate(): void {
     if (this.#hibernateTimer !== null || this.#closed) return;
-    // no grace (a lab's runtime, no custody behind it): hibernated at once, as a detach always did
+    // no grace (a lab's runtime, no custody behind it): let go at once, as a detach always did
     if (this.#detachedHibernateMs === 0) {
-      this.hibernateProducer();
+      this.letPageGo();
       return;
     }
     this.#hibernateTimer = setTimeout(() => {
       this.#hibernateTimer = null;
       if (this.#closed || aggregateDemand(this.#attachments.values()) !== null) return;
-      if (this.#lifecycle.snapshot.state === "live") this.pauseProducer();
-      this.hibernateProducer();
+      this.letPageGo();
     }, this.#detachedHibernateMs);
   }
 

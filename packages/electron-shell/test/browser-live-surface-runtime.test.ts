@@ -690,6 +690,59 @@ describe("BrowserLiveSurfaceRuntime", () => {
     }
   });
 
+  it("PT-6a (ruling 2, D) — the grace's LAPSE lets go a page that never stood, as a rest lets it go: STARTING (its window up, its server slow) or RECONNECTING (its window made again, or at the reconnect's tick) when its last renderer left and none came back — its window gone, its address kept; asked for again, it is made anew there. A lab's runtime (no grace) lets it go at the detach (before: the lapse acted only on a live or paused page — such a page kept its window, nobody attached)", async () => {
+    vi.useFakeTimers();
+    try {
+      /** a page whose renderer left in its STATE, the grace `ms` */
+      const left = async (ms: number, at: "starting" | "remade" | "tick") => {
+        const result = setup({ detachedHibernateMs: ms, startupTimeoutMs: 600_000 });
+        const renderer = attach(result.runtime);
+        renderer.attachment.setDemand(demand(1, "live"));
+        await vi.advanceTimersByTimeAsync(0);
+        if (at !== "starting") {
+          result.native.windows[0]?.emitNavigationState({ ...NAV });
+          result.native.windows[0]?.paint(sharedPaint().paint);
+          await vi.advanceTimersByTimeAsync(0);
+          result.native.windows[0]?.crash();
+          if (at === "remade") await vi.advanceTimersByTimeAsync(0);
+        }
+        const window = result.native.windows.at(-1);
+        expect(result.runtime.summary.state).toBe(at === "starting" ? "starting" : "reconnecting");
+        expect(result.native.windows).toHaveLength(at === "remade" ? 2 : 1);
+        renderer.attachment.dispose();
+        return { result, window };
+      };
+      for (const at of ["starting", "remade"] as const) {
+        const { result, window } = await left(1000, at);
+        await vi.advanceTimersByTimeAsync(999);
+        expect(window?.destroyed).toBe(false);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(window?.destroyed).toBe(true);
+        expect(result.runtime.summary.state).toBe("hibernated");
+        // asked for again: made anew at its address
+        const back = attach(result.runtime, "attachment_browser_00000002");
+        back.attachment.setDemand(demand(1, "live"));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(result.native.windows.at(-1)?.loadedUrls).toEqual([source().initialUrl]);
+        expect(result.runtime.summary.state).toBe("starting");
+        result.runtime.dispose();
+      }
+      // at the reconnect's tick (no window made — nobody asks for it live): at rest once the grace lapses, nothing made
+      const tick = await left(1000, "tick");
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(tick.result.runtime.summary.state).toBe("hibernated");
+      expect(tick.result.native.windows).toHaveLength(1);
+      tick.result.runtime.dispose();
+      // a lab's runtime (no grace): let go at the detach
+      const lab = await left(0, "starting");
+      expect(lab.window?.destroyed).toBe(true);
+      expect(lab.result.runtime.summary.state).toBe("hibernated");
+      lab.result.runtime.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("a page is HEARD only while it is asked for live (PT-5a ruling 4): an attached pause is silent — a pause stops its painting, not its sound — a page whose renderer LEFT is muted for its grace, and one seen live again is heard again", async () => {
     // Electron 43 (PT-2's probe): an offscreen page under `stopPainting()` paints nothing and its audio plays on —
     // `isCurrentlyAudible()` true, its AudioContext's clock running. The grace keeps a page no renderer shows: silent.
