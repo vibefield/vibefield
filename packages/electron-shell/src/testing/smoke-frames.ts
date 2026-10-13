@@ -59,6 +59,12 @@
 //                  writes by open()/write()/close() after its load (whose window's listeners, the focus words' too, the
 //                  open erases): its field pressed and typed — the text lands within `openedLandMs`, and the page is never
 //                  said stopped over a watch past the host's bound (a document that cannot speak is never waited on);
+//   FRAME-SESSIONS — PT-6a (M8 — C5): a page with a frame of another site holding a frame of a THIRD, navigated three
+//                  times: after each, main holds the current document's frame sessions — never one more a load;
+//   FRAME-SHADOW — PT-6a (M14 — R2): the frame held in a web component's OPEN SHADOW ROOT, its field pressed and "abc"
+//                  typed: the press reaches the frame (its host is never its cover), and the keys are REFUSED (M15's
+//                  limit) — never sent down the page's session (`where()` read the host as `here`); main alive. Run only on
+//                  the fixed code: on the unfixed it drove page-session keys at a focused frame of another site;
 // Then the panes are removed and the board is as found. `--frames-pane` beside `--smoke-canvas` runs these rows alone after
 // the boot's (the author's loop).
 
@@ -116,6 +122,8 @@ export const FRAMES_ROWS = {
   /** PT-6a (M8 — C5): FRAME-SESSIONS — how long after a document's nested frame speaks its sessions are counted (the old
    * document's detaches come before its commit, the new frames' attaches ~1 s after it: r2kids) */
   sessionsSettleMs: 1_500,
+  /** PT-6a (M14 — R2): what FRAME-SHADOW types into the shadowed frame's field (each character refused, one at least) */
+  shadowTyped: "abc",
   answerLookMs: 20,
   /** PT-6a (M1): FRAME-WHEEL's wheels, how far apart the hand sends them (ms), and the frame's late answers' period (run 4:
    * ~1016 ms) — the leg drains within its sending, two periods (a first late answer under the threshold is followed by one
@@ -300,6 +308,8 @@ export interface FramesSeen {
   readonly opened?: FrameOpenedSeen | null;
   /** PT-6a (M8 — C5): FRAME-SESSIONS (absent: not run) */
   readonly sessions?: FrameSessionsSeen;
+  /** PT-6a (M14 — R2): FRAME-SHADOW (absent: not run; null: its field could not be aimed at) */
+  readonly shadow?: FrameShadowSeen | null;
 }
 
 /** PT-6a (K1): FRAME-BUSY's leg — what was typed, what the field holds after, what kept the page's thread and when. */
@@ -1079,6 +1089,55 @@ export function judgeFrameSessions(seen: FrameSessionsSeen): string[] {
         `FRAME-SESSIONS: after navigation ${i + 1} main's census holds ${n ?? "no count of"} child sessions, not the first document's ${first} — a frame's session outlived its document`,
       );
   });
+  return out;
+}
+
+/** PT-6a (M14 — R2): FRAME-SHADOW — the frame held in a web component's open shadow root: whether a press focused its field
+ * (its own word), how many key-like events main refused over what was typed, what its field holds after, the keys the host
+ * and the frame heard, and whether main's census still answered after. */
+export interface FrameShadowSeen {
+  readonly focused: boolean;
+  readonly refused: number | null;
+  readonly field: string | null;
+  readonly hostHeard: readonly string[];
+  readonly frameHeard: readonly string[];
+  readonly alive: boolean;
+}
+
+/** PT-6a (M14 — R2): FRAME-SHADOW — a frame of another site focused inside a web component's open root is the FRAME's: a press
+ * reaches it, and the keys typed are refused (M15's limit), never sent down the page's session. */
+export function judgeFrameShadow(seen: FrameShadowSeen | null): string[] {
+  if (seen === null)
+    return [
+      "FRAME-SHADOW: the shadowed frame's field could not be aimed at — the row proved nothing",
+    ];
+  if (!seen.focused)
+    return [
+      "FRAME-SHADOW: the frame's field never took the focus — the press never reached a frame in a shadow root (its host read as its cover)",
+    ];
+  const out: string[] = [];
+  if (!seen.alive) out.push("FRAME-SHADOW: main's census no longer answers after the typing");
+  if (seen.field !== "")
+    out.push(
+      `FRAME-SHADOW: the frame's field holds ${JSON.stringify(seen.field)} — typing reached a frame of another site (M15: refused, a stated limit)`,
+    );
+  const least = FRAMES_ROWS.shadowTyped.length;
+  if (seen.refused === null)
+    out.push("FRAME-SHADOW: main's count of the refused was never read — the row proved nothing");
+  else if (seen.refused < least)
+    out.push(
+      `FRAME-SHADOW: main refused ${seen.refused} key-like event(s), not ${least} or more — the focus read as the page's (\`where()\` saw the shadow host): the keys went down a session`,
+    );
+  const keys = seen.hostHeard.filter((h) => h.startsWith("keydown"));
+  if (keys.length > 0)
+    out.push(
+      `FRAME-SHADOW: the host page heard ${keys.length} key(s) (${keys.join(", ")}) — they went down the page's session with a frame of another site focused (M3's banned path)`,
+    );
+  const frameKeys = seen.frameHeard.filter((h) => h.startsWith("keydown"));
+  if (frameKeys.length > 0)
+    out.push(
+      `FRAME-SHADOW: the frame heard ${frameKeys.length} key(s) (${frameKeys.join(", ")}) — they went down its own session (M15: typing into a frame of another site is off)`,
+    );
   return out;
 }
 
@@ -2964,6 +3023,85 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     const sessions = await sessionsRow();
     said.sessions = sessions;
     problems.push(...judgeFrameSessions(sessions));
+
+    // ── FRAME-SHADOW (PT-6a, M14 — R2): the frame in a web component's OPEN SHADOW ROOT; its field pressed, "abc" typed ──
+    // (run only on the fixed code: on the unfixed, `where()` read the host as `here`, and the keys went down the page's
+    // session at a focused frame of another site — the class M15 made a limit after main crashed)
+    const shadowRow = async (): Promise<FrameShadowSeen | null> => {
+      const SH_HOST = "/frames/host?p=sh&shadow=1";
+      const SH_FRAME = "/frames/frame?p=sh";
+      const pane = await lay(`${d.fixture.hostOrigin}${SH_HOST}`, x0 + 13 * step, y0);
+      await frame([pane]);
+      await live(pane);
+      await waitFor(
+        "the shadowed frame's word",
+        FRAMES_ROWS.withinMs,
+        () => at(SH_FRAME),
+        (rep) => rep?.framed?.parts.t !== undefined,
+      );
+      await pickUp(pane);
+      const heldNow = await heldFrame();
+      const hostSaid = at(SH_HOST);
+      const box = hostSaid?.framed?.parts.frame ?? null;
+      const field = at(SH_FRAME)?.framed?.parts.t ?? null;
+      if (heldNow === null || hostSaid === null || box === null || field === null) {
+        await done();
+        return null;
+      }
+      const hostHeard0 = hostSaid.framed?.heard.length ?? 0;
+      const frameHeard0 = at(SH_FRAME)?.framed?.heard.length ?? 0;
+      const w = await onWindow(
+        heldNow,
+        visibleView(hostSaid),
+        box.x + field.x + field.w / 2,
+        box.y + field.y + field.h / 2,
+      );
+      await h.press(w);
+      const focused =
+        (
+          await waitFor(
+            "the shadowed frame's field focused",
+            5_000,
+            () => at(SH_FRAME),
+            (rep) => rep?.focused === "t",
+          )
+        )?.focused === "t";
+      const before = d.custody()?.frameKeysRefused ?? null;
+      for (const ch of FRAMES_ROWS.shadowTyped) {
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode: ch });
+        win.webContents.sendInputEvent({ type: "char", keyCode: ch });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode: ch });
+        await sleep(30);
+      }
+      const after = await waitFor(
+        "main's refusals of the shadowed frame's keys",
+        5_000,
+        () => d.custody()?.frameKeysRefused ?? null,
+        (n) => before !== null && n !== null && n >= before + FRAMES_ROWS.shadowTyped.length,
+      );
+      // (each page's word taken AFTER the last key: two more of its asks)
+      const hostAsked = d.fixture.reports(SH_HOST);
+      const frameAsked = d.fixture.reports(SH_FRAME);
+      await waitFor(
+        "the shadowed pages' words after the typing",
+        5_000,
+        () => [d.fixture.reports(SH_HOST), d.fixture.reports(SH_FRAME)] as const,
+        ([hostN, frameN]) => hostN >= hostAsked + 2 && frameN >= frameAsked + 2,
+      );
+      const seen: FrameShadowSeen = {
+        focused,
+        refused: before === null || after === null ? null : after - before,
+        field: at(SH_FRAME)?.field ?? null,
+        hostHeard: (at(SH_HOST)?.framed?.heard ?? []).slice(hostHeard0),
+        frameHeard: (at(SH_FRAME)?.framed?.heard ?? []).slice(frameHeard0),
+        alive: d.custody() !== null,
+      };
+      await done();
+      return seen;
+    };
+    const shadow = await shadowRow();
+    said.shadow = shadow;
+    problems.push(...judgeFrameShadow(shadow));
 
     // ── STUCK: a page whose button starts an endless loop; a key it never answers; ↻ ───────────────────────────────
     const loop = await lay(`${d.fixture.origin}/frames/loop?p=s`, x0 + 3 * step, y0);

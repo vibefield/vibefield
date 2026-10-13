@@ -1442,6 +1442,98 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     expect(on.get("scroll")).toHaveLength(1);
   });
 
+  it("PT-6a (M14, R2) — `where()` looks THROUGH a shadow host: the document's `activeElement` is retargeted to the host, so the walk descends each OPEN root's `activeElement` — a frame of another site focused in a web component is `inner`, never `here` (before: `here`, the keys down the page's session); a CLOSED root cannot be seen from the page: its host reads as any focused element (a limit, said)", () => {
+    type Focused = {
+      readonly localName: string;
+      readonly shadowRoot?: { readonly activeElement: Focused | null } | null;
+      readonly contentDocument?: { readonly activeElement: Focused | null } | null;
+    };
+    /** The words' `where()`, run in a document whose focus is `active`. */
+    const where = (active: Focused | null): string => {
+      const g: Record<string, unknown> = { [FRAME_WORDS_BINDING]: () => undefined };
+      const self: { top?: unknown } = {};
+      self.top = self;
+      const doc = {
+        documentElement: {},
+        hasFocus: () => true,
+        activeElement: active,
+        querySelector: () => null,
+        querySelectorAll: () => [],
+      };
+      new Function(
+        "globalThis",
+        "window",
+        "location",
+        "addEventListener",
+        "requestAnimationFrame",
+        "setInterval",
+        "document",
+        "setTimeout",
+        "performance",
+        "MutationObserver",
+        FRAME_WORDS_SCRIPT,
+      )(
+        g,
+        self,
+        { href: "https://example.test/a" },
+        () => undefined,
+        () => undefined,
+        () => undefined,
+        doc,
+        () => undefined,
+        { now: () => 0 },
+        class {
+          observe(): void {}
+        },
+      );
+      return (g.__vibefield_where as () => string)();
+    };
+    const away: Focused = { localName: "iframe", contentDocument: null };
+    const field: Focused = { localName: "input" };
+    // a frame of another site in an open root
+    expect(where({ localName: "x-embed", shadowRoot: { activeElement: away } })).toBe("inner");
+    // a host in a host's root
+    expect(
+      where({
+        localName: "x-outer",
+        shadowRoot: {
+          activeElement: { localName: "x-inner", shadowRoot: { activeElement: away } },
+        },
+      }),
+    ).toBe("inner");
+    // a frame of its OWN site in a root: its document walked — a field there is here; a host there holding a frame of
+    // another site is inner
+    expect(
+      where({
+        localName: "x-embed",
+        shadowRoot: {
+          activeElement: { localName: "iframe", contentDocument: { activeElement: field } },
+        },
+      }),
+    ).toBe("here");
+    expect(
+      where({
+        localName: "x-embed",
+        shadowRoot: {
+          activeElement: {
+            localName: "iframe",
+            contentDocument: {
+              activeElement: { localName: "x-ad", shadowRoot: { activeElement: away } },
+            },
+          },
+        },
+      }),
+    ).toBe("inner");
+    // a field in a web component's root is here; so is a host focused itself (its root holds no focus)
+    expect(where({ localName: "x-embed", shadowRoot: { activeElement: field } })).toBe("here");
+    expect(where({ localName: "x-embed", shadowRoot: { activeElement: null } })).toBe("here");
+    // the LIMIT: a CLOSED root is null from the page — its host reads as any focused element
+    expect(where({ localName: "x-embed", shadowRoot: null })).toBe("here");
+    // and as before: a frame of another site, a field
+    expect(where(away)).toBe("inner");
+    expect(where(field)).toBe("here");
+  });
+
   it("rulings 1, M3, M7 H2 — a document's WORDS, run: it takes the binding out of the page's reach; says WHERE THE FOCUS IS (`here`, `inner`, `away`) after each trusted event — one word a task, once its default actions are done — and `moved` only when its frames' boxes or their VISIBLE parts changed (M6.3a), once an animation frame; never its size (M6.1); a document holding no frame never says moved; the page's blank and a document with no binding say nothing — a FRAME's blank speaks; M12 J10 — what no event says is LOOKED for: a cover between the quick look's points, or the frame's own `pointer-events`, seen within the deep look's bound", () => {
     const run = (options: { href?: string; binding?: boolean; top?: boolean } = {}) => {
       const said: string[] = [];
@@ -2094,6 +2186,104 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     expect(sight(frame, dotted)).toEqual({
       visible: [0, 0, 1, 1],
       covers: [[0.0969, 0.0952, 0.1031, 0.1048]],
+    });
+  });
+
+  it("PT-6a (M14, R2) — a frame inside a SHADOW ROOT: the engine's hit test is retargeted to its host, and the host — or a host of that host, a CLOSED root's too — is the frame's own, never its cover (before: covered whole, every press the page's); what is drawn over it is still a cover", () => {
+    type Fake = { style: Record<string, string>; parentElement: Fake | null } & Record<
+      string,
+      unknown
+    >;
+    const root: Fake = { style: {}, parentElement: null };
+    const el = (
+      box: { left: number; top: number; width: number; height: number },
+      parent: Fake | null = root,
+      style: Record<string, string> = {},
+    ): Fake => {
+      const e: Fake = {
+        style,
+        parentElement: parent,
+        getBoundingClientRect: () => ({
+          ...box,
+          right: box.left + box.width,
+          bottom: box.top + box.height,
+        }),
+        offsetWidth: box.width,
+        offsetHeight: box.height,
+        clientLeft: 0,
+        clientTop: 0,
+        clientWidth: box.width,
+        clientHeight: box.height,
+        isConnected: true,
+        contains: (other: unknown) => {
+          for (let x = other as Fake | null; x !== null; x = x.parentElement)
+            if (x === e) return true;
+          return false;
+        },
+      };
+      return e;
+    };
+    const computed = (e: Fake) => ({
+      position: "static",
+      overflowX: "visible",
+      overflowY: "visible",
+      contain: "none",
+      transform: "none",
+      perspective: "none",
+      filter: "none",
+      pointerEvents: "auto",
+      visibility: "visible",
+      borderLeftWidth: "0px",
+      borderTopWidth: "0px",
+      borderRightWidth: "0px",
+      borderBottomWidth: "0px",
+      paddingLeft: "0px",
+      paddingTop: "0px",
+      paddingRight: "0px",
+      paddingBottom: "0px",
+      ...e.style,
+    });
+    const body = el({ left: 0, top: 0, width: 1280, height: 2400 });
+    const BOX = { left: 160, top: 120, width: 640, height: 420 };
+    /** A frame in a shadow root of `host` (its root's own child: its `parentElement` is null, its root names the host). */
+    const shadowed = (host: Fake): Fake => {
+      const frame = el(BOX, null);
+      const shadow = { nodeType: 11, host };
+      frame["getRootNode"] = () => shadow;
+      return frame;
+    };
+    const sight = (frame: Fake, hit: (x: number, y: number) => unknown): unknown =>
+      (
+        new Function(
+          "getComputedStyle",
+          "document",
+          "globalThis",
+          "innerWidth",
+          "innerHeight",
+          "performance",
+          `return (${FRAME_SIGHT});`,
+        )(computed, { documentElement: root, body, elementFromPoint: hit }, {}, 1280, 800, {
+          now: () => 0,
+        }) as (this: Fake, quick: boolean) => unknown
+      ).call(frame, false);
+    // a web component holding the frame in its root: the hit test names the host wherever the frame is drawn
+    const host = el(BOX, body);
+    host["getRootNode"] = () => ({ nodeType: 9 });
+    const frame = shadowed(host);
+    expect(sight(frame, () => host)).toEqual({ visible: [0, 0, 1, 1], covers: [] });
+    // a host in a host's root (a closed root's too: the frame's own walk sees its root, whatever the page can see)
+    const outer = el(BOX, body);
+    outer["getRootNode"] = () => ({ nodeType: 9 });
+    const inner = el(BOX, null);
+    inner["getRootNode"] = () => ({ nodeType: 11, host: outer });
+    const deep = shadowed(inner);
+    expect(sight(deep, () => outer)).toEqual({ visible: [0, 0, 1, 1], covers: [] });
+    // a header drawn over the host's top: still a cover
+    const header = el({ left: 0, top: 0, width: 1280, height: 162 }, body, { position: "fixed" });
+    header["getRootNode"] = () => ({ nodeType: 9 });
+    expect(sight(frame, (_x, y) => (y < 162 ? header : host))).toEqual({
+      visible: [0, 0, 1, 1],
+      covers: [[0, 0, 1, 0.1]],
     });
   });
 

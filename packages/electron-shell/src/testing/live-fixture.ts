@@ -727,15 +727,23 @@ const FRAMES_STYLE = `<style>
 
 /** PT-5d — `/frames/host?p=<name>` at `hostOrigin` (`&noviewport=1`, M7 H11: naming no viewport — a phone lays it out at
  * 980 px and draws it whole, at about 0.41): the ground and a frame of `frameOrigin` at `FRAMES_BOX`, three views tall;
- * it hears the hand on the frame's element alone. */
+ * it hears the hand on the frame's element alone. PT-6a (M14, R2) — `&shadow=1`: the frame held in the OPEN SHADOW ROOT of
+ * a web component (`<x-embed id="f">` at `FRAMES_BOX`, the frame filling it): the document's focus and the engine's hit
+ * test name the HOST, as an embed's custom element makes them. */
 export const framesHostHtml = (
   name: string,
   frameOrigin: string,
   viewport = true,
+  shadow = false,
 ): string => `<!doctype html>
 <html><head><meta charset="utf-8">${viewport ? '<meta name="viewport" content="width=device-width, initial-scale=1">' : ""}<title>${FIXTURE_TITLE} — frames</title>
-${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; height: 300vh; } iframe { position: absolute; border: 0; }</style></head>
-<body><iframe id="f" src="${frameOrigin}/frames/frame?p=${cleanName(name)}" style="left:${FRAMES_BOX.x}px;top:${FRAMES_BOX.y}px;width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px"></iframe>
+${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; height: 300vh; } iframe, x-embed { position: absolute; display: block; border: 0; }</style></head>
+<body>${
+  shadow
+    ? `<x-embed id="f" style="left:${FRAMES_BOX.x}px;top:${FRAMES_BOX.y}px;width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px"></x-embed>
+<script>{ const frame = document.createElement("iframe"); frame.src = ${JSON.stringify(`${frameOrigin}/frames/frame?p=${cleanName(name)}`)}; frame.style.cssText = "position:absolute;left:0;top:0;width:100%;height:100%;border:0"; document.getElementById("f").attachShadow({ mode: "open" }).append(frame); }</script>`
+    : `<iframe id="f" src="${frameOrigin}/frames/frame?p=${cleanName(name)}" style="left:${FRAMES_BOX.x}px;top:${FRAMES_BOX.y}px;width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px"></iframe>`
+}
 <input id="r" type="range" min="0" max="100" value="10" style="left:${FRAMES_HOST_RANGE.x}px;top:${FRAMES_HOST_RANGE.y}px;width:${FRAMES_HOST_RANGE.w}px;height:${FRAMES_HOST_RANGE.h}px">
 ${framesScript(["f", "r"], ["f"])}
 </body></html>`;
@@ -1196,7 +1204,12 @@ export async function startLiveFixture(): Promise<LiveFixture> {
       const name = url.searchParams.get("p") ?? "";
       const page =
         url.pathname === "/frames/host"
-          ? framesHostHtml(name, frameOrigin, url.searchParams.get("noviewport") !== "1")
+          ? framesHostHtml(
+              name,
+              frameOrigin,
+              url.searchParams.get("noviewport") !== "1",
+              url.searchParams.get("shadow") === "1",
+            )
           : url.pathname === "/frames/clipped"
             ? framesClippedHtml(name, frameOrigin)
             : url.pathname === "/frames/covered"

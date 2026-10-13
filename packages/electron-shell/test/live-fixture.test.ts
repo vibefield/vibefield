@@ -714,6 +714,25 @@ describe("the live pane's fixture page", () => {
     expect((await fetch(`${fixture.origin}/frames/elsewhere`)).status).toBe(404);
   });
 
+  it('PT-6a (M14, R2): `/frames/host?…&shadow=1` — the frame held in the OPEN SHADOW ROOT of a web component (`<x-embed id="f">` at `FRAMES_BOX`, the frame filling it), as an embed\'s custom element holds it', async () => {
+    fixture = await startLiveFixture();
+    const shadowed = await (
+      await fetch(`${fixture.hostOrigin}/frames/host?p=s<h>&shadow=1`)
+    ).text();
+    expect(shadowed).not.toContain('<iframe id="f"');
+    expect(shadowed).toContain(
+      `<x-embed id="f" style="left:${FRAMES_BOX.x}px;top:${FRAMES_BOX.y}px;width:${FRAMES_BOX.w}px;height:${FRAMES_BOX.h}px"></x-embed>`,
+    );
+    expect(shadowed).toContain(
+      `frame.src = ${JSON.stringify(`${fixture.origin}/frames/frame?p=sh`)}`,
+    );
+    expect(shadowed).toContain('attachShadow({ mode: "open" }).append(frame)');
+    // the plain host is as it was
+    expect(await (await fetch(`${fixture.hostOrigin}/frames/host?p=sh`)).text()).toContain(
+      `<iframe id="f" src="${fixture.origin}/frames/frame?p=sh"`,
+    );
+  });
+
   it("PT-6a (M4, M5 — F1): `/frames/opened` — at `hostOrigin`, an AD-LIKE frame of another site and a same-site EDITOR frame the page WRITES by open()/write()/close() once it has loaded (its field inside); it says how often it wrote it and what the field holds, with every ask", async () => {
     fixture = await startLiveFixture();
     const page = await (await fetch(`${fixture.hostOrigin}/frames/opened?p=o<1>`)).text();

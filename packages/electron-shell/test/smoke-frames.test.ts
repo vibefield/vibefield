@@ -25,6 +25,7 @@ import {
   judgeFramePicker,
   judgeFramePress,
   judgeFrameSessions,
+  judgeFrameShadow,
   judgeFrameTouch,
   judgeFrameType,
   judgeFrameWheel,
@@ -868,6 +869,47 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
     expect(judgeFrameSessions({ third: true, counts: [2, 2] })).toEqual([
       "FRAME-SESSIONS: main's census was read 2 times, not four (the first document and three more) — the row proved nothing",
+    ]);
+  });
+
+  it("PT-6a (M14 — R2) FRAME-SHADOW: the frame in a web component's open shadow root — a press reaches it (its field focused), and the keys typed are REFUSED, its field empty, heard by neither page; a field never aimed at, or never focused, proves nothing", () => {
+    const refused = {
+      focused: true,
+      refused: 3,
+      field: "",
+      hostHeard: ["pointerdown #f"],
+      frameHeard: ["pointerdown #t", "mousedown #t"],
+      alive: true,
+    };
+    expect(judgeFrameShadow(refused)).toEqual([]);
+    expect(judgeFrameShadow({ ...refused, refused: 6 })).toEqual([]);
+    // R2 as the reviewer read it: the focus read as the page's — each key down the page's session, the host heard it
+    expect(
+      judgeFrameShadow({
+        ...refused,
+        refused: 0,
+        hostHeard: ["keydown a", "keydown b", "keydown c"],
+      }),
+    ).toEqual([
+      "FRAME-SHADOW: main refused 0 key-like event(s), not 3 or more — the focus read as the page's (`where()` saw the shadow host): the keys went down a session",
+      "FRAME-SHADOW: the host page heard 3 key(s) (keydown a, keydown b, keydown c) — they went down the page's session with a frame of another site focused (M3's banned path)",
+    ]);
+    expect(judgeFrameShadow({ ...refused, field: "abc", frameHeard: ["keydown a"] })).toEqual([
+      'FRAME-SHADOW: the frame\'s field holds "abc" — typing reached a frame of another site (M15: refused, a stated limit)',
+      "FRAME-SHADOW: the frame heard 1 key(s) (keydown a) — they went down its own session (M15: typing into a frame of another site is off)",
+    ]);
+    expect(judgeFrameShadow({ ...refused, refused: null })).toEqual([
+      "FRAME-SHADOW: main's count of the refused was never read — the row proved nothing",
+    ]);
+    expect(judgeFrameShadow({ ...refused, alive: false })).toEqual([
+      "FRAME-SHADOW: main's census no longer answers after the typing",
+    ]);
+    // the sight's half: a press that never reached the frame (its host read as its cover)
+    expect(judgeFrameShadow({ ...refused, focused: false })).toEqual([
+      "FRAME-SHADOW: the frame's field never took the focus — the press never reached a frame in a shadow root (its host read as its cover)",
+    ]);
+    expect(judgeFrameShadow(null)).toEqual([
+      "FRAME-SHADOW: the shadowed frame's field could not be aimed at — the row proved nothing",
     ]);
   });
 
