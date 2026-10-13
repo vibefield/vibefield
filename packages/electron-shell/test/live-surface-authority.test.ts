@@ -124,6 +124,7 @@ describe("LiveSurfaceAuthority", () => {
       handInFlight: 0,
       pullOnly: 0,
       childSessions: 0,
+      childSessionsBy: {},
     });
     switched.set(a.surfaceId, 2);
     switched.set(b.surfaceId, 1);
@@ -140,6 +141,7 @@ describe("LiveSurfaceAuthority", () => {
       handInFlight: 0,
       pullOnly: 0,
       childSessions: 0,
+      childSessionsBy: {},
     });
     switched.set(b.surfaceId, 2);
     expect(authority.state().emulations).toBe(4);
@@ -251,6 +253,39 @@ describe("LiveSurfaceAuthority", () => {
       released: true,
     });
     expect(authority.state().childSessions).toBe(3);
+  });
+
+  it("PT-6a (M14 — R3): the census gives each runtime's frame sessions by its SURFACE (`childSessionsBy`) — what FRAME-SESSIONS reads of its own pane, never another page's; a runtime that counts none is absent; one released is gone", () => {
+    const sessions = new Map<string, number>();
+    const runtime = (surfaceId: string): LiveSurfaceRuntimeHandle => ({
+      surfaceId,
+      attach: () => {
+        throw new Error("attach is the control session's job, not this suite's");
+      },
+      dispose: () => undefined,
+      childSessions: () => sessions.get(surfaceId) ?? 0,
+    });
+    const capture = (surfaceId: string): LiveSurfaceRuntimeHandle => ({
+      surfaceId,
+      attach: () => {
+        throw new Error("attach is the control session's job, not this suite's");
+      },
+      dispose: () => undefined,
+    });
+    const { authority, windows } = fixture({
+      factories: { browser: runtime, sckWindow: capture, iosSimulator: capture },
+    });
+    const alice = participant("window-1", "document-1");
+    windows.set(alice.incarnation, { webContentsId: 7 });
+    const a = authority.mint(mintParams(alice, BROWSER_SOURCE));
+    const b = authority.mint(mintParams(alice, BROWSER_SOURCE));
+    sessions.set(a.surfaceId, 2);
+    sessions.set(b.surfaceId, 7);
+    expect(authority.state().childSessionsBy).toEqual({ [a.surfaceId]: 2, [b.surfaceId]: 7 });
+    expect(authority.release({ rendererParticipant: alice, surfaceId: b.surfaceId })).toEqual({
+      released: true,
+    });
+    expect(authority.state().childSessionsBy).toEqual({ [a.surfaceId]: 2 });
   });
 
   it("mints a browser runtime and issues a window-bound interaction ticket", () => {
@@ -367,6 +402,7 @@ describe("LiveSurfaceAuthority", () => {
       handInFlight: 0,
       pullOnly: 0,
       childSessions: 0,
+      childSessionsBy: {},
     });
 
     expect(authority.release({ rendererParticipant: after, surfaceId: first.surfaceId })).toEqual({
@@ -381,6 +417,7 @@ describe("LiveSurfaceAuthority", () => {
       handInFlight: 0,
       pullOnly: 0,
       childSessions: 0,
+      childSessionsBy: {},
     });
   });
 
@@ -416,6 +453,7 @@ describe("LiveSurfaceAuthority", () => {
       handInFlight: 0,
       pullOnly: 0,
       childSessions: 0,
+      childSessionsBy: {},
     });
   });
 
@@ -466,6 +504,7 @@ describe("LiveSurfaceAuthority", () => {
       handInFlight: 0,
       pullOnly: 0,
       childSessions: 0,
+      childSessionsBy: {},
     });
   });
 

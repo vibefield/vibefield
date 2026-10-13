@@ -884,6 +884,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
         handInFlight: 0,
         pullOnly: 0,
         childSessions: 0,
+        childSessionsBy: {},
       });
       // no grace's timer outlives the runtimes it was for
       expect(vi.getTimerCount()).toBe(0);

@@ -239,7 +239,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
     expect(second.writers[0]?.device).toBe(other);
   });
 
-  it("a face's ROW is what a smoke reads: the kind's ask, LSF's wire demand for its page, its words, its arrivals, presents and drops, its texture; the stats count the writers made", () => {
+  it("a face's ROW is what a smoke reads: the kind's ask, LSF's wire demand for its page, its words, its arrivals, presents and drops, its texture; the stats count the writers made; PT-6a (M14 — R3): and the SURFACE its page is (the pool's attachment), by which main's census counts its own frame sessions", () => {
     const { face, handle, presentation, live } = attached();
     face.take();
     expect(live.faces()).toEqual([
@@ -247,6 +247,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         key: "13918995204487956201-1",
         demand: undefined,
         wire: null,
+        surface: null,
         state: { is: "live" },
         info: {},
         favicon: null,
@@ -273,6 +274,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
     face.take();
     face.demand(SEEN);
     handle.wire = { revision: 2, mode: "live", targetFps: 30 };
+    handle.surfaceId = "surface_0123456789abcdef";
     handle.set({
       browser: {
         url: "http://127.0.0.1:4321/",
@@ -290,6 +292,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         key: "13918995204487956201-1",
         demand: SEEN,
         wire: { revision: 2, mode: "live", targetFps: 30 },
+        surface: "surface_0123456789abcdef",
         state: { is: "live" },
         info: { address: "http://127.0.0.1:4321/", title: "Fixture", back: false, forward: false },
         favicon: null,
@@ -320,6 +323,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         key: "k-2",
         demand: undefined,
         wire: null,
+        surface: null,
         state: { is: "failed", reason: "may-not: no object on this board holds this face" },
         info: {},
         favicon: null,

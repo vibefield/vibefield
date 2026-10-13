@@ -1064,7 +1064,8 @@ export interface FrameOpenedSeen {
 /** PT-6a (M4, M5 — F1): FRAME-OPENED — the text typed into an editor frame that cannot speak lands, and its page is never said
  * stopped for a missing word. */
 /** PT-6a (M8 — C5): FRAME-SESSIONS — whether the nested frame is of a THIRD site, and main's census of child sessions after
- * the page's first document and after each of three navigations (null: no census). */
+ * the page's first document and after each of three navigations (null: no census) — PT-6a (M14 — R3): the row's PANE's own,
+ * by its surface (another page's, rested, woken or navigating between the reads, never moves it). */
 export interface FrameSessionsSeen {
   readonly third: boolean;
   readonly counts: readonly (number | null)[];
@@ -1194,6 +1195,7 @@ const FACE = (key: string): string => `(() => {
   return f === undefined ? null : {
     state: f.state.is, reason: f.state.reason ?? null, address: f.info?.address ?? null,
     loading: f.info?.loading !== undefined, presented: f.presented, cursor: f.info?.cursor ?? null,
+    surface: f.surface ?? null,
   };
 })()`;
 interface FramesFace {
@@ -1203,6 +1205,8 @@ interface FramesFace {
   readonly loading: boolean;
   readonly presented: number;
   readonly cursor: string | null;
+  /** PT-6a (M14 — R3): the surface its page is — main's census counts its own frame sessions by it */
+  readonly surface: string | null;
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -1344,6 +1348,11 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
     return { key, address, path: new URL(address).pathname + new URL(address).search };
   };
   const at = (path: string): FixtureReport | null => d.fixture.reportAt(path);
+  /** PT-6a (M14 — R3): a pane's OWN frame sessions, as main's census counts them by its surface (null: no surface, no count) */
+  const ownSessions = async (p: Pane): Promise<number | null> => {
+    const surface = (await face(p))?.surface ?? null;
+    return surface === null ? null : (d.custody()?.childSessionsBy?.[surface] ?? null);
+  };
   const live = async (p: Pane): Promise<void> => {
     await waitFor(
       `the page at ${p.path} live`,
@@ -3016,7 +3025,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
           (r) => r !== null,
         );
         await sleep(FRAMES_ROWS.sessionsSettleMs);
-        counts.push(d.custody()?.childSessions ?? null);
+        counts.push(await ownSessions(pane));
       }
       return { third, counts };
     };

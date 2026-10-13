@@ -164,6 +164,8 @@ export function fakeHandle(key: string, opts: SurfaceAcquireOptions) {
     demands: [] as SurfaceDemandRequest[],
     /** What the pool's snapshot says it last wrote to the wire for this key. */
     wire: null as unknown,
+    /** PT-6a (M14 — R3): the surface the pool's attachment for this key is (its snapshot's word; null: none attached). */
+    surfaceId: null as string | null,
     released: 0,
     retried: 0,
     get state() {
@@ -264,6 +266,7 @@ export function setup(over: Partial<DeskLiveDeps> = {}) {
               return {
                 key,
                 demand: of[0]?.wire ?? null,
+                surfaceId: of[0]?.surfaceId ?? null,
                 holders,
                 status: of[of.length - 1]?.status,
                 graceDeadlineAt: holders === 0 ? graceAt.at : null,

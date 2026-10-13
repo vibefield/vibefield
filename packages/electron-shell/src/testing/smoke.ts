@@ -1018,8 +1018,10 @@ export interface LiveCensus {
   readonly handInFlight: number;
   /** PT-6a (M4 — F1): main's pages whose current document is PULL-ONLY (FRAME-OPENED) */
   readonly pullOnly: number;
-  /** PT-6a (M8 — C5): the sessions of main's pages' frames of other sites (FRAME-SESSIONS) */
+  /** PT-6a (M8 — C5): the sessions of main's pages' frames of other sites */
   readonly childSessions: number;
+  /** PT-6a (M14 — R3): and each page's by its SURFACE (FRAME-SESSIONS reads its own pane's: another page's never moves it) */
+  readonly childSessionsBy?: Readonly<Record<string, number>>;
 }
 
 export async function runSmokeCanvas(opts: {

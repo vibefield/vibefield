@@ -182,6 +182,9 @@ export interface DeskLiveFaceRow {
   readonly demand: LiveDemand | undefined;
   /** What the pool last wrote to the wire for the page — LSF's demand — null before any. */
   readonly wire: LiveSurfaceDemandV1 | null;
+  /** PT-6a (M14 — R3): the surface the page is (the pool's attachment; null: none) — by which main's census counts its own
+   * frame sessions. */
+  readonly surface: string | null;
   readonly state: LiveState;
   /** The face's words — the page's address, title, loading line, history reach (what the kind's head reads) — less their
    * `extra` (a favicon's bytes are not a row's to carry: its key is, below). */
@@ -765,6 +768,11 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       .pool()
       ?.snapshot()
       .entries.find((entry) => entry.key === poolKey(key))?.demand ?? null;
+  const surfaceOf = (key: string): string | null =>
+    deps
+      .pool()
+      ?.snapshot()
+      .entries.find((entry) => entry.key === poolKey(key))?.surfaceId ?? null;
 
   /** The let-go pages the pool still keeps, as the cap reads them. */
   const ghosts = (): CapFace[] => {
@@ -936,6 +944,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         key,
         demand: undefined,
         wire: null,
+        surface: null,
         state: face.state(),
         info: face.info(),
         favicon: null,
@@ -1607,6 +1616,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
           key,
           demand: asked,
           wire: wireOf(key),
+          surface: surfaceOf(key),
           state: face.state(),
           info,
           favicon: icon?.key ?? null,
