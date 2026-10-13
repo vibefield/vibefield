@@ -707,6 +707,157 @@ describe("PT-5c2 (F1) — the producer over this adapter: a document's LATE fail
   });
 });
 
+describe("PT-6a (K2) — the producer over this adapter: a wheel's gesture is measured where the PRODUCER hears each wheel, never at the native's call (the producer reaches it once per answer)", () => {
+  it("review 3's K2 — wheels 50 ms apart as the hand sends them, the page answering each in 300 ms, a frame the page scrolled under the pointer after the first: ONE gesture, latched to the page", async () => {
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date", "performance"],
+    });
+    try {
+      const adapter = new ElectronBrowserSurfaceNative();
+      const sent: { method: string; session?: string }[] = [];
+      let made: (typeof electron.made)[number] | undefined;
+      const runtime = new BrowserLiveSurfaceRuntime({
+        surfaceId: "browser_surface_0123456789",
+        source: {
+          kind: "browser",
+          initialUrl: "https://example.test/a",
+          profile: { mode: "memory", ref: "pt-6a" },
+          logicalViewport: { width: 320, height: 180 },
+          deviceScaleFactor: 1,
+        },
+        native: {
+          createWindow: (options) => {
+            const native = adapter.createWindow(options);
+            made = electron.made.at(-1);
+            if (made !== undefined) {
+              Object.assign(made, { destroy: () => undefined });
+              Object.assign(made.webContents, {
+                setFrameRate: () => undefined,
+                startPainting: () => undefined,
+                stopPainting: () => undefined,
+                invalidate: () => undefined,
+                setAudioMuted: () => undefined,
+              });
+              let attached = false;
+              made.webContents.debugger.isAttached = () => attached;
+              made.webContents.debugger.attach = () => {
+                attached = true;
+              };
+              made.webContents.debugger.sendCommand = async (
+                method?: string,
+                _params?: unknown,
+                session?: string,
+              ) => {
+                sent.push({ method: method ?? "", ...(session === undefined ? {} : { session }) });
+                // (the page answers each wheel 300 ms after it is sent — a listener that is not passive, a busy thread)
+                if (method === "Input.dispatchMouseEvent")
+                  return new Promise((resolve) => setTimeout(() => resolve({}), 300));
+                if (method === "DOM.getFrameOwner") return { backendNodeId: 7 };
+                if (method === "DOM.getBoxModel")
+                  return { model: { content: [100, 80, 300, 80, 300, 170, 100, 170] } };
+                if (method === "DOM.resolveNode") return { object: { objectId: "owner" } };
+                if (method === "Runtime.callFunctionOn")
+                  return { result: { value: { visible: [0, 0, 1, 1], covers: [] } } };
+                return {};
+              };
+            }
+            return native;
+          },
+          monotonicNowUs: () => adapter.monotonicNowUs(),
+          engineAgent: () => adapter.engineAgent(),
+        },
+      });
+      const attachment = runtime.attach({
+        attachmentId: "attachment_browser_00000001",
+        rendererGeneration: 1,
+        operations: ["view", "pointer", "keyboard"],
+        publishSummary: () => undefined,
+        publishCpuFrame: () => true,
+        offerTextureFrame: (frame) => {
+          frame.releaseSource("imported");
+          frame.allReferencesReleased("released");
+          return { kind: "accepted", transfer: Promise.resolve() };
+        },
+      });
+      attachment.setDemand({
+        revision: 1,
+        mode: "live",
+        targetFps: 30,
+        priority: 50,
+        interactive: true,
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      const w = made;
+      if (w === undefined) throw new Error("no window was made");
+      const contents = w.webContents;
+      const emit = (method: string, params: unknown, session = ""): void =>
+        contents.debugger.emit("message", {}, method, params, session);
+      contents.url = "https://example.test/a";
+      contents.emit("did-navigate", {}, "https://example.test/a");
+      contents.emit(
+        "paint",
+        {
+          texture: {
+            release: () => undefined,
+            textureInfo: {
+              widgetType: "frame",
+              pixelFormat: "bgra",
+              codedSize: { width: 320, height: 180 },
+              colorSpace: { matrix: "rgb", primaries: "bt709", range: "full", transfer: "srgb" },
+              visibleRect: { x: 0, y: 0, width: 320, height: 180 },
+              contentRect: { x: 0, y: 0, width: 320, height: 180 },
+              timestamp: 42,
+              metadata: {},
+              handle: {},
+            },
+          },
+        },
+        { x: 0, y: 0, width: 320, height: 180 },
+        {
+          getSize: () => ({ width: 320, height: 180 }),
+          toBitmap: () => new Uint8Array(320 * 180 * 4),
+        },
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      expect(runtime.summary.state).toBe("live");
+      // the page's words' world (M8: where F's sight is read — without it F is UNSEEN, and the row passes for that alone)
+      emit("Runtime.executionContextCreated", {
+        context: { id: 41, name: WORDS_WORLD, auxData: { frameId: "main" } },
+      });
+      const revision = runtime.summary.geometry?.revision ?? 0;
+      const wheel = (): void =>
+        attachment.dispatchInput?.(
+          { kind: "wheel", x: 180, y: 120, deltaX: 0, deltaY: 10 },
+          revision,
+        );
+      wheel();
+      await vi.advanceTimersByTimeAsync(0);
+      // the page scrolls F under the pointer
+      emit("Page.frameAttached", { frameId: "t-F", parentFrameId: "main" });
+      emit("Target.attachedToTarget", {
+        sessionId: "F",
+        targetInfo: { type: "iframe", targetId: "t-F", url: "" },
+      });
+      emit(
+        "Runtime.executionContextCreated",
+        { context: { id: 101, name: WORDS_WORLD, auxData: { frameId: "t-F" } } },
+        "F",
+      );
+      await vi.advanceTimersByTimeAsync(50);
+      wheel();
+      await vi.advanceTimersByTimeAsync(50);
+      wheel();
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(
+        sent.filter((c) => c.method === "Input.dispatchMouseEvent").map((c) => c.session ?? "page"),
+      ).toEqual(["page", "page", "page"]);
+      runtime.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's events routed to the target that takes them (rulings 1, 3, 4)", () => {
   /**
    * A window whose debugger records what it is sent, by session, and answers what the row says (else `{}` — and, M8, a

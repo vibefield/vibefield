@@ -1043,10 +1043,11 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     });
   }
 
-  dispatchMouse(input: BrowserSurfaceNativeMouseInput): Promise<void> {
+  dispatchMouse(input: BrowserSurfaceNativeMouseInput, heardAt?: number): Promise<void> {
     // PT-5d (M12 J9): when it ARRIVED — a wheel's gesture is measured by the hand's spacing, never by its turn's (a page
-    // answering each wheel late spaces the turns by its answers: every wheel a new gesture, H7's defect back)
-    const arrived = performance.now();
+    // answering each wheel late spaces the turns by its answers: every wheel a new gesture, H7's defect back). PT-6a (K2):
+    // when the PRODUCER heard it, if it says — it reaches this call once per answer (its one chain awaits each dispatch)
+    const arrived = heardAt ?? performance.now();
     return this.hand(async () => {
       await this.ensureDebugger();
       for (const routed of this.routeMouse(input, arrived))

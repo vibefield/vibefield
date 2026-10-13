@@ -116,7 +116,9 @@ export interface BrowserSurfaceNativeWindow {
   ): Promise<LiveSurfacePixelSizeV1>;
   /** PT-4: what the page is TOLD of its device — its agent with its hints, touch, the colour scheme (CDP's Emulation). */
   setEmulation(emulation: BrowserSurfaceNativeEmulation): Promise<void>;
-  dispatchMouse(input: BrowserSurfaceNativeMouseInput): Promise<void>;
+  /** PT-6a (K2): `heardAt` — when the producer HEARD the event (`performance.now()`): a wheel's gesture is measured by it (the
+   * producer calls this once per answer — its one chain awaits each dispatch); absent, the call's own moment. */
+  dispatchMouse(input: BrowserSurfaceNativeMouseInput, heardAt?: number): Promise<void>;
   /** PT-4: a finger on a touch device's page (CDP `Input.dispatchTouchEvent`). */
   dispatchTouch(input: BrowserSurfaceNativeTouchInput): Promise<void>;
   dispatchKey(input: BrowserSurfaceNativeKeyInput): Promise<void>;
@@ -1405,6 +1407,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     by?: string,
   ): Promise<void> {
     const geometry = this.#geometry;
+    // PT-6a (K2): when it was HEARD — a wheel's gesture is measured by the hand's own spacing (the native is reached once per
+    // answer: a page answering each wheel late spaced its stamps by its answers — every wheel a new gesture, J9's defect)
+    const heard = performance.now();
     // PT-5b3 (ruling 5) — AN EVENT IS FOR THE WINDOW THAT STOOD WHEN IT WAS SENT. The chain is one a page and outlives a
     // window — a remake, a rest and its wake, a crash and its restart — and a geometry's revision is not a window's: at
     // its turn an event whose window is gone is refused (its caller counts it), never delivered to the window that
@@ -1433,7 +1438,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       this.onWindow(window, document, (standing) =>
         release
           ? this.release(request, standing, gesture)
-          : this.dispatchInTurn(request, geometry, standing, document, by),
+          : this.dispatchInTurn(request, geometry, standing, document, by, heard),
       ),
     );
     // (F8: a move of the gesture refused at its turn marks it — before the next turn starts)
@@ -1683,6 +1688,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     document: number,
     /** the attachment it came through */
     by: string | undefined,
+    /** PT-6a (K2): when the producer heard it */
+    heard: number,
   ): Promise<void> {
     // PT-5c (R1) — AN EVENT IS SENT ONLY WHILE ITS PAGE IS LIVE AND THE ATTACHMENT THAT SENT IT STANDS (every event but a
     // release), read when it is sent: here for what waits for nothing, and again after a wait (below). (Before: judged
@@ -1827,13 +1834,16 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       // PT-5b: WHERE the wheel is — the page's px, as a press's — but never how far: the engine takes a wheel's travel in
       // the VIEW's px and scrolls the document by it over the page's scale itself (the LEGACY row: a travel divided here
       // too scrolled a page shown at 0.41 by 1/0.41² of the finger's)
-      await window.dispatchMouse({
-        type: "mouseWheel",
-        x,
-        y,
-        deltaX: request.deltaX,
-        deltaY: request.deltaY,
-      });
+      await window.dispatchMouse(
+        {
+          type: "mouseWheel",
+          x,
+          y,
+          deltaX: request.deltaX,
+          deltaY: request.deltaY,
+        },
+        heard,
+      );
       return;
     }
     if (
