@@ -621,6 +621,23 @@ const aliveBySummary = (state: SurfaceHandleState<ProductSurfaceFrame>): boolean
   return s === "starting" || s === "live" || s === "paused" || s === "reconnecting";
 };
 
+/**
+ * PT-6a (M7 A6) — A LOAD THAT ENDED WITH NOTHING SHOWN: no document of the page came (an attachment, an empty answer) or the
+ * person stopped it before anything did — its failure said while no document stands (`starting`), or kept by a page let go
+ * for it (`hibernated`). Its window shows nothing a face may show: the service lets the page go (asks it `hibernated`, and main
+ * lets it go as a rest does), its words kept; a new address — a go, the face's ↻ — clears the failure, and its pane's ask is
+ * written again. (Before: it kept its window and the cap's slot, for nothing shown.)
+ */
+const nothingShown = (state: SurfaceHandleState<ProductSurfaceFrame>): boolean => {
+  if (state.status !== "live") return false;
+  const reason = state.browser?.failure?.reason;
+  const summary = state.presentation?.summary.state;
+  return (
+    (reason === "no-document" || reason === "stopped") &&
+    (summary === "starting" || summary === "hibernated")
+  );
+};
+
 /** A still as a face's words say it. */
 const stillOf = (takenAt: number, at: number): LiveBrowserStill => ({
   takenAt,
@@ -996,6 +1013,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     let allowed = false;
     let rested = false;
     let resting = false;
+    /** PT-6a (M7 A6): its page let go for a load that showed nothing (`nothingShown`) — until a new address clears it. */
+    let letGone = false;
     let seenAt = Number.NEGATIVE_INFINITY;
     /** PT-5b — THE STILL: the texture's content is a STILL (the shelf's, or the page as it was put to rest) and when it was
      * taken; the texture holds a LIVE frame of the page as it is; when this page's still was last taken, and whether a
@@ -1263,6 +1282,13 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         void showStill();
       }
       wasFailing = fails;
+      // PT-6a (M7 A6): a load that showed nothing lets its page go; a new address writes its pane's ask again
+      const gone = nothingShown(state);
+      if (gone !== letGone) {
+        letGone = gone;
+        lanes.get(key)?.send();
+        if (!closed && lanes.has(key)) replan();
+      }
       if (state.browser?.url !== saidAt) {
         saidAt = state.browser?.url;
         headed = undefined;
@@ -1351,6 +1377,13 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         const state = liveStateOf(handle.state, {
           mint: () => handle.retry(),
           reload: () => {
+            // PT-6a (M7 A6): a page let go for showing nothing is asked at its address again — a new window (a page with
+            // none takes no reload)
+            const url = handle.state.browser?.url;
+            if (letGone && url !== undefined) {
+              handle.navigate({ action: "go", url });
+              return;
+            }
             handle.navigate({ action: "reload" });
           },
         });
@@ -1473,7 +1506,9 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     const called = (): string => liveInfoOf(handle.state).title?.trim() || page.label;
     /** A page that failed or whose lane is lost has no WebContents — and the plan has nothing to do for it (its ↻ has). */
     const stopped = (): boolean =>
-      handle.state.status === "lost" || handle.state.presentation?.summary.state === "failed";
+      letGone ||
+      handle.state.status === "lost" ||
+      handle.state.presentation?.summary.state === "failed";
     /** Alive: the service lets it be — or it is alive as it stands (a page re-bound; one whose window is still going). */
     const alive = (): boolean => !stopped() && (allowed || aliveBySummary(handle.state));
     const want = (): CapFace["want"] =>
@@ -1541,7 +1576,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         // a page the cap put to rest stays hibernated; a parked desk's pages are paused; a page seen that the cap makes
         // wait is paused as it was made (nothing is made of it); else the kind's own ask
         handle.setDemand(
-          !allowed && rested
+          (!allowed && rested) || letGone
             ? restIntent(viewport)
             : liveDemandIntent(
                 parked || asked === undefined || (!allowed && asked.mode === "live")

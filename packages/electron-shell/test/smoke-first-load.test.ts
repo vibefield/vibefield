@@ -74,6 +74,8 @@ const NO_DOCUMENT: FirstLoadSeen["noDocument"] = {
   page: WORDS,
   tool: "Reload",
   again: { ...failed("no-document", `${O}/file.bin?p=n`), refused: 2 },
+  out: { alive: false, ms: 80 },
+  newWindow: true,
 };
 const STARTING: FirstLoadSeen["starting"] = {
   sent: {
@@ -89,6 +91,8 @@ const STARTING: FirstLoadSeen["starting"] = {
     page: { ...WORDS, film: 1_029_188, ink: 6_019 },
     retry: "Reload",
     loaded: face({ address: `${O}/gate?p=s2` }),
+    out: { alive: false, ms: 60 },
+    newWindow: true,
   },
 };
 const TAPS: FirstLoadSeen["taps"] = { view: [402, 874], log: ["start", "end", "start", "end"] };
@@ -146,6 +150,17 @@ describe("a page's first load, in the product — its rows", () => {
 
   it("NO-DOCUMENT: an address that is no page SAYS so in its page's area — never starting for good — its download REFUSED and counted, and ↻ asks again", () => {
     expect(judgeNoDocument(NO_DOCUMENT)).toEqual([]);
+    // PT-6a (M7 A6): before, the page that showed nothing kept its window and its slot — counted alive — and ↻ reloaded it in
+    // place; a face gone proves nothing either
+    expect(
+      judgeNoDocument({ ...NO_DOCUMENT, out: { alive: true, ms: 15_000 }, newWindow: false }),
+    ).toEqual([
+      "NO-DOCUMENT: 15000 ms after its words the pane whose address is an attachment is still counted alive — its window and the cap's slot kept for nothing shown",
+      "NO-DOCUMENT: ↻ made main no new window for the pane whose address is an attachment — its page, let go, was not made anew at its address",
+    ]);
+    expect(judgeNoDocument({ ...NO_DOCUMENT, out: { alive: null, ms: 15_000 } })).toEqual([
+      "NO-DOCUMENT: 15000 ms after its words the pane whose address is an attachment is without a face — its window and the cap's slot kept for nothing shown",
+    ]);
     // the lane before PT-5b2: the source failed ("could not load"); or, read off nothing, starting for good
     expect(
       judgeNoDocument({
@@ -205,6 +220,16 @@ describe("a page's first load, in the product — its rows", () => {
 
   it("STARTING: a pane whose first address has not answered can be SENT ELSEWHERE, STOPPED — it says so — and loaded again", () => {
     expect(judgeStarting(STARTING)).toEqual([]);
+    // PT-6a (M7 A6): the stopped pane — its first load given up before anything came — is counted out, and made anew by ↻
+    expect(
+      judgeStarting({
+        ...STARTING,
+        stopped: { ...STARTING.stopped, out: { alive: true, ms: 15_000 }, newWindow: false },
+      }),
+    ).toEqual([
+      "STARTING: 15000 ms after its words the stopped pane is still counted alive — its window and the cap's slot kept for nothing shown",
+      "STARTING: ↻ made main no new window for the stopped pane — its page, let go, was not made anew at its address",
+    ]);
     // the lane before PT-5b2: `go` and `stop` dropped while starting
     expect(
       judgeStarting({

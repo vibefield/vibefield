@@ -16,7 +16,18 @@ import {
   liveDemandIntent,
   PAGE_STILL_TAKE_MAX_MS,
 } from "../src/surfaces/live/desk-live";
-import { DOC, HELD, KEY, PAGE, SEEN, stage, stillOf, UNSEEN } from "./desk-live-fixture";
+import {
+  browserAt,
+  DOC,
+  HELD,
+  KEY,
+  PAGE,
+  SEEN,
+  says,
+  stage,
+  stillOf,
+  UNSEEN,
+} from "./desk-live-fixture";
 
 const PAUSED = {
   mode: "paused",
@@ -564,5 +575,57 @@ describe("PT-5b — the face's texture let go at the budget's word (ruling 4)", 
     frame();
     expect(face.texture()).toBeDefined();
     expect(s.writers).toHaveLength(2);
+  });
+});
+
+describe("PT-6a (M7, A6) — a page whose load ended with NOTHING SHOWN is let go, its words kept", () => {
+  /** The face as the cap and the head read it. */
+  const row = (s: ReturnType<typeof stage>, key = KEY) => s.live.faces().find((f) => f.key === key);
+
+  it("no-document, or a stop before anything came: the face says it (failed, its words), is counted NOT alive, and its page is LET GO — its wire hibernated, whatever its pane asks; ↻ goes to its address again (a new window: a page with none takes no reload) and, the failure gone, its pane's ask is written again; a LOAD that failed with a document standing is untouched", async () => {
+    for (const reason of ["no-document", "stopped"]) {
+      const s = stage();
+      const p = s.open(KEY, true, "starting");
+      p.face.demand(SEEN);
+      await s.pump();
+      expect(p.wire()).toBe("live");
+      // the address answered nothing a pane can show (or the person stopped it first): said, no document standing
+      says(p.handle, "starting", { browser: browserAt(PAGE.url, { failure: { reason } }) });
+      await s.pump();
+      expect(p.face.state()).toMatchObject({ is: "failed" });
+      expect(p.wire()).toBe("hibernated");
+      expect(row(s)?.alive).toBe(false);
+      // its pane asks again (a move, a zoom): still let go
+      p.face.demand({ ...SEEN, fps: 15 });
+      await s.pump();
+      expect(p.wire()).toBe("hibernated");
+      // let go at main: the words stand
+      says(p.handle, "hibernated", { browser: browserAt(PAGE.url, { failure: { reason } }) });
+      await s.pump();
+      expect(p.face.state()).toMatchObject({ is: "failed" });
+      expect(row(s)?.alive).toBe(false);
+      // ↻: its address asked again — a GO (the producer is born there at its next ask)
+      const retry = (p.face.state() as { retry?: () => void }).retry;
+      expect(retry).toBeDefined();
+      retry?.();
+      expect(p.handle.navigations.at(-1)).toEqual({ action: "go", url: PAGE.url });
+      // the producer says where it is headed, its failure gone: the pane's ask is written again
+      says(p.handle, "hibernated", { browser: browserAt(PAGE.url) });
+      await s.pump();
+      expect(p.wire()).toBe("live");
+    }
+    // a LOAD that failed while a document stood (the engine's error page behind it): its window kept, ↻ reloads in place
+    const t = stage();
+    const q = t.open(KEY, true, "live");
+    q.face.demand(SEEN);
+    await t.pump();
+    says(q.handle, "live", {
+      browser: browserAt(PAGE.url, { failure: { reason: "name-not-resolved" } }),
+    });
+    await t.pump();
+    expect(q.face.state()).toMatchObject({ is: "failed" });
+    expect(q.wire()).toBe("live");
+    (q.face.state() as { retry?: () => void }).retry?.();
+    expect(q.handle.navigations.at(-1)).toEqual({ action: "reload" });
   });
 });

@@ -120,6 +120,10 @@ export interface FirstLoadSeen {
     /** what ↻ reads in hand, and the face once the address was asked again */
     readonly tool: string | null;
     readonly again: FirstFace | null;
+    /** PT-6a (M7 A6): after its words, whether the cap still counts the face alive (null: no face), and when that was read
+     * (ms after the words); whether ↻ made main a NEW window for it (its page let go before) */
+    readonly out: { readonly alive: boolean | null; readonly ms: number };
+    readonly newWindow: boolean;
   };
   readonly starting: {
     readonly sent: {
@@ -139,6 +143,9 @@ export interface FirstLoadSeen {
       /** ↻'s label on the stopped face, and the face once the gate was open and ↻ pressed */
       readonly retry: string | null;
       readonly loaded: FirstFace | null;
+      /** PT-6a (M7 A6): as NO-DOCUMENT's — counted out after its words; its page loaded in a new window */
+      readonly out: { readonly alive: boolean | null; readonly ms: number };
+      readonly newWindow: boolean;
     };
   };
   readonly taps: {
@@ -401,6 +408,28 @@ export function judgeNoDocument(seen: FirstLoadSeen["noDocument"]): string[] {
     out.push(
       `NO-DOCUMENT: asked again, the pane's page was refused ${seen.again.refused} downloads in all, not two`,
     );
+  out.push(...countedOut("NO-DOCUMENT", "the pane whose address is an attachment", seen));
+  return out;
+}
+
+/** PT-6a (M7 A6) — a page whose load ended with nothing shown is counted out after its words, and ↻ makes it anew. */
+function countedOut(
+  row: string,
+  what: string,
+  seen: {
+    readonly out: { readonly alive: boolean | null; readonly ms: number };
+    readonly newWindow: boolean;
+  },
+): string[] {
+  const out: string[] = [];
+  if (seen.out.alive !== false)
+    out.push(
+      `${row}: ${seen.out.ms} ms after its words ${what} is ${seen.out.alive === null ? "without a face" : "still counted alive"} — its window and the cap's slot kept for nothing shown`,
+    );
+  if (!seen.newWindow)
+    out.push(
+      `${row}: ↻ made main no new window for ${what} — its page, let go, was not made anew at its address`,
+    );
   return out;
 }
 
@@ -455,6 +484,7 @@ export function judgeStarting(seen: FirstLoadSeen["starting"]): string[] {
     out.push(
       `STARTING: the gate open and ↻ pressed, the pane is ${s.loaded?.state ?? "without a face"} at ${s.loaded?.address ?? "no address"} (${s.loaded?.reason ?? "no reason"}) — its address was not loaded`,
     );
+  out.push(...countedOut("STARTING", "the stopped pane", s));
   return out;
 }
 
@@ -918,6 +948,31 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
     js<string | null>(`(${TOOL})?.getAttribute("aria-label") ?? null`);
   const pressReload = (): Promise<void> =>
     h.pressSelector('[data-selection-bar] [data-face-row="hand"] [data-tool="reload"]');
+  /** PT-6a (M7 A6): whether the cap counts `p`'s face alive (null: no face), read until it says not, bounded. */
+  const outOf = async (p: Pane): Promise<{ alive: boolean | null; ms: number }> => {
+    const t0 = Date.now();
+    const alive = await waitFor(
+      "the face counted out after its words",
+      FIRST_ROWS.withinMs,
+      () =>
+        js<boolean | null>(
+          `(globalThis.__vfDesk.live()?.faces ?? []).find((x) => x.key === ${JSON.stringify(p.key)})?.alive ?? null`,
+        ),
+      (a) => a === false,
+    );
+    return { alive, ms: Date.now() - t0 };
+  };
+  /** PT-6a (M7 A6): main's offscreen windows now (their ids), and whether one not among `was` comes, bounded. */
+  const windowsNow = (): readonly number[] => d.pages("").map((page) => page.id);
+  const anew = async (was: readonly number[]): Promise<boolean> => {
+    const fresh = await waitFor(
+      "a new window for the page",
+      FIRST_ROWS.withinMs,
+      () => windowsNow().some((id) => !was.includes(id)),
+      (n) => n,
+    );
+    return fresh;
+  };
   const shoot = async (name: string): Promise<void> => {
     if (d.shotDir === undefined) return;
     mkdirSync(d.shotDir, { recursive: true });
@@ -1080,11 +1135,15 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
     await sleep(900);
     const files1 = d.fixture.asked("/file.bin");
     const fileFace = (await face(file)) ?? ended;
+    // PT-6a (M7 A6): counted out once its words are said — its page let go
+    const fileOut = await outOf(file);
     const filePage = await pageOf(file);
     await shoot("pt-5b2-no-document.png");
     await pickUp(file);
     const fileTool = await reloadLabel();
+    const fileWindows = windowsNow();
     await pressReload();
+    const fileAnew = await anew(fileWindows);
     await waitFor(
       "the attachment asked for again",
       FIRST_ROWS.withinMs,
@@ -1105,6 +1164,8 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
       page: filePage,
       tool: fileTool,
       again,
+      out: fileOut,
+      newWindow: fileAnew,
     };
     said.noDocument = noDocument;
     problems.push(...judgeNoDocument(noDocument));
@@ -1171,13 +1232,16 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
     );
     const waiting1 = d.fixture.gated().waiting;
     await done();
+    const stoppedOut = await outOf(second);
     await frame([second]);
     const stoppedPage = await pageOf(second);
     await shoot("pt-5b2-starting-stopped.png");
     d.fixture.gate(true);
     await pickUp(second);
     const retryTool = await reloadLabel();
+    const stoppedWindows = windowsNow();
     await pressReload();
+    const stoppedAnew = await anew(stoppedWindows);
     const loaded = await waitFor(
       "the stopped pane loaded",
       FIRST_ROWS.withinMs,
@@ -1195,6 +1259,8 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
         page: stoppedPage,
         retry: retryTool,
         loaded,
+        out: stoppedOut,
+        newWindow: stoppedAnew,
       },
     };
     said.starting = starting;
