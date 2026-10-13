@@ -1055,11 +1055,16 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
      * since is the load's last word). */
     let letGone = false;
     let goneTimer: unknown = null;
+    /** PT-6a (M14, R1): a FAILED page asked back — its ↻ (`reload`), or a `go` — is planned for again: it waits for a slot
+     * as any seen page, or comes alive in the hand (a failed page starts only under a live ask). */
+    let revived = false;
     let loadSerial = 0;
     let wasLoading = false;
     const holdGone = (gone: boolean): void => {
       if (gone === letGone) return;
       letGone = gone;
+      // PT-6a (M14, R1): let go, it gives back the cap's permission — coming back it waits for the plan's wake
+      if (gone) allowed = false;
       lanes.get(key)?.send();
       if (!closed && lanes.has(key)) replan();
     };
@@ -1312,6 +1317,10 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     };
     listen(presentation);
     let wasFailing = failing(handle.state);
+    /** PT-6a (M14, R1): its page STOPPED — failed, or its handle lost (a page let go is `holdGone`'s). */
+    const stopping = (state: SurfaceHandleState<ProductSurfaceFrame>): boolean =>
+      state.status === "lost" || state.presentation?.summary.state === "failed";
+    let wasStopping = stopping(handle.state);
     /** What the cap reads of the lane, as one word: a move of it is a plan made again. */
     const capWord = (state: SurfaceHandleState<ProductSurfaceFrame>): string =>
       `${state.status} ${aliveBySummary(state)} ${state.presentation?.summary.state === "failed"}`;
@@ -1330,6 +1339,16 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         void showStill();
       }
       wasFailing = fails;
+      // PT-6a (M14, R1): a page that STOPS gives back the cap's permission — its slot is another's now, and coming back (a
+      // peer's address, a reload, a mint after a loss) it waits for the plan's wake: a free slot, or the hand. Its wire
+      // says so at once: main starts a failed page under a live ask (before: kept live, a SEEN page was rested for it)
+      const stops = stopping(state);
+      if (stops && !wasStopping) {
+        allowed = false;
+        revived = false;
+        lanes.get(key)?.send();
+      }
+      wasStopping = stops;
       // PT-6a (M7, M10 A6): a load that showed nothing lets its page go at its LAST WORD — the refusal of a download the
       // load began — else at `NOTHING_SHOWN_BOUND_MS`; a page let go already, at once; a new address writes its pane's ask
       // again
@@ -1443,6 +1462,11 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
               return;
             }
             handle.navigate({ action: "reload" });
+            // PT-6a (M14, R1): a FAILED page asked back is planned for again
+            if (handle.state.presentation?.summary.state === "failed") {
+              revived = true;
+              if (!closed && lanes.has(key)) replan();
+            }
           },
         });
         // PT-5b: a page the cap has not let be alive yet is not starting — nothing is being made of it: it rests
@@ -1568,7 +1592,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     const stopped = (): boolean =>
       letGone ||
       handle.state.status === "lost" ||
-      handle.state.presentation?.summary.state === "failed";
+      (handle.state.presentation?.summary.state === "failed" && !revived);
     /** Alive: the service lets it be — or it is alive as it stands (a page re-bound; one whose window is still going). */
     const alive = (): boolean => !stopped() && (allowed || aliveBySummary(handle.state));
     const want = (): CapFace["want"] =>
@@ -1724,6 +1748,11 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         // where the pane is headed — until its page says an address of its own
         headed = url;
         stillStands();
+        // PT-6a (M14, R1): a FAILED page asked back is planned for again
+        if (handle.state.presentation?.summary.state === "failed") {
+          revived = true;
+          if (!closed && lanes.has(key)) replan();
+        }
       },
     };
     lanes.set(key, lane);

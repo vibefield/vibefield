@@ -418,7 +418,7 @@ describe("PT-5b — six pages alive at most (ruling 3)", () => {
     expect(t.live.stats()).toMatchObject({ rests: 1, alive: 1 });
   });
 
-  it("a page that STOPPED holds no slot: a waiting page comes alive — and when the stopped one is loaded again, the cap holds", async () => {
+  it("a page that STOPPED holds no slot: a waiting page comes alive — and when the stopped one is loaded again, the cap holds (PT-6a M14 R1: merely seen it waits; in hand it is alive at once)", async () => {
     const s = stage({ far });
     s.live.cap(1);
     const a = s.open("a", true, "created");
@@ -434,7 +434,20 @@ describe("PT-5b — six pages alive at most (ruling 3)", () => {
     expect(s.live.stats().alive).toBe(1);
     // nothing is planned for a stopped page: it is not "woken" again by the plan
     expect(s.live.stats().wakes).toBe(2);
-    // ↻: a's producer starts again — two alive over a cap of one: the least recently seen of the seen ones rests
+    // PT-6a (M14, R1): its stop gave back the cap's permission — its ask is paused (main starts a failed page only under a
+    // live ask; before: kept live, its producer started again under it, two alive over a cap of one, and a SEEN page was
+    // rested for it)
+    expect(a.wire()).toBe("paused");
+    // picked up, not asked back: nothing is planned for it — no page rests for a page the person merely holds
+    a.face.demand(HELD);
+    await s.pump();
+    expect(a.wire()).toBe("paused");
+    expect(s.live.stats().rests).toBe(0);
+    // ↻ IN HAND (a held tool): asked back, the held page is alive at once, whatever it costs — b, the other seen page,
+    // rests; a's producer starting again leaves one alive
+    (a.face.state() as { retry?: () => void }).retry?.();
+    await s.pump();
+    expect(a.wire()).toBe("live");
     a.say("starting");
     await s.pump();
     expect(s.live.stats().alive).toBe(1);
@@ -787,5 +800,114 @@ describe("PT-6a (M7, A6) — a page whose load ended with NOTHING SHOWN is let g
     });
     await s.pump();
     expect(p.wire()).toBe("hibernated");
+  });
+});
+
+describe("PT-6a (M14, R1) — a page that STOPS gives back the cap's permission: let go, failed or lost, it waits for a slot when it comes back, as any seen page", () => {
+  /** Three seen panes under a cap of two: r and p alive, q waiting (r the least recently seen). */
+  async function full() {
+    const s = stage();
+    expect(s.live.cap(2)).toBe(2);
+    const r = s.open("r", true, "created");
+    r.face.demand(SEEN);
+    await s.pump();
+    s.clock.advance(1_000);
+    const p = s.open("p", true, "starting");
+    p.face.demand(SEEN);
+    await s.pump();
+    s.clock.advance(1_000);
+    const q = s.open("q", true, "created");
+    q.face.demand(SEEN);
+    await s.pump();
+    expect([r.wire(), p.wire(), q.wire()]).toEqual(["live", "live", "paused"]);
+    return { s, r, p, q };
+  }
+  const OTHER = "https://example.test/other";
+
+  it("LET GO (A6), then sent elsewhere by the DOCUMENT (a peer's address, another window's): it waits for a slot, and no SEEN page is rested for it (before: its live ask went past the cap on the permission it kept, and the farthest seen page was put to rest); ↻ in hand makes it alive at once", async () => {
+    const { s, r, p, q } = await full();
+    says(p.handle, "starting", { browser: browserAt(PAGE.url, { loading: true }) });
+    await s.pump();
+    says(p.handle, "starting", {
+      browser: browserAt(PAGE.url, {
+        failure: { reason: "no-document" },
+        refused: { what: "download", serial: 1 },
+      }),
+    });
+    await s.pump();
+    expect(p.wire()).toBe("hibernated");
+    // woken into p's slot
+    expect(q.wire()).toBe("live");
+    // a peer's address for p (the document's word, a `go`): main, at rest, takes it — its failure gone
+    expect(s.live.navigation.navigate("p", { action: "go", url: OTHER })).toBe(true);
+    says(p.handle, "hibernated", { browser: browserAt(OTHER) });
+    await s.pump();
+    expect(r.wire()).toBe("live");
+    expect(q.wire()).toBe("live");
+    expect(p.wire()).toBe("paused");
+    expect(s.live.stats().rests).toBe(0);
+    // ↻ in HAND: the held page is alive at once, whatever it costs — a seen page gives its slot
+    p.face.demand(HELD);
+    await s.pump();
+    expect(p.wire()).toBe("live");
+    expect(s.live.stats().rests).toBe(1);
+  });
+
+  it("FAILED (PT-5b's, the same hole): once it stops its wire is no longer live — a peer's address, or ↻ while merely seen, starts nothing (main starts a failed page only under a live ask); asked back it waits for a slot, and no SEEN page is rested for it; a slot free, it is woken; failing again, it stops again; in HAND a `go` makes it alive at once", async () => {
+    const { s, r, p, q } = await full();
+    /** main's `navigate` on a failed page: `effectiveDemand live` → `startProducer`, else it waits */
+    const starts = (): void => {
+      if (p.wire() === "live") p.say("starting");
+    };
+    p.say("failed");
+    await s.pump();
+    expect(q.wire()).toBe("live");
+    expect(p.wire()).toBe("paused");
+    // ↻ while merely SEEN: asked back, it waits — r and q, seen, keep their slots
+    (p.face.state() as { retry?: () => void }).retry?.();
+    starts();
+    await s.pump();
+    expect(p.wire()).toBe("paused");
+    // a peer's address: the same
+    expect(s.live.navigation.navigate("p", { action: "go", url: OTHER })).toBe(true);
+    starts();
+    await s.pump();
+    expect(r.wire()).toBe("live");
+    expect(q.wire()).toBe("live");
+    expect(p.wire()).toBe("paused");
+    expect(s.live.stats().rests).toBe(0);
+    // a slot comes free (the cap raised): asked back, it is woken — its ask live, and main starts it
+    s.live.cap(3);
+    await s.pump();
+    expect(p.wire()).toBe("live");
+    starts();
+    await s.pump();
+    // it fails AGAIN: it stops again — its ask paused, and not woken while it stands failed
+    p.say("failed");
+    await s.pump();
+    expect(p.wire()).toBe("paused");
+    // picked up: nothing yet (not asked back); a peer's address while it is in HAND: alive at once
+    p.face.demand(HELD);
+    await s.pump();
+    expect(p.wire()).toBe("paused");
+    expect(s.live.navigation.navigate("p", { action: "go", url: OTHER })).toBe(true);
+    await s.pump();
+    expect(p.wire()).toBe("live");
+  });
+
+  it("LOST (its window gone): the pool's retry mints it again under the ask its lane writes now — paused: it waits for a slot, and no SEEN page is rested for it", async () => {
+    const { s, r, p, q } = await full();
+    p.handle.set({ status: "lost", presentation: null, error: new Error("the window went away") });
+    await s.pump();
+    expect(q.wire()).toBe("live");
+    expect(p.wire()).toBe("paused");
+    // ↻: minted again, born under its lane's ask
+    p.say("created");
+    p.attach();
+    await s.pump();
+    expect(r.wire()).toBe("live");
+    expect(q.wire()).toBe("live");
+    expect(p.wire()).toBe("paused");
+    expect(s.live.stats().rests).toBe(0);
   });
 });
