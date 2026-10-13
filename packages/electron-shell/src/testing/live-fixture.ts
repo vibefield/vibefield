@@ -859,7 +859,9 @@ export const FRAMES_BUSY = {
  * PT-6a (K1) — `/frames/busy?p=<name>` at `hostOrigin`: a page holding an AD-LIKE frame of another site (`frameOrigin`'s
  * `/frames/next`) and a field of its OWN — a press on the field (its `pointerdown`), or a tap's end (`touchend`), POSTS
  * a task (a `MessageChannel` message, as a framework's scheduler posts its render) that keeps the thread
- * `FRAMES_BUSY_MS`, and a timer of its own beside it (`setTimeout(0)`, as the words' is — the words' fired before it).
+ * `FRAMES_BUSY_MS`, and a timer of its own (`setTimeout(0)`) posted WHERE THE WORDS' IS — in a capture listener on the
+ * window, at the hint's own event, ahead of the busy task's post — so it fires when theirs does (PT-6a run 10: posted
+ * after the busy task, it fired after the spin always, and `held` said a late word of every leg).
  * It says (`busy`, with every ask): each spin (when it began, how long, of a press or a tap), when its own timer fired,
  * and when its field heard each click — so a row knows whether the WORD of the hint waited behind the spin (its timer
  * after the spin) with the hint's gesture already answered (its click before the spin). `on: "key"` (`&on=key`): a press
@@ -881,17 +883,20 @@ ${FRAMES_STYLE}<style>body { background: ${hex(FIXTURE_HUE)}; } iframe { positio
   const busy = { spins: [], timers: [], clicks: [], keys: [] };
   globalThis.__vfBusy = busy;
   const now = () => Math.round(performance.now());
+  const mark = () => setTimeout(() => { busy.timers.push(now()); }, 0);
   const hold = (why) => {
     const ch = new MessageChannel();
     ch.port1.onmessage = () => { const at = performance.now(); while (performance.now() - at < ${FRAMES_BUSY_MS}) {} busy.spins.push([Math.round(at), Math.round(performance.now() - at), why]); };
     ch.port2.postMessage(0);
-    setTimeout(() => { busy.timers.push(now()); }, 0);
   };
   const t = document.getElementById("t");
   if (${JSON.stringify(on)} === "key") {
     let keyed = false;
+    globalThis.addEventListener("keydown", (e) => { if (e.target === t && !keyed) mark(); }, true);
     t.addEventListener("keydown", () => { if (keyed) return; keyed = true; busy.keys.push(now()); hold("key"); });
   } else {
+    globalThis.addEventListener("pointerdown", (e) => { if (e.target === t && e.pointerType !== "touch") mark(); }, true);
+    globalThis.addEventListener("touchend", (e) => { if (e.target === t) mark(); }, true);
     t.addEventListener("pointerdown", (e) => { if (e.pointerType !== "touch") hold("press"); });
     t.addEventListener("touchend", () => hold("tap"));
   }

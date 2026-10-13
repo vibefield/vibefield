@@ -787,26 +787,31 @@ describe("PT-5d — the frames rows, as the product says them", () => {
     ]);
   });
 
-  it("PT-6a (run 6) FRAME-BUSY's KEY leg — K1's witness: the page busy after a KEY on its own field (its keydown posts the task, its down answered at once), the keys after it land in order — and its word must have waited behind the task (K1's hold reached), else the leg proved nothing; the press's and the tap's legs never reach K1 and are judged as before", () => {
+  it("PT-6a (runs 6–10) FRAME-BUSY's KEY leg: the page busy after a KEY on its own field (its keydown posts the task) — its keys land in order, judged as the press's and the tap's are; `held` is said, never required (no leg can force K1's order: run 10)", () => {
     const keyed = {
       spins: [[200, 1500, "key"] as const],
-      timers: [1701],
+      timers: [201],
       clicks: [120],
       keys: [190],
     };
-    const key = { typed: "abc", field: "abc", busy: keyed, held: true };
-    const spun = { spins: [[100, 1500, "press"] as const], timers: [1601], clicks: [60] };
+    const key = { typed: "abc", field: "abc", busy: keyed, held: false };
+    const spun = { spins: [[100, 1500, "press"] as const], timers: [101], clicks: [60] };
     const ok = { typed: "abc", field: "abc", busy: spun, held: false };
+    // run 10, as main saw it: the page's word before its task — the keys in order, K1 not reached: green
     expect(judgeFrameBusy({ press: ok, tap: ok, key })).toEqual([]);
-    // run 6's K1 red-proof, as the key's leg would read it: the text refused at the second, the doubt spent
+    expect(judgeFrameBusy({ press: ok, tap: ok, key: { ...key, held: true } })).toEqual([]);
     expect(judgeFrameBusy({ press: ok, tap: ok, key: { ...key, field: "" } })).toEqual([
       'FRAME-BUSY (key): the keys typed while the page was busy after a key on its field landed as "", not "abc" in order — refused, or lost',
     ]);
-    // the word came before the task (or was never read): K1 never reached
-    for (const held of [false, null])
-      expect(judgeFrameBusy({ press: ok, tap: ok, key: { ...key, held } })).toEqual([
-        "FRAME-BUSY (key): the page's word did not wait behind its busy task (or was never read) — K1's hold was never reached: the leg proved nothing",
-      ]);
+    expect(
+      judgeFrameBusy({
+        press: ok,
+        tap: ok,
+        key: { ...key, busy: { spins: [], timers: [], clicks: [], keys: [] } },
+      }),
+    ).toEqual([
+      "FRAME-BUSY (key): the page never got busy after a key on its field — the leg proved nothing",
+    ]);
     expect(judgeFrameBusy({ press: ok, tap: ok, key: null })).toEqual([
       "FRAME-BUSY (key): its field could not be aimed at — the leg proved nothing",
     ]);

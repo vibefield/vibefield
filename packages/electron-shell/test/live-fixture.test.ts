@@ -732,33 +732,61 @@ describe("the live pane's fixture page", () => {
     const scripts = [...busy.matchAll(/<script>([\s\S]*?)<\/script>/gu)].map((m) => m[1] ?? "");
     const own = scripts.find((s) => s.includes("__vfBusy = busy"));
     if (own === undefined) throw new Error("the busy page carries no busy script");
-    const listeners = new Map<string, ((e: Record<string, unknown>) => void)[]>();
-    const posted: (() => void)[] = [];
-    const timers: (() => void)[] = [];
-    let clock = 0;
-    const global: { __vfBusy?: { spins: unknown[]; timers: number[]; clicks: number[] } } = {};
-    new Function("globalThis", "document", "MessageChannel", "performance", "setTimeout", own)(
-      global,
-      {
-        getElementById: () => ({
-          addEventListener: (type: string, listener: (e: Record<string, unknown>) => void) =>
-            listeners.set(type, [...(listeners.get(type) ?? []), listener]),
-        }),
-      },
-      class {
-        port1: { onmessage: (() => void) | null } = { onmessage: null };
-        port2 = { postMessage: () => posted.push(() => this.port1.onmessage?.()) };
-      },
-      { now: () => (clock += 1) },
-      (callback: () => void) => timers.push(callback),
-    );
-    const fire = (type: string, e: Record<string, unknown> = {}): void => {
-      for (const listener of listeners.get(type) ?? []) listener(e);
+    type Listener = (e: Record<string, unknown>) => void;
+    /** A page run in a fake window: its field's own listeners, the window's capture listeners, and the ORDER its timers
+     * and its posted tasks were queued in (PT-6a run 10: the page's timer is posted where the words' is — ahead of the busy
+     * task's post — so it fires when theirs does) */
+    const page = (script: string) => {
+      const listeners = new Map<string, Listener[]>();
+      const captures = new Map<string, Listener[]>();
+      const order: string[] = [];
+      const posted: (() => void)[] = [];
+      const timers: (() => void)[] = [];
+      const field = {
+        addEventListener: (type: string, listener: Listener) =>
+          listeners.set(type, [...(listeners.get(type) ?? []), listener]),
+      };
+      const global: {
+        __vfBusy?: { spins: unknown[]; timers: number[]; clicks: number[]; keys: number[] };
+        addEventListener: (type: string, listener: Listener, capture?: boolean) => void;
+      } = {
+        addEventListener: (type, listener, capture) => {
+          if (capture === true) captures.set(type, [...(captures.get(type) ?? []), listener]);
+        },
+      };
+      new Function("globalThis", "document", "MessageChannel", "performance", "setTimeout", script)(
+        global,
+        { getElementById: () => field },
+        class {
+          port1: { onmessage: (() => void) | null } = { onmessage: null };
+          port2 = {
+            postMessage: () => {
+              order.push("post");
+              posted.push(() => this.port1.onmessage?.());
+            },
+          };
+        },
+        { now: () => (clock += 1) },
+        (callback: () => void) => {
+          order.push("timer");
+          timers.push(callback);
+        },
+      );
+      const fire = (type: string, e: Record<string, unknown> = {}): void => {
+        const event = { ...e, target: field };
+        for (const listener of captures.get(type) ?? []) listener(event);
+        for (const listener of listeners.get(type) ?? []) listener(event);
+      };
+      return { global, order, posted, timers, fire };
     };
+    let clock = 0;
+    const { global, order, posted, timers, fire } = page(own);
     fire("pointerdown", { pointerType: "mouse" });
     fire("pointerdown", { pointerType: "touch" });
     expect(posted).toHaveLength(1);
     expect(timers).toHaveLength(1);
+    // (its timer posted AHEAD of its busy task, where the words' is)
+    expect(order).toEqual(["timer", "post"]);
     posted.shift()?.();
     timers.shift()?.();
     const said = global.__vfBusy;
@@ -780,38 +808,22 @@ describe("the live pane's fixture page", () => {
       .map((m) => m[1] ?? "")
       .find((s) => s.includes("__vfBusy = busy"));
     if (keyOwn === undefined) throw new Error("the key's busy page carries no busy script");
-    const keyListeners = new Map<string, ((e: Record<string, unknown>) => void)[]>();
-    const keyPosted: (() => void)[] = [];
-    const keyTimers: (() => void)[] = [];
-    const keyGlobal: { __vfBusy?: { spins: unknown[]; keys: number[] } } = {};
-    new Function("globalThis", "document", "MessageChannel", "performance", "setTimeout", keyOwn)(
-      keyGlobal,
-      {
-        getElementById: () => ({
-          addEventListener: (type: string, listener: (e: Record<string, unknown>) => void) =>
-            keyListeners.set(type, [...(keyListeners.get(type) ?? []), listener]),
-        }),
-      },
-      class {
-        port1: { onmessage: (() => void) | null } = { onmessage: null };
-        port2 = { postMessage: () => keyPosted.push(() => this.port1.onmessage?.()) };
-      },
-      { now: () => (clock += 1) },
-      (callback: () => void) => keyTimers.push(callback),
-    );
-    const keyFire = (type: string, e: Record<string, unknown> = {}): void => {
-      for (const listener of keyListeners.get(type) ?? []) listener(e);
-    };
+    const keyed = page(keyOwn);
+    const keyFire = keyed.fire;
     keyFire("pointerdown", { pointerType: "mouse" });
     keyFire("touchend");
-    expect(keyPosted).toHaveLength(0);
+    expect(keyed.posted).toHaveLength(0);
+    expect(keyed.timers).toHaveLength(0);
     keyFire("keydown");
     keyFire("keydown");
-    expect(keyPosted).toHaveLength(1);
-    expect(keyTimers).toHaveLength(1);
-    keyPosted.shift()?.();
-    expect((keyGlobal.__vfBusy?.spins[0] as [number, number, string] | undefined)?.[2]).toBe("key");
-    expect(keyGlobal.__vfBusy?.keys).toHaveLength(1);
+    expect(keyed.posted).toHaveLength(1);
+    expect(keyed.timers).toHaveLength(1);
+    expect(keyed.order).toEqual(["timer", "post"]);
+    keyed.posted.shift()?.();
+    expect((keyed.global.__vfBusy?.spins[0] as [number, number, string] | undefined)?.[2]).toBe(
+      "key",
+    );
+    expect(keyed.global.__vfBusy?.keys).toHaveLength(1);
     // the press's page posts on its press, never on a key
     expect(busy).toContain('if ("press" === "key")');
   });
