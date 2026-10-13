@@ -910,4 +910,72 @@ describe("PT-6a (M14, R1) — a page that STOPS gives back the cap's permission:
     expect(p.wire()).toBe("paused");
     expect(s.live.stats().rests).toBe(0);
   });
+
+  it("PT-6a (M15 — V1) — MAIN'S OWN RESTART: a seen page failed for a start that timed out and started again by main (before its paused ask lands) is no seen page's slot-taker — with no slot free it is the page put to rest (it came back unasked), never another seen one; with a slot free it is woken, not adopted", async () => {
+    const { s, r, p, q } = await full();
+    // main: the startup deadline missed → `failSource` (published: failed, frame-stalled, automatic) …
+    p.say("failed");
+    await s.pump();
+    // q woken into p's slot
+    expect(q.wire()).toBe("live");
+    // … and its 0-ms `scheduleFailedRestart` → `startProducer` (published: starting), under the live ask it still had
+    p.say("starting");
+    await s.pump();
+    // before: r, seen, rested for p (adopted: alive by its summary)
+    expect(r.wire()).toBe("live");
+    expect(q.wire()).toBe("live");
+    expect(p.wire()).toBe("hibernated");
+    expect(s.live.faces().find((f) => f.key === "p")?.rested).toBe(true);
+    // a slot free: the same restart woken into it — the plan's wake, never an adoption past the cap
+    const free = await full();
+    free.p.say("failed");
+    await free.s.pump();
+    expect(free.s.live.cap(3)).toBe(3);
+    await free.s.pump();
+    const wakes = free.s.live.stats().wakes;
+    free.p.say("starting");
+    await free.s.pump();
+    expect(free.p.wire()).toBe("live");
+    expect(free.s.live.stats().wakes).toBe(wakes + 1);
+    expect(free.s.live.stats().rests).toBe(0);
+  });
+
+  it("PT-6a (M15 — V1) — a page back unasked that the plan WAKES while its slot is still being made (another page's rest under way) is not put to rest: it waits for that rest, then is woken", async () => {
+    const s = stage();
+    expect(s.live.cap(2)).toBe(2);
+    const r = s.open("r", true, "created");
+    r.face.demand(SEEN);
+    await s.pump();
+    s.clock.advance(1_000);
+    const p = s.open("p", true, "starting");
+    p.face.demand(SEEN);
+    await s.pump();
+    s.clock.advance(1_000);
+    const u = s.open("u", true, "created");
+    u.face.demand(SEEN);
+    await s.pump();
+    expect([r.wire(), p.wire(), u.wire()]).toEqual(["live", "live", "paused"]);
+    // r has a frame drawn (its rest takes a still of it), and its still read never answers: its rest stays under way
+    // until the bound
+    r.frame();
+    s.shelf.takeStill.mockImplementation(() => new Promise(() => {}));
+    // r panned away: unseen and alive, it gives its slot to u — its rest begun
+    r.face.demand(UNSEEN);
+    await flush();
+    // p stops (its start timed out) — u is woken into the slot p frees
+    p.say("failed");
+    await s.pump();
+    expect(u.wire()).toBe("live");
+    // main restarts p by itself: the plan wakes it into the slot r's rest is making — no room yet, so it waits, unrested
+    p.say("starting");
+    await flush();
+    expect(p.wire()).not.toBe("hibernated");
+    expect(s.live.stats().rests).toBe(0);
+    // r's rest ends at the bound: p is woken
+    s.clock.advance(PAGE_STILL_TAKE_MAX_MS);
+    await s.pump();
+    expect(r.wire()).toBe("hibernated");
+    expect(p.wire()).toBe("live");
+    expect(s.live.stats().rests).toBe(1);
+  });
 });

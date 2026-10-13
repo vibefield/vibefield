@@ -674,6 +674,8 @@ interface Lane {
   /** PT-5b — the cap's read of it, and its words: woken, adopted as it stands, put to rest (its still taken first). */
   capFace(): CapFace;
   adoptable(): boolean;
+  /** PT-6a (M15 — V1): its page came back UNASKED (main restarted it after a stop) and the plan has not woken it. */
+  unasked(): boolean;
   wake(): void;
   /** True: its ask had been held back, and goes down the wire now. */
   adopt(): boolean;
@@ -895,6 +897,13 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         const rested = lane === undefined ? restGhost(key) : lane.rest();
         void track(rested.then(() => replan()));
       }
+      // PT-6a (M15 — V1): a page that came back UNASKED (main restarted it after a stop) and that the plan does not wake —
+      // no slot free, or unseen — is the page put to rest, never another seen one's slot given for it
+      const woken = new Set(plan.wake);
+      for (const lane of all) {
+        if (!lane.unasked() || woken.has(lane.key)) continue;
+        void track(lane.rest().then(() => replan()));
+      }
       // a page waits on a lane that has not said: asked again when that lane's hold lapses
       if (plan.waiting.length > 0)
         planAt(
@@ -1067,6 +1076,9 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     /** PT-6a (M14, R1): a FAILED page asked back — its ↻ (`reload`), or a `go` — is planned for again: it waits for a slot
      * as any seen page, or comes alive in the hand (a failed page starts only under a live ask). */
     let revived = false;
+    /** PT-6a (M15 — V1): it stopped since the plan last woke it — a page main restarts by itself (its start timed out) came
+     * back UNASKED: never adopted, it is woken into a free slot or put to rest, never another seen page's slot-taker. */
+    let stoppedSinceWake = false;
     let loadSerial = 0;
     let wasLoading = false;
     const holdGone = (gone: boolean): void => {
@@ -1355,6 +1367,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       if (stops && !wasStopping) {
         allowed = false;
         revived = false;
+        stoppedSinceWake = true;
         lanes.get(key)?.send();
       }
       wasStopping = stops;
@@ -1603,7 +1616,17 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       handle.state.status === "lost" ||
       (handle.state.presentation?.summary.state === "failed" && !revived);
     /** Alive: the service lets it be — or it is alive as it stands (a page re-bound; one whose window is still going). */
-    const alive = (): boolean => !stopped() && (allowed || aliveBySummary(handle.state));
+    /** PT-6a (M15 — V1): alive by its summary, back unasked since its stop — the plan's to wake or to rest (one being put
+     * to rest, or rested, is leaving: not this). */
+    const unasked = (): boolean =>
+      stoppedSinceWake &&
+      !allowed &&
+      !rested &&
+      !resting &&
+      !stopped() &&
+      aliveBySummary(handle.state);
+    const alive = (): boolean =>
+      !stopped() && !unasked() && (allowed || aliveBySummary(handle.state));
     const want = (): CapFace["want"] =>
       asked === undefined || asked.mode !== "live" ? "unseen" : asked.interactive ? "held" : "seen";
     const RANK = { unseen: 0, seen: 1, held: 2 } as const;
@@ -1697,11 +1720,18 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         };
       },
       adoptable: () =>
-        !allowed && !rested && !resting && !stopped() && aliveBySummary(handle.state),
+        !allowed &&
+        !rested &&
+        !resting &&
+        !stopped() &&
+        !stoppedSinceWake &&
+        aliveBySummary(handle.state),
+      unasked,
       wake() {
         if (allowed) return;
         allowed = true;
         rested = false;
+        stoppedSinceWake = false;
         counts.wakes += 1;
       },
       adopt() {
