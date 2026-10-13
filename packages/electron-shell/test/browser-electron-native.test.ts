@@ -2717,6 +2717,33 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         vi.useRealTimers();
       }
     });
+
+    it("PT-6a (K3) — M15 × J13: a key held on the PAGE, its repeats refused while F holds the focus, let up once the page holds it again: its up goes to the page — a refused down is never recorded", async () => {
+      vi.useFakeTimers();
+      try {
+        const r = await framed();
+        const key = (type: "keyDown" | "keyUp", autoRepeat?: boolean) =>
+          r.native.dispatchKey({
+            type,
+            key: "ArrowDown",
+            code: "ArrowDown",
+            modifiers: NONE,
+            ...(autoRepeat ? { autoRepeat } : {}),
+          });
+        await key("keyDown");
+        word(r, "here");
+        await press(r, 180, 120);
+        word(r, "here", "F");
+        expect(await settle(key("keyDown", true))).toMatch(/a frame of another site/);
+        await press(r, 20, 20);
+        word(r, "here");
+        word(r, "away", "F");
+        expect(await settle(key("keyUp"))).toBe("sent");
+        expect(r.hand().filter((h) => h.startsWith("key"))).toEqual(["keyDown@page", "keyUp@page"]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe("PT-6a (K1) — a doubt born of the PAGE's own press, the page holding the focus: its key-like events HELD until the page's word (the host's bound, never the second); the word itself timed", () => {

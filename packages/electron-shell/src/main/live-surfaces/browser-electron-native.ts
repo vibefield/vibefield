@@ -1072,11 +1072,14 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       await this.ensureDebugger();
       await this.focusSettled();
       const target =
-        input.type === "keyUp" ? this.#frames.keyUp(input.code) : this.#frames.keyDown(input.code);
+        input.type === "keyUp" ? this.#frames.keyUp(input.code) : this.#frames.focused();
       if (target === null) return;
       // PT-5d (M15): a frame of another site holding the focus — the key's down or up REFUSED, sent to no session: typing
       // there is off (a key's up so refused, J13's stated limit: the page keeps that key down until its next up)
       if (target.session !== undefined) throw new BrowserFrameKeysRefused();
+      // PT-6a (K3): a down is RECORDED only once it is not refused — a refused down recorded over the page's own record of
+      // that key (its repeats while a frame held the focus) had its up refused once the page held the focus again
+      if (input.type !== "keyUp") this.#frames.keyDown(input.code);
       await this.hinted(input.type !== "keyUp", target.session === undefined, () =>
         this.handCommand("Input.dispatchKeyEvent", input, target.session),
       );
