@@ -93,8 +93,10 @@ export const FRAMES_ROWS = {
   goneMs: 5_000,
   /** M20 F6: how many times STUCK presses its loop page's button for a leg's hang before the leg says it never ran */
   hangTries: 3,
-  /** PT-6a (K1): what FRAME-BUSY types while its page is busy; how often PRESS-ANSWER looks at main's count (ms) */
+  /** PT-6a (K1): what FRAME-BUSY types while its page is busy, a person's beat after the hint (ms); how often PRESS-ANSWER
+   * looks at main's count (ms) */
   busyTyped: "abc",
+  busyBeatMs: 150,
   answerLookMs: 20,
 } as const;
 
@@ -2517,7 +2519,10 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         await h.press(
           await onWindow(heldNow, visibleView(word), centre(field)[0], centre(field)[1]),
         );
-        // typed at once — while the page is busy after the hint
+        // typed after a person's beat — the hint's gesture whole at main (the desk delivers a pointer's up at its next frame,
+        // keys at once: typed 0 ms after, a phone's first key reached the page before its tap's end focused the field —
+        // run 3) — while the page is still busy after the hint
+        await sleep(FRAMES_ROWS.busyBeatMs);
         for (const ch of FRAMES_ROWS.busyTyped) {
           win.webContents.sendInputEvent({ type: "keyDown", keyCode: ch });
           win.webContents.sendInputEvent({ type: "char", keyCode: ch });
