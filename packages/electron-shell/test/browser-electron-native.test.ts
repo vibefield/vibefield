@@ -2189,7 +2189,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     });
   });
 
-  it("PT-6a (M14, R2) — a frame inside a SHADOW ROOT: the engine's hit test is retargeted to its host, and the host — or a host of that host, a CLOSED root's too — is the frame's own, never its cover (before: covered whole, every press the page's); what is drawn over it is still a cover", () => {
+  it("PT-6a (M15) — a frame inside a SHADOW ROOT is its HOST's: the engine's hit test is retargeted to the host, which the frame's containment cannot see into — covered whole, unpressable, nothing misrouted (R2's widening reverted: its place, covers and clip are not read through a root; at f0485743 the host was no cover, and V2–V5 misrouted presses); a frame in the light DOM keeps its own ancestors", () => {
     type Fake = { style: Record<string, string>; parentElement: Fake | null } & Record<
       string,
       unknown
@@ -2266,25 +2266,22 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
           now: () => 0,
         }) as (this: Fake, quick: boolean) => unknown
       ).call(frame, false);
-    // a web component holding the frame in its root: the hit test names the host wherever the frame is drawn
+    // a web component holding the frame in its root (open or closed: one path): the hit test names the host wherever the
+    // frame is drawn — a cover over all of it
     const host = el(BOX, body);
     host["getRootNode"] = () => ({ nodeType: 9 });
     const frame = shadowed(host);
-    expect(sight(frame, () => host)).toEqual({ visible: [0, 0, 1, 1], covers: [] });
-    // a host in a host's root (a closed root's too: the frame's own walk sees its root, whatever the page can see)
+    expect(sight(frame, () => host)).toEqual({ visible: [0, 0, 1, 1], covers: [[0, 0, 1, 1]] });
+    // a host in a host's root: the outer host covers it whole
     const outer = el(BOX, body);
     outer["getRootNode"] = () => ({ nodeType: 9 });
     const inner = el(BOX, null);
     inner["getRootNode"] = () => ({ nodeType: 11, host: outer });
     const deep = shadowed(inner);
-    expect(sight(deep, () => outer)).toEqual({ visible: [0, 0, 1, 1], covers: [] });
-    // a header drawn over the host's top: still a cover
-    const header = el({ left: 0, top: 0, width: 1280, height: 162 }, body, { position: "fixed" });
-    header["getRootNode"] = () => ({ nodeType: 9 });
-    expect(sight(frame, (_x, y) => (y < 162 ? header : host))).toEqual({
-      visible: [0, 0, 1, 1],
-      covers: [[0, 0, 1, 0.1]],
-    });
+    expect(sight(deep, () => outer)).toEqual({ visible: [0, 0, 1, 1], covers: [[0, 0, 1, 1]] });
+    // a frame in the LIGHT DOM under the same element: its own ancestor is no cover
+    const light = el(BOX, host);
+    expect(sight(light, () => host)).toEqual({ visible: [0, 0, 1, 1], covers: [] });
   });
 
   it("M7 H3 — a frame's COVERS are read with its quad: a press on the part a fixed header covers is the page's, below it the frame's", async () => {
