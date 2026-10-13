@@ -1442,7 +1442,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     expect(on.get("scroll")).toHaveLength(1);
   });
 
-  it("PT-6a (M14, R2) — `where()` looks THROUGH a shadow host: the document's `activeElement` is retargeted to the host, so the walk descends each OPEN root's `activeElement` — a frame of another site focused in a web component is `inner`, never `here` (before: `here`, the keys down the page's session); a CLOSED root cannot be seen from the page: its host reads as any focused element (a limit, said)", () => {
+  it("PT-6a (M14, R2) — `where()` looks THROUGH a shadow host: the document's `activeElement` is retargeted to the host, so the walk descends each OPEN root's `activeElement` — a frame of another site focused in a web component is `inner`, never `here` (before: `here`, the keys down the page's session); a CLOSED root cannot be seen from the page: its host reads as any focused element (a limit, said); PT-6a (M15 — V6): past its bound (33 open roots deep) it fails CLOSED — `inner`, never `here`", () => {
     type Focused = {
       readonly localName: string;
       readonly shadowRoot?: { readonly activeElement: Focused | null } | null;
@@ -1529,6 +1529,16 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     expect(where({ localName: "x-embed", shadowRoot: { activeElement: null } })).toBe("here");
     // the LIMIT: a CLOSED root is null from the page — its host reads as any focused element
     expect(where({ localName: "x-embed", shadowRoot: null })).toBe("here");
+    // V6: a focus 32 open roots deep is descended; 33 deep is past the bound — unknown, so never `here`
+    const nested = (depth: number, at: Focused): Focused => {
+      let node = at;
+      for (let i = 0; i < depth; i += 1)
+        node = { localName: `x-${i}`, shadowRoot: { activeElement: node } };
+      return node;
+    };
+    expect(where(nested(32, away))).toBe("inner");
+    expect(where(nested(32, field))).toBe("here");
+    expect(where(nested(33, field))).toBe("inner");
     // and as before: a frame of another site, a field
     expect(where(away)).toBe("inner");
     expect(where(field)).toBe("here");
