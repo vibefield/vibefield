@@ -96,6 +96,9 @@ interface FaceEntry {
   /** PT-5b — the bytes charged to the desk's budget for its texture (0: none charged), and the texture they were for. */
   charged: number;
   chargedFor: unknown;
+  /** PT-6a (M7 C1) — when the face was last STIRRED: a frame of its page arrived, or an input was sent it
+   * (`performance.now()`, ms; −∞: never) — what the hand's driver reads to let a held, still page's desk sleep. */
+  stirredAt: number;
 }
 
 /** The budget's key for a face's texture, and for a pane's notice (the kind's two rows a pane). */
@@ -127,6 +130,9 @@ export interface PaneFaces {
   ): { readonly key: string; readonly state: LiveState; readonly info: LiveInfo } | undefined;
   /** PT-3 — `e`'s face if it is open (never opens one). */
   opened(e: Entity): LiveFace | undefined;
+  /** PT-6a (M7 C1) — when `e`'s face was last stirred (a frame arrived, an input sent; `performance.now()` ms), or undefined:
+   * no face. */
+  stirred(e: Entity): number | undefined;
   /** PT-3 — send `e`'s face an input (false: no face, a view-only one — or, PT-5a, a FAILED one: nothing is sent to a page
    * nobody sees). */
   send(e: Entity, input: LiveInput): boolean;
@@ -275,6 +281,8 @@ export function createPaneFaces(
       const key = host?.keyOf?.(e);
       if (live === undefined || key === undefined) return undefined;
       const face = live.open(key, { ...spec }, () => {
+        const opened = faces.get(e);
+        if (opened !== undefined) opened.stirredAt = performance.now();
         woken.add(e);
         host?.wake?.();
       });
@@ -292,6 +300,7 @@ export function createPaneFaces(
         said: undefined,
         charged: 0,
         chargedFor: undefined,
+        stirredAt: Number.NEGATIVE_INFINITY,
       };
       faces.set(e, f);
       byKey.set(key, e);
@@ -401,12 +410,15 @@ export function createPaneFaces(
         : { key: f.key, state: f.face.state(), info: f.face.info() };
     },
     opened: (e) => faces.get(e)?.face,
+    stirred: (e) => faces.get(e)?.stirredAt,
     send(e, input) {
-      const f = faces.get(e)?.face;
+      const entry = faces.get(e);
+      const f = entry?.face;
       // (a failed page is not sent anything: what is there — the engine's own error page — is seen by nobody)
-      if (f?.input === undefined || f.state().is === "failed") return false;
+      if (entry === undefined || f?.input === undefined || f.state().is === "failed") return false;
       counts.sent += 1;
       f.input(input);
+      entry.stirredAt = performance.now();
       return true;
     },
     forget(e) {

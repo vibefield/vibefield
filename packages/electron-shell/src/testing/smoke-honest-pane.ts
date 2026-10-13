@@ -71,6 +71,13 @@ export const HONEST_ROWS = {
   /** CARET: how long the held page is watched (ms), and the most frames a second a resting field's caret may cost */
   caretMs: 4_000,
   caretMaxFps: 6,
+  /** PT-6a (M7 C1): SLEEP — how long the desk is watched after each stir (ms); how soon after a key or a wheel it may sleep
+   * (the hand's quiet, 250 ms, less the clocks' slack) and must (the quiet, two frames at 60, and the reads' slack); how soon
+   * after the lease's end, and after the page's last frame, it must */
+  sleepWatchMs: 2_000,
+  sleepNotBeforeMs: 230,
+  sleepWithinMs: 344,
+  sleepArrivalWithinMs: 400,
   /** HEARD: how soon after its delete a page must be silent (ms) — the pane's ghost fades, then its face closes */
   silentWithinMs: 2_500,
   /** PARKED: how long the page is watched under the cover and after it (ms) */
@@ -177,6 +184,17 @@ export interface HonestSeen {
     readonly unsaidMs: number | null;
     readonly path: string | null;
     readonly asked: number;
+  };
+  /** PT-6a (M7 C1) — SLEEP: the held page still (its field blurred): the desk asleep then; after each stir — a key, a wheel,
+   * the lease's end, the page's frames — whether it woke, and how long until it slept again (ms; null: not within the watch) */
+  readonly sleep: {
+    readonly still: boolean;
+    readonly after: Readonly<
+      Record<
+        "key" | "wheel" | "lease" | "arrival",
+        { readonly woke: boolean; readonly ms: number | null }
+      >
+    >;
   };
   readonly caret: {
     readonly focused: string | null;
@@ -360,6 +378,32 @@ export function judgeDownload(seen: HonestSeen["download"]): string[] {
 }
 
 /** CARET (a measurement, with a ceiling): a focused field at rest in hand costs a caret's frames, one submit a frame. */
+/** PT-6a (M7 C1) — SLEEP: a held page that is still lets the desk sleep after the hand's quiet, and what moves wakes it. */
+export function judgeSleep(seen: HonestSeen["sleep"]): string[] {
+  const out: string[] = [];
+  if (!seen.still)
+    out.push(
+      "SLEEP: a held page with nothing moving — its field blurred, a second gone — keeps the desk awake: it steps every frame for nothing",
+    );
+  for (const [stir, { woke, ms }] of Object.entries(seen.after)) {
+    if (!woke) {
+      out.push(`SLEEP: the ${stir} did not wake the desk — what it moved was never drawn`);
+      continue;
+    }
+    const within =
+      stir === "arrival" ? HONEST_ROWS.sleepArrivalWithinMs : HONEST_ROWS.sleepWithinMs;
+    if (ms === null || ms > within)
+      out.push(
+        `SLEEP: after the ${stir} the desk ${ms === null ? `was still awake ${HONEST_ROWS.sleepWatchMs} ms later` : `slept ${ms} ms later`}, not within ${within}`,
+      );
+    else if ((stir === "key" || stir === "wheel") && ms < HONEST_ROWS.sleepNotBeforeMs)
+      out.push(
+        `SLEEP: after the ${stir} the desk slept ${ms} ms later — before the hand's quiet (${HONEST_ROWS.sleepNotBeforeMs})`,
+      );
+  }
+  return out;
+}
+
 export function judgeCaret(seen: HonestSeen["caret"]): string[] {
   const out: string[] = [];
   if (seen.focused !== "field")
@@ -1176,6 +1220,61 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
     );
     said.caret = caret;
     problems.push(...judgeCaret(caret));
+
+    // ── SLEEP (PT-6a, M7 C1): the held page still — its field blurred — the desk asleep after the hand's quiet; a key, a wheel,
+    //    the lease's end and the page's frames each wake it ─────────────────────────────────────────────────────────────────
+    const asleep = (): Promise<boolean> => js<boolean>("globalThis.__vfDesk.rest().asleep");
+    /** A stir, then: whether the desk woke, and how long after the stir's end until it slept again (null: not in the watch). */
+    const sleepAfter = async (
+      stir: () => Promise<unknown> | unknown,
+    ): Promise<{ woke: boolean; ms: number | null }> => {
+      await stir();
+      const t0 = Date.now();
+      let woke = false;
+      while (Date.now() - t0 < HONEST_ROWS.sleepWatchMs) {
+        const a = await asleep();
+        if (!a) woke = true;
+        else if (woke) return { woke, ms: Date.now() - t0 };
+        await sleep(5);
+      }
+      return { woke, ms: null };
+    };
+    await press(ground);
+    await sleep(1_000);
+    const stillAsleep = await asleep();
+    const afterKey = await sleepAfter(() => {
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Shift" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Shift" });
+    });
+    await sleep(500);
+    const afterWheel = await sleepAfter(() =>
+      win.webContents.sendInputEvent({
+        type: "mouseWheel",
+        x: ground.x,
+        y: ground.y,
+        deltaX: 0,
+        deltaY: 40,
+        canScroll: true,
+      }),
+    );
+    await sleep(500);
+    const afterLease = await sleepAfter(() =>
+      js(
+        "document.activeElement instanceof HTMLElement ? (document.activeElement.blur(), true) : false",
+      ),
+    );
+    await sleep(500);
+    const afterArrival = await sleepAfter(async () => {
+      d.fixture.setPlaying(true);
+      await sleep(300);
+      d.fixture.setPlaying(false);
+    });
+    const sleepSeen: HonestSeen["sleep"] = {
+      still: stillAsleep,
+      after: { key: afterKey, wheel: afterWheel, lease: afterLease, arrival: afterArrival },
+    };
+    said.sleep = sleepSeen;
+    problems.push(...judgeSleep(sleepSeen));
 
     // ── HEARD: the tone — in hand, at rest, off the view, back, deleted, undone ───────────────────────────────────────
     const prefix = d.fixture.origin + ACTS;
