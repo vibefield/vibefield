@@ -14,6 +14,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   LIVE_ATTACH_HOLD_MS,
   liveDemandIntent,
+  NOTHING_SHOWN_BOUND_MS,
   PAGE_STILL_TAKE_MAX_MS,
 } from "../src/surfaces/live/desk-live";
 import {
@@ -618,11 +619,35 @@ describe("PT-6a (M7, A6) — a page whose load ended with NOTHING SHOWN is let g
       p.face.demand(SEEN);
       await s.pump();
       expect(p.wire()).toBe("live");
-      // the address answered nothing a pane can show (or the person stopped it first): said, no document standing
+      // its load begins
+      says(p.handle, "starting", { browser: browserAt(PAGE.url, { loading: true }) });
+      await s.pump();
+      // the address answered nothing a pane can show (or the person stopped it first): said, no document standing — the
+      // page is let go at its LAST WORD, not before
       says(p.handle, "starting", { browser: browserAt(PAGE.url, { failure: { reason } }) });
       await s.pump();
       expect(p.face.state()).toMatchObject({ is: "failed" });
-      expect(p.wire()).toBe("hibernated");
+      expect(p.wire()).toBe("live");
+      if (reason === "no-document") {
+        // the attachment's download, refused by the session's guard a moment after the load's end: let go at once
+        s.clock.advance(300);
+        says(p.handle, "starting", {
+          browser: browserAt(PAGE.url, {
+            failure: { reason },
+            refused: { what: "download", serial: 1 },
+          }),
+        });
+        await s.pump();
+        expect(p.wire()).toBe("hibernated");
+      } else {
+        // a stop refuses nothing: let go at the bound
+        s.clock.advance(NOTHING_SHOWN_BOUND_MS - 1);
+        await s.pump();
+        expect(p.wire()).toBe("live");
+        s.clock.advance(1);
+        await s.pump();
+        expect(p.wire()).toBe("hibernated");
+      }
       expect(row(s)?.alive).toBe(false);
       // its pane asks again (a move, a zoom): still let go
       p.face.demand({ ...SEEN, fps: 15 });
@@ -643,6 +668,59 @@ describe("PT-6a (M7, A6) — a page whose load ended with NOTHING SHOWN is let g
       await s.pump();
       expect(p.wire()).toBe("live");
     }
+    // a refusal heard while its load still ran, then the load's end: its last word is in — let go at once
+    const w = stage();
+    const q1 = w.open(KEY, true, "starting");
+    q1.face.demand(SEEN);
+    await w.pump();
+    says(q1.handle, "starting", { browser: browserAt(PAGE.url, { loading: true }) });
+    await w.pump();
+    says(q1.handle, "starting", {
+      browser: browserAt(PAGE.url, { loading: true, refused: { what: "download", serial: 1 } }),
+    });
+    await w.pump();
+    says(q1.handle, "starting", {
+      browser: browserAt(PAGE.url, {
+        failure: { reason: "no-document" },
+        refused: { what: "download", serial: 1 },
+      }),
+    });
+    await w.pump();
+    expect(q1.wire()).toBe("hibernated");
+    // the BOUND, witnessed: a refusal held past it — the page let go at the bound, whatever comes after
+    const b = stage();
+    const q0 = b.open(KEY, true, "starting");
+    q0.face.demand(SEEN);
+    await b.pump();
+    says(q0.handle, "starting", { browser: browserAt(PAGE.url, { loading: true }) });
+    await b.pump();
+    says(q0.handle, "starting", {
+      browser: browserAt(PAGE.url, { failure: { reason: "no-document" } }),
+    });
+    await b.pump();
+    b.clock.advance(NOTHING_SHOWN_BOUND_MS);
+    await b.pump();
+    expect(q0.wire()).toBe("hibernated");
+    b.clock.advance(500);
+    says(q0.handle, "hibernated", {
+      browser: browserAt(PAGE.url, {
+        failure: { reason: "no-document" },
+        refused: { what: "download", serial: 1 },
+      }),
+    });
+    await b.pump();
+    expect(q0.wire()).toBe("hibernated");
+    // a page let go already, met by a new mount (a remount: main kept it at rest, its words with it): held at once — no
+    // window is made of it for its pane's first ask
+    const r = stage();
+    const kept = r.open(KEY, true, "hibernated");
+    says(kept.handle, "hibernated", {
+      browser: browserAt(PAGE.url, { failure: { reason: "no-document" } }),
+    });
+    kept.face.demand(SEEN);
+    await r.pump();
+    expect(kept.handle.demands.every((d) => (d as { mode?: string }).mode !== "live")).toBe(true);
+    expect(row(r)?.alive).toBe(false);
     // a LOAD that failed while a document stood (the engine's error page behind it): its window kept, ↻ reloads in place
     const t = stage();
     const q = t.open(KEY, true, "live");

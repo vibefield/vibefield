@@ -622,6 +622,14 @@ const aliveBySummary = (state: SurfaceHandleState<ProductSurfaceFrame>): boolean
 };
 
 /**
+ * PT-6a (M10 A6): the bound on a page's LAST WORD after a load that showed nothing — the refusal of a download the load began:
+ * the session's guard cancels it and says so, a moment after the load's end (g-fl: a refusal heard after an immediate let-go
+ * was dropped with the window). A page is let go at that refusal; one that refuses nothing (an empty answer, a stop) at this
+ * bound. No signal says a download is still pending: the refusal is the item's whole life (`will-download`, cancelled at once).
+ */
+export const NOTHING_SHOWN_BOUND_MS = 2_000;
+
+/**
  * PT-6a (M7 A6) — A LOAD THAT ENDED WITH NOTHING SHOWN: no document of the page came (an attachment, an empty answer) or the
  * person stopped it before anything did — its failure said while no document stands (`starting`), or kept by a page let go
  * for it (`hibernated`). Its window shows nothing a face may show: the service lets the page go (asks it `hibernated`, and main
@@ -1042,8 +1050,19 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     let allowed = false;
     let rested = false;
     let resting = false;
-    /** PT-6a (M7 A6): its page let go for a load that showed nothing (`nothingShown`) — until a new address clears it. */
+    /** PT-6a (M7, M10 A6): its page let go for a load that showed nothing (`nothingShown`) — until a new address clears it —
+     * the timer its let-go waits on (`NOTHING_SHOWN_BOUND_MS`), and the refusals' serial when its load began (a refusal
+     * since is the load's last word). */
     let letGone = false;
+    let goneTimer: unknown = null;
+    let loadSerial = 0;
+    let wasLoading = false;
+    const holdGone = (gone: boolean): void => {
+      if (gone === letGone) return;
+      letGone = gone;
+      lanes.get(key)?.send();
+      if (!closed && lanes.has(key)) replan();
+    };
     let seenAt = Number.NEGATIVE_INFINITY;
     /** PT-5b — THE STILL: the texture's content is a STILL (the shelf's, or the page as it was put to rest) and when it was
      * taken; the texture holds a LIVE frame of the page as it is; when this page's still was last taken, and whether a
@@ -1311,13 +1330,23 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         void showStill();
       }
       wasFailing = fails;
-      // PT-6a (M7 A6): a load that showed nothing lets its page go; a new address writes its pane's ask again
+      // PT-6a (M7, M10 A6): a load that showed nothing lets its page go at its LAST WORD — the refusal of a download the
+      // load began — else at `NOTHING_SHOWN_BOUND_MS`; a page let go already, at once; a new address writes its pane's ask
+      // again
+      const serial = state.browser?.refused?.serial ?? 0;
+      const loading = state.browser?.loading === true;
+      if (loading && !wasLoading) loadSerial = serial;
+      wasLoading = loading;
       const gone = nothingShown(state);
-      if (gone !== letGone) {
-        letGone = gone;
-        lanes.get(key)?.send();
-        if (!closed && lanes.has(key)) replan();
-      }
+      if (!gone || state.presentation?.summary.state === "hibernated" || serial > loadSerial) {
+        if (goneTimer !== null) timers.clear(goneTimer);
+        goneTimer = null;
+        holdGone(gone);
+      } else if (!letGone && goneTimer === null)
+        goneTimer = timers.set(() => {
+          goneTimer = null;
+          if (!closed && nothingShown(handle.state)) holdGone(true);
+        }, NOTHING_SHOWN_BOUND_MS);
       if (state.browser?.url !== saidAt) {
         saidAt = state.browser?.url;
         headed = undefined;
