@@ -323,6 +323,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   readonly #frameTells = new Map<string, Promise<void>>();
   /** PT-5d (M6.5b i): the frames attached under this page's debugger, and not gone */
   readonly #children = new Set<string>();
+  /** PT-6a (M14 — R4): each of those sessions' PARENT session (undefined: the page's), set at its attach and forgotten with
+   * it — the cascade at a detach reads these, never the frames' records, which a frame's own COMMIT drops first */
+  readonly #parentOf = new Map<string, string | undefined>();
   /** PT-5d (M8): by session (`""`: the page's), each document's context of the words' isolated world, by its frame */
   readonly #worlds = new Map<string, Map<string, number>>();
   /** PT-5d (M8): each frame's parent frame — the document that holds its owner element */
@@ -479,9 +482,12 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       if (typeof gone === "string") {
         // PT-6a (M8 — C5): its DESCENDANTS go with it — the engine never says a nested frame's detach once its parent's
         // session has gone (r2kids: CNN's frame in a frame, one more session kept at each load), so each is forgotten here,
-        // by the frames' parent links read before the frames' own cascade
+        // by the native's own parent links (M14 — R4: the frames' records, which a frame's own commit drops first, are not)
         const going = [gone, ...this.descendantsOf(gone)];
-        for (const session of going) this.#children.delete(session);
+        for (const session of going) {
+          this.#children.delete(session);
+          this.#parentOf.delete(session);
+        }
         this.#frames.detached(gone);
         // (M12 J12: a command in flight on a session the detach took — its, and the frames' in it — is let go, as at a
         // commit: the engine may never answer a session torn down mid-command, and the chain stalled to the bound said the
@@ -599,6 +605,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       );
     const cdp = this.window.webContents.debugger;
     this.#children.add(child);
+    this.#parentOf.set(child, parent);
     /** one step: sent if the frame is still attached, and waited for until it is answered, refused, or unanswered past
      * `FRAME_STEP_MS` (abandoned: unconfirmed, not unsent). Each its own (M2): every step is sent before any is waited for
      * (M12 J4), so none — refused or late — keeps another unsent, the nested frames' auto-attach least of all. */
@@ -1288,16 +1295,15 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     return this.#children.size;
   }
 
-  /** PT-6a (M8 — C5): the frames under a frame's session, at any depth — by the frames' parent links. */
+  /** PT-6a (M8 — C5): the sessions under a frame's session, at any depth — by the native's own parent links (M14 — R4). */
   private descendantsOf(session: string): string[] {
-    const frames = this.#frames.frames();
     const out: string[] = [];
     const under = [session];
     for (let parent = under.shift(); parent !== undefined; parent = under.shift())
-      for (const f of frames)
-        if (f.parent === parent && !out.includes(f.session)) {
-          out.push(f.session);
-          under.push(f.session);
+      for (const [child, of] of this.#parentOf)
+        if (of === parent && !out.includes(child)) {
+          out.push(child);
+          under.push(child);
         }
     return out;
   }

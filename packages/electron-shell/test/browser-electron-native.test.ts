@@ -4521,6 +4521,34 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       expect(r.native.childSessions?.()).toBe(0);
     });
 
+    it("PT-6a (M14 — R4) — a frame's OWN commit drops its children's records first (another document of its own site: its session stays): their nested sessions still go with them at the detach that follows — the native's own parent links, never the frames' records (before: the grandchild's session kept for good, one more at each rotation); in the other order the same", async () => {
+      for (const commitFirst of [true, false]) {
+        const r = recording();
+        r.attach("F");
+        r.attach("N", "F");
+        r.attach("M", "N");
+        await turns();
+        expect(r.native.childSessions?.()).toBe(3);
+        const commit = (): void =>
+          r.emit(
+            "Page.frameNavigated",
+            { frame: { id: "t-F", url: "https://frame.test/next" } },
+            "F",
+          );
+        // F commits another document of its own site; N's frame went with the old one: its detach on F's session, M's
+        // never comes
+        if (commitFirst) commit();
+        r.emit("Target.detachedFromTarget", { sessionId: "N", targetId: "t-N" }, "F");
+        if (!commitFirst) commit();
+        expect(r.native.childSessions?.()).toBe(1);
+        // F's new document's frames attach: new sessions, counted
+        r.attach("N2", "F");
+        r.attach("M2", "N2");
+        await turns();
+        expect(r.native.childSessions?.()).toBe(3);
+      }
+    });
+
     it("PT-6a (K5) — the hand's commands SENT and not yet answered, counted (`handInFlight` — main's census reads it): one while unanswered; none once answered, let go at its frame's detach, or let go at the page's commit", async () => {
       vi.useFakeTimers();
       try {
