@@ -735,4 +735,57 @@ describe("PT-6a (M7, A6) — a page whose load ended with NOTHING SHOWN is let g
     (q.face.state() as { retry?: () => void }).retry?.();
     expect(q.handle.navigations.at(-1)).toEqual({ action: "reload" });
   });
+
+  it("PT-6a (M12) — a load's bound goes with its wait: a SECOND load that shows nothing within the first one's bound (↻ pressed at once) is let go at ITS last word, never at the first load's bound", async () => {
+    const s = stage();
+    const p = s.open(KEY, true, "starting");
+    p.face.demand(SEEN);
+    await s.pump();
+    // load 1 begins, and shows nothing at 0 ms: its bound would lapse at 2,000
+    says(p.handle, "starting", { browser: browserAt(PAGE.url, { loading: true }) });
+    await s.pump();
+    says(p.handle, "starting", {
+      browser: browserAt(PAGE.url, { failure: { reason: "no-document" } }),
+    });
+    await s.pump();
+    expect(p.wire()).toBe("live");
+    // its refusal at 300: its last word — let go at once
+    s.clock.advance(300);
+    const refused = (serial: number) => ({ what: "download", serial });
+    says(p.handle, "starting", {
+      browser: browserAt(PAGE.url, { failure: { reason: "no-document" }, refused: refused(1) }),
+    });
+    await s.pump();
+    expect(p.wire()).toBe("hibernated");
+    // ↻ at 400: the producer headed to its address again, its failure gone — the pane's ask written again
+    s.clock.advance(100);
+    (p.face.state() as { retry?: () => void }).retry?.();
+    expect(p.handle.navigations.at(-1)).toEqual({ action: "go", url: PAGE.url });
+    says(p.handle, "hibernated", {
+      browser: browserAt(PAGE.url, { loading: true, refused: refused(1) }),
+    });
+    await s.pump();
+    expect(p.wire()).toBe("live");
+    says(p.handle, "starting", {
+      browser: browserAt(PAGE.url, { loading: true, refused: refused(1) }),
+    });
+    await s.pump();
+    // load 2, in its new window, shows nothing at 500: its own bound lapses at 2,500
+    s.clock.advance(100);
+    says(p.handle, "starting", {
+      browser: browserAt(PAGE.url, { failure: { reason: "no-document" }, refused: refused(1) }),
+    });
+    await s.pump();
+    // at 2,000, where load 1's bound would have lapsed: the page still waits on load 2's last word
+    s.clock.advance(1_500);
+    await s.pump();
+    expect(p.wire()).toBe("live");
+    // load 2's refusal at 2,100: let go at once
+    s.clock.advance(100);
+    says(p.handle, "starting", {
+      browser: browserAt(PAGE.url, { failure: { reason: "no-document" }, refused: refused(2) }),
+    });
+    await s.pump();
+    expect(p.wire()).toBe("hibernated");
+  });
 });
