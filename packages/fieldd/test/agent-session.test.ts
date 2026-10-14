@@ -2164,6 +2164,78 @@ describe("PJ-7 — a launch names a place (agent.spawn {place})", () => {
     expect(sessions).toHaveLength(0);
     expect(existsSync(join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR))).toBe(false);
   }, 60_000);
+
+  it("Q3 (a) — a native resume that names no folder runs in the conversation's own, from this desktop's index, never in home; a folder gone is `missing-cwd`, and so is a conversation the index files no folder for", async () => {
+    const box = await setup({ floor: "real", catalog: FILED_CATALOG });
+    const { daemon, dataDir, root, sessions } = box;
+    const own = join(root, "conversation-folder");
+    mkdirSync(own);
+    const win = await window(daemon, DECK, "pj7c");
+    await indexReady(win);
+    const spawned = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: own,
+    })) as AgentSpawnResult;
+    const conversation = spawned.session.sessionId;
+    // the index files it under the scripted agent, in its own folder
+    const fileIn = (cwd: string | null) => {
+      writeFileSync(
+        box.runtimesFile,
+        JSON.stringify([{ id: "rt-scripted", kind: "scripted", data_root: "~/.scripted" }]),
+      );
+      writeFileSync(
+        box.sessionsFile,
+        JSON.stringify([{ ...rosettaRow(conversation, 60_000), cwd }]),
+      );
+    };
+    fileIn(own);
+    const ended = async (result: AgentSpawnResult) => {
+      await win.call("terminal.terminate", { sessionId: result.terminal.sessionId });
+      await poll(
+        async () =>
+          readRecord(dataDir, result.session.runtimeRunId).exited !== undefined ? true : undefined,
+        15_000,
+      );
+    };
+    await ended(spawned);
+
+    // the phone's Resume: an id and an agent, no path
+    const resumed = (await win.call("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: conversation,
+    })) as AgentSpawnResult;
+    expect(sessions.at(-1)?.resume).toBe(conversation);
+    expect(readRecord(dataDir, resumed.session.runtimeRunId).cwd).toBe(own);
+    await ended(resumed);
+
+    // the folder is gone: refused as today, never started somewhere else
+    rmSync(own, { recursive: true });
+    const gone = (await win.callErr("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: conversation,
+    })) as RpcErrorShape;
+    expect(gone.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(gone.data?.details).toMatchObject({ reason: "missing-cwd", cwd: own });
+    // the index knows no folder for it: refused too — home was never its folder
+    mkdirSync(own);
+    fileIn(null);
+    const unfiled = (await win.callErr("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: conversation,
+    })) as RpcErrorShape;
+    expect(unfiled.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(unfiled.data?.details).toMatchObject({ reason: "missing-cwd" });
+    expect(sessions).toHaveLength(2);
+
+    // a caller that names the folder is unchanged: it runs where it said
+    const named = (await win.call("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: conversation,
+      cwd: box.envOut,
+    })) as AgentSpawnResult;
+    expect(readRecord(dataDir, named.session.runtimeRunId).cwd).toBe(box.envOut);
+    await win.call("terminal.terminate", { sessionId: named.terminal.sessionId });
+  }, 90_000);
 });
 
 describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins", () => {

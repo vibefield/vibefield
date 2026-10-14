@@ -1197,6 +1197,19 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     return { path: facts.path, placeId: facts.placeId };
   }
 
+  /** QL-D10 — a native resume runs only in an existing absolute folder of
+   * this device: else `missing-cwd`, with the folder it named. */
+  private requireConversationFolder(provider: string, cwd: string): void {
+    if (!isAbsolute(cwd) || !isDirectory(cwd)) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the conversation's folder is not a folder on this device",
+        false,
+        { provider, reason: "missing-cwd", cwd },
+      );
+    }
+  }
+
   /** `agent.resume` — a run of ours (its record), or QL-D10's conversation by
    * its provider-native id. */
   async resume(
@@ -1279,15 +1292,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         { provider: params.provider, state: "signed-out" },
       );
     }
-    const cwd = params.cwd ?? this.home;
-    if (!isAbsolute(cwd) || !isDirectory(cwd)) {
-      throw new RpcCallError(
-        "PRECONDITION_FAILED",
-        "the conversation's folder is not a folder on this device",
-        false,
-        { provider: params.provider, reason: "missing-cwd", cwd },
-      );
-    }
+    // a folder the caller names is checked first, as it always was
+    if (params.cwd !== undefined) this.requireConversationFolder(params.provider, params.cwd);
     // …and only a conversation the INDEX files under this agent: the
     // renderer's word for which agent a native id belongs to is not provenance.
     const filed = await this.opts.index.nativeSessionAgent(params.nativeSessionId);
@@ -1321,6 +1327,19 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         },
       );
     }
+    // PJ-7 (Q3 (a)) — no folder named (the phone's Resume names none): the
+    // conversation's own, from this desktop's index row for the id — never
+    // home, which was never its folder; a row that names none is refused
+    const cwd = params.cwd ?? filed.cwd;
+    if (cwd === undefined) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the agent index knows no folder for this conversation; name the folder to resume it in",
+        false,
+        { provider: params.provider, reason: "missing-cwd" },
+      );
+    }
+    if (params.cwd === undefined) this.requireConversationFolder(params.provider, cwd);
     const identity = this.identity();
     // PJ-6 (Q4) — a conversation a run of ours launched at a model resumes at
     // it, in the account the index files it under

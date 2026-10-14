@@ -574,7 +574,9 @@ export type AgentResumeRunParams = z.infer<typeof AgentResumeRunParams>;
  * be the one the index files the conversation under (none where it is filed
  * in the agent's own folder) — else PRECONDITION_FAILED `other-profile`. A
  * conversation a live run already continues is refused. The answer is
- * `agent.spawn`'s. */
+ * `agent.spawn`'s. PJ-7 (Q3 (a)) — `cwd` absent is the conversation's OWN
+ * folder, from the desktop's index row for the id (it was home): refused
+ * `missing-cwd` when that folder is gone, or when the row names none. */
 export const AgentResumeNativeParams = z
   .object({
     provider: AgentProviderId,
