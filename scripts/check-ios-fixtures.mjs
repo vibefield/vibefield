@@ -175,7 +175,10 @@ for (const searchRoot of searchRoots) {
 // on the phone as template SVGs beside the glyphs. They are COPIES of the
 // desktop's `os-marks.tsx` paths, held to them here the way a golden is.
 const OS_MARKS_TSX = join(root, "packages/field-app/src/godview/os-marks.tsx");
-const OS_MARKS_IOS = join(root, "apps/ios/VibeFieldKit/Sources/FieldDesign/Resources/OSMarks.xcassets");
+const OS_MARKS_IOS = join(
+  root,
+  "apps/ios/VibeFieldKit/Sources/FieldDesign/Resources/OSMarks.xcassets",
+);
 {
   const source = readFileSync(OS_MARKS_TSX, "utf8");
   const start = source.indexOf("const MARKS");
