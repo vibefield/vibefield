@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap } from "../src/index";
 import { nativeBinPath, shortTmpRoot, waitForMgmtEndpoint } from "./native-harness";
-import { helloAs, WsRpc } from "./ws-rpc";
+import { helloAs, type RpcErrorShape, WsRpc } from "./ws-rpc";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const BIN = nativeBinPath(ROOT);
@@ -181,15 +181,25 @@ describe("the terminal seam (NF-3, real field-native)", () => {
 
     // fieldd's OWN inventory has not necessarily caught up yet — that is the
     // whole asymmetry, and openTicket still honestly refuses what it has not
-    // seen. Both answers are correct at the same instant.
-    const observedNow = ((await rpc.call("terminal.list", {})) as { terminals: TerminalInfo[] })
-      .terminals;
-    if (!observedNow.some((t) => t.sessionId === created.sessionId)) {
-      const refused = await rpc.call("terminal.openTicket", { sessionId: created.sessionId }).then(
-        () => null,
-        (error: unknown) => error,
+    // seen. Both answers are correct at the same instant. The observation may
+    // land between the list and the mint (a gate red, 2026-10-12): then the
+    // mint rightly succeeds, and what it must never do is succeed for a
+    // session fieldd still does not list.
+    const listed = async () =>
+      ((await rpc.call("terminal.list", {})) as { terminals: TerminalInfo[] }).terminals.some(
+        (t) => t.sessionId === created.sessionId,
       );
-      expect(refused).not.toBeNull();
+    if (!(await listed())) {
+      const minted = await rpc.call("terminal.openTicket", { sessionId: created.sessionId }).then(
+        () => ({ ok: true as const }),
+        (error: unknown) => ({ ok: false as const, error }),
+      );
+      if (minted.ok) {
+        expect(await listed(), "a ticket for a session fieldd does not list").toBe(true);
+      } else {
+        // the refusal is the not-yet-observed one
+        expect((minted.error as { rpc?: RpcErrorShape }).rpc?.data?.kind).toBe("NOT_FOUND");
+      }
     }
 
     // and once observed, the attach-to-existing door works as it always did

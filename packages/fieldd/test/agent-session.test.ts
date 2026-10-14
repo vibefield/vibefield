@@ -38,15 +38,17 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type {
-  AccountUsageService,
-  AgentAdapterBinding,
-  AgentHost,
-  AgentProfile,
-  BoundIngress,
-  ExtensionService,
-  PromptReceipt,
-  PromptSubmission,
+import {
+  type AccountUsageService,
+  type AgentAdapterBinding,
+  type AgentHost,
+  type AgentModelService,
+  type AgentProfile,
+  type BoundIngress,
+  defineModelService,
+  type ExtensionService,
+  type PromptReceipt,
+  type PromptSubmission,
 } from "@vibecook/puppeteer-core";
 import type {
   AgentProvider,
@@ -260,22 +262,107 @@ function withoutExtensionReads(provider: AgentProvider): AgentProvider {
   };
 }
 
+/** PJ-6 — the scripted agent's own model picker, as an adapter declares one:
+ * two models, the first with an effort control, read per account and folder.
+ * `fail` makes the read fail the way a signed-out agent's does; `reads`
+ * counts the reads (a launch at a model discovers again; one without does
+ * not); `options` is what each launch was handed to start at — puppeteer's
+ * translation of the selection, the adapter's private options. PJ-6 (Q4) —
+ * `resumeSelection`: whether its resume takes a selection (fixed at boot);
+ * `discovered`: the account each read ran in (a resume's must be the
+ * session's own). */
+interface ScriptedModels {
+  fail: boolean;
+  reads: number;
+  options: unknown[];
+  resumeSelection: boolean;
+  discovered: Array<string | undefined>;
+}
+
+const SCRIPTED_MODELS = [
+  {
+    id: "model-a",
+    label: "Model A",
+    controls: [
+      {
+        id: "effort",
+        label: "Effort",
+        role: "effort" as const,
+        values: [
+          { id: "low", label: "low" },
+          { id: "high", label: "high" },
+        ],
+      },
+    ],
+  },
+  { id: "model-b", label: "Model B", controls: [] },
+];
+
+function scriptedModels(state: ScriptedModels): AgentModelService {
+  return defineModelService({
+    provider: {
+      id: "scripted",
+      label: "Scripted",
+      discovery: "prelaunch",
+      resumeSelection: state.resumeSelection,
+    },
+    async discover(context) {
+      state.reads += 1;
+      state.discovered.push(context.profile?.id);
+      if (state.fail)
+        return {
+          status: "auth-required",
+          provider: "scripted",
+          code: "auth-required",
+          message: "Sign in to discover models.",
+        };
+      return {
+        status: "available",
+        catalog: {
+          provider: "scripted",
+          ...(context.profile !== undefined ? { profileId: context.profile.id } : {}),
+          cwd: context.cwd,
+          observedAt: new Date().toISOString(),
+          source: { kind: "native-protocol", freshness: "live" },
+          completeness: "complete",
+          customModels: false,
+          models: SCRIPTED_MODELS,
+        },
+      };
+    },
+    toAgentOptions: (selection) => ({
+      model: selection.modelId,
+      ...(selection.controls?.["effort"] !== undefined
+        ? { effort: selection.controls["effort"] }
+        : {}),
+    }),
+  });
+}
+
 function scriptedProvider(
   envOut: string,
   sessions: ScriptedSession[],
   attach: { records: ScriptedAttach[] } | undefined,
-  extra: { profiles?: boolean; seen?: Array<AgentProfile | undefined>; signInMark?: string } = {},
+  extra: {
+    profiles?: boolean;
+    seen?: Array<AgentProfile | undefined>;
+    signInMark?: string;
+    models?: ScriptedModels;
+  } = {},
 ): AgentProvider {
   let counter = 0;
   return {
     descriptor: { id: "scripted", label: "Scripted" },
     ...(extra.profiles === true ? { profiles: scriptedProfiles() } : {}),
     ...(extra.signInMark !== undefined ? { extensions: scriptedExtensions(extra.signInMark) } : {}),
+    ...(extra.models !== undefined ? { models: scriptedModels(extra.models) } : {}),
     async createSession(options: AgentProviderSessionOptions): Promise<AgentAdapterBinding> {
       const bornAt = Date.now();
       const n = ++counter;
       // AR-S2 — the account a spawn was bound to, as the runtime resolved it
       extra.seen?.push(options.profile);
+      // PJ-6 — what the launch was handed to start at
+      extra.models?.options.push(options.agentOptions);
       const out = join(envOut, `session-${n}.env`);
       const typedOut = join(envOut, `session-${n}.typed`);
       // the stable-ingress contract, from the adapter's side: bound, then
@@ -357,6 +444,8 @@ interface Box {
   records: SessionRecordStore;
   /** AR-S2 — the account each scripted spawn was bound to, in order */
   seen: Array<AgentProfile | undefined>;
+  /** PJ-6 — the scripted agent's model picker and what each launch started at */
+  models: ScriptedModels;
 }
 
 interface SetupConfig {
@@ -381,6 +470,8 @@ interface SetupConfig {
   catalog?: readonly AgentCatalogEntry[];
   /** Replace every real quota reader; only the fake Claude service remains. */
   usage?: AccountUsageService;
+  /** PJ-6 (Q4) — whether the scripted agent's resume takes a model (default yes) */
+  resumeSelection?: boolean;
 }
 
 /** Boot fieldd: over the mock mgmt server (no floor) or the REAL field-native. */
@@ -449,6 +540,13 @@ async function setup(config: SetupConfig): Promise<Box> {
   const sessions: ScriptedSession[] = restart?.sessions ?? [];
   const seen: Array<AgentProfile | undefined> = restart?.seen ?? [];
   const attached: ScriptedAttach[] = restart?.attached ?? [];
+  const models: ScriptedModels = restart?.models ?? {
+    fail: false,
+    reads: 0,
+    options: [],
+    resumeSelection: config.resumeSelection ?? true,
+    discovered: [],
+  };
   const daemon = await bootstrap({
     dataDir,
     controlPort: 0,
@@ -478,6 +576,7 @@ async function setup(config: SetupConfig): Promise<Box> {
           profiles: config.profiles === true,
           seen,
           ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
+          models,
         }),
       ];
     },
@@ -511,6 +610,7 @@ async function setup(config: SetupConfig): Promise<Box> {
     requestLog,
     records,
     seen,
+    models,
   };
 }
 
@@ -609,31 +709,48 @@ const auditEntries = (dataDir: string): AuditEntry[] =>
  * (carrying the mutation's own attrs — `how`, the provider, the PTY) and the
  * `outcome` sharing its operationId (carrying the result's). Disjoint greps
  * over the concatenated ledger cannot say that the words came from the same
- * act, or the same ACTOR; this can, and it says what it saw when it cannot. */
-function auditAct(
+ * act, or the same ACTOR; this can, and it says what it saw when it cannot.
+ *
+ * WAITED FOR, up to `ms` (the debts lane, 2026-10-12): the outcome is appended
+ * after the act's effect resolves (AuditService.requiredAs — attempt, effect,
+ * outcome), and a daemon's own act (the boot's re-attach) shows its effect —
+ * the row, the record — before its fsync'd outcome lands. Four gates read the
+ * ledger in that gap ("never got an outcome record"); an outcome that is late
+ * is not one that is missing, and one that never comes still fails here. */
+async function auditAct(
   dataDir: string,
   where: (entry: AuditEntry) => boolean,
-): { attempt: AuditEntry; outcome: AuditEntry } {
-  const entries = auditEntries(dataDir);
-  const attempt = entries.find((entry) => entry.phase === "attempt" && where(entry));
-  if (attempt === undefined) {
-    const seen = entries.map((entry) => ({
-      action: entry.action,
-      phase: entry.phase,
-      outcome: entry.outcome,
-      actor: entry.actor.kind,
-      target: entry.target.id,
-      attrs: entry.attrs,
-    }));
-    throw new Error(`no audit attempt matched; the ledger holds ${JSON.stringify(seen)}`);
+  ms = 10_000,
+): Promise<{ attempt: AuditEntry; outcome: AuditEntry }> {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    const entries = auditEntries(dataDir);
+    const attempt = entries.find((entry) => entry.phase === "attempt" && where(entry));
+    const outcome =
+      attempt === undefined
+        ? undefined
+        : entries.find(
+            (entry) => entry.phase === "outcome" && entry.operationId === attempt.operationId,
+          );
+    if (attempt !== undefined && outcome !== undefined) return { attempt, outcome };
+    if (Date.now() > deadline) {
+      if (attempt === undefined) {
+        const seen = entries.map((entry) => ({
+          action: entry.action,
+          phase: entry.phase,
+          outcome: entry.outcome,
+          actor: entry.actor.kind,
+          target: entry.target.id,
+          attrs: entry.attrs,
+        }));
+        throw new Error(`no audit attempt matched; the ledger holds ${JSON.stringify(seen)}`);
+      }
+      throw new Error(
+        `the audit attempt ${attempt.operationId} never got an outcome record within ${ms} ms`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  const outcome = entries.find(
-    (entry) => entry.phase === "outcome" && entry.operationId === attempt.operationId,
-  );
-  if (outcome === undefined) {
-    throw new Error(`the audit attempt ${attempt.operationId} never got an outcome record`);
-  }
-  return { attempt, outcome };
 }
 
 /** EL7 as a SET, not as a list of suspicions.
@@ -877,7 +994,7 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
     expect(existsSync(join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR))).toBe(false);
     // the ledger, as records: the door's own act, the provider it was for,
     // and the floor's refusal kind as the outcome's reason
-    const refusal = auditAct(dataDir, (entry) => entry.action === "agent.session.spawn");
+    const refusal = await auditAct(dataDir, (entry) => entry.action === "agent.session.spawn");
     expect(refusal.attempt.attrs?.["provider"]).toBe("scripted");
     expect(refusal.attempt.actor.kind).toBe("local-token");
     expect(refusal.outcome.outcome).toBe("failed");
@@ -907,7 +1024,7 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
       capability: "resume",
     });
     // the attempt is ledgered as the native form names it: a conversation, no run yet
-    const act = auditAct(
+    const act = await auditAct(
       dataDir,
       (entry) =>
         entry.action === "agent.session.resume" && entry.attrs?.["nativeSessionId"] === "conv-1",
@@ -1166,7 +1283,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     expect(typed).toContain("hello-floor");
 
     // ── the audit ──
-    const spawnAct = auditAct(dataDir, (entry) => entry.action === "agent.session.spawn");
+    const spawnAct = await auditAct(dataDir, (entry) => entry.action === "agent.session.spawn");
     expect(spawnAct.attempt.target.kind).toBe("agent-session");
     expect(spawnAct.attempt.attrs?.["provider"]).toBe("scripted");
     expect(spawnAct.outcome.outcome).toBe("succeeded");
@@ -1213,7 +1330,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     expect(second.creationRequestId).not.toBe(record.creationRequestId);
     expect(sessions[1]?.ingress).toEqual({ port: 40_002, token: "bearer-2" });
     expect(second.ingress).toEqual(sessions[1]?.ingress);
-    const resumeAct = auditAct(dataDir, (entry) => entry.action === "agent.session.resume");
+    const resumeAct = await auditAct(dataDir, (entry) => entry.action === "agent.session.resume");
     expect(resumeAct.attempt.target.id).toBe(runId);
     expect(resumeAct.attempt.actor.kind).toBe("local-token");
     expect(resumeAct.outcome.outcome).toBe("succeeded");
@@ -1299,7 +1416,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     });
     expect(record.cwd).toBe(envOut);
     expect(record.exited).toBeUndefined();
-    const act = auditAct(
+    const act = await auditAct(
       dataDir,
       // the ledger redacts a temp root, so the one with a folder is the one sent with a folder
       (entry) => entry.action === "agent.session.resume" && entry.attrs?.["cwd"] !== undefined,
@@ -1642,6 +1759,279 @@ describe("a server's values over the REAL floor (AR-S4d)", () => {
   }, 60_000);
 });
 
+describe("PJ-6 — a launch at a model the agent offers (agent.spawn {modelSelection})", () => {
+  /** The spawn params fixture's selection (EL9: the reader's side of the
+   * contract's own file), aimed at the scripted agent, which does not list it. */
+  const FIXTURE_PARAMS = JSON.parse(
+    readFileSync(
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        "../../contracts/fixtures/agent-spawn-params.model-selection.json",
+      ),
+      "utf8",
+    ),
+  ) as { modelSelection: { modelId: string; controls: Record<string, string> } };
+
+  it("refuses a model or a control the agent does not offer, and a picker it cannot read, before anything starts — in fieldd's words, keeping puppeteer's codes", async () => {
+    const { daemon, dataDir, models } = await setup({ floor: "mock" });
+    const win = await window(daemon, DECK, "pj6a");
+
+    // the contract fixture's model is not one the scripted agent lists
+    const unlisted = await win.callErr("agent.spawn", {
+      provider: "scripted",
+      modelSelection: FIXTURE_PARAMS.modelSelection,
+    });
+    expect(unlisted.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(unlisted.message).toContain("Scripted was not started at the chosen model");
+    expect(unlisted.data?.details).toMatchObject({
+      provider: "scripted",
+      code: "AGENT_LAUNCH_REFUSED",
+      refusal: "INVALID_MODEL_SELECTION",
+      reason: "invalid-model-selection",
+    });
+
+    // a listed model at a value its control does not offer
+    const value = await win.callErr("agent.spawn", {
+      provider: "scripted",
+      modelSelection: { modelId: "model-a", controls: { effort: "max" } },
+    });
+    expect(value.data?.details).toMatchObject({ refusal: "INVALID_MODEL_SELECTION" });
+
+    // the picker cannot be read: the launch is refused as unavailable, never
+    // started at the agent's own settings behind the person's back
+    models.fail = true;
+    const unread = await win.callErr("agent.spawn", {
+      provider: "scripted",
+      modelSelection: { modelId: "model-a" },
+    });
+    expect(unread.data?.kind).toBe("UNAVAILABLE");
+    expect(unread.data?.retryable).toBe(true);
+    expect(unread.message).toContain("Sign in to discover models.");
+    expect(unread.data?.details).toMatchObject({
+      service: "agents",
+      state: "model-discovery-unavailable",
+      refusal: "MODEL_DISCOVERY_UNAVAILABLE",
+    });
+
+    // each refusal read the picker once and launched nothing
+    expect(models.reads).toBe(3);
+    expect(models.options).toEqual([]);
+    expect(existsSync(join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR))).toBe(false);
+    const act = await auditAct(
+      dataDir,
+      (entry) => entry.action === "agent.session.spawn" && entry.attrs?.["modelSelection"] === true,
+    );
+    expect(act.outcome.outcome).toBe("failed");
+    // a malformed selection never reaches puppeteer: the door's own refusal
+    const malformed = await win.callErr("agent.spawn", {
+      provider: "scripted",
+      modelSelection: { modelId: "" },
+    });
+    expect(malformed.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(models.reads).toBe(3);
+  });
+
+  it("starts at the model and the control chosen: the adapter is handed them, the row is born, and the ledger says a selection was applied without naming it", async () => {
+    const { daemon, dataDir, envOut, models } = await setup({ floor: "real" });
+    const win = await window(daemon, DECK, "pj6b");
+    const spawned = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      // a key a newer caller adds rides the contract, and never reaches
+      // puppeteer's strict schema (which would call the selection malformed)
+      modelSelection: { modelId: "model-a", controls: { effort: "high" }, later: 1 },
+    })) as AgentSpawnResult;
+    expect(models.options).toEqual([{ model: "model-a", effort: "high" }]);
+    expect(models.reads).toBe(1);
+    expect(spawned.session.runtimeRunId).toBeDefined();
+    const act = await auditAct(
+      dataDir,
+      (entry) => entry.action === "agent.session.spawn" && entry.attrs?.["modelSelection"] === true,
+    );
+    expect(act.outcome.outcome).toBe("succeeded");
+    expect(act.outcome.attrs?.["modelSelection"]).toBe("applied");
+    expect(auditText(dataDir)).not.toContain("model-a");
+
+    // no selection: the agent's own settings, and no picker read
+    const plain = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+    })) as AgentSpawnResult;
+    expect(models.options).toEqual([{ model: "model-a", effort: "high" }, undefined]);
+    expect(models.reads).toBe(1);
+
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    await win.call("terminal.terminate", { sessionId: plain.terminal.sessionId });
+  }, 60_000);
+
+  it("a CONFIRMED birth hands its project the launch's recipe and keeps the selection on its record; a refusal hands nothing, a resume no recipe", async () => {
+    const { daemon, dataDir, envOut, records } = await setup({ floor: "real", profiles: true });
+    const win = await window(daemon, DECK, "pj6c");
+    const acted = vi.spyOn(daemon.projectRecords, "actedIn");
+    const spawned = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      profileSet: "native",
+      modelSelection: { modelId: "model-a", controls: { effort: "high" } },
+    })) as AgentSpawnResult;
+    expect(acted).toHaveBeenCalledTimes(1);
+    expect(acted.mock.calls[0]?.[0]).toBe(envOut);
+    expect(acted.mock.calls[0]?.[2]).toEqual({
+      provider: "scripted",
+      profileSet: "native",
+      selection: { modelId: "model-a", controls: { effort: "high" } },
+    });
+    // the record keeps what the launch asked for, signed
+    const record = readRecord(dataDir, spawned.session.runtimeRunId);
+    expect(record.modelSelection).toEqual({ modelId: "model-a", controls: { effort: "high" } });
+    expect(records.verifies(record)).toBe(true);
+
+    // a refused launch: no birth, no act
+    await win.callErr("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      profileSet: "native",
+      modelSelection: { modelId: "model-x" },
+    });
+    expect(acted).toHaveBeenCalledTimes(1);
+
+    // the agent's own settings: a recipe with no model, and none on the record
+    const plain = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      profileSet: "native",
+    })) as AgentSpawnResult;
+    expect(acted.mock.calls[1]?.[2]).toEqual({ provider: "scripted", profileSet: "native" });
+    expect(readRecord(dataDir, plain.session.runtimeRunId)).not.toHaveProperty("modelSelection");
+
+    // a resume is an act in its place, never a recipe (Q6: only a launch writes one)
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    await poll(
+      async () =>
+        readRecord(dataDir, spawned.session.runtimeRunId).exited !== undefined ? true : undefined,
+      15_000,
+    );
+    const resumed = (await win.call("agent.resume", {
+      runtimeRunId: spawned.session.runtimeRunId,
+    })) as AgentSpawnResult;
+    expect(acted).toHaveBeenCalledTimes(3);
+    expect(acted.mock.calls[2]?.[2]).toBeUndefined();
+
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+    await win.call("terminal.terminate", { sessionId: plain.terminal.sessionId });
+  }, 60_000);
+
+  /** A run launched at model-a/high under `profileSet`, then ended. */
+  async function launchedAndEnded(box: Box, win: WsRpc, profileSet: string) {
+    const spawned = (await win.call("agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+      profileSet,
+      modelSelection: { modelId: "model-a", controls: { effort: "high" } },
+    })) as AgentSpawnResult;
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    await poll(
+      async () =>
+        readRecord(box.dataDir, spawned.session.runtimeRunId).exited !== undefined
+          ? true
+          : undefined,
+      15_000,
+    );
+    return spawned;
+  }
+
+  it("Q4 — a resume starts at the session's own launch model again, discovered in the account it was launched in; the answer and the ledger say applied, and the successor keeps it", async () => {
+    const box = await setup({ floor: "real", profiles: true });
+    const { daemon, dataDir, sessions, models } = box;
+    const win = await window(daemon, DECK, "pj6d");
+    const made = (await win.call("agents.profileSets.create", {
+      label: "Work",
+    })) as AgentsProfileSetsSetResult;
+    const { persona } = (await win.call("agents.profiles.create", {
+      set: made.set.id,
+      provider: "scripted",
+    })) as AgentsProfilesCreateResult;
+    const spawned = await launchedAndEnded(box, win, made.set.id);
+    expect(models.discovered).toEqual([persona.profileId]);
+
+    const resumed = (await win.call("agent.resume", {
+      runtimeRunId: spawned.session.runtimeRunId,
+    })) as AgentSpawnResult;
+    // the same conversation, continued — at the model and the effort it was
+    // launched at, the picker read again in the session's own account
+    expect(sessions.at(-1)?.resume).toBe(spawned.session.sessionId);
+    expect(models.options.at(-1)).toEqual({ model: "model-a", effort: "high" });
+    expect(models.discovered).toEqual([persona.profileId, persona.profileId]);
+    expect(resumed.modelSelection).toEqual({ state: "applied" });
+    expect(readRecord(dataDir, resumed.session.runtimeRunId).modelSelection).toEqual({
+      modelId: "model-a",
+      controls: { effort: "high" },
+    });
+    const act = await auditAct(
+      dataDir,
+      (entry) =>
+        entry.action === "agent.session.resume" && entry.target.id === spawned.session.runtimeRunId,
+    );
+    expect(act.outcome.attrs?.["modelSelection"]).toBe("applied");
+    expect(auditText(dataDir)).not.toContain("model-a");
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+  }, 60_000);
+
+  it("Q4 — a launch model the picker can no longer give is refused on resume, in fieldd's words with puppeteer's code — never dropped to the agent's own", async () => {
+    const box = await setup({ floor: "real" });
+    const { daemon, sessions, models } = box;
+    const win = await window(daemon, DECK, "pj6e");
+    const spawned = await launchedAndEnded(box, win, "native");
+    const born = sessions.length;
+    models.fail = true;
+    const refused = await win.callErr("agent.resume", {
+      runtimeRunId: spawned.session.runtimeRunId,
+    });
+    expect(refused.data?.kind).toBe("UNAVAILABLE");
+    expect(refused.message).toContain(
+      "Scripted was not resumed at the model the session was launched at",
+    );
+    expect(refused.data?.details).toMatchObject({ refusal: "MODEL_DISCOVERY_UNAVAILABLE" });
+    expect(sessions).toHaveLength(born);
+  }, 60_000);
+
+  it("Q4 — an agent whose resume cannot take a model resumes at its own, and the answer says so in fieldd's words", async () => {
+    const box = await setup({ floor: "real", resumeSelection: false });
+    const { daemon, models } = box;
+    const win = await window(daemon, DECK, "pj6f");
+    const spawned = await launchedAndEnded(box, win, "native");
+    const reads = models.reads;
+    const resumed = (await win.call("agent.resume", {
+      runtimeRunId: spawned.session.runtimeRunId,
+    })) as AgentSpawnResult;
+    // no selection asked of puppeteer (which would refuse it): its own settings
+    expect(models.options.at(-1)).toBeUndefined();
+    expect(models.reads).toBe(reads);
+    expect(resumed.modelSelection).toEqual({
+      state: "own",
+      reason: "at Scripted's own model — it can't start a resumed session at a chosen one",
+    });
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+  }, 60_000);
+
+  it("Q4 — a conversation resumed by its native id starts at the model its newest run of ours was launched at", async () => {
+    const box = await setup({ floor: "real", catalog: FILED_CATALOG });
+    const { daemon, sessions, models } = box;
+    const win = await window(daemon, DECK, "pj6g");
+    const spawned = await launchedAndEnded(box, win, "native");
+    fileConversations(box, [spawned.session.sessionId]);
+    const resumed = (await win.call("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: spawned.session.sessionId,
+      cwd: box.envOut,
+    })) as AgentSpawnResult;
+    expect(sessions.at(-1)?.resume).toBe(spawned.session.sessionId);
+    expect(models.options.at(-1)).toEqual({ model: "model-a", effort: "high" });
+    expect(resumed.modelSelection).toEqual({ state: "applied" });
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+  }, 60_000);
+});
+
 describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins", () => {
   /** A profile with one scripted sign-in; answers the persona and its root. */
   async function signedIn(
@@ -1778,7 +2168,7 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
     expect(refused.data?.kind).toBe("NOT_FOUND");
     expect(refused.message).toContain("Empty has no scripted account");
     expect(seen.length).toBe(before);
-    const act = auditAct(
+    const act = await auditAct(
       dataDir,
       (entry) =>
         entry.action === "agent.session.spawn" && entry.attrs?.["profileSet"] === made.set.id,
@@ -2262,7 +2652,7 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     // ── the ledger: this device's own act, on the run, with its outcome ──
     // (the attempt is written BEFORE the effect, so the refusals above are in
     // the ledger too — the act is matched by its target, not by being first)
-    const act = auditAct(
+    const act = await auditAct(
       dataDir,
       (entry) => entry.action === "agent.session.interrupt" && entry.target.id === runId,
     );
@@ -2272,7 +2662,7 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     expect(act.outcome.attrs?.["accepted"]).toBe(true);
     // an interrupt aimed at a run that does not exist is ledgered as an
     // ATTEMPT that failed — a reach for someone else's session leaves a trace
-    const missed = auditAct(
+    const missed = await auditAct(
       dataDir,
       (entry) => entry.action === "agent.session.interrupt" && entry.target.id === "run-none",
     );
@@ -2401,7 +2791,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     expect(after.ingress).toEqual(record.ingress);
     // the daemon's own act, read as records: the system actor, the epoch it
     // found on the attempt and the epoch it reached on the outcome
-    const reattachAct = auditAct(
+    const reattachAct = await auditAct(
       first.dataDir,
       (entry) => entry.action === "agent.session.reattach" && entry.target.id === runId,
     );
@@ -2487,7 +2877,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     expect(readRecord(first.dataDir, runId).reattach).toMatchObject({ state: "unsupported" });
     // the boot's own act, as records: it tried, and the adapter's "I cannot"
     // is the outcome's CODE (a daemon act's reasonCode is a code, not prose)
-    const held = auditAct(
+    const held = await auditAct(
       first.dataDir,
       (entry) => entry.action === "agent.session.reattach" && entry.target.id === runId,
     );
@@ -2562,7 +2952,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     // no second, system-actor copy: that one is reserved for the resume it
     // decides on by itself, and two entries for one act is a double ledger,
     // not corroboration.
-    const byDoor = auditAct(
+    const byDoor = await auditAct(
       first.dataDir,
       (entry) => entry.action === "agent.session.resume" && entry.target.id === runId,
     );
@@ -2686,7 +3076,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
       replacedBy: replaced.runtimeRunId,
     });
     // the ledger: ONE act, the daemon's own, and it says how it decided
-    const byIdle = auditAct(
+    const byIdle = await auditAct(
       first.dataDir,
       (entry) =>
         entry.action === "agent.session.resume" &&
@@ -2916,7 +3306,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     expect(readRecord(first.dataDir, bad.session.runtimeRunId).reattach).toMatchObject({
       state: "failed",
     });
-    const trouble = auditAct(
+    const trouble = await auditAct(
       first.dataDir,
       (entry) =>
         entry.action === "agent.session.reattach" && entry.target.id === bad.session.runtimeRunId,

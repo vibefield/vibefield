@@ -5,7 +5,7 @@
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
 > stays in the design docs + specs. Last rewritten: **2026-10-12 — GODVIEW ROUND 3 IS BUILT: THE STORIES HEAD, AND THE TERMINALS GO AWAY, COME BACK AND FILL THE WINDOW (`8c55581c`, `d5f1f836`, `f377f0e7`).**
 > Godview round 3 is on main whole: eight landings since the 10-10 rewrite, the History lead's six through lane land3 and the MV lead's two by James's fast-forward, each gated on the tree that landed. Nothing is pushed.
-> - **The Stories head, TV-8 and the perf lab's debts** (`8c55581c`, 2026-10-12, on James's "Merge now, diagnose after"; LANDED "GV-D1 + TV-8 + MV lab debts"): the instrument bar is gone. The monitor's views switch in a row of glass circles on the frame's head row, marks only and with no "Add a view" circle (N13 (a)). System control is the palette's act. An ended lane on the timeline opens its session in History. The canvas's head is hidden under any cover; History had shown it through its glass since One Frame. The perf pair: one row worse (swarm × n60 task), which James accepted as noise on the MV lead's reading of the per-round signs, and the swarm's style recalc went with the bar. The head's reserve is lent to the swarm as an obstacle; the swarm still reaching under the circles is under diagnosis (the MV lead's next slice, ruled by James for after the landing).
+> - **The Stories head, TV-8 and the perf lab's debts** (`8c55581c`, 2026-10-12, on James's "Merge now, diagnose after"; LANDED "GV-D1 + TV-8 + MV lab debts"): the instrument bar is gone. The monitor's views switch in a row of glass circles on the frame's head row, marks only and with no "Add a view" circle (N13 (a)). System control is the palette's act. An ended lane on the timeline opens its session in History. The canvas's head is hidden under any cover; History had shown it through its glass since One Frame. The perf pair: one row worse (swarm × n60 task), which James accepted as noise on the MV lead's reading of the per-round signs, and the swarm's style recalc went with the bar. The head's reserve is lent to the swarm as an obstacle. The swarm still reached under the circles, and the diagnosis James ruled for after the landing found its sizing at fault, not the band: no body is smaller than r 50, so the crowd outgrows its field and spills past any edge, as it did unseen under the bar. On his "Fade now + sizing later" the field dissolves under the head (`5214ff50`, LANDED "The field dissolves under the head"; light-theme rain's own ground fades there too). The sizing is puppeteer's, at its next pin.
 > - **The terminals' wrapper** (`86a49d68` … `d5f1f836`, 2026-10-11/12; LANDED "GV round 3, the terminals' wrapper"):
 >   - the deck's door (`away · up · maximized`) and the window's lights door;
 >   - the Lip: a 30 bar with the groove, the frame's tone, the panes in a well;
@@ -16,11 +16,11 @@
 >   - and its close (`ecfd7388` · `81ccb8da` · `f377f0e7`; LANDED "GV round 3, finished"): a launch opens on the monitor alone and the first call brings the last run's panes (N14 (a)); ⌘W on the last pane puts the terminals away (N16 (a)); the rest is 5/13 of any window, floor 232, the slider retired (N15 (a)).
 > - **Honest states the gates turned up:** the line never says "Pasted into …" for a paste the pane dropped; History's acts never end in silence; the deck's queued floor reads are bounded.
 >
-> Left of round 3: the bar's search stepping out in 120 ms (it changes place at once today), and a look on a real window at what the offscreen smokes cannot see (the lights' move, a real fling, the launch's first call, ⌘W on a last pane, other heights). Next: the debts lane beside PJ-6, then PJ-7 (N10 (a)); the swarm's reach under the head is the MV lead's.
+> Left of round 3: a look on a real window at what the offscreen smokes cannot see (the lights' move, a real fling, the launch's first call, ⌘W on a last pane, other heights). Next: PJ-7 (N10 (a); the debts lane and PJ-6 are landed); the swarm's sizing to its field is puppeteer's, at its next pin.
 >
 > **James ruled the whole *After Wave 2 Docket* on 2026-10-12** (republished under his current account, https://claude.ai/artifact/RvcaxJnoLhXMz3HcKHZx1G; DECISIONS, the N row): every mark at the lean but N7. **Pushes stay held (N7 (b)).** truffle's egress release this week (N11 (a)); after round 3, a debts lane beside PJ-6, then PJ-7 (N10 (a)). N2 (PK2) closed: the Stories head ended it. Upstream, for ghosttea: `paste()` / `sendKey()` / `sendText()` say whether they sent.
 >
-> Debts: fieldd's timing tests fail under load, a different one most runs (LANDED, the wrapper entry's "Owed"; a debts lane); "Open debts" below. **Every push is still HELD.**
+> Debts: the debts lane is LANDED (N10 (a); lanes dfd and dui), in five parts: "Debts, first part" (fieldd's honest budgets, doc-sync's teardown, kill-matrix row 6), "Debts, second part" (Godview's filter kept for the run, N4 (a); the search's 120 ms step, round 3's last mark; the launcher rung's focus race), "Debts, third part" (History's day heads frost, N3 (a), measured first), "Debts, fourth part" (index-timeline instrumented, fieldd-client's `timeoutMs`, the routed read bounded at 5 s, every kill-matrix create retried) and "Debts, fifth part" (the four reds met while landing were the tests' own races, index-timeline's among them). Owed: which callers pass a timeout, field-native's flush behind its backoff, rosettad's signal handler armed after it announces (rosetta's), and smoke:canvas on the live display for N3. "Open debts" below. **Every push is still HELD.**
 > Previous rewrite, kept for continuity — **2026-10-10 — HISTORY LISTS YOUR PROJECTS, AND GODVIEW'S TIMELINE READS THE PAST (`0e020306`).**
 > Wave 2 of the History finish is on main: four slices since the 10-09 rewrite. James ruled docket v9 on 2026-10-09, every mark at its lean (DECISIONS, the AR-8 finish row). Nothing is pushed.
 > - **PJ-4 phase A** (`36295d77`, 2026-10-10): fieldd tags every session with its project key. Figures merge across folders and desktops and say when they are partial. Project inks deal on the cool half (DESIGN.md §2.9).
@@ -36,7 +36,7 @@
 >
 > Next for History:
 > - DS-7/SP-7 (other desktops' sessions and transcripts, the phone's) wait on truffle's egress release. Until then History lists this desktop's sessions, with marks for the rest (H3).
-> - PJ-6 (model and effort in New agent) and PJ-7 (the phone over `project.*`).
+> - PJ-6 (model and effort in New agent) LANDED: the launch (LANDED "PJ-6, the launch") and Resume at the session's own model ("PJ-6, Resume"; puppeteer pinned on its unmerged branch `vf/pj6-resume-selection`, James merges). Next: PJ-7 (the phone over `project.*`, with the phone's launch rows).
 > - The past for other desktops (B-D4) and for the phone (B-D5).
 >
 > Open with James, none decided by this landing (N2–N4 on his page *After Wave 2 Docket*, published 2026-10-10 with the lead's leans):
@@ -492,13 +492,14 @@ its two-device/Tailscale acceptance witness remains open. AH-5 still owns the ph
 **History and Godview's past — wave 2 is landed; nothing of the History finish is in build.** The plan of record
 is `draft/history-finish/build-hf.md` (§6 has each lane's state). Ruled 2026-10-12 (the docket's N3, N4), for the debts lane
 after round 3 (N10 (a)):
-- History's stuck day heads frost (N3 (a)): DESIGN.md §6 first, the cost measured under a cover before it lands.
-- Godview's filter is kept while the app runs and cleared at launch (N4 (a)).
+- History's stuck day heads frost (N3 (a)): BUILT `b73ff700` (DESIGN.md first; measured under a cover first: no frame cost,
+  about 5 points of a core in the GPU process while the list scrolls).
+- Godview's filter is kept while the app runs and cleared at launch (N4 (a)): BUILT `6a0e808c`.
 
 **Godview round 3 — BUILT (2026-10-11/12).** The Stories head (GV-D1) and TV-8 landed at `8c55581c` (the MV lead's);
 the wrapper at `d5f1f836` (the History lead's, lane land3; GV-D4, the Lip GV-D7/D12, minimize and away GV-D5's call
 and GV-D6, maximized as the title bar GV-D11); the launch (W7, N14 (a)), ⌘W on the last pane (N16 (a)) and the rest
-on any window (N15 (a)) at `f377f0e7`. Left: the bar's search stepping out in 120 ms; a look on a real window. PK2 ended
+on any window (N15 (a)) at `f377f0e7`; the search's 120 ms step at `8c6982f0` (the debts lane). Left: a look on a real window. PK2 ended
 with the bar (N2 closed).
 
 **SNAP — the screenshot tool. SNAP-0 LANDED 2026-09-09 (`46c0c190`): the tool is in the
@@ -1061,11 +1062,11 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
     runs (N4 (a)); the Peek keeps its watch-only terminal (N5 (a)); after round 3 a debts lane beside PJ-6, then PJ-7 (N10 (a));
     truffle's egress this week (N11 (a)); pushes held (N7 (b)).
   - **Godview round 3: BUILT** — the Stories head and TV-8 (`8c55581c`), the wrapper (`d5f1f836`), the launch, ⌘W and
-    the rest (`f377f0e7`). Left: the bar's search stepping out in 120 ms.
+    the rest (`f377f0e7`), the search's 120 ms step (`8c6982f0`, the debts lane). Left: a look on a real window.
   - **Waiting on truffle's egress release:** DS-7 and SP-7, which bring other desktops' sessions and transcripts
     into History and onto the phone. History lists this desktop's sessions until then (H3).
-  - **Not waiting on a release (order unruled):** PJ-6 (launch recipes: model and effort in New agent) · PJ-7
-    (the phone over `project.*`) · the room's batched figures and the repository's address (R8, R9: built
+  - **Not waiting on a release:** PJ-7
+    (the phone over `project.*`, with the phone's launch rows) · the room's batched figures and the repository's address (R8, R9: built
     upstream, not yet passed) · the past for other desktops and the phone (B-D4, B-D5).
 - **DS — after wave 2 (LANDED 2026-10-01 `fa31207f`; LANDED §DS wave 2; `work/ds-wave2-2026-10-01.md`).** The plane is
   built, consumed on this side and hardened; the phone's ground (SP-1, SP-2, DS-4b) is laid. **James's (unchanged):** merge, release

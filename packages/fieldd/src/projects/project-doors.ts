@@ -17,6 +17,7 @@ import {
   type ProjectListParams,
   type ProjectListResult,
   type ProjectPlace,
+  ProjectRecipe,
   type ProjectRefusal,
   type ProjectRegrouped,
   type ProjectSessionRow,
@@ -859,6 +860,8 @@ export class ProjectDoors {
       // PJ-4 (H4) — the person's pin and hide, from the project's record
       ...(project.pinned === true ? { pinned: true } : {}),
       ...(project.hidden === true ? { hidden: true } : {}),
+      // PJ-6 — the launch recipe on its record, when this daemon can read it
+      ...recipeOf(project.recipe),
     };
   }
 
@@ -891,4 +894,13 @@ export class ProjectDoors {
     }
     for (const subscriber of this.#subscribers) subscriber(change);
   }
+}
+
+/** PJ-6 — a record's recipe as a summary carries it: the contract's shape, or
+ * nothing (a recipe a newer desktop wrote in a shape this one cannot read is
+ * left on the record, unanswered — never a refused summary). */
+function recipeOf(recipe: unknown): { recipe?: ProjectRecipe } {
+  if (recipe === undefined) return {};
+  const read = ProjectRecipe.safeParse(recipe);
+  return read.success ? { recipe: read.data } : {};
 }

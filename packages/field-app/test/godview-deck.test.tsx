@@ -2642,7 +2642,7 @@ describe("the remote attach rides the routed host (DS-4e)", () => {
       });
       expect(await Promise.race([attached, Promise.resolve(STILL_WAITING)])).toEqual({
         state: "failed",
-        reason: "studio did not answer in 10 s",
+        reason: "studio did not answer in 5 s",
       });
       expect(await Promise.race([next, Promise.resolve(STILL_WAITING)])).toEqual({
         state: "mounted",

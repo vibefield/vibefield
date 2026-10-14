@@ -48,6 +48,7 @@ export type {
   LogRetentionPolicy,
   LogSanitizerAliases,
   NodeLogging,
+  NodeLoggingFlushOptions,
   NodeLoggingTestHooks,
   RecentLogDelta,
   RecentLogSnapshot,

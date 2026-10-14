@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  AgentProfileSetId,
   AgentProviderId,
   IndexCalendarDay,
   IndexCatalogSession,
@@ -139,6 +140,33 @@ export type ProjectPlace = z.infer<typeof ProjectPlace>;
  * (Temporary). */
 export const PROJECT_NAME_SOURCES = ["you", "repository", "folder", "home", "bucket"] as const;
 
+/** PJ-6 (build-pj6.md "The shapes"; PJ-D13 (a), Q2, Q3) — the project's
+ * launch recipe, kept on its record: what the last launch from VibeField's own
+ * controls into one of its places chose (never a typed launch's flags, Q6;
+ * never Temporary). `provider` and `profileSet` (the Agent Profile, AR-D23) are
+ * the agent and the sign-in it ran under; `selection` the model it started at
+ * (absent: the agent's own settings); `controlsByModel` each model's controls
+ * as last chosen, so switching back to a model brings its own effort back (a
+ * model with `{}` ran at its own). Every id is the agent's own, opaque
+ * (AR-L1). `at` is the launch's time, epoch ms. Written by fieldd at a
+ * CONFIRMED birth (after the run entered the fold, never on a refusal). */
+export const ProjectRecipe = z
+  .object({
+    provider: AgentProviderId,
+    profileSet: AgentProfileSetId,
+    selection: z
+      .object({ modelId: z.string().min(1).max(1024), custom: z.boolean().optional() })
+      .passthrough()
+      .optional(),
+    controlsByModel: z.record(
+      z.string().min(1).max(1024),
+      z.record(z.string().min(1).max(1024), z.string().min(1).max(1024)),
+    ),
+    at: z.number().finite(),
+  })
+  .passthrough();
+export type ProjectRecipe = z.infer<typeof ProjectRecipe>;
+
 /** PJ-D15's `ProjectSummary` v2 — one project as a door answers it. */
 export const ProjectSummary = z
   .object({
@@ -184,6 +212,10 @@ export const ProjectSummary = z
     /** PJ-4 (H4) — the person hid it (its record's `hidden`): listed, folded
      * under "Hidden" at the list's foot, never dropped; absent: not */
     hidden: z.boolean().optional(),
+    /** PJ-6 — the project's launch recipe (its record's), which History's New
+     * agent offers first. A recipe this reader cannot read reads as none —
+     * never a refused list */
+    recipe: ProjectRecipe.optional().catch(undefined),
   })
   .passthrough();
 export type ProjectSummary = z.infer<typeof ProjectSummary>;

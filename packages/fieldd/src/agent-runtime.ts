@@ -49,6 +49,9 @@ import {
   type AgentInterruptParams,
   type AgentInterruptResult,
   type AgentListResult,
+  type AgentModelSelection,
+  type AgentModelsParams,
+  type AgentModelsResult,
   type AgentMonitorMirror,
   type AgentPersona,
   type AgentProfileFailure,
@@ -82,6 +85,7 @@ import { AgentExtensionStore } from "./agent-extension-store";
 import { AgentExtensionService } from "./agent-extensions";
 import { createTerminalAgentHost, type TerminalAgentHost } from "./agent-host";
 import type { IndexService } from "./agent-index";
+import { AgentModelCatalogs } from "./agent-models";
 import {
   AgentProfileService,
   failureToError,
@@ -110,6 +114,7 @@ import type { AccountUsageRuntime } from "./agent-usage";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError } from "./native-link";
 import { createDarwinSecretStore, type SecretStore } from "./plugin-settings";
+import type { LaunchRecipe } from "./projects/project-records";
 import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
 import type { GrantPrincipal } from "./terminal-grants";
 import { bornWithoutTicket, type TerminalService } from "./terminal-service";
@@ -399,8 +404,15 @@ export interface AgentRuntimeServiceOptions {
    * folder a PLACE, or moves its `lastActiveAt`. Called after the record is
    * written; a listener that throws is logged and the run goes on. PJ-2 (D6)
    * — `system` when the daemon itself brought the run back (AR-4's re-attach
-   * at boot): no act of the person's. */
-  onPlace?: (cwd: string, at: string, how?: { system: boolean }) => void;
+   * at boot): no act of the person's. PJ-6 — `recipe` when the run is a
+   * launch from VibeField's own controls (`agent.spawn`), what it chose: the
+   * project's recipe takes it. A resume, a re-attach and a typed run carry
+   * none (Q6). */
+  onPlace?: (
+    cwd: string,
+    at: string,
+    how?: { system: boolean; recipe?: LaunchRecipe | undefined },
+  ) => void;
   now?: () => Date;
   logger?: Logger;
 }
@@ -544,6 +556,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   readonly extensions: AgentExtensionService;
   /** AR-S4d — what each profile keeps once for its agents: definitions, value names, what each agent was given */
   private readonly extensionStore: AgentExtensionStore;
+  /** PJ-6 — each agent's own model picker, per Agent Profile, as last read */
+  private readonly modelCatalogs: AgentModelCatalogs;
   private readonly records: SessionRecordStore;
   private readonly home: string;
   private readonly logger: Logger;
@@ -711,6 +725,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // createBuiltinAgentRuntime's own two steps, spelled out because it does
     // not thread `executables` through to the providers.
     this.runtime = createAgentRuntime(runtimeOptions);
+    this.modelCatalogs = new AgentModelCatalogs({
+      discover: (options) => this.runtime.discoverModels(options),
+      logger: this.logger,
+    });
     this.distribution = new AgentDistributionService({
       runtime: this.runtime,
       catalog: this.catalog,
@@ -1037,6 +1055,38 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     visibleBy(this.catalog, provider, act);
   }
 
+  /** PJ-6 — `agent.models`: the agent's own model picker under one Agent
+   * Profile, held from the last read (agent-models.ts). Only an agent the
+   * catalog offers to spawn is read; the folder must be one on this device. */
+  async models(params: AgentModelsParams): Promise<AgentModelsResult> {
+    this.requireOffered(params.provider, "spawn");
+    const cwd = params.cwd ?? this.home;
+    if (!isAbsolute(cwd) || !isDirectory(cwd)) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the folder to read the models in is not a folder on this device",
+        false,
+        { provider: params.provider, reason: "missing-cwd", cwd },
+      );
+    }
+    try {
+      return await this.modelCatalogs.read({
+        provider: params.provider,
+        profileSet: params.profileSet,
+        cwd,
+        refresh: params.refresh,
+      });
+    } catch (error) {
+      // a read that THREW (the runtime stopping) is not the agent's answer
+      throw new RpcCallError("UNAVAILABLE", "the agent's models could not be read now", true, {
+        service: "agents",
+        state: "model-discovery-failed",
+        provider: params.provider,
+        error: error instanceof Error ? error.message.slice(0, 200) : String(error),
+      });
+    }
+  }
+
   /** A managed session born in a PTY on this device's floor. The answer is
    * the fold's row at birth and the routed ticket the pane mounts. */
   async spawn(
@@ -1059,11 +1109,35 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         // AR-S5 — that profile's sign-in for the agent; puppeteer refuses a
         // profile that holds none, and a plain spawn takes the default's
         ...(params.profileSet !== undefined ? { profileSet: params.profileSet } : {}),
+        // PJ-6 — the model and its controls, opaque: puppeteer discovers again
+        // in the run's account and folder, validates, and translates
+        ...(params.modelSelection !== undefined
+          ? { modelSelection: modelSelectionOf(params.modelSelection) }
+          : {}),
         creationRequestId: identity.creationRequestId,
         ingress: identity.ingress,
       });
       if (isSessionFailure(result)) throw this.sessionFailureToError(result, params.provider);
-      return this.enter(result, { cwd, title: params.title, ...identity.launched() });
+      // PJ-6 — CONFIRMED: the run is born. Its record keeps the selection (a
+      // Resume starts at it again, Q4) and its project takes the recipe
+      const selection =
+        params.modelSelection !== undefined ? modelSelectionOf(params.modelSelection) : undefined;
+      const profileSet = params.profileSet ?? result.info.profileSetId;
+      return this.enter(result, {
+        cwd,
+        title: params.title,
+        ...identity.launched(),
+        ...(selection !== undefined ? { modelSelection: selection } : {}),
+        ...(profileSet !== undefined
+          ? {
+              recipe: {
+                provider: params.provider,
+                profileSet,
+                ...(selection !== undefined ? { selection } : {}),
+              },
+            }
+          : {}),
+      });
     });
     return this.ticketed(entry, principal, terminals, forwardedFor);
   }
@@ -1193,6 +1267,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       );
     }
     const identity = this.identity();
+    // PJ-6 (Q4) — a conversation a run of ours launched at a model resumes at
+    // it, in the account the index files it under
+    const launched = this.launchedSelection(params.provider, params.nativeSessionId, profileId);
+    const selection = this.resumeSelection(params.provider, launched);
     const entry = await this.creation(profileId ?? null, async () => {
       const result = await this.runtime.resume({
         continuation: {
@@ -1205,11 +1283,21 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         ...(profileId !== undefined ? { profile: profileId } : {}),
         creationRequestId: identity.creationRequestId,
         ingress: identity.ingress,
+        ...(selection.pass !== undefined ? { modelSelection: selection.pass } : {}),
       });
-      if (isSessionFailure(result)) throw this.sessionFailureToError(result, params.provider);
-      return this.enter(result, { cwd, title: params.title, ...identity.launched() });
+      if (isSessionFailure(result))
+        throw this.sessionFailureToError(result, params.provider, "resume");
+      return this.enter(result, {
+        cwd,
+        title: params.title,
+        ...identity.launched(),
+        ...(launched !== undefined ? { modelSelection: launched } : {}),
+      });
     });
-    return this.ticketed(entry, principal, terminals, forwardedFor);
+    return {
+      ...this.ticketed(entry, principal, terminals, forwardedFor),
+      ...(selection.outcome !== undefined ? { modelSelection: selection.outcome } : {}),
+    };
   }
 
   /** QL-D10 — the persona a native resume runs under: the one named, or the
@@ -1339,7 +1427,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         );
       }
       const entry = await this.track(this.replacePending(pending, params.cwd, "manual"));
-      return this.ticketed(entry, principal, terminals, forwardedFor);
+      const said = this.resumeSelection(record.provider, record.modelSelection).outcome;
+      return {
+        ...this.ticketed(entry, principal, terminals, forwardedFor),
+        ...(said !== undefined ? { modelSelection: said } : {}),
+      };
     }
     const live = this.managed.get(record.runtimeRunId);
     // MF-1f — a STAMPED record means the process is over, so its PTY still
@@ -1399,7 +1491,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // The ticket FIRST: the successor exists and is answerable before anything
     // is destroyed, so a birth that failed above leaves the dead pane and its
     // final screen exactly where they were.
-    const answer = this.ticketed(entry, principal, terminals, forwardedFor);
+    const said = this.resumeSelection(record.provider, record.modelSelection).outcome;
+    const answer = {
+      ...this.ticketed(entry, principal, terminals, forwardedFor),
+      ...(said !== undefined ? { modelSelection: said } : {}),
+    };
     // MF-1g — then the husk goes. Ordered like AR-4b's own replacement (the
     // pending path terminates the old PTY before its door answers, and the
     // deck's hand-over is built for precisely that), so nothing lingers once
@@ -2056,6 +2152,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       adopted?:
         | { process: { pid: number; startedAt: string }; terminal?: TerminalInfo | undefined }
         | undefined;
+      /** PJ-6 — the model the launch started at, kept on the record */
+      modelSelection?: AgentModelSelection | undefined;
+      /** PJ-6 — a launch from VibeField's own controls: what its project's
+       * recipe takes (agent.spawn only) */
+      recipe?: LaunchRecipe | undefined;
     },
   ): ManagedEntry {
     const info = agent.info;
@@ -2071,6 +2172,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           ingress: launch.ingress,
           replaced: launch.replaced,
           adopted: launch.adopted?.process,
+          modelSelection: launch.modelSelection,
         }),
       );
     } else {
@@ -2084,7 +2186,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     // FS-1a — the folder this run works in is a place of the files service
     try {
-      this.opts.onPlace?.(launch.cwd, now, { system: launch.reattached !== undefined });
+      this.opts.onPlace?.(launch.cwd, now, {
+        system: launch.reattached !== undefined,
+        ...(launch.recipe !== undefined ? { recipe: launch.recipe } : {}),
+      });
     } catch (error) {
       this.logger.warn("fieldd.agents.place_failed", "A run's folder could not be made a place", {
         error: error instanceof Error ? error.message : String(error),
@@ -2347,6 +2452,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     };
     const cwd = cwdOverride ?? record.cwd;
     const identity = this.identity();
+    // PJ-6 (Q4) — the session's own launch model, where its resume takes one;
+    // the account it was launched in rides with it (discovery runs there)
+    const selection = this.resumeSelection(record.provider, record.modelSelection);
     return this.creation(record.profileId ?? null, async () => {
       const result = await this.runtime.resume({
         continuation,
@@ -2356,10 +2464,74 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         workspace: restoredWorkspaceRequest(record.workspace, record.cwd),
         creationRequestId: identity.creationRequestId,
         ingress: identity.ingress,
+        ...(selection.pass !== undefined ? { modelSelection: selection.pass } : {}),
       });
-      if (isSessionFailure(result)) throw this.sessionFailureToError(result, record.provider);
-      return this.enter(result, { cwd, title: record.title, ...identity.launched(), replaced });
+      if (isSessionFailure(result))
+        throw this.sessionFailureToError(result, record.provider, "resume");
+      return this.enter(result, {
+        cwd,
+        title: record.title,
+        ...identity.launched(),
+        replaced,
+        // the successor keeps the session's launch model, so its own resume
+        // starts there too
+        ...(record.modelSelection !== undefined ? { modelSelection: record.modelSelection } : {}),
+      });
     });
+  }
+
+  /** PJ-6 (Q4) — what a resume of a session launched at `launched` passes and
+   * says: the selection (its three keys) where the agent's resume takes one
+   * (`runtime.modelProviders()[].resumeSelection`), else none, and the words
+   * for a resume at the agent's own settings. Nothing when the session named no
+   * model. */
+  private resumeSelection(
+    provider: string,
+    launched: AgentModelSelection | undefined,
+  ): {
+    pass?: ReturnType<typeof modelSelectionOf>;
+    outcome?: NonNullable<AgentSpawnResult["modelSelection"]>;
+  } {
+    if (launched === undefined) return {};
+    const takes = this.runtime
+      .modelProviders()
+      .some((candidate) => candidate.id === provider && candidate.resumeSelection === true);
+    if (takes) return { pass: modelSelectionOf(launched), outcome: { state: "applied" } };
+    const label = this.labelFor(provider, provider);
+    return {
+      outcome: {
+        state: "own",
+        reason: `at ${label}'s own model — it can't start a resumed session at a chosen one`,
+      },
+    };
+  }
+
+  /** PJ-6 (Q4) — the model a conversation's newest run of ours was launched
+   * at, in the account the resume names: a native resume of a session fieldd
+   * launched starts where its record says it did. Verified records only. */
+  private launchedSelection(
+    provider: string,
+    nativeSessionId: string,
+    profileId: string | undefined,
+  ): AgentModelSelection | undefined {
+    let records: AgentSessionRecord[];
+    try {
+      records = this.records.list();
+    } catch {
+      return undefined;
+    }
+    let newest: AgentSessionRecord | undefined;
+    for (const record of records) {
+      if (
+        record.continuation.providerId !== provider ||
+        record.continuation.nativeSessionId !== nativeSessionId ||
+        record.profileId !== profileId ||
+        record.modelSelection === undefined
+      )
+        continue;
+      if (newest === undefined || record.createdAt > newest.createdAt) newest = record;
+    }
+    return newest?.modelSelection;
   }
 
   // ── internals: the re-attach (AR-4) ──
@@ -3472,8 +3644,44 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   /** puppeteer folds a host refusal into `AGENT_SESSION_CREATE_FAILED` with
    * the message; a typed refusal from the floor (no cell, the cap, an absent
    * executable) is worth more than the message, so the door says it. */
-  private sessionFailureToError(failure: AgentSessionFailure, provider: string): RpcCallError {
+  private sessionFailureToError(
+    failure: AgentSessionFailure,
+    provider: string,
+    /** PJ-6 — what the refused act was: a launch at a chosen model, or a
+     * resume at the session's own launch model */
+    act: "launch" | "resume" = "launch",
+  ): RpcCallError {
     const details = { provider, code: failure.error.code, runtimeRunId: failure.runtimeRunId };
+    // PJ-6 — the adapter's refusal keeps its code; the two a model selection
+    // meets are said in fieldd's words, around puppeteer's sentence
+    const refusal = failure.error.refusal?.code;
+    if (failure.error.code === "AGENT_LAUNCH_REFUSED" && refusal !== undefined) {
+      const label = this.labelFor(provider, provider);
+      const notAt =
+        act === "launch"
+          ? `${label} was not started at the chosen model`
+          : `${label} was not resumed at the model the session was launched at`;
+      if (refusal === MODEL_REFUSALS.INVALID) {
+        return new RpcCallError(
+          "PRECONDITION_FAILED",
+          `${notAt}: ${failure.error.message}`,
+          false,
+          { ...details, refusal, reason: "invalid-model-selection" },
+        );
+      }
+      if (refusal === MODEL_REFUSALS.UNDISCOVERED) {
+        return new RpcCallError(
+          "UNAVAILABLE",
+          `${notAt}: it could not list its models (${failure.error.message})`,
+          true,
+          { service: "agents", state: "model-discovery-unavailable", ...details, refusal },
+        );
+      }
+      return new RpcCallError("PRECONDITION_FAILED", failure.error.message, false, {
+        ...details,
+        refusal,
+      });
+    }
     switch (failure.error.code) {
       case "AGENT_NOT_FOUND":
       case "AGENT_PROFILE_NOT_FOUND":
@@ -3502,6 +3710,28 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     const refusal = this.terminalHost?.lastRefusal();
     return refusal ?? fallback;
   }
+}
+
+/** PJ-6 — puppeteer's launch refusals for a model selection
+ * (`docs/agent-management-api.html` §"Model discovery & launch selection"). */
+const MODEL_REFUSALS = {
+  INVALID: "INVALID_MODEL_SELECTION",
+  UNDISCOVERED: "MODEL_DISCOVERY_UNAVAILABLE",
+} as const;
+
+/** PJ-6 — the selection as puppeteer's strict schema takes it: its three keys
+ * and nothing else (a key a newer caller adds would read as malformed there).
+ * The values pass as they came — the agent's own ids, never read here. */
+function modelSelectionOf(selection: AgentModelSelection): {
+  modelId: string;
+  custom?: boolean;
+  controls?: Record<string, string>;
+} {
+  return {
+    modelId: selection.modelId,
+    ...(selection.custom !== undefined ? { custom: selection.custom } : {}),
+    ...(selection.controls !== undefined ? { controls: { ...selection.controls } } : {}),
+  };
 }
 
 /** puppeteer's workspace request for a resumed run (Godview's own rule): a

@@ -1,4 +1,5 @@
 import type {
+  AgentProfileSet,
   AgentProviderSummary,
   DeviceInfo,
   IndexCatalogSource,
@@ -21,8 +22,9 @@ import type { HistorySections } from "./sections";
 // its name and its OS, PJ-D24), which conversations run here now (one plain
 // `agent.list` per listing — P3's reading, PF6-safe: History asks only while
 // it shows), and the agents this desktop offers (`agent.providers`, the
-// catalog's ids, R23). Pure: the controller (`HistoryView`) gathers, this
-// folds; `host-inputs.tsx` draws from it.
+// catalog's ids, R23) with the Agent Profiles they run in
+// (`agents.profileSets.list`, PJ-6 Q2). Pure: the controller (`HistoryView`)
+// gathers, this folds; `host-inputs.tsx` draws from it.
 
 /** A desktop as History draws it: its OS mark and its name (PJ-D24), and
  * whether it is this one or asleep (PJ-L6). */
@@ -47,6 +49,8 @@ export interface HistoryHostModel {
   /** this desktop's live runs, by the conversation's native id */
   readonly live: ReadonlyMap<string, LiveRun>;
   readonly providers: readonly AgentProviderSummary[];
+  /** PJ-6 — the Agent Profiles New agent starts under; empty when unread */
+  readonly profileSets: readonly AgentProfileSet[];
   readonly sections: HistorySections;
 }
 
@@ -57,6 +61,7 @@ export const EMPTY_HOST_MODEL: HistoryHostModel = {
   devices: [],
   live: new Map(),
   providers: [],
+  profileSets: [],
   sections: { home: [], temporary: null },
 };
 
@@ -116,6 +121,7 @@ export function hostModelOf(
   roster: readonly DeviceInfo[],
   liveRows: readonly unknown[],
   providers: readonly AgentProviderSummary[],
+  profileSets: readonly AgentProfileSet[] = [],
 ): HistoryHostModel {
   const sessions = new Map(
     listing.sessions
@@ -129,6 +135,7 @@ export function hostModelOf(
     devices: hostDevicesOf(listing.sources, roster, listing.self),
     live: liveRunsOf(liveRows, sessions.values()),
     providers,
+    profileSets,
     sections: listing.sections,
   };
 }

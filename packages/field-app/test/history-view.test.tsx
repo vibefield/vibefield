@@ -130,8 +130,13 @@ afterEach(() => {
 });
 
 /** fieldd, scripted: the index's doors as AR-8b answers them; `list` is the
- * fold's `agent.list` (P3), unanswered when left out. */
-function fieldd(resume: () => unknown, list?: () => unknown) {
+ * fold's `agent.list` (P3), unanswered when left out; `more` answers the doors
+ * a case scripts beside them (PJ-6's), `undefined` leaving one unscripted. */
+function fieldd(
+  resume: () => unknown,
+  list?: () => unknown,
+  more?: (method: string, params: Record<string, unknown>) => unknown,
+) {
   const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
   let onFrame: ((payload: unknown, kind?: "snapshot" | "delta") => void) | null = null;
   const client = {
@@ -147,6 +152,8 @@ function fieldd(resume: () => unknown, list?: () => unknown) {
     },
     async request(method: string, params: Record<string, unknown> = {}) {
       calls.push({ method, params });
+      const scripted = more?.(method, params);
+      if (scripted !== undefined) return scripted;
       switch (method) {
         case "project.list":
           return { rows: [PROJECTS.rows[0]], sources: PROJECTS.sources, groupingVersion: 2 };
@@ -336,6 +343,30 @@ describe("History in the frame (AR-8c)", () => {
     expect(asked).toContain("godview");
     expect(place).toHaveBeenCalledWith((SPAWNED as { terminal: unknown }).terminal);
     expect(host?.querySelector(".vf-line-note")?.textContent).toBe("Resumed in the active pane");
+  });
+
+  it("PJ-6 (Q4): a Resume fieldd answers at the agent's own model — the session's launch model not taken by its resume — says so on the line", async () => {
+    const own = "at Claude Code's own model — it can't start a resumed session at a chosen one";
+    const client = fieldd(() => ({ ...SPAWNED, modelSelection: { state: "own", reason: own } }));
+    publishGodviewLineDoor({
+      panes: [],
+      onScreen: false,
+      newTerminal: async () => ({ state: "opened" }),
+      paste: () => false,
+      canPlace: true,
+      place: async () => ({ state: "opened" }),
+      reveal: async () => ({ state: "opened" }),
+    });
+    mount(client);
+    to("history");
+    await choose();
+    await until(() => (create().hasAttribute("aria-disabled") ? null : true), "Resume to wake");
+    await act(async () => {
+      create().click();
+    });
+    expect(await until(() => host?.querySelector(".vf-line-note")?.textContent, "the note")).toBe(
+      `Resumed in the active pane, ${own}`,
+    );
   });
 
   it("a refusal is said on the line in the launcher's words, and the window stays in History", async () => {
@@ -766,4 +797,162 @@ describe("an act that throws is said and logged (2026-10-11)", () => {
       },
     ]);
   }, 20_000);
+});
+
+describe("PJ-6 — New agent's pages turn in place, over the real room", () => {
+  /** Work holds the fixture's agent's sign-in (the contract's Work holds two
+   * others), and the agent's own picker under it is the contract's */
+  const SETS = (() => {
+    const listed = fixture("agents-profile-sets.valid.json") as {
+      sets: Array<{ id: string; personas: unknown[] }>;
+    };
+    const persona =
+      ((fixture("agent-providers.valid.json") as { providers: Array<{ personas: unknown[] }> })
+        .providers[0]?.personas[0] as Record<string, unknown>) ?? {};
+    return {
+      ...listed,
+      sets: listed.sets.map((set) =>
+        set.id === "work"
+          ? {
+              ...set,
+              personas: [...set.personas, { ...persona, profileId: "claude:work", set: "work" }],
+            }
+          : set,
+      ),
+    };
+  })();
+  const PICKER = fixture("agent-models.valid.json");
+
+  function launching() {
+    return fieldd(
+      () => SPAWNED,
+      () => ({ sessions: [] }),
+      (method) =>
+        method === "agents.profileSets.list"
+          ? SETS
+          : method === "agent.models"
+            ? PICKER
+            : method === "agent.spawn"
+              ? SPAWNED
+              : undefined,
+    );
+  }
+  const menuRows = (): HTMLButtonElement[] => [
+    ...(historySlot()?.querySelectorAll<HTMLButtonElement>(".ah-menu [role=menu] .ah-menu__item") ??
+      []),
+  ];
+  const rowKeyed = (key: string) => () =>
+    menuRows().find((row) => row.getAttribute("data-key") === key) ?? null;
+  const trigger = () =>
+    historySlot()?.querySelector<HTMLButtonElement>(
+      '.ah-hostact[data-place="head"][data-act="new-agent"]',
+    ) ?? null;
+
+  beforeEach(() => {
+    publishGodviewLineDoor({
+      panes: [],
+      onScreen: false,
+      newTerminal: async () => ({ state: "opened" }),
+      paste: () => false,
+      canPlace: true,
+      place: async () => ({ state: "opened" }),
+      reveal: async () => ({ state: "opened" }),
+    });
+  });
+
+  it("Another model… turns the open rows to the agent's own picker, a model to its efforts, and a value starts it there — each page opening where the last one was", async () => {
+    const client = launching();
+    mount(client);
+    to("history");
+    await choose();
+    const start = await until(trigger, "New agent in ②'s head");
+    await act(async () => {
+      start.click();
+    });
+    // Claude Code under Work, its Another model… beside it
+    const work = await until(
+      () =>
+        historySlot()?.querySelector<HTMLButtonElement>(
+          `.ah-menu__row[data-key="claude\u001fwork"] .ah-menu__act[data-act="another"]`,
+        ) ?? null,
+      "Another model… beside Claude Code under Work",
+    );
+    await act(async () => {
+      work.click();
+    });
+    // the rows closed on the choice and opened again on the models page
+    const opus = await until(rowKeyed("model\u001fopus"), "the picker's Opus row");
+    expect(start.getAttribute("aria-expanded")).toBe("true");
+    expect(rowKeyed("back")()?.textContent).toContain("All agents");
+    expect(client.calls.find((call) => call.method === "agent.models")?.params).toEqual({
+      provider: "claude",
+      profileSet: "work",
+    });
+    await act(async () => {
+      opus.click();
+    });
+    const max = await until(rowKeyed("value\u001fmax"), "Opus's effort values");
+    expect(start.getAttribute("aria-expanded")).toBe("true");
+    await act(async () => {
+      max.click();
+    });
+    await until(
+      () => client.calls.find((call) => call.method === "agent.spawn") ?? null,
+      "the start",
+    );
+    expect(client.calls.find((call) => call.method === "agent.spawn")?.params).toEqual({
+      provider: "claude",
+      cwd: expect.any(String),
+      profileSet: "work",
+      modelSelection: { modelId: "opus", controls: { effort: "max" } },
+    });
+    expect(
+      await until(() => host?.querySelector(".vf-line-note")?.textContent, "the note"),
+    ).toMatch(/^Started in /);
+    // a start closes the rows: the next press opens on the first page
+    await until(() => (start.getAttribute("aria-expanded") === "true" ? null : true), "closed");
+    await act(async () => {
+      start.click();
+    });
+    await until(
+      () => historySlot()?.querySelector(`.ah-menu__row[data-key="claude\u001fwork"]`) ?? null,
+      "the first page again",
+    );
+    expect(rowKeyed("back")()).toBeNull();
+  }, 30_000);
+
+  it("rows closed on a page without a choice (Escape) open on the first page again", async () => {
+    mount(launching());
+    to("history");
+    await choose();
+    const start = await until(trigger, "New agent in ②'s head");
+    await act(async () => {
+      start.click();
+    });
+    const another = await until(
+      () =>
+        historySlot()?.querySelector<HTMLButtonElement>(
+          `.ah-menu__row[data-key="claude\u001fwork"] .ah-menu__act[data-act="another"]`,
+        ) ?? null,
+      "Another model…",
+    );
+    await act(async () => {
+      another.click();
+    });
+    await until(rowKeyed("model\u001fopus"), "the models page");
+    await act(async () => {
+      (document.activeElement ?? document.body).dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+    });
+    await until(() => (start.getAttribute("aria-expanded") === "true" ? null : true), "closed");
+    await act(async () => {
+      start.click();
+    });
+    await until(
+      () => historySlot()?.querySelector(`.ah-menu__row[data-key="claude\u001fwork"]`) ?? null,
+      "the first page",
+    );
+    expect(rowKeyed("model\u001fopus")()).toBeNull();
+  }, 30_000);
 });

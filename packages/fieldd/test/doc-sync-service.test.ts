@@ -27,7 +27,7 @@ import type { LogFields, Logger } from "@vibefield/logging";
 import { LoroDoc } from "loro-crdt";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolveSyncIntent } from "../src/app-preferences";
-import { contentIdOf, DocumentService } from "../src/doc-service";
+import { contentIdOf, type DocCommit, DocumentService } from "../src/doc-service";
 import {
   type DocSyncOptions,
   DocSyncService,
@@ -38,13 +38,17 @@ import {
 import { Renderer } from "./loro-renderer";
 
 let dirs: string[] = [];
-afterEach(async () => {
-  // Let outstanding broadcast work settle before the data dir vanishes under
-  // it. Not papering over anything — the service deliberately never throws a
-  // sync fault into a caller, so a torn-down directory would show up as log
-  // noise attributed to whichever test happened to be running next.
-  await new Promise((r) => setTimeout(r, 60));
-  for (const d of dirs) rmSync(d, { recursive: true, force: true });
+const teardowns: (() => void)[] = [];
+afterEach(() => {
+  // No write of ours is in flight here: a row that waited on a peer's record
+  // waited on its COMMIT (`landed`), which the store announces only after the
+  // registry write. Waiting on the record's size or journal instead — true
+  // before that write lands — let this remove the directory under a tmp file
+  // being renamed in (ENOTEMPTY, four sightings under load). Then the routing
+  // stops and the store drops its timers before the directory goes; the
+  // retries are a backstop, never the wait.
+  for (const teardown of teardowns.splice(0)) teardown();
+  for (const d of dirs) rmSync(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   dirs = [];
 });
 
@@ -158,7 +162,19 @@ function harness(
   const control = new FakeControl();
   const bytes = new FakeBytes();
   let sync: DocSyncService | undefined;
-  const docs = new DocumentService({ dataDir, onCommit: (c) => sync?.onCommit(c) });
+  const commits: DocCommit[] = [];
+  const docs = new DocumentService({
+    dataDir,
+    onCommit: (c) => {
+      commits.push(c);
+      sync?.onCommit(c);
+    },
+  });
+  /** How many of the peers' records `docId` has COMMITTED — the wait a row
+   * ends on, since the store announces a commit only after its registry
+   * write lands (the afterEach says why that matters). */
+  const landed = (docId: string) =>
+    commits.filter((c) => c.docId === docId && c.origin === "peer").length;
   /** id → online; tests flip entries to take a peer off the mesh (C6-4). */
   const peerState = new Map(peerIds.map((id) => [id, true]));
   /** UA-6: the daemon's own fold, in miniature — the doc's answer over the
@@ -177,7 +193,11 @@ function harness(
     ...(isSelfPeer !== undefined ? { isSelfPeer } : {}),
     ...extra,
   });
-  return { docs, control, bytes, sync, peerState, posture };
+  teardowns.push(() => {
+    sync?.stop();
+    docs.dispose();
+  });
+  return { docs, control, bytes, sync, peerState, posture, landed };
 }
 
 /** The C6-4 fold for one doc, as `doc.sync.subscribe` would publish it. */
@@ -220,7 +240,7 @@ describe("claiming the lanes a peer opened", () => {
   });
 
   it("claims a lane announced after it started, and applies what arrives", async () => {
-    const { docs, control, bytes, sync } = harness();
+    const { docs, control, bytes, sync, landed } = harness();
     const docId = await seeded(docs);
     await sync.start();
     const laneId = MESHDATA_INBOUND_LANE_ID_BASE + 3;
@@ -235,9 +255,9 @@ describe("claiming the lanes a peer opened", () => {
 
     const update = new Uint8Array([7, 0, 0, 9]);
     bytes.deliver(laneId, record(update));
-    await until(
-      () => (docs.list().find((d) => d.docId === docId)?.sizeBytes ?? 0) > ice1().byteLength,
-      "the peer's record to land",
+    await until(() => landed(docId) === 1, "the peer's record to land");
+    expect(docs.list().find((d) => d.docId === docId)?.sizeBytes).toBeGreaterThan(
+      ice1().byteLength,
     );
     const stored = await docs.readDoc(docId);
     expect([...(stored?.updates[0] ?? [])]).toEqual([...update]);
@@ -399,7 +419,7 @@ describe("broadcasting what we commit", () => {
   it("takes a record it already holds as a no-op, not a second journal entry", async () => {
     // Content identity is what makes redelivery free — and redelivery is what
     // a reconnect, a second lane, or a crossed HAVE looks like from here.
-    const { docs, control, bytes, sync } = harness();
+    const { docs, control, bytes, sync, landed } = harness();
     const docId = await seeded(docs);
     await sync.start();
     const laneId = MESHDATA_INBOUND_LANE_ID_BASE;
@@ -413,11 +433,12 @@ describe("broadcasting what we commit", () => {
     });
     const payload = new Uint8Array([5, 5, 5]);
     bytes.deliver(laneId, record(payload));
-    await until(async () => (await docs.readDoc(docId))?.updates.length === 1, "the first copy");
+    await until(() => landed(docId) === 1, "the first copy");
     bytes.deliver(laneId, record(payload));
     bytes.deliver(laneId, record(payload));
     await new Promise((r) => setTimeout(r, 120));
     expect((await docs.readDoc(docId))?.updates).toHaveLength(1);
+    expect(landed(docId)).toBe(1);
     // a redelivery is not a problem — the doc must REACH in step. Awaited
     // rather than read at a deadline: `syncing` derives from work still in
     // flight, so under a loaded machine a fixed sleep was reading the queue's
@@ -449,7 +470,7 @@ describe("broadcasting what we commit", () => {
   it("NEVER sends a peer's record back to the peers", async () => {
     // The rule that matters. Two devices echoing each other's updates converges
     // instantly and then never stops.
-    const { docs, control, bytes, sync } = harness();
+    const { docs, control, bytes, sync, landed } = harness();
     const docId = await seeded(docs);
     await sync.start();
     await until(() => bytes.sent.length >= 1, "the bootstrap");
@@ -466,10 +487,8 @@ describe("broadcasting what we commit", () => {
     });
     bytes.deliver(laneId, record(new Uint8Array([9, 9, 9])));
 
-    await until(
-      async () => (await docs.readDoc(docId))?.updates.length === 1,
-      "the peer's record to be stored",
-    );
+    await until(() => landed(docId) === 1, "the peer's record to be stored");
+    expect((await docs.readDoc(docId))?.updates).toHaveLength(1);
     // Give any (wrong) broadcast a generous chance to happen. A HAVE going out
     // is fine and expected — greeting a peer is not echoing its data; what must
     // never travel back is the RECORD.
@@ -552,7 +571,7 @@ describe("broadcasting what we commit", () => {
 
   it("keeps a lane alive through one undecodable record", async () => {
     // A peer running a newer build should degrade, not disconnect.
-    const { docs, control, bytes, sync } = harness();
+    const { docs, control, bytes, sync, landed } = harness();
     const docId = await seeded(docs);
     await sync.start();
     const laneId = MESHDATA_INBOUND_LANE_ID_BASE;
@@ -569,10 +588,8 @@ describe("broadcasting what we commit", () => {
 
     const good = new Uint8Array([8, 8]);
     bytes.deliver(laneId, record(good));
-    await until(
-      async () => (await docs.readDoc(docId))?.updates.length === 1,
-      "the next good record to land",
-    );
+    await until(() => landed(docId) === 1, "the next good record to land");
+    expect((await docs.readDoc(docId))?.updates).toHaveLength(1);
   });
 });
 
@@ -606,7 +623,7 @@ describe("the honest sync state (C6-4)", () => {
     // §8: a record whose causal dependencies have not arrived shows NOTHING in
     // the doc — however settled the board looks, it is not complete, and EL5
     // forbids the state saying otherwise.
-    const { docs, control, bytes, sync } = harness();
+    const { docs, control, bytes, sync, landed } = harness();
     const docId = await seeded(docs);
     await sync.start();
     const laneId = MESHDATA_INBOUND_LANE_ID_BASE;
@@ -630,13 +647,14 @@ describe("the honest sync state (C6-4)", () => {
     // the doc goes back to in step.
     bytes.deliver(laneId, record(enRoute));
     await until(() => stateOf(sync, docId) === "in-step", "the pending set to drain");
+    await until(() => landed(docId) === 1, "the named record's commit");
   });
 
   it("reads pending while an update has no checkpoint underneath it", async () => {
     // The bootstrap race, made ordinary by the HAVE exchange: an update
     // arriving before the checkpoint is declined would-clobber and re-greeted
     // for — but until the bootstrap lands the doc is INCOMPLETE, not busy.
-    const { docs, control, bytes, sync } = harness();
+    const { docs, control, bytes, sync, landed } = harness();
     const entry = await docs.create("empty-here"); // registry entry, no content
     await sync.start();
     const laneId = MESHDATA_INBOUND_LANE_ID_BASE;
@@ -653,6 +671,7 @@ describe("the honest sync state (C6-4)", () => {
 
     bytes.deliver(laneId, record(ice1(), DOC_SYNC_RECORD.SNAPSHOT));
     await until(() => stateOf(sync, entry.docId) === "in-step", "the bootstrap to land");
+    await until(() => landed(entry.docId) >= 1, "the bootstrap's commit");
   });
 
   it("names a doc it does not have as peer-declined with a null name", async () => {
@@ -711,7 +730,7 @@ describe("the honest sync state (C6-4)", () => {
   });
 
   it("publishes status changes to subscribers, and detaches cleanly", async () => {
-    const { docs, control, bytes, sync } = harness(["peer-a"]);
+    const { docs, control, bytes, sync, landed } = harness(["peer-a"]);
     await sync.start();
     const seen: string[][] = [];
     const off = sync.onStatusChanged((statuses) => seen.push(statuses.map((s) => s.state)));
@@ -730,7 +749,8 @@ describe("the honest sync state (C6-4)", () => {
       inbound: true,
     });
     bytes.deliver(laneId, record(new Uint8Array([6])));
-    await until(async () => (await docs.readDoc(docId))?.updates.length === 1, "the record");
+    await until(() => landed(docId) === 1, "the record");
+    expect((await docs.readDoc(docId))?.updates).toHaveLength(1);
     expect(seen.length).toBe(before); // detached means detached
   });
 
@@ -844,7 +864,7 @@ describe("sync intent — a doc that stays home (UA-D7)", () => {
     // Intent flips while a lane is live and its handler is registered. "Keep
     // this local" has to bind to the DOC, not to the lanes that happened to
     // exist when it was said.
-    const { docs, control, bytes, sync } = harness();
+    const { docs, control, bytes, sync, landed } = harness();
     const docId = await seeded(docs);
     await sync.start();
     const laneId = MESHDATA_INBOUND_LANE_ID_BASE + 8;
@@ -857,15 +877,13 @@ describe("sync intent — a doc that stays home (UA-D7)", () => {
       inbound: true,
     });
     bytes.deliver(laneId, record(new Uint8Array([4, 4])));
-    await until(
-      async () => (await docs.readDoc(docId))?.updates.length === 1,
-      "the first record to land while the doc still syncs",
-    );
+    await until(() => landed(docId) === 1, "the first record to land while the doc still syncs");
 
     await docs.setSyncIntent(docId, "local");
     bytes.deliver(laneId, record(new Uint8Array([5, 5, 5])));
     await new Promise((r) => setTimeout(r, 120));
     expect((await docs.readDoc(docId))?.updates).toHaveLength(1);
+    expect(landed(docId)).toBe(1);
   });
 
   it("lets the posture answer for a doc that never said anything", async () => {
@@ -946,7 +964,10 @@ describe("UA-P-0f — documents cross only within one account", () => {
   it("admits the same lane from this account's peer", async () => {
     // the CONTROL: the refusal above is about WHOSE peer it is, and nothing
     // else about the lane changed between the two rows
-    const { docs, control, bytes, sync } = harness(["peer-mine"], (peer) => peer === "peer-mine");
+    const { docs, control, bytes, sync, landed } = harness(
+      ["peer-mine"],
+      (peer) => peer === "peer-mine",
+    );
     const docId = await seeded(docs);
     await sync.start();
     const laneId = MESHDATA_INBOUND_LANE_ID_BASE + 12;
@@ -962,9 +983,9 @@ describe("UA-P-0f — documents cross only within one account", () => {
 
     const update = new Uint8Array([7, 0, 0, 9]);
     bytes.deliver(laneId, record(update));
-    await until(
-      () => (docs.list().find((d) => d.docId === docId)?.sizeBytes ?? 0) > ice1().byteLength,
-      "this account's peer's record to land",
+    await until(() => landed(docId) === 1, "this account's peer's record to land");
+    expect(docs.list().find((d) => d.docId === docId)?.sizeBytes).toBeGreaterThan(
+      ice1().byteLength,
     );
     expect(control.closed).not.toContain(laneId);
   });
@@ -1046,7 +1067,7 @@ describe("D3 (UA-P-D5) — a phone never receives a document, inbound included",
 
   it("admits the same lane from a desktop whose roster row says docHost", async () => {
     // the CONTROL: one bit differs between the rows — what the roster says
-    const { docs, control, bytes, sync } = harness(["desk-b"], () => true, {
+    const { docs, control, bytes, sync, landed } = harness(["desk-b"], () => true, {
       isDocHost: docHost,
     });
     const docId = await seeded(docs);
@@ -1061,7 +1082,8 @@ describe("D3 (UA-P-D5) — a phone never receives a document, inbound included",
       inbound: true,
     });
     bytes.deliver(laneId, record(new Uint8Array([7, 0, 0, 9])));
-    await until(() => sizeOf(docs, docId) > ice1().byteLength, "the desktop's record to land");
+    await until(() => landed(docId) === 1, "the desktop's record to land");
+    expect(sizeOf(docs, docId)).toBeGreaterThan(ice1().byteLength);
     expect(bytes.claimed(laneId)).toBe(true);
     expect(control.closed).not.toContain(laneId);
     await until(() => control.opened.some((o) => o.peer === "desk-b"), "the return lane");
@@ -1206,7 +1228,7 @@ describe("DS-5c — reassembly is fair", () => {
     // fifth transfer EVICTED the oldest, whose next slice then opened a slot
     // of its own mid-stream and evicted the next — five at once thrashed until
     // none completed, freed only by the TTL.
-    const { docs, control, bytes, sync } = harness(["peer-a"]);
+    const { docs, control, bytes, sync, landed } = harness(["peer-a"]);
     await sync.start();
     const transfers: Uint8Array[][] = [];
     const docIds: string[] = [];
@@ -1234,14 +1256,16 @@ describe("DS-5c — reassembly is fair", () => {
       }
     }
     await until(
-      () =>
-        docIds.every((docId) => (docs.list().find((d) => d.docId === docId)?.sizeBytes ?? 0) > 0),
+      () => docIds.every((docId) => landed(docId) === 1),
       "all five checkpoints to reassemble and land",
     );
+    for (const docId of docIds) {
+      expect(docs.list().find((d) => d.docId === docId)?.sizeBytes).toBeGreaterThan(0);
+    }
   });
 
   it("a slice of a transfer never started here takes no slot (the guard on refusing, not evicting)", async () => {
-    const { docs, control, bytes, sync } = harness(["peer-a"]);
+    const { docs, control, bytes, sync, landed } = harness(["peer-a"]);
     await sync.start();
     const { docId } = await docs.create("board");
     const laneId = MESHDATA_INBOUND_LANE_ID_BASE + 50;
@@ -1263,10 +1287,8 @@ describe("DS-5c — reassembly is fair", () => {
     }
     // The same peer's next transfer, whole, still lands.
     for (const chunk of chunkDocSyncRecord(whole, "peer-a-next", 64)) bytes.deliver(laneId, chunk);
-    await until(
-      () => (docs.list().find((d) => d.docId === docId)?.sizeBytes ?? 0) > 0,
-      "the whole transfer to land",
-    );
+    await until(() => landed(docId) === 1, "the whole transfer to land");
+    expect(docs.list().find((d) => d.docId === docId)?.sizeBytes).toBeGreaterThan(0);
   });
 });
 

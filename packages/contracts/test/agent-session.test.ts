@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   AGENT_MONITOR_SCHEMA_VERSION,
+  AgentModelsResult,
   AgentMonitorMirror,
   AgentResumeNativeParams,
   AgentResumeParams,
@@ -58,6 +59,15 @@ describe("agent.* registry rows (AR-3)", () => {
       {
         method: "agent.catalog",
         scope: "agent.observe",
+        idempotent: true,
+        locality: "federate",
+        subscription: false,
+      },
+      // PJ-6 — the agent's own model picker: a read that starts the agent's
+      // CLI in a profile's sign-in, so a launch's scope; asked of its desktop
+      {
+        method: "agent.models",
+        scope: "agent.spawn",
         idempotent: true,
         locality: "federate",
         subscription: false,
@@ -235,6 +245,66 @@ describe("SessionSummary v2 and the doors", () => {
     expect(AgentSpawnParams.safeParse({}).success).toBe(false);
   });
 
+  it("PJ-6 — a spawn at a model carries the agent's own ids opaque: any id, any control, nothing read for meaning", () => {
+    const params = AgentSpawnParams.parse(fixture("agent-spawn-params.model-selection.json"));
+    expect(params.modelSelection).toEqual({
+      modelId: "model-card-v2",
+      controls: { effort: "high" },
+    });
+    // an unlisted model is the caller's explicit opt-in, and a key a newer
+    // caller adds rides through whole (the record signs the selection)
+    const custom = AgentSpawnParams.parse({
+      provider: "claude",
+      modelSelection: { modelId: "vendor/model:variant", custom: true, later: { kept: 1 } },
+    });
+    expect(custom.modelSelection).toEqual({
+      modelId: "vendor/model:variant",
+      custom: true,
+      later: { kept: 1 },
+    });
+    for (const bad of [
+      { modelId: "" },
+      { controls: { effort: "high" } },
+      { modelId: "m", controls: { effort: 3 } },
+      { modelId: "m", controls: { "": "high" } },
+      { modelId: "m", custom: "yes" },
+      "model-card-v2",
+    ]) {
+      expect(
+        AgentSpawnParams.safeParse({ provider: "claude", modelSelection: bad }).success,
+        JSON.stringify(bad),
+      ).toBe(false);
+    }
+  });
+
+  it("PJ-6 — agent.models answers a catalog with its read's time, or the last read's failure in puppeteer's words — never an empty list — and reads newer words tolerantly", () => {
+    const valid = AgentModelsResult.parse(fixture("agent-models.valid.json"));
+    expect(valid.failure).toBeUndefined();
+    expect(valid.catalog?.observedAt).toBe("2026-10-12T18:07:17.797Z");
+    // each model owns its controls: the effort a model offers is its own
+    const opus = valid.catalog?.models.find((model) => model.label === "Opus");
+    expect(opus?.controls[0]?.role).toBe("effort");
+    expect(valid.catalog?.models.at(-1)?.controls).toEqual([]);
+
+    const signedOut = AgentModelsResult.parse(fixture("agent-models.auth-required.json"));
+    expect(signedOut.catalog).toBeUndefined();
+    expect(signedOut.failure).toMatchObject({ status: "auth-required", code: "auth-required" });
+
+    // an older catalog stands beside the last read's failure, a read running;
+    // a role and a key a newer daemon sends ride through
+    const stale = AgentModelsResult.parse(fixture("agent-models.stale.json"));
+    expect(stale.refreshing).toBe(true);
+    expect(stale.failure?.code).toBe("timeout");
+    expect(stale.catalog?.models[1]?.controls.map((control) => control.role)).toEqual([
+      "effort",
+      "some-future-role",
+    ]);
+    expect((stale as Record<string, unknown>)["later"]).toEqual({ kept: true });
+    // `refreshing` is always said; a control offers at least its ids
+    const { refreshing: _r, ...unsaid } = valid;
+    expect(AgentModelsResult.safeParse(unsaid).success).toBe(false);
+  });
+
   it("QL-D10 — resume params: a run, or a conversation by its native id; the run is the more specific claim", () => {
     const run = AgentResumeParams.parse(fixture("agent-resume-params.valid.json"));
     expect("runtimeRunId" in run && run.runtimeRunId).toBe("run-01J8Z3K9");
@@ -297,6 +367,23 @@ describe("SessionSummary v2 and the doors", () => {
     ).toBe(false);
     expect(
       AgentSessionRecord.safeParse({ ...record, reattach: { state: "later", at: "now" } }).success,
+    ).toBe(false);
+  });
+
+  it("PJ-6 (Q4): the record keeps the model the run was launched at, opaque; a record without one is every record before PJ-6", () => {
+    const record = AgentSessionRecord.parse(fixture("agent-session-record.valid.json"));
+    expect(record.modelSelection).toBeUndefined();
+    const launched = AgentSessionRecord.parse({
+      ...record,
+      modelSelection: { modelId: "model-card-v2", controls: { effort: "high" } },
+    });
+    expect(launched.modelSelection).toEqual({
+      modelId: "model-card-v2",
+      controls: { effort: "high" },
+    });
+    // the field is the launch's shape, typed: a record naming no model is not one
+    expect(
+      AgentSessionRecord.safeParse({ ...record, modelSelection: { modelId: "" } }).success,
     ).toBe(false);
   });
 

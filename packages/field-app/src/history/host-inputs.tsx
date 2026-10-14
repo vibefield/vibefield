@@ -41,6 +41,16 @@ import {
   usualPlaceOf,
   workingIn,
 } from "./host-model";
+import {
+  controlsPageGroups,
+  FIRST_PAGE,
+  firstPageGroups,
+  type HeldModels,
+  type LaunchContext,
+  type LaunchPage,
+  modelsPageGroups,
+  pageHolds,
+} from "./launch";
 
 // HISTORY BY PROJECT, AS THE ROOM DRAWS IT (PJ-4's second half; H1 "we map,
 // the room draws"; rosetta `host-inputs.ts`, ROOM API v1/v2). Everything here
@@ -64,7 +74,7 @@ import {
 //   R4 a session's mark and folder in the id slot, Resume or Jump to — or the
 //      reason — at its end (PJ-D9), and a device-qualified host key;
 //   R5 New agent (H6) in ②'s head, the suggestions in its card, Resume or
-//      Jump to in ④'s;
+//      Jump to in ④'s; PJ-6 — its ways to start are `launch.ts`'s pages;
 //   R6 ③'s head as every folder by desktop — one on another desktop says
 //      "Files stay on Studio" (PJ-D22) and is never opened here;
 //   R7 a desktop chip over the list, an agent chip over a project;
@@ -83,6 +93,13 @@ export interface HistoryHostState {
   readonly suggestions: ReadonlyMap<string, readonly ProjectSuggestion[]>;
   /** the window's home, so a path under it reads `~/…` (AR-8 L2) */
   readonly home: string | null;
+  /** PJ-6 — the page New agent's rows are on (`launch.ts`) */
+  readonly page: LaunchPage;
+  /** PJ-6 — each agent's own picker under each Agent Profile, as asked of
+   * fieldd (`agent.models`), by `modelsKey` */
+  readonly models: ReadonlyMap<string, HeldModels>;
+  /** the clock a picker's age is said against (absent: the wall's) */
+  readonly clock?: (() => number) | undefined;
 }
 
 export const NO_HOST_STATE: HistoryHostState = {
@@ -90,6 +107,8 @@ export const NO_HOST_STATE: HistoryHostState = {
   agent: null,
   suggestions: new Map(),
   home: null,
+  page: FIRST_PAGE,
+  models: new Map(),
 };
 
 export interface HistoryHostActs {
@@ -105,6 +124,9 @@ export interface HistoryHostActs {
   rename(key: string, name: string): Promise<void>;
   /** ③ shows a folder of a project now (R6's `onShow`) */
   shown(project: string, folder: string | null): void;
+  /** PJ-6 — turn New agent's rows to `page` (the controller asks the picker a
+   * models page needs, and opens the rows again on it) */
+  page(page: LaunchPage): void;
 }
 
 /* ── small parts the room draws where it is told ──────────────────────── */
@@ -155,7 +177,10 @@ export function DeviceMark({ device }: { device: HostDevice }): ReactElement {
   );
 }
 
-function glyphAct(glyph: "resume" | "jump" | "start" | "ellipsis", word?: string): ReactNode {
+function glyphAct(
+  glyph: "resume" | "jump" | "start" | "ellipsis" | "chevron",
+  word?: string,
+): ReactNode {
   return (
     <span className="vf-history-act">
       <FieldGlyph name={glyph} size={13} />
@@ -330,37 +355,6 @@ function foldersOf(
 
 /* ── R5 ②: New agent and the project's acts ────────────────────────────── */
 
-/** The agents New agent offers: this desktop's, installed and able to start
- * (the catalog's ids — `agent.providers` — never a literal, R23), newest
- * used first; each persona its own row. */
-function newAgentRows(
-  model: HistoryHostModel,
-  start: ((provider: AgentProviderSummary, profileId?: string) => void) | null,
-  why: string | null,
-): RoomMenuItem[] {
-  const usable = model.providers
-    .filter(
-      (provider) =>
-        provider.available && provider.offers?.spawn !== false && provider.status !== "declined",
-    )
-    .sort((a, b) => (b.lastLaunchedAt ?? 0) - (a.lastLaunchedAt ?? 0));
-  return usable.flatMap((provider) => {
-    const personas = provider.personas.length > 0 ? provider.personas : [null];
-    return personas.map((persona): RoomMenuItem => {
-      const pick = start;
-      return {
-        key: `${provider.id}\u001f${persona?.profileId ?? ""}`,
-        label: provider.label,
-        aside: persona === null ? "its own" : persona.label,
-        ...(why !== null ? { disabled: true, detail: why } : {}),
-        ...(pick !== null && why === null
-          ? { onSelect: () => pick(provider, persona?.profileId) }
-          : {}),
-      };
-    });
-  });
-}
-
 function newAgentAct(
   model: HistoryHostModel,
   project: ProjectSummary,
@@ -403,14 +397,47 @@ function newAgentAct(
       },
     ],
   };
-  const agents = newAgentRows(
-    model,
-    path === null
-      ? null
-      : (provider, profileId) =>
-          acts.newAgent({ provider: provider.id, profileId, cwd: path, where }),
+  // PJ-6 — the ways to start there (`launch.ts`): the page New agent's rows
+  // were turned to, for this project and folder, else the first
+  const context: LaunchContext = {
+    project: project.key,
+    folder,
+    providers: model.providers,
+    profileSets: model.profileSets,
+    recipe: project.recipe,
+    models: state.models,
     why,
-  );
+    now: (state.clock ?? Date.now)(),
+    start:
+      path === null
+        ? null
+        : (choice) =>
+            acts.newAgent({
+              provider: choice.provider,
+              ...(choice.profileSet !== undefined ? { profileSet: choice.profileSet } : {}),
+              ...(choice.modelSelection !== undefined
+                ? { modelSelection: choice.modelSelection }
+                : {}),
+              cwd: path,
+              where,
+            }),
+    page: (page) => acts.page(page),
+  };
+  const back = <FieldGlyph name="chevron" size={13} turn={180} />;
+  const page = pageHolds(state.page, project.key, folder) ? state.page : FIRST_PAGE;
+  let groups: RoomMenuGroup[];
+  let filterAfter: number | undefined;
+  let count = 0;
+  if (page.kind === "models") {
+    const models = modelsPageGroups(context, page, back);
+    groups = [startsIn, ...models.groups];
+    count = models.count;
+    filterAfter = 9;
+  } else if (page.kind === "controls") {
+    groups = [startsIn, ...(controlsPageGroups(context, page, back) ?? [])];
+  } else {
+    groups = [startsIn, ...firstPageGroups(context, () => glyphAct("chevron"))];
+  }
   return {
     key: "new-agent",
     label: "New agent",
@@ -418,22 +445,10 @@ function newAgentAct(
     primary: true,
     menu: {
       label: "New agent",
-      groups: [
-        startsIn,
-        { key: "agents", title: "Agent", items: agents },
-        {
-          key: "options",
-          title: "Model and effort",
-          items: [
-            {
-              key: "model-effort",
-              label: "Each agent's own",
-              detail: "Model and effort can't be set from here yet (PJ-6)",
-              disabled: true,
-            },
-          ],
-        },
-      ],
+      groups,
+      ...(filterAfter !== undefined
+        ? { filterAfter, filterPlaceholder: `Filter ${count} models` }
+        : {}),
       empty: "No agent here can start one",
     },
   };

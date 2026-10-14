@@ -1,7 +1,7 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AGENT_CATALOG, type AgentSessionRecord } from "@vibefield/contracts";
+import { AGENT_CATALOG, AgentSessionRecord } from "@vibefield/contracts";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { SessionRecordStore } from "../src/agent-sessions";
 
@@ -94,5 +94,32 @@ describe("the newest launch per agent, kept in memory", () => {
     expect(() => records.newestCreatedByProvider()).toThrow("EACCES");
     expect(records.newestCreatedByProvider().get(FIRST!)).toBe(at("2026-09-01T00:00:00.000Z"));
     expect(list).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("PJ-6 (Q4) — a record carrying the launch's model selection", () => {
+  it("reads back and verifies; an OLDER fieldd, whose schema never heard of the field, keeps the key through its passthrough and verifies the same bytes", () => {
+    const records = store();
+    // the selection as puppeteer took it, plus a key a later fieldd might add
+    const modelSelection = { modelId: "model-a", controls: { effort: "high" }, later: { kept: 1 } };
+    records.write({
+      ...record("run-pj6", FIRST!, "2026-10-12T00:00:00.000Z"),
+      modelSelection,
+    });
+    expect(records.read("run-pj6")?.modelSelection).toEqual(modelSelection);
+
+    const raw = JSON.parse(readFileSync(records.path("run-pj6"), "utf8")) as unknown;
+    // the record schema as it stood before PJ-6, which the older reader parses with
+    const older = AgentSessionRecord.omit({ modelSelection: true }).parse(raw);
+    expect(older).toHaveProperty("modelSelection", modelSelection);
+    expect(records.verifies(older as AgentSessionRecord)).toBe(true);
+    // the passthrough is what holds it: a reader that STRIPPED the unknown key
+    // would canonicalise other bytes and set the record aside as forged
+    const stripped = AgentSessionRecord.omit({ modelSelection: true }).strip().parse(raw);
+    expect(stripped).not.toHaveProperty("modelSelection");
+    expect(records.verifies(stripped as AgentSessionRecord)).toBe(false);
+    // and a record written before PJ-6 still reads with this build's schema
+    records.write(record("run-old", FIRST!, "2026-10-01T00:00:00.000Z"));
+    expect(records.read("run-old")).not.toHaveProperty("modelSelection");
   });
 });

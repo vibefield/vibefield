@@ -14,6 +14,10 @@
 # bound root (CLAUDE_CONFIG_DIR) keeps the mark inside itself; the agent's own
 # folder keeps it under FAKE_CLAUDE_STATE_DIR when a test names one, and nowhere
 # otherwise: never in the developer's real ~/.claude.
+# PJ-6: `--print --input-format stream-json …` is the model picker read
+# (puppeteer's Claude model service): one `initialize` control request on
+# stdin, answered with the vendor's own `models` rows — two of them, the first
+# with its effort levels — under the request's own id, as Claude Code 2.1 does.
 mark() {
   if [ -n "$CLAUDE_CONFIG_DIR" ]; then echo "$CLAUDE_CONFIG_DIR/.fake-signed-out"
   elif [ -n "$FAKE_CLAUDE_STATE_DIR" ]; then echo "$FAKE_CLAUDE_STATE_DIR/native-signed-out"
@@ -22,6 +26,16 @@ mark() {
 case "$1" in
   --version) echo "2.1.0 (Claude Code)" ;;
   update) echo "fake claude: nothing to update" ;;
+  --print)
+    IFS= read -r line
+    case "$line" in
+      *'"initialize"'*)
+        id=$(printf '%s\n' "$line" | sed -n 's/.*"request_id":\([0-9][0-9]*\).*/\1/p')
+        printf '{"type":"control_response","response":{"subtype":"success","request_id":%s,"response":{"models":[{"value":"fake-model-a","displayName":"Fake Model A","description":"The fake picker'"'"'s first model","supportedEffortLevels":["low","high"],"supportsEffort":true},{"value":"fake-model-b","displayName":"Fake Model B","supportsEffort":false}]}}}\n' "$id"
+        ;;
+      *) : ;;
+    esac
+    ;;
   auth)
     case "$2" in
       login) m=$(mark); [ -n "$m" ] && rm -f "$m"; echo "fake claude: logged in" ;;

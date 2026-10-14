@@ -12,7 +12,8 @@
 //               its budget of the rise; never a blank frame (the canvas or the still on every frame);
 //     HOLD    — `submits()` and `perf().frames` standing still for ≥ 3 s from the park;
 //     RECEDE  — the still 1 → 0.98 over 560 ms on the island curve, transform only; the view's ground at the covers' 72 %,
-//               no backdrop filter on it (nor on the room's fades, History);
+//               no backdrop filter on it; under History a stuck day head wears the room's own frost (docket N3 (a))
+//               and the transcript's top fade none;
 //     THEME   — the theme changed under the cover: thaw → one frame → capture → blur → swap → hide → freeze → park, the
 //               still lit the new way; the stills dk-15-<view>-{light,dark}.png;
 //     RESIZE  — the window resized under the cover: taken again at the new size — the still the desk's LAYOUT size at the
@@ -516,12 +517,29 @@ const READ_LINE = `(() => {
   return r.shown;
 })()`;
 
-/** The view's facts a row judges by: the DPR, the desk canvas's layout and backing size, the views' grounds. */
+/** The view's facts a row judges by: the DPR, the desk canvas's layout and backing size, the views' grounds, and History's
+ * two paper fades (DK-15; docket N3 (a)) — a STUCK day head's frost and the transcript's top fade, read off the room's own
+ * elements, or, where the room draws none (no sessions in this run's root, no transcript open), off a probe of that class
+ * placed in the room's frame for one read, so the cascade is judged either way and the line says which was read. */
 const READ_VIEW = `(() => {
   const canvas = document.querySelector("[data-ice-canvas] > canvas");
   const still = document.querySelector(".field-still");
   const ground = (sel) => { const el = document.querySelector(sel); if (el === null) return null; const cs = getComputedStyle(el); return { background: cs.backgroundColor, backdrop: cs.backdropFilter }; };
-  const frosts = [...document.querySelectorAll(".vf-history .tr-frost, .vf-history .ah-day")].map((el) => getComputedStyle(el, "::before").backdropFilter).filter((f) => f !== "none");
+  const fades = (() => {
+    const frame = document.querySelector('.vf-history .ah-frame[data-ah-surface="host"]');
+    if (frame === null) return null;
+    const probe = (className) => { const el = document.createElement("div"); el.className = className; el.setAttribute("aria-hidden", "true"); frame.appendChild(el); const backdrop = getComputedStyle(el, "::before").backdropFilter; el.remove(); return backdrop; };
+    const list = frame.querySelector(".ah-session-list");
+    const heads = [...(list?.querySelectorAll(".ah-day") ?? [])];
+    const top = list?.getBoundingClientRect().top ?? 0;
+    const stuck = heads.find((head) => Math.abs(head.getBoundingClientRect().top - top) < 1);
+    const shown = frame.querySelector(".tr-frost");
+    return {
+      heads: heads.length,
+      dayHead: stuck === undefined ? { read: "probe", backdrop: probe("ah-day") } : { read: "stuck", backdrop: getComputedStyle(stuck, "::before").backdropFilter },
+      topFade: shown === null ? { read: "probe", backdrop: probe("tr-frost") } : { read: "shown", backdrop: getComputedStyle(shown, "::before").backdropFilter },
+    };
+  })();
   return {
     dpr: devicePixelRatio,
     cssWidth: canvas?.clientWidth ?? 0,
@@ -530,7 +548,7 @@ const READ_VIEW = `(() => {
     still: still === null ? null : { face: still.getAttribute("data-still"), background: getComputedStyle(still).backgroundColor, transform: getComputedStyle(still).transform, transition: getComputedStyle(still).transition },
     godview: ground(".vf-godview"),
     history: ground(".vf-history"),
-    frosts,
+    fades,
     cover: (() => { const c = document.querySelector(".vf-cover"); return c === null ? null : getComputedStyle(c).transitionDuration; })(),
   };
 })()`;
@@ -548,9 +566,17 @@ interface ViewFacts {
   } | null;
   readonly godview: { readonly background: string; readonly backdrop: string } | null;
   readonly history: { readonly background: string; readonly backdrop: string } | null;
-  readonly frosts: readonly string[];
+  /** History's paper fades as the compositor is asked to draw them; null with no room frame to read */
+  readonly fades: {
+    readonly heads: number;
+    readonly dayHead: { readonly read: "stuck" | "probe"; readonly backdrop: string };
+    readonly topFade: { readonly read: "shown" | "probe"; readonly backdrop: string };
+  } | null;
   readonly cover: string | null;
 }
+
+/** The room's own frost on a day head (room.css: 14px), and none on the transcript's top fade (N3 (a)). */
+const DAY_HEAD_FROST = "blur(14px)";
 
 /** The still under the cover, read back as a mean luma (drawn small into a 2D canvas — the still is a bitmap canvas). */
 const STILL_LUMA = `(() => {
@@ -719,8 +745,25 @@ export async function coverRows(d: CoverRowsDriver): Promise<string[]> {
       if (ground.backdrop !== "none")
         problems.push(row(`the view's ground wears a backdrop filter (${ground.backdrop})`));
     }
-    if (facts.frosts.length > 0)
-      problems.push(row(`the room's fades still frost (${facts.frosts.join(", ")})`));
+    // N3 (a): under History's cover a stuck day head frosts (the room's own blur), the transcript's top fade is tint
+    if (name === "history") {
+      const fades = facts.fades;
+      if (fades === null) problems.push(row("the room's frame is not there to read its fades"));
+      else {
+        if (fades.dayHead.backdrop !== DAY_HEAD_FROST)
+          problems.push(
+            row(
+              `the sticky day head (${fades.dayHead.read}) wears ${fades.dayHead.backdrop}, not the room's ${DAY_HEAD_FROST}`,
+            ),
+          );
+        if (fades.topFade.backdrop !== "none")
+          problems.push(
+            row(
+              `the transcript's top fade (${fades.topFade.read}) frosts (${fades.topFade.backdrop}) — it is the cover's tint`,
+            ),
+          );
+      }
+    }
     if (rec?.passes[0]?.parked !== undefined)
       parks[name] = Math.round(rec.passes[0].parked - rec.rose);
     await rimRow(name, first);
@@ -766,6 +809,7 @@ export async function coverRows(d: CoverRowsDriver): Promise<string[]> {
           settled: scaleOf(recorded.samples.at(-1)?.transform ?? "none"),
         },
         ground,
+        ...(name === "history" ? { fades: facts.fades } : {}),
         luma: luma0,
       })}`,
     );

@@ -201,6 +201,36 @@ describe("the tolerant reader on an answer", () => {
     expect(parsed.pinned).toBe(true);
   });
 
+  it("PJ-6 — a project's launch recipe rides its summary: the agent, its Agent Profile, the model, each model's own controls; a recipe this reader cannot read is none, never a refused summary", () => {
+    const { "//": _note, ...summary } = fixture("project-summary.recipe.json");
+    const parsed = ProjectSummary.parse(summary);
+    expect(parsed.recipe).toEqual({
+      provider: "claude",
+      profileSet: "work-7f3a",
+      selection: { modelId: "opus" },
+      controlsByModel: { opus: { effort: "high" }, sonnet: { effort: "low" }, haiku: {} },
+      at: 1759276800000,
+    });
+    // a recipe from a newer desktop that this reader cannot read: no recipe,
+    // the project still listed
+    for (const unreadable of [
+      { provider: "claude" },
+      { ...parsed.recipe, profileSet: "Not A Set" },
+      { ...parsed.recipe, controlsByModel: { opus: { effort: 3 } } },
+      "claude · opus · high",
+    ]) {
+      const read = ProjectSummary.safeParse({ ...summary, recipe: unreadable });
+      expect(read.success, JSON.stringify(unreadable)).toBe(true);
+      expect(read.success && read.data.recipe).toBeUndefined();
+    }
+    // …and a key a newer desktop adds to a readable one rides through
+    const later = ProjectSummary.parse({
+      ...summary,
+      recipe: { ...parsed.recipe, later: { kept: 1 } },
+    }).recipe as Record<string, unknown>;
+    expect(later["later"]).toEqual({ kept: 1 });
+  });
+
   it("J11 — a desktop's Home is a project on one device; Temporary is the only bucket", () => {
     const { "//": _note, ...home } = fixture("project-summary.home.json");
     const parsed = ProjectSummary.parse(home);

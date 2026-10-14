@@ -902,6 +902,15 @@ if (mode === "silent") {
   const metaSockets = new Set();
   // SP-6 — the session sockets' ring identity; a scripted resync moves it
   let sessionEpoch = 1;
+  // SP-6 — while the timeline control is scripted, each session socket's own
+  // events (opened, with the control it read; resync fired; drop fired; a send
+  // that failed; closed) are request-log lines under a `ws ` prefix: what the
+  // fake SENT, so a frame a test never saw is placed on one side of the socket
+  // or the other. The prefix keeps them apart from the reads a test counts.
+  let sessionSockets = 0;
+  const logSocket = (event) => {
+    if (process.env.FAKE_ROSETTAD_TIMELINE_CONTROL !== undefined) logRequest(`ws ${event}`);
+  };
   // the WebSocket server loads on the FIRST upgrade: a test that never opens
   // the stream (the supervisor's kill matrix) starts the fake as fast as ever
   let wss = null;
@@ -1025,6 +1034,10 @@ if (mode === "silent") {
             ws.close(1000);
             return;
           }
+          const socketId = `${id}#${++sessionSockets}`;
+          const sent = (what) => (error) => {
+            if (error) logSocket(`${socketId} send ${what} failed: ${error.message}`);
+          };
           const snapshot = () => {
             const page = timelinePage(id, SNAPSHOT_LIMIT, null);
             ws.send(
@@ -1036,16 +1049,26 @@ if (mode === "silent") {
                 cursor: page.cursor,
                 watermark: page.watermark,
               }),
+              sent("timeline_snapshot"),
             );
+            return page.entries.length;
           };
-          snapshot();
+          // The baseline the poll diffs against is read BEFORE the snapshot
+          // goes out: a client that has the snapshot may change the scripted
+          // files at once (a test's next line), and a baseline read after that
+          // change takes it for the starting state — a resync asked for was
+          // then never fired (index-timeline's barrier row, 2026-10-12: the
+          // socket "opened" with resync already in its control).
           let last = new Map(timelineRows(id).map((row) => [row.timeline_id, JSON.stringify(row)]));
           let control = { ...timelineControl() };
+          snapshot();
+          logSocket(`${socketId} opened epoch=${epoch} control=${JSON.stringify(control)}`);
           const poll = setInterval(() => {
             if (ws.readyState !== 1) return;
             const next = timelineControl();
             if (next.drop !== undefined && next.drop !== control.drop) {
               control = { ...next };
+              logSocket(`${socketId} drop fired`);
               ws.close(1011, "scripted drop");
               return;
             }
@@ -1054,8 +1077,9 @@ if (mode === "silent") {
               sessionEpoch += 1;
               epoch = sessionEpoch;
               seq = 0;
-              ws.send(JSON.stringify({ frame: "resync" }));
-              snapshot();
+              ws.send(JSON.stringify({ frame: "resync" }), sent("resync"));
+              const rows = snapshot();
+              logSocket(`${socketId} resync fired epoch=${epoch} rows=${rows}`);
               last = new Map(timelineRows(id).map((row) => [row.timeline_id, JSON.stringify(row)]));
               return;
             }
@@ -1077,8 +1101,14 @@ if (mode === "silent") {
             last = now;
           }, 40);
           poll.unref();
-          ws.on("close", () => clearInterval(poll));
-          ws.on("error", () => clearInterval(poll));
+          ws.on("close", (code) => {
+            clearInterval(poll);
+            logSocket(`${socketId} closed ${code}`);
+          });
+          ws.on("error", (error) => {
+            clearInterval(poll);
+            logSocket(`${socketId} error ${error.message}`);
+          });
         }),
       );
       return;
@@ -1116,6 +1146,17 @@ if (mode === "silent") {
         })}\n`,
       );
     }
+    // The guard is armed BEFORE the ready line: a parent that reads the line
+    // may stop the daemon at once, and a SIGINT that lands while no listener
+    // is installed takes Node's default — the process dies without cleanup,
+    // its announce file outliving it (two gate reds, ~0.3 s rows, 2026-10-12).
+    const cleanup = () => {
+      if (announce !== null) rmSync(announce, { force: true });
+    };
+    process.on("SIGINT", () => {
+      cleanup();
+      process.exit(0);
+    });
     const origin =
       mode === "bad-origin" ? `http://example.com:${port}` : `http://127.0.0.1:${port}`;
     const ready = {
@@ -1133,13 +1174,6 @@ if (mode === "silent") {
     if (phase === "awaiting_consent") {
       process.stdout.write("no enrolled agents — choose in the app (or pass --all-agents)\n");
     }
-    const cleanup = () => {
-      if (announce !== null) rmSync(announce, { force: true });
-    };
-    process.on("SIGINT", () => {
-      cleanup();
-      process.exit(0);
-    });
     if (mode === "crash-after-ready") {
       setTimeout(() => {
         // a crash keeps its announce file behind, exactly like a real SIGKILL

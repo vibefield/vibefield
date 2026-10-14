@@ -2306,6 +2306,21 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "federate",
   }),
+  // PJ-6 (build-pj6.md, Q1) — `agent.models`: one agent's own model picker
+  // under one Agent Profile, from fieldd's last read (and a read behind it),
+  // so a launch menu opens on it at once. On `agent.spawn`, not
+  // `agent.observe`: a read starts the agent's own CLI in the profile's
+  // sign-in, which is a launch's consent, and its answer is only ever the
+  // input to one. Idempotent (a read; a refresh replaces the held catalog with
+  // the agent's own answer). `federate` like `agent.providers`: another
+  // desktop's picker is asked of it.
+  defineMethod({
+    surface: "product",
+    method: "agent.models",
+    scope: "agent.spawn",
+    idempotent: true,
+    locality: "federate",
+  }),
   defineMethod({
     surface: "product",
     method: "agent.spawn",

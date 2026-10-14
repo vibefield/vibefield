@@ -10,6 +10,7 @@ import {
   AGENT_FIELD,
   AgentCatalogParams,
   AgentInterruptParams,
+  AgentModelsParams,
   AgentRecordedLanesParams,
   AgentReportShownParams,
   type AgentReportShownResult,
@@ -610,6 +611,9 @@ export interface FielddDaemon {
   /** PJ-1/PJ-3 — the projects this desktop groups (the `project.*` doors'
    * source); tests regroup it directly rather than wait out the settle. */
   projects: ProjectGroups;
+  /** PJ-2/PJ-6 — the person's acts on projects, written as records; a launch
+   * reaches it through the agents' birth hook (tests watch what it is told). */
+  projectRecords: ProjectRecords;
   /** SP-6 — the session tails (`index.session.subscribe`): one rosetta socket
    * per tailed session, shared by its subscribers; tests count them. */
   indexTail: IndexTailService;
@@ -974,9 +978,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // FS-1a (L2) — every run's folder is a place of the files service; PJ-2
     // (D6) — and a run started there (not one the daemon re-attached at
     // boot) is an act in its place
+    // — PJ-6 — and a launch from VibeField's own controls brings its recipe
     onPlace: (cwd, at, how) => {
       workspace.registry.touchPlace(cwd, at);
-      if (how?.system !== true) projectRecords.actedIn(cwd, Date.parse(at));
+      if (how?.system !== true) projectRecords.actedIn(cwd, Date.parse(at), how?.recipe);
     },
     ...(config.agentGateway?.processTable !== undefined
       ? { processTable: config.agentGateway.processTable }
@@ -2925,14 +2930,29 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         throw new RpcCallError("PRECONDITION_FAILED", "expected { surface? }", false);
       return agents.visibleCatalog(parsed.data.surface);
     });
+    // PJ-6 — the agent's own model picker for one Agent Profile (agent-models.ts):
+    // a read, unaudited like agent.providers
+    api.register("agent.models", async (_ctx, params) => {
+      const parsed = AgentModelsParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { provider, profileSet?, cwd?, refresh? }",
+          false,
+        );
+      return await agents.models(parsed.data);
+    });
     api.register("agent.spawn", async (ctx, params) => {
       const parsed = AgentSpawnParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { provider, cwd?, profileId?, profileSet?, title? }",
+          "expected { provider, cwd?, profileId?, profileSet?, title?, modelSelection? }",
           false,
         );
+      // PJ-6 — the ledger says a launch asked for a model and that it was
+      // applied, never which: the ids are the agent's own words (AR-L1)
+      const selected = parsed.data.modelSelection !== undefined;
       return await audit.required(
         ctx,
         {
@@ -2944,6 +2964,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             ...(parsed.data.profileId !== undefined ? { profileId: parsed.data.profileId } : {}),
             ...(parsed.data.profileSet !== undefined ? { profileSet: parsed.data.profileSet } : {}),
             ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
+            ...(selected ? { modelSelection: true } : {}),
           },
         },
         () => agents.spawn(parsed.data, ctx.principal, ctx.onBehalfOf),
@@ -2952,6 +2973,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           attrs: {
             runtimeRunId: result.session.runtimeRunId,
             sessionId: result.terminal.sessionId,
+            ...(selected ? { modelSelection: "applied" } : {}),
           },
         }),
       );
@@ -2998,6 +3020,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             // ledgered as the system actor)
             ...(result.session.terminal?.replaced !== undefined
               ? { how: "manual", replaced: result.session.terminal.replaced }
+              : {}),
+            // PJ-6 — the session's launch model applied again, or the agent's
+            // own (its resume cannot take one); never which model
+            ...(result.modelSelection !== undefined
+              ? { modelSelection: result.modelSelection.state }
               : {}),
           },
         }),
@@ -6148,6 +6175,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       indexTail,
       indexMesh: indexMesh as IndexMesh,
       projects: projectGroups,
+      projectRecords,
       agents,
       agentUsage,
       agentGateway: gateway,

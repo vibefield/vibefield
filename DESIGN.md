@@ -570,7 +570,7 @@ during a fall turns it round from where it is. Beside them, on plain `ease`: the
 fade out under a maximized deck, and back, in 260ms (the drawing's number, 20 past the table's
 range); the sheet's top corners and shadow go and return in 160ms; the two readouts (§8, §9) come
 in 120ms and leave in 160ms, their veil 160ms both ways; the title bar's own search steps out in
-120ms *(not built: the one button changes its place at once, §8 "Search — the Peek")*. Under reduced motion the deck is at its end at once.
+120ms, and only then the head's returns in 200ms (§8 "Search — the Peek"). Under reduced motion the deck is at its end at once.
 
 Loops are for an indicator waiting on a fact it cannot predict, never for decoration (QL-2's
 launch, §8): a **breath** — `ease-in-out`, alternate, 1.1s, scale 1 → 1.06 — and a repeating
@@ -1053,9 +1053,21 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     *As built (2026-10-11):* the reserve is `--vf-godview-head-reserve`. The stage's own chrome —
     the usage column and the claims strip — begins at it, where it began 11 under the bar. The
     swarm steers by the stage's obstacles and reads no inset, so the reserve is the first of
-    them, the band across the stage's top: its bodies keep below the head as they kept below the
-    bar. The rain is a picture with no words or controls of its own, and bleeds under the head.
+    them, the band across the stage's top. *(Corrected 2026-10-12: this said "its bodies keep
+    below the head as they kept below the bar". They do not, and they never did. The swarm's crowd
+    is bigger than its field (no body is smaller than r 50), and its physics lets the crowd past
+    every edge, a band as thick as a wall included. Under the bar the swarm spilled above the
+    stage's top too, and the bar and the stage's edge hid it. Measured in
+    `draft/monitor-view-sdk/evidence/swarm-probe-ce17e858`.)* The rain is a picture with no words or
+    controls of its own; it runs under the head too.
     The terminals' edge rests where it rested: the monitor's rest height takes up the bar's 40.
+  - **The field dissolves under the head** (2026-10-12; James: "Fade now + sizing later"). The
+    stage is masked from clear at the head's axis, **28**, to whole at the reserve, **56**
+    (`--vf-godview-head-fade-from` → `--vf-godview-head-reserve`), whatever the view. What a field
+    draws in that band, the swarm's crowd or the rain's ground, fades out under the glass instead
+    of standing beside the circles. The stage's own chrome begins at the reserve and is never
+    faded. It is the stage that is masked, never the head beside it. Until the swarm sizes its
+    bodies to its field (puppeteer's, owed), the fade is what keeps the head clear.
   - **Maximized** (GV-D11) nothing of the head stands over the terminals' title bar: the row and
     its chevrons fade in 200ms and take no pointer.
   - **Reduced motion:** the row pages and the label appears at once.
@@ -1435,7 +1447,8 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   `createImageBitmap` on the desk's own canvas stands in — a bitmap ICE does not promise, so its
   absence falls back the same way. **Godview's live backdrop** (GT-7's viewer glass,
   `backdropOpacity` / `backdropBlur`) **and rosetta's room glass retire on the desk**: the cover is
-  a tint over the still, and their settings rows go (R16; the deck's note, below).
+  a tint over the still, and their settings rows go (R16; the deck's note, below). *(Carve-out
+  2026-10-12, docket N3 (a): the room's sticky day heads keep their own frost — the deck's note.)*
   *Amended 2026-10-07 (DK-16; plan addenda (68), (69)):* the rim the receded still leaves at the
   window's edge (≈12 px at 0.98) is the mat's ground as the theme lights it under the cover's tint —
   the still's own ring, `box-shadow: 0 0 0 2vmax var(--vf-mat-ground)`, never the canvas's colour
@@ -1697,6 +1710,14 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   the transcript's top fade and the sticky day heads are the cover's tint (`--vf-chrome-solid`,
   feathered by the room's own masks), never a backdrop filter — the room's sheet is rosetta's, so
   the override is VibeField's, scoped to the view and riding the room's own chunk.
+  *Carve-out 2026-10-12 (docket N3 (a), James):* the **sticky day heads frost** again — the room's
+  own 14px blur, feathered by its own mask (`linear-gradient(#000 72%, transparent)`), over the
+  cover's glass, on every head the room draws as `.ah-day` (a list's days and its section heads
+  alike); the override keeps only **the transcript's top fade**, which stays the cover's tint. The
+  ruling asks the frost's cost to be measured under a cover before it lands. *Measured 2026-10-12* (lane dui,
+  offscreen at 60 fps, History under its cover, 181 rows and 45 day heads scrolled 8 s an arm, paired A/B with a null
+  A/A): no frame cost (rAF p95 16.7 ms in both arms, no long frames); the GPU process about 5 points of a core higher
+  (+37 %) while the list scrolls, every pair above the null's spread; a still list costs nothing.
   Over the monitor the card occludes the bodies exactly as much as Godview occludes the field.
   **The Lip** (GV-D7; built 2026-10-11) is the lip grown into the drag bar: **30** tall, on the
   frame's tone. **The groove** (GV-D12 — James's pick over the lean: "i like the groove one")
@@ -2127,6 +2148,11 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     The room's paper fades — the transcript's top frost, the sticky day heads — **frost** over that
     glass (a 14px blur feathered by its own mask, the package's), never a mask on the scroller, which
     would fade the pinned chrome with the rows.
+    *Corrected 2026-10-12 (docket N3 (a)):* this said both fades frost, and from DK-15 (2026-10-07)
+    neither did — on the desk both were the cover's tint (§8 "The covers over the desk", the deck's
+    note), which this line was not corrected for. Since N3 (a) the **sticky day heads frost** as
+    above; **the transcript's top fade is the cover's tint** (`--vf-chrome-solid`, feathered by the
+    room's mask), never a frost.
   - **Its edges are the frame's.** The columns end at **692** — the reserve of 88 above the window's
     foot (FC-D15) — and keep **8** clear at each side for the notches' slivers; the top band, 0–52, is
     the head's (FC-D6), holding only the window's lights: the strip's search pill left for the frame's
@@ -2242,13 +2268,39 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     - **New agent** is ②'s head's one primary — the `start` glyph on the room's primary fill — and
       opens the room's rows: **Starts in** names the folder ③ shows (its mark, its path, its
       branch, "1 agent is already working there"; or, dimmed, why it cannot start there: another
-      desktop's folder waits for routed acts, DS-2), then **Agent** — each agent this desktop
-      offers, one row per persona (its name at the row's end, "its own" for the agent's own
-      sign-in), the most recently used first — then **Model and effort**, one dimmed row: "Model
-      and effort can't be set from here yet (PJ-6)". A row starts the agent in that folder and the
-      window moves to Godview to show its pane; the note says **"Started in ~/…"**, or **"Could
-      not start — …"** in fieldd's words — or, for a run that started and no pane showed, why
-      (above, "An act never ends in silence").
+      desktop's folder waits for routed acts, DS-2), then the ways to start there (PJ-6, built
+      2026-10-12; Q7 "menu first" — the full launch of the record's PJ-D7 waits for the room):
+      - **Last used** — the project's recipe (PJ-D13, written by fieldd at a launch's confirmed
+        birth): the agent, the model, its effort, then the Agent Profile after a dash —
+        **"Claude Code · Opus · high — Work"** — checked, "last used" at its end; "its own" for a
+        launch that named no model. The words are the agent catalog's label and the agent's own
+        picker's (`agent.models`); until that picker is read, its ids as they are. A recipe whose
+        agent or profile is not here any more is dimmed and says why. None until a launch.
+      - **Agent** — each agent this desktop offers under each **Agent Profile** it can run in
+        (Q2: This Mac for every agent, a profile holding its sign-in for the rest — the profiles
+        Godview's launcher offers, never personas), at the agent's own model and effort: the
+        agent's label, the profile's name at the row's end, the most recently used agent first.
+        Each row carries its own act beside it, **Another model…** (`chevron`, quiet until the
+        row is under the pointer, → reaches it).
+      - **Another model…** turns the rows to that agent's and profile's **models**: "All agents"
+        first (the `chevron` turned 180), then the agent's own picker as fieldd last read it —
+        each model's label, its description under it, and at its end the effort this project
+        last chose for it; the recipe's model checked. While the first read runs one dimmed row
+        says **"Reading Claude Code's models…"**; a picker that could not be read says why,
+        dimmed — **"Sign in to see models"** for a sign-in, else the agent's own words — never an
+        empty list; the foot says the picker's age, **"As of 3 min ago"** (and "· reading again"
+        while a read runs behind it). Past nine models a filter heads them.
+      - A model with no control starts at once; one with controls turns the rows to the first
+        control's values, under its label ("Opus — Effort"): "Models" first (turned back), **its
+        own** (the agent's own effort), then each value, the one this project last chose for the
+        model checked and the agent's default saying so. A value starts it (or turns to the next
+        control). The rows turn **in place**: the room closes its rows on a choice and VibeField
+        opens them again on the next page — an interim until the room pages its own rows (a room
+        ask). Rows closed without a choice (Escape, a press outside) open on the first page again.
+      A row starts the agent in that folder and the window moves to Godview to show its pane; the
+      note says **"Started in ~/…"**, or **"Could not start — …"** in fieldd's words ("Claude Code
+      was not started at the chosen model: …" for a model it no longer offers) — or, for a run
+      that started and no pane showed, why (above, "An act never ends in silence").
     - **③'s head is the folder list** (PJ-D22): every folder of the project under its desktop's
       mark and name ("here", "asleep"), a linked worktree one step in, the shown one checked; past
       nine a filter heads it. A folder on another desktop is never opened here: ③ says **"Files
@@ -2340,7 +2392,7 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     as its glass widens. *(Until the Stories head, built 2026-10-11, it stood over the instrument
     bar's right end and hung 8 below the bar's foot, PK2 (a).)*
   - **The button in the terminals' title bar** (GV-D11, ruled 2026-10-02; One Frame §23.1;
-    built 2026-10-11 — the bar's own step-out below is not): while
+    built 2026-10-11, its step-out below 2026-10-12): while
     Godview's terminals are maximized (§8, the deck) the head's circle is not drawn — nothing of
     the head stands over the terminals — and the same button stands in their title bar, first of
     the controls at its right end, before the hairline. It is folded to the bar: **24 tall**,
@@ -2352,10 +2404,14 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     the keyboard, and the popup opens over the terminals. ⌘F is unchanged. **A filter that is on
     is not named in the bar:** maximized there is no view for it to filter, and the popup shows
     it. As the grip is dragged out of maximized the bar's button steps out (120ms) and the head's
-    returns (200ms), so search is never in two places. *(As built the button changes its place at
-    once — it is one button, so it is never in two — and the head's row fades back in its 200ms;
-    the 120ms step-out is not built.)* The deck's ink it wears is lent by Godview's stage on the
-    document (`--vf-godview-bar-ink`) while the terminals are maximized.
+    returns (200ms), so search is never in two places. It is one button, so the two are a
+    sequence, never a morph of the 24 bar control into the 40 glass circle: the bar's control
+    fades where it stands over 120ms on `ease`, taking no pointer, and once it is gone (its 120ms
+    and the deck's two frames, 34ms, on a timer) the circle fades in at the head over 200ms on
+    `ease`; maximized again mid-step, it is back in the bar at once. Into the bar, and under
+    reduced motion, it changes its place at once. The head's row starts its fade back as the deck
+    leaves maximized, so the circle starts 154ms after it. The deck's ink it wears is lent by
+    Godview's stage on the document (`--vf-godview-bar-ink`) while the terminals are maximized.
   - **The popup — Peek, 900 × 560**, centred in the window: solid (`--vf-chrome-solid`, FC-D14 —
     rows to be read), corners 24, ringed by the strong hairline, with its own shadow (§5, *Search
     popup*). It pops in on the island curve (§6). **The scrim** (§5, *Search scrim*) blurs and dims

@@ -19,7 +19,9 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
+import { useReducedMotion } from "../field/desk/bar/bar-motion";
 import { isSearchChord, listenForProductChord } from "../field/product-chords";
+import { DECK_TRAVEL_GRACE_MS } from "../godview/deck-state";
 import { openHistoryAt } from "../history/open-at";
 import { PeekReaderMount } from "../history/room-chunk";
 import { productHistoryPorts } from "../history/window-ports";
@@ -37,7 +39,7 @@ import {
 import { type FrameSurface, foldSurface } from "./frame-surface";
 import { jumpNote, sayOnLine } from "./line-door";
 import { openLiveRow } from "./live-open";
-import { PeekButtonView, type PeekMenu, PeekPastLines, PeekView } from "./PeekView";
+import { PeekButtonView, type PeekMenu, PeekPastLines, type PeekStep, PeekView } from "./PeekView";
 import {
   isLiveRow,
   type LiveFeedState,
@@ -142,6 +144,46 @@ function useLiveFeedWhile(
   );
   const read = useCallback(() => (feed === null ? NO_FEED_SNAPSHOT : feed.read()), [feed]);
   return { feed, snapshot: useSyncExternalStore(subscribe, read, read) };
+}
+
+/** GV-D11 (DESIGN.md §6, §8 "The button in the terminals' title bar"): the
+ * bar's control fades where it stands over 120ms, and only then the head's
+ * circle fades in over 200ms — one element, so search is never in two places.
+ * A sequence, never a FLIP: a 24 bar control morphing into a 40 glass circle
+ * is a shape no one drew. */
+export const PEEK_STEP_OUT_MS = 120;
+export const PEEK_STEP_IN_MS = 200;
+
+/** Where the one button stands: the terminals' bar, the head, or no Godview. */
+type FindPlace = "bar" | "head" | "elsewhere";
+
+/** The button's place and its step. Only leaving maximized moves (the step
+ * out, then the step in); into the bar, out of Godview and under reduced
+ * motion the place changes at once. Each step ends on a timer — the step out
+ * on its length and the deck's two frames (`DECK_TRAVEL_GRACE_MS`) — never on
+ * a `transitionend` a hidden window may not send. */
+function useFindStep(
+  inGodview: boolean,
+  maximized: boolean,
+  reducedMotion: boolean,
+): { bar: boolean; step: PeekStep | null } {
+  const place: FindPlace = !inGodview ? "elsewhere" : maximized ? "bar" : "head";
+  const [step, setStep] = useState<PeekStep | null>(null);
+  const [placeSeen, setPlaceSeen] = useState(place);
+  if (placeSeen !== place) {
+    setPlaceSeen(place);
+    setStep(placeSeen === "bar" && place === "head" && !reducedMotion ? "out" : null);
+  }
+  useEffect(() => {
+    if (step === null) return;
+    const timer = window.setTimeout(
+      () => setStep(step === "out" ? "in" : null),
+      step === "out" ? PEEK_STEP_OUT_MS + DECK_TRAVEL_GRACE_MS : PEEK_STEP_IN_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [step]);
+  const shown = reducedMotion ? null : step;
+  return { bar: place === "bar" || shown === "out", step: shown };
 }
 
 function boxOf(container: HTMLElement | null | undefined): { width: number; height: number } {
@@ -339,8 +381,10 @@ export function Peek({
   const liveShows = open && scope === "live";
   const inGodview = view === "godview";
   // GV-D11: while Godview's terminals are maximized this button stands in
-  // their title bar — the same button, never a second one
+  // their title bar — the same button, never a second one — and steps out of
+  // it before the head's returns
   const deckMaximized = useGodviewDeckMaximized();
+  const findStep = useFindStep(inGodview, deckMaximized, useReducedMotion());
   const historyFeed = useLiveFeedWhile(openLiveFeed, liveShows && !inGodview);
   // Godview's rows are listened to only while Live now shows over it: the
   // monitor makes its find join only while someone listens
@@ -616,7 +660,8 @@ export function Peek({
           findRef={findRef}
           token={token}
           onClearToken={clearToken}
-          bar={inGodview && deckMaximized}
+          bar={findStep.bar}
+          step={findStep.step}
           onPress={() => (open ? fold() : onSurfaceChange("search"))}
         />
       )}

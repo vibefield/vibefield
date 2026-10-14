@@ -9289,3 +9289,336 @@ field-app test unless a case turns them off; a test pane session without `activi
 real last pane and the second ⌘W closing the window, the rest on other heights and the floor on a short window; the
 bar's search stepping out in 120 ms (it changes place at once). The builder ran ~7 s of tests under the MV lead's
 proof-launch PERF.lock (22:40 PDT; the proof grades nothing, no re-run); the lock test now sits in the run command.
+
+## Debts, first part — fieldd's suite keeps honest budgets on a loaded host, doc-sync stops racing its own teardown, kill-matrix row 6 outlives a lost cell birth, and the logging flush takes a deadline (2026-10-12; `7b3e858a` · `41a558f8` · `98170109` · `c1d87e09` through lane land3, gated on the exact tree)
+
+**Why:** James ruled N10 (a) on 2026-10-12 (the After Wave 2 Docket): after Godview round 3, a debts lane beside PJ-6.
+Every gate of round 3 had met a different fieldd timing red ("Owed" in the wrapper's entry above), and the closing
+landing met two in a row. A read-only survey diagnosed each from its code and its red log
+(`draft/history-finish/surveys/s-debts-fieldd.md`); lane dfd (`debts/fieldd`, brief
+`draft/history-finish/briefs/debts-fieldd.md`) builds the fixes. These are its first four; the index-timeline
+row and the two unbounded waits follow.
+
+**What landed:**
+- `7b3e858a` the budgets: fieldd's vitest `testTimeout`/`hookTimeout` 30 s (vitest's 5 s/10 s defaults are not a
+  product budget; one gate failed four fsync-heavy files at once, each normally under 0.6 s); the catalog census row
+  its own 30 s (its body waits up to 15 s twice); doc-holders-stop's CONTROL row waits 10 s on a real ledger flush
+  (the never-settling rows keep 100 ms); field-native's logging `flush(4 s)` test 15 s.
+- `41a558f8` `NodeLogging.flush({timeoutMs})`: the product keeps 2 s; audit-retention gives its janitor 15 s. Red first.
+- `98170109` doc-sync-service: a row waits on the commit it expects (`onCommit`), never a fixed 60 ms; afterEach stops
+  the routing and disposes the store before the directory goes (`rmSync`'s retries stay as a backstop). Red first: the
+  old wait tightened to 0 went ENOTEMPTY in 3 of 10 on the sightings' own two rows; fixed with the backstop REMOVED,
+  0 of 10.
+- `c1d87e09` terminal-kill-matrix row 6: a create refused UNAVAILABLE + retryable is asked again, 250 ms apart, for 30 s
+  of the row's 60 s, each refusal printed, and the field-native log's tail printed before cleanup deletes it. Red first:
+  the row forced to lose the birth race went red 5 of 5 with the sighting's words; fixed, 0 of 5. A dead floor still
+  fails loudly at the budget.
+
+**Validation:** the lane's red and green logs under `/Volumes/SamsungRed/lanes/dfd/` (`red-2-flush-timeout.log`,
+`red-3-docsync-tightened.log`, `s3-docsync-fixed-no-backstop.log`, `red-4-killmatrix-birthrace.log`,
+`probe-4-loud-failure.log`); then the landing gate on the exact tree (`lanes/land3/logs/`, under this landing's sha).
+
+**Found:** field-native's logging worker waits out its retry backoff (250 ms × 2^attempt, capped 30 s;
+`logging/mod.rs:1130-1135`) before it looks at a requested flush (:940-951, :961), so the fatal path's
+`flush(500 ms)` (:1431) can never write once two writes in a row have failed. Whether a requested flush cuts the
+backoff short is the field-native owner's question.
+
+**Owed:** index-timeline's lost `.snapshot` (four sightings: not a budget — the frame never came; instrumented next);
+fieldd-client requests and the routed inventory read still have no bound of their own (lane dfd, next).
+
+## Debts, second part — Godview's filter is kept for the run, the search steps out of the terminals' bar in 120 ms, and smoke:godview's launcher rung settles its focus before it presses (2026-10-12; `6a0e808c` · `8c6982f0` · `39b1698a` through lane land3, gated on the exact tree)
+
+**Why:** the debts lane (N10 (a)), its renderer half: lane dui (`debts/ui`, brief `draft/history-finish/briefs/debts-ui.md`,
+survey `draft/history-finish/surveys/s-debts-ui.md`). N4 (a) is James's ruling of 2026-10-12; the 120 ms step was
+round 3's one mark left (GV-D11, DESIGN.md §6, §8); the launcher rung had failed twice at two different steps on trees
+that touch no launcher code (the wrapper's entry, "Owed").
+
+**What landed:**
+- `6a0e808c` N4 (a): Godview's two filters (the desktop and the profile chosen in search's Live now) are kept for the
+  run in the window's session storage (`godview/filter-state.ts`, `vf-godview-filters-v1`, every access in try/catch),
+  so closing Godview or a reload keeps them and a launch or a new window starts on everything. Only the window's own
+  stage reads or writes them; a stale id falls back where it is read, so no false token shows. Red first.
+- `8c6982f0` the search's step: leaving maximized, the bar's control fades where it stands over 120 ms `ease`, then
+  (120 + 34 ms, on a timer, never `transitionend`) the head's circle fades in over 200 ms — one element, never in two
+  places, never a FLIP (a 24 bar control morphing into a 40 glass circle is unruled). Into the bar, a re-maximize
+  mid-step, a change of view and reduced motion change place at once. DESIGN.md's "(not built …)" notes removed. Red
+  first.
+- `39b1698a` the launcher rung's focus race (a read-only survey traced it: the launcher's field is open only while it
+  holds focus, and ghosttea hands focus back to the terminal on a pane's activation): before ⌥↵ the rung waits for the
+  split session's own input gate (as the line-send rung does, `6bde8506`), puts focus on the split's terminal and
+  holds it two frames; after ⌥↵ it requires the field open and focused across two frames, again before each ⎋; its
+  state names the focused pane and class, so a red says what took the focus. No retry. Witness: the rung green 5 runs
+  in 5 (`/Volumes/SamsungRed/lanes/dui/rung5-run1..5.log`); nothing took the focus in them, so whether the product
+  races (⌥↵ right after ⌘D) stays unproven.
+
+**Validation:** the lane's red and green logs under `/Volumes/SamsungRed/lanes/dui/`; then the landing gate on the
+exact tree (`lanes/land3/logs/`, under this landing's sha).
+
+**Found:** with a filter token on, the Stories row's side reserve widens 154 ms into the row's fade back (the token
+width is the bar's until the step ends; visible only if the row was clipped). smoke:canvas's COVER HISTORY "frosts"
+guard read nothing: that smoke stages no person, so History had no day head to read (N3's slice changes it).
+
+**Owed:** History's day heads frost (N3 (a)), its cost measured under a cover first (lane dui, next).
+
+## Debts, third part — History's stuck day heads frost under the cover, measured first (2026-10-12; `791cf2c5` · `b73ff700` through lane land3, gated on the exact tree)
+
+**Why:** James ruled N3 (a) on 2026-10-12 (the After Wave 2 Docket): History's stuck day heads frost, DESIGN.md first,
+the cost measured under a cover before it lands. Since DK-15 (2026-10-07) both of the room's paper fades had been the
+cover's tint on the desk. Lane dui (`debts/ui`, brief `draft/history-finish/briefs/debts-ui.md`).
+
+**What landed:**
+- `791cf2c5` DESIGN.md first: the DK-15 note gains a dated N3 (a) carve-out (the sticky day heads keep the room's own
+  14 px blur and mask; the transcript's top fade stays the tint); §8 History's "both fades frost", untrue since DK-15,
+  corrected at its source; a dated pointer at §8 "The covers over the desk". The landing adds the measurement to the
+  carve-out.
+- `b73ff700` `history-room-glass.css` keeps only the transcript's `.tr-frost::before` in its override, so every head the
+  room draws as `.ah-day` (a list's days and its section heads) frosts; the two guards flipped: the boundaries test, and
+  smoke:canvas's COVER HISTORY row, which reads a stuck day head when one exists and otherwise a probe of that class in
+  the room's frame, and says which it read (the old "frosts" guard read nothing: that smoke stages no person).
+
+**Measured before it landed** (lane-local harness, never for main: branch `debts/ui-frost-lab-wip` `1c5046da`; data
+`/Volumes/SamsungRed/lanes/dui/frost-run1.json`, `frost-run2.json`, `frost-large.json`, `frost-null.json`; the lock
+`lanes/PERF.lock` held 12:08:34–12:17:05Z): the lane's build, offscreen at 60 fps, scale 2, 1180 × 780 and 1512 × 982;
+a throwaway person seeded with 180 sessions over 45 days; History under its cover (opacity 1 over the desk's still), the
+project open (181 rows, 45 day heads); the arms switched in memory by exactly this change and checked by a stuck head's
+computed `::before`; each arm 8 s of scripted scrolling; six paired A/B per launch, plus a null A/A launch.
+- **Frames: unaffected.** rAF p50 and p95 16.7 ms in every arm, frames over 25 ms 0–1 per 8 s in both, no long
+  animation frames, 480 paints per 8 s in both.
+- **GPU process: about 5 points of a core more while the list scrolls** (+4.65 and +4.95 at 1180 × 780, +6.6 at
+  1512 × 982; the null +0.10, spread −0.5…+0.6): about +37 % of that process's CPU, every one of the 16 pairs above the
+  null's whole spread. The renderer's CPU and main thread stay inside the null's spread, as a compositor filter should.
+- Caveats: offscreen, not the live display; one host, quiet; a still list costs nothing (only movement re-blurs).
+
+**Validation:** red and green logs under `/Volumes/SamsungRed/lanes/dui/`; then the landing gate on the exact tree
+(`lanes/land3/logs/`, under this landing's sha).
+
+## Debts, fourth part — index-timeline's lost frame is instrumented, a fieldd-client call can carry a bound, one hung terminal read no longer pins every pane, and every kill-matrix create outlives a lost cell birth (2026-10-12; `54f6471d` · `9e9dd977` · `f0ce25eb` · `0bee8178` through lane land3, gated on the exact tree)
+
+**Why:** the rest of lane dfd's slices (the debts lane, N10 (a); brief `draft/history-finish/briefs/debts-fieldd.md`,
+survey `draft/history-finish/surveys/s-debts-fieldd.md` with its appendix). The first part above landed its first four.
+
+**What landed:**
+- `54f6471d` index-timeline's barrier row, instrumented, not fixed: the fake rosettad logs per socket what it did
+  (opened, resync fired, drop fired, send failed, closed); `until` takes a label its timeout names; an expired wait dumps
+  the subscription's frames, the tail's state (`IndexTailService.tailState()`, diagnostics only) and the fake's events,
+  and the row's fieldd writes its index log. No cause was reproduced (0 red in 30 alone, 0 in 30 beside a whole fieldd
+  suite); the survey's candidate (a repair whose delivery throws) is the projection's tested design and cannot lose this
+  frame in the index tail, so no fix went in. Five sightings, the fifth at a low 1-minute load (15.6) during a busy test
+  phase; the next red says which side lost it.
+- `9e9dd977` `RequestOptions.timeoutMs` in fieldd-client, no default: past it a call is refused `UNAVAILABLE {service:
+  "fieldd", state: "timeout", timeoutMs}` (retryable), its pending entry dropped; a call still waiting for ready is never
+  sent; a keyed forward that already left becomes outcome-unknown with its key. Which callers pass one is the lead's to
+  decide (the survey's appendix lists about thirty, with proposed bounds). Red first.
+- `f0ce25eb` the routed inventory read (`terminal/routed/host.ts`): each attempt races the read's 5 s (listRuntimeSessions'
+  designed deadline, before checked only between attempts), an expiry lets go of the shared read and refuses
+  `{state: "timeout"}`, and a generation re-read happens at most once — one hung `terminal.sessions` no longer pins every
+  pane of that desktop. The pool's `floorReadWithin` says that lapse in the owner's name ("studio did not answer in 5 s")
+  and ends the lookup at once; its own 10 s race stays the outer guard. **So Godview's deck now gives up on a routed
+  floor read at 5 s, where the fourth set's entry above says 10.** Red first (routed host and pool rows).
+- `0bee8178` terminal-kill-matrix: every `terminal.create` that can meet a slow cell birth (16, across rows 1, 3+6, 6,
+  6b, epoch arbitration, churn, S2-A, S3-A/B/C) re-asks a retryable UNAVAILABLE within its row's budget, and every
+  native row prints the field-native log on failure. "epoch arbitration reaches through the ticket path" lost the same
+  15 s birth race row 6 did, on this lane's own gate (`lanes/land3/logs/e7337bf6/verify.log`). Red first: forced, 3 of
+  3; fixed, 0 of 3; every bootstrap forced at once, the file green.
+
+**Validation:** the lane's red and green logs under `/Volumes/SamsungRed/lanes/dfd/` (`red-6-client-timeout.log`,
+`red-6-routed-inventory.log`, `red-6b-pool-floor-read.log`, `red-4b-killmatrix-epoch-birthrace.log`, the `s5-loop-*`
+stress logs); the lane's own gate green on its tip; then the landing gate on the exact tree (`lanes/land3/logs/`, under
+this landing's sha).
+
+**Found while landing parts two and three** (each a fieldd red on a tree that did not touch fieldd, each passing on a
+re-run): agent-session "re-attach across a restart … the audit attempt … never got an outcome record" (four sightings
+across lanes: fs1a, pins, pj2, land3 `40d8299f`); rosettad-supervisor "stop() SIGINTs, awaits the exit, the file is
+gone" left the daemon's announce file behind (two: jump, land3 `40d8299f`) — if the product, a reader could find a dead
+daemon's address.
+
+**Owed:**
+- those two reds, diagnosed (a budget or a real ordering fault) — the debts lane's next;
+- which fieldd-client callers pass a `timeoutMs` (the lead's call; the survey's appendix);
+- field-native's logging worker waits out its retry backoff before a requested flush, so the fatal path's
+  `flush(500 ms)` cannot write after two failed writes (the "Debts, first part" entry) — the field-native owner's;
+- **smoke:canvas on the live display for N3** ("Debts, third part"): its COVER HISTORY row went red to green offscreen
+  for the intended reason, but the whole smoke cannot pass offscreen (its occluded row, DK-13's debugger, DK-14's @ list,
+  the HAND_* timings), so the landing gates here never run it.
+
+## Debts, fifth part — the four fieldd reds that met this day's landings were the tests' own races, each proven and fixed; one upstream finding for rosetta (2026-10-12; `3c4a7d78` · `c9921d1f` · `9921f40e` · `5e8c45f0` through lane land3, gated on the exact tree)
+
+**Why:** parts two to four each met fieldd reds on trees that did not touch fieldd (the fourth part's entry, "Found"
+and "Owed"). Lane dfd diagnosed each; every fix is test-only, each proven red first by forcing the ordering it found
+and green under the same probe (`/Volumes/SamsungRed/lanes/dfd/red-q*.log`, `q*-fixed-probe.log`). No product fault.
+
+**What landed:**
+- `3c4a7d78` agent-session (four sightings, the re-attach row): `auditAct` read the audit ledger once. The boot's
+  background re-attach shows its row in agent.list and writes `reattach: attached` before its fsync'd outcome is
+  appended (`AuditService.requiredAs` writes the attempt, runs the effect, then the outcome), and the row read the
+  ledger in that gap. No outcome is ever dropped (later writes made 3 s late: 3/3 red before, 0/3 after). `auditAct`
+  now waits up to 10 s; all 13 call sites await it.
+- `c9921d1f` rosettad-supervisor (two sightings): the FAKE rosettad wrote its ready line before it installed its SIGINT
+  handler, so a stop that came first killed it by Node's default and left its announce file behind; fieldd's supervisor
+  did nothing wrong (stop() awaits the real exit; the red took 329 ms, no SIGKILL). The fake arms its guard first.
+- `9921f40e` index-timeline (six sightings, the most frequent red of the round): the instrumentation of the fourth
+  part caught it on its first gate — the fake opened with `resync: 1` and never fired it; fieldd's tail was live, not
+  gapped. The fake's session socket sent the open's snapshot and only then read its poll baseline, so a resync written
+  at once was taken for the starting state. It reads the baseline first and re-sends a change landing in between, as
+  rosetta's own stream does. The barrier row 10 of 10 after.
+- `5e8c45f0` terminal-seam GT-1 (new at a load of 4): the row read `terminal.list`, then minted a ticket expecting a
+  refusal; an observation landing between them makes the mint rightly succeed. Both honest answers pass now — a
+  refusal must be the not-yet-observed NOT_FOUND, a success must find the session listed — and a ticket for a session
+  fieldd still does not list fails.
+
+**Validation:** the lane's red and green logs above; the lane's gate green on its tip (`2dceff05`); then the landing
+gate on the exact tree (`lanes/land3/logs/`, under this landing's sha).
+
+**Found (upstream, rosetta; not changed):** the real rosettad has the fake's shape — `serve.rs:396-409` arms ctrl_c
+inside a spawned tokio task (registered only when first polled), unordered against the announce file (:432-452) and the
+ready line (:458); a SIGINT that beats that first poll leaves a dead daemon's announce file. fieldd's orphan pass and
+rosetta's readers skip dead pids, so it is tolerated; the fix is to arm the handler before announcing.
+
+**Owed (the debts lane's end):** which fieldd-client callers pass a `timeoutMs` (the lead's call;
+`draft/history-finish/surveys/s-debts-fieldd.md`'s appendix); field-native's flush behind its backoff (the first part's
+entry); the rosetta finding above; smoke:canvas on the live display for N3 (the third part's).
+
+## The field dissolves under the head — the swarm's spill fades under the Stories row, diagnosed and measured first (2026-10-12; `5214ff50`, one commit through lane mvland (`mv/head-band-wall`), rebased clean from `3a48d4ed` on `ce17e858` with the same patch-id, gated on the exact tree)
+
+**Why:** at the Stories head's landing (`8c55581c`) James ruled "Merge now, diagnose after" on the swarm still reaching
+under the head's circles. The diagnosis, below, found the swarm's sizing at fault, not the band. A first fix, the band lent to
+the swarm as a wall, was refuted by its own test and never committed. James then ruled "Fade now + sizing later", and on
+the photos and the perf pair, "Fast-forward now".
+
+**What landed** (`5214ff50`):
+- `godview-head.css` masks `.vf-godview-monitor-stage` with
+  `linear-gradient(to bottom, transparent var(--vf-godview-head-fade-from), black var(--vf-godview-head-reserve))`,
+  whatever the view: clear at the head's axis (28, its 40 at top 8), whole at the reserve (56). The head's slot stands
+  beside the stage, so the head is never masked; the stage's own chrome begins at the reserve, where the mask is whole.
+- tokens.css adds `--vf-godview-head-fade-from: 28px`.
+- DESIGN.md first: §8 "Godview's head — Stories" gains "The field dissolves under the head". Its as-built "its bodies keep
+  below the head as they kept below the bar" is corrected at its source, dated, with the measurement.
+- Side effects, said in DESIGN.md: rain's own ground now fades under the head too, where it ran to the top; a view's glass
+  (spend's panels, the timeline's grayscale) blurs only the stage's own drawing, since the masked stage is a backdrop root.
+- Tests: godview-head (the mask, its two tokens, 28 = 8 + 40/2, DESIGN.md's words); godview-monitor (the head's slot is
+  never inside the stage, nor the stage inside it).
+
+**Diagnosed before it was built** (a read-only fiber walk to the swarm's render bodies at each capture, still and
+animated, on main `ce17e858`; `draft/monitor-view-sdk/evidence/swarm-probe-ce17e858/`, logs
+`lanes/mvland/logs/probe-swarm-ce17e858/`):
+- At n20, 8–9 of 27 bodies' tops stand inside the head's band in every frame; at n60 with motion, centres too.
+- **The cause is the swarm's sizing:** no body is smaller than r 50, so the crowd is bigger than its field, and its physics
+  yields at any edge. With the swarm's own SwarmPhysics (27 bodies, r 50/60/73, 1164 × 288): a 56-tall band, 9/27 inside;
+  the same band reaching 5000 above the stage, 9/27, identical; a world starting at 56, 10/27 above its own wall; the bar's
+  own field (280, no band), 8/27 above its top. Under the bar, the bar and the stage's edge hid the spill; GV-D1 runs the
+  stage to the window's top under glass.
+
+**Measured before it landed** (A = main `ce17e858`, B = `3a48d4ed`, puppeteer `dce6adb` both; `lanes/mvland/logs/vf-ab-3a48d4ed/`;
+`lanes/PERF.lock` held 09:21:36–11:14:02Z):
+- **Perf, M40 literally: no row worse** in either 7-round run (504 cells). Each run read *noisy*, and each time it was
+  the null arm that moved, not B: the first, timeline × n10 task ms/s (T₀ 3.23 of 124.35, z₀ 4.4; B z 0.1); the repeat,
+  swarm × n20 and timeline × n60 React render ms/s (z₀ 4.7 and 4.5; B z 0.1 and 0.7). Pooled over 14 rounds: pass, nothing
+  worse or noisy. The lab's job line says EXIT 1, because it asks for the repeat to pass fresh as well.
+- Weather: the History lead's one fieldd test probe overlapped the lock 09:21:36–09:22:18Z, the proof launch's build steps
+  only (no arm was measuring). Rounds 1–2's launch loads read 56–88, from no lane of ours; rounds 3–7 read 4–14.
+- **Captures, all five views** (n20, frames 2.5 and 7.9 s, both themes, motion reduced): 2 of 20 differ, both light-theme rain
+  (18.9 % of pixels against its A/A 3.6–3.8 %): rain paints its own black ground, which now dissolves into the light cover
+  across the top 28–56. Swarm differs within its A/A; list, timeline and spend are pixel-identical (nothing of theirs sits in
+  the band). The photos James ruled on: https://claude.ai/artifact/KJq8iZEFVu4RoL7sFbRqQR.
+- Not measured: the GPU's compositing of the mask (the lab reads main-thread work, React and frame pacing).
+
+**Validation:** on `3a48d4ed`, smoke and smoke:godview green on the first run; verify red once on fieldd's index-timeline
+(since proven the fake rosettad's own race and fixed, "Debts, fifth part"), then green with smoke. On the exact tree
+`5214ff50` (`lanes/mvland/logs/5214ff50/`), all green on the first run: verify `EXIT: 0`, smoke `EXIT: 0`, smoke:godview
+`EXIT 0` on run 1. This entry's commit changes nothing a gate reads (no code reads `docs/`, and `check:retired` skips it).
+
+**Owed, at puppeteer's next pin:** the swarm's sizing to its field (the r 50 floor), arrivals spawned clear of obstacles
+(`findSpawnPosition` ignores them), a manifest field for a view to keep its own ground out of the head's fade, and the
+`animations` doc comment (`view-sdk/src/view.ts:111`), which says only "no loop runs" — held still, arrivals are drawn
+where they spawn, unsolved.
+
+## PJ-6, the launch — History's New agent starts an agent at a model and an effort the agent itself offers, and the project remembers what it started at (2026-10-12; `df135def` · `646699f4` · `ad699f8e` · `07f4d985` · `ca4749ac` · `1538c900` through lane land3, gated on the exact tree)
+
+**Why:** PJ-6 (`thinking-project-places.md` :352, PJ-L8, PJ-D13, PJ-D14). James ruled its seven open questions on
+2026-10-12 ("go with your lean", after puppeteer `cbc6e01`, his, the same day: each agent's own model picker read live,
+and launches validated against it); the record is the design's "Delta 2026-10-12", the plan
+`draft/project-places/build-pj6.md`, the survey `draft/history-finish/surveys/s-pj6.md`. Lane pj6
+(`pj/6-launch-recipes`, brief `draft/project-places/briefs/pj6.md`).
+
+**What landed:**
+- `df135def` EL8: puppeteer `dce6adb` → `cbc6e01` (the sha line; `siblings:pin` green, R23 green, consumers' typecheck
+  green).
+- `646699f4` `agent.spawn` carries puppeteer's `modelSelection {modelId, custom?, controls?}`, opaque (AR-L1); fieldd
+  hands puppeteer only its three keys; refusals keep their codes (`INVALID_MODEL_SELECTION` → PRECONDITION_FAILED "<Agent>
+  was not started at the chosen model: …"; `MODEL_DISCOVERY_UNAVAILABLE` → UNAVAILABLE, retryable). The audit says a
+  selection was applied, never its ids.
+- `ad699f8e` `agent.models {provider, profileSet?, cwd?, refresh?}` (scope `agent.spawn`, idempotent, federate): each
+  agent's own picker under one Agent Profile, held in memory per (agent, Agent Profile) so a menu opens at once and a
+  read runs behind it (a held catalog re-read after 60 s; a held failure behind every ask; a first ask waits for a read
+  bounded at 20 s). A failure is puppeteer's words, never an empty list. Keyed by agent and profile, not folder: the
+  launch discovers again in its own folder before it starts.
+- `07f4d985` the recipe: a CONFIRMED birth from VibeField's launch writes the project's recipe through the birth hook
+  (`enter` → `onPlace` → `actedIn`) — the selection and each model's last controls, a switch of agent starting the map
+  afresh; never a refusal, a resume, a re-attach, a typed run (Q6) or Temporary. `ProjectSummary.recipe?`; the session
+  record keeps its launch's `modelSelection` (an older reader still verifies a record carrying it). PJ-2's callerless
+  keyed `setRecipe` removed (a birth knows its folder, not its key).
+- `ca4749ac` History's New agent (DESIGN.md §8 first): the project's recipe first ("Claude Code · Opus · high — Work",
+  last used), then each agent under each Agent Profile at its own model and effort (Q2: the Agent Profiles, never
+  personas), each with "Another model…" turning the rows to that agent's own picker (models with this project's last
+  effort for each; "Reading …'s models…"; "Sign in to see models" or the agent's own words; the catalog's age), then
+  the chosen model's controls ("its own" first). **Interim:** the room closes its rows on every choice and pages
+  nothing (ROOM API v3), so `history/turn-page.ts` presses the room's own New agent trigger again once its rows have
+  closed after a turning choice, to open the next page in place — one DOM reach into the room, tested against the real
+  room, degrading to "press New agent again"; rows closed without a turn open on the first page again.
+- `1538c900` the witness: the typed stub answers its picker's `initialize`; smoke:godview's new History rung starts it
+  from New agent → Another model… → a model → an effort and finds the stub's own launch argv carrying `--model …
+  --effort …` and fieldd's fold row at `model {intent: configured}`, `effort {value, configured, intent: configured}`.
+
+**Validation:** the lane's red and green logs under `/Volumes/SamsungRed/lanes/pj6/` (red-2…red-6, green-2…green-6;
+the smoke's red with slice 5 reverted, `red-6-smoke-godview.log`); the lane's gate green on `318ba907`; then the
+landing gate on the exact tree (`lanes/land3/logs/`, under this landing's sha).
+
+**Found:** fieldd's daemon tests and the smokes root under the OS temp, so every place there is Temporary and writes no
+recipe; the recipe's write is witnessed in fieldd's project-records test (the real library and grouping). The lane's
+first gate met agent-session "MF-1f/MF-1g — the pane stays and the row with it" ("the terminal floor is not
+available", load ~200): the birth-race class the debts lane cured in the kill matrix, here in another file.
+
+**Owed:**
+- Resume at the session's own selection (Q4): puppeteer `vf/pj6-resume-selection` `c57fe53` (built: resume takes a
+  selection; Claude, Codex, Copilot, Grok, Kimi, Pi, Antigravity can; OpenCode and Hermes refuse honestly) — lane pj6's
+  slice 7, on the second pin;
+- the room ask that retires `turn-page.ts`: `RoomMenuItem.menu?`, a row that pages the open menu (rosetta);
+- the catalogs held across a fieldd restart (the first menu after a restart waits ~2.5 s for Claude) — not built;
+- agent-session MF-1f/MF-1g's create, through the retry the kill matrix got;
+- the phone's launch rows (PJ-7); the full launch dialog (a room ask).
+
+## PJ-6, Resume — a resumed session starts at the model and the effort it was launched at, or says why it cannot (2026-10-12; `7c9eae57` · `3f627f69` · `fa9819dc` through lane land3, gated on the exact tree)
+
+**Why:** James ruled PJ-6's Q4 on 2026-10-12: Resume starts at the session's own launch selection — reversing one line
+of puppeteer `cbc6e01` ("selections apply only to new sessions"). Lane pj6pu built it upstream on puppeteer branch
+`vf/pj6-resume-selection` (`c57fe53`, five commits on `cbc6e01`; puppeteer's `pnpm test` EXIT 0, 4,417 passed): a resume
+carrying a selection discovers again in the account it names and validates and translates it as a launch does; a new
+core field `AgentModelProvider.resumeSelection` says which agents' native resume can take one (Claude, Codex — wired and
+probed live —, Copilot, Grok, Kimi, Pi, Antigravity; not OpenCode, whose session model is set only at creation, nor
+Hermes, whose `session.resume` reads none). Lane pj6 built VibeField's half (plan `draft/project-places/build-pj6.md`).
+
+**What landed:**
+- `7c9eae57` EL8: puppeteer `cbc6e01` → `c57fe53` — **an unmerged branch commit; James merges `vf/pj6-resume-selection`
+  into puppeteer's main.**
+- `3f627f69` Resume at the session's own selection: the record form (and the pending replacement, resume-when-idle)
+  passes the record's `modelSelection` WITH its account (`profile`); the native form (History's and the launcher's
+  Resume) takes it from the newest verified record of that conversation in the same account. An agent whose resume
+  cannot take one (`resumeSelection` false) resumes at its own settings and the answer says so — History's line
+  "Resumed in a new pane, at <Agent>'s own model — it can't start a resumed session at a chosen one"; a stale selection
+  is refused, never dropped ("<Agent> was not resumed at the model the session was launched at: …", puppeteer's code
+  kept). The successor's record keeps the selection; the audit carries `modelSelection: applied | own`, never its ids.
+- `fa9819dc` the witness: smoke:godview's `historyResumeAtModel` ends the run the launch rung started at a model, resumes
+  it by its record, and finds the answer `applied`, the successor's row at `model` and `effort` `intent: configured`, and
+  the stub's own argv `--resume <id> --model … --effort …`.
+
+**Validation:** red first (`/Volumes/SamsungRed/lanes/pj6/red-7-*.log`, the smoke's red resuming with no flags); the
+lane's gate green on `02797936`; then the landing gate on the exact tree (`lanes/land3/logs/`, under this landing's
+sha).
+
+**Found:** Claude's adapter refuses to resume a conversation whose transcript is not on disk, so the rung writes the one
+the agent would have kept; ending the launch rung's run before the deck's rungs turned `deckAway` red (the swarm calls
+the terminals up through that run's body), so the Resume rung runs after them.
+
+**Owed:** a live native resume for Claude, Kimi, Pi, Copilot, Antigravity and Grok (their evidence is help text and
+argv; Codex's was probed live); the PJ-6 entry above's list (the room ask retiring `turn-page.ts`, the catalogs across a
+restart, agent-session MF-1f/MF-1g's create).

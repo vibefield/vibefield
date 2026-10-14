@@ -35,6 +35,9 @@ const summary = {
   },
 };
 
+/** Every inventory read is handed its bound (the read's 5 s, less what is spent). */
+const BOUND = { timeoutMs: expect.any(Number) };
+
 function ticket(): TerminalOpenTicket {
   const cellBootId = "cell-a-boot-1";
   return {
@@ -337,6 +340,83 @@ describe("createRoutedTerminalHost — TP-S3f routed session events (G24)", () =
 
     await expect(binding.host.getSession?.("sess-1")).rejects.toThrow("floor unavailable");
     await expect(binding.host.getSession?.("sess-1")).resolves.toEqual(summary);
+  });
+
+  it("a hung terminal.sessions no longer pins every pane: the read gives up at its 5 s bound, and the next turn reads fresh", async () => {
+    vi.useFakeTimers();
+    try {
+      // the first read is taken and never answered (a request that ignores
+      // any bound it is handed); the second answers
+      let asked = 0;
+      const requests = vi.fn((method: string, _params?: unknown, _opts?: unknown) => {
+        if (method !== "terminal.sessions") throw new Error(`unexpected ${method}`);
+        asked += 1;
+        return asked === 1
+          ? new Promise(() => undefined)
+          : Promise.resolve({ sessions: [summary] });
+      });
+      const binding = createRoutedTerminalHost({
+        fieldd: { request: requests } as unknown as FielddClient,
+      });
+      // two panes join the one read
+      const first = vi.fn();
+      const second = vi.fn();
+      binding.host.getSession?.("sess-1").then(first, first);
+      binding.host.getSession?.("sess-1").then(second, second);
+      expect(requests).toHaveBeenCalledTimes(1);
+      // the client is handed the same bound, so a real one drops its pending call
+      expect((requests.mock.calls[0]?.[2] as { timeoutMs?: number } | undefined)?.timeoutMs).toBe(
+        5_000,
+      );
+
+      await vi.advanceTimersByTimeAsync(4_900);
+      expect(first).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(100);
+      const said = expect.objectContaining({
+        kind: "UNAVAILABLE",
+        retryable: true,
+        details: expect.objectContaining({ state: "timeout" }),
+      });
+      expect(first).toHaveBeenCalledWith(said);
+      expect(second).toHaveBeenCalledWith(said);
+
+      // the expiry let go of the read: the next pane's turn asks again, and lands
+      const third = binding.host.getSession?.("sess-1");
+      expect(requests).toHaveBeenCalledTimes(2);
+      await expect(third).resolves.toEqual(summary);
+      binding.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("an inventory invalidated while it was read is re-read ONCE: a second invalidation answers the re-read, uncached", async () => {
+    const resolvers: Array<(value: unknown) => void> = [];
+    const requests = vi.fn((method: string) => {
+      if (method !== "terminal.sessions") throw new Error(`unexpected ${method}`);
+      return new Promise((resolve) => {
+        resolvers.push(resolve);
+      });
+    });
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: requests } as unknown as FielddClient,
+    });
+    const settled = vi.fn();
+    void binding.host.getSession?.("sess-1").then(settled, settled);
+    expect(requests).toHaveBeenCalledTimes(1);
+    // a ticket primed while the read is out invalidates it: the read re-reads
+    binding.primeTicket("sess-1", ticket());
+    resolvers[0]?.({ sessions: [] });
+    await vi.waitFor(() => expect(requests).toHaveBeenCalledTimes(2));
+    // invalidated again under the re-read: its answer is the answer this time
+    binding.primeTicket("sess-1", ticket());
+    resolvers[1]?.({ sessions: [summary] });
+    await vi.waitFor(() => expect(settled).toHaveBeenCalledWith(summary));
+    expect(requests).toHaveBeenCalledTimes(2);
+    // …uncached: the floor moved under it, so the next turn reads again
+    void binding.host.getSession?.("sess-1");
+    expect(requests).toHaveBeenCalledTimes(3);
+    binding.dispose();
   });
 
   it("applies exited and removed through the runtime door, custody-checked", () => {
@@ -722,7 +802,7 @@ describe("createRoutedTerminalHost — a session on another desktop (DS-4e)", ()
       expect(applySessionEvent).toHaveBeenCalledWith({ type: "removed", sessionId: "pane-gone" });
     });
     expect(applySessionEvent).toHaveBeenCalledTimes(2);
-    expect(requests.mock.calls).toEqual([["terminal.sessions", { device: OWNER }]]);
+    expect(requests.mock.calls).toEqual([["terminal.sessions", { device: OWNER }, BOUND]]);
   });
 
   it("refreshes a remote pane's summary from the OWNER's inventory — one read per desktop per turn", async () => {
@@ -746,8 +826,8 @@ describe("createRoutedTerminalHost — a session on another desktop (DS-4e)", ()
     expect(local).toEqual(summary);
     expect(again).toEqual(ownersSummary);
     expect(requests.mock.calls).toEqual([
-      ["terminal.sessions", { device: OWNER }],
-      ["terminal.sessions", {}],
+      ["terminal.sessions", { device: OWNER }, BOUND],
+      ["terminal.sessions", {}, BOUND],
     ]);
   });
 
@@ -766,8 +846,8 @@ describe("createRoutedTerminalHost — a session on another desktop (DS-4e)", ()
     // a mount reads FRESH: the summary it mounts is the owner's now
     await expect(binding.readRemoteSession(OWNER, "pane-elsewhere")).resolves.toBeNull();
     expect(requests.mock.calls).toEqual([
-      ["terminal.sessions", { device: OWNER }],
-      ["terminal.sessions", { device: OWNER }],
+      ["terminal.sessions", { device: OWNER }, BOUND],
+      ["terminal.sessions", { device: OWNER }, BOUND],
     ]);
   });
 });

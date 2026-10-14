@@ -39,6 +39,7 @@ import type {
   LoggerBindings,
   LogRetentionPolicy,
   NodeLogging,
+  NodeLoggingFlushOptions,
   TrustedLogIngress,
 } from "./types";
 
@@ -503,10 +504,10 @@ class NodeLoggingService implements NodeLogging {
     this.recomputePinoLevel();
   }
 
-  async flush(): Promise<void> {
+  async flush(options: NodeLoggingFlushOptions = {}): Promise<void> {
     this.cancelRetry();
     this.scheduleDrain();
-    await this.waitForIdle(2_000);
+    await this.waitForIdle(options.timeoutMs ?? 2_000);
     if (!this.writer.isOpen) {
       throw this.lastWriterError ?? new Error("logging writer is unavailable");
     }

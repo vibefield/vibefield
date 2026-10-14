@@ -209,7 +209,14 @@ export function whenGodviewCanPlace(timeoutMs: number): Promise<LineViewDoor | n
 /** What a Resume came to, said on the line. `running`: the session runs here,
  * so nothing was resumed — Jump to is the act (P3). */
 export type ResumeOutcome =
-  | { readonly state: "resumed"; readonly placement?: DeckPlaced }
+  | {
+      readonly state: "resumed";
+      readonly placement?: DeckPlaced;
+      /** PJ-6 (Q4) — fieldd's words for a session launched at a model whose
+       * agent resumed it at its own ("at OpenCode's own model — it can't start
+       * a resumed session at a chosen one") */
+      readonly own?: string | undefined;
+    }
   | { readonly state: "running" }
   | { readonly state: "refused"; readonly reason: string };
 
@@ -267,11 +274,13 @@ export function useHistoryLineDoor(): HistoryLineDoor | null {
 /** The words a Resume is said in, as a new terminal's are (above). */
 export function resumeNote(outcome: ResumeOutcome): string {
   switch (outcome.state) {
-    case "resumed":
+    case "resumed": {
       // GV-D4: a new pane beside the focused one, or the active pane itself
-      return outcome.placement === "beside"
-        ? "Resumed in a new pane"
-        : "Resumed in the active pane";
+      const where =
+        outcome.placement === "beside" ? "Resumed in a new pane" : "Resumed in the active pane";
+      // PJ-6 (Q4): a launch model the agent's resume could not take is said
+      return outcome.own === undefined ? where : `${where}, ${outcome.own}`;
+    }
     case "running":
       return "This session is running — Jump to it";
     case "refused":

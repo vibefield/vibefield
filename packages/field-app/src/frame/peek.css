@@ -217,6 +217,21 @@
   opacity: 0.72;
 }
 
+/* Out of the bar (GV-D11; DESIGN.md §6, §8): the bar's control fades where it
+   stands over 120ms, taking no pointer, and only then the head's circle fades
+   in over 200ms — one element, so search is never in two places. Into the
+   bar, and under reduced motion, it changes place at once (`Peek.tsx` times
+   both steps and draws none under reduced motion). */
+.vf-peek-find[data-step="out"] {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.vf-peek-find[data-step="in"] {
+  animation: vf-peek-fade 200ms ease;
+}
+
 /* ── THE LAYER — the scrim, and the popup over it ──────────────────────────
    Above the frame (62) and below Settings (65), the palette (70) and the veil
    (80) — none of which is ever open with it. In the product it is drawn on the

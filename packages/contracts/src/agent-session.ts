@@ -222,6 +222,28 @@ export const AgentSessionSummary = z
   .passthrough();
 export type AgentSessionSummary = z.infer<typeof AgentSessionSummary>;
 
+/** PJ-6 (`draft/project-places/build-pj6.md`; PJ-D14 as amended 2026-10-12) —
+ * a launch's model, puppeteer's `AgentModelSelection` carried OPAQUE (AR-L1):
+ * `modelId` and every control's id and value are the agent's own words from
+ * its catalog (`agent.models`), which VibeField passes on and never reads for
+ * meaning. Absent, the agent starts at its own settings; a control left out
+ * is the agent's own too (puppeteer applies no displayed default). `custom`
+ * asks for a model the catalog does not list, only where the catalog says
+ * `customModels`. puppeteer discovers again at the launch and refuses a
+ * selection its agent no longer offers (`INVALID_MODEL_SELECTION`) or cannot
+ * read (`MODEL_DISCOVERY_UNAVAILABLE`). Passthrough at its own depth: the
+ * session record keeps it under the record's HMAC, so a key a newer fieldd
+ * adds must reach an older reader whole (a stripped key breaks the
+ * signature). */
+export const AgentModelSelection = z
+  .object({
+    modelId: z.string().min(1).max(1024),
+    custom: z.boolean().optional(),
+    controls: z.record(z.string().min(1).max(1024), z.string().min(1).max(1024)).optional(),
+  })
+  .passthrough();
+export type AgentModelSelection = z.infer<typeof AgentModelSelection>;
+
 // ── the persisted continuation (`users/<fuid>/agents/sessions/<runtimeRunId>.json`) ──
 
 export const AGENT_SESSION_RECORD_FORMAT = 1;
@@ -310,6 +332,13 @@ export const AgentSessionRecord = z
       .object({ pid: z.number().int().positive(), startedAt: z.string().min(1) })
       .passthrough()
       .optional(),
+    /** PJ-6 (Q4) — the model the run was LAUNCHED at, as the launch asked for
+     * it (opaque, AR-L1), so a Resume starts at it again. Absent: the agent's
+     * own settings, and every record written before PJ-6. Optional and
+     * passthrough at its depth, so a record carrying it canonicalises — and
+     * verifies — the same under an older fieldd, whose passthrough keeps the
+     * key it does not know. */
+    modelSelection: AgentModelSelection.optional(),
   })
   .passthrough();
 export type AgentSessionRecord = z.infer<typeof AgentSessionRecord>;
@@ -365,6 +394,110 @@ export const AgentProvidersResult = z
   .passthrough();
 export type AgentProvidersResult = z.infer<typeof AgentProvidersResult>;
 
+/** PJ-6 — agent.models: one agent's own model picker under one Agent Profile,
+ * as fieldd last read it (puppeteer's `runtime.discoverModels`, the agent's
+ * own protocol or command — never a list of ours, Q1). `profileSet` is the
+ * Agent Profile a launch would run under (absent: the default, as a spawn);
+ * `cwd` the folder the read runs in (absent: home). The answer is the catalog
+ * fieldd holds at once, and a read runs behind it when that is old;
+ * `refresh: true` waits for a fresh read, bounded by the read's own deadline. */
+export const AgentModelsParams = z
+  .object({
+    provider: AgentProviderId,
+    profileSet: AgentProfileSetId.optional(),
+    cwd: z.string().optional(),
+    refresh: z.boolean().optional(),
+  })
+  .passthrough();
+export type AgentModelsParams = z.infer<typeof AgentModelsParams>;
+
+/** One of a model's own controls (puppeteer `AgentModelControl`): `role` names
+ * what it is — `effort`, `thinking` or `variant` today, an OPEN string to a
+ * reader (a role a newer agent adds is drawn by its label, never refused) —
+ * and `values` are the only ids a selection may carry for it. A
+ * `defaultValue` is what the catalog shows; puppeteer never applies it. */
+export const AgentModelControl = z
+  .object({
+    id: z.string().min(1).max(1024),
+    label: z.string().min(1),
+    role: z.string().min(1).max(32),
+    values: z.array(
+      z.object({ id: z.string().min(1).max(1024), label: z.string().min(1) }).passthrough(),
+    ),
+    defaultValue: z.string().min(1).max(1024).optional(),
+  })
+  .passthrough();
+export type AgentModelControl = z.infer<typeof AgentModelControl>;
+
+/** One model the agent's picker offers (puppeteer `AgentModelChoice`): its id
+ * is what a selection names, its label what a person reads. */
+export const AgentModelChoice = z
+  .object({
+    id: z.string().min(1).max(1024),
+    label: z.string().min(1),
+    description: z.string().optional(),
+    group: z.string().optional(),
+    controls: z.array(AgentModelControl),
+  })
+  .passthrough();
+export type AgentModelChoice = z.infer<typeof AgentModelChoice>;
+
+/** The picker as one read found it (puppeteer `AgentModelCatalog`).
+ * `observedAt` is the read's own time; `source.freshness` says whether the
+ * agent answered from its own cache. `completeness` and `freshness` are OPEN
+ * strings to a reader. A model listed is what the picker offers, never a
+ * promise of access. */
+export const AgentModelCatalog = z
+  .object({
+    provider: AgentProviderId,
+    /** the persona (puppeteer's account) the read ran in; absent: the agent's own folder */
+    profileId: z.string().min(1).optional(),
+    cwd: z.string(),
+    observedAt: z.string().min(1),
+    source: z
+      .object({
+        kind: z.string().min(1),
+        freshness: z.string().min(1),
+        nativeVersion: z.string().optional(),
+      })
+      .passthrough(),
+    completeness: z.string().min(1),
+    customModels: z.boolean(),
+    models: z.array(AgentModelChoice),
+  })
+  .passthrough();
+export type AgentModelCatalog = z.infer<typeof AgentModelCatalog>;
+
+/** A read that found no picker, in puppeteer's words (its
+ * `AgentModelDiscoveryFailure`): `status` (`auth-required`, `unsupported`,
+ * `unavailable`, `requires-session`, `error`, `cancelled`), `code`, and the
+ * adapter's own sentence; `at` is when the read ended. OPEN strings. */
+export const AgentModelsFailure = z
+  .object({
+    status: z.string().min(1).max(32),
+    code: z.string().min(1).max(32),
+    message: z.string(),
+    at: z.string().min(1),
+  })
+  .passthrough();
+export type AgentModelsFailure = z.infer<typeof AgentModelsFailure>;
+
+/** agent.models' answer. `catalog` is the last picker a read found, with its
+ * own `observedAt`; `failure` says the LAST read failed and why (an older
+ * catalog may stand beside it); `refreshing` that a read is running now, so a
+ * later ask may answer newer. A failed read is a `failure`, never an empty
+ * list. */
+export const AgentModelsResult = z
+  .object({
+    provider: AgentProviderId,
+    profileSet: AgentProfileSetId.optional(),
+    catalog: AgentModelCatalog.optional(),
+    failure: AgentModelsFailure.optional(),
+    refreshing: z.boolean(),
+  })
+  .passthrough();
+export type AgentModelsResult = z.infer<typeof AgentModelsResult>;
+
 /** agent.spawn — a managed session born in a PTY on this device's floor
  * (workload class `agent`, a clean allow-listed environment). `cwd` defaults
  * to the OS user's home; `profileId` selects the persona (its root is bound
@@ -372,7 +505,8 @@ export type AgentProvidersResult = z.infer<typeof AgentProvidersResult>;
  * AR-S5 — `profileSet` runs it under that Agent Profile's sign-in for the
  * agent (`native`: the agent's own folder), refused when the profile holds
  * none; with neither, the default profile's sign-in, else the agent's own
- * folder. */
+ * folder. PJ-6 — `modelSelection` starts it at that model and those controls
+ * (absent: the agent's own settings). */
 export const AgentSpawnParams = z
   .object({
     provider: AgentProviderId,
@@ -380,6 +514,7 @@ export const AgentSpawnParams = z
     profileId: AgentProfileId.optional(),
     profileSet: AgentProfileSetId.optional(),
     title: z.string().max(256).optional(),
+    modelSelection: AgentModelSelection.optional(),
   })
   .passthrough();
 export type AgentSpawnParams = z.infer<typeof AgentSpawnParams>;
@@ -392,6 +527,16 @@ export const AgentSpawnResult = z
   .object({
     session: AgentSessionSummary,
     terminal: TerminalCreateOpenResult,
+    /** PJ-6 (Q4) — on a RESUME of a session launched at a model: `applied`, it
+     * starts at that model again; `own`, it starts at the agent's own settings
+     * because its resume cannot take one, and `reason` says so in fieldd's words
+     * ("at OpenCode's own model — it can't start a resumed session at a chosen
+     * one"). Absent: no model was involved. `state` is an OPEN string to a
+     * reader. */
+    modelSelection: z
+      .object({ state: z.string().min(1).max(32), reason: z.string().optional() })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 export type AgentSpawnResult = z.infer<typeof AgentSpawnResult>;

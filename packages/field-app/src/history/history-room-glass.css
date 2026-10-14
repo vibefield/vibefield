@@ -1,17 +1,17 @@
-/* ROSETTA'S ROOM GLASS RETIRES ON THE DESK (DK-15; DESIGN.md §8 "The covers over
-   the desk", the deck's note; R16). On a host surface the room's paper fades —
-   the transcript's top frost, the sticky day heads — FROST: a backdrop filter
-   over whatever passes beneath, which under a cover is the desk's still, already
-   blurred once, and which the compositor re-blurs on every frame anything beneath
-   it moves. Here the cover is a tint over the still, so the fades are the cover's
-   TINT instead: the view's own chrome, feathered by the room's own masks — its
-   paper fades' recipe in the cover's colour, which cuts cleanly and costs the
-   compositor nothing. Scoped to this view; the room's own sheet (`@rosetta/room`,
-   not ours to edit) keeps its frost elsewhere. It rides the ROOM'S chunk (only
-   `HistoryRoomView` imports it, after the room's sheet): its selectors are the
-   room's, and the room's rules travel with the room (`pnpm bundle:assert`). */
-.vf-history .ah-frame[data-ah-surface="host"] .tr-frost::before,
-.vf-history .ah-frame[data-ah-surface="host"] .ah-day::before {
+/* ROSETTA'S ROOM GLASS ON THE DESK (DK-15; docket N3 (a), 2026-10-12; DESIGN.md §8 "The
+   covers over the desk", the deck's note and its carve-out; R16). On a host surface the room's
+   paper fades — the transcript's top frost, the sticky day heads — FROST: a backdrop filter over
+   whatever passes beneath, which under a cover is the desk's still, already blurred once, and
+   which the compositor re-blurs on every frame anything beneath it moves. The transcript's top
+   fade is the cover's TINT here instead: the view's own chrome, feathered by the room's own
+   mask — its paper fade's recipe in the cover's colour, which cuts cleanly and costs the
+   compositor nothing. The sticky day heads (every head the room draws as `.ah-day`, a list's
+   days and its section heads) keep the room's own frost since N3 (a), its cost measured under a
+   cover before it landed, so this names them nowhere. Scoped to this view; the room's own sheet
+   (`@rosetta/room`, not ours to edit) keeps its frost elsewhere. It rides the ROOM'S chunk (only
+   `HistoryRoomView` imports it, after the room's sheet): its selectors are the room's, and the
+   room's rules travel with the room (`pnpm bundle:assert`). */
+.vf-history .ah-frame[data-ah-surface="host"] .tr-frost::before {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   background: var(--vf-chrome-solid);

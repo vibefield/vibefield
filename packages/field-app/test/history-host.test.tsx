@@ -10,7 +10,9 @@
  *   · R3 the sections: Live now, Pinned, the rest, Temporary and Hidden
  *     folded at the foot; a project's Live now and Temporary's older fold;
  *   · R4 a row's act — Resume, Jump to, or the reason — and its host key;
- *   · R5 New agent's rows and its spawn args; the model and effort row;
+ *   · R5 New agent's rows and its spawn args; PJ-6 — its pages: the project's
+ *     recipe, each agent under each Agent Profile, Another model…'s picker
+ *     (reading, a failure in words, the age) and a model's controls;
  *   · R6 ③'s folders: by desktop, another desktop's never opened here;
  *   · R7 the chips; H4 each act's intent;
  *   · Resume refusing a gone folder with the reason, and a session another
@@ -26,7 +28,9 @@ import { fileURLToPath } from "node:url";
 import type { SessionRow } from "@rosetta/protocol";
 import type { RoomMenu, RoomMenuItem } from "@rosetta/room";
 import {
+  AgentModelsResult,
   AgentProvidersResult,
+  AgentsProfileSetsListResult,
   type IndexSession,
   type ProjectIntentParams,
   type ProjectSummary,
@@ -63,12 +67,31 @@ import {
   sessionSectionsOf,
 } from "../src/history/host-inputs";
 import { type HistoryListing, hostModelOf } from "../src/history/host-model";
+import { FIRST_PAGE, type HeldModels, type LaunchPage, modelsKey } from "../src/history/launch";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "contracts", "fixtures");
 const fixture = (name: string): Record<string, unknown> =>
   JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
 
 const PROVIDERS = AgentProvidersResult.parse(fixture("agent-providers.valid.json")).providers;
+/** PJ-6 — the contract's two Agent Profiles, Work given a sign-in for the
+ * fixture's one installed agent (the fixture's Work holds two others) */
+const SETS = AgentsProfileSetsListResult.parse(fixture("agents-profile-sets.valid.json")).sets.map(
+  (set) =>
+    set.id === "work"
+      ? {
+          ...set,
+          personas: [
+            ...set.personas,
+            { ...PROVIDERS[0]!.personas[0]!, profileId: "claude:work", set: "work" },
+          ],
+        }
+      : set,
+);
+/** PJ-6 — the agent's own picker as fieldd answers it, and a read that failed */
+const PICKER = AgentModelsResult.parse(fixture("agent-models.valid.json"));
+const PICKER_SIGNED_OUT = AgentModelsResult.parse(fixture("agent-models.auth-required.json"));
+const PICKER_STALE = AgentModelsResult.parse(fixture("agent-models.stale.json"));
 const SUMMARY = fixture("agent-session-summary.valid.json");
 
 const STUDIO = "dev-studio";
@@ -223,6 +246,7 @@ function spyActs() {
     intent: vi.fn<(params: ProjectIntentParams, words: { done: string; verb: string }) => void>(),
     rename: vi.fn<(key: string, name: string) => Promise<void>>(async () => undefined),
     shown: vi.fn(),
+    page: vi.fn<(page: LaunchPage) => void>(),
   } satisfies HistoryHostActs;
 }
 
@@ -528,13 +552,20 @@ describe("the acts", () => {
     expect(place).toHaveBeenCalledTimes(1);
   });
 
-  it("New agent spawns exactly {provider, cwd, profileId} in the chosen place, and places its pane", async () => {
+  it("New agent spawns exactly {provider, cwd, profileSet, modelSelection} in the chosen place, and places its pane", async () => {
     expect(
-      spawnParamsOf({ provider: "claude", profileId: "claude:9a3d", cwd: "/w", where: "~/w" }),
+      spawnParamsOf({
+        provider: "claude",
+        profileSet: "work",
+        modelSelection: { modelId: "opus", controls: { effort: "high" } },
+        cwd: "/w",
+        where: "~/w",
+      }),
     ).toEqual({
       provider: "claude",
       cwd: "/w",
-      profileId: "claude:9a3d",
+      profileSet: "work",
+      modelSelection: { modelId: "opus", controls: { effort: "high" } },
     });
     expect(spawnParamsOf({ provider: "claude", cwd: "/w", where: "~/w" })).toEqual({
       provider: "claude",
@@ -544,7 +575,7 @@ describe("the acts", () => {
     const { door, place } = deck();
     const outcome = await newAgent(depsOf(client, door), {
       provider: "claude",
-      profileId: "claude:9a3d",
+      profileSet: "work",
       cwd: "/Users/me/Projects/vibe-field",
       where: "~/Projects/vibe-field",
     });
@@ -552,7 +583,7 @@ describe("the acts", () => {
     expect(client.calls.find((call) => call.method === "agent.spawn")?.params).toEqual({
       provider: "claude",
       cwd: "/Users/me/Projects/vibe-field",
-      profileId: "claude:9a3d",
+      profileSet: "work",
     });
     expect(place).toHaveBeenCalledTimes(1);
   });
@@ -784,35 +815,221 @@ describe("the acts", () => {
 });
 
 describe("R5: New agent and the project's acts", () => {
-  it("New agent: Starts in names ③'s folder; one row per agent and persona from agent.providers; the model and effort row says it can't be set yet", () => {
+  /** PJ-6 — vibe-field's recipe: the last launch ran Claude under Work at a
+   * model and an effort, and the project remembers another model's effort */
+  const RECIPE = {
+    provider: "claude",
+    profileSet: "work",
+    selection: { modelId: "opus" },
+    controlsByModel: { opus: { effort: "high" }, sonnet: { effort: "low" } },
+    at: NOW - DAY,
+  };
+  const LAUNCHING = hostModelOf(
+    {
+      ...LISTING,
+      projects: LISTING.projects.map((each) =>
+        each.key === "p1:vibe" ? { ...each, recipe: RECIPE } : each,
+      ),
+    },
+    ROSTER,
+    RUNS,
+    PROVIDERS,
+    SETS,
+  );
+  const held = (answer: AgentModelsResult | null): ReadonlyMap<string, HeldModels> =>
+    new Map(
+      answer === null
+        ? []
+        : [[modelsKey("claude", "work"), { state: "answered", answer } as const]],
+    );
+  const newAgentMenu = (
+    state: Partial<typeof NO_HOST_STATE>,
+    acts: HistoryHostActs = spyActs(),
+    model = LAUNCHING,
+  ) =>
+    historyHostInputs(model, { ...NO_HOST_STATE, home: "/Users/me", ...state }, acts)
+      .projectActs?.("p1:vibe", { folder: null })
+      ?.find((act) => act.key === "new-agent")?.menu;
+  const PATH = "/Users/me/Projects/vibe-field";
+  const WHERE = "~/Projects/vibe-field";
+  const MODELS_PAGE: LaunchPage = {
+    kind: "models",
+    project: "p1:vibe",
+    folder: null,
+    provider: "claude",
+    profileSet: "work",
+  };
+
+  it("New agent: Starts in names ③'s folder; Last used is the project's recipe in the picker's words, checked; then each agent under each Agent Profile it runs in, at its own, with Another model… beside it", () => {
     const acts = spyActs();
-    const inputs = historyHostInputs(MODEL, { ...NO_HOST_STATE, home: "/Users/me" }, acts);
-    const [newAgentAct, ...others] = inputs.projectActs?.("p1:vibe", { folder: null }) ?? [];
-    expect(newAgentAct?.key).toBe("new-agent");
-    expect(newAgentAct?.primary).toBe(true);
-    const groups = newAgentAct?.menu?.groups ?? [];
-    expect(groups.map((group) => group.key)).toEqual(["starts-in", "agents", "options"]);
+    const menu = newAgentMenu({ models: held(PICKER) }, acts);
+    const groups = menu?.groups ?? [];
+    expect(groups.map((group) => group.key)).toEqual(["starts-in", "last-used", "agents"]);
     // the usual place: the newest folder here that is there
     const where = groups[0]?.items[0];
-    expect(where?.label).toBe("~/Projects/vibe-field");
+    expect(where?.label).toBe(WHERE);
     expect(where?.detail).toBe("main · 1 agent is already working there");
-    // the fixture offers claude (one persona, Kim); pi is not installed
-    const agents = groups[1]?.items ?? [];
-    expect(agents.map((row) => [row.label, row.aside])).toEqual([["Claude Code", "Kim"]]);
-    agents[0]?.onSelect?.();
-    expect(acts.newAgent).toHaveBeenCalledWith({
+
+    const [recipe] = groups[1]?.items ?? [];
+    expect(recipe).toMatchObject({
+      label: "Claude Code · Opus · high — Work",
+      checked: true,
+      aside: "last used",
+    });
+    recipe?.onSelect?.();
+    expect(acts.newAgent).toHaveBeenLastCalledWith({
       provider: "claude",
-      profileId: "claude:9a3d",
-      cwd: "/Users/me/Projects/vibe-field",
-      where: "~/Projects/vibe-field",
+      profileSet: "work",
+      modelSelection: { modelId: "opus", controls: { effort: "high" } },
+      cwd: PATH,
+      where: WHERE,
     });
-    expect(groups[2]?.items[0]).toMatchObject({
+    // before the picker is read, its ids as they are
+    expect(newAgentMenu({})?.groups[1]?.items[0]?.label).toBe("Claude Code · opus · high — Work");
+
+    // This Mac for every agent, Work where it holds the agent's sign-in; Pi is
+    // not installed, so it is not offered; never a persona's name
+    const agents = groups[2]?.items ?? [];
+    expect(agents.map((row) => [row.label, row.aside])).toEqual([
+      ["Claude Code", "This Mac"],
+      ["Claude Code", "Work"],
+    ]);
+    agents[1]?.onSelect?.();
+    expect(acts.newAgent).toHaveBeenLastCalledWith({
+      provider: "claude",
+      profileSet: "work",
+      cwd: PATH,
+      where: WHERE,
+    });
+    expect(agents[1]?.act?.label).toBe("Another model for Claude Code — Work");
+    agents[1]?.act?.onPress?.();
+    expect(acts.page).toHaveBeenCalledWith(MODELS_PAGE);
+    expect(acts.newAgent).toHaveBeenCalledTimes(2);
+    // no recipe, no Last used
+    const plain = newAgentMenu({}, spyActs(), hostModelOf(LISTING, ROSTER, RUNS, PROVIDERS, SETS));
+    expect(plain?.groups.map((group) => group.key)).toEqual(["starts-in", "agents"]);
+  });
+
+  it("Another model… turns to the agent's own picker for that profile: reading, then each model with the effort this project last chose, the recipe's checked, and the picker's age — a failed read says why, never an empty list", () => {
+    const acts = spyActs();
+    const reading = newAgentMenu({ page: MODELS_PAGE }, acts);
+    expect(items(reading).map((row) => [row.key, row.label, row.disabled === true])).toEqual([
+      ["where", WHERE, false],
+      ["back", "All agents", false],
+      ["reading", "Reading Claude Code's models…", true],
+    ]);
+    expect(reading?.groups[2]?.title).toBe("Claude Code — Work");
+
+    const observed = Date.parse(PICKER.catalog!.observedAt);
+    const menu = newAgentMenu(
+      { page: MODELS_PAGE, models: held(PICKER), clock: () => observed + 3 * 60_000 },
+      acts,
+    );
+    const rows = menu?.groups[2]?.items ?? [];
+    expect(rows.map((row) => [row.label, row.aside ?? null, row.checked ?? null])).toEqual([
+      ["Default (recommended)", null, false],
+      ["Opus", "high", true],
+      ["Sonnet", "low", false],
+      ["Haiku", null, false],
+      ["As of 3 min ago", null, null],
+    ]);
+    expect(rows.at(-1)?.disabled).toBe(true);
+    expect(menu?.filterPlaceholder).toBe("Filter 4 models");
+    // a model with no control starts at once; one with controls turns the page
+    rows[3]?.onSelect?.();
+    expect(acts.newAgent).toHaveBeenLastCalledWith({
+      provider: "claude",
+      profileSet: "work",
+      modelSelection: { modelId: "haiku" },
+      cwd: PATH,
+      where: WHERE,
+    });
+    rows[1]?.onSelect?.();
+    expect(acts.page).toHaveBeenLastCalledWith({
+      ...MODELS_PAGE,
+      kind: "controls",
+      modelId: "opus",
+      step: 0,
+      chosen: {},
+    });
+    menu?.groups[1]?.items[0]?.onSelect?.();
+    expect(acts.page).toHaveBeenLastCalledWith(FIRST_PAGE);
+
+    // a picker that could not be read says why
+    const signedOut = newAgentMenu({ page: MODELS_PAGE, models: held(PICKER_SIGNED_OUT) });
+    expect(signedOut?.groups[2]?.items.map((row) => [row.label, row.disabled])).toEqual([
+      ["Sign in to see models", true],
+    ]);
+    // an older picker beside the last read's failure, a read behind it
+    const stale = newAgentMenu({
+      page: MODELS_PAGE,
+      models: held(PICKER_STALE),
+      clock: () => observed + 2 * 3_600_000,
+    });
+    expect(stale?.groups[2]?.items.at(-1)?.label).toBe(
+      "As of 2 h ago · reading again · the last read failed: Model discovery timed out.",
+    );
+    const unasked = newAgentMenu({
+      page: MODELS_PAGE,
+      models: new Map([
+        [modelsKey("claude", "work"), { state: "unasked", reason: "fieldd is away" }],
+      ]),
+    });
+    expect(unasked?.groups[2]?.items[0]).toMatchObject({
+      label: "Can't see Claude Code's models",
+      detail: "fieldd is away",
       disabled: true,
-      detail: "Model and effort can't be set from here yet (PJ-6)",
     });
-    // ②'s head: New agent, then H4's `···` (its rows: the next test)
-    expect(others.map((act) => act.key)).toEqual(["project-acts"]);
-    expect(others[0]?.primary).toBeUndefined();
+  });
+
+  it("a model's controls page: its own first, then each value; the project's last choice checked, the agent's default said; a value starts at the model and that value", () => {
+    const acts = spyActs();
+    const page: LaunchPage = {
+      ...MODELS_PAGE,
+      kind: "controls",
+      modelId: "opus",
+      step: 0,
+      chosen: {},
+    };
+    const menu = newAgentMenu({ page, models: held(PICKER) }, acts);
+    expect(menu?.groups[2]?.title).toBe("Opus — Effort");
+    const rows = menu?.groups[2]?.items ?? [];
+    expect(rows.map((row) => [row.label, row.checked ?? null])).toEqual([
+      ["its own", false],
+      ["low", false],
+      ["medium", false],
+      ["high", true],
+      ["xhigh", false],
+      ["max", false],
+    ]);
+    rows[5]?.onSelect?.();
+    expect(acts.newAgent).toHaveBeenLastCalledWith({
+      provider: "claude",
+      profileSet: "work",
+      modelSelection: { modelId: "opus", controls: { effort: "max" } },
+      cwd: PATH,
+      where: WHERE,
+    });
+    rows[0]?.onSelect?.();
+    expect(acts.newAgent).toHaveBeenLastCalledWith({
+      provider: "claude",
+      profileSet: "work",
+      modelSelection: { modelId: "opus" },
+      cwd: PATH,
+      where: WHERE,
+    });
+    menu?.groups[1]?.items[0]?.onSelect?.();
+    expect(acts.page).toHaveBeenLastCalledWith(MODELS_PAGE);
+    // a page turned for another folder is the first page here
+    const elsewhere = newAgentMenu({
+      page: { ...page, folder: "elsewhere" },
+      models: held(PICKER),
+    });
+    expect(elsewhere?.groups.map((group) => group.key)).toEqual([
+      "starts-in",
+      "last-used",
+      "agents",
+    ]);
   });
 
   it("New agent follows ③: a folder on another desktop names why it can't start there, and its rows are dimmed", () => {

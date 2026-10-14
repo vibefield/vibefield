@@ -21,10 +21,11 @@ import {
 // ONCE, at boot — this stages, in the run's own root:
 //
 //   · a STUB: the smoke's own stand-in for the agent's CLI. It answers the
-//     launch's probes (`--version`, `--help`), records every run of itself
-//     (its arguments and its environment's NAMES — never a value) and, run as
-//     a managed session, waits at its prompt until `exit` or the end of its
-//     input;
+//     launch's probes (`--version`, `--help`) and its model picker's read
+//     (PJ-6: the agent's own stream-json `initialize`, answered with
+//     `TYPED_AGENT_MODELS`), records every run of itself (its arguments and
+//     its environment's NAMES — never a value) and, run as a managed session,
+//     waits at its prompt until `exit` or the end of its input;
 //   · the MACHINE RECORD naming the stub as that agent's ACTIVE install — the
 //     choice Settings → Agents records (`machine/agents/distribution.json`,
 //     AR-D16), so the launch recipe, the launch's probe and the gateway's
@@ -91,6 +92,20 @@ Options:
   -h, --help                   print this help
 `;
 
+/** PJ-6 — the stub's own model picker, in the agent's native `initialize` rows
+ * (`value`, `displayName`, the effort levels each model offers): one model with
+ * efforts, one without. The History rung starts the first at its last level. */
+export const TYPED_AGENT_MODELS = [
+  {
+    value: "stub-steady",
+    displayName: "Steady",
+    description: "The stub's model with an effort",
+    supportedEffortLevels: ["low", "high"],
+    supportsEffort: true,
+  },
+  { value: "stub-plain", displayName: "Plain", supportsEffort: false },
+] as const;
+
 /** The stub, as a Node program: `#!/usr/bin/env node`, so a shell, the
  * shim's exec and fieldd's probes all run the same file the same way. */
 export function typedAgentStubSource(calls: string): string {
@@ -122,20 +137,42 @@ if (argv.length === 1 && (argv[0] === "--help" || argv[0] === "-h")) {
   process.stdout.write(${JSON.stringify(STUB_HELP)});
   process.exit(0);
 }
-// Not a session (a sign-in's status, a usage read): nothing to answer.
-if (!argv.includes("--session-id") && !argv.includes("--resume")) process.exit(1);
-process.stdout.write("typed-agent stub: a managed session. Type exit to leave.\\n");
 let pending = "";
 process.stdin.setEncoding("utf8");
-process.stdin.on("data", (chunk) => {
-  pending += chunk;
-  for (let at = pending.indexOf("\\n"); at >= 0; at = pending.indexOf("\\n")) {
-    const line = pending.slice(0, at).trim();
-    pending = pending.slice(at + 1);
-    if (line === "exit") process.exit(0);
-  }
-});
-process.stdin.on("end", () => process.exit(0));
+if (argv.includes("--print") && argv.includes("stream-json")) {
+  // PJ-6 — the model picker's read: one control request, the agent's own
+  // \`initialize\` answered under its id with the stub's models
+  process.stdin.on("data", (chunk) => {
+    pending += chunk;
+    const at = pending.indexOf("\\n");
+    if (at < 0) return;
+    const request = JSON.parse(pending.slice(0, at));
+    const answer = {
+      type: "control_response",
+      response: {
+        subtype: "success",
+        request_id: request.request_id,
+        response: { models: ${JSON.stringify(TYPED_AGENT_MODELS)} },
+      },
+    };
+    process.stdout.write(JSON.stringify(answer) + "\\n", () => process.exit(0));
+  });
+  process.stdin.on("end", () => process.exit(0));
+} else if (!argv.includes("--session-id") && !argv.includes("--resume")) {
+  // Not a session (a sign-in's status, a usage read): nothing to answer.
+  process.exit(1);
+} else {
+  process.stdout.write("typed-agent stub: a managed session. Type exit to leave.\\n");
+  process.stdin.on("data", (chunk) => {
+    pending += chunk;
+    for (let at = pending.indexOf("\\n"); at >= 0; at = pending.indexOf("\\n")) {
+      const line = pending.slice(0, at).trim();
+      pending = pending.slice(at + 1);
+      if (line === "exit") process.exit(0);
+    }
+  });
+  process.stdin.on("end", () => process.exit(0));
+}
 `;
 }
 
@@ -267,6 +304,11 @@ function writePersonTranscript(
   person: string,
   work: string,
   row: (typeof AGENT_CATALOG)[number],
+  conversation: { sessionId: string; asked: string; said: string } = {
+    sessionId: randomUUID(),
+    asked: "Where are the lanterns?",
+    said: HISTORY_SEED_WORDS,
+  },
 ): { kind: string; nativeSessionId: string } {
   const kind = row.seams.rosetta?.kind;
   const layoutRoot = row.layoutRoot;
@@ -275,7 +317,7 @@ function writePersonTranscript(
       "the typed agent's catalog row names no rosetta kind or home layout: History has nothing to seed",
     );
   }
-  const sessionId = randomUUID();
+  const { sessionId } = conversation;
   const prompt = randomUUID();
   const reply = randomUUID();
   const at = (secondsAgo: number) => new Date(Date.now() - secondsAgo * 1_000).toISOString();
@@ -294,7 +336,7 @@ function writePersonTranscript(
       type: "user",
       uuid: prompt,
       timestamp: at(60),
-      message: { role: "user", content: "Where are the lanterns?" },
+      message: { role: "user", content: conversation.asked },
     },
     {
       ...common,
@@ -307,7 +349,7 @@ function writePersonTranscript(
         type: "message",
         role: "assistant",
         model: "claude-opus-5",
-        content: [{ type: "text", text: `${HISTORY_SEED_WORDS}.` }],
+        content: [{ type: "text", text: `${conversation.said}.` }],
         stop_reason: "end_turn",
         stop_sequence: null,
         stop_details: null,
@@ -338,6 +380,22 @@ function writePersonTranscript(
     `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`,
   );
   return { kind, nativeSessionId: sessionId };
+}
+
+/** PJ-6 (Q4) — a conversation the stub "had" in a session it was launched
+ * into: the agent keeps a transcript for every session, and its resume refuses
+ * one that is not on disk ("…is not on disk under <home>/.claude/projects; it
+ * cannot be resumed", the Claude adapter). The stub keeps none of its own, so
+ * a rung that resumes a stub session writes the transcript the agent would
+ * have — the person's, in the agent's own layout, under that session's id. */
+export function writeTypedAgentConversation(
+  staged: Pick<StagedTypedAgent, "person" | "work">,
+  sessionId: string,
+  words: { asked: string; said: string },
+): void {
+  const row = AGENT_CATALOG.find((entry) => entry.id === TYPED_AGENT_ID);
+  if (row === undefined) throw new Error("the typed agent's catalog row is gone");
+  writePersonTranscript(staged.person, staged.work, row, { sessionId, ...words });
 }
 
 /** What `stageTypedAgent` put in place, for the step that types. */

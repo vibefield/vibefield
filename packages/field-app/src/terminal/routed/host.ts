@@ -20,7 +20,7 @@ import {
   TerminalRuntimeSessionsResult,
   TerminalTerminateResult,
 } from "@vibefield/contracts";
-import type { FielddClient } from "@vibefield/fieldd-client";
+import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
 import { requestResolvingOutcome } from "../../forwarded-call";
 import { createRoutedInputEncoder } from "./encode-input";
 import { type RemoteRefusal, remoteRefusalOf } from "./remote-refusal";
@@ -176,7 +176,9 @@ function isUnobservedInventory(cause: unknown): boolean {
 /** Preserve fieldd's honest observation gate without turning its startup race
  * into a permanent failed Workspace initialization. Other failures propagate
  * immediately; only the explicitly retryable `unobserved` state is awaited.
- * DS-4e: with a `device`, the OWNER's inventory — the same read, forwarded. */
+ * DS-4e: with a `device`, the OWNER's inventory — the same read, forwarded.
+ * The 5 s bound holds over every attempt, not only between them: one answer
+ * that never came used to pin the read, and every pane joined to it. */
 async function listRuntimeSessions(
   fieldd: FielddClient,
   device?: string,
@@ -185,12 +187,54 @@ async function listRuntimeSessions(
   const params = device === undefined ? {} : { device };
   for (;;) {
     try {
-      return asSessionSummaries(await fieldd.request("terminal.sessions", params));
+      return asSessionSummaries(await sessionsBefore(fieldd, params, deadline));
     } catch (cause) {
       if (!isUnobservedInventory(cause) || Date.now() >= deadline) throw cause;
       await new Promise((resolve) => setTimeout(resolve, RUNTIME_SESSION_OBSERVATION_RETRY_MS));
     }
   }
+}
+
+/** One `terminal.sessions` attempt, raced against what is left of the read's
+ * deadline. The client is handed the same bound, so a real one drops the call
+ * it can no longer answer; whichever gives up first, the refusal is the READ's
+ * — `UNAVAILABLE {state: "timeout", timeoutMs}` at its 5 s — which the pool
+ * says in the owner's name (`floorReadWithin`). */
+function sessionsBefore(
+  fieldd: FielddClient,
+  params: { device?: string },
+  deadline: number,
+): Promise<unknown> {
+  const timeoutMs = Math.max(1, deadline - Date.now());
+  const lapsed = () =>
+    new FielddRpcError(
+      "UNAVAILABLE",
+      `terminal.sessions had no answer within ${RUNTIME_SESSION_OBSERVATION_TIMEOUT_MS} ms`,
+      true,
+      { service: "terminal", state: "timeout", timeoutMs: RUNTIME_SESSION_OBSERVATION_TIMEOUT_MS },
+    );
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(lapsed()), timeoutMs);
+  });
+  return Promise.race([fieldd.request("terminal.sessions", params, { timeoutMs }), expired])
+    .catch((cause: unknown) => {
+      // the client's own `timeout` is the same lapse, said once, as the read's
+      throw isTimedOut(cause) ? lapsed() : cause;
+    })
+    .finally(() => clearTimeout(timer));
+}
+
+function isTimedOut(cause: unknown): boolean {
+  if (!(cause instanceof Error) || !("kind" in cause) || cause.kind !== "UNAVAILABLE") {
+    return false;
+  }
+  const details = (cause as { details?: unknown }).details;
+  return (
+    details !== null &&
+    typeof details === "object" &&
+    (details as { state?: unknown }).state === "timeout"
+  );
 }
 
 /** Build one host/encoder scope for one window runtime. */
@@ -317,7 +361,11 @@ export function createRoutedTerminalHost(
     readers.clear();
     inventoryGeneration += 1;
   };
-  const readInventory = (fresh = false, device?: string): Promise<Map<string, SessionSummary>> => {
+  const readInventory = (
+    fresh = false,
+    device?: string,
+    reread = false,
+  ): Promise<Map<string, SessionSummary>> => {
     const key = device ?? "";
     let reader = readers.get(key);
     if (reader === undefined) {
@@ -330,10 +378,17 @@ export function createRoutedTerminalHost(
     if (reader.read !== null) return reader.read;
     const generation = inventoryGeneration;
     const current = reader;
+    // A read that fails — its 5 s bound among the ways — lets go of
+    // `current.read` (the `finally`), so the next pane's turn reads fresh
+    // instead of joining a read that will never answer.
     const read = listRuntimeSessions(options.fieldd, device)
       .then((sessions) => {
-        if (generation !== inventoryGeneration) return readInventory(false, device);
         const inventory = new Map(sessions.map((session) => [session.id, session]));
+        // invalidated while it was read: ONE re-read sees what moved; a floor
+        // that moves under the re-read too is answered with it, uncached,
+        // rather than chased without end
+        if (generation !== inventoryGeneration)
+          return reread ? inventory : readInventory(false, device, true);
         current.inventory = inventory;
         current.at = Date.now();
         return inventory;
