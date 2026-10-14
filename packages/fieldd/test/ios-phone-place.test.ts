@@ -19,6 +19,7 @@ import {
 } from "@vibefield/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import WebSocket from "ws";
+import { born } from "./agent-birth";
 import {
   PHONE_HANDSHAKE,
   type PhoneFixture,
@@ -94,7 +95,7 @@ describe.skipIf(process.platform === "win32")(
       expect(ref.device).toBe(handshake.device);
 
       const spawned = AgentSpawnResult.parse(
-        await phone.call("agent.spawn", {
+        await born(phone, "agent.spawn", {
           provider: handshake.provider,
           place: ref,
           profileSet: handshake.profileSet,

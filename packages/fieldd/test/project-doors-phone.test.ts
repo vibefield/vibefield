@@ -44,6 +44,7 @@ import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import { KeyJournal } from "../src/projects/key-journal";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { born } from "./agent-birth";
 import { productDoorPath, TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { desktopSlice, registryPeer } from "./peer-roster";
@@ -632,7 +633,11 @@ describe.skipIf(process.platform === "win32")(
 
       // the launch: a provider, a place, an Agent Profile — no path
       const spawned = AgentSpawnResult.parse(
-        await phone.call("agent.spawn", { provider: "scripted", place: ref, profileSet: "native" }),
+        await born(phone, "agent.spawn", {
+          provider: "scripted",
+          place: ref,
+          profileSet: "native",
+        }),
       );
       expect(births.at(-1)?.cwd).toBe(placePath);
       // the self phone's ticket names the tailnet's doors, never this Mac's loopback
@@ -703,7 +708,7 @@ describe.skipIf(process.platform === "win32")(
         async () => {
           try {
             resumed = AgentSpawnResult.parse(
-              await phone.call("agent.resume", {
+              await born(phone, "agent.resume", {
                 provider: "scripted",
                 nativeSessionId: conversation,
               }),
