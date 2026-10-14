@@ -114,6 +114,12 @@ const historyFixtures = [
   "project-figures.valid.json",
   "project-changes-open.snapshot.json",
 ];
+// fix7 — the ledger reads its door's index beside it: ready, failed, rebuilding.
+const indexFixtures = [
+  "index-status.valid.json",
+  "index-status.failed.json",
+  "index-status.rebuilding.json",
+];
 // The launch sheet reads these (its tests, and the DEBUG fixture door the first two).
 const sheetFixtures = [
   "agents-profile-sets.valid.json",
@@ -126,6 +132,7 @@ const requiredMirrors = [
   ["workspace", workspaceFixtures, ["Tests/FieldWorkspaceTests", "Sources/FieldWorkspace"]],
   ["project", projectFixtures, ["Tests/FieldProductTests"]],
   ["project", historyFixtures, ["Tests/FieldHistoryTests", "Sources/FieldHistory"]],
+  ["index", indexFixtures, ["Tests/FieldHistoryTests"]],
   ["launch", launchFixtures, ["Tests/FieldProductTests"]],
   ["launch", sheetFixtures, ["Tests/FieldWorkspaceTests"]],
   ["launch", sheetFixtures.slice(0, 2), ["Sources/FieldWorkspace"]],

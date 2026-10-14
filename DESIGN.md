@@ -2599,6 +2599,21 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   document the stepper's slot carries the same act with where it runs (mark, desktop, folder). A refused
   Resume is said, never shown as a failure: `studio is asleep` · `The folder is gone` · `Signed out of
   Claude Code on studio` · `Held under another profile on studio`.
+  **The ledger's door's INDEX is said, never guessed** (fix7, 2026-10-14 — PJ-7's first phone run
+  said "No project in your desktops' index yet" over a FAILED index): the reader asks `index.status`
+  beside each `project.list`, and while the index is not ready the scope line gains one more
+  sentence, led by that desktop's mark like an asleep one — `studio's index is starting` · `studio
+  is rebuilding its index` · `studio is indexing · 61%` · `studio's index has stopped` · `studio runs
+  no history index` — the project screen carries the same line under its head, and an EMPTY ledger
+  says it as its note, with fieldd's own words after it: **"studio's index has stopped"** — "‹fieldd's
+  reason›. History reads nothing from it until it runs again." · **"studio is rebuilding its
+  index"** — "studio's VibeField reads history in a newer form, so it is rebuilding its index from
+  what it recorded; its projects arrive when that ends." · **"studio's index is starting"** — "Its
+  projects arrive when it is ready." · **"studio is reading its history"** — "8,400 of 13,700
+  sessions read; its projects arrive as it reads." "No project in your desktops' index yet" is said
+  only over an index that is READY (or a desktop whose door offers no `index.status`). No restart
+  is offered or promised: no window offers the index's restart yet. While it is not ready the
+  ledger is read again every few seconds (nothing pings when it becomes ready).
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the

@@ -69,7 +69,9 @@ public struct HistoryLedgerView: View {
       if let project = projects.corpus.project(id) {
         HistoryProjectView(
           project: project, sessions: projects.corpus.sessions(of: id), corpus: projects.corpus,
-          standing: projects.standing, router: router, onNeed: onNeed)
+          standing: projects.standing,
+          index: FieldHistoryModel.indexSentence(projects.index, desktop: projects.sourceName),
+          indexPlatform: projects.sourcePlatform, router: router, onNeed: onNeed)
       } else {
         QuietNote(title: "This project is not in the ledger", text: "Nothing was read for it on this phone.")
           .onAppear { onNeed(.project(id: id)) }
@@ -101,14 +103,11 @@ public struct HistoryLedgerView: View {
     let ranked = FieldHistoryModel.projects(corpus.projects, rankedBy: rank)
     return LazyVStack(alignment: .leading, spacing: 0) {
       scope(corpus, standing: standing)
-      if corpus.projects.isEmpty, !awake {
-        QuietNote(
-          title: "Your projects have not been read yet",
-          text: "Nothing of your history is on this phone; the ledger arrives when a desktop's door answers.")
-      } else if corpus.projects.isEmpty {
-        QuietNote(
-          title: "No project in your desktops' index yet",
-          text: "The index lists no project. Choose whose history it reads on a desktop (Settings → Agents).")
+      if corpus.projects.isEmpty {
+        // fix7 — never "no project" while the door's index is not ready
+        let empty = FieldHistoryModel.emptyLedger(
+          standing: standing, index: projects.index, desktop: projects.sourceName)
+        QuietNote(title: empty.title, text: empty.text)
       } else {
         GroupHead(live.label, count: live.count)
         VStack(spacing: 6) {
@@ -135,7 +134,8 @@ public struct HistoryLedgerView: View {
   }
 
   /// The scope line, ending in the marks of the desktops read; then each
-  /// sleeping desktop's own sentence, led by its mark.
+  /// sleeping desktop's own sentence, led by its mark; then the door's index
+  /// while it is not ready (fix7), led by its desktop's mark the same way.
   private func scope(_ corpus: HistoryCorpus, standing: FieldHistoryModel.DesktopStanding) -> some View {
     VStack(alignment: .leading, spacing: 5) {
       if corpus.desktops.isEmpty {
@@ -165,6 +165,16 @@ public struct HistoryLedgerView: View {
           .foregroundStyle(ChromePalette.inkTertiary)
           .accessibilityElement(children: .combine)
         }
+      }
+      if standing.isAwake, let line = FieldHistoryModel.indexSentence(projects.index, desktop: projects.sourceName) {
+        HStack(spacing: 5) {
+          DeviceMark(platform: projects.sourcePlatform, size: 12)
+          Text(line)
+            .font(ChromeType.sans(13))
+            .monospacedDigit()
+        }
+        .foregroundStyle(ChromePalette.inkTertiary)
+        .accessibilityElement(children: .combine)
       }
     }
     .padding(.horizontal, HistoryParts.sidePadding)

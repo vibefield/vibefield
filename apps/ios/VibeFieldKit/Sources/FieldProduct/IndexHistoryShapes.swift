@@ -381,6 +381,9 @@ public struct IndexSearchResult: Sendable, Equatable, Decodable {
 public struct IndexStatusResult: Sendable, Equatable, Decodable {
   public let phase: String
   public let daemonPhase: String?
+  /// fieldd's words for the daemon's phase (`rosettad.detail`: the failure, the
+  /// rebuild's two schema versions) — what the phone says when it is not ready
+  public let daemonDetail: String?
   public let protocolVersion: Int64?
   public let searchReachable: Bool?
   public let searchReadiness: String?
@@ -397,7 +400,7 @@ public struct IndexStatusResult: Sendable, Equatable, Decodable {
     var daemon = object.object("rosettad")
     daemonPhase = daemon.string("phase")
     protocolVersion = daemon.int("protocolVersion")
-    _ = daemon.string("detail")
+    daemonDetail = daemon.string("detail")
     _ = daemon.int("pid")
     var search = object.object("search")
     searchReachable = search.bool("reachable")

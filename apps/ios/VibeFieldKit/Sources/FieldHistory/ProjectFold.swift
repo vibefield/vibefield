@@ -71,6 +71,114 @@ extension FieldHistoryModel {
     "\(desktop.name) is asleep · read \(desktop.readAt)"
   }
 
+  // MARK: - The index's own standing (fix7, PJ-7's first phone run)
+
+  /// The ledger's door's INDEX (`index.status` beside `project.list`), apart
+  /// from whether the door answers: a door can answer an empty `project.list`
+  /// while its index is starting, rebuilding or failed, and "no project" is
+  /// only true of an index that is ready. SP-6's reader asked it; PJ-7's
+  /// projects reader had dropped it.
+  public enum IndexStanding: Equatable, Sendable {
+    /// live, or waiting for consent — what it lists is what there is
+    case ready
+    /// starting, or starting again after its daemon stopped (fieldd's words)
+    case starting(detail: String?)
+    /// DEBTS — a projection of another schema, rebuilt from its ledger before
+    /// it serves; rosetta's rebuild reports no progress, so none is said
+    case rebuilding(detail: String?)
+    /// reading its history (the search build's counters)
+    case indexing(percent: Int, done: String, total: String)
+    /// stopped trying, in fieldd's words
+    case failed(reason: String)
+    /// this desktop runs no index
+    case unconfigured(reason: String?)
+    /// shut down with its desktop's field service
+    case stopped
+
+    public var isReady: Bool { self == .ready }
+  }
+
+  /// `index.status` as the index's standing: the folded phase first (fieldd's
+  /// supervisor phases, then rosetta's reading phases), its detail kept.
+  public static func indexStanding(status: IndexStatusResult) -> IndexStanding {
+    let detail = status.daemonDetail.flatMap { $0.isEmpty ? nil : $0 }
+    switch status.phase {
+    case "starting", "restarting": return .starting(detail: detail)
+    case "rebuilding": return .rebuilding(detail: detail)
+    case "failed": return .failed(reason: detail ?? "the index failed")
+    case "unconfigured": return .unconfigured(reason: detail)
+    case "stopped": return .stopped
+    default:
+      if case .indexing(let percent, let done, let total) = standing(status: status) {
+        return .indexing(percent: percent, done: done, total: total)
+      }
+      return .ready
+    }
+  }
+
+  /// The index's sentence under the ledger's scope line (and a project's
+  /// head), led by its desktop's mark on screen; nil while it is ready.
+  public static func indexSentence(_ index: IndexStanding?, desktop: String) -> String? {
+    switch index {
+    case nil, .ready?: nil
+    case .starting?: "\(desktop)'s index is starting"
+    case .rebuilding?: "\(desktop) is rebuilding its index"
+    case .indexing(let percent, _, _)?: "\(desktop) is indexing · \(percent)%"
+    case .failed?: "\(desktop)'s index has stopped"
+    case .unconfigured?: "\(desktop) runs no history index"
+    case .stopped?: "\(desktop)'s index is stopped"
+    }
+  }
+
+  /// What an EMPTY ledger says, in this order: nothing read and no door
+  /// answering; the index not ready, in its own words (never "no project"
+  /// while it is not); then the index's honest emptiness.
+  public static func emptyLedger(
+    standing: DesktopStanding, index: IndexStanding?, desktop: String
+  ) -> (title: String, text: String) {
+    if !standing.isAwake {
+      return (
+        "Your projects have not been read yet",
+        "Nothing of your history is on this phone; the ledger arrives when a desktop's door answers."
+      )
+    }
+    switch index {
+    case .starting(let detail)?:
+      return (
+        "\(desktop)'s index is starting",
+        detail.map { "Its projects arrive when it is ready. \(sentence($0))" }
+          ?? "Its projects arrive when it is ready.")
+    case .rebuilding(let detail)?:
+      return (
+        "\(desktop) is rebuilding its index",
+        "\(desktop)'s VibeField reads history in a newer form, so it is rebuilding its index from what it recorded; its projects arrive when that ends."
+          + (detail.map { " \(sentence($0))" } ?? ""))
+    case .indexing(_, let done, let total)?:
+      return ("\(desktop) is reading its history", "\(done) of \(total) sessions read; its projects arrive as it reads.")
+    case .failed(let reason)?:
+      return (
+        "\(desktop)'s index has stopped",
+        "\(sentence(reason)) History reads nothing from it until it runs again.")
+    case .unconfigured(let reason)?:
+      return ("\(desktop) runs no history index", reason.map(sentence) ?? "Its desktop was started without one.")
+    case .stopped?:
+      return ("\(desktop)'s index is stopped", "Its projects arrive when it runs again.")
+    case nil, .ready?:
+      return (
+        "No project in your desktops' index yet",
+        "The index lists no project. Choose whose history it reads on a desktop (Settings → Agents)."
+      )
+    }
+  }
+
+  /// fieldd's words as a sentence: the first letter up, a full stop at the end.
+  static func sentence(_ words: String) -> String {
+    let trimmed = words.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let first = trimmed.first else { return trimmed }
+    let capitalized = first.uppercased() + trimmed.dropFirst()
+    return capitalized.hasSuffix(".") ? capitalized : capitalized + "."
+  }
+
   /// The scope line over the ledger, before the desktops' marks: `12 projects
   /// · 1,405 sessions across 9 agents on`.
   public static func ledgerScope(_ corpus: HistoryCorpus) -> String {

@@ -1,0 +1,21 @@
+{
+  "phase": "failed",
+  "search": {
+    "reachable": false,
+    "capabilities": { "sessionScope": true, "prefix": true },
+    "detail": "the agent index is failed"
+  },
+  "rosettad": {
+    "phase": "failed",
+    "detail": "restart intensity exceeded (5 in 60000ms) — something is wrong with rosettad itself; use the restart affordance to try again",
+    "pid": null,
+    "protocolVersion": null
+  },
+  "enrollment": {
+    "enabledKinds": ["claude-code"],
+    "runtimes": [],
+    "retired": [],
+    "updatedAt": "2026-10-14T18:02:24.000Z"
+  },
+  "runtimes": []
+}

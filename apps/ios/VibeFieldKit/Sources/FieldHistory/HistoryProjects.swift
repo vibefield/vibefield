@@ -13,6 +13,13 @@ import Observation
 // DOCUMENT is not here: it stays on its owner's door (the row's `device`,
 // `HistoryDesktopReader`). The honest states are SP-6's: a door that stops
 // answering leaves what was read standing, stamped, and the cache replays it.
+//
+// fix7 (2026-10-14, PJ-7's first phone run): the door's INDEX is read beside
+// the ledger (`index.status` before each `project.list`, as SP-6's reader
+// read it) — a door answers an empty listing while its index is starting,
+// rebuilding or failed, and the phone had said "no project" over a failed
+// one. While the index is not ready the ledger is read again on a cadence: no
+// ping says it became ready (the catalog may not move when it does).
 
 /// The ledger of projects, read over one door and kept as values.
 @MainActor
@@ -34,12 +41,25 @@ public final class HistoryProjects {
   public private(set) var moves: [ProjectRegrouped] = []
   /// The door's last refusal, in its own words.
   public private(set) var failure: String?
+  /// fix7 — the door's index (`index.status`): nil before it is read, or when
+  /// the door does not offer it (the listing is believed then).
+  public private(set) var index: FieldHistoryModel.IndexStanding?
   public var isReplaying: Bool { door == nil || !standing.isAwake }
+  /// The desktop whose door answers, by name: the roster's, else the answer's.
+  public var sourceName: String {
+    roster.first { $0.id == source }?.name ?? corpus.desktops.first { $0.id == source }?.name
+      ?? "Your desktop"
+  }
+  /// Its OS (the mark that leads the index's sentence).
+  public var sourcePlatform: String? {
+    roster.first { $0.id == source }?.platform ?? corpus.desktops.first { $0.id == source }?.platform
+  }
 
   @ObservationIgnored private let door: (any HistoryDoor)?
   @ObservationIgnored private let ownsDoor: Bool
   @ObservationIgnored private let cache: HistoryCache?
   @ObservationIgnored private let now: @MainActor () -> Date
+  @ObservationIgnored private let indexRecheck: Duration
   @ObservationIgnored private var roster: [FieldHistoryModel.RosterDesktop]
   @ObservationIgnored private var order: [String] = []
   @ObservationIgnored private var sources: [CatalogSource] = []
@@ -54,7 +74,8 @@ public final class HistoryProjects {
 
   public init(
     source: String?, door: (any HistoryDoor)?, ownsDoor: Bool = false, cache: HistoryCache? = nil,
-    roster: [FieldHistoryModel.RosterDesktop] = [], now: @escaping @MainActor () -> Date = { Date() }
+    roster: [FieldHistoryModel.RosterDesktop] = [], now: @escaping @MainActor () -> Date = { Date() },
+    indexRecheck: Duration = .seconds(HistoryReads.indexRecheckSeconds)
   ) {
     self.source = source
     self.door = door
@@ -62,6 +83,7 @@ public final class HistoryProjects {
     self.cache = cache
     self.roster = roster
     self.now = now
+    self.indexRecheck = indexRecheck
     corpus = .empty(desktop: "your desktops", deviceId: source ?? Self.cacheKey)
     standing = door == nil ? .asleep : .connected
   }
@@ -89,6 +111,7 @@ public final class HistoryProjects {
     paused = true
     pings?.cancel()
     pings = nil
+    tasks.removeValue(forKey: "index-wait")?.cancel()
   }
 
   public func resume() {
@@ -161,9 +184,13 @@ public final class HistoryProjects {
         if rereadWanted, !closed {
           rereadWanted = false
           readLedger()
+        } else {
+          waitForIndex()
         }
       }
       do {
+        await readIndex(door)
+        guard !Task.isCancelled else { return }
         let page = try ProjectListResult(
           json: try await door.call("project.list", params: ProjectListParams(limit: HistoryReads.listRows).json))
         guard !Task.isCancelled else { return }
@@ -253,6 +280,37 @@ public final class HistoryProjects {
       } catch {
         refused(error)
       }
+    }
+  }
+
+  // MARK: The index (fix7)
+
+  /// The door's index, read before the listing it explains. A door that does
+  /// not offer `index.status` to this phone leaves it unknown; a door that does
+  /// not answer at all is the listing's own refusal to say.
+  private func readIndex(_ door: any HistoryDoor) async {
+    do {
+      let status = try await door.call("index.status", params: nil).decode(IndexStatusResult.self)
+      guard !Task.isCancelled else { return }
+      index = FieldHistoryModel.indexStanding(status: status)
+    } catch let refusal as FieldProductError where ["NOT_FOUND", "FORBIDDEN_SCOPE", "PRECONDITION_FAILED"].contains(refusal.kind) {
+      index = nil
+    } catch {
+      // the door itself: `project.list` asks next and says so
+    }
+  }
+
+  /// While the index is not ready, read the ledger (and the index) again.
+  private func waitForIndex() {
+    // a door that stopped answering is the desktops' to replace, not to poll
+    guard let index, !index.isReady, door != nil, standing.isAwake, !closed, !paused, tasks["index-wait"] == nil
+    else { return }
+    let wait = indexRecheck
+    tasks["index-wait"] = Task { [weak self] in
+      try? await Task.sleep(for: wait)
+      guard let self, !Task.isCancelled else { return }
+      tasks["index-wait"] = nil
+      readLedger()
     }
   }
 

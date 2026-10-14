@@ -19,6 +19,10 @@ struct HistoryProjectView: View {
   let sessions: [HistorySession]
   let corpus: HistoryCorpus
   let standing: FieldHistoryModel.DesktopStanding
+  /// fix7 — the ledger's index while it is not ready, in its sentence (nil:
+  /// ready), led by its desktop's mark under the head
+  var index: String? = nil
+  var indexPlatform: String? = nil
   @Bindable var router: HistoryRouter
   var onNeed: (HistoryNeed) -> Void = { _ in }
 
@@ -101,6 +105,17 @@ struct HistoryProjectView: View {
           DeviceMarks(ids: project.devices, desktops: corpus.desktops)
         }
         .padding(.top, 5)
+      }
+      if let index {
+        HStack(spacing: 5) {
+          DeviceMark(platform: indexPlatform, size: 12)
+          Text(index)
+            .font(ChromeType.sans(12.5))
+            .monospacedDigit()
+        }
+        .foregroundStyle(ChromePalette.inkTertiary)
+        .padding(.top, 5)
+        .accessibilityElement(children: .combine)
       }
     }
     .padding(.horizontal, HistoryParts.sidePadding)

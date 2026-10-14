@@ -1,0 +1,21 @@
+{
+  "phase": "rebuilding",
+  "search": {
+    "reachable": false,
+    "capabilities": { "sessionScope": true, "prefix": true },
+    "detail": "the agent index is rebuilding"
+  },
+  "rosettad": {
+    "phase": "rebuilding",
+    "detail": "the index's projection is schema 24 where this rosettad reads 27: rebuilding it from its ledger (the old one stands until the new one is whole)",
+    "pid": null,
+    "protocolVersion": null
+  },
+  "enrollment": {
+    "enabledKinds": ["claude-code"],
+    "runtimes": [],
+    "retired": [],
+    "updatedAt": "2026-10-14T18:02:24.000Z"
+  },
+  "runtimes": []
+}

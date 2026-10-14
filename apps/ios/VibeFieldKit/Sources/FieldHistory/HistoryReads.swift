@@ -39,6 +39,11 @@ public enum HistoryReads {
   public static let prefetchFigures = 6
   /// Recent searches kept per desktop.
   public static let recentSearches = 8
+  /// fix7 — while the ledger's index is not ready (starting, rebuilding,
+  /// failed), how often the ledger and its index are read again: nothing pings
+  /// when it becomes ready, and two cheap reads every few seconds is a
+  /// phone's pace for a state a person is watching.
+  public static let indexRecheckSeconds: Int64 = 5
 }
 
 /// An open tail, held until it is cancelled.
