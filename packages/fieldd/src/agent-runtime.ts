@@ -1197,6 +1197,19 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     return { path: facts.path, placeId: facts.placeId };
   }
 
+  /** QL-D10 — a native resume continues only under a persona still signed
+   * in (none: the agent's own folder): else `signed-out`. */
+  private requirePersonaActive(provider: string, profileId: string | undefined): void {
+    if (!this.personaActive(profileId)) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the account this conversation was held under is signed out",
+        false,
+        { provider, state: "signed-out" },
+      );
+    }
+  }
+
   /** QL-D10 — a native resume runs only in an existing absolute folder of
    * this device: else `missing-cwd`, with the folder it named. */
   private requireConversationFolder(provider: string, cwd: string): void {
@@ -1283,15 +1296,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     terminals: TerminalService,
     forwardedFor?: ForwardedFor,
   ): Promise<AgentSpawnResult> {
-    const profileId = await this.resumeProfile(params);
-    if (!this.personaActive(profileId)) {
-      throw new RpcCallError(
-        "PRECONDITION_FAILED",
-        "the account this conversation was held under is signed out",
-        false,
-        { provider: params.provider, state: "signed-out" },
-      );
-    }
+    // a persona the caller NAMES (by id, or by an Agent Profile's sign-in) is
+    // resolved and checked first, as it always was
+    const named = params.profileId !== undefined || params.profileSet !== undefined;
+    const asked = named ? await this.resumeProfile(params) : undefined;
+    if (named) this.requirePersonaActive(params.provider, asked);
     // a folder the caller names is checked first, as it always was
     if (params.cwd !== undefined) this.requireConversationFolder(params.provider, params.cwd);
     // …and only a conversation the INDEX files under this agent: the
@@ -1314,8 +1323,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // enrolled root is one persona's. The persona the caller named (by id, or
     // by its Agent Profile's sign-in) must be that one — no persona where the
     // index files it in the agent's own folder. The renderer's word for the
-    // persona is no more provenance than its word for the agent.
-    if (filed.profileId !== profileId) {
+    // persona is no more provenance than its word for the agent. PJ-7 (the
+    // lead's ruling on pj7k's ask, PJ-D10 (a) "under its own profile") — a
+    // resume that names NO persona runs under the index's, as it runs in the
+    // index's folder: no word of the caller's is taken, so it is adopted, and
+    // the sign-in check is made on the persona actually used.
+    const profileId = named ? asked : filed.profileId;
+    if (named && filed.profileId !== profileId) {
       throw new RpcCallError(
         "PRECONDITION_FAILED",
         "the conversation is held under another profile than the one named",
@@ -1327,6 +1341,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         },
       );
     }
+    if (!named) this.requirePersonaActive(params.provider, profileId);
     // PJ-7 (Q3 (a)) — no folder named (the phone's Resume names none): the
     // conversation's own, from this desktop's index row for the id — never
     // home, which was never its folder; a row that names none is refused

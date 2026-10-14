@@ -569,8 +569,10 @@ export type AgentResumeRunParams = z.infer<typeof AgentResumeRunParams>;
  * refused when its row does not offer `resume`. The persona is `profileId`
  * (the row's own — the root that HOLDS the conversation) or `profileSet` (an
  * Agent Profile, resolved to its sign-in for the agent; `native`: the agent's
- * own folder), never both; with neither, the agent's own folder — a resume
- * never takes the default profile (puppeteer's rule). The persona named must
+ * own folder), never both; with neither, the persona the index files the
+ * conversation under (PJ-7: adopted, the caller's word taken for nothing; the
+ * agent's own folder when it is filed there) — a resume never takes the
+ * default profile (puppeteer's rule). The persona named must
  * be the one the index files the conversation under (none where it is filed
  * in the agent's own folder) — else PRECONDITION_FAILED `other-profile`. A
  * conversation a live run already continues is refused. The answer is

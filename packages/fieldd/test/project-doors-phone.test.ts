@@ -16,7 +16,7 @@
 //     derived preset holds `project.read`;
 //   · a plugin can never hold `project.read`; the phone cannot act (P2).
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -727,5 +727,59 @@ describe.skipIf(process.platform === "win32")(
       expect(births.at(-1)).toMatchObject({ resume: conversation, cwd: placePath });
       await local.call("terminal.terminate", { sessionId: resumed!.terminal.sessionId });
     }, 60_000);
+
+    it("a native resume naming no persona runs under the one the index files the conversation under", async () => {
+      const { daemon, births, placePath, dataDir } = phoneWorld;
+      // a Work sign-in on this desktop, its root enrolled with the index, and a
+      // conversation the index files there, in the place
+      const made = (await local.call("agents.profileSets.create", { label: "Work" })) as {
+        set: { id: string };
+      };
+      const { persona } = (await local.call("agents.profiles.create", {
+        set: made.set.id,
+        provider: "scripted",
+      })) as { persona: { profileId: string } };
+      const folder = join(dataDir, ...LAYOUT.AGENT_PROFILE_SETS_DIR, made.set.id);
+      const root = join(folder, readdirSync(folder)[0] as string);
+      await daemon.index.enrollRuntimes([
+        { kind: "scripted", dataRoot: root, label: "Work", profileId: persona.profileId },
+      ]);
+      await eventually(
+        async () => daemon.health().rosettad.phase === "ready",
+        30_000,
+        "the index is back after the enrollment",
+      );
+      phoneWorld.fileConversation("conv-work", placePath, "rt-scripted-enrolled-1");
+
+      // the phone names no persona: the index's is adopted
+      let resumed: AgentSpawnResult | undefined;
+      await eventually(
+        async () => {
+          try {
+            resumed = AgentSpawnResult.parse(
+              await born(phone, "agent.resume", {
+                provider: "scripted",
+                nativeSessionId: "conv-work",
+              }),
+            );
+            return true;
+          } catch (error) {
+            const data = (error as { rpc?: RpcErrorShape }).rpc?.data;
+            // the index may not have read the conversation yet
+            if (data?.kind === "NOT_FOUND") return false;
+            throw error;
+          }
+        },
+        15_000,
+        "the conversation filed under Work resumes",
+      );
+      expect(births.at(-1)).toMatchObject({
+        resume: "conv-work",
+        cwd: placePath,
+        profileId: persona.profileId,
+      });
+      expect(resumed?.session.profileId).toBe(persona.profileId);
+      await local.call("terminal.terminate", { sessionId: resumed!.terminal.sessionId });
+    }, 90_000);
   },
 );

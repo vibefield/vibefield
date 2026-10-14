@@ -2450,6 +2450,77 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
     }
   }, 60_000);
 
+  it("PJ-7 — a native resume that names no persona runs under the one the index files the conversation under: its sign-in, its root; refused `signed-out` once that persona is signed out; a persona named is still held to the filed one", async () => {
+    const box = await setup({ floor: "real", profiles: true, catalog: FILED_CATALOG });
+    const { daemon, dataDir, envOut, seen } = box;
+    const win = await window(daemon, DECK, "pj7p");
+    await indexReady(win);
+    const work = await signedIn(win, dataDir, "Work");
+    const home = await signedIn(win, dataDir, "Home");
+    // Work's root is enrolled with the index (as a persona of an agent the
+    // roll call spells is at its creation), and the conversation is filed there.
+    // The runtime row is scripted beside the enrolled one, so it outlives the
+    // sign-out below as rosetta keeps a retired root's rows (AR-D19)
+    await daemon.index.enrollRuntimes([
+      { kind: "scripted", dataRoot: work.root, label: "Work", profileId: work.profileId },
+    ]);
+    await indexReady(win);
+    writeFileSync(
+      box.runtimesFile,
+      JSON.stringify([
+        { id: "rt-work", kind: "scripted", data_root: work.root, provenance: "enrolled" },
+      ]),
+    );
+    writeFileSync(
+      box.sessionsFile,
+      JSON.stringify([{ ...rosettaRow("conv-work", 60_000), runtime_id: "rt-work" }]),
+    );
+
+    // the phone's Resume names no persona: the index's is adopted — no word
+    // of the caller's is taken for it (EL7, the review's finding 8)
+    const resumed = (await born(win, "agent.resume", {
+      provider: "scripted",
+      nativeSessionId: "conv-work",
+      cwd: envOut,
+    })) as AgentSpawnResult;
+    expect(seen.at(-1)?.id).toBe(work.profileId);
+    expect(seen.at(-1)?.dataRoot).toBe(work.root);
+    expect(resumed.session.profileId).toBe(work.profileId);
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+    await poll(
+      async () =>
+        readRecord(dataDir, resumed.session.runtimeRunId).exited !== undefined ? true : undefined,
+      15_000,
+    );
+
+    // a persona NAMED is held to the filed one, as before
+    const before = seen.length;
+    const other = await win.callErr("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: "conv-work",
+      cwd: envOut,
+      profileId: home.profileId,
+    });
+    expect(other.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(other.data?.details).toMatchObject({ reason: "other-profile" });
+
+    // Work signed out: the persona adopted is the one checked
+    await win.call("agents.profiles.delete", { profileId: work.profileId });
+    let out: RpcErrorShape | undefined;
+    await poll(async () => {
+      out = (await win.callErr("agent.resume", {
+        provider: "scripted",
+        nativeSessionId: "conv-work",
+        cwd: envOut,
+      })) as RpcErrorShape;
+      return (out.data?.details as { state?: string } | undefined)?.state === "signed-out"
+        ? true
+        : undefined;
+    }, 15_000);
+    expect(out?.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(seen.length).toBe(before);
+  }, 90_000);
+
   it("deleting a profile stops the sessions running under it first, then deletes its folder", async () => {
     const { daemon, dataDir, envOut } = await setup({ floor: "real", profiles: true });
     const win = await window(daemon, DECK, "ap3");

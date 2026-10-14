@@ -58,6 +58,8 @@ export interface PhoneBirth {
   cwd: string;
   sessionId: string;
   resume: string | undefined;
+  /** the persona the run was bound to (absent: the agent's own folder) */
+  profileId?: string | undefined;
 }
 
 export interface PhoneWorld {
@@ -75,8 +77,10 @@ export interface PhoneWorld {
   /** every birth the scripted agent was asked for, in order */
   births: PhoneBirth[];
   /** the index learns a conversation of the scripted agent in `cwd`, as
-   * rosetta would once it read the transcript */
-  fileConversation(nativeSessionId: string, cwd: string): void;
+   * rosetta would once it read the transcript — under `runtimeId` (default:
+   * the agent's own folder, `rt-scripted`; an enrolled persona root's is
+   * `rt-scripted-enrolled-<n>`) */
+  fileConversation(nativeSessionId: string, cwd: string, runtimeId?: string): void;
   stop(): Promise<void>;
 }
 
@@ -108,12 +112,18 @@ async function until(label: string, ok: () => boolean, ms: number): Promise<void
   }
 }
 
-const rosettaRow = (id: string, nativeSessionId: string, cwd: string, at: number) => ({
+const rosettaRow = (
+  id: string,
+  nativeSessionId: string,
+  cwd: string,
+  at: number,
+  runtimeId = "rt-scripted",
+) => ({
   id,
   native_session_id: nativeSessionId,
   root_session_id: id,
   parent_session_id: null,
-  runtime_id: "rt-scripted",
+  runtime_id: runtimeId,
   project_id: "p-place",
   cwd,
   title: null,
@@ -213,6 +223,7 @@ export async function bootPhoneWorld(
           cwd: options.cwd,
           sessionId: options.resume ?? `pj7-native-${count}-${Date.now()}`,
           resume: options.resume,
+          ...(options.profile !== undefined ? { profileId: options.profile.id } : {}),
         };
         births.push(birth);
         opts.onBirth?.(birth);
@@ -303,9 +314,9 @@ export async function bootPhoneWorld(
     );
     daemon.projects.regroupNow();
 
-    const fileConversation = (nativeSessionId: string, cwd: string) => {
+    const fileConversation = (nativeSessionId: string, cwd: string, runtimeId?: string) => {
       const rows = JSON.parse(readFileSync(sessionsFile, "utf8")) as unknown[];
-      rows.push(rosettaRow(`s-${nativeSessionId}`, nativeSessionId, cwd, Date.now()));
+      rows.push(rosettaRow(`s-${nativeSessionId}`, nativeSessionId, cwd, Date.now(), runtimeId));
       writeFileSync(sessionsFile, JSON.stringify(rows));
       daemon.indexCatalog.resnapshot();
     };
