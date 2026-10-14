@@ -76,6 +76,7 @@ const projectFixtures = [
   "project-summary.home.json",
   "project-summary.recipe.json",
   "project-summary.hidden.json",
+  "project-summary.recipe-place.json",
   "project-get.valid.json",
   "project-get.moved.json",
   "project-sessions.valid.json",
@@ -101,7 +102,9 @@ const launchFixtures = [
   "agent-models.auth-required.json",
   "agent-models-params.valid.json",
   "agent-spawn-params.model-selection.json",
+  "agent-spawn-params.place.json",
   "agents-profile-sets.valid.json",
+  "agent-field-snapshot.native-session.json",
 ];
 const requiredMirrors = [
   ["workspace", workspaceFixtures, ["Tests/FieldWorkspaceTests", "Sources/FieldWorkspace"]],

@@ -100,6 +100,23 @@ import Testing
     #expect(AgentSpawnParams(provider: "codex", cwd: "/a").json == .object(["provider": .string("codex"), "cwd": .string("/a")]))
   }
 
+  @Test func thePhonesWholeLaunchByPlaceMatchesItsGolden() throws {
+    let golden = try Fixture.json("agent-spawn-params.place")
+    let params = AgentSpawnParams(
+      provider: "claude", place: try PlaceRef(json: try #require(golden["place"])), profileSet: "work-7f3a",
+      modelSelection: AgentModelSelection(modelId: "model-card-v2", controls: ["effort": "high"]))
+    var expected = try #require(golden.objectValue)
+    expected["//"] = nil
+    #expect(params.json == .object(expected))
+    #expect(params.json["cwd"] == nil, "never beside a cwd")
+  }
+
+  @Test func theFieldRowCarriesItsConversationsIdOnlyWhenTheAgentSaidIt() throws {
+    let board = try AgentFieldSnapshot(json: try Fixture.json("agent-field-snapshot.native-session"))
+    #expect(board.rows.map(\.nativeSessionId) == ["4f9c2d1e-7a3b-4c8d-9e0f-1a2b3c4d5e6f", nil])
+    #expect(board.rows.allSatisfy { $0.unknownFields.isEmpty })
+  }
+
   @Test func aNativeResumeSendsTheIdAndNoPath() {
     let params = AgentResumeNativeParams(provider: "claude", nativeSessionId: "665e3e71")
     #expect(params.json == .object(["provider": .string("claude"), "nativeSessionId": .string("665e3e71")]))

@@ -102,6 +102,15 @@ private func withoutNote(_ value: JSONValue) -> JSONValue {
     #expect(recipe.at == 1_759_276_800_000)
   }
 
+  @Test func theRecipeNamesThePlaceItsLaunchEnteredByRef() throws {
+    let project = try ProjectSummary(json: try Fixture.json("project-summary.recipe-place"))
+    let recipe = try #require(project.recipe)
+    #expect(recipe.place == PlaceRef(device: "01J9ZK3M5Q8XR2V7N4B6C1D0EF", placeId: "pl_4c1e9a0b7d2f6e8a1b3c5d7e"))
+    #expect(recipe.unknownFields.isEmpty)
+    // a recipe written before PJ-7 names none
+    #expect(try ProjectSummary(json: try Fixture.json("project-summary.recipe")).recipe?.place == nil)
+  }
+
   @Test func anUnreadableRecipeReadsAsNoneNeverARefusedProject() throws {
     var fields = try #require(try Fixture.json("project-summary.recipe").objectValue)
     fields["recipe"] = .object(["provider": .int(7)])
