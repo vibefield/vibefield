@@ -96,6 +96,8 @@ import {
 } from "../src/agent-runtime";
 import { endTypedProcess, typedRunProof } from "../src/agent-typed-run";
 import type { AuditMutation, AuditMutationOutcome } from "../src/audit-service";
+// `born` names a terminal's birth in this file's rows; the agent's is `birth`
+import { born as birth } from "./agent-birth";
 import {
   linesOf,
   TYPED_CATALOG,
@@ -3064,7 +3066,10 @@ describe("a name typed in a pane — the REAL floor (AR-7b)", () => {
       );
       await until(() => (listedRow(box, pane.sessionId) === undefined ? true : undefined));
       await until(() => (isAlive(pid) ? undefined : true));
-      expect(isAlive(pane.pid)).toBe(false);
+      // the floor's ladder ends the agent before the shell, and a shell not yet
+      // reaped still answers kill(0): its death is waited for, like the agent's
+      // (the MV lead's gate on 562ea33a met it alive, once; green alone 3/3)
+      await until(() => (isAlive(pane.pid) ? undefined : true), FLOOR_WAIT_MS, "the shell gone");
       const stamped = await until(() => {
         const record = readRecord(box.dataDir, row.runtimeRunId);
         return record.exited === undefined ? undefined : record;
@@ -3226,7 +3231,9 @@ describe("a name typed in a pane — the REAL floor (AR-7b)", () => {
       const typed = await adopted(box, pane);
       await until(() => (linesOf(box.script.managedLog).length === 1 ? true : undefined));
       // a live typed run refuses a resume the way any live run does
-      const live = (await box.win.call("agent.resume", { runtimeRunId: typed.runtimeRunId }).then(
+      // through `birth` (agent-birth.ts) like every real-floor birth: a refusal that started
+      // nothing is asked again; this one (PRECONDITION_FAILED) is read at once
+      const live = (await birth(box.win, "agent.resume", { runtimeRunId: typed.runtimeRunId }).then(
         () => undefined,
         (error: { rpc?: { data?: { details?: unknown } } }) => error.rpc?.data?.details,
       )) as { state?: string } | undefined;
@@ -3235,7 +3242,7 @@ describe("a name typed in a pane — the REAL floor (AR-7b)", () => {
       await key(box, pane, END_OF_INPUT);
       await until(() => (rowOf(box, typed.runtimeRunId) === undefined ? true : undefined));
 
-      const resumed = (await box.win.call("agent.resume", {
+      const resumed = (await birth(box.win, "agent.resume", {
         runtimeRunId: typed.runtimeRunId,
       })) as { session: AgentSessionSummary; terminal: { sessionId: string } };
       expect(resumed.session.runtimeRunId).not.toBe(typed.runtimeRunId);
@@ -3533,7 +3540,7 @@ describe("a typed run across a fieldd restart — the REAL floor (AR-7c)", () =>
       const index = { afterMs: 1_000, pollMs: 200 };
       const { first, pane, row, pid } = await typedThenStopped({ index });
       // the control: a run one of our doors started, by the same adapter, in the same boot
-      const app = (await first.win.call("agent.spawn", {
+      const app = (await birth(first.win, "agent.spawn", {
         provider: TYPED_PROVIDER,
         cwd: first.work,
       })) as { session: AgentSessionSummary; terminal: { sessionId: string } };
@@ -3590,7 +3597,7 @@ describe("a typed run across a fieldd restart — the REAL floor (AR-7c)", () =>
 
       // by hand: refused, in words a person can act on
       const refused = await detailsOf(
-        second.win.call("agent.resume", { runtimeRunId: row.runtimeRunId }),
+        birth(second.win, "agent.resume", { runtimeRunId: row.runtimeRunId }),
       );
       expect(refused?.kind).toBe("PRECONDITION_FAILED");
       expect(refused?.details?.state).toBe("typed-run-alive");
