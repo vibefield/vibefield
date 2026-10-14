@@ -2588,6 +2588,27 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   “studio is asleep · read 11:42”; starting/restarting and partial search coverage are
   stated explicitly. Forms use the existing chrome palette, system prose and monospaced
   paths; the sheet radius remains 40 pt, as the phone's other sheets.
+  **PJ-7 (2026-10-14; Q5, Q6, Q7, PJ-D12 (a)) — how it starts, in three more rows.** Under
+  Folder, Desktop and Agent the same Form at the same medium detent takes **Profile · Model ·
+  Effort**, menu rows (the system's `.menu` picker) that never come or go: a choice with one
+  answer, or none, is a quiet fact in its own row instead — `Default — the only profile on
+  studio`, `Haiku has no effort setting`, `Each agent's own · Sign in to see models` — never an
+  empty menu and never a row that vanishes. **Profile** offers the desktop's Agent Profiles that
+  hold a sign-in for the agent, and its agents' own folders, which the phone names **Default**
+  (the wire's "This Mac" is a desktop's word for itself). **Model** offers "Each agent's own"
+  first, then the agent's own picker as that desktop last read it under that profile; the
+  footer says how old the read is (`models read 2h ago`), and a failed read is said in words
+  (`Sign in to see models`). **Effort** offers "Its own" first, then the chosen model's own
+  effort values; switching model brings back the effort the project last ran that model at.
+  **The folder row comes filled**: the place the project's last launch entered (its recipe's
+  place), else the newest place on the sheet's desktop that can take a launch, named by its
+  folder's name and branch; with neither, the folder sheet opens by itself. **From a project**
+  the folder sheet lists that project's places first — under each desktop's mark and name, a
+  place that cannot take a launch dimmed with its reason — then Recent places and Browse. A
+  place is launched by its ref; only Browse sends a path, until PJ-8. **New agent** on a
+  project screen stands in the stepper's slot: the 48 pt glass capsule 10 above the bar, the
+  `start` glyph and "New agent", then the usual place's desktop mark and name (`asleep` when
+  it cannot be asked).
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
