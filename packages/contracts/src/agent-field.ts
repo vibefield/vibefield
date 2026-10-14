@@ -127,7 +127,9 @@ export const AgentFieldRow = z
      * adapter observes the id, then the observed one), so a History row by that
      * id finds the card to jump to. The id only, never the folder: the path
      * stays on this desktop's own windows (`AgentModelLocalFacts.cwd`, EL7 B1).
-     * Absent on a row from a daemon before PJ-7. */
+     * fieldd fills it on the phone's `field` cut only — a desk row leaves it
+     * off (a window reads its own runs' ids from `local`). Absent on a row from
+     * a daemon before PJ-7. */
     nativeSessionId: z.string().min(1).max(256).optional(),
     terminal: AgentSessionTerminal.optional(),
   })
