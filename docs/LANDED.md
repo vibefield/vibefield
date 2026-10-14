@@ -9822,3 +9822,59 @@ once under load 34–47 (green alone in 9.2 s, and in the next gate) — a load 
 **Owed:** the kit's half (lane pj7k); agent-gateway's four typed-run births are not yet through `born`; AR-4's restart
 rows call `terminal.list`/`agent.list` on a just-restarted daemon without waiting for its floor (`untilListed` exists); a desktop's
 last-seen time on the roster (the phone's sleeping bud reads "ASLEEP", not "ASLEEP · 2 H").
+
+## PJ-7, the kit half — the phone reads History over `project.*`, launches by place at a profile, a model and an effort, blooms, resumes and jumps; a launch from the phone lands in the named place on the named desktop (2026-10-14; `220f9b81` · `ce4156a0` · `5620a87f` · `0fbbed8c` · `62764133` · `e0e35864` · `09715ca2` · `ae95fd10` · `081d32e5` · `26ae5ffd` · `7e17c243` · `e8668896` · `1afea9e6` through lane land3, gated on the exact tree)
+
+**Why:** PJ-7's second lane, pj7k (the iOS kit), on the daemon half landed above (plan `draft/project-places/build-pj7.md`;
+James's rulings Q1–Q7 of 2026-10-14). With it PJ-7 is LANDED: TP's slice row — "the phone: History over `project.*`, the
+launch sheet, the bloom → sheet" — and its witness.
+
+**What landed:**
+- `220f9b81` · `5620a87f` the shapes and mirrors: the `project.*` goldens, the launch set (`agent-models.*`,
+  `agents-profile-sets`, the spawn's selection and place) and the keyed fixtures ROADMAP's open debts named
+  (`index-sessions.keyed`, `project-summary.hidden`), mirrored and named REQUIRED in `check-ios-fixtures` as a `project`
+  and a `launch` set; `projectInkHue` ported to Swift against one golden both sides read
+  (`packages/design-kit/fixtures/project-ink.golden.json`); the OS marks as template SVGs held to `os-marks.tsx`.
+- `ce4156a0` · `0fbbed8c` **History is one ledger of projects** (DESIGN.md §8 first, §13's phone picks): one projects
+  reader on the home's door (another answering desktop's while the home sleeps); a session's document still from its
+  OWN desktop's door; marks in the path's slot, left-aligned, one per desktop present; the scope line's marks and a
+  sentence per sleeping desktop; the project screen's Desktops rows folding out their places; session rows name the
+  desktop and the folder, never the path; the project's ink, the per-device colour deal retired; subscribe pings
+  refetch, `movedTo`/`regrouped` re-key. SP-D10's grouping by desktop is superseded, as TP §11 recorded.
+- `62764133` · `e0e35864` **the launch sheet (Q5, Q6, Q7):** FS-2's Form at one medium detent gains Profile · Model ·
+  Effort rows that never come or go; the native set reads "Default"; models from `agent.models {provider, profileSet}`
+  (never a path), "Each agent's own" first, the catalog's age, a failure in words ("Sign in to see models"); effort per
+  model from the recipe's `controlsByModel`; the folder row from the recipe's `place`, else the newest launchable place,
+  else the folder sheet opens itself (PJ-D12 (a)); from a project, its places first by desktop; the spawn names the
+  place by ref (`cwd` only from Browse); New agent in the project screen's stepper slot.
+- `09715ca2` · `ae95fd10` · `081d32e5` **the bloom → the sheet (Q4):** the hold blooms the desktops by their OS marks (a
+  sleeping one dashed), a reached desktop its profiles; the hub is the home; letting go opens the sheet there; haptics;
+  reduced motion. The geometry is the desktop bloom's own: `apps/ios/scripts/spawn-bloom-goldens.mjs` runs puppeteer
+  `d3e82aa`'s `views/swarm/bloom` over the phone's field, and the Swift rings and targeting match all 16 layouts and 23
+  targets within 1e-6.
+- `26ae5ffd` · `7e17c243` **Resume and Jump to (Q3):** Resume on an ended session asks `agent.resume {provider,
+  nativeSessionId}` of the session's OWN desktop, with no path and no persona (fieldd fills both, the daemon half);
+  refusals in words (asleep · the folder is gone · signed out · another profile); absent when the agent cannot resume.
+  Jump to opens the run's card on the Field tab, joined by the field row's conversation id. The disabled "Open in the
+  field" is gone.
+- `1afea9e6` **the witness:** `FieldWorkspaceTests/PlaceLaunchLoopbackTests`, opt-in on the daemon half's fixture
+  (`ios-phone-place.ts`): the phone's own code, over the real product client to a real fieldd as a self tailnet phone,
+  reads `project.list`, opens the project, launches from its place with an Agent Profile, and reads the session back in
+  `project.sessions` at that PlaceRef on that desktop. The fixture's `/proof`: the birth's cwd is the place's folder, and
+  the spawn carried no path.
+
+**Validation:** red first (`/Volumes/SamsungRed/lanes/pj7k/logs/*/red-*.log`, EXIT 65 each; the witness's evidence is its
+live run, since it cannot compile before both halves); the kit's suite whole on the lane's final commit, clean
+(`lanes/pj7k/logs/437e8739/final.log`: TEST SUCCEEDED, 1,093 tests in 12 bundles, from 1,030 at its baseline); the
+witness green (`lanes/pj7k/logs/be0b98d7/witness.log`). The lane's own verify was red only on fieldd's `born` (the
+daemon half's DEBTS commit, which the lane did not carry); the builder reached its usage limit there, so the lead took
+the 13 commits onto main and ran the landing gate, the kit's suite and the witness on the exact tree
+(`lanes/land3/logs/`, under this landing's sha; the kit on its own simulator and DerivedData).
+
+**Found:** the roster carries no last-seen time, so a sleeping desktop's bud reads "ASLEEP", not "ASLEEP · 2 H"; the
+bloom's words take the phone prototype's top/bottom placement, not the desktop's grid search; `project.figuresDay` has a
+reader and a mirror but no screen asks it yet.
+
+**Owed:** the over-the-air run on James's phone (the kit's tests and the simulator are not his phone); renders of the
+sheet, the ledger, the project screen and a session row for James (only the bloom's were made:
+`lanes/pj7k/shots/bloom-*.png`); the roster's last-seen time.
