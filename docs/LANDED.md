@@ -9622,3 +9622,64 @@ the terminals up through that run's body), so the Resume rung runs after them.
 **Owed:** a live native resume for Claude, Kimi, Pi, Copilot, Antigravity and Grok (their evidence is help text and
 argv; Codex's was probed live); the PJ-6 entry above's list (the room ask retiring `turn-page.ts`, the catalogs across a
 restart, agent-session MF-1f/MF-1g's create).
+
+## The swarm's crowd fits its field — one shared scale with a floor, a pull that takes the field's shape, and words that step down (2026-10-14; `585d1e71` · `7f3e0b84` through lane mvland (`mv/swarm-fit`) on `46ea39c7`, puppeteer `vf/swarm-fit` `d3e82aa` fast-forwarded onto puppeteer main, gated on the exact tree)
+
+**Why:** "The field dissolves under the head" landed the fade and left the sizing owed. The diagnosis was overpacking:
+no body smaller than r 50, so the crowd outgrew its field. James ruled in chat, in three marks: "Shrink together"
+(2026-10-13); "Pull takes the field's shape" (2026-10-14), after the builder showed that the radial centre pull piles a
+crowd into a ball that no scale above the floor could fit in 1164 × 288 (ρmax 0.06–0.12); and "Fast-forward both now"
+on the photos and the perf pair. His min-height ruling (round 3 W4: the field is never shorter than 220, and the sheet
+slides over it) stands; the squeeze was at rest.
+
+**What landed:**
+- puppeteer `vf/swarm-fit`, ten commits on `c57fe53` (builder swfit-pu, brief `draft/monitor-view-sdk/briefs/swarm-fit-pu.md`):
+  - `d461943` spawns keep clear of obstacles;
+  - `43f5392` the pure fit: k solves Σπ(k·rᵢ + 4)² = ρ · free, with the free area the field less its obstacles padded
+    by 7, and k between 0.56 (r 28 over the smallest base, 50) and 1;
+  - `61b6905` the pull: "The swarm's pull toward the field's centre is weakened along the free field's long side by
+    the square of its short-to-long ratio, so a crowd settles into the field's own shape; a square field pulls exactly as
+    before." `eea72ba` proves the square case byte-identical;
+  - `0548405` the fit wired through models, physics, births and the bloom: ρ 0.45, k on a 0.04 grid with a 0.02 dead
+    band on growth, refitted on a change of bodies, size or obstacles and never per frame; `5203f09` (ρ 0.31) and its
+    revert `50e7858`;
+  - `d0ccc37` then `d3e82aa` the words on three rungs by drawn radius: full at r ≥ 50 (so nothing changes at today's
+    sizes), the name and one line (the state, else the model, else the terminal's word) at 35 ≤ r < 50, the name alone
+    below 35; each body's layout cached on its model and eased radius;
+  - `e62895a` the `animations` comment says what holding still means.
+- `585d1e71` DESIGN.md first: §8 "The swarm's crowd fits its field", with a dated note at the fade bullet's "owed",
+  and the DECISIONS SWF row.
+- `7f3e0b84` EL8 pin c57fe53 → d3e82aa (`siblings:pin` with its consumer typecheck; the diff is the sha line).
+
+**Measured before it landed:**
+- **ρ, from puppeteer's own physics** (headless, settled 8 s, 2 px tolerance against the edges and the padded band; the
+  tables are in `0548405` and `50e7858`): ρ 0.45 is the largest packing at which every case above the floor settles
+  clean (8 seeds). On 1164 × 288 under the head, 20 bodies settle clean at k 0.68 and 27 at the floor. Before, at full
+  size, 27 put 8 in the band and 10 past an edge.
+- **Perf** (A = `46ea39c7` + puppeteer `c57fe53`, B = `7f3e0b84` + `d3e82aa`; `lanes/mvland/logs/vf-ab-7f3e0b84/`; both
+  locks held 05:28:53–06:32:25Z): R7 **pass**, nothing worse or noisy. Better: swarm × n60 main-thread task 216.1 →
+  207.1 ms/s (z 7.1) and script 193.6 → 183.6 ms/s, the layout cache. Launch loads 3–17, except B2 at 83 and A3 at 30.
+- **Two attempts never read:** attempt 1 stopped at its own bundle check (the minifier writes `` `one-line` ``, which my
+  pattern missed); attempt 2 was discarded because ICE's `gate:landing` ran beside its first two rounds (logs kept
+  apart). Since then the perf script also waits for any running landing gate. Neither gate runner reads a perf lock; the
+  History lead owes `scripts/gate-landing.mjs` a per-gate lock check.
+- **Captures**, n20 in all five views and n60 swarm, both themes, frame 7.9 s: list, timeline and spend are
+  pixel-identical; rain is within its A/A; the swarm is judged by eye, because its A/A is 22–34 %. At n20 the crowd
+  sits below the head and above the floor; at n60 (past the floor) it stays clear of the head but overlaps, using
+  about the middle 60 % of the width at 7.9 s, since spreading sideways is slow under the new pull. The photos James
+  ruled on: https://claude.ai/artifact/WR8wEPP2CjX5UWnABnXeR8.
+- puppeteer's gate on `d3e82aa`: every step 0 but format:check, which is the same file red on `c57fe53`; goldens 64/64,
+  frames 3/3, the three smokes 0. The full tests went red once on two imposter tests outside the diff, then 0. At
+  k = 1 the swarm's 12 images are pixel-identical; only the four k < 1 goldens were re-recorded.
+
+**Validation:** VibeField's landing gate on the exact tree `7f3e0b84` (`lanes/mvland/logs/7f3e0b84/`): smoke `EXIT: 0`
+and smoke:godview `EXIT 0` on run 1. Verify was red once on two fieldd races outside the diff: agent-session QL-D10
+over the real floor ("the terminal floor is not available", a first sighting) and service-drain-deadline (a known
+lottery, its third sighting). Each was green alone three times out of three, and both are on the History lead's debts
+list (`s-debts-fieldd.md` Appendix 3). Then verify `EXIT: 0` and smoke `EXIT: 0`. This entry's commit changes nothing a
+gate reads.
+
+**Owed:** past the floor the crowd overlaps rather than spreads (slow sideways drift under the new pull); the full rung
+is the constant 50, not read from the lab's size sliders (VibeField never shows them); the name-only rung could use
+the full chord (one glyph); a blocked body's name-only line keeps its small style; a swarm mounted with animations
+off paints nothing until its first change (pre-existing); a per-view opt-out of the head's fade (unruled).
