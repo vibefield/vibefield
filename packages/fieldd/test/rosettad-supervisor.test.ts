@@ -7,14 +7,18 @@
 // wall-clock precision: this host runs loaded.
 import { type ChildProcess, spawn } from "node:child_process";
 import {
+  closeSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readdirSync,
   readFileSync,
   rmSync,
   statSync,
   writeFileSync,
+  writeSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -642,10 +646,151 @@ describe("RosettadSupervisor — every generation behind a credential (AR-8b)", 
   });
 });
 
+// DEBTS (fix7, PJ-7's first phone run) — a projection of another schema is the
+// FIRST thing every user meets after a rosetta schema bump: `serve` fails closed
+// by design (rosetta store/src/schema.rs), and five retries of a binary that can
+// never open it ended in "use the restart affordance" — which no window offers.
+// The upgrade path is rosetta's own explicit rebuild, run by the supervisor.
+describe("RosettadSupervisor — a projection of another schema is rebuilt, not retried (DEBTS)", () => {
+  type Rebuild = { pid: number; args: string[] };
+
+  /** The fake over a projection stamped 24 (it expects 27), a home and a
+   * record, its rebuild scripted; `rebuilds()` reads each rebuild's argv. */
+  function upgradeRig(
+    rebuild: "ok" | "fail" | "noop",
+    options: { timings?: Partial<RosettadTimings>; env?: Record<string, string> } = {},
+  ) {
+    const root = tmp();
+    const stamp = join(root, "schema-stamp");
+    writeFileSync(stamp, "24\n");
+    const log = join(root, "rebuilds.ndjson");
+    const home = join(root, "home");
+    mkdirSync(home, { recursive: true });
+    const enrollFile = join(root, "index", "enrollment.json");
+    mkdirSync(dirname(enrollFile), { recursive: true });
+    writeFileSync(enrollFile, JSON.stringify({ format: 1, enabled_kinds: [], runtimes: [] }));
+    const env = {
+      FAKE_ROSETTAD_SCHEMA_FILE: stamp,
+      FAKE_ROSETTAD_REBUILD: rebuild,
+      FAKE_ROSETTAD_REBUILD_LOG: log,
+      ...options.env,
+    };
+    const r = rig("ok", {
+      root,
+      home,
+      enrollFile,
+      spawnProcess: fakeSpawner("ok", env),
+      ...(options.timings !== undefined ? { timings: options.timings } : {}),
+    });
+    const rebuilds = (): Rebuild[] =>
+      existsSync(log)
+        ? readFileSync(log, "utf8")
+            .split("\n")
+            .filter((line) => line.length > 0)
+            .map((line) => JSON.parse(line) as Rebuild)
+        : [];
+    return { ...r, stamp, home, enrollFile, rebuilds };
+  }
+
+  it("mismatch → rebuild (the same binary, serve's --db, --home and --enroll) → serving: rebuilding, then ready", async () => {
+    const { sup, transitions, phases, root, stamp, home, enrollFile, rebuilds } = upgradeRig("ok");
+    // the first generation exits on the mismatch: start() answers for it
+    expect(await sup.start()).toBeNull();
+    await until(() => sup.state().phase === "ready", 6_000, "served after the rebuild");
+    expect(sup.state().origin).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    expect(rebuilds().map((r) => r.args)).toEqual([
+      [
+        "rebuild",
+        "--db",
+        join(root, "index", "rosetta.db"),
+        "--home",
+        home,
+        "--enroll",
+        enrollFile,
+      ],
+    ]);
+    expect(readFileSync(stamp, "utf8").trim()).toBe("27");
+    const rebuilding = transitions.find((t) => t.phase === "rebuilding");
+    // said in the numbers rosetta gave, while no serve child is alive
+    expect(rebuilding?.detail).toMatch(/schema 24.*27/);
+    expect(rebuilding?.pid).toBeNull();
+    expect(rebuilding?.origin).toBeNull();
+    expect(phases()).not.toContain("failed");
+    // (a "restarting" may precede it when the exit overtakes the line that
+    // says why; the retry it scheduled is taken back — the intensity row)
+    expect(phases().indexOf("rebuilding")).toBeLessThan(phases().lastIndexOf("ready"));
+    await sup.stop();
+  });
+
+  it("a rebuild that fails ends in failed with rosetta's own reason — never the restart affordance — and stays there", async () => {
+    const { sup, root, stamp, rebuilds } = upgradeRig("fail");
+    expect(await sup.start()).toBeNull();
+    await until(() => sup.state().phase === "failed", 6_000, "failed");
+    const detail = sup.state().detail ?? "";
+    expect(detail).toContain(`no ledger at ${join(root, "index", "rosetta.ledger")}`);
+    expect(detail).not.toMatch(/restart affordance|restart intensity/);
+    // the old index is untouched and nothing is retried
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(sup.state().phase).toBe("failed");
+    expect(rebuilds()).toHaveLength(1);
+    expect(readFileSync(stamp, "utf8").trim()).toBe("24");
+    expect(sup.state().pid).toBeNull();
+  });
+
+  it("no rebuild loop: a second mismatch right after a rebuild is a real failure, said as one", async () => {
+    const { sup, phases, rebuilds } = upgradeRig("noop");
+    expect(await sup.start()).toBeNull();
+    await until(() => sup.state().phase === "failed", 6_000, "failed");
+    expect(sup.state().detail).toMatch(/schema 24.*27.*after (?:a|its) rebuild/);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(sup.state().phase).toBe("failed");
+    expect(rebuilds()).toHaveLength(1);
+    expect(phases().filter((p) => p === "rebuilding")).toHaveLength(1);
+  });
+
+  it("the restart intensity is left untouched by a mismatch: one real crash after it still comes back", async () => {
+    // RESTART_MAX 1: had the mismatch's exit been charged, the crash below
+    // would trip to "failed" (the witness the requested-restart row uses)
+    const { sup } = upgradeRig("ok", { timings: { ...T, RESTART_MAX: 1 } });
+    await sup.start();
+    await until(() => sup.state().phase === "ready", 6_000, "served after the rebuild");
+    const served = sup.state().pid as number;
+    process.kill(served, "SIGKILL");
+    await until(
+      () => sup.state().phase === "ready" && sup.state().pid !== served,
+      6_000,
+      "ready again after one real crash",
+    );
+    await sup.stop();
+  });
+
+  it("stop() during a rebuild puts the rebuild down and settles stopped — no serve after it", async () => {
+    const { sup, phases, rebuilds } = upgradeRig("ok", {
+      env: { FAKE_ROSETTAD_REBUILD_MS: "30000" },
+    });
+    void sup.start();
+    await until(() => rebuilds().length === 1, 6_000, "the rebuild running");
+    const rebuild = rebuilds()[0] as Rebuild;
+    expect(sup.state().phase).toBe("rebuilding");
+    await sup.stop();
+    expect(alive(rebuild.pid)).toBe(false);
+    expect(sup.state().phase).toBe("stopped");
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(phases().slice(phases().indexOf("stopped") + 1)).toEqual([]);
+  });
+});
+
 // The live rows: the REAL rosettad, opt-in. `pnpm siblings:build` then
 // FIELDD_ROSETTAD_BIN=$(node scripts/siblings.mjs bin) \
 //   pnpm --filter @vibefield/fieldd test -- rosettad-supervisor
 const REAL_BIN = process.env["FIELDD_ROSETTAD_BIN"];
+/** rosetta's own ground-truth Claude Code home (one session), from the pinned
+ * checkout — the transcript agent-index-search's real row seeds too */
+const GROUNDTRUTH = join(
+  dirname(fileURLToPath(import.meta.url)),
+  ...["..", "..", "..", "..", "rosetta-pin", "groundtruth", "claude-code", "fixtures"],
+  ...["2.1.241", "basic-chat", "claude-config"],
+);
 describe.skipIf(REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BIN))(
   "RosettadSupervisor — the real rosettad (opt-in via FIELDD_ROSETTAD_BIN)",
   () => {
@@ -767,5 +912,95 @@ describe.skipIf(REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BI
       expect(sup.state().pid).not.toBe(left.pid);
       await sup.stop();
     });
+
+    it.skipIf(!existsSync(GROUNDTRUTH))(
+      "DEBTS: a projection stamped with an older schema is rebuilt by the pin's own binary — its words matched, its rebuild run — and served",
+      async () => {
+        const root = tmp();
+        const home = join(root, "home");
+        // rosetta's own ground-truth transcript in an empty home: nothing of the
+        // developer's is read, and the ledger the rebuild replays is real
+        cpSync(GROUNDTRUTH, join(home, ".claude"), { recursive: true });
+        const enrollFile = join(root, "index", "enrollment.json");
+        mkdirSync(dirname(enrollFile), { recursive: true });
+        writeFileSync(
+          enrollFile,
+          JSON.stringify({ format: 1, enabled_kinds: ["claude-code"], runtimes: [] }),
+        );
+        const dbPath = join(root, "index", "rosetta.db");
+        const options = {
+          bin: REAL_BIN as string,
+          dbPath,
+          announceDir: join(root, "index", "daemons"),
+          home,
+          enrollFile,
+          ...authFiles(root),
+          expectedProtocolVersion: PROTOCOL_VERSION,
+          timings: { STARTUP_TIMEOUT_MS: 30_000 },
+        };
+        const first = new RosettadSupervisor(options);
+        sups.push(first);
+        const origin = await first.start();
+        expect(origin, first.state().detail ?? "").toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+        await untilIngestLive(origin as string, first, 30_000);
+        await first.stop();
+        // SQLite's own header: the user version (rosetta's schema stamp) is
+        // the big-endian word at byte 60 — set back three versions
+        const current = schemaStamp(dbPath);
+        expect(current).toBeGreaterThan(3);
+        stampSchema(dbPath, current - 3);
+
+        const second = new RosettadSupervisor(options);
+        sups.push(second);
+        const seen: RosettadState[] = [];
+        second.on("transition", (s: RosettadState) => seen.push(s));
+        expect(await second.start()).toBeNull(); // the mismatched generation
+        await until(
+          () => second.state().phase === "ready" || second.state().phase === "failed",
+          60_000,
+          "served or failed",
+        );
+        expect(second.state().phase, second.state().detail ?? "").toBe("ready");
+        expect(seen.find((s) => s.phase === "rebuilding")?.detail).toContain(
+          `schema ${current - 3} where this rosettad reads ${current}`,
+        );
+        await second.stop();
+        expect(schemaStamp(dbPath)).toBe(current);
+      },
+    );
   },
 );
+
+/** SQLite's header word at byte 60, the user version (rosetta's stamp). */
+function schemaStamp(db: string): number {
+  return readFileSync(db).readUInt32BE(60);
+}
+
+function stampSchema(db: string, version: number): void {
+  const word = Buffer.alloc(4);
+  word.writeUInt32BE(version, 0);
+  const fd = openSync(db, "r+");
+  try {
+    writeSync(fd, word, 0, 4, 60);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** The daemon's ingest says `live`: the ledger the rebuild needs is written. */
+async function untilIngestLive(origin: string, sup: RosettadSupervisor, ms: number): Promise<void> {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    const credentials = sup.credentials();
+    if (credentials !== null) {
+      const body = (await fetch(`${origin}/api/status`, {
+        headers: { authorization: credentials.authorization },
+      })
+        .then((response) => response.json())
+        .catch(() => null)) as { daemon?: { ingest?: { phase?: string } } } | null;
+      if (body?.daemon?.ingest?.phase === "live") return;
+    }
+    if (Date.now() > deadline) throw new Error(`the ingest never said live within ${ms}ms`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}

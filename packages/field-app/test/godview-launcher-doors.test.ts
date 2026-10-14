@@ -224,6 +224,8 @@ describe("the port's list and its status", () => {
         "building",
       ],
       [refusal("UNAVAILABLE", "restarting", { service: "index", state: "restarting" }), "building"],
+      // DEBTS — the schema upgrade: coming, never failed
+      [refusal("UNAVAILABLE", "rebuilding", { service: "index", state: "rebuilding" }), "building"],
       [
         refusal("UNAVAILABLE", "the agent index is failed", { service: "index", state: "failed" }),
         "failed",

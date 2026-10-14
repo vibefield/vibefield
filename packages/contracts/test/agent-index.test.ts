@@ -565,6 +565,8 @@ describe("IndexPhase — the tolerant fold", () => {
   it("names the supervisor's phases and rosetta's IngestPhase, and reads an unheard-of phase as unknown", () => {
     expect(INDEX_PHASES).toContain("awaiting_consent");
     expect(INDEX_PHASES).toContain("failed");
+    // DEBTS — the schema upgrade's own phase, never folded to unknown
+    expect(IndexPhase.parse("rebuilding")).toBe("rebuilding");
     expect(IndexPhase.parse("hyperspace")).toBe("unknown");
     const status = IndexStatus.parse({
       phase: "hyperspace",

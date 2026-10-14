@@ -73,12 +73,28 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 // that does NOT answer as rosettad is left alone — the pid may have been reused
 // (rosetta's announce.rs states the same reader rule) — and the child's lock
 // error then surfaces in the failure detail, honestly, with its stderr.
+//
+// The schema upgrade (DEBTS, 2026-10-14 — PJ-7's first phone run): a projection
+// stamped with another schema version than the binary's FAILS CLOSED on open, by
+// rosetta's design (store/src/schema.rs: "replacement happens only through an
+// explicit validated rebuild"), so after every rosetta schema bump each user's
+// index met five retries that could never open it and then a "failed" naming
+// a restart affordance no window offers. A generation that exits before ready
+// on rosetta's own mismatch words is therefore not a crash: the supervisor runs
+// `rosettad rebuild` over the same `--db`, `--home` and `--enroll` serve gets —
+// rosetta rebuilds into a private sibling and installs it atomically only after
+// every runtime replays (rosettad main.rs `cmd_rebuild`), so a rebuild that
+// fails leaves the old index untouched — says `rebuilding` while it runs, and
+// serves again. The mismatch is not charged to the restart intensity. Once per
+// mismatch: a second one right after a rebuild is a real failure, and a rebuild
+// that fails ends in `failed` with rosetta's own words.
 
 export type RosettadPhase =
   | "unconfigured"
   | "starting"
   | "ready"
   | "restarting"
+  | "rebuilding"
   | "failed"
   | "stopped";
 
@@ -173,6 +189,32 @@ const GRANT_KEY_BYTES = 32;
 /** An older rosettad does not know RO-1's flags and says so before it binds
  * (`rosettad: unknown flag --token-file`, main.rs). Retrying cannot teach it. */
 const UNKNOWN_AUTH_FLAG = /unknown flag (--(?:token-file|grant-key-file|allow-origin))\b/;
+
+/** DEBTS — rosetta's own words for a projection of another schema
+ * (`StoreError::SchemaVersionMismatch`, store/src/lib.rs at the pin): the Debug
+ * form `serve` prints at open (`rosettad: opening progressive <db>:
+ * SchemaVersionMismatch { found: 24, expected: 27 }`, main.rs) and the Display
+ * form (`projection schema version 24 does not match 27`). Only on a line the
+ * daemon printed as its top-level error (`rosettad: …`), so a chatty line that
+ * merely quotes the words cannot pose as one. */
+const SCHEMA_MISMATCH =
+  /^rosettad: .*(?:SchemaVersionMismatch \{ found: (\d+), expected: (\d+) \}|projection schema version (\d+) does not match (\d+))/;
+
+/** The two schema versions a mismatch line names, or null for any other line. */
+export function schemaMismatchIn(line: string): SchemaMismatch | null {
+  const match = SCHEMA_MISMATCH.exec(line);
+  if (match === null) return null;
+  const found = Number(match[1] ?? match[3]);
+  const expected = Number(match[2] ?? match[4]);
+  return Number.isSafeInteger(found) && Number.isSafeInteger(expected) ? { found, expected } : null;
+}
+
+export interface SchemaMismatch {
+  /** the projection's stamp */
+  found: number;
+  /** the binary's own schema version */
+  expected: number;
+}
 
 /** Write one owner-only secret file: the directory 0700, the file created
  * EXCLUSIVELY (never through something already at the path — a planted file or
@@ -348,6 +390,11 @@ interface Generation {
   /** AR-8b — set when the generation said it does not know RO-1's flags: the
    * wrong binary, a TERMINAL failure whatever the exit's timing */
   wrongBinary: string | null;
+  /** DEBTS — set when the generation refused its projection's schema before
+   * it was ready: the exit is an upgrade owed, not a crash */
+  schemaMismatch: SchemaMismatch | null;
+  /** the generation said ready once (a mismatch after that is not an open's) */
+  wasReady: boolean;
   startupTimer: NodeJS.Timeout | null;
   stableTimer: NodeJS.Timeout | null;
   killTimer: NodeJS.Timeout | null;
@@ -456,6 +503,15 @@ export class RosettadSupervisor extends EventEmitter {
   private generations = 0;
   private attempts = 0;
   private restartStamps: number[] = [];
+  /** DEBTS — the generation whose exit scheduled the pending retry, and
+   * whether it charged a stamp: what a mismatch line that trails its exit
+   * takes back */
+  private retryFor: { generation: Generation; charged: boolean } | null = null;
+  /** DEBTS — a rebuild ran for the last mismatch: the next one is a real
+   * failure (reset by a ready generation and by a human's restart) */
+  private rebuilt = false;
+  /** DEBTS — the `rosettad rebuild` child while one runs */
+  private rebuildProc: ChildProcess | null = null;
   private stateValue: RosettadState = {
     phase: "starting",
     origin: null,
@@ -536,6 +592,8 @@ export class RosettadSupervisor extends EventEmitter {
     if (this.launching !== null) await this.launching;
     this.restartStamps = [];
     this.attempts = 0;
+    // the binary may have been rebuilt since: a mismatch may be rebuilt again
+    this.rebuilt = false;
     this.clearRetry();
     const generation = this.current;
     if (generation !== null) {
@@ -556,6 +614,10 @@ export class RosettadSupervisor extends EventEmitter {
   async stop(): Promise<void> {
     this.stopped = true;
     this.clearRetry();
+    // DEBTS — a rebuild writes a private sibling and installs only when whole,
+    // so putting it down leaves the old projection as it was
+    const rebuild = this.rebuildProc;
+    if (rebuild !== null) await this.putDownChild(rebuild);
     if (this.launching !== null) await this.launching;
     const generation = this.current;
     if (generation !== null) {
@@ -588,6 +650,7 @@ export class RosettadSupervisor extends EventEmitter {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
+    this.retryFor = null;
   }
 
   private publish(patch: Partial<RosettadState>): void {
@@ -611,26 +674,234 @@ export class RosettadSupervisor extends EventEmitter {
     this.emit("transition", this.state());
   }
 
-  private scheduleRetry(): void {
-    if (this.stopped || this.retryTimer !== null) return;
+  /** Schedule the next generation after `generation`'s own death; false when
+   * the intensity window is spent (and the honest `failed` is published). */
+  private scheduleRetry(generation: Generation): boolean {
+    if (this.stopped || this.retryTimer !== null) return false;
     const now = Date.now();
     this.restartStamps = this.restartStamps.filter((s) => now - s < this.t.RESTART_WINDOW_MS);
     if (this.restartStamps.length >= this.t.RESTART_MAX) {
+      this.retryFor = { generation, charged: false };
       this.publish({
         phase: "failed",
         origin: null,
         detail: `restart intensity exceeded (${this.t.RESTART_MAX} in ${this.t.RESTART_WINDOW_MS}ms) — something is wrong with rosettad itself; use the restart affordance to try again`,
       });
-      return;
+      return false;
     }
     this.restartStamps.push(now);
     const delay = Math.min(this.t.RESTART_MAX_MS, this.t.RESTART_BASE_MS * 2 ** this.attempts);
     this.attempts += 1;
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
+      this.retryFor = null;
       void this.launch();
     }, delay);
     this.retryTimer.unref?.();
+    this.retryFor = { generation, charged: true };
+    return true;
+  }
+
+  /** DEBTS — a mismatch line that trailed its generation's exit (the exit
+   * event can overtake the pipe's last data): the retry that exit scheduled
+   * is taken back, stamp and backoff step with it, before the upgrade runs.
+   * False when the exit scheduled nothing that is still pending. */
+  private takeBackRetry(generation: Generation): boolean {
+    const owed = this.retryFor;
+    if (owed === null || owed.generation !== generation) return false;
+    if (owed.charged) {
+      if (this.retryTimer === null) return false; // it already launched
+      this.restartStamps.pop();
+      this.attempts = Math.max(0, this.attempts - 1);
+    }
+    this.clearRetry();
+    return true;
+  }
+
+  // --- the schema upgrade (DEBTS; header) -----------------------------------
+
+  /** The generation refused its projection's schema: rebuild it once, then
+   * serve; a second mismatch after a rebuild is a real failure. */
+  private upgrade(mismatch: SchemaMismatch): void {
+    if (this.stopped) return;
+    const numbers = `schema ${mismatch.found} where this rosettad reads ${mismatch.expected}`;
+    if (this.rebuilt) {
+      this.publish({
+        phase: "failed",
+        origin: null,
+        pid: null,
+        announce: null,
+        detail: `rosettad still finds the index's projection at ${numbers}, after its rebuild — the rebuild did not take, and serving cannot open it`,
+      });
+      return;
+    }
+    this.rebuilt = true;
+    this.publish({
+      phase: "rebuilding",
+      origin: null,
+      pid: null,
+      announce: null,
+      enrollRefusals: NO_REFUSALS,
+      detail: `the index's projection is ${numbers}: rebuilding it from its ledger (the old one stands until the new one is whole)`,
+    });
+    const run = this.rebuild(mismatch).then((rebuilt) => {
+      if (!rebuilt || this.stopped) return null;
+      this.publish({
+        phase: "restarting",
+        detail: `rebuilt from its ledger (schema ${mismatch.found} → ${mismatch.expected}); serving it`,
+      });
+      return this.spawnGeneration();
+    });
+    // the rebuild and the serve after it are one launch: stop() and a
+    // requested restart wait on it like on any spawn step
+    const launching: Promise<Generation | null> = run.finally(() => {
+      if (this.launching === launching) this.launching = null;
+    });
+    this.launching = launching;
+  }
+
+  /** `rosettad rebuild` over serve's own projection, home and record (the
+   * flags `serve` gets; rebuild reads no credential). True when it exited 0;
+   * otherwise `failed` is published in rosetta's own last words. */
+  private rebuild(mismatch: SchemaMismatch): Promise<boolean> {
+    const args = [
+      "rebuild",
+      "--db",
+      this.opts.dbPath,
+      ...(this.opts.home !== undefined ? ["--home", this.opts.home] : []),
+      ...(this.opts.enrollFile !== undefined ? ["--enroll", this.opts.enrollFile] : []),
+    ];
+    const failed = (detail: string, refusals: readonly string[] = []): void => {
+      if (this.stopped) return;
+      this.publish({
+        phase: "failed",
+        origin: null,
+        pid: null,
+        announce: null,
+        detail,
+        ...(refusals.length > 0 ? { enrollRefusals: [...refusals] } : {}),
+      });
+    };
+    let proc: ChildProcess;
+    try {
+      proc = this.spawnProcess(this.opts.bin, args, {
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      });
+    } catch (error) {
+      failed(`the index could not be rebuilt: rosettad could not be spawned: ${String(error)}`);
+      return Promise.resolve(false);
+    }
+    this.rebuildProc = proc;
+    this.logger.info("fieldd.rosettad.rebuild_started", "Rebuilding the index's projection", {
+      found: mismatch.found,
+      expected: mismatch.expected,
+      pid: proc.pid ?? null,
+    });
+    const tail: string[] = [];
+    const refusals: string[] = [];
+    let partial = "";
+    proc.stdout?.setEncoding("utf8");
+    proc.stdout?.on("data", (chunk: string) => {
+      for (const line of chunk.split("\n")) {
+        if (line.trim().length > 0) {
+          this.logger.debug("fieldd.rosettad.rebuild_stdout", "rosettad rebuild stdout", {
+            line: line.slice(0, 512),
+          });
+        }
+      }
+    });
+    const keep = (line: string): void => {
+      if (line.length === 0) return;
+      this.logger.info("fieldd.rosettad.rebuild_stderr", "rosettad rebuild stderr", {
+        line: line.slice(0, 512),
+      });
+      tail.push(line.slice(0, 256));
+      if (tail.length > STDERR_TAIL_LINES) tail.shift();
+      if (ENROLL_LINE.test(line) && refusals.length < ENROLL_REFUSAL_LINES) {
+        refusals.push(line.slice(0, ENROLL_REFUSAL_CHARS));
+      }
+    };
+    proc.stderr?.setEncoding("utf8");
+    proc.stderr?.on("data", (chunk: string) => {
+      partial += chunk;
+      let end = partial.indexOf("\n");
+      while (end !== -1) {
+        keep(partial.slice(0, end).trimEnd());
+        partial = partial.slice(end + 1);
+        end = partial.indexOf("\n");
+      }
+      if (partial.length > 4_096) partial = partial.slice(-2_048);
+    });
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (rebuilt: boolean, detail: string): void => {
+        if (done) return;
+        done = true;
+        if (this.rebuildProc === proc) this.rebuildProc = null;
+        if (rebuilt) {
+          this.logger.info("fieldd.rosettad.rebuild_done", "The index's projection was rebuilt", {
+            found: mismatch.found,
+            expected: mismatch.expected,
+          });
+        } else {
+          this.logger.warn("fieldd.rosettad.rebuild_failed", "The index could not be rebuilt", {
+            detail,
+          });
+          failed(detail, refusals);
+        }
+        resolve(rebuilt);
+      };
+      proc.on("error", (error: NodeJS.ErrnoException) =>
+        finish(
+          false,
+          `the index could not be rebuilt: rosettad could not be spawned (${error.code ?? error.message}): ${this.opts.bin}`,
+        ),
+      );
+      // `close`, not `exit`: the reason is the stream's last line, which the
+      // exit event can overtake
+      proc.on("close", (code, signal) => {
+        keep(partial.trim());
+        partial = "";
+        if (code === 0) {
+          finish(true, "");
+          return;
+        }
+        const words = tail.at(-1) ?? `rosettad rebuild exited (${signal ?? code})`;
+        finish(false, `the index could not be rebuilt (the old one is untouched) — ${words}`);
+      });
+    });
+  }
+
+  /** SIGINT, then SIGKILL after the shutdown budget; resolves once the child
+   * has exited, or once SIGKILL went unanswered for its own budget. */
+  private putDownChild(proc: ChildProcess): Promise<void> {
+    if (proc.exitCode !== null || proc.signalCode !== null) return Promise.resolve();
+    return new Promise((resolve) => {
+      let timer: NodeJS.Timeout | null = null;
+      const gone = (): void => {
+        if (timer !== null) clearTimeout(timer);
+        resolve();
+      };
+      proc.once("exit", gone);
+      const send = (name: NodeJS.Signals): void => {
+        try {
+          proc.kill(name);
+        } catch {
+          // already gone: the exit event answers
+        }
+      };
+      timer = setTimeout(() => {
+        send("SIGKILL");
+        timer = setTimeout(() => {
+          proc.off("exit", gone);
+          resolve();
+        }, this.t.KILL_WAIT_MS);
+        timer.unref?.();
+      }, this.t.SHUTDOWN_TIMEOUT_MS);
+      timer.unref?.();
+      send("SIGINT");
+    });
   }
 
   private signal(generation: Generation, name: NodeJS.Signals): void {
@@ -864,6 +1135,8 @@ export class RosettadSupervisor extends EventEmitter {
       enrollRefusals: [],
       credentials: { authorization: `Bearer ${token}`, token, grantKey: new Uint8Array(key) },
       wrongBinary: null,
+      schemaMismatch: null,
+      wasReady: false,
       startupTimer: null,
       stableTimer: null,
       killTimer: null,
@@ -923,6 +1196,25 @@ export class RosettadSupervisor extends EventEmitter {
         });
       }
     };
+    /** DEBTS — a stderr line in rosetta's own mismatch words, before ready.
+     * Before the exit it only marks the generation (the exit decides); after
+     * it (the line trailed the exit) it takes back the retry the exit
+     * scheduled and runs the upgrade instead. */
+    const noteSchemaMismatch = (line: string): void => {
+      if (generation.schemaMismatch !== null || generation.wasReady) return;
+      const mismatch = schemaMismatchIn(line);
+      if (mismatch === null) return;
+      generation.schemaMismatch = mismatch;
+      if (
+        generation.exited &&
+        generation.onExit === "retry" &&
+        this.current === null &&
+        !this.stopped &&
+        this.takeBackRetry(generation)
+      ) {
+        this.upgrade(mismatch);
+      }
+    };
     const exited = (exitDetail: string): void => {
       if (generation.exited) return;
       generation.exited = true;
@@ -933,6 +1225,7 @@ export class RosettadSupervisor extends EventEmitter {
       if (last.length > 0) {
         generation.stderrTail.push(last.slice(0, 256));
         noteWrongBinary(last);
+        noteSchemaMismatch(last);
       }
       generation.settle(null);
       resolveExit();
@@ -962,6 +1255,12 @@ export class RosettadSupervisor extends EventEmitter {
         this.publish({ origin: null, pid: null, announce: null });
         return;
       }
+      if (generation.schemaMismatch !== null && !generation.wasReady) {
+        // DEBTS — the projection is another schema's: an upgrade owed, never
+        // a crash, so nothing is charged to the intensity window
+        this.upgrade(generation.schemaMismatch);
+        return;
+      }
       // the daemon's own death, or a missed startup budget: carry its last
       // words — the projection lock, a panic — so the detail names the cause
       const tail =
@@ -976,7 +1275,7 @@ export class RosettadSupervisor extends EventEmitter {
           ? { enrollRefusals: [...generation.enrollRefusals] }
           : {}),
       });
-      this.scheduleRetry();
+      this.scheduleRetry(generation);
     };
     generation.exitedBy = exited;
 
@@ -1049,6 +1348,9 @@ export class RosettadSupervisor extends EventEmitter {
           return;
         }
         if (generation.startupTimer) clearTimeout(generation.startupTimer);
+        generation.wasReady = true;
+        // DEBTS — a projection that opens: the next mismatch may be rebuilt
+        this.rebuilt = false;
         // read once before it bound (AUTH.md §4): the files have done their job
         this.removeCredentialFiles();
         // with the origin, in the same publish: a transition's listener that
@@ -1090,6 +1392,7 @@ export class RosettadSupervisor extends EventEmitter {
         generation.stderrTail.push(line.slice(0, 256));
         if (generation.stderrTail.length > STDERR_TAIL_LINES) generation.stderrTail.shift();
         noteWrongBinary(line);
+        noteSchemaMismatch(line);
         // AC-D8 — a refusal names a root, and a real root is longer than the
         // tail's line budget: keep the daemon's `--enroll` lines whole
         if (ENROLL_LINE.test(line)) {

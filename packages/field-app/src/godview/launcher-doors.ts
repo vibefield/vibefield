@@ -235,7 +235,8 @@ function messageOf(cause: unknown): string {
 /**
  * The index's state, as the launcher's readiness. `UNAVAILABLE {service:
  * "index", state}` carries rosettad's phase: coming up is `building` (the
- * rows arrive when it is ready), a daemon that failed or answered what fieldd
+ * rows arrive when it is ready — a rebuild of a projection of another schema
+ * too, DEBTS), a daemon that failed or answered what fieldd
  * cannot read is `failed`, and a daemon that is stopped, unconfigured or not
  * reachable at all is `unreachable`.
  */
@@ -244,7 +245,8 @@ export function historyStatusFromRefusal(cause: unknown): LauncherHistoryStatus 
   const detail = messageOf(cause);
   const state = refusal.details?.["state"];
   if (refusal.kind === "UNAVAILABLE" && typeof state === "string") {
-    if (state === "starting" || state === "restarting") return { readiness: "building", detail };
+    if (state === "starting" || state === "restarting" || state === "rebuilding")
+      return { readiness: "building", detail };
     if (state === "failed" || state === "malformed") return { readiness: "failed", detail };
   }
   return { readiness: "unreachable", detail };

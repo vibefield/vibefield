@@ -1396,8 +1396,8 @@
                     <td><p><code>agent-field-publisher.test.ts</code></p></td>
                   </tr>
                   <tr>
-                    <td><span class="route">rosettad-supervisor.ts</span><br /><span class="native-type">775 lines</span></td>
-                    <td><p>One rosettad generation per user root: readiness from the daemon's own JSON line, bounded restart intensity, orphan reaping.</p></td>
+                    <td><span class="route">rosettad-supervisor.ts</span><br /><span class="native-type">1,433 lines</span></td>
+                    <td><p>One rosettad generation per user root: readiness from the daemon's own JSON line, bounded restart intensity, orphan reaping, and the schema upgrade (rosetta's own rebuild, 2026-10-14).</p></td>
                     <td><p>nothing in the agent family</p></td>
                     <td><p><code>PROTOCOL_VERSION</code> is read in <code>daemon.ts</code>, not here</p></td>
                     <td><p><code>rosettad-supervisor.test.ts</code>, <code>rosettad-daemon.test.ts</code></p></td>
@@ -1844,6 +1844,30 @@
               that answers <code>unknown flag --token-file</code> — is the wrong binary, refused
               terminally like a protocol mismatch. Every dial fieldd makes, the catalog's
               <code>/ws/meta</code> included, carries <code>Authorization: Bearer</code>.
+              <span class="badge tone-built">Built</span>
+            </p>
+            <p class="section-note">
+              <strong>Update 2026-10-14 (DEBTS — the schema upgrade, found by PJ-7's first phone
+              run).</strong> A projection stamped with another schema version than the binary's fails
+              closed on open, by rosetta's design (<code>store/src/schema.rs</code>: replacement only
+              through an explicit rebuild), so every user's index met the first schema bump after an
+              upgrade as five retries and a <code>failed</code> no restart could cure. A generation that
+              exits before ready on rosetta's own words
+              (<code>rosettad: opening progressive &lt;db&gt;: SchemaVersionMismatch { found, expected }</code>,
+              or the Display form; rosettad emits no structured line for it) is now an upgrade, not a
+              crash: the supervisor publishes <code>rebuilding</code> (an <code>INDEX_PHASES</code> word,
+              with both versions in the detail; rebuild reports no progress, so none is claimed), runs
+              <code>rosettad rebuild --db … [--home …] [--enroll …]</code> — the same binary and the
+              flags <code>serve</code> gets — and serves again. rosetta rebuilds into a private sibling
+              and installs only when every runtime replayed, so a rebuild that fails leaves the old index
+              untouched and ends in <code>failed</code> in rosetta's own last words (<code>no ledger at
+              …</code>). The mismatch is never charged to the restart intensity (a line that trails its
+              exit takes back the retry the exit scheduled); it is rebuilt once — a second mismatch right
+              after a rebuild is a real failure — and <code>stop()</code> puts a running rebuild down.
+              The index doors answer <code>UNAVAILABLE {service: "index", state: "rebuilding"}</code>,
+              retryable, which the desktop's readers fold as coming. Witnessed against the pin's own
+              binary (<code>rosettad-supervisor.test.ts</code>, the opt-in real row over rosetta's
+              ground-truth transcript).
               <span class="badge tone-built">Built</span>
             </p>
             <h3>Consent by construction</h3>

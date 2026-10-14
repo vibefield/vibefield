@@ -14,6 +14,7 @@
 //   crash-on-start     a line on stderr and exit 2 before saying anything
 //   no-auth            ready, but the line says nothing about access (pre-RO-1)
 //   old-binary         `rosettad: unknown flag --token-file`, exit 2 (pre-RO-1)
+// (and, whatever the mode, the schema stamp and the `rebuild` subcommand below)
 // The supervisor never sees this file's name — it spawns whatever `bin` it was
 // given, so the test passes `process.execPath` with this script as `bin` via
 // the spawnProcess seam.
@@ -155,6 +156,54 @@ const censusDelayMs = Number(process.env.FAKE_ROSETTAD_CENSUS_DELAY_MS ?? "0");
 if (mode === "crash-on-start") {
   process.stderr.write("fake rosettad: refusing to start (scripted)\n");
   process.exit(2);
+}
+
+// DEBTS (fix7) — rosetta's schema stamp (store/src/schema.rs at the pin): `serve`
+// opens the projection and FAILS CLOSED on another schema version, in rosettad's
+// own words (`rosettad: opening progressive <db>: SchemaVersionMismatch { found,
+// expected }`, main.rs's Debug form, exit 1); `rebuild --db PATH [--home DIR]
+// [--enroll FILE]` replays the ledger into a private sibling and installs it.
+// FAKE_ROSETTAD_SCHEMA_FILE names the projection's stamp: absent, or the
+// expected version, opens; any other number refuses. FAKE_ROSETTAD_REBUILD
+// scripts the rebuild: `ok` (stamps the expected version, exit 0), `fail`
+// (rosetta's own "no ledger at …", exit 1, the stamp untouched) or `noop`
+// (exit 0, the stamp untouched — a rebuild that did not take). Each run appends
+// `{pid, args}` to FAKE_ROSETTAD_REBUILD_LOG; FAKE_ROSETTAD_REBUILD_MS holds it
+// open that long (a SIGINT ends it early, as a person's quit would).
+const SCHEMA_EXPECTED = 27;
+const schemaFile = process.env.FAKE_ROSETTAD_SCHEMA_FILE;
+const schemaFound = () =>
+  schemaFile === undefined || !existsSync(schemaFile)
+    ? SCHEMA_EXPECTED
+    : Number(readFileSync(schemaFile, "utf8").trim());
+if (args[0] === "rebuild") {
+  const log = process.env.FAKE_ROSETTAD_REBUILD_LOG;
+  if (log !== undefined) appendFileSync(log, `${JSON.stringify({ pid: process.pid, args })}\n`);
+  const finish = () => {
+    const how = process.env.FAKE_ROSETTAD_REBUILD ?? "ok";
+    if (how === "fail") {
+      // rosetta's ledger root drops the projection's extension (`rosetta.ledger`)
+      process.stderr.write(`rosettad: no ledger at ${db.replace(/\.[^./]+$/, "")}.ledger\n`);
+      process.exit(1);
+    }
+    if (how === "ok" && schemaFile !== undefined) writeFileSync(schemaFile, `${SCHEMA_EXPECTED}\n`);
+    process.exit(0);
+  };
+  const hold = Number(process.env.FAKE_ROSETTAD_REBUILD_MS ?? "0");
+  if (hold > 0) {
+    process.on("SIGINT", () => process.exit(130));
+    setTimeout(finish, hold);
+  } else {
+    finish();
+  }
+  // the rebuild is the whole process: nothing below (the server) runs
+  await new Promise(() => {});
+}
+if (schemaFound() !== SCHEMA_EXPECTED) {
+  process.stderr.write(
+    `rosettad: opening progressive ${db}: SchemaVersionMismatch { found: ${schemaFound()}, expected: ${SCHEMA_EXPECTED} }\n`,
+  );
+  process.exit(1);
 }
 
 // AR-8b — the access flags, read once before binding (AUTH.md §4)

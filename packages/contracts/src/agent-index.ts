@@ -195,11 +195,16 @@ export type IndexDiscoveriesResult = z.infer<typeof IndexDiscoveriesResult>;
 /** The index's one phase, folded in fieldd: the supervisor's phase until the
  * daemon is ready, then rosetta's `IngestPhase` (`discovering` →
  * `awaiting_consent` | `backfilling` → … → `live`). `unknown` is the tolerant
- * reader's answer to a phase this build has never heard of. */
+ * reader's answer to a phase this build has never heard of. `rebuilding`
+ * (DEBTS, 2026-10-14): the projection was another schema version's, and
+ * fieldd is running rosetta's own rebuild before it serves again — coming,
+ * like `starting`, with the two versions in the daemon's `detail`; rosetta's
+ * rebuild reports no progress until it ends, so none is claimed. */
 export const INDEX_PHASES = [
   "unconfigured",
   "starting",
   "restarting",
+  "rebuilding",
   "failed",
   "stopped",
   "discovering",
