@@ -42,7 +42,7 @@ catalogs:
 
 overrides:
   loro-crdt: ^1.13.8
-  '@vibecook/ice': 0.16.0-portals.4
+  '@vibecook/ice': 0.16.0
   '@vibecook/ghosttea-client': 0.12.0
   '@vibecook/ghosttea-electron': 0.12.0
   '@vibecook/ghosttea-protocol': 0.12.0
@@ -110,8 +110,8 @@ importers:
   apps/plugin-playground:
     dependencies:
       '@vibecook/ice':
-        specifier: 0.16.0-portals.4
-        version: 0.16.0-portals.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: 0.16.0
+        version: 0.16.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -387,8 +387,8 @@ importers:
         specifier: link:../../../ghosttea-0.11.2/packages/ghosttea-react
         version: link:../../../ghosttea-0.11.2/packages/ghosttea-react
       '@vibecook/ice':
-        specifier: 0.16.0-portals.4
-        version: 0.16.0-portals.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: 0.16.0
+        version: 0.16.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@vibecook/mille':
         specifier: link:../../../mille-pin/packages/mille
         version: link:../../../mille-pin/packages/mille
@@ -676,8 +676,8 @@ importers:
   packages/plugin-sdk:
     dependencies:
       '@vibecook/ice':
-        specifier: 0.16.0-portals.4
-        version: 0.16.0-portals.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: 0.16.0
+        version: 0.16.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -1943,8 +1943,8 @@ packages:
   '@vibecook/ghosttea-protocol@0.12.0':
     resolution: {integrity: sha512-RNAnE0vMmPFT3Nax4qMF9q1k+VhJDm9vhhk4b+bJVTM6ayVPIhFeaItCIKwK3ulnHLM/IDFl36NsSuI5FJu7iw==}
 
-  '@vibecook/ice@0.16.0-portals.4':
-    resolution: {integrity: sha512-glbxIa16bjYpHkRILnhzzXay8pxdmDgfte9+QVATWI+LHXQXzyM0teLQzQzx1IOP27yBusNNIPPgzdYqu7MuoA==}
+  '@vibecook/ice@0.16.0':
+    resolution: {integrity: sha512-+6au+93yr3BwbJ2bUkdZ2FwaE9Xvm0m6i0IOW5aOC/rJgm4z02UBUoX36Xf6TVeix7bN7IhaqiYJO7Tdu1Ob2g==}
     engines: {node: '>=20'}
     peerDependencies:
       react: '>=19'
@@ -4344,7 +4344,7 @@ snapshots:
 
   '@vibecook/ghosttea-protocol@0.12.0': {}
 
-  '@vibecook/ice@0.16.0-portals.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@vibecook/ice@0.16.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@vibecook/strata-ecs': 0.13.0(loro-crdt@1.13.8)(react@19.2.7)
       '@webgpu/types': 0.1.74

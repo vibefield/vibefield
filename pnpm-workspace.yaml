@@ -189,7 +189,13 @@ overrides:
   # caller. I51: the live face's HOST half (`createLiveTexture`, `stillLive`)
   # left `/desk/kit` for `/desk` — the SDK's two shadow exports go with it.
   # strata 0.13.0 and loro ^1.13.8 unchanged.
-  "@vibecook/ice": 0.16.0-portals.4
+  # 2026-10-14 bumped 0.16.0-portals.4 → 0.16.0 (PORTALS PT-6b) — the FINAL,
+  # on `latest`: ICE `54b02b8` (the 0.16.0 cut of M24 LT1–LT5). LT5 (I52):
+  # the reference kinds' drivers (the board's pen, the notebook's leaf, the
+  # calendar's hand) idle unless the object in hand is their own, so a held
+  # pane no longer keeps them following and the desk can sleep under it. No
+  # API change against portals.4; strata 0.13.0 and loro ^1.13.8 unchanged.
+  "@vibecook/ice": 0.16.0
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -322,7 +328,7 @@ catalog:
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
-  - '@vibecook/ice@0.16.0-portals.4'
+  - '@vibecook/ice@0.16.0'
   - '@vibecook/ghosttea-client@0.12.0'
   - '@vibecook/ghosttea-protocol@0.12.0'
   - '@vibecook/ghosttea-electron@0.12.0'
