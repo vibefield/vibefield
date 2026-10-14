@@ -13,10 +13,14 @@ import Testing
 // actually cross — the real product client, its framing, a rows subscription
 // resumed by cursor — would carry no History bytes at all before James's
 // device run. This row stands an RFC 6455 door on loopback and puts the real
-// client between the reader and it: hello, the ledger's three reads, a
-// session's header and page, the tail opened as a rows subscription at the
-// floor, and a delta over the wire that moves the document and counts the
-// arrival.
+// client between the reader and it: hello, the ledger's reads, a session's
+// header and page, the tail opened as a rows subscription at the floor, and a
+// delta over the wire that moves the document and counts the arrival.
+//
+// PJ-7 — the ledger's reads are `project.*` now (`HistoryProjects` over the
+// same client): `project.list`, the pings opened as rows at the floor and a
+// ping over the wire that re-keys a regrouped project, then `project.get` and
+// `project.sessions` for the project opened.
 //
 // It is NOT a claim about fieldd. The door answers from the contracts' goldens;
 // what it witnesses is that the reader's asks are the contracts' methods and
@@ -200,6 +204,16 @@ private func waitUntil(
     let session = try Fixture.json("index-session.valid")
     let project = try Fixture.json("index-project.valid")
     let page = try Fixture.json("index-timeline.valid")
+    let projectList = try Fixture.json("project-list.valid")
+    let projectGet = try Fixture.json("project-get.valid")
+    let projectSessions = try Fixture.json("project-sessions.valid")
+    let projectFigures = try Fixture.json("project-figures.valid")
+    let pingsOpen = try #require(try Fixture.json("project-changes-open.snapshot")["snapshot"])
+    // the golden ping, continuing the open's revision (a gap would re-open)
+    var ping = try #require(try Fixture.json("project-changes-delta.regrouped").objectValue)
+    ping["since"] = pingsOpen["revision"]
+    ping["revision"] = .int((pingsOpen["revision"]?.intValue ?? 0) + 1)
+    let pingPayload = JSONValue.object(ping)
     let tailOpen = try Fixture.json("index-session-tail-open.snapshot")
     let snapshot = try #require(tailOpen["snapshot"])
     // the golden's delta with one NEW row appended: the arrival the pill counts
@@ -224,6 +238,15 @@ private func waitUntil(
       case "index.session": return [Frame.result(id: id, session)]
       case "index.project": return [Frame.result(id: id, project)]
       case "index.timeline": return [Frame.result(id: id, page)]
+      case "project.list": return [Frame.result(id: id, projectList)]
+      case "project.get": return [Frame.result(id: id, projectGet)]
+      case "project.sessions": return [Frame.result(id: id, projectSessions)]
+      case "project.figures": return [Frame.result(id: id, projectFigures)]
+      case "project.subscribe":
+        return [
+          Frame.result(id: id, .object(["subId": .string("pp-1"), "snapshot": pingsOpen])),
+          Frame.subscriptionEvent(method: "project.subscribe.delta", subId: "pp-1", payload: pingPayload),
+        ]
       case "index.session.subscribe":
         // fieldd's ProductAPI names a subscription's frames `<method>.delta`
         return [
@@ -252,10 +275,22 @@ private func waitUntil(
       deviceId: "dev-1", name: "studio", isHome: true, door: client, ownsDoor: true,
       agentLabel: { _ in "Claude Code" })
     reader.start()
-    try await waitUntil("the ledger over the socket") { reader.corpus.projects.count == 2 }
+    try await waitUntil("the standing over the socket") { asks.methods.contains("index.status") }
     #expect(reader.standing == .connected)
-    #expect(reader.corpus.sessionCount == 449)
-    #expect(reader.corpus.desktop == "studio")
+
+    // PJ-7 — the ledger over the same client (the reader owns the door)
+    let ledger = HistoryProjects(source: "01J9ZK3M5Q8XR2V7N4B6C1D0EF", door: client)
+    ledger.start()
+    try await waitUntil("the ledger over the socket") { ledger.corpus.projects.count == 2 }
+    #expect(ledger.corpus.sessionCount == 452)
+    #expect(ledger.corpus.desktops.map(\.name) == ["studio", "laptop"])
+    try await waitUntil("the ping's key move") { !ledger.moves.isEmpty }
+    #expect(ledger.moved("p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8") == "r:01JA0B1C2D3E4F5G6H7J8K9M0N")
+    ledger.open("p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8")
+    try await waitUntil("the opened project's sessions") {
+      !ledger.corpus.sessions(of: "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8").isEmpty
+    }
+    #expect(ledger.corpus.sessions(of: "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8").first?.folder == "vibe-field")
 
     reader.need(.session(device: "dev-1", id: "s1"))
     try await waitUntil("the document, its tail, and the delta's arrival") { reader.arrivals["s1"] == 1 }
@@ -275,11 +310,15 @@ private func waitUntil(
     let methods = asks.methods
     #expect(methods.first == "system.hello")
     for method in [
-      "index.status", "index.projects", "index.sessions", "index.session", "index.timeline",
-      "index.session.subscribe",
+      "index.status", "index.session", "index.timeline", "index.session.subscribe", "project.list",
+      "project.subscribe", "project.get", "project.sessions", "project.figures",
     ] {
       #expect(methods.contains(method), "\(method) was never asked over the socket")
     }
+    for retired in ["index.projects", "index.sessions", "index.project"] {
+      #expect(!methods.contains(retired), "\(retired) is the ledger's old read")
+    }
+    #expect(asks.params(for: "project.subscribe")?["minIntervalMs"]?.intValue == Int64(HistoryReads.tailIntervalMs))
     let subscribe = asks.params(for: "index.session.subscribe")
     #expect(subscribe?["sessionId"]?.stringValue == "s1")
     #expect(subscribe?["minIntervalMs"]?.intValue == Int64(HistoryReads.tailIntervalMs))
@@ -287,6 +326,7 @@ private func waitUntil(
     #expect(timeline?["sessionId"]?.stringValue == "s1")
     #expect(timeline?["limit"]?.intValue == Int64(HistoryReads.pageRows))
 
+    ledger.close()
     reader.close()
     await door.stop()
   }

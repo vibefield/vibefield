@@ -2025,6 +2025,21 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   names it on its body (glyph and name, where the desktop has more than one) and its empty-pane launcher
   reads `New · Under Work`, an agent the profile has no sign-in for marked `no sign-in`. Reduced motion:
   no travel, overshoot or turning; 90ms fades; the body appears.
+  **On the phone** (PJ-7, 2026-10-14; SB §2.12, `thinking-project-places.md` §6.3, Q4 (a)): the SAME
+  geometry, transcribed — puppeteer's `views/swarm/bloom` numbers, held to it by a golden its own code
+  generates — over SwarmStage's 520 ms hold. Every desktop is a choice: ring one is the desktops (from one
+  desktop with two profiles or more, its profiles), each bud its **OS mark** (the desktop's own, §13), 48 pt,
+  92 pt out, opening upward and turning only for the field's edge and the bar, its label above — the name
+  (mono 9.5/700) over its state line (`2 RUNNING` · `IDLE` · `ASLEEP · 2 H`, mono 7.5/800). A sleeping
+  desktop's bud is dashed and faint, and letting go on it opens nothing. Reaching a desktop with two profiles
+  or more opens ring two with them; the agents' own folders read **Default** (Q5). **The hub is the home.**
+  Letting go opens the **launch sheet** on that desktop and profile, never a terminal (Q4); one desktop with
+  one profile does not bloom, and the hold opens the sheet as before. The words are the phone prototype's —
+  `New agent on studio` · `New agent as Work` · `laptop is asleep` · `Cancel` — in SF 800 over the veil, the
+  verb at 40%, one mono line under them, at the field's top when the hold is in its lower half and above the
+  bar otherwise. **Haptics:** a soft impact as the bloom opens, a selection tick at each new target, success
+  or warning at the birth (the sheet's Start). Reduced motion: the buds stand in place behind a 90 ms fade —
+  no pop, no lift.
 - **The terminal preview is Godview in miniature** (GT-7): a preview of how terminals will
   look mounts Godview's OWN parts over a depiction of the canvas — `GodviewStage` with its
   ground, the scanlines and vignette, `PaneFrameChrome`'s bands — never a painted
@@ -2556,6 +2571,34 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     of the window's top and foot (the line's 72, and 24), so it never covers the head or the line.
     Below a 680 popup — a window narrower than 728 — the list and a useful peek no longer both fit:
     **the peek folds and the list fills the popup**.
+- **The phone's History is one ledger of projects** (PJ-7, 2026-10-14; `thinking-project-places.md`
+  §6.3, PJ-D24, PJ-L7): the tab reads the projects every desktop groups alike from ONE door — the
+  home's, or another answering desktop's while the home sleeps — and is no longer grouped by desktop
+  (SP-D10's grouping is superseded). **A device is its OS mark** — the kept-exact Simple Icons
+  marks (§13), template assets on the phone, in the text's ink — and never a hue. The **ledger row**
+  keeps identity · location · quantity; location is the marks, **one per desktop the project lives
+  on, left-aligned** in the roster's order (the home first) at 13 pt in `inkFaint`, a sleeping
+  desktop's at 40% — the path never shows. The **scope line** ends in the marks of the desktops
+  read (12 pt), and each sleeping desktop gets its own honest sentence led by its mark: `⊞ mini is
+  asleep · read 11:42`. A **live row** names its desktop — mark and name — before its running
+  line. The project's colour is **its ink** (§2.9) on the cap, the wash, the sparkline and the
+  ribbon; the per-device deal by sequence retires from History. The **project screen**: the head
+  (cap, name, count), `N places on` and the marks, the four tiles, Overview, Live now, then
+  **Desktops** — one row per desktop (its mark at 19 pt, its name, `1 working` or `asleep · 2h`,
+  and a disclosure that folds its places out run-fold style: each place by its folder's name and
+  a branch that says more, then its last use or why it cannot take a launch), then the sessions by
+  day. A **session row's** foot names where it ran — the desktop's mark and name, then the
+  folder's name, never its path — and its last-word slot holds the session's act (Resume or Jump
+  to, below) or the reason there is none. A session's document is read from its OWN desktop's door
+  (the row's `device`); a desktop that does not answer shows what this phone kept, in the same words.
+  **Resume and Jump to** (Q3 (a); TP §5): an ENDED session's slot takes **Resume** — the `resume`
+  glyph and its word in a 28 pt pill — when its own desktop answers and its catalog offers it for the
+  agent (absent otherwise); `asleep` stands in its place while that desktop sleeps. A session the field
+  holds a run for (joined by the conversation's native id) takes **Jump to** instead, and a live row
+  ends in a 32 pt `jump` circle; Jump to switches to the Field and opens that run's card. On a session's
+  document the stepper's slot carries the same act with where it runs (mark, desktop, folder). A refused
+  Resume is said, never shown as a failure: `studio is asleep` · `The folder is gone` · `Signed out of
+  Claude Code on studio` · `Held under another profile on studio`.
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the
@@ -2568,6 +2611,27 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   “studio is asleep · read 11:42”; starting/restarting and partial search coverage are
   stated explicitly. Forms use the existing chrome palette, system prose and monospaced
   paths; the sheet radius remains 40 pt, as the phone's other sheets.
+  **PJ-7 (2026-10-14; Q5, Q6, Q7, PJ-D12 (a)) — how it starts, in three more rows.** Under
+  Folder, Desktop and Agent the same Form at the same medium detent takes **Profile · Model ·
+  Effort**, menu rows (the system's `.menu` picker) that never come or go: a choice with one
+  answer, or none, is a quiet fact in its own row instead — `Default — the only profile on
+  studio`, `Haiku has no effort setting`, `Each agent's own · Sign in to see models` — never an
+  empty menu and never a row that vanishes. **Profile** offers the desktop's Agent Profiles that
+  hold a sign-in for the agent, and its agents' own folders, which the phone names **Default**
+  (the wire's "This Mac" is a desktop's word for itself). **Model** offers "Each agent's own"
+  first, then the agent's own picker as that desktop last read it under that profile; the
+  footer says how old the read is (`models read 2h ago`), and a failed read is said in words
+  (`Sign in to see models`). **Effort** offers "Its own" first, then the chosen model's own
+  effort values; switching model brings back the effort the project last ran that model at.
+  **The folder row comes filled**: the place the project's last launch entered (its recipe's
+  place), else the newest place on the sheet's desktop that can take a launch, named by its
+  folder's name and branch; with neither, the folder sheet opens by itself. **From a project**
+  the folder sheet lists that project's places first — under each desktop's mark and name, a
+  place that cannot take a launch dimmed with its reason — then Recent places and Browse. A
+  place is launched by its ref; only Browse sends a path, until PJ-8. **New agent** on a
+  project screen stands in the stepper's slot: the 48 pt glass capsule 10 above the bar, the
+  `start` glyph and "New agent", then the usual place's desktop mark and name (`asleep` when
+  it cannot be asked).
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
@@ -2980,7 +3044,11 @@ stills — and, on the desk, two named exceptions: the bar's ONE path renderer f
 (R2; one component, allow-listed) and the peers' pointer arrow (R17; §8, peers on the mat).
 **Kept exact, outside this set:** the tray and app masters, the three vendor marks (AR-L1),
 the OS marks the device chip wears (Simple Icons, drawn inline in `os-marks.tsx` — the test's one
-other allowed file), the Face Club and AFTER HOURS art (§11), the file-tree family (§8).
+other allowed file), the Face Club and AFTER HOURS art (§11), the file-tree family (§8). On the
+phone (PJ-7) the OS marks are template SVGs in FieldDesign's `OSMarks.xcassets` (`DeviceMark`),
+copies of `os-marks.tsx`'s paths that `pnpm check:ios-fixtures` holds to them; and `start`,
+`resume` and `jump` join the phone's picks, so History's New agent, Resume and Jump to draw the
+same Session Glyphs the desktop does.
 
 *History:* pass 1 (2026-09-23) redrew the set at three stroke treatments and was rejected as three
 weights of one drawing; pass 2 drew three constructions — a 9×9 dot matrix on the ground's grid,

@@ -4,10 +4,11 @@ import Testing
 
 @testable import FieldHistory
 
-// SP-6 — the reader over a scripted door: the ledger fills from the goldens,
-// a session's document from its page, the tail's frames move it and count the
-// arrivals, a door that stops answering dims what was read and the cache
-// replays it for a reader with no door at all.
+// SP-6 — the reader over a scripted door: a session's document from its page,
+// the tail's frames move it and count the arrivals, a door that stops
+// answering dims what was read and the cache replays it for a reader with no
+// door at all. PJ-7 — the LEDGER is `HistoryProjects`' (HistoryProjectsTests):
+// a desktop's reader asks only its standing, its documents and its search.
 
 /// A door made of the goldens, with a script for the tail and a switch that
 /// turns every later ask into a refusal.
@@ -75,21 +76,19 @@ private func scratch() -> URL {
 
 @Suite("the reads fill the values")
 struct HistoryReadsTests {
-  @Test("the ledger: status, projects, sessions — the counts, the live rows, the figures prefetched")
+  @Test("PJ-7 — a desktop's reader asks its standing and never the ledger")
   @MainActor
-  func ledger() async throws {
+  func standingOnly() async throws {
     let door = ScriptedDoor()
     let reader = HistoryDesktopReader(deviceId: "dev-1", name: "studio", isHome: true, door: door, agentLabel: { "Agent \($0)" })
     reader.start()
-    await settle("the ledger") { reader.corpus.projects.count == 2 }
+    await settle("the standing") { door.asked.contains("index.status") }
     #expect(reader.standing == .connected)
     #expect(reader.corpus.desktop == "studio" && reader.corpus.deviceId == "dev-1")
-    #expect(reader.corpus.sessionCount == 449)
-    #expect(reader.corpus.projects.map(\.name) == ["vibe-field", "vibe-field"])
-    #expect(reader.corpus.readAt.count == 5)
-    await settle("the figures") { reader.corpus.projects.allSatisfy { $0.stats != nil } }
-    #expect(door.asked.filter { $0 == "index.project" }.count == 2)
-    #expect(reader.corpus.projects.first?.spark.count == FieldHistoryModel.sparkDays)
+    #expect(reader.corpus.projects.isEmpty)
+    for method in ["index.projects", "index.sessions", "index.project", "project.list"] {
+      #expect(!door.asked.contains(method), "\(method) is the ledger's, not a desktop reader's")
+    }
   }
 
   @Test("a session: the header and the page make the document, the tail's delta moves it and counts the arrival, `seen` clears it")
@@ -143,7 +142,7 @@ struct HistoryReadsTests {
     let door = ScriptedDoor()
     let reader = HistoryDesktopReader(deviceId: "dev-1", name: "studio", door: door, ownsDoor: true)
     reader.start()
-    await settle("the ledger") { reader.corpus.projects.count == 2 }
+    await settle("the standing") { door.asked.contains("index.status") }
     await reader.search("needle", kind: .prompts)
     #expect(reader.corpus.searchedQuery == "needle")
     #expect(reader.corpus.hits.count == 1)
@@ -152,7 +151,7 @@ struct HistoryReadsTests {
     door.refuse = FieldProductError(kind: "UNAVAILABLE", message: "the door is gone", retryable: true)
     await reader.search("other", kind: .any)
     #expect(reader.standing == .asleep)
-    #expect(reader.corpus.projects.count == 2, "what was read stands")
+    #expect(reader.corpus.hits.count == 1, "what was read stands")
     #expect(reader.failure == "the door is gone")
     #expect(reader.isReplaying)
     door.refuse = FieldProductError(
@@ -163,7 +162,7 @@ struct HistoryReadsTests {
     #expect(door.closed, "a door the reader owns is closed with it")
   }
 
-  @Test("the cache replays the ledger and a document for a reader with no door, under the desktop's name")
+  @Test("the cache replays a document for a reader with no door, under the desktop's name and its read stamp")
   @MainActor
   func cacheReplay() async throws {
     let cache = HistoryCache(directory: scratch())
@@ -171,7 +170,6 @@ struct HistoryReadsTests {
     door.tailSnapshot = try Fixture.json("index-session-tail-open.snapshot")["snapshot"]
     let online = HistoryDesktopReader(deviceId: "dev-1", name: "studio", door: door, cache: cache)
     online.start()
-    await settle("the ledger") { online.corpus.projects.count == 2 }
     online.need(.session(device: "dev-1", id: "s1"))
     await settle("the document") { online.corpus.document("s1") != nil }
     online.close()
@@ -179,9 +177,9 @@ struct HistoryReadsTests {
     let offline = HistoryDesktopReader(deviceId: "dev-1", name: "mini", door: nil, cache: cache)
     offline.start()
     #expect(offline.standing == .asleep)
-    #expect(offline.corpus.projects.count == 2)
     #expect(offline.corpus.desktop == "mini")
-    #expect(offline.corpus.documents.isEmpty, "documents replay on open, not with the ledger")
+    #expect(offline.corpus.readAt.count == 5, "the hour this phone last read it")
+    #expect(offline.corpus.documents.isEmpty, "documents replay on open")
     offline.need(.session(device: "dev-1", id: "s1"))
     #expect(offline.corpus.document("s1")?.title == "Named")
     #expect(FieldHistoryModel.scopeLine(offline.corpus, standing: offline.standing) == "mini is asleep · read \(offline.corpus.readAt)")
@@ -199,11 +197,10 @@ struct HistoryReadsTests {
     group.attach(deviceId: "dev-1", name: "studio", isHome: true, door: studio, ownsDoor: false)
     #expect(group.readers.map(\.name) == ["studio", "laptop"])
     #expect(group.home == "dev-1")
-    await settle("both ledgers") { group.readers.allSatisfy { $0.corpus.projects.count == 2 } }
+    await settle("both standings") { laptop.asked.contains("index.status") && studio.asked.contains("index.status") }
     group.markOffline(deviceId: "dev-2", name: "laptop")
     #expect(laptop.closed)
     #expect(group.reader(for: "dev-2")?.isReplaying == true)
-    #expect(group.reader(for: "dev-2")?.corpus.projects.count == 2)
     group.allOffline()
     #expect(!studio.closed, "a shared door is the link's to close")
     let allReplaying = group.readers.allSatisfy { $0.isReplaying }

@@ -6,6 +6,9 @@
 // session (DS-D10), the pings with their key moves, and the act's shell until
 // PJ-2's records are wired (P2). The phone's witness over the real door is
 // project-doors-phone.test.ts.
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type {
   CallerContext,
   IndexCatalogProject,
@@ -736,6 +739,23 @@ describe("PJ-4 — the join column (A-D4): every catalog session carries its pro
       );
     };
     expect(answerWith(recipe)?.recipe).toEqual(recipe);
+    // PJ-7 — the contracts' golden recipe, with the place its launch entered,
+    // answers whole (EL9: the fixture read by its daemon), and a place this
+    // daemon cannot read leaves the recipe standing without one
+    const golden = JSON.parse(
+      readFileSync(
+        join(import.meta.dirname, "../../contracts/fixtures/project-summary.recipe-place.json"),
+        "utf8",
+      ),
+    ) as { recipe: Record<string, unknown> };
+    expect(answerWith(golden.recipe)?.recipe).toEqual(golden.recipe);
+    expect(answerWith(golden.recipe)?.recipe?.place).toEqual({
+      device: "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      placeId: "pl_4c1e9a0b7d2f6e8a1b3c5d7e",
+    });
+    const strayPlace = answerWith({ ...golden.recipe, place: "/Users/me/x" })?.recipe;
+    expect(strayPlace?.provider).toBe("claude");
+    expect(strayPlace?.place).toBeUndefined();
     // a newer desktop's shape this daemon cannot read: no recipe, the row stands
     const unreadable = answerWith({ provider: "scripted", profileSet: "work", v: 2 });
     expect(unreadable).toBeDefined();

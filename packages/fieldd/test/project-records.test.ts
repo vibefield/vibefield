@@ -256,6 +256,8 @@ describe("PJ-2 — ProjectRecords: a record is made by an act", () => {
       selection: { modelId: "model-a" },
       controlsByModel: { "model-a": { effort: "high" } },
       at: 5_000,
+      // PJ-7 — and the place the launch entered
+      place: { device: "dev-a", placeId: "a" },
     });
     // the grouping reads it back on the project
     expect(d.of("a").recipe).toEqual(recipe());
@@ -277,6 +279,8 @@ describe("PJ-2 — ProjectRecords: a record is made by an act", () => {
       profileSet: "work",
       controlsByModel: { "model-a": { effort: "low" }, "model-b": {} },
       at: 5_003,
+      // PJ-7 — and the place the launch entered
+      place: { device: "dev-a", placeId: "a" },
     });
     // a launch with no recipe (a resume, a typed run) records the place only
     d.records.actedIn("/p/app", 5_004);
@@ -298,6 +302,8 @@ describe("PJ-2 — ProjectRecords: a record is made by an act", () => {
       selection: { modelId: "o-1" },
       controlsByModel: { "o-1": { thinking: "on" } },
       at: 5_005,
+      // PJ-7 — and the place the launch entered
+      place: { device: "dev-a", placeId: "a" },
     });
 
     // Temporary: no record, so no recipe (the act after it is drained after it)
@@ -309,6 +315,42 @@ describe("PJ-2 — ProjectRecords: a record is made by an act", () => {
     );
     expect(d.library.projectIntents().records).toHaveLength(1);
     expect(d.of("t").recordId).toBeUndefined();
+  });
+
+  it("PJ-7 — the recipe names the place its launch entered, by the ref the doors answer: a launch by folder is matched to its place, a launch by place hands its id; the newest launch's place stands, and a launch with no recipe leaves it", async () => {
+    const d = await desktop([repo("a", "/p/app", APP), repo("b", "/q/app", APP)]);
+    d.folders.set("/p/app", "a");
+    d.folders.set("/q/app", "b");
+    const recipe = () => d.library.projectIntents().records[0]?.recipe as Record<string, unknown>;
+    const work = { provider: "scripted", profileSet: "work" };
+
+    // by folder: the place that holds it, as `project.get` names it
+    d.records.actedIn("/p/app/src", 5_000, work);
+    await until(() => recipe() !== undefined, "the first recipe");
+    expect(recipe()["place"]).toEqual({ device: "dev-a", placeId: "a" });
+    expect(
+      d
+        .of("a")
+        .places.map((pl) => pl.placeId)
+        .sort(),
+    ).toEqual(["a", "b"]);
+
+    // by place: the id the launch resolved is the place it entered — no
+    // folder lookup stands between them
+    d.records.actedIn("/somewhere/else", 5_001, work, "b");
+    await until(() => recipe()["at"] === 5_001, "the place launch's recipe");
+    expect(recipe()["place"]).toEqual({ device: "dev-a", placeId: "b" });
+
+    // a resume (no recipe) is an act in its place and leaves the recipe's
+    d.records.actedIn("/p/app", 5_002, undefined, "a");
+    await until(
+      () =>
+        (d.library.projectIntents().records[0]?.places ?? []).some(
+          (p) => p.placeId === "a" && p.at === 5_002,
+        ),
+      "the recipe-less act",
+    );
+    expect(recipe()).toMatchObject({ at: 5_001, place: { device: "dev-a", placeId: "b" } });
   });
 
   it("refuses an act on Temporary, an unknown key, a place not the project's, a bad name, itself, Home's links", async () => {

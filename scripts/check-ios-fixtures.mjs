@@ -42,7 +42,15 @@ function jsonFiles(dir) {
 // such a copy was silently skipped and `checked` merely dropped by one; a gate
 // that stops gating without a red is the failure this script exists to catch,
 // so the copy half now has the pin half's posture below.
-const LANE_AUTHORED = new Set(["trf1-frames.lane.json"]);
+const LANE_AUTHORED = new Set(["trf1-frames.lane.json", "spawn-bloom-geometry.lane.json"]);
+
+// Goldens whose origin is another package than the contracts — a design
+// decision both apps compute, not a wire shape — compared byte for byte all
+// the same. PJ-7: the project ink's table (DESIGN.md §2.9), which the design
+// kit's own test reads too.
+const OTHER_ORIGINS = new Map([
+  ["project-ink.golden.json", join(root, "packages/design-kit/fixtures/project-ink.golden.json")],
+]);
 
 const problems = [];
 let checked = 0;
@@ -57,13 +65,80 @@ const workspaceFixtures = [
   "workspace-search-params.valid.json",
   "agent-catalog.valid.json",
 ];
-for (const folder of ["Tests/FieldWorkspaceTests", "Sources/FieldWorkspace"]) {
-  for (const fixture of workspaceFixtures) {
-    const copy = join(root, "apps/ios/VibeFieldKit", folder, "Fixtures", fixture);
-    try {
-      statSync(copy);
-    } catch {
-      problems.push(`required workspace mirror is missing: ${relative(root, copy)}`);
+// PJ-7: the phone's `project.*` reads (History) and its launch sheet's reads
+// and asks, named the same way — a project set and a launch set.
+const projectFixtures = [
+  "place-ref.valid.json",
+  "project-list.valid.json",
+  "project-list.tailnet.json",
+  "project-summary.valid.json",
+  "project-summary.tailnet.json",
+  "project-summary.home.json",
+  "project-summary.recipe.json",
+  "project-summary.hidden.json",
+  "project-summary.recipe-place.json",
+  "project-get.valid.json",
+  "project-get.moved.json",
+  "project-sessions.valid.json",
+  "project-figures.valid.json",
+  "project-figures-day.valid.json",
+  "project-changes-open.snapshot.json",
+  "project-changes-delta.regrouped.json",
+  "project-refusal.path-in-request.json",
+  "project-refusal.key-moved.json",
+  "error-data.projects-grouping.json",
+  "index-sessions.keyed.json",
+  "project-list-params.valid.json",
+  "project-get-params.key.json",
+  "project-get-params.anchor.json",
+  "project-sessions-params.valid.json",
+  "project-figures-params.valid.json",
+  "project-figures-day-params.valid.json",
+  "project-subscribe-params.valid.json",
+];
+const launchFixtures = [
+  "agent-models.valid.json",
+  "agent-models.stale.json",
+  "agent-models.auth-required.json",
+  "agent-models-params.valid.json",
+  "agent-spawn-params.model-selection.json",
+  "agent-spawn-params.place.json",
+  "agents-profile-sets.valid.json",
+  "agent-field-snapshot.native-session.json",
+];
+// History's ledger reads them: the fixture door serves these, its tests read them.
+const historyFixtures = [
+  "project-list.valid.json",
+  "project-get.valid.json",
+  "project-sessions.valid.json",
+  "project-figures.valid.json",
+  "project-changes-open.snapshot.json",
+];
+// The launch sheet reads these (its tests, and the DEBUG fixture door the first two).
+const sheetFixtures = [
+  "agents-profile-sets.valid.json",
+  "agent-models.valid.json",
+  "agent-models.stale.json",
+  "agent-models.auth-required.json",
+  "project-summary.recipe-place.json",
+];
+const requiredMirrors = [
+  ["workspace", workspaceFixtures, ["Tests/FieldWorkspaceTests", "Sources/FieldWorkspace"]],
+  ["project", projectFixtures, ["Tests/FieldProductTests"]],
+  ["project", historyFixtures, ["Tests/FieldHistoryTests", "Sources/FieldHistory"]],
+  ["launch", launchFixtures, ["Tests/FieldProductTests"]],
+  ["launch", sheetFixtures, ["Tests/FieldWorkspaceTests"]],
+  ["launch", sheetFixtures.slice(0, 2), ["Sources/FieldWorkspace"]],
+];
+for (const [set, fixtures, folders] of requiredMirrors) {
+  for (const folder of folders) {
+    for (const fixture of fixtures) {
+      const copy = join(root, "apps/ios/VibeFieldKit", folder, "Fixtures", fixture);
+      try {
+        statSync(copy);
+      } catch {
+        problems.push(`required ${set} mirror is missing: ${relative(root, copy)}`);
+      }
     }
   }
 }
@@ -71,7 +146,7 @@ for (const folder of ["Tests/FieldWorkspaceTests", "Sources/FieldWorkspace"]) {
 for (const searchRoot of searchRoots) {
   for (const copy of jsonFiles(searchRoot)) {
     const name = copy.slice(copy.lastIndexOf("/") + 1);
-    const origin = join(contracts, name);
+    const origin = OTHER_ORIGINS.get(name) ?? join(contracts, name);
     try {
       statSync(origin);
     } catch {
@@ -91,6 +166,40 @@ for (const searchRoot of searchRoots) {
       problems.push(
         `${relative(root, copy)} differs from ${relative(root, origin)}\n` +
           `  fix: cp ${relative(root, origin)} ${relative(root, copy)}`,
+      );
+    }
+  }
+}
+
+// PJ-7 — the OS marks (Simple Icons, kept exact: DESIGN.md §13, PJ-D24) ship
+// on the phone as template SVGs beside the glyphs. They are COPIES of the
+// desktop's `os-marks.tsx` paths, held to them here the way a golden is.
+const OS_MARKS_TSX = join(root, "packages/field-app/src/godview/os-marks.tsx");
+const OS_MARKS_IOS = join(
+  root,
+  "apps/ios/VibeFieldKit/Sources/FieldDesign/Resources/OSMarks.xcassets",
+);
+{
+  const source = readFileSync(OS_MARKS_TSX, "utf8");
+  const start = source.indexOf("const MARKS");
+  const block = source.slice(start, source.indexOf("};", start));
+  const marks = [...block.matchAll(/(\w+): \{\s*d: "([^"]+)",(\s*evenOdd: true,)?/g)];
+  if (marks.length === 0) problems.push(`no OS marks read from ${relative(root, OS_MARKS_TSX)}`);
+  for (const [, os, d, evenOdd] of marks) {
+    const copy = join(OS_MARKS_IOS, `os-${os}.imageset`, `os-${os}.svg`);
+    let svg = "";
+    try {
+      svg = readFileSync(copy, "utf8");
+    } catch {
+      problems.push(`the phone's ${os} mark is missing: ${relative(root, copy)}`);
+      continue;
+    }
+    checked += 1;
+    const sameRule = svg.includes('fill-rule="evenodd"') === Boolean(evenOdd);
+    if (!svg.includes(` d="${d}"`) || !sameRule) {
+      problems.push(
+        `${relative(root, copy)} is not ${relative(root, OS_MARKS_TSX)}'s ${os} mark\n` +
+          "  fix: copy the path (and its fill rule) from the desktop's mark, exactly",
       );
     }
   }

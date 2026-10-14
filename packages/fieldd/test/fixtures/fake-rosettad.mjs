@@ -309,7 +309,20 @@ const originAllowed = (origin) =>
 
 // --enroll: rosetta's refusals, mirrored (a refused file never binds)
 const INSTALLED = new Set(["claude-code"]);
-const KNOWN = new Set(["claude-code", "codex", "copilot", "pi", "opencode", "kimi-code", "grok"]);
+// …and `scripted`, fieldd's test agent (agent-catalog-fixture.ts), so a suite
+// can enroll a scripted persona's root and file conversations under it — the
+// one kind here real rosetta would refuse (PJ-7: a resume adopts the persona
+// the index files its conversation under)
+const KNOWN = new Set([
+  "claude-code",
+  "codex",
+  "copilot",
+  "pi",
+  "opencode",
+  "kimi-code",
+  "grok",
+  "scripted",
+]);
 let enrollment = { format: 1, enabled_kinds: [], runtimes: [] };
 if (enrollPath !== undefined) {
   let text;

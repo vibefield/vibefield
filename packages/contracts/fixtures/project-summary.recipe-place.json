@@ -1,0 +1,81 @@
+{
+  "//": "PJ-7 (the lead's call; PJ-D6's \"your last launch's place\") — the recipe also names the place its launch entered, by PlaceRef (never a path), so a phone's folder row fills from it. A recipe written before PJ-7 carries none. Synthetic ids.",
+  "key": "r:rec-01J9ZQ4N7V2",
+  "provisional": false,
+  "name": "vibe-field",
+  "nameFrom": "folder",
+  "ink": 412,
+  "kind": "repo",
+  "bucket": null,
+  "devices": ["01J9ZK3M5Q8XR2V7N4B6C1D0EF", "01J9ZM0PQ7W3E6R8T2Y4U1I5O9"],
+  "places": [
+    {
+      "ref": {
+        "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+        "placeId": "pl_4c1e9a0b7d2f6e8a1b3c5d7e"
+      },
+      "name": "vibe-field",
+      "path": "/Users/me/Projects/vibe-field",
+      "class": "repo",
+      "branch": "main",
+      "exists": true,
+      "mounted": true,
+      "sessions": 412,
+      "lastAt": 1759276800000
+    },
+    {
+      "ref": {
+        "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9",
+        "placeId": "pl_77d3f2a1c9e0b4d6f8a2c4e6"
+      },
+      "name": "vf-docs",
+      "path": "/Users/me/code/vf-docs",
+      "class": "repo",
+      "branch": "docs",
+      "worktreeOf": {
+        "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9",
+        "placeId": "pl_0a2b4c6d8e1f3a5b7c9d0e2f"
+      },
+      "exists": true,
+      "mounted": true,
+      "sessions": 37,
+      "lastAt": 1759190400000
+    }
+  ],
+  "sessions": 449,
+  "firstAt": 1751328000000,
+  "lastAt": 1759276800000,
+  "allGone": false,
+  "anchors": [
+    "place:pl_4c1e9a0b7d2f6e8a1b3c5d7e",
+    "place:pl_77d3f2a1c9e0b4d6f8a2c4e6",
+    "remote:github.com/acme/vibe-field",
+    "root:a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"
+  ],
+  "asOf": {
+    "01J9ZK3M5Q8XR2V7N4B6C1D0EF": "2026-09-30T23:40:00.000Z",
+    "01J9ZM0PQ7W3E6R8T2Y4U1I5O9": "2026-09-30T02:12:44.000Z"
+  },
+  "groupingVersion": 1,
+  "recipe": {
+    "provider": "claude",
+    "profileSet": "work-7f3a",
+    "selection": {
+      "modelId": "opus"
+    },
+    "controlsByModel": {
+      "opus": {
+        "effort": "high"
+      },
+      "sonnet": {
+        "effort": "low"
+      },
+      "haiku": {}
+    },
+    "at": 1759276800000,
+    "place": {
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "placeId": "pl_4c1e9a0b7d2f6e8a1b3c5d7e"
+    }
+  }
+}

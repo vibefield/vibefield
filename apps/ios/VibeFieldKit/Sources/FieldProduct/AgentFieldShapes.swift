@@ -93,6 +93,10 @@ public struct AgentFieldRow: Sendable, Equatable, Identifiable, Decodable {
   public let projectName: String?
   public let branch: String?
   public let terminal: AgentTerminalJoin?
+  /// PJ-7 (Q3) — the agent's own id for the conversation this run continues:
+  /// what joins a History row to the card Jump to opens. The id only, never
+  /// the folder (EL7 B1); absent until the agent says it.
+  public let nativeSessionId: String?
   public let unknownFields: [String]
   /// Blockers that did not read. A row with one unreadable blocker is still a
   /// row — but the count is not nothing, so it rides rather than vanishing.
@@ -140,6 +144,7 @@ public struct AgentFieldRow: Sendable, Equatable, Identifiable, Decodable {
     projectName = project.string("name")
     branch = project.string("branch")
     terminal = try object.decodeObject("terminal", AgentTerminalJoin.init(json:))
+    nativeSessionId = object.string("nativeSessionId")
     unknownFields = object.unknownFields
   }
 

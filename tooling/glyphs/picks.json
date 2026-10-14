@@ -24,6 +24,9 @@
     "backspace",
     "scantext",
     "snippets",
-    "clipboard"
+    "clipboard",
+    "start",
+    "resume",
+    "jump"
   ]
 }

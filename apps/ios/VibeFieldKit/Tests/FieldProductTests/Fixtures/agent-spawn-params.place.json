@@ -1,0 +1,13 @@
+{
+  "//": "PJ-7 (Q1 (a)) — a launch that names a place of the desktop it asks by its PlaceRef, never its path (P1): fieldd resolves the folder from its own place facts. Never beside a cwd. The phone's whole launch: the place, the Agent Profile, the model. Synthetic ids.",
+  "provider": "claude",
+  "place": {
+    "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+    "placeId": "pl_4c1e9a0b7d2f6e8a1b3c5d7e"
+  },
+  "profileSet": "work-7f3a",
+  "modelSelection": {
+    "modelId": "model-card-v2",
+    "controls": { "effort": "high" }
+  }
+}

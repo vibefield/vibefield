@@ -24,6 +24,14 @@ public struct HomeScreen: View {
   @State private var feed = MockAgentField()
   @State private var createSheetOpen = false
   @State private var workspaceLaunch: WorkspaceLaunch?
+  /// PJ-7 — the last Resume's words in the stepper's slot.
+  @State private var resumeWords: String?
+  /// PJ-7 — each answering desktop's Agent Profiles, read ahead so a hold can
+  /// bloom them at once (a desktop not read yet is a leaf: its default).
+  @State private var bloomProfiles: [String: [AgentProfileSet]] = [:]
+  /// PJ-7 — each answering desktop's catalog for the phone, read ahead with
+  /// its profiles: whether History's Resume is offered for an agent there.
+  @State private var fieldCatalogs: [String: [AgentCatalogRow]] = [:]
   @State private var mesh = MeshModel()
   @State private var remoteField = RemoteSessionField(source: nil)
   /// IOS-4b — the live field: the devices store, the doors it names, and the
@@ -242,8 +250,13 @@ public struct HomeScreen: View {
           #if DEBUG
             if mockActive { return feed.spawn() }
           #endif
-          beginCreate()
+          beginCreate(fieldContext())
           return nil
+        },
+        bloom: bloomMenu,
+        onBloom: { choice in
+          // Q4 (a): the bloom opens the launch sheet on that desktop and profile
+          beginCreate(fieldContext(desktop: choice.desktop, profileSet: choice.profile))
         }
       ) {
         chrome
@@ -281,6 +294,7 @@ public struct HomeScreen: View {
       rememberAccount()
       syncHistoryDesktops()
       workspaceLaunch?.update(workspaceDesktops)
+      readBloomProfiles()
     }
     // SP-6 — the home moved: the History groups re-order and the home's
     // reader takes the shared door
@@ -324,7 +338,9 @@ public struct HomeScreen: View {
     }
   }
 
-  private func beginCreate() {
+  /// A launch begins (PJ-7): from the field's hold or bloom, or from a
+  /// project's New agent — the sheet comes filled with the usual place.
+  private func beginCreate(_ context: LaunchContext) {
     if workspaceLaunch == nil {
       workspaceLaunch = WorkspaceLaunch(desktops: workspaceDesktops, home: link?.home) { device, method, params in
         guard let link else {
@@ -334,7 +350,91 @@ public struct HomeScreen: View {
       }
     }
     workspaceLaunch?.update(workspaceDesktops)
+    workspaceLaunch?.prepare(context)
     createSheetOpen = true
+  }
+
+  /// PJ-7 — a project's places as a launch names them: by ref, by their
+  /// folder's name, with why one cannot take a launch.
+  private func launchPlaces(_ places: [ProjectPlace]) -> [LaunchPlace] {
+    let now = Date()
+    return places.map { place in
+      let drawn = FieldHistoryModel.place(place, now: now)
+      return LaunchPlace(
+        ref: place.ref, name: drawn.name, branch: drawn.branch, desktop: place.ref.device, reason: drawn.reason,
+        lastAt: place.lastAt, last: drawn.last)
+    }
+  }
+
+  /// From a project (its New agent): its places first in the folder sheet,
+  /// its recipe filling the rows.
+  private func projectContext(_ key: String) -> LaunchContext {
+    let projects = historyDesktops.projects
+    guard let summary = projects.summaries[projects.moved(key) ?? key] else { return LaunchContext() }
+    return LaunchContext(projectName: summary.name, places: launchPlaces(summary.places), recipe: summary.recipe)
+  }
+
+  /// From the field (the hold, or the bloom's desktop and profile): FS-2's
+  /// sheet as it is, filled with the newest place known on that desktop.
+  private func fieldContext(desktop: String? = nil, profileSet: String? = nil) -> LaunchContext {
+    let summaries = historyDesktops.projects.summaries.values.filter(FieldHistoryModel.listed)
+    return LaunchContext(
+      usual: summaries.flatMap { launchPlaces($0.places) }, desktop: desktop, profileSet: profileSet)
+  }
+
+  /// PJ-7 — what a hold on the field can bloom (DESIGN.md §8's phone
+  /// paragraph): every desktop, its OS mark, its state line, its profiles.
+  private var bloomMenu: BloomMenu? {
+    guard let link else { return nil }
+    let desktops = link.desktops.map { desktop in
+      let asleep = desktop.state != .ready
+      let running = liveAgents.filter { $0.join?.deviceID == desktop.deviceId }.count
+      let profiles = (bloomProfiles[desktop.deviceId] ?? []).map { set in
+        BloomProfile(
+          id: set.id, label: set.kind == "native" ? LaunchModel.nativeLabel : set.label, isDefault: set.isDefault,
+          glyph: set.glyph)
+      }
+      return BloomDesktop(
+        id: desktop.deviceId, name: desktop.name, platform: desktop.platform, asleep: asleep,
+        sub: asleep ? "ASLEEP" : running > 0 ? "\(running) RUNNING" : "IDLE", profiles: profiles)
+    }
+    return BloomMenu(desktops: desktops, home: link.home)
+  }
+
+  /// Each answering desktop's profiles (the bloom's) and catalog (History's
+  /// Resume) not read yet, asked of its own door.
+  private func readBloomProfiles() {
+    guard let link else { return }
+    for desktop in link.desktops where desktop.state == .ready {
+      let id = desktop.deviceId
+      if bloomProfiles[id] == nil {
+        Task {
+          guard let answer = try? await link.workspaceCall(on: id, method: "agents.profileSets.list"),
+            let sets = try? AgentProfileSetsResult(json: answer)
+          else { return }
+          bloomProfiles[id] = sets.sets
+        }
+      }
+      if fieldCatalogs[id] == nil {
+        Task {
+          guard let answer = try? await link.workspaceCall(on: id, method: "agent.catalog", params: AgentCatalogParams.phone.json),
+            let catalog = try? AgentCatalogResult(json: answer)
+          else { return }
+          fieldCatalogs[id] = catalog.catalog
+        }
+      }
+    }
+  }
+
+  /// The desktop a project's New agent would start on (its usual place's).
+  private func usualDesktop(_ key: String) -> WorkspaceDesktop? {
+    let context = projectContext(key)
+    let online = Set(workspaceDesktops.filter(\.online).map(\.id))
+    guard
+      let place = LaunchModel.usualPlace(
+        recipe: context.recipe, places: context.usual, desktop: link?.home ?? "", online: online)
+    else { return nil }
+    return workspaceDesktops.first { $0.id == place.desktop }
   }
 
   // MARK: - IOS-9e: the pages, and the bar over them
@@ -383,11 +483,12 @@ public struct HomeScreen: View {
   }
 
   private var historyTab: some View {
-    HistoryLedgerView(desktops: historyDesktops.readers, router: history) { need in
+    HistoryLedgerView(history: historyDesktops, router: history) { need in
       historyDesktops.need(need)
     }
+    .environment(\.historyActs, historyActs)
     .safeAreaInset(edge: .bottom, spacing: 0) {
-      Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: history.stepperShowing))
+      Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: history.stepperShowing || slotProject != nil || slotSession != nil))
     }
   }
 
@@ -449,6 +550,10 @@ public struct HomeScreen: View {
         ZStack(alignment: .bottom) {
           if barStepper {
             stepper
+          } else if let key = slotProject {
+            newAgentSlot(key)
+          } else if let session = slotSession {
+            sessionSlot(session)
           }
           if selectedTab == .search {
             SearchBarRow(query: $searchQuery, focus: $searchFocused, typing: barTyping, glass: barGlass, onClose: closeSearch)
@@ -483,13 +588,23 @@ public struct HomeScreen: View {
   }
 
   private var barState: BarState {
-    BarState(tab: selectedTab, folded: barFolded, stepper: barStepper, typing: barTyping)
+    BarState(
+      tab: selectedTab, folded: barFolded, stepper: barStepper || slotProject != nil || slotSession != nil,
+      typing: barTyping)
   }
 
   /// History's scroll has folded the bar to its glyph (the page's minimize).
   private var barFolded: Bool { selectedTab == .history && history.barMinimized && !accountMenuOpen }
   /// A landed search is on top: the stepper rides the bar.
   private var barStepper: Bool { selectedTab == .history && history.stepperShowing && !accountMenuOpen }
+  /// PJ-7 — a project on top of History's stack, no landed search holding the
+  /// slot: New agent stands there (TP §6.3).
+  private var slotProject: String? {
+    guard selectedTab == .history, !history.stepperShowing, !accountMenuOpen,
+      case .project(let key)? = history.path.last
+    else { return nil }
+    return key
+  }
   /// A software keyboard stands under search: the row rides above it at the
   /// system's typing size. Focus alone is not enough — with a hardware
   /// keyboard the field is focused and no keyboard rises, and the row stays
@@ -562,6 +677,137 @@ public struct HomeScreen: View {
       .padding(.bottom, barFolded ? 0 : AppBar.height + AppBar.stepperGap)
   }
 
+  /// PJ-7 — a session on top of History's stack, no landed search holding the
+  /// slot: its act (Resume, Jump to, or why not) stands there (TP §6.3).
+  private var slotSession: HistorySession? {
+    guard selectedTab == .history, !history.stepperShowing, !accountMenuOpen,
+      case .session(let device, let id)? = history.path.last
+    else { return nil }
+    return historyDesktops.projects.corpus.sessions.values.lazy.flatMap { $0 }
+      .first { $0.id == id && ($0.device ?? device) == device }
+  }
+
+  /// The session's act in the stepper's slot, with where it runs.
+  @ViewBuilder
+  private func sessionSlot(_ session: HistorySession) -> some View {
+    if let act = historyActs.act(for: session) {
+      Button {
+        switch act {
+        case .jump: if let native = session.nativeSessionId { jumpToRun(native) }
+        case .resume: Task { resumeWords = await resumeSession(session) }
+        case .why: break
+        }
+      } label: {
+        HStack(spacing: 8) {
+          switch act {
+          case .jump: FieldGlyph(.jump, size: FieldGlyph.box(for: 15))
+          case .resume, .why: FieldGlyph(.resume, size: FieldGlyph.box(for: 15))
+          }
+          Text(act == .jump ? "Jump to" : "Resume").font(ChromeType.sans(15, .semibold))
+          Spacer(minLength: 6)
+          if case .why(let reason) = act {
+            Text(reason).font(ChromeType.sans(13))
+          } else if let words = resumeWords {
+            Text(words).font(ChromeType.sans(13)).lineLimit(1)
+          } else if let device = session.device {
+            DeviceMark(platform: link?.desktops.first { $0.deviceId == device }?.platform, size: 12)
+            Text([session.deviceName, session.folder].compactMap { $0 }.joined(separator: " · "))
+              .font(ChromeType.sans(13)).lineLimit(1)
+          }
+        }
+        .foregroundStyle(act == .why("asleep") ? ChromePalette.inkSecondary : ChromePalette.ink)
+        .padding(.horizontal, 18)
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .contentShape(Capsule())
+      }
+      .buttonStyle(.plain)
+      .disabled({ if case .why = act { true } else { false } }())
+      .frame(height: barFolded ? AppBar.height : AppBar.stepperHeight)
+      .liquidGlassCapsule()
+      .glassID("stepper", in: barGlass)
+      .padding(.horizontal, barFolded ? AppBar.margin + AppBar.height + AppBar.inlineGap : AppBar.margin)
+      .padding(.bottom, barFolded ? 0 : AppBar.height + AppBar.stepperGap)
+      .onChange(of: session.id) { resumeWords = nil }
+    }
+  }
+
+  // MARK: - PJ-7: History's acts (Q3 (a))
+
+  /// What History's rows may offer, and how they are done.
+  private var historyActs: HistoryActs {
+    HistoryActs(
+      inField: { native in liveAgents.contains { $0.join?.nativeSessionID == native } },
+      desktopAwake: { device in link?.desktops.first { $0.deviceId == device }?.state == .ready },
+      canResume: { device, provider in
+        fieldCatalogs[device].map { rows in rows.contains { $0.id == provider && $0.canResume } }
+      },
+      resume: { session in await resumeSession(session) },
+      jump: { native in jumpToRun(native) })
+  }
+
+  /// Resume on the session's OWN desktop's door, by its native id and no path
+  /// (that desktop fills the folder); a refusal is said in words.
+  private func resumeSession(_ session: HistorySession) async -> String {
+    guard let link, let device = session.device, let provider = session.provider,
+      let native = session.nativeSessionId
+    else { return "This session cannot be resumed from here" }
+    let desktop = link.desktops.first { $0.deviceId == device }?.name ?? session.deviceName ?? "its desktop"
+    let agent = fieldCatalogs[device]?.first { $0.id == provider }?.label ?? provider
+    do {
+      _ = try await link.workspaceCall(
+        on: device, method: "agent.resume",
+        params: AgentResumeNativeParams(provider: provider, nativeSessionId: native).json)
+      UINotificationFeedbackGenerator().notificationOccurred(.success)
+      return "Resuming on \(desktop)"
+    } catch {
+      UINotificationFeedbackGenerator().notificationOccurred(.warning)
+      let refusal = (error as? FieldProductError) ?? FieldProductError(kind: "UNAVAILABLE", message: "\(error)")
+      return FieldHistoryModel.resumeRefusal(
+        kind: refusal.kind, reason: refusal.details?["reason"]?.stringValue,
+        state: refusal.details?["state"]?.stringValue, message: refusal.message, desktop: desktop, agent: agent)
+    }
+  }
+
+  /// Jump to: the Field tab opens the card of the run that continues this
+  /// conversation (joined by the field row's native id).
+  private func jumpToRun(_ native: String) {
+    guard let agent = liveAgents.first(where: { $0.join?.nativeSessionID == native }),
+      let bubble = bubbles.first(where: { $0.id == agent.id })
+    else { return }
+    selectedTab = .field
+    openCard(on: bubble)
+  }
+
+  /// PJ-7 — New agent in the stepper's slot (DESIGN.md §8's FS-2 entry): the
+  /// Start glyph and its words, then the usual place's desktop.
+  private func newAgentSlot(_ key: String) -> some View {
+    let desktop = usualDesktop(key)
+    return Button {
+      beginCreate(projectContext(key))
+    } label: {
+      HStack(spacing: 8) {
+        FieldGlyph(.start, size: FieldGlyph.box(for: 15))
+        Text("New agent").font(ChromeType.sans(15, .semibold))
+        Spacer(minLength: 6)
+        if let desktop {
+          DeviceMark(platform: desktop.platform, size: 12)
+          Text(desktop.name).font(ChromeType.sans(13)).lineLimit(1)
+        }
+      }
+      .foregroundStyle(ChromePalette.ink)
+      .padding(.horizontal, 18)
+      .frame(maxWidth: .infinity, minHeight: 44)
+      .contentShape(Capsule())
+    }
+    .buttonStyle(.plain)
+    .frame(height: barFolded ? AppBar.height : AppBar.stepperHeight)
+    .liquidGlassCapsule()
+    .glassID("stepper", in: barGlass)
+    .padding(.horizontal, barFolded ? AppBar.margin + AppBar.height + AppBar.inlineGap : AppBar.margin)
+    .padding(.bottom, barFolded ? 0 : AppBar.height + AppBar.stepperGap)
+    .accessibilityLabel(desktop.map { "New agent, on \($0.name)" } ?? "New agent")
+  }
+
   /// The search circle becomes the field (their shared `glassID`), and the
   /// keyboard comes up once the field exists to take it.
   private func openSearch() {
@@ -621,6 +867,19 @@ public struct HomeScreen: View {
       where !link.desktops.contains(where: { $0.deviceId == remembered.deviceId }) {
         historyDesktops.markOffline(deviceId: remembered.deviceId, name: remembered.name)
       }
+    }
+    // PJ-7 — the one ledger of projects reads the home's door, else another
+    // answering desktop's
+    historyDesktops.chooseLedger(roster: historyRoster)
+  }
+
+  /// PJ-7 — the desktops as History's ledger draws them: the mark (the
+  /// platform), whether this phone hears it, and the home.
+  private var historyRoster: [FieldHistoryModel.RosterDesktop] {
+    (link?.desktops ?? []).map { desktop in
+      FieldHistoryModel.RosterDesktop(
+        id: desktop.deviceId, name: desktop.name, platform: desktop.platform,
+        awake: desktop.state == .ready, isHome: desktop.deviceId == link?.home)
     }
   }
 
@@ -695,7 +954,7 @@ public struct HomeScreen: View {
           if let open = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-project=") }) {
             let id = String(open.dropFirst("-vf-mock-project=".count))
             if HistoryCorpus.mock.project(id) != nil {
-              history.path = [.project(device: HistoryCorpus.mock.deviceId, id: id)]
+              history.path = [.project(id: id)]
               selectedTab = .history
             }
           }
@@ -704,7 +963,7 @@ public struct HomeScreen: View {
             let id = String(open.dropFirst("-vf-mock-session=".count))
             if let document = HistoryCorpus.mock.document(id) {
               history.path = [
-                .project(device: HistoryCorpus.mock.deviceId, id: document.projectId),
+                .project(id: document.projectId),
                 .session(device: HistoryCorpus.mock.deviceId, id: id),
               ]
               selectedTab = .history
@@ -736,8 +995,16 @@ public struct HomeScreen: View {
           demoHistory = true
           let offline = ProcessInfo.processInfo.arguments.contains("-vf-demo-history-offline")
           let door = HistoryFixtureDoor()
-          historyDesktops.attach(
-            deviceId: "dev-fixture", name: "studio", isHome: true, door: door, ownsDoor: true)
+          // PJ-7 — the goldens' own desktops: `studio` answers (its door is
+          // the fixture's), `laptop` sleeps
+          let studio = "01J9ZK3M5Q8XR2V7N4B6C1D0EF"
+          let roster = [
+            FieldHistoryModel.RosterDesktop(id: studio, name: "studio", platform: "darwin", awake: true, isHome: true),
+            FieldHistoryModel.RosterDesktop(
+              id: "01J9ZM0PQ7W3E6R8T2Y4U1I5O9", name: "laptop", platform: "win32", awake: false, isHome: false),
+          ]
+          historyDesktops.attach(deviceId: studio, name: "studio", isHome: true, door: door, ownsDoor: true)
+          historyDesktops.chooseLedger(roster: roster)
           selectedTab = .history
           let open = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-demo-history-session=") })
             .map { String($0.dropFirst("-vf-demo-history-session=".count)) }
@@ -745,29 +1012,30 @@ public struct HomeScreen: View {
             // the ledger first (the reads are one in-process answer each),
             // then the document asked for, then — offline — the door goes
             var waited = 0
-            while historyDesktops.reader(for: "dev-fixture")?.corpus.projects.isEmpty ?? true, waited < 50 {
+            while historyDesktops.projects.corpus.projects.isEmpty, waited < 50 {
               try? await Task.sleep(for: .milliseconds(100))
               waited += 1
             }
             if let project = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-demo-history-project=") })
               .map({ String($0.dropFirst("-vf-demo-history-project=".count)) })
             {
-              historyDesktops.need(.project(device: "dev-fixture", id: project))
-              history.path = [.project(device: "dev-fixture", id: project)]
+              historyDesktops.need(.project(id: project))
+              history.path = [.project(id: project)]
             }
             if let open {
-              historyDesktops.need(.session(device: "dev-fixture", id: open))
+              historyDesktops.need(.session(device: studio, id: open))
               waited = 0
-              while historyDesktops.reader(for: "dev-fixture")?.corpus.document(open) == nil, waited < 50 {
+              while historyDesktops.reader(for: studio)?.corpus.document(open) == nil, waited < 50 {
                 try? await Task.sleep(for: .milliseconds(100))
                 waited += 1
               }
-              history.path = [.session(device: "dev-fixture", id: open)]
+              history.path = [.session(device: studio, id: open)]
             }
             if offline {
-              historyDesktops.forget(deviceId: "dev-fixture")
-              historyDesktops.markOffline(deviceId: "dev-fixture", name: "studio", isHome: true)
-              if let open { historyDesktops.reader(for: "dev-fixture")?.replayDocument(open) }
+              historyDesktops.forget(deviceId: studio)
+              historyDesktops.markOffline(deviceId: studio, name: "studio", isHome: true)
+              historyDesktops.chooseLedger(roster: roster)
+              if let open { historyDesktops.reader(for: studio)?.replayDocument(open) }
             }
           }
         }

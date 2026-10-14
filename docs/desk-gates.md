@@ -19,7 +19,10 @@ cutover of `desk/landing` needs, what each proves, where it runs, and its verdic
   `--from <gate>` run a part, `--list` prints the list, `--logs <dir>` keeps the logs there (default: a fresh directory under
   the OS temp, named on the first line). The Mac is kept awake while it runs (`caffeinate -w`). Run it on a quiet machine:
   other sessions' Electron and vitest load the timing rows, and a timing row red under load is re-run at a quiet moment before
-  it is called (the K-H rule).
+  it is called (the K-H rule). `VF_PERF_LOCKS=<path>[:<path>…]` names lock files a perf measurement holds while it owns the
+  host: before EACH gate the run waits while any of them exists, and says so (`GATE_WAIT <gate> waits: …` and `… waited
+  <n>s`); a lock that appears mid-gate is met at the next gate's start. The paths are this host's and the caller's, never the
+  script's; unset, the run is as it was (DEBTS, 2026-10-14).
 
 ## The list
 

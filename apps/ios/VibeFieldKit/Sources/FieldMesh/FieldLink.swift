@@ -591,10 +591,17 @@ public final class FieldLink {
 
   /// FS-2: bounded row reads and spawn on the selected owner. No new socket
   /// while History already holds its door, and no forwarding through home.
+  /// PJ-7: the launch sheet's profile and model reads, and History's Resume —
+  /// each asked of the desktop it is about, never through the home.
+  public static let workspaceMethods: Set<String> = [
+    "workspace.roots", "workspace.list", "workspace.search", "agent.catalog", "agent.spawn",
+    "agents.profileSets.list", "agent.models", "agent.resume",
+  ]
+
   public func workspaceCall(
     on deviceId: String, method: String, params: JSONValue? = nil
   ) async throws -> JSONValue {
-    guard ["workspace.roots", "workspace.list", "workspace.search", "agent.catalog", "agent.spawn"].contains(method) else {
+    guard Self.workspaceMethods.contains(method) else {
       throw FieldProductError(kind: "FORBIDDEN_SCOPE", message: "not a workspace act", retryable: false)
     }
     return try await ownerDoor(deviceId, refusal: Self.noFilesDoor) { client in

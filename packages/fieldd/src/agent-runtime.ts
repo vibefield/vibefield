@@ -72,6 +72,7 @@ import {
   type ForwardedFor,
   isAgentResumeRun,
   LAYOUT,
+  type PlaceRef,
   type TerminalInfo,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
@@ -114,6 +115,7 @@ import type { AccountUsageRuntime } from "./agent-usage";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError } from "./native-link";
 import { createDarwinSecretStore, type SecretStore } from "./plugin-settings";
+import type { OwnPlace } from "./projects/project-groups";
 import type { LaunchRecipe } from "./projects/project-records";
 import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
 import type { GrantPrincipal } from "./terminal-grants";
@@ -407,12 +409,21 @@ export interface AgentRuntimeServiceOptions {
    * at boot): no act of the person's. PJ-6 — `recipe` when the run is a
    * launch from VibeField's own controls (`agent.spawn`), what it chose: the
    * project's recipe takes it. A resume, a re-attach and a typed run carry
-   * none (Q6). */
+   * none (Q6). PJ-7 — `place` when the launch named its place by ref: the
+   * placeId it resolved, so the act is that place's with no folder lookup. */
   onPlace?: (
     cwd: string,
     at: string,
-    how?: { system: boolean; recipe?: LaunchRecipe | undefined },
+    how?: {
+      system: boolean;
+      recipe?: LaunchRecipe | undefined;
+      place?: string | undefined;
+    },
   ) => void;
+  /** PJ-7 (Q1 (a)) — a place a launch names by ref, read from this desktop's
+   * own place facts (`ProjectGroups.ownPlace`); absent, every launch by place
+   * is refused `unknown-place` */
+  place?: (ref: PlaceRef) => OwnPlace;
   now?: () => Date;
   logger?: Logger;
 }
@@ -1097,8 +1108,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     forwardedFor?: ForwardedFor,
   ): Promise<AgentSpawnResult> {
     this.requireOffered(params.provider, "spawn");
+    // PJ-7 — a place by ref is resolved here, before the floor is asked
+    const place =
+      params.place !== undefined ? this.placeFolder(params.provider, params.place) : null;
     const terminals = this.requireTerminals();
-    const cwd = params.cwd ?? this.home;
+    const cwd = place?.path ?? params.cwd ?? this.home;
     const identity = this.identity();
     const entry = await this.creation(params.profileId ?? null, async () => {
       const result = await this.runtime.spawn({
@@ -1127,6 +1141,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         cwd,
         title: params.title,
         ...identity.launched(),
+        ...(place !== null ? { place: place.placeId } : {}),
         ...(selection !== undefined ? { modelSelection: selection } : {}),
         ...(profileSet !== undefined
           ? {
@@ -1140,6 +1155,72 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       });
     });
     return this.ticketed(entry, principal, terminals, forwardedFor);
+  }
+
+  /** PJ-7 (Q1 (a)) — the folder a launch by place runs in: the place's own
+   * path, from this desktop's own facts, and only while it is a folder here
+   * now (the facts are sticky — a deleted place keeps its last ones — so the
+   * disk is asked too). Refused in fieldd's words, the ref in the details and
+   * never the path (the caller sent none): another desktop's place is
+   * `not-here` (a desktop launches only into its own; PJ-8 carries acts across
+   * desktops), an id with no facts here `unknown-place`, a folder gone or
+   * unmounted today's `missing-cwd`. */
+  private placeFolder(provider: string, ref: PlaceRef): { path: string; placeId: string } {
+    const found = this.opts.place?.(ref) ?? { state: "unknown" as const };
+    const place = { device: ref.device, placeId: ref.placeId };
+    if (found.state === "not-here") {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "that place is on another desktop; a desktop starts agents only in its own places",
+        false,
+        { provider, reason: "not-here", place },
+      );
+    }
+    if (found.state === "unknown") {
+      throw new RpcCallError("NOT_FOUND", "this desktop knows no place by that id", false, {
+        provider,
+        reason: "unknown-place",
+        place,
+      });
+    }
+    const { facts } = found;
+    if (!facts.exists || !facts.mounted || !isAbsolute(facts.path) || !isDirectory(facts.path)) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        facts.mounted
+          ? "the place's folder is gone from this device"
+          : "the place's folder is on a volume that is not mounted",
+        false,
+        { provider, reason: "missing-cwd", place },
+      );
+    }
+    return { path: facts.path, placeId: facts.placeId };
+  }
+
+  /** QL-D10 — a native resume continues only under a persona still signed
+   * in (none: the agent's own folder): else `signed-out`. */
+  private requirePersonaActive(provider: string, profileId: string | undefined): void {
+    if (!this.personaActive(profileId)) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the account this conversation was held under is signed out",
+        false,
+        { provider, state: "signed-out" },
+      );
+    }
+  }
+
+  /** QL-D10 — a native resume runs only in an existing absolute folder of
+   * this device: else `missing-cwd`, with the folder it named. */
+  private requireConversationFolder(provider: string, cwd: string): void {
+    if (!isAbsolute(cwd) || !isDirectory(cwd)) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the conversation's folder is not a folder on this device",
+        false,
+        { provider, reason: "missing-cwd", cwd },
+      );
+    }
   }
 
   /** `agent.resume` — a run of ours (its record), or QL-D10's conversation by
@@ -1215,24 +1296,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     terminals: TerminalService,
     forwardedFor?: ForwardedFor,
   ): Promise<AgentSpawnResult> {
-    const profileId = await this.resumeProfile(params);
-    if (!this.personaActive(profileId)) {
-      throw new RpcCallError(
-        "PRECONDITION_FAILED",
-        "the account this conversation was held under is signed out",
-        false,
-        { provider: params.provider, state: "signed-out" },
-      );
-    }
-    const cwd = params.cwd ?? this.home;
-    if (!isAbsolute(cwd) || !isDirectory(cwd)) {
-      throw new RpcCallError(
-        "PRECONDITION_FAILED",
-        "the conversation's folder is not a folder on this device",
-        false,
-        { provider: params.provider, reason: "missing-cwd", cwd },
-      );
-    }
+    // a persona the caller NAMES (by id, or by an Agent Profile's sign-in) is
+    // resolved and checked first, as it always was
+    const named = params.profileId !== undefined || params.profileSet !== undefined;
+    const asked = named ? await this.resumeProfile(params) : undefined;
+    if (named) this.requirePersonaActive(params.provider, asked);
+    // a folder the caller names is checked first, as it always was
+    if (params.cwd !== undefined) this.requireConversationFolder(params.provider, params.cwd);
     // …and only a conversation the INDEX files under this agent: the
     // renderer's word for which agent a native id belongs to is not provenance.
     const filed = await this.opts.index.nativeSessionAgent(params.nativeSessionId);
@@ -1253,8 +1323,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // enrolled root is one persona's. The persona the caller named (by id, or
     // by its Agent Profile's sign-in) must be that one — no persona where the
     // index files it in the agent's own folder. The renderer's word for the
-    // persona is no more provenance than its word for the agent.
-    if (filed.profileId !== profileId) {
+    // persona is no more provenance than its word for the agent. PJ-7 (the
+    // lead's ruling on pj7k's ask, PJ-D10 (a) "under its own profile") — a
+    // resume that names NO persona runs under the index's, as it runs in the
+    // index's folder: no word of the caller's is taken, so it is adopted, and
+    // the sign-in check is made on the persona actually used.
+    const profileId = named ? asked : filed.profileId;
+    if (named && filed.profileId !== profileId) {
       throw new RpcCallError(
         "PRECONDITION_FAILED",
         "the conversation is held under another profile than the one named",
@@ -1266,6 +1341,20 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         },
       );
     }
+    if (!named) this.requirePersonaActive(params.provider, profileId);
+    // PJ-7 (Q3 (a)) — no folder named (the phone's Resume names none): the
+    // conversation's own, from this desktop's index row for the id — never
+    // home, which was never its folder; a row that names none is refused
+    const cwd = params.cwd ?? filed.cwd;
+    if (cwd === undefined) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the agent index knows no folder for this conversation; name the folder to resume it in",
+        false,
+        { provider: params.provider, reason: "missing-cwd" },
+      );
+    }
+    if (params.cwd === undefined) this.requireConversationFolder(params.provider, cwd);
     const identity = this.identity();
     // PJ-6 (Q4) — a conversation a run of ours launched at a model resumes at
     // it, in the account the index files it under
@@ -2157,6 +2246,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       /** PJ-6 — a launch from VibeField's own controls: what its project's
        * recipe takes (agent.spawn only) */
       recipe?: LaunchRecipe | undefined;
+      /** PJ-7 — the place a launch by place resolved (its placeId) */
+      place?: string | undefined;
     },
   ): ManagedEntry {
     const info = agent.info;
@@ -2189,6 +2280,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       this.opts.onPlace?.(launch.cwd, now, {
         system: launch.reattached !== undefined,
         ...(launch.recipe !== undefined ? { recipe: launch.recipe } : {}),
+        ...(launch.place !== undefined ? { place: launch.place } : {}),
       });
     } catch (error) {
       this.logger.warn("fieldd.agents.place_failed", "A run's folder could not be made a place", {

@@ -28,6 +28,12 @@ public enum WorkspaceFixtureDoor {
         return .object(page)
       case "workspace.search": return try fixture("workspace-search.valid")
       case "agent.catalog": return try fixture("agent-catalog.valid")
+      // PJ-7 — the sheet's Profile and Model rows over the goldens
+      case "agents.profileSets.list": return try fixture("agents-profile-sets.valid")
+      case "agent.models":
+        var answer = try fixture("agent-models.valid").objectValue ?? [:]
+        answer["provider"] = params?["provider"] ?? answer["provider"]
+        return .object(answer)
       case "agent.spawn":
         if ProcessInfo.processInfo.arguments.contains("-vf-demo-workspace=spawning") {
           try await Task.sleep(for: .seconds(60))

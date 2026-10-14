@@ -18,6 +18,12 @@ public enum FieldGlyphName: String, CaseIterable, Sendable {
   case scanText = "scantext"
   case snippets
   case clipboard
+  /// PJ-7 — the Session Glyphs (DESIGN.md §13): `terminal`'s window with its
+  /// verb — a plus for New agent, play for Resume, the arrow coming in through
+  /// the opened wall for Jump to.
+  case start
+  case resume
+  case jump
 
   var assetName: String { "glyph-\(rawValue)" }
 }

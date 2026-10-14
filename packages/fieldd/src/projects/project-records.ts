@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { PROJECT_DOORS, ProjectRecipe } from "@vibefield/contracts";
+import { type PlaceRef, PROJECT_DOORS, ProjectRecipe } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { RpcCallError } from "../native-link";
 import type { GroupedProject, GroupingIntents } from "./grouping";
@@ -34,7 +34,8 @@ import type { ProjectWrite } from "./records-doc";
 //   acted (a launch/resume) the place joins the record's places acted in (D6)
 //   recipe (a launch)       PJ-6: what a launch from VibeField's own controls
 //                           chose, merged into the project's recipe (each
-//                           model's controls kept), last writer wins
+//                           model's controls kept), last writer wins; PJ-7:
+//                           with the place it entered, by the doors' ref
 //
 // Temporary is a bucket, not a project (PJ-L4): an act on it is refused, and
 // a launch there makes no record. A desktop's Home is a project (J11,
@@ -73,8 +74,15 @@ export interface LaunchRecipe {
  * agent, profile and model, and every model's controls as last chosen — the
  * launch's model takes its controls as launched (`{}`: its own), the rest are
  * kept while the agent stays the same (another agent's model ids mean nothing
- * to this one, so a switch of agent starts the map afresh). */
-export function recipeAfter(prior: unknown, launch: LaunchRecipe, at: number): ProjectRecipe {
+ * to this one, so a switch of agent starts the map afresh). PJ-7 — `place`, the
+ * place the launch entered (PJ-D6's "your last launch's place"): the newest
+ * launch's, never an older one's. */
+export function recipeAfter(
+  prior: unknown,
+  launch: LaunchRecipe,
+  at: number,
+  place?: PlaceRef,
+): ProjectRecipe {
   const held = ProjectRecipe.safeParse(prior);
   const kept =
     held.success && held.data.provider === launch.provider ? held.data.controlsByModel : {};
@@ -96,6 +104,7 @@ export function recipeAfter(prior: unknown, launch: LaunchRecipe, at: number): P
       : {}),
     controlsByModel,
     at,
+    ...(place !== undefined ? { place } : {}),
   };
 }
 
@@ -171,6 +180,9 @@ interface PendingAct {
   readonly cwd: string;
   readonly at: number;
   readonly recipe?: LaunchRecipe;
+  /** PJ-7 — the place a launch by place entered (its placeId), no folder
+   * lookup needed */
+  readonly placeId?: string;
 }
 
 const byStrength = (a: string, b: string): number => {
@@ -223,10 +235,17 @@ export class ProjectRecords {
    * VibeField's own controls brings its `recipe`, merged into the project's
    * (`recipeAfter`) in the same commit; Temporary records neither. (This is
    * the recipe's one writer: PJ-2's keyed `setRecipe` seam is gone — a birth
-   * knows its folder, not its project's key.) */
-  actedIn(cwd: string, at: number, recipe?: LaunchRecipe): void {
+   * knows its folder, not its project's key.) PJ-7 — `placeId`, the place a
+   * launch by place resolved: the act is that place's, with no folder lookup;
+   * the recipe names it by the ref the doors answer. */
+  actedIn(cwd: string, at: number, recipe?: LaunchRecipe, placeId?: string): void {
     if (this.#disposed) return;
-    this.#pending.push({ cwd, at, ...(recipe !== undefined ? { recipe } : {}) });
+    this.#pending.push({
+      cwd,
+      at,
+      ...(recipe !== undefined ? { recipe } : {}),
+      ...(placeId !== undefined ? { placeId } : {}),
+    });
     if (this.#pending.length > PENDING_ACTS_MAX) this.#pending.shift();
     void this.#serial(() => this.#drainActs()).catch(() => {});
   }
@@ -389,7 +408,7 @@ export class ProjectRecords {
     const library = this.#opts.library();
     const snapshot = this.#opts.groups.regroupNow();
     const placeOf = this.#opts.placeOf;
-    if (library === null || snapshot === null || placeOf === undefined) return;
+    if (library === null || snapshot === null) return;
     const waiting: PendingAct[] = [];
     const writes: ProjectWrite[] = [];
     const ensured = new Map<GroupedProject, string>();
@@ -397,14 +416,18 @@ export class ProjectRecords {
     const recipes = new Map<GroupedProject, unknown>();
     let recorded = 0;
     for (const act of this.#pending) {
-      const placeId = placeOf(act.cwd);
+      const placeId = act.placeId ?? placeOf?.(act.cwd) ?? null;
       const project =
         placeId === null
           ? undefined
           : snapshot.result.projects.find((p) =>
               p.places.some((pl) => pl.placeId === placeId || pl.aliasIds.includes(placeId)),
             );
-      if (placeId === null || project === undefined) {
+      // the place as the doors name it: its canonical id, on its device
+      const entered = project?.places.find(
+        (pl) => pl.placeId === placeId || (placeId !== null && pl.aliasIds.includes(placeId)),
+      );
+      if (placeId === null || project === undefined || entered === undefined) {
         waiting.push(act);
         continue;
       }
@@ -422,6 +445,7 @@ export class ProjectRecords {
           recipes.has(project) ? recipes.get(project) : project.recipe,
           act.recipe,
           act.at,
+          { device: entered.deviceId, placeId: entered.placeId },
         );
         recipes.set(project, recipe);
         writes.push({ kind: "recipe", record: recordId, recipe });

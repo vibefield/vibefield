@@ -146,7 +146,7 @@ public struct HistorySearchView: View {
 
   private func groupHead(_ group: HistoryHitGroup, corpus: HistoryCorpus) -> some View {
     let project = corpus.project(group.projectId)
-    let color = HistoryParts.projectColor(seq: project?.seq ?? 0, scheme: scheme)
+    let color = HistoryParts.projectColor(project, scheme: scheme)
     return HStack(alignment: .center, spacing: 8) {
       Capsule().fill(color).frame(width: 3, height: 14)
       HStack(spacing: 4) {

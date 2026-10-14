@@ -231,6 +231,25 @@ describe("the tolerant reader on an answer", () => {
     expect(later["later"]).toEqual({ kept: 1 });
   });
 
+  it("PJ-7 — the recipe names the place its launch entered by ref; a place this reader cannot read is no place, never a lost recipe", () => {
+    const { "//": _note, ...summary } = fixture("project-summary.recipe-place.json");
+    const parsed = ProjectSummary.parse(summary);
+    expect(parsed.recipe?.place).toEqual({
+      device: "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      placeId: "pl_4c1e9a0b7d2f6e8a1b3c5d7e",
+    });
+    expect(parsed.recipe?.provider).toBe("claude");
+    // a recipe written before PJ-7 carries none
+    const { "//": _older, ...older } = fixture("project-summary.recipe.json");
+    expect(ProjectSummary.parse(older).recipe?.place).toBeUndefined();
+    const recipe = summary["recipe"] as Record<string, unknown>;
+    for (const unreadable of [{ device: "d" }, { device: "", placeId: "pl_1" }, "/Users/me/x"]) {
+      const read = ProjectSummary.parse({ ...summary, recipe: { ...recipe, place: unreadable } });
+      expect(read.recipe?.provider, JSON.stringify(unreadable)).toBe("claude");
+      expect(read.recipe?.place, JSON.stringify(unreadable)).toBeUndefined();
+    }
+  });
+
   it("J11 — a desktop's Home is a project on one device; Temporary is the only bucket", () => {
     const { "//": _note, ...home } = fixture("project-summary.home.json");
     const parsed = ProjectSummary.parse(home);

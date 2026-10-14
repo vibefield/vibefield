@@ -301,10 +301,15 @@ public struct AgentJoin: Sendable, Equatable, Codable {
   /// greyed (`FieldAssembly` dresses it stale), because asleep is a state and
   /// not an absence. `true` for a feed with no mesh behind it.
   public var deviceLive: Bool
+  /// PJ-7 (Q3) — the agent's own id for the conversation this run continues
+  /// (the field row's `nativeSessionId`): what History's Jump to joins a
+  /// session row to its card by. The id only, never the folder (EL7 B1); nil
+  /// until the agent says it.
+  public var nativeSessionID: String?
 
   public init(
     deviceID: String, hosted: String, runtimeSessionID: String? = nil, pending: Bool = false,
-    exited: Bool = false, deviceLive: Bool = true
+    exited: Bool = false, deviceLive: Bool = true, nativeSessionID: String? = nil
   ) {
     self.deviceID = deviceID
     self.hosted = hosted
@@ -312,6 +317,7 @@ public struct AgentJoin: Sendable, Equatable, Codable {
     self.pending = pending
     self.exited = exited
     self.deviceLive = deviceLive
+    self.nativeSessionID = nativeSessionID
   }
 
   /// Whether the run has a terminal at all, by the wire's word.

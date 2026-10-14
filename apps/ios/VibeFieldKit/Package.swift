@@ -254,7 +254,11 @@ let package = Package(
     // The home screen: the field's composition, bubble chrome, session card —
     // and since IOS-9a the tab bar the two views stand under.
     .target(name: "FieldWorkspace", dependencies: ["FieldProduct", "FieldDesign"], resources: [.copy("Fixtures")]),
-    .testTarget(name: "FieldWorkspaceTests", dependencies: ["FieldWorkspace", "FieldProduct"], resources: [.copy("Fixtures")]),
+    // PJ-7 — the witness runs the phone's own History reader beside the launch
+    // sheet, so the test target takes FieldHistory too (test-only).
+    .testTarget(
+      name: "FieldWorkspaceTests", dependencies: ["FieldWorkspace", "FieldProduct", "FieldHistory"],
+      resources: [.copy("Fixtures")]),
     .target(
       name: "FieldHome",
       dependencies: [
@@ -268,7 +272,14 @@ let package = Package(
     // edge pinned to goldens computed from the contracts' own TypeScript, and
     // the die-cut witnessed on pixels.
     .testTarget(name: "FieldDesignTests", dependencies: ["FieldDesign"]),
-    .testTarget(name: "FieldAgentsTests", dependencies: ["FieldAgents"]),
+    .testTarget(
+      name: "FieldAgentsTests",
+      dependencies: ["FieldAgents"],
+      // PJ-7 — the project ink's golden table, the design kit's OWN bytes
+      // (`packages/design-kit/fixtures`), which the TypeScript test reads too.
+      // `pnpm check:ios-fixtures` keeps the word "copy" true.
+      resources: [.copy("Fixtures")]
+    ),
     .testTarget(
       name: "FieldProductTests",
       dependencies: ["FieldProduct"],

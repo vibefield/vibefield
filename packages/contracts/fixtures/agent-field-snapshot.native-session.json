@@ -1,0 +1,55 @@
+{
+  "//": "PJ-7 (Q3 (a)) — the phone's field row carries the provider-native id of the conversation a run continues, so a History row joins the card it jumps to. The id only: never the folder (EL7 B1). A run whose agent has not said its id yet carries none.",
+  "epoch": "fieldd-5d1e2a7c90b3f418.2",
+  "revision": 12,
+  "rows": [
+    {
+      "runtimeRunId": "run-placed",
+      "revision": 4,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "working",
+      "statusSince": "2026-10-14T09:12:40.000Z",
+      "stateChangedAt": "2026-10-14T09:12:40.000Z",
+      "createdAt": "2026-10-14T09:12:31.000Z",
+      "alive": true,
+      "blockers": [],
+      "lastActivityAt": "2026-10-14T09:12:44.000Z",
+      "nativeSessionId": "4f9c2d1e-7a3b-4c8d-9e0f-1a2b3c4d5e6f",
+      "model": {
+        "id": "claude-opus-5",
+        "displayName": "Opus 5"
+      },
+      "project": {
+        "name": "vibe-field",
+        "branch": "main"
+      },
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-5a20",
+        "workloadClass": "agent"
+      }
+    },
+    {
+      "runtimeRunId": "run-unsaid",
+      "revision": 1,
+      "kind": "codex",
+      "label": "Codex",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "unknown",
+      "statusSince": "2026-10-14T09:13:02.000Z",
+      "stateChangedAt": "2026-10-14T09:13:02.000Z",
+      "createdAt": "2026-10-14T09:13:02.000Z",
+      "alive": true,
+      "blockers": [],
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-5a21",
+        "workloadClass": "agent"
+      }
+    }
+  ]
+}

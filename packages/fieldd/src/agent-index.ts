@@ -1001,10 +1001,12 @@ export class IndexService {
    * catalog id that kind maps to. `undefined` when the index has never read
    * the id; `{}` when it has, but no catalog row maps its kind. A native
    * resume takes an id only the index vouches for, and only for the agent the
-   * index says it belongs to — the renderer's word is not provenance. */
+   * index says it belongs to — the renderer's word is not provenance. PJ-7
+   * (Q3 (a)) — and the folder the conversation worked in (`cwd`, absent when
+   * the row names none): a resume that names no folder runs there. */
   async nativeSessionAgent(
     nativeSessionId: string,
-  ): Promise<{ provider?: string; profileId?: string } | undefined> {
+  ): Promise<{ provider?: string; profileId?: string; cwd?: string } | undefined> {
     this.requireReady();
     const rows = (await this.fetchSessionRows([nativeSessionId], SESSION_FACTS_LIMIT)).filter(
       (row) => row.native_session_id === nativeSessionId,
@@ -1017,6 +1019,7 @@ export class IndexService {
     return {
       ...(provider !== undefined ? { provider } : {}),
       ...(runtime?.profileId !== undefined ? { profileId: runtime.profileId } : {}),
+      ...(typeof row.cwd === "string" && row.cwd !== "" ? { cwd: row.cwd } : {}),
     };
   }
 

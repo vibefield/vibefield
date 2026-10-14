@@ -1,0 +1,9 @@
+{
+  "provider": "claude",
+  "cwd": "/Users/test/Projects/vibe-field",
+  "profileSet": "work-7f3a",
+  "modelSelection": {
+    "modelId": "model-card-v2",
+    "controls": { "effort": "high" }
+  }
+}

@@ -28,6 +28,10 @@ public enum FieldPalette {
   // swarm's ink is `textMain`, at a weight from `SwarmWeight`'s ladder.
   public static let bodySurface = dynamic(light: 0xE5E5E5, dark: 0x2A2A2A)
 
+  // PJ-7 — the spawn bloom's bud (DESIGN.md §8 "Hold, reach, let go": a clear
+  // disc, `--bud-bg` white / #242424, with a 1.25 px ring at 22% ink).
+  public static let bloomBud = dynamic(light: 0xFFFFFF, dark: 0x242424)
+
   // The terminal card surface (the desktop terminal deck's paper)
   public static let terminalBackground = dynamic(light: 0xECE8DC, dark: 0x282C34)
   public static let terminalDivider = dynamic(light: 0xD2CEC3, dark: 0x414650)

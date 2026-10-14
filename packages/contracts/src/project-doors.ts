@@ -149,7 +149,11 @@ export const PROJECT_NAME_SOURCES = ["you", "repository", "folder", "home", "buc
  * as last chosen, so switching back to a model brings its own effort back (a
  * model with `{}` ran at its own). Every id is the agent's own, opaque
  * (AR-L1). `at` is the launch's time, epoch ms. Written by fieldd at a
- * CONFIRMED birth (after the run entered the fold, never on a refusal). */
+ * CONFIRMED birth (after the run entered the fold, never on a refusal).
+ * PJ-7 (the lead's call; PJ-D6's "your last launch's place") — `place` is the
+ * place that launch entered, by ref (never its path), so a phone's folder row
+ * fills from it; absent on a recipe written before PJ-7, and a ref this reader
+ * cannot read is no place, never a lost recipe. */
 export const ProjectRecipe = z
   .object({
     provider: AgentProviderId,
@@ -163,6 +167,7 @@ export const ProjectRecipe = z
       z.record(z.string().min(1).max(1024), z.string().min(1).max(1024)),
     ),
     at: z.number().finite(),
+    place: PlaceRef.optional().catch(undefined),
   })
   .passthrough();
 export type ProjectRecipe = z.infer<typeof ProjectRecipe>;

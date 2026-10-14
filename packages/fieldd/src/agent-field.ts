@@ -324,6 +324,11 @@ export function projectFieldRow(summary: AgentSessionSummary): ProjectedFieldRow
         }
       : {}),
     ...(project !== undefined ? { project } : {}),
+    // PJ-7 (Q3 (a)) — the provider-native id the fold joins on, so the phone's
+    // History row finds the card it jumps to. The id, never the folder: the
+    // path stays on this desktop's window cut (`localFactsOf`, EL7 B1). The
+    // phone's cut only: `projectDeskRow` leaves it off.
+    nativeSessionId: summary.sessionId,
     // The join, verbatim: `{hosted, runtimeSessionId, cellBootId?,
     // workloadClass?, replaced?}` is what a body's card attaches THROUGH (G3),
     // and every field of it is already content-free.
@@ -562,7 +567,9 @@ export function projectDeskRow(
   monitorRow?: MonitorAgentRow | undefined,
   audience: "peer" | "window" = "peer",
 ): ProjectedFieldRow {
-  const field = projectFieldRow(summary);
+  // PJ-7 — the conversation id is the PHONE's (its History row's Jump to): a
+  // window reads its own runs' ids from `local`, and no peer's desk asks one
+  const { nativeSessionId: _phones, ...field } = projectFieldRow(summary);
   const message = deskMessage(summary, chars);
   const mirrorBlockers = summary.monitor?.blockers ?? [];
   const blockers: AgentDeskBlocker[] = field.blockers.map((blocker, index) => {

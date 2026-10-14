@@ -33,6 +33,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -75,6 +76,7 @@ import {
   type AgentsProfilesListResult,
   type AgentsProfilesLoginResult,
   LAYOUT,
+  type PlaceFacts,
   SOCKETS,
   type TerminalInfo,
 } from "@vibefield/contracts";
@@ -85,6 +87,7 @@ import { RpcCallError } from "../src/native-link";
 import type { SecretStore } from "../src/plugin-settings";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { RootsRegistry } from "../src/workspace/roots";
+import { born } from "./agent-birth";
 import { catalogWith, SCRIPTED_CATALOG, SCRIPTED_ROW } from "./agent-catalog-fixture";
 import {
   killDaemonTree,
@@ -1151,7 +1154,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     const win = await window(daemon, DECK, "r1");
 
     // ── the birth ──
-    const spawned = (await win.call("agent.spawn", {
+    const spawned = (await born(win, "agent.spawn", {
       provider: "scripted",
       cwd: envOut,
       title: "scripted one",
@@ -1316,7 +1319,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     expect(daemon.agents.runtime.agent(spawned.terminal.sessionId)).toBeUndefined();
 
     // ── resume: a new run in a new PTY, the vendor's conversation continued ──
-    const resumed = (await win.call("agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
+    const resumed = (await born(win, "agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
     expect(resumed.session.runtimeRunId).not.toBe(runId);
     expect(resumed.session.sessionId).toBe(spawned.session.sessionId);
     expect(resumed.session.title).toBe("scripted one");
@@ -1355,7 +1358,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     const box = await setup({ floor: "real", catalog: FILED_CATALOG });
     const { daemon, dataDir, envOut, sessions, records } = box;
     const win = await window(daemon, DECK, "qn3");
-    const spawned = (await win.call("agent.spawn", {
+    const spawned = (await born(win, "agent.spawn", {
       provider: "scripted",
       cwd: envOut,
       title: "first",
@@ -1391,7 +1394,7 @@ describe("managed sessions over the REAL floor (field-native)", () => {
       15_000,
     );
 
-    const resumed = (await win.call("agent.resume", {
+    const resumed = (await born(win, "agent.resume", {
       provider: "scripted",
       nativeSessionId: conversation,
       cwd: envOut,
@@ -1733,7 +1736,7 @@ describe("a server's values over the REAL floor (AR-S4d)", () => {
     );
 
     const win = await window(daemon, DECK, "v1");
-    const spawned = (await win.call("agent.spawn", {
+    const spawned = (await born(win, "agent.spawn", {
       provider: "scripted",
       cwd: envOut,
       title: "given a key",
@@ -1834,7 +1837,7 @@ describe("PJ-6 — a launch at a model the agent offers (agent.spawn {modelSelec
   it("starts at the model and the control chosen: the adapter is handed them, the row is born, and the ledger says a selection was applied without naming it", async () => {
     const { daemon, dataDir, envOut, models } = await setup({ floor: "real" });
     const win = await window(daemon, DECK, "pj6b");
-    const spawned = (await win.call("agent.spawn", {
+    const spawned = (await born(win, "agent.spawn", {
       provider: "scripted",
       cwd: envOut,
       // a key a newer caller adds rides the contract, and never reaches
@@ -1853,7 +1856,7 @@ describe("PJ-6 — a launch at a model the agent offers (agent.spawn {modelSelec
     expect(auditText(dataDir)).not.toContain("model-a");
 
     // no selection: the agent's own settings, and no picker read
-    const plain = (await win.call("agent.spawn", {
+    const plain = (await born(win, "agent.spawn", {
       provider: "scripted",
       cwd: envOut,
     })) as AgentSpawnResult;
@@ -1868,7 +1871,7 @@ describe("PJ-6 — a launch at a model the agent offers (agent.spawn {modelSelec
     const { daemon, dataDir, envOut, records } = await setup({ floor: "real", profiles: true });
     const win = await window(daemon, DECK, "pj6c");
     const acted = vi.spyOn(daemon.projectRecords, "actedIn");
-    const spawned = (await win.call("agent.spawn", {
+    const spawned = (await born(win, "agent.spawn", {
       provider: "scripted",
       cwd: envOut,
       profileSet: "native",
@@ -1896,7 +1899,7 @@ describe("PJ-6 — a launch at a model the agent offers (agent.spawn {modelSelec
     expect(acted).toHaveBeenCalledTimes(1);
 
     // the agent's own settings: a recipe with no model, and none on the record
-    const plain = (await win.call("agent.spawn", {
+    const plain = (await born(win, "agent.spawn", {
       provider: "scripted",
       cwd: envOut,
       profileSet: "native",
@@ -1911,7 +1914,7 @@ describe("PJ-6 — a launch at a model the agent offers (agent.spawn {modelSelec
         readRecord(dataDir, spawned.session.runtimeRunId).exited !== undefined ? true : undefined,
       15_000,
     );
-    const resumed = (await win.call("agent.resume", {
+    const resumed = (await born(win, "agent.resume", {
       runtimeRunId: spawned.session.runtimeRunId,
     })) as AgentSpawnResult;
     expect(acted).toHaveBeenCalledTimes(3);
@@ -1923,7 +1926,7 @@ describe("PJ-6 — a launch at a model the agent offers (agent.spawn {modelSelec
 
   /** A run launched at model-a/high under `profileSet`, then ended. */
   async function launchedAndEnded(box: Box, win: WsRpc, profileSet: string) {
-    const spawned = (await win.call("agent.spawn", {
+    const spawned = (await born(win, "agent.spawn", {
       provider: "scripted",
       cwd: box.envOut,
       profileSet,
@@ -1954,7 +1957,7 @@ describe("PJ-6 — a launch at a model the agent offers (agent.spawn {modelSelec
     const spawned = await launchedAndEnded(box, win, made.set.id);
     expect(models.discovered).toEqual([persona.profileId]);
 
-    const resumed = (await win.call("agent.resume", {
+    const resumed = (await born(win, "agent.resume", {
       runtimeRunId: spawned.session.runtimeRunId,
     })) as AgentSpawnResult;
     // the same conversation, continued — at the model and the effort it was
@@ -2001,7 +2004,7 @@ describe("PJ-6 — a launch at a model the agent offers (agent.spawn {modelSelec
     const win = await window(daemon, DECK, "pj6f");
     const spawned = await launchedAndEnded(box, win, "native");
     const reads = models.reads;
-    const resumed = (await win.call("agent.resume", {
+    const resumed = (await born(win, "agent.resume", {
       runtimeRunId: spawned.session.runtimeRunId,
     })) as AgentSpawnResult;
     // no selection asked of puppeteer (which would refuse it): its own settings
@@ -2020,7 +2023,7 @@ describe("PJ-6 — a launch at a model the agent offers (agent.spawn {modelSelec
     const win = await window(daemon, DECK, "pj6g");
     const spawned = await launchedAndEnded(box, win, "native");
     fileConversations(box, [spawned.session.sessionId]);
-    const resumed = (await win.call("agent.resume", {
+    const resumed = (await born(win, "agent.resume", {
       provider: "scripted",
       nativeSessionId: spawned.session.sessionId,
       cwd: box.envOut,
@@ -2030,6 +2033,210 @@ describe("PJ-6 — a launch at a model the agent offers (agent.spawn {modelSelec
     expect(resumed.modelSelection).toEqual({ state: "applied" });
     await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
   }, 60_000);
+});
+
+/** PJ-7 — give this desktop one place, through the catalog's own write path
+ * (the scanner's `setPlaces`): the index learns a project rooted at `path`, and
+ * the place's facts ride its row. Answers the place's ref as the doors name it. */
+async function placeOf(box: Box, placeId: string, path: string, over: Partial<PlaceFacts> = {}) {
+  writeFileSync(
+    box.runtimesFile,
+    JSON.stringify([{ id: "rt-scripted", kind: "scripted", data_root: "~/.scripted" }]),
+  );
+  writeFileSync(
+    box.sessionsFile,
+    JSON.stringify([{ ...rosettaRow(`in-${placeId}`, 60_000), project_id: "p-place", cwd: path }]),
+  );
+  const catalog = box.daemon.indexCatalog;
+  await poll(async () => (catalog.ready ? true : undefined), 20_000);
+  catalog.resnapshot();
+  await poll(async () => (catalog.projects.size === 1 ? true : undefined), 20_000);
+  catalog.setPlaces(
+    new Map([
+      [
+        "p-place",
+        [
+          {
+            placeId,
+            path,
+            aliases: [],
+            kind: "project" as const,
+            caseless: true,
+            exists: true,
+            mounted: true,
+            git: true,
+            identityRemote: "github.com/acme/app",
+            remotes: ["github.com/acme/app"],
+            samples: [],
+            hits: [],
+            observedAt: 1,
+            ...over,
+          },
+        ],
+      ],
+    ]),
+  );
+  return { device: box.daemon.devices.currentDeviceId(), placeId };
+}
+
+describe("PJ-7 — a launch names a place (agent.spawn {place})", () => {
+  it("runs in the place's own folder, resolved from this desktop's place facts; the ledger names the ref, never the path; the birth hands the place to its project", async () => {
+    const box = await setup({ floor: "real", profiles: true });
+    const { daemon, dataDir, root } = box;
+    const app = join(root, "app");
+    mkdirSync(app);
+    const ref = await placeOf(box, "pl_app", app);
+    const win = await window(daemon, DECK, "pj7a");
+    const acted = vi.spyOn(daemon.projectRecords, "actedIn");
+
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      place: ref,
+      profileSet: "native",
+    })) as AgentSpawnResult;
+    // the run's folder is the place's path: no path crossed the wire
+    expect(readRecord(dataDir, spawned.session.runtimeRunId).cwd).toBe(app);
+    // the birth is an act in that place, its recipe the place's (`onPlace`)
+    expect(acted).toHaveBeenCalledTimes(1);
+    expect(acted.mock.calls[0]?.[0]).toBe(app);
+    expect(acted.mock.calls[0]?.[2]).toEqual({ provider: "scripted", profileSet: "native" });
+    expect(acted.mock.calls[0]?.[3]).toBe("pl_app");
+    // the ledger: the ref the caller sent, and no folder at all
+    const act = await auditAct(
+      dataDir,
+      (entry) => entry.action === "agent.session.spawn" && entry.attrs?.["place"] !== undefined,
+    );
+    expect(act.attempt.attrs?.["place"]).toEqual(ref);
+    expect(act.attempt.attrs).not.toHaveProperty("cwd");
+    expect(act.outcome.outcome).toBe("succeeded");
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+  }, 60_000);
+
+  it("refuses in fieldd's words before anything starts: another desktop's place, a place this desktop does not know, a folder gone or unmounted, a place beside a cwd", async () => {
+    const box = await setup({ floor: "real" });
+    const { daemon, dataDir, root, sessions } = box;
+    const app = join(root, "app");
+    mkdirSync(app);
+    const ref = await placeOf(box, "pl_app", app);
+    const win = await window(daemon, DECK, "pj7b");
+    const refusal = async (params: Record<string, unknown>) =>
+      (await win.callErr("agent.spawn", { provider: "scripted", ...params })) as RpcErrorShape;
+
+    // another desktop's ref: this desktop launches only into its own places —
+    // the contracts' golden launch (EL9), whose place is another desktop's
+    const golden = JSON.parse(
+      readFileSync(
+        join(import.meta.dirname, "../../contracts/fixtures/agent-spawn-params.place.json"),
+        "utf8",
+      ),
+    ) as Record<string, unknown>;
+    const { modelSelection: _model, ...goldenLaunch } = golden;
+    const elsewhere = (await win.callErr("agent.spawn", {
+      ...goldenLaunch,
+      provider: "scripted",
+    })) as RpcErrorShape;
+    expect(elsewhere.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(elsewhere.data?.details).toMatchObject({
+      reason: "not-here",
+      place: golden["place"],
+    });
+    // an id this desktop has no facts for
+    const unknown = await refusal({ place: { ...ref, placeId: "pl_nowhere" } });
+    expect(unknown.data?.kind).toBe("NOT_FOUND");
+    expect(unknown.data?.details).toMatchObject({ reason: "unknown-place" });
+    // both a place and a folder: which did the caller mean? (the schema's own refusal)
+    const both = await refusal({ place: ref, cwd: app });
+    expect(both.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(both.message).toContain("place");
+
+    // a place whose folder is gone — on disk, whatever the facts last said —
+    // and one whose volume is not mounted: today's `missing-cwd`, by ref
+    rmSync(app, { recursive: true });
+    const gone = await refusal({ place: ref });
+    expect(gone.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(gone.data?.details).toMatchObject({ reason: "missing-cwd", place: ref });
+    expect(JSON.stringify(gone.data?.details)).not.toContain(app);
+    mkdirSync(app);
+    await placeOf(box, "pl_app", app, { mounted: false });
+    const unmounted = await refusal({ place: ref });
+    expect(unmounted.data?.details).toMatchObject({ reason: "missing-cwd", place: ref });
+
+    // nothing started, nothing recorded
+    expect(sessions).toHaveLength(0);
+    expect(existsSync(join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR))).toBe(false);
+  }, 60_000);
+
+  it("Q3 (a) — a native resume that names no folder runs in the conversation's own, from this desktop's index, never in home; a folder gone is `missing-cwd`, and so is a conversation the index files no folder for", async () => {
+    const box = await setup({ floor: "real", catalog: FILED_CATALOG });
+    const { daemon, dataDir, root, sessions } = box;
+    const own = join(root, "conversation-folder");
+    mkdirSync(own);
+    const win = await window(daemon, DECK, "pj7c");
+    await indexReady(win);
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: own,
+    })) as AgentSpawnResult;
+    const conversation = spawned.session.sessionId;
+    // the index files it under the scripted agent, in its own folder
+    const fileIn = (cwd: string | null) => {
+      writeFileSync(
+        box.runtimesFile,
+        JSON.stringify([{ id: "rt-scripted", kind: "scripted", data_root: "~/.scripted" }]),
+      );
+      writeFileSync(
+        box.sessionsFile,
+        JSON.stringify([{ ...rosettaRow(conversation, 60_000), cwd }]),
+      );
+    };
+    fileIn(own);
+    const ended = async (result: AgentSpawnResult) => {
+      await win.call("terminal.terminate", { sessionId: result.terminal.sessionId });
+      await poll(
+        async () =>
+          readRecord(dataDir, result.session.runtimeRunId).exited !== undefined ? true : undefined,
+        15_000,
+      );
+    };
+    await ended(spawned);
+
+    // the phone's Resume: an id and an agent, no path
+    const resumed = (await born(win, "agent.resume", {
+      provider: "scripted",
+      nativeSessionId: conversation,
+    })) as AgentSpawnResult;
+    expect(sessions.at(-1)?.resume).toBe(conversation);
+    expect(readRecord(dataDir, resumed.session.runtimeRunId).cwd).toBe(own);
+    await ended(resumed);
+
+    // the folder is gone: refused as today, never started somewhere else
+    rmSync(own, { recursive: true });
+    const gone = (await win.callErr("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: conversation,
+    })) as RpcErrorShape;
+    expect(gone.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(gone.data?.details).toMatchObject({ reason: "missing-cwd", cwd: own });
+    // the index knows no folder for it: refused too — home was never its folder
+    mkdirSync(own);
+    fileIn(null);
+    const unfiled = (await win.callErr("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: conversation,
+    })) as RpcErrorShape;
+    expect(unfiled.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(unfiled.data?.details).toMatchObject({ reason: "missing-cwd" });
+    expect(sessions).toHaveLength(2);
+
+    // a caller that names the folder is unchanged: it runs where it said
+    const named = (await born(win, "agent.resume", {
+      provider: "scripted",
+      nativeSessionId: conversation,
+      cwd: box.envOut,
+    })) as AgentSpawnResult;
+    expect(readRecord(dataDir, named.session.runtimeRunId).cwd).toBe(box.envOut);
+    await win.call("terminal.terminate", { sessionId: named.terminal.sessionId });
+  }, 90_000);
 });
 
 describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins", () => {
@@ -2057,7 +2264,7 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
     const { daemon, dataDir, envOut, seen } = await setup({ floor: "real", profiles: true });
     const win = await window(daemon, DECK, "ap1");
     const work = await signedIn(win, dataDir, "Work");
-    const spawned = (await win.call("agent.spawn", {
+    const spawned = (await born(win, "agent.spawn", {
       provider: "scripted",
       cwd: envOut,
       profileId: work.profileId,
@@ -2099,7 +2306,7 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
     const { daemon, dataDir, envOut, seen } = await setup({ floor: "real", profiles: true });
     const win = await window(daemon, DECK, "ap2");
     const work = await signedIn(win, dataDir, "Work", { default: true });
-    const spawned = (await win.call("agent.spawn", {
+    const spawned = (await born(win, "agent.spawn", {
       provider: "scripted",
       cwd: envOut,
     })) as AgentSpawnResult;
@@ -2115,13 +2322,13 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
         readRecord(dataDir, spawned.session.runtimeRunId).exited !== undefined ? true : undefined,
       15_000,
     );
-    const resumed = (await win.call("agent.resume", {
+    const resumed = (await born(win, "agent.resume", {
       runtimeRunId: spawned.session.runtimeRunId,
     })) as AgentSpawnResult;
     expect(seen.at(-1)?.id).toBe(work.profileId);
     expect(resumed.session.profileId).toBe(work.profileId);
     // …and a fresh spawn now runs in the agent's own folder
-    await win.call("agent.spawn", { provider: "scripted", cwd: envOut });
+    await born(win, "agent.spawn", { provider: "scripted", cwd: envOut });
     expect(seen.at(-1)).toBeUndefined();
     await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
   }, 60_000);
@@ -2130,7 +2337,7 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
     const { daemon, dataDir, envOut, seen } = await setup({ floor: "real", profiles: true });
     const win = await window(daemon, DECK, "ap5");
     const work = await signedIn(win, dataDir, "Work");
-    const spawned = (await win.call("agent.spawn", {
+    const spawned = (await born(win, "agent.spawn", {
       provider: "scripted",
       cwd: envOut,
       profileSet: work.set,
@@ -2146,7 +2353,7 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
     ).toBe(work.set);
 
     // This Mac: the agent's own folder, bound to no sign-in, and named on the row
-    const native = (await win.call("agent.spawn", {
+    const native = (await born(win, "agent.spawn", {
       provider: "scripted",
       cwd: envOut,
       profileSet: "native",
@@ -2221,7 +2428,7 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
 
     // Work is the DEFAULT, and a resume that names nothing still continues in
     // the agent's own folder: the conversation lives where it was born
-    const own = (await win.call("agent.resume", {
+    const own = (await born(win, "agent.resume", {
       provider: "scripted",
       nativeSessionId: "conv-own",
       cwd: envOut,
@@ -2229,7 +2436,7 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
     expect(seen.at(-1)).toBeUndefined();
     expect(own.session.profileId).toBeUndefined();
     // …as does naming the agent's own folder by its Agent Profile
-    const native = (await win.call("agent.resume", {
+    const native = (await born(win, "agent.resume", {
       provider: "scripted",
       nativeSessionId: "conv-native",
       cwd: envOut,
@@ -2243,11 +2450,82 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
     }
   }, 60_000);
 
+  it("PJ-7 — a native resume that names no persona runs under the one the index files the conversation under: its sign-in, its root; refused `signed-out` once that persona is signed out; a persona named is still held to the filed one", async () => {
+    const box = await setup({ floor: "real", profiles: true, catalog: FILED_CATALOG });
+    const { daemon, dataDir, envOut, seen } = box;
+    const win = await window(daemon, DECK, "pj7p");
+    await indexReady(win);
+    const work = await signedIn(win, dataDir, "Work");
+    const home = await signedIn(win, dataDir, "Home");
+    // Work's root is enrolled with the index (as a persona of an agent the
+    // roll call spells is at its creation), and the conversation is filed there.
+    // The runtime row is scripted beside the enrolled one, so it outlives the
+    // sign-out below as rosetta keeps a retired root's rows (AR-D19)
+    await daemon.index.enrollRuntimes([
+      { kind: "scripted", dataRoot: work.root, label: "Work", profileId: work.profileId },
+    ]);
+    await indexReady(win);
+    writeFileSync(
+      box.runtimesFile,
+      JSON.stringify([
+        { id: "rt-work", kind: "scripted", data_root: work.root, provenance: "enrolled" },
+      ]),
+    );
+    writeFileSync(
+      box.sessionsFile,
+      JSON.stringify([{ ...rosettaRow("conv-work", 60_000), runtime_id: "rt-work" }]),
+    );
+
+    // the phone's Resume names no persona: the index's is adopted — no word
+    // of the caller's is taken for it (EL7, the review's finding 8)
+    const resumed = (await born(win, "agent.resume", {
+      provider: "scripted",
+      nativeSessionId: "conv-work",
+      cwd: envOut,
+    })) as AgentSpawnResult;
+    expect(seen.at(-1)?.id).toBe(work.profileId);
+    expect(seen.at(-1)?.dataRoot).toBe(work.root);
+    expect(resumed.session.profileId).toBe(work.profileId);
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+    await poll(
+      async () =>
+        readRecord(dataDir, resumed.session.runtimeRunId).exited !== undefined ? true : undefined,
+      15_000,
+    );
+
+    // a persona NAMED is held to the filed one, as before
+    const before = seen.length;
+    const other = await win.callErr("agent.resume", {
+      provider: "scripted",
+      nativeSessionId: "conv-work",
+      cwd: envOut,
+      profileId: home.profileId,
+    });
+    expect(other.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(other.data?.details).toMatchObject({ reason: "other-profile" });
+
+    // Work signed out: the persona adopted is the one checked
+    await win.call("agents.profiles.delete", { profileId: work.profileId });
+    let out: RpcErrorShape | undefined;
+    await poll(async () => {
+      out = (await win.callErr("agent.resume", {
+        provider: "scripted",
+        nativeSessionId: "conv-work",
+        cwd: envOut,
+      })) as RpcErrorShape;
+      return (out.data?.details as { state?: string } | undefined)?.state === "signed-out"
+        ? true
+        : undefined;
+    }, 15_000);
+    expect(out?.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(seen.length).toBe(before);
+  }, 90_000);
+
   it("deleting a profile stops the sessions running under it first, then deletes its folder", async () => {
     const { daemon, dataDir, envOut } = await setup({ floor: "real", profiles: true });
     const win = await window(daemon, DECK, "ap3");
     const work = await signedIn(win, dataDir, "Work");
-    const spawned = (await win.call("agent.spawn", {
+    const spawned = (await born(win, "agent.spawn", {
       provider: "scripted",
       cwd: envOut,
       profileId: work.profileId,
@@ -2317,7 +2595,7 @@ describe('MF-1 — agent.subscribe {projection: "field"} over the wire', () => {
   it("answers the live board, then carries the change in CHAINED frames no closer than the floor, and no content ever", async () => {
     const box = await setup({ floor: "real" });
     const win = await window(box.daemon, [...DECK, "agent.control"], "fw1");
-    const spawned = (await win.call("agent.spawn", {
+    const spawned = (await born(win, "agent.spawn", {
       provider: "scripted",
       cwd: box.envOut,
     })) as AgentSpawnResult;
@@ -2461,7 +2739,7 @@ describe("MF-1f/MF-1g — an agent pane outlives its run, and the fold keeps its
    * state could not be reached at all.
    */
   async function endedRun(box: Box, win: WsRpc): Promise<{ runId: string; paneId: string }> {
-    const spawned = (await win.call("agent.spawn", {
+    const spawned = (await born(win, "agent.spawn", {
       provider: "scripted",
       cwd: box.envOut,
       title: "held open",
@@ -2547,7 +2825,7 @@ describe("MF-1f/MF-1g — an agent pane outlives its run, and the fold keeps its
 
     // Before MF-1f this refused `terminal-alive`: the husk read as a running
     // session, so the verb on the exited card could not be used at all.
-    const resumed = (await win.call("agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
+    const resumed = (await born(win, "agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
     const nextId = resumed.session.runtimeRunId;
     expect(nextId).not.toBe(runId);
     // AR-4's hand-over shape, which is what the deck's resume verb reads: the
@@ -2588,7 +2866,7 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     const watcher = await window(daemon, DECK, "i0");
     const win = await window(daemon, [...DECK, "agent.control"], "i1");
 
-    const spawned = (await win.call("agent.spawn", {
+    const spawned = (await born(win, "agent.spawn", {
       provider: "scripted",
       cwd: envOut,
     })) as AgentSpawnResult;
@@ -2738,7 +3016,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
   it("re-attach across a restart: a graceful stop RELEASES the run (no exit, the PTY alive); the next boot attaches it at the next epoch, the same PTY, automation working; the attached run still refuses a resume; its exit is the ordinary one", async () => {
     const first = await setup({ floor: "real", attach: true });
     const win1 = await window(first.daemon, DECK, "ra1");
-    const spawned = (await win1.call("agent.spawn", {
+    const spawned = (await born(win1, "agent.spawn", {
       provider: "scripted",
       cwd: first.envOut,
       title: "survivor",
@@ -2841,7 +3119,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
   it("a provider that cannot attach: the run is held PENDING across the restart (live, unobserved, resumable), and agent.resume replaces its PTY by hand — the new row names the PTY it replaced", async () => {
     const first = await setup({ floor: "real" });
     const win1 = await window(first.daemon, DECK, "pe1");
-    const spawned = (await win1.call("agent.spawn", {
+    const spawned = (await born(win1, "agent.spawn", {
       provider: "scripted",
       cwd: first.envOut,
       title: "held",
@@ -2908,7 +3186,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     // born") is an ORDER, and an end state cannot tell it from the reverse.
     const watcher = await window(second.daemon, DECK, "pe3");
     const gone = watchForGone(watcher, ptyId);
-    const resumed = (await win2.call("agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
+    const resumed = (await born(win2, "agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
     const goneAt = await gone.stop();
     const bornAt = first.sessions[1]?.bornAt ?? Number.NEGATIVE_INFINITY;
     expect(goneAt, "the watcher never saw the old PTY leave the listing").toBeDefined();
@@ -2976,7 +3254,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
   it("resume-when-idle: a pending run stays pending while the index knows nothing of it, while its row carries no activity, while its conversation has just moved, and while a still SUBAGENT row sits beside an active canonical one — and is resumed by the daemon itself once the canonical row says the conversation has been still", async () => {
     const first = await setup({ floor: "real" });
     const win1 = await window(first.daemon, DECK, "ri1");
-    const spawned = (await win1.call("agent.spawn", {
+    const spawned = (await born(win1, "agent.spawn", {
       provider: "scripted",
       cwd: first.envOut,
     })) as AgentSpawnResult;
@@ -3108,7 +3386,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
   it("a record whose PTY did NOT survive is stamped at the next boot as an unknown exit, and resumes from the door like any other", async () => {
     const first = await setup({ floor: "real", attach: true });
     const win1 = await window(first.daemon, DECK, "go1");
-    const spawned = (await win1.call("agent.spawn", {
+    const spawned = (await born(win1, "agent.spawn", {
       provider: "scripted",
       cwd: first.envOut,
     })) as AgentSpawnResult;
@@ -3136,7 +3414,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     expect(first.attached).toHaveLength(0);
     expect(((await win2.call("agent.list", {})) as AgentListResult).sessions).toEqual([]);
     // …and it resumes from the door
-    const resumed = (await win2.call("agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
+    const resumed = (await born(win2, "agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
     expect(resumed.session.sessionId).toBe(spawned.session.sessionId);
     expect(resumed.session.terminal?.replaced).toBeUndefined();
     await win2.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
@@ -3147,7 +3425,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
   it("a managed PTY that ends on its OWN (killed out of band, nothing asked) withdraws the row and stamps the record", async () => {
     const box = await setup({ floor: "real" });
     const win = await window(box.daemon, DECK, "ko1");
-    const spawned = (await win.call("agent.spawn", {
+    const spawned = (await born(win, "agent.spawn", {
       provider: "scripted",
       cwd: box.envOut,
     })) as AgentSpawnResult;
@@ -3209,7 +3487,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
 
     const first = await setup({ floor: "real" });
     const win1 = await window(first.daemon, DECK, "ix1");
-    const spawned = (await win1.call("agent.spawn", {
+    const spawned = (await born(win1, "agent.spawn", {
       provider: "scripted",
       cwd: first.envOut,
     })) as AgentSpawnResult;
@@ -3261,12 +3539,12 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
   it("one record's trouble does not end the re-attach: a record naming a provider that no longer exists is held pending with its reason, and the good record beside it still attaches", async () => {
     const first = await setup({ floor: "real", attach: true });
     const win1 = await window(first.daemon, DECK, "tr1");
-    const good = (await win1.call("agent.spawn", {
+    const good = (await born(win1, "agent.spawn", {
       provider: "scripted",
       cwd: first.envOut,
       title: "the good one",
     })) as AgentSpawnResult;
-    const bad = (await win1.call("agent.spawn", {
+    const bad = (await born(win1, "agent.spawn", {
       provider: "scripted",
       cwd: first.envOut,
       title: "the troubled one",
@@ -3330,7 +3608,7 @@ describe.skipIf(!REAL_AGENT)(
       const win = await window(daemon, DECK, "real1");
       const cwd = join(root, "work");
       mkdirSync(cwd);
-      const spawned = (await win.call("agent.spawn", {
+      const spawned = (await born(win, "agent.spawn", {
         provider: "claude",
         cwd,
       })) as AgentSpawnResult;
@@ -3402,7 +3680,7 @@ describe.skipIf(!REAL_AGENT)(
       const win1 = await window(first.daemon, DECK, "real2");
       const cwd = join(first.root, "work");
       mkdirSync(cwd);
-      const spawned = (await win1.call("agent.spawn", {
+      const spawned = (await born(win1, "agent.spawn", {
         provider: "claude",
         cwd,
       })) as AgentSpawnResult;

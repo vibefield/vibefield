@@ -12,15 +12,24 @@ import UIKit
 /// `chrome` floats above the bodies inside the field's coordinate space (the
 /// slot owns its own alignment); any chrome element marked `.swarmObstacle()`
 /// becomes a physics obstacle the swarm flows around.
+///
+/// PJ-7 — the hold BLOOMS when `bloom` offers a real choice (two desktops or
+/// more, or one with two profiles or more; DESIGN.md §8's phone paragraph):
+/// the finger reaches a desktop, then a profile, and letting go hands the
+/// choice to `onBloom` — the launch sheet opens on it, never a terminal (Q4).
+/// No real choice: the hold creates through `onCreate`, as before.
 public struct SwarmField<Chrome: View>: View {
   private let bubbles: [FieldBubble]
   private let parameters: SwarmParameters
   private let isActive: Bool
   private let onSelect: (FieldBubble) -> Void
   private let onCreate: ((SIMD2<Double>) -> String?)?
+  private let bloom: BloomMenu?
+  private let onBloom: ((BloomChoice) -> Void)?
   private let chrome: Chrome
 
   @State private var stage = SwarmStage()
+  @State private var bloomHost = BloomHost()
   @State private var failure: String?
   @State private var touching = false
   @Environment(\.colorScheme) private var colorScheme
@@ -32,6 +41,8 @@ public struct SwarmField<Chrome: View>: View {
     isActive: Bool = true,
     onSelect: @escaping (FieldBubble) -> Void,
     onCreate: ((SIMD2<Double>) -> String?)? = nil,
+    bloom: BloomMenu? = nil,
+    onBloom: ((BloomChoice) -> Void)? = nil,
     @ViewBuilder chrome: () -> Chrome
   ) {
     self.bubbles = bubbles
@@ -39,6 +50,8 @@ public struct SwarmField<Chrome: View>: View {
     self.isActive = isActive
     self.onSelect = onSelect
     self.onCreate = onCreate
+    self.bloom = bloom
+    self.onBloom = onBloom
     self.chrome = chrome()
   }
 
@@ -63,34 +76,65 @@ public struct SwarmField<Chrome: View>: View {
         }
 
         chrome
+
+        if let open = bloomHost.bloom {
+          SpawnBloomOverlay(bloom: open, size: proxy.size)
+        }
       }
       .contentShape(Rectangle())
       .gesture(touches)
       .coordinateSpace(name: SwarmSpace.name)
-      .onPreferenceChange(SwarmObstacleFramesKey.self) { [stage] frames in
-        Task { @MainActor in stage.setObstacles(frames) }
+      .onPreferenceChange(SwarmObstacleFramesKey.self) { [stage, bloomHost] frames in
+        Task { @MainActor in
+          stage.setObstacles(frames)
+          bloomHost.chrome = frames.map {
+            BloomRect(x: $0.minX, y: $0.minY, width: $0.width, height: $0.height)
+          }
+        }
       }
       .onAppear {
         stage.parameters = parameters
         stage.onSelect = onSelect
-        stage.onCreate = onCreate
+        stage.onCreate = holdCompleted
         stage.reducedMotion = reduceMotion
         stage.setBounds(proxy.size)
+        bloomHost.field = BloomSize(w: proxy.size.width, h: proxy.size.height)
+        bloomHost.menu = bloom
         stage.update(bubbles: bubbles, time: CACurrentMediaTime())
       }
-      .onChange(of: proxy.size) { _, size in stage.setBounds(size) }
+      .onChange(of: proxy.size) { _, size in
+        stage.setBounds(size)
+        bloomHost.field = BloomSize(w: size.width, h: size.height)
+      }
     }
+    .onChange(of: bloom) { bloomHost.menu = bloom }
     .onChange(of: bubbles) { stage.update(bubbles: bubbles, time: CACurrentMediaTime()) }
     .onChange(of: parameters) { stage.parameters = parameters }
     .onChange(of: reduceMotion) { stage.reducedMotion = reduceMotion }
   }
 
+  /// The hold ran its course: the bloom opens when there is a real choice,
+  /// else the hold creates as before.
+  private var holdCompleted: ((SIMD2<Double>) -> String?)? {
+    guard let onCreate else { return nil }
+    let host = bloomHost
+    return { point in
+      if host.hold(at: point) { return nil }
+      return onCreate(point)
+    }
+  }
+
   /// One gesture for the whole field: the stage decides whether a finger is
-  /// on a body (a drag, or a tap and a nudge) or on empty ground (a hold).
+  /// on a body (a drag, or a tap and a nudge) or on empty ground (a hold);
+  /// once a hold has bloomed, the finger is the bloom's until it lets go.
   private var touches: some Gesture {
     DragGesture(minimumDistance: 0, coordinateSpace: .named(SwarmSpace.name))
       .onChanged { value in
         let point = SIMD2(Double(value.location.x), Double(value.location.y))
+        if bloomHost.bloom != nil {
+          bloomHost.move(to: point)
+          return
+        }
         if !touching {
           touching = true
           stage.pointerDown(at: SIMD2(Double(value.startLocation.x), Double(value.startLocation.y)), time: CACurrentMediaTime())
@@ -99,6 +143,11 @@ public struct SwarmField<Chrome: View>: View {
       }
       .onEnded { value in
         touching = false
+        if bloomHost.bloom != nil {
+          stage.pointerCancelled()
+          if let choice = bloomHost.release() { onBloom?(choice) }
+          return
+        }
         stage.pointerUp(at: SIMD2(Double(value.location.x), Double(value.location.y)))
       }
   }

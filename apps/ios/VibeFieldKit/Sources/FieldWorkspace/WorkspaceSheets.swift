@@ -5,6 +5,11 @@ import UIKit
 
 /// Folder first; the chooser has its own presenter above a single-detent
 /// launch sheet. Agent choices never change the launch sheet's height.
+///
+/// PJ-7 — Profile · Model · Effort, menu rows that never come or go; a choice
+/// with one answer, or none, is said in its row (DESIGN.md §8's FS-2 entry).
+/// The folder row comes filled with the usual place, else the folder sheet
+/// opens by itself.
 public struct CreateSessionSheet: View {
   @Bindable private var model: WorkspaceLaunch
   @State private var choosingFolder = false
@@ -19,10 +24,16 @@ public struct CreateSessionSheet: View {
             HStack {
               Image(systemName: "folder")
               VStack(alignment: .leading) {
-                Text(model.folder == nil ? "Choose a folder" : "Folder")
-                if let folder = model.folder {
-                  Text(folder.path).font(.caption.monospaced()).foregroundStyle(ChromePalette.inkSecondary)
-                    .lineLimit(1).truncationMode(.middle)
+                if let place = model.place {
+                  Text(place.label)
+                  Text(model.desktops.first { $0.id == place.desktop }?.name ?? "")
+                    .font(.caption).foregroundStyle(ChromePalette.inkSecondary)
+                } else {
+                  Text(model.folder == nil ? "Choose a folder" : "Folder")
+                  if let folder = model.folder {
+                    Text(folder.path).font(.caption.monospaced()).foregroundStyle(ChromePalette.inkSecondary)
+                      .lineLimit(1).truncationMode(.middle)
+                  }
                 }
               }
               Spacer()
@@ -37,26 +48,57 @@ public struct CreateSessionSheet: View {
             else { Text("Connect a desktop").foregroundStyle(ChromePalette.inkSecondary) }
           }
           if model.agents.count > 1 {
-            Picker("Agent", selection: $model.provider) {
+            Picker("Agent", selection: Binding(get: { model.provider }, set: { provider in
+              model.provider = provider
+              Task { await model.providerChanged() }
+            })) {
               ForEach(model.agents) { Text($0.label).tag($0.id) }
             }.disabled(model.spawning)
           } else {
-            HStack {
-              Text("Agent"); Spacer()
-              Text(model.agents.first?.label ?? "No agent available").foregroundStyle(ChromePalette.inkSecondary)
-            }
+            fact("Agent", model.agents.first?.label ?? "No agent available")
+          }
+          if let words = model.profileRowWords {
+            fact("Profile", words)
+          } else {
+            Picker("Profile", selection: Binding(get: { model.profileSet ?? "" }, set: { id in
+              Task { await model.chooseProfile(id) }
+            })) {
+              ForEach(model.profileChoices) { Text($0.label).tag($0.id) }
+            }.pickerStyle(.menu).disabled(model.spawning)
+          }
+          if let words = model.modelRowWords {
+            fact("Model", words)
+          } else {
+            Picker("Model", selection: Binding(get: { model.modelId }, set: { model.chooseModel($0) })) {
+              Text("Each agent's own").tag(String?.none)
+              ForEach(model.modelChoices) { Text($0.label).tag(String?.some($0.id)) }
+            }.pickerStyle(.menu).disabled(model.spawning)
+          }
+          if let words = model.effortRowWords {
+            fact("Effort", words)
+          } else {
+            Picker("Effort", selection: Binding(get: { model.effort }, set: { model.chooseEffort($0) })) {
+              Text("Its own").tag(String?.none)
+              ForEach(model.model?.effort?.values ?? []) { Text($0.label).tag(String?.some($0.id)) }
+            }.pickerStyle(.menu).disabled(model.spawning)
           }
         } footer: {
-          Text(model.message ?? "The agent opens in this folder using the desktop’s default profile.")
+          Text(model.footer)
             .foregroundStyle(ChromePalette.inkSecondary)
         }
         Button {
-          Task { if await model.spawn() { dismiss() } }
+          Task {
+            // DESIGN.md §8: success or warning at the birth
+            let born = await model.spawn()
+            UINotificationFeedbackGenerator().notificationOccurred(born ? .success : .warning)
+            if born { dismiss() }
+          }
         } label: {
           HStack {
             Spacer()
             if model.spawning { ProgressView().tint(ChromePalette.keyOnInk) }
-            Label(model.spawning ? "Starting…" : "Start session", systemImage: "terminal")
+            else { FieldGlyph(.start, size: FieldGlyph.box(for: 15)) }
+            Text(model.spawning ? "Starting…" : "Start \(model.agents.first { $0.id == model.provider }?.label ?? "session")")
             Spacer()
           }
         }
@@ -79,6 +121,8 @@ public struct CreateSessionSheet: View {
           .fieldGlassSheet()
       }
       .task {
+        // PJ-D12 (a): nowhere to start yet, the folder sheet opens by itself
+        if model.needsFolder { choosingFolder = true }
         if let device = model.selected { await model.select(device) }
         #if DEBUG
           if let scenario = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-demo-workspace=") })?.split(separator: "=").last {
@@ -107,6 +151,18 @@ public struct CreateSessionSheet: View {
   }
 }
 
+extension CreateSessionSheet {
+  /// A row with one answer, or none: the fact in its place, never a menu.
+  fileprivate func fact(_ title: String, _ words: String) -> some View {
+    HStack {
+      Text(title)
+      Spacer()
+      Text(words).foregroundStyle(ChromePalette.inkSecondary).multilineTextAlignment(.trailing)
+    }
+    .accessibilityElement(children: .combine)
+  }
+}
+
 public struct WorkspaceFolderSheet: View {
   @Bindable private var model: WorkspaceLaunch
   @State private var query = ""
@@ -117,6 +173,16 @@ public struct WorkspaceFolderSheet: View {
   public var body: some View {
     NavigationStack {
       List {
+        // Q7 — from a project: its places first, under each desktop's mark
+        ForEach(model.placesByDesktop, id: \.desktop) { group in
+          Section {
+            ForEach(group.places) { place in placeRow(place) }
+          } header: {
+            if let desktop = model.desktops.first(where: { $0.id == group.desktop }) {
+              WorkspaceDesktopLabel(desktop: desktop)
+            }
+          }
+        }
         Section {
           if model.desktops.count > 1 {
             Picker("Desktop", selection: Binding(
@@ -149,7 +215,7 @@ public struct WorkspaceFolderSheet: View {
       }
       .scrollContentBackground(.hidden)
       .background(ChromePalette.paper)
-      .navigationTitle("Choose a folder")
+      .navigationTitle(model.context.projectName.map { "Where in \($0)" } ?? "Choose a folder")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -172,6 +238,31 @@ public struct WorkspaceFolderSheet: View {
       }
       .onChange(of: model.selected) { query = "" }
     }.tint(ChromePalette.ink)
+  }
+
+  /// A project's place: its folder's name and branch, then its last use or
+  /// why it cannot take a launch; the chosen one checked. A tap brings its
+  /// desktop and returns.
+  private func placeRow(_ place: LaunchPlace) -> some View {
+    let awake = model.desktops.first { $0.id == place.desktop }?.online == true
+    let available = place.reason == nil && awake && !model.spawning
+    return Button {
+      Task {
+        await model.choose(place)
+        if model.place == place { dismiss() }
+      }
+    } label: {
+      HStack {
+        Image(systemName: "folder")
+        Text(place.label).lineLimit(1)
+        Spacer()
+        Text(place.reason ?? (awake ? place.last : "asleep")).font(.caption)
+        if model.place == place { Image(systemName: "checkmark") }
+      }
+      .foregroundStyle(available ? ChromePalette.ink : ChromePalette.inkSecondary)
+    }
+    .disabled(!available)
+    .accessibilityValue(model.place == place ? "chosen" : "")
   }
 
   @ViewBuilder private func roots(_ reader: WorkspaceReads) -> some View {
@@ -285,18 +376,12 @@ public struct WorkspaceFolderSheet: View {
   }
 }
 
+/// A desktop as a choice: its OS mark (PJ-7: the desktop's own marks,
+/// `DeviceMark`, where FS-2 drew SF Symbols) and its name.
 private struct WorkspaceDesktopLabel: View {
   let desktop: WorkspaceDesktop
-  private var symbol: String {
-    switch desktop.platform {
-    case "darwin", "macos": "apple.logo"
-    case "win32", "windows": "square.grid.2x2"
-    case "linux": "terminal"
-    default: "desktopcomputer"
-    }
-  }
   var body: some View {
-    Label(desktop.name, systemImage: symbol)
+    Label { Text(desktop.name) } icon: { DeviceMark(platform: desktop.platform, size: 17) }
       .foregroundStyle(desktop.online ? ChromePalette.ink : ChromePalette.inkSecondary)
   }
 }

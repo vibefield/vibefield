@@ -1,0 +1,11 @@
+{
+  "provider": "codex",
+  "profileSet": "work-7f3a",
+  "failure": {
+    "status": "auth-required",
+    "code": "auth-required",
+    "message": "Sign in to discover models.",
+    "at": "2026-10-12T18:08:01.112Z"
+  },
+  "refreshing": false
+}

@@ -70,7 +70,7 @@ describe("projectDeskRow — the field row plus the reply line, the question and
     const field = projectFieldRow(run);
     const desk = projectDeskRow(run);
     for (const [key, value] of Object.entries(field)) {
-      if (key === "blockers" || key === "usage") continue;
+      if (key === "blockers" || key === "usage" || key === "nativeSessionId") continue;
       expect(desk[key], key).toEqual(value);
     }
     // the only NEW key is the reply line; the question and the cost ride
@@ -81,6 +81,15 @@ describe("projectDeskRow — the field row plus the reply line, the question and
     expect(desk.usage).toEqual({ ...field.usage, costUsd: 4.04, costCoverage: "complete" });
     // and the contract reads it as a desk row
     expect(AgentDeskRow.safeParse({ ...desk, revision: 1 }).success).toBe(true);
+  });
+
+  it("PJ-7 — leaves the field row's conversation id off: the phone's cut carries it, a window reads its own runs' ids from `local`, a peer's desk wants none", () => {
+    const run = summary({});
+    expect(projectFieldRow(run).nativeSessionId).toBe(run.sessionId);
+    expect(projectDeskRow(run)).not.toHaveProperty("nativeSessionId");
+    const window = projectDeskRow(run, undefined, undefined, "window") as Record<string, unknown>;
+    expect(window).not.toHaveProperty("nativeSessionId");
+    expect((window["local"] as { nativeSessionId?: string }).nativeSessionId).toBe(run.sessionId);
   });
 
   it("bounds the reply and the question to the registry's number", () => {
@@ -109,9 +118,11 @@ describe("projectDeskRow — the field row plus the reply line, the question and
     expect(desk).not.toHaveProperty("lastAssistantMessage");
     expect(desk.blockers[0]).not.toHaveProperty("question");
     expect(desk).not.toHaveProperty("usage");
-    // an unobserved run (no mirror at all) is the field row, exactly
+    // an unobserved run (no mirror at all) is the field row, exactly — less
+    // the phone's conversation id (PJ-7)
     const pending = summary({ monitor: false, pending: "not attached yet" });
-    expect(projectDeskRow(pending)).toEqual(projectFieldRow(pending));
+    const { nativeSessionId: _phones, ...field } = projectFieldRow(pending);
+    expect(projectDeskRow(pending)).toEqual(field);
   });
 });
 
