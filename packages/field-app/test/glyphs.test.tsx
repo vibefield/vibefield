@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { execFileSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -262,6 +262,8 @@ describe("the glyph set", () => {
     };
     visit(join(PACKAGE_ROOT, "src"), "", (rel) => rel.startsWith("design-system"));
     for (const plugin of readdirSync(join(REPO_ROOT, "plugins"))) {
+      // Retired plugins can leave ignored build/cache folders, not product packages.
+      if (!existsSync(join(REPO_ROOT, "plugins", plugin, "package.json"))) continue;
       visit(join(REPO_ROOT, "plugins", plugin, "src"), "", () => false);
     }
     expect(Object.fromEntries(found)).toEqual(Object.fromEntries(allow));

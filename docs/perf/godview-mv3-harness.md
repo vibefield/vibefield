@@ -71,7 +71,7 @@ did around its cells).
   stay clipped at 160), so the reason reaches the run's own log. Perf and capture share the wait.
 - **The proof audit reads the load at each launch's end.** It printed only `loadRange`, the
   runner's reading BEFORE each launch, and a launch that starts under the ceiling can end far
-  over it (0e020306's A r5: 12 before, 108 as it ended). Its account now also carries
+  over it (bda60ddd's A r5: 12 before, 108 as it ended). Its account now also carries
   `endLoadRange` (each report's own `loadavg[0]` as its launch ended), the `quietLine` and whose
   it is, and `endedOverQuiet` — every launch that ended over the line, with arm, round, start and
   end load — and it prints one plain line per such launch. The quiet line is `--quiet <n>` when
@@ -252,7 +252,7 @@ It exits 0 only when the repeat passes fresh AND the pool passes.
 - **Sanity row:** each view's dark and light captures must differ.
 - **Exit 1** on a blank, missing or mis-sized capture, or a blind sanity row.
 
-## Proven on this tree (A = vf `mv/land` 83db0728 + this lane)
+## Proven on this tree (A = vf `mv/land` 2f99ec3f + this lane)
 
 ### The gate's negative control, with its A/A arm
 

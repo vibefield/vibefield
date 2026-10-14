@@ -56,3 +56,6 @@ xcuserdata/
 # capture (`pnpm --filter @vibefield/terminal-perf capture`); the `.trf1`
 # fixtures beside them are the committed artifact.
 fixtures/terminal-perf/.sources/
+
+# 2026-10-14: private local audit; removed from history before the first push (RL1(c)).
+/work/godview-audit-2026-09-25/

@@ -1,6 +1,6 @@
 # Godview monitor — MV-0 baselines (2026-10-03)
 
-**Status:** recorded on today's code (main `9d72a75d` + the MV-0 instruments, lane `mv/mv0-vf`).
+**Status:** recorded on today's code (main `7b6edaa1` + the MV-0 instruments, lane `mv/mv0-vf`).
 **Reference, never a bound** (build-mv L14): a slice is judged by a PAIRED run against its base, not
 against these numbers. They say what today's seam and views cost, so the direction of a later
 delta can be read.

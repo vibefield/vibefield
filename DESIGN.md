@@ -1058,7 +1058,7 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     is bigger than its field (no body is smaller than r 50), and its physics lets the crowd past
     every edge, a band as thick as a wall included. Under the bar the swarm spilled above the
     stage's top too, and the bar and the stage's edge hid it. Measured in
-    `draft/monitor-view-sdk/evidence/swarm-probe-ce17e858`.)* The rain is a picture with no words or
+    `draft/monitor-view-sdk/evidence/swarm-probe-15bfb9ae`.)* The rain is a picture with no words or
     controls of its own; it runs under the head too.
     The terminals' edge rests where it rested: the monitor's rest height takes up the bar's 40.
   - **The field dissolves under the head** (2026-10-12; James: "Fade now + sizing later"). The

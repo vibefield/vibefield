@@ -105,7 +105,7 @@ the authority for a number.
 > later. `../p008/truffle` is James's own checkout and is still nothing this repo reads.
 
 `@vibecook/ice` is an **exact registry pin of a RELEASE** (`0.15.0` since the desk landing, DK-18
-`bf94fe35`; declared once in the pnpm-workspace.yaml overrides — packages ask for `"*"`). It stopped
+`490357dd`; declared once in the pnpm-workspace.yaml overrides — packages ask for `"*"`). It stopped
 being a `file:` sibling on 2026-07-25: npm ships its dist, so the B2 stale-dist class is gone and
 upgrading is a version edit, not a SHA chase. **A pin bump is an EL8 event, one commit:** the pin
 moves in its THREE places together — preflight's `PIN_EXPECTATIONS` (anchored to the line's end, so a
