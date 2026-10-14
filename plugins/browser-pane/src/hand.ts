@@ -98,13 +98,20 @@ function onScreen(
   };
 }
 
-/** The hand's seams a test fills: the cell its one write lands in (the pane type's url cell, from the catalog, by default). */
+/** PT-6a (M7 C1): how long a held pane's page must have been still — no frame arrived, no input sent — before the hand lets
+ * the desk sleep (ms). */
+export const HELD_QUIET_MS = 250;
+
+/** The hand's seams a test fills: the cell its one write lands in (the pane type's url cell, from the catalog, by default);
+ * the clock its quiet is read by (`performance.now()`, the faces' own). */
 export interface PaneHandOptions {
   readonly cell?: () => ReturnType<typeof urlCell>;
+  readonly now?: () => number;
 }
 
 export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): PaneHand {
   const cellOf = opts.cell ?? urlCell;
+  const now = opts.now ?? (() => performance.now());
   let dom: ObjectDomHost | undefined;
   /** The pane the editor is lent for, and the lease holding it — the page's or the address's (two leases: ICE's editor keeps a
    * lease it already holds and never asks its value again, so a switch of mode is a hand-over from one lease to the other). */
@@ -330,11 +337,18 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
       if (leased === e && (holding === pageLease || holding === addressLease)) return;
       lend(e, pageLease);
     },
-    // idle once nothing is held and every address a page went to has been written (or refused — a read-only document)
+    // idle once every address a page went to has been written (or refused — a read-only document) and nothing is held —
+    // PT-6a (M7 C1): or the pane is held, its lease the hand's, and its page has not stirred it (a frame arrived, an input sent)
+    // for HELD_QUIET_MS: the desk sleeps. What moves wakes it: a frame's arrival (the face wakes its kind), the hand's input,
+    // the lease's end (the editor wakes the loop — and the hand, not idle while the lease is not its, lends it again); the
+    // head's own motions are its kind's `due`. (Before: never idle while held — a still page held stepped the desk every frame.)
     idle: () => {
-      if (leased !== undefined || inHand() !== undefined) return false;
       for (const [e, url] of local()?.addressed() ?? []) if (written.get(e) !== url) return false;
-      return true;
+      const e = inHand();
+      if (e === undefined) return leased === undefined;
+      // (the lease's end clears `leased` — `ended` — so a hand whose lease went is not idle until it lends again)
+      if (leased !== e) return false;
+      return now() - (local()?.stirred(e) ?? Number.NEGATIVE_INFINITY) >= HELD_QUIET_MS;
     },
     dispose() {
       hands.delete(h.world);

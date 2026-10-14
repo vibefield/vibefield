@@ -29,6 +29,7 @@ import {
   resolvePane,
   shapeOf,
 } from "../src";
+import { HELD_QUIET_MS } from "../src/hand";
 import { LAMP } from "../src/law";
 
 const PAGE = "http://127.0.0.1:4321/page";
@@ -49,12 +50,17 @@ function fakeLocal() {
   };
   let addressed = new Map<Entity, string>();
   let bound: { address(e: Entity): void } | undefined;
+  /** PT-6a (M7 C1): when pane 1's page last stirred it (the faces' stamp), and the clock a send stamps by */
+  let stirredAt: number | undefined;
+  let clock: () => number = () => 0;
   const info = { address: PAGE, loading: undefined as number | undefined };
   const local = {
     send: (e: Entity, input: LiveInput) => {
       calls.sent.push({ e, input });
+      stirredAt = clock();
       return true;
     },
+    stirred: (e: Entity) => (e === 1 ? stirredAt : undefined),
     act: (e: Entity, control: HeldPart) => calls.acts.push({ e, control }),
     navigate: (e: Entity, command: BrowserNavigationCommand) => {
       calls.navigations.push({ e, command });
@@ -76,6 +82,13 @@ function fakeLocal() {
       addressed = m;
     },
     bound: () => bound,
+    /** a frame of pane 1's page arrived (or the local sent it the hand's input) at `at` */
+    stir: (at: number) => {
+      stirredAt = at;
+    },
+    clockBy: (now: () => number) => {
+      clock = now;
+    },
   };
 }
 
@@ -121,8 +134,9 @@ function fakeEditor() {
   };
 }
 
-function setup(opts: { inHand?: boolean; readOnly?: boolean } = {}) {
+function setup(opts: { inHand?: boolean; readOnly?: boolean; now?: () => number } = {}) {
   const L = fakeLocal();
+  if (opts.now !== undefined) L.clockBy(opts.now);
   const E = fakeEditor();
   const writes: { e: Entity; value: unknown; opts: unknown }[] = [];
   const props: Record<string, unknown> = { url: PAGE, device: "laptop" };
@@ -169,7 +183,10 @@ function setup(opts: { inHand?: boolean; readOnly?: boolean } = {}) {
     refused: () => {},
     wake: () => {},
   } as unknown as KindDriverHost;
-  const hand = createPaneHand(h, { cell: () => cell });
+  const hand = createPaneHand(h, {
+    cell: () => cell,
+    ...(opts.now === undefined ? {} : { now: opts.now }),
+  });
   const downs: ((ev: PointerEvent) => void)[] = [];
   const dom = {
     container: {
@@ -240,6 +257,43 @@ describe("the pane's hand on the editor (PT-3 rulings 6–9)", () => {
     t.editor.release();
     expect(t.hand.idle?.()).toBe(true);
     expect(t.hand.stats()).toMatchObject({ pageLeases: 2, addressLeases: 0 });
+  });
+
+  it("PT-6a (M7, C1) — a HELD pane lets the desk SLEEP once its lease is the hand's and its page has not stirred it for 250 ms; a frame's arrival, a key, a wheel and the lease's end each wake it (before: never idle while held — a still page held stepped the desk every frame)", () => {
+    let t0 = 1_000;
+    const t = setup({ now: () => t0 });
+    // held: the first frame lends the page's lease — then, nothing stirring, the hand is idle
+    expect(t.hand.idle?.()).toBe(false);
+    t.hand.follow(0);
+    expect(t.lends).toHaveLength(1);
+    expect(t.hand.idle?.()).toBe(true);
+    // a frame of its page arrives: awake for 250 ms from it
+    t.stir(t0);
+    expect(t.hand.idle?.()).toBe(false);
+    t0 += HELD_QUIET_MS - 1;
+    expect(t.hand.idle?.()).toBe(false);
+    t0 += 1;
+    expect(t.hand.idle?.()).toBe(true);
+    // a key through the lease: sent to the page — awake again
+    t.lease().keydown(key("a"));
+    expect(t.calls.sent.at(-1)?.input).toMatchObject({ kind: "key", phase: "down" });
+    expect(t.hand.idle?.()).toBe(false);
+    t0 += HELD_QUIET_MS;
+    expect(t.hand.idle?.()).toBe(true);
+    // a wheel over the page (the local sends the hand's own input): awake
+    t.stir(t0);
+    expect(t.hand.idle?.()).toBe(false);
+    t0 += HELD_QUIET_MS;
+    expect(t.hand.idle?.()).toBe(true);
+    // the lease's end (a blur): not idle until it is lent again, whatever the quiet
+    t.editor.release();
+    expect(t.hand.idle?.()).toBe(false);
+    t.hand.follow(1);
+    expect(t.lends).toHaveLength(2);
+    expect(t.hand.idle?.()).toBe(true);
+    // an address its record has not read: never idle (as before)
+    t.setAddressed(new Map([[1 as Entity, NEXT]]));
+    expect(t.hand.idle?.()).toBe(false);
   });
 
   it("keys go to the page RAW — a printable one types, its text the page's — the IME's composition and its commit; Esc is the desk's", () => {
