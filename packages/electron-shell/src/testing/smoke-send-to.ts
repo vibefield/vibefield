@@ -19,6 +19,10 @@
 //             the chip flies from where the desk DRAWS it (`__vfDesk.held()`);
 //   MISSING — the clock's plugin off, its missing face sent: its type's name ("Clock"), a still of the hatched card;
 //   REDUCED — reduced motion emulated: no flight — the chip fades in at the caret, the @ after it;
+//   AIMED   — a draft already aimed (@ typed, a pane's Send to row taken) takes the chip with no @, and send arms. Since
+//             W7 a launch leaves the terminals uncalled and the deck shows no pane, so the row first calls them up
+//             through the Godview markers' lab seam, as a person's first call would, and aims at the shell that call
+//             births;
 //   COUNTERS — the bar's placements ≤ the anchor's publishes through all of it.
 // The stills: dk-14-chip-{light,dark}.png (the line with the note's chip and @'s list open), dk-14-flight.png (the window,
 // the note's chip in flight).
@@ -26,6 +30,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { BrowserWindow } from "electron";
+import { askGodviewDeckUp, sayingDeckAsk } from "./godview-deck-up";
 import { type BarCounters, judgeCounters, POINT_IN } from "./smoke-selection-bar";
 
 /** The canon's numbers for Send to… (§8 "Send to…", the line's chip). */
@@ -982,14 +987,35 @@ export async function sendToRows(d: SendRowsDriver): Promise<string[]> {
   // ── AIMED: a draft already aimed takes the chip with no @ — and send arms ──────────────────────────────────────
   {
     const row = (p: string): string => `AIMED: ${p}`;
-    // aimed the one way VibeField aims: @ typed in the draft, a Send to row taken (the pane the deck shows)
+    // aimed the one way VibeField aims: @ typed in the draft, a Send to row taken (the pane the deck shows). W7 (GV-D5,
+    // N14 (a)): a launch leaves the terminals uncalled — no workspace, no shell — so the deck shows no pane and Send to
+    // says "No panes open yet". The row calls them up first, as a person's first call would, through the Godview
+    // markers' lab seam (`godview-deck-up.ts`; smoke.ts loads this run with the markers for it). The called deck asks
+    // the last run's question itself (LR, `last-run.ts`); a fresh profile left nothing, so it answers start clean at
+    // once and the deck births its opening shell, the pane the row aims at. The bound counts that birth.
+    const askedAt = Date.now();
+    await askGodviewDeckUp(win);
     await js(`document.querySelector(".vf-line-input")?.focus()`);
     win.webContents.sendInputEvent({ type: "char", keyCode: "@" });
-    await until(
-      "@'s list open with a pane to send to",
-      10_000,
-      `document.querySelector(".vf-at-menu .vf-at-row.is-aim:not([aria-disabled])") !== null`,
-    );
+    try {
+      await sayingDeckAsk(
+        win,
+        until(
+          "@'s list open with a pane to send to",
+          20_000,
+          `document.querySelector(".vf-at-menu .vf-at-row.is-aim:not([aria-disabled])") !== null`,
+        ),
+      );
+    } catch (error) {
+      const quiet = await js<string | null>(
+        `document.querySelector(".vf-at-menu .vf-at-quiet")?.textContent ?? null`,
+      );
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(quiet === null ? message : `${message}; Send to said "${quiet}"`, {
+        cause: error,
+      });
+    }
+    const paneMs = Date.now() - askedAt;
     await pressAt(".vf-at-menu .vf-at-row.is-aim:not([aria-disabled])");
     await until(
       "the draft aimed",
@@ -1017,7 +1043,7 @@ export async function sendToRows(d: SendRowsDriver): Promise<string[]> {
     if (shown !== "true")
       problems.push(row(`the bar did not come back with no list to wait for (${shown})`));
     say(
-      `SMOKE_CANVAS_SEND_AIMED ${JSON.stringify({ chip, aim: seen.aim, sendArmed: seen.sendArmed, text: seen.text, aimed: record?.aimed })}`,
+      `SMOKE_CANVAS_SEND_AIMED ${JSON.stringify({ chip, aim: seen.aim, sendArmed: seen.sendArmed, text: seen.text, aimed: record?.aimed, paneMs })}`,
     );
     // the aim taken away again, and the draft emptied
     await pressAt('.vf-line-chip[data-chip="aim"] .vf-line-chip-x');

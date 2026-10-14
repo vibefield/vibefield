@@ -1172,12 +1172,15 @@ export async function runSmokeCanvas(opts: {
     const deskVerdict = waitForConsole(win, drawing ? "DESK_READY " : "DESK_UNAVAILABLE ", 60_000);
     // the first board lays the examples where the run asks (DK-8, ruling 1): the CLOCK row needs its clock. DK-16: the
     // window is loaded with the smokes' two doors of its own — the presence relay (`presenceRelay`: the PEERS rows play the
-    // mesh between this window and a second) and the GPU faults (`deskFaults`: the BANNER and LOST rows)
+    // mesh between this window and a second) and the GPU faults (`deskFaults`: the BANNER and LOST rows). W7: the Godview
+    // markers too, for their lab seam alone — DK-14's AIMED row calls the terminals up through it, as a person's first
+    // call would, since a launch leaves them uncalled and the deck shows no pane to aim at (testing/godview-deck-up.ts)
     if (noWebgpu) await withoutWebgpu(win);
     await loadRenderer(win, "smoke-canvas", opts.viteUrl, {
       [SEED_EXAMPLES]: "1",
       presenceRelay: "1",
       deskFaults: "1",
+      godviewMarkers: "1",
     });
     // DK-11: the page's visibility recorder armed as the window loads — the occluded row asks whether it EVER went hidden
     await pageVisibility(win);
@@ -1319,8 +1322,9 @@ export async function runSmokeCanvas(opts: {
           problems.push(`DK-18 TAKE: ${error instanceof Error ? error.message : String(error)}`);
         }
         // DK-14: Send to… — the bar's pill, the grown menu's row and the tools in hand's pill each drafting ONE chip into
-        // the line: its face by kind, the flight, the @ typed, the still, the bar aside, reduced motion
-        // (testing/smoke-send-to.ts) — still at the arrival fit, before the pad row moves the camera
+        // the line: its face by kind, the flight, the @ typed, the still, the bar aside, reduced motion, an aimed draft (the
+        // terminals called up first, W7) (testing/smoke-send-to.ts) — still at the arrival fit, before the pad row moves
+        // the camera
         try {
           problems.push(
             ...(await sendToRows({
