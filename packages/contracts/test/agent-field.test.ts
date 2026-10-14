@@ -187,6 +187,32 @@ describe("DS-3 — the board's epoch (DS-L3), optional so the phone keeps parsin
   });
 });
 
+describe("PJ-7 — the phone's row knows its conversation (Q3 (a))", () => {
+  it("carries the provider-native id, and only the id — a row with none still parses", () => {
+    const snapshot = AgentFieldSnapshot.parse(golden("agent-field-snapshot.native-session.json"));
+    const [placed, unsaid] = snapshot.rows;
+    expect(placed?.nativeSessionId).toBe("4f9c2d1e-7a3b-4c8d-9e0f-1a2b3c4d5e6f");
+    expect(unsaid?.nativeSessionId).toBeUndefined();
+    // the id, never the folder: no key of the row names a path (EL7 B1)
+    expect(JSON.stringify(snapshot)).not.toContain('"cwd"');
+    // the mirrored golden, from before PJ-7, carries none and still parses
+    const older = AgentFieldSnapshot.parse(golden("agent-field-snapshot.valid.json"));
+    expect(older.rows.every((row) => row.nativeSessionId === undefined)).toBe(true);
+  });
+
+  it("refuses an id that is not one rather than coercing it", () => {
+    const row = AgentFieldSnapshot.parse(golden("agent-field-snapshot.native-session.json"))
+      .rows[0] as Record<string, unknown>;
+    for (const bad of ["", 42, { id: "x" }, "x".repeat(257)]) {
+      expect(AgentFieldRow.safeParse({ ...row, nativeSessionId: bad }).success, String(bad)).toBe(
+        false,
+      );
+    }
+    // the desk row is a field row: it reads the same key the same way
+    expect(AgentDeskRow.safeParse({ ...row, nativeSessionId: 42 }).success).toBe(false);
+  });
+});
+
 describe("DS-3 — the subscription's new options", () => {
   it("a mesh board is field or desk at a scope; today's callers ask none of it", () => {
     const parsed = AgentSubscribeParams.parse({ projection: "desk", scope: "mesh" });

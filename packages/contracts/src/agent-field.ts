@@ -122,6 +122,12 @@ export const AgentFieldRow = z
       .object({ name: z.string().optional(), branch: z.string().nullable().optional() })
       .passthrough()
       .optional(),
+    /** PJ-7 (Q3 (a)) — the provider-native id of the conversation the run
+     * continues (the fold's `sessionId`), so a History row by that id finds
+     * the card to jump to. The id only, never the folder: the path stays on
+     * this desktop's own windows (`AgentModelLocalFacts.cwd`, EL7 B1). Absent
+     * until the agent has said it. */
+    nativeSessionId: z.string().min(1).max(256).optional(),
     terminal: AgentSessionTerminal.optional(),
   })
   .passthrough();

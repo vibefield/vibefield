@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AgentOffers } from "./agent-catalog";
 import { AgentPersona, AgentProfileId, AgentProfileSetId, AgentProviderId } from "./agent-index";
+import { PlaceRef } from "./project-places";
 import { TerminalCreateOpenResult } from "./terminal-pipeline";
 
 // AR-3 — the managed-session doors (`agent.*`) and the fold's one row shape,
@@ -506,17 +507,25 @@ export type AgentModelsResult = z.infer<typeof AgentModelsResult>;
  * agent (`native`: the agent's own folder), refused when the profile holds
  * none; with neither, the default profile's sign-in, else the agent's own
  * folder. PJ-6 — `modelSelection` starts it at that model and those controls
- * (absent: the agent's own settings). */
+ * (absent: the agent's own settings). PJ-7 (Q1 (a)) — `place` names the
+ * folder by its `PlaceRef` instead of its path (P1): one of THIS desktop's
+ * places, resolved from fieldd's own place facts — another device's ref is
+ * refused `not-here`, an id it does not know `unknown-place`, a folder gone or
+ * unmounted `missing-cwd`. Never beside `cwd`: a body naming both is refused. */
 export const AgentSpawnParams = z
   .object({
     provider: AgentProviderId,
     cwd: z.string().optional(),
+    place: PlaceRef.optional(),
     profileId: AgentProfileId.optional(),
     profileSet: AgentProfileSetId.optional(),
     title: z.string().max(256).optional(),
     modelSelection: AgentModelSelection.optional(),
   })
-  .passthrough();
+  .passthrough()
+  .refine((params) => params.cwd === undefined || params.place === undefined, {
+    message: "name a place or a cwd, not both",
+  });
 export type AgentSpawnParams = z.infer<typeof AgentSpawnParams>;
 
 /** The answer to a spawn or a resume: the fold's row as it stands at birth

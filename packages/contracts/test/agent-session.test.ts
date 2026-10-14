@@ -277,6 +277,46 @@ describe("SessionSummary v2 and the doors", () => {
     }
   });
 
+  it("PJ-7 — a spawn names a place by its ref or a folder by its path, never both, and a ref is a device and an id", () => {
+    const params = AgentSpawnParams.parse(fixture("agent-spawn-params.place.json"));
+    expect(params.place).toEqual({
+      device: "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      placeId: "pl_4c1e9a0b7d2f6e8a1b3c5d7e",
+    });
+    expect(params.cwd).toBeUndefined();
+    expect(params).toMatchObject({
+      profileSet: "work-7f3a",
+      modelSelection: { modelId: "model-card-v2" },
+    });
+    // a key a newer caller adds to the ref rides through
+    const later = AgentSpawnParams.parse({
+      provider: "claude",
+      place: { device: "d", placeId: "pl_1", later: 1 },
+    }).place as Record<string, unknown>;
+    expect(later["later"]).toBe(1);
+    // both: which folder did the caller mean? Refused, never a guess
+    expect(
+      AgentSpawnParams.safeParse({
+        provider: "claude",
+        cwd: "/repo",
+        place: { device: "d", placeId: "pl_1" },
+      }).success,
+    ).toBe(false);
+    for (const bad of [
+      { device: "d" },
+      { placeId: "pl_1" },
+      { device: "", placeId: "pl_1" },
+      { device: "d", placeId: "" },
+      "pl_1",
+      "/Users/me/Projects/vibe-field",
+    ]) {
+      expect(
+        AgentSpawnParams.safeParse({ provider: "claude", place: bad }).success,
+        JSON.stringify(bad),
+      ).toBe(false);
+    }
+  });
+
   it("PJ-6 — agent.models answers a catalog with its read's time, or the last read's failure in puppeteer's words — never an empty list — and reads newer words tolerantly", () => {
     const valid = AgentModelsResult.parse(fixture("agent-models.valid.json"));
     expect(valid.failure).toBeUndefined();
