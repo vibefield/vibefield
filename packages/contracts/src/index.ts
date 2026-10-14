@@ -37,6 +37,8 @@ export * from "./shell";
 export * from "./terminal";
 export * from "./terminal-pipeline";
 export * from "./terminal-pipeline-machines";
+export * from "./trust-root";
+export * from "./update-policy";
 export * from "./user-face";
 export * from "./users";
 export * from "./workspace";

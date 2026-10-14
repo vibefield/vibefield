@@ -23,7 +23,7 @@ export default defineConfig({
       // The scroll lock under the room's Radix dialog (react-remove-scroll and
       // the four helpers it imports) publishes no `exports`, so vitest's
       // Node-style resolution takes each one's ES5 CommonJS `main` — which Node
-      // then loads natively, with the room's own React (see `inline` below).
+      // then loads natively, with a React instance of its own (see `inline` below).
       // Pointed at their `module` builds, they are ESM that Vite inlines and
       // dedupes, as the bundle resolves them.
       {
@@ -47,18 +47,17 @@ export default defineConfig({
         // as it does for the renderer bundle — so the test loads the module the
         // same way production does instead of through a stricter loader.
         //
-        // rosetta's room (a sibling `link:` row) brings its own install, and
-        // vitest EXTERNALIZES what resolves there — Node loads it, so
-        // `resolve.dedupe` never reaches it, and the room's Radix dialog (the
-        // search sheet, the file viewer) took the room's own React copy:
-        // "Invalid hook call" the moment History's search rendered (the search
-        // interim, 2026-10-04). Inlined, Vite resolves that tree's `react` as it
-        // does for the bundle — one React.
+        // rosetta's room is a registry package since RD-5a (2026-10-14), and its
+        // dist imports its own stylesheets (`import "../../styles/….css"`), which
+        // Node's loader refuses. Inlined, Vite transforms it as it does for the
+        // renderer bundle, and `resolve.dedupe` reaches the Radix dialog it
+        // carries — one React, the class the sibling link's own install hit as
+        // "Invalid hook call" in History's search (2026-10-04).
         inline: [
           "@vibecook/mille",
           "@vibecook/mille-ui",
           "@vibecook/ghosttea-react",
-          /[\\/]clients[\\/]room[\\/]node_modules[\\/]/,
+          "@vibefield/rosetta-room",
         ],
       },
     },

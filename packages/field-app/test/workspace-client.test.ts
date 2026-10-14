@@ -1,12 +1,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { WorktreeHostEvent } from "@rosetta/room";
 import {
   WORKSPACE_LIMITS,
   WorkspaceOpenTicketResult,
   WorkspacePickFolderResult,
   WorkspaceRootsResult,
 } from "@vibefield/contracts";
+import type { WorktreeHostEvent } from "@vibefield/rosetta-room";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resolveWorkspaceRoot, WorkspaceClient } from "../src/workspace/client";
 

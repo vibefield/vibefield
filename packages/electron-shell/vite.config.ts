@@ -1,5 +1,4 @@
-import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, searchForWorkspaceRoot } from "vite";
@@ -24,26 +23,10 @@ const repoRoot = join(import.meta.dirname, "..", "..");
 // graph (watched, HMR'd), never through the dev runner's watchers.
 const siblingEntries = Object.values(readLock(repoRoot)?.siblings ?? {});
 const siblingRoots = siblingEntries.map((entry) => siblingDir(repoRoot, entry));
-// AR-8c (2026-10-03): a linked package may link further checkouts of its own —
-// rosetta's room takes `@vibecook/mille` and `mille-ui` as `link:` rows into a
-// mille checkout beside it, the way rosetta's app does — and Vite reaches those
-// files by their REAL path, outside every root above. Each such link a lock
-// package declares joins the list, resolved from that package's own manifest.
-const linkedRoots = siblingEntries.flatMap((entry) =>
-  Object.values(entry.packages ?? {}).flatMap((packageDir) => {
-    const dir = join(siblingDir(repoRoot, entry), packageDir);
-    const manifest = join(dir, "package.json");
-    if (!existsSync(manifest)) return [];
-    const { dependencies = {} } = JSON.parse(readFileSync(manifest, "utf8")) as {
-      dependencies?: Record<string, string>;
-    };
-    return Object.values(dependencies)
-      .filter((spec) => spec.startsWith("link:"))
-      .map((spec) => resolve(dir, spec.slice("link:".length)))
-      .filter((target) => existsSync(target))
-      .map((target) => realpathSync(target));
-  }),
-);
+// AR-8c's second list — the checkouts a LINKED package links in turn (rosetta's
+// room took `@vibecook/mille*` as `link:` rows of its own) — retired at RD-5a
+// (2026-10-14): the room is a registry package, its mille dependencies take this
+// tree's mille rows, and no lock package declares a `link:` dependency.
 // MV-3c (build-mv M33): the Godview perf lab sums every React root's render
 // time from the committed roots' `actualDuration`, which only React's profiling
 // build keeps. `VF_REACT_PROFILING=1` at build time swaps the client for it
@@ -223,7 +206,7 @@ export default defineConfig(({ mode }) => ({
     port: mode === "design" ? 5174 : 5173,
     strictPort: true,
     ...(siblingRoots.length > 0
-      ? { fs: { allow: [searchForWorkspaceRoot(repoRoot), ...siblingRoots, ...linkedRoots] } }
+      ? { fs: { allow: [searchForWorkspaceRoot(repoRoot), ...siblingRoots] } }
       : {}),
   },
 }));

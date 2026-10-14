@@ -289,7 +289,7 @@ export interface RosettadSupervisorOptions {
   /** the SQLite projection rosettad serves (`--db`), absolute; its directory
    * is created */
   dbPath: string;
-  /** the wire version fieldd's client speaks (`@rosetta/protocol`
+  /** the wire version fieldd's client speaks (`@vibefield/rosetta-protocol`
    * PROTOCOL_VERSION); a daemon that announces another is the wrong binary. */
   expectedProtocolVersion: number;
   /** rosettad `--announce-dir DIR`: fieldd's PRIVATE announce directory for

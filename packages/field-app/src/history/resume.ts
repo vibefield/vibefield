@@ -1,4 +1,3 @@
-import type { RoomSelection } from "@rosetta/room";
 import {
   type AgentProviderSummary,
   AgentProvidersResult,
@@ -8,6 +7,7 @@ import {
   type IndexRecentSession,
   IndexSessionResult,
 } from "@vibefield/contracts";
+import type { RoomSelection } from "@vibefield/rosetta-room";
 import { type KeyedCallClient, requestResolvingOutcome } from "../forwarded-call";
 import { launcherSession, refusalReason, UNTITLED_SESSION } from "../godview/launcher-doors";
 

@@ -7,15 +7,6 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, isAbsolute, join } from "node:path";
-import type {
-  DaemonStatus,
-  DiscoveriesResponse,
-  RuntimeBackfill,
-  RuntimeIngestStatus,
-  RuntimeRow,
-  RuntimesResponse,
-  StatusResponse,
-} from "@rosetta/protocol";
 import {
   AbsoluteDataRoot,
   AGENT_CATALOG,
@@ -64,6 +55,15 @@ import {
   IndexUsageResponse,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
+import type {
+  DaemonStatus,
+  DiscoveriesResponse,
+  RuntimeBackfill,
+  RuntimeIngestStatus,
+  RuntimeRow,
+  RuntimesResponse,
+  StatusResponse,
+} from "@vibefield/rosetta-protocol";
 import { projectTimelineRow } from "./index-timeline";
 import { RpcCallError } from "./native-link";
 import {
@@ -397,7 +397,7 @@ export interface IndexServiceOptions {
   /** null = no daemon configured (FIELDD_ROSETTAD_BIN empty); the record still exists */
   supervisor: RosettadSupervisor | null;
   store: EnrollmentStore;
-  /** the wire version fieldd speaks (`@rosetta/protocol` PROTOCOL_VERSION);
+  /** the wire version fieldd speaks (`@vibefield/rosetta-protocol` PROTOCOL_VERSION);
    * every answer is checked against it (the daemon's header) */
   expectedProtocolVersion: number;
   fetchFn?: typeof fetch;

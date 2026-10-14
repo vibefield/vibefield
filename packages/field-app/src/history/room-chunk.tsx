@@ -1,4 +1,4 @@
-import type { ReaderAddress, RoomPorts } from "@rosetta/room";
+import type { ReaderAddress, RoomPorts } from "@vibefield/rosetta-room";
 import {
   Component,
   type ComponentType,
@@ -16,7 +16,7 @@ import type { HistoryRoomViewProps } from "./HistoryRoomView";
 
 // THE HISTORY ROOM'S CHUNK (AR-8c's follow-up, 2026-10-04; DESIGN.md §8
 // "History" — "Its first open says 'Opening History'"). The room —
-// `HistoryRoomView`, everything under `@rosetta/room`, and the package's sheet
+// `HistoryRoomView`, everything under `@vibefield/rosetta-room`, and the package's sheet
 // — is its own chunk, reached by the ONE dynamic import below and by nothing
 // static: `ui-system-boundaries` holds the source to that, and
 // `pnpm bundle:assert` holds the build. Until then the room's sheet rode the

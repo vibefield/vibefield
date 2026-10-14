@@ -53,13 +53,6 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  type AssetRef,
-  type AttachmentRef,
-  type MetaState,
-  type TimelineEntry,
-  UnauthorizedError,
-} from "@rosetta/protocol";
-import {
   IndexEndpointSet,
   IndexOpenTicket,
   IndexSessionsResult,
@@ -71,6 +64,13 @@ import {
 import { bootstrap, type FielddDaemon } from "@vibefield/fieldd";
 import { MockMgmtServer } from "@vibefield/fieldd/testing";
 import { FielddClient, type WsLike } from "@vibefield/fieldd-client";
+import {
+  type AssetRef,
+  type AttachmentRef,
+  type MetaState,
+  type TimelineEntry,
+  UnauthorizedError,
+} from "@vibefield/rosetta-protocol";
 import { afterEach, describe, expect, it } from "vitest";
 import { type HistoryDoorClient, historyPortsOver } from "../src/history/doors";
 import { FILE_TARGET_REFUSAL } from "../src/history/session-port";

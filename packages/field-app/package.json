@@ -31,8 +31,8 @@
     "perf:godview:model": "vitest run --config vitest.perf.config.ts perf/model-streams.generate.perf.ts"
   },
   "dependencies": {
-    "@rosetta/protocol": "*",
-    "@rosetta/room": "*",
+    "@vibefield/rosetta-protocol": "*",
+    "@vibefield/rosetta-room": "*",
     "@vibecook/ghosttea-protocol": "*",
     "@vibecook/ghosttea-react": "*",
     "@vibecook/ice": "*",

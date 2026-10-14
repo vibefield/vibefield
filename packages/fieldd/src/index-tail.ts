@@ -17,20 +17,20 @@
 // carries it — and never leaves this process (EL7).
 import { createHash } from "node:crypto";
 import {
-  type ApiError,
-  RosettaClient,
-  type SessionSubscription,
-  type SubscriptionStatus,
-  type TimelineEntry,
-  type TimelinePage,
-} from "@rosetta/protocol";
-import {
   INDEX_MESH,
   IndexTimelineEntryRow,
   type IndexTimelineRow,
   type RowsCursor,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import {
+  type ApiError,
+  RosettaClient,
+  type SessionSubscription,
+  type SubscriptionStatus,
+  type TimelineEntry,
+  type TimelinePage,
+} from "@vibefield/rosetta-protocol";
 import { newestRows, projectTimelineRow } from "./index-timeline";
 import { RpcCallError } from "./native-link";
 import {
@@ -52,7 +52,7 @@ const OPEN_TIMEOUT_MS = 15_000;
 export interface IndexTailOptions {
   /** null = no daemon configured; every open is UNAVAILABLE unconfigured */
   supervisor: RosettadSupervisor | null;
-  /** `@rosetta/protocol` PROTOCOL_VERSION — rosetta's client refuses another
+  /** `@vibefield/rosetta-protocol` PROTOCOL_VERSION — rosetta's client refuses another
    * at the hello, and the open names both numbers (H-D2) */
   expectedProtocolVersion: number;
   /** the socket rosetta's client dials with: Node's global `WebSocket` (22+)

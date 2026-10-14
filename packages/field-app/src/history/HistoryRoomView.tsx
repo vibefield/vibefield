@@ -1,3 +1,5 @@
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
+import { EmptyState } from "@vibefield/design-kit/primitives";
 import {
   HistoryRoom,
   type HistoryRoomHandle,
@@ -8,9 +10,7 @@ import {
   type RoomSelection,
   type RoomTarget,
   TranscriptReader,
-} from "@rosetta/room";
-import { FieldGlyph } from "@vibefield/design-kit/glyphs";
-import { EmptyState } from "@vibefield/design-kit/primitives";
+} from "@vibefield/rosetta-room";
 import {
   type CSSProperties,
   type ReactElement,
@@ -24,7 +24,7 @@ import { type ViewKeys, viewKeysOf } from "../frame/views";
 // The room's own sheet enters HERE, with the room — one row, the package's own
 // bundle, never a copy — so it rides the room's chunk, not the first paint, and
 // lands after the kit's tokens by load order (its README's one ordering rule).
-import "@rosetta/room/styles/room.css";
+import "@vibefield/rosetta-room/styles/room.css";
 import "./history-room-view.css";
 // PJ-4: VibeField's own content inside the room's host slots
 import "./history-host.css";

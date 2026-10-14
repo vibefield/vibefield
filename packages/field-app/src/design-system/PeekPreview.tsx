@@ -1,5 +1,5 @@
-import type { RoomPorts, RoomTarget } from "@rosetta/room";
-import { createDemoPorts, createRoomDemo } from "@rosetta/room/fixtures";
+import type { RoomPorts, RoomTarget } from "@vibefield/rosetta-room";
+import { createDemoPorts, createRoomDemo } from "@vibefield/rosetta-room/fixtures";
 import { type ReactElement, useCallback, useMemo, useState } from "react";
 import type { LiveFilters } from "../frame/find-door";
 import type { FrameSurface } from "../frame/frame-surface";

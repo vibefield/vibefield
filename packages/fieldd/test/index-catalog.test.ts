@@ -7,7 +7,6 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { Duplex } from "node:stream";
 import { fileURLToPath } from "node:url";
-import { PROTOCOL_VERSION } from "@rosetta/protocol/protocol-version";
 import {
   AGENT_CATALOG,
   createAgentCatalogReaders,
@@ -18,6 +17,7 @@ import {
   IndexThread,
 } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
+import { PROTOCOL_VERSION } from "@vibefield/rosetta-protocol/protocol-version";
 import { afterEach, describe, expect, it } from "vitest";
 import { RowsCopy } from "../src/catalog-rows";
 import { IndexCatalog } from "../src/index-catalog";

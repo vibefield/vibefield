@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SemverString } from "./envelope";
 import { CapabilityId, PluginId } from "./plugins";
+import { IsoInstant } from "./trust-root";
 
 // P7 — distribution and the synced install-set (spec §5.3.1/§6.3/§16.6 + D29′).
 // TS-only like the whole plugin surface. Three shape families:
@@ -12,7 +13,7 @@ import { CapabilityId, PluginId } from "./plugins";
 
 // --- the registry index (§5.3.1) ----------------------------------------------
 
-const Sha256Pin = z.string().regex(/^sha256:[0-9a-f]{64}$/);
+export const Sha256Pin = z.string().regex(/^sha256:[0-9a-f]{64}$/);
 
 export const RegistryRelease = z
   .object({
@@ -48,6 +49,115 @@ export const RegistryIndex = z
   })
   .passthrough();
 export type RegistryIndex = z.infer<typeof RegistryIndex>;
+
+// --- the registry index v2 (TD-9; specs/trust-and-distribution.md §6.3) --------
+//
+// The `vibefield/registry` repository's signed index (the `registry` role, TD-1), beside v1 until the
+// first registry release, then v1 retires. What v2 adds is review and provenance: who may publish
+// under a namespace, the rung a plugin runs at (TD-6), who reviewed its first listing (TD-11), the
+// capabilities a person is shown, and per release the source commit and the attestation the
+// registry's CI verified (TD-4) — with the REGISTRY'S rebuilt artifact as the one served (TD-5).
+// Freshness rides TD-10 (`version`, `expires`; `judgeSignedDocument`). Tolerant like v1.
+
+/** The containment rungs of plugin-architecture §20.5; community plugins list at R2 at 1.0 (TD-6). */
+export const RegistryRung = z.enum(["R0", "R1", "R2", "R3"]);
+export type RegistryRung = z.infer<typeof RegistryRung>;
+
+/** A GitHub login (the namespace's publishers, the reviewer). */
+const GithubLogin = z.string().regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/);
+
+export const RegistryPublisher = z
+  .object({
+    /** the logins allowed to publish under this namespace (§6.4's ownership gate) */
+    logins: z.array(GithubLogin).min(1).max(32),
+    verified: z.boolean().optional(),
+  })
+  .passthrough();
+export type RegistryPublisher = z.infer<typeof RegistryPublisher>;
+
+export const RegistryReleaseV2 = RegistryRelease.extend({
+  prerelease: z.boolean().default(false),
+  notes: z.string().max(8192).optional(),
+  /** the author's repository and the commit the registry rebuilt (TD-4a) */
+  sourceRepo: z.string().url().max(2048),
+  sourceCommit: z.string().regex(/^[0-9a-f]{40}$/),
+  /** the digest of the provenance attestation verified on the author's artifact (TD-4b) */
+  attestation: Sha256Pin,
+}).passthrough();
+export type RegistryReleaseV2 = z.infer<typeof RegistryReleaseV2>;
+
+export const RegistryPluginEntryV2 = z
+  .object({
+    id: PluginId,
+    /** the namespace — the id's first segment (§6.4) */
+    publisher: z.string().min(1).max(64),
+    repo: z.string().url().max(2048),
+    rung: RegistryRung,
+    /** the human who reviewed the FIRST listing (TD-11) */
+    reviewedBy: GithubLogin,
+    reviewedAt: z.number().int().nonnegative(),
+    /** what a person is shown before enabling it */
+    capabilities: z.array(CapabilityId).max(64).default([]),
+    latest: RegistryReleaseV2,
+    /** newest-first; latest is NOT duplicated here */
+    history: z.array(RegistryReleaseV2).max(64).default([]),
+    /** versions withdrawn (an advisory names each); honoured on the next refresh */
+    yanked: z.array(SemverString).max(256).default([]),
+    /** the per-plugin kill switch, always with its reason (§6.4) */
+    disabled: z.boolean().default(false),
+    disabledReason: z.string().min(1).max(512).optional(),
+    /** gathered by the registry's CI from GitHub; the app never reports (TD-14) */
+    stats: z
+      .object({ downloads: z.number().int().nonnegative(), at: z.number().int().nonnegative() })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough()
+  .superRefine((entry, ctx) => {
+    if (entry.id.split(".")[0] !== entry.publisher)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["publisher"],
+        message: `${entry.id} is not in the ${entry.publisher} namespace`,
+      });
+    if (entry.disabled && entry.disabledReason === undefined)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["disabledReason"],
+        message: "a disabled plugin says why",
+      });
+  });
+export type RegistryPluginEntryV2 = z.infer<typeof RegistryPluginEntryV2>;
+
+export const RegistryIndexV2 = z
+  .object({
+    schemaVersion: z.literal(2),
+    /** monotonic; a lower one than last accepted is refused as an index rollback (TD-10, §6.5) */
+    version: z.number().int().min(1),
+    generatedAt: z.number().int().nonnegative(),
+    /** 90 days after the last re-sign (TRUST_FRESHNESS_DAYS.registryIndex) */
+    expires: IsoInstant,
+    publishers: z.record(z.string().min(1).max(64), RegistryPublisher),
+    plugins: z.record(RegistryPluginEntryV2),
+  })
+  .passthrough()
+  .superRefine((index, ctx) => {
+    for (const [key, entry] of Object.entries(index.plugins)) {
+      if (key !== entry.id)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["plugins", key, "id"],
+          message: `listed under ${key} but its id is ${entry.id}`,
+        });
+      if (!Object.hasOwn(index.publishers, entry.publisher))
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["plugins", key, "publisher"],
+          message: `${entry.publisher} is not a registered publisher`,
+        });
+    }
+  });
+export type RegistryIndexV2 = z.infer<typeof RegistryIndexV2>;
 
 // --- the install surface (§22.1, P7) ------------------------------------------
 

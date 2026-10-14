@@ -1,4 +1,14 @@
-import type { SessionRow } from "@rosetta/protocol";
+import type {
+  AgentProviderSummary,
+  IndexSession,
+  ProjectIntentParams,
+  ProjectPlace,
+  ProjectSuggestion,
+  ProjectSummary,
+} from "@vibefield/contracts";
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
+import { projectInk } from "@vibefield/design-kit/project-ink";
+import type { SessionRow } from "@vibefield/rosetta-protocol";
 import type {
   RoomAct,
   RoomFilter,
@@ -13,17 +23,7 @@ import type {
   RoomRename,
   RoomSection,
   RoomSessionRow,
-} from "@rosetta/room";
-import type {
-  AgentProviderSummary,
-  IndexSession,
-  ProjectIntentParams,
-  ProjectPlace,
-  ProjectSuggestion,
-  ProjectSummary,
-} from "@vibefield/contracts";
-import { FieldGlyph } from "@vibefield/design-kit/glyphs";
-import { projectInk } from "@vibefield/design-kit/project-ink";
+} from "@vibefield/rosetta-room";
 import { type ReactElement, type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { FOLDER_GONE } from "../godview/launcher-doors";
 import { OS_LABEL, OsMark } from "../godview/os-marks";

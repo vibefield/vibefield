@@ -1,10 +1,10 @@
-import { createDemoPorts, type RoomDemo } from "@rosetta/room/fixtures";
 import {
   catalogIdForKind,
   IndexRecentResult,
   type IndexSearchHit,
   IndexSearchResult,
 } from "@vibefield/contracts";
+import { createDemoPorts, type RoomDemo } from "@vibefield/rosetta-room/fixtures";
 import { PEEK_LATEST_LIMIT, PEEK_SEARCH_LIMIT } from "../frame/peek-model";
 import type { PeekPort } from "../frame/peek-port";
 

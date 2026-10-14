@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ProjectRow, RuntimeRow, SessionRow } from "@rosetta/protocol";
 import { AGENT_CATALOG, IndexRecentResult } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
+import type { ProjectRow, RuntimeRow, SessionRow } from "@vibefield/rosetta-protocol";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { EnrollmentStore, IndexService, normalizeRoot, repoRoots } from "../src/agent-index";
 import { RpcCallError } from "../src/native-link";

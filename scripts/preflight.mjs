@@ -34,6 +34,12 @@ import {
 const root = resolve(import.meta.dirname, "..");
 const problems = [];
 const warnings = [];
+// The dependency SHAPE, printed on every run (RD-5a, 2026-10-14; RD-D10's
+// "preflight prints the shape"): what each sibling reaches this tree as — a
+// link: row, an exact registry pin, a binary built from its checkout, a cargo
+// patch, a SwiftPM path package. `prod` only when nothing is a checkout; until
+// RD-1's overlay exists, a committed link: row is what makes the tree `dev`.
+const shape = [];
 
 // --- cargo-typify (contracts gen; gen:check diffs are version-sensitive) -----
 const TYPIFY_EXPECTED = "cargo-typify 0.7.0";
@@ -114,6 +120,21 @@ const PIN_EXPECTATIONS = [
     re: /"@vibecook\/ghosttea-protocol":\s*0\.12\.0/,
     label: '"@vibecook/ghosttea-protocol": 0.12.0',
   },
+  // RD-5a (2026-10-14): rosetta's TypeScript packages are exact registry pins,
+  // published from the revision the lock still pins for rosettad's build. Anchored
+  // to the line's end like ice's row, so a prerelease never passes for the release.
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibefield\/rosetta-protocol":\s*0\.1\.1\s*$/m,
+    label: '"@vibefield/rosetta-protocol": 0.1.1',
+    package: "@vibefield/rosetta-protocol",
+  },
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibefield\/rosetta-room":\s*0\.1\.1\s*$/m,
+    label: '"@vibefield/rosetta-room": 0.1.1',
+    package: "@vibefield/rosetta-room",
+  },
 ];
 // A petition window's [patch.crates-io] row is part of its pin: without it the
 // exact version is a registry version again and the window is quietly shut. That
@@ -150,9 +171,12 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
 // --- AR-0 sibling mode: siblings.lock.json vs the checkouts and the overrides ---
 // Two siblings, two kinds of consumption. Every lock package must have a `link:`
 // row pointing INTO the pinned checkout, and the family rule says all-or-nothing:
-// every @vibecook/puppeteer-* or @rosetta/* override is either a lock-backed
-// link: row or (registry mode, W-D8) an exact version — a mixed family is the
-// drift class a per-line table would miss. Revision drift FAILS with the
+// every override of one sibling's packages is either a lock-backed link: row or
+// (registry mode, W-D8) an exact version — a mixed family is the drift class a
+// per-line table would miss. The rule is asked PER SIBLING since RD-5a
+// (2026-10-14), when rosetta's packages went exact while puppeteer's stayed
+// linked; each family is matched under every scope it has carried, and the
+// retired `@rosetta/*` scope (RL5) is named as retired. Revision drift FAILS with the
 // sync-or-repin choice spelled out; a dirty tree only WARNs (co-developing the
 // sibling is the normal state — the pin is about the base revision). The
 // rosettad binary is a WARN when absent: fieldd reports the agent index
@@ -171,20 +195,35 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
   const declaredPackages = new Set(
     Object.values(lock?.siblings ?? {}).flatMap((entry) => Object.keys(entry.packages ?? {})),
   );
+  const SIBLING_FAMILIES = [
+    { sibling: "puppeteer", test: /^@(?:vibecook|vibefield)\/puppeteer-/ },
+    { sibling: "rosetta", test: /^@rosetta\/|^@vibefield\/rosetta-/, retired: /^@rosetta\// },
+  ];
+  const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+  const familyOf = (name) => SIBLING_FAMILIES.find((f) => f.test.test(name));
   const family = [...yaml.matchAll(/^\s*['"]?(@[a-z-]+\/[a-z-]+)['"]?:\s*(\S+)/gm)]
     .map(([line, name, value]) => [line, name, unquote(value)])
     .filter(
       ([, name, value]) =>
-        /^@vibecook\/puppeteer-|^@rosetta\//.test(name) ||
-        declaredPackages.has(name) ||
-        value.startsWith("link:"),
+        familyOf(name) !== undefined || declaredPackages.has(name) || value.startsWith("link:"),
     );
+  for (const [, name] of family) {
+    if (familyOf(name)?.retired?.test(name)) {
+      problems.push(
+        `${name}: the @rosetta scope is retired (RL5, RD-5a) — rosetta publishes as @vibefield/rosetta-*`,
+      );
+    }
+  }
   if (lock === null) {
     // Registry mode: no link: row may exist without a lock behind it.
     for (const [, name, value] of family) {
       if (value.startsWith("link:")) {
         problems.push(
           `${name} is a link: override but ${LOCK_FILE} is absent — a path dependency needs a pin (pnpm siblings:pin after declaring the sibling)`,
+        );
+      } else if (!EXACT_VERSION.test(value)) {
+        problems.push(
+          `sibling family rule: ${name} reads ${value} — a published sibling is an EXACT version (EL8), never a range`,
         );
       }
     }
@@ -241,11 +280,37 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
       }
     }
     for (const [, name, value] of family) {
-      if (!lockPackages.has(name)) {
+      if (lockPackages.has(name)) continue; // its link: row is checked above
+      const sibling = familyOf(name)?.sibling;
+      if (value.startsWith("link:")) {
         problems.push(
-          `sibling family rule: ${name} (${value}) is not in ${LOCK_FILE} — the family is ALL lock-backed link: rows or ALL exact versions, never mixed`,
+          `sibling family rule: ${name} (${value}) is a link: row ${LOCK_FILE} does not declare — a path dependency needs a revision pin (declare it, then \`pnpm siblings:pin\`)`,
+        );
+      } else if (Object.keys(lock.siblings[sibling]?.packages ?? {}).length > 0) {
+        problems.push(
+          `sibling family rule: ${name} (${value}) is not in ${LOCK_FILE} while ${sibling}'s other packages are link: rows — the family is ALL lock-backed link: rows or ALL exact versions, never mixed`,
+        );
+      } else if (!EXACT_VERSION.test(value)) {
+        problems.push(
+          `sibling family rule: ${name} reads ${value} — a published sibling is an EXACT version (EL8), never a range`,
         );
       }
+    }
+    for (const [name, entry] of Object.entries(lock.siblings)) {
+      const parts = [];
+      const linked = Object.keys(entry.packages ?? {}).length;
+      if (linked > 0) parts.push(`npm link ×${linked}`);
+      const exact = family.filter(([, pkg]) => familyOf(pkg)?.sibling === name);
+      if (linked === 0 && exact.length > 0) {
+        parts.push(
+          `npm exact ${[...new Set(exact.map(([, , value]) => value))].join("/")} ×${exact.length}`,
+        );
+      }
+      if (entry.cargo) parts.push(`${entry.cargo.crate} built from the checkout`);
+      const patched = Object.keys(entry.patch ?? {}).length;
+      if (patched > 0) parts.push(`cargo patch ×${patched}`);
+      if (entry.swift) parts.push("swift path package");
+      shape.push(`${name} ${parts.join(" + ") || "checkout"} @ ${entry.sha.slice(0, 7)}`);
     }
     // The CARGO half of the family rule (RFC 025 window). Every crate a lock
     // entry declares under `patch` must have a [patch.crates-io] row naming that
@@ -462,9 +527,14 @@ try {
 // The ledger, electron-builder and runtime AUMID are three consumers of one
 // frozen identity. Run both the rule proof and the live comparison in the
 // ordinary gate so drift cannot wait until packaging CI to be discovered.
+// TD-0 (2026-10-14): the trust-root's keygen proves its own refusals here too —
+// the overwrite, the secret on a non-terminal or in the repository, the role
+// confusion, the rotation and the embedding — with keys that never leave a
+// temporary directory.
 for (const command of [
   "node scripts/check-release-identity.mjs --self-test",
   "node scripts/check-release-identity.mjs --enforce",
+  "node scripts/trust-keygen.mjs --self-test",
 ]) {
   try {
     execSync(command, {
@@ -504,5 +574,7 @@ try {
 // --- report ------------------------------------------------------------------
 for (const w of warnings) console.warn(`preflight WARN: ${w}`);
 for (const p of problems) console.error(`preflight FAIL: ${p}`);
+if (shape.length > 0) console.log(`shape: dev — ${shape.join(" · ")}`);
+else console.log("shape: prod — no sibling checkout in the build");
 if (problems.length > 0) process.exit(1);
 console.log(warnings.length > 0 ? `preflight OK (${warnings.length} warning(s))` : "preflight OK");

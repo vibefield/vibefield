@@ -1,6 +1,6 @@
 /* The History view (AR-8c; DESIGN.md §8 "History", §10; One Frame §9 —
    FC-D6, FC-D15, FC-D16): rosetta's room on the cover's glass. Tokens only. The
-   room's own sheet (`@rosetta/room/styles/room.css`) enters with the room, in
+   room's own sheet (`@vibefield/rosetta-room/styles/room.css`) enters with the room, in
    its chunk (`HistoryRoomView.tsx`, since 2026-10-04 — the app's manifest
    carried it until then), so it loads AFTER this sheet, which the faces before
    the room bring on the canvas's chunk (`HistoryOpening.tsx`). Nothing here and

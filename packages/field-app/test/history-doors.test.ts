@@ -22,13 +22,6 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  type AssetRef,
-  type MetaState,
-  PROTOCOL_VERSION,
-  RosettaClient,
-  type SubscriptionStatus,
-} from "@rosetta/protocol";
-import {
   IndexSessionsResult,
   IndexStatus,
   IndexThreadsResult,
@@ -37,6 +30,13 @@ import {
   ProjectListResult,
   type ProjectSummary,
 } from "@vibefield/contracts";
+import {
+  type AssetRef,
+  type MetaState,
+  PROTOCOL_VERSION,
+  RosettaClient,
+  type SubscriptionStatus,
+} from "@vibefield/rosetta-protocol";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { assetSourceOver } from "../src/history/asset-source";
 import {

@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { MAX_GRANT_BYTES, mintGrant, SCOPE_FILES, SCOPE_READ } from "@rosetta/protocol/grants";
 import {
   type CallerContext,
   INDEX_TICKET,
@@ -11,6 +10,12 @@ import {
   remoteIndexEndpointsFor,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
+import {
+  MAX_GRANT_BYTES,
+  mintGrant,
+  SCOPE_FILES,
+  SCOPE_READ,
+} from "@vibefield/rosetta-protocol/grants";
 import type { ServeSpec, ServeState } from "./mesh-client";
 import { RpcCallError } from "./native-link";
 import {

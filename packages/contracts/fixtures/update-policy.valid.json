@@ -1,0 +1,15 @@
+{
+  "version": 3,
+  "generatedAt": 1791936000000,
+  "expires": "2026-12-13T00:00:00Z",
+  "channel": "beta",
+  "trustRootVersion": 1,
+  "yanked": ["0.9.0-beta.2"],
+  "killSwitch": false,
+  "requireUserConfirmation": false,
+  "floors": {
+    "os": "14.0",
+    "glibc": "2.31"
+  },
+  "minSupported": "0.9.0-beta.1"
+}

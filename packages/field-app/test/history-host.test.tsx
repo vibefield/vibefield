@@ -25,8 +25,6 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SessionRow } from "@rosetta/protocol";
-import type { RoomMenu, RoomMenuItem } from "@rosetta/room";
 import {
   AgentModelsResult,
   AgentProvidersResult,
@@ -36,6 +34,8 @@ import {
   type ProjectSummary,
 } from "@vibefield/contracts";
 import { projectInk } from "@vibefield/design-kit/project-ink";
+import type { SessionRow } from "@vibefield/rosetta-protocol";
+import type { RoomMenu, RoomMenuItem } from "@vibefield/rosetta-room";
 import { isValidElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import {

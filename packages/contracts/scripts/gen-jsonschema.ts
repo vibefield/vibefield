@@ -12,7 +12,10 @@
 // The files service's door tier (FS-1a, src/workspace.ts) is absent for the
 // same reason: fieldd ↔ a window, a phone or a peer daemon, and fieldd ↔ its
 // files worker — field-native has no reader. Its LAYOUT rows do reach Rust
-// (gen-registries-rs.ts), as every LAYOUT row does.
+// (gen-registries-rs.ts), as every LAYOUT row does. The trust model (TD-0:
+// src/trust-root.ts, src/update-policy.ts, plugin-distribution.ts's
+// RegistryIndexV2) is absent for the same reason: its verifiers are Electron
+// main and fieldd, and field-native signs and reads none of it.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

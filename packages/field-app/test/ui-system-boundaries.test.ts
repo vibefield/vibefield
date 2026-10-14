@@ -45,9 +45,9 @@ describe("UI system ownership boundaries", () => {
     // (its README's one ordering rule), by load order: the manifest is the
     // entry's sheet, the room's chunk comes later. The chunk itself is held by
     // the row below and by `pnpm bundle:assert`.
-    expect(appManifest).not.toMatch(/@import\s+"@rosetta\/room/);
+    expect(appManifest).not.toMatch(/@import\s+"@vibefield\/rosetta-room/);
     expect(source("history/HistoryRoomView.tsx")).toContain(
-      'import "@rosetta/room/styles/room.css";',
+      'import "@vibefield/rosetta-room/styles/room.css";',
     );
 
     const catalogManifest = source("design-system/design-system.css");
@@ -59,7 +59,7 @@ describe("UI system ownership boundaries", () => {
 
   it("keeps History's room behind its chunk's one dynamic import — nothing in the product imports it statically (2026-10-04)", () => {
     // The room's chunk (`history/room-chunk.tsx`) reaches `HistoryRoomView` —
-    // and through it everything under `@rosetta/room`, its sheet included — by
+    // and through it everything under `@vibefield/rosetta-room`, its sheet included — by
     // ONE dynamic import. A static import anywhere in the product pulls the
     // room back onto the canvas's chunk (or the first paint); `import type` is
     // erased and costs nothing, while `import { type X }` is NOT (under
@@ -79,10 +79,10 @@ describe("UI system ownership boundaries", () => {
             offenders.push(`${relativePath}: imports HistoryRoomView statically`);
           }
           if (
-            /^import\s+(?!type\s)[^;]*?from\s+"@rosetta\/room(?:\/[^"]*)?"/m.test(text) ||
-            /^import\s+"@rosetta\/room/m.test(text)
+            /^import\s+(?!type\s)[^;]*?from\s+"@vibefield\/rosetta-room(?:\/[^"]*)?"/m.test(text) ||
+            /^import\s+"@vibefield\/rosetta-room/m.test(text)
           ) {
-            offenders.push(`${relativePath}: imports @rosetta/room's code or sheet`);
+            offenders.push(`${relativePath}: imports @vibefield/rosetta-room's code or sheet`);
           }
         }
       }
@@ -201,7 +201,7 @@ describe("UI system ownership boundaries", () => {
     // in the room's own chunk: only the room's view imports it, after the room's sheet
     const view = source("history/HistoryRoomView.tsx");
     expect(view.indexOf('import "./history-room-glass.css";')).toBeGreaterThan(
-      view.indexOf('import "@rosetta/room/styles/room.css";'),
+      view.indexOf('import "@vibefield/rosetta-room/styles/room.css";'),
     );
     expect(source("history/HistoryOpening.tsx")).not.toContain("history-room-glass.css");
   });
@@ -216,7 +216,7 @@ describe("UI system ownership boundaries", () => {
     const fixtures = source("design-system/history-fixtures.ts");
     expect(preview).toContain("HistoryRoomView");
     expect(preview).toMatch(/<Composer\s/u);
-    expect(fixtures).toContain('from "@rosetta/room/fixtures"');
+    expect(fixtures).toContain('from "@vibefield/rosetta-room/fixtures"');
     for (const file of [preview, fixtures]) {
       expect(file).not.toMatch(/className="(?:ah-|tr-|vf-history)/);
       expect(file).not.toContain("<style");
@@ -247,7 +247,7 @@ describe("UI system ownership boundaries", () => {
     expect(preview).toMatch(/<HistoryRoomView\s/u);
     expect(preview).toContain("peekFixturePort");
     expect(preview).toContain("data-peek-recede");
-    expect(fixtures).toContain('from "@rosetta/room/fixtures"');
+    expect(fixtures).toContain('from "@vibefield/rosetta-room/fixtures"');
     for (const file of [preview, fixtures, live]) {
       expect(file).not.toMatch(/className="(?:vf-peek|ah-|tr-|vf-history)/);
       expect(file).not.toContain("<style");
@@ -485,6 +485,12 @@ describe("UI system ownership boundaries", () => {
     // docs/UI_SYSTEM.md §Catalog fidelity). Any other internal path would let
     // the catalog quietly grow a private copy of a package's seam, which is the
     // replica rule's failure mode arriving through the import graph.
+    // The `@vibefield` npm scope is shared since RL5 (RD-5a, 2026-10-14): rosetta's
+    // published packages (and puppeteer's, when they go exact) are siblings under
+    // it, not workspace packages, so this rule does not read them — the catalog's
+    // History plates take the room's own fixtures, as they did as `@rosetta/room`.
+    const publishedSibling = (specifier: string): boolean =>
+      /^@vibefield\/(?:rosetta|puppeteer)-/.test(specifier);
     const allowedDoor = (specifier: string): boolean =>
       specifier === "@vibefield/contracts" ||
       specifier === "@vibefield/design-kit" ||
@@ -501,6 +507,7 @@ describe("UI system ownership boundaries", () => {
         } else if (/\.tsx?$/.test(entry.name)) {
           for (const match of source(relativePath).matchAll(/from\s+"(@vibefield\/[^"]+)"/g)) {
             const specifier = match[1] ?? "";
+            if (publishedSibling(specifier)) continue;
             if (!allowedDoor(specifier)) offenders.push(`${relativePath} → ${specifier}`);
           }
         }

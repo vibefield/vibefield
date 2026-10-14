@@ -22,7 +22,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@rosetta/protocol": "*",
+    "@vibefield/rosetta-protocol": "*",
     "@vibecook/ghosttea-client": "*",
     "@vibecook/mille": "*",
     "@vibecook/puppeteer-builtin-providers": "*",

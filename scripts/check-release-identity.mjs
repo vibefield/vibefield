@@ -26,12 +26,16 @@
 // Usage: node scripts/check-release-identity.mjs [--enforce] [--require-frozen] [--self-test]
 // Node >=22 ESM, builtins only — no new dependencies.
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { createPublicKey, generateKeyPairSync } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { hostname, userInfo } from "node:os";
 
 const LEDGER_PATH = "apps/desktop/packaging/release-identity.json";
 const BUILDER_PATH = "apps/desktop/packaging/electron-builder.yml";
 const DESKTOP_REGISTRY_PATH = "packages/contracts/src/registries.ts";
+// TD-1: the embedded trust-root (specs/trust-and-distribution.md §2) — its root keys must equal the
+// ledger's frozen `trustRootKeys`, and it must not exist while that field is still a blocker.
+const TRUST_ROOT_PATH = "apps/desktop/packaging/trust-root.json";
 
 const REQUIRED_FIELDS = [
   "appId",
@@ -43,6 +47,7 @@ const REQUIRED_FIELDS = [
   "trayGuid",
   "updateChannel",
   "updateOrigin",
+  "trustRootKeys",
 ];
 
 // Literal fields whose value is dictated by a standing decision elsewhere, so a
@@ -72,7 +77,9 @@ const FORMATS = {
   uuid: (v) =>
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v) ||
     "expected a UUID",
-  "update-channel": (v) => v === "beta" || v === "stable" || "expected 'beta' or 'stable'",
+  // RL4 (a), 2026-10-12: three channels — nightly, beta, stable (contracts' UPDATE_CHANNELS).
+  "update-channel": (v) =>
+    ["nightly", "beta", "stable"].includes(v) || "expected 'nightly', 'beta' or 'stable'",
   "https-url": (v) => {
     try {
       return new URL(v).protocol === "https:" || "expected an https origin";
@@ -80,7 +87,38 @@ const FORMATS = {
       return "expected a parseable URL";
     }
   },
+  // TD-1: the trust-root's ROOT public keys — at least two (the law is two keys, threshold 1),
+  // distinct, each an Ed25519 public key in the kit's encoding. A secret in their place is refused
+  // here AND by the credential rule below, which this format's real public keys are exempt from.
+  "ed25519-spki-base64[]": (v) => {
+    if (v.length < 2) return "expected the root's public keys — at least two (TD-1)";
+    if (new Set(v).size !== v.length) return "a root key is listed twice";
+    const bad = v.find((key) => !isEd25519Spki(key));
+    return (
+      bad === undefined || `${bad.slice(0, 16)}… is not an Ed25519 public key (base64 SPKI DER)`
+    );
+  },
 };
+
+/** Formats whose value is a list; every other format holds one string. */
+const LIST_FORMATS = new Set(["ed25519-spki-base64[]"]);
+
+const SPKI_HEADER = Buffer.from("302a300506032b6570032100", "hex");
+/** An Ed25519 public key as base64 SPKI DER, and only that: 44 bytes behind the SPKI header, a
+ * canonical base64 spelling, and node:crypto agreeing it is ed25519. A PKCS#8 secret never passes. */
+function isEd25519Spki(value) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return false;
+  const der = Buffer.from(value, "base64");
+  if (der.length !== 44 || !der.subarray(0, 12).equals(SPKI_HEADER)) return false;
+  if (der.toString("base64") !== value) return false;
+  try {
+    return (
+      createPublicKey({ key: der, format: "der", type: "spki" }).asymmetricKeyType === "ed25519"
+    );
+  } catch {
+    return false;
+  }
+}
 
 /** EDP-30's real target: a value that differs per developer machine is not an
  * identity. Checked against THIS machine's user/host plus the universal path
@@ -127,7 +165,11 @@ function credentialShaped(value) {
   if (/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(value)) return "contains a private key block";
   if (/\.(p12|pfx|key|pem)$/i.test(value)) return "points at a key/certificate file";
   if (/(password|passphrase|secret|token)\s*[:=]/i.test(value)) return "embeds a credential";
-  if (/^[A-Za-z0-9+/]{40,}={0,2}$/.test(value)) return "looks like an encoded credential blob";
+  // A long base64 run is refused as a likely secret — unless it PROVES to be an Ed25519 public key,
+  // which is meant to be published (trustRootKeys). The proof is structural, not a format label, so
+  // a secret parked under that format is still refused here.
+  if (/^[A-Za-z0-9+/]{40,}={0,2}$/.test(value) && !isEd25519Spki(value))
+    return "looks like an encoded credential blob";
   return null;
 }
 
@@ -162,8 +204,16 @@ function checkLedger(ledger, committed, identity) {
       else blockers.push(`${name} (${field.blocker})`);
       continue;
     }
-    if (typeof value !== "string" || value.length === 0) {
-      violations.push(`${name}: a frozen field must hold a non-empty string`);
+    const isList = LIST_FORMATS.has(field.format);
+    const shaped = isList
+      ? Array.isArray(value) &&
+        value.length > 0 &&
+        value.every((item) => typeof item === "string" && item.length > 0)
+      : typeof value === "string" && value.length > 0;
+    if (!shaped) {
+      violations.push(
+        `${name}: a frozen field must hold ${isList ? "a non-empty list of non-empty strings" : "a non-empty string"}`,
+      );
       continue;
     }
     const format = FORMATS[field.format];
@@ -172,16 +222,19 @@ function checkLedger(ledger, committed, identity) {
       const verdict = format(value, name);
       if (verdict !== true) violations.push(`${name}: ${verdict}`);
     }
-    const derived = machineDerived(value, field.machineOverlapAcknowledged, identity);
-    if (derived !== null) {
-      const line = `${name}: ${derived.note} (EDP-30)`;
-      // An acknowledged overlap is still REPORTED — the point is that a reviewer
-      // sees it and the reason every time, not that it disappears.
-      if (derived.fatal) violations.push(line);
-      else notes.push(`${line} — acknowledged: ${field.machineOverlapAcknowledged}`);
+    // Hygiene asks of every string the field holds — one, or each item of a list.
+    for (const item of isList ? value : [value]) {
+      const derived = machineDerived(item, field.machineOverlapAcknowledged, identity);
+      if (derived !== null) {
+        const line = `${name}: ${derived.note} (EDP-30)`;
+        // An acknowledged overlap is still REPORTED — the point is that a reviewer
+        // sees it and the reason every time, not that it disappears.
+        if (derived.fatal) violations.push(line);
+        else notes.push(`${line} — acknowledged: ${field.machineOverlapAcknowledged}`);
+      }
+      const credential = credentialShaped(item);
+      if (credential !== null) violations.push(`${name}: ${credential} (spec §9.4)`);
     }
-    const credential = credentialShaped(value);
-    if (credential !== null) violations.push(`${name}: ${credential} (spec §9.4)`);
   }
 
   // Freeze: compare frozen values against the file as committed. A changed
@@ -192,7 +245,8 @@ function checkLedger(ledger, committed, identity) {
     for (const [name, field] of Object.entries(fields)) {
       const before = committed.fields?.[name];
       if (before === undefined || before.status !== "frozen") continue;
-      if (before.value !== field.value && !bumped)
+      // Compared as JSON, so a list is equal by content, not by identity.
+      if (JSON.stringify(before.value) !== JSON.stringify(field.value) && !bumped)
         violations.push(
           `${name}: frozen value changed from ${JSON.stringify(before.value)} without bumping identityRevision`,
         );
@@ -233,7 +287,17 @@ function loadIdentityConsumers() {
   if (trayGuidMatch === null) {
     throw new Error(`${DESKTOP_REGISTRY_PATH}: could not read DESKTOP_TRAY_GUID`);
   }
+  let trustRoot = null;
+  if (existsSync(TRUST_ROOT_PATH)) {
+    try {
+      trustRoot = JSON.parse(readFileSync(TRUST_ROOT_PATH, "utf8"));
+    } catch (error) {
+      throw new Error(`${TRUST_ROOT_PATH}: unparseable — ${error}`);
+    }
+  }
   return {
+    trustRoot,
+    trustRootSigned: existsSync(`${TRUST_ROOT_PATH}.sig`),
     builderAppId: topLevelYamlScalar(builder, "appId"),
     builderProductName: topLevelYamlScalar(builder, "productName"),
     builderExecutableName: topLevelYamlScalar(builder, "executableName"),
@@ -274,6 +338,25 @@ function checkIdentityConsumers(ledger, consumers) {
       `ledger: appId ${JSON.stringify(appId)} and windowsAppUserModelId ${JSON.stringify(aumid)} must be identical`,
     );
   }
+  // TD-1: the embedded trust-root's root keys ARE the frozen trustRootKeys (as a set — order carries
+  // no trust), it ships with its signatures, and it does not exist before the field is frozen: an
+  // embedded root the ledger does not pin is a root nobody reviewed.
+  const rootKeys = frozenValue("trustRootKeys");
+  if (rootKeys !== null) {
+    const embedded = consumers.trustRoot?.root?.keys;
+    if (!Array.isArray(embedded)) {
+      violations.push(
+        `${TRUST_ROOT_PATH}: missing or without root keys, but trustRootKeys is frozen`,
+      );
+    } else if (JSON.stringify([...embedded].sort()) !== JSON.stringify([...rootKeys].sort())) {
+      violations.push(`${TRUST_ROOT_PATH}: its root keys disagree with frozen trustRootKeys`);
+    }
+    if (!consumers.trustRootSigned) violations.push(`${TRUST_ROOT_PATH}.sig: missing`);
+  } else if (consumers.trustRoot !== null) {
+    violations.push(
+      `${TRUST_ROOT_PATH}: exists while trustRootKeys is unresolved — embed it with \`node scripts/trust-keygen.mjs embed\` (TD-1)`,
+    );
+  }
   if (consumers.builderAppId !== consumers.runtimeWindowsAppUserModelId) {
     violations.push(
       `runtime/builder drift: DESKTOP_APP_ID ${JSON.stringify(consumers.runtimeWindowsAppUserModelId)} does not match appId ${JSON.stringify(consumers.builderAppId)}`,
@@ -305,6 +388,18 @@ const FIXTURE_IDENTITY = { user: "fixtureuser", host: "fixturehost" };
 
 function selfTest() {
   const base = () => JSON.parse(readFileSync(LEDGER_PATH, "utf8"));
+  // TD-1's field, with keys minted here and thrown away: two public keys in the kit's encoding, and a
+  // secret's encoding to prove it is refused where a public key belongs.
+  const ed25519 = () => generateKeyPairSync("ed25519");
+  const spki = (pair) => pair.publicKey.export({ type: "spki", format: "der" }).toString("base64");
+  const [rootA, rootB] = [ed25519(), ed25519()];
+  const rootKeys = [spki(rootA), spki(rootB)];
+  const pkcs8 = rootA.privateKey.export({ type: "pkcs8", format: "der" }).toString("base64");
+  const withRootKeys = (value) => {
+    const l = base();
+    l.fields.trustRootKeys = { status: "frozen", value, format: "ed25519-spki-base64[]" };
+    return l;
+  };
   const cases = [
     ["clean ledger has no violations", base(), 0],
     [
@@ -405,6 +500,20 @@ function selfTest() {
       })(),
       1,
     ],
+    [
+      "TD-1: two root public keys freeze clean (the credential rule exempts a proven key)",
+      withRootKeys(rootKeys),
+      0,
+    ],
+    ["TD-1: a single root key is refused (the law is two)", withRootKeys([rootKeys[0]]), 1],
+    ["TD-1: a root key listed twice is refused", withRootKeys([rootKeys[0], rootKeys[0]]), 1],
+    // Two: the format refuses it as no public key, and the credential rule refuses the blob.
+    [
+      "TD-1: a SECRET in place of a public key is refused twice over",
+      withRootKeys([rootKeys[0], pkcs8]),
+      2,
+    ],
+    ["TD-1: one string where the list belongs is refused", withRootKeys(rootKeys[0]), 1],
   ];
 
   let failures = 0;
@@ -456,6 +565,29 @@ function selfTest() {
   if (!bumpOk) failures++;
   console.log(`${bumpOk ? "ok  " : "FAIL"} a revision bump legitimises the same change`);
 
+  // The freeze compares a list by content: the same keys re-parsed are no change, a changed key is.
+  const frozenKeys = withRootKeys(rootKeys);
+  const sameKeys = checkLedger(
+    withRootKeys([...rootKeys]),
+    frozenKeys,
+    FIXTURE_IDENTITY,
+  ).violations;
+  const listSameOk = !sameKeys.some((v) => v.includes("without bumping"));
+  if (!listSameOk) failures++;
+  console.log(
+    `${listSameOk ? "ok  " : "FAIL"} a frozen list re-read with the same keys is no change`,
+  );
+  const rotated = checkLedger(
+    withRootKeys([rootKeys[0], spki(ed25519())]),
+    frozenKeys,
+    FIXTURE_IDENTITY,
+  );
+  const listDriftOk = rotated.violations.some((v) =>
+    v.startsWith("trustRootKeys: frozen value changed"),
+  );
+  if (!listDriftOk) failures++;
+  console.log(`${listDriftOk ? "ok  " : "FAIL"} a root key cannot change without a revision bump`);
+
   const consumers = loadIdentityConsumers();
   const consumerBaseline = checkIdentityConsumers(base(), consumers);
   const consumerBaselineOk = consumerBaseline.length === 0;
@@ -494,6 +626,51 @@ function selfTest() {
   const trayDriftOk = driftedTray.some((v) => v.includes("runtime DESKTOP_TRAY_GUID"));
   if (!trayDriftOk) failures++;
   console.log(`${trayDriftOk ? "ok  " : "FAIL"} runtime tray GUID drift is refused`);
+
+  // TD-1's consumer: the embedded document and the frozen keys agree, or the pair is refused.
+  const embeddedDoc = (keys) => ({ schemaVersion: 1, root: { threshold: 1, keys } });
+  const embedCases = [
+    [
+      "the embedded root agrees with frozen trustRootKeys (in any order)",
+      frozenKeys,
+      embeddedDoc([...rootKeys].reverse()),
+      true,
+      0,
+    ],
+    [
+      "an embedded root that disagrees is refused",
+      frozenKeys,
+      embeddedDoc([rootKeys[0], spki(ed25519())]),
+      true,
+      1,
+    ],
+    ["a frozen trustRootKeys with no embedded document is refused", frozenKeys, null, false, 2],
+    [
+      "an embedded document without its signatures is refused",
+      frozenKeys,
+      embeddedDoc(rootKeys),
+      false,
+      1,
+    ],
+    [
+      "an embedded document while trustRootKeys is a blocker is refused",
+      base(),
+      embeddedDoc(rootKeys),
+      true,
+      1,
+    ],
+  ];
+  for (const [name, ledger, trustRoot, trustRootSigned, expected] of embedCases) {
+    const found = checkIdentityConsumers(ledger, {
+      ...consumers,
+      trustRoot,
+      trustRootSigned,
+    }).filter((v) => v.includes("trust-root"));
+    const ok = found.length === expected;
+    if (!ok) failures++;
+    console.log(`${ok ? "ok  " : "FAIL"} TD-1: ${name} (${found.length} violation(s))`);
+    if (!ok) for (const v of found) console.log(`       ${v}`);
+  }
 
   if (failures > 0) {
     console.error(`self-test: ${failures} rule(s) did not behave as specified`);

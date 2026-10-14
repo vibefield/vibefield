@@ -458,7 +458,7 @@ const RULES = [
     // is the SDK's own wall checker's (L16), not this one's.
     enforce: true,
     description:
-      "fieldd imports puppeteer only through its runtime door (runtime · builtin-providers · core · record · monitor · view-sdk) + @rosetta/protocol — never an adapter or native-observation",
+      "fieldd imports puppeteer only through its runtime door (runtime · builtin-providers · core · record · monitor · view-sdk) + @vibefield/rosetta-protocol — never an adapter or native-observation",
     applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/fieldd/src"),
     importTest: (s) =>
       s.startsWith("@vibecook/puppeteer-") &&
@@ -476,7 +476,7 @@ const RULES = [
     // reads the model, the view host mounts one view.
     enforce: true,
     description:
-      "field-app imports puppeteer only through its view door (core · monitor · react · views · view-sdk) + @rosetta/protocol — never runtime, providers, record, an adapter, or native-observation",
+      "field-app imports puppeteer only through its view door (core · monitor · react · views · view-sdk) + @vibefield/rosetta-protocol — never runtime, providers, record, an adapter, or native-observation",
     applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/field-app/src"),
     importTest: (s) =>
       s.startsWith("@vibecook/puppeteer-") &&
@@ -491,7 +491,7 @@ const RULES = [
     description:
       "no puppeteer or rosetta import outside packages/fieldd and packages/field-app (D2: the runtime lives in fieldd; A4/R10 elsewhere)",
     applies: (p) => SOURCE_EXT.test(p) && !underAny(p, ["packages/fieldd", "packages/field-app"]),
-    importTest: (s) => s.startsWith("@vibecook/puppeteer-") || s.startsWith("@rosetta/"),
+    importTest: (s) => s.startsWith("@vibecook/puppeteer-") || s.startsWith("@vibefield/rosetta-"),
   },
   {
     id: "R24",
@@ -1039,7 +1039,7 @@ function runSelfTest() {
     {
       id: "R22",
       file: "packages/electron-shell/src/main/uses-rosetta.ts",
-      body: 'import { RosettaClient } from "@rosetta/protocol";\n',
+      body: 'import { RosettaClient } from "@vibefield/rosetta-protocol";\n',
     },
     // FS-1a (R24) — mille's engine outside the files worker: in the daemon's
     // own process, in Electron main, the root entry in the renderer, a
@@ -1275,7 +1275,7 @@ function runSelfTest() {
     // door, both with the rosetta client — clean under R20/R21/R22.
     {
       file: "packages/fieldd/src/clean-runtime-door.ts",
-      body: 'import { createBuiltinAgentRuntime } from "@vibecook/puppeteer-builtin-providers";\nimport type { AgentRuntime } from "@vibecook/puppeteer-runtime";\nimport { PROTOCOL_VERSION } from "@rosetta/protocol";\nexport const r = createBuiltinAgentRuntime;\nexport type R = AgentRuntime;\nexport const v = PROTOCOL_VERSION;\n',
+      body: 'import { createBuiltinAgentRuntime } from "@vibecook/puppeteer-builtin-providers";\nimport type { AgentRuntime } from "@vibecook/puppeteer-runtime";\nimport { PROTOCOL_VERSION } from "@vibefield/rosetta-protocol";\nexport const r = createBuiltinAgentRuntime;\nexport type R = AgentRuntime;\nexport const v = PROTOCOL_VERSION;\n',
     },
     // FS-1a (R24) — the two doors mille has: the worker takes any entry, the
     // renderer the native-free client and the tree.
@@ -1303,7 +1303,7 @@ function runSelfTest() {
     },
     {
       file: "packages/field-app/src/clean-view-door.ts",
-      body: 'import type { AgentMonitorState } from "@vibecook/puppeteer-core";\nimport { createMonitorStore } from "@vibecook/puppeteer-monitor";\nimport type { SessionRow } from "@rosetta/protocol";\nexport type S = AgentMonitorState;\nexport const m = createMonitorStore;\nexport type Row = SessionRow;\n',
+      body: 'import type { AgentMonitorState } from "@vibecook/puppeteer-core";\nimport { createMonitorStore } from "@vibecook/puppeteer-monitor";\nimport type { SessionRow } from "@vibefield/rosetta-protocol";\nexport type S = AgentMonitorState;\nexport const m = createMonitorStore;\nexport type Row = SessionRow;\n',
     },
     // MV-3a doors: the backend and the model's types in fieldd; the replica and
     // the monitor-view contract in the renderer — clean under R20/R21.

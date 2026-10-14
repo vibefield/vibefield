@@ -249,6 +249,22 @@ overrides:
   # version transitively; declaring it puts it under the one-version law rather
   # than leaving a hoisted transitive to drift.
   "@vibecook/ghosttea-protocol": 0.12.0
+  # rosetta — EXACT registry pins since RD-5a (2026-10-14; W-D8's exit shape under
+  # RL5's `@vibefield` scope; packages ask for "*"). `@vibefield/rosetta-protocol`
+  # is the TypeScript client (types + the REST/WS client); `@vibefield/rosetta-room`
+  # is the History room (AR-8c, AR-D36): the four columns, the panels and the
+  # transcript behind injected ports, mounted in the frame's History slot. It
+  # dials nothing — VibeField's adapters (field-app `history/doors.ts`) are its
+  # ports. Its react/react-dom are PEERS (>=19 <20) and resolve to this tree's
+  # copy; its `@vibecook/mille*` dependencies take the mille rows below. Both were
+  # published from rosetta 43485458 (tag npm-v0.1.1; the npm provenance names that
+  # commit), the revision siblings.lock.json still pins, because rosettad is built
+  # from that checkout until it ships as a release asset (RD-D7). A bump is ONE
+  # EL8 commit: these rows, preflight's PIN_EXPECTATIONS, the lock's rosetta sha
+  # (`pnpm siblings:pin rosetta`), and minimumReleaseAgeExclude for a version
+  # published this week.
+  "@vibefield/rosetta-protocol": 0.1.1
+  "@vibefield/rosetta-room": 0.1.1
   # FS-1a (2026-10-05, FS-D10 RULED (a) with its exit at once — 0.3.4 is on npm):
   # mille, the file explorer engine behind the files service, entered as an
   # EXACT registry pin (EL8; ice's shape — packages ask for "*"). Since FS-1b
@@ -280,6 +296,9 @@ overrides:
   # renders a package component with hooks (two Reacts throw there). That is
   # what admitted @vibecook/puppeteer-views (the Godview views, PU-5); the
   # puppeteer-react contract it extends stays transitive, never a row.
+  # (RD-5a, 2026-10-14: rosetta is published and its rows left this block for
+  # exact pins above; puppeteer's follow at the release that carries what the
+  # pin has — its 0.2.1 lacks PJ-6's resume selection and the SWF commits.)
   # EXIT (W-D8): replace each row with an exact version, delete the lock
   # entries, drop electron-shell's sibling-mode `server.fs.allow` branch; the
   # walls and preflight's family rule stay.
@@ -297,22 +316,9 @@ overrides:
   # read it too). Types for fieldd; the replica's scheduler type for field-app.
   "@vibecook/puppeteer-view-sdk": link:../puppeteer/packages/view-sdk
   "@vibecook/puppeteer-views": link:../puppeteer/packages/views
-  # rosetta's TypeScript client (types + the REST/WS client); rosettad itself is
-  # built from the same checkout by `pnpm siblings:build` and reaches fieldd as
-  # FIELDD_ROSETTAD_BIN, never through npm. The checkout is DEDICATED to the pin
-  # (`../rosetta-pin`, 2026-10-03; `node scripts/siblings.mjs fetch rosetta`): James's
-  # working checkout `../rosetta` is nothing this tree reads.
-  "@rosetta/protocol": link:../rosetta-pin/clients/ts
-  # AR-8c (2026-10-03) — rosetta's History room as a package (AR-D36; built
-  # upstream as AR-8a, `clients/room`): the four columns, the panels and the
-  # transcript behind injected ports, mounted in the frame's History slot. It
-  # dials nothing — VibeField's adapters (field-app `history/doors.ts`) are its
-  # ports. Its react/react-dom are PEERS (>=19 <20), deduped to this tree's
-  # copy exactly as @vibecook/puppeteer-views is (the renderer's Vite config
-  # and field-app's vitest config); its own install (`pnpm install
-  # --frozen-lockfile` in that folder, its own lock) brings its dependencies
-  # and a development React for its own typecheck.
-  "@rosetta/room": link:../rosetta-pin/clients/room
+  # rosetta's two packages LEFT this block at RD-5a (2026-10-14): they are exact
+  # registry pins above the fence now. rosettad is still built from the pinned
+  # checkout (`../rosetta-pin`, siblings.lock.json's `cargo` key) until RD-D7.
 # Shared dependency versions, declared ONCE — packages reference "catalog:".
 catalog:
   "@tailwindcss/vite": ^4.0.0
@@ -335,6 +341,11 @@ minimumReleaseAgeExclude:
   - '@vibecook/ghosttea-react@0.12.0'
   - '@vibecook/ghosttea-frame@0.12.0'
   - '@vibecook/ghosttea@0.12.0'
+  # RD-5a (2026-10-14): rosetta's first `@vibefield` release, published
+  # 2026-10-13T23:36Z — inside the release-age window on the day the pin went
+  # exact; our own packages, reviewed as an EL8 pin.
+  - '@vibefield/rosetta-protocol@0.1.1'
+  - '@vibefield/rosetta-room@0.1.1'
   # AH-1b — the exact T2 release is a reviewed executable input, not an
   # unreviewed transitive update. All platform packages move in lockstep.
   # 0.7.12 → 0.7.14 (2026-09-16, UA-P-X): the RFC 025 petition window's exit.

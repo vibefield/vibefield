@@ -2184,7 +2184,7 @@ its hot-point glow and rim left with the card (above); its last two rows are the
 - **History is rosetta's room, on the cover's glass** (AR-8c, built 2026-10-03; One Frame §9
   "History, joined"; FC-D6, FC-D15, FC-D16; AR-D36…AR-D43): History is rosetta's own room — the
   projects, the sessions, the panels and charts, the transcript and its folds — mounted from the
-  package `@rosetta/room` behind VibeField's ports, so its drawing is rosetta's and this entry governs
+  package `@vibefield/rosetta-room` behind VibeField's ports, so its drawing is rosetta's and this entry governs
   only where it sits and what VibeField says around it. Lists and figures arrive over fieldd's
   `index.*` doors; one session's body over the direct plane, with a grant of its own (EL2).
   - **Its ground is the cover's glass.** The room is a HOST surface: it paints no ground and no plate

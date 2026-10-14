@@ -1,6 +1,6 @@
 {
   "//": "The frozen release constants (distribution spec §7.6, EDP-30). These are the values an installed VibeField is KNOWN BY: bundle id, publisher, tray slot, update origin. Changing one after a public release is a migration — signatures, update feeds, taskbar pinning and notification routing all key off them — never a cosmetic edit. Two laws are enforced by scripts/check-release-identity.mjs: (1) nothing here may be inferred from a local path, username or hostname (EDP-30) — a value that differs per developer machine is not an identity; (2) a `frozen` field cannot change without bumping identityRevision in the same commit, so an identity edit is always a reviewable event rather than a silent drift.",
-  "identityRevision": 4,
+  "identityRevision": 5,
   "frozenAt": null,
   "fields": {
     "appId": {
@@ -59,6 +59,13 @@
       "value": "https://github.com/vibefield/vibefield/releases",
       "format": "https-url",
       "note": "Revised 2026-07-27 (identityRevision 4): the repository lives at github.com/vibefield/vibefield — its own org, alongside infinite-canvas-engine and strata-ecs. Revision 3 pointed this at `vibecook-dev/vibefield` and reasoned that a redirect kept it working; that premise was wrong. There is no such repository — the API 404s it, and the vibecook-dev org holds truffle and five siblings but never this one. The origin was aimed at nothing, not at a redirect, and the format checker could not catch it because `https-url` validates the SHAPE of a URL and never asks whether it resolves. What hid it is that the ORIGINAL path (jamesyong-42/vibefield) does redirect here, so every human clone and push kept working. Free to correct because the repo has published no releases yet: no installed client has ever read this value, so this is an edit rather than the migration it becomes the moment a signed beta ships. Revision 3's machine-overlap retirement still holds — `vibefield` shares nothing with a local username. Frozen 2026-07-25 (James): VibeField is open source and both downloads and updates are served from public GitHub Releases. electron-updater's github provider reads metadata from here, and because the repo is public no credential ever reaches an end-user machine — which is what §11.4 requires. Release ASSETS are consequently public too: a 437 MB .app is visible to anyone, which is intended for an open beta."
+    },
+    "trustRootKeys": {
+      "status": "blocker",
+      "value": null,
+      "format": "ed25519-spki-base64[]",
+      "blocker": "TD-1",
+      "note": "Declared 2026-10-14 (TD-0, identityRevision 5; specs/trust-and-distribution.md §2): the trust-root's ROOT public keys — the offline Ed25519 pair James holds (two keys, threshold 1) that signs trust-root.json, the document naming the release, bundled and registry roles. An installed VibeField trusts what these keys sign and nothing else, so changing them after a public release is a root rotation (a document signed by an old root key and a new one), never an edit. Public keys only: base64 SPKI DER, 60 characters each; the secrets live in James's keychain and never here (the checker refuses a PKCS#8 secret in this field). Filled at TD-1 by `node scripts/trust-keygen.mjs embed`, which also lands apps/desktop/packaging/trust-root.json; the checker then holds the embedded document's root keys equal to this value."
     }
   }
 }

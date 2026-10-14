@@ -161,7 +161,7 @@ for (const name of TRACKED) {
 }
 
 /** AR-8c (2026-10-03) — the React peers' TYPES. A linked sibling ships its
- * SOURCE (puppeteer's views, rosetta's room), so this tree's TypeScript
+ * SOURCE (puppeteer's views; rosetta's room until RD-5a), so this tree's TypeScript
  * compiles it in field-app's program, where each file's `react` resolves the
  * types installed beside IT — the sibling checkout's own `@types/react`. Two
  * installs are one to the compiler only at the same VERSION (it redirects a

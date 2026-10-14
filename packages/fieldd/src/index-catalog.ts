@@ -101,7 +101,7 @@ export type IndexCatalogPhase =
 export interface IndexCatalogOptions {
   /** null = no rosettad configured (the tables stay empty and never ready) */
   supervisor: RosettadSupervisor | null;
-  /** the rosetta wire version fieldd speaks (`@rosetta/protocol` PROTOCOL_VERSION) */
+  /** the rosetta wire version fieldd speaks (`@vibefield/rosetta-protocol` PROTOCOL_VERSION) */
   expectedProtocolVersion: number;
   /** this desktop's id, read at every stamp: it moves from the persisted
    * local fallback to the mesh identity (D30). Errata (PJ-2 §0, 2026-10-08):

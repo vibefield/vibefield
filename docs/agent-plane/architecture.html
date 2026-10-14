@@ -1492,7 +1492,7 @@
                     <td><span class="badge tone-vibefield">fieldd</span></td>
                     <td>
                       <p>
-                        <code>@rosetta/protocol</code> (rosetta <code>clients/ts</code>)<br />
+                        <code>@vibefield/rosetta-protocol</code> (rosetta <code>clients/ts</code>; an exact registry pin since RD-5a, 2026-10-14)<br />
                         <code>packages/fieldd/src/agent-index.ts</code> · <code>daemon.ts</code>
                       </p>
                     </td>
@@ -1719,7 +1719,7 @@
                 <strong>R20</strong>
                 <p>
                   "fieldd imports puppeteer only through its runtime door (runtime · builtin-providers · core · record)
-                  + @rosetta/protocol — never an adapter or native-observation". The rule's own comment gives the
+                  + @vibefield/rosetta-protocol — never an adapter or native-observation". The rule's own comment gives the
                   reason: "an adapter import is a product branching on a provider, and native-observation is the
                   adapters' private half. Tests may reach further (puppeteer-testing); production may not."
                 </p>
@@ -1728,7 +1728,7 @@
                 <strong>R21</strong>
                 <p>
                   "field-app imports puppeteer only through its view door (core · monitor · react · views) +
-                  @rosetta/protocol — never runtime, providers, record, an adapter, or native-observation". The
+                  @vibefield/rosetta-protocol — never runtime, providers, record, an adapter, or native-observation". The
                   renderer sees the agent <em>view</em> and never the runtime: spawning, providers and recording are
                   fieldd's.
                 </p>
@@ -2398,7 +2398,7 @@
                   <tr>
                     <td><strong>AR-8</strong></td>
                     <td><p>The History view as spine content, not a plugin — the ingested tier's home, behind the ticketed direct route.</p></td>
-                    <td><span class="badge tone-built">Built</span><p>for one desktop (AR-8c, 2026-10-03): rosetta's room (<code>@rosetta/room</code>, AR-8a, merged upstream <code>00b97869</code>) mounted in the frame's History slot over VibeField's four ports — lists and figures on fieldd's <code>index.*</code> doors (AR-8b), one session's body on the ticket's grant — with Resume as its create; system.html §History, "The mount". <em>Correction 2026-10-03:</em> this row said Designed while AR-8a ∥ AR-8b were in build. Owed: the guest (AR-8d), grouping across desktops (AR-8e = PJ-1), the Peek's Everything scope. <em>2026-10-04 (SP-6):</em> the PHONE's History reads a desktop's real sessions over the door — <code>index.timeline</code> (bounded pages) and <code>index.session.subscribe</code> (the tail as rows at 1 s) beside the catalog doors, grouped by desktop with a 24 MiB cache that replays offline; system.html §History, "The phone's History lane". The phone's ticket is SP-7's.</p></td>
+                    <td><span class="badge tone-built">Built</span><p>for one desktop (AR-8c, 2026-10-03): rosetta's room (<code>@vibefield/rosetta-room</code>, AR-8a, merged upstream <code>00b97869</code>) mounted in the frame's History slot over VibeField's four ports — lists and figures on fieldd's <code>index.*</code> doors (AR-8b), one session's body on the ticket's grant — with Resume as its create; system.html §History, "The mount". <em>Correction 2026-10-03:</em> this row said Designed while AR-8a ∥ AR-8b were in build. Owed: the guest (AR-8d), grouping across desktops (AR-8e = PJ-1), the Peek's Everything scope. <em>2026-10-04 (SP-6):</em> the PHONE's History reads a desktop's real sessions over the door — <code>index.timeline</code> (bounded pages) and <code>index.session.subscribe</code> (the tail as rows at 1 s) beside the catalog doors, grouped by desktop with a 24 MiB cache that replays offline; system.html §History, "The phone's History lane". The phone's ticket is SP-7's.</p></td>
                   </tr>
                   <tr>
                     <td><strong>RO-1</strong></td>

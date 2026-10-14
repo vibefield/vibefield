@@ -8,7 +8,7 @@
    compositor nothing. The sticky day heads (every head the room draws as `.ah-day`, a list's
    days and its section heads) keep the room's own frost since N3 (a), its cost measured under a
    cover before it landed, so this names them nowhere. Scoped to this view; the room's own sheet
-   (`@rosetta/room`, not ours to edit) keeps its frost elsewhere. It rides the ROOM'S chunk (only
+   (`@vibefield/rosetta-room`, not ours to edit) keeps its frost elsewhere. It rides the ROOM'S chunk (only
    `HistoryRoomView` imports it, after the room's sheet): its selectors are the room's, and the
    room's rules travel with the room (`pnpm bundle:assert`). */
 .vf-history .ah-frame[data-ah-surface="host"] .tr-frost::before {
