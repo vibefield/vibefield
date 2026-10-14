@@ -1066,8 +1066,37 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     (`--vf-godview-head-fade-from` → `--vf-godview-head-reserve`), whatever the view. What a field
     draws in that band, the swarm's crowd or the rain's ground, fades out under the glass instead
     of standing beside the circles. The stage's own chrome begins at the reserve and is never
-    faded. It is the stage that is masked, never the head beside it. Until the swarm sizes its
-    bodies to its field (puppeteer's, owed), the fade is what keeps the head clear.
+    faded. It is the stage that is masked, never the head beside it. Past the swarm's floor (the
+    next point) the fade still takes what spills. *(2026-10-14: this said "Until the swarm sizes its
+    bodies to its field (puppeteer's, owed), the fade is what keeps the head clear". It sizes them
+    now.)*
+  - **The swarm's crowd fits its field** (2026-10-14, puppeteer `d3e82aa`; James: "Shrink
+    together", then "Pull takes the field's shape").
+    - **One shared scale.** Every body's base size (idle 50, working 60–80, blocked 50) is
+      multiplied by one scale, *k*, never above 1. *k* solves Σπ(k·rᵢ + 4)² = 0.45 × the free area:
+      the field less its obstacles, each padded by 7. It moves on a 0.04 grid: it shrinks at once,
+      and grows only once the crowd's room clears the next step by 0.02, so a dragged window never
+      makes it shimmer. It is refitted when the bodies, the field's size or its obstacles change,
+      never per frame. The bodies ease to it on the swarm's radius spring.
+    - **The floor is r 28** (*k* 0.56 at today's sizes). A crowd past it spills, as it did before,
+      and under the head the fade takes it.
+    - **The pull takes the field's shape.** In puppeteer's words: "The swarm's pull toward the
+      field's centre is weakened along the free field's long side by the square of its
+      short-to-long ratio, so a crowd settles into the field's own shape; a square field pulls
+      exactly as before." The free height leaves out the head's band, so under the head the
+      crowd settles as a wide, low band, not a ball. A lone body far out in a wide field drifts in
+      slowly: from the far left it takes 13 s to reach one other body (0.5 s before). From eight
+      bodies up the crowd already spans the stage. A new body never spawns that far out (spawns
+      are searched within 28 % of the width from the centre); only a hold or a drag puts one there.
+    - **The words step down, on three rungs by the drawn radius.** At r 50 and up a body draws
+      everything, so a field with room changes nothing. From 50 down to 35 it draws its name and
+      one line: its state when it has one ("Bash · …", "? Should …"), otherwise its model,
+      otherwise the terminal's word. Below 35 it draws its name alone, centred. Figures, the
+      branch, the clock and the burn row go at the first step.
+    - **Measured on this field** (1164 × 288 under the head, puppeteer's own physics, settled 8 s):
+      20 bodies settle clean at *k* 0.68, and 27 at the floor. Before, at full size, 27 bodies put
+      8 in the band and 10 past an edge.
+    - Spawns keep clear of obstacles, so a body is never born under the head.
   - **Maximized** (GV-D11) nothing of the head stands over the terminals' title bar: the row and
     its chevrons fade in 200ms and take no pointer.
   - **Reduced motion:** the row pages and the label appears at once.
