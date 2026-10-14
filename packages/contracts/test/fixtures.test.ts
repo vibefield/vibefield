@@ -149,6 +149,7 @@ import {
   StoreSnapshot,
   TerminalRoutesStreamPayload,
 } from "../src/mgmt";
+import { RegistryIndexV2 } from "../src/plugin-distribution";
 import { PluginRegistrySnapshot } from "../src/plugin-registry";
 import { PluginManifestV1 } from "../src/plugins";
 import {
@@ -207,6 +208,8 @@ import {
   TransferGeometry,
   TransportCredit,
 } from "../src/terminal-pipeline";
+import { TrustRoot } from "../src/trust-root";
+import { UpdatePolicy } from "../src/update-policy";
 import {
   WorkspaceCloseTicketParams,
   WorkspaceCloseTicketResult,
@@ -293,6 +296,11 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "mesh-self-identity": MeshSelfIdentity,
   "plugin-manifest": PluginManifestV1,
   "plugin-registry-snapshot": PluginRegistrySnapshot,
+  // TD-0 (trust-and-distribution.md §2, §6.3; WP12a): the trust-root, the registry's signed index v2
+  // and the release's update policy. Their refusals live in trust-root.test.ts.
+  "trust-root": TrustRoot,
+  "registry-index-v2": RegistryIndexV2,
+  "update-policy": UpdatePolicy,
   "log-record": LogRecordV1,
   "logging-health": LoggingHealthV1,
   "diagnostic-snapshot": DiagnosticLogSnapshotV1,

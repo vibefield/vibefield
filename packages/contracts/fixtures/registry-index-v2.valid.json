@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 2,
+  "version": 1412,
+  "generatedAt": 1791936000000,
+  "expires": "2027-01-12T00:00:00Z",
+  "publishers": {
+    "vibefield": {
+      "logins": ["jamesyong"],
+      "verified": true
+    },
+    "acme": {
+      "logins": ["acme-bot"]
+    }
+  },
+  "plugins": {
+    "acme.jupyter": {
+      "id": "acme.jupyter",
+      "publisher": "acme",
+      "repo": "https://github.com/acme/vf-jupyter",
+      "rung": "R2",
+      "reviewedBy": "jamesyong",
+      "reviewedAt": 1790812800000,
+      "capabilities": ["net.outbound", "x.acme.jupyter.kernel"],
+      "latest": {
+        "version": "1.2.0",
+        "artifactUrl": "https://github.com/vibefield/registry/releases/download/acme.jupyter%401.2.0/acme.jupyter@1.2.0.vfplugin",
+        "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "minApp": "0.9.0",
+        "minContracts": "1.4.0",
+        "publishedAt": 1791590400000,
+        "prerelease": false,
+        "notes": "Kernels restart cleanly.",
+        "sourceRepo": "https://github.com/acme/vf-jupyter",
+        "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+        "attestation": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "history": [
+        {
+          "version": "1.1.0",
+          "artifactUrl": "https://github.com/vibefield/registry/releases/download/acme.jupyter%401.1.0/acme.jupyter@1.1.0.vfplugin",
+          "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "minApp": "0.9.0",
+          "minContracts": "1.4.0",
+          "publishedAt": 1791590400000,
+          "prerelease": false,
+          "notes": "Kernels restart cleanly.",
+          "sourceRepo": "https://github.com/acme/vf-jupyter",
+          "sourceCommit": "0123456789abcdef0123456789abcdef01234567",
+          "attestation": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      ],
+      "yanked": ["1.1.0"],
+      "disabled": false,
+      "stats": {
+        "downloads": 1234,
+        "at": 1791936000000
+      }
+    }
+  }
+}

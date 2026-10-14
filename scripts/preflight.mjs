@@ -524,9 +524,14 @@ try {
 // The ledger, electron-builder and runtime AUMID are three consumers of one
 // frozen identity. Run both the rule proof and the live comparison in the
 // ordinary gate so drift cannot wait until packaging CI to be discovered.
+// TD-0 (2026-10-14): the trust-root's keygen proves its own refusals here too —
+// the overwrite, the secret on a non-terminal or in the repository, the role
+// confusion, the rotation and the embedding — with keys that never leave a
+// temporary directory.
 for (const command of [
   "node scripts/check-release-identity.mjs --self-test",
   "node scripts/check-release-identity.mjs --enforce",
+  "node scripts/trust-keygen.mjs --self-test",
 ]) {
   try {
     execSync(command, {

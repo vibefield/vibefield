@@ -53,6 +53,12 @@
       // byte (`pnpm check:ios-fixtures`): biome collapsing a short array (PJ-D21's
       // `taskRoots`, its first) would be undone by the next gen and break the mirrors.
       "!packages/contracts/fixtures/agent-catalog.valid.json",
+      // TD-0/TD-1: a trust-root is SIGNED over its exact bytes (trust-and-distribution.md §2) — the
+      // canonical JSON `scripts/trust-keygen.mjs assemble` writes. Biome collapsing a one-key array
+      // would break every signature on the embedded copy, so only the keygen formats it; the
+      // contracts fixture is kept in the same canonical form (its test holds it so).
+      "!**/trust-root.json",
+      "!packages/contracts/fixtures/trust-root.valid.json",
       // design-kit/assets/ is GENERATED art (tooling/fieldmarks/generate.py and
       // tooling/face-stickers/generate.py, DESIGN.md §11): the generators own its
       // bytes. Its sprite sheets are containers of <symbol>s that a <use> names, so
