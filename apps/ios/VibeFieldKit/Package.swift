@@ -254,7 +254,11 @@ let package = Package(
     // The home screen: the field's composition, bubble chrome, session card —
     // and since IOS-9a the tab bar the two views stand under.
     .target(name: "FieldWorkspace", dependencies: ["FieldProduct", "FieldDesign"], resources: [.copy("Fixtures")]),
-    .testTarget(name: "FieldWorkspaceTests", dependencies: ["FieldWorkspace", "FieldProduct"], resources: [.copy("Fixtures")]),
+    // PJ-7 — the witness runs the phone's own History reader beside the launch
+    // sheet, so the test target takes FieldHistory too (test-only).
+    .testTarget(
+      name: "FieldWorkspaceTests", dependencies: ["FieldWorkspace", "FieldProduct", "FieldHistory"],
+      resources: [.copy("Fixtures")]),
     .target(
       name: "FieldHome",
       dependencies: [
