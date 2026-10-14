@@ -1,4 +1,4 @@
-# Godview paired perf — A/A baseline, main 9d72a75d + MV-0 instruments
+# Godview paired perf — A/A baseline, main 7b6edaa1 + MV-0 instruments
 
 - A: `/Volumes/SamsungRed/lanes/mv/mv0-vf/vibe-field`
 - B: `/Volumes/SamsungRed/lanes/mv/mv0-vf/vibe-field`

@@ -23,7 +23,7 @@ cutover of `desk/landing` needs, what each proves, where it runs, and its verdic
 
 ## The list
 
-Verdicts at `f1c026a4` (2026-10-08 08:43–08:59Z, `pnpm gate:landing --with-stages`, one run; load 7 at the start, 94 under
+Verdicts at `c60f6448` (2026-10-08 08:43–08:59Z, `pnpm gate:landing --with-stages`, one run; load 7 at the start, 94 under
 the test stage). The commit after it adds this document and CLAUDE.md's lines for it — no code. Every smoke's `SMOKE_DAEMONS`
 said `"left": []`.
 
@@ -60,7 +60,7 @@ said `"left": []`.
 
 `pnpm verify`'s chain is rows 1–14 in that order. `pnpm gate:landing` is rows 15–26; `--with-stages` puts 1–14 first.
 
-**Re-run at DK-19, on main merged in** (`19318c33`; `pnpm gate:landing --with-stages`, 2026-10-08 09:32→09:47Z, load 3, 124
+**Re-run at DK-19, on main merged in** (`695ff9d1`; `pnpm gate:landing --with-stages`, 2026-10-08 09:32→09:47Z, load 3, 124
 under the test stage, 5 at the end; `field-native` rebuilt from the merge first). The same 26 gates, red only by preflight
 (MAIN's ghosttea row), check:deps (MAIN's three mille rows) and test — fieldd `2 failed | 2106 passed`: AR-7b row 1 (MAIN's)
 and `agent-session.test.ts`'s MF-1f/MF-1g resume row, "poll timed out after 15000ms" at load 124, which passed ALONE twice
@@ -71,18 +71,18 @@ test:rust, gen:check — and every landing gate ok, `SMOKE_DAEMONS` `left: []` i
 TAKE 8/8, LANDED min 4.5 ms against 250, REST still 314 / wind 22,033 / cover 101 ms, PEERS IDLE 8,086 ms, PEERS EXIT
 line / head / drag strip 46 / 22 / 67 ms, COVER_BUDGET 34 / 26 / 26 ms against 240, ISOLATION 0, PRESENCE_REST `wakes {}`);
 both GPU-less modes; kind-faults; plugin-restart; plugin; godview; terminal-door; terminal-direct; studio. Main's three rows
-were proven ON MAIN at `fc928566` (a throwaway worktree on a cargo target of its own, removed): the same preflight row, the
+were proven ON MAIN at `1adde1a6` (a throwaway worktree on a cargo target of its own, removed): the same preflight row, the
 same three check:deps rows, AR-7b row 1's same assertion ("1 failed | 91 passed (92)").
-**And on the ledger's tip** (`a4d8c6d5`, the merge plus the DK-19 ledger's docs; 10:10→10:25Z, load 11–82): the same
+**And on the ledger's tip** (`bba0279f`, the merge plus the DK-19 ledger's docs; 10:10→10:25Z, load 11–82): the same
 verdicts — test red by AR-7b row 1 and, at load 82, `doc-sync-service.test.ts`'s DS-5c row, whose `afterEach` met ENOTEMPTY
 removing its temp directory (alone twice: 44 passed); smoke:canvas 291 s — TAKE 8/8, LANDED min 3.4 ms, REST still 316 /
 wind 22,046 / cover 102 ms, PEERS IDLE 8,046 ms, PEERS EXIT 45 / 23 / 22 ms, COVER_BUDGET 37 / 29 / 27 ms; every other
 landing gate ok, no smoke's daemon left.
-**And on main merged again** (`7c7fea1c` — MV, Godview's five views as SDK modules over one backend, and the ghosttea pin —
-with its merge fix `af25af82`; 2026-10-08 20:33→20:58Z, load 60–445). **Preflight is GREEN now**: main moved ghosttea's pin
+**And on main merged again** (`ef5d5ad8` — MV, Godview's five views as SDK modules over one backend, and the ghosttea pin —
+with its merge fix `ed9706db`; 2026-10-08 20:33→20:58Z, load 60–445). **Preflight is GREEN now**: main moved ghosttea's pin
 to `10d0b17`, where the sibling sits. check:deps stays red by MAIN's mille row. Walls, retired, iOS fixtures, icons, lint (2,112
 files), fmt, lint:rust, test:rust and gen:check are ok. Typecheck, bundle:assert, test and every smoke that builds are RED, and
-RED ON MAIN `34fce7c4` the same way (a throwaway, removed): the puppeteer sibling sits at MV's pin `594d222` without its own
+RED ON MAIN `8ae3da5c` the same way (a throwaway, removed): the puppeteer sibling sits at MV's pin `594d222` without its own
 install for the new `packages/view-sdk` (the cutover's 1.5). The evidence, side by side:
 - typecheck: the identical 165 error lines;
 - bundle:assert: the same Rolldown "failed to resolve `@vibecook/puppeteer-view-sdk/toolkit`";
@@ -102,7 +102,7 @@ vitest's worker channel closing at exit (`ERR_IPC_CHANNEL_CLOSED`) after its ten
 runs, and the same tinypool channel error ended a field-app run at DK-13 (2026-10-06): a teardown flake, not the merge's. AR-7b
 passed: MV made its test assert what AR-7b guards. Until the sibling was prepared this merge had no green run.
 
-**Re-run whole on `43b3b46f`, the sibling prepared** (its own frozen install, 21:28Z — the cutover's 1.5; field-native rebuilt
+**Re-run whole on `fab71fa0`, the sibling prepared** (its own frozen install, 21:28Z — the cutover's 1.5; field-native rebuilt
 from the lane first; 2026-10-08 21:32→21:51Z, load 34–402): 24 of the 26 gates ok — typecheck (the 165 lines gone),
 bundle:assert, `still` and all eleven smokes, each smoke's daemon row `left: []` (smoke:godview's and smoke:terminal-direct's
 through MV's runner — the merge fix's row; smoke:plugin's in its `try.log`; the two GPU-less modes on this run's own build) —
@@ -118,14 +118,14 @@ Each named row passed alone twice, and field-app alone (179 files, 1,915 tests).
 whole suite passed at least once — field-app 1,915 tests, fieldd 2,139 (AR-7b's rows among them), logging 50 — and the lane
 changes none of those four test files, nor logging.
 
-**And on main merged a fourth time** (`b259c718` — AR-8's History gaps, 5 commits, 28 files; one conflict, `docs/LANDED.md`,
+**And on main merged a fourth time** (`4853e9d6` — AR-8's History gaps, 5 commits, 28 files; one conflict, `docs/LANDED.md`,
 both kept; three exact unions; no `.rs`, lock or sibling move), by the orchestrator's policy for a merge of main (the cutover's
 1.2): the cheap stages each alone — preflight, walls, retired, typecheck, lint, fmt and gen:check ok, check:deps MAIN's — and
 the suites of the projects it touches, alone and green: contracts 886, field-app 1,922, fieldd 2,147 (on the lane's own
 field-native: gen:check rewrites the generated `.rs` files unchanged, and fieldd's setup rebuilt it). The full gate runs once,
 on the final merge.
 
-**And on main merged a fifth time, the final** (`7170bd17` — 15 commits: AR-8's packaged History, EL8's rosetta `eab2f57` and
+**And on main merged a fifth time, the final** (`1fa5d8f7` — 15 commits: AR-8's packaged History, EL8's rosetta `eab2f57` and
 mille `c8160d5` pins, the DS, AR-7, MV, PJ-2 and FS test fixes, the design prototypes' removal; 102 files; five conflicts, each
 both intents — LANDED, design-kit's manifest, electron-shell's vite config, the design-system test, the lock; nine unions; the
 lock regenerated offline, one copy each; no `.rs`). The siblings first, read-only against main's lock: all five at their pins
@@ -140,7 +140,7 @@ lane's field-native, rebuilt after gen:check), the dev runner's 131. The orchest
   `--user-data-dir`, removes it once Electron has exited (`SMOKE_PROFILE_REMOVED`). The app's shared profile is never touched.
   smoke:godview and smoke:terminal-direct run through MV's `scripts/smoke-godview.mjs` since DK-19's merge of MV: an isolated
   lab profile whose proof the runner checks, Electron spawned with no shell, the two occlusion switches — and, from DK-19's
-  merge fix (`af25af82`), the same run mark and daemon row as `run-smoke.mjs`.
+  merge fix (`ed9706db`), the same run mark and daemon row as `run-smoke.mjs`.
 - **Its daemons stopped, and waited for** (plan (39)): the run is MARKED — `VF_SMOKE_RUN`, the profile's name, in Electron's
   environment, inherited by every process the smoke starts (fieldd, field-native, its terminal cells, fieldd's workers). The
   smoke's teardown (`packages/electron-shell/src/testing/smoke-daemons.ts`) finds the run's processes by the mark after the
@@ -175,7 +175,7 @@ lane's field-native, rebuilt after gen:check), the dev runner's 131. The orchest
   (`~/.cargo/config.toml`, `[build] target-dir`), which a checkout's own `target` link does not override, so a throwaway
   worktree whose `target` linked elsewhere still built its `field-native` into the shared one — give it `CARGO_TARGET_DIR`,
   and link its `target` to the same place (the suites look for `<checkout>/target/debug/field-native`). Since DK-19's merge
-  (`19318c33`) the lane's Rust sources equal main's: PJ-3's two constants are no longer a difference.
+  (`695ff9d1`) the lane's Rust sources equal main's: PJ-3's two constants are no longer a difference.
 
 ## The doors (plan (74))
 
@@ -223,7 +223,7 @@ two-Mac check are James's hands. Nothing in step 1 writes.
 1. The lane's tip is the graded one: `git -C ../vf-desk rev-parse desk/landing` prints the SHA the orchestrator graded, and
    `git -C ../vf-desk status --short` prints nothing.
 2. Main has not moved since the lane last merged it: `git rev-parse main` equals the second parent of the lane's last merge
-   (`21f26256` at DK-19's fifth merge, `7170bd17` —
+   (`6a6cf37e` at DK-19's fifth merge, `1fa5d8f7` —
    `git log --merges --first-parent -1 --format=%P desk/landing`), and `git merge-base --is-ancestor main desk/landing`
    exits 0. **If main moved, merge it into the lane again — never a rebase ((73): a rebase orphans every graded SHA the
    landing log names):** `git merge-tree --write-tree desk/landing main` first; each conflict resolved keeping both intents;
@@ -243,7 +243,7 @@ two-Mac check are James's hands. Nothing in step 1 writes.
    git diff --cached --name-only                            # must print nothing (a bystander's staged files)
    ```
    At every DK-19 hand-back before the fifth merge it printed `DESIGN.md` (another session's uncommitted logo work, its two
-   hunks in §12 and at §13's end, far from the lane's); main's `21f26256` resolved it, and at the fifth merge it printed
+   hunks in §12 and at §13's end, far from the lane's); main's `6a6cf37e` resolved it, and at the fifth merge it printed
    nothing. Work like that is its owner's to commit first — and then main has moved: 1.2.
 4. ICE's `latest` is `0.15.0`: `npm view @vibecook/ice dist-tags` (James moved it 2026-10-08 06:29Z; the pin is exact and does
    not wait on it).
@@ -257,7 +257,7 @@ two-Mac check are James's hands. Nothing in step 1 writes.
    `594d222` unprepared: `../puppeteer/packages/monitor` and `views` could not resolve their new
    `@vibecook/puppeteer-view-sdk`, and typecheck, the renderer and fieldd builds, field-app's tests and every smoke that builds
    went red, on main as on the lane. Its frozen install (2026-10-08 21:28Z, James's go; online, for `happy-dom`) cleared them
-   all: the gates' re-run on `43b3b46f`.
+   all: the gates' re-run on `fab71fa0`.
 
 **2. The fast-forward** (the main checkout, on `main`):
 ```sh
@@ -268,7 +268,7 @@ Then, in the main checkout: `pnpm install --frozen-lockfile --offline` (the lock
 `touch packages/field-native/src/registries.rs` and `cargo build -p field-native`; the gates on the cutover SHA,
 `NX_SKIP_NX_CACHE=true NX_DAEMON=false node scripts/gate-landing.mjs --with-stages`, red only by main's known rows;
 `pnpm commit-draft` (the drafts' snapshot). Pushing is James's word (every push is HELD). The main before the cutover is
-`21f26256` at DK-19's fifth merge (or the main 1.2 merged): a fast-forward is undone only by moving main back to it —
+`6a6cf37e` at DK-19's fifth merge (or the main 1.2 merged): a fast-forward is undone only by moving main back to it —
 James's call, never over a dirty tree.
 
 **3. If the fast-forward refuses:**
