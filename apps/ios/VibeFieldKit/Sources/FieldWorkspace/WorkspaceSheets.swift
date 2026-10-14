@@ -47,15 +47,15 @@ public struct CreateSessionSheet: View {
             if let desktop = model.desktop { WorkspaceDesktopLabel(desktop: desktop) }
             else { Text("Connect a desktop").foregroundStyle(ChromePalette.inkSecondary) }
           }
-          if model.agents.count > 1 {
+          if let words = model.agentRowWords {
+            fact("Agent", words)
+          } else {
             Picker("Agent", selection: Binding(get: { model.provider }, set: { provider in
               model.provider = provider
               Task { await model.providerChanged() }
             })) {
               ForEach(model.agents) { Text($0.label).tag($0.id) }
             }.disabled(model.spawning)
-          } else {
-            fact("Agent", model.agents.first?.label ?? "No agent available")
           }
           if let words = model.profileRowWords {
             fact("Profile", words)

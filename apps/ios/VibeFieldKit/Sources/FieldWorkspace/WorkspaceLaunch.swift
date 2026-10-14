@@ -17,6 +17,11 @@ public final class WorkspaceLaunch {
   public private(set) var selected: String?
   public private(set) var reader: WorkspaceReads?
   public private(set) var agents: [AgentCatalogRow] = []
+  /// fix7 — the chosen desktop's agents were asked and answered (or refused):
+  /// until then the Agent row says it is reading, never "No agent available"
+  public private(set) var agentsRead = false
+  /// fix7 — the agents could not be read (the footer says fieldd's words)
+  public private(set) var agentsFailed = false
   public var provider: String = ""
   /// FS-2 — a folder chosen in Browse (its absolute path; sent as `cwd`)
   public private(set) var folder: WorkspaceChoice?
@@ -54,13 +59,24 @@ public final class WorkspaceLaunch {
 
   // MARK: The rows' words (DESIGN.md §8: one answer, or none, said in the row)
 
+  /// fix7 — the Agent row's quiet fact (nil: a menu of several): reading,
+  /// refused, none, or the one there is — never "No agent available" while
+  /// the desktop has not answered.
+  public var agentRowWords: String? {
+    LaunchModel.agentRow(agents, read: agentsRead, failed: agentsFailed, online: desktop?.online == true)
+  }
   public var profileChoices: [ProfileChoice] { LaunchModel.profileChoices(profileSets, provider: provider) }
   public var profileRowWords: String? {
-    profilesRead ? LaunchModel.profileRow(profileChoices, desktop: desktop?.name ?? "this desktop") : "Reading profiles…"
+    if agentsFailed || (agentsRead && agents.isEmpty) { return "Not read — no agent to run" }
+    return profilesRead
+      ? LaunchModel.profileRow(profileChoices, desktop: desktop?.name ?? "this desktop") : "Reading profiles…"
   }
   public var modelChoices: [AgentModelChoice] { models?.catalog?.models ?? [] }
   public var model: AgentModelChoice? { modelChoices.first { $0.id == modelId } }
-  public var modelRowWords: String? { LaunchModel.modelRow(models, loading: modelsLoading, error: modelsError) }
+  public var modelRowWords: String? {
+    if agentsFailed || (agentsRead && agents.isEmpty) { return "Each agent's own · not read" }
+    return LaunchModel.modelRow(models, loading: modelsLoading, error: modelsError)
+  }
   public var effortRowWords: String? { LaunchModel.effortRow(model: model) }
   /// The footer: a refusal first, else how old the models' read is.
   public var footer: String {
@@ -113,7 +129,7 @@ public final class WorkspaceLaunch {
     let previous = provider
     if selected != device { folder = nil }
     if place?.desktop != device { place = nil }
-    selected = device; agents = []; provider = ""; message = nil
+    selected = device; agents = []; agentsRead = false; agentsFailed = false; provider = ""; message = nil
     profileSets = []; profilesRead = false; profileSet = nil
     models = nil; modelsError = nil; modelId = nil; effort = nil
     let reader = readers[device] ?? WorkspaceReads(device: device, name: desktop.name) { [request] method, params in
@@ -121,18 +137,25 @@ public final class WorkspaceLaunch {
     }
     readers[device] = reader; self.reader = reader
     reader.setOnline(desktop.online)
-    await reader.refreshRoots()
-    guard ticket == epoch, desktop.online, !Task.isCancelled else { return }
+    // fix7 — the folder roots are the FILES worker's to answer, and a busy one
+    // (a drive something writes a lot to) held every row behind them for the
+    // call's whole 20 s: they are read beside the agents, never before them
+    let roots = Task { await reader.refreshRoots() }
+    guard desktop.online, !Task.isCancelled else { return }
     do {
       let catalog = try AgentCatalogResult(json: await request(device, "agent.catalog", AgentCatalogParams.phone.json))
       guard ticket == epoch, !Task.isCancelled else { return }
+      agentsRead = true
       agents = catalog.catalog.filter { $0.canSpawn && $0.phone != false }
       // the agent already chosen stays when this desktop offers it, else the recipe's
       provider = (agents.first { $0.id == previous } ?? agents.first { $0.id == context.recipe?.provider })?.id
         ?? agents.first?.id ?? ""
       if agents.isEmpty { message = "This desktop offers no agents to launch" }
     } catch {
-      if ticket == epoch { message = (error as? FieldProductError)?.message ?? String(describing: error) }
+      if ticket == epoch {
+        agentsRead = true; agentsFailed = true
+        message = (error as? FieldProductError)?.message ?? String(describing: error)
+      }
       return
     }
     do {
@@ -146,6 +169,8 @@ public final class WorkspaceLaunch {
     profilesRead = true
     profileSet = LaunchModel.firstProfile(profileChoices, wanted: [kept, recipe?.profileSet, context.profileSet])
     await readModels()
+    // the sheet's reads end with its roots (the folder sheet's first page)
+    await roots.value
   }
 
   /// Q7 — a place chosen in the folder sheet; one on another desktop brings
@@ -246,3 +271,7 @@ public final class WorkspaceLaunch {
     }
   }
 }
+
+/// fix7 — the sheet is presented BY its model (`.sheet(item:)`): a sheet asked
+/// to open with no model drew an empty container on the first launch.
+extension WorkspaceLaunch: Identifiable {}

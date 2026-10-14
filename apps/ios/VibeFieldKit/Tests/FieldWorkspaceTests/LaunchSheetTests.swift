@@ -34,9 +34,21 @@ private final class Desk {
   var asked: [(device: String, method: String, params: JSONValue?)] = []
   var models: [String: String] = ["claude": "agent-models.valid", "codex": "agent-models.auth-required"]
   var spawnReply: JSONValue = .object(["session": .object(["runtimeRunId": .string("run-1")])])
+  /// fix7 — methods that do not answer until `release()`, and ones refused
+  var stalled: Set<String> = []
+  var refused: [String: FieldProductError] = [:]
+  private var waiting: [CheckedContinuation<Void, Never>] = []
+
+  func release() {
+    let held = waiting
+    waiting = []
+    for continuation in held { continuation.resume() }
+  }
 
   func answer(_ device: String, _ method: String, _ params: JSONValue?) async throws -> JSONValue {
     asked.append((device, method, params))
+    if stalled.contains(method) { await withCheckedContinuation { waiting.append($0) } }
+    if let refusal = refused[method] { throw refusal }
     switch method {
     case "workspace.roots":
       // the golden's roots, on the desktop asked
@@ -247,5 +259,51 @@ struct LaunchSheetTests {
     model.provider = "codex"
     await model.providerChanged()
     #expect(model.profileSet == "work")
+  }
+
+  // fix7 — PJ-7's first phone run: the first launch sheet stood blank for over
+  // a minute (L8-blank-sheet.png: a large empty container, no title, no Cancel
+  // — the sheet drew with no model; HomeScreen presents it by its model now).
+  // Its rows must draw at once and say what they wait on, whatever answers.
+
+  @Test("fix7: a folder read that does not answer holds no row — the agents, profiles and models are read beside it", .timeLimit(.minutes(1)))
+  func rootsHoldNoRow() async throws {
+    let desk = Desk()
+    desk.stalled = ["workspace.roots"]
+    let model = desk.launch()
+    let begun = Task { await model.begin(.init(places: [vibeField])) }
+    await settle("the rows read beside the roots") {
+      desk.last("agent.catalog") != nil && model.profilesRead && model.models != nil
+    }
+    #expect(model.agents.contains { $0.id == "claude" })
+    #expect(model.agentRowWords.map { !$0.hasPrefix("Reading") } ?? true)
+    #expect(model.canSpawn, "a place needs no folder roots to launch")
+    // the roots answer from now on (a later read is not held again)
+    desk.stalled = []
+    desk.release()
+    await begun.value
+    #expect(model.reader?.roots.isEmpty == false, "the roots land when they answer")
+  }
+
+  @Test("fix7: the agent row says it is reading; a refused catalog is said in every row — never 'No agent available'", .timeLimit(.minutes(1)))
+  func agentRowSaysIt() async throws {
+    let desk = Desk()
+    desk.stalled = ["agent.catalog"]
+    let model = desk.launch()
+    let begun = Task { await model.begin(.init(places: [vibeField])) }
+    await settle("the catalog asked") { desk.last("agent.catalog") != nil }
+    #expect(model.agentRowWords == "Reading agents…")
+    #expect(model.profileRowWords == "Reading profiles…")
+    #expect(model.modelRowWords == "Each agent's own · reading models…")
+    desk.refused["agent.catalog"] = FieldProductError(
+      kind: "TIMEOUT", message: "studio did not answer agent.catalog within 20 s", retryable: true)
+    desk.stalled = []
+    desk.release()
+    await begun.value
+    #expect(model.agentRowWords == "Agents could not be read")
+    #expect(model.profileRowWords == "Not read — no agent to run")
+    #expect(model.modelRowWords == "Each agent's own · not read")
+    #expect(model.footer == "studio did not answer agent.catalog within 20 s")
+    #expect(!model.canSpawn)
   }
 }

@@ -119,6 +119,17 @@ public enum LaunchModel {
     }
   }
 
+  /// fix7 — the Agent row's quiet fact (nil: several agents, a menu): what
+  /// is being read is said, a refusal is said, and "No agent available" only
+  /// when the desktop answered with none.
+  public static func agentRow(_ agents: [AgentCatalogRow], read: Bool, failed: Bool, online: Bool) -> String? {
+    if !online { return "Its desktop is not connected" }
+    if failed { return "Agents could not be read" }
+    if !read { return "Reading agents…" }
+    if agents.count > 1 { return nil }
+    return agents.first?.label ?? "No agent available"
+  }
+
   /// A failed models read, in words: a signed-out agent says how to fix it.
   public static func modelsNote(_ answer: AgentModelsResult?) -> String? {
     guard let failure = answer?.failure else { return nil }

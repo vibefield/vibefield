@@ -2636,7 +2636,13 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   (the wire's "This Mac" is a desktop's word for itself). **Model** offers "Each agent's own"
   first, then the agent's own picker as that desktop last read it under that profile; the
   footer says how old the read is (`models read 2h ago`), and a failed read is said in words
-  (`Sign in to see models`). **Effort** offers "Its own" first, then the chosen model's own
+  (`Sign in to see models`). **What a row waits on is said, at once** (fix7, 2026-10-14 — the first
+  open from the field stood empty for a minute): the sheet is presented BY its model, never by a
+  flag beside it; the folder roots (the files worker's) are read beside the agents, never before
+  them; a row being read says so — `Reading agents…`, `Reading profiles…`, `Each agent's own ·
+  reading models…` — and a refused read is said in every row it empties (`Agents could not be
+  read`, `Not read — no agent to run`, `Each agent's own · not read`) with fieldd's words in the
+  footer; "No agent available" only when the desktop answered with none. **Effort** offers "Its own" first, then the chosen model's own
   effort values; switching model brings back the effort the project last ran that model at.
   **The folder row comes filled**: the place the project's last launch entered (its recipe's
   place), else the newest place on the sheet's desktop that can take a launch, named by its

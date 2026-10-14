@@ -22,7 +22,10 @@ import UIKit
 /// a peer's session is a guest here.
 public struct HomeScreen: View {
   @State private var feed = MockAgentField()
-  @State private var createSheetOpen = false
+  /// fix7 — the launch sheet's item: the model it draws, never a flag beside
+  /// it (the first launch from the field opened an empty sheet: the flag and
+  /// the model were set in one update and the sheet drew the model as nil)
+  @State private var createSheet: WorkspaceLaunch?
   @State private var workspaceLaunch: WorkspaceLaunch?
   /// PJ-7 — the last Resume's words in the stepper's slot.
   @State private var resumeWords: String?
@@ -274,13 +277,11 @@ public struct HomeScreen: View {
       #if DEBUG
         if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-vf-demo-workspace=") }) {
           workspaceLaunch = WorkspaceFixtureDoor.model()
-          createSheetOpen = true
+          createSheet = workspaceLaunch
         }
       #endif
     }
-    .sheet(isPresented: $createSheetOpen) {
-      if let workspaceLaunch { CreateSessionSheet(model: workspaceLaunch) }
-    }
+    .sheet(item: $createSheet) { launch in CreateSessionSheet(model: launch) }
     // --- IOS-6d: every projection and every change of the card's subject
     // folds the ledgers; the theme's tint moves the project colours with it.
     // On the stage for the same reason as the cover above.
@@ -351,7 +352,7 @@ public struct HomeScreen: View {
     }
     workspaceLaunch?.update(workspaceDesktops)
     workspaceLaunch?.prepare(context)
-    createSheetOpen = true
+    createSheet = workspaceLaunch
   }
 
   /// PJ-7 — a project's places as a launch names them: by ref, by their
@@ -1932,7 +1933,7 @@ public struct HomeScreen: View {
     #endif
     selection = nil
     closeCard()
-    createSheetOpen = false
+    createSheet = nil
     workspaceLaunch = nil
     closeLink()
     mesh.signOut()
