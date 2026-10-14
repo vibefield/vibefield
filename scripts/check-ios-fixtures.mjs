@@ -42,7 +42,7 @@ function jsonFiles(dir) {
 // such a copy was silently skipped and `checked` merely dropped by one; a gate
 // that stops gating without a red is the failure this script exists to catch,
 // so the copy half now has the pin half's posture below.
-const LANE_AUTHORED = new Set(["trf1-frames.lane.json"]);
+const LANE_AUTHORED = new Set(["trf1-frames.lane.json", "spawn-bloom-geometry.lane.json"]);
 
 // Goldens whose origin is another package than the contracts — a design
 // decision both apps compute, not a wire shape — compared byte for byte all
