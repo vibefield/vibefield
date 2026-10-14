@@ -6,6 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { FIXTURE_HUE } from "../src/testing/live-fixture";
+import { PANE } from "../src/testing/smoke-browser-pane";
 import {
   type FailedFaceSeen,
   HONEST_ROWS,
@@ -262,27 +263,26 @@ describe("the page's honest life — its rows", () => {
   it("PT-6a (M7 C1) SLEEP: a held page that is still lets the desk sleep — asleep a second after its field blurred; after a key or a wheel asleep again after the hand's quiet (not before it, not long after); after the lease's end and the page's last frame within their bounds; each stir wakes it", () => {
     const ok = {
       still: true,
+      following: [],
       after: {
-        key: { woke: true, ms: 262 },
-        wheel: { woke: true, ms: 270 },
-        lease: { woke: true, ms: 24 },
-        arrival: { woke: true, ms: 290 },
+        key: { woke: true, ms: 262, following: [PANE.type], followedMs: 250 },
+        wheel: { woke: true, ms: 270, following: [PANE.type], followedMs: 256 },
+        lease: { woke: true, ms: 24, following: [PANE.type], followedMs: 9 },
+        arrival: { woke: true, ms: 290, following: [PANE.type], followedMs: 281 },
       },
     };
     expect(judgeSleep(ok)).toEqual([]);
-    // before C1: a held page never let the desk sleep
+    // before C1: a held page never let the desk sleep — its own driver followed it for good
+    const followed = { woke: false, ms: null, following: [PANE.type], followedMs: 1_995 };
     expect(
       judgeSleep({
         still: false,
-        after: {
-          key: { woke: false, ms: null },
-          wheel: { woke: false, ms: null },
-          lease: { woke: false, ms: null },
-          arrival: { woke: false, ms: null },
-        },
+        following: [PANE.type],
+        after: { key: followed, wheel: followed, lease: followed, arrival: followed },
       }),
     ).toEqual([
       "SLEEP: a held page with nothing moving — its field blurred, a second gone — keeps the desk awake: it steps every frame for nothing",
+      `SLEEP: a held page with nothing moving has drivers following (${PANE.type}) — the desk cannot sleep while one follows`,
       "SLEEP: the key did not wake the desk — what it moved was never drawn",
       "SLEEP: the wheel did not wake the desk — what it moved was never drawn",
       "SLEEP: the lease did not wake the desk — what it moved was never drawn",
@@ -294,15 +294,76 @@ describe("the page's honest life — its rows", () => {
         ...ok,
         after: {
           ...ok.after,
-          key: { woke: true, ms: 40 },
-          wheel: { woke: true, ms: 900 },
-          arrival: { woke: true, ms: null },
+          key: { woke: true, ms: 40, following: [PANE.type], followedMs: 30 },
+          wheel: { woke: true, ms: 900, following: [PANE.type], followedMs: 250 },
+          arrival: { woke: true, ms: null, following: [PANE.type], followedMs: 281 },
         },
       }),
     ).toEqual([
       `SLEEP: after the key the desk slept 40 ms later — before the hand's quiet (${HONEST_ROWS.sleepNotBeforeMs})`,
       `SLEEP: after the wheel the desk slept 900 ms later, not within ${HONEST_ROWS.sleepWithinMs}`,
       `SLEEP: after the arrival the desk was still awake ${HONEST_ROWS.sleepWatchMs} ms later, not within ${HONEST_ROWS.sleepArrivalWithinMs}`,
+    ]);
+  });
+
+  it("PT-6b SLEEP's drivers: while the held page is still NONE follows; a stir follows only the pane's own driver, and not past the stir's bound — ICE's reference drivers following a held pane (before 0.16.0, I52) are said", () => {
+    const ok = {
+      still: true,
+      following: [],
+      after: {
+        key: { woke: true, ms: 262, following: [PANE.type], followedMs: 250 },
+        wheel: { woke: true, ms: 270, following: [PANE.type], followedMs: 256 },
+        lease: { woke: true, ms: 24, following: [PANE.type], followedMs: 9 },
+        arrival: { woke: true, ms: 290, following: [PANE.type], followedMs: 281 },
+      },
+    };
+    expect(judgeSleep(ok)).toEqual([]);
+    // a stir that followed nothing at all is no problem (a stir the hand let go of at once)
+    expect(
+      judgeSleep({
+        ...ok,
+        after: { ...ok.after, lease: { woke: true, ms: 12, following: [], followedMs: null } },
+      }),
+    ).toEqual([]);
+    // ICE before 0.16.0: the board's pen, the notebook's leaf and the calendar's hand followed ANY held object
+    const reference = ["desk.board", "desk.calendar", "desk.notebook"];
+    const awake = {
+      woke: false,
+      ms: null,
+      following: [...reference, PANE.type],
+      followedMs: 1_995,
+    };
+    expect(
+      judgeSleep({
+        still: false,
+        following: reference,
+        after: { key: awake, wheel: awake, lease: awake, arrival: awake },
+      }),
+    ).toEqual([
+      "SLEEP: a held page with nothing moving — its field blurred, a second gone — keeps the desk awake: it steps every frame for nothing",
+      "SLEEP: a held page with nothing moving has drivers following (desk.board, desk.calendar, desk.notebook) — the desk cannot sleep while one follows",
+      "SLEEP: after the key desk.board, desk.calendar, desk.notebook followed — a held pane's stir is its own driver's alone",
+      "SLEEP: the key did not wake the desk — what it moved was never drawn",
+      "SLEEP: after the wheel desk.board, desk.calendar, desk.notebook followed — a held pane's stir is its own driver's alone",
+      "SLEEP: the wheel did not wake the desk — what it moved was never drawn",
+      "SLEEP: after the lease desk.board, desk.calendar, desk.notebook followed — a held pane's stir is its own driver's alone",
+      "SLEEP: the lease did not wake the desk — what it moved was never drawn",
+      "SLEEP: after the arrival desk.board, desk.calendar, desk.notebook followed — a held pane's stir is its own driver's alone",
+      "SLEEP: the arrival did not wake the desk — what it moved was never drawn",
+    ]);
+    // one other driver for one stir, and the pane's own following past the bound
+    expect(
+      judgeSleep({
+        ...ok,
+        after: {
+          ...ok.after,
+          wheel: { woke: true, ms: 270, following: ["desk.calendar", PANE.type], followedMs: 256 },
+          arrival: { woke: true, ms: 380, following: [PANE.type], followedMs: 420 },
+        },
+      }),
+    ).toEqual([
+      "SLEEP: after the wheel desk.calendar followed — a held pane's stir is its own driver's alone",
+      `SLEEP: after the arrival a driver still followed 420 ms later, past ${HONEST_ROWS.sleepArrivalWithinMs}`,
     ]);
   });
 

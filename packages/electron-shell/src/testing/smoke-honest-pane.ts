@@ -186,13 +186,21 @@ export interface HonestSeen {
     readonly asked: number;
   };
   /** PT-6a (M7 C1) — SLEEP: the held page still (its field blurred): the desk asleep then; after each stir — a key, a wheel,
-   * the lease's end, the page's frames — whether it woke, and how long until it slept again (ms; null: not within the watch) */
+   * the lease's end, the page's frames — whether it woke, and how long until it slept again (ms; null: not within the watch).
+   * PT-6b — and the drivers FOLLOWING (ICE's `due().following`, each driver's `idle` asked): while the page is still, and in
+   * each stir's watch every one seen and how long after the stir one last followed (ms; null: none did) */
   readonly sleep: {
     readonly still: boolean;
+    readonly following: readonly string[];
     readonly after: Readonly<
       Record<
         "key" | "wheel" | "lease" | "arrival",
-        { readonly woke: boolean; readonly ms: number | null }
+        {
+          readonly woke: boolean;
+          readonly ms: number | null;
+          readonly following: readonly string[];
+          readonly followedMs: number | null;
+        }
       >
     >;
   };
@@ -377,21 +385,35 @@ export function judgeDownload(seen: HonestSeen["download"]): string[] {
   return out;
 }
 
-/** CARET (a measurement, with a ceiling): a focused field at rest in hand costs a caret's frames, one submit a frame. */
-/** PT-6a (M7 C1) — SLEEP: a held page that is still lets the desk sleep after the hand's quiet, and what moves wakes it. */
+/** PT-6a (M7 C1) — SLEEP: a held page that is still lets the desk sleep after the hand's quiet, and what moves wakes it.
+ * PT-6b — ICE 0.16.0 (I52): a reference kind's driver follows only its own object in hand, so while the held page is still
+ * NO driver follows, and a stir follows the pane's own (`PANE.type`) alone, not past the stir's bound. */
 export function judgeSleep(seen: HonestSeen["sleep"]): string[] {
   const out: string[] = [];
   if (!seen.still)
     out.push(
       "SLEEP: a held page with nothing moving — its field blurred, a second gone — keeps the desk awake: it steps every frame for nothing",
     );
-  for (const [stir, { woke, ms }] of Object.entries(seen.after)) {
+  if (seen.following.length > 0)
+    out.push(
+      `SLEEP: a held page with nothing moving has drivers following (${seen.following.join(", ")}) — the desk cannot sleep while one follows`,
+    );
+  for (const [stir, { woke, ms, following, followedMs }] of Object.entries(seen.after)) {
+    const others = following.filter((type) => type !== PANE.type);
+    if (others.length > 0)
+      out.push(
+        `SLEEP: after the ${stir} ${others.join(", ")} followed — a held pane's stir is its own driver's alone`,
+      );
     if (!woke) {
       out.push(`SLEEP: the ${stir} did not wake the desk — what it moved was never drawn`);
       continue;
     }
     const within =
       stir === "arrival" ? HONEST_ROWS.sleepArrivalWithinMs : HONEST_ROWS.sleepWithinMs;
+    if (followedMs !== null && followedMs > within)
+      out.push(
+        `SLEEP: after the ${stir} a driver still followed ${followedMs} ms later, past ${within}`,
+      );
     if (ms === null || ms > within)
       out.push(
         `SLEEP: after the ${stir} the desk ${ms === null ? `was still awake ${HONEST_ROWS.sleepWatchMs} ms later` : `slept ${ms} ms later`}, not within ${within}`,
@@ -404,6 +426,7 @@ export function judgeSleep(seen: HonestSeen["sleep"]): string[] {
   return out;
 }
 
+/** CARET (a measurement, with a ceiling): a focused field at rest in hand costs a caret's frames, one submit a frame. */
 export function judgeCaret(seen: HonestSeen["caret"]): string[] {
   const out: string[] = [];
   if (seen.focused !== "field")
@@ -1223,25 +1246,36 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
 
     // ── SLEEP (PT-6a, M7 C1): the held page still — its field blurred — the desk asleep after the hand's quiet; a key, a wheel,
     //    the lease's end and the page's frames each wake it ─────────────────────────────────────────────────────────────────
-    const asleep = (): Promise<boolean> => js<boolean>("globalThis.__vfDesk.rest().asleep");
-    /** A stir, then: whether the desk woke, and how long after the stir's end until it slept again (null: not in the watch). */
+    /** The desk's loop at rest or not, and the drivers following now (PT-6b: ICE's `due().following` — each driver's
+     * `idle` asked, a rig's question; it moves nothing) — one look. */
+    const restNow = (): Promise<{ asleep: boolean; following: string[] }> =>
+      js(
+        "(() => { const r = globalThis.__vfDesk.rest(); return { asleep: r.asleep, following: [...r.due.following].sort() }; })()",
+      );
+    /** A stir, then: whether the desk woke, and how long after the stir's end until it slept again (null: not in the watch);
+     * every driver seen following meanwhile, and how long after the stir one last did (null: none did). */
     const sleepAfter = async (
       stir: () => Promise<unknown> | unknown,
-    ): Promise<{ woke: boolean; ms: number | null }> => {
+    ): Promise<HonestSeen["sleep"]["after"]["key"]> => {
       await stir();
       const t0 = Date.now();
       let woke = false;
+      const seen = new Set<string>();
+      let followedMs: number | null = null;
       while (Date.now() - t0 < HONEST_ROWS.sleepWatchMs) {
-        const a = await asleep();
-        if (!a) woke = true;
-        else if (woke) return { woke, ms: Date.now() - t0 };
+        const r = await restNow();
+        for (const type of r.following) seen.add(type);
+        if (r.following.length > 0) followedMs = Date.now() - t0;
+        if (!r.asleep) woke = true;
+        else if (woke)
+          return { woke, ms: Date.now() - t0, following: [...seen].sort(), followedMs };
         await sleep(5);
       }
-      return { woke, ms: null };
+      return { woke, ms: null, following: [...seen].sort(), followedMs };
     };
     await press(ground);
     await sleep(1_000);
-    const stillAsleep = await asleep();
+    const still = await restNow();
     const afterKey = await sleepAfter(() => {
       win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Shift" });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Shift" });
@@ -1270,7 +1304,8 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
       d.fixture.setPlaying(false);
     });
     const sleepSeen: HonestSeen["sleep"] = {
-      still: stillAsleep,
+      still: still.asleep,
+      following: still.following,
       after: { key: afterKey, wheel: afterWheel, lease: afterLease, arrival: afterArrival },
     };
     said.sleep = sleepSeen;
