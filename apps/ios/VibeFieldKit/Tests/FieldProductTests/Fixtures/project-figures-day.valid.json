@@ -1,0 +1,19 @@
+{
+  "//": "PJ-4 (H2) — `project.figuresDay` over the same parts: hour × model tokens summed across every whole part that answered; a part held in part is left out, so the day is partial.",
+  "key": "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8",
+  "day": "2026-09-29",
+  "models": [
+    { "hour": 14, "model": "claude-opus-5-5", "tokens": 120000 },
+    { "hour": 15, "model": "claude-opus-5-5", "tokens": 62000 }
+  ],
+  "sources": [
+    {
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "state": "answered",
+      "tookMs": 12,
+      "projects": 2,
+      "split": 1
+    }
+  ],
+  "partial": true
+}

@@ -170,3 +170,26 @@ describe("DESIGN.md §2.9 — the tone is the theme's, in both themes", () => {
     }
   });
 });
+
+describe("DESIGN.md §2.9 — the phone reads the same ink (PJ-7)", () => {
+  // The golden table the iOS port is held to (`ProjectInkTests`, over a
+  // byte-identical copy `pnpm check:ios-fixtures` keeps): every deal's hue and
+  // both themes' hex, as this kit answers them. A row that fails here means the
+  // kit moved — regenerate the table on purpose (its `//` says how), never by
+  // hand, and the phone's copy with it.
+  const GOLDEN = JSON.parse(
+    readFileSync(join(REPO, "packages/design-kit/fixtures/project-ink.golden.json"), "utf8"),
+  ) as { rows: Array<{ ink: number; hue: number; light: string; dark: string }> };
+
+  it("holds every one of the 997 deals, in order", () => {
+    expect(GOLDEN.rows.map((row) => row.ink)).toEqual(DEALS);
+  });
+
+  it("answers each row's hue and hex exactly as the table says", () => {
+    for (const row of GOLDEN.rows) {
+      expect(projectInkHue(row.ink), `hue ${row.ink}`).toBe(row.hue);
+      expect(projectInkHex(row.ink, "light"), `light ${row.ink}`).toBe(row.light);
+      expect(projectInkHex(row.ink, "dark"), `dark ${row.ink}`).toBe(row.dark);
+    }
+  });
+});

@@ -167,10 +167,3 @@ public struct WorkspaceSearchParams: Codable, Sendable, Equatable {
     .object(["rootId": .string(rootId), "path": .string(path), "q": .string(q), "kinds": .string(kinds)])
   }
 }
-
-public struct AgentSpawnParams: Codable, Sendable, Equatable {
-  public let provider: String
-  public let cwd: String
-  public init(provider: String, cwd: String) { self.provider = provider; self.cwd = cwd }
-  public var json: JSONValue { .object(["provider": .string(provider), "cwd": .string(cwd)]) }
-}

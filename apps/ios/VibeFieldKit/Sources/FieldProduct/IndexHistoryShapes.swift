@@ -121,6 +121,13 @@ public struct IndexSessionRow: Sendable, Equatable, Identifiable, Decodable {
   public let profileId: String?
   /// `project.name` on a header; absent on a listing row
   public let projectName: String?
+  /// PJ-4 / PJ-7 — the PJ project whose place holds the cwd (`index.sessions`
+  /// as a window reads it; absent where no place holds it yet)
+  public let projectKey: String?
+  /// PJ-7 — the place that holds the cwd (`project.sessions` always says it)
+  public let place: PlaceRef?
+  /// every desktop that indexed it (DS-D10); `device` is the copy that speaks
+  public let devices: [String]
   public let unknownFields: [String]
 
   public var id: String { sessionId }
@@ -137,9 +144,14 @@ public struct IndexSessionRow: Sendable, Equatable, Identifiable, Decodable {
     activity = try object.decodeObject("activity", IndexSessionActivity.init(json:))
     streamState = object.string("streamState") ?? "indexed"
     device = object.string("device")
-    _ = object.array("devices")
+    devices = (object.array("devices") ?? []).compactMap(\.stringValue)
+    projectKey = object.string("projectKey")
+    place = try? object.decodeObject("place", PlaceRef.init(json:))
     projectId = object.string("projectId")
     family = object.string("family")
+    // the agent's KIND (`claude-code`); the catalog id below is what the
+    // phone names an agent by
+    _ = object.string("kind")
     provider = object.string("provider")
     startedAt = object.int("startedAt")
     parentSessionId = object.string("parentSessionId")
@@ -242,11 +254,14 @@ public struct IndexContribution: Sendable, Equatable, Decodable {
   public let messages: Double
   public let tokens: Double
   public let costMicroUsd: Double?
+  /// PJ-4 — the desktop whose index recorded it (`project.figures`' rows)
+  public let device: String?
 
   public init(json: JSONValue) throws {
     var object = try WireObject(shape: "IndexContribution", value: json)
     sessionId = try object.requiredString("sessionId")
     _ = object.string("projectId")
+    device = object.string("device")
     commits = object.double("commits") ?? 0
     edits = object.double("edits") ?? 0
     loc = object.double("loc") ?? 0

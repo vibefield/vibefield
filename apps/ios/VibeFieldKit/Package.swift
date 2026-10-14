@@ -268,7 +268,14 @@ let package = Package(
     // edge pinned to goldens computed from the contracts' own TypeScript, and
     // the die-cut witnessed on pixels.
     .testTarget(name: "FieldDesignTests", dependencies: ["FieldDesign"]),
-    .testTarget(name: "FieldAgentsTests", dependencies: ["FieldAgents"]),
+    .testTarget(
+      name: "FieldAgentsTests",
+      dependencies: ["FieldAgents"],
+      // PJ-7 — the project ink's golden table, the design kit's OWN bytes
+      // (`packages/design-kit/fixtures`), which the TypeScript test reads too.
+      // `pnpm check:ios-fixtures` keeps the word "copy" true.
+      resources: [.copy("Fixtures")]
+    ),
     .testTarget(
       name: "FieldProductTests",
       dependencies: ["FieldProduct"],

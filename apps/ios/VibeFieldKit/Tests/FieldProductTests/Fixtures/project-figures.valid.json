@@ -1,0 +1,111 @@
+{
+  "//": "PJ-4 (H2) — `project.figures` answering a window: this desktop answered for two rosetta projects (a checkout and a second clone), one of which the project holds only in PART (a worktree split into another project) — its days are left out, its contribution rows kept for this project's sessions; the laptop is asleep, so its figures are missing and both kinds are partial. Costs sum as SQL sums them: null only when every part was unpriced.",
+  "key": "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8",
+  "heatmap": [
+    {
+      "day": "2026-09-29",
+      "tokens": 182000,
+      "costMicroUsd": 1240000,
+      "billedMicroUsd": null,
+      "unpricedTokens": 0,
+      "unrecordedOutput": 0,
+      "reportedCostAdjustmentMicroUsd": 0
+    },
+    {
+      "day": "2026-09-30",
+      "tokens": 96000,
+      "costMicroUsd": 610000,
+      "billedMicroUsd": null,
+      "unpricedTokens": 1200,
+      "unrecordedOutput": 1,
+      "reportedCostAdjustmentMicroUsd": 0
+    }
+  ],
+  "usage": {
+    "models": [
+      {
+        "day": "2026-09-29",
+        "model": "claude-opus-5-5",
+        "tokens": 182000,
+        "costMicroUsd": 1240000,
+        "billedMicroUsd": null,
+        "unpricedTokens": 0,
+        "unrecordedOutput": 0,
+        "reportedCostAdjustmentMicroUsd": 0
+      },
+      {
+        "day": "2026-09-30",
+        "model": "gpt-6-astra",
+        "tokens": 96000,
+        "costMicroUsd": 610000,
+        "billedMicroUsd": null,
+        "unpricedTokens": 1200,
+        "unrecordedOutput": 1,
+        "reportedCostAdjustmentMicroUsd": 0
+      }
+    ],
+    "hours": [
+      {
+        "hour": 15,
+        "tokens": 278000,
+        "costMicroUsd": 1850000,
+        "billedMicroUsd": null,
+        "unpricedTokens": 1200,
+        "unrecordedOutput": 1,
+        "reportedCostAdjustmentMicroUsd": 0
+      }
+    ]
+  },
+  "contribution": [
+    {
+      "sessionId": "ses-9b2f0c7d",
+      "projectId": "p-4f1c2a9e",
+      "commits": 3,
+      "edits": 41,
+      "loc": 612,
+      "messages": 88,
+      "tokens": 182000,
+      "costMicroUsd": 1240000,
+      "billedMicroUsd": null,
+      "unpricedTokens": 0,
+      "unrecordedOutput": 0,
+      "reportedCostAdjustmentMicroUsd": 0,
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF"
+    },
+    {
+      "sessionId": "ses-31c0de55",
+      "projectId": "p-0c7e1a33",
+      "commits": 0,
+      "edits": 6,
+      "loc": 40,
+      "messages": 21,
+      "tokens": 96000,
+      "costMicroUsd": 610000,
+      "billedMicroUsd": null,
+      "unpricedTokens": 1200,
+      "unrecordedOutput": 1,
+      "reportedCostAdjustmentMicroUsd": 0,
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF"
+    }
+  ],
+  "sources": [
+    {
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "state": "answered",
+      "tookMs": 38,
+      "projects": 2,
+      "split": 1
+    },
+    {
+      "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9",
+      "state": "asleep",
+      "tookMs": 0,
+      "detail": "this desktop is asleep; wake it to search its history",
+      "projects": 1,
+      "split": 0
+    }
+  ],
+  "partial": true,
+  "lifetimePartial": true,
+  "clipped": false
+}
