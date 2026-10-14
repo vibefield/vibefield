@@ -16,7 +16,7 @@
 >   - and its close (`42f8d5b6` · `0f7aab0b` · `60403758`; LANDED "GV round 3, finished"): a launch opens on the monitor alone and the first call brings the last run's panes (N14 (a)); ⌘W on the last pane puts the terminals away (N16 (a)); the rest is 5/13 of any window, floor 232, the slider retired (N15 (a)).
 > - **Honest states the gates turned up:** the line never says "Pasted into …" for a paste the pane dropped; History's acts never end in silence; the deck's queued floor reads are bounded.
 >
-> Left of round 3: a look on a real window at what the offscreen smokes cannot see (the lights' move, a real fling, the launch's first call, ⌘W on a last pane, other heights). PJ-7 (N10 (a)) RULED 2026-10-14 (Q1–Q7 at the lean; `project-places/build-pj7.md`) and IN BUILD in two lanes, the daemon (pj7d) and the kit (pj7k); the debts lane, PJ-6 and the swarm's sizing are landed.
+> Left of round 3: a look on a real window at what the offscreen smokes cannot see (the lights' move, a real fling, the launch's first call, ⌘W on a last pane, other heights). PJ-7 (N10 (a)) RULED 2026-10-14 (Q1–Q7 at the lean; `project-places/build-pj7.md`) and IN BUILD: the daemon half LANDED (LANDED "PJ-7, the daemon half"), the kit (pj7k) building; the debts lane, PJ-6 and the swarm's sizing are landed.
 >
 > **James ruled the whole *After Wave 2 Docket* on 2026-10-12** (republished under his current account, https://claude.ai/artifact/RvcaxJnoLhXMz3HcKHZx1G; DECISIONS, the N row): every mark at the lean but N7. **N7 (b) held pushes; RL1(c)'s implementation below resolves the audit-history hold.** truffle's egress release this week (N11 (a)); after round 3, a debts lane beside PJ-6, then PJ-7 (N10 (a)). N2 (PK2) closed: the Stories head ended it. Upstream, for ghosttea: `paste()` / `sendKey()` / `sendText()` say whether they sent.
 >
@@ -38,7 +38,7 @@
 >
 > Next for History:
 > - DS-7/SP-7 (other desktops' sessions and transcripts, the phone's) wait on truffle's egress release. Until then History lists this desktop's sessions, with marks for the rest (H3).
-> - PJ-6 (model and effort in New agent) LANDED: the launch (LANDED "PJ-6, the launch") and Resume at the session's own model ("PJ-6, Resume"; puppeteer pinned on its unmerged branch `vf/pj6-resume-selection`, James merges). PJ-7 (the phone over `project.*`, with the phone's launch rows) RULED 2026-10-14 and IN BUILD: the place spawn on the receiving desktop, the phone's History over `project.*`, the launch sheet's Profile · Model · Effort rows, the bloom → the sheet, Resume and Jump to on the phone; its witness a launch from the phone that lands in the named place on the named desktop, over a real fieldd from the simulator.
+> - PJ-6 (model and effort in New agent) LANDED: the launch (LANDED "PJ-6, the launch") and Resume at the session's own model ("PJ-6, Resume"; puppeteer pinned on its unmerged branch `vf/pj6-resume-selection`, James merges). PJ-7 (the phone over `project.*`, with the phone's launch rows) RULED 2026-10-14 and IN BUILD (the daemon half LANDED 2026-10-14): the place spawn on the receiving desktop, the phone's History over `project.*`, the launch sheet's Profile · Model · Effort rows, the bloom → the sheet, Resume and Jump to on the phone; its witness a launch from the phone that lands in the named place on the named desktop, over a real fieldd from the simulator.
 > - The past for other desktops (B-D4) and for the phone (B-D5).
 >
 > Open with James, none decided by this landing (N2–N4 on his page *After Wave 2 Docket*, published 2026-10-10 with the lead's leans):

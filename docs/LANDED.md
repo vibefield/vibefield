@@ -9765,3 +9765,60 @@ Evidence and recovery commands: `/Volumes/SamsungRed/rewrite-2026-10-12/`, live 
 (mille, puppeteer, rosetta, ghosttea), then VibeField. Origin `b4adabb2` is still an ancestor:
 1,389 commits ahead after rewriting, 1,390 including this records commit.
 The first push is a plain fast-forward; nothing was pushed. The PM remaps Claude memory notes from the live map.
+
+## PJ-7, the daemon half — a launch names a place, a resume needs no path or persona, the phone's row knows its conversation; and three debts paid (2026-10-14; `afdb5e05` · `d8a8e943` · `91412a1d` · `c0c5e485` · `588de570` · `85e0a560` · `f3dd3c71` · `c4a6d349` · `c321a64d` · `f37d814b` · `b96476cb` · `c9b6a0a4` through lane land3, gated on the exact tree)
+
+**Why:** James ruled PJ-7's seven questions at the lean on 2026-10-14 ("go with your lean"; `thinking-project-places.md`
+"Delta 2026-10-14", plan `draft/project-places/build-pj7.md`). PJ-7 is built in two lanes: pj7d (contracts and fieldd,
+this entry) and pj7k (the iOS kit: History over `project.*`, the launch sheet, the bloom, Resume and Jump to, and the
+simulator witness, which lands after it on this tree).
+
+**What landed:**
+- `afdb5e05` contracts first: `AgentSpawnParams.place?: PlaceRef`, exclusive with `cwd` through the schema's own refine
+  (both are refused PRECONDITION_FAILED "expected … a place or a cwd, never both" — the repo has no INVALID_PARAMS kind);
+  `ProjectRecipe.place?` (`.catch(undefined)`: an unreadable ref drops the place, never the recipe);
+  `AgentFieldRow.nativeSessionId?`. New fixtures, no golden the kit mirrors edited.
+- `d8a8e943` **a launch names a place (Q1 (a)):** fieldd resolves the ref from this desktop's OWN place facts
+  (`ProjectGroups.ownPlace`, the reverse of `placeResolver`) and checks the disk too (facts are sticky). Refused in
+  fieldd's words with the ref in the details and never a path: another desktop's place `not-here`, an unknown id
+  `unknown-place` (NOT_FOUND), a gone or unmounted folder `missing-cwd`. The ledger records `{place}`; the birth hands
+  the placeId through `onPlace` → `actedIn`, so the recipe keeps **the place it entered** (`recipe.place`, PJ-D6's "your
+  last launch's place", the lead's call).
+- `91412a1d` · `f37d814b` the phone's field row carries the conversation's native id (Q3's Jump to joins by it); the desk
+  cut a peer receives leaves it off (the first gate caught it: +538 upserts in the model-stream fixtures).
+- `c0c5e485` **a resume needs no path (Q3 (a)):** a native resume naming no folder runs in the conversation's own, from
+  this desktop's index row — never home; a row with no folder, or a gone one, is `missing-cwd`.
+- `b96476cb` **…nor a persona** (a lead ruling on lane pj7k's ask, recorded in the plan): a native resume naming no
+  persona runs under the one the index files the conversation under, signed-out checked on it; a NAMED persona is held
+  to the filed one as before (`other-profile`; EL7 finding 8 stands — no word of the caller's is taken).
+- `588de570` the phone's witness in vitest: `project-doors-phone.test.ts` gains a world over the REAL floor (an agent's
+  birth needs a real cell) reached AS a self tailnet phone by `Tailscale-User-Login` — `project.list` → `project.get` →
+  `agent.spawn {provider, place, profileSet}` → the run's cwd is the place's path, the recipe carries the place,
+  `project.sessions` joins the session at that PlaceRef; another device's ref refused; a resume with no path or persona.
+  A test-only mesh stand-in answers `native.mesh.*` on the mgmt socket (everything else real; Windows skips).
+- `85e0a560` the simulator fixture for the kit's witness: `packages/fieldd/test/fixtures/ios-phone-place.ts` serves a
+  real fieldd AS a self tailnet phone (its bridge plays the sidecar), one git place with an identity remote, a handshake
+  at `/private/tmp/vibefield-pj7-phone.json` and a `/proof` endpoint; proven from node (`ios-phone-place.test.ts`).
+- **Debts** (`s-debts-fieldd.md` Appendix 3): `f3dd3c71` `scripts/gate-landing.mjs` waits before EACH gate while a lock
+  named by `VF_PERF_LOCKS` exists (`GATE_WAIT` lines; unset = today's run; no host path in the script) — the MV lead's
+  perf pair was overlapped on 2026-10-14 by a gate that read no lock; `c4a6d349` service-drain-deadline on fake timers;
+  `c321a64d` one retry (`test/agent-birth.ts` `born`) for all 43 real-floor births in agent-session — agent-session
+  MF-1f/MF-1g's create and QL-D10, owed since "PJ-6, the launch", are paid.
+
+- `c9b6a0a4` the phone world's teardown removes its root the suite's way (retried; a leak said on stderr, never a red).
+
+**Validation:** red first (`/Volumes/SamsungRed/lanes/pj7d/red-*.log`, each run on the code before its change); the
+lane's gate green on `72511342` and on its final tip `72044464` (`lanes/pj7d/gate-summary.log`; the two reds between are
+kept as `gate3-*`/`gate4-*`: agent-session AR-4's listing on a just-restarted floor under load, green alone, and the new
+world's ENOTEMPTY teardown, fixed by `c9b6a0a4`); then the landing gate on the exact tree (`lanes/land3/logs/`, under
+this landing's sha). Gate 3's log shows the new retry at work ("agent.spawn attempt 1 refused, retrying: the terminal
+floor is not available", the row green).
+
+**Found:** an `agent.spawn` arriving over the tailnet door already wrote recipes before PJ-7 (FS-2's phone launches);
+`thinking-project-places.md` §9's "a phone act on another desktop also waits for DS-2" was stale twice (corrected at its
+source, 2026-10-14): the kit dials the owning desktop's own door. agent-session "AR-6-0 — the stop verb" met its 15 s poll
+once under load 34–47 (green alone in 9.2 s, and in the next gate) — a load row, not this diff's.
+
+**Owed:** the kit's half (lane pj7k); agent-gateway's four typed-run births are not yet through `born`; AR-4's restart
+rows call `terminal.list`/`agent.list` on a just-restarted daemon without waiting for its floor (`untilListed` exists); a desktop's
+last-seen time on the roster (the phone's sleeping bud reads "ASLEEP", not "ASLEEP · 2 H").
