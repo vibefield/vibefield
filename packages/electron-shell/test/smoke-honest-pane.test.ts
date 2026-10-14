@@ -264,20 +264,28 @@ describe("the page's honest life — its rows", () => {
     const ok = {
       still: true,
       following: [],
+      editorActive: true,
       after: {
-        key: { woke: true, ms: 262, following: [PANE.type], followedMs: 250 },
-        wheel: { woke: true, ms: 270, following: [PANE.type], followedMs: 256 },
-        lease: { woke: true, ms: 24, following: [PANE.type], followedMs: 9 },
-        arrival: { woke: true, ms: 290, following: [PANE.type], followedMs: 281 },
+        key: { woke: true, ms: 262, following: [PANE.type], followedMs: 250, lastFrameMs: null },
+        wheel: { woke: true, ms: 270, following: [PANE.type], followedMs: 256, lastFrameMs: null },
+        lease: { woke: true, ms: 24, following: [PANE.type], followedMs: 9, lastFrameMs: null },
+        arrival: { woke: true, ms: 290, following: [PANE.type], followedMs: 281, lastFrameMs: 40 },
       },
     };
     expect(judgeSleep(ok)).toEqual([]);
     // before C1: a held page never let the desk sleep — its own driver followed it for good
-    const followed = { woke: false, ms: null, following: [PANE.type], followedMs: 1_995 };
+    const followed = {
+      woke: false,
+      ms: null,
+      following: [PANE.type],
+      followedMs: 1_995,
+      lastFrameMs: null,
+    };
     expect(
       judgeSleep({
         still: false,
         following: [PANE.type],
+        editorActive: true,
         after: { key: followed, wheel: followed, lease: followed, arrival: followed },
       }),
     ).toEqual([
@@ -294,15 +302,27 @@ describe("the page's honest life — its rows", () => {
         ...ok,
         after: {
           ...ok.after,
-          key: { woke: true, ms: 40, following: [PANE.type], followedMs: 30 },
-          wheel: { woke: true, ms: 900, following: [PANE.type], followedMs: 250 },
-          arrival: { woke: true, ms: null, following: [PANE.type], followedMs: 281 },
+          key: { woke: true, ms: 40, following: [PANE.type], followedMs: 30, lastFrameMs: null },
+          wheel: {
+            woke: true,
+            ms: 900,
+            following: [PANE.type],
+            followedMs: 250,
+            lastFrameMs: null,
+          },
+          arrival: {
+            woke: true,
+            ms: null,
+            following: [PANE.type],
+            followedMs: 281,
+            lastFrameMs: 131,
+          },
         },
       }),
     ).toEqual([
       `SLEEP: after the key the desk slept 40 ms later — before the hand's quiet (${HONEST_ROWS.sleepNotBeforeMs})`,
       `SLEEP: after the wheel the desk slept 900 ms later, not within ${HONEST_ROWS.sleepWithinMs}`,
-      `SLEEP: after the arrival the desk was still awake ${HONEST_ROWS.sleepWatchMs} ms later, not within ${HONEST_ROWS.sleepArrivalWithinMs}`,
+      `SLEEP: after the arrival's last frame the desk was still awake ${HONEST_ROWS.sleepWatchMs} ms later, not within ${HONEST_ROWS.sleepWithinMs}`,
     ]);
   });
 
@@ -310,11 +330,12 @@ describe("the page's honest life — its rows", () => {
     const ok = {
       still: true,
       following: [],
+      editorActive: true,
       after: {
-        key: { woke: true, ms: 262, following: [PANE.type], followedMs: 250 },
-        wheel: { woke: true, ms: 270, following: [PANE.type], followedMs: 256 },
-        lease: { woke: true, ms: 24, following: [PANE.type], followedMs: 9 },
-        arrival: { woke: true, ms: 290, following: [PANE.type], followedMs: 281 },
+        key: { woke: true, ms: 262, following: [PANE.type], followedMs: 250, lastFrameMs: null },
+        wheel: { woke: true, ms: 270, following: [PANE.type], followedMs: 256, lastFrameMs: null },
+        lease: { woke: true, ms: 24, following: [PANE.type], followedMs: 9, lastFrameMs: null },
+        arrival: { woke: true, ms: 290, following: [PANE.type], followedMs: 281, lastFrameMs: 40 },
       },
     };
     expect(judgeSleep(ok)).toEqual([]);
@@ -322,7 +343,10 @@ describe("the page's honest life — its rows", () => {
     expect(
       judgeSleep({
         ...ok,
-        after: { ...ok.after, lease: { woke: true, ms: 12, following: [], followedMs: null } },
+        after: {
+          ...ok.after,
+          lease: { woke: true, ms: 12, following: [], followedMs: null, lastFrameMs: null },
+        },
       }),
     ).toEqual([]);
     // ICE before 0.16.0: the board's pen, the notebook's leaf and the calendar's hand followed ANY held object
@@ -332,11 +356,13 @@ describe("the page's honest life — its rows", () => {
       ms: null,
       following: [...reference, PANE.type],
       followedMs: 1_995,
+      lastFrameMs: null,
     };
     expect(
       judgeSleep({
         still: false,
         following: reference,
+        editorActive: true,
         after: { key: awake, wheel: awake, lease: awake, arrival: awake },
       }),
     ).toEqual([
@@ -357,13 +383,86 @@ describe("the page's honest life — its rows", () => {
         ...ok,
         after: {
           ...ok.after,
-          wheel: { woke: true, ms: 270, following: ["desk.calendar", PANE.type], followedMs: 256 },
-          arrival: { woke: true, ms: 380, following: [PANE.type], followedMs: 420 },
+          wheel: {
+            woke: true,
+            ms: 270,
+            following: ["desk.calendar", PANE.type],
+            followedMs: 256,
+            lastFrameMs: null,
+          },
+          arrival: {
+            woke: true,
+            ms: 640,
+            following: [PANE.type],
+            followedMs: 600,
+            lastFrameMs: 140,
+          },
         },
       }),
     ).toEqual([
       "SLEEP: after the wheel desk.calendar followed — a held pane's stir is its own driver's alone",
-      `SLEEP: after the arrival a driver still followed 420 ms later, past ${HONEST_ROWS.sleepArrivalWithinMs}`,
+      `SLEEP: after the arrival's last frame a driver still followed 460 ms later, past ${HONEST_ROWS.sleepWithinMs}`,
+      `SLEEP: after the arrival's last frame the desk slept 500 ms later, not within ${HONEST_ROWS.sleepWithinMs}`,
+    ]);
+  });
+
+  it("PT-6b SLEEP's stirs reach what they move: the desk's editor the active element before them (a key must reach the lease); the page's frames timed from the LAST one to arrive, held to the key's bounds; the lease's end never too soon", () => {
+    // sd1's own numbers (the product at the tip): its arrival slept 402 ms after the stop — 271 after the page's last frame
+    const ok = {
+      still: true,
+      following: [],
+      editorActive: true,
+      after: {
+        key: { woke: true, ms: 275, following: [PANE.type], followedMs: 246, lastFrameMs: null },
+        wheel: { woke: true, ms: 273, following: [PANE.type], followedMs: 249, lastFrameMs: null },
+        lease: { woke: true, ms: 27, following: [], followedMs: null, lastFrameMs: null },
+        arrival: { woke: true, ms: 402, following: [PANE.type], followedMs: 373, lastFrameMs: 131 },
+      },
+    };
+    expect(judgeSleep(ok)).toEqual([]);
+    // the editor not the active element (F6's: a press on the bar in an unfocused window took the focus, the lease stayed)
+    expect(judgeSleep({ ...ok, editorActive: false })).toEqual([
+      "SLEEP: the desk's editor is not the active element before the stirs — a key would not reach the page's lease",
+    ]);
+    // timed from the fixture's stop instead, the same arrival is late
+    expect(
+      judgeSleep({
+        ...ok,
+        after: { ...ok.after, arrival: { ...ok.after.arrival, lastFrameMs: null } },
+      }),
+    ).toEqual([
+      `SLEEP: after the arrival's last frame a driver still followed 373 ms later, past ${HONEST_ROWS.sleepWithinMs}`,
+      `SLEEP: after the arrival's last frame the desk slept 402 ms later, not within ${HONEST_ROWS.sleepWithinMs}`,
+    ]);
+    // asleep before the hand's quiet after the page's last frame
+    expect(
+      judgeSleep({
+        ...ok,
+        after: {
+          ...ok.after,
+          arrival: {
+            woke: true,
+            ms: 300,
+            following: [PANE.type],
+            followedMs: 280,
+            lastFrameMs: 131,
+          },
+        },
+      }),
+    ).toEqual([
+      `SLEEP: after the arrival's last frame the desk slept 169 ms later — before the hand's quiet (${HONEST_ROWS.sleepNotBeforeMs})`,
+    ]);
+    // the lease's end has no quiet of its own (the hand lends the editor again at once): asleep at 27 ms is right; a key is not
+    expect(
+      judgeSleep({
+        ...ok,
+        after: {
+          ...ok.after,
+          key: { woke: true, ms: 27, following: [], followedMs: null, lastFrameMs: null },
+        },
+      }),
+    ).toEqual([
+      `SLEEP: after the key the desk slept 27 ms later — before the hand's quiet (${HONEST_ROWS.sleepNotBeforeMs})`,
     ]);
   });
 
