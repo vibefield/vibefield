@@ -1,0 +1,283 @@
+import FieldProduct
+import Foundation
+import Testing
+
+@testable import FieldHistory
+
+// PJ-7 — History's ledger over `project.*`: ONE reader over one door (the
+// home's, else another answering desktop's) fills one ledger of projects — no
+// longer grouped by desktop — whose location is its desktops' marks; a
+// project opened reads what it is now, its sessions (each naming where it ran)
+// and its figures; a ping reads again and a key that regrouped re-keys; the
+// cache replays the ledger while no door answers. Over the contracts' goldens.
+
+private let studio = "01J9ZK3M5Q8XR2V7N4B6C1D0EF"
+private let laptop = "01J9ZM0PQ7W3E6R8T2Y4U1I5O9"
+private let vibeField = "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8"
+private let moved = "r:01JA0B1C2D3E4F5G6H7J8K9M0N"
+
+private let roster = [
+  FieldHistoryModel.RosterDesktop(id: laptop, name: "laptop", platform: "win32", awake: false, isHome: false),
+  FieldHistoryModel.RosterDesktop(id: studio, name: "studio", platform: "darwin", awake: true, isHome: true),
+]
+
+/// The ledger's door, made of the goldens: what it was asked, and the pings'
+/// delta for a test to deliver.
+@MainActor
+private final class ProjectsDoor: HistoryDoor {
+  var asked: [(String, JSONValue?)] = []
+  var refuse: FieldProductError?
+  var ping: (@MainActor (JSONValue) -> Void)?
+  var closed = false
+
+  func call(_ method: String, params: JSONValue?) async throws -> JSONValue {
+    asked.append((method, params))
+    if let refuse { throw refuse }
+    switch method {
+    case "project.list": return try Fixture.json("project-list.valid")
+    case "project.get":
+      return params?["key"]?.stringValue == vibeField
+        ? try Fixture.json("project-get.valid") : try Fixture.json("project-get.moved")
+    case "project.sessions":
+      var page = try #require(try Fixture.json("project-sessions.valid").objectValue)
+      page["key"] = params?["key"] ?? page["key"]
+      return .object(page)
+    case "project.figures":
+      var figures = try #require(try Fixture.json("project-figures.valid").objectValue)
+      figures["key"] = params?["key"] ?? figures["key"]
+      return .object(figures)
+    default: throw FieldProductError(kind: "NOT_FOUND", message: method)
+    }
+  }
+
+  func tail(
+    _ method: String, params: JSONValue?, shape: SubscriptionShape,
+    onSnapshot: @escaping @MainActor (JSONValue) -> Void,
+    onDelta: @escaping @MainActor (JSONValue) -> Void
+  ) async throws -> HistoryTailHandle {
+    asked.append((method, params))
+    if let refuse { throw refuse }
+    #expect(method == "project.subscribe")
+    #expect(shape.kind == .rows && shape.minIntervalMs == HistoryReads.tailIntervalMs)
+    #expect(params?["cwd"] == nil && params?["path"] == nil)
+    if let snapshot = try Fixture.json("project-changes-open.snapshot")["snapshot"] { onSnapshot(snapshot) }
+    ping = onDelta
+    return HistoryTailHandle { [weak self] in self?.ping = nil }
+  }
+
+  func close() { closed = true }
+
+  func count(_ method: String) -> Int { asked.filter { $0.0 == method }.count }
+}
+
+@MainActor
+private func settle(_ what: String, timeout: Duration = .seconds(5), _ condition: @MainActor () -> Bool) async {
+  let deadline = ContinuousClock.now.advanced(by: timeout)
+  while ContinuousClock.now < deadline {
+    if condition() { return }
+    try? await Task.sleep(for: .milliseconds(5))
+  }
+  Issue.record("timed out waiting for \(what)")
+}
+
+private func scratch() -> URL {
+  let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("vf-projects-\(UUID().uuidString)")
+  try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+  return url
+}
+
+@Suite("PJ-7 — the ledger is one, over project.*")
+struct HistoryProjectsTests {
+  @Test("the desktops: the answer's, the home first, a sleeping one said with the hour it was heard")
+  func desktops() throws {
+    let page = try ProjectListResult(json: try Fixture.json("project-list.valid"))
+    let now = Date(timeIntervalSince1970: 1_759_284_000)
+    let desktops = FieldHistoryModel.desktops(sources: page.sources, roster: roster, now: now)
+    #expect(desktops.map(\.name) == ["studio", "laptop"])
+    #expect(desktops.map(\.platform) == ["darwin", "win32"])
+    #expect(desktops.map(\.asleep) == [false, true])
+    #expect(desktops[0].isHome)
+    #expect(desktops[1].readAt.count == 5)
+    #expect(FieldHistoryModel.asleepSentence(desktops[1]) == "laptop is asleep · read \(desktops[1].readAt)")
+    // a desktop the roster does not list keeps the answer's name and no mark
+    let bare = FieldHistoryModel.desktops(sources: page.sources, roster: [], now: now)
+    #expect(bare.map(\.name) == ["studio", "laptop"], "the answer's own order")
+    #expect(bare.allSatisfy { $0.platform == nil })
+  }
+
+  @Test("a project is a ledger row whose location is its desktops' marks, its colour its ink, its places by name")
+  func aLedgerRow() throws {
+    let page = try ProjectListResult(json: try Fixture.json("project-list.valid"))
+    let now = Date(timeIntervalSince1970: 1_759_284_000)
+    let desktops = FieldHistoryModel.desktops(sources: page.sources, roster: roster, now: now)
+    let row = FieldHistoryModel.ledgerProject(page.rows[0], desktops: desktops, now: now)
+    #expect(row.id == vibeField)
+    #expect(row.ink == 412)
+    #expect(row.devices == [studio, laptop])
+    #expect(row.path.isEmpty, "the path never travels to the screen")
+    #expect(row.figure == "449" && row.unit.isEmpty)
+    #expect(row.places.map(\.name) == ["vibe-field", "vf-docs"])
+    #expect(row.places[0].branch == nil, "main says nothing the folder does not")
+    #expect(row.places[1].branch == "docs")
+    #expect(row.places.allSatisfy { $0.reason == nil })
+    let groups = FieldHistoryModel.placesByDesktop(row, desktops: desktops, live: [])
+    #expect(groups.map(\.desktop) == [studio, laptop])
+    #expect(groups[0].words == "1 place")
+    #expect(groups[1].words.hasPrefix("asleep · "))
+    let busy = FieldHistoryModel.placesByDesktop(
+      row, desktops: desktops,
+      live: [HistoryLive(id: "l", projectId: vibeField, title: "t", agent: "claude", running: "r", destination: .project, device: studio)])
+    #expect(busy[0].words == "1 working" && busy[0].working == 1)
+  }
+
+  @Test("a place that cannot take a launch says why; Temporary and a hidden project are not listed")
+  func reasonsAndListing() throws {
+    var fields = try #require(try Fixture.json("project-summary.valid").objectValue)
+    var places = try #require(fields["places"]?.arrayValue)
+    var gone = try #require(places[0].objectValue)
+    gone["exists"] = .bool(false)
+    var unplugged = try #require(places[1].objectValue)
+    unplugged["mounted"] = .bool(false)
+    places = [.object(gone), .object(unplugged)]
+    fields["places"] = .array(places)
+    let summary = try ProjectSummary(json: .object(fields))
+    let now = Date()
+    #expect(summary.places.map { FieldHistoryModel.place($0, now: now).reason } == ["folder gone", "not connected"])
+    #expect(FieldHistoryModel.listed(summary))
+    #expect(!FieldHistoryModel.listed(try ProjectSummary(json: try Fixture.json("project-summary.hidden"))))
+    fields["bucket"] = .string("temp")
+    #expect(!FieldHistoryModel.listed(try ProjectSummary(json: .object(fields))))
+  }
+
+  @Test("a session row names where it ran — the desktop and the folder — and the id Resume asks by")
+  func sessionRows() throws {
+    let page = try ProjectSessionsResult(json: try Fixture.json("project-sessions.valid"))
+    let project = try ProjectSummary(json: try Fixture.json("project-summary.valid"))
+    let desktops = [HistoryDevice(id: studio, name: "studio", platform: "darwin", asleep: false, readAt: "11:42")]
+    let rows = FieldHistoryModel.projectSessionRows(
+      page.rows, key: vibeField, places: project.places, desktops: desktops, now: Date())
+    let row = try #require(rows.first)
+    #expect(row.projectId == vibeField)
+    #expect(row.device == studio && row.deviceName == "studio")
+    #expect(row.folder == "vibe-field")
+    #expect(row.provider == "claude")
+    #expect(row.nativeSessionId == "665e3e71-7c12-4810-925a-e8b92cb6f29d")
+    #expect(row.day != nil)
+  }
+
+  @Test("the reader: one list, the desktops and their marks, figures prefetched, the pings open at the floor")
+  @MainActor
+  func theLedger() async throws {
+    let door = ProjectsDoor()
+    let projects = HistoryProjects(source: studio, door: door, roster: roster)
+    projects.start()
+    await settle("the ledger") { projects.corpus.projects.count == 2 }
+    #expect(projects.standing == .connected)
+    #expect(projects.corpus.projects.map(\.name) == ["vibe-field", "Home"])
+    #expect(projects.corpus.desktops.map(\.name) == ["studio", "laptop"])
+    #expect(projects.corpus.desktop == "studio")
+    #expect(projects.corpus.sessionCount == 452)
+    #expect(projects.summaries[vibeField]?.places.count == 2)
+    await settle("the figures") { projects.corpus.projects.allSatisfy { $0.stats != nil } }
+    #expect(door.count("project.figures") == 2)
+    #expect(projects.corpus.projects[0].ink == 412, "the figures keep the ink")
+    await settle("the pings") { door.ping != nil }
+    let list = try #require(door.asked.first { $0.0 == "project.list" }?.1)
+    #expect(list["limit"]?.intValue == Int64(HistoryReads.listRows))
+    // no ask names a folder (P1)
+    for (_, params) in door.asked {
+      #expect(params?["cwd"] == nil && params?["path"] == nil && params?["paths"] == nil)
+    }
+  }
+
+  @Test("a project opened: what it is now, its sessions with where each ran; a ping reads again and re-keys it")
+  @MainActor
+  func openAndRegroup() async throws {
+    let door = ProjectsDoor()
+    let projects = HistoryProjects(source: studio, door: door, roster: roster)
+    projects.start()
+    await settle("the ledger") { projects.corpus.projects.count == 2 }
+    projects.open(vibeField)
+    await settle("the sessions") { !projects.corpus.sessions(of: vibeField).isEmpty }
+    #expect(door.count("project.get") == 1)
+    let row = try #require(projects.corpus.sessions(of: vibeField).first)
+    #expect(row.device == studio && row.deviceName == "studio" && row.folder == "vibe-field")
+    // the ping: the key moved, and the ledger is read again
+    await settle("the pings") { door.ping != nil }
+    let lists = door.count("project.list")
+    door.ping?(try Fixture.json("project-changes-delta.regrouped"))
+    #expect(projects.moves == [ProjectRegrouped(from: vibeField, to: moved)])
+    #expect(projects.moved(vibeField) == moved)
+    #expect(projects.moved(moved) == nil)
+    await settle("the ledger read again") { door.count("project.list") > lists }
+    // a get that answers `movedTo` re-keys too
+    projects.open("p1:asked-before-it-moved")
+    await settle("the move") { projects.moved("p1:asked-before-it-moved") == moved }
+  }
+
+  @Test("no door: the cache's ledger, asleep; a door that stops answering dims what was read")
+  @MainActor
+  func cacheAndRefusal() async throws {
+    let cache = HistoryCache(directory: scratch())
+    let door = ProjectsDoor()
+    let online = HistoryProjects(source: studio, door: door, cache: cache, roster: roster)
+    online.start()
+    await settle("the ledger") { online.corpus.projects.count == 2 }
+    online.close()
+    let offline = HistoryProjects(source: nil, door: nil, cache: cache)
+    offline.start()
+    #expect(offline.isReplaying)
+    #expect(offline.standing == .asleep)
+    #expect(offline.corpus.projects.map(\.name) == ["vibe-field", "Home"])
+    #expect(offline.corpus.desktops.count == 2)
+    // the grouping not ready yet is still a door that answers
+    let grouping = ProjectsDoor()
+    grouping.refuse = FieldProductError(
+      kind: "UNAVAILABLE", message: "grouping", retryable: true,
+      details: try Fixture.json("error-data.projects-grouping")["details"])
+    let waiting = HistoryProjects(source: studio, door: grouping, roster: roster)
+    waiting.start()
+    await settle("the refusal") { waiting.failure != nil }
+    #expect(waiting.standing == .connected)
+    // a door gone: asleep, what was read stands
+    door.refuse = FieldProductError(kind: "UNAVAILABLE", message: "the door is gone", retryable: true)
+    let gone = HistoryProjects(source: studio, door: door, cache: cache, roster: roster)
+    gone.start()
+    #expect(gone.corpus.projects.count == 2, "the cache replays first")
+    await settle("asleep") { gone.standing == .asleep }
+    #expect(gone.corpus.projects.count == 2)
+    #expect(gone.failure == "the door is gone")
+  }
+
+  @Test("the desktops choose the ledger's door: the home while it answers, else another; none, the cache")
+  @MainActor
+  func chooseTheLedger() async throws {
+    let cache = HistoryCache(directory: scratch())
+    let group = HistoryDesktops(cache: cache)
+    let home = ProjectsDoor()
+    let other = ProjectsDoor()
+    group.attach(deviceId: laptop, name: "laptop", isHome: false, door: other, ownsDoor: true)
+    group.attach(deviceId: studio, name: "studio", isHome: true, door: home, ownsDoor: false)
+    group.chooseLedger(roster: roster)
+    #expect(group.projects.source == studio)
+    await settle("the ledger over the home") { group.projects.corpus.projects.count == 2 }
+    #expect(home.count("project.list") >= 1 && other.count("project.list") == 0)
+    group.need(.project(id: vibeField))
+    await settle("the project opened") { home.count("project.get") == 1 }
+    // the home sleeps: another answering desktop's door reads the ledger
+    group.markOffline(deviceId: studio, name: "studio", isHome: true)
+    group.chooseLedger(roster: roster)
+    #expect(group.projects.source == laptop)
+    await settle("the ledger over the laptop") { other.count("project.list") >= 1 }
+    #expect(!home.closed, "a shared door is the link's to close")
+    // none answers: the cache, asleep
+    group.allOffline()
+    group.chooseLedger(roster: roster)
+    #expect(group.projects.source == nil && group.projects.isReplaying)
+    #expect(group.projects.corpus.projects.count == 2)
+    // the mock: its corpus is the ledger too
+    group.mount(.fixed(corpus: .mock, standing: .connected))
+    #expect(group.projects.corpus.projects.count == 7)
+    #expect(group.projects.corpus.desktops.map(\.name) == ["studio"])
+  }
+}

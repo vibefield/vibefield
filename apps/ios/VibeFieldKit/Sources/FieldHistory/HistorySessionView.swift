@@ -14,7 +14,10 @@ import SwiftUI
 /// a placeholder row (`image on studio`), never a broken image (H-D9).
 struct HistorySessionView: View {
   let document: HistoryDocument
+  /// the document's own desktop's corpus (its reader's)
   let corpus: HistoryCorpus
+  /// PJ-7 — the ledger the session's project is named and coloured from
+  var ledger: HistoryCorpus? = nil
   let standing: FieldHistoryModel.DesktopStanding
   @Bindable var router: HistoryRouter
   var arrivals: Int = 0
@@ -33,8 +36,16 @@ struct HistorySessionView: View {
   static let barClearance: CGFloat = 80
 
   private var awake: Bool { standing.isAwake }
+  /// The project the document belongs to: the ledger's (by key, when the
+  /// route came through a project), else the desktop's own corpus's.
+  private var project: HistoryProject? {
+    router.path.lazy.compactMap { route -> HistoryProject? in
+      if case .project(let id) = route { return ledger?.project(id) }
+      return nil
+    }.first ?? ledger?.project(document.projectId) ?? corpus.project(document.projectId)
+  }
   private var color: Color {
-    HistoryParts.projectColor(seq: corpus.project(document.projectId)?.seq ?? 0, scheme: scheme)
+    HistoryParts.projectColor(project, scheme: scheme)
   }
   private var litAnchor: String? {
     guard let landed = router.landed, landed.sessionId == document.id, landed.device == corpus.deviceId else { return nil }
@@ -111,7 +122,7 @@ struct HistorySessionView: View {
     VStack(alignment: .leading, spacing: 0) {
       HStack(spacing: 8) {
         Capsule().fill(color).frame(width: 3, height: 13)
-        Text(corpus.project(document.projectId)?.name ?? corpus.desktop)
+        Text(project?.name ?? corpus.desktop)
           .font(ChromeType.sans(13, .medium))
           .foregroundStyle(ChromePalette.inkTertiary)
       }

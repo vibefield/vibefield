@@ -1,3 +1,4 @@
+import FieldProduct
 import Foundation
 
 /// What the History tab reads (IOS-9b, H-D4): the ledger, a project, a
@@ -33,12 +34,16 @@ public struct HistoryCorpus: Equatable, Sendable, Codable {
   public var searchedQuery: String?
   public var recentSearches: [String]
   public var documents: [String: HistoryDocument]
+  /// PJ-7 — the desktops the ledger was read across, the home first then the
+  /// roster's order: the scope line's marks and each sleeping desktop's honest
+  /// sentence. Empty for one desktop's own corpus (a document reader's).
+  public var desktops: [HistoryDevice]
 
   public init(
     desktop: String, deviceId: String = "dev-1", sessionCount: Int, agentCount: Int, readAt: String,
     projects: [HistoryProject], live: [HistoryLive], sessions: [String: [HistorySession]],
     hits: [HistoryHitGroup], searchedQuery: String? = nil, recentSearches: [String],
-    documents: [String: HistoryDocument]
+    documents: [String: HistoryDocument], desktops: [HistoryDevice] = []
   ) {
     self.desktop = desktop
     self.deviceId = deviceId
@@ -52,6 +57,7 @@ public struct HistoryCorpus: Equatable, Sendable, Codable {
     self.searchedQuery = searchedQuery
     self.recentSearches = recentSearches
     self.documents = documents
+    self.desktops = desktops
   }
 
   /// A desktop nothing has been read from yet: the shape every reader starts
@@ -65,6 +71,61 @@ public struct HistoryCorpus: Equatable, Sendable, Codable {
   public func project(_ id: String) -> HistoryProject? { projects.first { $0.id == id } }
   public func sessions(of projectId: String) -> [HistorySession] { sessions[projectId] ?? [] }
   public func document(_ sessionId: String) -> HistoryDocument? { documents[sessionId] }
+  public func desktop(_ id: String) -> HistoryDevice? { desktops.first { $0.id == id } }
+}
+
+/// PJ-7 — a desktop as History draws it: its OS mark (the platform), its name,
+/// and whether it answers — a sleeping one keeps its place, faint, with the
+/// hour its facts are from (DS-L8: asleep is a state, never a blank).
+public struct HistoryDevice: Identifiable, Equatable, Sendable, Codable {
+  public let id: String
+  public let name: String
+  /// `DeviceSlice.platform` (`darwin` · `win32` · `linux`); nil draws the plain screen
+  public let platform: String?
+  public let asleep: Bool
+  /// when the answering desktop last heard this one (`11:42`), for the honest sentence
+  public let readAt: String
+  /// the same, as how long ago (`2h`), for a row's `asleep · 2h`
+  public let since: String
+  public let isHome: Bool
+
+  public init(
+    id: String, name: String, platform: String?, asleep: Bool, readAt: String, since: String = "—",
+    isHome: Bool = false
+  ) {
+    self.id = id
+    self.name = name
+    self.platform = platform
+    self.asleep = asleep
+    self.readAt = readAt
+    self.since = since
+    self.isHome = isHome
+  }
+}
+
+/// PJ-7 — one place of a project as the phone draws it: its folder's NAME
+/// (never its path), a branch that says more, when it was last used, and the
+/// reason it cannot take a launch when it cannot.
+public struct HistoryPlace: Identifiable, Equatable, Sendable, Codable {
+  public let ref: PlaceRef
+  public let name: String
+  public let branch: String?
+  public let last: String
+  public let lastAt: Int64?
+  /// `folder gone` · `not connected`, or nil when a launch can land there
+  public let reason: String?
+
+  public var id: String { "\(ref.device)/\(ref.placeId)" }
+  public var device: String { ref.device }
+
+  public init(ref: PlaceRef, name: String, branch: String?, last: String, lastAt: Int64?, reason: String?) {
+    self.ref = ref
+    self.name = name
+    self.branch = branch
+    self.last = last
+    self.lastAt = lastAt
+    self.reason = reason
+  }
 }
 
 /// The ledger row: identity, location, quantity — and the marks of who worked here.
@@ -93,11 +154,21 @@ public struct HistoryProject: Identifiable, Equatable, Sendable, Codable {
   /// day, from `index.project`'s heatmap); nil draws the record's seeded
   /// pattern, which is the mock's and the honest "not read yet".
   public let ribbon: [[Int]]?
+  /// PJ-7 — the project's ink (`ProjectSummary.ink`, DESIGN.md §2.9): its
+  /// colour on every surface. nil only for the mock's corpus, which keeps the
+  /// record's seeded deal (`seq`).
+  public let ink: Int?
+  /// PJ-7 — the desktops it lives on (device ids, the ledger's desktops'
+  /// order): the marks in the path's slot.
+  public let devices: [String]
+  /// PJ-7 — its places, newest first.
+  public let places: [HistoryPlace]
 
   public init(
     id: String, name: String, seq: Int, path: String, missing: Bool = false, figure: String, unit: String,
     spend: Double, last: String, recencyMinutes: Int, agents: [HistoryAgentShare], moreAgents: Int = 0,
-    spark: [Int], stats: HistoryProjectStats? = nil, ribbon: [[Int]]? = nil
+    spark: [Int], stats: HistoryProjectStats? = nil, ribbon: [[Int]]? = nil, ink: Int? = nil,
+    devices: [String] = [], places: [HistoryPlace] = []
   ) {
     self.id = id
     self.name = name
@@ -114,6 +185,9 @@ public struct HistoryProject: Identifiable, Equatable, Sendable, Codable {
     self.spark = spark
     self.stats = stats
     self.ribbon = ribbon
+    self.ink = ink
+    self.devices = devices
+    self.places = places
   }
 
   public var isLive: Bool { last == "now" }
@@ -161,14 +235,24 @@ public struct HistoryLive: Identifiable, Equatable, Sendable, Codable {
   public let agent: String
   public let running: String
   public let destination: Destination
+  /// PJ-7 — the desktop it runs on (its document's door); nil for the mock's
+  public let device: String?
+  /// PJ-7 — the agent's own id for the conversation, which joins it to the
+  /// field's row (Jump to); nil when the index has none
+  public let nativeSessionId: String?
 
-  public init(id: String, projectId: String, title: String, agent: String, running: String, destination: Destination) {
+  public init(
+    id: String, projectId: String, title: String, agent: String, running: String, destination: Destination,
+    device: String? = nil, nativeSessionId: String? = nil
+  ) {
     self.id = id
     self.projectId = projectId
     self.title = title
     self.agent = agent
     self.running = running
     self.destination = destination
+    self.device = device
+    self.nativeSessionId = nativeSessionId
   }
 }
 
@@ -187,10 +271,21 @@ public struct HistorySession: Identifiable, Equatable, Sendable, Codable {
   public let branch: String
   public let last: String
   public let tone: Tone?
+  /// PJ-7 — where it ran: the desktop whose copy speaks (its document's door),
+  /// that desktop's name, and the folder's name (never its path). nil for the
+  /// mock's rows and a desktop's own listing.
+  public let device: String?
+  public let deviceName: String?
+  public let folder: String?
+  /// PJ-7 — the catalog's agent id and the agent's own id for the conversation:
+  /// what Resume asks by (`agent.resume {provider, nativeSessionId}`).
+  public let provider: String?
+  public let nativeSessionId: String?
 
   public init(
     id: String, projectId: String, day: String? = nil, title: String, agent: String, meta: String, branch: String,
-    last: String, tone: Tone? = nil
+    last: String, tone: Tone? = nil, device: String? = nil, deviceName: String? = nil, folder: String? = nil,
+    provider: String? = nil, nativeSessionId: String? = nil
   ) {
     self.id = id
     self.projectId = projectId
@@ -201,6 +296,11 @@ public struct HistorySession: Identifiable, Equatable, Sendable, Codable {
     self.branch = branch
     self.last = last
     self.tone = tone
+    self.device = device
+    self.deviceName = deviceName
+    self.folder = folder
+    self.provider = provider
+    self.nativeSessionId = nativeSessionId
   }
 
   public var isLive: Bool { last == "now" }
@@ -424,35 +524,35 @@ extension HistoryCorpus {
         spark: [2, 3, 2, 4, 3, 5, 4, 6, 5, 7, 8, 6, 9, 10, 12],
         stats: .init(
           sessions: "128", messages: "8,412", tokens: "3.73", tokensUnit: "B", activeDays: "102",
-          facts: "31d streak · 31d best · peak 3 PM · mostly Opus 5")),
+          facts: "31d streak · 31d best · peak 3 PM · mostly Opus 5"), devices: ["dev-1"]),
       HistoryProject(
         id: "ice", name: "infinite-canvas-engine", seq: 1, path: "~/ice", figure: "386", unit: "M", spend: 386, last: "2h",
         recencyMinutes: 120, agents: [.init("claude", 70), .init("cursor", 30)],
-        spark: [9, 8, 6, 7, 5, 4, 4, 3, 3, 2, 2, 1, 0, 1, 1]),
+        spark: [9, 8, 6, 7, 5, 4, 4, 3, 3, 2, 2, 1, 0, 1, 1], devices: ["dev-1"]),
       HistoryProject(
         id: "mille", name: "mille", seq: 2, path: "~/project100/mille", figure: "214", unit: "M", spend: 214, last: "now",
         recencyMinutes: 1, agents: [.init("codex", 58), .init("claude", 42)],
         spark: [0, 0, 1, 0, 2, 3, 5, 6, 4, 3, 2, 0, 1, 2, 3],
         stats: .init(
           sessions: "41", messages: "2,904", tokens: "611", tokensUnit: "M", activeDays: "58",
-          facts: "6d streak · 14d best · peak 11 PM · mostly o5")),
+          facts: "6d streak · 14d best · peak 11 PM · mostly o5"), devices: ["dev-1"]),
       HistoryProject(
         id: "chop", name: "chopsticks", seq: 3, path: "~/p008/chopsticks", figure: "92.4", unit: "M", spend: 92.4,
         last: "40m", recencyMinutes: 40, agents: [.init("cursor", 55), .init("claude", 45)],
-        spark: [3, 4, 5, 4, 6, 5, 6, 7, 5, 6, 7, 6, 5, 6, 7]),
+        spark: [3, 4, 5, 4, 6, 5, 6, 7, 5, 6, 7, 6, 5, 6, 7], devices: ["dev-1"]),
       HistoryProject(
         id: "rosetta", name: "rosetta", seq: 6, path: "~/project100/rosetta", figure: "71.8", unit: "M", spend: 71.8,
         last: "yesterday", recencyMinutes: 1440,
         agents: [.init("claude", 60), .init("codex", 30), .init("opencode", 10)],
-        spark: [0, 1, 2, 4, 3, 5, 6, 4, 5, 3, 4, 6, 5, 3, 2]),
+        spark: [0, 1, 2, 4, 3, 5, 6, 4, 5, 3, 4, 6, 5, 3, 2], devices: ["dev-1"]),
       HistoryProject(
         id: "truffle", name: "truffle", seq: 4, path: "~/p008/truffle · folder not found", missing: true, figure: "31.0",
         unit: "M", spend: 31, last: "12d", recencyMinutes: 17280, agents: [.init("claude", 100)],
-        spark: [4, 5, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        spark: [4, 5, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], devices: ["dev-1"]),
       HistoryProject(
         id: "jabali", name: "jabali", seq: 5, path: "~/jabali", figure: "4.20", unit: "M", spend: 4.2, last: "26d",
         recencyMinutes: 37440, agents: [.init("gemini", 70), .init("claude", 30)],
-        spark: [1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        spark: [1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], devices: ["dev-1"]),
     ],
     live: [
       HistoryLive(
@@ -602,5 +702,7 @@ extension HistoryCorpus {
             ]),
         ],
         liveSince: "11:45")
-    ])
+    ],
+    // PJ-7 — the mock's one desktop, as the ledger's marks draw it
+    desktops: [HistoryDevice(id: "dev-1", name: "studio", platform: "darwin", asleep: false, readAt: "11:42", isHome: true)])
 }

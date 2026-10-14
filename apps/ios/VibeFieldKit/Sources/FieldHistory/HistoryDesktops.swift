@@ -2,19 +2,23 @@ import FieldProduct
 import Foundation
 import Observation
 
-/// SP-6 — History GROUPED BY DESKTOP (the slice table's "grouped by desktop";
-/// SP-D2 (a): the phone is a multi-door client for History — one corpus per
-/// self desktop whose door answers, the HOME desktop first, DS-8's home).
-/// A desktop whose door does not answer is still a group: its reader replays
-/// what this phone last read of it from the cache, under H-D7's words with the
-/// desktop's name (`mini is asleep · read 11:42`), figures dimmed and green
-/// withheld. The home screen attaches and detaches readers as the link's
-/// roster moves; the views read the readers.
+/// SP-6 — one reader per self desktop whose door answers (SP-D2 (a): the
+/// phone is a multi-door client for History), the HOME desktop first, DS-8's
+/// home. PJ-7 — the LEDGER is no longer grouped by desktop (TP §6.3; SP-D10's
+/// grouping superseded): `projects` reads every desktop's projects over ONE
+/// door — the home's, or another answering desktop's while the home sleeps —
+/// and a desktop's reader keeps what only it can answer: its standing, a
+/// session's document and tail, its search. A desktop that does not answer
+/// replays what this phone last read of it, under H-D7's words with its name.
+/// The home screen attaches and detaches as the link's roster moves; the views
+/// read the ledger and the readers.
 @MainActor
 @Observable
 public final class HistoryDesktops {
   public private(set) var readers: [HistoryDesktopReader] = []
   public private(set) var home: String?
+  /// PJ-7 — the ledger of projects, over one door (or the cache's, asleep).
+  public private(set) var projects: HistoryProjects
 
   @ObservationIgnored private let cache: HistoryCache?
   @ObservationIgnored private let agentLabel: @MainActor (String) -> String
@@ -28,6 +32,47 @@ public final class HistoryDesktops {
     self.cache = cache
     self.agentLabel = agentLabel
     self.now = now
+    projects = HistoryProjects(source: nil, door: nil, cache: cache, now: now)
+    projects.start()
+  }
+
+  /// PJ-7 — the door the ledger reads: a reader over it stands while the
+  /// source does; another source, or one replaying the cache, is replaced.
+  public func attachProjects(
+    source: String, door: any HistoryDoor, ownsDoor: Bool, roster: [FieldHistoryModel.RosterDesktop]
+  ) {
+    if projects.source == source, !projects.isReplaying {
+      projects.update(roster: roster)
+      return
+    }
+    projects.close()
+    projects = HistoryProjects(source: source, door: door, ownsDoor: ownsDoor, cache: cache, roster: roster, now: now)
+    projects.start()
+  }
+
+  /// PJ-7 — which door the ledger reads (the lead's call, build-pj7.md): the
+  /// HOME's while it answers, else the first other desktop that answers (the
+  /// readers' order: the home first, then by name). It asks through that
+  /// desktop's reader's own door, so History holds one door per desktop. No
+  /// desktop answering: the cache's ledger, asleep.
+  public func chooseLedger(roster: [FieldHistoryModel.RosterDesktop]) {
+    let answering = readers.filter { !$0.isReplaying && $0.openDoor != nil }
+    guard let reader = answering.first(where: { $0.deviceId == home }) ?? answering.first,
+      let door = reader.openDoor
+    else {
+      projectsOffline()
+      projects.update(roster: roster)
+      return
+    }
+    attachProjects(source: reader.deviceId, door: door, ownsDoor: false, roster: roster)
+  }
+
+  /// No desktop's door answers: the ledger replays what this phone kept.
+  public func projectsOffline() {
+    guard !projects.isReplaying || projects.source != nil else { return }
+    projects.close()
+    projects = HistoryProjects(source: nil, door: nil, cache: cache, now: now)
+    projects.start()
   }
 
   public func reader(for deviceId: String) -> HistoryDesktopReader? {
@@ -65,11 +110,14 @@ public final class HistoryDesktops {
     reader.start()
   }
 
-  /// A fixed reader (the mock's corpus) as the one group.
+  /// A fixed reader (the mock's corpus) as the one desktop, and its corpus
+  /// as the ledger.
   public func mount(_ reader: HistoryDesktopReader) {
     for existing in readers { existing.close() }
     readers = [reader]
     home = reader.deviceId
+    projects.close()
+    projects = .fixed(corpus: reader.corpus, standing: reader.standing)
   }
 
   public func forget(deviceId: String) {
@@ -82,6 +130,7 @@ public final class HistoryDesktops {
     for reader in readers where !reader.isReplaying {
       markOffline(deviceId: reader.deviceId, name: reader.name, isHome: reader.isHome)
     }
+    projectsOffline()
   }
 
   public func setHome(_ deviceId: String?) {
@@ -91,19 +140,21 @@ public final class HistoryDesktops {
 
   public func pause() {
     for reader in readers { reader.pause() }
+    projects.pause()
   }
 
   public func resume() {
     for reader in readers { reader.resume() }
+    projects.resume()
   }
 
   public func need(_ need: HistoryNeed) {
-    let device: String =
-      switch need {
-      case .project(let device, _), .session(let device, _), .older(let device, _), .seen(let device, _):
-        device
-      }
-    reader(for: device)?.need(need)
+    switch need {
+    case .project(let key):
+      projects.open(key)
+    case .session(let device, _), .older(let device, _), .seen(let device, _):
+      reader(for: device)?.need(need)
+    }
   }
 
   /// One question to every desktop that answers — in turn (a phone has one

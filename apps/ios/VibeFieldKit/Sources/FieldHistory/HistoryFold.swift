@@ -151,15 +151,26 @@ extension FieldHistoryModel {
   public static func withFigures(
     _ project: HistoryProject, _ result: IndexProjectResult, sessions: [IndexSessionRow], now: Date
   ) -> HistoryProject {
-    let total = result.heatmap.reduce(0) { $0 + $1.tokens }
+    withFigures(
+      project, heatmap: result.heatmap, models: result.models, contribution: result.contribution, sessions: sessions,
+      now: now)
+  }
+
+  /// The figures' fold, whichever door counted them (`index.project` for one
+  /// desktop's project, `project.figures` merged across desktops, PJ-7).
+  static func withFigures(
+    _ project: HistoryProject, heatmap: [IndexHeatmapDay], models: [IndexModelDay], contribution: [IndexContribution],
+    sessions: [IndexSessionRow], now: Date
+  ) -> HistoryProject {
+    let total = heatmap.reduce(0) { $0 + $1.tokens }
     let word = tokensWord(total)
-    let byDay = Dictionary(result.heatmap.map { ($0.day, $0.tokens) }, uniquingKeysWith: +)
+    let byDay = Dictionary(heatmap.map { ($0.day, $0.tokens) }, uniquingKeysWith: +)
     let spark = lastDays(sparkDays, now: now).map { byDay[$0] ?? 0 }
     let peak = max(spark.max() ?? 0, 1)
-    let messages = result.contribution.reduce(0) { $0 + $1.messages }
-    let activeDays = result.heatmap.filter { $0.tokens > 0 }.count
+    let messages = contribution.reduce(0) { $0 + $1.messages }
+    let activeDays = heatmap.filter { $0.tokens > 0 }.count
     var modelTokens: [String: Double] = [:]
-    for day in result.models { modelTokens[day.model, default: 0] += day.tokens }
+    for day in models { modelTokens[day.model, default: 0] += day.tokens }
     let mostly = modelTokens.max { $0.value < $1.value }?.key
     let facts = [
       "\(activeDays) active \(activeDays == 1 ? "day" : "days")",
@@ -175,7 +186,7 @@ extension FieldHistoryModel {
       recencyMinutes: project.recencyMinutes, agents: agentShares(sessions),
       moreAgents: max(0, Set(sessions.compactMap(\.provider)).count - 3),
       spark: spark.map { Int(($0 / peak * 12).rounded()) }, stats: stats,
-      ribbon: ribbon(from: result.heatmap, now: now))
+      ribbon: ribbon(from: heatmap, now: now), ink: project.ink, devices: project.devices, places: project.places)
   }
 
   /// The last `count` calendar days, oldest first, as `YYYY-MM-DD`.

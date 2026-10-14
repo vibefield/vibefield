@@ -223,7 +223,7 @@ public enum FieldHistoryModel {
     case session(device: String, projectId: String, sessionId: String, ring: [String], at: Int)
     /// The project, with the session row to ring: the corpus holds no document
     /// (the mock's rows without one; a door's rows name no project yet).
-    case project(device: String, projectId: String, sessionId: String)
+    case project(projectId: String, sessionId: String)
   }
 
   /// Where a tapped hit goes. Over a DOOR (SP-6) a document is read when the
@@ -233,7 +233,7 @@ public enum FieldHistoryModel {
   public static func landing(for hit: HistoryHit, in group: HistoryHitGroup, corpus: HistoryCorpus) -> Landing {
     let readsOnOpen = corpus.searchedQuery != nil
     guard readsOnOpen || corpus.document(group.sessionId) != nil else {
-      return .project(device: corpus.deviceId, projectId: group.projectId, sessionId: group.sessionId)
+      return .project(projectId: group.projectId, sessionId: group.sessionId)
     }
     var ring: [String] = []
     for row in group.rows where !ring.contains(row.anchor) { ring.append(row.anchor) }

@@ -106,9 +106,18 @@ const launchFixtures = [
   "agents-profile-sets.valid.json",
   "agent-field-snapshot.native-session.json",
 ];
+// History's ledger reads them: the fixture door serves these, its tests read them.
+const historyFixtures = [
+  "project-list.valid.json",
+  "project-get.valid.json",
+  "project-sessions.valid.json",
+  "project-figures.valid.json",
+  "project-changes-open.snapshot.json",
+];
 const requiredMirrors = [
   ["workspace", workspaceFixtures, ["Tests/FieldWorkspaceTests", "Sources/FieldWorkspace"]],
   ["project", projectFixtures, ["Tests/FieldProductTests"]],
+  ["project", historyFixtures, ["Tests/FieldHistoryTests", "Sources/FieldHistory"]],
   ["launch", launchFixtures, ["Tests/FieldProductTests"]],
 ];
 for (const [set, fixtures, folders] of requiredMirrors) {

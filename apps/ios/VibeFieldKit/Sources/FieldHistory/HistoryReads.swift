@@ -11,6 +11,12 @@ import Observation
 // Every answer fills the same VALUES the mock fills (`HistoryCorpus`), one
 // corpus per desktop; the views never learn which filled them.
 //
+// PJ-7 (2026-10-14): the LEDGER left this reader for `HistoryProjects`
+// (`project.*` over one door — every desktop's projects grouped alike). What
+// stays per desktop is what only that desktop can answer: its standing, a
+// session's document and its tail (the row's `device` names the door), and
+// search over its own index.
+//
 // Honest states (H-D7, SP-L8): a door that stops answering leaves the corpus
 // as it was read, stamped (`readAt`), with the standing `asleep` — figures
 // dim, green withheld — and the cache replays the last read while the
@@ -89,6 +95,9 @@ public final class HistoryDesktopReader: Identifiable {
   public private(set) var failure: String?
   /// Whether this reader replays the cache (no door, or a door that stopped).
   public var isReplaying: Bool { door == nil || !standing.isAwake }
+  /// PJ-7 — the door this reader asks, which the ledger may ask too (one door
+  /// per desktop, the phone's budget): nil while it replays the cache.
+  var openDoor: (any HistoryDoor)? { closed ? nil : door }
 
   public nonisolated var id: String { deviceId }
 
@@ -107,10 +116,6 @@ public final class HistoryDesktopReader: Identifiable {
   @ObservationIgnored private var cursors: [String: String] = [:]
   @ObservationIgnored private var watermarks: [String: String] = [:]
   @ObservationIgnored private var liveSince: [String: String] = [:]
-  @ObservationIgnored private var projectRows: [IndexProjectRow] = []
-  @ObservationIgnored private var recent: [IndexSessionRow] = []
-  @ObservationIgnored private var sessionsByProject: [String: [IndexSessionRow]] = [:]
-  @ObservationIgnored private var figures: [String: IndexProjectResult] = [:]
   @ObservationIgnored private var paused = false
   @ObservationIgnored private var closed = false
 
@@ -145,11 +150,11 @@ public final class HistoryDesktopReader: Identifiable {
 
   // MARK: Lifecycle
 
-  /// Replay what the cache holds for this desktop, then read the ledger.
+  /// Replay what the cache holds for this desktop, then read its standing.
   public func start() {
     replayCache()
     guard door != nil else { return }
-    readLedger()
+    readStanding()
   }
 
   /// The app went away: the tail goes (the socket's bytes are where the cost
@@ -179,7 +184,7 @@ public final class HistoryDesktopReader: Identifiable {
 
   public func need(_ need: HistoryNeed) {
     switch need {
-    case .project(_, let id): readProject(id)
+    case .project: break
     case .session(_, let id): openSession(id)
     case .older(_, let session): readOlder(session)
     case .seen(_, let session): arrivals[session] = nil
@@ -188,15 +193,11 @@ public final class HistoryDesktopReader: Identifiable {
 
   // MARK: The cache
 
+  /// The cache's stamp for this desktop: when this phone last read it (its
+  /// documents replay on open, `replayDocument`).
   func replayCache() {
-    guard let cache else { return }
-    if let kept = cache.ledger(device: deviceId) {
-      var replayed = kept.corpus
-      replayed.desktop = name
-      replayed.deviceId = deviceId
-      replayed.readAt = FieldHistoryModel.clock(Int64(kept.readAt.timeIntervalSince1970 * 1000))
-      corpus = replayed
-    }
+    guard let cache, let kept = cache.ledger(device: deviceId) else { return }
+    corpus.readAt = FieldHistoryModel.clock(Int64(kept.readAt.timeIntervalSince1970 * 1000))
   }
 
   /// A cached document for a session this reader cannot read right now.
@@ -207,17 +208,20 @@ public final class HistoryDesktopReader: Identifiable {
     corpus.documents[sessionId] = kept.document
   }
 
-  private func keepLedger() {
-    cache?.keepLedger(corpus, device: deviceId, readAt: now())
+  private func keepStamp() {
+    cache?.keepLedger(.empty(desktop: name, deviceId: deviceId), device: deviceId, readAt: now())
   }
 
   private func stampOf(_ header: IndexSessionRow) -> String {
     "\(header.updatedAt ?? 0)"
   }
 
-  // MARK: The ledger
+  // MARK: The standing
 
-  private func readLedger() {
+  /// PJ-7 — the ledger is `HistoryProjects`' now (one door, every desktop's
+  /// projects); this reader asks its desktop only what is its own to answer:
+  /// its standing (`index.status`), a document and its tail, and search.
+  private func readStanding() {
     guard let door, !closed else { return }
     ledgerTask?.cancel()
     ledgerTask = Task { [weak self] in
@@ -226,96 +230,6 @@ public final class HistoryDesktopReader: Identifiable {
         let status = try await door.call("index.status", params: nil).decode(IndexStatusResult.self)
         guard !Task.isCancelled else { return }
         standing = FieldHistoryModel.standing(status: status)
-        let projects = try await door.call(
-          "index.projects", params: .object(["limit": .int(Int64(HistoryReads.listRows))])
-        ).decode(IndexProjectsResult.self)
-        let sessions = try await door.call(
-          "index.sessions", params: .object(["limit": .int(Int64(HistoryReads.listRows))])
-        ).decode(IndexSessionsResult.self)
-        guard !Task.isCancelled else { return }
-        projectRows = projects.rows.sorted { ($0.lastActivityAt ?? 0) > ($1.lastActivityAt ?? 0) }
-        recent = sessions.rows
-        var byProject: [String: [IndexSessionRow]] = [:]
-        for row in sessions.rows { byProject[row.projectId ?? "", default: []].append(row) }
-        for (project, rows) in byProject { sessionsByProject[project] = rows }
-        rebuildLedger()
-        keepLedger()
-        for project in projectRows.prefix(HistoryReads.prefetchFigures) where figures[project.projectId] == nil {
-          readFigures(project.projectId)
-        }
-      } catch {
-        refused(error)
-      }
-    }
-  }
-
-  private func rebuildLedger() {
-    let clock = now()
-    let counts = FieldHistoryModel.counts(projects: projectRows, sessions: recent)
-    var projects: [HistoryProject] = []
-    for (seq, row) in projectRows.enumerated() {
-      var project = FieldHistoryModel.ledgerProject(row, seq: seq, now: clock)
-      if let result = figures[row.projectId] {
-        project = FieldHistoryModel.withFigures(
-          project, result, sessions: sessionsByProject[row.projectId] ?? [], now: clock)
-      }
-      projects.append(project)
-    }
-    var sessions: [String: [HistorySession]] = [:]
-    for (projectId, rows) in sessionsByProject where !projectId.isEmpty {
-      sessions[projectId] = FieldHistoryModel.sessionRows(rows, projectId: projectId, now: clock)
-    }
-    corpus.projects = projects
-    corpus.sessions = sessions
-    corpus.live = FieldHistoryModel.liveRows(recent, now: clock)
-    corpus.sessionCount = counts.sessions
-    corpus.agentCount = counts.agents
-    corpus.readAt = FieldHistoryModel.clock(Int64(clock.timeIntervalSince1970 * 1000))
-  }
-
-  // MARK: A project
-
-  private func readProject(_ projectId: String) {
-    guard let door, !closed, tasks["project/\(projectId)"] == nil else { return }
-    tasks["project/\(projectId)"] = Task { [weak self] in
-      guard let self else { return }
-      defer { tasks["project/\(projectId)"] = nil }
-      do {
-        let listing = try await door.call(
-          "index.sessions",
-          params: .object(["projectId": .string(projectId), "limit": .int(Int64(HistoryReads.listRows))])
-        ).decode(IndexSessionsResult.self)
-        guard !Task.isCancelled else { return }
-        sessionsByProject[projectId] = listing.rows
-        rebuildLedger()
-        keepLedger()
-      } catch {
-        refused(error)
-      }
-    }
-    if figures[projectId] == nil { readFigures(projectId) }
-  }
-
-  private func readFigures(_ projectId: String) {
-    guard let door, !closed, tasks["figures/\(projectId)"] == nil else { return }
-    tasks["figures/\(projectId)"] = Task { [weak self] in
-      guard let self else { return }
-      defer { tasks["figures/\(projectId)"] = nil }
-      do {
-        let since = now().addingTimeInterval(-Double(FieldHistoryModel.figureWindowDays) * 86_400)
-        let offset = TimeZone.current.secondsFromGMT() / 60
-        let result = try await door.call(
-          "index.project",
-          params: .object([
-            "projectId": .string(projectId),
-            "sinceMs": .int(Int64(since.timeIntervalSince1970 * 1000)),
-            "offsetMinutes": .int(Int64(max(-840, min(840, offset)))),
-          ])
-        ).decode(IndexProjectResult.self)
-        guard !Task.isCancelled else { return }
-        figures[projectId] = result
-        rebuildLedger()
-        keepLedger()
       } catch {
         refused(error)
       }
@@ -405,6 +319,7 @@ public final class HistoryDesktopReader: Identifiable {
       agentLabel: agentLabel(header.provider ?? "agent"), nextCursor: cursors[sessionId],
       watermark: watermarks[sessionId], liveSince: liveSince[sessionId], now: clock)
     corpus.documents[sessionId] = document
+    keepStamp()
     cache?.keep(
       document, key: HistoryCache.Key(device: deviceId, session: sessionId, stamp: stampOf(header)),
       readAt: clock)

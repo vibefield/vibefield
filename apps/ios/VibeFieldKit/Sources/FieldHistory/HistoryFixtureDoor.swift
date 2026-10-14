@@ -12,6 +12,11 @@
   /// photographed over real-shaped rows with no desktop and no tailnet. It is
   /// not a demo path: nothing downstream of the door knows the difference.
   /// Cannot exist in Release.
+  ///
+  /// PJ-7 — it answers the ledger's `project.*` reads too (`project.list`,
+  /// `project.get`, `project.sessions`, `project.figures` and the pings' open),
+  /// so the one ledger of projects is photographed through the same reader a
+  /// desktop's door feeds. Its desktops are the goldens' (`studio`, `laptop`).
   @MainActor
   public final class HistoryFixtureDoor: HistoryDoor {
     private var tailDelivered = false
@@ -61,6 +66,16 @@
         }
         return result
       case "index.search": return try answer("index-search-result.valid")
+      case "project.list": return try answer("project-list.valid")
+      case "project.get": return try answer("project-get.valid")
+      case "project.sessions", "project.figures":
+        // the golden, answered for the project that was asked about
+        var result = try answer(method == "project.sessions" ? "project-sessions.valid" : "project-figures.valid")
+        if let asked = params?["key"]?.stringValue, var fields = result.objectValue {
+          fields["key"] = .string(asked)
+          result = .object(fields)
+        }
+        return result
       case "index.timeline":
         var page = try answer("index-timeline.valid")
         if var fields = page.objectValue {
@@ -113,6 +128,11 @@
       onSnapshot: @escaping @MainActor (JSONValue) -> Void,
       onDelta: @escaping @MainActor (JSONValue) -> Void
     ) async throws -> HistoryTailHandle {
+      if method == "project.subscribe" {
+        // the pings' open: an empty snapshot at the head, and no ping after it
+        if let snapshot = try answer("project-changes-open.snapshot")["snapshot"] { onSnapshot(snapshot) }
+        return HistoryTailHandle {}
+      }
       guard method == "index.session.subscribe" else {
         throw FieldProductError(kind: "NOT_FOUND", message: "the fixture door does not answer \(method)")
       }

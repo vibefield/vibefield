@@ -383,7 +383,7 @@ public struct HomeScreen: View {
   }
 
   private var historyTab: some View {
-    HistoryLedgerView(desktops: historyDesktops.readers, router: history) { need in
+    HistoryLedgerView(history: historyDesktops, router: history) { need in
       historyDesktops.need(need)
     }
     .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -622,6 +622,19 @@ public struct HomeScreen: View {
         historyDesktops.markOffline(deviceId: remembered.deviceId, name: remembered.name)
       }
     }
+    // PJ-7 — the one ledger of projects reads the home's door, else another
+    // answering desktop's
+    historyDesktops.chooseLedger(roster: historyRoster)
+  }
+
+  /// PJ-7 — the desktops as History's ledger draws them: the mark (the
+  /// platform), whether this phone hears it, and the home.
+  private var historyRoster: [FieldHistoryModel.RosterDesktop] {
+    (link?.desktops ?? []).map { desktop in
+      FieldHistoryModel.RosterDesktop(
+        id: desktop.deviceId, name: desktop.name, platform: desktop.platform,
+        awake: desktop.state == .ready, isHome: desktop.deviceId == link?.home)
+    }
   }
 
   /// The link's home, named so the modifier chain stays cheap to type-check.
@@ -695,7 +708,7 @@ public struct HomeScreen: View {
           if let open = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-project=") }) {
             let id = String(open.dropFirst("-vf-mock-project=".count))
             if HistoryCorpus.mock.project(id) != nil {
-              history.path = [.project(device: HistoryCorpus.mock.deviceId, id: id)]
+              history.path = [.project(id: id)]
               selectedTab = .history
             }
           }
@@ -704,7 +717,7 @@ public struct HomeScreen: View {
             let id = String(open.dropFirst("-vf-mock-session=".count))
             if let document = HistoryCorpus.mock.document(id) {
               history.path = [
-                .project(device: HistoryCorpus.mock.deviceId, id: document.projectId),
+                .project(id: document.projectId),
                 .session(device: HistoryCorpus.mock.deviceId, id: id),
               ]
               selectedTab = .history
@@ -736,8 +749,16 @@ public struct HomeScreen: View {
           demoHistory = true
           let offline = ProcessInfo.processInfo.arguments.contains("-vf-demo-history-offline")
           let door = HistoryFixtureDoor()
-          historyDesktops.attach(
-            deviceId: "dev-fixture", name: "studio", isHome: true, door: door, ownsDoor: true)
+          // PJ-7 — the goldens' own desktops: `studio` answers (its door is
+          // the fixture's), `laptop` sleeps
+          let studio = "01J9ZK3M5Q8XR2V7N4B6C1D0EF"
+          let roster = [
+            FieldHistoryModel.RosterDesktop(id: studio, name: "studio", platform: "darwin", awake: true, isHome: true),
+            FieldHistoryModel.RosterDesktop(
+              id: "01J9ZM0PQ7W3E6R8T2Y4U1I5O9", name: "laptop", platform: "win32", awake: false, isHome: false),
+          ]
+          historyDesktops.attach(deviceId: studio, name: "studio", isHome: true, door: door, ownsDoor: true)
+          historyDesktops.chooseLedger(roster: roster)
           selectedTab = .history
           let open = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-demo-history-session=") })
             .map { String($0.dropFirst("-vf-demo-history-session=".count)) }
@@ -745,29 +766,30 @@ public struct HomeScreen: View {
             // the ledger first (the reads are one in-process answer each),
             // then the document asked for, then — offline — the door goes
             var waited = 0
-            while historyDesktops.reader(for: "dev-fixture")?.corpus.projects.isEmpty ?? true, waited < 50 {
+            while historyDesktops.projects.corpus.projects.isEmpty, waited < 50 {
               try? await Task.sleep(for: .milliseconds(100))
               waited += 1
             }
             if let project = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-demo-history-project=") })
               .map({ String($0.dropFirst("-vf-demo-history-project=".count)) })
             {
-              historyDesktops.need(.project(device: "dev-fixture", id: project))
-              history.path = [.project(device: "dev-fixture", id: project)]
+              historyDesktops.need(.project(id: project))
+              history.path = [.project(id: project)]
             }
             if let open {
-              historyDesktops.need(.session(device: "dev-fixture", id: open))
+              historyDesktops.need(.session(device: studio, id: open))
               waited = 0
-              while historyDesktops.reader(for: "dev-fixture")?.corpus.document(open) == nil, waited < 50 {
+              while historyDesktops.reader(for: studio)?.corpus.document(open) == nil, waited < 50 {
                 try? await Task.sleep(for: .milliseconds(100))
                 waited += 1
               }
-              history.path = [.session(device: "dev-fixture", id: open)]
+              history.path = [.session(device: studio, id: open)]
             }
             if offline {
-              historyDesktops.forget(deviceId: "dev-fixture")
-              historyDesktops.markOffline(deviceId: "dev-fixture", name: "studio", isHome: true)
-              if let open { historyDesktops.reader(for: "dev-fixture")?.replayDocument(open) }
+              historyDesktops.forget(deviceId: studio)
+              historyDesktops.markOffline(deviceId: studio, name: "studio", isHome: true)
+              historyDesktops.chooseLedger(roster: roster)
+              if let open { historyDesktops.reader(for: studio)?.replayDocument(open) }
             }
           }
         }

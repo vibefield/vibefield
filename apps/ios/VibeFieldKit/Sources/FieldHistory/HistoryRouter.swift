@@ -5,23 +5,17 @@ import Observation
 /// read by both tabs — the search tab lands INTO the History tab, so the two
 /// have to share the stack.
 ///
-/// SP-6 — a route names its DESKTOP: History is grouped by desktop (one corpus
-/// per self desktop whose door answers), and rosetta's project id is a hash of
-/// a LOCAL path (D30), so the same checkout on two desktops is two ids that
-/// could collide only by their device. The id alone named a place when there
-/// was one desktop; the pair does now.
+/// SP-6 — a session's route names its DESKTOP: its document is read from the
+/// desktop whose copy speaks (the row's `device`), and a session id is that
+/// desktop's. PJ-7 — a project's route names its KEY alone: a project is one
+/// across every desktop (`project.*`), and a key that regrouped re-keys the
+/// route (`rekey`, D9).
 @MainActor
 @Observable
 public final class HistoryRouter {
   public enum Route: Hashable, Sendable {
-    case project(device: String, id: String)
+    case project(id: String)
     case session(device: String, id: String)
-
-    public var device: String {
-      switch self {
-      case .project(let device, _), .session(let device, _): device
-      }
-    }
   }
 
   /// A landed search: the query (the stepper's word), the ring of anchors in
@@ -61,12 +55,18 @@ public final class HistoryRouter {
       path =
         projectId.isEmpty
         ? [.session(device: device, id: sessionId)]
-        : [.project(device: device, id: projectId), .session(device: device, id: sessionId)]
-    case .project(let device, let projectId, let sessionId):
+        : [.project(id: projectId), .session(device: device, id: sessionId)]
+    case .project(let projectId, let sessionId):
       landed = nil
       rungSession = sessionId
-      path = [.project(device: device, id: projectId)]
+      path = [.project(id: projectId)]
     }
+  }
+
+  /// D9 — a project's key regrouped: every route that names it follows.
+  public func rekey(from: String, to: String) {
+    guard path.contains(.project(id: from)) else { return }
+    path = path.map { $0 == .project(id: from) ? .project(id: to) : $0 }
   }
 
   public func step(_ delta: Int) {
@@ -90,8 +90,9 @@ public final class HistoryRouter {
 /// hand these up; the home screen routes each to the desktop's reader. The
 /// mock answers none — its corpus is whole.
 public enum HistoryNeed: Equatable, Sendable {
-  /// A project was opened: its sessions and its figures.
-  case project(device: String, id: String)
+  /// A project was opened: what it is now, its sessions and its figures — asked
+  /// of the ledger's door (PJ-7: a project is one across every desktop).
+  case project(id: String)
   /// A session was opened: its header, its newest page and its tail.
   case session(device: String, id: String)
   /// The reader reached the document's top: the next older page.

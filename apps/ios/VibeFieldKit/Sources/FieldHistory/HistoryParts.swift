@@ -6,13 +6,62 @@ import SwiftUI
 /// agent's mark, the sparkline, the group head, the day header — chrome
 /// family throughout (`ChromePalette`, `ChromeType`), never the godview ink.
 enum HistoryParts {
-  /// Record §02's dealt colour for a project, under the theme's tint.
-  static func projectColor(seq: Int, scheme: ColorScheme) -> Color {
-    let c = SwarmColor.project(seq, scheme == .dark ? .dark : .light)
+  /// PJ-7 — a project's colour is its INK (DESIGN.md §2.9, `ProjectSummary.ink`
+  /// through the design kit's port), the same on every surface; the
+  /// per-device deal by sequence (record §02, D-i13) retired from History. The
+  /// mock's corpus, which no door dealt, is drawn at its sequence as a deal.
+  static func projectColor(_ project: HistoryProject?, scheme: ColorScheme) -> Color {
+    projectColor(ink: project?.ink ?? project?.seq ?? 0, scheme: scheme)
+  }
+
+  static func projectColor(ink: Int, scheme: ColorScheme) -> Color {
+    let c = SwarmColor.projectInk(ink, scheme == .dark ? .dark : .light)
     return Color(red: c.r, green: c.g, blue: c.b)
   }
 
   static let sidePadding: CGFloat = 20
+  /// DESIGN.md §8 (PJ-7): a sleeping desktop's mark, faint.
+  static let asleepMark: Double = 0.4
+}
+
+/// PJ-7 — where a project lives, as marks: one per desktop it is on, the
+/// ledger's order, left-aligned, a sleeping desktop's faint. A desktop the
+/// ledger did not read is drawn as the plain screen.
+struct DeviceMarks: View {
+  let ids: [String]
+  let desktops: [HistoryDevice]
+  var size: CGFloat = 13
+
+  var body: some View {
+    HStack(spacing: 5) {
+      ForEach(ids, id: \.self) { id in
+        let desktop = desktops.first { $0.id == id }
+        DeviceMark(platform: desktop?.platform, size: size)
+          .opacity(desktop?.asleep == true ? HistoryParts.asleepMark : 1)
+      }
+    }
+    .foregroundStyle(ChromePalette.inkFaint)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(
+      ids.map { id in desktops.first { $0.id == id }.map { $0.asleep ? "\($0.name), asleep" : $0.name } ?? "a desktop" }
+        .joined(separator: ", "))
+  }
+}
+
+/// PJ-7 — one device as a fact: its mark and its name (on the phone every
+/// desktop is elsewhere, so it is always named).
+struct DeviceName: View {
+  let device: HistoryDevice?
+  let fallback: String?
+  var size: CGFloat = 11
+
+  var body: some View {
+    HStack(spacing: 4) {
+      DeviceMark(platform: device?.platform, size: size)
+      Text(device?.name ?? fallback ?? "a desktop")
+        .lineLimit(1)
+    }
+  }
 }
 
 /// An agent's mark at 13 pt: the vendor's letter in a rounded square, the

@@ -1,0 +1,12 @@
+{
+  "//": "PJ-3 (D9) — a `project.delta` ping: no rows (a reader re-asks what it shows), the desktops whose catalogs moved, and a key move — a project's first record re-keyed it `p1:` → `r:`.",
+  "epoch": "projects-3f2a9c1e-5b7d-4e0a-9c8b-1d2e3f4a5b6c",
+  "since": 41,
+  "revision": 43,
+  "upserts": [],
+  "removed": [],
+  "regrouped": [
+    { "from": "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8", "to": "r:01JA0B1C2D3E4F5G6H7J8K9M0N" }
+  ],
+  "devices": ["01J9ZK3M5Q8XR2V7N4B6C1D0EF"]
+}
