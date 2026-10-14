@@ -24,6 +24,9 @@ public struct HomeScreen: View {
   @State private var feed = MockAgentField()
   @State private var createSheetOpen = false
   @State private var workspaceLaunch: WorkspaceLaunch?
+  /// PJ-7 — each answering desktop's Agent Profiles, read ahead so a hold can
+  /// bloom them at once (a desktop not read yet is a leaf: its default).
+  @State private var bloomProfiles: [String: [AgentProfileSet]] = [:]
   @State private var mesh = MeshModel()
   @State private var remoteField = RemoteSessionField(source: nil)
   /// IOS-4b — the live field: the devices store, the doors it names, and the
@@ -244,6 +247,11 @@ public struct HomeScreen: View {
           #endif
           beginCreate(fieldContext())
           return nil
+        },
+        bloom: bloomMenu,
+        onBloom: { choice in
+          // Q4 (a): the bloom opens the launch sheet on that desktop and profile
+          beginCreate(fieldContext(desktop: choice.desktop, profileSet: choice.profile))
         }
       ) {
         chrome
@@ -281,6 +289,7 @@ public struct HomeScreen: View {
       rememberAccount()
       syncHistoryDesktops()
       workspaceLaunch?.update(workspaceDesktops)
+      readBloomProfiles()
     }
     // SP-6 — the home moved: the History groups re-order and the home's
     // reader takes the shared door
@@ -366,6 +375,39 @@ public struct HomeScreen: View {
     let summaries = historyDesktops.projects.summaries.values.filter(FieldHistoryModel.listed)
     return LaunchContext(
       usual: summaries.flatMap { launchPlaces($0.places) }, desktop: desktop, profileSet: profileSet)
+  }
+
+  /// PJ-7 — what a hold on the field can bloom (DESIGN.md §8's phone
+  /// paragraph): every desktop, its OS mark, its state line, its profiles.
+  private var bloomMenu: BloomMenu? {
+    guard let link else { return nil }
+    let desktops = link.desktops.map { desktop in
+      let asleep = desktop.state != .ready
+      let running = liveAgents.filter { $0.join?.deviceID == desktop.deviceId }.count
+      let profiles = (bloomProfiles[desktop.deviceId] ?? []).map { set in
+        BloomProfile(
+          id: set.id, label: set.kind == "native" ? LaunchModel.nativeLabel : set.label, isDefault: set.isDefault,
+          glyph: set.glyph)
+      }
+      return BloomDesktop(
+        id: desktop.deviceId, name: desktop.name, platform: desktop.platform, asleep: asleep,
+        sub: asleep ? "ASLEEP" : running > 0 ? "\(running) RUNNING" : "IDLE", profiles: profiles)
+    }
+    return BloomMenu(desktops: desktops, home: link.home)
+  }
+
+  /// Each answering desktop's profiles not read yet, asked of its own door.
+  private func readBloomProfiles() {
+    guard let link else { return }
+    for desktop in link.desktops where desktop.state == .ready && bloomProfiles[desktop.deviceId] == nil {
+      let id = desktop.deviceId
+      Task {
+        guard let answer = try? await link.workspaceCall(on: id, method: "agents.profileSets.list"),
+          let sets = try? AgentProfileSetsResult(json: answer)
+        else { return }
+        bloomProfiles[id] = sets.sets
+      }
+    }
   }
 
   /// The desktop a project's New agent would start on (its usual place's).

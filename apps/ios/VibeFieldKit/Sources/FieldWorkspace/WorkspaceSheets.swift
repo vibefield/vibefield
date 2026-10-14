@@ -87,7 +87,12 @@ public struct CreateSessionSheet: View {
             .foregroundStyle(ChromePalette.inkSecondary)
         }
         Button {
-          Task { if await model.spawn() { dismiss() } }
+          Task {
+            // DESIGN.md §8: success or warning at the birth
+            let born = await model.spawn()
+            UINotificationFeedbackGenerator().notificationOccurred(born ? .success : .warning)
+            if born { dismiss() }
+          }
         } label: {
           HStack {
             Spacer()
