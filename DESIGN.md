@@ -2591,6 +2591,14 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   folder's name, never its path — and its last-word slot holds the session's act (Resume or Jump
   to, below) or the reason there is none. A session's document is read from its OWN desktop's door
   (the row's `device`); a desktop that does not answer shows what this phone kept, in the same words.
+  **Resume and Jump to** (Q3 (a); TP §5): an ENDED session's slot takes **Resume** — the `resume`
+  glyph and its word in a 28 pt pill — when its own desktop answers and its catalog offers it for the
+  agent (absent otherwise); `asleep` stands in its place while that desktop sleeps. A session the field
+  holds a run for (joined by the conversation's native id) takes **Jump to** instead, and a live row
+  ends in a 32 pt `jump` circle; Jump to switches to the Field and opens that run's card. On a session's
+  document the stepper's slot carries the same act with where it runs (mark, desktop, folder). A refused
+  Resume is said, never shown as a failure: `studio is asleep` · `The folder is gone` · `Signed out of
+  Claude Code on studio` · `Held under another profile on studio`.
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the
