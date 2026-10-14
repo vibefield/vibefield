@@ -16,7 +16,7 @@
 // launches write a recipe — a remote-less folder there is Temporary, and writes
 // none (LANDED "PJ-6, the launch", Found).
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentAdapterBinding } from "@vibecook/puppeteer-core";
 import type { AgentProvider } from "@vibecook/puppeteer-runtime";
@@ -35,6 +35,7 @@ import {
   killDaemonTree,
   nativeBinPath,
   nativeEndpoint,
+  removeTempRoot,
   shortTmpRoot,
   waitForMgmtEndpoint,
 } from "./native-harness";
@@ -198,7 +199,9 @@ export async function bootPhoneWorld(
       }
     }
     await Promise.all(children.map((child) => killDaemonTree(child)));
-    rmSync(root, { recursive: true, force: true });
+    // the suite's own removal: a floor still writing beside the walk retried,
+    // and a leak said on stderr, never a red on housekeeping
+    removeTempRoot(root);
   };
   try {
     await waitForMgmtEndpoint(dataDir, 30_000);
