@@ -9944,3 +9944,84 @@ terminal-door, terminal-direct, studio), smoke:canvas red on main's own AIMED ru
 
 **Owed:** RD-5a-2 — puppeteer goes exact at the release that carries the fifteen (James pushes the port branch, cuts it);
 then CI's puppeteer clone and install retire with it. rosettad as a release asset (RD-D7).
+
+## TD-0 — the trust-root has a shape: `TrustRoot`, `UpdatePolicy` and `RegistryIndexV2` in contracts, `scripts/trust-keygen.mjs`, and the ledger's `trustRootKeys` waiting on James's keys (2026-10-14; ``11c8fa67``)
+
+**Why:** the first rung of the trust ladder (`specs/trust-and-distribution.md` §9, ruled 2026-10-14, TD-1…TD-18), and
+the second of the prod-builder brief's order of work. It gives every later rung its shapes and its one key tool: TD-1 (James
+mints the root and the roles), TD-2 (WP8's bundled index under the `bundled` role), TD-3 (the signed update feed and
+policy), TD-4 (the registry's index v2).
+
+**What landed:**
+- **contracts, `trust-root.ts`:** `TrustRoot` — TUF's fields and no other (TD-16): `schemaVersion`, a monotonic `version`,
+  `expires`, the `root` key set and the three online roles. Keys are `Ed25519SpkiBase64`, the kit's encoding pinned to its
+  60-character SPKI shape (a PKCS#8 secret can never pass). The threshold must be ≤ the keys. The root is at least two keys
+  (TD-1), and EVERY key belongs to one role: the offline root is never an online key, and no role can sign another's
+  documents. Also `judgeSignedDocument` (TD-10: `rollback` before anything else, `stale` past expiry, else `accepted`) and
+  `TRUST_FRESHNESS_DAYS` (180 · 60 · 90).
+- **contracts, `update-policy.ts`:** `UpdatePolicy` — EDP-37's levers (`yanked`, `killSwitch`, `requireUserConfirmation`,
+  `floors`, `minSupported`) plus TD-3's `version`, `generatedAt`, `expires`, `channel` (nightly · beta · stable, RL4) and
+  `trustRootVersion`. This is also WP12a's schema.
+- **contracts, `plugin-distribution.ts`:** `RegistryIndexV2` beside v1 (§6.3). It carries publishers, rung, reviewer,
+  capabilities, yanked, the kill switch with its reason, stats, and per release the source commit and the attestation
+  digest. A plugin must sit in its publisher's namespace, its publisher must be registered, and it is keyed by its own id.
+  `Sha256Pin` is exported.
+- **Fixtures and refusals:** `trust-root.valid.json` (canonical, as `assemble` writes it), `update-policy.valid.json` and
+  `registry-index-v2.valid.json` hold public keys only. `trust-root.test.ts` carries 21 refusals and judgements inline
+  (every fixture file must parse). `tooling/plugin-build/test/trust-keygen-compat.test.ts` holds the script to the kit
+  both ways: canonical JSON byte for byte, keypairs, and signatures made by one and verified by the other.
+- **`scripts/trust-keygen.mjs`** (builtins only, so James runs it with no build): `keygen`, `assemble`, `sign`, `verify`,
+  `embed`, `--self-test`. Its EL7 guards:
+  - a secret is PRINTED once and only to a terminal; with stdout not a TTY it refuses unless `--secret-out` names a file,
+    written 0600, never over a file and never inside the repository;
+  - `sign` reads the secret from stdin (`security find-generic-password … -w | … --key-stdin`) or a named variable,
+    never argv;
+  - no key or document is overwritten.
+  `trust-root.json.sig` holds one base64 signature per line, one line per root key (a one-line file is exactly the kit's
+  registry signature). `verify` counts distinct trusted root keys against the threshold, refuses a rollback, and refuses
+  an expired document in words. `embed` (TD-1) copies the verified document beside the packaging config, freezes
+  `trustRootKeys` and bumps `identityRevision`. A second embedding is a rotation, verified against the first. The 23-row
+  self-test runs in preflight.
+- **The ledger and its checker:**
+  - `release-identity.json` gains `trustRootKeys` as a TD-1 blocker (identityRevision 4 → 5).
+  - `check-release-identity.mjs` gains a list format, `ed25519-spki-base64[]` (≥2 distinct keys), and a structural
+    freeze compare.
+  - The credential-blob rule now exempts a value only when it PROVES to be an Ed25519 public key, so a secret under that
+    format is refused twice.
+  - TD-1's consumer rule: the embedded `trust-root.json`'s root keys equal the frozen field, its `.sig` exists, and no
+    embedded root exists while the field is a blocker.
+  - `update-channel` accepts `nightly` (RL4).
+  - 12 new self-test rows.
+- **biome:** `**/trust-root.json` and the trust-root fixture are excluded. A signature covers exact bytes, and biome
+  collapsing a one-key array would break every signature on the embedded copy.
+
+**Validation:** contracts typecheck plus `trust-root.test.ts` 21/21; the kit's compat test plus its signing and
+canonical files 20/20; `trust-keygen --self-test` 23 rows and `check-release-identity --self-test` (12 new rows) both
+ok; the CLI refuses from an agent's shell ("stdout is not a terminal", exit 2, nothing written); `pnpm verify` EXIT 0
+on its first run (lane td0: vitest 7,707 passed / 13 skipped — 27 more than RD-5a's — and cargo 302 / 9 ignored);
+`pnpm gate:landing --with-stages` on `11c8fa67`: 23 of 26 ok (`lanes/td0/gate-11c8fa67.log`), and the three reds are
+in Found.
+
+**Found:**
+- **The gate's three reds, none of them TD-0's** (it changes no runtime code):
+  - **smoke:canvas's AIMED rung** is main's red since W7. Its test-only fix `f160cc66` (the MV lead) was not yet under
+    this tree.
+  - **smoke:godview** went red twice under load (the gate's run at load 15–83, after a test stage that peaked at 332,
+    and a rerun at 61), at two different timing-shaped steps: "the routed pane did not create …" (line-send), a
+    recurring red with about nine sightings since 10-08 on trees without this change, and "no link under a ⌘-held
+    pointer" (GT-8's link hover), a first sighting. It was green 2/2 alone on a quiet host (load 9–13;
+    `lanes/td0/godview-solo{1,2}.log`). The History lead's lane was typechecking during the first rerun; the PM held
+    the window after that (`/Volumes/SamsungRed/lanes/PM-WINDOW`).
+  - **smoke:studio** went red once ("the product to apply Studio's canvas ground timed out after 20000ms", a first
+    sighting) and was green alone (`lanes/td0/gate-11c8fa67-rerun.log`).
+- The spec's `.sig` ("one per root key that signed") had no file format; it is now one line per signature.
+- WP8's plan still names a standalone `bundledIndexPublicKey`. It is superseded by `trustRootKeys` plus the document's
+  `bundled` role (WP8-D2 as amended), so that field was never added.
+- An agent's shell cannot mint a key: the keygen refuses because stdout is not a terminal. That refusal is the guard
+  working, not a gap.
+
+**Owed:** TD-1 — James runs the hand-off in his own terminal (`draft/handover/2026-10-14-td1-james-keygen.md`: five
+keys into his keychain, assemble, sign, verify); then a
+lane runs `embed` and lands the embedded document with identityRevision 6. The `release-signing` GitHub environment and
+its two secrets are James's. The runtime verifiers (fieldd's bundled check at WP8c, the shell's `UpdateProvider` at TD-3)
+read `trust-root.json` through these contracts.
