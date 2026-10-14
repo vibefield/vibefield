@@ -2025,6 +2025,21 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   names it on its body (glyph and name, where the desktop has more than one) and its empty-pane launcher
   reads `New · Under Work`, an agent the profile has no sign-in for marked `no sign-in`. Reduced motion:
   no travel, overshoot or turning; 90ms fades; the body appears.
+  **On the phone** (PJ-7, 2026-10-14; SB §2.12, `thinking-project-places.md` §6.3, Q4 (a)): the SAME
+  geometry, transcribed — puppeteer's `views/swarm/bloom` numbers, held to it by a golden its own code
+  generates — over SwarmStage's 520 ms hold. Every desktop is a choice: ring one is the desktops (from one
+  desktop with two profiles or more, its profiles), each bud its **OS mark** (the desktop's own, §13), 48 pt,
+  92 pt out, opening upward and turning only for the field's edge and the bar, its label above — the name
+  (mono 9.5/700) over its state line (`2 RUNNING` · `IDLE` · `ASLEEP · 2 H`, mono 7.5/800). A sleeping
+  desktop's bud is dashed and faint, and letting go on it opens nothing. Reaching a desktop with two profiles
+  or more opens ring two with them; the agents' own folders read **Default** (Q5). **The hub is the home.**
+  Letting go opens the **launch sheet** on that desktop and profile, never a terminal (Q4); one desktop with
+  one profile does not bloom, and the hold opens the sheet as before. The words are the phone prototype's —
+  `New agent on studio` · `New agent as Work` · `laptop is asleep` · `Cancel` — in SF 800 over the veil, the
+  verb at 40%, one mono line under them, at the field's top when the hold is in its lower half and above the
+  bar otherwise. **Haptics:** a soft impact as the bloom opens, a selection tick at each new target, success
+  or warning at the birth (the sheet's Start). Reduced motion: the buds stand in place behind a 90 ms fade —
+  no pop, no lift.
 - **The terminal preview is Godview in miniature** (GT-7): a preview of how terminals will
   look mounts Godview's OWN parts over a depiction of the canvas — `GodviewStage` with its
   ground, the scanlines and vignette, `PaneFrameChrome`'s bands — never a painted
