@@ -9290,6 +9290,8 @@ real last pane and the second ⌘W closing the window, the rest on other heights
 bar's search stepping out in 120 ms (it changes place at once). The builder ran ~7 s of tests under the MV lead's
 proof-launch PERF.lock (22:40 PDT; the proof grades nothing, no re-run); the lock test now sits in the run command.
 
+*Correction 2026-10-14:* "the landing gate on the exact tree" in this entry was land3's three gates — `pnpm verify`, `pnpm smoke` and `pnpm smoke:godview` — not `pnpm gate:landing`, which CLAUDE.md requires at every landing. **This entry's W7 (`42f8d5b6`) turned main's smoke:canvas red** on the AIMED rung ("@'s list open with a pane to send to" — W7 stopped a launch from birthing a shell, the rung's precondition), unseen because smoke:canvas never ran here; the PM found it on 2026-10-14 and the MV lead owns the test-only fix (LANDED "PJ-7, the first phone run's fixes", Found).
+
 ## Debts, first part — fieldd's suite keeps honest budgets on a loaded host, doc-sync stops racing its own teardown, kill-matrix row 6 outlives a lost cell birth, and the logging flush takes a deadline (2026-10-12; `5040787c` · `049ce785` · `b14aaca3` · `311b2034` through lane land3, gated on the exact tree)
 
 **Why:** James ruled N10 (a) on 2026-10-12 (the After Wave 2 Docket): after Godview round 3, a debts lane beside PJ-6.
@@ -9326,6 +9328,8 @@ backoff short is the field-native owner's question.
 **Owed:** index-timeline's lost `.snapshot` (four sightings: not a budget — the frame never came; instrumented next);
 fieldd-client requests and the routed inventory read still have no bound of their own (lane dfd, next).
 
+*Correction 2026-10-14:* "the landing gate on the exact tree" in this entry was land3's three gates — `pnpm verify`, `pnpm smoke` and `pnpm smoke:godview` — not `pnpm gate:landing`, which CLAUDE.md requires at every landing; the gates it skipped (`still` and the other smokes) were not run on this tree. Main's smoke:canvas AIMED rung went red at W7 (`42f8d5b6`) and was unseen until the PM found it (LANDED "PJ-7, the first phone run's fixes", Found).
+
 ## Debts, second part — Godview's filter is kept for the run, the search steps out of the terminals' bar in 120 ms, and smoke:godview's launcher rung settles its focus before it presses (2026-10-12; `d4530fcc` · `96bd2859` · `40459cb6` through lane land3, gated on the exact tree)
 
 **Why:** the debts lane (N10 (a)), its renderer half: lane dui (`debts/ui`, brief `draft/history-finish/briefs/debts-ui.md`,
@@ -9360,6 +9364,8 @@ guard read nothing: that smoke stages no person, so History had no day head to r
 
 **Owed:** History's day heads frost (N3 (a)), its cost measured under a cover first (lane dui, next).
 
+*Correction 2026-10-14:* "the landing gate on the exact tree" in this entry was land3's three gates — `pnpm verify`, `pnpm smoke` and `pnpm smoke:godview` — not `pnpm gate:landing`, which CLAUDE.md requires at every landing; the gates it skipped (`still` and the other smokes) were not run on this tree. Main's smoke:canvas AIMED rung went red at W7 (`42f8d5b6`) and was unseen until the PM found it (LANDED "PJ-7, the first phone run's fixes", Found).
+
 ## Debts, third part — History's stuck day heads frost under the cover, measured first (2026-10-12; `29511e14` · `caa7b482` through lane land3, gated on the exact tree)
 
 **Why:** James ruled N3 (a) on 2026-10-12 (the After Wave 2 Docket): History's stuck day heads frost, DESIGN.md first,
@@ -9391,6 +9397,8 @@ computed `::before`; each arm 8 s of scripted scrolling; six paired A/B per laun
 
 **Validation:** red and green logs under `/Volumes/SamsungRed/lanes/dui/`; then the landing gate on the exact tree
 (`lanes/land3/logs/`, under this landing's sha).
+
+*Correction 2026-10-14:* "the landing gate on the exact tree" in this entry was land3's three gates — `pnpm verify`, `pnpm smoke` and `pnpm smoke:godview` — not `pnpm gate:landing`, which CLAUDE.md requires at every landing; the gates it skipped (`still` and the other smokes) were not run on this tree. Main's smoke:canvas AIMED rung went red at W7 (`42f8d5b6`) and was unseen until the PM found it (LANDED "PJ-7, the first phone run's fixes", Found).
 
 ## Debts, fourth part — index-timeline's lost frame is instrumented, a fieldd-client call can carry a bound, one hung terminal read no longer pins every pane, and every kill-matrix create outlives a lost cell birth (2026-10-12; `5997e09e` · `f6fa1e93` · `3bf6f1ed` · `68f24004` through lane land3, gated on the exact tree)
 
@@ -9441,6 +9449,8 @@ daemon's address.
   for the intended reason, but the whole smoke cannot pass offscreen (its occluded row, DK-13's debugger, DK-14's @ list,
   the HAND_* timings), so the landing gates here never run it.
 
+*Correction 2026-10-14:* "the landing gate on the exact tree" in this entry was land3's three gates — `pnpm verify`, `pnpm smoke` and `pnpm smoke:godview` — not `pnpm gate:landing`, which CLAUDE.md requires at every landing; the gates it skipped (`still` and the other smokes) were not run on this tree. Main's smoke:canvas AIMED rung went red at W7 (`42f8d5b6`) and was unseen until the PM found it (LANDED "PJ-7, the first phone run's fixes", Found).
+
 ## Debts, fifth part — the four fieldd reds that met this day's landings were the tests' own races, each proven and fixed; one upstream finding for rosetta (2026-10-12; `d41fe1d8` · `4baff058` · `a8a6e35d` · `1e4bdbdb` through lane land3, gated on the exact tree)
 
 **Why:** parts two to four each met fieldd reds on trees that did not touch fieldd (the fourth part's entry, "Found"
@@ -9477,6 +9487,8 @@ rosetta's readers skip dead pids, so it is tolerated; the fix is to arm the hand
 **Owed (the debts lane's end):** which fieldd-client callers pass a `timeoutMs` (the lead's call;
 `draft/history-finish/surveys/s-debts-fieldd.md`'s appendix); field-native's flush behind its backoff (the first part's
 entry); the rosetta finding above; smoke:canvas on the live display for N3 (the third part's).
+
+*Correction 2026-10-14:* "the landing gate on the exact tree" in this entry was land3's three gates — `pnpm verify`, `pnpm smoke` and `pnpm smoke:godview` — not `pnpm gate:landing`, which CLAUDE.md requires at every landing; the gates it skipped (`still` and the other smokes) were not run on this tree. Main's smoke:canvas AIMED rung went red at W7 (`42f8d5b6`) and was unseen until the PM found it (LANDED "PJ-7, the first phone run's fixes", Found).
 
 ## The field dissolves under the head — the swarm's spill fades under the Stories row, diagnosed and measured first (2026-10-12; `619535b1`, one commit through lane mvland (`mv/head-band-wall`), rebased clean from `3a48d4ed` on `15bfb9ae` with the same patch-id, gated on the exact tree)
 
@@ -9587,6 +9599,8 @@ available", load ~200): the birth-race class the debts lane cured in the kill ma
 - agent-session MF-1f/MF-1g's create, through the retry the kill matrix got;
 - the phone's launch rows (PJ-7); the full launch dialog (a room ask).
 
+*Correction 2026-10-14:* "the landing gate on the exact tree" in this entry was land3's three gates — `pnpm verify`, `pnpm smoke` and `pnpm smoke:godview` — not `pnpm gate:landing`, which CLAUDE.md requires at every landing; the gates it skipped (`still` and the other smokes) were not run on this tree. Main's smoke:canvas AIMED rung went red at W7 (`42f8d5b6`) and was unseen until the PM found it (LANDED "PJ-7, the first phone run's fixes", Found).
+
 ## PJ-6, Resume — a resumed session starts at the model and the effort it was launched at, or says why it cannot (2026-10-12; `64281956` · `874232d6` · `cf5ec385` through lane land3, gated on the exact tree)
 
 **Why:** James ruled PJ-6's Q4 on 2026-10-12: Resume starts at the session's own launch selection — reversing one line
@@ -9622,6 +9636,8 @@ the terminals up through that run's body), so the Resume rung runs after them.
 **Owed:** a live native resume for Claude, Kimi, Pi, Copilot, Antigravity and Grok (their evidence is help text and
 argv; Codex's was probed live); the PJ-6 entry above's list (the room ask retiring `turn-page.ts`, the catalogs across a
 restart, agent-session MF-1f/MF-1g's create).
+
+*Correction 2026-10-14:* "the landing gate on the exact tree" in this entry was land3's three gates — `pnpm verify`, `pnpm smoke` and `pnpm smoke:godview` — not `pnpm gate:landing`, which CLAUDE.md requires at every landing; the gates it skipped (`still` and the other smokes) were not run on this tree. Main's smoke:canvas AIMED rung went red at W7 (`42f8d5b6`) and was unseen until the PM found it (LANDED "PJ-7, the first phone run's fixes", Found).
 
 ## The swarm's crowd fits its field — one shared scale with a floor, a pull that takes the field's shape, and words that step down (2026-10-14; `ca9b9992` · `8a851973` through lane mvland (`mv/swarm-fit`) on `deeb6e6a`, puppeteer `vf/swarm-fit` `d3e82aa` fast-forwarded onto puppeteer main, gated on the exact tree)
 
@@ -9823,6 +9839,8 @@ once under load 34–47 (green alone in 9.2 s, and in the next gate) — a load 
 rows call `terminal.list`/`agent.list` on a just-restarted daemon without waiting for its floor (`untilListed` exists); a desktop's
 last-seen time on the roster (the phone's sleeping bud reads "ASLEEP", not "ASLEEP · 2 H").
 
+*Correction 2026-10-14:* "the landing gate on the exact tree" in this entry was land3's three gates — `pnpm verify`, `pnpm smoke` and `pnpm smoke:godview` — not `pnpm gate:landing`, which CLAUDE.md requires at every landing; the gates it skipped (`still` and the other smokes) were not run on this tree. Main's smoke:canvas AIMED rung went red at W7 (`42f8d5b6`) and was unseen until the PM found it (LANDED "PJ-7, the first phone run's fixes", Found).
+
 ## PJ-7, the kit half — the phone reads History over `project.*`, launches by place at a profile, a model and an effort, blooms, resumes and jumps; a launch from the phone lands in the named place on the named desktop (2026-10-14; `220f9b81` · `ce4156a0` · `5620a87f` · `0fbbed8c` · `62764133` · `e0e35864` · `09715ca2` · `ae95fd10` · `081d32e5` · `26ae5ffd` · `7e17c243` · `e8668896` · `1afea9e6` through lane land3, gated on the exact tree)
 
 **Why:** PJ-7's second lane, pj7k (the iOS kit), on the daemon half landed above (plan `draft/project-places/build-pj7.md`;
@@ -9878,6 +9896,8 @@ reader and a mirror but no screen asks it yet.
 **Owed:** the over-the-air run on James's phone (the kit's tests and the simulator are not his phone); renders of the
 sheet, the ledger, the project screen and a session row for James (only the bloom's were made:
 `lanes/pj7k/shots/bloom-*.png`); the roster's last-seen time.
+
+*Correction 2026-10-14:* "the landing gate on the exact tree" in this entry was land3's three gates — `pnpm verify`, `pnpm smoke` and `pnpm smoke:godview` — not `pnpm gate:landing`, which CLAUDE.md requires at every landing; the gates it skipped (`still` and the other smokes) were not run on this tree. Main's smoke:canvas AIMED rung went red at W7 (`42f8d5b6`) and was unseen until the PM found it (LANDED "PJ-7, the first phone run's fixes", Found).
 
 ## RD-5a, the rosetta half — rosetta goes exact: `@vibefield/rosetta-protocol` and `@vibefield/rosetta-room` 0.1.1 from the registry, rosettad still built from the pin, now `43485458`; puppeteer stays linked, its release lacks what the pin has (2026-10-14; ``fe01ac79``)
 
@@ -10025,3 +10045,65 @@ keys into his keychain, assemble, sign, verify); then a
 lane runs `embed` and lands the embedded document with identityRevision 6. The `release-signing` GitHub environment and
 its two secrets are James's. The runtime verifiers (fieldd's bundled check at WP8c, the shell's `UpdateProvider` at TD-3)
 read `trust-root.json` through these contracts.
+
+## PJ-7, the first phone run's fixes — History says when the index is down and rebuilds it after an upgrade, a folder list never waits behind mille's watcher, the first launch sheet draws, an agent's card can attach again, and the index can be restarted from History (2026-10-14; `b030de84` · `347c8c89` · `e201c95a` · `c2860c5d` · `b99f8331` · `b0c00213` · `6da4cf2b` through lane land3, gated in full on the exact tree)
+
+**Why:** James's computer-use tester ran PJ-7 on his iPhone (`draft/testing/pj7-phone-test-plan.md`; results
+`draft/testing/pj7-phone-results-2026-10-14.md`): 6 PASS, 3 FAIL, 23 blocked. The block was environmental — the dev
+History index sat at rosetta schema 24 under a rosettad that expects 27, and rosetta fails an old projection closed by
+design; the lead ran `rosettad rebuild` on it (James: "just rebuild it") — but the run exposed what a user would meet
+after any rosetta upgrade, and five more defects. James launched a session, **the fixer**, to "fix all the stuff"; it
+built lane fix7 from the lead's brief (`draft/project-places/briefs/fix7.md`).
+
+**What landed:**
+- `b030de84` **fieldd rebuilds an index of another schema.** On rosetta's own mismatch line (`SchemaVersionMismatch {
+  found, expected }`, or its Display form) the rosettad supervisor runs `rosettad rebuild` with the same `--db`,
+  `--home` and `--enroll` serve gets — rosetta's validated rebuild into a private sibling, installed only when every
+  runtime replays — says `rebuilding` (a new INDEX_PHASES value, golden `index-status.rebuilding`), then serves again.
+  Once per mismatch; never charged to the restart intensity; a failed rebuild ends `failed` in rosetta's words. Before
+  it, an upgraded user's History retried five times and stopped (the real-binary row on main's supervisor fails with the
+  phone run's own words).
+- `347c8c89` **the phone's History says its door's index** (a PJ-7 regression: the projects reader had dropped SP-6's
+  `index.status`): starting, rebuilding, indexing · N %, or "studio's index has stopped" with fieldd's reason; "No
+  project in your desktops' index yet" only over a ready index.
+- `e201c95a` **a folder list never waits without end on its files engine.** The run's 20 s list timeouts were inside
+  mille (`c8160d5`): every filesystem-facing call arms a recursive watcher on the engine's root, and its batches
+  reconcile under the engine's one `policy_gate`, which `resync` needs too — one probe list on the SSD waited 44.5 s, 37 s
+  of it in resync. On our side, without patching mille: a list waits at most 4 s on its engine and a held engine is
+  retired for a fresh one, once; search resolves hits in a short-lived engine of its own, bounded and marked partial when
+  cut; concurrent searches of one subtree share a walk. `engine.ts`'s "row-only engines have no watcher" is corrected at
+  its source.
+- `b99f8331` **the first launch sheet draws.** The blank sheet (`L8-blank-sheet.png`, full height, no title) was a
+  presentation race: `.sheet(isPresented:)` read a model set in the same update; it is `.sheet(item:)` now. The sheet's
+  rows also draw at once and say what they wait on, and the Agent row no longer says "No agent available" while reading.
+- `b0c00213` **an agent's card attaches again.** fieldd was right — an adopted run's row carries its terminal — but the
+  card had no act for it since TM-5 retired the store IOS-4c's ATTACH rode; only DEBUG `-vf-auto-attach` attached (as
+  Phase 0 did). The card offers ATTACH for its own run's terminal.
+- `6da4cf2b` **Restart the index, in desktop History.** `system.index.restart` — the "restart affordance" fieldd's
+  failed sentence named — had no caller, and could have none: it rode `native.admin`, which no window holds. It moves to
+  `agents.manage` (the lead's ruling, recorded in the plan: the window holds it, local-only, never plugin-eligible; the
+  index's enrolment already lives in Settings → Agents), and History's failed state carries the button; fieldd's
+  sentence names it; the phone says the restart is in History on that desktop (no phone act, P2).
+- `c2860c5d` **DEBTS:** agent-gateway's "row 3 — the shell exits under it" waits for the shell's death as it waits for the
+  agent's (the MV lead's red on `562ea33a`; the floor's ladder ends the agent first, and a zombie reads alive); its four
+  typed-run births go through `born`.
+
+**Validation:** red first (`/Volumes/SamsungRed/lanes/fix7/red-*.log`, and the kit's under `logs/`); the lane's
+`gate.sh` (verify, smoke, smoke:godview), the kit's whole suite (1,101 tests) and the PJ-7 simulator witness, all EXIT 0
+on the lane's tip `fa535b29` (on `562ea33a`; replayed onto main `fb9efdb3`, PT-6b, the browser pane, for this landing); then, for the first time on this lead's landings, **`pnpm gate:landing --with-stages` in full** — every
+verify stage and every smoke — plus the kit's suite and the witness, on the exact tree (`lanes/land3/logs/`, under this
+landing's sha).
+
+**Found:** item 6 of the run ("the Debug build waited for Connect") is not a regression — `MeshModel.connect()` is the
+user's deliberate act in every build, and only DEBUG `-vf-auto-connect` starts it at launch; the test plan's claim was
+wrong and is corrected. The floor's own "use the restart affordance" (`native-supervisor.ts`, `system.native.restart`)
+has no caller either — whether a window may offer a restart that ends every terminal is James's. rosetta's rebuild
+reports no progress, so `rebuilding` claims none. **The lead's landings since 10-12 ran three gates, not
+`gate:landing`** (the PM's finding): main's smoke:canvas has been red since W7 (`42f8d5b6`, GV round 3) on the AIMED
+rung — the rung's precondition went stale when W7 stopped a launch from birthing a shell — and the MV lead owns its
+test-only fix; the entries concerned carry dated corrections.
+
+**Owed:** the upstream ask to mille (James's): a watch-off option for row-only engines, or reconciles that do not share
+the gate with watcher batches; a real-SSD witness of an engine retirement (the post-fix probe saw no stall: 286 lists,
+max 19 ms, against 27–37 s before — suggestive only); the presentation fix and ATTACH on a device — the tester's rerun of
+the blocked cases.
