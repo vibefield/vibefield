@@ -158,7 +158,7 @@ extension FieldHistoryModel {
     case .failed(let reason)?:
       return (
         "\(desktop)'s index has stopped",
-        "\(sentence(reason)) History reads nothing from it until it runs again.")
+        "\(sentence(reason)) History on this phone reads nothing from it until it runs again; its restart is in History on \(desktop).")
     case .unconfigured(let reason)?:
       return ("\(desktop) runs no history index", reason.map(sentence) ?? "Its desktop was started without one.")
     case .stopped?:

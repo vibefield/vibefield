@@ -14,6 +14,7 @@ import {
 import {
   type CSSProperties,
   type ReactElement,
+  type ReactNode,
   type RefObject,
   useEffect,
   useRef,
@@ -133,6 +134,9 @@ export interface HistoryRoomViewProps {
    * the room as rosetta's app shows it. Memoized by the controller — the room
    * calls them as it renders. */
   inputs?: RoomHostInputs;
+  /** fix7 — the frame's own act under the room (the index's restart while it
+   * has failed; `index-restart.tsx`): VibeField's, not the room's. */
+  act?: ReactNode;
 }
 
 export function HistoryRoomView({
@@ -144,6 +148,7 @@ export function HistoryRoomView({
   keys,
   roomRef,
   inputs,
+  act = null,
 }: HistoryRoomViewProps): ReactElement {
   const [layers, setLayers] = useState<HTMLDivElement | null>(null);
   // An object ref, not a ref callback: the room's handle type is declared in
@@ -187,6 +192,7 @@ export function HistoryRoomView({
           {...inputs}
         />
       </div>
+      {act}
       <div className="vf-history-layers" ref={setLayers} />
     </div>
   );

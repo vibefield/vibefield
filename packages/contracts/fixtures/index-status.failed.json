@@ -7,7 +7,7 @@
   },
   "rosettad": {
     "phase": "failed",
-    "detail": "restart intensity exceeded (5 in 60000ms) — something is wrong with rosettad itself; use the restart affordance to try again",
+    "detail": "restart intensity exceeded (5 in 60000ms) — something is wrong with rosettad itself; Restart the index in the desktop's History to try again",
     "pid": null,
     "protocolVersion": null
   },

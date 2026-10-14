@@ -273,14 +273,15 @@ struct HistoryProjectsTests {
     let projects = HistoryProjects(source: studio, door: door, roster: roster)
     projects.start()
     await settle("the listing") { door.count("project.list") >= 1 && projects.index != nil }
-    let reason = "restart intensity exceeded (5 in 60000ms) — something is wrong with rosettad itself; use the restart affordance to try again"
+    let reason = "restart intensity exceeded (5 in 60000ms) — something is wrong with rosettad itself; Restart the index in the desktop's History to try again"
     #expect(projects.index == .failed(reason: reason))
     #expect(projects.standing == .connected, "the door answers; its index does not")
     #expect(projects.sourceName == "studio")
     let empty = FieldHistoryModel.emptyLedger(standing: projects.standing, index: projects.index, desktop: projects.sourceName)
     #expect(empty.title == "studio's index has stopped")
     #expect(empty.text.hasPrefix("Restart intensity exceeded (5 in 60000ms)"))
-    #expect(empty.text.hasSuffix("History reads nothing from it until it runs again."))
+    // the restart is the desktop's (P2: the phone reads), and the phone says where
+    #expect(empty.text.hasSuffix("History on this phone reads nothing from it until it runs again; its restart is in History on studio."))
     #expect(!empty.title.contains("No project"))
     #expect(FieldHistoryModel.indexSentence(projects.index, desktop: projects.sourceName) == "studio's index has stopped")
     // the index is asked on the ledger's door, before the listing it explains

@@ -28,6 +28,9 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 // dies is restarted with backoff; a rosettad that keeps dying stops being
 // restarted (bounded intensity, TC-D1's shape) and the state says "failed" with
 // a restart affordance (`system.index.restart`) — never a spin, never a blank.
+// (*Since 2026-10-14, fix7:* that affordance is desktop History's "Restart the
+// index" button, and the failed sentence names it; until then no window
+// could reach the door.)
 // Two failures are TERMINAL on sight because retrying cannot fix them: a
 // protocol mismatch (the wrong binary for this fieldd) and a spawn that cannot
 // happen (ENOENT/EACCES).
@@ -685,7 +688,7 @@ export class RosettadSupervisor extends EventEmitter {
       this.publish({
         phase: "failed",
         origin: null,
-        detail: `restart intensity exceeded (${this.t.RESTART_MAX} in ${this.t.RESTART_WINDOW_MS}ms) — something is wrong with rosettad itself; use the restart affordance to try again`,
+        detail: `restart intensity exceeded (${this.t.RESTART_MAX} in ${this.t.RESTART_WINDOW_MS}ms) — something is wrong with rosettad itself; Restart the index in the desktop's History to try again`,
       });
       return false;
     }

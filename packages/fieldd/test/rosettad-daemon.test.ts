@@ -261,7 +261,8 @@ describe("rosettad through fieldd (AR-0)", () => {
         .filter((n) => n.method === "system.health.delta" && n.params.subId === sub.subId)
         .map((n) => n.params.payload as FielddHealth);
 
-    // the registry scope gate: a window token holds no native.admin
+    // the registry scope gate: a window token holding no agents.manage (it was
+    // native.admin until fix7) is refused
     const denied = await win.callErr("system.index.restart", {});
     expect(denied.data?.kind).toBe("FORBIDDEN_SCOPE");
     expect(alive(firstPid)).toBe(true);
@@ -285,6 +286,23 @@ describe("rosettad through fieldd (AR-0)", () => {
     }
     const secondOrigin = daemon.rosettad?.state().origin as string;
     for (const d of deltas()) expect(JSON.stringify(d)).not.toContain(secondOrigin);
+
+    // fix7 — the door rides `agents.manage` since 2026-10-14: the window's
+    // token holds it (bootstrap.ts), so desktop History's "Restart the index"
+    // reaches it; a window without it is refused as above
+    const admin = (await shell.call("system.mintWindowToken", {
+      scopes: ["agents.manage"],
+      label: "window-3",
+      rendererParticipant: rendererParticipant("3"),
+    })) as { token: string };
+    const history = await openRpc(daemon.controlPort);
+    await helloAs(history, admin.token);
+    const restarted = (await history.call("system.index.restart", {})) as {
+      rosettad: RosettadHealth;
+    };
+    expect(restarted.rosettad.phase).toBe("ready");
+    expect(restarted.rosettad.pid).not.toBe(secondPid);
+    expect(Object.keys(restarted.rosettad).sort()).toEqual(PROJECTION_KEYS);
   });
 
   it("the stop ladder puts the daemon down: after stop() the child and its announce file are gone", async () => {

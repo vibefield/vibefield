@@ -76,6 +76,27 @@
   }
 }
 
+/* fix7 (DESIGN.md §8 "History" — the index's failed state carries its act):
+   the frame's own band under the room's state, centred in the room's box,
+   above the reserve — the button, then what it did in the line's words. The
+   room keeps its own words above it. */
+.vf-history-index-act {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--vf-history-reserve) + 48px);
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  max-width: 480px;
+}
+
+.vf-history-index-act-words {
+  margin: 0;
+  color: var(--vf-text-secondary);
+  text-align: center;
+}
+
 /* M6, the floor the room asks of its host (the reference host's own rule,
    scoped to the room and its layers): motion collapses under reduced motion. */
 @media (prefers-reduced-motion: reduce) {

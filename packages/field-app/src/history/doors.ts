@@ -2,6 +2,7 @@ import {
   AGENT_CATALOG_READERS,
   INDEX_MESH,
   type IndexCatalogSource,
+  type IndexPhase,
   IndexSearchResult,
   type IndexSession,
   IndexSessionsResult,
@@ -588,6 +589,11 @@ export interface HistoryCatalogPort extends CatalogPort {
   /** The index's state in the frame's words while it cannot answer, or null:
    * what the room says under "rosettad is not answering". */
   words(): string | null;
+  /** fix7 — the index's phase as `index.status` last answered it (null:
+   * not answered yet, or fieldd itself did not answer): the frame's act for a
+   * FAILED index (DESIGN.md §8 "History" — Restart the index) keys on it.
+   * Its changes are said through `onWordsChange`. */
+  indexPhase(): IndexPhase | null;
   onWordsChange(listener: () => void): () => void;
   dispose(): void;
 }
@@ -606,6 +612,13 @@ export function catalogPortOver(
     listing: null,
   };
   const currentWords = (): string | null => said.connection ?? said.status ?? said.listing;
+  /** fix7 — the index's phase, as `index.status` last answered it */
+  let phase: IndexPhase | null = null;
+  const setPhase = (next: IndexPhase | null): void => {
+    if (phase === next) return;
+    phase = next;
+    for (const listener of [...wordsListeners]) listener();
+  };
   /** The newest topology a listing answered — for search's filters. */
   let lastMeta: MetaState | null = null;
   let lastSections: HistorySections | null = null;
@@ -1003,10 +1016,13 @@ export function catalogPortOver(
       try {
         status = IndexStatus.parse(await withSignal(client.request("index.status", {}), signal));
       } catch (cause) {
-        if (signal?.aborted !== true)
+        if (signal?.aborted !== true) {
           say("status", `Fieldd is not answering — ${refusalWords(cause)}`);
+          setPhase(null);
+        }
         throw cause;
       }
+      setPhase(status.phase);
       const answer = catalogStatusOf(status);
       if (answer === null) {
         const words = statusWords(status);
@@ -1123,6 +1139,8 @@ export function catalogPortOver(
     },
 
     words: currentWords,
+
+    indexPhase: () => phase,
 
     onWordsChange(listener) {
       wordsListeners.add(listener);

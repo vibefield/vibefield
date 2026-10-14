@@ -710,6 +710,38 @@ describe("the catalog port's meta feed (AR-8c; PJ-4)", () => {
     expect(catalog.unavailable?.()).toBe("The agent index is failed: exited 101");
   });
 
+  it("fix7: keeps the index's phase beside its words — FAILED is what the frame's restart keys on — and says each change", async () => {
+    let phase = "failed";
+    const catalog = catalogPortOver(
+      client({
+        "index.status": () => ({
+          ...(fixture("index-status.valid.json") as object),
+          phase,
+          rosettad: {
+            phase,
+            detail: "restart intensity exceeded",
+            pid: null,
+            protocolVersion: null,
+          },
+        }),
+      }),
+    );
+    expect(catalog.indexPhase()).toBeNull();
+    let heard = 0;
+    catalog.onWordsChange(() => {
+      heard += 1;
+    });
+    await expect(catalog.status()).rejects.toThrow();
+    expect(catalog.indexPhase()).toBe("failed");
+    expect(heard).toBeGreaterThanOrEqual(1);
+    // the restart took: the phase moves and is said
+    phase = "live";
+    heard = 0;
+    await catalog.status();
+    expect(catalog.indexPhase()).toBe("live");
+    expect(heard).toBeGreaterThanOrEqual(1);
+  });
+
   it("PJ-4 (H2): shares ONE project.figures flight between the panel's figures and its usage, by the PJ key; a day is project.figuresDay", async () => {
     const door = scripted({ sessions: [SESSIONS] });
     const catalog = catalogPortOver(door);

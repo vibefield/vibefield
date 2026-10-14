@@ -2267,7 +2267,16 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     answer keeps the room's own **"rosettad is not answering"** (or "Connecting to rosettad") with
     fieldd's own words under it — "The agent index is starting", "The agent index is failed: …",
     "The history catalog has not read the index yet (connecting)", "Fieldd is not answering
-    (reconnecting)" — never a blank. An index waiting for consent, nothing enrolled, says ours:
+    (reconnecting)" — never a blank. **An index that has FAILED carries its act** (fix7,
+    2026-10-14 — until then the failed sentence named "the restart affordance" and no window
+    offered one): under the room's words, centred in the room's box and 48 above the reserve, the
+    frame's own band — **Restart the index** (`UiButton`, primary), then what it did in the line's
+    words (`--vf-text-secondary`): "Restarting the index…" on the button while it runs, then "The
+    index is running again." · "The index is rebuilding." · "The index stopped again — ‹fieldd's
+    words›" · "Could not restart the index — ‹the refusal›". fieldd's failed sentence names the
+    button: "… Restart the index in the desktop's History to try again". The PHONE shows the
+    failed state in the same words and offers no act (P2: the phone reads); its sentence is the
+    one that names the desktop. An index waiting for consent, nothing enrolled, says ours:
     **"No agent's history is read yet"** — "Nothing is enrolled yet, so the index reads nothing.
     Choose whose history it reads in Settings → Agents." (No count is claimed: a desktop with no
     agents to find waits the same way.) A recorded file says
@@ -2606,13 +2615,14 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   is rebuilding its index` · `studio is indexing · 61%` · `studio's index has stopped` · `studio runs
   no history index` — the project screen carries the same line under its head, and an EMPTY ledger
   says it as its note, with fieldd's own words after it: **"studio's index has stopped"** — "‹fieldd's
-  reason›. History reads nothing from it until it runs again." · **"studio is rebuilding its
+  reason›. History on this phone reads nothing from it until it runs again; its restart is in History
+  on studio." (the restart is the desktop's act — P2, the phone reads) · **"studio is rebuilding its
   index"** — "studio's VibeField reads history in a newer form, so it is rebuilding its index from
   what it recorded; its projects arrive when that ends." · **"studio's index is starting"** — "Its
   projects arrive when it is ready." · **"studio is reading its history"** — "8,400 of 13,700
   sessions read; its projects arrive as it reads." "No project in your desktops' index yet" is said
-  only over an index that is READY (or a desktop whose door offers no `index.status`). No restart
-  is offered or promised: no window offers the index's restart yet. While it is not ready the
+  only over an index that is READY (or a desktop whose door offers no `index.status`). The phone
+  offers no restart; desktop History's failed state carries **Restart the index**. While it is not ready the
   ledger is read again every few seconds (nothing pings when it becomes ready).
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder

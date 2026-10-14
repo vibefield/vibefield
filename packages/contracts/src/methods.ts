@@ -286,10 +286,18 @@ export const METHODS: MethodDef[] = [
   // AR-0 — the index daemon's escalation affordance (rosettad; the same
   // posture as system.native.restart: local admin only). Answers the health
   // projection — the daemon's origin never crosses this surface (EL7).
+  // *Corrected 2026-10-14 (fix7, PJ-7's first phone run):* under
+  // `native.admin` no window could call it — the window's token holds no
+  // native.admin, and no surface did — so the "restart affordance" the
+  // supervisor's failed sentence named did not exist. It rides `agents.manage`
+  // now: the window holds it (bootstrap.ts — the Agents settings section's
+  // attended acts on this machine's agents), it is local-only and in no
+  // tailnet preset or plugin eligibility table, the same posture; desktop
+  // History's index-failed state carries the button (DESIGN.md §8).
   defineMethod({
     surface: "product",
     method: "system.index.restart",
-    scope: "native.admin",
+    scope: "agents.manage",
     idempotent: false,
     locality: "local",
   }),

@@ -48,6 +48,7 @@ import {
   NO_HOST_STATE,
 } from "./host-inputs";
 import { deviceOf, EMPTY_HOST_MODEL, type HistoryHostModel, hostModelOf } from "./host-model";
+import { HistoryIndexRestart } from "./index-restart";
 import { readLiveRun } from "./jump";
 import { launchActs } from "./launch-acts";
 import { useHistoryOpenAt } from "./open-at";
@@ -105,6 +106,11 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
   const words = useSyncExternalStore(
     useCallback((listener: () => void) => ports.catalog.onWordsChange(listener), [ports]),
     () => ports.catalog.words(),
+  );
+  // fix7 — the index's phase: FAILED carries the frame's restart (DESIGN.md §8)
+  const indexPhase = useSyncExternalStore(
+    useCallback((listener: () => void) => ports.catalog.onWordsChange(listener), [ports]),
+    () => ports.catalog.indexPhase(),
   );
 
   /* ── the host model (PJ-4): one per listing, gathered while History shows ── */
@@ -401,6 +407,7 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
     <HistoryRoomMount
       ports={ports}
       unavailable={words}
+      act={indexPhase === "failed" ? <HistoryIndexRestart client={fieldd} /> : null}
       onSelect={setSelection}
       openAt={openAt}
       keys={keys}
