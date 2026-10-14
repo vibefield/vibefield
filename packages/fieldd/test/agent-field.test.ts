@@ -160,22 +160,34 @@ describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
     }
   });
 
-  it("speaks the same vocabulary as the golden the phone decodes", () => {
+  it("speaks the same vocabulary as the goldens the phone decodes", () => {
     // The contracts suite asserts the GOLDEN carries no content; this asserts
-    // the PRODUCER and that golden cannot drift apart — a fixture nobody
+    // the PRODUCER and those goldens cannot drift apart — a fixture nobody
     // produces is a fixture that can quietly stop describing the product.
-    const fixture = join(
-      dirname(fileURLToPath(import.meta.url)),
-      "..",
-      "..",
-      "contracts",
-      "fixtures",
+    // PJ-7 — the native id joined the row in a golden of its own: the slice's
+    // is the kit's mirror and stays byte for byte as it shipped.
+    const rows = [
       "agent-field-slice.valid.json",
+      "agent-field-snapshot.native-session.json",
+    ].flatMap(
+      (name) =>
+        (
+          JSON.parse(
+            readFileSync(
+              join(
+                dirname(fileURLToPath(import.meta.url)),
+                "..",
+                "..",
+                "contracts",
+                "fixtures",
+                name,
+              ),
+              "utf8",
+            ),
+          ) as { rows: Array<Record<string, unknown>> }
+        ).rows,
     );
-    const golden = JSON.parse(readFileSync(fixture, "utf8")) as {
-      rows: Array<Record<string, unknown>>;
-    };
-    const goldenKeys = [...new Set(golden.rows.flatMap((row) => Object.keys(row)))].sort();
+    const goldenKeys = [...new Set(rows.flatMap((row) => Object.keys(row)))].sort();
     // the golden exercises every field the contract names — no more, no less
     expect(goldenKeys).toEqual(CONTRACT_KEYS);
     // and every key this producer can emit is one that golden shows
@@ -227,6 +239,17 @@ describe("projectFieldRow — facts kept, content dropped (§10.1)", () => {
     // a shape this projection cannot read is simply absent, never a throw
     expect(projectFieldRow(summary({ effort: { configured: "high" } })).effort).toBeUndefined();
     expect(projectFieldRow(summary({})).effort).toBeUndefined();
+  });
+
+  it("PJ-7 (Q3 (a)) — carries the conversation's provider-native id, so a History row finds the card it jumps to; the id, never the folder", () => {
+    const row = projectFieldRow(summary({ cwd: "/Users/james/Projects/repo" }));
+    expect(row.nativeSessionId).toBe("run-1-native");
+    // the fold's own key stays home; only the id travels, by its contract name
+    expect(Object.keys(row)).not.toContain("sessionId");
+    expect(JSON.stringify(row)).not.toContain("/Users/james");
+    // the id moves with the fold's (a configured claim corrected by observation)
+    const corrected = projectFieldRow({ ...summary({}), sessionId: "observed-later" });
+    expect(corrected.nativeSessionId).toBe("observed-later");
   });
 
   it("names the FOLDER and never the path (EL7 B1), honestly about git", () => {

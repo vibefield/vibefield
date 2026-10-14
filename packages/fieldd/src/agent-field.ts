@@ -324,6 +324,10 @@ export function projectFieldRow(summary: AgentSessionSummary): ProjectedFieldRow
         }
       : {}),
     ...(project !== undefined ? { project } : {}),
+    // PJ-7 (Q3 (a)) — the provider-native id the fold joins on, so the phone's
+    // History row finds the card it jumps to. The id, never the folder: the
+    // path stays on this desktop's window cut (`localFactsOf`, EL7 B1).
+    nativeSessionId: summary.sessionId,
     // The join, verbatim: `{hosted, runtimeSessionId, cellBootId?,
     // workloadClass?, replaced?}` is what a body's card attaches THROUGH (G3),
     // and every field of it is already content-free.

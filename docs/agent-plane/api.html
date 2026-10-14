@@ -1845,7 +1845,7 @@
                   <tr><td><span class="route">deviceId</span></td><td><p>the publishing device's mesh identity — the slice key's own value</p></td></tr>
                   <tr><td><span class="route">publishedAt · expiresAt</span></td><td><p>the honesty clause. A slice expires 30 s after it is written and a live publisher refreshes it every 10 s while it has rows; a graceful stop publishes empty rows with the clock already past, so a desktop that died fades rather than haunting every phone. Writes coalesce at 250 ms, the phone's foreground cadence.</p></td></tr>
                   <tr><td><span class="route">revision</span></td><td><p>the board's own counter, which orders frames</p></td></tr>
-                  <tr><td><span class="route">rows</span></td><td><p><code>AgentFieldRow[]</code> — identity, status and clocks, liveness, blocker shapes, two usage numbers, a context percentage, model and effort, the folder name, the terminal join</p></td></tr>
+                  <tr><td><span class="route">rows</span></td><td><p><code>AgentFieldRow[]</code> — identity, status and clocks, liveness, blocker shapes, two usage numbers, a context percentage, model and effort, the folder name, the terminal join, and since PJ-7 the conversation's provider-native id (<code>nativeSessionId</code>, the fold's <code>sessionId</code>; never the folder)</p></td></tr>
                   <tr><td><span class="route">omitted</span></td><td><p>how many rows the byte cap left out, absent when the board is whole. The door is never capped; only the slice is.</p></td></tr>
                 </tbody>
               </table>

@@ -123,10 +123,11 @@ export const AgentFieldRow = z
       .passthrough()
       .optional(),
     /** PJ-7 (Q3 (a)) — the provider-native id of the conversation the run
-     * continues (the fold's `sessionId`), so a History row by that id finds
-     * the card to jump to. The id only, never the folder: the path stays on
-     * this desktop's own windows (`AgentModelLocalFacts.cwd`, EL7 B1). Absent
-     * until the agent has said it. */
+     * continues (the fold's `sessionId`: puppeteer's configured claim until an
+     * adapter observes the id, then the observed one), so a History row by that
+     * id finds the card to jump to. The id only, never the folder: the path
+     * stays on this desktop's own windows (`AgentModelLocalFacts.cwd`, EL7 B1).
+     * Absent on a row from a daemon before PJ-7. */
     nativeSessionId: z.string().min(1).max(256).optional(),
     terminal: AgentSessionTerminal.optional(),
   })
