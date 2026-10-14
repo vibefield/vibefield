@@ -2556,6 +2556,26 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     of the window's top and foot (the line's 72, and 24), so it never covers the head or the line.
     Below a 680 popup — a window narrower than 728 — the list and a useful peek no longer both fit:
     **the peek folds and the list fills the popup**.
+- **The phone's History is one ledger of projects** (PJ-7, 2026-10-14; `thinking-project-places.md`
+  §6.3, PJ-D24, PJ-L7): the tab reads the projects every desktop groups alike from ONE door — the
+  home's, or another answering desktop's while the home sleeps — and is no longer grouped by desktop
+  (SP-D10's grouping is superseded). **A device is its OS mark** — the kept-exact Simple Icons
+  marks (§13), template assets on the phone, in the text's ink — and never a hue. The **ledger row**
+  keeps identity · location · quantity; location is the marks, **one per desktop the project lives
+  on, left-aligned** in the roster's order (the home first) at 13 pt in `inkFaint`, a sleeping
+  desktop's at 40% — the path never shows. The **scope line** ends in the marks of the desktops
+  read (12 pt), and each sleeping desktop gets its own honest sentence led by its mark: `⊞ mini is
+  asleep · read 11:42`. A **live row** names its desktop — mark and name — before its running
+  line. The project's colour is **its ink** (§2.9) on the cap, the wash, the sparkline and the
+  ribbon; the per-device deal by sequence retires from History. The **project screen**: the head
+  (cap, name, count), `N places on` and the marks, the four tiles, Overview, Live now, then
+  **Desktops** — one row per desktop (its mark at 19 pt, its name, `1 working` or `asleep · 2h`,
+  and a disclosure that folds its places out run-fold style: each place by its folder's name and
+  a branch that says more, then its last use or why it cannot take a launch), then the sessions by
+  day. A **session row's** foot names where it ran — the desktop's mark and name, then the
+  folder's name, never its path — and its last-word slot holds the session's act (Resume or Jump
+  to, below) or the reason there is none. A session's document is read from its OWN desktop's door
+  (the row's `device`); a desktop that does not answer shows what this phone kept, in the same words.
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the
@@ -2980,7 +3000,11 @@ stills — and, on the desk, two named exceptions: the bar's ONE path renderer f
 (R2; one component, allow-listed) and the peers' pointer arrow (R17; §8, peers on the mat).
 **Kept exact, outside this set:** the tray and app masters, the three vendor marks (AR-L1),
 the OS marks the device chip wears (Simple Icons, drawn inline in `os-marks.tsx` — the test's one
-other allowed file), the Face Club and AFTER HOURS art (§11), the file-tree family (§8).
+other allowed file), the Face Club and AFTER HOURS art (§11), the file-tree family (§8). On the
+phone (PJ-7) the OS marks are template SVGs in FieldDesign's `OSMarks.xcassets` (`DeviceMark`),
+copies of `os-marks.tsx`'s paths that `pnpm check:ios-fixtures` holds to them; and `start`,
+`resume` and `jump` join the phone's picks, so History's New agent, Resume and Jump to draw the
+same Session Glyphs the desktop does.
 
 *History:* pass 1 (2026-09-23) redrew the set at three stroke treatments and was rejected as three
 weights of one drawing; pass 2 drew three constructions — a 9×9 dot matrix on the ground's grid,
