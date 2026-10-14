@@ -18,9 +18,12 @@
 //                   kit's `try` stops the app — and RED: a gate that hangs never holds the list (DK-18's final run met
 //                   one: smoke:canvas waiting for ever on a call into a window it had destroyed);
 //   --list          print the list and exit.
+// VF_PERF_LOCKS=<path>[:<path>…] — a perf measurement owns this host while its lock file exists: before EACH gate the run
+//                   waits while any lock named exists, and says so (`GATE_WAIT`). The paths are the caller's — this host's,
+//                   never written here. Unset, the run is exactly as it was.
 
 import { spawn, spawnSync } from "node:child_process";
-import { createWriteStream, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { constants, loadavg, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -167,6 +170,37 @@ export function said(out) {
   return keep.map((l) => (l.length > 220 ? `${l.slice(0, 220)}…` : l));
 }
 
+/** The perf locks this run honours: `VF_PERF_LOCKS`, colon-separated paths; none named is none. */
+export function perfLocks(env = process.env) {
+  return (env.VF_PERF_LOCKS ?? "").split(":").filter((path) => path.length > 0);
+}
+
+/** Before a gate: wait while any of `locks` exists, saying so when the wait starts and when it ends; answers the ms waited.
+ * With no lock named nothing is looked at, so a run without `VF_PERF_LOCKS` is today's exactly. A lock that appears while a
+ * gate runs is met at the next gate's start: no gate is stopped for one. */
+export async function waitForPerfLocks(
+  locks,
+  gate,
+  {
+    exists = existsSync,
+    sleep = (ms) => new Promise((done) => setTimeout(done, ms)),
+    say = (line) => process.stdout.write(`${line}\n`),
+    now = Date.now,
+    pollMs = 30_000,
+  } = {},
+) {
+  if (locks.length === 0) return 0;
+  const held = locks.filter((path) => exists(path));
+  if (held.length === 0) return 0;
+  const t0 = now();
+  say(`GATE_WAIT ${gate} waits: a perf lock is held (${held.join(", ")})`);
+  do await sleep(pollMs);
+  while (locks.some((path) => exists(path)));
+  const waited = now() - t0;
+  say(`GATE_WAIT ${gate} waited ${(waited / 1000).toFixed(0)}s for the perf lock`);
+  return waited;
+}
+
 function argValue(flag) {
   const i = process.argv.indexOf(flag);
   return i >= 0 ? process.argv[i + 1] : undefined;
@@ -276,7 +310,9 @@ async function main() {
       detached: true,
     }).unref();
   const verdicts = [];
+  const locks = perfLocks();
   for (const [i, gate] of list.entries()) {
+    await waitForPerfLocks(locks, gate.name);
     const logPath = join(
       logs,
       `${String(i + 1).padStart(2, "0")}-${gate.name.replaceAll(":", "_")}.log`,

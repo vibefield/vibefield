@@ -3,11 +3,13 @@ import test from "node:test";
 import {
   LANDING,
   onlyAr7b,
+  perfLocks,
   preflightSiblingsOnly,
   projectCounts,
   STAGES,
   said,
   secondCopiesOutside,
+  waitForPerfLocks,
 } from "../../../scripts/gate-landing.mjs";
 
 // DK-18 — the landing gate's list and its three readings of MAIN's known reds (scripts/gate-landing.mjs). A red that is main's
@@ -141,5 +143,70 @@ test("a verdict quotes the run's own words for its result", () => {
   assert.deepEqual(lines, [
     "Tests  1 failed | 1908 passed | 23 skipped (1932)",
     'SMOKE_DAEMONS {"left":[]}',
+  ]);
+});
+
+// DEBTS (s-debts-fieldd.md Appendix 3) — a perf measurement owns the host while its lock exists: the run waits before EACH
+// gate while any lock `VF_PERF_LOCKS` names is there, and says so. The paths are the caller's (this script is public).
+
+test("the perf locks are the caller's, colon-separated; none named is none", () => {
+  assert.deepEqual(perfLocks({}), []);
+  assert.deepEqual(perfLocks({ VF_PERF_LOCKS: "" }), []);
+  assert.deepEqual(perfLocks({ VF_PERF_LOCKS: "/a/PERF.lock:/b/PERF.lock" }), [
+    "/a/PERF.lock",
+    "/b/PERF.lock",
+  ]);
+  assert.deepEqual(perfLocks({ VF_PERF_LOCKS: ":/a/PERF.lock::" }), ["/a/PERF.lock"]);
+});
+
+/** A host whose locks stand for `polls` looks each, the clock moving a minute a look. */
+function host(present, polls) {
+  let clock = 0;
+  let looks = 0;
+  const said = [];
+  const sleeps = [];
+  return {
+    said,
+    sleeps,
+    looks: () => looks,
+    opts: {
+      exists: (path) => {
+        looks += 1;
+        return present.includes(path) && sleeps.length < polls;
+      },
+      sleep: async (ms) => {
+        sleeps.push(ms);
+        clock += 60_000;
+      },
+      say: (line) => said.push(line),
+      now: () => clock,
+      pollMs: 60_000,
+    },
+  };
+}
+
+test("no lock named: today's run exactly — nothing is looked at, nothing said, no wait", async () => {
+  const h = host(["/a/PERF.lock"], 5);
+  assert.equal(await waitForPerfLocks([], "smoke", h.opts), 0);
+  assert.equal(h.looks(), 0);
+  assert.deepEqual(h.said, []);
+  assert.deepEqual(h.sleeps, []);
+});
+
+test("a lock named but absent: the gate starts at once, and nothing is said", async () => {
+  const h = host([], 5);
+  assert.equal(await waitForPerfLocks(["/a/PERF.lock", "/b/PERF.lock"], "smoke", h.opts), 0);
+  assert.deepEqual(h.said, []);
+  assert.deepEqual(h.sleeps, []);
+});
+
+test("a lock present: the gate waits until it is gone, and the wait is said when it starts and when it ends", async () => {
+  const h = host(["/b/PERF.lock"], 3);
+  const waited = await waitForPerfLocks(["/a/PERF.lock", "/b/PERF.lock"], "smoke:godview", h.opts);
+  assert.equal(waited, 180_000);
+  assert.deepEqual(h.sleeps, [60_000, 60_000, 60_000]);
+  assert.deepEqual(h.said, [
+    "GATE_WAIT smoke:godview waits: a perf lock is held (/b/PERF.lock)",
+    "GATE_WAIT smoke:godview waited 180s for the perf lock",
   ]);
 });
