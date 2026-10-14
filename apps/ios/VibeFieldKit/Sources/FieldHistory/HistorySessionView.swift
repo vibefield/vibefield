@@ -94,8 +94,6 @@ struct HistorySessionView: View {
           Menu {
             Button("Open every run") { expanded = Set(document.turns.flatMap { $0.segments.map(\.id) }) }
             Button("Copy session id") { UIPasteboard.general.string = document.id }
-            Button("Open in the field") {}
-              .disabled(true)
           } label: {
             Image(systemName: "ellipsis")
           }

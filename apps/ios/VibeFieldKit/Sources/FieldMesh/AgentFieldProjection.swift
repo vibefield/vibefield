@@ -162,8 +162,9 @@ public func agentSnapshot(
     lastEvidenceAt: parseWireDate(row.lastActivityAt))
 
   return AgentSnapshot(
-    // AR-4b: the row's identity IS the run. The field projection carries no
-    // provider-native session id at all, by design.
+    // AR-4b: the row's identity IS the run. PJ-7 (Q3): the conversation's
+    // native id rides the JOIN, never the identity — what History's Jump to
+    // finds the card by.
     id: row.runtimeRunId,
     // The card header's hue is dealt from this; the PTY is the better alias
     // when there is one, because that is what a card will attach to (IOS-4c).
@@ -194,7 +195,7 @@ public func agentSnapshot(
       // MF-1f's row: the process ended and the pane is still on the floor. A
       // PENDING row is not this — it is live and merely unobserved.
       exited: !row.alive && !parked,
-      deviceLive: deviceLive),
+      deviceLive: deviceLive, nativeSessionID: row.nativeSessionId),
     catalogEntry: catalog.entry(for: provider))
 }
 

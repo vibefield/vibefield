@@ -461,3 +461,14 @@ private func blocker(kind: String) -> JSONValue {
     #expect(fieldBubble(from: older)?.agent?.providerName == "Claude")
   }
 }
+
+/// PJ-7 (Q3) — the field row's conversation id rides the join, so History's
+/// Jump to finds the run's card by it; a run whose agent has not said it has none.
+@Suite struct AgentFieldNativeSessionTests {
+  @Test func theJoinCarriesTheConversationsIdOnlyWhenTheAgentSaidIt() throws {
+    let board = try AgentFieldSnapshot(json: try MeshFixture.json("agent-field-snapshot.native-session"))
+    let field = projectAgentField(rows: board.rows, device: "dev-home")
+    #expect(field.agents.map { $0.join?.nativeSessionID } == ["4f9c2d1e-7a3b-4c8d-9e0f-1a2b3c4d5e6f", nil])
+    #expect(field.agents.map(\.id) == ["run-placed", "run-unsaid"], "the run is still the identity")
+  }
+}

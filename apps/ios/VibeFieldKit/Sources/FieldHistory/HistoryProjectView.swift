@@ -23,7 +23,9 @@ struct HistoryProjectView: View {
   var onNeed: (HistoryNeed) -> Void = { _ in }
 
   @Environment(\.colorScheme) private var scheme
+  @Environment(\.historyActs) private var acts
   @State private var receipt: String?
+  @State private var resuming: String?
   @State private var rung: String?
   @State private var unfolded: String?
 
@@ -228,6 +230,7 @@ struct HistoryProjectView: View {
               }
               Spacer(minLength: 8)
               AgentMark(agent: row.agent)
+              if row.nativeSessionId.map(acts.inField) == true { Color.clear.frame(width: 32, height: 32) }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -235,6 +238,12 @@ struct HistoryProjectView: View {
             .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
           }
           .buttonStyle(.plain)
+          .overlay(alignment: .trailing) {
+            if let native = row.nativeSessionId, acts.inField(native) {
+              JumpCircle { acts.jump(native) }
+                .padding(.trailing, 12)
+            }
+          }
         }
       }
       .padding(.horizontal, 16)
@@ -367,7 +376,17 @@ struct HistoryProjectView: View {
               .lineLimit(1)
             }
             Spacer(minLength: 0)
-            LastWord(word: session.last, isLive: session.isLive, awake: awake)
+            switch acts.act(for: session) {
+            case .why(let reason):
+              Text(reason)
+                .font(ChromeType.sans(12))
+                .foregroundStyle(ChromePalette.inkFaint)
+            case nil:
+              LastWord(word: session.last, isLive: session.isLive, awake: awake)
+            default:
+              // the act stands over the row (below), so its tap is its own
+              Color.clear.frame(width: 90, height: 28)
+            }
           }
           .padding(.top, 2)
         }
@@ -383,10 +402,41 @@ struct HistoryProjectView: View {
       .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
     .buttonStyle(HistoryRowStyle())
+    .overlay(alignment: .bottomTrailing) {
+      sessionAct(session)
+        .padding(.trailing, 12)
+        .padding(.bottom, 8)
+    }
     .padding(.horizontal, 8)
     .padding(.bottom, 2)
     .id(session.id)
     .accessibilityLabel("\(session.title), \(session.agent), \(session.meta), \(session.branch), last \(session.last)")
+  }
+
+  // MARK: - The session's act (PJ-7: Resume or Jump to, or why not)
+
+  /// The last-word slot's act, over the row: Resume or Jump to as a 28 pt
+  /// pill (the reason and the last word stand in the row itself).
+  @ViewBuilder
+  private func sessionAct(_ session: HistorySession) -> some View {
+    switch acts.act(for: session) {
+    case .jump:
+      ActPill(glyph: .jump, title: "Jump to") {
+        if let native = session.nativeSessionId { acts.jump(native) }
+      }
+    case .resume:
+      ActPill(glyph: .resume, title: resuming == session.id ? "Resuming…" : "Resume") {
+        guard resuming == nil else { return }
+        resuming = session.id
+        Task {
+          let words = await acts.resume(session)
+          resuming = nil
+          note(words)
+        }
+      }
+    case .why, nil:
+      EmptyView()
+    }
   }
 
   // MARK: - The receipt (a row that does not open, said once)

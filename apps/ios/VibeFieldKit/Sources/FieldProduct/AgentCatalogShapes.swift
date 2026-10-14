@@ -58,6 +58,9 @@ public struct AgentCatalogRow: Sendable, Equatable, Decodable, Identifiable {
   public let phone: Bool?
   /// A launch choice exists only when THIS desktop explicitly offers it.
   public let canSpawn: Bool
+  /// PJ-7 — History's Resume exists only when this desktop offers it for the
+  /// agent (`offers.resume`); absent otherwise (D-i6).
+  public let canResume: Bool
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
@@ -70,6 +73,7 @@ public struct AgentCatalogRow: Sendable, Equatable, Decodable, Identifiable {
     phone = surfaces.bool("phone")
     var offers = object.object("offers")
     canSpawn = offers.bool("spawn") == true
+    canResume = offers.bool("resume") == true
     unknownFields = object.unknownFields
   }
 

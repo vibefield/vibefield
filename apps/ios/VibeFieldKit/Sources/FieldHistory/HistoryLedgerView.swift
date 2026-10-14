@@ -30,6 +30,7 @@ public struct HistoryLedgerView: View {
 
   @State private var rank: FieldHistoryModel.Rank = .spend
   @Environment(\.colorScheme) private var scheme
+  @Environment(\.historyActs) private var acts
 
   private var projects: HistoryProjects { history.projects }
 
@@ -235,6 +236,7 @@ public struct HistoryLedgerView: View {
         }
         Spacer(minLength: 8)
         AgentMark(agent: row.agent)
+        if jumpable(row) != nil { Color.clear.frame(width: 32, height: 32) }
       }
       .padding(.leading, 12)
       .padding(.trailing, 14)
@@ -244,7 +246,20 @@ public struct HistoryLedgerView: View {
       .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
     .buttonStyle(.plain)
+    // PJ-7 — a live row ends in the jump circle when the field holds its run
+    // (over the row, so its own tap is its own)
+    .overlay(alignment: .trailing) {
+      if let native = jumpable(row) {
+        JumpCircle { acts.jump(native) }
+          .padding(.trailing, 14)
+      }
+    }
     .accessibilityLabel("\(row.title), \(row.agent), running \(row.running)")
+  }
+
+  /// The conversation a live row can jump to: the field holds its run.
+  private func jumpable(_ row: HistoryLive) -> String? {
+    row.nativeSessionId.flatMap { acts.inField($0) ? $0 : nil }
   }
 
   private func projectRow(_ project: HistoryProject, corpus: HistoryCorpus, awake: Bool) -> some View {

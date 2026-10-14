@@ -277,6 +277,48 @@ struct QuietNote: View {
   }
 }
 
+/// PJ-7 — a session's act in a row's last-word slot: the Session Glyph and
+/// its verb in a 28 pt pill (TP §6.3).
+struct ActPill: View {
+  let glyph: FieldGlyphName
+  let title: String
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 5) {
+        FieldGlyph(glyph, size: 14)
+        Text(title).font(ChromeType.sans(12.5, .medium))
+      }
+      .foregroundStyle(ChromePalette.ink)
+      .padding(.horizontal, 10)
+      .frame(height: 28)
+      .background(Capsule().fill(ChromePalette.fill))
+      .contentShape(Capsule())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(title)
+  }
+}
+
+/// PJ-7 — a live row's end: the 32 pt jump circle (TP §6.3), the Jump to
+/// glyph, which opens the run's card in the field.
+struct JumpCircle: View {
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      FieldGlyph(.jump, size: 16)
+        .foregroundStyle(ChromePalette.ink)
+        .frame(width: 32, height: 32)
+        .background(Circle().fill(ChromePalette.paper))
+        .contentShape(Circle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel("Jump to it in the field")
+  }
+}
+
 /// A row's press: the fill, on the row's own radius (`.prow:active`).
 struct HistoryRowStyle: ButtonStyle {
   var radius: CGFloat = 14

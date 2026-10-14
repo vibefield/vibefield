@@ -24,9 +24,14 @@ public struct HomeScreen: View {
   @State private var feed = MockAgentField()
   @State private var createSheetOpen = false
   @State private var workspaceLaunch: WorkspaceLaunch?
+  /// PJ-7 — the last Resume's words in the stepper's slot.
+  @State private var resumeWords: String?
   /// PJ-7 — each answering desktop's Agent Profiles, read ahead so a hold can
   /// bloom them at once (a desktop not read yet is a leaf: its default).
   @State private var bloomProfiles: [String: [AgentProfileSet]] = [:]
+  /// PJ-7 — each answering desktop's catalog for the phone, read ahead with
+  /// its profiles: whether History's Resume is offered for an agent there.
+  @State private var fieldCatalogs: [String: [AgentCatalogRow]] = [:]
   @State private var mesh = MeshModel()
   @State private var remoteField = RemoteSessionField(source: nil)
   /// IOS-4b — the live field: the devices store, the doors it names, and the
@@ -396,16 +401,27 @@ public struct HomeScreen: View {
     return BloomMenu(desktops: desktops, home: link.home)
   }
 
-  /// Each answering desktop's profiles not read yet, asked of its own door.
+  /// Each answering desktop's profiles (the bloom's) and catalog (History's
+  /// Resume) not read yet, asked of its own door.
   private func readBloomProfiles() {
     guard let link else { return }
-    for desktop in link.desktops where desktop.state == .ready && bloomProfiles[desktop.deviceId] == nil {
+    for desktop in link.desktops where desktop.state == .ready {
       let id = desktop.deviceId
-      Task {
-        guard let answer = try? await link.workspaceCall(on: id, method: "agents.profileSets.list"),
-          let sets = try? AgentProfileSetsResult(json: answer)
-        else { return }
-        bloomProfiles[id] = sets.sets
+      if bloomProfiles[id] == nil {
+        Task {
+          guard let answer = try? await link.workspaceCall(on: id, method: "agents.profileSets.list"),
+            let sets = try? AgentProfileSetsResult(json: answer)
+          else { return }
+          bloomProfiles[id] = sets.sets
+        }
+      }
+      if fieldCatalogs[id] == nil {
+        Task {
+          guard let answer = try? await link.workspaceCall(on: id, method: "agent.catalog", params: AgentCatalogParams.phone.json),
+            let catalog = try? AgentCatalogResult(json: answer)
+          else { return }
+          fieldCatalogs[id] = catalog.catalog
+        }
       }
     }
   }
@@ -470,8 +486,9 @@ public struct HomeScreen: View {
     HistoryLedgerView(history: historyDesktops, router: history) { need in
       historyDesktops.need(need)
     }
+    .environment(\.historyActs, historyActs)
     .safeAreaInset(edge: .bottom, spacing: 0) {
-      Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: history.stepperShowing || slotProject != nil))
+      Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: history.stepperShowing || slotProject != nil || slotSession != nil))
     }
   }
 
@@ -535,6 +552,8 @@ public struct HomeScreen: View {
             stepper
           } else if let key = slotProject {
             newAgentSlot(key)
+          } else if let session = slotSession {
+            sessionSlot(session)
           }
           if selectedTab == .search {
             SearchBarRow(query: $searchQuery, focus: $searchFocused, typing: barTyping, glass: barGlass, onClose: closeSearch)
@@ -569,7 +588,9 @@ public struct HomeScreen: View {
   }
 
   private var barState: BarState {
-    BarState(tab: selectedTab, folded: barFolded, stepper: barStepper || slotProject != nil, typing: barTyping)
+    BarState(
+      tab: selectedTab, folded: barFolded, stepper: barStepper || slotProject != nil || slotSession != nil,
+      typing: barTyping)
   }
 
   /// History's scroll has folded the bar to its glyph (the page's minimize).
@@ -654,6 +675,107 @@ public struct HomeScreen: View {
       .glassID("stepper", in: barGlass)
       .padding(.horizontal, barFolded ? AppBar.margin + AppBar.height + AppBar.inlineGap : AppBar.margin)
       .padding(.bottom, barFolded ? 0 : AppBar.height + AppBar.stepperGap)
+  }
+
+  /// PJ-7 — a session on top of History's stack, no landed search holding the
+  /// slot: its act (Resume, Jump to, or why not) stands there (TP §6.3).
+  private var slotSession: HistorySession? {
+    guard selectedTab == .history, !history.stepperShowing, !accountMenuOpen,
+      case .session(let device, let id)? = history.path.last
+    else { return nil }
+    return historyDesktops.projects.corpus.sessions.values.lazy.flatMap { $0 }
+      .first { $0.id == id && ($0.device ?? device) == device }
+  }
+
+  /// The session's act in the stepper's slot, with where it runs.
+  @ViewBuilder
+  private func sessionSlot(_ session: HistorySession) -> some View {
+    if let act = historyActs.act(for: session) {
+      Button {
+        switch act {
+        case .jump: if let native = session.nativeSessionId { jumpToRun(native) }
+        case .resume: Task { resumeWords = await resumeSession(session) }
+        case .why: break
+        }
+      } label: {
+        HStack(spacing: 8) {
+          switch act {
+          case .jump: FieldGlyph(.jump, size: FieldGlyph.box(for: 15))
+          case .resume, .why: FieldGlyph(.resume, size: FieldGlyph.box(for: 15))
+          }
+          Text(act == .jump ? "Jump to" : "Resume").font(ChromeType.sans(15, .semibold))
+          Spacer(minLength: 6)
+          if case .why(let reason) = act {
+            Text(reason).font(ChromeType.sans(13))
+          } else if let words = resumeWords {
+            Text(words).font(ChromeType.sans(13)).lineLimit(1)
+          } else if let device = session.device {
+            DeviceMark(platform: link?.desktops.first { $0.deviceId == device }?.platform, size: 12)
+            Text([session.deviceName, session.folder].compactMap { $0 }.joined(separator: " · "))
+              .font(ChromeType.sans(13)).lineLimit(1)
+          }
+        }
+        .foregroundStyle(act == .why("asleep") ? ChromePalette.inkSecondary : ChromePalette.ink)
+        .padding(.horizontal, 18)
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .contentShape(Capsule())
+      }
+      .buttonStyle(.plain)
+      .disabled({ if case .why = act { true } else { false } }())
+      .frame(height: barFolded ? AppBar.height : AppBar.stepperHeight)
+      .liquidGlassCapsule()
+      .glassID("stepper", in: barGlass)
+      .padding(.horizontal, barFolded ? AppBar.margin + AppBar.height + AppBar.inlineGap : AppBar.margin)
+      .padding(.bottom, barFolded ? 0 : AppBar.height + AppBar.stepperGap)
+      .onChange(of: session.id) { resumeWords = nil }
+    }
+  }
+
+  // MARK: - PJ-7: History's acts (Q3 (a))
+
+  /// What History's rows may offer, and how they are done.
+  private var historyActs: HistoryActs {
+    HistoryActs(
+      inField: { native in liveAgents.contains { $0.join?.nativeSessionID == native } },
+      desktopAwake: { device in link?.desktops.first { $0.deviceId == device }?.state == .ready },
+      canResume: { device, provider in
+        fieldCatalogs[device].map { rows in rows.contains { $0.id == provider && $0.canResume } }
+      },
+      resume: { session in await resumeSession(session) },
+      jump: { native in jumpToRun(native) })
+  }
+
+  /// Resume on the session's OWN desktop's door, by its native id and no path
+  /// (that desktop fills the folder); a refusal is said in words.
+  private func resumeSession(_ session: HistorySession) async -> String {
+    guard let link, let device = session.device, let provider = session.provider,
+      let native = session.nativeSessionId
+    else { return "This session cannot be resumed from here" }
+    let desktop = link.desktops.first { $0.deviceId == device }?.name ?? session.deviceName ?? "its desktop"
+    let agent = fieldCatalogs[device]?.first { $0.id == provider }?.label ?? provider
+    do {
+      _ = try await link.workspaceCall(
+        on: device, method: "agent.resume",
+        params: AgentResumeNativeParams(provider: provider, nativeSessionId: native).json)
+      UINotificationFeedbackGenerator().notificationOccurred(.success)
+      return "Resuming on \(desktop)"
+    } catch {
+      UINotificationFeedbackGenerator().notificationOccurred(.warning)
+      let refusal = (error as? FieldProductError) ?? FieldProductError(kind: "UNAVAILABLE", message: "\(error)")
+      return FieldHistoryModel.resumeRefusal(
+        kind: refusal.kind, reason: refusal.details?["reason"]?.stringValue,
+        state: refusal.details?["state"]?.stringValue, message: refusal.message, desktop: desktop, agent: agent)
+    }
+  }
+
+  /// Jump to: the Field tab opens the card of the run that continues this
+  /// conversation (joined by the field row's native id).
+  private func jumpToRun(_ native: String) {
+    guard let agent = liveAgents.first(where: { $0.join?.nativeSessionID == native }),
+      let bubble = bubbles.first(where: { $0.id == agent.id })
+    else { return }
+    selectedTab = .field
+    openCard(on: bubble)
   }
 
   /// PJ-7 — New agent in the stepper's slot (DESIGN.md §8's FS-2 entry): the

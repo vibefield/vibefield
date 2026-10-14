@@ -117,6 +117,14 @@ import Testing
     #expect(board.rows.allSatisfy { $0.unknownFields.isEmpty })
   }
 
+  @Test func theCatalogSaysWhichAgentsResume() throws {
+    let catalog = try AgentCatalogResult(json: try Fixture.json("agent-catalog.valid"))
+    #expect(catalog.catalog.first { $0.id == "claude" }?.canResume == true)
+    let silent = try AgentCatalogRow(
+      json: .object(["id": .string("x"), "label": .string("X"), "status": .string("preview"), "offers": .object(["spawn": .bool(true)])]))
+    #expect(!silent.canResume, "absent unless the desktop offers it")
+  }
+
   @Test func aNativeResumeSendsTheIdAndNoPath() {
     let params = AgentResumeNativeParams(provider: "claude", nativeSessionId: "665e3e71")
     #expect(params.json == .object(["provider": .string("claude"), "nativeSessionId": .string("665e3e71")]))
