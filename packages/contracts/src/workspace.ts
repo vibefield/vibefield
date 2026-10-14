@@ -188,6 +188,9 @@ export type WorkspaceSearchParams = z.infer<typeof WorkspaceSearchParams>;
 
 export const WorkspaceSearchHit = z
   .object({
+    /** the search's OWN engine's id for the hit (fix7: a search resolves in
+     * an engine apart from the rows') — an identity within this answer, never
+     * comparable with a listing's ids; a hit is listed by `relativePath` */
     id: z.number().int().nonnegative(),
     name: z.string().min(1).max(WORKSPACE_LIMITS.NAME_CHARS),
     /** the absolute path on the root's desktop (the door composes it from the
@@ -213,7 +216,8 @@ export const WorkspaceSearchResult = z
     /** the search read every folder of the subtree it walks (hidden, ignored,
      * vendored and symlinked folders are not walked); false when the walk's
      * bounds (`WORKSPACE_LIMITS.SEARCH_WALK_*`) cut it — a miss is then not a
-     * "no" */
+     * "no" — or when hits it found were left out unresolved at
+     * `SEARCH_RESOLVE_MS` (fix7) */
     complete: z.boolean(),
   })
   .passthrough();

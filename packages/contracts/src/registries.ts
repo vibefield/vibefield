@@ -506,7 +506,21 @@ export const PROJECT_GROUPING = {
  * every place); an engine with no ask for HOST_IDLE_MS is disposed, and at
  * most HOSTS_MAX live at once — at the cap the least recently used idle one
  * goes, and an ask that finds every engine busy is refused RESOURCE_EXHAUSTED
- * (retryable). TS-only: no native reader. */
+ * (retryable). TS-only: no native reader.
+ *
+ * LANES (fix7, 2026-10-14 — PJ-7's first phone run, where a phone's Browse at
+ * an external SSD timed every `workspace.list` out at the worker's 20 s): mille
+ * arms a RECURSIVE watcher on an engine's root at its first filesystem-facing
+ * call, and every watcher batch reconciles under the engine's one policy lock,
+ * which `prefetch` and `resync` take too — measured on that SSD while another
+ * lane built on it, one `resync` of a two-entry folder waited 37 s. So a list
+ * never waits on its engine for longer than LIST_ENGINE_MS: an engine that
+ * held it that long is retired (its attached sessions keep it until they end)
+ * and the list is answered by a fresh one, once; a second stall is the
+ * folder's honest `timed-out`. A search resolves its hits in an engine of its
+ * OWN, never the rows' (the folders it hydrates are a build's busiest), for at
+ * most SEARCH_RESOLVE_MS: hits left unresolved by then are left out and the
+ * answer says `complete: false`. */
 export const WORKSPACE_LIMITS = {
   LIST_PAGE: 200,
   TAILNET_PAGE: 100,
@@ -524,6 +538,8 @@ export const WORKSPACE_LIMITS = {
   READ_TIMEOUT_MS: 2_000,
   MATERIALIZE_DATALESS: false,
   SEARCH_CACHE_MS: 60_000,
+  SEARCH_RESOLVE_MS: 2_000,
+  LIST_ENGINE_MS: 4_000,
   HOST_IDLE_MS: 300_000,
   HOSTS_MAX: 16,
   TICKETS_MAX: 256,

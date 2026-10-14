@@ -128,7 +128,10 @@ async function init(milleNative: string): Promise<void> {
     placesModule = await import("./places");
     failureClass = engine.WorkerFailure;
     assertRoot = engine.assertRoot;
-    engines = new engine.Engines();
+    // fix7 — an engine retired for holding a list is fieldd's to log
+    engines = new engine.Engines({
+      onLog: (event, message, fields) => send({ t: "log", level: "warn", event, message, fields }),
+    });
     const serving = await import("./listener");
     resolveConfined = serving.resolveConfined;
     // R6 — an attachment's establish and end ride the control pipe to fieldd's ledger

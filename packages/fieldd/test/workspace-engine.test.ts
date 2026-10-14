@@ -251,3 +251,165 @@ it("hands mille an attached session's every bound by name, the viewport cap incl
     maxViewportRows: WORKSPACE_LIMITS.MAX_VIEWPORT_ROWS,
   });
 });
+
+// fix7 (PJ-7's first phone run): a phone's Browse at an external SSD that other
+// lanes were building on timed every `workspace.list` out at the worker's 20 s.
+// The cause, measured there (lane fix7, probe/ssd-probe-3-1.log): mille arms a
+// RECURSIVE watcher on an engine's root at its first filesystem-facing call, and
+// every watcher batch reconciles under the engine's one policy lock, which
+// `prefetch` and `resync` take too — one `resync` of a two-entry folder waited
+// 37 011 ms. The seam below models that lock HELD: from the moment it is held
+// (by a named call, or by a watcher batch — `held = true`), every filesystem-
+// facing call on that engine waits without end; a call already running ends.
+/** mille's engine, as the worker's own seam hands it (R24: a test names no
+ * mille entry but the clients) */
+type FileExplorerHost = Parameters<
+  NonNullable<NonNullable<ConstructorParameters<typeof Engines>[0]>["onHost"]>
+>[0];
+type Gate = {
+  /** the call that takes the lock and keeps it (null: none does) */
+  holdAt: string | null;
+  held: boolean;
+  started: Promise<void>;
+  start: () => void;
+};
+const LOCKED = ["prefetch", "resync", "list", "resolvePath", "refreshWorkspaceRoots"] as const;
+
+function gatedEngines(
+  opts: { holdNew?: string | null } & ConstructorParameters<typeof Engines>[0],
+) {
+  const { holdNew = null, ...rest } = opts;
+  const hosts: FileExplorerHost[] = [];
+  const gates = new Map<FileExplorerHost, Gate>();
+  /** engines made from now on are born with their lock held */
+  const policy = { bornHeld: false };
+  const made = engines({
+    ...rest,
+    onHost: (host) => {
+      hosts.push(host);
+      let start!: () => void;
+      const gate: Gate = {
+        holdAt: holdNew,
+        held: policy.bornHeld,
+        started: new Promise<void>((resolve) => {
+          start = resolve;
+        }),
+        start: () => start(),
+      };
+      gates.set(host, gate);
+      const fx = host.local as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>;
+      for (const name of LOCKED) {
+        const original = fx[name];
+        if (typeof original !== "function") continue;
+        fx[name] = (...args: unknown[]) => {
+          if (name === "resolvePath") gate.start();
+          if (name === gate.holdAt) gate.held = true;
+          if (gate.held) return new Promise(() => {});
+          return original.apply(host.local, args);
+        };
+      }
+    },
+  });
+  return { e: made, hosts, gates, policy };
+}
+
+/** The answer, or null when it did not come within `ms`. */
+function within<T>(answer: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    answer,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
+describe("a list never waits behind a search, nor without end on its engine (fix7)", () => {
+  it("a list answers while a search holds its engine's lock; the search ends partial at its budget", async () => {
+    const root = base();
+    // a deep tree: thirty needles, each three folders down
+    for (let i = 0; i < 30; i += 1) {
+      const folder = join(root, "deep", `a${i}`, "b", "c");
+      mkdirSync(folder, { recursive: true });
+      writeFileSync(join(folder, `needle-${i}.txt`), "");
+    }
+    mkdirSync(join(root, "quiet", "inner"), { recursive: true });
+    // every engine's first hit resolve keeps the lock (the search hydrated a
+    // build's busiest folders, and the watcher reconciles them under it)
+    const { e, hosts, gates } = gatedEngines({
+      holdNew: "resolvePath",
+      listMs: 1_500,
+      resolveMs: 300,
+    });
+    const started = Date.now();
+    const search = e.search({ rootPath: root, segments: [], q: "needle", limit: 50, kinds: "all" });
+    await within(
+      new Promise<void>((resolve) => {
+        const look = (): void => {
+          const resolving = hosts.find((host) => gates.get(host) !== undefined);
+          if (resolving !== undefined) void gates.get(resolving)?.started.then(resolve);
+          else setTimeout(look, 5);
+        };
+        look();
+      }),
+      2_000,
+    );
+    const listing = await within(list(e, root, ["quiet"]), 6_000);
+    expect(
+      listing?.entries.map((entry) => entry.name),
+      "the list was answered",
+    ).toEqual(["inner"]);
+    const answer = await within(search, 6_000);
+    expect(answer, "the search was answered").not.toBeNull();
+    expect(answer?.complete).toBe(false);
+    expect(answer?.hits.length ?? 0).toBeLessThan(30);
+    expect(Date.now() - started).toBeLessThan(6_000);
+  });
+
+  it("a list whose engine stays held is answered by a fresh engine within its deadline; held again, it is the folder's timed-out", async () => {
+    const root = base();
+    mkdirSync(join(root, "quiet", "inner"), { recursive: true });
+    const { e, hosts, gates, policy } = gatedEngines({ listMs: 1_500 });
+    expect((await list(e, root, ["quiet"])).entries.map((entry) => entry.name)).toEqual(["inner"]);
+    expect(hosts).toHaveLength(1);
+    // the watcher's batch holds the first engine's lock from now on
+    const first = gates.get(hosts[0] as FileExplorerHost) as Gate;
+    first.held = true;
+    const again = await within(list(e, root, ["quiet"]), 6_000);
+    expect(
+      again?.entries.map((entry) => entry.name),
+      "a fresh engine answered",
+    ).toEqual(["inner"]);
+    expect(hosts).toHaveLength(2);
+    // the fresh engine is the export's now: the next ask goes straight to it
+    expect((await list(e, root, ["quiet"])).entries).toHaveLength(1);
+    expect(hosts).toHaveLength(2);
+    // every engine held (the next one is too): the folder's honest refusal,
+    // within two deadlines — never a third wait
+    (gates.get(hosts[1] as FileExplorerHost) as Gate).held = true;
+    policy.bornHeld = true;
+    const refusal = await within(
+      list(e, root, ["quiet"]).then(
+        () => null,
+        (error: unknown) => error,
+      ),
+      6_000,
+    );
+    expect(refusal).toBeInstanceOf(WorkerFailure);
+    expect((refusal as WorkerFailure).code).toBe("timed-out");
+    expect((refusal as WorkerFailure).message).toMatch(/“quiet” did not answer within 1\.5 s/);
+    expect(hosts).toHaveLength(3);
+  });
+
+  it("searches of one subtree asked together share one walk (a reader typing)", async () => {
+    const root = base();
+    for (let i = 0; i < 20; i += 1) mkdirSync(join(root, `pj${i}`, "x"), { recursive: true });
+    const walks: string[] = [];
+    const e = engines({ onWalk: (startRel) => walks.push(startRel) });
+    const answers = await Promise.all(
+      ["p", "pj", "pj7"].map((q) =>
+        e.search({ rootPath: root, segments: [], q, limit: 50, kinds: "dirs" }),
+      ),
+    );
+    expect(walks).toEqual([""]);
+    expect(answers.map((answer) => answer.complete)).toEqual([true, true, true]);
+    expect(answers[1]?.hits.length).toBe(20);
+  });
+});

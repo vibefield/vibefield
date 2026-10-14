@@ -55,6 +55,29 @@ import { ENTRY, HUNG_READS_MAX, matchName, type NameWalk, timedRead, walkNames }
 // the engine only its hits. Its hits are RELATIVE to the export's root (as
 // mille's own search over the port will say them, M6); the door composes the
 // absolute path.
+//
+// *Errata (2026-10-14, fix7 — PJ-7's first phone run):* "row-only engines have
+// no watcher" above was never true. mille arms a RECURSIVE watcher on an
+// engine's root at its first filesystem-facing call ("filesystem-facing calls
+// lazily enable live updates" — `ensure_watcher` in `prefetch`/`resync`/
+// `refreshWorkspaceRoots`, mille-binding explorer.rs at c8160d5), and every
+// watcher batch reconciles under the engine's one `policy_gate`, which
+// `prefetch` and `resync` take too. On an export where something writes a lot
+// (an external SSD other lanes build on), a list waited there: one `resync` of
+// a two-entry folder took 37 011 ms, a phone's Browse timed every list out at
+// the worker's 20 s. mille has no switch for it (only the debounce), so the
+// worker keeps its waits bounded instead, in two LANES:
+//   - the ROWS' engine (lists, attaches) is never waited on for longer than
+//     WORKSPACE_LIMITS.LIST_ENGINE_MS: an engine that held a list that long is
+//     RETIRED (out of the table; disposed once its attachments let go) and the
+//     list is answered by a fresh one, whose store holds nothing busy yet —
+//     once; a second stall is the folder's honest `timed-out`;
+//   - a SEARCH resolves its hits in an engine of its OWN, made for it and
+//     disposed when no search holds it, so the busy folders a hit's ancestors
+//     hydrate never enter the rows' store; its resolve phase stops at
+//     SEARCH_RESOLVE_MS and says `complete: false`. Its hit ids are that
+//     engine's (an identity within the answer; a hit is listed by its path).
+// Searches of one subtree asked together (a reader typing) share one walk.
 
 /** mille's `EntryKind` (mille-core entry.rs). */
 const KIND = { FILE: 0, DIR: 1, SYMLINK: 2, UNAVAILABLE: 4 } as const;
@@ -66,8 +89,8 @@ const KIND = { FILE: 0, DIR: 1, SYMLINK: 2, UNAVAILABLE: 4 } as const;
 const SWEEP_MS = 60_000;
 /** Folder child counts read at once for one page. */
 const COUNT_CONCURRENCY = 16;
-/** Subtree name walks kept beside one engine (host/names.ts), and in the
- * whole worker at most this many walked entries (two full walks: some 40 MB
+/** Subtree name walks kept per export (host/names.ts), and in the whole
+ * worker at most this many walked entries (two full walks: some 40 MB
  * measured) — the oldest walk anywhere goes first. */
 const WALKS_KEPT = 2;
 const WALK_CACHE_ENTRIES = 2 * WORKSPACE_LIMITS.SEARCH_WALK_ENTRIES;
@@ -132,17 +155,52 @@ export function milleRefusal(
   return null;
 }
 
+/** Which work an engine serves (fix7; header): the rows' — lists and
+ * attaches — or the searches' of one export. */
+export type EngineLane = "rows" | "search";
+
 /** One export's engine, as the worker holds it. `active` is counted from the
  * moment an ask names the export — before its engine exists — so an engine an
  * ask is waiting for is never the one evicted. */
 interface Slot {
+  key: string;
+  lane: EngineLane;
   rootPath: string;
   pending: Promise<FileExplorerHost>;
   host: FileExplorerHost | null;
   lastUsed: number;
   active: number;
-  /** the search's name walks of this export, by subtree (host/names.ts) */
-  walks: Map<string, NameWalk>;
+  /** fix7 — out of the table: a list found it held past LIST_ENGINE_MS (or a
+   * search lane's last search ended); disposed once nothing holds it */
+  retired: boolean;
+}
+
+/** fix7 — what a bounded wait answers when the call did not come back in time
+ * (the call itself runs on; mille has no cancel for it). */
+const HELD = Symbol("held");
+
+function bounded<T>(answer: Promise<T>, ms: number): Promise<T | typeof HELD> {
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<typeof HELD>((resolve) => {
+    timer = setTimeout(() => resolve(HELD), Math.max(0, ms));
+    timer.unref?.();
+  });
+  return Promise.race([answer, late]).finally(() => clearTimeout(timer));
+}
+
+/** fix7 — a folder whose ENGINE did not answer within LIST_ENGINE_MS, twice:
+ * the folder's `timed-out`, in words that name what holds it. */
+export function engineHeld(
+  path: string | undefined,
+  ms: number = WORKSPACE_LIMITS.LIST_ENGINE_MS,
+): WorkerFailure {
+  const leaf = path === undefined ? "" : basename(path);
+  const name = leaf === "" ? "That folder" : `“${leaf}”`;
+  const seconds = Math.round(ms / 100) / 10;
+  return new WorkerFailure(
+    "timed-out",
+    `${name} did not answer within ${seconds} s — its drive is busy (something is writing a lot there). Try again in a moment.`,
+  );
 }
 
 /** An acquired slot: its engine is there. */
@@ -150,17 +208,23 @@ type Live = Slot & { host: FileExplorerHost };
 
 export interface EnginesOptions {
   /** test seams; production: WORKSPACE_LIMITS.HOST_IDLE_MS / HOSTS_MAX /
-   * SEARCH_WALK_ENTRIES / SEARCH_WALK_MS */
+   * SEARCH_WALK_ENTRIES / SEARCH_WALK_MS / LIST_ENGINE_MS / SEARCH_RESOLVE_MS */
   idleMs?: number;
   hostsMax?: number;
   walkEntries?: number;
   walkMs?: number;
+  listMs?: number;
+  resolveMs?: number;
   /** the user's home folder (its top-level Library is never walked) */
   home?: string;
   now?: () => number;
   platform?: NodeJS.Platform;
   /** test seam: each engine as it is made, before it answers anything */
-  onHost?: (host: FileExplorerHost) => void;
+  onHost?: (host: FileExplorerHost, lane: EngineLane) => void;
+  /** test seam: each name walk as it starts (its subtree below the root) */
+  onWalk?: (startRel: string) => void;
+  /** fix7 — the worker's word to fieldd's log (a retired engine) */
+  onLog?: (event: string, message: string, fields: Record<string, unknown>) => void;
 }
 
 /** What every engine is made with, beside its root (header). */
@@ -241,13 +305,22 @@ export class Engines {
   readonly #hostsMax: number;
   readonly #walkEntries: number;
   readonly #walkMs: number;
+  readonly #listMs: number;
+  readonly #resolveMs: number;
   readonly #home: string;
+  /** the searches' name walks, by export and then subtree (host/names.ts) —
+   * names, not engine state, so they outlive a search lane's engine */
+  readonly #walks = new Map<string, Map<string, NameWalk>>();
+  /** walks in flight, by export and subtree: one walk per subtree at a time */
+  readonly #walking = new Map<string, Promise<NameWalk>>();
   /** folders whose read hung (a search walk's or a child count's,
    * host/names.ts) — never read again while that read holds its thread */
   readonly #hung = new Set<string>();
   readonly #now: () => number;
   readonly #platform: NodeJS.Platform;
-  readonly #onHost: ((host: FileExplorerHost) => void) | undefined;
+  readonly #onHost: EnginesOptions["onHost"];
+  readonly #onWalk: EnginesOptions["onWalk"];
+  readonly #onLog: EnginesOptions["onLog"];
   readonly #sweeper: NodeJS.Timeout;
 
   constructor(opts: EnginesOptions = {}) {
@@ -255,10 +328,14 @@ export class Engines {
     this.#hostsMax = Math.max(1, opts.hostsMax ?? WORKSPACE_LIMITS.HOSTS_MAX);
     this.#walkEntries = opts.walkEntries ?? WORKSPACE_LIMITS.SEARCH_WALK_ENTRIES;
     this.#walkMs = opts.walkMs ?? WORKSPACE_LIMITS.SEARCH_WALK_MS;
+    this.#listMs = opts.listMs ?? WORKSPACE_LIMITS.LIST_ENGINE_MS;
+    this.#resolveMs = opts.resolveMs ?? WORKSPACE_LIMITS.SEARCH_RESOLVE_MS;
     this.#home = opts.home ?? homedir();
     this.#now = opts.now ?? Date.now;
     this.#platform = opts.platform ?? process.platform;
     this.#onHost = opts.onHost;
+    this.#onWalk = opts.onWalk;
+    this.#onLog = opts.onLog;
     this.#sweeper = setInterval(() => void this.sweep(), Math.min(SWEEP_MS, this.#idleMs));
     this.#sweeper.unref();
   }
@@ -294,32 +371,35 @@ export class Engines {
         "busy",
         `every one of the ${this.#hostsMax} file engines is answering; ask again shortly`,
       );
-    this.#slots.delete(victim.rootPath);
+    this.#slots.delete(victim.key);
     void victim.host.dispose().catch(() => undefined);
   }
 
-  async #acquire(rootPath: string): Promise<Live> {
-    let slot = this.#slots.get(rootPath);
+  async #acquire(rootPath: string, lane: EngineLane = "rows"): Promise<Live> {
+    const key = lane === "rows" ? rootPath : `search\u0000${rootPath}`;
+    let slot = this.#slots.get(key);
     if (slot === undefined) {
       if (this.#slots.size >= this.#hostsMax) this.#evictOne();
       const pending = createFileExplorerHost({ roots: [rootPath], ...ENGINE_OPTIONS }).then(
         (host) => {
-          this.#onHost?.(host);
+          this.#onHost?.(host, lane);
           return host;
         },
       );
       const made: Slot = {
+        key,
+        lane,
         rootPath,
         pending,
         host: null,
         lastUsed: this.#now(),
         active: 0,
-        walks: new Map(),
+        retired: false,
       };
       slot = made;
-      this.#slots.set(rootPath, made);
+      this.#slots.set(key, made);
       pending.catch(() => {
-        if (this.#slots.get(rootPath) === made) this.#slots.delete(rootPath);
+        if (this.#slots.get(key) === made) this.#slots.delete(key);
       });
     }
     slot.active += 1;
@@ -336,6 +416,22 @@ export class Engines {
   #release(slot: Slot): void {
     slot.active -= 1;
     slot.lastUsed = this.#now();
+    // a search lane lives while a search holds it (header)
+    if (slot.lane === "search" && slot.active === 0) this.#retire(slot);
+    else if (slot.retired && slot.active === 0) this.#dispose(slot);
+  }
+
+  /** Out of the table now; disposed once nothing holds it (an attachment
+   * keeps a retired rows engine to its end). */
+  #retire(slot: Slot): void {
+    if (this.#slots.get(slot.key) === slot) this.#slots.delete(slot.key);
+    if (slot.retired) return;
+    slot.retired = true;
+    if (slot.active === 0) this.#dispose(slot);
+  }
+
+  #dispose(slot: Slot): void {
+    void slot.pending.then((host) => host.dispose()).catch(() => undefined);
   }
 
   /** The engine's root row — refreshed when the folder came back after the
@@ -413,15 +509,58 @@ export class Engines {
     };
   }
 
+  /** The folder's page from the rows' engine, or HELD when the engine did not
+   * answer within LIST_ENGINE_MS (its lock held: header). */
+  async #page(
+    slot: Live,
+    rootReal: string,
+    segments: readonly string[],
+  ): Promise<
+    { abs: string; page: Awaited<ReturnType<FileExplorerHost["local"]["list"]>> } | typeof HELD
+  > {
+    return bounded(
+      (async () => {
+        const { id, abs } = await this.#folder(slot, rootReal, segments);
+        const fx = slot.host.local;
+        // a folder read before is reconciled against the disk, never served
+        // from memory (the engine's watcher is not trusted to have caught up)
+        if (fx.getSnapshot().directoryChildrenLoaded(id)) await fx.resync(id);
+        return { abs, page: await fx.list(id, { sort: "kindThenName" }) };
+      })(),
+      this.#listMs,
+    );
+  }
+
+  /** fix7 — an engine that held a list past its budget: retired, said. */
+  #held(slot: Slot, ms: number): void {
+    this.#retire(slot);
+    this.#onLog?.(
+      "engine_retired",
+      "A files engine held a list past its budget; a fresh one answers",
+      {
+        export: slot.rootPath,
+        ms,
+      },
+    );
+  }
+
   async list(args: ListArgs): Promise<ListValue> {
     const rootReal = await this.#rootReal(args.rootPath);
-    const slot = await this.#acquire(rootReal);
+    let slot = await this.#acquire(rootReal);
     try {
-      const { id, abs } = await this.#folder(slot, rootReal, args.segments);
-      const fx = slot.host.local;
-      // no watcher: a folder read before is reconciled, never served from memory
-      if (fx.getSnapshot().directoryChildrenLoaded(id)) await fx.resync(id);
-      const page = await fx.list(id, { sort: "kindThenName" });
+      let read = await this.#page(slot, rootReal, args.segments);
+      if (read === HELD) {
+        // the list's own lane: never a second wait on a held engine
+        this.#held(slot, this.#listMs);
+        this.#release(slot);
+        slot = await this.#acquire(rootReal);
+        read = await this.#page(slot, rootReal, args.segments);
+        if (read === HELD) {
+          this.#held(slot, this.#listMs);
+          throw engineHeld(join(rootReal, ...args.segments), this.#listMs);
+        }
+      }
+      const { abs, page } = read;
       const entries =
         args.kinds === "dirs" ? page.entries.filter((e) => e.kind === KIND.DIR) : [...page.entries];
       const slice = entries.slice(args.offset, args.offset + args.limit);
@@ -460,15 +599,21 @@ export class Engines {
 
   /** The subtree's NAMES (host/names.ts): this export's walk of that subtree
    * when one ran within SEARCH_CACHE_MS (a reader typing a query asks again
-   * and again), else a fresh walk — kept beside the engine for its life, at
-   * most WALKS_KEPT of them. */
-  async #names(slot: Live, abs: string, startRel: string): Promise<NameWalk> {
+   * and again) or is running now (fix7: asked together, one walk), else a
+   * fresh walk — kept for the export, at most WALKS_KEPT of them. */
+  async #names(rootPath: string, abs: string, startRel: string): Promise<NameWalk> {
     const now = this.#now();
-    for (const [key, walk] of slot.walks)
-      if (now - walk.at > WORKSPACE_LIMITS.SEARCH_CACHE_MS) slot.walks.delete(key);
-    const kept = slot.walks.get(startRel);
+    const walks = this.#walks.get(rootPath) ?? new Map<string, NameWalk>();
+    this.#walks.set(rootPath, walks);
+    for (const [key, walk] of walks)
+      if (now - walk.at > WORKSPACE_LIMITS.SEARCH_CACHE_MS) walks.delete(key);
+    const kept = walks.get(startRel);
     if (kept !== undefined) return kept;
-    const walk = await walkNames({
+    const flight = `${rootPath}\u0000${startRel}`;
+    const running = this.#walking.get(flight);
+    if (running !== undefined) return running;
+    this.#onWalk?.(startRel);
+    const walking = walkNames({
       start: abs,
       startRel,
       home: abs === this.#home,
@@ -477,41 +622,52 @@ export class Engines {
       readTimeoutMs: WORKSPACE_LIMITS.READ_TIMEOUT_MS,
       hung: this.#hung,
       now: this.#now,
+    }).then((walk) => {
+      walks.set(startRel, walk);
+      if (walks.size > WALKS_KEPT) {
+        const oldest = [...walks.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+        if (oldest !== undefined) walks.delete(oldest[0]);
+      }
+      this.#trimWalks(walk);
+      return walk;
     });
-    slot.walks.set(startRel, walk);
-    if (slot.walks.size > WALKS_KEPT) {
-      const oldest = [...slot.walks.entries()].sort((a, b) => a[1].at - b[1].at)[0];
-      if (oldest !== undefined) slot.walks.delete(oldest[0]);
+    this.#walking.set(flight, walking);
+    try {
+      return await walking;
+    } finally {
+      this.#walking.delete(flight);
     }
-    this.#trimWalks(walk);
-    return walk;
   }
 
   /** The worker-wide bound on kept walks: the oldest anywhere goes until the
    * kept entries fit WALK_CACHE_ENTRIES (never the walk just made). */
   #trimWalks(keep: NameWalk): void {
-    const all: Array<{ slot: Slot; key: string; walk: NameWalk }> = [];
+    const all: Array<{ walks: Map<string, NameWalk>; key: string; walk: NameWalk }> = [];
     let total = 0;
-    for (const slot of this.#slots.values())
-      for (const [key, walk] of slot.walks) {
-        all.push({ slot, key, walk });
+    for (const walks of this.#walks.values())
+      for (const [key, walk] of walks) {
+        all.push({ walks, key, walk });
         total += walk.walked;
       }
     all.sort((a, b) => a.walk.at - b.walk.at);
     for (const item of all) {
       if (total <= WALK_CACHE_ENTRIES) break;
       if (item.walk === keep) continue;
-      item.slot.walks.delete(item.key);
+      item.walks.delete(item.key);
       total -= item.walk.walked;
     }
   }
 
   async search(args: SearchArgs): Promise<SearchValue> {
     const rootReal = await this.#rootReal(args.rootPath);
-    const slot = await this.#acquire(rootReal);
+    // fix7 — an engine of the search's own (header): what it hydrates never
+    // enters the rows' store
+    const slot = await this.#acquire(rootReal, "search");
     try {
-      const { abs } = await this.#folder(slot, rootReal, args.segments);
-      const walk = await this.#names(slot, abs, args.segments.join("/"));
+      const folder = await bounded(this.#folder(slot, rootReal, args.segments), this.#listMs);
+      if (folder === HELD) throw engineHeld(join(rootReal, ...args.segments), this.#listMs);
+      const { abs } = folder;
+      const walk = await this.#names(rootReal, abs, args.segments.join("/"));
       const scored: Array<{ index: number; score: number }> = [];
       for (let index = 0; index < walk.rels.length; index += 1) {
         const kind = walk.kinds[index] as number;
@@ -531,9 +687,16 @@ export class Engines {
       // a hit whose folder did not answer is left out, and the answer says it
       // is not all the walk found
       let unread = false;
+      // fix7 — the resolve phase's budget: what is unresolved by then is left
+      // out, said as `complete: false`
+      const resolveBy = Date.now() + this.#resolveMs;
       for (const { index } of scored) {
         if (hits.length === args.limit) {
           more = true;
+          break;
+        }
+        if (Date.now() >= resolveBy) {
+          unread = true;
           break;
         }
         const relativePath = walk.rels[index] as string;
@@ -545,10 +708,17 @@ export class Engines {
         } catch {
           continue;
         }
-        const id = await slot.host.local.resolvePath(absolute).catch((error: unknown) => {
-          if (milleRefusal(error) !== null) unread = true;
-          return null;
-        });
+        const id = await bounded(
+          slot.host.local.resolvePath(absolute).catch((error: unknown) => {
+            if (milleRefusal(error) !== null) unread = true;
+            return null;
+          }),
+          resolveBy - Date.now(),
+        );
+        if (id === HELD) {
+          unread = true;
+          break;
+        }
         if (id === null || id === undefined) continue;
         hits.push({
           id,
@@ -572,8 +742,8 @@ export class Engines {
     const now = this.#now();
     for (const slot of [...this.#slots.values()]) {
       if (slot.host === null || slot.active > 0 || now - slot.lastUsed < this.#idleMs) continue;
-      if (this.#slots.get(slot.rootPath) !== slot) continue;
-      this.#slots.delete(slot.rootPath);
+      if (this.#slots.get(slot.key) !== slot) continue;
+      this.#slots.delete(slot.key);
       await slot.host.dispose().catch(() => undefined);
     }
   }
@@ -582,6 +752,7 @@ export class Engines {
     clearInterval(this.#sweeper);
     const slots = [...this.#slots.values()];
     this.#slots.clear();
+    this.#walks.clear();
     await Promise.all(
       slots.map((slot) => slot.pending.then((host) => host.dispose()).catch(() => undefined)),
     );
