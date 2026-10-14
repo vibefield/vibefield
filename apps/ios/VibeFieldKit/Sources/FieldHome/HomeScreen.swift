@@ -242,7 +242,7 @@ public struct HomeScreen: View {
           #if DEBUG
             if mockActive { return feed.spawn() }
           #endif
-          beginCreate()
+          beginCreate(fieldContext())
           return nil
         }
       ) {
@@ -324,7 +324,9 @@ public struct HomeScreen: View {
     }
   }
 
-  private func beginCreate() {
+  /// A launch begins (PJ-7): from the field's hold or bloom, or from a
+  /// project's New agent — the sheet comes filled with the usual place.
+  private func beginCreate(_ context: LaunchContext) {
     if workspaceLaunch == nil {
       workspaceLaunch = WorkspaceLaunch(desktops: workspaceDesktops, home: link?.home) { device, method, params in
         guard let link else {
@@ -334,7 +336,47 @@ public struct HomeScreen: View {
       }
     }
     workspaceLaunch?.update(workspaceDesktops)
+    workspaceLaunch?.prepare(context)
     createSheetOpen = true
+  }
+
+  /// PJ-7 — a project's places as a launch names them: by ref, by their
+  /// folder's name, with why one cannot take a launch.
+  private func launchPlaces(_ places: [ProjectPlace]) -> [LaunchPlace] {
+    let now = Date()
+    return places.map { place in
+      let drawn = FieldHistoryModel.place(place, now: now)
+      return LaunchPlace(
+        ref: place.ref, name: drawn.name, branch: drawn.branch, desktop: place.ref.device, reason: drawn.reason,
+        lastAt: place.lastAt, last: drawn.last)
+    }
+  }
+
+  /// From a project (its New agent): its places first in the folder sheet,
+  /// its recipe filling the rows.
+  private func projectContext(_ key: String) -> LaunchContext {
+    let projects = historyDesktops.projects
+    guard let summary = projects.summaries[projects.moved(key) ?? key] else { return LaunchContext() }
+    return LaunchContext(projectName: summary.name, places: launchPlaces(summary.places), recipe: summary.recipe)
+  }
+
+  /// From the field (the hold, or the bloom's desktop and profile): FS-2's
+  /// sheet as it is, filled with the newest place known on that desktop.
+  private func fieldContext(desktop: String? = nil, profileSet: String? = nil) -> LaunchContext {
+    let summaries = historyDesktops.projects.summaries.values.filter(FieldHistoryModel.listed)
+    return LaunchContext(
+      usual: summaries.flatMap { launchPlaces($0.places) }, desktop: desktop, profileSet: profileSet)
+  }
+
+  /// The desktop a project's New agent would start on (its usual place's).
+  private func usualDesktop(_ key: String) -> WorkspaceDesktop? {
+    let context = projectContext(key)
+    let online = Set(workspaceDesktops.filter(\.online).map(\.id))
+    guard
+      let place = LaunchModel.usualPlace(
+        recipe: context.recipe, places: context.usual, desktop: link?.home ?? "", online: online)
+    else { return nil }
+    return workspaceDesktops.first { $0.id == place.desktop }
   }
 
   // MARK: - IOS-9e: the pages, and the bar over them
@@ -387,7 +429,7 @@ public struct HomeScreen: View {
       historyDesktops.need(need)
     }
     .safeAreaInset(edge: .bottom, spacing: 0) {
-      Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: history.stepperShowing))
+      Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: history.stepperShowing || slotProject != nil))
     }
   }
 
@@ -449,6 +491,8 @@ public struct HomeScreen: View {
         ZStack(alignment: .bottom) {
           if barStepper {
             stepper
+          } else if let key = slotProject {
+            newAgentSlot(key)
           }
           if selectedTab == .search {
             SearchBarRow(query: $searchQuery, focus: $searchFocused, typing: barTyping, glass: barGlass, onClose: closeSearch)
@@ -483,13 +527,21 @@ public struct HomeScreen: View {
   }
 
   private var barState: BarState {
-    BarState(tab: selectedTab, folded: barFolded, stepper: barStepper, typing: barTyping)
+    BarState(tab: selectedTab, folded: barFolded, stepper: barStepper || slotProject != nil, typing: barTyping)
   }
 
   /// History's scroll has folded the bar to its glyph (the page's minimize).
   private var barFolded: Bool { selectedTab == .history && history.barMinimized && !accountMenuOpen }
   /// A landed search is on top: the stepper rides the bar.
   private var barStepper: Bool { selectedTab == .history && history.stepperShowing && !accountMenuOpen }
+  /// PJ-7 — a project on top of History's stack, no landed search holding the
+  /// slot: New agent stands there (TP §6.3).
+  private var slotProject: String? {
+    guard selectedTab == .history, !history.stepperShowing, !accountMenuOpen,
+      case .project(let key)? = history.path.last
+    else { return nil }
+    return key
+  }
   /// A software keyboard stands under search: the row rides above it at the
   /// system's typing size. Focus alone is not enough — with a hardware
   /// keyboard the field is focused and no keyboard rises, and the row stays
@@ -560,6 +612,36 @@ public struct HomeScreen: View {
       .glassID("stepper", in: barGlass)
       .padding(.horizontal, barFolded ? AppBar.margin + AppBar.height + AppBar.inlineGap : AppBar.margin)
       .padding(.bottom, barFolded ? 0 : AppBar.height + AppBar.stepperGap)
+  }
+
+  /// PJ-7 — New agent in the stepper's slot (DESIGN.md §8's FS-2 entry): the
+  /// Start glyph and its words, then the usual place's desktop.
+  private func newAgentSlot(_ key: String) -> some View {
+    let desktop = usualDesktop(key)
+    return Button {
+      beginCreate(projectContext(key))
+    } label: {
+      HStack(spacing: 8) {
+        FieldGlyph(.start, size: FieldGlyph.box(for: 15))
+        Text("New agent").font(ChromeType.sans(15, .semibold))
+        Spacer(minLength: 6)
+        if let desktop {
+          DeviceMark(platform: desktop.platform, size: 12)
+          Text(desktop.name).font(ChromeType.sans(13)).lineLimit(1)
+        }
+      }
+      .foregroundStyle(ChromePalette.ink)
+      .padding(.horizontal, 18)
+      .frame(maxWidth: .infinity, minHeight: 44)
+      .contentShape(Capsule())
+    }
+    .buttonStyle(.plain)
+    .frame(height: barFolded ? AppBar.height : AppBar.stepperHeight)
+    .liquidGlassCapsule()
+    .glassID("stepper", in: barGlass)
+    .padding(.horizontal, barFolded ? AppBar.margin + AppBar.height + AppBar.inlineGap : AppBar.margin)
+    .padding(.bottom, barFolded ? 0 : AppBar.height + AppBar.stepperGap)
+    .accessibilityLabel(desktop.map { "New agent, on \($0.name)" } ?? "New agent")
   }
 
   /// The search circle becomes the field (their shared `glassID`), and the

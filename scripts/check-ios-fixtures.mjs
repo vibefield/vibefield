@@ -114,11 +114,21 @@ const historyFixtures = [
   "project-figures.valid.json",
   "project-changes-open.snapshot.json",
 ];
+// The launch sheet reads these (its tests, and the DEBUG fixture door the first two).
+const sheetFixtures = [
+  "agents-profile-sets.valid.json",
+  "agent-models.valid.json",
+  "agent-models.stale.json",
+  "agent-models.auth-required.json",
+  "project-summary.recipe-place.json",
+];
 const requiredMirrors = [
   ["workspace", workspaceFixtures, ["Tests/FieldWorkspaceTests", "Sources/FieldWorkspace"]],
   ["project", projectFixtures, ["Tests/FieldProductTests"]],
   ["project", historyFixtures, ["Tests/FieldHistoryTests", "Sources/FieldHistory"]],
   ["launch", launchFixtures, ["Tests/FieldProductTests"]],
+  ["launch", sheetFixtures, ["Tests/FieldWorkspaceTests"]],
+  ["launch", sheetFixtures.slice(0, 2), ["Sources/FieldWorkspace"]],
 ];
 for (const [set, fixtures, folders] of requiredMirrors) {
   for (const folder of folders) {
