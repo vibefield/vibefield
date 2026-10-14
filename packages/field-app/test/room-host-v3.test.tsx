@@ -22,8 +22,8 @@ import {
   type RoomAct,
   type RoomFolders,
   type RoomMenu,
-} from "@rosetta/room";
-import { createDemoPorts, createRoomDemo } from "@rosetta/room/fixtures";
+} from "@vibefield/rosetta-room";
+import { createDemoPorts, createRoomDemo } from "@vibefield/rosetta-room/fixtures";
 import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -34,7 +34,7 @@ let root: Root | null = null;
 let host: HTMLElement | null = null;
 
 beforeAll(async () => {
-  await import("@rosetta/room");
+  await import("@vibefield/rosetta-room");
 }, 60_000);
 
 afterEach(() => {

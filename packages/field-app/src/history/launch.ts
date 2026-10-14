@@ -1,4 +1,3 @@
-import type { RoomMenuGroup, RoomMenuItem } from "@rosetta/room";
 import type {
   AgentModelChoice,
   AgentModelControl,
@@ -8,6 +7,7 @@ import type {
   AgentProviderSummary,
   ProjectRecipe,
 } from "@vibefield/contracts";
+import type { RoomMenuGroup, RoomMenuItem } from "@vibefield/rosetta-room";
 
 // HISTORY'S NEW AGENT, ITS WAYS TO START (PJ-6d; `build-pj6.md` Q1–Q3, Q7;
 // DESIGN.md §8 "History", New agent). After "Starts in", the rows say HOW: the

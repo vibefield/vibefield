@@ -27,12 +27,6 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  RosettaClient,
-  type SessionSubscriptionHandlers,
-  UnauthorizedError,
-} from "@rosetta/protocol";
-import { SCOPE_FILES, SCOPE_READ, verifyGrant } from "@rosetta/protocol/grants";
 import { verifyAuditSegment } from "@vibefield/audit";
 import {
   type CallerContext,
@@ -47,6 +41,12 @@ import {
 } from "@vibefield/contracts";
 import type { AuditRecordV1 } from "@vibefield/contracts/diagnostics";
 import type { WsCtor } from "@vibefield/fieldd-client";
+import {
+  RosettaClient,
+  type SessionSubscriptionHandlers,
+  UnauthorizedError,
+} from "@vibefield/rosetta-protocol";
+import { SCOPE_FILES, SCOPE_READ, verifyGrant } from "@vibefield/rosetta-protocol/grants";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";

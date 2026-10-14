@@ -1,4 +1,4 @@
-import type { RoomSelection, RoomTarget } from "@rosetta/room";
+import type { RoomSelection, RoomTarget } from "@vibefield/rosetta-room";
 import { type ReactElement, useEffect, useMemo, useState } from "react";
 import { Composer } from "../frame/Composer";
 import type { FrameSurface } from "../frame/frame-surface";

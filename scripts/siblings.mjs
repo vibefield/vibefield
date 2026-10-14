@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 // AR-0 sibling mode — the one reader of siblings.lock.json.
 //
-// puppeteer (the agent runtime) and rosetta (agent history) are unpublished, so
-// this repo consumes them as SIBLING CHECKOUTS: their packages enter through
+// puppeteer (the agent runtime) and rosetta (agent history) were unpublished, so
+// this repo consumed them as SIBLING CHECKOUTS: their packages entered through
 // `link:` rows in pnpm-workspace.yaml and rosettad is built from the sibling's
-// source. Three consumers need the same facts about those checkouts and must
+// source. Since RD-5a (2026-10-14) rosetta's packages are exact registry pins and
+// its entry is a `cargo` key alone — the checkout serves rosettad's build until
+// RD-D7 ships it as a release asset. Three consumers need the same facts about those checkouts and must
 // never derive them twice: preflight (verify the pins), Nx (invalidate caches
 // when a sibling changes — a `link:` records no content hash in the lockfile,
 // so without this a sibling edit would never miss a cached typecheck), and the

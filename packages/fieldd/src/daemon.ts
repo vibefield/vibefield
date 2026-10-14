@@ -2,9 +2,6 @@ import { randomBytes } from "node:crypto";
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-// the bare wire number (RO-4): the client entry is a DOM program, and fieldd
-// needs only the version its supervisor holds a spawned rosettad to
-import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@rosetta/protocol/protocol-version";
 import {
   AGENT_CATALOG,
   AGENT_FIELD,
@@ -165,6 +162,9 @@ import {
   pluginLogProvenance,
 } from "@vibefield/logging";
 import { projectPluginAuthority } from "@vibefield/plugin-runtime";
+// the bare wire number (RO-4): the client entry is a DOM program, and fieldd
+// needs only the version its supervisor holds a spawned rosettad to
+import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@vibefield/rosetta-protocol/protocol-version";
 import {
   createFieldSubscription,
   deskProjector,

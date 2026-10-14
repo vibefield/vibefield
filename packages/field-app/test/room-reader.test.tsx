@@ -14,9 +14,9 @@
  */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import type { MetaSubscriptionHandlers } from "@rosetta/protocol";
-import { type ReaderAddress, TranscriptReader } from "@rosetta/room";
-import { createDemoPorts, createRoomDemo } from "@rosetta/room/fixtures";
+import type { MetaSubscriptionHandlers } from "@vibefield/rosetta-protocol";
+import { type ReaderAddress, TranscriptReader } from "@vibefield/rosetta-room";
+import { createDemoPorts, createRoomDemo } from "@vibefield/rosetta-room/fixtures";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -27,7 +27,7 @@ let root: Root | null = null;
 let host: HTMLElement | null = null;
 
 beforeAll(async () => {
-  await import("@rosetta/room");
+  await import("@vibefield/rosetta-room");
 }, 60_000);
 
 afterEach(() => {
@@ -214,7 +214,7 @@ describe("the room's reader (PK3)", () => {
   it("the mark's look is the host's: three tokens whose defaults are neutral, never the select hue (K1)", () => {
     const css = readFileSync(
       createRequire(import.meta.url)
-        .resolve("@rosetta/room/styles/room.css")
+        .resolve("@vibefield/rosetta-room/styles/room.css")
         .replace(/history-room\.css$/, "reader.css"),
       "utf8",
     );

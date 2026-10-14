@@ -1,4 +1,3 @@
-import type { RoomSelection, RoomTarget } from "@rosetta/room";
 import {
   type AgentProfileSet,
   type AgentProviderSummary,
@@ -9,6 +8,7 @@ import {
   ProjectGetResult,
 } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
+import type { RoomSelection, RoomTarget } from "@vibefield/rosetta-room";
 import {
   type ReactElement,
   useCallback,

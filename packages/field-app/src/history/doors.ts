@@ -1,3 +1,22 @@
+import {
+  AGENT_CATALOG_READERS,
+  INDEX_MESH,
+  type IndexCatalogSource,
+  IndexSearchResult,
+  type IndexSession,
+  IndexSessionsResult,
+  IndexStatus,
+  type IndexThread,
+  type IndexThreadDelegation,
+  IndexThreadsResult,
+  PROJECT_DOORS,
+  ProjectChangesDelta,
+  ProjectFiguresDayResult,
+  ProjectFiguresResult,
+  ProjectListResult,
+  type ProjectRegrouped,
+  type ProjectSummary,
+} from "@vibefield/contracts";
 import type {
   BackfillState,
   ContributionRow,
@@ -22,7 +41,7 @@ import type {
   StreamState,
   SubscriptionStatus,
   UsageResponse,
-} from "@rosetta/protocol";
+} from "@vibefield/rosetta-protocol";
 import type {
   CatalogPort,
   CatalogSearch,
@@ -31,26 +50,7 @@ import type {
   HostPort,
   ProjectStats,
   RoomPorts,
-} from "@rosetta/room";
-import {
-  AGENT_CATALOG_READERS,
-  INDEX_MESH,
-  type IndexCatalogSource,
-  IndexSearchResult,
-  type IndexSession,
-  IndexSessionsResult,
-  IndexStatus,
-  type IndexThread,
-  type IndexThreadDelegation,
-  IndexThreadsResult,
-  PROJECT_DOORS,
-  ProjectChangesDelta,
-  ProjectFiguresDayResult,
-  ProjectFiguresResult,
-  ProjectListResult,
-  type ProjectRegrouped,
-  type ProjectSummary,
-} from "@vibefield/contracts";
+} from "@vibefield/rosetta-room";
 import { WorkspaceClient, type WorkspaceClientOptions } from "../workspace/client";
 import { type AssetSourceOptions, assetSourceOver, type HistoryAssetSource } from "./asset-source";
 import type { HistoryListing } from "./host-model";
@@ -58,7 +58,7 @@ import { type HistorySections, historySectionsOf } from "./sections";
 import { type HistorySessionPort, type SessionPortOptions, sessionPortOver } from "./session-port";
 
 // THE HISTORY ROOM'S PORTS (AR-8c; thinking-ar-history-room.md §2 — AR-D36,
-// AR-D37 (a)). rosetta's room (`@rosetta/room`) dials nothing: it reads four
+// AR-D37 (a)). rosetta's room (`@vibefield/rosetta-room`) dials nothing: it reads four
 // ports, and these are VibeField's, pure adapters over this window's fieldd
 // client, the way `godview/monitor/doors.ts` adapts puppeteer's views. Two
 // lanes, never crossed (EL2):

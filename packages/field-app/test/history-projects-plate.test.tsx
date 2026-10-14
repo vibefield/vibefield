@@ -241,7 +241,16 @@ describe("History by project — the catalog's plate (PJ-4)", () => {
     // `:where(.ah)` in the illustration sheet, so the plates draw the room's own.
     const classes = (css: string): Set<string> =>
       new Set([...css.matchAll(/\.(ah-[A-Za-z0-9_-]+)/gu)].map((match) => match[1] ?? ""));
-    const roomStyles = join(HERE, "..", "node_modules", "@rosetta", "room", "src", "styles");
+    // The published room ships its sheets under dist/ (RD-5a; the sibling link read src/).
+    const roomStyles = join(
+      HERE,
+      "..",
+      "node_modules",
+      "@vibefield",
+      "rosetta-room",
+      "dist",
+      "styles",
+    );
     const room = new Set(
       readdirSync(roomStyles)
         .filter((name) => name.endsWith(".css"))

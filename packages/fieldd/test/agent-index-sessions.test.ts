@@ -1,9 +1,9 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { SessionRow } from "@rosetta/protocol";
 import { IndexSessionRow } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
+import type { SessionRow } from "@vibefield/rosetta-protocol";
 import { afterAll, describe, expect, it } from "vitest";
 import { EnrollmentStore, IndexService } from "../src/agent-index";
 import { RpcCallError } from "../src/native-link";

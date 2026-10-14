@@ -1,5 +1,3 @@
-import type { CatalogPort, CatalogStatus, HostPort, RoomPorts } from "@rosetta/room";
-import { createDemoPorts, createRoomDemo, type RoomDemo } from "@rosetta/room/fixtures";
 import {
   AGENT_CATALOG_READERS,
   type AgentModelsResult,
@@ -12,11 +10,13 @@ import {
   type ProjectFiguresResult,
   type ProjectSummary,
 } from "@vibefield/contracts";
+import type { CatalogPort, CatalogStatus, HostPort, RoomPorts } from "@vibefield/rosetta-room";
+import { createDemoPorts, createRoomDemo, type RoomDemo } from "@vibefield/rosetta-room/fixtures";
 import { catalogPortOver, type HistoryCatalogPort, type HistoryDoorClient } from "../history/doors";
 
 // History's FIXTURE ADAPTER (AR-8c; docs/UI_SYSTEM.md "Catalog fidelity"). The
 // catalog mounts the SHIPPING `HistoryRoomView` over the room package's own
-// fixture entry (`@rosetta/room/fixtures`: six projects, eleven sessions, a
+// fixture entry (`@vibefield/rosetta-room/fixtures`: six projects, eleven sessions, a
 // year of figures, two transcripts — all relative to now), never a copy of the
 // room's markup or CSS. What this file adds is only what a HOST supplies in
 // the two states the package's demo does not draw: an index that cannot

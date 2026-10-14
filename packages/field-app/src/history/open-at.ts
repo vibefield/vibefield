@@ -1,4 +1,4 @@
-import type { RoomTarget } from "@rosetta/room";
+import type { RoomTarget } from "@vibefield/rosetta-room";
 import { useSyncExternalStore } from "react";
 
 // WHERE THE FRAME OPENS HISTORY AT A LINE (DESIGN.md §8 "Search — the Peek",

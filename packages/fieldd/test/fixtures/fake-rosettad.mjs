@@ -103,7 +103,7 @@
 // `x-rosetta-auth: <reason>` beside the protocol header, which is how a test
 // tells "wrong credential" from "wrong daemon"; FAKE_ROSETTAD_AUTH_LOG names a
 // file that gets one line per decision (`<METHOD> <path> <credential> <verdict>`,
-// never the credential itself). Grants verify with `@rosetta/protocol/grants`.
+// never the credential itself). Grants verify with `@vibefield/rosetta-protocol/grants`.
 // Modes: `no-auth` (a ready line with no `auth` — a daemon from before RO-1),
 // `old-binary` (`rosettad: unknown flag --token-file` and exit 2, as an older
 // binary answers the flag).
@@ -134,8 +134,8 @@ import {
 } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
-import { verifyGrant } from "@rosetta/protocol/grants";
-import { PROTOCOL_VERSION } from "@rosetta/protocol/protocol-version";
+import { verifyGrant } from "@vibefield/rosetta-protocol/grants";
+import { PROTOCOL_VERSION } from "@vibefield/rosetta-protocol/protocol-version";
 
 const args = process.argv.slice(2);
 const flag = (name) => {

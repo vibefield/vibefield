@@ -11,8 +11,8 @@
  * the "not recorded" words are nowhere. (The bytes from a real rosettad under a
  * real grant: `history-witness.test.ts`, its synthesized home's D1 row.)
  */
-import { PROTOCOL_VERSION, RosettaClient } from "@rosetta/protocol";
-import { createDemoPorts, createRoomDemo } from "@rosetta/room/fixtures";
+import { PROTOCOL_VERSION, RosettaClient } from "@vibefield/rosetta-protocol";
+import { createDemoPorts, createRoomDemo } from "@vibefield/rosetta-room/fixtures";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -28,7 +28,7 @@ let assets: HistoryAssetSource | null = null;
 // The room is its own chunk in the product; loading it once before the rows
 // keeps a row's seconds for the room rather than its first transform.
 beforeAll(async () => {
-  await import("@rosetta/room");
+  await import("@vibefield/rosetta-room");
 }, 60_000);
 
 /** An observer that says every observed tile is on screen — happy-dom lays

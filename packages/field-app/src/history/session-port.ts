@@ -1,3 +1,4 @@
+import { INDEX_TICKET, IndexEndpointSet, IndexOpenTicket } from "@vibefield/contracts";
 import {
   type CollaborationSubscriptionHandlers,
   RosettaClient,
@@ -5,9 +6,8 @@ import {
   type SessionSubscriptionHandlers,
   type SubscriptionStatus,
   UnauthorizedError,
-} from "@rosetta/protocol";
-import type { SessionClient, SessionPort } from "@rosetta/room";
-import { INDEX_TICKET, IndexEndpointSet, IndexOpenTicket } from "@vibefield/contracts";
+} from "@vibefield/rosetta-protocol";
+import type { SessionClient, SessionPort } from "@vibefield/rosetta-room";
 
 // THE ROOM'S SESSION PORT (AR-8c; thinking-ar-history-room.md §2, AR-D37 (a)).
 // One session's BODY — its live transcript, its entries, plans and assets —

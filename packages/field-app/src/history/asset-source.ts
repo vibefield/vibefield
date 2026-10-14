@@ -1,5 +1,5 @@
-import type { AssetRef, ImageVariant, RosettaClient } from "@rosetta/protocol";
-import type { AssetSource } from "@rosetta/room";
+import type { AssetRef, ImageVariant, RosettaClient } from "@vibefield/rosetta-protocol";
+import type { AssetSource } from "@vibefield/rosetta-room";
 
 // THE ROOM'S ASSET SOURCE (AR-8c; AR-D40 (a)). An `<img src>` cannot carry a
 // credential, and rosettad wants one on every route once it runs with a bearer

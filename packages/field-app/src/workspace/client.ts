@@ -1,4 +1,3 @@
-import type { WorktreeHostEvent, WorktreeHostPort } from "@rosetta/room";
 import {
   WORKSPACE_LIMITS,
   WorkspaceFileActionResult,
@@ -10,6 +9,7 @@ import {
   WorkspaceRootsResult,
   WorkspaceSearchResult,
 } from "@vibefield/contracts";
+import type { WorktreeHostEvent, WorktreeHostPort } from "@vibefield/rosetta-room";
 
 export interface WorkspaceDoor {
   request(method: string, params: Record<string, unknown>): Promise<unknown>;

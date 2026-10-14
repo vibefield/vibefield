@@ -134,9 +134,11 @@ pnpm link ../infinite-canvas-engine/packages/ice   # undo: pnpm unlink
 **rosetta** (chopsticks and spaghetti retired 2026-09-04). Neither is published, so this repo
 consumes two SIBLING CHECKOUTS, `../puppeteer` and `../rosetta-pin` (three since 2026-09-16 —
 `../truffle-rfc025` still serves the RFC 025 window's SwiftPM half above), pinned by revision in
-`siblings.lock.json`: puppeteer's packages and rosetta's TypeScript client enter as `link:` rows in
-the fenced block of `pnpm-workspace.yaml` (packages ask for `"*"`; only directly imported packages
-are rows; adapters never — walls R20–R22), and `rosettad` is built from the pinned rosetta checkout by
+`siblings.lock.json`: puppeteer's packages enter as `link:` rows in the fenced block of
+`pnpm-workspace.yaml` (packages ask for `"*"`; only directly imported packages are rows; adapters
+never — walls R20–R22) — rosetta's two TypeScript packages left that block at RD-5a (2026-10-14) for
+EXACT registry pins, `@vibefield/rosetta-protocol` and `@vibefield/rosetta-room` 0.1.1, published
+from the revision the lock pins (its entry is a `cargo` key alone now) — and `rosettad` is built from the pinned rosetta checkout by
 `pnpm siblings:build` (cargo's own target dir, the SSD) and reaches fieldd as `FIELDD_ROSETTAD_BIN`.
 `pnpm preflight` fails on a missing checkout or a revision ≠ the pin and warns on a dirty tree;
 `pnpm siblings` prints the state; `pnpm siblings:pin` is the deliberate upgrade event (EL8), and since
@@ -155,6 +157,8 @@ creates it on a machine that lacks it (once the pin is on the remote; today's wa
 reads — his commits there no longer redden preflight. A pin move is
 `git -C ../rosetta-pin fetch && git -C ../rosetta-pin checkout --detach <sha>`, then `pnpm siblings:pin rosetta`
 (which builds rosettad from that checkout; its machine-local `.cargo/config.toml` keeps the target on the SSD).
+Since RD-5a the same EL8 commit moves the two `@vibefield/rosetta-*` rows to the version published from
+that revision (and preflight's `PIN_EXPECTATIONS`), so rosettad and the client never name two revisions.
 
 **Terminal performance source window (2026-09-27):** `../ghosttea-0.11.2` is also pinned in
 the lock, supplying six Cargo patches and the React renderer. Run

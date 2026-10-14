@@ -26,7 +26,7 @@
 /* QL-1: the empty pane launcher, beside the frame it sits inside — the same
    package, the same one row, after the frame's rules. */
 @import "@vibecook/puppeteer-views/styles/pane-launcher.css";
-/* AR-8c: History is rosetta's room (`@rosetta/room`), and its sheet does NOT
+/* AR-8c: History is rosetta's room (`@vibefield/rosetta-room`), and its sheet does NOT
    enter here (2026-10-04): it rides the room's own chunk — one row in
    `history/HistoryRoomView.tsx`, the package's own bundle — so the first paint
    never carries it and it still lands after the kit's tokens, by load order. */
