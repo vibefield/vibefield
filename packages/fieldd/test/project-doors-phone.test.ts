@@ -21,6 +21,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  AgentSpawnResult,
   CONTRACTS_VERSION,
   computeEffectiveGrants,
   IndexSessionsResult,
@@ -46,7 +47,8 @@ import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { productDoorPath, TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { desktopSlice, registryPeer } from "./peer-roster";
-import { helloAs, until, WsRpc } from "./ws-rpc";
+import { bootPhoneWorld, type PhoneWorld } from "./phone-world";
+import { helloAs, type RpcErrorShape, until, WsRpc } from "./ws-rpc";
 
 const FAKE = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "fake-rosettad.mjs");
 const ROOT_SHA = "a".repeat(40);
@@ -562,3 +564,163 @@ describe("PJ-4 — the merged figures over the real door (H2)", () => {
     }
   }, 30_000);
 });
+
+// PJ-7 — THE PHONE LAUNCHES INTO A PLACE (build-pj7.md slice 4). A second
+// world, over the REAL floor (an agent's birth needs a terminal cell), with the
+// sidecar's half stood in by `MeshStandIn` (phone-world.ts says what is real).
+// The phone arrives the way it does on the tailnet — the product door's secret
+// path and a login header, a self device — and reads, launches and resumes
+// with no path on the wire. The place is a git checkout with an identity
+// remote: a project, not Temporary, so the launch writes the recipe.
+
+/** Polls an async condition every 100 ms until it holds. */
+async function eventually(fn: () => Promise<boolean>, ms: number, label: string): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (!(await fn())) {
+    if (Date.now() > deadline) throw new Error(`not met within ${ms} ms: ${label}`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+describe.skipIf(process.platform === "win32")(
+  "PJ-7 — the phone launches into a place and resumes with no path (the REAL floor, as a self tailnet phone)",
+  () => {
+    let phoneWorld: PhoneWorld;
+    let phone: WsRpc;
+    let local: WsRpc;
+    let ref: { device: string; placeId: string };
+
+    beforeAll(async () => {
+      phoneWorld = await bootPhoneWorld();
+      phone = await open(phoneWorld.doorUrl, { "Tailscale-User-Login": phoneWorld.login });
+      const ack = (await phone.call("system.hello", {
+        contractsVersion: CONTRACTS_VERSION,
+        minCompatible: CONTRACTS_VERSION,
+        clientKind: "ios",
+      })) as { grantedScopes: string[] };
+      expect(ack.grantedScopes).toEqual([...TAILNET_SCOPES]);
+      // a window of this desktop, for what only a window does (ending a run)
+      local = await open(`ws://127.0.0.1:${phoneWorld.daemon.controlPort}`);
+      await helloAs(
+        local,
+        phoneWorld.daemon.tokens.mint(["agent.spawn", "agent.observe", "terminal.attach"], "pj7")
+          .token,
+      );
+    }, 180_000);
+
+    afterAll(async () => {
+      await phoneWorld?.stop();
+    }, 60_000);
+
+    const placeRow = async (): Promise<ProjectListResult["rows"][number]> => {
+      const page = ProjectListResult.parse(await phone.call("project.list", {}));
+      const row = page.rows.find((r) => r.places.some((p) => p.path === phoneWorld.placePath));
+      if (row === undefined) throw new Error("the phone's list holds no project at the place");
+      return row;
+    };
+
+    it("lists the place's project, opens it, launches by its ref: the run starts in the place's folder, the recipe names the place, project.sessions joins the session there, and the field row carries its id", async () => {
+      const { daemon, births, placePath } = phoneWorld;
+      // list → get, as the phone reads them: a repository, not Temporary
+      const listed = await placeRow();
+      expect(listed).toMatchObject({ kind: "repo", bucket: null });
+      const got = ProjectGetResult.parse(await phone.call("project.get", { key: listed.key }));
+      const place = got.project.places.find((p) => p.path === placePath);
+      if (place === undefined) throw new Error("project.get answered no place at the path");
+      expect(place.ref.device).toBe(daemon.devices.currentDeviceId());
+      ref = { device: place.ref.device, placeId: place.ref.placeId };
+
+      // the launch: a provider, a place, an Agent Profile — no path
+      const spawned = AgentSpawnResult.parse(
+        await phone.call("agent.spawn", { provider: "scripted", place: ref, profileSet: "native" }),
+      );
+      expect(births.at(-1)?.cwd).toBe(placePath);
+      // the self phone's ticket names the tailnet's doors, never this Mac's loopback
+      expect(spawned.terminal.endpoints.controlUrl).not.toContain("127.0.0.1");
+
+      // the recipe, written at the confirmed birth, names the place it entered
+      let recipe: Record<string, unknown> | undefined;
+      await eventually(
+        async () => {
+          recipe = (await placeRow()).recipe as Record<string, unknown> | undefined;
+          return recipe?.["place"] !== undefined;
+        },
+        15_000,
+        "the project's recipe names the place",
+      );
+      expect(recipe).toMatchObject({ provider: "scripted", profileSet: "native", place: ref });
+      const key = (await placeRow()).key;
+
+      // the index reads the conversation (as rosetta would), and the project's
+      // sessions join it to that place on this desktop
+      const conversation = spawned.session.sessionId;
+      phoneWorld.fileConversation(conversation, placePath);
+      let joined: ProjectSessionsResult["rows"][number] | undefined;
+      await eventually(
+        async () => {
+          const page = ProjectSessionsResult.parse(await phone.call("project.sessions", { key }));
+          joined = page.rows.find((row) => row.nativeSessionId === conversation);
+          return joined !== undefined;
+        },
+        15_000,
+        "project.sessions joins the launched session",
+      );
+      expect(joined).toMatchObject({ device: daemon.devices.currentDeviceId(), place: ref });
+
+      // Jump to: the phone's field row knows the conversation by its id
+      const board = (await phone.call("agent.subscribe", { projection: "field" })) as {
+        snapshot: { rows: Array<{ runtimeRunId: string; nativeSessionId?: string }> };
+      };
+      expect(
+        board.snapshot.rows.find((row) => row.runtimeRunId === spawned.session.runtimeRunId)
+          ?.nativeSessionId,
+      ).toBe(conversation);
+
+      await local.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    }, 90_000);
+
+    it("refuses another desktop's place `not-here`, before anything starts", async () => {
+      const before = phoneWorld.births.length;
+      const refused = await phone.callErr("agent.spawn", {
+        provider: "scripted",
+        place: { device: "dev-studio", placeId: ref.placeId },
+      });
+      expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
+      expect(refused.data?.details).toMatchObject({
+        reason: "not-here",
+        place: { device: "dev-studio", placeId: ref.placeId },
+      });
+      expect(phoneWorld.births).toHaveLength(before);
+    }, 30_000);
+
+    it("a native resume with no path runs in the conversation's own folder", async () => {
+      const { births, placePath } = phoneWorld;
+      const conversation = births[0]!.sessionId;
+      let resumed: AgentSpawnResult | undefined;
+      // the run the first row ended may still be leaving: a resume beside it is
+      // refused `terminal-alive` until it has gone (AR-4b's one-run law)
+      await eventually(
+        async () => {
+          try {
+            resumed = AgentSpawnResult.parse(
+              await phone.call("agent.resume", {
+                provider: "scripted",
+                nativeSessionId: conversation,
+              }),
+            );
+            return true;
+          } catch (error) {
+            const data = (error as { rpc?: RpcErrorShape }).rpc?.data;
+            if ((data?.details as { state?: unknown } | undefined)?.state === "terminal-alive")
+              return false;
+            throw error;
+          }
+        },
+        15_000,
+        "the conversation resumes once its run has ended",
+      );
+      expect(births.at(-1)).toMatchObject({ resume: conversation, cwd: placePath });
+      await local.call("terminal.terminate", { sessionId: resumed!.terminal.sessionId });
+    }, 60_000);
+  },
+);
