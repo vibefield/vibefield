@@ -33,6 +33,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -75,6 +76,7 @@ import {
   type AgentsProfilesListResult,
   type AgentsProfilesLoginResult,
   LAYOUT,
+  type PlaceFacts,
   SOCKETS,
   type TerminalInfo,
 } from "@vibefield/contracts";
@@ -2029,6 +2031,138 @@ describe("PJ-6 — a launch at a model the agent offers (agent.spawn {modelSelec
     expect(models.options.at(-1)).toEqual({ model: "model-a", effort: "high" });
     expect(resumed.modelSelection).toEqual({ state: "applied" });
     await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+  }, 60_000);
+});
+
+/** PJ-7 — give this desktop one place, through the catalog's own write path
+ * (the scanner's `setPlaces`): the index learns a project rooted at `path`, and
+ * the place's facts ride its row. Answers the place's ref as the doors name it. */
+async function placeOf(box: Box, placeId: string, path: string, over: Partial<PlaceFacts> = {}) {
+  writeFileSync(
+    box.runtimesFile,
+    JSON.stringify([{ id: "rt-scripted", kind: "scripted", data_root: "~/.scripted" }]),
+  );
+  writeFileSync(
+    box.sessionsFile,
+    JSON.stringify([{ ...rosettaRow(`in-${placeId}`, 60_000), project_id: "p-place", cwd: path }]),
+  );
+  const catalog = box.daemon.indexCatalog;
+  await poll(async () => (catalog.ready ? true : undefined), 20_000);
+  catalog.resnapshot();
+  await poll(async () => (catalog.projects.size === 1 ? true : undefined), 20_000);
+  catalog.setPlaces(
+    new Map([
+      [
+        "p-place",
+        [
+          {
+            placeId,
+            path,
+            aliases: [],
+            kind: "project" as const,
+            caseless: true,
+            exists: true,
+            mounted: true,
+            git: true,
+            identityRemote: "github.com/acme/app",
+            remotes: ["github.com/acme/app"],
+            samples: [],
+            hits: [],
+            observedAt: 1,
+            ...over,
+          },
+        ],
+      ],
+    ]),
+  );
+  return { device: box.daemon.devices.currentDeviceId(), placeId };
+}
+
+describe("PJ-7 — a launch names a place (agent.spawn {place})", () => {
+  it("runs in the place's own folder, resolved from this desktop's place facts; the ledger names the ref, never the path; the birth hands the place to its project", async () => {
+    const box = await setup({ floor: "real", profiles: true });
+    const { daemon, dataDir, root } = box;
+    const app = join(root, "app");
+    mkdirSync(app);
+    const ref = await placeOf(box, "pl_app", app);
+    const win = await window(daemon, DECK, "pj7a");
+    const acted = vi.spyOn(daemon.projectRecords, "actedIn");
+
+    const spawned = (await win.call("agent.spawn", {
+      provider: "scripted",
+      place: ref,
+      profileSet: "native",
+    })) as AgentSpawnResult;
+    // the run's folder is the place's path: no path crossed the wire
+    expect(readRecord(dataDir, spawned.session.runtimeRunId).cwd).toBe(app);
+    // the birth is an act in that place, its recipe the place's (`onPlace`)
+    expect(acted).toHaveBeenCalledTimes(1);
+    expect(acted.mock.calls[0]?.[0]).toBe(app);
+    expect(acted.mock.calls[0]?.[2]).toEqual({ provider: "scripted", profileSet: "native" });
+    expect(acted.mock.calls[0]?.[3]).toBe("pl_app");
+    // the ledger: the ref the caller sent, and no folder at all
+    const act = await auditAct(
+      dataDir,
+      (entry) => entry.action === "agent.session.spawn" && entry.attrs?.["place"] !== undefined,
+    );
+    expect(act.attempt.attrs?.["place"]).toEqual(ref);
+    expect(act.attempt.attrs).not.toHaveProperty("cwd");
+    expect(act.outcome.outcome).toBe("succeeded");
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+  }, 60_000);
+
+  it("refuses in fieldd's words before anything starts: another desktop's place, a place this desktop does not know, a folder gone or unmounted, a place beside a cwd", async () => {
+    const box = await setup({ floor: "real" });
+    const { daemon, dataDir, root, sessions } = box;
+    const app = join(root, "app");
+    mkdirSync(app);
+    const ref = await placeOf(box, "pl_app", app);
+    const win = await window(daemon, DECK, "pj7b");
+    const refusal = async (params: Record<string, unknown>) =>
+      (await win.callErr("agent.spawn", { provider: "scripted", ...params })) as RpcErrorShape;
+
+    // another desktop's ref: this desktop launches only into its own places —
+    // the contracts' golden launch (EL9), whose place is another desktop's
+    const golden = JSON.parse(
+      readFileSync(
+        join(import.meta.dirname, "../../contracts/fixtures/agent-spawn-params.place.json"),
+        "utf8",
+      ),
+    ) as Record<string, unknown>;
+    const { modelSelection: _model, ...goldenLaunch } = golden;
+    const elsewhere = (await win.callErr("agent.spawn", {
+      ...goldenLaunch,
+      provider: "scripted",
+    })) as RpcErrorShape;
+    expect(elsewhere.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(elsewhere.data?.details).toMatchObject({
+      reason: "not-here",
+      place: golden["place"],
+    });
+    // an id this desktop has no facts for
+    const unknown = await refusal({ place: { ...ref, placeId: "pl_nowhere" } });
+    expect(unknown.data?.kind).toBe("NOT_FOUND");
+    expect(unknown.data?.details).toMatchObject({ reason: "unknown-place" });
+    // both a place and a folder: which did the caller mean? (the schema's own refusal)
+    const both = await refusal({ place: ref, cwd: app });
+    expect(both.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(both.message).toContain("place");
+
+    // a place whose folder is gone — on disk, whatever the facts last said —
+    // and one whose volume is not mounted: today's `missing-cwd`, by ref
+    rmSync(app, { recursive: true });
+    const gone = await refusal({ place: ref });
+    expect(gone.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(gone.data?.details).toMatchObject({ reason: "missing-cwd", place: ref });
+    expect(JSON.stringify(gone.data?.details)).not.toContain(app);
+    mkdirSync(app);
+    await placeOf(box, "pl_app", app, { mounted: false });
+    const unmounted = await refusal({ place: ref });
+    expect(unmounted.data?.details).toMatchObject({ reason: "missing-cwd", place: ref });
+
+    // nothing started, nothing recorded
+    expect(sessions).toHaveLength(0);
+    expect(existsSync(join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR))).toBe(false);
   }, 60_000);
 });
 

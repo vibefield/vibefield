@@ -72,6 +72,7 @@ import {
   type ForwardedFor,
   isAgentResumeRun,
   LAYOUT,
+  type PlaceRef,
   type TerminalInfo,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
@@ -114,6 +115,7 @@ import type { AccountUsageRuntime } from "./agent-usage";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError } from "./native-link";
 import { createDarwinSecretStore, type SecretStore } from "./plugin-settings";
+import type { OwnPlace } from "./projects/project-groups";
 import type { LaunchRecipe } from "./projects/project-records";
 import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
 import type { GrantPrincipal } from "./terminal-grants";
@@ -407,12 +409,21 @@ export interface AgentRuntimeServiceOptions {
    * at boot): no act of the person's. PJ-6 — `recipe` when the run is a
    * launch from VibeField's own controls (`agent.spawn`), what it chose: the
    * project's recipe takes it. A resume, a re-attach and a typed run carry
-   * none (Q6). */
+   * none (Q6). PJ-7 — `place` when the launch named its place by ref: the
+   * placeId it resolved, so the act is that place's with no folder lookup. */
   onPlace?: (
     cwd: string,
     at: string,
-    how?: { system: boolean; recipe?: LaunchRecipe | undefined },
+    how?: {
+      system: boolean;
+      recipe?: LaunchRecipe | undefined;
+      place?: string | undefined;
+    },
   ) => void;
+  /** PJ-7 (Q1 (a)) — a place a launch names by ref, read from this desktop's
+   * own place facts (`ProjectGroups.ownPlace`); absent, every launch by place
+   * is refused `unknown-place` */
+  place?: (ref: PlaceRef) => OwnPlace;
   now?: () => Date;
   logger?: Logger;
 }
@@ -1097,8 +1108,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     forwardedFor?: ForwardedFor,
   ): Promise<AgentSpawnResult> {
     this.requireOffered(params.provider, "spawn");
+    // PJ-7 — a place by ref is resolved here, before the floor is asked
+    const place =
+      params.place !== undefined ? this.placeFolder(params.provider, params.place) : null;
     const terminals = this.requireTerminals();
-    const cwd = params.cwd ?? this.home;
+    const cwd = place?.path ?? params.cwd ?? this.home;
     const identity = this.identity();
     const entry = await this.creation(params.profileId ?? null, async () => {
       const result = await this.runtime.spawn({
@@ -1127,6 +1141,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         cwd,
         title: params.title,
         ...identity.launched(),
+        ...(place !== null ? { place: place.placeId } : {}),
         ...(selection !== undefined ? { modelSelection: selection } : {}),
         ...(profileSet !== undefined
           ? {
@@ -1140,6 +1155,46 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       });
     });
     return this.ticketed(entry, principal, terminals, forwardedFor);
+  }
+
+  /** PJ-7 (Q1 (a)) — the folder a launch by place runs in: the place's own
+   * path, from this desktop's own facts, and only while it is a folder here
+   * now (the facts are sticky — a deleted place keeps its last ones — so the
+   * disk is asked too). Refused in fieldd's words, the ref in the details and
+   * never the path (the caller sent none): another desktop's place is
+   * `not-here` (a desktop launches only into its own; PJ-8 carries acts across
+   * desktops), an id with no facts here `unknown-place`, a folder gone or
+   * unmounted today's `missing-cwd`. */
+  private placeFolder(provider: string, ref: PlaceRef): { path: string; placeId: string } {
+    const found = this.opts.place?.(ref) ?? { state: "unknown" as const };
+    const place = { device: ref.device, placeId: ref.placeId };
+    if (found.state === "not-here") {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "that place is on another desktop; a desktop starts agents only in its own places",
+        false,
+        { provider, reason: "not-here", place },
+      );
+    }
+    if (found.state === "unknown") {
+      throw new RpcCallError("NOT_FOUND", "this desktop knows no place by that id", false, {
+        provider,
+        reason: "unknown-place",
+        place,
+      });
+    }
+    const { facts } = found;
+    if (!facts.exists || !facts.mounted || !isAbsolute(facts.path) || !isDirectory(facts.path)) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        facts.mounted
+          ? "the place's folder is gone from this device"
+          : "the place's folder is on a volume that is not mounted",
+        false,
+        { provider, reason: "missing-cwd", place },
+      );
+    }
+    return { path: facts.path, placeId: facts.placeId };
   }
 
   /** `agent.resume` — a run of ours (its record), or QL-D10's conversation by
@@ -2157,6 +2212,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       /** PJ-6 — a launch from VibeField's own controls: what its project's
        * recipe takes (agent.spawn only) */
       recipe?: LaunchRecipe | undefined;
+      /** PJ-7 — the place a launch by place resolved (its placeId) */
+      place?: string | undefined;
     },
   ): ManagedEntry {
     const info = agent.info;
@@ -2189,6 +2246,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       this.opts.onPlace?.(launch.cwd, now, {
         system: launch.reattached !== undefined,
         ...(launch.recipe !== undefined ? { recipe: launch.recipe } : {}),
+        ...(launch.place !== undefined ? { place: launch.place } : {}),
       });
     } catch (error) {
       this.logger.warn("fieldd.agents.place_failed", "A run's folder could not be made a place", {

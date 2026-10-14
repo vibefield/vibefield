@@ -176,6 +176,25 @@ export function placeResolver(places: readonly PlaceFacts[]): (cwd: string) => s
   };
 }
 
+/** PJ-7 — the reverse of `placeResolver`: a placeId → the facts of the place
+ * that bears it over one device's places, or undefined. */
+export function placeById(
+  places: readonly PlaceFacts[],
+): (placeId: string) => PlaceFacts | undefined {
+  const byId = new Map<string, PlaceFacts>();
+  for (const place of places) if (!byId.has(place.placeId)) byId.set(place.placeId, place);
+  return (placeId: string): PlaceFacts | undefined => byId.get(placeId);
+}
+
+/** PJ-7 (Q1 (a)) — a place a caller named by ref, as THIS desktop's own facts
+ * answer it: its facts, or why there are none — the ref names another device
+ * (`not-here`: a desktop launches only into its own places), or no place of
+ * this desktop bears the id (`unknown`). */
+export type OwnPlace =
+  | { readonly state: "here"; readonly facts: PlaceFacts }
+  | { readonly state: "not-here" }
+  | { readonly state: "unknown" };
+
 /** One device's grouping input, in an order every reader agrees on. */
 function deviceInput(
   deviceId: string,
@@ -274,6 +293,16 @@ export class ProjectGroups {
   onChange(listener: (change: ProjectGroupsChange) => void): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
+  }
+
+  /** PJ-7 — a place named by ref, read from this desktop's OWN facts (its
+   * catalog's rows, which the scanner writes): never a peer's replica, and not
+   * the grouping — a place this desktop knows is launchable before any regroup.
+   * The device is this desktop's roster id, the one the doors' refs carry. */
+  ownPlace(ref: { device: string; placeId: string }): OwnPlace {
+    if (ref.device !== this.#opts.deviceId()) return { state: "not-here" };
+    const facts = placeById(placesOf(this.#opts.local.projects.rows()))(ref.placeId);
+    return facts === undefined ? { state: "unknown" } : { state: "here", facts };
   }
 
   /** PJ-3 (D9) — where a key no project holds went, or undefined. */

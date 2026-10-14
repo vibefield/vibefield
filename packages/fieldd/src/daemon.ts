@@ -979,10 +979,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // (D6) — and a run started there (not one the daemon re-attached at
     // boot) is an act in its place
     // — PJ-6 — and a launch from VibeField's own controls brings its recipe
+    // — PJ-7 — and a launch by place, the place it named
     onPlace: (cwd, at, how) => {
       workspace.registry.touchPlace(cwd, at);
-      if (how?.system !== true) projectRecords.actedIn(cwd, Date.parse(at), how?.recipe);
+      if (how?.system !== true)
+        projectRecords.actedIn(cwd, Date.parse(at), how?.recipe, how?.place);
     },
+    // PJ-7 (Q1 (a)) — a launch by place reads this desktop's own place facts
+    place: (ref) => projectGroups.ownPlace(ref),
     ...(config.agentGateway?.processTable !== undefined
       ? { processTable: config.agentGateway.processTable }
       : {}),
@@ -2947,7 +2951,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { provider, cwd?, profileId?, profileSet?, title?, modelSelection? }",
+          "expected { provider, cwd? | place?, profileId?, profileSet?, title?, modelSelection? } — a place or a cwd, never both",
           false,
         );
       // PJ-6 — the ledger says a launch asked for a model and that it was
@@ -2961,6 +2965,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           attrs: {
             provider: parsed.data.provider,
             ...(parsed.data.cwd !== undefined ? { cwd: parsed.data.cwd } : {}),
+            // PJ-7 — a launch by place is ledgered by its ref, never a path
+            ...(parsed.data.place !== undefined
+              ? { place: { device: parsed.data.place.device, placeId: parsed.data.place.placeId } }
+              : {}),
             ...(parsed.data.profileId !== undefined ? { profileId: parsed.data.profileId } : {}),
             ...(parsed.data.profileSet !== undefined ? { profileSet: parsed.data.profileSet } : {}),
             ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
