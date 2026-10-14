@@ -67,6 +67,9 @@ struct SessionCardView<Terminal: View>: View {
   /// (`AgentTerminalFace.note`). nil where the ordinary invitation already
   /// says it, or where there is nothing honest to say.
   var terminalReason: String?
+  /// fix7 — the run's own face offers its terminal (`AgentTerminalFace
+  /// .offersAttach`): an agent's card draws ATTACH, as a peer's does
+  var agentAttachable: Bool = false
   /// The act that fixes "no write key for this host" (IOS-3c), when there is
   /// one to offer. `nil` means not offered and draws nothing — this card never
   /// renders a control it cannot honour (D-i6). It is a callback rather than a
@@ -215,7 +218,10 @@ struct SessionCardView<Terminal: View>: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 14)
 
-      if isAttached {
+      switch FieldHomeModel.terminalSlot(
+        attached: isAttached, remote: bubble.remote != nil, agentAttachable: agentAttachable)
+      {
+      case .live:
         VStack(spacing: 0) {
           terminal()
             .clipShape(RoundedRectangle(cornerRadius: 14))
@@ -260,9 +266,11 @@ struct SessionCardView<Terminal: View>: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 14)
-      } else if let remote = bubble.remote {
-        invitation(remote)
-      } else {
+      case .peerInvitation:
+        if let remote = bubble.remote { invitation(remote) }
+      case .agentInvitation:
+        agentInvitation()
+      case .absence:
         agentTerminalAbsence(bubble)
       }
     }
@@ -324,6 +332,35 @@ struct SessionCardView<Terminal: View>: View {
           .lineSpacing(3)
           .padding(.horizontal, 28)
       }
+    }
+  }
+
+  /// fix7 — an agent's own run whose terminal can be opened: the one act, and
+  /// what the face says about it (an unobserved run, an ended one still open
+  /// to read). Whether it lands is the ticket's answer, said by the attachment.
+  private func agentInvitation() -> some View {
+    VStack(spacing: 12) {
+      Text("TERMINAL")
+        .font(FieldType.mono(9, .heavy))
+        .tracking(FieldType.tracking(0.18, of: 9))
+        .foregroundStyle(FieldPalette.textMuted)
+      Button(action: onAttach) {
+        Text("ATTACH")
+          .font(FieldType.mono(11, .heavy))
+          .tracking(FieldType.tracking(0.12, of: 11))
+          .foregroundStyle(FieldPalette.panelBackground)
+          .padding(.horizontal, 18)
+          .padding(.vertical, 9)
+          .background(RoundedRectangle(cornerRadius: 8).fill(FieldPalette.textMain))
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("Attach to this run's terminal")
+      Text(statusNote ?? terminalReason ?? "this run's own terminal, on its desktop")
+        .font(FieldType.mono(9))
+        .foregroundStyle(FieldPalette.textMuted)
+        .multilineTextAlignment(.center)
+        .lineSpacing(3)
+        .padding(.horizontal, 28)
     }
   }
 

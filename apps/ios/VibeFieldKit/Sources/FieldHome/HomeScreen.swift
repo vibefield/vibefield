@@ -1595,7 +1595,8 @@ public struct HomeScreen: View {
       cooled: attachment?.banner?.coolsTerminal ?? false,
       onAttach: { if let bubble { beginAttachment(to: bubble) } },
       onSettings: { cardSettingsOpen = true },
-      terminalReason: cardTerminalFace.note
+      terminalReason: cardTerminalFace.note,
+      agentAttachable: cardTerminalFace.offersAttach
     ) {
       liveTerminal(title: bubble?.project)
     }

@@ -124,6 +124,30 @@ enum FieldHomeModel {
     return (listed || attached) ? .session : .ended
   }
 
+  /// fix7 — what the card's terminal slot draws (PJ-7's first phone run, S2:
+  /// a hand-started agent's card said "no terminal has been offered for this
+  /// session" while its desktop pane was live). IOS-4c gave an agent's card
+  /// ATTACH through the hosts store's advertisement, which made its bubble a
+  /// peer's; TM-5 retired that store, and the agent's card lost its tap — only
+  /// the DEBUG `-vf-auto-attach` still reached an attachment. The run's own
+  /// face (`agentTerminalFace`) says whether its terminal can be opened.
+  enum TerminalSlot: Equatable {
+    /// an attachment speaks for itself
+    case live
+    /// a peer's session (IOS-3a): ATTACH
+    case peerInvitation
+    /// an agent's own run whose face offers its terminal (IOS-4c): ATTACH
+    case agentInvitation
+    /// nothing to open, and why (the face's words)
+    case absence
+  }
+
+  static func terminalSlot(attached: Bool, remote: Bool, agentAttachable: Bool) -> TerminalSlot {
+    if attached { return .live }
+    if remote { return .peerInvitation }
+    return agentAttachable ? .agentInvitation : .absence
+  }
+
   // MARK: - The input card
 
   /// Whether the input card is on the screen at all (K-D2).

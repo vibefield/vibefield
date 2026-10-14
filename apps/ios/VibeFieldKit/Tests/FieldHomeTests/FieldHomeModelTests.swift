@@ -103,6 +103,28 @@ struct DiscoveryActionTests {
   }
 }
 
+// MARK: - The card's terminal slot (fix7)
+
+/// PJ-7's first phone run, S2: a hand-started agent's card said "no terminal
+/// has been offered for this session" while its desktop pane was live. The
+/// run's field row carried its terminal (fieldd: `hosted: "local"` and the
+/// pane's session id, adopted runs included); the card had no act for it.
+@Suite("fix7 — an agent's card opens its own terminal")
+struct TerminalSlotTests {
+  @Test("an agent's run whose face offers its terminal draws ATTACH — never the absence")
+  func agentAttaches() {
+    #expect(FieldHomeModel.terminalSlot(attached: false, remote: false, agentAttachable: true) == .agentInvitation)
+  }
+
+  @Test("a peer's session invites as before; attached is live; nothing to open is the absence, with its reason")
+  func theOtherSlots() {
+    #expect(FieldHomeModel.terminalSlot(attached: false, remote: true, agentAttachable: false) == .peerInvitation)
+    #expect(FieldHomeModel.terminalSlot(attached: true, remote: false, agentAttachable: true) == .live)
+    #expect(FieldHomeModel.terminalSlot(attached: true, remote: true, agentAttachable: false) == .live)
+    #expect(FieldHomeModel.terminalSlot(attached: false, remote: false, agentAttachable: false) == .absence)
+  }
+}
+
 // MARK: - The card's face
 
 /// The bug: the card looked its subject up in the live field every update and
