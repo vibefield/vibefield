@@ -9878,3 +9878,69 @@ reader and a mirror but no screen asks it yet.
 **Owed:** the over-the-air run on James's phone (the kit's tests and the simulator are not his phone); renders of the
 sheet, the ledger, the project screen and a session row for James (only the bloom's were made:
 `lanes/pj7k/shots/bloom-*.png`); the roster's last-seen time.
+
+## RD-5a, the rosetta half — rosetta goes exact: `@vibefield/rosetta-protocol` and `@vibefield/rosetta-room` 0.1.1 from the registry, rosettad still built from the pin, now `43485458`; puppeteer stays linked, its release lacks what the pin has (2026-10-14; ``fe01ac79``)
+
+**Why:** the first rung of the prod-builder brief (`draft/handover/2026-10-14-prod-builder-brief.md`, the PM's order of work):
+W-D8's exit shape for the two siblings James published under RL5's `@vibefield` scope (`thinking-release-management.md`
+§11). Only rosetta's half could land: puppeteer's 0.2.1 is not a superset of the pin (Found).
+
+**What landed (one EL8 commit):**
+- **The pin:** rosetta `2a91bf0` → `43485458` (tag `npm-v0.1.1`), the commit npm's SLSA provenance names for both
+  packages (`.github/workflows/npm-release.yml`, read from the attestations). `pnpm siblings:pin rosetta` built rosettad at
+  it (1 m 33 s, the lane's own target), wall R23 passed (`10 catalog row(s) honoured by both pins, 0 warning(s)
+  [--enforce --require-rosetta]`), and the consumers typechecked (25 projects). The lock's rosetta entry keeps only its
+  `cargo` key; rosettad stays a checkout build until RD-D7.
+- **The rename:** `@rosetta/protocol` → `@vibefield/rosetta-protocol`, `@rosetta/room` → `@vibefield/rosetta-room` in
+  fieldd, field-app, the walls (R20–R22's descriptions, R22's test), the tests, the agent-plane pages and DESIGN.md; the
+  overrides take exact `0.1.1` above the sibling fence; `minimumReleaseAgeExclude` carries both (published 2026-10-13
+  23:36Z); preflight's `PIN_EXPECTATIONS` holds them (anchored to the line's end).
+- **Preflight:** the sibling family rule is asked PER SIBLING (all lock-backed `link:` rows or all exact versions, under
+  every scope a family has carried; the retired `@rosetta/*` scope named as retired), and preflight prints the shape:
+  `shape: dev — puppeteer npm link ×7 @ d3e82aa · rosetta npm exact 0.1.1 ×2 + rosettad built from the checkout @ 4348545 ·
+  truffle swift path package @ 9f0d628 · ghosttea npm link ×1 + cargo patch ×6 @ 10d0b17 · mille npm link ×2 @ c8160d5`.
+- **The room is dist, not source:** field-app's vitest inlines `@vibefield/rosetta-room` (its dist imports its own
+  `.css`, which Node's loader refuses); the projects-plate test reads the room's `dist/styles`; electron-shell's AR-8c
+  linked-roots list is retired (no lock package declares a `link:` dependency any more).
+- **CI:** vibefield/puppeteer and vibefield/rosetta are both PUBLIC (read anonymously, 2026-10-14), so the clone step
+  fetches each by `siblings.mjs fetch` from the lock's `repository` with no token — `SIBLINGS_TOKEN` is retired; the
+  puppeteer entry gains its `repository`. rosetta's clone stays for rosettad.
+- **The records at their sources:** CLAUDE.md's AR-0 paragraph (rosetta's packages are exact; a rosetta pin move bumps
+  the two npm rows in the same EL8 commit), the agent-plane pages' seam rows (dated correction in `system.html`), the
+  comments in `siblings.mjs`, `check-single-copy.mjs` and the renderer's Vite config.
+
+**Validation:** mutation probes on preflight, red each with its own words (a retired `@rosetta/room` row; `^0.1.1`; a
+stray `link:` for rosetta-protocol; a mixed puppeteer family); fieldd's rosetta-facing files with the real rosettad 236
+passed, 2 skipped (packaged rows); field-app's History, room and Peek files 284/284; `pnpm verify` EXIT 0 (lane rd5a, run 4: vitest 7,680 passed / 13 skipped, cargo 302 passed / 9
+ignored; runs 1–3 red on lane setup and one load flake — Found); `pnpm gate:landing --with-stages` on `fe01ac79`: 25 of 26
+ok (every verify stage, still, smoke, smoke:canvas:no-gpu, :no-webgpu, kind-faults, plugin-restart, plugin, godview,
+terminal-door, terminal-direct, studio), smoke:canvas red on main's own AIMED rung (Found)
+(`/Volumes/SamsungRed/lanes/rd5a/gate-fe01ac79.log`).
+
+**Found:**
+- **puppeteer 0.2.1 is not a superset of the pin.** Its release line (`d7e7a63`) is a squash (`5abe8f7`) on `1def18f` of
+  local history up to `cbc6e01`: it lacks PJ-6's resume selection (`b49fa10` `857b7c8` `3e17ece` `6405611` `c57fe53` —
+  fieldd reads `modelProviders()[].resumeSelection`, absent from 0.2.1's core) and the ten SWF commits (`d461943` …
+  `d3e82aa`, the swarm sizing of `3c045f53`). Ancestry says nothing across a squash; the audit is rename-normalized,
+  per commit (`git apply --check` against the release tree). A port branch for James (`swf/port-0.2.2`, base
+  `d7e7a63`, tip `ce127f4`, in `/Volumes/SamsungRed/lanes/pu/swf-port`) carries all fifteen; unpushed.
+- **The rename hid vacuous tests.** Three regexes in `ui-system-boundaries.test.ts` spelled `@rosetta\/room` and would
+  have passed for ever after the rename; one test read the room's `src/styles`, which the published package does not
+  ship. And the catalog-door rule read every `@vibefield/*` import as a workspace package — the scope is shared since
+  RL5, so it now skips the published `rosetta-`/`puppeteer-` siblings.
+- **smoke:canvas's AIMED rung is main's red since W7 (`42f8d5b6`, 10-12), and the MV lead's test-only fix follows.**
+  "DK-14: @'s list open with a pane to send to did not happen within 10000ms": the @ list opens on Canvas with no pane
+  to send to, because a launch no longer births a shell (the MV lead's diagnosis; the product is right, the rung's
+  precondition is stale). It was red on `fe01ac79` in the gate and alone (`lanes/rd5a/gate-fe01ac79/17-smoke_canvas.log`,
+  `lanes/rd5a/gate-fe01ac79-rerun/01-smoke_canvas.log`), and red 2/2 with the same words on main `a508721e` in a
+  control worktree (`lanes/rd5a-ctl/ctl-run1/`, `ctl-run2/`; run 2 also red on REST and PEERS timing rows). No
+  landing since W7 ran smoke:canvas on main (land3's ran verify, smoke and smoke:godview); PORTALS' gates have met it
+  since 10-12. Landed under the house rule for a red that is main's own (DK-19's precedent), on the PM's ruling.
+- **A gate overlapped:** verify run 3's one red (fieldd MF-1, "a settled board sent a frame"; 3/3 alone) ran while
+  PORTALS' landing gate held the Mac; run 4 waited for a quiet host.
+- **Lane setup, twice:** a lane that LINKS James's shared `../mille-pin` resolves the main checkout's React through
+  mille's host peers (check:deps red: two copies); a lane needs its own mille-pin worktree and `install-js`/`build-js`
+  mille. A fresh lane's Electron package may lack its binary (`path.txt`): `node install.js` in it.
+
+**Owed:** RD-5a-2 — puppeteer goes exact at the release that carries the fifteen (James pushes the port branch, cuts it);
+then CI's puppeteer clone and install retire with it. rosettad as a release asset (RD-D7).
