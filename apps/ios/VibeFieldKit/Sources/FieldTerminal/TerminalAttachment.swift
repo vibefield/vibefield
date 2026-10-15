@@ -19,6 +19,9 @@ public enum TerminalPhase: Equatable, Sendable {
   case refused(String)
   case ended(String)
   case failed(String)
+  /// fix8 — an attach step outlived its deadline: which step, in words. The
+  /// banner names the desktop; the attach is stopped and RETRY starts afresh.
+  case stalled(String)
 }
 
 /// The card's one banner: what is wrong, and what can be done about it.
@@ -172,17 +175,29 @@ public final class TerminalAttachment {
   /// the new one. The client is rebuilt per attach, so this is the cheap check
   /// that a task started before the rebuild is not still writing to it.
   @ObservationIgnored private var attachID: UInt64 = 0
+  /// fix8 — how long any one step of an attach may wait (the mint here, each
+  /// `RoutedTerminalClient.AttachStep` in the client) before the card says
+  /// where it stopped.
+  @ObservationIgnored private let deadline: Duration
+  /// fix8 — where the attach's phases are written.
+  @ObservationIgnored private let log: TerminalAttachLog
+
+  /// The shipping deadline for one attach step: the mesh's own request timeout
+  /// (15 s) and a margin.
+  nonisolated public static let stepDeadline: Duration = .seconds(20)
 
   public convenience init(
     session: @escaping SessionProvider,
     appearance: TerminalAppearance,
     door: @escaping TicketDoor,
     renewal: RenewalDoor? = nil,
-    budget: PhoneConnectionBudget? = nil
+    budget: PhoneConnectionBudget? = nil,
+    deadline: Duration = TerminalAttachment.stepDeadline,
+    log: TerminalAttachLog = .device
   ) {
     self.init(
       transport: URLSessionRoutedTransport(session: session), appearance: appearance, door: door,
-      renewal: renewal, budget: budget)
+      renewal: renewal, budget: budget, deadline: deadline, log: log)
   }
 
   /// The seam the tests hold: a transport with no sockets behind it. Every
@@ -194,13 +209,17 @@ public final class TerminalAttachment {
     appearance: TerminalAppearance,
     door: @escaping TicketDoor,
     renewal: RenewalDoor? = nil,
-    budget: PhoneConnectionBudget? = nil
+    budget: PhoneConnectionBudget? = nil,
+    deadline: Duration = TerminalAttachment.stepDeadline,
+    log: TerminalAttachLog = .device
   ) {
     self.transport = transport
     self.appearance = appearance
     self.door = door
     self.renewal = renewal
     self.budget = budget
+    self.deadline = deadline
+    self.log = log
     presentation = presentationConfig(for: appearance)
   }
 
@@ -212,7 +231,7 @@ public final class TerminalAttachment {
   public var phase: TerminalPhase {
     if let localPhase { return localPhase }
     guard let client, let sessionID else { return .idle }
-    return Self.phase(for: client.state, session: client.sessions[sessionID])
+    return Self.phase(for: client.state, session: client.sessions[sessionID], deadline: deadline)
   }
 
   /// Whether the CELL accepted this client's right to type. The grant asks; the
@@ -285,7 +304,11 @@ public final class TerminalAttachment {
       // door's sentence is the whole answer and it must reach a face.
       let ticket: RoutedTerminalTicket
       do {
-        ticket = try await self.mintTicket(for: sessionID)
+        ticket = try await self.mint(for: sessionID, within: self.deadline)
+      } catch is MintDeadline {
+        guard attach == self.attachID, !Task.isCancelled else { return }
+        self.localPhase = .stalled(Self.stallWords(.ticket, after: self.deadline))
+        return
       } catch {
         guard attach == self.attachID, !Task.isCancelled else { return }
         self.localPhase = .refused(self.doorRefusal ?? Self.shortReason(error))
@@ -293,6 +316,58 @@ public final class TerminalAttachment {
       }
       guard attach == self.attachID, !Task.isCancelled else { return }
       self.open(ticket, sessionID: sessionID, attach: attach)
+    }
+  }
+
+  /// fix8 — the field says this card's run has exited (its face is an ended
+  /// one) while the attach has not gone live: say the run ended, and stop
+  /// connecting to a terminal the desktop has already let go of. A live
+  /// session is the cell's to end, and an ended or idle card has nothing to stop.
+  public func runEnded() {
+    switch phase {
+    case .idle, .live, .ended: return
+    case .connecting, .suspended, .refused, .failed, .stalled: break
+    }
+    attachID &+= 1  // a mint or a ticket still in flight belongs to nobody now
+    attachTask?.cancel()
+    attachTask = nil
+    client?.close()
+    client = nil
+    sink = nil
+    localPhase = .ended(Self.runEndedWords(device: deviceName))
+  }
+
+  nonisolated static func runEndedWords(device: String?) -> String {
+    "its run exited on \(device ?? "that desktop")"
+  }
+
+  /// The first mint, bounded by the step deadline. The door's own call timeout
+  /// covers a door that has answered hello; `call` first waits for that hello,
+  /// and a door that is re-dialing waits as long as the re-dial takes. The
+  /// door's call cannot be cancelled, so it is raced rather than awaited: a
+  /// late answer lands on a resumed continuation and is dropped.
+  private func mint(for session: String, within limit: Duration) async throws
+    -> RoutedTerminalTicket
+  {
+    try await withCheckedThrowingContinuation { continuation in
+      let once = MintOnce(continuation)
+      let timer = Task { @MainActor in
+        try? await Task.sleep(for: limit)
+        guard !Task.isCancelled else { return }
+        once.resume(with: .failure(MintDeadline()))
+      }
+      Task { @MainActor [weak self] in
+        defer { timer.cancel() }
+        guard let self else {
+          once.resume(with: .failure(CancellationError()))
+          return
+        }
+        do {
+          once.resume(with: .success(try await self.mintTicket(for: session)))
+        } catch {
+          once.resume(with: .failure(error))
+        }
+      }
     }
   }
 
@@ -357,7 +432,10 @@ public final class TerminalAttachment {
         renewalProvider: Self.renewalProvider(renewal),
         viewId: "phone-\(UUID().uuidString.lowercased())",
         // SP-2 (g) — the two legs count against the phone's budget.
-        legBudget: budget))
+        legBudget: budget,
+        // fix8 — and no step of the attach waits longer than this
+        stepDeadline: deadline,
+        log: log))
     self.sink = sink
     self.client = client
     self.sessionID = sessionID
@@ -721,7 +799,8 @@ public final class TerminalAttachment {
   /// set's state: the connection may be perfectly healthy and the thing the
   /// card is about gone.
   nonisolated static func phase(
-    for state: RoutedTerminalClient.State, session: RoutedSessionState?
+    for state: RoutedTerminalClient.State, session: RoutedSessionState?,
+    deadline: Duration = stepDeadline
   ) -> TerminalPhase {
     if let session, case .ended(let reason) = session.control { return .ended(reason) }
     switch state {
@@ -735,7 +814,33 @@ public final class TerminalAttachment {
     case .reconnecting, .staleRoute: return .connecting
     case .refused(let code): return .refused(code)
     case .failed(let reason): return .failed(reason)
+    case .stalled(let step): return .stalled(stallWords(step, after: deadline))
     }
+  }
+
+  /// fix8 — where an attach stopped, as the banner's second line: what was
+  /// asked of whom, what never came, and after how long (DESIGN.md §8, the
+  /// phone's session card).
+  nonisolated static func stallWords(
+    _ step: RoutedTerminalClient.AttachStep, after deadline: Duration
+  ) -> String {
+    let what =
+      switch step {
+      case .ticket: "the ticket was asked for and never came back"
+      case .slot: "this phone's last terminal never let go of its connection"
+      case .dial: "the dial over the mesh got no answer"
+      case .control: "the terminal took the dial but never attached the session"
+      case .frames: "the session attached but its screen never did"
+      case .firstFrame: "the session attached but sent no screen"
+      }
+    return "\(what) — stopped after \(seconds(deadline)) s"
+  }
+
+  /// Whole seconds, at least one: a deadline is said as a number a person
+  /// reads, and "0 s" would not be one.
+  nonisolated static func seconds(_ duration: Duration) -> Int64 {
+    let parts = duration.components
+    return max(1, parts.seconds + (parts.attoseconds > 0 ? 1 : 0))
   }
 
   /// The phase → the banner. Pure, so every sentence a person can be shown is
@@ -777,6 +882,12 @@ public final class TerminalAttachment {
     case .failed(let why):
       return TerminalBanner(
         title: "the connection failed — \(why)", detail: nil,
+        actions: [.retryNow, .backToTheField], coolsTerminal: true)
+    case .stalled(let detail):
+      // fix8 — the desktop by name, then the step: "couldn't reach studio's
+      // terminal" over a code, and RETRY is a fresh attach, not a wait.
+      return TerminalBanner(
+        title: "couldn't reach \(who)'s terminal", detail: detail,
         actions: [.retryNow, .backToTheField], coolsTerminal: true)
     }
   }
@@ -837,5 +948,25 @@ public final class TerminalAttachment {
   nonisolated static func shortReason(_ error: Error) -> String {
     let text = String(describing: error)
     return text.count > 120 ? String(text.prefix(117)) + "…" : text
+  }
+}
+
+/// fix8 — the first mint outlived the step deadline.
+private struct MintDeadline: Error {}
+
+/// One resume of a mint's continuation, whichever of the answer and the
+/// deadline comes first. Main-actor-bound: both racers run there.
+@MainActor
+private final class MintOnce {
+  private var continuation: CheckedContinuation<RoutedTerminalTicket, any Error>?
+
+  init(_ continuation: CheckedContinuation<RoutedTerminalTicket, any Error>) {
+    self.continuation = continuation
+  }
+
+  func resume(with result: Result<RoutedTerminalTicket, any Error>) {
+    let pending = continuation
+    continuation = nil
+    pending?.resume(with: result)
   }
 }

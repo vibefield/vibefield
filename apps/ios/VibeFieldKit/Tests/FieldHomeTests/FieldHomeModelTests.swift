@@ -1,3 +1,4 @@
+import FieldMesh
 import FieldTerminal
 import SwiftUI
 import Testing
@@ -122,6 +123,31 @@ struct TerminalSlotTests {
     #expect(FieldHomeModel.terminalSlot(attached: true, remote: false, agentAttachable: true) == .live)
     #expect(FieldHomeModel.terminalSlot(attached: true, remote: true, agentAttachable: false) == .live)
     #expect(FieldHomeModel.terminalSlot(attached: false, remote: false, agentAttachable: false) == .absence)
+  }
+}
+
+// MARK: - The run's end under an attach (fix8)
+
+/// PJ-7's second phone run: the card read "connecting over the mesh…" at
+/// 03:52:07, sixteen seconds after its run had exited. The run's own face says
+/// when it has ended; an attachment that has not gone live then stops.
+@Suite("fix8 — a run that exits ends the attach the card is still making")
+struct RunExitTests {
+  static let address = AgentTerminalAddress(
+    deviceID: "dev-studio", deviceName: "studio", sessionID: "sess-1")
+
+  @Test("both ended faces end it — with a pane to read and without one")
+  func endedFaces() {
+    #expect(FieldHomeModel.runHasExited(.exited))
+    #expect(FieldHomeModel.runHasExited(.exitedWithPane(Self.address)))
+  }
+
+  @Test("a live, unobserved, unpublished or join-less run does not")
+  func otherFaces() {
+    #expect(!FieldHomeModel.runHasExited(.attach(Self.address)))
+    #expect(!FieldHomeModel.runHasExited(.unobserved(Self.address)))
+    #expect(!FieldHomeModel.runHasExited(.notPublished(deviceName: "studio")))
+    #expect(!FieldHomeModel.runHasExited(.noJoin))
   }
 }
 

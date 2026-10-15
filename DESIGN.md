@@ -2663,6 +2663,22 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   project screen stands in the stepper's slot: the 48 pt glass capsule 10 above the bar, the
   `start` glyph and "New agent", then the usual place's desktop mark and name (`asleep` when
   it cannot be asked).
+- **The phone's session card attaches in words, and never waits forever** (fix8, 2026-10-15 —
+  PJ-7's second phone run: ATTACH minted one ticket and the card read "connecting over the
+  mesh…" for good, after the run had ended too). Between the tap and the first frame an attach
+  waits on six things — the ticket, the phone's terminal-leg slot, the dial over the mesh, the
+  cell's control acknowledgement, its frames acknowledgement, the first frame — and each has the
+  same deadline, 20 s (the mesh's own request timeout and a margin). While it waits the card
+  says `connecting over the mesh…`, as before. Past the deadline the card's banner names the
+  desktop, then the step and the number: **`couldn't reach studio's terminal`** over `the dial
+  over the mesh got no answer — stopped after 20 s` (and, step by step: `the ticket was asked
+  for and never came back`, `this phone's last terminal never let go of its connection`, `the
+  terminal took the dial but never attached the session`, `the session attached but its screen
+  never did`, `the session attached but sent no screen`) — the terminal cooled, the card's two
+  acts RETRY (a fresh attach, never a longer wait) and BACK TO THE FIELD. A run whose row says
+  it EXITED while the card is still attaching is said as ended — `this session ended — its run
+  exited on studio` — with RESUME and BACK TO THE FIELD: nothing keeps dialing a terminal the
+  field says is gone. A live session is never stopped by these deadlines.
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views

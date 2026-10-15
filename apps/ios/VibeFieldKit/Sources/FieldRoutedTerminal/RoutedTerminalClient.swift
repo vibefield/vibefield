@@ -173,6 +173,29 @@ public final class RoutedTerminalClient {
     case refused(code: String)
     /// Terminal for this client.
     case failed(reason: String)
+    /// fix8 — an attach step outlived `Options.stepDeadline`, and the set was
+    /// torn down rather than left waiting. Terminal for this client: a fresh
+    /// attach is the caller's act.
+    case stalled(AttachStep)
+  }
+
+  /// fix8 — where an attach stands between a ticket and its first frame. Each
+  /// is a wait on something this client does not control, and each has the
+  /// same deadline (`Options.stepDeadline`): PJ-7's second phone run sat on
+  /// one of them for good, with the card saying "connecting over the mesh…".
+  public enum AttachStep: String, Sendable, Equatable, CaseIterable {
+    /// A leg was lost and a fresh ticket is being minted (`ticketProvider`).
+    case ticket
+    /// The phone's terminal-leg budget is spent: waiting for a slot.
+    case slot
+    /// Both legs dialing: a socket, a hello, the cell's accept.
+    case dial
+    /// `AttachControlLeg` sent: waiting for the cell's acknowledgement.
+    case control
+    /// `AttachFramesLeg` sent: waiting for the cell's acknowledgement.
+    case frames
+    /// Both legs attached: waiting for the first presented frame.
+    case firstFrame
   }
 
   public struct Options: Sendable {
@@ -195,6 +218,11 @@ public final class RoutedTerminalClient {
     /// SP-2 (g) — the phone's budget the two legs count against
     /// (`PhoneBudget.terminalLegs`). Nil: no budget.
     public var legBudget: PhoneConnectionBudget?
+    /// fix8 — how long any one `AttachStep` may wait before the set is torn
+    /// down and the state says which step it stopped at.
+    public var stepDeadline: Duration
+    /// fix8 — where the attach's phases are written.
+    public var log: TerminalAttachLog
 
     public init(
       ticketProvider: (@MainActor @Sendable (String) async throws -> RoutedTerminalTicket)? = nil,
@@ -202,7 +230,9 @@ public final class RoutedTerminalClient {
       maxBackoff: Duration = .seconds(10),
       viewId: String = UUID().uuidString,
       capacities: RoutedReceiverCapacities = .phone,
-      legBudget: PhoneConnectionBudget? = nil
+      legBudget: PhoneConnectionBudget? = nil,
+      stepDeadline: Duration = .seconds(20),
+      log: TerminalAttachLog = .device
     ) {
       self.ticketProvider = ticketProvider
       self.renewalProvider = renewalProvider
@@ -210,8 +240,14 @@ public final class RoutedTerminalClient {
       self.viewId = viewId
       self.capacities = capacities
       self.legBudget = legBudget
+      self.stepDeadline = stepDeadline
+      self.log = log
     }
   }
+
+  /// fix8 — the attach step this client is waiting on, nil when it waits on
+  /// nothing (off, presenting, or stopped with a reason).
+  public private(set) var step: AttachStep?
 
   public private(set) var state: State = .off
   public private(set) var sessions: [String: RoutedSessionState] = [:]
@@ -242,6 +278,16 @@ public final class RoutedTerminalClient {
   /// SP-2 (g) — the two legs' budget slots, and a dial waiting for them.
   private var legGrant: PhoneConnectionBudget.Grant?
   private var legGrantTask: Task<Void, Never>?
+  /// fix8 — the armed deadline for `step`, and which arming it is.
+  private var stepTimer: Task<Void, Never>?
+  private var stepToken = 0
+  /// fix8 — a `ticketProvider` call in flight: the only part of a re-ticket
+  /// that is a wait (a refused mint is an answer, said by the caller's face,
+  /// and the backoff after it is this client's own sleep).
+  private var mintInFlight = false
+  /// fix8 — activations that have presented once. Past their first frame an
+  /// activation is not attaching any more, and no attach deadline applies.
+  private var presented: Set<String> = []
 
   // MARK: DS-4b — the lease verbs' bookkeeping
 
@@ -331,6 +377,7 @@ public final class RoutedTerminalClient {
   /// activation across one would be carrying it across a lineage.
   public func open(_ ticket: RoutedTerminalTicket) {
     guard !closed else { return }
+    defer { reconcileStep() }
     guard let sessionId = ticket.sessionId else {
       fail("the ticket's attach grant names no session")
       return
@@ -397,6 +444,7 @@ public final class RoutedTerminalClient {
     closed = true
     teardown()
     state = .off
+    reconcileStep()
   }
 
   // MARK: The control verbs
@@ -688,16 +736,23 @@ public final class RoutedTerminalClient {
     // SP-2 (g) — a connection SET is two legs, and a dial beyond the phone's
     // leg budget WAITS for a slot: a second attachment's legs open only once
     // the first's are torn down.
+    //
+    // fix8 — and waits no longer than a step may (`AttachStep.slot`): a slot
+    // nobody gives back is torn down by the deadline, which cancels this wait.
     legGrantTask = Task { [weak self] in
       let legs = RoutedChannel.allCases.count
       guard let grant = try? await ledger.acquire(.terminalLegs, count: legs) else { return }
-      guard let self, token == self.generation, !self.closed else {
+      // A free ledger answers without suspending, so a teardown that cancelled
+      // this task before it first ran is noticed here rather than not at all —
+      // without it, legs torn down by a refusal were opened anyway.
+      guard let self, token == self.generation, !self.closed, !Task.isCancelled else {
         ledger.release(grant)
         return
       }
       self.legGrantTask = nil
       self.legGrant = grant
       self.openLegs(ticket, token: token)
+      self.reconcileStep()
     }
   }
 
@@ -739,25 +794,32 @@ public final class RoutedTerminalClient {
 
   private func callbacks(for channel: RoutedChannel, token: Int) -> RoutedLeg.Callbacks {
     var callbacks = RoutedLeg.Callbacks()
+    // fix8 — every word from a leg can move the attach a step, so each one is
+    // followed by `reconcileStep`.
     callbacks.onAccepted = { [weak self] accepted in
       guard let self, token == self.generation else { return }
       self.accepted(accepted, on: channel)
+      self.reconcileStep()
     }
     callbacks.onRefused = { [weak self] refusal in
       guard let self, token == self.generation else { return }
       self.refused(refusal)
+      self.reconcileStep()
     }
     callbacks.onFailed = { [weak self] failure in
       guard let self, token == self.generation else { return }
       self.legFailed(failure, on: channel)
+      self.reconcileStep()
     }
     callbacks.onText = { [weak self] type, body in
       guard let self, token == self.generation else { return }
       self.handle(type, body)
+      self.reconcileStep()
     }
     callbacks.onBinary = { [weak self] data in
       guard let self, token == self.generation else { return }
       self.handle(unit: data)
+      self.reconcileStep()
     }
     return callbacks
   }
@@ -1391,8 +1453,10 @@ public final class RoutedTerminalClient {
       while !Task.isCancelled {
         guard let self, token == self.generation, !self.closed else { return }
         do {
+          self.mint(began: true, for: sessionId)
           let ticket = try await provider(sessionId)
           guard token == self.generation else { return }
+          self.mint(began: false, for: sessionId)
           self.open(ticket)
           // `open` can refuse the ticket it was just handed — a grant outside
           // its window, which a clock that is still wrong will produce again —
@@ -1403,6 +1467,8 @@ public final class RoutedTerminalClient {
           guard self.needsTicket else { return }
         } catch {
           self.lastRefusal = String(describing: error)
+          guard token == self.generation else { return }
+          self.mint(began: false, for: sessionId, refused: error)
         }
         try? await Task.sleep(for: delay)
         delay = min(delay * 2, self.options.maxBackoff)
@@ -1495,14 +1561,21 @@ public final class RoutedTerminalClient {
       while !Task.isCancelled {
         guard let self, token == self.generation, !self.closed else { return }
         do {
+          self.mint(began: true, for: sessionId)
           let fresh = try await provider(sessionId)
           guard token == self.generation, !self.closed else { return }
-          if self.attachOnLiveLegs(fresh) { return }
+          self.mint(began: false, for: sessionId)
+          if self.attachOnLiveLegs(fresh) {
+            self.reconcileStep()
+            return
+          }
           self.teardownLegs()
           self.open(fresh)
           guard self.needsTicket else { return }
         } catch {
           self.lastRefusal = String(describing: error)
+          guard token == self.generation else { return }
+          self.mint(began: false, for: sessionId, refused: error)
         }
         try? await Task.sleep(for: delay)
         delay = min(delay * 2, self.options.maxBackoff)
@@ -1592,6 +1665,88 @@ public final class RoutedTerminalClient {
     grants = [:]
     ticket = nil
     negotiatedCapabilities = []
+    // fix8 — a mint still in flight belongs to the generation just retired
+    mintInFlight = false
+    presented = []
+  }
+
+  // MARK: fix8 — the attach's steps, each with a deadline
+
+  /// The step this client is waiting on, read off what it holds — derived
+  /// rather than recorded at each transition, so a transition nobody thought to
+  /// mark still moves it the next time anything reconciles.
+  private var derivedStep: AttachStep? {
+    guard !closed else { return nil }
+    switch state {
+    case .off, .failed, .stalled: return nil
+    case .refused, .reconnecting, .staleRoute:
+      // A refusal or a lost leg waits on nothing but a mint in flight: a mint
+      // that was refused is an answer the caller says, and the backoff after it
+      // is this client's own sleep.
+      return mintInFlight ? .ticket : nil
+    case .connecting:
+      if mintInFlight { return .ticket }
+      return legGrantTask != nil ? .slot : .dial
+    case .ready, .attached:
+      if mintInFlight { return .ticket }
+      guard let sessionId = ticket?.sessionId, let session = sessions[sessionId] else {
+        return .control
+      }
+      if presented.contains(session.activationId) { return nil }
+      switch session.control {
+      case .attaching: return .control
+      case .refused, .ended: return nil
+      case .attached: break
+      }
+      switch session.frames {
+      case .attaching: return .frames
+      case .failed: return nil
+      case .resuming, .seeding, .applying, .active: break
+      }
+      return session.presentationReady ? nil : .firstFrame
+    }
+  }
+
+  /// Move `step` to what the client now holds, arming that step's deadline.
+  private func reconcileStep() {
+    if let sessionId = ticket?.sessionId, let session = sessions[sessionId],
+      session.presentationReady
+    {
+      presented.insert(session.activationId)
+    }
+    let next = derivedStep
+    guard next != step else { return }
+    step = next
+    stepTimer?.cancel()
+    stepTimer = nil
+    stepToken &+= 1
+    guard let next else { return }
+    let token = stepToken
+    let limit = options.stepDeadline
+    stepTimer = Task { [weak self] in
+      try? await Task.sleep(for: limit)
+      guard !Task.isCancelled, let self, token == self.stepToken else { return }
+      // A transition no call site reconciled is caught here, and re-arms.
+      self.reconcileStep()
+      guard token == self.stepToken, self.step == next else { return }
+      self.stall(at: next)
+    }
+  }
+
+  /// A step outlived its deadline: everything this set holds goes — the legs
+  /// and their slots, a dial waiting for a slot, every re-mint and renewal of
+  /// this generation — and the state says where it stopped.
+  private func stall(at step: AttachStep) {
+    lastRefusal = "the attach stopped waiting at \(step.rawValue)"
+    teardown()
+    state = .stalled(step)
+    reconcileStep()
+  }
+
+  /// A `ticketProvider` call starting or ending, for `derivedStep`.
+  private func mint(began: Bool, for sessionId: String, refused: (any Error)? = nil) {
+    mintInFlight = began
+    reconcileStep()
   }
 
   // MARK: Helpers

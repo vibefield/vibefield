@@ -1412,6 +1412,11 @@ public struct HomeScreen: View {
       inputCard.chips = replyChips(for: match)
       // --- end IOS-5c
     }
+    // fix8 — the row says the run EXITED while the card is still attaching:
+    // the card says so and stops dialing a terminal the desktop let go of.
+    .onChange(of: cardTerminalFace) { _, face in
+      if FieldHomeModel.runHasExited(face) { attachment?.runEnded() }
+    }
     .sheet(item: $selection, onDismiss: { closeCard() }) { selected in
       sessionCard(selected)
         // Attaching earns the room: a terminal at the 0.55 detent is a
@@ -2042,6 +2047,7 @@ public struct HomeScreen: View {
     case .refused(let words): return words
     case .ended(let why): return "ended — \(why)"
     case .failed(let why): return "failed — \(why)"
+    case .stalled(let detail): return detail
     }
   }
 

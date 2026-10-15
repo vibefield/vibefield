@@ -148,6 +148,17 @@ enum FieldHomeModel {
     return agentAttachable ? .agentInvitation : .absence
   }
 
+  /// fix8 — whether the card's run has EXITED, by its own face (PJ-7's second
+  /// phone run: the card read "connecting over the mesh…" after the run had
+  /// ended). An attachment still attaching then says the run ended and stops
+  /// dialing (`TerminalAttachment.runEnded`); a live one is the cell's to end.
+  static func runHasExited(_ face: AgentTerminalFace) -> Bool {
+    switch face {
+    case .exited, .exitedWithPane: true
+    case .attach, .unobserved, .notPublished, .noJoin: false
+    }
+  }
+
   // MARK: - The input card
 
   /// Whether the input card is on the screen at all (K-D2).
