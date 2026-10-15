@@ -65,6 +65,9 @@ directories:
 # native sidecar — is an extraResource below instead.
 asar: true
 
+# *(Corrected 2026-10-15, WP12 L3a: "cannot widen the archive" was false — the dependency collector widened it with
+# three `node_modules/@vibecook/truffle-sidecar-darwin-arm64` paths, in the build of 2026-08-16 and in WP8's of
+# 2026-10-14 alike; the `node_modules` negation below closes that door and `audit-asar.mjs` gates it.)*
 # The stage is already the allowlist; this is the second lock, so a polluted stage still cannot
 # widen the archive. The negations are not redundant: `assets/**/*` is the one glob here, and it
 # is exactly where a future Vite config change could start emitting source maps (§7.3 forbids them
@@ -78,6 +81,13 @@ files:
   - "!**/*.map"
   - "!**/*.{ts,tsx,cts,mts}"
   - "!**/testing/**"
+  # WP12-D12 (L3a): no dependency enters the archive. The positive entries above do not bound what electron-builder's
+  # dependency collector adds: it reads apps/desktop's package.json too (app-builder-lib 26.15.7
+  # `util/appFileCopier.js:236`) and counts `optionalDependencies` as production (`nodeModulesCollector.js:169`), so the
+  # `@vibecook/truffle-sidecar-*` rows put a SECOND signed `sidecar-slim` in the asar — Squirrel.Mac's strict nested
+  # validation's silent failure (EDP §16.1). The stage resolves the sidecar into `bin/` itself; the asar needs none.
+  # `scripts/audit-asar.mjs` is the gate (the release workflow's build job).
+  - "!**/node_modules/**"
 
 # §7.4 external resources, landing under Resources/. Flat `bin/` holds because packages are
 # architecture-specific (EDP-22/23); per-arch subdirectories arrive with the universal-build
@@ -135,6 +145,9 @@ npmRebuild: false
 # (WP12e) uploads the signed feed itself after the TD-3 `sign` step. The origin is the frozen identity constant
 # `updateOrigin` (release-identity.json, EDP-30); the client reads the feed through VibeField's UpdateProvider (TD-3),
 # never through this provider's own resolution.
+# *(Corrected 2026-10-15, WP12 L3a: "no command in this repository passes `--publish`" was not enough — given none,
+# electron-builder publishes IMPLICITLY under a git tag or CI (app-builder-lib 26.15.7 `PublishManager.js:46-60`), which
+# the release workflow is. `run-electron-builder.mjs` now passes `--publish never` on every build and refuses any other.)*
 publish:
   provider: github
   owner: vibefield

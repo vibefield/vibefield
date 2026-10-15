@@ -16,6 +16,9 @@ export const UPDATE_CHANNELS = ["nightly", "beta", "stable"] as const;
 export const UpdateChannel = z.enum(UPDATE_CHANNELS);
 export type UpdateChannel = z.infer<typeof UpdateChannel>;
 
+/** EDP-33's planes (declared here, before the shapes that name them; `UPDATE_PLANES` below is the same list). */
+const UPDATE_PLANES_LIST = ["shell", "fieldd", "field-native"] as const;
+
 /** WP12-D5 (build-wp12-updater.md): every release carries ONE policy PER CHANNEL, so a kill switch or a yank for
  * stable rides the next nightly without a stable re-cut; each document still names its own `channel`. Its signature
  * is the file's name plus `SIGNATURE_SUFFIX` (trust-and-distribution.md §3). */
@@ -66,6 +69,61 @@ export const UpdatePolicy = z
       });
   });
 export type UpdatePolicy = z.infer<typeof UpdatePolicy>;
+
+/** WP12-D5 (L3a) — a channel's COMMITTED policy source, `apps/desktop/packaging/policy/<channel>.json`, edited by PR: the
+ * policy minus what the release workflow's sign step stamps (`generatedAt`, `expires`, `trustRootVersion`). The sign
+ * step refuses a changed body without a `version` bump, and a `version` below the last published one. */
+export const UpdatePolicySource = z
+  .object({
+    version: z.number().int().min(1),
+    channel: UpdateChannel,
+    yanked: z.array(SemverString).max(256).default([]),
+    killSwitch: z.boolean(),
+    requireUserConfirmation: z.boolean(),
+    floors: z
+      .object({
+        os: z.string().min(1).max(64).optional(),
+        glibc: z.string().min(1).max(64).optional(),
+      })
+      .passthrough()
+      .default({}),
+    minSupported: SemverString.optional(),
+  })
+  .passthrough();
+export type UpdatePolicySource = z.infer<typeof UpdatePolicySource>;
+
+/** WP12-D11 (L3a) — `release-manifest.json`: the release's bytes per plane, signed by `release` like the feed. The
+ * planes a release TOUCHES are computed — each plane's digest against the previous release's manifest — never declared
+ * by hand (a hand-declared list is how a native change rides a "shell-only" release). The first release touches every
+ * plane. The client reads it from L3b on; until then every release counts as touching field-native. */
+export const RELEASE_MANIFEST_FILE = "release-manifest.json" as const;
+export const ReleaseManifest = z
+  .object({
+    schemaVersion: z.literal(1),
+    /** the app version (D6) */
+    version: SemverString,
+    tag: z.string().min(1).max(128),
+    channel: UpdateChannel,
+    /** the source commit the release was built from */
+    commit: z.string().regex(/^[0-9a-f]{40}$/),
+    /** per platform build, per plane: a sha256 over the plane's sorted `path\0sha256` lines, and its file count */
+    builds: z.record(
+      z.string().min(1).max(32),
+      z.record(
+        z.enum(UPDATE_PLANES_LIST),
+        z.object({
+          digest: z.string().regex(/^[0-9a-f]{64}$/),
+          files: z.number().int().nonnegative(),
+        }),
+      ),
+    ),
+    /** the planes whose digest differs from the previous release's on any platform (every plane on a first release) */
+    touched: z.array(z.enum(UPDATE_PLANES_LIST)),
+    /** the tag the comparison was made against; null on a first release */
+    previous: z.string().min(1).max(128).nullable(),
+  })
+  .passthrough();
+export type ReleaseManifest = z.infer<typeof ReleaseManifest>;
 
 // WP12-D4 (build-wp12-updater.md §3) — `channels.json`, the channel heads. Every release carries it, signed by the
 // `release` role and judged by TD-10's rules like the policy: it names, at that release's publish time, the newest
@@ -233,7 +291,7 @@ export type UpdateClientStateFile = z.infer<typeof UpdateClientStateFile>;
 
 /** EDP-33 — the planes a release can touch. Which ones a release touches selects its consent model; until WP12e's
  * signed planes (L3), every release is treated as touching field-native (`build-wp12-updater.md` §2, §9). */
-export const UPDATE_PLANES = ["shell", "fieldd", "field-native"] as const;
+export const UPDATE_PLANES = UPDATE_PLANES_LIST;
 export const UpdatePlane = z.enum(UPDATE_PLANES);
 export type UpdatePlane = z.infer<typeof UpdatePlane>;
 

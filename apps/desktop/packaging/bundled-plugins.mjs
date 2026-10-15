@@ -164,6 +164,26 @@ function chmodTree(dir) {
   }
 }
 
+/** WP12 D14 — the release workflow names the build's channel for a nightly; an unknown name refuses the stage. */
+function releaseChannel(ledgerChannel) {
+  const stamped = process.env.VIBEFIELD_RELEASE_CHANNEL;
+  if (stamped === undefined || stamped === "") return ledgerChannel;
+  if (!["nightly", "beta", "stable"].includes(stamped))
+    refuse(`VIBEFIELD_RELEASE_CHANNEL is "${stamped}"; it names nightly, beta or stable`);
+  return stamped;
+}
+
+/** WP12 D5 — the committed policy sources' versions (`apps/desktop/packaging/policy/<channel>.json`). */
+function committedPolicyFloors() {
+  const floors = {};
+  for (const channel of ["nightly", "beta", "stable"]) {
+    const path = join(repo, "apps/desktop/packaging/policy", `${channel}.json`);
+    const version = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")).version : null;
+    floors[channel] = Number.isInteger(version) && version >= 1 ? version : null;
+  }
+  return floors;
+}
+
 async function stage({ stage: stageDir, plugins, "app-version": appVersion }) {
   if (!stageDir || !plugins || !appVersion)
     refuse("stage needs --stage, --plugins and --app-version");
@@ -199,7 +219,9 @@ async function stage({ stage: stageDir, plugins, "app-version": appVersion }) {
     trustRootKeys: trust.rootKeys,
     appId: l.fields.appId.value,
     productName: l.fields.productName.value,
-    updateChannel: l.fields.updateChannel.value,
+    // WP12 D14 (L3a): the BUILD's channel — the release workflow stamps `nightly` for a nightly through
+    // VIBEFIELD_RELEASE_CHANNEL; anything else stays the ledger's frozen default
+    updateChannel: releaseChannel(l.fields.updateChannel.value),
     updateOrigin: l.fields.updateOrigin.value,
     // WP12's build-time floor: the updater never accepts a signed document below what this build was staged with.
     // The trust-root's version is known here; the channel heads have no build-time source; each channel policy's floor
@@ -209,7 +231,9 @@ async function stage({ stage: stageDir, plugins, "app-version": appVersion }) {
     updateFloors: {
       trustRoot: trust.doc.version,
       channels: null,
-      policy: { nightly: null, beta: null, stable: null },
+      // WP12 D5 (L3a): each channel's committed policy source — the version this build's release publishes, so the
+      // floor never exceeds what a client will be offered
+      policy: committedPolicyFloors(),
     },
   });
   writeFileSync(join(identityDir, RELEASE_IDENTITY_FILE), `${JSON.stringify(identity, null, 2)}\n`);

@@ -1,0 +1,13 @@
+# WP12e (build-wp12-updater.md §4; EDP §12.2): every third-party action is pinned to a reviewed commit SHA, with its
+# version in a trailing comment; Dependabot proposes the next SHA as a pull request, so a pin moves only by review.
+# `dtolnay/rust-toolchain` is pinned to a commit of its `stable` BRANCH, which Dependabot cannot track — it is moved
+# by hand, deliberately, with the toolchain (EL8's spirit).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

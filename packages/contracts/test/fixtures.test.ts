@@ -216,11 +216,13 @@ import {
 import { TrustRoot } from "../src/trust-root";
 import {
   ChannelHeads,
+  ReleaseManifest,
   RestartScheduled,
   SystemShutdownParams,
   SystemShutdownResult,
   UpdateClientStateFile,
   UpdatePolicy,
+  UpdatePolicySource,
 } from "../src/update-policy";
 import {
   WorkspaceCloseTicketParams,
@@ -265,6 +267,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "system-shutdown-params": SystemShutdownParams,
   "system-shutdown-result": SystemShutdownResult,
   "restart-scheduled": RestartScheduled,
+  // WP12 L3a (D5, D11) — a channel's committed policy source and the signed per-plane release manifest (TS-only)
+  "update-policy-source": UpdatePolicySource,
+  "release-manifest": ReleaseManifest,
   "rpc-request": RpcRequest,
   "rpc-response": RpcResponse,
   // SP-1 — the door's keepalive notification, whole (no id)

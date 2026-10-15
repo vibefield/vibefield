@@ -1,3 +1,7 @@
+# *(Corrected 2026-10-15, WP12 L3a: the comments below are WP1's, from before packaging existed. electron-builder's
+# config has existed since WP4, and the release workflow they name as missing is `release.yml` (WP12e): schedule,
+# dispatch and `v*` tags, its signing jobs in `release-signing`. This lane still packages nothing and holds no grant.)*
+#
 # Preview packaging lane (WP1 — EDP §12.1). The rail laid down BEFORE the packaging tool
 # arrives: there is no electron-builder config in this repo yet, so this workflow packages
 # NOTHING. It builds the TypeScript and inventories what a package would contain
@@ -13,7 +17,7 @@
 #   - `permissions: contents: read` is the entire grant, and read is all this job needs.
 # When a packaging step does land here it stays `--dir`-only — unsigned or ad-hoc — and any
 # artifact it uploads is labeled clearly non-release. Signing, notarization and the publish
-# transaction belong to the tag-triggered `release` workflow with its protected
+# transaction belong to the `release` workflow (`release.yml`) with its protected
 # environments (EDP §12.1/§12.4); this lane never grows into that one. EDP-30 is the reason
 # it can't fake its way there either: identity constants are injected configuration, never
 # inferred from a path or a developer username, so a preview build has no identity to sign
@@ -29,7 +33,7 @@ on:
   # protecting the trunk. Preview packaging answers a PR-shaped question — "does this
   # change what would ship?" — which is only actionable while there is still a diff to
   # reject; re-running it on main spends minutes to re-confirm what the merged PR just
-  # proved. Release-time packaging is a tag-triggered workflow that does not exist yet.
+  # proved. Release-time packaging is `release.yml` (WP12e, 2026-10-15): scheduled nightlies, a dispatch, and `v*` tags.
   #
   # `pull_request` (NOT `pull_request_target`): fork PRs therefore run with a read-only
   # token in the fork's context and receive no repository secrets — EDP §12.2's "fork pull
@@ -67,11 +71,11 @@ jobs:
       # workflow*; this lane carries no secrets, so a tag pin on actions/* and pnpm/* is the
       # accepted posture. Do not introduce a new third-party action here without revisiting
       # that clause.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # pnpm pinned from the packageManager field (pnpm@11.13.1); node from .nvmrc.
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: pnpm

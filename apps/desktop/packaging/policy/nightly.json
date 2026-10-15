@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "channel": "nightly",
+  "yanked": [],
+  "killSwitch": false,
+  "requireUserConfirmation": false,
+  "floors": {}
+}

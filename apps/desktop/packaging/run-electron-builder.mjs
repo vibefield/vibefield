@@ -12,7 +12,29 @@ if (process.platform === "darwin") {
   env.DEVELOPER_DIR = await resolveFullXcodeDeveloperDir();
 }
 
-const child = spawn("electron-builder", process.argv.slice(2), {
+// WP12 L3a: electron-builder NEVER publishes. Given no `--publish`, it publishes implicitly when it sees a git tag
+// (`onTag`) or CI (`onTagOrDraft`) — app-builder-lib 26.15.7 `out/publish/PublishManager.js:46-60` — which in the release
+// workflow would upload an unsigned feed or fail on a missing token. The workflow uploads the SIGNED feed itself, after
+// TD-3's sign step; so every build passes `--publish never`, and any other `--publish` is refused here.
+const argv = process.argv.slice(2);
+const publishAt = argv.findIndex(
+  (arg) => arg === "--publish" || arg === "-p" || arg.startsWith("--publish="),
+);
+if (publishAt !== -1) {
+  const value = argv[publishAt].startsWith("--publish=")
+    ? argv[publishAt].slice(10)
+    : argv[publishAt + 1];
+  if (value !== "never") {
+    console.error(
+      `electron-builder never publishes here (WP12e uploads the signed feed); refusing --publish ${value}`,
+    );
+    process.exit(1);
+  }
+} else {
+  argv.push("--publish", "never");
+}
+
+const child = spawn("electron-builder", argv, {
   env,
   stdio: "inherit",
 });

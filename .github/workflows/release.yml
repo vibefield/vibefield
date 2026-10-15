@@ -1,0 +1,440 @@
+# The RELEASE workflow (WP12e — build-wp12-updater.md §4, D4–D8, D11, D12; EDP §12; TD-3). Its shape:
+#   plan → verify (THE gate) → build (matrix) → sign → converge → publish.
+#
+# HONEST LIMIT: this workflow cannot run on the developer's Mac. Its witnesses are its scripts' tests
+# (`packages/electron-shell/test/updates/release-scripts.test.ts`) and a workflow lint (actionlint, plus the
+# structure test beside the scripts). Its first real run is James's (J3), and it is red until the sibling pins are on
+# their remotes: CI fetches every sibling checkout from its remote (`.github/actions/prepare-*`).
+#
+# PERMISSIONS (EDP §12.2; the PM's ruling 2026-10-15 14:47Z) — nothing at the top; each job states its own:
+#   job        environment        permissions                          secrets (step-scoped)
+#   plan       —                  contents: read, actions: read        none
+#   verify     —                  contents: read                       none (verify.yml, called)
+#   build      release-signing    contents: read                       VIBEFIELD_BUNDLED_INDEX_SECRET in the stage step;
+#                                                                      the Apple credentials in the signed-package step
+#   sign       release-signing    contents: read                       VIBEFIELD_RELEASE_SECRET in the sign step
+#   converge   —                  contents: read                       none
+#   publish    —                  contents: write                      none (GITHUB_TOKEN only)
+# Only publish writes. GitHub's required reviewers gate EVERY deployment to `release-signing`, so a SCHEDULED nightly
+# waits for an approval at the build job and again at the sign job (J2: "daily when approved" until James rules).
+#
+# TRIGGERS: a schedule and a manual dispatch make a NIGHTLY (`nightly-YYYYMMDD`, skipped when main is red or unchanged
+# since the last nightly — RL4 (a)); a pushed `v*` tag makes a BETA (`vX.Y.Z-beta.N`) or a STABLE (`vX.Y.Z`), whose
+# version must already be committed (RM-D7). The `v*` ruleset keeps those tags human; `nightly-*` tags are created by
+# the publish job (D7, J2).
+#
+# NO SECRET, NO METADATA (D8): without VIBEFIELD_RELEASE_SECRET the sign step publishes no `latest*.yml` and nothing
+# update-visible; the installers stay downloadable by hand and the run says so. Until J4 (Apple), a macOS build is
+# UNSIGNED and says so; its feed can still be verified and refused (W10), but Squirrel.Mac cannot apply it.
+name: release
+
+on:
+  schedule:
+    - cron: "17 6 * * *" # 06:17 UTC — off the hour, where GitHub's schedule queue is quietest
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+# One release at a time, never cancelled half-way: an interrupted publish is a burned tag (EDP §12.4).
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  # cache-free, reproducible builds (EDP §12.1): no Nx cache, no incremental Rust
+  NX_SKIP_NX_CACHE: "true"
+  NX_DAEMON: "false"
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      skip: ${{ steps.plan.outputs.skip }}
+      reason: ${{ steps.plan.outputs.reason }}
+      channel: ${{ steps.plan.outputs.channel }}
+      tag: ${{ steps.plan.outputs.tag }}
+      version: ${{ steps.plan.outputs.version }}
+      prerelease: ${{ steps.plan.outputs.prerelease }}
+      makeLatest: ${{ steps.plan.outputs.makeLatest }}
+      commit: ${{ steps.plan.outputs.commit }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # the nightly tags, to find the last nightly's commit
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+      - name: Main's state (nightlies only)
+        id: main
+        if: github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          # green = the verify run of THIS commit on main succeeded (a commit verify has not finished on is not green)
+          conclusion=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow verify.yml --branch main --commit "$SHA" \
+            --limit 1 --json conclusion --jq '.[0].conclusion // empty')
+          if [ "$conclusion" = "success" ]; then echo "green=true" >> "$GITHUB_OUTPUT"; else echo "green=false" >> "$GITHUB_OUTPUT"; fi
+          # the newest nightly by NAME (nightly-YYYYMMDD sorts by day; a lightweight tag's creatordate is its commit's)
+          last=$(git tag --list 'nightly-*' --sort=-refname | head -n 1)
+          if [ -n "$last" ]; then
+            echo "lastTag=$last" >> "$GITHUB_OUTPUT"
+            echo "lastCommit=$(git rev-list -n 1 "$last")" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Plan the release (D6, D7, D14)
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+          MAIN_GREEN: ${{ steps.main.outputs.green || 'true' }}
+          LAST_TAG: ${{ steps.main.outputs.lastTag }}
+          LAST_COMMIT: ${{ steps.main.outputs.lastCommit }}
+        run: |
+          node scripts/release-plan.mjs --event "$EVENT" --ref "$REF" --commit "$SHA" --main-green "$MAIN_GREEN" \
+            --last-nightly-tag "$LAST_TAG" --last-nightly-commit "$LAST_COMMIT" --github-output "$GITHUB_OUTPUT"
+      - name: Say a skipped nightly
+        if: steps.plan.outputs.skip == 'true'
+        env:
+          REASON: ${{ steps.plan.outputs.reason }}
+        run: echo "::notice title=No nightly today::$REASON"
+
+  verify:
+    needs: plan
+    if: needs.plan.outputs.skip != 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/verify.yml
+
+  build:
+    needs: [plan, verify]
+    if: needs.plan.outputs.skip != 'true'
+    environment: release-signing
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # macOS universal on one arm64 runner is EDP-22's target; until its amendment lands, arm64 alone
+          - platform: mac-arm64
+            runner: macos-15
+            out: mac-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
+      # The sibling checkouts at their pinned revisions, from their remotes, as verify.yml prepares them — and red until
+      # they are pushed (J3). No dependency or build cache anywhere in a release build (EDP §12.1).
+      - name: Fetch sibling checkouts at the pinned revisions (EL8, siblings.lock.json)
+        run: |
+          set -euo pipefail
+          for name in puppeteer rosetta; do
+            node scripts/siblings.mjs fetch "$name"
+          done
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+      - uses: ./.github/actions/prepare-ghosttea
+        with:
+          build: "false"
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable branch, 2026-10-15
+      - name: Install (frozen)
+        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/prepare-mille
+      - name: Install the puppeteer sibling's packages (filtered, frozen)
+        run: |
+          pnpm --dir ../puppeteer install --frozen-lockfile \
+            --filter "@vibecook/puppeteer-builtin-providers..." \
+            --filter "@vibecook/puppeteer-record" \
+            --filter "@vibecook/puppeteer-monitor" \
+            --filter "@vibecook/puppeteer-views..."
+      - name: Build rosettad and the Ghosttea renderer from their pinned siblings
+        run: pnpm siblings:build
+      # The stage COPIES field-native and its terminal cell from target/release (stage-package.mjs names the command and
+      # does not run it; field-native has no Nx target) — so the release builds them here, locked, never from a cache.
+      - name: Build field-native, the floor and its terminal cell (--locked)
+        run: cargo build --release --locked -p field-native
+      - name: Stamp the nightly's version (D6 — this checkout only, never committed)
+        if: needs.plan.outputs.channel == 'nightly'
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: node scripts/release-plan.mjs stamp --version "$VERSION"
+      - name: Package, signed (J4 — the Apple credentials exist)
+        if: vars.VIBEFIELD_MAC_SIGNING == 'true'
+        working-directory: apps/desktop
+        env:
+          VIBEFIELD_RELEASE_CHANNEL: ${{ needs.plan.outputs.channel }}
+          VIBEFIELD_BUNDLED_INDEX_SECRET: ${{ secrets.VIBEFIELD_BUNDLED_INDEX_SECRET }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          key="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          printf '%s' "$APPLE_API_KEY_P8" > "$key"
+          APPLE_API_KEY="$key" pnpm run package:mac:release
+          rm -f "$key"
+      - name: Stage, release-keyed (TD-3 — the bundled index is signed here)
+        if: vars.VIBEFIELD_MAC_SIGNING != 'true'
+        working-directory: apps/desktop
+        env:
+          VIBEFIELD_RELEASE_CHANNEL: ${{ needs.plan.outputs.channel }}
+          VIBEFIELD_BUNDLED_INDEX_SECRET: ${{ secrets.VIBEFIELD_BUNDLED_INDEX_SECRET }}
+        run: |
+          pnpm run package:stage
+          node ../../scripts/stage-package.mjs --verify --require-complete --require-release-key
+      - name: Package, UNSIGNED (until J4 — Squirrel.Mac cannot apply this build)
+        if: vars.VIBEFIELD_MAC_SIGNING != 'true'
+        working-directory: apps/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          echo "::warning title=Unsigned macOS build::no Apple credentials (J4): this build installs by hand and cannot apply through Squirrel.Mac"
+          node packaging/run-electron-builder.mjs --mac --arm64 --config packaging/electron-builder.yml
+      # run-macos-release.mjs's own post-package checks, minus the signature requirements it adds for a signed build
+      - name: The packaged app's checks (as package:mac:release runs them, unsigned)
+        if: vars.VIBEFIELD_MAC_SIGNING != 'true'
+        working-directory: apps/desktop
+        env:
+          OUT: ${{ matrix.out }}
+        run: |
+          set -euo pipefail
+          app="release/$OUT/VibeField.app"
+          node packaging/verify-files-package.mjs --native-root "$app/Contents/Resources/bin"
+          node packaging/verify-history-package.mjs --native-root "$app/Contents/Resources/bin"
+          node packaging/verify-plugins-package.mjs --app "$app" --require-release-key
+          node packaging/verify-live-surface-release.mjs --app "$app" --enumerate-only
+      - name: The asar allowlist (D12)
+        env:
+          OUT: ${{ matrix.out }}
+        run: node scripts/audit-asar.mjs --app "apps/desktop/release/$OUT/VibeField.app" --stage-app apps/desktop/build/stage/app
+      - name: Hash the planes (D11)
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          OUT: ${{ matrix.out }}
+        run: |
+          mkdir -p release-build
+          node scripts/release-manifest.mjs hash --app "apps/desktop/release/$OUT/VibeField.app" --platform "$PLATFORM" \
+            --out "release-build/hashes-$PLATFORM.json"
+          # the payloads and the UNSIGNED feed electron-builder wrote beside them (the sign job signs it, D8)
+          find apps/desktop/release -maxdepth 1 -type f \( -name '*.zip' -o -name '*.dmg' -o -name '*.blockmap' \
+            -o -name 'latest*.yml' \) -exec cp {} release-build/ \;
+          ls release-build/latest*.yml >/dev/null
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: build-${{ matrix.platform }}
+          path: release-build/
+          if-no-files-found: error
+          retention-days: 7
+
+  sign:
+    needs: [plan, build]
+    runs-on: ubuntu-24.04
+    environment: release-signing
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+      # release-verify runs the client's chain from source; it needs zod and nothing else (its loader maps the two
+      # workspace packages to their sources). No lifecycle script runs in the job that holds the release key.
+      - name: Install the chain's one dependency (contracts → zod; frozen, no scripts)
+        run: pnpm install --frozen-lockfile --ignore-scripts --prod --filter @vibefield/contracts
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: build-*
+          path: builds
+      # D4/D5 carry from the newest SIGNED release (an unsigned one publishes no metadata, D8), whatever its channel:
+      # every release carries every channel's policy and all three heads. D11's `touched` compares with the newest
+      # release of THIS channel. A failed download fails the job — never a silent first release.
+      - name: The previous releases' truth (D4, D5, D11)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+        run: |
+          set -euo pipefail
+          mkdir -p previous previous-channel release-out
+          case "$CHANNEL" in
+            nightly) same='^nightly-[0-9]{8}$' ;;
+            beta) same='^v[0-9]+[.][0-9]+[.][0-9]+-beta[.][0-9]+$' ;;
+            stable) same='^v[0-9]+[.][0-9]+[.][0-9]+$' ;;
+            *) echo "unknown channel $CHANNEL"; exit 1 ;;
+          esac
+          heads=""
+          manifest=""
+          while IFS= read -r tag; do
+            assets=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+            if [ -z "$heads" ] && grep -qx 'channels.json' <<<"$assets"; then heads=$tag; fi
+            if [ -z "$manifest" ] && [[ "$tag" =~ $same ]] && grep -qx 'release-manifest.json' <<<"$assets"; then manifest=$tag; fi
+            if [ -n "$heads" ] && [ -n "$manifest" ]; then break; fi
+          done < <(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --limit 100 --json tagName,createdAt \
+            --jq 'sort_by(.createdAt) | reverse | .[].tagName')
+          if [ -n "$heads" ]; then
+            gh release download "$heads" --repo "$GITHUB_REPOSITORY" --dir previous \
+              --pattern 'channels.json' --pattern 'update-policy.*.json'
+            echo "::notice title=Carried from $heads::the D4 heads and the D5 policy versions"
+          else
+            echo "::notice title=First signed release::no release carries channels.json yet; the heads start here (D4)"
+          fi
+          if [ -n "$manifest" ]; then
+            gh release download "$manifest" --repo "$GITHUB_REPOSITORY" --dir previous-channel --pattern 'release-manifest.json'
+          fi
+          for dir in builds/*/; do
+            find "$dir" -maxdepth 1 -type f ! -name 'hashes-*.json' -exec cp {} release-out/ \;
+          done
+      - name: Merge the planes (D11)
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          COMMIT: ${{ needs.plan.outputs.commit }}
+        run: |
+          hashes=$(find builds -name 'hashes-*.json' | sort | paste -sd, -)
+          node scripts/release-manifest.mjs merge --hashes "$hashes" --version "$VERSION" --tag "$TAG" \
+            --channel "$CHANNEL" --commit "$COMMIT" --previous previous-channel/release-manifest.json \
+            --out release-out/release-manifest.json
+      - name: Sign (TD-3, D8 — the release key, in this step alone)
+        env:
+          VIBEFIELD_RELEASE_SECRET: ${{ secrets.VIBEFIELD_RELEASE_SECRET }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+        run: |
+          node scripts/release-sign.mjs --dir release-out --tag "$TAG" --channel "$CHANNEL" \
+            --run "$GITHUB_RUN_NUMBER" --previous previous
+      - name: Verify with the client's own chain (D8)
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+        run: node scripts/release-verify.mjs --dir release-out --tag "$TAG" --channel "$CHANNEL"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-out
+          path: release-out/
+          if-no-files-found: error
+          retention-days: 7
+
+  converge:
+    needs: [plan, sign]
+    runs-on: macos-15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+      - name: Install the chain's one dependency (contracts → zod; frozen, no scripts)
+        run: pnpm install --frozen-lockfile --ignore-scripts --prod --filter @vibefield/contracts
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-out
+          path: release-out
+      - name: Verify again, on the bytes about to be published (D8)
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+        run: node scripts/release-verify.mjs --dir release-out --tag "$TAG" --channel "$CHANNEL"
+      - name: The published zip's nested signatures (EDP §16.1)
+        run: |
+          zip=$(find release-out -maxdepth 1 -name '*mac*.zip' | head -n 1)
+          if [ -z "$zip" ]; then echo "no macOS zip in this release"; exit 0; fi
+          mkdir -p unzipped && ditto -x -k "$zip" unzipped
+          app=$(find unzipped -maxdepth 2 -name '*.app' | head -n 1)
+          if codesign --display "$app" >/dev/null 2>&1; then
+            codesign --verify --deep --strict --verbose=2 "$app"
+          else
+            echo "::warning title=Unsigned macOS build::the published zip is unsigned (J4); the nested-signature audit runs once it is signed"
+          fi
+      - name: Checksums
+        run: |
+          cd release-out
+          for file in *; do
+            shasum -a 256 "$file"
+          done > "$RUNNER_TEMP/SHA256SUMS"
+          mv "$RUNNER_TEMP/SHA256SUMS" SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-final
+          path: release-out/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: [plan, converge]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-final
+          path: release-out
+      # EDP §12.4's transaction: a draft, the payloads, the metadata LAST, then the un-draft. Immutable Releases makes
+      # every asset final at the un-draft, so the expected assets are checked on the draft first.
+      - name: Draft, payloads, then metadata last
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          COMMIT: ${{ needs.plan.outputs.commit }}
+          PRERELEASE: ${{ needs.plan.outputs.prerelease }}
+        run: |
+          flags=(--draft --target "$COMMIT" --title "VibeField $VERSION" --notes "VibeField $VERSION ($TAG).")
+          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" "${flags[@]}"
+          cd release-out
+          payloads=()
+          metadata=()
+          for file in *; do
+            if [[ "$file" =~ ^(latest.*\.yml|channels\.json|update-policy\..*\.json|release-manifest\.json|trust-root\.json)(\.sig)?$ ]]; then
+              metadata+=("$file")
+            else
+              payloads+=("$file")
+            fi
+          done
+          if [ "${#payloads[@]}" -gt 0 ]; then gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" "${payloads[@]}"; fi
+          if [ "${#metadata[@]}" -gt 0 ]; then gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" "${metadata[@]}"; fi
+      - name: The expected assets, on the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort > remote.txt
+          find release-out -maxdepth 1 -type f -exec basename {} \; | sort > local.txt
+          diff -u local.txt remote.txt
+      - name: Publish (the un-draft)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          LATEST: ${{ needs.plan.outputs.makeLatest }}
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest="$LATEST"
+      - name: Nightly retention (RL4 — delete nightly RELEASES older than 14 days, keep their tags)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cutoff=$(date -u -d '14 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          # the newest nightly always stays, however old: the nightly channel's head must resolve
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName,createdAt \
+            --jq "[.[] | select(.tagName | startswith(\"nightly-\"))] | sort_by(.createdAt) | reverse | .[1:] | .[] | select(.createdAt < \"$cutoff\") | .tagName" |
+            while read -r old; do
+              # never --cleanup-tag: an immutable release's tag name is burned, and the nightly-* ruleset keeps it (D7)
+              gh release delete "$old" --repo "$GITHUB_REPOSITORY" --yes
+            done

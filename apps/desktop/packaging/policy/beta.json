@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "channel": "beta",
+  "yanked": [],
+  "killSwitch": false,
+  "requireUserConfirmation": false,
+  "floors": {}
+}

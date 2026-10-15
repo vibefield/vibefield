@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "version": "0.9.0-nightly.20261016",
+  "tag": "nightly-20261016",
+  "channel": "nightly",
+  "commit": "419178f200000000000000000000000000000000",
+  "builds": {
+    "mac-arm64": {
+      "shell": {
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "files": 412
+      },
+      "fieldd": {
+        "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "files": 9
+      },
+      "field-native": {
+        "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "files": 3
+      }
+    }
+  },
+  "touched": ["fieldd"],
+  "previous": "nightly-20261015"
+}

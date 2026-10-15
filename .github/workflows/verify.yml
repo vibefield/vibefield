@@ -32,10 +32,14 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # WP12e (L3a): release.yml's `verify` job runs THIS gate on the commit it releases (EDP §12.1 "verify, THE gate").
+  workflow_call:
 
 # One live run per ref; cancel superseded pushes. macOS minutes bill at 10x — never stack.
+# The group is named by the RUNNING workflow (WP12e): standalone it is `verify-<ref>` as before; called from release.yml
+# it is `release-<ref>`, so a push's verify on main never cancels the release's own gate on the same ref.
 concurrency:
-  group: verify-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -45,7 +49,7 @@ jobs:
   verify:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # The sibling checkouts, at the EXACT pinned SHAs, in the relative locations the
       # lock names (preflight resolves ../puppeteer and ../rosetta-pin from siblings.lock.json).
@@ -67,8 +71,8 @@ jobs:
           done
 
       # pnpm pinned from the packageManager field (pnpm@11.13.1); node from .nvmrc.
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -79,7 +83,7 @@ jobs:
         with:
           build: "false"
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable branch, 2026-10-15
         with:
           components: clippy, rustfmt
 
@@ -88,7 +92,7 @@ jobs:
       # a fixed input, not a per-commit one.
       - name: Cache cargo-typify 0.7.0
         id: typify
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cargo/bin/cargo-typify
           key: cargo-typify-0.7.0-${{ runner.os }}
@@ -98,7 +102,7 @@ jobs:
       # Registry/git/target cache for the Rust builds: field-native (+ truffle-core source)
       # here, and the rosetta sibling's rosettad (its own workspace, its own target dir).
       # cache-bin off: the typify binary is owned by the dedicated cache step above.
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           cache-bin: "false"
           workspaces: |
