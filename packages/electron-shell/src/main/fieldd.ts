@@ -80,7 +80,6 @@ export function buildSupervisor(opts: {
   if (launchTarget === undefined || !existsSync(launchTarget)) {
     throw new Error(`fieldd bin missing (build it): ${launchTarget ?? "(unset)"}`);
   }
-  const expectedBuildId = opts.mode === "dev" ? process.env["VIBEFIELD_DEV_BUILD_ID"] : undefined;
   const policy = shutdownPolicy(opts.mode);
   // UA-D12/UA-5 — ephemeral ports EVERYWHERE, no mode split. The old
   // rationale ("a leave-running mode wants the registry ports so its
@@ -100,6 +99,17 @@ export function buildSupervisor(opts: {
   if (packaged && trust === null) {
     throw new Error("a packaged app has no staged identity to verify its own plugins with");
   }
+  // The build identity a fieldd must record to be adopted: the dev runner's in development; the staged identity's
+  // in a packaged app (WP12 D10), where a fieldd of another build — the one an app update left running — is
+  // REPLACED (asked to stop, then superseded at field-native), never adopted with the old app's roots and anchor.
+  const expectedBuildId =
+    opts.mode === "dev"
+      ? process.env["VIBEFIELD_DEV_BUILD_ID"]
+      : packaged
+        ? trust?.buildId
+        : undefined;
+  const buildMismatch: "refuse" | "replace" =
+    packaged && opts.mode !== "dev" ? "replace" : "refuse";
   const pluginEnvironment: Record<string, string> = packaged
     ? {
         FIELDD_PLUGIN_ROOTS: pluginRoots.bundled.join(delimiter),
@@ -152,7 +162,7 @@ export function buildSupervisor(opts: {
     ],
     controlPort: 0,
     dataPort: 0,
-    ...(expectedBuildId ? { expectedBuildId } : {}),
+    ...(expectedBuildId ? { expectedBuildId, buildMismatch } : {}),
     ...(opts.userId !== undefined ? { userId: opts.userId } : {}),
     shutdownPolicy: policy,
     ...(policy === "stop-owned"

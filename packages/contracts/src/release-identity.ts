@@ -48,6 +48,10 @@ export const StagedReleaseIdentity = z
     updateOrigin: z.string().url().max(2048),
     /** absent on a stage cut before WP12: the updater then has no floor but its own memory */
     updateFloors: UpdateFloors.optional(),
+    /** WP12 D10 — this build's identity, `<appVersion>+<commit7>`: the shell adopts only a fieldd that records the
+     * same one in product.json and replaces any other (`ProductInfo.buildId`'s shape). Absent on a stage cut before
+     * WP12c: that app keeps the old adoption rule (user + contracts major only). */
+    buildId: z.string().min(1).max(128).optional(),
   })
   .passthrough()
   .superRefine((identity, ctx) => {

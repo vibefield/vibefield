@@ -456,12 +456,31 @@ export class SupportBundleService {
       logger: Logger;
       aliases: LogSanitizerAliases;
       versions: Record<string, string>;
+      /** WP12 L2a — the RUNNING daemons' own builds (fieldd's recorded buildId, field-native's from health), read
+       * at export: after an app update the adopted pair may not be this app's build, and the bundle must say what
+       * actually ran, never the shell's version standing in for theirs. Bounded; a failure says "unavailable". */
+      daemonBuilds?: () => Promise<Record<string, string>>;
       collectContext?: () => Promise<unknown>;
       now?: () => number;
     },
   ) {
     this.stagingRoot = join(options.dataRoot, ...LAYOUT.EXPORTS_STAGING_DIR);
     this.now = options.now ?? Date.now;
+  }
+
+  /** The static versions, overlaid by what the running daemons say of themselves (bounded to 1 s). */
+  private async versionsNow(): Promise<Record<string, string>> {
+    const ask = this.options.daemonBuilds;
+    if (ask === undefined) return this.options.versions;
+    const unavailable = { fielddBuild: "unavailable", fieldNativeBuild: "unavailable" };
+    let timer: NodeJS.Timeout | undefined;
+    const daemons = await Promise.race([
+      ask().catch(() => unavailable),
+      new Promise<Record<string, string>>((resolve) => {
+        timer = setTimeout(() => resolve(unavailable), 1_000);
+      }),
+    ]).finally(() => clearTimeout(timer));
+    return { ...this.options.versions, ...daemons };
   }
 
   initialize(): Promise<void> {
@@ -758,9 +777,10 @@ export class SupportBundleService {
     }
 
     const context = await this.options.collectContext?.();
+    const versionsNow = await this.versionsNow();
     const runtime = scrubSupportValue(
       {
-        versions: this.options.versions,
+        versions: versionsNow,
         context: context ?? { state: "unavailable" },
       },
       {
@@ -822,7 +842,7 @@ export class SupportBundleService {
     const bundleId = `bundle-${randomBytes(12).toString("base64url")}`;
     const createdAt = this.now();
     const versions: Record<string, string> = {};
-    for (const [key, value] of Object.entries(this.options.versions).slice(0, 64)) {
+    for (const [key, value] of Object.entries(versionsNow).slice(0, 64)) {
       versions[key.slice(0, 64)] = replacePathPrefixes(String(value), this.options.aliases).slice(
         0,
         128,

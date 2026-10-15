@@ -2030,11 +2030,21 @@ if (!hasInstanceLock) {
         logs: logRoot,
         data: root,
       },
+      // WP12 L2a — what the RUNNING pair says it is (an app update may leave an older pair adopted until replaced)
+      daemonBuilds: async () => {
+        const handle = await ensureFieldd();
+        const health = (await handle.client.request("system.health", {}).catch(() => null)) as {
+          nativeBuild?: unknown;
+        } | null;
+        return {
+          fielddBuild: handle.info.buildId ?? "unrecorded",
+          fieldNativeBuild:
+            typeof health?.nativeBuild === "string" ? health.nativeBuild : "unknown",
+        };
+      },
       versions: {
         vibeField: app.getVersion(),
         pluginHostBuild: app.getVersion(),
-        fielddBuild: app.getVersion(),
-        fieldNativeBuild: app.getVersion(),
         electron: process.versions.electron ?? "unknown",
         node: process.versions.node,
         rustToolchain: "not-reported",

@@ -14,5 +14,6 @@
     "trustRoot": 1,
     "channels": null,
     "policy": { "nightly": null, "beta": null, "stable": null }
-  }
+  },
+  "buildId": "0.1.0+0d48e33"
 }

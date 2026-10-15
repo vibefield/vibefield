@@ -446,7 +446,8 @@ export interface FielddConfig {
      * pane born before the integration exists) */
     hold?: AgentGatewayOptions["hold"];
   };
-  /** Development-only identity used to prevent adopting output from a stale build. */
+  /** The build identity recorded in product.json: the dev runner's in development, the staged identity's in a
+   * packaged app (WP12 D10) — the supervisor adopts only its own build and replaces any other. */
   buildId?: string;
   /** UA-2 — the user this daemon serves (users.json userId). Recorded in
    * product.json and asserted in every hello ack; the supervisor probe refuses

@@ -1,7 +1,7 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { assertDataRootUsable } from "./paths";
-import { type ProbeResult, tryAdopt } from "./probe";
+import { type ProbeResult, readRecordedProduct, type StaleDaemon, tryAdopt } from "./probe";
 import { createLineBuffer, createLogTail, redactLine } from "./process-log";
 import {
   type FielddHandle,
@@ -28,6 +28,17 @@ const STOP_TERM_WAIT_MS = 2_000;
  * Short: the request is one loopback round trip; a daemon that cannot answer
  * it inside this budget is what the ladder exists for. */
 const SHUTDOWN_RPC_WAIT_MS = 1_500;
+/** WP12 D10 — how long a replaced build's fieldd has to go before this build's is spawned anyway. */
+const REPLACE_WAIT_MS = 3_000;
+const REPLACE_POLL_MS = 100;
+/** WP12 D10 — a live listener we cannot adopt: the new fieldd supersedes it at field-native (one client at a time,
+ * `field-native/src/mgmt/mod.rs` single-client rule), so these spawn as NAMED takeovers, never refusals — a refusal
+ * would hand any same-uid listener a lever to stop the app's own fieldd (EL7). */
+const TAKEOVER_FAILURES: ReadonlySet<ProbeFailure> = new Set([
+  "incompatible-contracts",
+  "user-mismatch",
+  "foreign-listener",
+]);
 
 export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSupervisor {
   const emit = (event: FielddSupervisorEvent): void => {
@@ -92,6 +103,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       signal,
       opts.expectedBuildId,
       opts.userId,
+      { keepStaleClient: opts.buildMismatch === "replace" },
     );
     throwIfAborted(signal);
     if (adopted.ok) {
@@ -106,10 +118,20 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       probeFailure: adopted.failure,
     });
     if (adopted.failure === "incompatible-build") {
-      throw new SupervisorError(
-        "incompatible-build",
-        "a live fieldd from a different development build already owns this data root",
-        adopted.failure,
+      if (opts.buildMismatch !== "replace" || adopted.stale === undefined) {
+        adopted.stale?.client.close();
+        throw new SupervisorError(
+          "incompatible-build",
+          "a live fieldd from a different development build already owns this data root",
+          adopted.failure,
+        );
+      }
+      await replaceStaleBuild(adopted.stale, signal);
+    } else if (TAKEOVER_FAILURES.has(adopted.failure)) {
+      lifecycle(
+        "fieldd.supervisor.takeover",
+        "A live listener on this root cannot be adopted; the new fieldd supersedes it at field-native",
+        { probeFailure: adopted.failure },
       );
     }
 
@@ -320,6 +342,48 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       }
     }
     return result;
+  }
+
+  /** WP12 D10 — the bounded replace path: ask the other build's fieldd to stop over the channel our token already
+   * authenticated (`system.shutdown`: it releases its sessions to field-native and removes its run files), wait
+   * up to REPLACE_WAIT_MS for its run files to go or change hands, and return — the caller spawns either way. */
+  async function replaceStaleBuild(stale: StaleDaemon, signal: AbortSignal): Promise<void> {
+    lifecycle(
+      "fieldd.supervisor.replacing_build",
+      "A fieldd from another build owns this root; asking it to stop before spawning this build's",
+      { pid: stale.info.pid, from: stale.info.buildId ?? null, to: opts.expectedBuildId ?? null },
+    );
+    const asked = await Promise.race([
+      stale.client.request("system.shutdown", {}).then(
+        () => true,
+        () => false,
+      ),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), SHUTDOWN_RPC_WAIT_MS)),
+    ]);
+    stale.client.close();
+    const deadline = Date.now() + REPLACE_WAIT_MS;
+    let gone = false;
+    while (Date.now() < deadline) {
+      throwIfAborted(signal);
+      const current = await readRecordedProduct(opts.dataRoot);
+      if (current === null || current.bootId !== stale.info.bootId) {
+        gone = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, REPLACE_POLL_MS));
+    }
+    if (gone) {
+      lifecycle("fieldd.supervisor.replaced_build", "The other build's fieldd stopped", {
+        pid: stale.info.pid,
+        asked,
+      });
+    } else {
+      lifecycle(
+        "fieldd.supervisor.replace_wait_expired",
+        "The other build's fieldd did not stop in time; the new fieldd supersedes it at field-native",
+        { pid: stale.info.pid, asked },
+      );
+    }
   }
 
   async function stopChild(

@@ -500,6 +500,24 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
     let _ = writer.await;
 }
 
+/// The hello's version gate: a refusal when the client's contracts MAJOR is not ours (0.x line — tolerant within
+/// it, P3). It runs BEFORE the pairing credential is verified, so it carries NO server details — EL7 (WP12 L2a): a
+/// refusal sent before the credential is checked must carry no server details.
+fn refuse_incompatible_major(theirs: &str, id: Option<Value>) -> Option<Value> {
+    let ours_major = CONTRACTS_VERSION.split('.').next().unwrap_or("0");
+    if theirs.split('.').next().unwrap_or("") == ours_major {
+        return None;
+    }
+    Some(err(
+        id,
+        "INCOMPATIBLE",
+        -32009,
+        "contracts major mismatch",
+        false,
+        None,
+    ))
+}
+
 async fn handle_hello(
     state: &Arc<DaemonState>,
     conn_id: u64,
@@ -526,20 +544,10 @@ async fn handle_hello(
     };
 
     // version gate: major must match (0.x line — tolerant within it, P3)
-    let ours_major = CONTRACTS_VERSION.split('.').next().unwrap_or("0");
-    let theirs = hello.contracts_version.to_string();
-    if theirs.split('.').next().unwrap_or("") != ours_major {
-        return (
-            err(
-                id,
-                "INCOMPATIBLE",
-                -32009,
-                "contracts major mismatch",
-                false,
-                Some(json!({"server": CONTRACTS_VERSION, "client": theirs})),
-            ),
-            false,
-        );
+    if let Some(refusal) =
+        refuse_incompatible_major(&hello.contracts_version.to_string(), id.clone())
+    {
+        return (refusal, false);
     }
 
     // D8 pairing credential (read from raw params — variant-name independent)
@@ -1367,6 +1375,25 @@ fn err(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// WP12 L2a (EL7) — the version gate runs before the pairing credential is checked, so its refusal says
+    /// nothing of this floor: no server version, no details at all.
+    #[test]
+    fn a_major_refusal_before_the_credential_carries_no_server_details() {
+        assert!(refuse_incompatible_major(CONTRACTS_VERSION, Some(json!(1))).is_none());
+        let refusal = refuse_incompatible_major("99.0.0", Some(json!(1)))
+            .expect("a foreign major is refused");
+        assert_eq!(refusal["error"]["message"], "contracts major mismatch");
+        let text = refusal.to_string();
+        assert!(
+            !text.contains(CONTRACTS_VERSION),
+            "the refusal names the server's version: {text}"
+        );
+        assert!(
+            !text.contains("\"server\""),
+            "the refusal carries server details: {text}"
+        );
+    }
 
     #[test]
     fn an_unknown_session_is_the_ordinary_race() {

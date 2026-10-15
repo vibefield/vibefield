@@ -16,6 +16,7 @@
 // Usage (the stager's calls; stdout is ONE JSON line, the verdict):
 //   node apps/desktop/packaging/bundled-plugins.mjs stage  --stage <dir> --plugins <a,b> --app-version <v>
 //   node apps/desktop/packaging/bundled-plugins.mjs verify --stage <dir> --plugins <a,b> [--require-release-key]
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   chmodSync,
@@ -137,6 +138,24 @@ function devTrustRoot() {
   };
 }
 
+/** WP12 D10 — `<appVersion>+<commit7>` from this checkout; omitted (said) when git cannot name the commit, which
+ * leaves that app on the old adoption rule rather than inventing an identity. */
+function stagedBuildId(appVersion) {
+  try {
+    const commit = execFileSync("git", ["rev-parse", "--short=7", "HEAD"], {
+      cwd: repo,
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .toString()
+      .trim();
+    if (/^[0-9a-f]{7,}$/.test(commit)) return { buildId: `${appVersion}+${commit}` };
+  } catch {}
+  console.warn(
+    "bundled-plugins: no git commit — the staged identity carries no buildId (WP12 D10)",
+  );
+  return {};
+}
+
 function chmodTree(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const abs = join(dir, entry.name);
@@ -185,6 +204,8 @@ async function stage({ stage: stageDir, plugins, "app-version": appVersion }) {
     // WP12's build-time floor: the updater never accepts a signed document below what this build was staged with.
     // The trust-root's version is known here; the channel heads have no build-time source; each channel policy's floor
     // joins when WP12d stages the committed policy sources.
+    // WP12 D10: this build's identity, which the shell requires of the fieldd it adopts (a different one is replaced)
+    ...stagedBuildId(appVersion),
     updateFloors: {
       trustRoot: trust.doc.version,
       channels: null,

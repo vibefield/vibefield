@@ -471,6 +471,24 @@ describe("the bundled trust anchor (WP8c)", () => {
     });
   });
 
+  it("hands the shell this build's identity when the stage recorded one (WP12 D10), and none from an older stage", () => {
+    const withBuild = textReader({
+      "release-identity.json": JSON.stringify({
+        schemaVersion: 1,
+        keyClass: "release",
+        identityRevision: 6,
+        trustRootKeys: ROOT_KEYS,
+        appId: "com.jamesyong.vibefield",
+        productName: "VibeField",
+        updateChannel: "beta",
+        updateOrigin: "https://github.com/vibefield/vibefield/releases",
+        buildId: "0.9.0+0d48e33",
+      }),
+    });
+    expect(readBundledTrust(packaged, withBuild)?.buildId).toBe("0.9.0+0d48e33");
+    expect(readBundledTrust(packaged, textReader())).not.toHaveProperty("buildId");
+  });
+
   it("refuses a missing or damaged identity, and a trust-root without its signatures", () => {
     for (const over of [
       { "release-identity.json": null },

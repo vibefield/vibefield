@@ -660,32 +660,10 @@ export class ProductApi extends EventEmitter {
       }
       const oursMajor = CONTRACTS_VERSION.split(".")[0];
       if (String(parsed.data.contractsVersion).split(".")[0] !== oursMajor) {
-        reply(
-          this.err(id, "INCOMPATIBLE", "contracts major mismatch", false, {
-            server: CONTRACTS_VERSION,
-            client: parsed.data.contractsVersion,
-          }),
-        );
+        // EL7 (WP12 L2a): this refusal goes out BEFORE the credential is checked, so it carries no server
+        // details — an unauthenticated caller learns only that the major differs
+        reply(this.err(id, "INCOMPATIBLE", "contracts major mismatch", false));
         ws.close(1008, "incompatible");
-        return;
-      }
-      // UA-2 — identity threading: the client MAY carry its expectation of
-      // which user this daemon serves; a configured daemon refuses a mismatch
-      // the way it refuses a version mismatch. Restrict-only: the claim can
-      // narrow a connection, never escalate one.
-      const expectedUser = parsed.data.userId;
-      if (
-        expectedUser !== undefined &&
-        this.opts.userId !== undefined &&
-        expectedUser !== this.opts.userId
-      ) {
-        reply(
-          this.err(id, "INCOMPATIBLE", "user mismatch", false, {
-            server: this.opts.userId,
-            client: expectedUser,
-          }),
-        );
-        ws.close(1008, "user mismatch");
         return;
       }
       // DS-D15 — the connection's provenance, fixed at hello and carried on
@@ -867,6 +845,31 @@ export class ProductApi extends EventEmitter {
       } else {
         reply(this.err(id, "UNAUTHORIZED", "invalid token", false));
         ws.close(1008, "unauthorized");
+        return;
+      }
+      // UA-2 — identity threading: the client MAY carry its expectation of
+      // which user this daemon serves; a configured daemon refuses a mismatch
+      // the way it refuses a version mismatch. Restrict-only: the claim can
+      // narrow a connection, never escalate one. EL7 (WP12 L2a): checked only
+      // AFTER the credential — until then an unauthenticated local caller was
+      // told this daemon's userId — and the half-granted connection is
+      // withdrawn before the refusal goes out.
+      const expectedUser = parsed.data.userId;
+      if (
+        expectedUser !== undefined &&
+        this.opts.userId !== undefined &&
+        expectedUser !== this.opts.userId
+      ) {
+        state.authed = false;
+        state.scopes = [];
+        state.ctx = null;
+        reply(
+          this.err(id, "INCOMPATIBLE", "user mismatch", false, {
+            server: this.opts.userId,
+            client: expectedUser,
+          }),
+        );
+        ws.close(1008, "user mismatch");
         return;
       }
       const ackDevice =

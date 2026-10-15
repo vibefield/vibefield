@@ -9,9 +9,25 @@ import type { ProbeFailure } from "./types";
 // anything else is a diagnosed non-adoption, never an exception. The token is
 // read for the hello only and never logged (EL7).
 
+/** A live fieldd of ANOTHER build that answered our token (WP12 D10): kept open only when the caller asked, so the
+ * supervisor can ask it to stop over the authenticated channel before it spawns this build's. */
+export interface StaleDaemon {
+  readonly client: FielddClient;
+  readonly info: ProductInfo;
+}
+
 export type ProbeResult =
   | { ok: true; client: FielddClient; info: ProductInfo }
-  | { ok: false; failure: ProbeFailure };
+  | { ok: false; failure: ProbeFailure; stale?: StaleDaemon };
+
+/** The run file's recorded daemon, or null when absent or unreadable (the replace path's "is it gone yet"). */
+export async function readRecordedProduct(dataRoot: string): Promise<ProductInfo | null> {
+  try {
+    return ProductInfo.parse(JSON.parse(await readFile(productPath(dataRoot), "utf8")));
+  } catch {
+    return null;
+  }
+}
 
 export async function tryAdopt(
   dataRoot: string,
@@ -19,6 +35,7 @@ export async function tryAdopt(
   signal?: AbortSignal,
   expectedBuildId?: string,
   expectedUserId?: string,
+  options: { readonly keepStaleClient?: boolean } = {},
 ): Promise<ProbeResult> {
   let rawProduct: string;
   let token: string;
@@ -75,16 +92,20 @@ export async function tryAdopt(
   });
 
   if (outcome === "ready") {
-    if (expectedBuildId !== undefined && info.buildId !== expectedBuildId) {
-      client.close();
-      return { ok: false, failure: "incompatible-build" };
-    }
-    // UA-2 — identity is stricter than build: an absent userId is a daemon
-    // from before the partition (or another user's), and adopting it would
+    // UA-2 — identity is stricter than build, and it is checked FIRST (WP12 D10): an absent userId is a daemon from
+    // before the partition (or another user's), and adopting it — or asking it to stop for a replacement — would
     // cross the wall. Exact match or nothing.
     if (expectedUserId !== undefined && info.userId !== expectedUserId) {
       client.close();
       return { ok: false, failure: "user-mismatch" };
+    }
+    if (expectedBuildId !== undefined && info.buildId !== expectedBuildId) {
+      // our token answered: this is our user's daemon, of another build (or a pre-WP12 one, which records none)
+      if (options.keepStaleClient === true) {
+        return { ok: false, failure: "incompatible-build", stale: { client, info } };
+      }
+      client.close();
+      return { ok: false, failure: "incompatible-build" };
     }
     return { ok: true, client, info };
   }

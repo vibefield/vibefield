@@ -76,7 +76,12 @@ export type SupervisorLifecycleEventName =
   | "fieldd.supervisor.shutdown_requested_rpc"
   | "fieldd.supervisor.force_killed"
   | "fieldd.supervisor.stopped"
-  | "fieldd.supervisor.disposed";
+  | "fieldd.supervisor.disposed"
+  // WP12 D10 — adoption after an app update
+  | "fieldd.supervisor.replacing_build"
+  | "fieldd.supervisor.replaced_build"
+  | "fieldd.supervisor.replace_wait_expired"
+  | "fieldd.supervisor.takeover";
 
 export type FielddSupervisorEvent =
   | {
@@ -115,9 +120,15 @@ export interface FielddSupervisorOptions {
   /** undefined = daemon default (registry port); 0 = ephemeral (test isolation) */
   controlPort?: number;
   dataPort?: number;
-  /** Development-only build identity. When set, adoption requires an exact
-   * match and spawned fieldd receives it as FIELDD_BUILD_ID. */
+  /** Build identity: the dev runner's in development, the staged identity's in a packaged app (WP12 D10). When
+   * set, adoption requires an exact match and a spawned fieldd receives it as FIELDD_BUILD_ID. */
   expectedBuildId?: string;
+  /** WP12 D10 — a live fieldd of ANOTHER build (or none recorded) that answers our token owns the root:
+   * `refuse` (the default; development never stops a developer's other build) or `replace` (a packaged app after
+   * an update): ask it to stop over the authenticated channel (`system.shutdown`, which leaves field-native and its
+   * sessions running), wait bounded for its run files to go, then spawn this build's. If it did not stop, the new
+   * fieldd supersedes it at field-native (the single-client rule) — no signal is ever sent to a recorded pid. */
+  buildMismatch?: "refuse" | "replace";
   /** UA-2 — the attached user this pair must serve (users.json userId). When
    * set, adoption requires product.json to record exactly it, and spawned
    * fieldd receives it as FIELDD_USER_ID. */

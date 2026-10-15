@@ -247,6 +247,64 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     });
   }, 60_000);
 
+  // WP12 D10 (build-wp12-updater.md; the PM's ruling 2026-10-15) — after an app update a fieldd of ANOTHER build
+  // may still be running. The supervisor asks it to stop first; this row witnesses the BACKSTOP alone, with no stop
+  // asked: this build's fieldd boots while the old one still serves, field-native's single-client rule supersedes
+  // the old one, the new one records its build, and the PTY lives through it — re-paired onto the same native boot.
+  it("row WP12-D10: another build's fieldd is superseded at field-native; the PTY lives; the new build records itself", async () => {
+    const native = await spawnNative();
+    await withNativeLog(native, async () => {
+      let fatalSeen: (reason: string) => void = () => undefined;
+      const supersededOld = new Promise<string>((resolve) => {
+        fatalSeen = resolve;
+      });
+      const old = await bootstrap({
+        dataDir: native.dir,
+        controlPort: 0,
+        dataPort: 0,
+        buildId: "build-x",
+        onFatal: (reason) => fatalSeen(reason),
+      });
+      cleanup.push(() => old.stop());
+      const rpc1 = await connect(old);
+      const created = await createRetrying(rpc1, { shell: HOLD }, native, 30_000);
+      await poll(async () =>
+        (await listOf(rpc1)).some((t) => t.sessionId === created.sessionId) ? true : undefined,
+      );
+      const uds = udsEndpoints(old);
+      const productJson = join(native.dir, "fieldd", "run", "product.json");
+      expect(JSON.parse(readFileSync(productJson, "utf8"))).toMatchObject({ buildId: "build-x" });
+
+      // this build's fieldd, while the old one still serves — no stop asked
+      const fresh = await bootstrap({
+        dataDir: native.dir,
+        controlPort: 0,
+        dataPort: 0,
+        buildId: "build-y",
+      });
+      cleanup.push(() => fresh.stop());
+      await expect(supersededOld).resolves.toContain("superseded");
+      expect(old.native.superseded).toBe(true);
+      expect(JSON.parse(readFileSync(productJson, "utf8"))).toMatchObject({
+        buildId: "build-y",
+        port: fresh.controlPort,
+      });
+
+      const rpc2 = await connect(fresh);
+      await poll(
+        async () =>
+          (await listOf(rpc2)).some((t) => t.sessionId === created.sessionId) ? true : undefined,
+        5_000,
+      );
+      // the same native boot — the PTY never left it
+      expect(udsEndpoints(fresh).authToken).toBe(uds.authToken);
+      const term = (await rpc2.call("terminal.terminate", {
+        sessionId: created.sessionId,
+      })) as { terminated: boolean };
+      expect(term.terminated).toBe(true);
+    });
+  }, 60_000);
+
   it("rows 3+6: a dead floor refuses honestly; a replacement boot empties the inventory and re-arms", async () => {
     const native = await spawnNative();
     await withNativeLog(native, async () => {

@@ -312,7 +312,13 @@ function headOf(path: string): Uint8Array | null {
 export function readBundledTrust(
   resources: DesktopResources,
   readText: (path: string) => string | null = textOf,
-): { trustRootPath: string; rootKeys: readonly string[]; keyClass: KeyClass } | null {
+): {
+  trustRootPath: string;
+  rootKeys: readonly string[];
+  keyClass: KeyClass;
+  /** WP12 D10 — this build's identity, when the stage recorded one */
+  buildId?: string;
+} | null {
   const identity = resources.identity;
   if (!resources.packaged || identity === null) return null;
   const raw = readText(identity.identityPath);
@@ -342,6 +348,7 @@ export function readBundledTrust(
     trustRootPath: identity.trustRootPath,
     rootKeys: parsed.data.trustRootKeys,
     keyClass: parsed.data.keyClass,
+    ...(parsed.data.buildId !== undefined ? { buildId: parsed.data.buildId } : {}),
   };
 }
 
