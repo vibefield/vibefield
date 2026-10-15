@@ -11078,3 +11078,81 @@ jobs in the one `release-signing` environment, each secret scoped to its one ste
 **Next:** L3b (WP12d's main-side levers) → L3c (doctor + the Settings card) → L4 (`smoke:update`). James's J1–J4 are in
 the hand-off. They include the reviewer cost: required reviewers gate every deployment, so a scheduled nightly needs two
 approvals ("daily when approved" until he rules).
+
+## WP12 L3b-i — the policy and the planes: the levers bite at the one decision; the apply re-reads a FRESH verified policy at the click and holds when it can't (no offline allowance); and a release whose signed manifest leaves the floor's bytes alone keeps the floor and its sessions (2026-10-15; `5ae33a71` `9ec6bf48`)
+
+**Why:** `build-wp12-updater.md` §12 is L3b's reading. The PM ruled at 16:03Z:
+- the split stands (L3b-i = B1–B3, L3b-ii = B4–B8);
+- **B2 has NO offline allowance** (`policy-unreachable`). The 6 h bound is James's reversible alternative: it lost
+  because the kill switch is 1.0's only emergency lever, and its worth is how fast clients see it;
+- **B3 has one HARD condition.** The native plane is field-native AND every executable it execs from its own
+  directory, the manifest names that set, and a missing or extra member reads as touched.
+
+**What landed:**
+- **`5ae33a71` (test-only):** `index-activity-doors.test.ts`'s `day()` reads the clock ONCE. This is main's 1 ms race
+  that L3a's gate named (TL `3de3706a`). It is the lane's first commit by the PM's ruling, and closes the History
+  lead's item.
+- **`9ec6bf48`, B1 — the levers at `decideUpdate`, the one decision site:**
+  - kill switch: no download and no apply; a staged update is held `killed`;
+  - yank: never downloaded; a staged copy is discarded;
+  - OS floor (`process.getSystemVersion()`; unreadable reads as unmet): skipped, never installed;
+  - every refusal is audited (`KILLED`, `YANKED`, `FLOOR_UNMET`);
+  - doctor names the policy, a yanked running version, and the advisory `minSupported`;
+  - the tray says "Updates Paused" and "Update Needs a Newer macOS", never "Update Check Failed".
+- **B2 — the fresh policy at the click.** Before the census and before anything is torn down, the whole chain runs again
+  on main's own `net.fetch` (15 s per document, 20 s overall).
+  - Unreachable holds `policy-unreachable` (a new UPDATES_SERVICE state) with a box in the PM's words. A refused chain
+    holds `policy-unverified`.
+  - A kill switch, yank or floor published after the download stops the apply, and the person is told why.
+- **B3 — the planes by DIGEST.**
+  - The native set is read from the Rust: `field-native`, `field-terminal-host` (`config.rs`), and `sidecar-slim` or
+    `truffle-sidecar` (`mesh.rs`).
+  - Contracts: the manifest's field-native plane must name its `members`; `releasePlatformKey()` names the workflow's
+    keys.
+  - `release-manifest.mjs` names the members and writes resources-relative lines, so a plane's digest no longer depends
+    on where the app sits.
+  - Chain step 6b verifies the head's manifest by the release role.
+  - `native-plane.ts` hashes the installed plane. The verdict is untouched only when the members AND the digest match;
+    when the fresh head is not the staged version it reads `head-moved`, and touched.
+  - An untouched release skips the census and the consent box and sends `system.shutdown {}` (fieldd's plain stop, no
+    contract change). The floor and its sessions live on, and the tray's verb is the plain "Restart to Update".
+
+**Found:**
+- **The native set is read from the Rust, never listed by hand.** L3a's manifest rule missed `truffle-sidecar`, the
+  fallback the floor execs from its own directory. A release that shipped it would have passed a member-less
+  comparison: the hard condition's own case.
+- **The stub manifest is the chain working.** L3a's round-trip fixture wrote `{"schemaVersion":1}`. Step 6b now refuses
+  it (verify-1's one red), so the fixture writes a real manifest through the same merge the workflow uses.
+- **Keeping the floor crosses no seam.** `system.shutdown`'s `native` is optional, with `stop: literal(true)`, so
+  keeping the floor is fieldd's existing plain stop, and the next fieldd adopts the floor as every fieldd restart does
+  (`native-supervisor.ts:43`).
+
+**Validation:**
+- `pnpm verify` EXIT 0 (verify-2, 16:20:45–16:25:45Z): TS 691 files / 8,733 tests; Rust 23 suites / 313; gen:check clean. verify-1 was red on one test, L3a's stub-manifest fixture (see Found).
+- `gate:landing --with-stages` on `9ec6bf48` (16:26:32–16:57:52Z): **25/27**, both reds main's own.
+  - smoke:canvas: DK-14 AIMED.
+  - `test`: fieldd went red under load 100, and its cause sat past Nx's output cap (the task's printed output ends
+    mid-line and names no failing row; filed as an Open debt).
+  - Read by the PM's rule:
+    - fieldd's suite alone (vitest directly, full output; 16:58:36Z, load 28.97) went red on `service-drain.test.ts:171`'s
+      1.5 s wall-clock bound: `expected 3758 to be less than 1500`;
+    - the file alone (17:04:42Z, load 9.44) was green: `✓ ServiceHost route drain (PRC-2 / §18.2) > gives an active
+      subscription exactly one terminal outcome 936ms`. That is the lottery class (`fieldd-test-graph-lottery-rows`).
+  - The `day()` row was green under the gate's load 100: `✓ test/index-activity-doors.test.ts (20 tests)`.
+  - df: internal 14 → 13 GiB over the gate, 10 GiB at the suite's solo start, 15 GiB at the file's (another writer);
+    SSD 418 → 417 GiB.
+- **The cross-test:** main's hasher and `release-manifest.mjs` give one digest and one member set on one fixture app (a
+  symlink and `.exe` included).
+- **Tables:** the lever and native rows in `decide`; chain 6b's refusals; every verdict branch.
+- **`controller-apply`:**
+  - offline, no fetcher, and the 20 s bound under fake timers;
+  - a kill, a yank, a floor and an unverified policy, each published after the download;
+  - untouched with two live sessions: no census, no box, `native: false`, the no-spawn probe;
+  - three touched cases, and a head that moved past the staged version.
+
+**Next:** L3b-ii:
+- B4, the silent self-apply with the `pmset` reader, at census zero;
+- B5, root persistence as signed documents (the two-rotations case is in James's hand-off, item 7);
+- B6, the cache GC;
+- B7, the differential kept on;
+- B8, the build job's `app-update.yml` assertion with a local zip witness.

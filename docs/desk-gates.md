@@ -192,6 +192,7 @@ lane's field-native, rebuilt after gen:check), the dev runner's 131. The orchest
   is `pnpm gen && git diff --exit-code -- <the generated paths>`, so an uncommitted `bundle.json`, `contracts.rs`,
   `registries.rs` or `gen/layout.json` is a diff even when it is fresh. To settle freshness without a window, stage
   and run `pnpm gen:check` alone: gen and fmt need no PM-WINDOW; `cargo build`/`check`/`test` always do.
+- **OWED — a red test stage must name its row** (2026-10-15, the PM's item): Nx caps a task's printed output, so a gate's red fieldd stage can end mid-line with no failing row named (seen 10-15 on two gates); the gate's test stage should write vitest's own report file per project so the row is always on disk. Until it does, read a capped fieldd red by running the suite alone (vitest directly, its full output to a file), then each failing file alone (the lottery rule: `fieldd-test-graph-lottery-rows`).
 
 ## The doors (plan (74))
 
