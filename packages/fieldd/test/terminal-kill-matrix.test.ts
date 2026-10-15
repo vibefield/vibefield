@@ -406,10 +406,16 @@ describe("the kill matrix (NF-4, real field-native)", () => {
         kind: "PRECONDITION_FAILED",
         details: { live: [consented.sessionId, late.sessionId].sort(), births: 0 },
       });
-      // nothing ended: the floor serves, both sessions are listed, the shutdown owner was never asked
+      // nothing ended: the floor serves, both sessions are listed, the shutdown owner was never asked. The list is
+      // POLLED: `terminal.list` answers the OBSERVED inventory, which lags a fresh birth (GT-1's race) — the very
+      // session the refusal above counted as born-and-unseen. A one-shot read raced it (WP12 L2b-ii's verify-1,
+      // 2026-10-15: the late session not yet listed, 746 ms).
       expect(native.child.exitCode).toBeNull();
-      const listed = (await listOf(rpc)).map((t) => t.sessionId);
-      expect(listed).toEqual(expect.arrayContaining([consented.sessionId, late.sessionId]));
+      await poll(async () => {
+        const listed = new Set((await listOf(rpc)).map((t) => t.sessionId));
+        return listed.has(consented.sessionId) && listed.has(late.sessionId) ? true : undefined;
+      });
+      expect(native.child.exitCode).toBeNull();
       expect(ownerAsked).toBe(false);
       expect(daemon.health().restartScheduled).toBeNull();
       // and births reopened with the refusal
