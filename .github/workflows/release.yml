@@ -214,6 +214,12 @@ jobs:
           node packaging/verify-history-package.mjs --native-root "$app/Contents/Resources/bin"
           node packaging/verify-plugins-package.mjs --app "$app" --require-release-key
           node packaging/verify-live-surface-release.mjs --app "$app" --enumerate-only
+      # electron-builder writes app-update.yml only for a dmg or zip target (PublishManager.js:77-80): asserted here, on the
+      # release build's app — never on package:dir's (W8, corrected 2026-10-15)
+      - name: The update config (B8 — app-update.yml present, provider github, no token)
+        env:
+          OUT: ${{ matrix.out }}
+        run: node scripts/audit-app-update.mjs --app "apps/desktop/release/$OUT/VibeField.app"
       - name: The asar allowlist (D12)
         env:
           OUT: ${{ matrix.out }}

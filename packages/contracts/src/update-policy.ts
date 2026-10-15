@@ -334,6 +334,20 @@ export const UpdateClientStateFile = z
     lastCheckAt: z.number().int().nonnegative().nullable().default(null),
     /** WP12c — the last apply's branch (`UpdateLastApply`); null = none since the state began */
     lastApply: UpdateLastApply.nullable().default(null),
+    /** WP12d (L3b-ii, B5; the PM's ruling 2026-10-15 16:03Z) — the trust-root DOCUMENTS this client adopted by rotation,
+     * oldest first, each with its detached signature, never bare keys: re-verified from the app's EMBEDDED root keys at
+     * every load, each by the set before it (a same-uid writer cannot forge one, EL7), and the newest that verifies
+     * anchors the next check. A chain that breaks is dropped from the break on, loudly. */
+    trustRoots: z
+      .array(
+        z.object({
+          version: z.number().int().min(1),
+          doc: z.string().min(1).max(65_536),
+          sig: z.string().min(1).max(8_192),
+        }),
+      )
+      .max(16)
+      .default([]),
   })
   .passthrough();
 export type UpdateClientStateFile = z.infer<typeof UpdateClientStateFile>;

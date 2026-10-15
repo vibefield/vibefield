@@ -8,9 +8,10 @@
 // — and electron-updater's install-on-quit stays off, so nothing applies behind the gate.
 //
 // WP12d (L3b-i, `build-wp12-updater.md` §12; the PM's ruling 2026-10-15 16:03Z) — the policy's levers bite HERE and
-// nowhere else (B1): a kill switch downloads and applies nothing (a staged update is held `killed`, since a later
-// policy may lift it); a yanked version is never downloaded and a yanked STAGED one is discarded; a host below the
-// policy's OS floor skips the release (discarded if staged, never installed). And the census gates only a release
+// nowhere else (B1): a kill switch downloads and applies nothing; a yanked version is never downloaded; a host below
+// the policy's OS floor skips the release. A STAGED release any lever refuses is discarded, never installed — L3b-ii's
+// cache GC (B6) deletes its payload, so a kill no longer holds it: after a later policy lifts the kill, the next check
+// downloads it again. And the census gates only a release
 // that touches the native plane (B3): one that leaves the floor's bytes alone keeps its sessions, so it needs neither.
 
 export type UpdateTrigger = "launch" | "manual" | "resume" | "available" | "downloaded";
@@ -62,13 +63,13 @@ export type UpdateAction =
   | {
       readonly kind: "hold";
       readonly version: string;
-      readonly reason: "sessions" | "census-unknown" | "apply-unbuilt" | "killed";
+      readonly reason: "sessions" | "census-unknown" | "apply-unbuilt";
     }
-  /** a staged version the policy now forbids (yanked, or above this host's floor): forgotten, never installed */
+  /** a staged version the policy now forbids (killed, yanked, or above this host's floor): its payload deleted (B6) */
   | {
       readonly kind: "discard";
       readonly version: string;
-      readonly reason: "yanked" | "floor-unmet";
+      readonly reason: LeverRefusal;
     }
   | {
       readonly kind: "none";
@@ -176,7 +177,6 @@ export function decideUpdate(
   if (state.kind !== "staged") return { kind: "none", reason: "nothing-to-do" };
   if (context.declined.includes(state.version)) return { kind: "none", reason: "declined" };
   const lever = leverRefusal(state.version, context.policy, context.hostOs);
-  if (lever === "killed") return { kind: "hold", version: state.version, reason: "killed" };
   if (lever !== null) return { kind: "discard", version: state.version, reason: lever };
   // the census gates only a release that touches the floor: an untouched one keeps its sessions (B3)
   if (context.nativeTouched !== false) {

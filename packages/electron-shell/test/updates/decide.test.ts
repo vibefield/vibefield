@@ -224,9 +224,9 @@ describe("the levers (B1) and the native plane (B3)", () => {
     expect(at("available", { policy: null }, available)).toEqual({ kind: "download", version: V });
   });
 
-  it("a staged release: a kill holds it (a later policy may lift it); a yank or a floor discards it", () => {
+  it("a staged release any lever refuses is discarded — a kill too, since B6 deletes the payload (L3b-ii)", () => {
     expect(at("downloaded", { policy: { ...open, killSwitch: true } }, staged)).toEqual({
-      kind: "hold",
+      kind: "discard",
       version: V,
       reason: "killed",
     });
@@ -238,8 +238,9 @@ describe("the levers (B1) and the native plane (B3)", () => {
     expect(
       at("downloaded", { policy: { ...open, floors: { os: "99" } }, hostOs: "15.1" }, staged),
     ).toEqual({ kind: "discard", version: V, reason: "floor-unmet" });
-    // a lever outranks the census: a killed release is held as killed, not as "sessions"
+    // a lever outranks the census: a killed release is discarded, never held as "sessions"
     expect(at("downloaded", { policy: { ...open, killSwitch: true } }, staged, 3)).toMatchObject({
+      kind: "discard",
       reason: "killed",
     });
   });

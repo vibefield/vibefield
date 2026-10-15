@@ -2,11 +2,14 @@
 // VibeField's custom provider (D3) as its feed. Called only for a packaged app with a staged identity.
 // WP12c (L2b-ii) — and the ONE place Electron's own updater (Squirrel.Mac) is touched: the apply's port.
 
+import { readdir, readFile, rm, stat } from "node:fs/promises";
+import { join } from "node:path";
 import { SystemShutdownResult, TerminalListResult } from "@vibefield/contracts";
 import type { AuditAppendV1 } from "@vibefield/contracts/diagnostics";
 import type { FielddHandle } from "@vibefield/fieldd-supervisor";
 import { dialog, net, autoUpdater as squirrel } from "electron";
 import { autoUpdater, CancellationToken } from "electron-updater";
+import { getAppCacheDir } from "electron-updater/out/AppAdapter";
 import type { QuitFlow } from "../quit-flow";
 import {
   type ApplyPort,
@@ -17,7 +20,13 @@ import {
   type StageOutcome,
   type StopOutcome,
 } from "./apply";
-import { UpdateController, type UpdateControllerOptions, type UpdaterPort } from "./controller";
+import {
+  type StagedCachePort,
+  UpdateController,
+  type UpdateControllerOptions,
+  type UpdaterPort,
+} from "./controller";
+import { readDisplayHeldAwake } from "./display-awake";
 import type { UpdateIdentity } from "./identity";
 import { hashNativePlane } from "./native-plane";
 import { VibeFieldUpdateProvider } from "./provider";
@@ -26,6 +35,36 @@ import { type FetchBytes, feedFileFor } from "./verify-chain";
 
 /** How long one document fetch of the click's fresh policy check may take (B2; the whole check is bounded too). */
 const FETCH_BOUND_MS = 15_000;
+
+/** L3b-ii (B6) — electron-updater's staged-update cache, found as electron-updater finds it (`AppUpdater.js:545-550`):
+ * `<the OS cache dir>/<app-update.yml's updaterCacheDirName, else the app's name>`. `clear()` empties `pending/` — the
+ * payload — and keeps the directory's other files (the previous `update.zip` the differential download reads). */
+export function createStagedCache(resourcesPath: string, appName: string): StagedCachePort {
+  const cacheDir = (async (): Promise<string> => {
+    const config = await readFile(join(resourcesPath, "app-update.yml"), "utf8").catch(() => "");
+    const named = config.match(/^updaterCacheDirName:[ \t]*['"]?([^'"\s]+)['"]?[ \t]*$/m)?.[1];
+    return join(getAppCacheDir(), named ?? appName);
+  })();
+  const sizeOf = async (path: string): Promise<number> => {
+    const info = await stat(path);
+    if (!info.isDirectory()) return info.size;
+    let total = 0;
+    for (const name of await readdir(path)) total += await sizeOf(join(path, name));
+    return total;
+  };
+  return {
+    async clear() {
+      const pending = join(await cacheDir, "pending");
+      const names = await readdir(pending).catch((): string[] => []);
+      await Promise.all(
+        names.map((name) => rm(join(pending, name), { recursive: true, force: true })),
+      );
+    },
+    async size() {
+      return sizeOf(await cacheDir).catch(() => null);
+    },
+  };
+}
 
 /** L3b-i (B2) — the click's own byte fetcher, on Chromium's network stack (the system proxy, direct HTTPS — EDP-38),
  * like the provider's: a 404 is an absent file, every other answer or failure THROWS (unreachable, never a pass). */
@@ -55,6 +94,8 @@ export function installUpdateController(options: {
   readonly hostOsVersion?: () => string | null;
   readonly resourcesPath?: string;
   readonly platformKey?: string;
+  /** L3b-ii (B6) — the app's name, electron-updater's fallback for its cache directory */
+  readonly appName?: string;
 }): UpdateController {
   const resourcesPath = options.resourcesPath;
   return new UpdateController({
@@ -78,6 +119,11 @@ export function installUpdateController(options: {
       ? { safeWindowContext: options.safeWindowContext }
       : {}),
     fetch: electronFetchBytes,
+    // B4 — the display clause, read fresh by each silent evaluation (`unknown` off macOS: closed)
+    displayHeldAwake: () => readDisplayHeldAwake(options.platform ?? process.platform),
+    ...(resourcesPath !== undefined && options.appName !== undefined
+      ? { stagedCache: createStagedCache(resourcesPath, options.appName) }
+      : {}),
     ...(options.hostOsVersion !== undefined ? { hostOsVersion: options.hostOsVersion } : {}),
     ...(resourcesPath !== undefined && options.platformKey !== undefined
       ? { nativePlane: () => hashNativePlane(resourcesPath), platformKey: options.platformKey }

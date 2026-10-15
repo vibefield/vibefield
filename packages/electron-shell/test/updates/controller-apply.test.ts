@@ -11,6 +11,7 @@ import type {
 import {
   type CancellationLike,
   FRESH_POLICY_BOUND_MS,
+  SILENT_RECHECK_MS,
   UpdateController,
   type UpdaterPort,
 } from "../../src/main/updates/controller";
@@ -141,11 +142,20 @@ async function stagedController(
     /** B3: the head's manifest names this native plane */
     manifestNative?: NativePlane;
     hostOs?: string;
+    /** L3b-ii (B4) — the safe window's context: present = the silent apply may run */
+    window?: { windowless?: boolean; trayResident?: boolean; display?: boolean | "unknown" };
+    /** L3b-ii (B6) — the staged cache */
+    cache?: FakeCache;
+    /** the head policy's levers at the first check */
+    levers?: Record<string, unknown>;
   } = {},
 ) {
   const fx = new FixtureOrigin();
   fx.setReleases([NIGHTLY]);
-  fx.putRelease(NIGHTLY, { heads: { nightly: NIGHTLY, beta: null, stable: null } });
+  fx.putRelease(NIGHTLY, {
+    heads: { nightly: NIGHTLY, beta: null, stable: null },
+    ...(opts.levers !== undefined ? { levers: { nightly: opts.levers } } : {}),
+  });
   fx.putFeed(NIGHTLY, STAGED_VERSION);
   if (opts.manifestNative !== undefined)
     fx.putManifest(NIGHTLY, STAGED_VERSION, opts.manifestNative);
@@ -175,8 +185,31 @@ async function stagedController(
       ? { nativePlane: async () => opts.nativePlane!, platformKey: "mac-arm64" }
       : {}),
     ...(opts.hostOs !== undefined ? { hostOsVersion: () => opts.hostOs! } : {}),
+    ...(opts.window !== undefined
+      ? {
+          safeWindowContext: () => ({
+            windowless: opts.window?.windowless ?? true,
+            trayResident: opts.window?.trayResident ?? true,
+          }),
+          displayHeldAwake: async () => opts.window?.display ?? false,
+        }
+      : {}),
+    ...(opts.cache !== undefined ? { stagedCache: opts.cache } : {}),
   });
   return { controller, apply, timeline, audits, files, fx };
+}
+
+/** L3b-ii (B6) — a staged cache that records what was asked of it. */
+class FakeCache {
+  cleared = 0;
+  bytes = 42 * 1_048_576;
+  async clear(): Promise<void> {
+    this.cleared += 1;
+    this.bytes = 0;
+  }
+  async size(): Promise<number | null> {
+    return this.bytes;
+  }
 }
 
 async function staged(sessions: CensusSnapshot = { known: true, sessions: [] }) {
@@ -491,15 +524,18 @@ describe("restartToInstall — L3b-i: the fresh policy (B2) and the planes by di
     }
   });
 
-  it("a kill switch published after the download stops the apply: held `killed`, said, nothing torn down", async () => {
-    const rig = await stagedWith({});
+  it("a kill switch published after the download stops the apply: said, nothing torn down, the payload deleted (B6)", async () => {
+    const cache = new FakeCache();
+    const rig = await stagedWith({ cache });
     republish(rig.fx, { killSwitch: true });
     expect(await rig.controller.restartToInstall()).toEqual({ ok: false, reason: "killed" });
     expect(rig.apply.notices[0]?.detail).toBe(
       "Updates on the nightly channel are paused by VibeField's publisher. Nothing changed; your current version keeps running.",
     );
     expect(rig.audits[0]).toMatchObject({ action: "app.update.apply", reasonCode: "KILLED" });
-    expect(rig.controller.state).toMatchObject({ kind: "staged", blockedBy: "killed" });
+    // L3b-ii: a kill no longer holds the staged payload — it is deleted, and a lifted kill downloads again
+    expect(rig.controller.state).toMatchObject({ kind: "error", unavailable: { state: "killed" } });
+    await vi.waitFor(() => expect(cache.cleared).toBe(1));
     expect(rig.apply.plan).toBeNull();
     expect(rig.timeline).not.toContain("fieldd:census");
   });
@@ -601,6 +637,183 @@ describe("restartToInstall — L3b-i: the fresh policy (B2) and the planes by di
     expect(lines).toContain("the running version 0.8.0 is yanked; the next update replaces it");
     expect(lines).toContain(
       "UNSUPPORTED: 0.8.0 is below the minimum supported 0.9.0 (advisory, never a block)",
+    );
+  });
+});
+
+// WP12d (L3b-ii, build-wp12-updater.md §12 B4/B6; the PM's ruling 2026-10-15 16:03Z and its reading point 17:07Z) — the
+// silent self-apply, its timer, and the staged cache. The timer lives ONLY while staged and dies on every exit branch
+// and on a decline; the silent path asks no one, and a release that touches the floor needs a FRESH census at zero.
+describe("the silent self-apply (B4) and the staged cache (B6)", () => {
+  const LOCAL: NativePlane = {
+    digest: "e".repeat(64),
+    members: ["bin/field-native", "bin/field-terminal-host", "bin/sidecar-slim"],
+  };
+
+  async function rig(
+    opts: Parameters<typeof stagedController>[0],
+    sessions: CensusSnapshot = { known: true, sessions: [] },
+  ) {
+    const built = await stagedController(opts);
+    built.apply.snapshot = sessions;
+    return built;
+  }
+
+  it("staged with the safe window open: it applies ON ITS OWN — no box, the attempt says silent, the timer dies", async () => {
+    const r = await rig({ window: {} });
+    await r.controller.check("manual");
+    expect(r.apply.plan).not.toBeNull();
+    expect(r.apply.boxes).toEqual([]);
+    expect(r.apply.notices).toEqual([]);
+    expect(r.audits.find((a) => a.phase === "attempt")).toMatchObject({
+      attrs: expect.objectContaining({ trigger: "silent", native: "stop" }),
+    });
+    expect(r.controller.silentTimerAlive).toBe(false);
+    // the fresh census was read by the apply itself, after the check's own read
+    expect(r.timeline.filter((step) => step === "fieldd:census").length).toBeGreaterThanOrEqual(2);
+    await r.apply.plan!.prepare();
+    expect(r.controller.silentTimerAlive).toBe(false);
+  });
+
+  it("each closed clause holds it, named: a window open, no tray, the display held or unread", async () => {
+    for (const [window, clause] of [
+      [{ windowless: false }, "windowless"],
+      [{ trayResident: false }, "tray-resident"],
+      [{ display: true }, "display-awake-unheld"],
+      [{ display: "unknown" as const }, "display-awake-unheld"],
+    ] as const) {
+      const r = await rig({ window });
+      await r.controller.check("manual");
+      expect(r.apply.plan, clause).toBeNull();
+      expect(r.controller.doctorLines().some((line) => line.includes(clause))).toBe(true);
+      expect(r.controller.silentTimerAlive).toBe(true);
+    }
+  });
+
+  it("the policy's requireUserConfirmation keeps it a person's act", async () => {
+    const r = await rig({ window: {}, levers: { requireUserConfirmation: true } });
+    await r.controller.check("manual");
+    expect(r.apply.plan).toBeNull();
+    expect(await r.controller.considerSilentApply("timer")).toEqual({
+      applying: false,
+      reason: "the policy requires confirmation",
+    });
+  });
+
+  it("a release that touches the floor waits for a FRESH census at zero — live sessions hold it, and nobody is asked", async () => {
+    const r = await rig({ window: {} }, LIVE);
+    await r.controller.check("manual");
+    expect(r.apply.plan).toBeNull();
+    expect(r.apply.boxes).toEqual([]);
+    expect(await r.controller.considerSilentApply("timer")).toEqual({
+      applying: false,
+      reason: "sessions",
+    });
+  });
+
+  it("a release that leaves the floor alone applies silently over live sessions — they keep running", async () => {
+    const r = await rig({ window: {}, nativePlane: LOCAL, manifestNative: LOCAL }, LIVE);
+    await r.controller.check("manual");
+    expect(r.apply.plan).not.toBeNull();
+    expect(r.apply.boxes).toEqual([]);
+    await r.apply.plan!.prepare();
+    expect(r.apply.stoppedNative).toBe(false);
+  });
+
+  it("offline, the silent path holds without a box", async () => {
+    const r = await rig({
+      window: {},
+      fetch: async () => {
+        throw new Error("net::ERR_INTERNET_DISCONNECTED");
+      },
+    });
+    await r.controller.check("manual");
+    expect(r.apply.plan).toBeNull();
+    expect(r.apply.notices).toEqual([]);
+    expect(r.controller.state).toMatchObject({ kind: "staged", blockedBy: "policy-unreachable" });
+  });
+
+  it("the timer lives only while staged: born staged, dead on a decline, back on an aborted apply, dead at the stop", async () => {
+    const declined = await rig({ window: { windowless: false } });
+    await declined.controller.check("manual");
+    expect(declined.controller.silentTimerAlive).toBe(true);
+    declined.controller.decline(STAGED_VERSION);
+    expect(declined.controller.silentTimerAlive).toBe(false);
+
+    const aborted = await rig({ window: { windowless: false } });
+    await aborted.controller.check("manual");
+    expect(await aborted.controller.restartToInstall()).toEqual({ ok: true });
+    expect(aborted.controller.silentTimerAlive).toBe(false); // the quit is underway
+    aborted.apply.stop = { ok: false, reason: "a session was born" };
+    expect(await aborted.apply.plan!.prepare()).toMatchObject({ kind: "abort" });
+    aborted.apply.plan!.aborted("a session was born");
+    expect(aborted.controller.silentTimerAlive).toBe(true); // still staged, nothing torn down
+
+    const stopped = await rig({ window: { windowless: false } });
+    await stopped.controller.check("manual");
+    expect(await stopped.controller.restartToInstall()).toEqual({ ok: true });
+    await stopped.apply.plan!.prepare();
+    expect(stopped.controller.silentTimerAlive).toBe(false);
+    stopped.controller.dispose();
+    expect(stopped.controller.silentTimerAlive).toBe(false);
+  });
+
+  it("one apply at a time: a second Restart while the first is mid-check is the same apply", async () => {
+    const r = await rig({ window: { windowless: false } });
+    await r.controller.check("manual");
+    const [first, second] = await Promise.all([
+      r.controller.restartToInstall(),
+      r.controller.restartToInstall(),
+    ]);
+    expect(first).toEqual({ ok: true });
+    expect(second).toEqual({ ok: false, reason: "quit-underway" });
+    expect(r.timeline.filter((step) => step === "quit")).toEqual(["quit"]);
+  });
+
+  it("the timer re-evaluates every 30 minutes while staged", async () => {
+    vi.useFakeTimers();
+    try {
+      const r = await rig({ window: { windowless: false } });
+      await r.controller.check("manual");
+      const consider = vi.spyOn(r.controller, "considerSilentApply");
+      await vi.advanceTimersByTimeAsync(SILENT_RECHECK_MS);
+      expect(consider).toHaveBeenCalledWith("timer");
+      r.controller.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("B6: a check that finds nothing, a decline, and a yank each delete the staged payload; doctor says the size", async () => {
+    const quiet = new FakeCache();
+    const nothing = await rig({ cache: quiet });
+    (
+      nothing.controller as unknown as {
+        options: { updater: { checkForUpdates: () => Promise<unknown> } };
+      }
+    ).options.updater.checkForUpdates = async () => ({ isUpdateAvailable: false });
+    await nothing.controller.check("manual");
+    await vi.waitFor(() => expect(quiet.cleared).toBe(1));
+
+    const declinedCache = new FakeCache();
+    const declined = await rig({ cache: declinedCache });
+    await declined.controller.check("manual");
+    expect(declined.controller.doctorLines()).toContain("update cache: 42.0 MB");
+    declined.controller.decline(STAGED_VERSION);
+    await vi.waitFor(() => expect(declinedCache.cleared).toBe(1));
+
+    const yankedCache = new FakeCache();
+    const yanked = await rig({ cache: yankedCache });
+    await yanked.controller.check("manual");
+    yanked.fx.putRelease(NIGHTLY, {
+      heads: { nightly: NIGHTLY, beta: null, stable: null },
+      policyVersion: { nightly: 4 },
+      levers: { nightly: { yanked: [STAGED_VERSION] } },
+    });
+    expect(await yanked.controller.restartToInstall()).toEqual({ ok: false, reason: "yanked" });
+    await vi.waitFor(() => expect(yankedCache.cleared).toBe(1));
+    await vi.waitFor(() =>
+      expect(yanked.controller.doctorLines()).toContain("update cache: 0.0 MB"),
     );
   });
 });

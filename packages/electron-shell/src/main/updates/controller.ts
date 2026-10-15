@@ -10,6 +10,10 @@
 // `decideUpdate` (B1); the apply re-reads a FRESH verified policy at the click and holds `policy-unreachable` when it
 // cannot (B2, no offline allowance); and a release whose signed manifest leaves the native plane's bytes alone keeps
 // the floor and its sessions — no census gate, no consent box, `native: false` (B3).
+// L3b-ii (B4–B6): a staged update applies ON ITS OWN when EDP-34's safe window holds (`considerSilentApply`: on staged,
+// on the last window's close, on resume, and on a 30-minute timer that lives only while staged); the root keys anchor
+// on the adopted rotation chain, persisted as signed documents and re-verified from the embedded keys at every load;
+// and a staged payload the person or the policy turns away is deleted from electron-updater's cache.
 
 import { randomUUID } from "node:crypto";
 import {
@@ -43,6 +47,7 @@ import {
 } from "./decide";
 import { type NativePlane, type NativeVerdict, nativeVerdict } from "./native-plane";
 import { UpdateRefusal } from "./refusal";
+import { anchorFrom, MAX_ADOPTED_ROOTS, type RootAnchor, rotates } from "./root-chain";
 import { type SafeWindowContext, safeWindow, safeWindowLine } from "./safe-window";
 import type { UpdateClientState, UpdateStateStore } from "./state-store";
 import {
@@ -69,7 +74,6 @@ export type UpdateState =
         | "sessions"
         | "census-unknown"
         | "apply-unbuilt"
-        | "killed"
         | "policy-unreachable"
         | "policy-unverified";
       /** WP12c — the live sessions the last census read (the tray's verb says them); absent where unwired */
@@ -140,7 +144,16 @@ export interface UpdateControllerOptions {
   readonly currentVersion?: string;
   /** WP12c (§10 S7) — EDP-34's context minus the census and the planes (the controller holds both: the planes are
    * B3's verdict); doctor names the failing clause */
-  readonly safeWindowContext?: () => Omit<SafeWindowContext, "census" | "planes">;
+  readonly safeWindowContext?: () => Omit<
+    SafeWindowContext,
+    "census" | "planes" | "displayHeldAwake"
+  >;
+  /** L3b-ii (B4) — the display clause's reader (`display-awake.ts`), read fresh by each silent evaluation; absent, the
+   * clause is `unknown`, which is closed. */
+  readonly displayHeldAwake?: () => Promise<boolean | "unknown">;
+  /** L3b-ii (B6) — electron-updater's staged-update cache: emptied when the person or the policy turns a staged
+   * payload away, or a check finds nothing (EDP-38), and measured for doctor. */
+  readonly stagedCache?: StagedCachePort;
   /** L3b-i (B2) — the byte fetcher a FRESH policy check runs on at the click (main's `net.fetch`). Absent, every apply
    * holds `policy-unreachable`: no offline allowance (the PM's ruling 2026-10-15 16:03Z). */
   readonly fetch?: FetchBytes;
@@ -151,6 +164,20 @@ export interface UpdateControllerOptions {
   readonly nativePlane?: () => Promise<NativePlane>;
   readonly platformKey?: string;
 }
+
+/** L3b-ii (B6) — the staged-update cache, as the controller drives it (`install.ts` builds it over electron-updater's
+ * own directory). */
+export interface StagedCachePort {
+  /** empty the pending payload (never the copy of the previous update the differential download reads) */
+  clear(): Promise<void>;
+  /** the cache's size in bytes; null when unreadable */
+  size(): Promise<number | null>;
+}
+
+/** What the silent evaluation (B4) concluded: underway, or why not (the safe window's clause, or the apply's refusal). */
+export type SilentOutcome =
+  | { readonly applying: true }
+  | { readonly applying: false; readonly reason: string };
 
 /** What `restartToInstall()` answered. `ok: true` = the update quit is underway (the flow owns the rest). */
 export type RestartOutcome =
@@ -167,6 +194,8 @@ export type RestartOutcome =
         | "quit-underway"
         | "policy-unreachable"
         | "policy-unverified"
+        // the silent path (B4) never asks: a touched release with live sessions waits for a person
+        | "sessions"
         | LeverRefusal;
     };
 
@@ -174,6 +203,8 @@ export type RestartOutcome =
 const AUDIT_ATTEMPT_BOUND_MS = 2_000;
 /** How long the click's fresh policy check may take before it counts as unreachable (B2). */
 export const FRESH_POLICY_BOUND_MS = 20_000;
+/** B4 — while staged, the silent apply is re-evaluated this often (a timer that lives ONLY while staged). */
+export const SILENT_RECHECK_MS = 30 * 60_000;
 
 const LEVER_CODE: Readonly<Record<LeverRefusal, string>> = {
   killed: "KILLED",
@@ -238,6 +269,21 @@ export class UpdateController {
   private native: NativeVerdict = { touched: true, why: "no-manifest" };
   /** the installed native plane, hashed once per process (the bundle does not change under a running app) */
   private localNative: Promise<NativePlane | null> | null = null;
+  /** B5 — the root keys the next check trusts: the embedded set, or the newest adopted rotation */
+  private anchor: RootAnchor;
+  /** B4 — the timer that re-evaluates the silent apply; alive only while staged and no apply is underway */
+  private silentTimer: ReturnType<typeof setInterval> | null = null;
+  private silentInFlight = false;
+  /** one `restartToInstall` at a time (a click and the silent path never run two applies) */
+  private restarting = false;
+  /** an apply's quit is underway (from `quitForUpdate` until an abort): nothing re-evaluates */
+  private applying = false;
+  /** B4 — the display clause's last reading (doctor's), and the last silent evaluation's answer */
+  private display: boolean | "unknown" = "unknown";
+  private silentNote: string | null = null;
+  /** B6 — the staged cache's last measured size, and a collection in flight (a download waits for it) */
+  private cacheBytes: number | null = null;
+  private collecting: Promise<void> | null = null;
   private readonly now: () => number;
   private readonly onProgress = (progress: { percent: number }): void => {
     if (this.stateValue.kind === "downloading") {
@@ -267,6 +313,26 @@ export class UpdateController {
       );
       this.audit(UPDATES_AUDIT_ACTIONS.VERIFY, "failed", "STATE_UNREADABLE", {
         movedAside: loaded.recovered,
+      });
+    }
+    // B5 — the adopted rotation chain, re-verified from the embedded keys; a link that does not verify is dropped
+    // with everything after it, loudly (a same-uid writer cannot plant a root)
+    const roots = anchorFrom(options.rootKeys, this.client.trustRoots);
+    this.anchor = roots.anchor;
+    if (roots.dropped > 0) {
+      this.client = { ...this.client, trustRoots: roots.kept };
+      try {
+        options.store.save(this.client);
+      } catch {
+        // the next save writes the kept chain
+      }
+      options.log.warn(
+        "desktop.update.root_chain_dropped",
+        "Adopted trust-roots that no longer verify from the app's root keys were dropped",
+        { dropped: roots.dropped, kept: roots.kept.length },
+      );
+      this.audit(UPDATES_AUDIT_ACTIONS.VERIFY, "failed", "ROOT_CHAIN_BROKEN", {
+        dropped: String(roots.dropped),
       });
     }
     const updater = options.updater;
@@ -353,6 +419,8 @@ export class UpdateController {
     if (this.disposed) return action;
     if (found === null) {
       this.setState({ kind: "not-available" });
+      // EDP-38: nothing to offer, so nothing staged is kept
+      void this.collectStagedCache("not-available");
       return action;
     }
     this.setState({ kind: "available", version: found });
@@ -373,6 +441,8 @@ export class UpdateController {
     if ("version" in state && state.version === version) {
       this.cancelDownload();
       this.setState({ kind: "idle" });
+      // B6 — the declined payload goes (the timer died with the staged state: `setState`)
+      void this.collectStagedCache("declined");
     }
   }
 
@@ -397,10 +467,18 @@ export class UpdateController {
     if (state.kind === "staged" && windowContext !== undefined) {
       lines.push(
         safeWindowLine(
-          safeWindow({ ...windowContext(), planes: this.planes(), census: this.censusCount }),
+          safeWindow({
+            ...windowContext(),
+            displayHeldAwake: this.display,
+            planes: this.planes(),
+            census: this.censusCount,
+          }),
         ),
       );
+      if (this.silentNote !== null) lines.push(`silent apply: ${this.silentNote}`);
     }
+    if (this.cacheBytes !== null)
+      lines.push(`update cache: ${(this.cacheBytes / 1_048_576).toFixed(1)} MB`);
     const verified = this.lastVerified;
     if (verified !== null) {
       const policy = verified.policy;
@@ -472,8 +550,23 @@ export class UpdateController {
    * L3b-i puts two reads in front of the census, both before anything is torn down: (B2) a FRESH verified policy —
    * unreachable or unverified holds, with the person told why; a lever that now refuses (a kill switch or a yank
    * published after the download, a floor) stops it — and (B3) the native plane's verdict from that same chain: a
-   * release that leaves the floor's bytes alone skips the census and the consent and stops fieldd alone. */
-  async restartToInstall(): Promise<RestartOutcome> {
+   * release that leaves the floor's bytes alone skips the census and the consent and stops fieldd alone.
+   *
+   * L3b-ii (B4): `silent` is the safe window's own apply. It never shows a box: a refusal holds, said in the ledger and
+   * doctor; and a release that touches the floor needs a FRESH census at zero (never the tray's periodic count — a
+   * session born in the gap is the refusal fieldd's own re-check already makes). */
+  async restartToInstall(opts: { readonly silent?: boolean } = {}): Promise<RestartOutcome> {
+    // single-flight: a person's click while the silent path is mid-check (or the reverse) is the same apply
+    if (this.restarting) return { ok: false, reason: "quit-underway" };
+    this.restarting = true;
+    try {
+      return await this.restartOnce(opts.silent === true);
+    } finally {
+      this.restarting = false;
+    }
+  }
+
+  private async restartOnce(silent: boolean): Promise<RestartOutcome> {
     const state = this.stateValue;
     if (state.kind !== "staged") return { ok: false, reason: "not-staged" };
     const apply = this.options.apply;
@@ -493,9 +586,10 @@ export class UpdateController {
         { version, ...(fresh.kind === "refused" ? { state: fresh.state } : {}) },
       );
       this.setState({ ...this.stagedOf(version), blockedBy: reason });
-      await apply.notify(
-        policyNotice({ kind: reason === "policy-unreachable" ? "unreachable" : "unverified" }),
-      );
+      if (!silent)
+        await apply.notify(
+          policyNotice({ kind: reason === "policy-unreachable" ? "unreachable" : "unverified" }),
+        );
       return { ok: false, reason };
     }
     this.lastVerified = fresh.chain;
@@ -503,15 +597,16 @@ export class UpdateController {
     const lever = leverRefusal(version, policy, this.options.hostOsVersion?.() ?? null);
     if (lever !== null) {
       this.refuseByLever(version, lever, UPDATES_AUDIT_ACTIONS.APPLY);
-      await apply.notify(
-        policyNotice(
-          lever === "killed"
-            ? { kind: "killed", channel: this.channel }
-            : lever === "yanked"
-              ? { kind: "yanked", version }
-              : { kind: "floor-unmet", version, floor: policy.floors.os ?? "" },
-        ),
-      );
+      if (!silent)
+        await apply.notify(
+          policyNotice(
+            lever === "killed"
+              ? { kind: "killed", channel: this.channel }
+              : lever === "yanked"
+                ? { kind: "yanked", version }
+                : { kind: "floor-unmet", version, floor: policy.floors.os ?? "" },
+          ),
+        );
       return { ok: false, reason: lever };
     }
 
@@ -524,6 +619,8 @@ export class UpdateController {
         this.audit(UPDATES_AUDIT_ACTIONS.APPLY, "denied", "CENSUS_UNKNOWN", { version });
         return { ok: false, reason: "census-unknown" };
       }
+      // the silent path asks no one: live sessions wait for a person (EDP-33, EDP-34's plane gate)
+      if (silent && snapshot.sessions.length > 0) return { ok: false, reason: "sessions" };
       if (snapshot.sessions.length > 0) {
         const consented = await apply.confirm(consentBox(version, snapshot.sessions));
         if (!consented) return { ok: false, reason: "consent-declined" };
@@ -535,11 +632,122 @@ export class UpdateController {
       version,
       consented: String(sessions.length),
       native: native ? "stop" : "keep",
+      trigger: silent ? "silent" : "person",
     });
     if (!apply.quitForUpdate(this.updatePlan(apply, version, sessions, operationId, native))) {
       return { ok: false, reason: "quit-underway" };
     }
+    // the apply's quit is underway: nothing re-evaluates (the timer dies here, and again at the stop)
+    this.applying = true;
+    this.syncSilentTimer();
     return { ok: true };
+  }
+
+  /** B4 (EDP-34, §11.3) — apply a staged update ON ITS OWN when the safe window holds: windowless ∧ tray-resident ∧ the
+   * display not held awake (read fresh) ∧ the plane gate (field-native untouched, or a FRESH census at zero — checked
+   * inside the apply). The policy's `requireUserConfirmation` and the person's off switch keep it a person's act.
+   * Evaluated on staged, on the last window's close, on resume, and on the timer that lives only while staged. */
+  async considerSilentApply(
+    trigger: "staged" | "window-closed" | "resume" | "timer",
+  ): Promise<SilentOutcome> {
+    const no = (reason: string): SilentOutcome => {
+      this.silentNote = `not now (${trigger}) — ${reason}`;
+      return { applying: false, reason };
+    };
+    if (this.silentInFlight || this.applying || this.daemonsStopped || this.disposed)
+      return { applying: false, reason: "busy" };
+    const state = this.stateValue;
+    if (state.kind !== "staged") return { applying: false, reason: "not-staged" };
+    if (this.options.apply?.wired !== true) return no("apply-unbuilt");
+    if (!this.enabled) return no("disabled");
+    if (this.client.declined.includes(state.version)) return no("declined");
+    if (this.lastVerified?.policy.requireUserConfirmation === true)
+      return no("the policy requires confirmation");
+    const windowContext = this.options.safeWindowContext;
+    if (windowContext === undefined) return no("no window context");
+    this.silentInFlight = true;
+    try {
+      this.display = (await this.options.displayHeldAwake?.()) ?? "unknown";
+      // the window's own clauses first (the plane gate needs the fresh chain and census the apply reads)
+      const window = safeWindow({
+        ...windowContext(),
+        displayHeldAwake: this.display,
+        planes: this.planes(),
+        census: 0,
+      });
+      if (!window.open) return no(window.clause);
+      const outcome = await this.restartToInstall({ silent: true });
+      if (outcome.ok) {
+        this.silentNote = `applying (${trigger})`;
+        return { applying: true };
+      }
+      return no(outcome.reason);
+    } finally {
+      this.silentInFlight = false;
+    }
+  }
+
+  /** B4 — the re-evaluation timer: alive only while staged, wired and no apply underway; it dies on every exit branch
+   * (the stop sets `daemonsStopped`), on a decline or any other leaving of the staged state, and on dispose. */
+  private syncSilentTimer(): void {
+    const wanted =
+      this.stateValue.kind === "staged" &&
+      this.options.apply?.wired === true &&
+      !this.applying &&
+      !this.daemonsStopped &&
+      !this.disposed;
+    if (wanted && this.silentTimer === null) {
+      this.silentTimer = setInterval(() => {
+        void this.considerSilentApply("timer");
+      }, SILENT_RECHECK_MS);
+      this.silentTimer.unref?.();
+    } else if (!wanted && this.silentTimer !== null) {
+      clearInterval(this.silentTimer);
+      this.silentTimer = null;
+    }
+  }
+
+  /** Whether the re-evaluation timer is alive (doctor; the tests' window onto the timer's life). */
+  get silentTimerAlive(): boolean {
+    return this.silentTimer !== null;
+  }
+
+  /** B6 — empty the staged payload (never while a download writes it), then measure the cache for doctor. */
+  private collectStagedCache(reason: string): Promise<void> {
+    const cache = this.options.stagedCache;
+    if (cache === undefined || this.stateValue.kind === "downloading") return Promise.resolve();
+    const run = (async () => {
+      try {
+        await cache.clear();
+        this.options.log.info(
+          "desktop.update.cache_collected",
+          "The staged update's payload was deleted",
+          {
+            reason,
+          },
+        );
+      } catch (error) {
+        this.options.log.warn(
+          "desktop.update.cache_collect_failed",
+          "The staged update's payload stayed",
+          {
+            reason,
+            error: String(error),
+          },
+        );
+      }
+      await this.measureCache();
+    })();
+    this.collecting = run.finally(() => {
+      if (this.collecting === run) this.collecting = null;
+    });
+    return run;
+  }
+
+  private async measureCache(): Promise<void> {
+    const cache = this.options.stagedCache;
+    if (cache === undefined) return;
+    this.cacheBytes = await cache.size().catch(() => null);
   }
 
   /** B2 — the chain run again, now, on the click's own fetcher: verified, refused (named), or unreachable (a network
@@ -570,8 +778,9 @@ export class UpdateController {
     }
   }
 
-  /** A lever refused a version (B1): audited, and the state says it — a kill holds a staged update (a later policy may
-   * lift it) and reads `killed` otherwise; a yank or an unmet floor forgets a staged one, never installed. */
+  /** A lever refused a version (B1): audited, and the state says it — `killed` or `floor-unmet` (the tray's "Updates
+   * Paused" / "Update Needs a Newer macOS"), or nothing to offer for a yank. A STAGED payload any lever refuses is
+   * deleted (B6): a kill no longer holds it, so after a later policy lifts the kill the next check downloads again. */
   private refuseByLever(version: string, lever: LeverRefusal, action: string): void {
     this.audit(action, "denied", LEVER_CODE[lever], { version });
     this.options.log.warn("desktop.update.lever", "The update policy refused a version", {
@@ -579,14 +788,13 @@ export class UpdateController {
       lever,
       channel: this.channel,
     });
-    const state = this.stateValue;
-    if (lever === "killed" && state.kind === "staged") {
-      this.setState({ ...this.stagedOf(version), blockedBy: "killed" });
-      return;
-    }
+    const wasStaged = this.stateValue.kind === "staged";
+    this.stateForLever(lever);
+    if (wasStaged) void this.collectStagedCache(lever);
+  }
+
+  private stateForLever(lever: LeverRefusal): void {
     if (lever === "yanked") {
-      // B6 (L3b-ii) empties electron-updater's pending cache; until then a discarded payload stays on disk, never
-      // installed (install-on-quit is off, and every check refuses it again)
       this.setState({ kind: "not-available" });
       return;
     }
@@ -639,6 +847,7 @@ export class UpdateController {
         if (!stopped.ok) return { kind: "abort", reason: stopped.reason };
         // The daemons are down. From here every branch exits, and nothing may reach fieldd (that would START it).
         this.daemonsStopped = true;
+        this.syncSilentTimer(); // every exit branch starts here: the re-evaluation timer dies with the stop
         const staged = await apply.stage(SQUIRREL_STAGE_MS);
         if (staged.kind === "staged") {
           this.recordLastApply({ version, branch: "installing", consented, operationId });
@@ -670,6 +879,7 @@ export class UpdateController {
       aborted: (reason) => {
         // before the stop: fieldd lives, so this outcome reaches the ledger now
         this.audit(UPDATES_AUDIT_ACTIONS.APPLY, "denied", "SESSIONS_CHANGED", { version, reason });
+        this.applying = false; // still staged: the re-evaluation timer comes back with the state below
         this.setState({ ...this.stagedOf(version), blockedBy: "sessions" });
         apply.restore();
         void this.refreshCensus();
@@ -813,6 +1023,7 @@ export class UpdateController {
 
   dispose(): void {
     this.disposed = true;
+    this.syncSilentTimer();
     this.cancelDownload();
     this.options.updater.removeListener("download-progress", this.onProgress);
     this.options.updater.removeListener("error", this.onError);
@@ -823,19 +1034,43 @@ export class UpdateController {
     const result = await verifyUpdateChain({
       origin: this.options.origin,
       channel: this.channel,
-      rootKeys: this.options.rootKeys,
+      rootKeys: this.anchor.keys,
       remembered: this.client.remembered,
       ...(this.options.floors !== undefined ? { floors: this.options.floors } : {}),
       now: this.now(),
       feedFile: this.options.feedFile,
       fetch,
     });
-    // every ACCEPTED document is remembered, even when a later step refused (TD-10)
-    this.persist({ ...this.client, remembered: result.remembered });
+    // every ACCEPTED document is remembered, even when a later step refused (TD-10) — and a trust-root that ROTATES the
+    // root set is adopted (B5): persisted as its signed document, so the next rotation verifies against it
+    let trustRoots = this.client.trustRoots;
+    const adopted = result.acceptedRoot;
+    if (adopted !== undefined && rotates(this.anchor, adopted.rootKeys)) {
+      if (trustRoots.length >= MAX_ADOPTED_ROOTS) {
+        this.options.log.warn(
+          "desktop.update.root_chain_full",
+          "A rotated trust-root verified, but the adopted chain is full; it is trusted for this check only",
+          { version: adopted.version, kept: trustRoots.length },
+        );
+      } else {
+        trustRoots = [
+          ...trustRoots,
+          { version: adopted.version, doc: adopted.doc, sig: adopted.sig },
+        ];
+        this.anchor = { keys: adopted.rootKeys, version: adopted.version };
+        this.options.log.info("desktop.update.root_adopted", "A rotated trust-root was adopted", {
+          version: adopted.version,
+          keys: adopted.rootKeys.length,
+        });
+      }
+    }
+    this.persist({ ...this.client, remembered: result.remembered, trustRoots });
     return result;
   }
 
   private async startDownload(version: string): Promise<void> {
+    // a collection in flight empties the directory the download writes: let it finish first (B6)
+    if (this.collecting !== null) await this.collecting;
     const token = this.options.newCancellationToken();
     this.download = token;
     this.setState({ kind: "downloading", version, percent: 0 });
@@ -855,9 +1090,12 @@ export class UpdateController {
     if (this.options.apply?.wired === true) {
       // WP12c — the census decides what the tray offers (the verb, the consent, or a hold)
       await this.readCensus();
-      return;
+    } else {
+      this.settleStaged();
     }
-    this.settleStaged();
+    await this.measureCache();
+    // B4 — a freshly staged update may apply on its own at once, when the safe window already holds
+    if (this.stateValue.kind === "staged") await this.considerSilentApply("staged");
   }
 
   private cancelDownload(): void {
@@ -940,6 +1178,7 @@ export class UpdateController {
 
   private setState(next: UpdateState): void {
     this.stateValue = next;
+    this.syncSilentTimer();
     for (const listener of this.listeners) listener(next);
   }
 }

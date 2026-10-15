@@ -1825,17 +1825,17 @@ async function main(
           log: logger,
           ...(applyPort !== undefined ? { apply: applyPort } : {}),
           currentVersion: app.getVersion(),
-          // EDP-34's context for doctor; the planes are the controller's (L3b-i, B3: a signed manifest's digest), and
-          // the display clause has no reader until L3b-ii (it fails closed)
+          // EDP-34's context; the planes (L3b-i, B3) and the display clause (L3b-ii, B4: `pmset`, read fresh by each
+          // silent evaluation) are the controller's
           safeWindowContext: () => ({
             windowless: registry.primary() === null,
             trayResident: trayController?.keepsAliveWithoutWindows() ?? false,
-            displayHeldAwake: "unknown",
           }),
           // L3b-i — the policy's OS floor (B1), and the installed native plane against the release manifest (B3)
           hostOsVersion: () => process.getSystemVersion(),
           resourcesPath: process.resourcesPath,
           platformKey: releasePlatformKey(process.platform, process.arch),
+          appName: app.getName(),
         });
   if (updateIdentity?.originOverridden === true) {
     logger.warn(
@@ -1936,8 +1936,22 @@ async function main(
     );
     const launchCheck = setTimeout(() => void updates.check("launch"), UPDATE_LAUNCH_DELAY_MS);
     launchCheck.unref?.();
-    const onResume = (): void => void updates.check("resume");
+    // L3b-ii (B4) — the silent apply is considered after a resume (once its check settles), and a few seconds after
+    // the last window closes (a window reopened at once closes the safe window's first clause again)
+    const onResume = (): void => {
+      void updates.check("resume").then(() => updates.considerSilentApply("resume"));
+    };
     powerMonitor.on("resume", onResume);
+    let silentAfterClose: ReturnType<typeof setTimeout> | null = null;
+    const onAllClosed = (): void => {
+      if (silentAfterClose !== null) clearTimeout(silentAfterClose);
+      silentAfterClose = setTimeout(() => {
+        silentAfterClose = null;
+        void updates.considerSilentApply("window-closed");
+      }, UPDATE_SILENT_AFTER_CLOSE_MS);
+      silentAfterClose.unref?.();
+    };
+    app.on("window-all-closed", onAllClosed);
     // WP12c — while an update waits staged, the census is re-read now and then so the tray's verb says the sessions
     // it would end (EDP-35); the controller never reads it once the daemons have stopped.
     const censusWatch =
@@ -1951,6 +1965,8 @@ async function main(
       clearTimeout(launchCheck);
       if (censusWatch !== null) clearInterval(censusWatch);
       powerMonitor.removeListener("resume", onResume);
+      app.removeListener("window-all-closed", onAllClosed);
+      if (silentAfterClose !== null) clearTimeout(silentAfterClose);
       updates.dispose();
     });
   }
@@ -2195,6 +2211,8 @@ if (!hasInstanceLock) {
 const UPDATE_LAUNCH_DELAY_MS = 30_000;
 /** WP12c — how often a staged update re-reads the session census for the tray's verb. */
 const UPDATE_CENSUS_REFRESH_MS = 60_000;
+/** L3b-ii (B4) — how long after the last window closes the silent apply is considered (a reopened window wins). */
+const UPDATE_SILENT_AFTER_CLOSE_MS = 5_000;
 
 /** The tray's projection of the update state. Offline is quiet and retryable (EDP §11.2), so it reads as idle; a
  * refusal or a failure reads as failed, with its details in the log and the audit, never in the menu — except the
@@ -2206,7 +2224,6 @@ function trayUpdateOf(state: UpdateState): TrayUpdateState {
     case "downloading":
       return { kind: "downloading", percent: state.percent };
     case "staged":
-      if (state.blockedBy === "killed") return { kind: "paused" };
       return {
         kind: "staged",
         version: state.version,

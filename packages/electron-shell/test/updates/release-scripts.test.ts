@@ -9,6 +9,7 @@ import {
   UpdatePolicySource,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
+import { auditAppUpdate } from "../../../../scripts/audit-app-update.mjs";
 import { asarFiles, auditAsar, readAsarHeader } from "../../../../scripts/audit-asar.mjs";
 import { hashPlanes, mergeManifest, planeOf } from "../../../../scripts/release-manifest.mjs";
 import { planRelease, ReleasePlanError } from "../../../../scripts/release-plan.mjs";
@@ -580,5 +581,46 @@ describe("release.yml's shape — the permissions table, as a test", () => {
         expect(ref, `${file}: ${ref}`).toMatch(/@[0-9a-f]{40}$/);
       }
     }
+  });
+});
+
+// WP12 L3b-ii (B8; W8 as corrected 2026-10-15) — the packaged app's update config, asserted on the release build's app:
+// electron-builder writes it only for a dmg or zip target, so `package:dir` never carries it.
+describe("audit-app-update (B8): app-update.yml present, provider github, no token", () => {
+  function appWith(yml: string | null): string {
+    const app = join(scratch(), "VibeField.app");
+    const resources = join(app, "Contents", "Resources");
+    mkdirSync(resources, { recursive: true });
+    if (yml !== null) writeFileSync(join(resources, "app-update.yml"), yml);
+    return app;
+  }
+  const GOOD =
+    "owner: vibefield\nrepo: vibefield\nprovider: github\nreleaseType: draft\nupdaterCacheDirName: vibefield-updater\n";
+
+  it("passes electron-builder's own shape", () => {
+    expect(auditAppUpdate(appWith(GOOD))).toEqual([]);
+  });
+
+  it("names a missing file, another provider, a token, and a missing cache name", () => {
+    expect(auditAppUpdate(appWith(null))).toEqual([
+      "app-update.yml is missing (built for a dmg or zip target?)",
+    ]);
+    expect(auditAppUpdate(appWith(GOOD.replace("provider: github", "provider: generic")))).toEqual([
+      "app-update.yml does not name provider: github",
+    ]);
+    expect(auditAppUpdate(appWith(`${GOOD}token: ghp_x\n`))).toEqual([
+      "app-update.yml carries a token",
+    ]);
+    expect(auditAppUpdate(appWith(GOOD.replace(/updaterCacheDirName.*\n/, "")))).toEqual([
+      "app-update.yml names no updaterCacheDirName",
+    ]);
+  });
+
+  it("release.yml's build job runs it on the packaged app, before the asar audit", () => {
+    const yml = readFileSync(join(REPO, ".github", "workflows", "release.yml"), "utf8");
+    const step = yml.indexOf("node scripts/audit-app-update.mjs --app");
+    expect(step).toBeGreaterThan(yml.indexOf("\n  build:\n"));
+    expect(step).toBeLessThan(yml.indexOf("\n  sign:\n"));
+    expect(step).toBeLessThan(yml.indexOf("node scripts/audit-asar.mjs"));
   });
 });

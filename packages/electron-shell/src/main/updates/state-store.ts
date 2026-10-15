@@ -13,6 +13,7 @@ import {
   UpdateClientStateFile,
   type UpdateLastApply,
 } from "@vibefield/contracts";
+import type { AdoptedRoot } from "./root-chain";
 import { NOTHING_REMEMBERED, type RememberedVersions } from "./verify-chain";
 
 export interface UpdateClientState {
@@ -23,6 +24,8 @@ export interface UpdateClientState {
   readonly lastCheckAt: number | null;
   /** WP12c (§10 S4) — the last apply's branch, written before every exit it takes */
   readonly lastApply: UpdateLastApply | null;
+  /** L3b-ii (B5) — the trust-root documents adopted by rotation, oldest first (`root-chain.ts`) */
+  readonly trustRoots: readonly AdoptedRoot[];
 }
 
 export const FRESH_CLIENT_STATE: UpdateClientState = {
@@ -32,6 +35,7 @@ export const FRESH_CLIENT_STATE: UpdateClientState = {
   remembered: NOTHING_REMEMBERED,
   lastCheckAt: null,
   lastApply: null,
+  trustRoots: [],
 };
 
 export interface StoreFs {
@@ -95,6 +99,7 @@ export class UpdateStateStore {
         remembered: data.remembered,
         lastCheckAt: data.lastCheckAt,
         lastApply: data.lastApply,
+        trustRoots: data.trustRoots,
       },
       recovered: null,
     };
@@ -109,6 +114,7 @@ export class UpdateStateStore {
       remembered: state.remembered,
       lastCheckAt: state.lastCheckAt,
       lastApply: state.lastApply,
+      trustRoots: [...state.trustRoots],
     };
     this.fs.writeAtomic(this.path, `${JSON.stringify(doc, null, 2)}\n`);
   }

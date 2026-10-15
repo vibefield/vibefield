@@ -59,7 +59,8 @@ export interface ChainInput {
   /** The frozen identity's `updateOrigin`, e.g. `https://github.com/vibefield/vibefield/releases` (EDP-30). */
   readonly origin: string;
   readonly channel: UpdateChannel;
-  /** The app's EMBEDDED root keys (the staged identity's `trustRootKeys`): the only anchor nothing remote can move. */
+  /** The root keys the client trusts: the app's EMBEDDED set (the staged identity's `trustRootKeys`, the only anchor
+   * nothing remote can move), or the newest set it adopted by rotation from there (`root-chain.ts`, L3b-ii B5). */
   readonly rootKeys: readonly string[];
   readonly remembered: RememberedVersions;
   /** The build-time floor (the staged identity's `updateFloors`): every document is judged against
@@ -69,6 +70,15 @@ export interface ChainInput {
   /** The platform's feed file: `latest-mac.yml` · `latest-linux.yml` · `latest.yml`. */
   readonly feedFile: string;
   readonly fetch: FetchBytes;
+}
+
+/** L3b-ii (B5) — the trust-root the chain ACCEPTED (verified and judged), as text and signature, with its root set: the
+ * controller persists it when its root set differs from the anchor's (a rotation). */
+export interface AcceptedRoot {
+  readonly version: number;
+  readonly doc: string;
+  readonly sig: string;
+  readonly rootKeys: readonly string[];
 }
 
 export interface VerifiedChain {
@@ -87,6 +97,7 @@ export interface VerifiedChain {
   readonly heads: ChannelHeads;
   readonly policy: UpdatePolicy;
   readonly remembered: RememberedVersions;
+  readonly acceptedRoot: AcceptedRoot;
 }
 
 export interface RefusedChain {
@@ -95,6 +106,8 @@ export interface RefusedChain {
   /** For logs and doctor — never shown verbatim in privileged UI (EDP §11.1: no remote content). */
   readonly detail: string;
   readonly remembered: RememberedVersions;
+  /** the trust-root accepted before a later step refused (a verified document is a fact, TD-10) */
+  readonly acceptedRoot?: AcceptedRoot;
 }
 
 export type ChainResult = VerifiedChain | RefusedChain;
@@ -154,11 +167,13 @@ export function withFloors(
 export async function verifyUpdateChain(input: ChainInput): Promise<ChainResult> {
   const origin = input.origin.replace(/\/+$/, "");
   let remembered = withFloors(input.remembered, input.floors);
+  let acceptedRoot: AcceptedRoot | undefined;
   const refuse = (state: UpdatesUnavailableState, detail: string): RefusedChain => ({
     ok: false,
     state,
     detail,
     remembered,
+    ...(acceptedRoot !== undefined ? { acceptedRoot } : {}),
   });
   const releaseBase = (tag: string) => `${origin}/download/${encodeURIComponent(tag)}/`;
   const signed = async (base: string, file: string) => {
@@ -212,6 +227,13 @@ export async function verifyUpdateChain(input: ChainInput): Promise<ChainResult>
     );
   }
   remembered = { ...remembered, trustRoot: trustRoot.version };
+  acceptedRoot = {
+    version: trustRoot.version,
+    doc: Buffer.from(root.bytes).toString("utf8"),
+    sig: root.sigText,
+    rootKeys: trustRoot.root.keys,
+  };
+  const accepted = acceptedRoot;
   const releaseAnchor: TrustAnchor = trustRoot.roles.release;
 
   // 3. the channel heads, by the release role
@@ -383,6 +405,7 @@ export async function verifyUpdateChain(input: ChainInput): Promise<ChainResult>
     feedText,
     headVersion,
     manifest,
+    acceptedRoot: accepted,
     trustRoot,
     heads,
     policy,
