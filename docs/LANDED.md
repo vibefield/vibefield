@@ -10797,3 +10797,110 @@ landing with its own gate.
   - the prepare-restart op with its Rust gen and both-side fixtures;
   - the tray's "Restart to Update".
 - **L3, then L4** as filed in §WP12 L1. **W10 and W11** wait on James.
+
+## WP12 L2b-i — the consented native stop: an update that touches field-native stops the floor only when fieldd's own live set is exactly the set the person consented to end; the floor records its restart intent and stops itself over the paired channel, and its next boot says the stop was planned (2026-10-15; `19cec349` `77e1401f`)
+
+**Why:** `build-wp12-updater.md` §9 is L2b's reading. The PM ruled every lean at 12:15Z, R2's mechanism at 12:20Z and
+R3's event at 12:22Z. Three facts drove it:
+- `system.shutdown` stopped fieldd and LEFT field-native running, and nothing in production ever stopped field-native.
+  After a swap, the new fieldd adopted the OLD floor (L2a's own kill-matrix row shows it), so old native bytes ran under
+  the new app until a reboot. D11's "an old floor only ever outlives a release whose native binaries are byte-identical"
+  was false.
+- The session census is not "vacuous until agent sessions exist": `terminal.list` answers live PTYs today.
+- The kill ladder has no pid for an ADOPTED floor (`native-supervisor.ts:45`), and the update path is the adopted case
+  by construction.
+
+design-00's EL1 carries the dated note: this is the ONE consented exception to the two-planes law. **L2b-ii, the shell
+half, is a separate landing.**
+
+**What landed:**
+- **`19cec349` (test-only, the PM's ruling 12:47Z).** `agent-session.test.ts`'s `setup()` now waits for the floor's
+  terminal endpoints, as `agent-gateway-floor.ts` has since `ec011806`. This is the 10-08 fix's second site. The race's
+  sightings here: QL-D10's row at the MV landing (`8a851973`) and PJ-7's row in this lane's verify-2. It was on the
+  History lead's debts list (`s-debts-fieldd.md` Appendix 3), which closes at this landing.
+- **`77e1401f`, the consented native stop:**
+  - **Contracts (EL9: both sides parse the fixtures).**
+    - Management: `NativeRestartReason`, `NativePrepareRestartParams/Result` and `NativeShutdownParams/Result`. Their
+      doc says the single-client rule IS their authorization, and that a superseded connection is refused with the
+      existing `superseded` answer before any effect. Both are generated into Rust as named types.
+    - `HelloAck.lastExit: NativeLastExit` (`planned | unplanned`).
+    - The layout's `RESTART_INTENT_FILE` (`native/restart-intent.json`), with the vector updated.
+    - TS-only: `UPDATE_PLANES`, `RestartScheduled` and `SystemShutdownParams/Result`.
+  - **field-native.**
+    - `restart.rs` writes the intent atomically and privately, then renames it into place. The boot TAKES it: present
+      and well-formed reads `planned`; garbled, foreign or absent reads `unplanned`; a present file is always removed.
+    - `native.lifecycle.prepareRestart` records the intent.
+    - `native.lifecycle.shutdown` replies, then wakes **the third arm of main's `shutdown_signal()`**. That runs the same
+      drain SIGTERM runs, so nothing new ends a session (row S2-B; `shutdown_sweeps_every_session_within_budget`).
+    - The ack carries `lastExit`. The `native_build()` comment is corrected, dated.
+  - **fieldd.**
+    - **`NativeSupervisor.stopForUpdate()`** does everything in ONE function: suppress respawn → `prepareRestart` →
+      `shutdown` → a bounded wait for the management socket to close → its own TERM→KILL ladder, only if this fieldd
+      holds a pid and 5 s have passed. An adopted floor that doesn't close is reported `lingering`, never signalled.
+    - **`TerminalService` closes to births for the census.** The live set is the observed inventory plus every session
+      born and not yet observed (GT-1's race). Births in flight count. A refusal reopens births.
+    - **`system.shutdown {native: {stop, sessions, toVersion?}}`** proceeds only on an exact match; otherwise it refuses
+      `PRECONDITION_FAILED {live, births}` or `UNAVAILABLE {state: "unobserved"}`. On a match: `restartScheduled` is
+      pushed on health, then the floor stops, then fieldd.
+    - `FielddHealth` gains `nativeLastExit` and `restartScheduled`.
+
+**Validation:**
+- **The witnesses**, the kill matrix on a real field-native that fieldd ADOPTED (no pid: the socket closing is the
+  witness):
+  - `✓ the kill matrix (NF-4, real field-native) > row WP12-R2a: a consented stop ends exactly the consented set — the floor drains, records its intent, and the next boot says planned  1308ms` (verify-3) — consent names both PTYs; `native: "closed"`; **the floor exits 0 under the drain**; both PTY pids are gone;
+    the intent is on disk; the next floor's fieldd reads `lastExit: "planned"` and the file is taken.
+  - `✓ the kill matrix (NF-4, real field-native) > row WP12-R2b: a session born after consent refuses the stop — nothing ends, and births reopen  537ms` (verify-3) — consent names one PTY, then a second is born; **the refusal is `{live: [both], births: 0}`**; the floor still
+    serves, both sessions are listed, the shutdown owner is never asked, and births reopen.
+- **`native-stop-for-update.test.ts`, 6 cases:**
+  - the adopted case: no pid, no ladder, the socket closing as the witness;
+  - adopted-lingering, never signalled;
+  - a spawned floor: TERM, then KILL;
+  - TERM alone sufficing;
+  - closing in time, with no signal at all;
+  - a failed intent that still stops.
+- **A terminal-service row:** a born-unseen session refuses a `[]` consent; a malformed ask refuses; an unobserved floor
+  refuses.
+- **field-native:**
+  - `restart::tests` ×6;
+  - `mgmt_server` ×3: a planned stop recorded, with the next boot saying `planned` ONCE; **a superseded client can
+    neither record an intent nor stop the floor**; a malformed ask changes nothing;
+  - `restart_verb_fixtures`.
+- **`pnpm verify`** (verify-3, 12:47:21–12:52:16Z, on `19cec349` with the L2b-i tree uncommitted):
+  - vitest 8,621 passed / 17 skipped / 0 failed (+19); cargo 313 / 9 ignored (+10); clippy and fmt clean.
+  - gen:check was red only because the generated files were uncommitted. `pnpm gen:check` on the staged tree gave rc 0.
+  - Verify-1 and verify-2 were red on the real-floor endpoint race, outside the diff: AR-7b's row, then PJ-7's.
+- **The landing gate:** `gate:landing --with-stages` on `77e1401f` (lane wp12-l2b, 12:54:12–13:25:20Z, the internal disk
+  14 → 14 GiB free; `lanes/wp12-l2b/gate-77e1401f.log`), 26 of 27 ok: verify's fourteen stages (test 120 s, test:rust
+  82 s, gen:check on the committed tree), `still`, and every smoke but smoke:canvas, smoke:bundled and smoke:godview
+  included. smoke:canvas (923 s) was red on ONE row, DK-14's AIMED rung (`@'s list open with a pane to send to did not
+  happen within 10000ms`), main's own word for word, with the same red-path teardown shape as L1's and L2a's gates. The
+  gate's stages are the verify on the final sha; the PM ruled a separate verify-4 would only repeat them (12:54Z).
+
+**Found:**
+- **A lane that changes generated files stages or commits them before verify, or gen:check reds by construction (it
+  diffs the index).** This is now a house rule (the PM, 12:54Z), in `docs/desk-gates.md` beside the TMPDIR bullet.
+- **The kill ladder has no pid for an adopted floor.** The update path is the adopted case by construction, and on
+  Windows a signal is a hard kill. Hence the verb, with the single-client rule as its whole authorization.
+- **The old `killLadder` skips its KILL rung once `stopped` is set,** so the stop carries its own ladder.
+- **A naive census misses a session `create` answered before the inventory listed it.** The consent check counts births
+  that are born but unseen, and births in flight.
+- **R3's event as first leaned had no carrier.** fieldd sends no free-standing product notifications, and
+  `system.health.subscribe` is local-only (D36). Peers read a native-touching stop as `asleep` today, because the node
+  goes down with the floor. The local half is `FielddHealth.restartScheduled`; the phone/peer half is owed (below).
+- **R4 (the PM's 12:15Z ruling, built in L2b-ii):** with `autoInstallOnAppQuit` off, Squirrel.Mac takes the payload only
+  inside `quitAndInstall()` (`MacUpdater.js:220-223` vs `:240-256`). So L2b-ii hands Squirrel the payload FIRST and tears
+  down after.
+- **Ran without a window:** `pnpm gen` and `cargo fmt`. The PM's 12:35Z rule: gen and fmt need no window; cargo
+  build/check/test always do.
+
+**Owed:**
+- **L2b-ii, the shell half:**
+  - QuitFlow's update reason;
+  - the Squirrel-first apply, with `UNAVAILABLE apply-refused` leaving everything running;
+  - the tray and the native consent dialog ("Update Ends N Sessions…", Cancel the default, the sessions listed);
+  - D11's order;
+  - EDP-34's predicate with named clauses.
+- **The phone/peer half of the restart announcement, the History lead's (the DS track):** `DeviceSlice.restart {reason,
+  planes, at}`, read by the roster as `restarting` for its TTL even with the node offline. It is filed on the ROADMAP's
+  mesh/DS row.
+- **L3 and L4** as filed in §WP12 L1: the silent self-apply and its `pmset` clause move to L3.

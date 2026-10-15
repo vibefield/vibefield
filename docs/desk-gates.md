@@ -187,6 +187,11 @@ lane's field-native, rebuilt after gen:check), the dev runner's 131. The orchest
   with `-skipPackagePluginValidation`. verify and the smokes keep `/tmp` for their short unix-socket paths (the
   `vf-smoke-*` homes above). An SSD TMPDIR is fine for cargo, `-resolvePackageDependencies` and plain scripts; put
   `-derivedDataPath` and `CARGO_TARGET_DIR` on the SSD, which is where the bulk goes.
+- **Generated files before verify** (WP12 L2b-i, 2026-10-15; the PM's house rule): **a lane that changes generated
+  files stages or commits them before verify, or gen:check reds by construction (it diffs the index).** `gen:check`
+  is `pnpm gen && git diff --exit-code -- <the generated paths>`, so an uncommitted `bundle.json`, `contracts.rs`,
+  `registries.rs` or `gen/layout.json` is a diff even when it is fresh. To settle freshness without a window, stage
+  and run `pnpm gen:check` alone: gen and fmt need no PM-WINDOW; `cargo build`/`check`/`test` always do.
 
 ## The doors (plan (74))
 
