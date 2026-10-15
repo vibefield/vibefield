@@ -593,6 +593,18 @@ async function setup(config: SetupConfig): Promise<Box> {
     ...(config.floor === "mock" ? { terminalBirthWaitMs: 300 } : {}),
   });
   cleanup.push(() => daemon.stop().catch(() => undefined));
+  // The floor's terminal endpoints reach the daemon over the management link AFTER `bootstrap` resolves, so a row that
+  // births at once is refused UNAVAILABLE "the terminal floor is not available". Wait for them, as a window would: the
+  // 10-08 fix in `agent-gateway-floor.ts` (ec011806, "red in 3 of 9 gates, a different row each time"), whose second
+  // site this is. The race was sighted here first at QL-D10's row (the MV landing, 8a851973) and again at PJ-7's
+  // (2026-10-15 12:45Z, WP12 L2b-i's verify-2). A real floor only — a restart's floor is real too; the mock serves none.
+  // 30 s, inside the rows' own 60 s budgets: a floor that never sends them fails HERE, as this wait timing out, not
+  // as a refused birth deep inside a row.
+  if (config.floor === "real")
+    await poll(
+      async () => (daemon.native.terminalEndpoints !== undefined ? true : undefined),
+      30_000,
+    );
   const records =
     restart?.records ??
     new SessionRecordStore({
