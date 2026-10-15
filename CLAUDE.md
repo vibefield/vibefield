@@ -153,8 +153,15 @@ checkout; a released plane is committed EXACT, an unreleased one as its `link:`/
 writes the committed rows from the lock (`--check` compares), and the pre-commit hook refuses a commit whose staged
 rows its own lock does not render. `pnpm siblings use NAME` links a released sibling's checkout back in a LOCAL overlay
 (RD-2): a gitignored root `.pnpmfile.cjs` pnpm loads for every command, with the dev lockfile under `.vibefield/dev/` —
-the committed `pnpm-lock.yaml` is never the overlay's; `use --none` removes it and reinstalls the committed shape. Exit (RD-5, superseding W-D8's "delete the
-entry") is a `release` recorded in the lock and the rows re-rendered — the entry stays as the overlay's coordinate.
+the committed `pnpm-lock.yaml` is never the overlay's; `use --none` removes it and reinstalls the committed shape. The
+cargo and Swift halves (RD-3): a released cargo plane (`release.cargo` = git + rev) is committed as git rows and linked
+through a generated, gitignored root `.cargo/config.toml`, Cargo.lock skip-worktree while it stands; a released Swift
+plane is the manifest's own `let <name>Release` line, which the overlay renders nil in the working tree (the manifest
+shows modified) — the line itself, because SwiftPM caches a manifest by its contents plus its environment, never a file
+it reads. While a lock is hidden every commit is refused. Until G28 truffle's Swift plane records no release, so
+`.window/truffle` is still the committed coordinate (the SwiftPM paragraph above); after it, the overlay's.
+Exit (RD-5, superseding W-D8's "delete the entry") is a `release` recorded in the lock and the rows re-rendered — the
+entry stays as the overlay's coordinate.
 
 **rosetta's checkout is dedicated to its pin (W-D10, 2026-10-03):** `../rosetta-pin` is a DETACHED
 checkout at the lock's revision, with its `repository` in the lock so `node scripts/siblings.mjs fetch rosetta`
