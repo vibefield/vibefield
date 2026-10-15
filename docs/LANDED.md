@@ -10090,9 +10090,34 @@ built lane fix7 from the lead's brief (`draft/project-places/briefs/fix7.md`).
 
 **Validation:** red first (`/Volumes/SamsungRed/lanes/fix7/red-*.log`, and the kit's under `logs/`); the lane's
 `gate.sh` (verify, smoke, smoke:godview), the kit's whole suite (1,101 tests) and the PJ-7 simulator witness, all EXIT 0
-on the lane's tip `fa535b29` (on `562ea33a`; replayed onto main `fb9efdb3`, PT-6b, the browser pane, for this landing); then, for the first time on this lead's landings, **`pnpm gate:landing --with-stages` in full** — every
-verify stage and every smoke — plus the kit's suite and the witness, on the exact tree (`lanes/land3/logs/`, under this
-landing's sha).
+on the lane's tip `fa535b29` (on `562ea33a`). Replayed onto main `fb9efdb3` (PT-6b, the browser pane) for this landing,
+and gated there on the exact tree `5eb44589` (`lanes/land3/logs/5eb44589/`) — for the first time on this lead's
+landings, **`pnpm gate:landing --with-stages` in full**:
+- **22 of 26 gates green.** Every verify stage but `test`, `still`, and the smokes smoke, no-gpu, plugin-restart, plugin,
+  godview, terminal-door, terminal-direct and studio.
+- **`test` red on one row of 2,271:** fieldd's AR-6-0 (`agent.interrupt` on the real floor), its 15 s poll for the
+  scripted PTY's exit run out at load 68. Green alone (6.9 s; the file 45 passed, 2 skipped,
+  `rerun-agent-session.log`), the real-PTY lottery class.
+- **Three smokes red on the lead's offscreen harness, not on the code** (Found): smoke:canvas (hung to the 30-min cut),
+  smoke:canvas:no-webgpu and smoke:kind-faults.
+- **The kit's whole suite** (1,101 tests in 12 bundles, `kit-landing.log`) **and the witness**
+  (`PlaceLaunchLoopbackTests`, `witness.log`) **green** on the same tree.
+- **The three smokes again on the corrected harness** (`rerun-smokes/`):
+  - smoke:canvas:no-webgpu green;
+  - smoke:kind-faults red only on the occluded row;
+  - smoke:canvas red on seven rows.
+- **A control on main `fb9efdb3`** (`control-fb9efdb3/`; same lane, same harness, its renderer rebuilt from that tree)
+  was red on five of the seven:
+  - the occluded row, the harness's;
+  - DK-14's AIMED rung, main's since W7;
+  - HAND_WHITEBOARD (the bar back at 251 ms, not 200), COVER GODVIEW (the cover's first frame already the still) and
+    IDLE (3 submits for a still page in hand). These are offscreen frame timing; all three are green in PORTALS'
+    visible gate on main (24/26), which stands as their reading of record.
+- **The two red on fix7 alone, HAND_NOTEBOOK and COVER HISTORY,** are their red siblings' own judges (`judgeReturn`,
+  `judgeFade`). A second fix7 sample (`sample2/`) had both green, and COVER GODVIEW with them. It was red only on
+  the occluded row, HAND_WHITEBOARD, DK-14 and IDLE: the offscreen frame clock's lottery, not fix7's.
+- **PT-6b's rows** (PANE, LIVE with PLAYING, DEVICE, HONEST with SLEEP and CARET, STILL, FIRST, FRAMES, and USE but for
+  IDLE) are green on both trees.
 
 **Found:** item 6 of the run ("the Debug build waited for Connect") is not a regression — `MeshModel.connect()` is the
 user's deliberate act in every build, and only DEBUG `-vf-auto-connect` starts it at launch; the test plan's claim was
@@ -10102,6 +10127,17 @@ reports no progress, so `rebuilding` claims none. **The lead's landings since 10
 `gate:landing`** (the PM's finding): main's smoke:canvas has been red since W7 (`42f8d5b6`, GV round 3) on the AIMED
 rung — the rung's precondition went stale when W7 stopped a launch from birthing a shell — and the MV lead owns its
 test-only fix; the entries concerned carry dated corrections.
+
+**The lead's offscreen harness broke three of gate:landing's smokes once the browser pane landed.**
+- The cause: `lanes/land3/electron-offscreen.cjs`, the FS successor's recipe that every offscreen lane copies, attached
+  CDP to every window.
+- PT-6b's page windows attach their own (`browser-electron-native.ts`). They failed "Browser source could not load", and
+  smoke:canvas waited on them until gate-landing's cut.
+- smoke-unavailable's rows met "Debugger is already attached to the target".
+- The corrected harness is `lanes/land3/electron-offscreen2.cjs`, now also the lane template's (`lanes/fs-audit/`). It
+  leaves whole a window the app already renders offscreen, and makes a later attach a no-op. The MV lead is told.
+- The occluded row (a shown occluder over the desk) cannot pass offscreen on any harness, and smoke:canvas's
+  frame-timing rows read differently offscreen (the control above).
 
 **Owed:** the upstream ask to mille (James's): a watch-off option for row-only engines, or reconciles that do not share
 the gate with watcher batches; a real-SSD witness of an engine retirement (the post-fix probe saw no stall: 286 lists,
