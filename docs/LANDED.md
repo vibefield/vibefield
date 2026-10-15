@@ -10616,3 +10616,97 @@ remote (RD-4 §4, James's push) and truffle's Swift exact waits on G28, so both 
   ghosttea fork's `release.cargo` once `10d0b17` is on its remote; truffle's `release.swift` at G28. Then RD-6.
 - The Swift overlay in Xcode's GUI is a premise, not a witness — nothing here can drive the GUI.
 - The spike's branch `rd/3-spike` stays in lane rd3 until the landing is read; nothing of it lands.
+
+## WP12 L1 — the updater core: VibeField's UpdateProvider verifies the trust-root, the channel heads, the channel's policy and the feed before any download (TD-3's client half), channels resolve by signed heads, and the one verifier becomes a Node-only spine library, `@vibefield/trust` (2026-10-15; `dfc4b832` `9f9e4ec5` `0682ac15`)
+
+**Why:** `specs/build-wp12-updater.md`, read and approved at the leans by the PM (09:58Z). It is L1 of four serial lanes:
+WP12a (the shapes) + WP12b (the verifier and the controller core), with D3's spike first and D13's pins as one
+deliberate commit. Before it, a packaged VibeField could not update: no electron-updater, no publish configuration,
+no release workflow, and the tray's "Check for Updates…" rendered disabled.
+
+**What landed:**
+- **D13, the pins (`dfc4b832`).**
+  - electron-builder `^26.0.12` (locked 26.15.3) → `26.15.7`, and electron-updater `6.8.9`, both exact (EDP-39).
+  - `electron-builder.yml`'s `publish:` block names the frozen origin. It is REQUIRED: electron-updater reads
+    `Resources/app-update.yml` for its cache dir name (`AppUpdater.js:545`) even with a custom provider, and
+    electron-builder writes that file only with a publish provider configured. Nothing publishes from it.
+  - The lock: `Packages: +8 -4`.
+- **WP12a, the shapes and the one verifier (`9f9e4ec5`).** The contracts, all TS-only:
+  - `ChannelHeads` (D4): a head of another channel's tag shape is refused.
+  - `updatePolicyFile(channel)` (D5).
+  - `UPDATES_SERVICE`: seven honest states, TD §4's four among them.
+  - `UPDATES_AUDIT_ACTIONS`, which fieldd's `audit.append` now accepts.
+  - `UpdateClientStateFile`.
+  - `UpdateFloors`, the build-time floor: the staged identity's optional `updateFloors`, written by the stager from the
+    embedded trust-root's version.
+  - **D2, decided by the walls:** R2 forbids every `@vibefield/plugin-*` import under the shell's main, so the verifier
+    moved to a new Node-only spine library, `packages/trust`. The kit re-exports it (one verifier). Walls R27/R28
+    hold it.
+- **WP12b, the updater core (`0682ac15`, `electron-shell/src/main/updates/`):**
+  - **The verify chain:** §3's order. The policy is read from the NEWEST release (D5). Every document is judged against
+    `max(remembered, build floor)`. Every accepted document is remembered even when a later step refuses.
+  - **The custom provider:** as the D3 spike proved it.
+  - **`decideUpdate`:** the one decision, renamed from EDP §11.1's `UpdatePolicy` (D14).
+  - **The UpdateController:** single-flight; bounded codes; declines persisted; the off switch honored at every
+    boundary; refusals become `UNAVAILABLE` plus a warn line plus an audit row; an unreadable state is moved aside
+    loudly and the updater restarts from the build's floor; `doctorLines()`.
+  - **Nothing installs:** `autoInstallOnAppQuit` is forced OFF, a staged update is HELD `apply-unbuilt`, and
+    `restartToInstall` is honestly refused until WP12c.
+  - **D9's dev-only fixture origin.**
+  - **The tray:** `ready` → `staged`; with no apply, a staged update reads "Update Downloaded".
+  - **Packaged-only wiring:** a manual check, one launch check after 30 s, and a stale-resume check.
+
+**Validation:**
+- **The D3 spike** (10:01–10:03Z): headless, against a loopback origin signed with dev keys. The custom-provider seam
+  holds:
+  - `getLatestVersion` runs once per check (`AppUpdater.js:389`, cached at :413, reused at :436);
+  - the payload URLs come from our `resolveFiles` (`MacUpdater.js:53`);
+  - no GitHub logic runs (`providerFactory.js:56-62`);
+  - a forged feed is refused with zero payload requests (`ERR_VF_UPDATES_FEED_UNVERIFIED`);
+  - a signed feed whose sha512 lies is refused by electron-updater's own check (`ERR_CHECKSUM_MISMATCH`).
+- **`pnpm verify` EXIT 0** on the L1 tree (verify-3, 10:30:43–10:35:40Z): vitest 8,590 passed / 17 skipped / 0 failed
+  (+65 over main), cargo 302 / 9 ignored, node --test 169/0. The walls' `--self-test` passed, including the R27/R28
+  probes. The chain's tests name every refusal state; the controller's tests run over a fake updater that drives the
+  real chain.
+- **The landing gate:** `gate:landing --with-stages` on `0682ac15` (lane wp12, 10:37:55–11:08:57Z, the internal disk
+  14 → 14 GiB free; `lanes/wp12/gate-0682ac15.log`), 26 of 27 ok — verify's fourteen stages, `still`, and every smoke
+  but smoke:canvas, smoke:bundled included. smoke:canvas (923 s) red on ONE row, DK-14's AIMED rung (`@'s list open
+  with a pane to send to did not happen within 10000ms`) — main's own, word for word. The gate armed on a still-held
+  window seconds before the PM's grant; the PM let it stand (the same scope, nobody waiting), and two rules follow —
+  the builder arms a gate only after the grant message, the PM flips PM-WINDOW to idle the moment a window's end is
+  reported.
+
+**Found:**
+- **R2 decided D2 before any code ran.** `@vibefield/plugin-*` is walled out of the shell's main, so "the kit's
+  `./trust` subpath" was never possible. The spine library is the shape, and the PM's condition held: the walls decide,
+  then the spine library wins without asking.
+- **electron-updater defaults `autoInstallOnAppQuit` to true.** An updater wired naively would install a staged update
+  on any quit, past EDP-35's census gate. It is forced off until WP12c.
+- **electron-updater turns `allowPrerelease` ON for a prerelease build** (`AppUpdater.js:218`, a nightly or a beta) and
+  filters nothing by it after the provider returns. Channel selection must be ours (D4); the controller's tests keep
+  the fact.
+- **`app-update.yml` is load-bearing even with a custom provider** (the cache dir name). D13's `publish:` block is
+  required, not cosmetic; W8 checks it on `package:dir`.
+- **The plan's §3 step 5 contradicted D5.** It read the policy from the head release; D5's whole point needs the newest
+  release's copy. It was corrected at the source, dated.
+- **The malformed-before-expired order:** a schema's refinement ("cannot expire before it was generated") speaks before
+  the expiry clause. A test of expiry must build a WELL-FORMED expired document; verify-2's one red was the fixture's,
+  not the code's.
+- `AuditAppendV1` lives at `@vibefield/contracts/diagnostics`, not the contracts root (verify-1's one red).
+- pnpm 11's `verify-deps-before-run` made a `pnpm exec biome` install the new workspace links: +22 lock lines, said.
+- electron-updater's npm `latest` is 6.8.9, but its `v26` dist-tag carries 6.8.10 (2026-09-26). The pin stays EDP-39's.
+- **Differential downloads fetch `<zip>.blockmap` from the same release.** The assembled file is still checked against
+  the signed sha512, so blockmaps need no signature.
+
+**Owed:**
+- **L2 = WP12c.** Adoption after an update (D10: a production build identity, the bounded replace path, and the three
+  fall-through spawns become refusals), D11's shutdown-before-swap, the apply gate (EDP-34/35), and the prepare-restart
+  op with its Rust gen and both-side fixtures (moved from WP12a by the PM). This closes the debt row filed below.
+- **L3 = WP12d + WP12e.** The policy's levers, the doctor surface that renders `doctorLines()`, per-channel policy
+  sources (which raise the policy floors from null), the release workflow with the TD-3 `sign` step, and the asar
+  allowlist audit (the second `sidecar-slim`).
+- **L4 = WP12f.** The physical `smoke:update` against the fixture origin.
+- **W10** (a real nightly: TD-3's gate) waits on TD-1, the tag rulesets and the first push. **W11** (the signed
+  N-1 → N apply) waits on WP10.
+- **Root-key rotation:** a rotated root is verified and judged but the adopted set is not persisted, so the next check
+  judges from the embedded root again; WP12d persists it in the client state beside the policies.
