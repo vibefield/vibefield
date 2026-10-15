@@ -128,6 +128,19 @@ afterPack: packaging/after-pack.mjs
 # start doing something.
 npmRebuild: false
 
+# WP12 (build-wp12-updater.md D13): REQUIRED — electron-updater reads `Resources/app-update.yml` for its cache dir
+# name (`AppUpdater.js:545`, even with VibeField's custom provider), and electron-builder writes that file only with a
+# publish provider configured; it also writes `latest*.yml` beside the artifacts only then. This block only
+# NAMES the origin — it never publishes: no command in this repository passes `--publish`, and the release workflow
+# (WP12e) uploads the signed feed itself after the TD-3 `sign` step. The origin is the frozen identity constant
+# `updateOrigin` (release-identity.json, EDP-30); the client reads the feed through VibeField's UpdateProvider (TD-3),
+# never through this provider's own resolution.
+publish:
+  provider: github
+  owner: vibefield
+  repo: vibefield
+  releaseType: draft
+
 mac:
   target: [dmg, zip]
   icon: packaging/icons/app.icon

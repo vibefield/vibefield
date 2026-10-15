@@ -58,7 +58,7 @@
     "@resvg/resvg-js": "2.6.2",
     "@vibefield/electron-shell": "workspace:*",
     "electron": "^43.1.1",
-    "electron-builder": "^26.0.12",
+    "electron-builder": "26.15.7",
     "postject": "^1.0.0-alpha.6"
   },
   "optionalDependencies": {
