@@ -10392,3 +10392,78 @@ Gated here on the exact tree, `gate:landing --with-stages` in full plus the kit'
 - item 4 (a frozen app), if James's hand dismissal of run 2's stuck card says so;
 - a bound and a face for TM-r3's endless re-mint loop;
 - the fixture's temp dir.
+
+## WP8 — the packaged app carries its own plugins under a signed index: the browser, the browser pane and the pad staged under the trust-root's `bundled` role, verified by fieldd at two grains, and a package with no identity refused (2026-10-15; `40178d20` `5e7507d6`)
+
+**Why:** ESP §10.4 / §16 item 4. Until now every packaged build shipped ZERO built-ins: the stager's `plugins/bundled`
+row was null, electron-builder dropped the empty folder, and `package:mac:release` could not pass, because
+`--require-complete` turned that absent row into a failure. WP8 is the third rung of the prod-builder brief's order of
+work and TD-2 of the trust ladder: the bundled index is signed by the `bundled` role of the trust-root TD-0 shaped.
+Plan: `draft/specs/build-wp8-bundled-plugins.md` (with its §10 addendum).
+
+**What landed:**
+- **WP8a, the shape and the kit's verifier.**
+  - contracts: `BundledPluginIndex` / `BundledPluginEntry` / `StagedPluginPath` / `BundledPluginPlatform`. Each entry
+    carries every staged file's hash, the manifest hash (fieldd's own definition) and the artifact hash (`packVfplugin`
+    over the staged tree, the registry's pin for the same bytes).
+  - The names are in registries.ts: the index, its `.sig` (the kit's convention, which amends ESP §10.1's
+    `bundled-plugins.sig`), `identity/`, `release-identity.json`, `FIELDD_TRUST_ROOT(_KEYS)`. They are TS-only.
+  - The kit has `buildBundledIndex` / `verifyBundledIndex` and `trust.ts`. W2's six refusals each name their file.
+- **WP8b, the stage produces it.**
+  - `bundled-plugins.mjs` (stage/verify). DEV mints an ephemeral trust-root in memory and drops its secrets. RELEASE
+    needs `VIBEFIELD_BUNDLED_INDEX_SECRET` and the embedded trust-root, and refuses while `trustRootKeys` is a TD-1
+    blocker.
+  - `bundled-list.mjs` holds the one named list.
+  - The stager's null row is gone: its producer's verdict is required, `identity/` is a stage root, and
+    `--require-release-key` exists. The report line reads `plugins/bundled: … KEY CLASS: DEV|RELEASE`.
+  - electron-builder ships `identity/`, and `StagedReleaseIdentity` is in contracts.
+- **WP8c, fieldd verifies; the shell hands over and refuses.**
+  - fieldd: a keyed bundled root checks the trust-root against the app's root keys at its own threshold, then the index
+    against the `bundled` role, then each plugin's bytes. A bad trust-root or index is one root problem and no row. A
+    bad copy is that row `invalid` with `PLUGIN_ARTIFACT_MISMATCH`, naming the path. A verified row's installRevision
+    is its artifact hash, and it carries a provenance block.
+  - shell: `DesktopResources.identity` and `readBundledTrust`, plus three typed packaged-only refusals:
+    `bundled-identity-missing`, `bundled-root-missing`, and `bundled-dev-trust` (a DEV stage launches only with
+    `--allow-dev-trust`).
+  - WP8-D9: a packaged fieldd's roots and trust anchor come from the layout alone, never from the environment.
+- **WP8d, the witnesses.** `pnpm smoke:bundled` is gate:landing's row 29 (three launches: loads · corrupt · forged).
+  `package:verify:plugins --app <VibeField.app>` checks the BUILT app offline and then runs its packaged fieldd SEA.
+  run-macos-release passes `--require-release-key` and runs the plugins verifier after the history verifier.
+
+**Validation:**
+- W1: `pnpm verify` EXIT 0 on `5e7507d6` (06:07–06:12Z: vitest 8,525 passed / 17 skipped across 25 projects, cargo 302 / 9 ignored, node --test 152/152); before it, EXIT 0 on the same trees over `34a1171c` (`7e2e505d`: vitest 8,525 passed / 17 skipped across 25 projects, cargo 302 / 9 ignored, node --test 152/152; checks 11/11 first).
+- W2–W4: in verify. The kit's six refusals; fieldd's 7 keyed-root cases; the shell's resources cases in both layouts.
+- W5: the package:dir stage report: `plugins/bundled: 3 plugin(s) (vibefield.browser, vibefield.browser-pane, vibefield.comment-pad), index signed and verified, KEY CLASS: DEV`, with the DEV-KEYED warning beneath it.
+- W6: `package:verify` ok. `--require-release-key` refuses the dev stage: `BUNDLED  KEY CLASS: DEV — a release stage must be signed with the release keys (set VIBEFIELD_BUNDLED_INDEX_SECRET; TD-1)`, exit 1.
+- W7: `smoke:bundled` alone, 96 s, `ok` (`lanes/wp8/witness-5e7507d6/`): loads — `stagedPlugins` 3, all three rows `enabled` with their provenance and the artifact hash as `installRevision`; corrupt — `vibefield.browser` `invalid`, `PLUGIN_ARTIFACT_MISMATCH: dist/renderer.js does not match the bundled index`, the pane and the pad enabled, `stagedPlugins` 2; forged — 0 bundled rows, 1 root problem (`the bundled index's signature does not verify against the app's bundled key`), `stagedPlugins` 0; `SMOKE_DAEMONS left: []` ×3.
+- W8: every other landing gate, unchanged (`gate:landing --with-stages` on `5e7507d6`, 06:14:40–06:46:15Z: 26 of 27 ok (`lanes/wp8/gate-5e7507d6.log`) — verify's fourteen stages, `still`, and every smoke but smoke:canvas, including the new row 29, `smoke:bundled`, ok in 93 s with its three runs as W7 says; `stagedPlugins ≥ 4` in the development layout still holds).
+- W9: package:dir built `release/mac-arm64/VibeField.app`. Its `Contents/Resources` holds
+  `plugins/bundled/bundled-plugins.json(.sig)` and `identity/{release-identity.json,trust-root.json(.sig)}`, so the
+  folder no longer vanishes. `package:verify:plugins --app` passed: every row — layout, identity (dev-keyed, identityRevision 5, 2 root keys), key-class, trust-root (1 of 2 root keys, threshold 1), index (the `bundled` role, 3 plugins, platform `any`), each plugin's files and artifact hash, contents (nothing unnamed) — and the packaged fieldd SEA's three rows (as shipped: every plugin enabled with provenance; a flipped byte refused on its row; foreign keys: one root problem). With `--require-release-key` it refuses
+  the DEV app.
+- W10 is James's RL8 dogfood build: a RELEASE build discovering its plugins.
+
+**Found:**
+- **The rebase brought one plugin more.** The lane opened on `5062139e`. PORTALS then landed 243 commits, including
+  the tracked `plugins/browser-pane` (`vibefield.browser-pane`, PT-D1). TD-7 ("the product's own objects ship in the
+  app under the `bundled` role") puts it in the list, so `5e7507d6` adds it. The textual overlaps were registries.ts
+  and main/index.ts, which merged clean, and smoke.ts's imports, which conflicted and kept both.
+  Then fix8 landed (`fbed547a`: apps/ios, DESIGN.md prose, the ledger) and the lane rebased again with no overlap;
+  the first commit's message was reworded before the gate, so the gated shas are the landed ones.
+- **The first verify (on the old base) went red on one task:** electron-shell's `fieldd-rosettad.test.ts`. Its temp
+  packaged layout had no `identity/`, which WP8c now refuses, as designed. The test stages the identity fixture now,
+  just as it already staged `bin/fieldd`.
+- **The gate's one red is main's:** smoke:canvas (925 s, PORTALS' pane rows in it now) failed on ONE row, `DK-14: @'s list open with a pane to send to did not happen within 10000ms` — the AIMED rung, word for word the red RD-5a proved main's own (a control on `a508721e`, red 2/2) and fix8's record names. Every other row of it passed, the occluded row and the HAND_CALENDAR / HAND_WHITEBOARD / COVER HISTORY frame-timing rows included.
+- The plan's names were stale and are amended at source: `FIELDD_BUNDLED_INDEX_KEY` became `FIELDD_TRUST_ROOT` +
+  `_KEYS`; `bundled-plugins.sig` became `bundled-plugins.json.sig`; W4's `bundled-index-key-missing` became
+  `bundled-identity-missing`.
+
+**Owed:**
+- TD-1 is James's: the keys and the `release-signing` environment. Until it lands, every `package:dir` build is
+  DEV-keyed and launches only with `--allow-dev-trust`, and `package:mac:release` refuses at `--require-release-key`.
+  That refusal is the design, not a regression.
+- ESP §16 item 7 (persistent-profile lifecycle, cookie clearing, downloads, per-site permission UX) and ESP-11 (cookie encryption verified on the SIGNED build) are owed before RL8's dogfood build carries a persistent browser profile, and before any beta; the reversal is a one-line revert of 5e7507d6. Where they stand on main (PORTALS' reading at `34a1171c`, checked in the lane): **deny-all today** — the pane's session refuses every permission and cancels every download (`browser-security.ts`, `installGuardedBrowserSurfaceSession`), so per-site permissions and downloads are a deny, not an open door; **unbuilt** — nothing clears or deletes a persistent profile under `LAYOUT.BROWSER_PROFILES_DIR`, so the profile lifecycle and cookie clearing are the work; **a witness** — `fuse-matrix.mjs` already sets `EnableCookieEncryption`, so ESP-11's remaining half is witnessing it on the signed build, plus an answer for a dev run (fuse off) opening a profile the signed build wrote. (The PM's ruling, 2026-10-15: KEEP the pane at TD-D7; the gate moves to the first thing that ships. PORTALS records the same in `thinking-portals.md` — Status, §4 "Owed before RL8's signed build", §6 risk 4.)
+- W10 rides RL8.
+- The plan's owed items stand, named, not this lane's:
+  - after an update, adoption keeps an old fieldd's roots (WP12c);
+  - a second `sidecar-slim` rides inside `app.asar` (WP10).
