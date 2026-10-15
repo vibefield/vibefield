@@ -11093,7 +11093,7 @@ approvals ("daily when approved" until he rules).
   that L3a's gate named (TL `3de3706a`). It is the lane's first commit by the PM's ruling, and closes the History
   lead's item.
 - **`9ec6bf48`, B1 — the levers at `decideUpdate`, the one decision site:**
-  - kill switch: no download and no apply; a staged update is held `killed`;
+  - kill switch: no download and no apply; a staged update is held `killed`; *(Corrected 2026-10-15, WP12 L3b-ii `421e6355`, the PM's approval 17:21Z: a staged release ANY lever refuses — a kill included — is DISCARDED, its payload deleted (B6), never held: a hold would let a later lift hand Squirrel a deleted file after the daemon stop. The state reads `killed` ("Updates Paused"), and after a lift the next check downloads again.)*
   - yank: never downloaded; a staged copy is discarded;
   - OS floor (`process.getSystemVersion()`; unreadable reads as unmet): skipped, never installed;
   - every refusal is audited (`KILLED`, `YANKED`, `FLOOR_UNMET`);
@@ -11156,3 +11156,59 @@ approvals ("daily when approved" until he rules).
 - B6, the cache GC;
 - B7, the differential kept on;
 - B8, the build job's `app-update.yml` assertion with a local zip witness.
+
+## WP12 L3b-ii — a staged update applies on its own when the safe window holds; root rotations persist as signed documents; a payload turned away is deleted; the release build asserts its app-update.yml (2026-10-15; `421e6355`)
+
+**Why:** `build-wp12-updater.md` §12 is L3b's reading.
+- The PM ruled B4–B8 at the leans (16:03Z).
+- The PM's reading point for B4 (17:07Z): the 30-minute timer dies on every exit branch and on decline, and the silent
+  census is a FRESH snapshot, never the tray's.
+- B6's consequence was approved at 17:21Z: a staged release any lever refuses is DISCARDED, never held.
+
+**What landed (`421e6355`):**
+- **B4, the silent self-apply.**
+  - `considerSilentApply()` runs on staged, on the last window's close (5 s grace), after a resume's check, and on a
+    timer that lives only while staged.
+  - It needs updates on, the policy not `requireUserConfirmation`, and EDP-34's window: windowless ∧ tray-resident ∧ the
+    display not held (`pmset`, read fresh: `PreventUserIdleDisplaySleep`) ∧ the plane gate.
+  - The apply runs B2's fresh policy with no box. A floor-touching release needs a fresh census at zero; an untouched
+    one keeps its sessions.
+  - `restartToInstall` is single-flight.
+- **B5, root rotation persisted.** The adopted trust-root DOCUMENTS are kept with their signatures, re-verified from
+  the embedded keys at every load. A broken link is dropped loudly (`ROOT_CHAIN_BROKEN`), so the second rotation now
+  verifies.
+- **B6, the staged-cache GC.** electron-updater's `pending/` is emptied on not-available, a decline and a discard; the
+  differential's cached zip is kept. Doctor reports the size. A staged kill is now `discard/killed`, and L3b-i's
+  entry carries the dated correction.
+- **B7:** the differential kept on.
+- **B8:** `audit-app-update.mjs` runs in the release build job.
+
+**Found:**
+- **A trust-root fixture needs two root keys or it is malformed** (TD-1, `trust-root.ts:96`), and a document dropped
+  for its shape is not a test of its signature. verify-1's two root-chain reds were fixtures naming one-key roots; the
+  planted root is now dropped for its signature alone.
+
+**Validation:**
+- `pnpm verify` EXIT 0 (verify-2, 17:29:09–17:34:42Z): TS 693 files / 8,757 tests (root-chain 6, display-awake 5, controller-apply 33, decide 24, release-scripts 26 among them); Rust 23 suites / 313; gen:check clean. verify-1 was red on two root-chain fixtures (see Found) and on fieldd's MF-1f/g real-PTY poll, green on the re-read (`✓ test/agent-session.test.ts (47 tests | 2 skipped)`).
+- **B8's zip witness (W8's line now):** a local `--mac zip --arm64` build, unsigned (17:25–17:28Z).
+  - On the built app: `audit-app-update: app-update.yml present, provider github, no token`.
+  - On the app unzipped from the 193 MB zip a person downloads: `audit-app-update: app-update.yml present, provider
+    github, no token`.
+  - The file names `updaterCacheDirName: '@vibefielddesktop-updater'`, quoted; B6's cache-dir reader strips the quotes.
+- `gate:landing --with-stages` on `421e6355` (17:35:28–18:07:57Z, from a start at load 30 / 54 / 42, verify-2's tail): **25/27**, both reds main's own.
+  - smoke:canvas: DK-14 AIMED.
+  - `test`: fieldd went red under load 98, its row past Nx's output cap (the Open debt filed at L3b-i).
+  - Read by the rule: fieldd's suite alone (vitest directly, full output; 18:08:11Z, load 3.93) was green,
+    `Test Files 184 passed | 3 skipped (187)`, `Tests 2283 passed | 11 skipped (2294)`, EXIT 0. With no failing file
+    to isolate, the red is the load lottery.
+  - df: internal 13 → 13 GiB; SSD 412 → 412 GiB.
+- **`display-awake`:** this Mac's real `pmset` output as the fixture.
+- **`root-chain`:** two rotations end to end through the controller and the store; a planted root dropped at load.
+- **`controller-apply`:**
+  - the silent apply, and each closed clause named;
+  - a touched release with live sessions held, with no one asked; an untouched one applied over them;
+  - the timer's whole life, under fake timers too;
+  - B6's three collections.
+
+**Next:** L3c, the doctor surface and Settings' update card (DESIGN.md and `docs/UI_SYSTEM.md` bind it), then L4
+(`smoke:update`).
