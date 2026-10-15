@@ -10904,3 +10904,88 @@ half, is a separate landing.**
   planes, at}`, read by the roster as `restarting` for its TTL even with the node offline. It is filed on the ROADMAP's
   mesh/DS row.
 - **L3 and L4** as filed in §WP12 L1: the silent self-apply and its `pmset` clause move to L3.
+
+## WP12 L2b-ii — the apply: "Restart to Update" takes one census, asks consent in EDP-35's words, durable-closes, holds fieldd and stops the pair, and only then stages Squirrel and installs; from the stop on nothing may start a daemon and every branch exits — WP12c complete on macOS (2026-10-15; `60e7c264` `4b6f4ab4`)
+
+**Why:** `build-wp12-updater.md` §10 is L2b-ii's reading. The PM ruled S1–S7 at 13:31Z. The lane's reading then changed
+the plan three times:
+- **R4 reversed (13:36Z).** Electron's own docs say "a successfully downloaded update will always be applied the next
+  time the application starts" (`electron.d.ts:2103-2104`). So "Squirrel first" would have armed an install that every
+  later refusal could no longer stop. **Order (A):** Squirrel is staged only after the daemons stopped.
+- **S4 rewritten (13:37–13:40Z).** After the stop the flow never restores; it always exits.
+- **The coordinator hold.** Without it, the update's own stop would have respawned the pair.
+
+**What landed:**
+- **`60e7c264` (test-only).** Kill-matrix row WP12-R2b polls the inventory for the late session. Its one-shot read raced
+  GT-1's lag, the lag the census itself closes.
+- **`4b6f4ab4`, the apply. `restartToInstall()` over an `ApplyPort`:**
+  - (1) ONE census snapshot: `terminal.list`, bounded to 2 s; unknown holds.
+  - (2) The consent box when sessions live: "Updating ends N terminal sessions", the sessions as `title — cwd`,
+    "Cancel" (the default) and "End N sessions and update". Cancel holds.
+  - Then the `app.update.apply` ATTEMPT row through fieldd while it lives.
+  - (3) The quit flow's update mode: `before-quit`'s durable close (fieldd alive) → **hold fieldd** → its consented stop
+    with the snapshot's ids, byte for byte. A refusal aborts: nothing stopped, the window reopens.
+  - (4) Squirrel's staging (120 s).
+  - (5) `quitAndInstall()`; only Electron's own quit, which follows it, exits.
+- **After the stop, every branch exits:**
+  - a Squirrel refusal (nothing armed) → relaunch;
+  - a timeout or a failed install (Squirrel may have armed) → a message box in DESIGN.md §9's voice, auto-closing at
+    60 s, then exit WITHOUT relaunch.
+  - `lastApply` names the branch, synchronously, before every exit. Its outcome row reaches the ledger at the next
+    launch, once.
+- **The supporting pieces:**
+  - `FielddHandleCoordinator.holdForUpdate()`;
+  - QuitFlow's `armUpdate`, with an install watchdog;
+  - the lifecycle's `resetAfterAbortedQuit()` and the registry's `cancelShutdown()`;
+  - the tray's census-aware verb, re-read every 60 s while staged;
+  - EDP-34's `safeWindow()` with its four named clauses, named in doctor;
+  - the contracts: `apply-refused`, `census-unknown`, `app.update.apply`, `UpdateLastApply`.
+- macOS only; elsewhere the update stays `apply-unbuilt`, and doctor says so.
+
+**Validation:**
+- **The no-spawn probes:**
+  - `fieldd-recovery.test.ts`: held, a closed client attempts no upstream `ensure()`, and `ensure()` refuses.
+  - `controller-apply.test.ts`: in every post-stop branch (installed, refused, timeout, stalled), nothing reaches fieldd
+    after the stop.
+- **The aborted update quit** (`lifecycle.test.ts`): after the close, a window reopens and an ordinary quit
+  durable-closes and exits. A control without the reset shows the stale replay flag skipping the close.
+- **QuitFlow's update mode** (`quit-flow.test.ts`): every branch, re-entry, and an ordinary quit untouched.
+- **The words** (`apply.test.ts`): pinned to DESIGN.md §9 (sentence case, buttons that say what they do, numbers, no
+  apology), with the tray's labels and the predicate's table.
+- **`pnpm verify` EXIT 0** (verify-2, 13:53:54–13:58:53Z, on `60e7c264` with the L2b-ii tree): vitest 8,674 passed / 17
+  skipped / 0 failed (+72 over main's 8,602), cargo 313 / 9 ignored, node --test 169/0, gen:check fresh. Verify-1 was
+  red on ONE row, the landed WP12-R2b's one-shot inventory read, which `60e7c264` fixes.
+- **The landing gate:** `gate:landing --with-stages` on `4b6f4ab4` (lane wp12-l2c, 13:59:46–14:31:03Z, the internal disk
+  14 → 14 GiB free; `lanes/wp12-l2c/gate-4b6f4ab4.log`), 26 of 27 ok: verify's fourteen stages (test 123 s, test:rust
+  83 s, gen:check), `still`, and every smoke but smoke:canvas, smoke:bundled and smoke:godview included. smoke:canvas
+  (923 s) was red on ONE row, DK-14's AIMED rung (`@'s list open with a pane to send to did not happen within
+  10000ms`), main's own word for word, with the same teardown shape as the last three gates.
+
+**Found:**
+- **The handle coordinator auto-recovers a closed fieldd client by `ensure()`, so without `holdForUpdate()` the update's
+  own stop would have respawned the pair under a possibly armed install with no caller asking.** The hold makes the
+  no-spawn rule structural (`fieldd-handle-coordinator.ts:73-99`).
+- **After the daemon stop, nothing may call `ensureFieldd()`, which spawns; the audit's outcome waits for the next
+  launch.** The shell's audit row travels through fieldd (wall R17).
+- **An irreversible step goes after the last refusal, never before it.** R4 was reversed on `electron.d.ts:2103-2104`.
+- **Two EDP sentences were wrong for a native-touching apply, and are corrected at source, dated:** EDP-38's "updater
+  failure is shell-local by construction" and EDP §8.4 step 5's "a failed shell swap leaves the running daemons
+  untouched". A reader of the old spec would build the wrong thing: restoring the pair after a Squirrel failure, under an
+  install that may be armed. The rule now reads: after the stop every branch exits, so there is never a running shell
+  over a stopped floor.
+- **`willQuit`'s later calls only defer.** So an update without the mode would have exited before ShipIt took over.
+- **An update quit aborted after `before-quit` leaves the registry shut and the replay flags set.** Both need an undo.
+- **A row that reads the inventory right after a birth must poll:** the inventory is observed, and lags (`60e7c264`).
+  Main's WP12-R2b was a flake at this rate, and this landing closes it.
+
+**Owed:**
+- **L3 = WP12d + WP12e:**
+  - the policy's levers;
+  - the doctor surface, plus Settings' consent card;
+  - the SILENT self-apply, with its `pmset` display clause;
+  - root-rotation persistence;
+  - the release workflow and its TD-3 `sign` step;
+  - the asar allowlist audit.
+- **L4 = WP12f, `smoke:update`:** the real Squirrel run on DEV-signed builds, which witnesses the order (A) branches.
+- **W10 and W11** wait on James.
+- **The phone/peer half of the restart announcement, plus the kit's `doorWords` arm,** are the DS track's.
