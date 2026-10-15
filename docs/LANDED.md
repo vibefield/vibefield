@@ -10143,3 +10143,144 @@ test-only fix; the entries concerned carry dated corrections.
 the gate with watcher batches; a real-SSD witness of an engine retirement (the post-fix probe saw no stall: 286 lists,
 max 19 ms, against 27–37 s before — suggestive only); the presentation fix and ATTACH on a device — the tester's rerun of
 the blocked cases.
+
+## PT — PORTALS lands: the browser is a live page on the desk, picked up and used (2026-10-14; `portals/landing` PT-1…PT-6b on the desk's cutover `31d0d44e`, main merged into it six times — `11a6e336`, `e18801a2`, `d0f13167`, `0616073e`, `282fde51`, `fb9efdb3` — never rebased; main took it by ONE fast-forward, `5062139e` → `fb9efdb3`, 243 commits)
+
+**Why:** PT-D1…D13 (`draft/thinking-portals.md` §7, the slate at the orchestrator's leans, 2026-10-09; James: "let's start
+working on this browser widget, and make it into a new plugin, and also work on the track of PORTALS, ICE's live-texture
+seam"), the desk migration's Phase 6 (DK-D19/D20). Live surfaces return to the desk as object kinds over ICE's live face
+(ICE design-019, M24): the host fills a texture, ICE draws it, and a kind never sees a frame (PA-22). The browser comes
+first, as the new plugin `vibefield.browser-pane` (PT-D1); its pages are LSF's live surfaces
+(`specs/live-surfaces-foundation.md`), offscreen Electron pages driven over CDP. Every slice was graded by the
+orchestrator's own gates on its exact SHA. The grades, rulings, red-proofs and read-only reviews are the landing log
+(`draft/portals-maps/landing-log.md`). Every SHA here is the rewritten history's (RL1; `docs/sha-map-2026-10-12.tsv`).
+
+**The slices** (each SHA the slice's graded tip on the lane):
+- **PT-1** (`a2b2900e`): the pane drawn, a page's face on the desk as a plugin kind (on ICE `0.15.0`).
+- **PT-2 + PT-2b** (`97bfd793`): the page live over LSF through the desk's LIVE service. Custody re-bind, the 60 s
+  detach grace and mute, density, and the sight on the box.
+- **PT-3** (`70d275bf`): use.
+  - A held page takes clicks, the wheel, keys and IME, and shows its cursor.
+  - The bar's tools and ⌘L's address.
+  - `url` in its own cell; navigation through `BROWSER_NAVIGATION`.
+- **PT-4** (`21f9464c`): the page as a device sees it. The agent and its hints, touch, the colour scheme, the favicon on
+  the head, the title on the bar, one shared profile.
+- **PT-5a** (`780c6372`), on the pin `0.16.0-portals.4`:
+  - the bar's state; failure faces with Try again;
+  - a page heard only while asked live; the parked desk;
+  - the may-not guards (the file picker, dialogs, pop-ups, downloads, auth); the favicon once a key.
+- **PT-5b** (`85b389ed`; main merged in, `11a6e336`) → **PT-5b2** (`be08b86c`) → **PT-5b3** (`22008dc0`).
+  - What they built: the last still on the keyed shelf, six pages alive at most, memory charged to the desk's budget, a
+    phone's no-viewport page, two windows.
+  - Then the defects that two grades proved in it (eight, then seven, then seven narrower), each fixed.
+- **PT-5c** (`7305ec63`) → **PT-5c2** (`c11828c1`; main merged first, `e18801a2`): the chain finished. Events are scoped
+  to their document, the page says its own scale, the native's queue is split, and a stop holds across a remake. Then
+  its edges.
+- **PT-5d** (`2905fa9b`): the hand reaches every frame.
+  - Frames of other sites are pressed, hovered, dragged, wheeled and touched through their own sessions.
+  - What the host draws over a frame is the host's.
+  - Typing into such a frame is a STATED LIMIT (James, 2026-10-12): it crashed Electron 43.1.1's main three times.
+- **PT-6a** (`14877f42`): the gates. K1 witnessed in the product; a missing word is never a hang (F1); the costs measured
+  and five fixed (D, A6, B6, B7, C5); two read-only review rounds. Its ruling 1 merged main (`d0f13167`).
+- **PT-6b** (`fb9efdb3`): the landing.
+  - ICE `0.16.0` pinned (`53c55bd4`).
+  - C1 back (`da4be3b3`): a held page that has not stirred for 250 ms lets the desk sleep.
+  - The honest smoke's SLEEP row (`95c710d6`, `dcc49dbf`).
+  - Main merged three more times (`0616073e`, `282fde51`, `fb9efdb3`). The last was proven from git objects: its four
+    two-sided files 0 lines off, 244 one-sided files byte-equal, and the lock unchanged by the install.
+
+**ICE releases ridden** (each pinned exactly):
+- `0.15.0` → `0.16.0-portals.2` (2026-10-09; portals.1 was never published): LT1, the live texture, the LIVE source, the
+  sight, `KindHost.redraw`/`keyOf`; LT2, the hand's input.
+- → `portals.3` (10-09): LT3, the render half contained.
+- → `portals.4` (10-10): LT4, I46, I49, I50, I51.
+- → `0.16.0` (2026-10-14, `latest`): LT5, I52, the reference kinds' drivers idle unless their own object is in hand.
+- Petitions I46 and I49–I52 LANDED; I47 and I48 were named only.
+
+**The gates at the final SHA `fb9efdb3`** (`node scripts/gate-landing.mjs --with-stages`, each run inside the PM's
+window, `caffeinate -is` on AC):
+- **The builder's (pt-3), 20:47–21:16Z: 24 of 26, preflight green.**
+  - The reds: check:deps (a lane's row, below); smoke:canvas with DK-14 (main's), PLAYING and PT-4 DEVICE. Those two
+    were each green ALONE at the same tip; the screen was in use during the gate.
+  - smoke:studio green, its window witnessed on screen for the publish.
+- **The orchestrator's grade, 21:24–21:52Z: 24 of 26.** The reds: check:deps (the lane's row) and smoke:canvas with
+  DK-14 ALONE.
+  - All eight PORTALS sets CLEARED: PANE, LIVE, USE, DEVICE, HONEST, STILL, FIRST, FRAMES.
+  - SLEEP green: a held, still page has no driver following and the desk asleep.
+    - The key: followed to 249 ms, asleep at 279.
+    - The wheel: 256 / 280.
+    - The lease's end: 33.
+    - The arrival: followed to 245 ms after the page's last frame, asleep at 268 after it.
+  - CARET: 265 steps in 4 s with 8 sleeps. smoke:studio green.
+- **On main, after the fast-forward, 22:00:45–22:29:17Z: 24 of 26.**
+  - check:deps GREEN on main itself.
+  - smoke:canvas with DK-14 alone; every PORTALS set CLEARED.
+  - smoke:studio red with its window covered: Google Chrome was frontmost in 69 of 77 samples, and the Studio window was
+    on screen in 1 of 25. It was GREEN ALONE at 22:30Z in 22 s, with the window seen.
+- **Red-proofs:**
+  - C1's four at the tip: 4 of 4 RED.
+  - PT-6a's 59 carry (57 red, two declared hygiene); none of their files changed.
+  - The builder's 17 of 17 RED at each of PT-6b's merges.
+- **C1, measured:**
+  - Held with its caret blinking, 66.2 steps a second and 8 sleeps in 4 s. Before C1 and I52: 119.9 and 0.
+  - Held and still: no steps.
+- **The cutover** (`docs/desk-gates.md`, "The cutover", on James's word in the PM's window):
+  - The verify list: the lane clean at the graded tip; main at the last merge's second parent; no dirty file in the main
+    checkout; nothing staged; ICE `latest` `0.16.0`; the siblings 5 of 5 at their pins, clean.
+  - Then `--ff-only`, `pnpm install --frozen-lockfile --offline` (one ICE, one loro), and `cargo build -p field-native`
+    into the shared target.
+
+**Found:**
+- **A covered Studio window reds smoke:studio.** Studio publishes on its window's animation frame and keeps
+  `backgroundThrottling: true`, so a covered Studio window, or one on another Space, never sends its snapshot. A window
+  sampler witnessed it: red with Chrome in front, green with the window seen. This is main's smoke.
+- **DK-14's AIMED rung** has been main's red since W7. Its test-only fix `f160cc66` (the MV lead's) merges `fb9efdb3`
+  next.
+- **The shared cargo target links another checkout's crate.** `~/.cargo/config.toml` sets one global `target-dir`; a
+  `target` symlink redirects nothing. A lane exports `CARGO_TARGET_DIR` to an APFS clone of its own.
+  - The lane's 18:19Z build wrote its `field-native` into the shared target.
+  - The cutover's `cargo build -p field-native` put main's crate back.
+- **check:deps is green on main itself** and red in every other checkout (FS-1b's absolute mille links).
+- **ICE's three reference kinds' drivers never idled while ANY object was held,** so a held still pane stepped the desk
+  120 times a second. Petition I52, landed in ICE `0.16.0`.
+- **Typing into a frame of another site crashed Electron 43.1.1's main** (three crash reports). It is refused and
+  counted: a stated limit.
+- **The pane's page windows are offscreen windows, each with a debugger session of its own.** Anything that attaches a
+  debugger to EVERY window breaks them. On the new main, the History lead's chain ran an offscreen shim that did so,
+  and its smokes said "Browser source could not load" and, on no-webgpu's rows, "Debugger is already attached". The
+  shim was fixed and its smokes re-run (the PM, 2026-10-14). Any offscreen preload or CDP tool must leave the pane's
+  own offscreen windows alone.
+- **The read-only review of C1** found no product defect: every way a held pane changes wakes the desk by its own path.
+  No reviewer had read C1 before, because it was reverted ahead of PT-6a's reviews. The review found four gaps in the
+  SLEEP row's judge (Owed).
+
+**Owed:**
+- **smoke:studio's Studio window keeps its frames when covered,** as DK-11 did for the main window. Main's.
+- **PORTALS' carried items** (ROADMAP, "Open debts"):
+  - the SLEEP judge's M1 (the lease's end witnesses the re-lend) and L1–L3;
+  - B5, R5, V7, and the pressable shadow-hosted frames;
+  - James's rulings, built after the landing: A2 (a resting face swaps its live frame for its still), B4 (a still at
+    rest after 10 s with no commit), the wind's 5 s;
+  - a typed address that may not be drawn while it is typed (PLAUSIBLE, to check);
+  - the host page's own clicks, off by up to 4 CSS px (a measurement owed).
+- **PT-S, the iOS simulator portal:** designed by Thursday 2026-10-16 (RL7 (a); `draft/portals-maps/PT-S-the-simulator.md`),
+  built after RL2 lands. Then PT-C (window capture), then PT-T (the terminal, its form ruled then, PT-D10).
+- **IDLE (the USE set) is red in an OFFSCREEN window only.** It reads 3 desk submits with no desk frame and no arrival,
+  on `fb9efdb3` and on fix7 alike (the History lead's control, 2026-10-15 00:06Z), and 0 on every visible gate. Read
+  from the code, not witnessed: a desk submit outside a frame is a still being taken (one `queue.submit` each,
+  `still-taker.ts:146`).
+  - The held pane takes none, but other panes do: at rest in view (`armStill`), at a rest, and at a put-down, which a
+    hidden window's parked desk may cause.
+  - The row counts the whole desk's submits, so another pane's still inside its 1.2 s watch reads as the held page's.
+  - To witness: `stillsTaken` across the watch, offscreen. Then either the row counts the held face's own submits, or
+    the stills settle before the watch.
+- **The pane in a packaged app** comes with WP8 (TD-7: a plugin, bundled).
+- **James's:**
+  - the push;
+  - npm's `next` dist-tag, still `0.16.0-portals.4`;
+  - removing the lanes (`../vf-portals`; ICE's `../ice-lt1`…`../ice-lt4`);
+  - the fleet and the two-Mac check.
+- **ICE's, after `0.16.0`:**
+  - `gate:landing` waits before each step on `VF_PERF_LOCKS`;
+  - units for the pen's and the leaf's put-down (LT5's L4/L5);
+  - I52's residual: a press held inside another kind's held object.
