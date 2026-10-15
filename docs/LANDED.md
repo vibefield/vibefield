@@ -10079,6 +10079,9 @@ built lane fix7 from the lead's brief (`draft/project-places/briefs/fix7.md`).
 - `b0c00213` **an agent's card attaches again.** fieldd was right — an adopted run's row carries its terminal — but the
   card had no act for it since TM-5 retired the store IOS-4c's ATTACH rode; only DEBUG `-vf-auto-attach` attached (as
   Phase 0 did). The card offers ATTACH for its own run's terminal.
+  > **Correction (2026-10-15):** the phone's second run (on main `34a1171c`) showed the card's act restored but the
+  > attach not working. ATTACH appeared and a tap minted its ticket, then nothing dialed, and the card read "connecting
+  > over the mesh…" until the run had ended and after. An attach is not yet witnessed on a device. See the fix8 entry.
 - `6da4cf2b` **Restart the index, in desktop History.** `system.index.restart` — the "restart affordance" fieldd's
   failed sentence named — had no caller, and could have none: it rode `native.admin`, which no window holds. It moves to
   `agents.manage` (the lead's ruling, recorded in the plan: the window holds it, local-only, never plugin-eligible; the
@@ -10284,3 +10287,91 @@ window, `caffeinate -is` on AC):
   - `gate:landing` waits before each step on `VF_PERF_LOCKS`;
   - units for the pen's and the leaf's put-down (LT5's L4/L5);
   - I52's residual: a press held inside another kind's held object.
+
+## PJ-7, the second phone run's fixes — an attach never waits forever: it says where it stopped and on which desktop, a run that exits mid-attach is said as ended, and each step is written to the phone's console (2026-10-15; `3e515fe4` · `903d0773` through lane land3, gated in full on the exact tree)
+
+**Why:** James's tester ran the PJ-7 plan a second time on his iPhone, on main `34a1171c` with fix7 in it
+(`draft/testing/pj7-phone-results-2026-10-14-run2.md`): 4 PASS, 1 FAIL, 27 n/a.
+- **Witnessed on the device:**
+  - the dev index came up `ready`, with no schema mismatch;
+  - three launch-sheet openings drew their rows at once (fix7's `b99f8331`);
+  - Browse listed the SSD in 784 ms and the scratch folder in 772 ms, and a search inside the scratch folder answered
+    in 475 ms (`e201c95a`);
+  - the phone's Browse launch landed in the exact folder (audit `agent.session.spawn`, actor `tailnet`);
+  - the agent's card offered ATTACH (`b0c00213`).
+- **The FAIL (S2):** the tap minted one ticket (audit `terminal.ticket.mint` succeeded, 03:49:51Z). From then on the
+  card read "connecting over the mesh…", still after the run had ended.
+- **L8's missing project was the plan's error, not a defect:** History's places come only from rosetta's project rows
+  (`place-scanner.ts`), and Claude writes no transcript before its first prompt, which the test agent never got. The
+  launch's recipe waits meanwhile (`ProjectRecords.actedIn`). The plan is corrected at its source and now sends one
+  prompt.
+
+**What the lead found before the lane:**
+- There was no second mint. The client re-mints on every lost leg, so no leg ever failed.
+- The desktop's agent cell, which logs every leg that reaches its T1 door (refusals included), logged none.
+- The desktop half works: from this Mac's own Tailscale node, a WebSocket upgrade to
+  `:9422/cell/<the agent cell>/control` was answered 101 and then refused `PRE_AUTH_LIMIT`, so the terminal serve, the
+  agent cell's route and the sidecar's WS forward (P0-H's T6) all hold.
+- The stall is on the phone, between the ticket and the first socket.
+- No phone has attached on hardware since P0-H (2026-09-25). The attach path has since gained SP-2's leg budget and
+  DS-4b's seat (both 10-01). The phone's package pins have not moved since.
+
+**What landed (the fixer, from the lead's brief `draft/project-places/briefs/fix8.md`):**
+- `3e515fe4` **an attach never waits forever.**
+  - `RoutedTerminalClient` derives the step it waits on from what it holds: ticket, slot, dial, control, frames or
+    first frame. It re-derives the step after every leg event, slot grant and mint, and gives each step the same
+    deadline, 20 s (the mesh's 15 s request timeout and a margin).
+  - Past it, the set is torn down whole (legs, slots, a queued slot waiter, re-mints, renewals), and the state is
+    `.stalled(step)`. The first mint races the same deadline, because the door's `call` waits for its hello first.
+  - The card's banner: "couldn't reach studio's terminal", over the step in words ("the dial over the mesh got no answer —
+    stopped after 20 s"), with RETRY (a fresh attach) and BACK TO THE FIELD. DESIGN.md §8 carries every sentence,
+    written first.
+  - A run whose face turns `exited` while the card is still attaching is said as ended ("its run exited on studio"),
+    with RESUME, and stops dialing.
+  - A live session is never stopped by these deadlines.
+  - Also fixed: the slot task checks its own cancellation after `acquire` (a free ledger answers without suspending, so
+    legs a refusal had torn down were opened anyway).
+- `903d0773` **the attach says where it is on the device's console.**
+  - `TerminalAttachLog.device` writes one line per phase to the unified log (`com.jamesyong.vibefield.kit` /
+    `attach`, public arguments), and in DEBUG also prints it as `[attach] …`, which a `devicectl` stdout capture
+    carries. Run 2's capture held only stdout.
+  - Each leg's `node.urlSession(configuration:)` is bracketed with its elapsed ms.
+  - `MainThreadWitness` (DEBUG only) logs "main thread stalled N s, last attach phase: …" when the main queue has not
+    answered for 2 s, and its recovery.
+  - A line carries only ids, refusal codes and error domains and numbers: never a grant, MAC, nonce or URL (a test).
+  - `apps/ios/README.md` says how to read an attach on a device.
+
+**Item 1, the cause, did not reproduce in the kit, and is not claimed.** Ruled out with tests:
+- **the leg budget:** run 2's tap was the app's first attach; doors count against their own resource; and run 2's
+  order of events attaches at once (`runTwosOrderAttachesAtOnce`);
+- **a far end that takes the socket and never answers:** `URLSessionWebSocketTask` fails at its request timeout and
+  the client re-mints (`aSilentDoorEndsInAFreshMint`), and run 2 had no second mint.
+
+Two device-only readings remain: (a) the mesh's session factory never returned for a leg (TailscaleKit's `proxyVia` →
+a synchronous `loopback()`); (b) the main thread stopped right after the mint (the tester's `···` tap and swipe drew
+nothing, and the card's header still said `idle` sixteen seconds after the run exited). Run 3's console decides:
+- a last line "asking the mesh for a session", with no "mesh session in", is (a);
+- "main thread stalled" is (b), with the phase it stopped in.
+
+**Validation:** red first in lane fix8 (`red-2-attach-deadlines.log` 7 failed, `red-3-attach-log.log` 6 of 6, both
+EXIT 65). On the lane's tip `903d0773`, all EXIT 0:
+- the kit's whole suite, 1,120 tests in 12 bundles (1,101 + 19);
+- the lane's `gate.sh` (verify, smoke, smoke:godview);
+- the PJ-7 simulator witness.
+
+Gated here on the exact tree, `gate:landing --with-stages` in full plus the kit's suite and the witness
+(`lanes/land3/logs/<this commit>/`).
+
+**Found:**
+- The PJ-7 phone fixture leaves its files-host temp dir (`/tmp/vf-fh-*`) behind on SIGTERM.
+- A leg that keeps failing and re-minting still reads "connecting over the mesh…" for as long as TM-r3's retry runs.
+  Each round is a mint the desktop audits, so it is not run 2's silent stall, but it has no end the card says.
+- The main-thread witness can report the app's own suspension as a stall on the way back to the foreground. The
+  attach log's "back in the foreground" line beside it tells the two apart.
+
+**Owed:**
+- run 3 on the device, read in Console.app (`subsystem:com.jamesyong.vibefield.kit category:attach`), and the cause
+  it shows;
+- item 4 (a frozen app), if James's hand dismissal of run 2's stuck card says so;
+- a bound and a face for TM-r3's endless re-mint loop;
+- the fixture's temp dir.
