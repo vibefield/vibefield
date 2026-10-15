@@ -545,7 +545,12 @@ afterAll(async () => {
   cleanup = [];
 }, 30_000);
 
-const day = () => ({ sinceMs: Date.now() - DAY, untilMs: Date.now() });
+// ONE clock read: two reads straddling a millisecond made the window DAY + 1 ms, which the contract refuses (at most a
+// day) — a red under load, never the door's (WP12 L3a's gate, 2026-10-15)
+const day = () => {
+  const now = Date.now();
+  return { sinceMs: now - DAY, untilMs: now };
+};
 
 // T4 — rosettad's turns, as its route answers them (the scripted daemon
 // serves the scripted ROOT sessions with these turns)
