@@ -905,6 +905,22 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
   }
 
+  /** LR (2026-10-15) — this boot's re-attach has run, and every record it held
+   * for a grace has been attached or stamped: from here a run the fold does
+   * not hold is not coming back on its own (`agent-last-run.ts`). */
+  reattachSettled(): boolean {
+    return this.reattachDone && this.awaitingBoot.size === 0;
+  }
+
+  /** LR — whether `agent.resume {runtimeRunId}` could continue this run: its
+   * record exists, verifies, and was not already continued into another run
+   * (AR-4b's one-run law). What the door would still refuse — a signed-out
+   * persona, a folder gone — it refuses in its own words when asked. */
+  continuable(runtimeRunId: string): boolean {
+    const record = this.records.read(runtimeRunId);
+    return record !== undefined && record.reattach?.state !== "resumed";
+  }
+
   /** TL (TIMELINE SHAPES v2, item 7) — the runs THIS runtime ran, alive or
    * long gone, as the VERIFIED session records keep them: the provider and the
    * native session id the record joins on (AR-D3), with the run's birth, the

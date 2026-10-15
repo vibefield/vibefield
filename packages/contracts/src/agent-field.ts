@@ -636,6 +636,65 @@ export type AgentReportShownParams = z.infer<typeof AgentReportShownParams>;
 export const AgentReportShownResult = z.object({ reported: z.literal(true) }).passthrough();
 export type AgentReportShownResult = z.infer<typeof AgentReportShownResult>;
 
+/** LR (James, 2026-10-15 — the focus session's ruling) — one session the last
+ * run LEFT: a row of the last board whose run or terminal is not alive on this
+ * boot. An agent appears here only when its record can continue it
+ * (`agent.resume {runtimeRunId: id}` — the record exists and verifies, was not
+ * already continued, and did not end by its own exit), so `gone` is exactly
+ * what a restore acts on; a terminal is any bare shell the floor lost. */
+export const AgentLastRunGone = z
+  .object({
+    /** the board row's id — its `runtimeRunId` (a terminal's is its session id) */
+    id: z.string().min(1),
+    kind: z.enum(["agent", "terminal"]),
+    /** the floor session the row held as the run ended: the deck's pane join
+     * (a saved pane names this id) */
+    sessionId: z.string().min(1).optional(),
+  })
+  .passthrough();
+export type AgentLastRunGone = z.infer<typeof AgentLastRunGone>;
+
+/** LR — `agent.lastRun {}`: what this desktop's last run left. fieldd keeps ONE
+ * picture of its own model board (the local cut a window reads), rewritten as
+ * the board moves; at a boot whose floor lost sessions, the last run's picture
+ * is held until a window answers (`agent.lastRunForget`) — never a history,
+ * never federated, refused to a peer and a phone like the `model` board.
+ * `none`: nothing was left (or every session survived the restart). `left`:
+ * the board as the last run left it, for the views to draw still, and the rows
+ * whose sessions did not survive. Before the boot's re-attach has settled the
+ * door answers UNAVAILABLE `{service: "agent-last-run", state: "starting"}`,
+ * retryable: a session not yet re-attached is not yet gone. */
+export type AgentLastRunResult =
+  | { state: "none" }
+  | {
+      state: "left";
+      /** when the picture was last written — the last run's last moment */
+      asOf: string;
+      /** the last board, whole: this desktop's rows as they stood */
+      board: AgentModelSnapshot;
+      gone: AgentLastRunGone[];
+    };
+// Annotated with the type above for the reason `AgentModelMeshOpen` is: the
+// inferred type over the model-board union is longer than the compiler will
+// serialize into a declaration (TS7056).
+export const AgentLastRunResult: z.ZodType<AgentLastRunResult, z.ZodTypeDef, unknown> =
+  z.discriminatedUnion("state", [
+    z.object({ state: z.literal("none") }).passthrough(),
+    z
+      .object({
+        state: z.literal("left"),
+        asOf: z.string(),
+        board: AgentModelSnapshot,
+        gone: z.array(AgentLastRunGone).max(4096),
+      })
+      .passthrough(),
+  ]);
+
+/** LR — `agent.lastRunForget {}`: the window's answer is in (restore, or start
+ * clean) and the held picture goes. `forgotten`: one was held. */
+export const AgentLastRunForgetResult = z.object({ forgotten: z.boolean() }).passthrough();
+export type AgentLastRunForgetResult = z.infer<typeof AgentLastRunForgetResult>;
+
 /** TL (docket v9, RULED 2026-10-09; B-D6 (a)) — `agent.recordedLanes
  * {sinceMs, untilMs, device?}`: the lanes' past as the monitor backend beside
  * the runtime derives it from the record (`MonitorBackend.readPast` over

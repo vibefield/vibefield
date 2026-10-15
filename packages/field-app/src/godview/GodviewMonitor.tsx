@@ -305,7 +305,21 @@ export interface GodviewMonitorProps {
    * search is not the window's has no other way to be filtered). */
   initialProfile?: string | null;
   onSelectView?: (viewId: string) => void;
+  /** LR (2026-10-15) — the stage draws last run's picture (its owner hands the
+   * still feed above it, `MonitorFeedOverride`): no motion, no verb reaches the
+   * door, the stage takes no pointer or key, and the Peek is not lent — the
+   * curtain over it is the window's one question. The head stays live. */
+  still?: boolean;
 }
+
+/** LR — a still stage's verbs: nothing is selected or born on a picture. The
+ * shape is the live one's (`openEnded` present), so a view mounted under the
+ * picture keeps its controls once the picture lifts. */
+const STILL_COMMANDS: ViewSlotCommands = {
+  select: () => undefined,
+  create: () => Promise.reject(new Error("last run's picture is still")),
+  openEnded: () => undefined,
+};
 
 export function GodviewMonitor({
   view,
@@ -317,6 +331,7 @@ export function GodviewMonitor({
   publishesFind = false,
   initialProfile = null,
   onSelectView,
+  still = false,
 }: GodviewMonitorProps): ReactElement {
   const stageRef = useRef<HTMLElement>(null);
   // The palette reads THIS stage's Godview root, never the document's first:
@@ -487,8 +502,8 @@ export function GodviewMonitor({
   // which are one object for the stage's life, so no publish rebuilds this
   // (M195) and the past's coming and going never moves it.
   const viewCommands = useMemo<ViewSlotCommands>(
-    () => ({ ...commands, openEnded: openEndedLane }),
-    [commands],
+    () => (still ? STILL_COMMANDS : { ...commands, openEnded: openEndedLane }),
+    [commands, still],
   );
   /** AR-5: what the swarm paints with — `starting` while its physics runs and its device has not answered. */
   const swarmRenderer =
@@ -538,8 +553,8 @@ export function GodviewMonitor({
   // its physics). Both are known at the first render, so a view mounted under
   // a still stage never starts its loop.
   const monitorTheme = useMemo<MonitorTheme>(
-    () => ({ scheme: theme, tokens: palette, reducedMotion, animations }),
-    [theme, palette, reducedMotion, animations],
+    () => ({ scheme: theme, tokens: palette, reducedMotion, animations: animations && !still }),
+    [theme, palette, reducedMotion, animations, still],
   );
 
   // Views that lay out in flow clear the chrome with these two insets — the
@@ -789,14 +804,16 @@ export function GodviewMonitor({
     }),
     [readRows, subscribeRows, transcripts, commands, liveFilters, holdKeys, readViewHoldsKeys],
   );
+  // LR — a still stage lends the Peek nothing: its rows are a picture
+  const lendsFind = publishesFind && !still;
   useEffect(() => {
-    if (!publishesFind) return;
+    if (!lendsFind) return;
     publishGodviewFindDoor(findDoor);
-  }, [publishesFind, findDoor]);
+  }, [lendsFind, findDoor]);
   useEffect(() => {
-    if (!publishesFind) return;
+    if (!lendsFind) return;
     return () => publishGodviewFindDoor(null);
-  }, [publishesFind]);
+  }, [lendsFind]);
 
   // M195 — the head's one handler, the same function while its owner's is, so
   // `MonitorHead` renders for the view or the deck's state — never for a
@@ -831,6 +848,8 @@ export function GodviewMonitor({
       <section
         ref={stageRef}
         className={MONITOR_STAGE_CLASS}
+        inert={still}
+        {...(still ? { "data-still": "" } : {})}
         aria-label={
           sources.remote === 0 ? "Agent monitor" : "Agent monitor — local and remote sessions"
         }

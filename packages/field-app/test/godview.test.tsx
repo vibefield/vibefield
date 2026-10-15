@@ -10,8 +10,6 @@ import {
   paneCwd,
   readDeviceHost,
   rememberDeviceHost,
-  restoreQuestion,
-  restoreSentence,
   savedPaneSessionIds,
 } from "../src/godview/deck-restore";
 import { type DeckSession, describePane } from "../src/godview/pane-faces";
@@ -111,48 +109,6 @@ describe("savedPaneSessionIds", () => {
     expect(savedPaneSessionIds(JSON.stringify({ version: 9, root: { kind: "future" } }))).toEqual(
       [],
     );
-  });
-});
-
-describe("restoreQuestion", () => {
-  it("counts what rejoins and what would be relaunched", () => {
-    expect(restoreQuestion(["a", "b", "c"], ["a", "c", "stranger"])).toEqual({
-      saved: 3,
-      alive: 2,
-      dead: 1,
-    });
-  });
-
-  it("counts a repeated id once — two panes cannot hold one session", () => {
-    expect(restoreQuestion(["a", "a"], [])).toEqual({ saved: 1, alive: 0, dead: 1 });
-  });
-
-  it("asks nothing of an all-alive deck", () => {
-    expect(restoreQuestion(["a"], ["a"]).dead).toBe(0);
-  });
-});
-
-describe("restoreSentence", () => {
-  it("reads as English at one and at many", () => {
-    expect(restoreSentence({ saved: 2, alive: 1, dead: 1 })).toBe(
-      "1 pane is still running and rejoin · 1 pane ended — restoring opens a new shell in its folder on this machine, at home where there is none",
-    );
-    expect(restoreSentence({ saved: 4, alive: 2, dead: 2 })).toBe(
-      "2 panes are still running and rejoin · 2 panes ended — restoring opens a new shell in their folders on this machine, at home where there is none",
-    );
-  });
-
-  it("says so plainly when nothing survived", () => {
-    expect(restoreSentence({ saved: 2, alive: 0, dead: 2 })).toContain("none are still running");
-  });
-
-  it("does not promise a folder it may not have (GT-5c)", () => {
-    // The face used to promise "a new shell in its folder" unconditionally,
-    // while a pane that was a PEER'S — or whose shell never announced a cwd —
-    // lands at home. `paneCwd` now refuses both; the sentence says so.
-    const sentence = restoreSentence({ saved: 1, alive: 0, dead: 1 });
-    expect(sentence).toContain("on this machine");
-    expect(sentence).toContain("at home where there is none");
   });
 });
 

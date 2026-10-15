@@ -1,3 +1,4 @@
+import { frameScheduler } from "@vibecook/puppeteer-view-sdk/host";
 import { ChromeBoundary } from "@vibecook/puppeteer-views";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
@@ -27,8 +28,19 @@ import {
   godviewTuningStyle,
 } from "./GodviewTuningPanel";
 import { useGodviewTheme } from "./godview-theme";
+import { LastRunCurtain } from "./LastRunCurtain";
 import { useLabSwitches } from "./lab-switches";
-import { GodviewAgentsProvider } from "./monitor/GodviewAgentsProvider";
+import {
+  askLastRun,
+  curtainQuestion,
+  dismissLastRun,
+  restoreLastRun,
+  startCleanLastRun,
+  stillBoardPort,
+  useLastRun,
+} from "./last-run";
+import { GodviewAgentsProvider, MonitorFeedOverride } from "./monitor/GodviewAgentsProvider";
+import { useMonitorReplica } from "./monitor/model-replica";
 import { monitorTuningSections, useMonitorTuning } from "./monitor/monitor-tuning";
 import { useGodviewReplayPanes } from "./monitor/perf/replay-panes";
 import type { RemoteSessionDoor } from "./monitor/remote-door";
@@ -155,6 +167,25 @@ export function GodviewOverlay(): ReactElement | null {
       }),
     [callTerminalsUp],
   );
+
+  /** LR (James, 2026-10-15) — WHAT THE LAST RUN LEFT, asked once as Godview
+   * first opens (`last-run.ts`): every view draws last run's picture, still,
+   * through a feed of its own (the window's subscription stays open beside it
+   * for the deck), and the curtain stands over the stage until it is
+   * answered. The deck waits on the same answer. */
+  const lastRun = useLastRun();
+  useEffect(() => {
+    if (everOpened) void askLastRun(fieldd);
+  }, [everOpened, fieldd]);
+  const question = curtainQuestion(lastRun);
+  const picture = question?.board;
+  const stillPort = useMemo(
+    () => (picture !== undefined ? stillBoardPort(picture) : null),
+    [picture],
+  );
+  const { feed: stillFeed } = useMonitorReplica(stillPort, { scheduler: frameScheduler });
+  const restore = useCallback(() => void restoreLastRun(fieldd), [fieldd]);
+  const startClean = useCallback(() => void startCleanLastRun(fieldd), [fieldd]);
 
   const changeTuning = useCallback((patch: Partial<GodviewTuning>) => {
     setTuning((current) => ({ ...current, ...patch }));
@@ -302,18 +333,32 @@ export function GodviewOverlay(): ReactElement | null {
         style={screenStyle}
         monitor={
           open && labSwitches.monitor ? (
-            <GodviewMonitor
-              view={monitor.view}
-              parameters={monitor.parameters}
-              theme={theme}
-              door={remoteDoor}
-              panes={monitorPanes}
-              // MV-W4: the same switch, for a ported view's own loop — and
-              // under a maximized deck the view's bodies rest (GV-D11)
-              animations={labSwitches.animations && deckState !== "maximized"}
-              // P2: the window's Godview lends the frame's Peek its Live now
-              publishesFind
-              onSelectView={monitor.selectView}
+            // LR — under the curtain the views draw last run's picture
+            <MonitorFeedOverride feed={question !== null ? stillFeed : null}>
+              <GodviewMonitor
+                view={monitor.view}
+                parameters={monitor.parameters}
+                theme={theme}
+                door={remoteDoor}
+                panes={monitorPanes}
+                // MV-W4: the same switch, for a ported view's own loop — and
+                // under a maximized deck the view's bodies rest (GV-D11)
+                animations={labSwitches.animations && deckState !== "maximized"}
+                // P2: the window's Godview lends the frame's Peek its Live now
+                publishesFind
+                onSelectView={monitor.selectView}
+                still={question !== null}
+              />
+            </MonitorFeedOverride>
+          ) : undefined
+        }
+        curtain={
+          open && question !== null ? (
+            <LastRunCurtain
+              state={lastRun}
+              onRestore={restore}
+              onStartClean={startClean}
+              onContinue={dismissLastRun}
             />
           ) : undefined
         }

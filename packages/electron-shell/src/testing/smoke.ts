@@ -4324,8 +4324,10 @@ interface DeckFacts {
   poolPhase: string;
   rosterState: string;
   error?: string;
-  /** present ONLY while the GT-3 restore consent face is up */
-  consent?: { saved: number; alive: number; dead: number };
+  /** present ONLY while the window's restore question stands (GT-3; the
+   * last run's curtain since LR, 2026-10-15): the agents a restore resumes,
+   * the deck's dead shell panes, the bare shells that cannot come back */
+  consent?: { agents: number; shells: number; unplaced: number };
   /** panes showing an ended session */
   exitedSessionIds?: string[];
   /** the pane the deck's own affordances act on */
@@ -8250,19 +8252,22 @@ export async function runSmokeGodview(opts: {
         deck,
         viteUrl: opts.viteUrl,
       });
+      // LR (2026-10-15) — the question is the window's now (the last run's
+      // curtain over Godview), the deck waiting on its answer: one shell pane
+      // ended, and no agent of the last run's (the floor lived)
       const asking = await deck.until(
         (facts) => facts.active && facts.consent !== undefined,
-        "the deck to ask before relaunching a dead pane",
+        "the window to ask before relaunching a dead pane",
         90_000,
       );
       verdict["consentShown"] = asking.consent;
-      if (asking.consent?.dead !== 1 || asking.consent.saved !== closed.panes) {
-        throw new Error(`the consent face miscounted: ${JSON.stringify(asking.consent)}`);
+      if (asking.consent?.shells !== 1 || asking.consent.agents !== 0) {
+        throw new Error(`the restore question miscounted: ${JSON.stringify(asking.consent)}`);
       }
       if (asking.panes !== 0) {
         throw new Error("the workspace mounted before the question was answered");
       }
-      await clickDeckButton(win, "restore");
+      await clickDeckButton(win, "Restore");
       const relaunched = await deck.until(
         (facts) => facts.consent === undefined && facts.panes === closed.panes,
         "the restored deck to come up with every pane filled",
@@ -10053,7 +10058,7 @@ export async function runSmokeGodview(opts: {
         "the warm open to reach a pane or the restore question",
         60_000,
       );
-      if (asked.consent !== undefined) await clickDeckButton(win, "restore");
+      if (asked.consent !== undefined) await clickDeckButton(win, "Restore");
       await deck.until((facts) => facts.panes >= 1, "the warm open's first pane", 60_000);
       verdict["coldOpenWarm"] = JSON.parse(await warmLine) as Record<string, unknown>;
     } catch (error) {

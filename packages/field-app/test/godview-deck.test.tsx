@@ -196,6 +196,9 @@ const { DEFAULT_DECK_APPEARANCE, resetDeckAppearanceForTest, setDeckAppearance }
 );
 
 const DECK_STORAGE_KEY = "vf-godview-deck-v1";
+const { lastRunState, resetLastRunForTests, restoreLastRun, startCleanLastRun } = await import(
+  "../src/godview/last-run"
+);
 
 /** The deck's own marker, which is also how the smoke reads it. Asserting
  * through the marker rather than through the DOM keeps this fixture and the
@@ -299,6 +302,10 @@ const fieldd = {
         ...(profileSet !== undefined ? { profileSet } : {}),
       });
     }
+    // LR — the window's restore question: this fixture's fieldd kept no
+    // picture of a last run, so the deck's own layout is all it asks from
+    if (method === "agent.lastRun") return Promise.resolve({ state: "none" });
+    if (method === "agent.lastRunForget") return Promise.resolve({ forgotten: false });
     if (method === "terminal.roster") {
       // The contract's key is `items` (`TerminalRosterResult`), not `sessions`.
       return Promise.resolve({
@@ -384,6 +391,8 @@ beforeEach(() => {
   deviceWarm = () => Promise.resolve({ backend: "test" });
   localStorage.clear();
   resetDeckAppearanceForTest();
+  // LR — the window's restore question is a per-window module store too
+  resetLastRunForTests();
   // TP-S0b: the pool is a per-WINDOW module singleton, so a case that opened or
   // warmed one would otherwise hand the next case a transport it never asked
   // for — and the bridge subscription that came with it.
@@ -406,6 +415,15 @@ afterEach(() => {
   container = null;
   vi.restoreAllMocks();
 });
+
+/** LR — the window's answer to the restore question. Its buttons are the
+ * curtain's (`LastRunCurtain`, the overlay's), which this deck-only fixture does
+ * not mount, so the answer is given where the curtain gives it. */
+async function answer(choice: "restore" | "start clean"): Promise<void> {
+  await act(async () => {
+    await (choice === "restore" ? restoreLastRun(fieldd) : startCleanLastRun(fieldd));
+  });
+}
 
 /** A saved layout in the shape ghosttea persists, holding these sessions. */
 function saveLayout(sessionIds: readonly string[]): void {
@@ -736,26 +754,50 @@ describe("the restore consent gate (GT-3)", () => {
     expect(requests, "a first run has nothing to compare").not.toContain("terminal.list");
   });
 
-  it("asks, with honest counts, when a saved pane would be relaunched", async () => {
+  it("waits on the window's question, with honest counts, when a saved pane would be relaunched", async () => {
     saveLayout(["alive-1", "dead-1"]);
     floor = [{ sessionId: "alive-1" }];
     await mountDeck();
-    expect(latest().consent).toEqual({ saved: 2, alive: 1, dead: 1 });
+    // LR — the question is the window's (the curtain's numbers on the marker):
+    // one dead shell pane, no agent the last run left (no picture from fieldd)
+    expect(latest().consent).toEqual({ agents: 0, shells: 1, unplaced: 0 });
+    expect(lastRunState().phase).toBe("asking");
     // The workspace does not exist yet — that is the point of a gate.
     expect(workspaceMounts, "nothing may spawn before the answer").toHaveLength(0);
-    expect(container?.textContent).toContain("this deck had 2 panes last time");
-    expect(container?.textContent).toContain("1 pane is still running and rejoin");
-    expect(container?.textContent).toContain("1 pane ended");
+    // …and the deck draws no question of its own any more
+    expect(container?.querySelector('[role="dialog"]')).toBeNull();
+    expect(container?.textContent).not.toContain("last time");
+  });
+
+  it("hands a resumed agent's terminal to the pane that showed it, never a shell (LR)", async () => {
+    saveLayout(["alive-1", "agent-pty"]);
+    floor = [{ sessionId: "alive-1" }];
+    const resumed = bornSummary("resumed-pty");
+    resetLastRunForTests(
+      { phase: "answered", rehydrate: true },
+      new Map([["agent-pty", resumed as never]]),
+    );
+    await mountDeck();
+    const rehydrate = workspaceMounts[0]?.["onRehydratePane"] as
+      | ((context: { meta: unknown; sessionId: string; paneId: string }) => Promise<unknown>)
+      | undefined;
+    expect(rehydrate, "armed by the window's restore").toBeTypeOf("function");
+    const before = requests.filter((method) => method === "terminal.create").length;
+    const answered = await act(async () =>
+      rehydrate?.({ meta: { cwd: "/Users/x/proj" }, sessionId: "agent-pty", paneId: "pane-2" }),
+    );
+    expect(answered).toBe(resumed);
+    expect(
+      requests.filter((method) => method === "terminal.create").length,
+      "no shell is born beside the resumed conversation",
+    ).toBe(before);
   });
 
   it("restore mounts the workspace with rehydration armed, layout intact", async () => {
     saveLayout(["alive-1", "dead-1"]);
     floor = [{ sessionId: "alive-1" }];
     await mountDeck();
-    const restore = [...(container?.querySelectorAll("button") ?? [])].find(
-      (button) => button.textContent === "restore",
-    );
-    await act(async () => restore?.click());
+    await answer("restore");
     await settle();
     expect(workspaceMounts).toHaveLength(1);
     expect(workspaceMounts[0]?.["onRehydratePane"]).toBeTypeOf("function");
@@ -766,10 +808,7 @@ describe("the restore consent gate (GT-3)", () => {
     saveLayout(["alive-1", "dead-1"]);
     floor = [{ sessionId: "alive-1" }];
     await mountDeck();
-    const clean = [...(container?.querySelectorAll("button") ?? [])].find(
-      (button) => button.textContent === "start clean",
-    );
-    await act(async () => clean?.click());
+    await answer("start clean");
     await settle();
     expect(localStorage.getItem(DECK_STORAGE_KEY), "an answer that does not stick").toBeNull();
     expect(workspaceMounts).toHaveLength(1);
@@ -953,7 +992,9 @@ describe("every birth goes through the product door (TP-S1)", () => {
     expect(requests, "a session that exists is claimed, never duplicated").not.toContain(
       "terminal.create",
     );
-    expect(requests).toEqual([]);
+    // LR — the one ask is the window's restore question, of the BOARD (what
+    // the last run left), never of the floor
+    expect(requests).toEqual(["agent.lastRun"]);
   });
 
   // ("creates its first session through fieldd when there is nothing to
@@ -989,10 +1030,7 @@ describe("every birth goes through the product door (TP-S1)", () => {
     saveLayout(["alive-1", "dead-1"]);
     floor = [{ sessionId: "alive-1" }];
     await mountDeck();
-    const restore = [...(container?.querySelectorAll("button") ?? [])].find(
-      (button) => button.textContent === "restore",
-    );
-    await act(async () => restore?.click());
+    await answer("restore");
     await settle();
 
     const rehydrate = workspaceMounts[0]?.["onRehydratePane"] as
@@ -1010,12 +1048,9 @@ describe("every birth goes through the product door (TP-S1)", () => {
     saveLayout(["alive-1", "dead-1"]);
     floor = [{ sessionId: "alive-1" }];
     await mountDeck();
-    const restore = [...(container?.querySelectorAll("button") ?? [])].find(
-      (button) => button.textContent === "restore",
-    );
-    await act(async () => restore?.click());
+    await answer("restore");
     await settle();
-    const answer = fieldd.request;
+    const real = fieldd.request;
     let refuse: "for-now" | "gone" = "for-now";
     let refusals = 2;
     const calls = vi
@@ -1041,7 +1076,7 @@ describe("every birth goes through the product door (TP-S1)", () => {
                 ),
           );
         }
-        return answer(method, params);
+        return real(method, params);
       });
     const created = (): unknown[] =>
       calls.mock.calls.filter(([method]) => method === "terminal.create").map(([, p]) => p);
@@ -1090,10 +1125,7 @@ describe("every birth goes through the product door (TP-S1)", () => {
     saveLayout(["alive-1", "dead-1"]);
     floor = [{ sessionId: "alive-1" }];
     await mountDeck();
-    const restore = [...(container?.querySelectorAll("button") ?? [])].find(
-      (button) => button.textContent === "restore",
-    );
-    await act(async () => restore?.click());
+    await answer("restore");
     await settle();
     const calls = vi.spyOn(fieldd, "request");
     const created = (): unknown[] =>
@@ -1860,14 +1892,15 @@ describe("the monitor alone at launch: the deck waits for its first call (W7 —
     const deck = await mountUncalled();
     expect(workspaceMounts, "no workspace before the first call").toHaveLength(0);
     expect(latest().consent, "no question before the first call").toBeUndefined();
-    expect(container?.textContent).not.toContain("last time");
+    expect(lastRunState().phase, "the deck asks nothing before its call").toBe("unasked");
     expect(requests, "no birth before the first call").not.toContain("terminal.create");
     // the door is the monitor's from the start: a body can call
     expect(deck.door()).not.toBeNull();
-    // the first call: the last run's panes come back, and an ended one asks
+    // the first call: a deck no window asked for asks itself (LR — idempotent;
+    // in the app the window asked as Godview opened), and an ended pane waits
     await deck.call();
-    expect(latest().consent).toEqual({ saved: 2, alive: 1, dead: 1 });
-    expect(container?.textContent).toContain("this deck had 2 panes last time");
+    expect(latest().consent).toEqual({ agents: 0, shells: 1, unplaced: 0 });
+    expect(workspaceMounts, "nothing spawns before the answer").toHaveLength(0);
   });
 
   it("with nothing to ask, the first call mounts the workspace on the last run's panes", async () => {

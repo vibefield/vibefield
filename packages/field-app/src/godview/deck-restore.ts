@@ -15,15 +15,13 @@ import { AgentProfileSetId } from "@vibefield/contracts";
 // the user anything, and it is the whole reason this is a pure function — the
 // consent face is a claim about the floor, and a claim is worth testing.
 
-/** What a restore would do, in the numbers the consent face states. */
-export interface RestoreQuestion {
-  /** panes the saved layout holds */
-  saved: number;
-  /** of those, sessions the floor still lists — they rejoin by id, untouched */
-  alive: number;
-  /** of those, sessions that are gone — restoring relaunches a shell for each */
-  dead: number;
-}
+/** The deck's own localStorage namespace, in the vf- prefix the renderer's
+ * other keys use. Deliberately NOT the app's IPC channel namespace, which wall
+ * R6 reserves for contracts — GT-0 caught a storage key squatting there, and
+ * R6 catches this comment too if it spells the prefix out. Here since LR
+ * (2026-10-15): the window's restore question reads and clears it too
+ * (`last-run.ts`), before the deck is ever called. */
+export const DECK_STORAGE_KEY = "vf-godview-deck-v1";
 
 /** The pane session ids a saved deck layout references, in tree order.
  *
@@ -70,20 +68,6 @@ function collect(node: unknown, into: string[]): void {
   if (candidate["kind"] !== "split") return;
   collect(candidate["first"], into);
   collect(candidate["second"], into);
-}
-
-/** Saved panes against the live floor. Duplicate ids are counted once — two
- * panes cannot hold one session in a restored layout (ghosttea's `restoreNode`
- * maps ids to sessions, so a repeated id would revive as the same session), and
- * counting it twice would over-state the question. */
-export function restoreQuestion(
-  savedIds: readonly string[],
-  liveIds: readonly string[],
-): RestoreQuestion {
-  const live = new Set(liveIds);
-  const unique = [...new Set(savedIds)];
-  const alive = unique.filter((id) => live.has(id)).length;
-  return { saved: unique.length, alive, dead: unique.length - alive };
 }
 
 /** Where this device's own shells say they are, remembered from a pane the deck
@@ -218,24 +202,4 @@ export function paneProfileSet(meta: unknown): string | undefined {
   if (typeof record?.remoteDevice === "string" && record.remoteDevice !== "") return undefined;
   const parsed = AgentProfileSetId.safeParse(record?.profileSet);
   return parsed.success ? parsed.data : undefined;
-}
-
-/** The consent face's fact line. Sentence-shaped rather than a template with
- * holes: "1 pane" and "2 panes" both have to read like English, and a user
- * about to relaunch shells in folders is owed a sentence, not a legend.
- *
- * `on this machine` is the correction the erratum asked for and not a flourish:
- * a pane can only be relaunched in the folder it left when that folder is HERE,
- * and a pane that was a peer's — or whose shell never announced one — starts at
- * home instead. The old sentence promised the folder unconditionally. */
-export function restoreSentence(question: RestoreQuestion): string {
-  const panes = (count: number): string => `${count} pane${count === 1 ? "" : "s"}`;
-  const rejoin =
-    question.alive === 0
-      ? "none are still running"
-      : `${panes(question.alive)} ${question.alive === 1 ? "is" : "are"} still running and rejoin`;
-  const relaunch = `${panes(question.dead)} ended — restoring opens a new shell in ${
-    question.dead === 1 ? "its folder" : "their folders"
-  } on this machine, at home where there is none`;
-  return `${rejoin} · ${relaunch}`;
 }

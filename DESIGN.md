@@ -1891,12 +1891,39 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   selects nothing, and raises nothing.
   **The monitor alone at launch, then as you left it** (GV-D5; N14 (a), ruled 2026-10-11; built
   2026-10-12). A launch opens Godview on the monitor alone: the terminals
-  away, and nothing asked of them — no restore question, no pane, no shell born — until something
-  calls them. **The first call brings last run's panes back with the session it called**, placed
-  by the rule for a session with no pane (below): beside the focused pane, or in its place with
-  three showing. Panes whose sessions ended still ask first ("this deck had N panes last time" ·
-  restore · start clean); while that question waits, an act that called the terminals waits with
-  the person, and its bound is the deck's time, never theirs (§8 "History"). **A first call that
+  away, and nothing asked of them — no pane, no shell born — until something calls them (the one
+  question a launch can put is the window's, below). **The first call brings last run's panes back
+  with the session it called**, placed by the rule for a session with no pane (below): beside the
+  focused pane, or in its place with three showing. While the last run's question waits, an act
+  that called the terminals waits with the person, and its bound is the deck's time, never theirs
+  (§8 "History"). *Amended 2026-10-15 (LR, James): the deck's own face — "this deck had N panes
+  last time" · restore · start clean, asked at its first call — is retired; the question is the
+  window's, as Godview opens.*
+  **What the last run left — the curtain** (LR; James, 2026-10-15: "this restore dialogue should
+  be shown at the godview at the center … a static view of previous snapshotted last state shown
+  in each view … a semi transparent overlay on top"). When the last run ended with sessions this
+  launch no longer has — agents its records can resume, panes whose shells are gone — **Godview
+  opens on last run's picture**: every view draws the board as the last run left it (fieldd keeps
+  ONE picture of its model board and holds it until answered — never a history), **still** — no
+  motion, no verb, no pointer — and over the whole stage stands **the curtain**: a veil of the
+  monitor's own ground at the readouts' 62%, the picture reading through it; in the window's middle
+  a mono eyebrow, **Last run · 15:39** (the moment the picture was taken; the day too when it was
+  not today); the count **huge**, the readouts' words (800, −0.04em, up to 64px, haloed in the
+  ground), the nouns full and the joint at 40% — **2 agents · 1 terminal**; one mono line of what
+  each answer does in those numbers — *Restore resumes each agent's conversation where it was and
+  opens a new shell in the terminal's folder (at home if it had none here). Start clean lets them
+  go.* — and, when the picture holds bare shells no pane showed, *1 shell that had no pane can't
+  come back*, a step fainter; then **Restore** · **Start clean**, two pills of one weight (neither
+  is the safe one, GT-3). It stands over the monitor and the sheet (20) and under the CRT layers
+  (30) — it wears the scanlines — and the head (31), whose **view circles stay live** so each
+  view's picture can be looked at before answering. **Restore** resumes every agent at once, each into its own
+  conversation in its folder under its profile with its launch model, and hands each its old pane;
+  the curtain says *Resuming 2 agents…* with both answers held, and lifts when they have started —
+  or says, before it lifts, which could not and why in fieldd's words (*1 of 2 agents resumed* ·
+  *Claude Code in vibe-field — its profile is signed out* · **Continue**). **Start clean** forgets
+  the deck's layout and the picture; nothing still running is touched. A restart the floor
+  survived asks nothing (the silence of GT-3). Motion: the curtain fades in over 240ms (`ease`),
+  its words rising 8px on the island curve (480ms); reduced motion fades only, 120ms. **A first call that
   is a new terminal** — ⌘T, the bloom's birth — on a deck with nothing to bring back finds the
   workspace's own first shell, and that shell is the terminal: one pane, never a second born
   beside it (asked under an Agent Profile, the profile's shell is born in its place). Within a

@@ -1090,6 +1090,152 @@
   clip-path: inset(calc(var(--vf-godview-deck-rest) + var(--vf-godview-deck-shift, 0px)) 0 0 0);
 }
 
+/* ── WHAT THE LAST RUN LEFT — the curtain (LR, 2026-10-15; DESIGN.md §8, the
+   deck, "What the last run left") ─────────────────────────────────────────
+   Over the whole stage: above the monitor and the sheet (10), under the CRT
+   layers (30) — the question wears the stage's own scanlines — and the head
+   (31), whose view circles stay live over the picture. The views under it draw
+   last run's board still; the veil is the monitor's own ground at the
+   readouts' 62%, so the picture reads through it. The words are the readouts'
+   (800, −0.04em, haloed in the ground); one mono line says what each answer
+   does; the two answers are the same weight, neither drawn as the safe one. In
+   over 240ms, the words rising 8px on the island curve (480ms), both from a
+   starting style; reduced motion fades only, over 120ms. */
+.vf-last-run {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 32px;
+  font-family: var(--vf-font-sans);
+  transition: opacity 240ms ease;
+}
+
+.vf-last-run-veil {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--monitor-bg) 62%, transparent);
+}
+
+.vf-last-run-say {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  max-width: min(880px, 100%);
+  text-align: center;
+  transition: transform 480ms var(--vf-ease-island);
+}
+
+/* The entrance is a transition from a starting style, never a keyframe: one
+   travel when the curtain mounts, and no loop (GT-D15.1's audit). */
+@starting-style {
+  .vf-last-run {
+    opacity: 0;
+  }
+
+  .vf-last-run-say {
+    transform: translateY(8px);
+  }
+}
+
+.vf-last-run-eyebrow {
+  margin: 0;
+  color: var(--text-muted);
+  font: 800 10px / 1 var(--vf-font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.vf-last-run-words {
+  margin: 0;
+  color: var(--text-main);
+  font: 800 clamp(28px, 6.6vmax, 64px) / 1 var(--vf-font-sans);
+  letter-spacing: -0.04em;
+  text-shadow:
+    0 0 40px var(--monitor-bg),
+    0 0 18px var(--monitor-bg);
+}
+
+.vf-last-run .vf-last-run-words i {
+  font-style: normal;
+  opacity: 0.4;
+}
+
+.vf-last-run-line,
+.vf-last-run-note {
+  max-width: 62ch;
+  margin: 0;
+  color: var(--text-muted);
+  font: 400 12px / 1.5 var(--vf-font-mono);
+}
+
+.vf-last-run-note {
+  color: var(--text-faint);
+}
+
+.vf-last-run-failures {
+  display: grid;
+  gap: 6px;
+  max-width: 72ch;
+  margin: 0;
+  padding: 0;
+  color: var(--text-muted);
+  font: 400 12px / 1.5 var(--vf-font-mono);
+  list-style: none;
+}
+
+.vf-last-run-failures b {
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.vf-last-run-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.vf-last-run-act {
+  min-width: 120px;
+  padding: 9px 18px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  color: var(--text-main);
+  background: color-mix(in srgb, var(--monitor-bg) 72%, transparent);
+  font: 700 13px / 1 var(--vf-font-sans);
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.vf-last-run-act:hover:not(:disabled) {
+  border-color: var(--control-hover-border);
+  background: var(--control-hover-bg);
+}
+
+.vf-last-run-act:focus-visible {
+  outline: 2px solid var(--control-hover-border);
+  outline-offset: 2px;
+}
+
+.vf-last-run-act:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-last-run {
+    transition-duration: 120ms;
+  }
+
+  .vf-last-run-say {
+    transition: none;
+  }
+}
+
 /* A live WebGPU canvas may be promoted above ordinary DOM overlays on macOS.
    Compositing the deck while the lab is open keeps the body-level panel on top
    without changing the visible terminal alpha. */

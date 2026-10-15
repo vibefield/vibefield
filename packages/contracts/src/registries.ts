@@ -1386,6 +1386,15 @@ export const LAYOUT = {
    * it wrote itself — a same-uid file dropped into `agents/sessions/` is set
    * aside, never acted on (EL7). */
   AGENT_SESSIONS_KEY_FILE: ["agents", "sessions.key"],
+  /** LR (2026-10-15) — this desktop's model board as it stands, ONE picture
+   * (0600), rewritten as the board moves: what the next boot reads as "the
+   * last run". A picture to draw and nothing to act on — a restore resumes
+   * through the signed records above, never through a row of this file. */
+  AGENT_LAST_BOARD_FILE: ["agents", "last-board.json"],
+  /** LR — the picture a boot found its floor had lost sessions from, held
+   * until a window answers restore or start clean (`agent.lastRunForget`), so
+   * a second restart before the answer does not take the question away. */
+  AGENT_LEFT_BOARD_FILE: ["agents", "left-board.json"],
   /** AR-7 — the spawn-through shim's home under this user (0700): the
    * rendezvous files, one launcher per offered agent's command, the bundled
    * shim and the shell integration. puppeteer's spawn-through kit writes every

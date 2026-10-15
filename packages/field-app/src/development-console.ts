@@ -129,7 +129,10 @@ export interface GodviewDeckFacts {
    * present is — "no prompt appeared" is a claim about a face that is not
    * there, and a field that only ever appears when it should makes both
    * directions checkable. */
-  consent?: { saved: number; alive: number; dead: number };
+  /** LR (2026-10-15) — the window's restore question while it stands: the
+   * agents a restore resumes, the deck's dead shell panes, the bare shells
+   * that are not coming back (the curtain's numbers). */
+  consent?: { agents: number; shells: number; unplaced: number };
   /** GT-3: which panes are showing an ENDED session. The floor can prove a
    * session died; only the renderer can prove the pane admitted it. */
   exitedSessionIds?: readonly string[];

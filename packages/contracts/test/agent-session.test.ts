@@ -113,6 +113,23 @@ describe("agent.* registry rows (AR-3)", () => {
         locality: "local",
         subscription: false,
       },
+      // LR (2026-10-15) — what the last run left: read on the board's scope,
+      // forgotten on spawn's (the other half of the restore decision); both
+      // local, as the board they picture is.
+      {
+        method: "agent.lastRun",
+        scope: "agent.observe",
+        idempotent: true,
+        locality: "local",
+        subscription: false,
+      },
+      {
+        method: "agent.lastRunForget",
+        scope: "agent.spawn",
+        idempotent: true,
+        locality: "local",
+        subscription: false,
+      },
       // TL (docket v9; B-D6 (a)) — the lanes' past, the backend's over the
       // record: the record's consent (`index.search`, as `index.activity`),
       // asked where the record lives (`federate`), never a stream

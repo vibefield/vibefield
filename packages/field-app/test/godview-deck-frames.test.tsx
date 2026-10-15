@@ -374,6 +374,7 @@ vi.mock("@vibecook/ghosttea-react/workspace", () => ({
 const { configureTerminalPool, disposeTerminalPool, retryTerminalPool, terminalPoolSnapshot } =
   await import("../src/terminal/pool");
 const { GodviewDeck } = await import("../src/godview/GodviewDeck");
+const { resetLastRunForTests } = await import("../src/godview/last-run");
 const { GodviewMonitor } = await import("../src/godview/GodviewMonitor");
 const { GodviewAgentsProvider } = await import("../src/godview/monitor/GodviewAgentsProvider");
 const { launcherOwnsKeyEvent, launcherOwnsKeys, resetLauncherKeys, setMonitorHoldsKeys } =
@@ -422,6 +423,9 @@ const fieldd = {
       });
     }
     if (method === "terminal.roster") return Promise.resolve({ items: rosterRows });
+    // LR — the window's restore question: no picture of a last run here
+    if (method === "agent.lastRun") return Promise.resolve({ state: "none" });
+    if (method === "agent.lastRunForget") return Promise.resolve({ forgotten: false });
     if (method === "terminal.terminate")
       return terminateAnswer ?? Promise.resolve({ terminated: true });
     if (method === "terminal.openTicket") {
@@ -696,6 +700,8 @@ beforeEach(() => {
   workspace.fenced = false;
   workspace.splits = 0;
   localStorage.clear();
+  // LR — the window's restore question is a per-window module store
+  resetLastRunForTests();
   document.documentElement.style.setProperty("--tint-l", "0.6");
   document.documentElement.style.setProperty("--tint-c", "0.15");
   disposeTerminalPool();

@@ -173,6 +173,14 @@
     "agents",
     "sessions.key"
   ],
+  "AGENT_LAST_BOARD_FILE": [
+    "agents",
+    "last-board.json"
+  ],
+  "AGENT_LEFT_BOARD_FILE": [
+    "agents",
+    "left-board.json"
+  ],
   "AGENT_SHIMS_DIR": [
     "agents",
     "shims"

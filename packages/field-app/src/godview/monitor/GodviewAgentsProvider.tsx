@@ -136,6 +136,24 @@ export function GodviewAgentsProvider({
   );
 }
 
+/**
+ * LR (2026-10-15) — the monitor drawn over a feed of its owner's choosing: last
+ * run's picture, held still (`last-run.ts`), while the window's own
+ * subscription stays open beside it for the deck. Null hands the window's own
+ * feed through, under the SAME provider, so lifting the picture swaps the
+ * replica the views read and remounts nothing.
+ */
+export function MonitorFeedOverride({
+  feed,
+  children,
+}: {
+  feed: GodviewMonitorFeed | null;
+  children: ReactNode;
+}): ReactElement {
+  const own = useContext(MonitorFeedContext);
+  return <MonitorFeedContext.Provider value={feed ?? own}>{children}</MonitorFeedContext.Provider>;
+}
+
 /** MV-3b — the model board's feed, for the stage that draws the replica and the
  * chrome that reads its runs (MV-3d). Null while there is no door, no model
  * port on it, or Godview is closed — the `no-door` fact, which is not an empty

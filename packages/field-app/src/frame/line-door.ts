@@ -118,9 +118,9 @@ export function resetGodviewLineDoorForTest(): void {
 export type DeckAnswer = NewTerminalOutcome | { readonly state: "late" };
 
 /** What the line says while an act waits on the person's answer in Godview
- * (W7): the restore question's own two buttons, "restore" and "start clean". */
-export const WAITING_ON_PERSON_NOTE =
-  "Waiting in Godview — restore last time's panes, or start clean";
+ * (W7): the restore question's own two buttons, "Restore" and "Start clean"
+ * (LR, 2026-10-15: the question is the last run's now, not the deck's panes). */
+export const WAITING_ON_PERSON_NOTE = "Waiting in Godview — restore the last run, or start clean";
 
 /** The deck's answer, or `late` once `timeoutMs` pass. A throw is the act's.
  *

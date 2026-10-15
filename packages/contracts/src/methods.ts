@@ -2422,6 +2422,29 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // LR (2026-10-15) — `agent.lastRun`: the picture this desktop's last run left
+  // and the sessions in it that did not survive (agent-field.ts
+  // `AgentLastRunResult`). The board's scope, because it IS the board — the
+  // last one, still. `local`: a desktop's last run is its own, like the
+  // `model` board it pictures (refused to a peer and a phone in the handler).
+  defineMethod({
+    surface: "product",
+    method: "agent.lastRun",
+    scope: "agent.observe",
+    idempotent: true,
+    locality: "local",
+  }),
+  // LR — `agent.lastRunForget`: the answer is in, the held picture goes. Spawn's
+  // scope, because it is the other half of the restore decision whose first
+  // half is `agent.resume` (spawn's too): a reader of the board cannot make a
+  // desktop forget what its last run left.
+  defineMethod({
+    surface: "product",
+    method: "agent.lastRunForget",
+    scope: "agent.spawn",
+    idempotent: true,
+    locality: "local",
+  }),
   // TL (docket v9, RULED 2026-10-09; B-D6 (a)) — `agent.recordedLanes`: the
   // lanes' past as the monitor backend derives it from the record (agent-field.ts
   // `AgentRecordedLanesParams`), asked by a window only while a mounted view

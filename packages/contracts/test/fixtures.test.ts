@@ -24,6 +24,8 @@ import {
   AgentFieldSlice,
   AgentFieldSnapshot,
   AgentInterruptResult,
+  AgentLastRunForgetResult,
+  AgentLastRunResult,
   AgentMeshFrame,
   AgentMeshOpen,
   AgentModelDeskRow,
@@ -540,6 +542,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // honest unavailable.
   "agent-recorded-lanes-params": AgentRecordedLanesParams,
   "agent-recorded-lanes": AgentRecordedLanesResult,
+  // LR (2026-10-15) — what the last run left: the board whole with the rows
+  // whose sessions did not survive, and nothing left; the forget's answer.
+  "agent-last-run": AgentLastRunResult,
+  "agent-last-run-forget": AgentLastRunForgetResult,
   // Both arms of the interrupt's union: the refusal carries the FLOOR's own
   // word, never a sentence composed at the door.
   "agent-interrupt": AgentInterruptResult,

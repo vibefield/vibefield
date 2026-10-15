@@ -71,18 +71,24 @@ import { deckThemeNameForMode, useDeckAppearance } from "./deck-appearance";
 import { bornInThisView, GodviewDeckLaunchers, recordBornShell } from "./deck-launchers";
 import { type DeckPlacement, type DeckShape, deckPlacement } from "./deck-placement";
 import {
+  DECK_STORAGE_KEY,
   paneCwd,
   paneProfileSet,
-  type RestoreQuestion,
   readDeviceHost,
   rememberDeviceHost,
-  restoreQuestion,
-  restoreSentence,
   savedPaneSessionIds,
 } from "./deck-restore";
 import { godviewTerminalEffects, godviewTerminalTheme, terminalGround } from "./deck-theme";
 import { getDeckWrapperFacts, subscribeDeckWrapperFacts } from "./deck-wrapper-witness";
 import type { GodviewTheme } from "./GodviewTuningPanel";
+import {
+  askingPerson,
+  askLastRun,
+  consentFacts,
+  deckAnswer,
+  resumedPaneSession,
+  useLastRun,
+} from "./last-run";
 import { linePanesOf, newTerminalOutcome, pasteIntoPane } from "./line-panes";
 import type { MonitorFloorRecord } from "./monitor/agents";
 import { RosterFlips, teeDevicesPort } from "./monitor/devices";
@@ -145,12 +151,6 @@ import "@vibecook/ghosttea-react/workspace.css";
 // demand when they go. Everything below the acquisition is unchanged — the
 // restore gate, the pane faces, the door, the persisted layout are all still the
 // deck's, because they are about a deck and not about a window.
-
-/** The deck's own localStorage namespace, in the vf- prefix the renderer's
- * other keys use. Deliberately NOT the app's IPC channel namespace, which wall
- * R6 reserves for contracts — GT-0 caught a storage key squatting there, and
- * R6 catches this comment too if it spells the prefix out. */
-const DECK_STORAGE_KEY = "vf-godview-deck-v1";
 
 /**
  * DS-4 — THE DECK TAKES ON FOCUS. DS-D5, ruled 2026-09-30 with James's note:
@@ -473,14 +473,17 @@ export function GodviewDeck({
    * because it must not re-run the workspace's
    * initialization, and the mount that follows a birth re-renders anyway. */
   const bornCwd = useRef(new Map<string, string>());
-  /** GT-3, the restore gate. `null` while the question is still being asked of
-   * the floor; a question object while the user is being asked; `"go"` once the
-   * deck may mount — with rehydration armed or not, per `rehydrate`. */
-  const [consent, setConsent] = useState<RestoreQuestion | "go" | null>(null);
+  /** GT-3, the restore gate — answered by the WINDOW since LR (2026-10-15,
+   * `last-run.ts`): the question is asked once as Godview opens, over last
+   * run's picture, and the deck waits on its answer. `"go"` once the terminals
+   * have been called (W7) AND the answer is in; null before either. */
+  const lastRun = useLastRun();
+  const answer = deckAnswer(lastRun);
+  const consent: "go" | null = called && answer !== null ? "go" : null;
   /** Whether `onRehydratePane` is armed. False is not a bug state: a user who
    * chose to start clean has no layout left to rehydrate, and a deck with no
    * dead panes never had anything to ask about. */
-  const [rehydrate, setRehydrate] = useState(false);
+  const rehydrate = answer?.rehydrate === true;
 
   const publish = useCallback((next: GhostteaWorkspaceContext) => {
     workspaceRef.current = next;
@@ -492,34 +495,6 @@ export function GodviewDeck({
    * no bridge-up is coming (a bridge that never built, a ladder that spent
    * itself). The button is the deck's; the ladder is not. */
   const retry = useCallback(() => retryTerminalPool(savedPanes), [savedPanes]);
-
-  /** The user said restore. Rehydration is armed and the workspace mounts;
-   * dead panes come back through `onRehydratePane` below. */
-  const acceptRestore = useCallback(() => {
-    setRehydrate(true);
-    setConsent("go");
-  }, []);
-
-  /** The user said start clean. The saved layout is REMOVED rather than
-   * ignored: leaving it would mean the next open asks the same question about
-   * the same dead panes, and an answer that does not stick is not an answer.
-   * Nothing on the floor is touched — the live sessions this drops go on
-   * running, which is the close-detaches law (GT-D5) applied to a whole deck. */
-  const startClean = useCallback(() => {
-    try {
-      localStorage.removeItem(DECK_STORAGE_KEY);
-    } catch (cause) {
-      getRendererLogger()
-        .child({ component: "godview" })
-        .error(
-          "renderer.godview.layout_clear_failed",
-          "The saved deck layout could not be cleared",
-          cause,
-        );
-    }
-    setRehydrate(false);
-    setConsent("go");
-  }, []);
 
   // The viewer's own appearance (GT-D12), read from the store Settings writes.
   // Recomputed when it moves and ONLY then: `theme` is not among the
@@ -553,86 +528,17 @@ export function GodviewDeck({
     [publish],
   );
 
-  // THE RESTORE GATE (GT-3, GT-D8 as amended). Runs ONCE per deck mount — at
-  // its first call since W7: a launch opens on the monitor alone, and nothing
-  // is asked of a person who has not called the terminals — and finishes
-  // BEFORE the workspace is allowed to mount.
-  //
-  // It has to happen here and not inside `onRehydratePane`, because by the time
-  // the workspace asks about a dead pane it has already committed to restoring
-  // the layout — and the question a user needs answered is about the whole
-  // deck, once, before anything spawns: "these N panes are coming back, K of
-  // them as new shells". Asking per pane would be K prompts for one decision.
-  //
-  // Once per MOUNT and deliberately not per generation, which the connect above
-  // does run per generation: a recovery rebuilds the bridge, and the bridge has
-  // nothing to do with what the last session left behind. Re-running it would
-  // re-ask a question the user already answered, and — measured, in the smoke —
-  // blank the consent face mid-decision, because a bridge-up arrives moments
-  // after the deck comes up and the gate's first act is to have no answer yet.
-  //
-  // Silence is the common case and is deliberate: with the floor outliving the
-  // shell, most reopens find every saved session still alive, and a prompt that
-  // appears when nothing is at stake trains people to dismiss the one that
-  // matters. No layout, or a layout this reader cannot make sense of, is also
-  // silent — GT-D8's malformed-manifest rule is "start clean", not "explain".
-  //
-  // A floor that cannot be asked mounts too, unarmed: a roster this window
-  // cannot read means the deck is about to have bigger problems than a prompt,
-  // and guessing that every saved pane is dead would be the one answer certain
-  // to be wrong.
-  //
-  // TP-S1 — THE ROSTER, NOT THE INVENTORY. This read was `terminal.list`, which
-  // is the TRANSPORT-facing projection: it carries the cell tag the routed
-  // transport consumes, and a UI that read it was handling placement it is not
-  // allowed to see (TP-L-C). `terminal.roster` is the other projection of the
-  // same fold (TP-D4) — ids, class, health, provenance, and a contract that
-  // REFUSES a placement key at parse. The pool performs the read because the
-  // pool holds the client; what arrives here is already placement-free.
+  // THE RESTORE GATE (GT-3, GT-D8 as amended) — the WINDOW's since LR
+  // (2026-10-15). The question used to be asked here, at the deck's first call,
+  // about the deck's own layout alone; it is asked as Godview opens now, over
+  // last run's picture (`last-run.ts`, the curtain), and this deck only waits
+  // on its answer. A deck called before anyone asked asks (idempotent): it
+  // must never wait on a question nobody put.
   useEffect(() => {
-    if (!called) return;
-    let cancelled = false;
-    void (async () => {
-      if (savedPanes.length === 0) {
-        if (!cancelled) setConsent("go");
-        return;
-      }
-      const sessions = await refreshTerminalRoster(godviewColdOpen);
-      if (cancelled) return;
-      // `unread`/`unavailable`/`unobserved` all mean the same thing to this
-      // gate: no trustworthy list of what is alive, so ask nothing and mount.
-      // Only an OBSERVED roster can say a saved pane is dead.
-      if (terminalPoolSnapshot().rosterState !== "observed") {
-        getRendererLogger()
-          .child({ component: "godview" })
-          .info(
-            "renderer.godview.restore_roster_unreadable",
-            "The roster could not be read for the restore check; mounting without it",
-            { state: terminalPoolSnapshot().rosterState },
-          );
-        setConsent("go");
-        return;
-      }
-      const saved = savedPanes;
-      const live = sessions
-        .filter((session) => session.health !== "exited")
-        .map((session) => session.sessionId);
-      const question = restoreQuestion(saved, live);
-      // Everything alive ⇒ nothing to consent to. The panes rejoin by id
-      // inside the workspace's own initialization, exactly as they did before
-      // this gate existed.
-      if (question.dead === 0) {
-        setConsent("go");
-        return;
-      }
-      setConsent(question);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [savedPanes, called]);
+    if (called) void askLastRun(fieldd);
+  }, [called, fieldd]);
   /** The question is up: the person's time, which no bound counts (W7). */
-  const asking = consent !== null && consent !== "go";
+  const asking = askingPerson(lastRun);
   const askingRef = useRef(asking);
   askingRef.current = asking;
 
@@ -990,6 +896,10 @@ export function GodviewDeck({
   const rehydratePane = useCallback(
     async (context: { meta: unknown; sessionId: string; paneId: string }) => {
       if (shell === null) return null;
+      // LR — the pane showed an agent the window's restore resumed: its new
+      // terminal takes the pane, never a shell beside the conversation it was
+      const resumed = resumedPaneSession(context.sessionId);
+      if (resumed !== undefined) return resumed;
       // `paneCwd` and not `meta.cwd`: what the floor calls a cwd is the OSC 7
       // URL the shell announced, and a spawn given `file://host/Users/x` cannot
       // chdir into it. Home is the honest fallback for a pane whose shell never
@@ -2235,6 +2145,8 @@ export function GodviewDeck({
     [sayDeck],
   );
   useEffect(() => {
+    // LR — the window's question while it is put (the curtain's numbers)
+    const asked = asking ? consentFacts(lastRun) : undefined;
     const panes = workspace?.panes ?? [];
     const exited = panes
       .filter((pane) => (pane.session as { exited?: boolean }).exited === true)
@@ -2272,7 +2184,7 @@ export function GodviewDeck({
       // one line per phase and the commit count only ever grows.
       zoom: { phase: zoom.state.phase, commits: zoom.state.commits },
       ...(error !== null ? { error: error.message, errorPlane: error.plane } : {}),
-      ...(consent !== null && consent !== "go" ? { consent } : {}),
+      ...(asked !== undefined ? { consent: asked } : {}),
       ...(exited.length > 0 ? { exitedSessionIds: exited } : {}),
       ...(workspace?.activeSession !== undefined
         ? { activeSessionId: workspace.activeSession.id }
@@ -2286,7 +2198,8 @@ export function GodviewDeck({
     pool.phase,
     pool.rosterState,
     error,
-    consent,
+    asking,
+    lastRun,
     terminalTheme,
     terminalEffects,
     activeThemeName,
@@ -2365,30 +2278,9 @@ export function GodviewDeck({
   // vanishes inside 200ms reads as a stutter, not as honesty.
   if (platform === null || shell === null || consent === null || runtime === null) return null;
 
-  // The consent face (GT-3). Same family as the fault face above — a centred
-  // statement on the dark stage with actions under it — because they are the
-  // same kind of moment: the deck has something true to say before it can be
-  // itself. It states counts and consequences (DESIGN.md §9: states tell the
-  // truth with numbers) and neither action is styled as the safe one, because
-  // neither is: restoring runs shells, and starting clean forgets a layout.
-  if (consent !== "go") {
-    return (
-      <div className="vf-godview-deck-fault" role="dialog" aria-label="Restore saved panes">
-        <p className="vf-godview-deck-fault-message">
-          this deck had {consent.saved} pane{consent.saved === 1 ? "" : "s"} last time
-        </p>
-        <p className="vf-godview-deck-fault-detail">{restoreSentence(consent)}</p>
-        <div className="vf-godview-deck-actions">
-          <button type="button" className="vf-godview-deck-fault-retry" onClick={acceptRestore}>
-            restore
-          </button>
-          <button type="button" className="vf-godview-deck-fault-retry" onClick={startClean}>
-            start clean
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // The consent face (GT-3) left the deck at LR (2026-10-15): the question is
+  // the window's, asked over last run's picture (`LastRunCurtain`), and the
+  // deck is simply not mounted until it is answered (`consent` above).
 
   return (
     <GhostteaProvider key={generation} runtime={runtime}>

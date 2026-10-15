@@ -7,6 +7,8 @@ import {
   AGENT_FIELD,
   AgentCatalogParams,
   AgentInterruptParams,
+  type AgentLastRunForgetResult,
+  type AgentLastRunResult,
   AgentModelsParams,
   AgentRecordedLanesParams,
   AgentReportShownParams,
@@ -182,6 +184,7 @@ import {
   type ShellIntegration,
 } from "./agent-gateway";
 import { DEFAULT_SEARCH_LIMIT, EnrollmentStore, IndexService } from "./agent-index";
+import { LastRunKeeper, modelBoardSource } from "./agent-last-run";
 import { createModelSubscription } from "./agent-model-board";
 import { type AgentMonitorService, createAgentMonitorService } from "./agent-monitor";
 import { AgentRuntimeService, type AgentRuntimeServiceOptions } from "./agent-runtime";
@@ -887,6 +890,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
    * device roster exists. Null only in the window before that, and read by
    * the door's `model` projection and the stop paths. */
   let monitor: AgentMonitorService | null = null;
+  /** LR (2026-10-15) — the board's one picture and what the last run left
+   * (`agent-last-run.ts`); built with the monitor it pictures. */
+  let lastRun: LastRunKeeper | null = null;
   // Show in Finder reaches Electron main through the shell provider, which
   // the api owns — built later in this boot, so bound through a ref too. GT-7:
   // Settings → Terminal's file actions (the terminal service) reach it here.
@@ -3370,6 +3376,33 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const result: AgentReportShownResult = { reported: true };
       return result;
     });
+    // LR (2026-10-15) — what this desktop's last run left, and the answer that
+    // lets it go. This desktop's windows' alone, as the `model` board it
+    // pictures is: a peer and a phone are refused as that board refuses them.
+    const refuseLastRun = (kind: string): void => {
+      if (kind === "peer-fieldd" || kind === "tailnet")
+        throw new RpcCallError(
+          "FORBIDDEN_SCOPE",
+          "what the last run left is this desktop's windows'",
+          false,
+          { service: "agent-last-run" },
+        );
+    };
+    api.register("agent.lastRun", (ctx) => {
+      refuseLastRun(ctx.principal.kind);
+      if (lastRun === null)
+        throw new RpcCallError("UNAVAILABLE", "the agent monitor is starting", true, {
+          service: "agent-last-run",
+          state: "starting",
+        });
+      const result: AgentLastRunResult = lastRun.read();
+      return result;
+    });
+    api.register("agent.lastRunForget", (ctx) => {
+      refuseLastRun(ctx.principal.kind);
+      const result: AgentLastRunForgetResult = lastRun?.forget() ?? { forgotten: false };
+      return result;
+    });
     // TL (docket v9, RULED 2026-10-09; B-D6 (a)) — `agent.recordedLanes`: the
     // lanes' past as the backend beside the runtime derives it from the record,
     // asked by a window only while a mounted view asks (PF6). Read through to
@@ -3849,6 +3882,28 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         : {}),
       logger,
     });
+    // LR (James, 2026-10-15) — the board's picture, kept beside the backend it
+    // pictures: read before this boot writes anything, then taken as the board
+    // moves while the floor is up. What the last run left is held until a
+    // window answers restore or start clean.
+    lastRun = new LastRunKeeper({
+      lastPath: join(config.dataDir, ...LAYOUT.AGENT_LAST_BOARD_FILE),
+      leftPath: join(config.dataDir, ...LAYOUT.AGENT_LEFT_BOARD_FILE),
+      board: modelBoardSource({
+        fold: { list: () => agents.list(), subscribe: (fn) => agents.subscribe(fn) },
+        monitor,
+      }),
+      floorUp: () => native.connected,
+      settled: () => agents.reattachSettled(),
+      liveSessions: () =>
+        terminals.observation() !== undefined
+          ? new Set(terminals.list().map((row) => row.sessionId))
+          : undefined,
+      liveRuns: () => new Set(agents.list().sessions.map((row) => row.runtimeRunId)),
+      continuable: (runtimeRunId) => agents.continuable(runtimeRunId),
+      logger: logger.child({ component: "agent.last-run" }),
+    });
+    lastRun.start();
     // D1 (2026-10-01) — a peer that dialled before the roster could vouch for
     // it was admitted as `tailnet`; once the roster shows its node as a
     // desktop, its connection closes for a fresh hello (ProductApi)
@@ -5738,6 +5793,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           (gateway?.stop() ?? Promise.resolve())
             .catch(() => undefined)
             .then(() => {
+              lastRun?.dispose(); // LR — the last picture, taken while the board still stands
               monitor?.dispose(); // MV-3a — off the runtime's bus before the runs go
               return agents.dispose();
             }),
@@ -6179,6 +6235,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           // rendezvous is withdrawn, and the list of our shells STAYS (a
           // launcher in a pane waits for the fieldd that comes next)
           await gateway?.stop();
+          lastRun?.dispose(); // LR — the last picture, taken while the board still stands
           monitor?.dispose(); // MV-3a — the backend leaves the runtime's bus before the runs are released
           await agents.dispose(); // AR-2/AR-4 — the runs RELEASED (their PTYs outlive us) before the index
           indexTail.dispose(); // SP-6 — every session socket closes before its daemon stops
@@ -6302,6 +6359,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // guard is stated so a later start-before-ready cannot leave an orphan.
     agentUsage.stop(); // AR-5d — a failed boot leaves no poller and no listener
     await gatewayRef?.stop().catch(() => undefined); // AR-7b — nor a listener of the gateway's
+    lastRun?.dispose(); // LR — nor the picture's listeners
     monitor?.dispose(); // MV-3a — nor the backend's listeners on the runtime's bus
     await agents.dispose();
     await rosettad?.stop();

@@ -52,6 +52,11 @@ export interface GodviewStageProps {
   /** W7 — the window's witness says when a lab's call (the markers' seam,
    * `deck-state.ts`) raised the terminals from away. */
   deckRaisedBy?: "lab" | null;
+  /** LR (2026-10-15) — a question standing over the whole stage (the last
+   * run's curtain): above the monitor and the sheet, under the CRT layers and
+   * the head, so the view circles stay live. While it stands the sheet takes
+   * no pointer, focus or key, as away. */
+  curtain?: ReactNode;
   className?: string;
 }
 
@@ -72,6 +77,7 @@ export function GodviewStage({
   onDeckState,
   publishesDeck = false,
   deckRaisedBy = null,
+  curtain,
   className = "",
 }: GodviewStageProps): ReactElement {
   const monitorPresent = monitor !== undefined && monitor !== null && monitor !== false;
@@ -107,6 +113,7 @@ export function GodviewStage({
   const { travel, layout } = useDeckTravel(deckState, atOnce, deckRef);
   const away = deckState === "away";
   const maximized = deckState === "maximized";
+  const curtained = curtain !== undefined && curtain !== null && curtain !== false;
   // The owner's acts. The Lip's buttons ask with a travel; the edge's hand
   // asks at once. A stage with no owner (a picture) asks nothing and draws no
   // button.
@@ -164,6 +171,7 @@ export function GodviewStage({
       // an edge PLACES the sheet (godview.css): without one — Settings'
       // miniature — the sheet stays in the flow under its own monitor
       {...(deckEdge ? { "data-godview-deck-edge": "" } : {})}
+      {...(curtained ? { "data-godview-curtain": "" } : {})}
       className={`vf-godview theme-${theme} ${className}`.trim()}
       style={style}
     >
@@ -182,7 +190,7 @@ export function GodviewStage({
         ref={deckRef}
         className="vf-godview-terminal-deck relative min-h-0 flex-1"
         aria-label="Terminal panes"
-        inert={away}
+        inert={away || curtained}
       >
         {deckEdge ? (
           // M49 — the edge is chrome too: a throw in it says so in the lip's
@@ -223,6 +231,7 @@ export function GodviewStage({
         </div>
       </section>
       {deckEdge && owned && monitorPresent ? <DeckReadout says={readout} /> : null}
+      {curtained ? curtain : null}
     </div>
   );
 }
