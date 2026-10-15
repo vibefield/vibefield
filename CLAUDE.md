@@ -152,7 +152,8 @@ through esbuild's and Vite's own input tracking, never through the runner's watc
 checkout; a released plane is committed EXACT, an unreleased one as its `link:`/path rows. `pnpm siblings render --prod`
 writes the committed rows from the lock (`--check` compares), and the pre-commit hook refuses a commit whose staged
 rows its own lock does not render. `pnpm siblings use NAME` links a released sibling's checkout back in a LOCAL overlay
-under `.vibefield/dev/` (never a committed file); `use --none` removes it. Exit (RD-5, superseding W-D8's "delete the
+(RD-2): a gitignored root `.pnpmfile.cjs` pnpm loads for every command, with the dev lockfile under `.vibefield/dev/` —
+the committed `pnpm-lock.yaml` is never the overlay's; `use --none` removes it and reinstalls the committed shape. Exit (RD-5, superseding W-D8's "delete the
 entry") is a `release` recorded in the lock and the rows re-rendered — the entry stays as the overlay's coordinate.
 
 **rosetta's checkout is dedicated to its pin (W-D10, 2026-10-03):** `../rosetta-pin` is a DETACHED

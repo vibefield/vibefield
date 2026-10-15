@@ -4,24 +4,38 @@
 // Fixture repos in a temporary directory; the last case reads THIS tree, whose committed rows must be the lock's.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  alignOverlay,
   applyCargoRows,
   applyNpmRows,
   committedCargoRow,
   committedNpmRow,
+  ensureElectronBinary,
   linkedPackages,
   npmPlane,
   OVERLAY_PNPMFILE,
   OVERLAY_STATE,
   readOverlay,
   renderProd,
+  seedDevLock,
+  shapeInstallEnv,
   siblingShape,
+  unalignOverlay,
   useSiblings,
 } from "../../../scripts/siblings.mjs";
 
@@ -77,11 +91,17 @@ function fixture(t, { lock = LOCK, yaml = YAML, cargo = CARGO } = {}) {
   writeFileSync(join(root, "siblings.lock.json"), `${JSON.stringify(lock, null, 2)}\n`);
   writeFileSync(join(root, "pnpm-workspace.yaml"), yaml);
   writeFileSync(join(root, "Cargo.toml"), cargo);
-  writeFileSync(join(root, ".gitignore"), ".vibefield/\n");
+  writeFileSync(join(root, ".gitignore"), ".vibefield/\n/.pnpmfile.cjs\n");
+  writeFileSync(join(root, "package.json"), `${JSON.stringify({ name: "fixture-root" })}\n`);
   for (const sub of ["runtime/packages/core", "runtime/packages/views", "history/clients/ts"]) {
     mkdirSync(join(dir, sub), { recursive: true });
     writeFileSync(join(dir, sub, "package.json"), "{}\n");
   }
+  // the released sibling's package declares a dependency and a peer: what the overlay installs for it and aligns
+  writeFileSync(
+    join(dir, "history/clients/ts/package.json"),
+    `${JSON.stringify({ name: "@x/history-protocol", dependencies: { "@x/codec": "^2.0.0" }, peerDependencies: { react: ">=19" } })}\n`,
+  );
   const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
   git("init", "--quiet");
   git("add", "-A");
@@ -176,23 +196,35 @@ test("render --prod is a no-op on a tree that is the lock's, rewrites a drifted 
 
 test("use links a released sibling in an ignored overlay; use --none removes it; no committed file changes", (t) => {
   const { root, git } = fixture(t);
-  const used = quiet(() => useSiblings(root, ["history"]));
+  const used = quiet(() => useSiblings(root, ["history", "--no-install"]));
   assert.equal(used.result, 0);
   assert.deepEqual(readOverlay(root), ["history"]);
   assert.match(used.out, /history npm link ×1 \(overlay over 0\.1\.1\)/);
   const pnpmfile = join(root, OVERLAY_PNPMFILE);
   assert.ok(existsSync(pnpmfile));
-  // the generated hook rewrites every importer's dependency on a linked package, and nothing else
+  // RD-2: the overrides are the link (pnpm's overrider runs after readPackage), a relative link: row becomes absolute
+  // against the root (the dev lock lives elsewhere), the lock and the store are moved; the root manifest gains the
+  // linked package's dependencies, every other manifest passes untouched
   const { hooks } = createRequire(import.meta.url)(pnpmfile);
-  const pkg = hooks.readPackage({
-    dependencies: { "@x/history-protocol": "*", react: "^19" },
-    devDependencies: { "@x/history-protocol": "0.1.1" },
-    peerDependencies: { "@x/history-protocol": "*" },
+  const config = hooks.updateConfig({
+    overrides: {
+      "@x/history-protocol": "0.1.1",
+      "@x/runtime-core": "link:../runtime/packages/core",
+      loro: "^1",
+    },
   });
-  assert.match(pkg.dependencies["@x/history-protocol"], /^link:.*history\/clients\/ts$/);
-  assert.match(pkg.devDependencies["@x/history-protocol"], /^link:.*history\/clients\/ts$/);
-  assert.equal(pkg.dependencies.react, "^19");
-  assert.equal(pkg.peerDependencies["@x/history-protocol"], "*");
+  assert.match(config.overrides["@x/history-protocol"], /^link:\/.*\/history\/clients\/ts$/);
+  assert.equal(
+    config.overrides["@x/runtime-core"],
+    `link:${join(root, "..", "runtime", "packages", "core")}`,
+  );
+  assert.equal(config.overrides.loro, "^1");
+  assert.equal(config.lockfileDir, join(root, ".vibefield", "dev"));
+  assert.equal(config.virtualStoreDir, join(root, "node_modules", ".pnpm"));
+  const rootPkg = hooks.readPackage({ name: "fixture-root", dependencies: { left: "1" } });
+  assert.deepEqual(rootPkg.dependencies, { "@x/codec": "^2.0.0", left: "1" });
+  const other = hooks.readPackage({ name: "@x/app", dependencies: { "@x/history-protocol": "*" } });
+  assert.deepEqual(other.dependencies, { "@x/history-protocol": "*" });
   assert.equal(git("status", "--porcelain"), "", "the overlay touched a committed file");
 
   // the overlay's links are what the single-copy guard and the shape see
@@ -201,7 +233,7 @@ test("use links a released sibling in an ignored overlay; use --none removes it;
     ["@x/history-protocol:overlay", "@x/runtime-core:committed", "@x/runtime-views:committed"],
   );
 
-  assert.equal(quiet(() => useSiblings(root, ["--none"])).result, 0);
+  assert.equal(quiet(() => useSiblings(root, ["--none", "--no-install"])).result, 0);
   assert.deepEqual(readOverlay(root), []);
   assert.ok(!existsSync(pnpmfile));
   assert.ok(!existsSync(join(root, OVERLAY_STATE)));
@@ -214,11 +246,11 @@ test("use links a released sibling in an ignored overlay; use --none removes it;
 
 test("use on a sibling committed in dev shape says so and links nothing; an unknown name is refused", (t) => {
   const { root } = fixture(t);
-  const dev = quiet(() => useSiblings(root, ["runtime"]));
+  const dev = quiet(() => useSiblings(root, ["runtime", "--no-install"]));
   assert.equal(dev.result, 0);
   assert.match(dev.out, /runtime is committed in dev shape already/);
   assert.deepEqual(readOverlay(root), []);
-  const typo = quiet(() => useSiblings(root, ["histroy"]));
+  const typo = quiet(() => useSiblings(root, ["histroy", "--no-install"]));
   assert.equal(typo.result, 2);
   assert.match(typo.err, /unknown sibling histroy/);
 });
@@ -270,6 +302,110 @@ test("the pre-commit check reads the INDEX: a staged row the lock does not rende
   assert.equal(refused.result, 1);
   assert.match(refused.err, /pnpm-workspace\.yaml \(staged\): @x\/history-protocol reads link:/);
   assert.match(refused.err, /SKIP_SHAPE=1 bypasses/);
+});
+
+test("the dev lock is seeded from the committed one, its importers rebased to the lockfile directory", () => {
+  const committed = `lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    devDependencies:
+      biome:
+        specifier: 2.5.4
+        version: 2.5.4
+
+  packages/app:
+    dependencies:
+      react:
+        specifier: ^19
+        version: 19.2.7
+
+packages:
+
+  biome@2.5.4:
+    resolution: {integrity: sha512-x}
+`;
+  const seeded = seedDevLock(committed);
+  assert.match(seeded, /^ {2}\.\.\/\.\.:$/m);
+  assert.match(seeded, /^ {2}\.\.\/\.\.\/packages\/app:$/m);
+  assert.match(seeded, /^ {2}biome@2\.5\.4:$/m, "the packages section is untouched");
+  assert.doesNotMatch(seeded, /^ {2}\.:$/m);
+});
+
+test("a shape install never inherits a pnpmfile, lockfile or store directory from the environment", () => {
+  const env = shapeInstallEnv({
+    PATH: "/bin",
+    pnpm_config_pnpmfile: "/elsewhere.cjs",
+    pnpm_config_lockfile_dir: "/x",
+    pnpm_config_virtual_store_dir: "/y",
+  });
+  assert.deepEqual(env, { PATH: "/bin" });
+});
+
+test("align links a linked package's dependencies and peers from the store, and re-points its hoist; unalign undoes the hoist", (t) => {
+  const { dir, root } = fixture(t);
+  quiet(() => useSiblings(root, ["history", "--no-install"]));
+  const store = join(root, "node_modules", ".pnpm");
+  // a fake installed store: the hoist holds the dependency and the peer, and the registry copy of the release
+  for (const [name, at] of [
+    ["@x/codec", "@x+codec@2.0.0/node_modules/@x/codec"],
+    ["react", "react@19.2.7/node_modules/react"],
+    [
+      "@x/history-protocol",
+      "@x+history-protocol@0.1.1_react@19.2.7/node_modules/@x/history-protocol",
+    ],
+  ]) {
+    mkdirSync(join(store, at), { recursive: true });
+    writeFileSync(join(store, at, "package.json"), `${JSON.stringify({ name })}\n`);
+    mkdirSync(dirname(join(store, "node_modules", name)), { recursive: true });
+    symlinkSync(join(store, at), join(store, "node_modules", name));
+  }
+  assert.deepEqual(alignOverlay(root), []);
+  const checkout = join(dir, "history", "clients", "ts");
+  assert.equal(
+    realpathSync(join(checkout, "node_modules", "@x", "codec")),
+    realpathSync(join(store, "@x+codec@2.0.0/node_modules/@x/codec")),
+  );
+  assert.equal(
+    realpathSync(join(checkout, "node_modules", "react")),
+    realpathSync(join(store, "react@19.2.7/node_modules/react")),
+  );
+  assert.equal(
+    realpathSync(join(store, "node_modules", "@x", "history-protocol")),
+    realpathSync(checkout),
+  );
+  assert.deepEqual(unalignOverlay(root, ["@x/history-protocol"]), [
+    "@x/history-protocol → the store's 0.1.1",
+  ]);
+  assert.equal(
+    realpathSync(join(store, "node_modules", "@x", "history-protocol")),
+    realpathSync(
+      join(store, "@x+history-protocol@0.1.1_react@19.2.7/node_modules/@x/history-protocol"),
+    ),
+  );
+});
+
+test("a shape switch gives the desktop's Electron its binary when the store directory came back without one", (t) => {
+  const { root } = fixture(t);
+  assert.equal(ensureElectronBinary(root), "no Electron resolvable from apps/desktop");
+  mkdirSync(join(root, "apps", "desktop"), { recursive: true });
+  writeFileSync(
+    join(root, "apps", "desktop", "package.json"),
+    `${JSON.stringify({ name: "desktop" })}\n`,
+  );
+  const electron = join(root, "node_modules", "electron");
+  mkdirSync(electron, { recursive: true });
+  writeFileSync(join(electron, "package.json"), `${JSON.stringify({ name: "electron" })}\n`);
+  // Electron's own installer writes path.txt (and dist/) from its download cache; the fake one writes path.txt alone
+  writeFileSync(
+    join(electron, "install.js"),
+    'require("node:fs").writeFileSync(require("node:path").join(__dirname, "path.txt"), "Electron.app/Contents/MacOS/Electron");\n',
+  );
+  const did = quiet(() => ensureElectronBinary(root));
+  assert.match(did.result, /^Electron's binary installed at node_modules\/electron/);
+  assert.ok(existsSync(join(electron, "path.txt")));
+  assert.equal(ensureElectronBinary(root), null, "a binary already there is left alone");
 });
 
 test("THIS tree: the committed sibling rows are exactly what its lock renders, and its hook asks the same", () => {

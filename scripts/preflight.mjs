@@ -22,6 +22,7 @@ import {
   committedNpmRow,
   goSidecarState,
   LOCK_FILE,
+  linkedPackages,
   newestSourceMtime,
   npmPlane,
   OVERLAY_PNPMFILE,
@@ -316,10 +317,33 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
         );
       }
     }
-    if (overlay.length > 0 && !existsSync(resolve(root, OVERLAY_PNPMFILE))) {
-      warnings.push(
-        `the dev overlay names ${overlay.join(", ")} but ${OVERLAY_PNPMFILE} is missing — \`node scripts/siblings.mjs render --dev\``,
+    // RD-2: the overlay IS the root .pnpmfile.cjs (pnpm loads it for every command), so the two must agree — a stray
+    // one with no overlay recorded silently changes every install of this tree; an overlay recorded with no pnpmfile
+    // or not installed is a tree that is not the shape `pnpm siblings` says.
+    const pnpmfileExists = existsSync(resolve(root, OVERLAY_PNPMFILE));
+    if (overlay.length === 0 && pnpmfileExists) {
+      problems.push(
+        `${OVERLAY_PNPMFILE} exists but no dev overlay is recorded (${OVERLAY_STATE}) — pnpm loads it for every install; \`pnpm siblings use --none\` removes it`,
       );
+    }
+    if (overlay.length > 0 && !pnpmfileExists) {
+      warnings.push(
+        `the dev overlay names ${overlay.join(", ")} but ${OVERLAY_PNPMFILE} is missing — \`pnpm siblings use ${overlay.join(" ")}\``,
+      );
+    }
+    for (const [pkg, { dir, via }] of linkedPackages(root, lock, overlay)) {
+      if (via !== "overlay") continue;
+      let installed = null;
+      try {
+        installed = realpathSync(resolve(root, "node_modules", ".pnpm", "node_modules", pkg));
+      } catch {
+        installed = null;
+      }
+      if (installed !== realpathSync(dir)) {
+        warnings.push(
+          `the dev overlay links ${pkg} but this tree has ${installed === null ? "no copy of it" : installed} installed — \`pnpm siblings use ${overlay.join(" ")}\` (or \`use --none\`)`,
+        );
+      }
     }
     // The CARGO half of the family rule (RFC 025 window). Every crate a lock
     // entry declares under `patch` must have a [patch.crates-io] row naming that
