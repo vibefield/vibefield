@@ -10,6 +10,10 @@ import type {
   ShellPlatform,
   ThemePreference,
   ThemeState,
+  UpdateChannel,
+  UpdateConfirmResult,
+  UpdateDoctorResult,
+  UpdatePrepareResult,
   WindowConnection,
   WindowLightsState,
 } from "@vibefield/contracts";
@@ -106,6 +110,16 @@ declare global {
       theme: {
         set(preference: ThemePreference): Promise<ThemeState>;
         onState(handler: (state: ThemeState) => void): () => void;
+      };
+      /** WP12d (L3c-i) — the desktop updater's host doors (its state rides `onDesktopState`'s `update`). */
+      update: {
+        check(): Promise<void>;
+        setEnabled(enabled: boolean): Promise<void>;
+        setChannel(channel: UpdateChannel): Promise<void>;
+        decline(version: string): Promise<void>;
+        prepareRestart(): Promise<UpdatePrepareResult>;
+        confirmRestart(token: string): Promise<UpdateConfirmResult>;
+        doctor(): Promise<UpdateDoctorResult>;
       };
       /** Godview round 3 — the deck's state said by name; main owns the
        * window's lights (GV-D11) and lends ⌘W by the same word. */

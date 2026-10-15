@@ -1465,6 +1465,14 @@ export const IPC_CHANNELS = {
   shellCommand: "vibefield:shell:command",
   /** main → renderer: native tray/background capability truth */
   desktopState: "vibefield:shell:desktop-state",
+  /** WP12d (L3c-i) — the updater's host doors (renderer → main, invoke): no path, no URL (EDP-38) */
+  updateCheck: "vibefield:update:check",
+  updateSetEnabled: "vibefield:update:set-enabled",
+  updateSetChannel: "vibefield:update:set-channel",
+  updateDecline: "vibefield:update:decline",
+  updatePrepareRestart: "vibefield:update:prepare-restart",
+  updateConfirmRestart: "vibefield:update:confirm-restart",
+  updateDoctor: "vibefield:update:doctor",
   // GT-D3's bridge channels (`vibefield:terminal:connect` invoke,
   // `vibefield:terminal:status` event) RETIRED at TP-S3e: the renderer dials
   // the cells' T1 doors directly and main runs no terminal Backend.

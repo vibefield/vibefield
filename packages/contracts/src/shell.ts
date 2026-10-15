@@ -15,6 +15,7 @@ import { isAbsoluteDesktopPath } from "./paths";
 import { PluginId } from "./plugins";
 import { ScreenshotShortcutState } from "./screenshot";
 import { TERMINAL_LINK_MAX_CHARS } from "./terminal";
+import { UpdateView } from "./update-policy";
 
 // Shell-boundary contracts (ESR spec §6.1): the shapes that cross the Electron
 // seam — the daemon's on-disk discovery descriptor and the closed contextBridge
@@ -289,6 +290,9 @@ export const DesktopShellState = z
           .nullable(),
       })
       .passthrough(),
+    /** WP12d (L3c-i) — the desktop updater, as the tray and the Settings card render it (`projectUpdateView`); absent
+     * where no updater runs (a development or unpackaged build) */
+    update: UpdateView.optional(),
   })
   .passthrough();
 export type DesktopShellState = z.infer<typeof DesktopShellState>;

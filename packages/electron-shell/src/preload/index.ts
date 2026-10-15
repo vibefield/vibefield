@@ -26,6 +26,14 @@ import {
   ThemeSetRequest,
   type ThemeState,
   ThemeState as ThemeStateSchema,
+  type UpdateChannel,
+  UpdateConfirmRequest,
+  UpdateConfirmResult,
+  UpdateDeclineRequest,
+  UpdateDoctorResult,
+  UpdatePrepareResult,
+  UpdateSetChannelRequest,
+  UpdateSetEnabledRequest,
   type UserRecord,
   UserRecord as UserRecordSchema,
   UsersCreateParams,
@@ -387,6 +395,40 @@ contextBridge.exposeInMainWorld("vibefield", {
         await ipcRenderer.invoke(IPC_CHANNELS.themeSet, ThemeSetRequest.parse({ preference })),
       ),
     onState: (handler: (state: ThemeState) => void): (() => void) => themeState.subscribe(handler),
+  },
+  /** WP12d (L3c-i; §13 C1) — the desktop updater's host doors, the narrow set the Settings card needs: no path, no
+   * URL, every payload parsed both ways (a malformed one throws here instead of crossing). Its state rides
+   * `onDesktopState` (`update`). */
+  update: {
+    check: async (): Promise<void> => {
+      await ipcRenderer.invoke(IPC_CHANNELS.updateCheck);
+    },
+    setEnabled: async (enabled: boolean): Promise<void> => {
+      await ipcRenderer.invoke(
+        IPC_CHANNELS.updateSetEnabled,
+        UpdateSetEnabledRequest.parse({ enabled }),
+      );
+    },
+    setChannel: async (channel: UpdateChannel): Promise<void> => {
+      await ipcRenderer.invoke(
+        IPC_CHANNELS.updateSetChannel,
+        UpdateSetChannelRequest.parse({ channel }),
+      );
+    },
+    decline: async (version: string): Promise<void> => {
+      await ipcRenderer.invoke(IPC_CHANNELS.updateDecline, UpdateDeclineRequest.parse({ version }));
+    },
+    prepareRestart: async (): Promise<UpdatePrepareResult> =>
+      UpdatePrepareResult.parse(await ipcRenderer.invoke(IPC_CHANNELS.updatePrepareRestart)),
+    confirmRestart: async (token: string): Promise<UpdateConfirmResult> =>
+      UpdateConfirmResult.parse(
+        await ipcRenderer.invoke(
+          IPC_CHANNELS.updateConfirmRestart,
+          UpdateConfirmRequest.parse({ token }),
+        ),
+      ),
+    doctor: async (): Promise<UpdateDoctorResult> =>
+      UpdateDoctorResult.parse(await ipcRenderer.invoke(IPC_CHANNELS.updateDoctor)),
   },
   deck: {
     /** Say Godview's deck state by name — or null for none — never a position

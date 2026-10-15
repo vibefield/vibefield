@@ -220,7 +220,7 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the twenty-two channel keys, in order", () => {
+  it("exposes exactly the twenty-nine channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -230,6 +230,14 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "liveSurfacePorts",
       "shellCommand",
       "desktopState",
+      // WP12d (L3c-i) — the desktop updater's host doors (ESR §6.2's `update*` rows)
+      "updateCheck",
+      "updateSetEnabled",
+      "updateSetChannel",
+      "updateDecline",
+      "updatePrepareRestart",
+      "updateConfirmRestart",
+      "updateDoctor",
       // TP-S3e: terminalConnect + terminalStatus retired with the bridge —
       // the renderer dials the cells' T1 doors itself.
       "viewState", // FR-1 — the window's active view (GT-D2's Godview bit, grown into four)
@@ -259,6 +267,13 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       liveSurfacePorts: "vibefield:live-surfaces:host-ports",
       shellCommand: "vibefield:shell:command",
       desktopState: "vibefield:shell:desktop-state",
+      updateCheck: "vibefield:update:check",
+      updateSetEnabled: "vibefield:update:set-enabled",
+      updateSetChannel: "vibefield:update:set-channel",
+      updateDecline: "vibefield:update:decline",
+      updatePrepareRestart: "vibefield:update:prepare-restart",
+      updateConfirmRestart: "vibefield:update:confirm-restart",
+      updateDoctor: "vibefield:update:doctor",
       viewState: "vibefield:view:state",
       viewSet: "vibefield:view:set",
       viewZoom: "vibefield:view:zoom",

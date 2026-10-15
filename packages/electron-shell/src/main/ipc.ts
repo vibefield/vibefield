@@ -9,6 +9,14 @@ import {
   ScreenshotPreviewResult,
   ThemeSetRequest,
   ThemeState as ThemeStateSchema,
+  type UpdateChannel,
+  UpdateConfirmRequest,
+  UpdateConfirmResult,
+  UpdateDeclineRequest,
+  UpdateDoctorResult,
+  UpdatePrepareResult,
+  UpdateSetChannelRequest,
+  UpdateSetEnabledRequest,
   type UserRecord,
   UsersCreateParams,
   type UsersListSnapshot,
@@ -236,6 +244,69 @@ export function registerRendererReplace(
     );
     reload(event.sender);
     return RendererReplaceResult.parse({ replacing: true });
+  });
+}
+
+/** WP12d (L3c-i; `build-wp12-updater.md` §13 C1, the PM's ruling 2026-10-15 18:17Z) — the updater's host doors. The
+ * Settings card reaches main's ONE updater here, not through fieldd: an updater must work with fieldd broken (EDP §11.3).
+ * Same registered-sender gate as every door; every payload parsed by its contract in both directions; no door carries
+ * a path or a URL (EDP-38). The state itself rides `desktopState` (`update`, the controller's one projection). */
+export interface UpdateDoorHandlers {
+  check(): Promise<void>;
+  setEnabled(enabled: boolean): void;
+  setChannel(channel: UpdateChannel): void;
+  decline(version: string): void;
+  prepareRestart(): Promise<UpdatePrepareResult>;
+  confirmRestart(token: string): Promise<{ ok: true } | { ok: false; reason: string }>;
+  doctor(): string[];
+}
+
+export function registerUpdateDoors(
+  registry: WindowRegistry,
+  handlers: UpdateDoorHandlers,
+  logger?: Logger,
+): void {
+  const gate = (door: string, sender: WebContents): void => {
+    if (registry.owns(sender)) return;
+    logger?.warn(
+      "desktop.ipc.update_refused",
+      "Electron refused an update door from an unregistered sender",
+      {
+        door,
+        webContentsId: sender.id,
+      },
+    );
+    throw new Error(`update ${door} refused: unregistered sender`);
+  };
+  ipcMain.handle(IPC_CHANNELS.updateCheck, async (event) => {
+    gate("check", event.sender);
+    await handlers.check();
+  });
+  ipcMain.handle(IPC_CHANNELS.updateSetEnabled, async (event, raw: unknown) => {
+    gate("set-enabled", event.sender);
+    handlers.setEnabled(UpdateSetEnabledRequest.parse(raw).enabled);
+  });
+  ipcMain.handle(IPC_CHANNELS.updateSetChannel, async (event, raw: unknown) => {
+    gate("set-channel", event.sender);
+    handlers.setChannel(UpdateSetChannelRequest.parse(raw).channel);
+  });
+  ipcMain.handle(IPC_CHANNELS.updateDecline, async (event, raw: unknown) => {
+    gate("decline", event.sender);
+    handlers.decline(UpdateDeclineRequest.parse(raw).version);
+  });
+  ipcMain.handle(IPC_CHANNELS.updatePrepareRestart, async (event) => {
+    gate("prepare-restart", event.sender);
+    return UpdatePrepareResult.parse(await handlers.prepareRestart());
+  });
+  ipcMain.handle(IPC_CHANNELS.updateConfirmRestart, async (event, raw: unknown) => {
+    gate("confirm-restart", event.sender);
+    return UpdateConfirmResult.parse(
+      await handlers.confirmRestart(UpdateConfirmRequest.parse(raw).token),
+    );
+  });
+  ipcMain.handle(IPC_CHANNELS.updateDoctor, async (event) => {
+    gate("doctor", event.sender);
+    return UpdateDoctorResult.parse({ lines: handlers.doctor() });
   });
 }
 

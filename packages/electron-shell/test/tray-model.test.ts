@@ -4,6 +4,7 @@ import {
   type TrayActions,
   type TraySnapshot,
   type TrayUpdateState,
+  trayUpdateOf,
 } from "../src/main/tray-model";
 
 const snapshot = (patch: Partial<TraySnapshot> = {}): TraySnapshot => ({
@@ -257,5 +258,35 @@ describe("the face in the tray (UA-7)", () => {
       "darwin",
     );
     expect(byId(menu, "switch-user").submenu?.[0]?.label).toBe("Lab");
+  });
+});
+
+// WP12d (L3c-i, §13 C6) — the tray's item comes from the controller's ONE projection, the view the Settings card also
+// renders: the two cannot drift. Offline is quiet (idle); the policy's own answers are not failures.
+describe("trayUpdateOf — the tray's half of the one projection", () => {
+  const base = {
+    channel: "stable",
+    buildChannel: "stable",
+    enabled: true,
+    lastCheckAt: null,
+    applyWired: true,
+  } as const;
+  it.each([
+    [{ phase: "idle" }, { kind: "idle" }],
+    [{ phase: "offline" }, { kind: "idle" }],
+    [{ phase: "checking" }, { kind: "checking" }],
+    [
+      { phase: "downloading", version: "1.2.0", percent: 41 },
+      { kind: "downloading", percent: 41 },
+    ],
+    [
+      { phase: "staged", version: "1.2.0", sessions: 2, keepsSessions: true },
+      { kind: "staged", version: "1.2.0", sessions: 2, keepsSessions: true },
+    ],
+    [{ phase: "paused" }, { kind: "paused" }],
+    [{ phase: "unsupported" }, { kind: "unsupported" }],
+    [{ phase: "failed", unavailable: "feed-unverified" }, { kind: "failed" }],
+  ] as const)("%o → %o", (view, tray) => {
+    expect(trayUpdateOf({ ...base, ...view })).toEqual(tray);
   });
 });

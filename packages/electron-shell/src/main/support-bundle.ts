@@ -461,6 +461,9 @@ export class SupportBundleService {
        * actually ran, never the shell's version standing in for theirs. Bounded; a failure says "unavailable". */
       daemonBuilds?: () => Promise<Record<string, string>>;
       collectContext?: () => Promise<unknown>;
+      /** WP12d (L3c-i, §13 C4) — the host's doctor surfaces (the updater's lines today), written to `doctor/status.json`
+       * through the same scrub as every file; absent, the file says no surface is registered. */
+      doctor?: () => Record<string, unknown>;
       now?: () => number;
     },
   ) {
@@ -795,8 +798,17 @@ export class SupportBundleService {
     } else {
       files.push(memoryFile("health/runtime.json", "health", runtimeData));
     }
+    const surfaces = (() => {
+      try {
+        return this.options.doctor?.();
+      } catch (error) {
+        return { error: String(error) };
+      }
+    })();
     const doctor = scrubSupportValue(
-      { state: "unavailable", reason: "no host doctor surface is registered" },
+      surfaces === undefined
+        ? { state: "unavailable", reason: "no host doctor surface is registered" }
+        : { state: "available", surfaces },
       {
         aliases: this.options.aliases,
         pseudonyms,

@@ -17,6 +17,7 @@
 
 import { randomUUID } from "node:crypto";
 import {
+  UPDATE_CHANNELS,
   UPDATE_PLANES,
   UPDATES_AUDIT_ACTIONS,
   UPDATES_SERVICE,
@@ -24,13 +25,17 @@ import {
   type UpdatePlane,
   type UpdatePolicy,
   type UpdatesUnavailableState,
+  type UpdateView,
 } from "@vibefield/contracts";
 import type { AuditAppendV1 } from "@vibefield/contracts/diagnostics";
 import type { UpdatePrepared, UpdateQuitPlan } from "../quit-flow";
 import {
   type ApplyPort,
+  type BoxContent,
+  type CensusSession,
   type CensusSnapshot,
   consentBox,
+  expiredNotice,
   policyNotice,
   quitNotice,
   SQUIRREL_STAGE_MS,
@@ -196,8 +201,32 @@ export type RestartOutcome =
         | "policy-unverified"
         // the silent path (B4) never asks: a touched release with live sessions waits for a person
         | "sessions"
+        // C2 (L3c-i): the prepared snapshot went stale before the answer — a fresh prepare, never a silent proceed
+        | "expired"
         | LeverRefusal;
     };
+
+/** C2 (L3c-i) — the first phase's answer: the snapshot a consent shows and the token bound to its ids, or a refusal
+ * with the words both the tray's box and the Settings card say. */
+export type PrepareOutcome =
+  | {
+      readonly ok: true;
+      readonly token: string;
+      readonly version: string;
+      readonly keepsSessions: boolean;
+      readonly sessions: readonly CensusSession[];
+      readonly expiresAt: number;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: Exclude<RestartOutcome, { ok: true }>["reason"];
+      readonly words?: { readonly message: string; readonly detail: string };
+    };
+
+/** C2 — how long a prepared snapshot stands: past it, the person's answer is to a list that may be stale. */
+export const PREPARE_TTL_MS = 120_000;
+
+const CHANNEL_RANK: Readonly<Record<UpdateChannel, number>> = { stable: 0, beta: 1, nightly: 2 };
 
 /** How long the apply's ATTEMPT row may take to reach fieldd's audit before the apply goes on without it. */
 const AUDIT_ATTEMPT_BOUND_MS = 2_000;
@@ -274,8 +303,16 @@ export class UpdateController {
   /** B4 — the timer that re-evaluates the silent apply; alive only while staged and no apply is underway */
   private silentTimer: ReturnType<typeof setInterval> | null = null;
   private silentInFlight = false;
-  /** one `restartToInstall` at a time (a click and the silent path never run two applies) */
+  /** one apply flow at a time (the tray's click, the silent path and the card's prepare never run two) */
   private restarting = false;
+  /** C2 — the snapshot the last prepare took, and the token bound to it (one use; `PREPARE_TTL_MS`) */
+  private prepared: {
+    readonly token: string;
+    readonly version: string;
+    readonly native: boolean;
+    readonly sessions: readonly CensusSession[];
+    readonly expiresAt: number;
+  } | null = null;
   /** an apply's quit is underway (from `quitForUpdate` until an abort): nothing re-evaluates */
   private applying = false;
   /** B4 — the display clause's last reading (doctor's), and the last silent evaluation's answer */
@@ -338,7 +375,8 @@ export class UpdateController {
     const updater = options.updater;
     updater.autoDownload = false;
     updater.autoInstallOnAppQuit = false; // WP12c's gate owns the apply; nothing installs on a plain quit
-    updater.allowDowngrade = false;
+    // EDP-36: only a channel below the running build's own may install an older version — set deliberately (C6)
+    updater.allowDowngrade = CHANNEL_RANK[this.channel] < CHANNEL_RANK[options.buildChannel];
     // `allowPrerelease` is left as electron-updater sets it (on for a nightly or beta build, AppUpdater.js:218): the
     // custom provider never reads it — the signed channel heads decide the channel (D4).
     updater.setFeedURL(
@@ -437,6 +475,7 @@ export class UpdateController {
       this.persist({ ...this.client, declined: [...this.client.declined, version].slice(-64) });
     }
     this.audit(UPDATES_AUDIT_ACTIONS.DECLINE, "succeeded", undefined, { version });
+    this.emit();
     const state = this.stateValue;
     if ("version" in state && state.version === version) {
       this.cancelDownload();
@@ -449,10 +488,92 @@ export class UpdateController {
   /** The off switch: honored at every stage boundary — an in-flight download is cancelled now. */
   setEnabled(enabled: boolean): void {
     this.persist({ ...this.client, enabled });
+    this.emit();
     if (!enabled && this.stateValue.kind === "downloading") {
       this.cancelDownload();
       this.setState({ kind: "idle" });
     }
+  }
+
+  /** C6 (L3c-i; EDP-36) — the person's channel. A channel below the running build's is a DOWNGRADE, and only then is
+   * electron-updater allowed one (`allowDowngrade`, set deliberately, never inherited). A download or a staged
+   * payload from the old channel is dropped: the next check resolves the new channel's head. Audited. */
+  setChannel(channel: UpdateChannel): void {
+    const from = this.channel;
+    if (channel === from) return;
+    this.persist({ ...this.client, channel });
+    this.options.updater.allowDowngrade = this.downgrades();
+    this.audit(UPDATES_AUDIT_ACTIONS.CHANNEL, "succeeded", undefined, {
+      from,
+      to: channel,
+      downgrade: String(this.downgrades()),
+    });
+    const state = this.stateValue;
+    this.lastVerified = null;
+    this.native = { touched: true, why: "no-manifest" };
+    this.prepared = null;
+    if (state.kind === "downloading") this.cancelDownload();
+    if (state.kind === "downloading" || state.kind === "staged" || state.kind === "available") {
+      this.setState({ kind: "idle" });
+      if (state.kind === "staged") void this.collectStagedCache("channel-changed");
+    }
+    this.emit();
+  }
+
+  /** The chosen channel ranks below the running build's own (EDP-36's "Return to stable"). */
+  private downgrades(): boolean {
+    return CHANNEL_RANK[this.channel] < CHANNEL_RANK[this.options.buildChannel];
+  }
+
+  /** C6 — the ONE projection the tray and the Settings card both render (they cannot drift). */
+  view(): UpdateView {
+    const state = this.stateValue;
+    const common = {
+      channel: this.channel,
+      buildChannel: this.options.buildChannel,
+      enabled: this.enabled,
+      lastCheckAt: this.client.lastCheckAt,
+      applyWired: this.options.apply?.wired === true,
+      ...this.unsupportedBelow(),
+    };
+    switch (state.kind) {
+      case "checking":
+      case "available":
+        return { phase: "checking", ...common };
+      case "downloading":
+        return { phase: "downloading", version: state.version, percent: state.percent, ...common };
+      case "staged":
+        return {
+          phase: "staged",
+          version: state.version,
+          ...(state.sessions !== undefined ? { sessions: state.sessions } : {}),
+          ...(state.keepsSessions === true ? { keepsSessions: true } : {}),
+          ...(state.blockedBy !== undefined ? { blockedBy: state.blockedBy } : {}),
+          ...common,
+        };
+      case "error": {
+        const unavailable = state.unavailable?.state;
+        if (unavailable === UPDATES_SERVICE.STATE_KILLED) return { phase: "paused", ...common };
+        if (unavailable === UPDATES_SERVICE.STATE_FLOOR_UNMET)
+          return { phase: "unsupported", ...common };
+        if (state.code === "offline") return { phase: "offline", ...common };
+        return {
+          phase: "failed",
+          ...(unavailable !== undefined ? { unavailable } : { unavailable: state.code }),
+          ...common,
+        };
+      }
+      default:
+        return { phase: "idle", ...common };
+    }
+  }
+
+  private unsupportedBelow(): { unsupportedBelow?: string } {
+    const min = this.lastVerified?.policy.minSupported;
+    const current = this.options.currentVersion;
+    return min !== undefined && current !== undefined && compareSemver(current, min) < 0
+      ? { unsupportedBelow: min }
+      : {};
   }
 
   /** EDP §11.6's doctor lines: the state, the last check, a staged version and what blocks it, a refusal's clause,
@@ -560,13 +681,92 @@ export class UpdateController {
     if (this.restarting) return { ok: false, reason: "quit-underway" };
     this.restarting = true;
     try {
-      return await this.restartOnce(opts.silent === true);
+      const silent = opts.silent === true;
+      const apply = this.options.apply;
+      const prepared = await this.prepareOnce();
+      if (!prepared.ok) {
+        if (!silent && prepared.words !== undefined && apply !== undefined)
+          await apply.notify(wordsBox(prepared.words));
+        return { ok: false, reason: prepared.reason };
+      }
+      if (prepared.sessions.length > 0) {
+        // the silent path asks no one: live sessions wait for a person (EDP-33, EDP-34's plane gate)
+        if (silent || apply === undefined) {
+          this.prepared = null;
+          return { ok: false, reason: "sessions" };
+        }
+        // the tray's consent: the native box between the two phases, showing THIS snapshot
+        const consented = await apply.confirm(consentBox(prepared.version, prepared.sessions));
+        if (!consented) {
+          this.prepared = null;
+          return { ok: false, reason: "consent-declined" };
+        }
+      }
+      const confirmed = await this.confirmRestart(prepared.token, silent ? "silent" : "person");
+      if (!confirmed.ok && confirmed.reason === "expired" && !silent && apply !== undefined)
+        await apply.notify(expiredNotice());
+      return confirmed;
     } finally {
       this.restarting = false;
     }
   }
 
-  private async restartOnce(silent: boolean): Promise<RestartOutcome> {
+  /** C2 (L3c-i; the PM's ruling 2026-10-15 18:17Z) — the first phase, for the Settings card (its consent) and, inside
+   * `restartToInstall`, the tray: a FRESH policy (B2), the levers, the planes (B3) and ONE census snapshot, bound to a
+   * token. Nothing is torn down. */
+  async prepareRestart(): Promise<PrepareOutcome> {
+    if (this.restarting) return { ok: false, reason: "quit-underway" };
+    this.restarting = true;
+    try {
+      return await this.prepareOnce();
+    } finally {
+      this.restarting = false;
+    }
+  }
+
+  /** C2 — the second phase: act on EXACTLY the prepared snapshot (its ids are what fieldd re-checks, the last word).
+   * One use; a stale, replaced or unknown token is `expired`, which means a fresh prepare, never a silent proceed. */
+  async confirmRestart(
+    token: string,
+    trigger: "person" | "silent" = "person",
+  ): Promise<RestartOutcome> {
+    const prepared = this.prepared;
+    this.prepared = null;
+    const state = this.stateValue;
+    if (
+      prepared === null ||
+      prepared.token !== token ||
+      this.now() > prepared.expiresAt ||
+      state.kind !== "staged" ||
+      state.version !== prepared.version
+    ) {
+      return { ok: false, reason: "expired" };
+    }
+    const apply = this.options.apply;
+    if (apply === undefined || !apply.wired) return { ok: false, reason: "apply-unbuilt" };
+    const sessions = prepared.sessions.map((session) => session.sessionId);
+    const operationId = randomUUID();
+    await this.auditAttempt(operationId, {
+      version: prepared.version,
+      consented: String(sessions.length),
+      native: prepared.native ? "stop" : "keep",
+      trigger,
+    });
+    if (
+      !apply.quitForUpdate(
+        this.updatePlan(apply, prepared.version, sessions, operationId, prepared.native),
+      )
+    ) {
+      return { ok: false, reason: "quit-underway" };
+    }
+    // the apply's quit is underway: nothing re-evaluates (the timer dies here, and again at the stop)
+    this.applying = true;
+    this.syncSilentTimer();
+    return { ok: true };
+  }
+
+  private async prepareOnce(): Promise<PrepareOutcome> {
+    this.prepared = null;
     const state = this.stateValue;
     if (state.kind !== "staged") return { ok: false, reason: "not-staged" };
     const apply = this.options.apply;
@@ -586,19 +786,23 @@ export class UpdateController {
         { version, ...(fresh.kind === "refused" ? { state: fresh.state } : {}) },
       );
       this.setState({ ...this.stagedOf(version), blockedBy: reason });
-      if (!silent)
-        await apply.notify(
+      return {
+        ok: false,
+        reason,
+        words: wordsOf(
           policyNotice({ kind: reason === "policy-unreachable" ? "unreachable" : "unverified" }),
-        );
-      return { ok: false, reason };
+        ),
+      };
     }
     this.lastVerified = fresh.chain;
     const policy = leversOf(fresh.chain.policy);
     const lever = leverRefusal(version, policy, this.options.hostOsVersion?.() ?? null);
     if (lever !== null) {
       this.refuseByLever(version, lever, UPDATES_AUDIT_ACTIONS.APPLY);
-      if (!silent)
-        await apply.notify(
+      return {
+        ok: false,
+        reason: lever,
+        words: wordsOf(
           policyNotice(
             lever === "killed"
               ? { kind: "killed", channel: this.channel }
@@ -606,41 +810,25 @@ export class UpdateController {
                 ? { kind: "yanked", version }
                 : { kind: "floor-unmet", version, floor: policy.floors.os ?? "" },
           ),
-        );
-      return { ok: false, reason: lever };
+        ),
+      };
     }
 
-    // B3 — the planes, by digest, from the same fresh chain
+    // B3 — the planes, by digest, from the same fresh chain; a touched release takes ONE census snapshot
     const native = (await this.judgeNative(fresh.chain, version)).touched;
-    let sessions: readonly string[] = [];
+    let sessions: readonly CensusSession[] = [];
     if (native) {
       const snapshot = await this.readCensus();
       if (!snapshot.known) {
         this.audit(UPDATES_AUDIT_ACTIONS.APPLY, "denied", "CENSUS_UNKNOWN", { version });
         return { ok: false, reason: "census-unknown" };
       }
-      // the silent path asks no one: live sessions wait for a person (EDP-33, EDP-34's plane gate)
-      if (silent && snapshot.sessions.length > 0) return { ok: false, reason: "sessions" };
-      if (snapshot.sessions.length > 0) {
-        const consented = await apply.confirm(consentBox(version, snapshot.sessions));
-        if (!consented) return { ok: false, reason: "consent-declined" };
-      }
-      sessions = snapshot.sessions.map((session) => session.sessionId);
+      sessions = snapshot.sessions;
     }
-    const operationId = randomUUID();
-    await this.auditAttempt(operationId, {
-      version,
-      consented: String(sessions.length),
-      native: native ? "stop" : "keep",
-      trigger: silent ? "silent" : "person",
-    });
-    if (!apply.quitForUpdate(this.updatePlan(apply, version, sessions, operationId, native))) {
-      return { ok: false, reason: "quit-underway" };
-    }
-    // the apply's quit is underway: nothing re-evaluates (the timer dies here, and again at the stop)
-    this.applying = true;
-    this.syncSilentTimer();
-    return { ok: true };
+    const token = `${randomUUID()}${randomUUID()}`.replace(/-/g, "");
+    const expiresAt = this.now() + PREPARE_TTL_MS;
+    this.prepared = { token, version, native, sessions, expiresAt };
+    return { ok: true, token, version, keepsSessions: !native, sessions, expiresAt };
   }
 
   /** B4 (EDP-34, §11.3) — apply a staged update ON ITS OWN when the safe window holds: windowless ∧ tray-resident ∧ the
@@ -1179,6 +1367,32 @@ export class UpdateController {
   private setState(next: UpdateState): void {
     this.stateValue = next;
     this.syncSilentTimer();
-    for (const listener of this.listeners) listener(next);
+    this.emit();
+  }
+
+  /** Subscribers hear the state AND the person's choices (the switch, the channel, a decline): the view is both. */
+  private emit(): void {
+    for (const listener of this.listeners) listener(this.stateValue);
   }
 }
+
+/** The words a refusal carries to the card (the tray's box says the same). */
+function wordsOf(box: BoxContent): { message: string; detail: string } {
+  return { message: box.message, detail: box.detail };
+}
+
+/** The tray's native box for those words. */
+function wordsBox(words: { readonly message: string; readonly detail: string }): BoxContent {
+  return {
+    message: words.message,
+    detail: words.detail,
+    buttons: ["OK"],
+    defaultId: 0,
+    cancelId: 0,
+  };
+}
+
+/** The channels, lowest first (the segmented control's order). */
+export const UPDATE_CHANNELS_BY_RANK: readonly UpdateChannel[] = [...UPDATE_CHANNELS].sort(
+  (a, b) => CHANNEL_RANK[a] - CHANNEL_RANK[b],
+);

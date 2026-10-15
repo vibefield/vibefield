@@ -278,6 +278,8 @@ export const UPDATES_AUDIT_ACTIONS = {
    * found a release it may not offer) and on `app.update.apply` (a policy re-read at the click), and
    * `POLICY_UNREACHABLE` / `POLICY_UNVERIFIED` on `app.update.apply`. */
   APPLY: "app.update.apply",
+  /** WP12d (L3c-i) — a person's channel change (EDP §11.6), `from` and `to` in attrs; a lower channel is a downgrade */
+  CHANNEL: "app.update.channel",
 } as const;
 
 const RememberedVersion = z.number().int().min(1).nullable();
@@ -405,3 +407,102 @@ export const SystemShutdownResult = z
   })
   .passthrough();
 export type SystemShutdownResult = z.infer<typeof SystemShutdownResult>;
+
+// ── WP12d (L3c-i; `build-wp12-updater.md` §13, the PM's ruling 2026-10-15 18:17Z) — the updater over the HOST BRIDGE ──
+// The renderer's Settings card and the tray read ONE projection of the updater (`projectUpdateView` in main) and act
+// through narrow host doors (the preload's allowlist; `IPC_CHANNELS.update*`). The bridge, not fieldd, because an
+// updater must work with fieldd broken (EDP §11.3). No door carries a path or a URL (EDP-38); main validates each.
+
+/** The updater as the person sees it: the tray's item and the Settings card both render THIS. */
+export const UpdateView = z
+  .object({
+    phase: z.enum([
+      "idle",
+      "checking",
+      "downloading",
+      "staged",
+      "paused",
+      "unsupported",
+      "failed",
+      "offline",
+    ]),
+    /** downloading or staged */
+    version: z.string().min(1).max(64).optional(),
+    /** downloading: coarse, 0–100 */
+    percent: z.number().min(0).max(100).optional(),
+    /** staged: the live sessions the last census read, or `unknown` (the verb holds) */
+    sessions: z.union([z.number().int().nonnegative(), z.literal("unknown")]).optional(),
+    /** staged: the release leaves the floor's bytes alone, so its apply ends no session (L3b-i, B3) */
+    keepsSessions: z.boolean().optional(),
+    /** staged: what holds the apply, named (`sessions`, `census-unknown`, `policy-unreachable`, …) */
+    blockedBy: z.string().min(1).max(64).optional(),
+    /** failed: the honest `UNAVAILABLE {service: "updates", state}` */
+    unavailable: z.string().min(1).max(64).optional(),
+    channel: UpdateChannel,
+    /** the running build's own channel: a lower `channel` is a downgrade, and the card says so (EDP-36) */
+    buildChannel: UpdateChannel,
+    enabled: z.boolean(),
+    lastCheckAt: z.number().int().nonnegative().nullable(),
+    /** the apply exists on this platform (macOS); elsewhere nothing offers a restart */
+    applyWired: z.boolean(),
+    /** the advisory UNSUPPORTED line: the running version is below the policy's `minSupported` — never a block */
+    unsupportedBelow: z.string().min(1).max(64).optional(),
+  })
+  .passthrough();
+export type UpdateView = z.infer<typeof UpdateView>;
+
+export const UpdateSetEnabledRequest = z.object({ enabled: z.boolean() }).strict();
+export const UpdateSetChannelRequest = z.object({ channel: UpdateChannel }).strict();
+export const UpdateDeclineRequest = z.object({ version: z.string().min(1).max(64) }).strict();
+export const UpdateConfirmRequest = z.object({ token: z.string().min(16).max(128) }).strict();
+
+/** One live session in the apply's census, as the consent names it (`title — cwd`); the id is what fieldd re-checks. */
+export const UpdateConsentSession = z
+  .object({
+    sessionId: z.string().min(1).max(256),
+    title: z.string().max(512).optional(),
+    cwd: z.string().max(4096).optional(),
+  })
+  .passthrough();
+
+/** Words the person reads when an apply does not start: the tray's native box and the card say the SAME sentence. */
+export const UpdateWords = z
+  .object({ message: z.string().min(1).max(256), detail: z.string().min(1).max(1024) })
+  .passthrough();
+
+/** C2, the first phase: a FRESH policy, the planes, and ONE census snapshot — with a token bound to its ids. The
+ * second phase acts on exactly that snapshot (fieldd's re-check is the last word); an expired token means a fresh
+ * prepare, never a silent proceed. */
+export const UpdatePrepareResult = z.discriminatedUnion("ok", [
+  z
+    .object({
+      ok: z.literal(true),
+      token: z.string().min(16).max(128),
+      version: z.string().min(1).max(64),
+      /** the release leaves the floor alone: no session ends, no consent */
+      keepsSessions: z.boolean(),
+      sessions: z.array(UpdateConsentSession).max(4096),
+      expiresAt: z.number().int().nonnegative(),
+    })
+    .passthrough(),
+  z
+    .object({
+      ok: z.literal(false),
+      reason: z.string().min(1).max(64),
+      words: UpdateWords.optional(),
+    })
+    .passthrough(),
+]);
+export type UpdatePrepareResult = z.infer<typeof UpdatePrepareResult>;
+
+export const UpdateConfirmResult = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true) }).passthrough(),
+  z.object({ ok: z.literal(false), reason: z.string().min(1).max(64) }).passthrough(),
+]);
+export type UpdateConfirmResult = z.infer<typeof UpdateConfirmResult>;
+
+/** C4 — the doctor's lines (EDP §11.6), as `doctorLines()` says them. */
+export const UpdateDoctorResult = z
+  .object({ lines: z.array(z.string().max(1024)).max(64) })
+  .passthrough();
+export type UpdateDoctorResult = z.infer<typeof UpdateDoctorResult>;

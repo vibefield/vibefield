@@ -33,7 +33,7 @@ function unpackTarGz(raw: Buffer): Map<string, Buffer> {
   return files;
 }
 
-async function fixture() {
+async function fixture(extra: { doctor?: () => Record<string, unknown> } = {}) {
   const root = await mkdtemp(join(tmpdir(), "vibefield-support-"));
   roots.push(root);
   const logRoot = join(root, "logs");
@@ -67,6 +67,7 @@ async function fixture() {
       node: process.versions.node,
       contracts: "0.1.0",
     },
+    ...(extra.doctor !== undefined ? { doctor: extra.doctor } : {}),
     collectContext: async () => ({
       userId: "real-user-id",
       env: { SHOULD_NOT: "leave" },
@@ -346,5 +347,55 @@ describe("previewed support bundles", () => {
 
     await crashes.markClean();
     await logging.close();
+  });
+});
+
+// WP12d (L3c-i, §13 C4) — the bundle's first doctor surface: the updater's lines, through the same scrub as every file.
+describe("the doctor surface in a support bundle", () => {
+  async function doctorOf(extra: { doctor?: () => Record<string, unknown> }) {
+    const { root, logging, service } = await fixture(extra);
+    const now = Date.now();
+    logging.logger.info("desktop.support.doctor", "a record so the bundle has a log");
+    await logging.desktop.flush();
+    const preview = await service.preview({
+      range: { from: now - 60_000, to: now + 1_000 },
+      sources: [LOG_STREAMS.SYSTEM_DESKTOP],
+      pluginIds: [],
+      includeAudit: false,
+      crashArtifactIds: [],
+    });
+    const destination = join(root, "support-doctor.tar.gz");
+    await service.export(preview.previewId, destination);
+    const files = unpackTarGz(await readFile(destination));
+    return JSON.parse(files.get("doctor/status.json")!.toString("utf8")) as Record<string, unknown>;
+  }
+
+  it("carries the updater's lines when a doctor surface is registered", async () => {
+    expect(
+      await doctorOf({
+        doctor: () => ({
+          updates: { lines: ["updates: staged · channel stable", "update cache: 42.0 MB"] },
+        }),
+      }),
+    ).toEqual({
+      state: "available",
+      surfaces: {
+        updates: { lines: ["updates: staged · channel stable", "update cache: 42.0 MB"] },
+      },
+    });
+  });
+
+  it("says no surface is registered when none is — and a throwing surface is said, not fatal", async () => {
+    expect(await doctorOf({})).toEqual({
+      state: "unavailable",
+      reason: "no host doctor surface is registered",
+    });
+    expect(
+      await doctorOf({
+        doctor: () => {
+          throw new Error("the updater is gone");
+        },
+      }),
+    ).toMatchObject({ state: "available", surfaces: { error: "Error: the updater is gone" } });
   });
 });

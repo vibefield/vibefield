@@ -20,7 +20,7 @@ import {
   type ScreenshotCaptureResult,
   type ShellCommand,
   ShellCommandRequest,
-  UPDATES_SERVICE,
+  type UpdateView,
   type UserRecord,
   type UsersCreateParams,
 } from "@vibefield/contracts";
@@ -70,6 +70,7 @@ import {
   registerScreenshotCapture,
   registerScreenshotPreview,
   registerThemeSet,
+  registerUpdateDoors,
   registerUsersRoster,
   registerUsersUpdate,
   registerViewSet,
@@ -129,9 +130,8 @@ import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { fileThemeStore, THEME_FILE, ThemeOwner } from "./theme";
 import { TrayController } from "./tray-controller";
 import { TrayEvidenceMonitor } from "./tray-evidence";
-import type { TrayLinkState, TraySnapshot, TrayUpdateState } from "./tray-model";
+import { type TrayLinkState, type TraySnapshot, trayUpdateOf } from "./tray-model";
 import { createElectronTrayRuntime } from "./tray-native";
-import type { UpdateState } from "./updates/controller";
 import { readUpdateIdentity } from "./updates/identity";
 import { createElectronApplyPort, installUpdateController } from "./updates/install";
 import { applyProfileUpdate, dealOwedFace } from "./users-profile";
@@ -208,6 +208,8 @@ let logging: ElectronLogging | null = null;
 let localDiagnostics: ElectronLocalDiagnostics | null = null;
 let crashArtifacts: CrashArtifactManager | null = null;
 let supportBundles: SupportBundleService | null = null;
+/** WP12d (L3c-i, §13 C4) — the updater's doctor lines for the support bundle; null where no updater runs */
+let updateDoctorLines: (() => readonly string[]) | null = null;
 let trayController: TrayController | null = null;
 let viewStates: ViewRegistry | null = null;
 // Godview round 3 — each window's lights and the deck word they follow
@@ -1671,10 +1673,15 @@ async function main(
   }
 
   let latestDesktopState: DesktopShellState | null = null;
+  let latestDesktopRaw: DesktopShellState | null = null;
+  // WP12d (L3c-i) — the updater's one projection rides desktopState to the Settings card (the tray reads the same)
+  let latestUpdateView: UpdateView | null = null;
   const publishDesktopState = (raw: DesktopShellState): void => {
+    latestDesktopRaw = raw;
     const state = DesktopShellStateSchema.parse({
       ...raw,
       ...(screenshotShortcut === null ? {} : { screenshotHotkey: screenshotShortcut.current() }),
+      ...(latestUpdateView === null ? {} : { update: latestUpdateView }),
     });
     latestDesktopState = state;
     const window = registry.primary();
@@ -1931,8 +1938,44 @@ async function main(
     onDesktopState: publishDesktopState,
   });
   if (updates !== null) {
-    shellDisposers.add(
-      updates.subscribe((state) => trayController?.update({ update: trayUpdateOf(state) })),
+    // C6 — ONE projection feeds the tray's item and the Settings card (through desktopState), so they cannot drift
+    const projectUpdate = (): void => {
+      const view = updates.view();
+      latestUpdateView = view;
+      trayController?.update({ update: trayUpdateOf(view) });
+      if (latestDesktopRaw !== null) publishDesktopState(latestDesktopRaw);
+    };
+    projectUpdate();
+    shellDisposers.add(updates.subscribe(() => projectUpdate()));
+    updateDoctorLines = () => updates.doctorLines();
+    // C1 — the Settings card's host doors (the narrow preload set; no path, no URL)
+    registerUpdateDoors(
+      registry,
+      {
+        check: async () => {
+          await updates.check("manual");
+        },
+        setEnabled: (enabled) => updates.setEnabled(enabled),
+        setChannel: (channel) => updates.setChannel(channel),
+        decline: (version) => updates.decline(version),
+        prepareRestart: async () => {
+          const prepared = await updates.prepareRestart();
+          if (!prepared.ok) return prepared;
+          // the wire's sessions are plain records (the contract passes unknown keys through): each is copied out
+          // field by field, so the controller's snapshot is never handed over by reference
+          return {
+            ...prepared,
+            sessions: prepared.sessions.map(({ sessionId, title, cwd }) => ({
+              sessionId,
+              ...(title === undefined ? {} : { title }),
+              ...(cwd === undefined ? {} : { cwd }),
+            })),
+          };
+        },
+        confirmRestart: (token) => updates.confirmRestart(token),
+        doctor: () => updates.doctorLines(),
+      },
+      logger.child({ component: "ipc.update" }),
     );
     const launchCheck = setTimeout(() => void updates.check("launch"), UPDATE_LAUNCH_DELAY_MS);
     launchCheck.unref?.();
@@ -2114,6 +2157,13 @@ if (!hasInstanceLock) {
         logs: logRoot,
         data: root,
       },
+      // WP12d (L3c-i, §13 C4) — the bundle's first doctor surface: the updater's lines, as Settings shows them
+      doctor: () => ({
+        updates:
+          updateDoctorLines === null
+            ? { state: "unavailable", reason: "no updater runs in this build" }
+            : { lines: [...updateDoctorLines()] },
+      }),
       // WP12 L2a — what the RUNNING pair says it is (an app update may leave an older pair adopted until replaced)
       daemonBuilds: async () => {
         const handle = await ensureFieldd();
@@ -2213,29 +2263,3 @@ const UPDATE_LAUNCH_DELAY_MS = 30_000;
 const UPDATE_CENSUS_REFRESH_MS = 60_000;
 /** L3b-ii (B4) — how long after the last window closes the silent apply is considered (a reopened window wins). */
 const UPDATE_SILENT_AFTER_CLOSE_MS = 5_000;
-
-/** The tray's projection of the update state. Offline is quiet and retryable (EDP §11.2), so it reads as idle; a
- * refusal or a failure reads as failed, with its details in the log and the audit, never in the menu — except the
- * policy's own answers (L3b-i, B1), which are not failures: a kill switch reads `paused`, an unmet OS floor `unsupported`. */
-function trayUpdateOf(state: UpdateState): TrayUpdateState {
-  switch (state.kind) {
-    case "checking":
-      return { kind: "checking" };
-    case "downloading":
-      return { kind: "downloading", percent: state.percent };
-    case "staged":
-      return {
-        kind: "staged",
-        version: state.version,
-        ...(state.sessions !== undefined ? { sessions: state.sessions } : {}),
-        ...(state.keepsSessions === true ? { keepsSessions: true } : {}),
-      };
-    case "error":
-      if (state.unavailable?.state === UPDATES_SERVICE.STATE_KILLED) return { kind: "paused" };
-      if (state.unavailable?.state === UPDATES_SERVICE.STATE_FLOOR_UNMET)
-        return { kind: "unsupported" };
-      return state.code === "offline" ? { kind: "idle" } : { kind: "failed" };
-    default:
-      return { kind: "idle" };
-  }
-}

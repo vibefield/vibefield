@@ -96,6 +96,16 @@ export function mountProductHost(
         exportSupport: (request) => window.vibefield.diagnostics.exportSupport(request),
         copyText: (text) => window.vibefield.diagnostics.copyText(text),
       },
+      // WP12d (L3c-i) — the desktop updater's doors, straight onto the preload's narrow set
+      updates: {
+        check: () => window.vibefield.update.check(),
+        setEnabled: (enabled) => window.vibefield.update.setEnabled(enabled),
+        setChannel: (channel) => window.vibefield.update.setChannel(channel),
+        decline: (version) => window.vibefield.update.decline(version),
+        prepareRestart: () => window.vibefield.update.prepareRestart(),
+        confirmRestart: (token) => window.vibefield.update.confirmRestart(token),
+        doctor: () => window.vibefield.update.doctor(),
+      },
       getConnection: async () => {
         const connection = await window.vibefield.getConnection();
         const { terminal, ...required } = connection;

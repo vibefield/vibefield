@@ -146,6 +146,19 @@ export function policyNotice(
   };
 }
 
+/** C2 (L3c-i) — the consent's snapshot went stale before the answer (two minutes, or the update changed): nothing
+ * changed, and the next Restart takes a fresh one. Never a silent proceed on an old list. */
+export function expiredNotice(): BoxContent {
+  return {
+    message: "VibeField didn't install the update",
+    detail:
+      "The list of sessions it would end may have changed while you decided. Nothing changed; choose Restart to Update again.",
+    buttons: ["OK"],
+    defaultId: 0,
+    cancelId: 0,
+  };
+}
+
 /** The tray's verb for a staged update (the macOS menu convention the tray already uses: Title Case, an ellipsis for
  * a verb that asks). `undefined` sessions = not wired here; `"unknown"` = the census could not be read. A release that
  * leaves the floor alone (`keepsSessions`, L3b-i B3) ends no session, so its verb is the plain one whatever the count. */

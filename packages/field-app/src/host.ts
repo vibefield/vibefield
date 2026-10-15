@@ -20,6 +20,10 @@ import type {
   ShellPlatform,
   ThemePreference,
   ThemeState,
+  UpdateChannel,
+  UpdateConfirmResult,
+  UpdateDoctorResult,
+  UpdatePrepareResult,
   WindowLightsState,
   WindowTerminalBootstrap,
 } from "@vibefield/contracts";
@@ -49,6 +53,24 @@ export interface FieldConnection {
   rendererParticipant?: RendererParticipantIdentity;
   /** Present on the TP-aware Electron bridge; absent on older/browser hosts. */
   terminal?: WindowTerminalBootstrap;
+}
+
+/** WP12d (L3c-i; `build-wp12-updater.md` §13 C1) — the desktop updater's doors, which the HOST owns: main runs the
+ * one updater, and the Settings card reaches it over the host bridge (an updater must work with fieldd broken, EDP
+ * §11.3). Its state rides `onDesktopState` (`update`). Absent in browser harnesses and unpackaged builds. No door
+ * takes a path or a URL. */
+export interface FieldUpdatesHost {
+  check(): Promise<void>;
+  setEnabled(enabled: boolean): Promise<void>;
+  setChannel(channel: UpdateChannel): Promise<void>;
+  /** "Skip this version": declined across restarts and a staged download (EDP §11.3) */
+  decline(version: string): Promise<void>;
+  /** C2's first phase: the snapshot a consent shows, and a token bound to its ids (or the refusal and its words) */
+  prepareRestart(): Promise<UpdatePrepareResult>;
+  /** C2's second phase: act on THAT snapshot; `expired` means prepare again, never a silent proceed */
+  confirmRestart(token: string): Promise<UpdateConfirmResult>;
+  /** C4 — the doctor's lines */
+  doctor(): Promise<UpdateDoctorResult>;
 }
 
 export interface FieldDiagnosticsHost {
@@ -175,6 +197,8 @@ export interface FieldHost {
    * every boot without changing the supervisor-owned durable profile. */
   readonly forceOnboarding?: boolean;
   readonly diagnostics?: FieldDiagnosticsHost;
+  /** WP12d (L3c-i) — the desktop updater (`FieldUpdatesHost`); absent where no updater runs. */
+  readonly updates?: FieldUpdatesHost;
   readonly platform?: ShellPlatform;
   readonly view?: FieldViewHost;
   /** Optional like `view`: a browser harness has no main to own the theme, and

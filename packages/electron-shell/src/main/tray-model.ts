@@ -1,3 +1,4 @@
+import type { UpdateView } from "@vibefield/contracts";
 import { stagedTrayLabel } from "./updates/apply";
 
 export type TrayLinkState = "starting" | "ready" | "reconnecting" | "unavailable";
@@ -304,4 +305,31 @@ export function buildTrayMenu(
     },
   );
   return items;
+}
+
+/** The tray's item, from the controller's ONE projection (C6; the Settings card renders the same view). Offline is
+ * quiet and retryable (EDP §11.2), so it reads as idle; a refusal or a failure reads as failed, with its details in
+ * doctor and the audit, never in the menu — except the policy's own answers (L3b-i, B1), which are not failures. */
+export function trayUpdateOf(view: UpdateView): TrayUpdateState {
+  switch (view.phase) {
+    case "checking":
+      return { kind: "checking" };
+    case "downloading":
+      return { kind: "downloading", percent: view.percent ?? 0 };
+    case "staged":
+      return {
+        kind: "staged",
+        version: view.version ?? "",
+        ...(view.sessions !== undefined ? { sessions: view.sessions } : {}),
+        ...(view.keepsSessions === true ? { keepsSessions: true } : {}),
+      };
+    case "paused":
+      return { kind: "paused" };
+    case "unsupported":
+      return { kind: "unsupported" };
+    case "failed":
+      return { kind: "failed" };
+    default:
+      return { kind: "idle" };
+  }
 }

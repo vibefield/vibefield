@@ -11,6 +11,7 @@ import type {
 import {
   type CancellationLike,
   FRESH_POLICY_BOUND_MS,
+  PREPARE_TTL_MS,
   SILENT_RECHECK_MS,
   UpdateController,
   type UpdaterPort,
@@ -148,6 +149,8 @@ async function stagedController(
     cache?: FakeCache;
     /** the head policy's levers at the first check */
     levers?: Record<string, unknown>;
+    /** L3c-i — a clock the test moves (a prepared snapshot's two minutes) */
+    clock?: { now: number };
   } = {},
 ) {
   const fx = new FixtureOrigin();
@@ -177,7 +180,7 @@ async function stagedController(
       audits.push(record);
     },
     log: { info: vi.fn(), warn: vi.fn() },
-    now: () => NOW,
+    now: () => opts.clock?.now ?? NOW,
     apply,
     ...(opts.currentVersion !== undefined ? { currentVersion: opts.currentVersion } : {}),
     ...(opts.fetch === null ? {} : { fetch: opts.fetch ?? fx.fetch }),
@@ -815,5 +818,163 @@ describe("the silent self-apply (B4) and the staged cache (B6)", () => {
     await vi.waitFor(() =>
       expect(yanked.controller.doctorLines()).toContain("update cache: 0.0 MB"),
     );
+  });
+});
+
+// WP12d (L3c-i; build-wp12-updater.md §13 C2/C6, the PM's ruling 2026-10-15 18:17Z) — the two-phase apply the tray and
+// the Settings card share, and the one projection they both render. `prepareRestart` takes ONE snapshot and binds a
+// token to it; `confirmRestart` acts on exactly that snapshot (fieldd's re-check is the last word); an expired,
+// replaced or spent token is `expired` — a fresh prepare, never a silent proceed. No apply asks twice.
+describe("the two-phase apply (C2) and the one projection (C6)", () => {
+  async function staged(
+    opts: Parameters<typeof stagedController>[0],
+    sessions: CensusSnapshot = LIVE,
+  ) {
+    const r = await stagedController(opts);
+    r.apply.snapshot = sessions;
+    await r.controller.check("manual");
+    r.timeline.length = 0;
+    r.audits.length = 0;
+    return r;
+  }
+
+  it("the card's consent: ONE snapshot and a token; confirm acts on THAT snapshot, with no box of its own", async () => {
+    const r = await staged({});
+    const prepared = await r.controller.prepareRestart();
+    expect(prepared).toMatchObject({
+      ok: true,
+      version: STAGED_VERSION,
+      keepsSessions: false,
+      sessions: LIVE.sessions,
+    });
+    if (!prepared.ok) return;
+    // a session is born after the snapshot: the stop still names exactly what the person saw (fieldd re-checks)
+    r.apply.snapshot = {
+      known: true,
+      sessions: [...LIVE.sessions, { sessionId: "01SESSIONCCCCCCCCCCCCCCCCC" }],
+    };
+    expect(await r.controller.confirmRestart(prepared.token)).toEqual({ ok: true });
+    expect(r.apply.boxes).toEqual([]); // the card was the consent: main asks nothing more
+    await r.apply.plan!.prepare();
+    expect(r.apply.stoppedWith).toEqual(LIVE.sessions.map((session) => session.sessionId));
+    expect(r.timeline.filter((step) => step === "fieldd:census")).toEqual(["fieldd:census"]);
+  });
+
+  it("a token is one use: replaced by a later prepare, spent by any confirm, dead after two minutes or a changed update", async () => {
+    const clock = { now: NOW };
+    const r = await staged({ clock });
+    const first = await r.controller.prepareRestart();
+    const second = await r.controller.prepareRestart();
+    if (!first.ok || !second.ok) throw new Error("prepare refused");
+    expect(await r.controller.confirmRestart(first.token)).toEqual({
+      ok: false,
+      reason: "expired",
+    });
+    // the wrong token spent the snapshot too: the right one now needs a fresh prepare
+    expect(await r.controller.confirmRestart(second.token)).toEqual({
+      ok: false,
+      reason: "expired",
+    });
+
+    const third = await r.controller.prepareRestart();
+    if (!third.ok) throw new Error("prepare refused");
+    expect(third.expiresAt).toBe(NOW + PREPARE_TTL_MS);
+    clock.now += PREPARE_TTL_MS + 1;
+    expect(await r.controller.confirmRestart(third.token)).toEqual({
+      ok: false,
+      reason: "expired",
+    });
+
+    clock.now = NOW;
+    const fourth = await r.controller.prepareRestart();
+    if (!fourth.ok) throw new Error("prepare refused");
+    r.controller.decline(STAGED_VERSION);
+    expect(await r.controller.confirmRestart(fourth.token)).toEqual({
+      ok: false,
+      reason: "expired",
+    });
+    expect(r.apply.plan).toBeNull(); // nothing ever proceeded
+  });
+
+  it("the tray's native box sits between the same two phases — left open past two minutes, nothing proceeds, and it says so", async () => {
+    const clock = { now: NOW };
+    const r = await staged({ clock });
+    r.apply.confirm = async (box) => {
+      r.apply.boxes.push(box);
+      clock.now += PREPARE_TTL_MS + 1;
+      return true;
+    };
+    expect(await r.controller.restartToInstall()).toEqual({ ok: false, reason: "expired" });
+    expect(r.apply.boxes).toHaveLength(1);
+    expect(r.apply.notices[0]?.detail).toContain("choose Restart to Update again");
+    expect(r.apply.plan).toBeNull();
+  });
+
+  it("a refusal at prepare carries the words the tray says, and the card's path shows no box of main's", async () => {
+    const r = await staged({
+      fetch: async () => {
+        throw new Error("net::ERR_INTERNET_DISCONNECTED");
+      },
+    });
+    expect(await r.controller.prepareRestart()).toEqual({
+      ok: false,
+      reason: "policy-unreachable",
+      words: {
+        message: "VibeField didn't install the update",
+        detail:
+          "VibeField checks the update policy before installing and couldn't reach it; try again when online.",
+      },
+    });
+    expect(r.apply.notices).toEqual([]);
+  });
+
+  it("C6 — a channel below the build's is a deliberate downgrade: persisted, audited, the old payload dropped, subscribers told", async () => {
+    const cache = new FakeCache();
+    const r = await staged({ cache }, { known: true, sessions: [] });
+    const updater = (r.controller as unknown as { options: { updater: FakeUpdater } }).options
+      .updater;
+    expect(updater.allowDowngrade).toBe(false); // a nightly build on nightly
+    const heard: string[] = [];
+    r.controller.subscribe((state) => heard.push(state.kind));
+    r.controller.setChannel("stable");
+    expect(updater.allowDowngrade).toBe(true);
+    expect(r.controller.state).toEqual({ kind: "idle" });
+    expect(heard).toContain("idle");
+    expect(JSON.parse(r.files.get("/state.json")!).channel).toBe("stable");
+    expect(r.audits).toContainEqual(
+      expect.objectContaining({
+        action: "app.update.channel",
+        attrs: { from: "nightly", to: "stable", downgrade: "true" },
+      }),
+    );
+    await vi.waitFor(() => expect(cache.cleared).toBe(1));
+    expect(r.controller.view()).toMatchObject({
+      phase: "idle",
+      channel: "stable",
+      buildChannel: "nightly",
+    });
+    r.controller.setChannel("nightly");
+    expect(updater.allowDowngrade).toBe(false);
+  });
+
+  it("C6 — the view says the state, the person's choices and the advisory line, and hears a decline", async () => {
+    const r = await staged({ currentVersion: "0.8.0", levers: { minSupported: "0.9.0" } });
+    expect(r.controller.view()).toEqual({
+      phase: "staged",
+      version: STAGED_VERSION,
+      sessions: 2,
+      blockedBy: "sessions",
+      channel: "nightly",
+      buildChannel: "nightly",
+      enabled: true,
+      lastCheckAt: NOW,
+      applyWired: true,
+      unsupportedBelow: "0.9.0",
+    });
+    const heard: string[] = [];
+    r.controller.subscribe(() => heard.push(r.controller.view().phase));
+    r.controller.setEnabled(false);
+    expect(r.controller.view().enabled).toBe(false);
+    expect(heard.length).toBeGreaterThan(0);
   });
 });
