@@ -26,7 +26,14 @@ process.stdout.write(
 );
 
 await run("pnpm", ["run", "package:stage"]);
-await run(process.execPath, ["../../scripts/stage-package.mjs", "--verify", "--require-complete"]);
+// WP8-D4: a release stage is signed by the RELEASE keys — the bundled index by the trust-root's `bundled` role
+// (VIBEFIELD_BUNDLED_INDEX_SECRET) under James's embedded trust-root (TD-1); a dev-keyed stage refuses here.
+await run(process.execPath, [
+  "../../scripts/stage-package.mjs",
+  "--verify",
+  "--require-complete",
+  "--require-release-key",
+]);
 await run(process.execPath, [
   "packaging/run-electron-builder.mjs",
   "--mac",
@@ -47,6 +54,15 @@ await run(process.execPath, [
   "--native-root",
   join("release", outputDirectory, "VibeField.app", "Contents", "Resources", "bin"),
   "--require-signed",
+]);
+// WP8d (W9): the app's own plugins as the built app carries them — the staged identity RELEASE-keyed, the trust-root and
+// the signed index verified offline, then the packaged fieldd listing every one enabled with its provenance. No
+// executable among them, so no `--require-signed`: the bundle's seal over Resources is codesign's deep check below.
+await run(process.execPath, [
+  "packaging/verify-plugins-package.mjs",
+  "--app",
+  join("release", outputDirectory, "VibeField.app"),
+  "--require-release-key",
 ]);
 await run(process.execPath, [
   "packaging/verify-live-surface-release.mjs",

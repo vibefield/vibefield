@@ -159,6 +159,77 @@ export const RegistryIndexV2 = z
   });
 export type RegistryIndexV2 = z.infer<typeof RegistryIndexV2>;
 
+// --- the bundled plugin index (WP8; ESP §10.4, trust-and-distribution.md §5) ---
+//
+// The packaged app's own plugins ship as a staged ROOT beside its code: each plugin's §5.2 installed shape under
+// `plugins/bundled/<id>/`, and one canonical index naming every staged file with its hash, each plugin's manifest
+// hash as fieldd computes it, and its artifact hash (`packVfplugin` over the staged tree — the registry's pin for the
+// same bytes). The index is SIGNED by the trust-root's `bundled` role (TD-1, TD-7): fieldd registers a bundled plugin
+// only when the signature verifies and every file matches, refusing at two grains — a bad index refuses the root, a bad
+// copy refuses that plugin (ESP §10.4 item 7). Signed over its exact bytes, so it is parsed tolerant like its siblings
+// and the parse is never re-serialized. TS-only: field-native reads none of it.
+
+/** A staged path: relative, forward-slash, no `..`, no empty or dot-only segment, no backslash or NUL. */
+export const StagedPluginPath = z
+  .string()
+  .min(1)
+  .max(512)
+  .refine(
+    (path) =>
+      !path.startsWith("/") &&
+      !/[\\\0]/.test(path) &&
+      path.split("/").every((segment) => segment.length > 0 && segment !== "." && segment !== ".."),
+    "a staged path is relative and forward-slash, with no empty, . or .. segment",
+  );
+
+export const BundledPluginEntry = z
+  .object({
+    id: PluginId,
+    version: SemverString,
+    /** sha256(canonicalJson(manifest)) — fieldd's own definition (§9.2) */
+    manifestHash: Sha256Pin,
+    /** packVfplugin over the staged tree; fieldd adopts it as the row's installRevision */
+    artifactSha256: Sha256Pin,
+    /** every staged path → the sha256 of its bytes; the manifest is always one of them */
+    files: z.record(StagedPluginPath, Sha256Pin),
+  })
+  .passthrough()
+  .superRefine((entry, ctx) => {
+    if (!Object.hasOwn(entry.files, "vibefield.plugin.json"))
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["files"],
+        message: "a bundled plugin's files include its vibefield.plugin.json",
+      });
+  });
+export type BundledPluginEntry = z.infer<typeof BundledPluginEntry>;
+
+/** `any` while every bundled plugin is JS; `<platform>-<arch>` the day one ships native bits. */
+export const BundledPluginPlatform = z
+  .string()
+  .regex(/^(any|(darwin|win32|linux)-(arm64|x64))$/, "expected any or <platform>-<arch>");
+
+export const BundledPluginIndex = z
+  .object({
+    schemaVersion: z.literal(1),
+    generatedAt: z.number().int().nonnegative(),
+    /** the app version the stage was cut for (apps/desktop/package.json) */
+    appVersion: SemverString,
+    platform: BundledPluginPlatform,
+    plugins: z.record(BundledPluginEntry),
+  })
+  .passthrough()
+  .superRefine((index, ctx) => {
+    for (const [key, entry] of Object.entries(index.plugins))
+      if (key !== entry.id)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["plugins", key, "id"],
+          message: `listed under ${key} but its id is ${entry.id}`,
+        });
+  });
+export type BundledPluginIndex = z.infer<typeof BundledPluginIndex>;
+
 // --- the install surface (§22.1, P7) ------------------------------------------
 
 /** Registry install: the id is looked up in the signed index; `version` pins a

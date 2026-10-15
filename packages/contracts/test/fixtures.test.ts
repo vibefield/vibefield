@@ -149,7 +149,7 @@ import {
   StoreSnapshot,
   TerminalRoutesStreamPayload,
 } from "../src/mgmt";
-import { RegistryIndexV2 } from "../src/plugin-distribution";
+import { BundledPluginIndex, RegistryIndexV2 } from "../src/plugin-distribution";
 import { PluginRegistrySnapshot } from "../src/plugin-registry";
 import { PluginManifestV1 } from "../src/plugins";
 import {
@@ -172,6 +172,7 @@ import {
   ProjectSummary,
 } from "../src/project-doors";
 import { PlaceFacts, PlaceRef } from "../src/project-places";
+import { StagedReleaseIdentity } from "../src/release-identity";
 import { RemoteEndpointSet } from "../src/remote-endpoints";
 import {
   ScreenshotCaptureResult,
@@ -301,6 +302,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "trust-root": TrustRoot,
   "registry-index-v2": RegistryIndexV2,
   "update-policy": UpdatePolicy,
+  // WP8a: the packaged app's signed bundled-plugin index (refusals in plugin-distribution.test.ts).
+  "bundled-plugin-index": BundledPluginIndex,
+  // WP8b: the stage's public identity (Resources/identity/release-identity.json).
+  "staged-release-identity": StagedReleaseIdentity,
   "log-record": LogRecordV1,
   "logging-health": LoggingHealthV1,
   "diagnostic-snapshot": DiagnosticLogSnapshotV1,

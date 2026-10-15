@@ -9,9 +9,11 @@
 // artifact, which fails the build outright. The build stages are authoring-time
 // tooling: reachable at `@vibefield/plugin-build/build`, never through the door
 // the runtime uses.
+export * from "./bundled-index";
 export * from "./canonical";
 export * from "./emit";
 export * from "./externals";
 export * from "./fixture-registry";
 export * from "./pack";
 export * from "./registry-sign";
+export * from "./trust";

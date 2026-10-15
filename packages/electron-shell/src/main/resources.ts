@@ -1,6 +1,15 @@
 import { readFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import {
+  BUNDLED_PLUGIN_INDEX_FILE,
+  IDENTITY_DIR,
+  type KeyClass,
+  RELEASE_IDENTITY_FILE,
+  SIGNATURE_SUFFIX,
+  StagedReleaseIdentity,
+  TRUST_ROOT_FILE,
+} from "@vibefield/contracts";
+import {
   archCompatible,
   EXECUTABLE_HEADER_BYTES,
   type ExecutableArch,
@@ -72,6 +81,10 @@ export interface DesktopResources {
     readonly bundled: readonly string[];
     readonly devLinked: readonly string[];
   };
+  /** WP8c / TD-2 — the staged public identity (`Resources/identity/`): the trust-root document and
+   * release-identity.json (the root keys and the key class). Packaged only; the development layout has none,
+   * and a smoke that keys a bundled root sets FIELDD_TRUST_ROOT(_KEYS) in its launching shell instead. */
+  readonly identity: { readonly identityPath: string; readonly trustRootPath: string } | null;
   readonly tray: Readonly<Record<TrayImageKind, TrayImageSet>>;
 }
 
@@ -201,6 +214,7 @@ export function resolveDevelopmentResources(opts: {
       bundled: [join(opts.repoRoot, "plugins")],
       devLinked: [join(opts.repoRoot, "examples", "plugins")],
     },
+    identity: null,
     tray: trayLayout(join(opts.repoRoot, "apps", "desktop", "packaging", "tray")),
   };
 }
@@ -247,6 +261,10 @@ export function resolvePackagedResources(opts: {
       bundled: [join(opts.resourcesPath, "plugins", "bundled")],
       devLinked: [],
     },
+    identity: {
+      identityPath: join(opts.resourcesPath, IDENTITY_DIR, RELEASE_IDENTITY_FILE),
+      trustRootPath: join(opts.resourcesPath, IDENTITY_DIR, TRUST_ROOT_FILE),
+    },
     tray: trayLayout(join(opts.resourcesPath, "tray")),
   };
 }
@@ -260,7 +278,10 @@ export type ResourceProblemCode =
   | "live-surface-capture-helper-arch-mismatch"
   | "live-surface-adapter-missing"
   | "live-surface-adapter-arch-mismatch"
-  | "rosettad-arch-mismatch";
+  | "rosettad-arch-mismatch"
+  | "bundled-identity-missing"
+  | "bundled-root-missing"
+  | "bundled-dev-trust";
 
 /** A packaged resource failure is fatal and TYPED — distribution spec §4.3 and
  * §14 both require a doctor code rather than a stack trace, because the user
@@ -285,16 +306,71 @@ function headOf(path: string): Uint8Array | null {
   }
 }
 
+/** The bundled trust anchor fieldd is handed (WP8c): the staged trust-root's path and the root keys it must be
+ * signed by, read from the staged identity. Null in the development layout. Throws a typed ResourceError when a
+ * packaged identity is missing or malformed — a package must never fall back to an unverified walk. */
+export function readBundledTrust(
+  resources: DesktopResources,
+  readText: (path: string) => string | null = textOf,
+): { trustRootPath: string; rootKeys: readonly string[]; keyClass: KeyClass } | null {
+  const identity = resources.identity;
+  if (!resources.packaged || identity === null) return null;
+  const raw = readText(identity.identityPath);
+  let parsed: ReturnType<typeof StagedReleaseIdentity.safeParse> | null = null;
+  try {
+    parsed = raw === null ? null : StagedReleaseIdentity.safeParse(JSON.parse(raw));
+  } catch {
+    parsed = null;
+  }
+  if (parsed === null || !parsed.success) {
+    throw new ResourceError(
+      "bundled-identity-missing",
+      "This installation's identity file is missing or damaged, so its own plugins cannot be verified.",
+      identity.identityPath,
+    );
+  }
+  for (const path of [identity.trustRootPath, `${identity.trustRootPath}${SIGNATURE_SUFFIX}`]) {
+    if (readText(path) === null) {
+      throw new ResourceError(
+        "bundled-identity-missing",
+        "This installation's trust-root is missing, so its own plugins cannot be verified.",
+        path,
+      );
+    }
+  }
+  return {
+    trustRootPath: identity.trustRootPath,
+    rootKeys: parsed.data.trustRootKeys,
+    keyClass: parsed.data.keyClass,
+  };
+}
+
+function textOf(path: string): string | null {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return null;
+  }
+}
+
 /** Validate a resolved layout before anything tries to spawn from it. Runs for
  * packaged builds only: a development tree legitimately lacks a release
  * field-native until someone builds one, and failing boot over that would make
  * the dev loop hostage to a cargo profile. */
 export function assertPackagedResources(
   resources: DesktopResources,
-  opts?: { nodeArch?: string; readHead?: (path: string) => Uint8Array | null },
+  opts?: {
+    nodeArch?: string;
+    readHead?: (path: string) => Uint8Array | null;
+    readText?: (path: string) => string | null;
+    /** TD §5 / WP8-D4: a packaged app refuses a DEV-keyed stage unless launched with `--allow-dev-trust`
+     * (never set by a release); `package:dir` previews pass it to launch a dev stage on purpose. */
+    allowDevTrust?: boolean;
+  },
 ): void {
   if (!resources.packaged) return;
   const readHead = opts?.readHead ?? headOf;
+  const readText = opts?.readText ?? textOf;
 
   const host: ExecutableArch = hostArch(opts?.nodeArch ?? process.arch);
 
@@ -352,7 +428,36 @@ export function assertPackagedResources(
   }
 
   const capture = resources.macosLiveSurfaceCapture;
-  if (capture === null) return;
+  if (capture !== null) assertCapture(capture, readHead, host);
+
+  // WP8c: the app's own plugins verify against the staged identity, so a package without it — or without the
+  // signed index it vouches for — is refused here, typed, rather than booting into an empty or unverified root.
+  const trust = readBundledTrust(resources, readText);
+  const bundledRoot = resources.pluginRoots.bundled[0];
+  if (trust !== null && bundledRoot !== undefined) {
+    if (readText(join(bundledRoot, BUNDLED_PLUGIN_INDEX_FILE)) === null) {
+      throw new ResourceError(
+        "bundled-root-missing",
+        "This installation's own plugins are missing.",
+        join(bundledRoot, BUNDLED_PLUGIN_INDEX_FILE),
+      );
+    }
+    if (trust.keyClass === "dev" && opts?.allowDevTrust !== true) {
+      throw new ResourceError(
+        "bundled-dev-trust",
+        "This installation was signed with development keys, not VibeField's release keys.",
+        trust.trustRootPath,
+      );
+    }
+  }
+}
+
+/** The macOS SCK helper and its IOSurface adapter: present, and built for this machine. */
+function assertCapture(
+  capture: NonNullable<DesktopResources["macosLiveSurfaceCapture"]>,
+  readHead: (path: string) => Uint8Array | null,
+  host: ExecutableArch,
+): void {
   const helperHead = readHead(capture.helperPath);
   if (helperHead === null) {
     throw new ResourceError(

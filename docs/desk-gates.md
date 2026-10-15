@@ -60,8 +60,9 @@ said `"left": []`.
 | 26 | smoke:studio | `pnpm smoke:studio` | the Studio's physical acceptance — product and Studio sessions and preloads apart, a real appearance edit applied, replayed across a reload, restored when Studio closes — on a FRESH dev root (plan (88), below) | landing | ok — `STUDIO_PHYSICAL` ok, the fresh root removed |
 | 27 | the product desk rig | rows of smoke:canvas (TAKE, LANDED) and the census below | each kind taken off the pegboard by the pointer and drawn where it lands; the take's landing timed by the K-H discipline | landing | with #17 |
 | 28 | the two-desktop check | James's steps, below | presence across two DESKTOPS over a real mesh; (20)'s stamp-wait drop; a real pointer in the `.app-drag` strip | two Macs | not runnable on one Mac (below) |
+| 29 | smoke:bundled | `pnpm smoke:bundled` | a bundled plugin loads through the staged path under a verified index; a corrupted copy is refused on its row; a forged index refuses the root (WP8d, W7). `apps/desktop/packaging/stage-bundled-fixture.mjs` stages the app's own plugins as a package carries them (the stage's producer, DEV keys minted in memory, nothing secret written) and launches smoke:canvas `--bundled --disable-gpu` THREE times, each on its own copy keyed to that root alone (`FIELDD_PLUGIN_ROOTS` the copy, `FIELDD_PLUGIN_DEV_ROOTS` empty, `FIELDD_TRUST_ROOT`/`_KEYS`): **loads** — every bundled row `enabled` with its provenance block, `stagedPlugins` = the renderer-bearing plugins, no root problem; **corrupt** — one byte of `vibefield.browser`'s `dist/renderer.js` flipped: that row `invalid` `PLUGIN_ARTIFACT_MISMATCH` naming the file, the pad enabled and staged; **forged** — the same flip, its hash written into the index and the index re-signed by a stranger's key: 0 bundled rows, 1 root problem naming the signature, 0 staged. One `SMOKE_BUNDLED {…}` line a run; `BUNDLED_FIXTURE_DONE` the three exits | landing | not yet run |
 
-`pnpm verify`'s chain is rows 1–14 in that order. `pnpm gate:landing` is rows 15–26; `--with-stages` puts 1–14 first.
+`pnpm verify`'s chain is rows 1–14 in that order. `pnpm gate:landing` is rows 15–26, then 29; `--with-stages` puts 1–14 first.
 
 **Re-run at DK-19, on main merged in** (`695ff9d1`; `pnpm gate:landing --with-stages`, 2026-10-08 09:32→09:47Z, load 3, 124
 under the test stage, 5 at the end; `field-native` rebuilt from the merge first). The same 26 gates, red only by preflight
@@ -201,6 +202,8 @@ Smoke-only doors. The product never loads these queries, never reads these varia
 | `VIBEFIELD_DEV_ROOT` | the dev runner's whole state root (smoke:studio's fresh one). |
 | `VF_SMOKE_SHOT_DIR` | where a smoke keeps its stills (`dk-3-desk-light.png`, `dk-18-take-<type>.png`, …). |
 | `VF_SMOKE_DEBUG` | the renderer's console passed through. |
+| `--bundled` (after `--smoke-canvas`) | the bundled rows instead of the canvas witnesses: the product's first board, `CANVAS_READY.stagedPlugins` and `plugins.list` judged against the run (smoke:bundled; `packages/electron-shell/src/testing/smoke-bundled.ts`). |
+| `VF_BUNDLED_FIXTURE` | the bundled run's fixture, JSON, set by `stage-bundled-fixture.mjs`: which run (`loads`, `corrupt`, `forged`), the staged root, the index's ids, the renderer-bearing ones, the file it corrupted. |
 
 ## The product desk rig — the census
 

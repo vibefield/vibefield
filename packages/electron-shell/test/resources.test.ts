@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
 import { join, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   assertPackagedResources,
   type DesktopResources,
   ResourceError,
+  readBundledTrust,
   resolveDevelopmentRepoRoot,
   resolveDevelopmentResources,
   resolvePackagedResources,
@@ -35,6 +37,32 @@ const MACHO_ARM64 = (() => {
   b.set([0xcf, 0xfa, 0xed, 0xfe, 0x0c, 0x00, 0x00, 0x01]);
   return b;
 })();
+/** WP8c — two root public keys in the kit's encoding (the contracts fixture's; no secret exists for them). */
+const ROOT_KEYS: string[] = JSON.parse(
+  readFileSync(
+    join(import.meta.dirname, "..", "..", "contracts", "fixtures", "trust-root.valid.json"),
+    "utf8",
+  ),
+).root.keys;
+/** A packaged layout's staged identity and signed roots, as text reads answer them: valid and RELEASE-keyed
+ * unless an override (by path suffix) says otherwise; `null` is a missing file. */
+const textReader =
+  (over: Record<string, string | null> = {}) =>
+  (path: string): string | null => {
+    for (const [suffix, answer] of Object.entries(over)) if (path.endsWith(suffix)) return answer;
+    if (path.endsWith("release-identity.json"))
+      return JSON.stringify({
+        schemaVersion: 1,
+        keyClass: "release",
+        identityRevision: 5,
+        trustRootKeys: ROOT_KEYS,
+        appId: "com.jamesyong.vibefield",
+        productName: "VibeField",
+        updateChannel: "beta",
+        updateOrigin: "https://github.com/vibefield/vibefield/releases",
+      });
+    return "{}";
+  };
 const MACHO_X64 = (() => {
   const b = new Uint8Array(64);
   b.set([0xcf, 0xfa, 0xed, 0xfe, 0x07, 0x00, 0x00, 0x01]);
@@ -160,7 +188,11 @@ describe("resolvePackagedResources", () => {
     const okHeads = (path: string): Uint8Array | null =>
       path.includes("field-screenshot-helper") ? null : MACHO_ARM64;
     expect(() =>
-      assertPackagedResources(pkg, { nodeArch: "arm64", readHead: okHeads }),
+      assertPackagedResources(pkg, {
+        nodeArch: "arm64",
+        readHead: okHeads,
+        readText: textReader(),
+      }),
     ).not.toThrow();
   });
 
@@ -321,7 +353,11 @@ describe("assertPackagedResources", () => {
 
   it("accepts a matching architecture on both executables", () => {
     expect(() =>
-      assertPackagedResources(packaged(), { nodeArch: "arm64", readHead: reader(bothOk) }),
+      assertPackagedResources(packaged(), {
+        nodeArch: "arm64",
+        readHead: reader(bothOk),
+        readText: textReader(),
+      }),
     ).not.toThrow();
   });
 
@@ -362,10 +398,18 @@ describe("assertPackagedResources", () => {
       (path: string): Uint8Array | null =>
         path === rosettad ? answer : MACHO_ARM64;
     expect(() =>
-      assertPackagedResources(packaged(), { nodeArch: "arm64", readHead: heads(null) }),
+      assertPackagedResources(packaged(), {
+        nodeArch: "arm64",
+        readHead: heads(null),
+        readText: textReader(),
+      }),
     ).not.toThrow();
     expect(() =>
-      assertPackagedResources(packaged(), { nodeArch: "arm64", readHead: heads(MACHO_ARM64) }),
+      assertPackagedResources(packaged(), {
+        nodeArch: "arm64",
+        readHead: heads(MACHO_ARM64),
+        readText: textReader(),
+      }),
     ).not.toThrow();
     try {
       assertPackagedResources(packaged(), { nodeArch: "arm64", readHead: heads(MACHO_X64) });
@@ -386,5 +430,107 @@ describe("assertPackagedResources", () => {
     expect(pkg.fieldNativePath).not.toContain(REPO);
     // With nothing on disk at those paths, boot must fail rather than search.
     expect(() => assertPackagedResources(pkg)).toThrow(ResourceError);
+  });
+});
+
+// WP8c (build-wp8-bundled-plugins.md W4; WP8-D3, D4, D9 as amended by trust-and-distribution.md §5): the staged
+// identity is the app's anchor for its own plugins, so a package without it, without the signed index it vouches
+// for, or signed with development keys refuses to boot — typed, before anything spawns. A development layout has
+// no anchor at all: its bundled root is the developer's own tree.
+describe("the bundled trust anchor (WP8c)", () => {
+  const packaged = resolvePackagedResources({
+    resourcesPath: RESOURCES,
+    electronExecPath: ELECTRON,
+    platform: "darwin",
+  });
+  const allHeads = (): Uint8Array | null => MACHO_ARM64;
+  const codeOf = (fn: () => void): string | null => {
+    try {
+      fn();
+      return null;
+    } catch (error) {
+      return error instanceof ResourceError ? error.code : String(error);
+    }
+  };
+
+  it("names the staged identity in the packaged layout, and none in development", () => {
+    expect(packaged.identity).toEqual({
+      identityPath: join(RESOURCES, "identity", "release-identity.json"),
+      trustRootPath: join(RESOURCES, "identity", "trust-root.json"),
+    });
+    const dev = resolveDevelopmentResources({ repoRoot: REPO, electronExecPath: ELECTRON });
+    expect(dev.identity).toBeNull();
+    expect(readBundledTrust(dev)).toBeNull();
+  });
+
+  it("hands fieldd the trust-root's path and the staged root keys", () => {
+    expect(readBundledTrust(packaged, textReader())).toEqual({
+      trustRootPath: join(RESOURCES, "identity", "trust-root.json"),
+      rootKeys: ROOT_KEYS,
+      keyClass: "release",
+    });
+  });
+
+  it("refuses a missing or damaged identity, and a trust-root without its signatures", () => {
+    for (const over of [
+      { "release-identity.json": null },
+      { "release-identity.json": "{not json" },
+      { "release-identity.json": JSON.stringify({ schemaVersion: 1, keyClass: "release" }) },
+      { "trust-root.json.sig": null },
+      { "trust-root.json": null },
+    ]) {
+      expect(
+        codeOf(() =>
+          assertPackagedResources(packaged, {
+            nodeArch: "arm64",
+            readHead: allHeads,
+            readText: textReader(over),
+          }),
+        ),
+        JSON.stringify(over),
+      ).toBe("bundled-identity-missing");
+    }
+  });
+
+  it("refuses a package whose bundled root has no signed index", () => {
+    expect(
+      codeOf(() =>
+        assertPackagedResources(packaged, {
+          nodeArch: "arm64",
+          readHead: allHeads,
+          readText: textReader({ "bundled-plugins.json": null }),
+        }),
+      ),
+    ).toBe("bundled-root-missing");
+  });
+
+  it("refuses a DEV-keyed package unless launched with --allow-dev-trust", () => {
+    const dev = textReader({
+      "release-identity.json": JSON.stringify({
+        schemaVersion: 1,
+        keyClass: "dev",
+        identityRevision: 5,
+        trustRootKeys: ROOT_KEYS,
+        appId: "com.jamesyong.vibefield",
+        productName: "VibeField",
+        updateChannel: "beta",
+        updateOrigin: "https://github.com/vibefield/vibefield/releases",
+      }),
+    });
+    expect(
+      codeOf(() =>
+        assertPackagedResources(packaged, { nodeArch: "arm64", readHead: allHeads, readText: dev }),
+      ),
+    ).toBe("bundled-dev-trust");
+    expect(
+      codeOf(() =>
+        assertPackagedResources(packaged, {
+          nodeArch: "arm64",
+          readHead: allHeads,
+          readText: dev,
+          allowDevTrust: true,
+        }),
+      ),
+    ).toBeNull();
   });
 });

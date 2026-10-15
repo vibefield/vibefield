@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createNoopLogger } from "@vibefield/logging";
@@ -40,13 +40,28 @@ afterEach(() => {
 });
 
 /** A packaged layout on disk: fieldd always (buildSupervisor refuses a
- * missing launch target), rosettad only when asked for. */
+ * missing launch target), the staged identity always (WP8c: it refuses a
+ * package with no anchor for its own plugins), rosettad only when asked for. */
 function packagedLayout(withRosettad: boolean) {
   const resourcesPath = mkdtempSync(join(tmpdir(), "vf-rosettad-layout-"));
   cleanup.push(() => rmSync(resourcesPath, { recursive: true, force: true }));
   mkdirSync(join(resourcesPath, "bin"));
   writeFileSync(join(resourcesPath, "bin", "fieldd"), "");
   if (withRosettad) writeFileSync(join(resourcesPath, "bin", "rosettad"), "");
+  mkdirSync(join(resourcesPath, "identity"));
+  copyFileSync(
+    join(
+      import.meta.dirname,
+      "..",
+      "..",
+      "contracts",
+      "fixtures",
+      "staged-release-identity.valid.json",
+    ),
+    join(resourcesPath, "identity", "release-identity.json"),
+  );
+  writeFileSync(join(resourcesPath, "identity", "trust-root.json"), "{}");
+  writeFileSync(join(resourcesPath, "identity", "trust-root.json.sig"), "");
   return resolvePackagedResources({
     resourcesPath,
     electronExecPath: join(resourcesPath, "VibeField"),

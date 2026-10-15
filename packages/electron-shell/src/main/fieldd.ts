@@ -1,13 +1,17 @@
 import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
-import { PLUGIN_LIMITS } from "@vibefield/contracts";
+import {
+  FIELDD_TRUST_ROOT_ENV,
+  FIELDD_TRUST_ROOT_KEYS_ENV,
+  PLUGIN_LIMITS,
+} from "@vibefield/contracts";
 import { createFielddSupervisor, type FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
 import { app } from "electron";
 import { APP_ORIGIN } from "./app-protocol";
 import { isSmokeLike, type ShellMode, shutdownPolicy } from "./modes";
-import type { DesktopResources } from "./resources";
+import { type DesktopResources, readBundledTrust } from "./resources";
 
 // The supervisor owns adopt/spawn/probe/readiness (ESR §5.3); this builder
 // owns only what a supervisor must never know: Electron paths, the runner
@@ -87,6 +91,32 @@ export function buildSupervisor(opts: {
   // discovery, which is exactly what lets N resident pairs share a machine.
   const logger = opts.logger.child({ component: "daemon.supervisor" });
   const pluginRoots = opts.resources.pluginRoots;
+  // WP8-D9: a PACKAGED app's plugin roots and trust anchor come from its layout and its staged identity, never
+  // from the environment it was launched in — an ambient FIELDD_PLUGIN_ROOTS / _DEV_ROOTS / FIELDD_TRUST_ROOT
+  // would point a package at an unverified tree. The development layout keeps the passthrough (the smokes key
+  // a staged bundled root that way).
+  const packaged = opts.resources.packaged;
+  const trust = readBundledTrust(opts.resources);
+  if (packaged && trust === null) {
+    throw new Error("a packaged app has no staged identity to verify its own plugins with");
+  }
+  const pluginEnvironment: Record<string, string> = packaged
+    ? {
+        FIELDD_PLUGIN_ROOTS: pluginRoots.bundled.join(delimiter),
+        FIELDD_PLUGIN_DEV_ROOTS: "",
+        [FIELDD_TRUST_ROOT_ENV]: trust?.trustRootPath ?? "",
+        [FIELDD_TRUST_ROOT_KEYS_ENV]: trust?.rootKeys.join(",") ?? "",
+      }
+    : {
+        // PLUG-P2 — plugin discovery roots (§9.1), layout-derived; explicit env still wins in
+        // development (PATH-style lists, see fieldd bin.ts). WIN-3: `path.delimiter` — this is the
+        // ENCODER half, whose decoder is fieldd's `splitPathList`; on Windows a `:` join shreds
+        // every `C:\…` root, and flipping one side alone just moves the silent break.
+        FIELDD_PLUGIN_ROOTS:
+          process.env["FIELDD_PLUGIN_ROOTS"] ?? pluginRoots.bundled.join(delimiter),
+        FIELDD_PLUGIN_DEV_ROOTS:
+          process.env["FIELDD_PLUGIN_DEV_ROOTS"] ?? pluginRoots.devLinked.join(delimiter),
+      };
   return createFielddSupervisor({
     dataRoot: opts.root,
     spawn: { command, args: args.filter((a): a is string => a !== undefined) },
@@ -97,16 +127,7 @@ export function buildSupervisor(opts: {
       // ignored — asking for node mode there would be a claim the artifact
       // cannot honour (ESP §9.3).
       ...(nodeMode ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
-      // PLUG-P2 — plugin discovery roots (§9.1), now layout-derived: the repo in
-      // development, Resources/plugins/bundled when packaged. Explicit env still
-      // wins (PATH-style lists, see fieldd bin.ts). WIN-3: `path.delimiter` —
-      // this is the ENCODER half, whose decoder is fieldd's `splitPathList`; on
-      // Windows a `:` join shreds every `C:\…` root, and flipping one side alone
-      // just moves the silent break.
-      FIELDD_PLUGIN_ROOTS:
-        process.env["FIELDD_PLUGIN_ROOTS"] ?? pluginRoots.bundled.join(delimiter),
-      FIELDD_PLUGIN_DEV_ROOTS:
-        process.env["FIELDD_PLUGIN_DEV_ROOTS"] ?? pluginRoots.devLinked.join(delimiter),
+      ...pluginEnvironment,
       // The shell resolved this root under its own mode policy. Passing that
       // trusted absolute decision keeps all three process owners aligned while
       // fieldd still refuses an ambient override on its own.

@@ -1132,6 +1132,22 @@ export const SOCKETS = {
  * product document. */
 export const PLUGIN_MODULE_SCHEME = "vibefield-plugin" as const;
 
+/** WP8 (ESP §10.1/§10.4; trust-and-distribution.md §5) — the names a packaged app's bundled plugin root and its
+ * identity directory share between the stager (scripts/stage-package.mjs), the kit's verifier, fieldd and the
+ * shell. The signature is the index's name plus `.sig` (the kit's convention; ESP §10.1's `bundled-plugins.sig`
+ * amended). TS-only: field-native reads none of them, so they are not in FILES. */
+export const BUNDLED_PLUGIN_INDEX_FILE = "bundled-plugins.json" as const;
+export const BUNDLED_PLUGIN_INDEX_SIGNATURE_FILE = "bundled-plugins.json.sig" as const;
+/** `Resources/identity/` — the staged public identity: the trust-root document and its signatures, and
+ * `release-identity.json` (the ledger's public fields, the root keys, the key class). */
+export const IDENTITY_DIR = "identity" as const;
+export const RELEASE_IDENTITY_FILE = "release-identity.json" as const;
+/** The shell hands fieldd the staged trust-root document's path here (WP8-D3 amended; never ambient in a
+ * packaged app, WP8-D9). */
+export const FIELDD_TRUST_ROOT_ENV = "FIELDD_TRUST_ROOT" as const;
+/** …and the root keys that document must be signed by, a comma-separated list (the app's embedded anchor). */
+export const FIELDD_TRUST_ROOT_KEYS_ENV = "FIELDD_TRUST_ROOT_KEYS" as const;
+
 /** PA-29 / plugin spec §11.6 — the host-singleton externals list. React,
  * ReactDOM, ICE/strata (and the desk's four entries), Loro, and the SDK runtime
  * are host-provided singletons; a plugin bundle that carries a second copy of

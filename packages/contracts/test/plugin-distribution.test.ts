@@ -1,5 +1,9 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  BundledPluginIndex,
   GrantDecision,
   InstallSetEntry,
   SETTINGS_DOC_SECTIONS,
@@ -112,5 +116,59 @@ describe("standingDecision — which decision stands after a merge (PA-32)", () 
       granted: false,
       reason: "revocation-bias",
     });
+  });
+});
+
+// WP8a (build-wp8-bundled-plugins.md §3): the bundled index's refusals, made inline from its fixture.
+describe("the bundled plugin index (WP8a)", () => {
+  const fixture = () =>
+    JSON.parse(
+      readFileSync(
+        join(
+          dirname(fileURLToPath(import.meta.url)),
+          "..",
+          "fixtures",
+          "bundled-plugin-index.valid.json",
+        ),
+        "utf8",
+      ),
+    );
+  const pad = (index: ReturnType<typeof fixture>) => index.plugins["vibefield.comment-pad"];
+
+  it("refuses another schemaVersion and a platform that is neither any nor <platform>-<arch>", () => {
+    expect(BundledPluginIndex.safeParse({ ...fixture(), schemaVersion: 2 }).success).toBe(false);
+    expect(BundledPluginIndex.safeParse({ ...fixture(), platform: "macos" }).success).toBe(false);
+    expect(BundledPluginIndex.safeParse({ ...fixture(), platform: "darwin-arm64" }).success).toBe(
+      true,
+    );
+  });
+
+  it("refuses a staged path that climbs, starts at the root, or hides an empty or dot segment", () => {
+    for (const path of [
+      "../renderer.js",
+      "/etc/passwd",
+      "dist//renderer.js",
+      "dist/./renderer.js",
+      "dist\\x.js",
+    ]) {
+      const index = fixture();
+      pad(index).files[path] = `sha256:${"a".repeat(64)}`;
+      expect(BundledPluginIndex.safeParse(index).success, path).toBe(false);
+    }
+  });
+
+  it("refuses an entry whose files leave out its manifest, or that is listed under another id", () => {
+    const noManifest = fixture();
+    delete pad(noManifest).files["vibefield.plugin.json"];
+    expect(BundledPluginIndex.safeParse(noManifest).success).toBe(false);
+    const misfiled = fixture();
+    misfiled.plugins["vibefield.other"] = pad(misfiled);
+    expect(BundledPluginIndex.safeParse(misfiled).success).toBe(false);
+  });
+
+  it("refuses a hash that is not a sha256 pin", () => {
+    const index = fixture();
+    pad(index).artifactSha256 = "sha256:abc";
+    expect(BundledPluginIndex.safeParse(index).success).toBe(false);
   });
 });

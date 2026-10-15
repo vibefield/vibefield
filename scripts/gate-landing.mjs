@@ -66,6 +66,9 @@ export const LANDING = [
   { name: "smoke:terminal-door", run: pnpm("smoke:terminal-door") },
   { name: "smoke:terminal-direct", run: pnpm("smoke:terminal-direct") },
   { name: "smoke:studio", run: pnpm("smoke:studio") },
+  // WP8d (W7, desk-gates row 29): the app's own plugins under a verified index — it loads, a corrupted copy is refused
+  // on its row, a forged index refuses the root; three launches GPU-less
+  { name: "smoke:bundled", run: pnpm("smoke:bundled") },
 ];
 
 /** A terminal's colour codes, which vitest and nx print, left out of what a reading reads. */
@@ -156,6 +159,7 @@ const SAYS = [
   /^SMOKE_DAEMONS .*$/u,
   /^SMOKE_\w*failed.*$|^\w+ failed: .*$/u,
   /^STUDIO_PHYSICAL .*$/u,
+  /^BUNDLED_FIXTURE_DONE .*$/u,
   /^(?:ok|fail)\s+try\s+.*$/u,
   /^icons current.*$|^ios (?:fixtures|pins): .*$/u,
 ];

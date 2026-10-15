@@ -22,6 +22,7 @@ import {
   IndexOpenTicket,
   IndexSessionsResult,
   LAYOUT,
+  PluginsListResult,
   TerminalConfigDocument,
   TerminalConfigValidation,
   TerminalConfigWriteRefusal,
@@ -138,6 +139,7 @@ import {
   type PhysicalSoakSample,
 } from "./plugin-runtime-soak";
 import { browserPaneRows, PANE_FLAG } from "./smoke-browser-pane";
+import { BUNDLED_FLAG, bundledFixture, judgeBundled } from "./smoke-bundled";
 import { coverRows } from "./smoke-covers";
 import { removeSmokeRoot, SMOKE_RUN_ENV, stopRunDaemons } from "./smoke-daemons";
 import { deskRigRows } from "./smoke-desk-rig";
@@ -1114,6 +1116,51 @@ export async function runSmokeCanvas(opts: {
       console.log("SMOKE_TRY_OK");
     } catch (e) {
       console.error(`SMOKE_TRY failed: ${e instanceof Error ? e.message : e}`);
+    }
+    await teardown(opts.supervisor, opts.root, opts.beforeExit, ok);
+    app.exit(ok ? 0 : 2);
+    return;
+  }
+  if (process.argv.includes(BUNDLED_FLAG)) {
+    // WP8d — THE BUNDLED ROOT, KEYED (`pnpm smoke:bundled`, W7): the product's own plugins staged under a signed index
+    // and launched with that root alone (packaging/stage-bundled-fixture.mjs) — the run judged from the staged count and
+    // fieldd's list (smoke-bundled.ts), none of the canvas witnesses below. The product's first board, the desk's verdict
+    // awaited so a refused root is seen to boot honestly too.
+    try {
+      const read = bundledFixture(process.env);
+      if ("problem" in read) throw new Error(read.problem);
+      const drawing = gpu && !noWebgpu;
+      const canvasReady = waitForConsole(win, "CANVAS_READY ", 45_000);
+      const deskVerdict = waitForConsole(
+        win,
+        drawing ? "DESK_READY " : "DESK_UNAVAILABLE ",
+        60_000,
+      );
+      await loadRenderer(win, "smoke-canvas", opts.viteUrl);
+      const raw = await canvasReady;
+      console.log(`SMOKE_CANVAS ${raw}`);
+      const problems = [...smokeProfileFailures()];
+      const verdict = await deskVerdict;
+      console.log(`SMOKE_CANVAS_DESK ${drawing ? "DESK_READY" : "DESK_UNAVAILABLE"} ${verdict}`);
+      deskSaid.stop();
+      const listed = PluginsListResult.safeParse(await opts.handle.client.request("plugins.list"));
+      if (!listed.success) throw new Error(`plugins.list did not parse: ${listed.error.message}`);
+      const judged = judgeBundled(
+        read.fixture,
+        (JSON.parse(raw) as CanvasFacts).stagedPlugins,
+        listed.data,
+      );
+      problems.push(...judged.problems);
+      if (win.webContents.isCrashed()) problems.push("the renderer crashed");
+      if (cspViolations.length > 0) problems.push(`CSP refused: ${cspViolations.join(" | ")}`);
+      console.log(
+        `SMOKE_BUNDLED ${JSON.stringify({ ...judged.facts, ok: problems.length === 0 })}`,
+      );
+      if (problems.length > 0) throw new Error(problems.join(" · "));
+      ok = true;
+      console.log(`SMOKE_BUNDLED_OK ${read.fixture.run}`);
+    } catch (e) {
+      console.error(`SMOKE_BUNDLED failed: ${e instanceof Error ? e.message : e}`);
     }
     await teardown(opts.supervisor, opts.root, opts.beforeExit, ok);
     app.exit(ok ? 0 : 2);

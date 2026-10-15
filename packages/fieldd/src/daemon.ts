@@ -455,6 +455,10 @@ export interface FielddConfig {
   /** PLUG-P2 — plugin discovery roots (§9.1): dirs whose children are plugin
    * dirs. Unset ⇒ an empty registry (honest, never a scan of guessed paths). */
   pluginRoots?: { bundled?: string[]; devLinked?: string[] };
+  /** WP8c / TD-2 — the app's trust anchor for bundled roots: the staged trust-root document and the root keys it
+   * must be signed by, both handed over by the shell (FIELDD_TRUST_ROOT, FIELDD_TRUST_ROOT_KEYS). Set ⇒ every
+   * bundled root is keyed (verified, fail closed); unset ⇒ the development walk by manifest. */
+  bundledTrust?: { trustRootPath: string; rootKeys: string[] };
   /** Platform-resolved diagnostic root. Omit only for embedded/unit use where
    * the caller deliberately supplies no process-owned evidence sink. */
   logRoot?: string;
@@ -1181,6 +1185,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         devLinked: config.pluginRoots?.devLinked ?? [],
         installed: [installedRoot],
       },
+      ...(config.bundledTrust !== undefined ? { bundledTrust: config.bundledTrust } : {}),
     });
     await plugins.refresh();
     // P8b (ESP §8.4): the module authority reads the registry and mints opaque

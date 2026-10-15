@@ -14,7 +14,16 @@
         "{workspaceRoot}/packages/fieldd/package.json",
         "{workspaceRoot}/packages/fieldd/scripts/**/*",
         "{workspaceRoot}/packages/fieldd/src/workspace/**/*",
-        "{workspaceRoot}/packages/contracts/src/**/*"
+        "{workspaceRoot}/packages/contracts/src/**/*",
+        "{workspaceRoot}/scripts/stage-package.mjs",
+        "{workspaceRoot}/apps/desktop/packaging/bundled-plugins.mjs",
+        "{workspaceRoot}/apps/desktop/packaging/stage-bundled-fixture.mjs",
+        "{workspaceRoot}/apps/desktop/packaging/verify-plugins-package.mjs",
+        "{workspaceRoot}/packages/electron-shell/src/testing/smoke-bundled.ts",
+        "{workspaceRoot}/scripts/gate-landing.mjs",
+        "{workspaceRoot}/scripts/trust-keygen.mjs",
+        "{workspaceRoot}/tooling/plugin-build/src/**/*",
+        "{workspaceRoot}/apps/desktop/packaging/bundled-list.mjs"
       ]
     }
   }

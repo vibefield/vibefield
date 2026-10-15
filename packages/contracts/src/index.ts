@@ -30,6 +30,7 @@ export * from "./plugins";
 export * from "./project-doors";
 export * from "./project-places";
 export * from "./registries";
+export * from "./release-identity";
 export * from "./remote-endpoints";
 export * from "./rows";
 export * from "./screenshot";

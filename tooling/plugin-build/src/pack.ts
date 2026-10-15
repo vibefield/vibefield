@@ -201,6 +201,14 @@ function collectDefaultEntries(rootDir: string): PlannedEntry[] {
   return entries;
 }
 
+/** The §5.2 members `packVfplugin` packs by default for `rootDir`, as sorted forward-slash paths — the ONE
+ * walk, so a staged copy of a plugin (WP8's bundled root) holds exactly the bytes its pack hash covers. */
+export function listBundleMembers(rootDir: string): string[] {
+  return collectDefaultEntries(rootDir)
+    .map((entry) => entry.name)
+    .sort((a, b) => bytewise(Buffer.from(a, "utf8"), Buffer.from(b, "utf8")));
+}
+
 /** entries.renderer / entries.service from the manifest, normalized to the
  * zip's forward-slash form (declared as ./-relative per the contract). */
 function declaredEntryModules(manifestAbs: string): string[] {

@@ -33,6 +33,8 @@
     "smoke:studio": "node packaging/run-studio-smoke.mjs",
     "smoke:plugin-restart": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && node packaging/stage-kind-fixtures.mjs restart -- node packaging/run-smoke.mjs --smoke-plugin-restart",
     "smoke:kind-faults": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && node packaging/stage-kind-fixtures.mjs faults -- node packaging/run-smoke.mjs --smoke-canvas",
+    "//smoke:bundled": "WP8d (W7) — the app's own plugins staged as a package carries them (bundled-plugins.mjs, dev keys in memory) and the app launched three times keyed to that root alone: it loads, a corrupted copy is refused on its row, a forged index refuses the root. GPU-less: the staged path needs no pixels",
+    "smoke:bundled": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && node packaging/stage-bundled-fixture.mjs -- node packaging/run-smoke.mjs --smoke-canvas --bundled --disable-gpu",
     "smoke:plugin": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && node packaging/run-smoke.mjs --smoke-canvas --try",
     "lab:plugin-runtime:soak": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && node packaging/run-plugin-runtime-soak.mjs",
     "lab:plugin-runtime:soak:24h": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && node packaging/run-plugin-runtime-soak.mjs --hours 24 --cycle-delay-ms 45000 --warmup-samples 8 --minimum-graded-samples 24 --footprint",
@@ -46,6 +48,7 @@
     "package:verify": "node ../../scripts/stage-package.mjs --verify",
     "package:verify:files": "node packaging/verify-files-package.mjs",
     "package:verify:history": "node packaging/verify-history-package.mjs",
+    "package:verify:plugins": "node packaging/verify-plugins-package.mjs",
     "package:dir": "pnpm run package:stage && node packaging/run-electron-builder.mjs --dir --config packaging/electron-builder.yml",
     "package:mac:release": "node packaging/run-macos-release.mjs",
     "package:audit": "node ../../scripts/audit-fuses.mjs --app release/mac-arm64/VibeField.app"

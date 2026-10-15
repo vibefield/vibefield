@@ -15,7 +15,10 @@
 // (gen-registries-rs.ts), as every LAYOUT row does. The trust model (TD-0:
 // src/trust-root.ts, src/update-policy.ts, plugin-distribution.ts's
 // RegistryIndexV2) is absent for the same reason: its verifiers are Electron
-// main and fieldd, and field-native signs and reads none of it.
+// main and fieldd, and field-native signs and reads none of it. So is WP8's
+// packaged identity (plugin-distribution.ts's BundledPluginIndex,
+// src/release-identity.ts): the stager writes it, the kit, fieldd and the shell
+// read it, field-native never does.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

@@ -11,14 +11,16 @@
 // package-census.mjs carries it as an acknowledged non-shipping artifact and this stage is where
 // it actually gets dropped.
 //
-// Usage: node scripts/stage-package.mjs [--out <dir>] [--verify] [--require-complete]
+// Usage: node scripts/stage-package.mjs [--out <dir>] [--verify] [--require-complete] [--require-release-key]
 //   (no flag)  wipe and rebuild the stage, then verify what was produced
 //   --verify   verify an EXISTING stage without touching it — the check CI runs against a stage
 //              it did not just create, and the only form that can catch a stale or tampered one
 //   --require-complete  make every declared optional gap fatal; release packaging uses this after
 //                       the ordinary stage build so an explicitly incomplete preview cannot ship
+//   --require-release-key  refuse a stage whose bundled index and trust-root are DEV-keyed (WP8-D4)
 //
 // Node >=22 ESM, builtins only — no new dependencies, no glob library.
+import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
@@ -32,6 +34,8 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+// WP8-D6: the bundled list's one home, shared with smoke:bundled's stager.
+import { BUNDLED_PLUGINS } from "../apps/desktop/packaging/bundled-list.mjs";
 // Not a dependency — a repo script. scripts/siblings.mjs is the ONE reader of
 // siblings.lock.json (CLAUDE.md §Machine setup), and staging is its fourth
 // consumer after preflight, the Nx cache stamp and the dev runner.
@@ -49,6 +53,7 @@ const outRel = argValue("--out") ?? "apps/desktop/build/stage";
 const outAbs = resolve(repoRoot, outRel);
 const verifyOnly = args.includes("--verify");
 const requireComplete = args.includes("--require-complete");
+const requireReleaseKey = args.includes("--require-release-key");
 
 // Modes are SET rather than inherited (§7.4 "executable permission bits are asserted after
 // staging"; §13.2 "exact executable modes"). A stage whose modes depend on the umask of whoever
@@ -321,22 +326,50 @@ const PLAN = [
     from: "apps/desktop/packaging/tray",
     kind: "dir",
   },
-  {
-    // No producer exists yet, so there is no source path to name: inventing one here would bake a
-    // guess into the allowlist. WP8 owns both the producer and this entry's `from`.
-    stage: "plugins/bundled",
-    from: null,
-    kind: "dir",
-    optional: "no bundled plugins — the packaged app ships with zero built-ins",
-    produce: "WP8 — PA-34 bundled-plugin staging + signed index (ESP §10.4)",
-  },
 ];
 
-// The stage roots always exist, even when empty. electron-builder fails a build when an
-// extraResources source is missing. Bundled plugins remain optional until WP8, while the tray is
-// required and validated by the icon gate before staging. Empty plugin roots remain loud in the
-// report instead of breaking electron-builder's extraResources copy.
-const STAGE_ROOTS = ["app", "bin", "tray", "plugins/bundled"];
+// ---- the produced outputs (WP8b) ----------------------------------------------
+// `plugins/bundled/` and `identity/` are not copies of a build tree: they are PRODUCED, signed, for this stage —
+// each first-party plugin's §5.2 members and the canonical index naming every staged file's hash, signed by the
+// trust-root's `bundled` role, and the trust-root document with the stage's public identity
+// (apps/desktop/packaging/bundled-plugins.mjs; the kit's ONE verifier checks both, as fieldd will). The list is
+// NAMED, never globbed (WP8-D6): DK-8's retired plugin folders keep build leftovers that must never ship. RL2 (b),
+// TD-7: both stay. A release stage needs VIBEFIELD_BUNDLED_INDEX_SECRET and James's embedded trust-root; without
+// the secret the stage is DEV-keyed (minted for this stage only) and says so in capitals. The list lives in
+// apps/desktop/packaging/bundled-list.mjs.
+const BUNDLED_PRODUCER = join(repoRoot, "apps/desktop/packaging/bundled-plugins.mjs");
+const runProducer = (command, extra = []) => {
+  const run = spawnSync(
+    process.execPath,
+    [
+      BUNDLED_PRODUCER,
+      command,
+      "--stage",
+      outAbs,
+      "--plugins",
+      BUNDLED_PLUGINS.join(","),
+      ...extra,
+    ],
+    { cwd: repoRoot, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+  );
+  const line = (run.stdout ?? "").trim().split("\n").at(-1) ?? "";
+  try {
+    return JSON.parse(line);
+  } catch {
+    return {
+      ok: false,
+      problems: [
+        `the bundled-plugin producer gave no verdict (exit ${run.status}): ${(run.stderr ?? "").trim().slice(0, 2000)}`,
+      ],
+    };
+  }
+};
+
+// The stage roots always exist. electron-builder fails a build when an extraResources source is
+// missing, and it DROPS an empty one (the WP8 plan's addendum: no bundle examined before WP8 had a
+// Resources/plugins) — since WP8 the bundled root and identity/ are produced, so neither is empty by
+// construction. The tray is required and validated by the icon gate before staging.
+const STAGE_ROOTS = ["app", "bin", "tray", "plugins/bundled", "identity"];
 
 // ---- §7.3 "must never ship" ------------------------------------------------
 // package-census.mjs owns the canonical list; this is the same policy applied to STAGE-relative
@@ -613,7 +646,7 @@ const walkStage = (absDir, prefix, out) => {
   }
 };
 
-const verify = ({ files, manifest }) => {
+const verify = ({ files, manifest }, produced) => {
   if (!existsSync(outAbs)) {
     fail(`no stage at ${outRel} — run \`node scripts/stage-package.mjs\` first`);
   }
@@ -622,9 +655,13 @@ const verify = ({ files, manifest }) => {
 
   const expected = new Map(files.map((f) => [f.stage, f]));
   expected.set("app/package.json", { stage: "app/package.json", mode: DATA_MODE, generated: true });
+  // WP8b: what the producer's verifier vouched for (signature, every hash, the sources) is expected too —
+  // and ONLY that: a file under plugins/bundled or identity it did not name is UNEXPECTED below.
+  for (const rel of produced.files ?? [])
+    expected.set(rel, { stage: rel, mode: DATA_MODE, generated: true });
   const present = new Map(found.map((f) => [f.rel, f]));
 
-  const problems = [];
+  const problems = [...(produced.problems ?? []).map((p) => `BUNDLED  ${p}`)];
   for (const key of [...expected.keys()].sort()) {
     if (!present.has(key)) problems.push(`MISSING  ${key}`);
   }
@@ -704,8 +741,19 @@ const verify = ({ files, manifest }) => {
 
 // ---- run -------------------------------------------------------------------
 const plan = resolvePlan();
-if (!verifyOnly) stage(plan);
-const { found, problems } = verify(plan);
+for (const rel of BUNDLED_PLUGINS) {
+  if (!existsSync(join(repoRoot, rel, "dist")))
+    fail(`required input missing: ${rel}/dist (for plugins/bundled) — run \`pnpm build\` first`);
+}
+if (!verifyOnly) {
+  stage(plan);
+  const desktopVersion = plan.manifest.version;
+  const produced = runProducer("stage", ["--app-version", desktopVersion]);
+  if (!produced.ok)
+    fail(`bundled plugins were not produced: ${(produced.problems ?? []).join("; ")}`);
+}
+const bundled = runProducer("verify", requireReleaseKey ? ["--require-release-key"] : []);
+const { found, problems } = verify(plan, bundled);
 
 const n = (v) => v.toLocaleString("en-US");
 const mb = (v) => `${(v / 1024 / 1024).toFixed(2)} MB`;
@@ -738,6 +786,17 @@ if (existsSync(smokeAbs)) {
   );
   if (staged) problems.push("the smoke harness reached the stage (§7.3)");
 }
+
+// The bundled report line (WP8 W5): what shipped, and which keys signed it — DEV in capitals.
+console.log(
+  `\nplugins/bundled: ${bundled.plugins?.length ?? 0} plugin(s) (${(bundled.plugins ?? []).join(", ") || "none"}), ` +
+    `index ${bundled.ok ? "signed and verified" : "NOT VERIFIED"}, KEY CLASS: ${(bundled.keyClass ?? "unknown").toUpperCase()}`,
+);
+if (bundled.keyClass === "dev")
+  console.warn(
+    "  DEV-KEYED: the trust-root and the bundled index were signed by keys minted for this stage only — " +
+      "a release stage needs VIBEFIELD_BUNDLED_INDEX_SECRET and James's trust-root (TD-1)",
+  );
 
 if (plan.missing.length > 0) {
   const bar = "─".repeat(78);

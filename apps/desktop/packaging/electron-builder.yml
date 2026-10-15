@@ -97,6 +97,11 @@ extraResources:
     to: tray
   - from: build/stage/plugins
     to: plugins
+  # WP8b: the stage's public identity — the trust-root document, its signatures and release-identity.json
+  # (key class + root keys). The shell reads it in the packaged layout and hands fieldd the document's path
+  # and root keys (FIELDD_TRUST_ROOT, FIELDD_TRUST_ROOT_KEYS); outside app.asar so fieldd reads it as a file.
+  - from: build/stage/identity
+    to: identity
 
 # NO `electronFuses:` BLOCK HERE — deliberately, not by omission. EDP-31 split the packaging
 # surface: electron-security-packaging.md §9.1 owns the single fuse matrix (including the

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "keyClass": "dev",
+  "identityRevision": 5,
+  "trustRootKeys": [
+    "MCowBQYDK2VwAyEAOV8Idm3f/zKHwvWKinwKoI64abo1UivKIR1rLYqpwzY=",
+    "MCowBQYDK2VwAyEAbp3p8OLj6oNMkBGZSo+bm8P8SSpLEJB5OQqId+DtfX4="
+  ],
+  "appId": "com.jamesyong.vibefield",
+  "productName": "VibeField",
+  "updateChannel": "beta",
+  "updateOrigin": "https://github.com/vibefield/vibefield/releases"
+}

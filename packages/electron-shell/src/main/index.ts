@@ -584,7 +584,7 @@ async function main(
   // Fatal and typed before anything spawns: a missing or wrong-architecture
   // sidecar must read as a packaging failure with a doctor code, not as an exec
   // error later that looks like a missing file (§4.3, §14).
-  assertPackagedResources(resources);
+  assertPackagedResources(resources, { allowDevTrust: process.argv.includes("--allow-dev-trust") });
 
   let sckLabPaths:
     | {

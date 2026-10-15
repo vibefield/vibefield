@@ -3,6 +3,8 @@ import { EventEmitter } from "node:events";
 import { mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import {
+  BUNDLED_PLUGIN_INDEX_FILE,
+  type BundledPluginEntry,
   CONTRACTS_VERSION,
   computeEffectiveGrants,
   isWellFormedPluginId,
@@ -14,9 +16,10 @@ import {
   type PluginRegistrySnapshot,
   RegistryProvenance,
   SemverString,
+  SIGNATURE_SUFFIX,
   validatePluginManifest,
 } from "@vibefield/contracts";
-import { canonicalJson } from "@vibefield/plugin-build";
+import { canonicalJson, verifyBundledIndex, verifyTrustRoot } from "@vibefield/plugin-build";
 import { RpcCallError } from "./native-link";
 import { resolveInstalledArtifact } from "./plugin-artifact-store";
 
@@ -41,6 +44,11 @@ export interface PluginRegistryConfig {
    * P7 — `installed` is the registry-install root (source:"registry"); its
    * children carry a `.vf-registry.json` provenance sidecar (§6.3). */
   roots: { bundled: string[]; devLinked: string[]; installed?: string[] };
+  /** WP8c / TD-2 — set ⇒ every bundled root is KEYED: walked only through its signed index
+   * (`verifyBundledIndex`, the stager's own verifier), after the trust-root at `trustRootPath` verifies
+   * against `rootKeys` (the app's embedded root, handed over by the shell — never read from the root it
+   * protects). Unset ⇒ a bundled root walks by manifest as before: the developer's own tree. */
+  bundledTrust?: { trustRootPath: string; rootKeys: readonly string[] };
 }
 
 interface InstallRecordsFile {
@@ -157,6 +165,16 @@ export class PluginRegistryService extends EventEmitter {
       ...(this.cfg.roots.installed ?? []).map((root) => ({ source: "registry" as const, root })),
     ];
     for (const { source, root } of walks) {
+      if (source === "bundled" && this.cfg.bundledTrust !== undefined) {
+        await this.walkKeyedBundled(root, this.cfg.bundledTrust, records, {
+          rows,
+          rootPaths,
+          commitEpochs,
+          nextDecls,
+          problems,
+        });
+        continue;
+      }
       let children: string[];
       try {
         children = (await readdir(root, { withFileTypes: true }))
@@ -275,6 +293,123 @@ export class PluginRegistryService extends EventEmitter {
     this.serviceDecls = nextDecls;
     this.problems = problems;
     this.publish();
+  }
+
+  /** WP8c (WP8-D5, D7): a keyed bundled root. The trust-root first, against the app's root keys; then the index
+   * against the document's `bundled` role and every listed plugin's file set and bytes. Two grains, fail closed:
+   * the trust-root or the index refused ⇒ ONE root problem and no row from the root; a plugin whose files differ
+   * ⇒ that plugin's row is `invalid` with `PLUGIN_ARTIFACT_MISMATCH` naming the first offending path, and the others
+   * register. A directory the index does not list is ignored — never a row. A verified row's `installRevision` is
+   * its artifact hash and it carries a provenance block, exactly as a registry row does (§6.3). Re-verified on every
+   * refresh: a bundled root is read at boot and at the registry's own refreshes. */
+  private async walkKeyedBundled(
+    root: string,
+    trust: { trustRootPath: string; rootKeys: readonly string[] },
+    records: InstallRecordsFile,
+    into: {
+      rows: Map<string, PluginRecord>;
+      rootPaths: Map<string, string>;
+      commitEpochs: Map<string, number>;
+      nextDecls: Map<string, PluginManifestV1["contributes"]>;
+      problems: PluginRegistryProblem[];
+    },
+  ): Promise<void> {
+    const refuseRoot = (message: string): void => {
+      into.problems.push({
+        root: basename(root),
+        error: summary("PLUGIN_ARTIFACT_MISMATCH", message),
+      });
+    };
+    let docBytes: Buffer;
+    let sigText: string;
+    try {
+      docBytes = await readFile(trust.trustRootPath);
+      sigText = await readFile(`${trust.trustRootPath}${SIGNATURE_SUFFIX}`, "utf8");
+    } catch {
+      refuseRoot("the app's trust-root is missing or unreadable");
+      return;
+    }
+    const doc = verifyTrustRoot(docBytes, sigText, { keys: trust.rootKeys, threshold: 1 });
+    if (!doc.ok) {
+      refuseRoot(`the app's trust-root does not verify: ${doc.reason}`);
+      return;
+    }
+    if (doc.signers.length < doc.doc.root.threshold) {
+      refuseRoot(
+        `the app's trust-root carries ${doc.signers.length} root signature(s); it needs ${doc.doc.root.threshold}`,
+      );
+      return;
+    }
+    const verdict = await verifyBundledIndex({ root, trust: doc.doc.roles.bundled });
+    if (!verdict.ok) {
+      refuseRoot(verdict.reason);
+      return;
+    }
+    for (const plugin of verdict.plugins.values()) {
+      const { entry } = plugin;
+      if (!plugin.ok) {
+        into.rows.set(entry.id, this.refusedBundledRow(entry, plugin.reason));
+        continue;
+      }
+      let raw: string;
+      let parsed: unknown;
+      try {
+        raw = await readFile(join(plugin.dir, "vibefield.plugin.json"), "utf8");
+        parsed = JSON.parse(raw);
+      } catch {
+        into.rows.set(
+          entry.id,
+          this.refusedBundledRow(entry, "vibefield.plugin.json is not valid JSON"),
+        );
+        continue;
+      }
+      let contributes: PluginManifestV1["contributes"] | undefined;
+      const row = this.buildRow(parsed, raw, "bundled", records, (_id, declared) => {
+        contributes = declared;
+      });
+      if (row === null || row.id !== entry.id || row.manifestHash !== entry.manifestHash) {
+        into.rows.set(
+          entry.id,
+          this.refusedBundledRow(entry, "vibefield.plugin.json does not match the bundled index"),
+        );
+        continue;
+      }
+      into.rows.set(row.id, {
+        ...row,
+        installRevision: entry.artifactSha256.slice("sha256:".length),
+        registry: {
+          indexRef: BUNDLED_PLUGIN_INDEX_FILE,
+          artifactSha256: entry.artifactSha256,
+          publisher: "vibefield",
+        },
+      });
+      if (contributes !== undefined) into.nextDecls.set(row.id, contributes);
+      into.rootPaths.set(row.id, plugin.dir);
+      into.commitEpochs.set(row.id, 1);
+    }
+  }
+
+  /** A bundled plugin the index refused: present, honest, never loadable. */
+  private refusedBundledRow(entry: BundledPluginEntry, reason: string): PluginRecord {
+    return {
+      id: entry.id,
+      version: entry.version,
+      title: entry.id,
+      source: "bundled",
+      manifestHash: entry.manifestHash,
+      installRevision: entry.artifactSha256.slice("sha256:".length),
+      state: "invalid",
+      compatible: true,
+      enabled: false,
+      requestedCapabilities: [],
+      grantedCapabilities: [],
+      deniedCapabilities: [],
+      grantGeneration: this.grantGenerations.get(entry.id) ?? 0,
+      contributions: { objects: [], behaviors: [], commands: [], surfaces: [], capabilities: [] },
+      renderer: "none",
+      service: "none",
+      lastError: summary("PLUGIN_ARTIFACT_MISMATCH", reason),
+    };
   }
 
   /** DAEMON-INTERNAL (never snapshot data): the plugin's raw manifest

@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { FIELDD_TRUST_ROOT_ENV, FIELDD_TRUST_ROOT_KEYS_ENV } from "@vibefield/contracts";
 import { resolvePlatformLogRoot, serializeError } from "@vibefield/logging";
 import { ensureUsersRoot, rootAboveUserRoot } from "@vibefield/users";
 import { defaultDataRoot, nativeAlive, nativeMgmtEndpoint, splitPathList } from "./boot-env";
@@ -62,6 +63,18 @@ async function main(): Promise<void> {
     bundled: splitPathList(process.env["FIELDD_PLUGIN_ROOTS"]),
     devLinked: splitPathList(process.env["FIELDD_PLUGIN_DEV_ROOTS"]),
   };
+  // WP8c — the trust anchor for bundled roots, handed over by the shell (the packaged layout reads it from
+  // Resources/identity; a smoke sets it in the launching shell). Both or neither: a trust-root without the root
+  // keys it must be signed by is an anchor that verifies nothing, so it keys the roots with no keys — every
+  // bundled root then refuses, honestly, rather than walking unverified.
+  const trustRootPath = process.env[FIELDD_TRUST_ROOT_ENV];
+  const bundledTrust =
+    trustRootPath === undefined || trustRootPath === ""
+      ? undefined
+      : {
+          trustRootPath,
+          rootKeys: (process.env[FIELDD_TRUST_ROOT_KEYS_ENV] ?? "").split(",").filter(Boolean),
+        };
   // P4 — the bundled daemon ships the worker harness beside bin.cjs; source
   // runs resolve it in-package. Explicit env always wins.
   const serviceHarnessPath =
@@ -133,6 +146,7 @@ async function main(): Promise<void> {
     dataPort: dataPortEnv !== undefined ? Number(dataPortEnv) : 0,
     allowedOrigins,
     pluginRoots,
+    ...(bundledTrust !== undefined ? { bundledTrust } : {}),
     serviceHarnessPath,
     ...(nativePid !== undefined ? { nativePid } : {}),
     ...(spawnNative !== undefined ? { nativeSpawner: spawnNative } : {}),

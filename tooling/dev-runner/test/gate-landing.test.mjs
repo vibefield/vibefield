@@ -50,6 +50,7 @@ test("the list: verify's chain stage by stage, then this host's GPU gates", () =
       "smoke:terminal-door",
       "smoke:terminal-direct",
       "smoke:studio",
+      "smoke:bundled",
     ],
   );
 });
