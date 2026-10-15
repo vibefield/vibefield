@@ -11244,6 +11244,9 @@ approvals ("daily when approved" until he rules).
   nightly client's own flag was wrong at boot (EDP-36: set deliberately, never inherited).
 - **The strict request parsing that refuses an extra key is the EDP-38 wall made testable.** No door can carry a
   smuggled path or URL, and `update-doors.test.ts` proves the refusal.
+- **Correction (2026-10-15, L3c-ii `1bc68c15`):** `view()` folded `available` into `checking`, so a skipped or updates-off
+  manual check read "Checking for Updates…" for ever. Fixed at L3c-ii: the `available` phase, and the tray reads it as
+  idle.
 
 **Validation:**
 - `pnpm verify` EXIT 0 (verify-3, 18:37Z): vitest 8781 passed / 0 failed / 16 skipped across 26 suites (electron-shell 1887 + 2 skipped, contracts 995), cargo 313 passed / 9 ignored. Verify-1 and verify-2 were each red on ONE electron-shell type error at the prepareRestart door (a `readonly` array, then a passthrough schema's index signature that the `CensusSession` interface lacks); the door now copies each session field by field, and tsc alone was green (11 s) before verify-3 was armed.
@@ -11258,3 +11261,68 @@ approvals ("daily when approved" until he rules).
 
 **Next:** L3c-ii, the Settings card (the consent from Settings), the Diagnostics doctor block and the catalog specimen.
 James's eyes are owed after it.
+
+## WP12 L3c-ii — the update card on Settings › General and the updater block on Diagnostics: one state line with its provenance, the card as the consent in main's words, EDP-36's sentence before a lower channel, both in the catalog over a fixture adapter (2026-10-15; `1bc68c15`)
+
+**Why:** `build-wp12-updater.md` §13, the PM's ruling at 18:17Z: C2, the card IS the consent from Settings; C3, General
+after Desktop for now; C4, the doctor block; C5, the catalog's adapter. L3c-i (`d9d2d40f`) landed the bridge it renders.
+WP12d is complete with this slice.
+
+**What landed (`1bc68c15`):**
+- **The card** (`panels/UpdatesSection.tsx`, `panels/update-words.ts`):
+  - `UpdatesSectionView`, controller-free, under a thin controller that reads `desktopState.update` and asks through
+    `getHost().updates`.
+  - One state line with its number and provenance ("VibeField is up to date · checked 14:02", "Downloading VibeField X ·
+    42%" over a 3px bar on real progress, "VibeField X is ready — restart to finish updating").
+  - The policy's answers in the §2.5 inks; the advisory UNSUPPORTED line as a sentence; a no-updater line where no
+    release identity is.
+- **The consent:**
+  - "Restart to update…" prepares ONE snapshot, then shows main's own words as the two-step destructive confirm: red
+    "End N sessions and update", Cancel focused.
+  - The second click confirms that token.
+  - A release that ends nothing restarts on one click.
+  - A refusal or an expired snapshot says main's sentence.
+- **The channel:** EDP-36's "Return to stable — reinstalls the latest stable release" before a lower channel takes.
+- **The doctor block on Diagnostics:** the doctor's lines as `SystemSection`'s rows, read on open and on Refresh.
+- **Main's words on the wire:**
+  - `consentWords()` is composed once, for the tray's box and for `prepare`'s `consent`.
+  - An expired confirm carries its words.
+  - The census-unknown Restart says `censusNotice()`.
+- **The catalog:** two specimens in the shipping `SettingsDialog` (fourteen states) plus the Diagnostics block, over
+  `design-system/updates-settings-fixtures.ts`.
+  - ui-system-boundaries names the views and pins the fixture as an adapter.
+  - DESIGN.md gains "The desktop update card".
+
+**Found:**
+- **An L3c-i regression, corrected at its source.**
+  - `view()` folded `available` into `checking`, so a skipped or updates-off manual check read "Checking for Updates…"
+    for ever.
+  - Fixed: the `available` phase and `declined`; the tray reads `available` as idle.
+- **A person's Restart with the census unreadable was silent on the tray.** It now says why nothing ended.
+- **The kit's `InlineNotice` attention and error tones colour text with the fills,** below §2.5's ink rule at small
+  sizes. It's filed as owed on the ROADMAP's UI row; the card uses the inks meanwhile.
+- **The ROADMAP's EDP/ESP next column carried a leftover tail from the L3b-ii records** ("→ L4 (the doctor surface + the
+  Settings card) → L4"). This records pass rewrites the cell.
+
+**Validation:**
+- `pnpm verify` EXIT 0 (verify-2, 20:46Z): vitest 8818 passed / 0 failed / 16 skipped across 26 suites (field-app 2557, electron-shell 1891 + 2 skipped, fieldd 2283 + 11 skipped, contracts 995), cargo 313 passed / 9 ignored. The touched packages' tsc ran alone first (field-app's one shape fixed: `detail?: string | undefined`). Verify-1 was red ONLY on fieldd's MF-1f real-PTY poll (a package this slice doesn't touch); its one re-read, the file alone, was 45 passed / 2 skipped.
+- `gate:landing --with-stages` on `1bc68c15` (20:49–21:22Z, armed at load 9.32 after the guard waited ~2.5 min; James's desktop in front throughout): 24/27, every stage included. The three reds, each read: smoke:canvas's DK-14 AIMED (main's own named red); the `test` stage's fieldd task CAPPED past Nx's output (no FAIL row; the stage ran at load 13 → 124) — the suite alone, vitest directly, 2283 passed / 11 skipped; smoke:studio's "Studio never sent a revision" (the product received only `product.connect`), the COVERED-WINDOW class — alone, 21:25Z, `STUDIO_PHYSICAL ok`. Internal disk 12 GiB at the start, 19 GiB at the end.
+- field-app:
+  - `update-words.test.ts`: every state line, the provenance, EDP-36, the fallbacks.
+  - `updates-section.test.tsx`, the real controller over a fake host:
+    - the consent then confirm(token), with Cancel focused;
+    - Cancel and Escape;
+    - the one-click restart;
+    - main's refusal and expired words;
+    - a stale consent dropped;
+    - the doors, the channel both ways, progress, the advisory line;
+    - the doctor's rows, refresh, absent, error.
+- electron-shell:
+  - `consentWords` ≡ the box;
+  - prepare's consent present and absent;
+  - expired words;
+  - the census notice;
+  - `available` (off, skipped);
+  - the tray's row.
+
+**Next:** L4 (WP12f, `smoke:update`). James's eyes on the card: the catalog's three Updates specimens, then a real window.
