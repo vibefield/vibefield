@@ -10686,7 +10686,9 @@ no release workflow, and the tray's "Check for Updates…" rendered disabled.
   filters nothing by it after the provider returns. Channel selection must be ours (D4); the controller's tests keep
   the fact.
 - **`app-update.yml` is load-bearing even with a custom provider** (the cache dir name). D13's `publish:` block is
-  required, not cosmetic; W8 checks it on `package:dir`.
+  required, not cosmetic; W8 checks it on `package:dir`. *(Corrected 2026-10-15, WP12 L3a `3eb90abf`: not on `package:dir`
+  — on darwin electron-builder writes `app-update.yml` only for a dmg or zip target (`PublishManager.js:77-80`), and
+  `--dir` is neither. W8's clause is witnessed on a dmg/zip build; the release build job's assertion is L3b's.)*
 - **The plan's §3 step 5 contradicted D5.** It read the policy from the head release; D5's whole point needs the newest
   release's copy. It was corrected at the source, dated.
 - **The malformed-before-expired order:** a schema's refinement ("cannot expire before it was generated") speaks before
@@ -10989,3 +10991,90 @@ the plan three times:
 - **L4 = WP12f, `smoke:update`:** the real Squirrel run on DEV-signed builds, which witnesses the order (A) branches.
 - **W10 and W11** wait on James.
 - **The phone/peer half of the restart announcement, plus the kit's `doorWords` arm,** are the DS track's.
+
+## WP12 L3a — the release workflow: plan → verify → build → sign → converge → publish, its permissions table held by a test; electron-builder never publishes, nothing update-visible goes out unsigned, and the asar carries no dependency (2026-10-15; `3eb90abf`)
+
+**The honest limit, first:** the workflow cannot run on this Mac. Its witnesses are:
+- its scripts' tests;
+- a workflow lint (actionlint, plus a structure test);
+- a CI emulation run here.
+
+Its first real run is James's (J3). Like `verify.yml`, it is red until the sibling pins are on their remotes, because CI
+clones every sibling from its remote.
+
+**Why:** `build-wp12-updater.md` §11 is L3's reading; the PM ruled the split (L3a → L3b → L3c) at 14:36Z and the
+permissions table at 14:47Z. The 14:36Z "secrets in the sign job alone" could not hold, because the stage signs the
+bundled index inside the bundle (EDP §12.1's own list) and WP10's Apple step joins the build job. So the table has two
+jobs in the one `release-signing` environment, each secret scoped to its one step.
+
+**What landed (`3eb90abf`):**
+- **`.github/workflows/release.yml`.**
+  - Triggers: a schedule and a dispatch make a nightly, skipped when main is red, unchanged, or already released today
+    (a tag name is used once, D7); a `v*` tag makes a beta or a stable at the committed version.
+  - verify is `verify.yml`, called. Its concurrency group now names the running workflow, so a push's verify cannot
+    cancel the release's gate.
+  - build is cache-free and runs `cargo build --release --locked -p field-native` first. It packages signed when J4's
+    credentials exist, and UNSIGNED otherwise, said in a warning; then come the asar allowlist (D12) and the plane
+    hashes (D11).
+  - sign installs zod alone, with no lifecycle scripts. It carries D4/D5 from the newest SIGNED release and compares
+    `touched` with the newest release of the same channel, failing loudly on a failed download. Then it signs, with the
+    release secret in that step alone, and verifies with the client's own chain.
+  - converge verifies again, checks the zip's nested signatures with codesign (once the build is signed), and writes
+    SHA256SUMS.
+  - publish runs §12.4's draft transaction: metadata last, the assets compared on the draft, then the un-draft. Nightly
+    retention keeps the newest nightly and never deletes a tag.
+- **Five scripts** (`release-plan`, `release-manifest`, `release-sign`, `release-verify`, `audit-asar`).
+- **Contracts:** `UpdatePolicySource` and `ReleaseManifest`.
+- **The committed policy sources** in `apps/desktop/packaging/policy/`.
+- **Every third-party action SHA-pinned** (24 refs), with Dependabot proposing the next SHA.
+
+| job | environment | permissions | secrets (step-scoped) |
+|---|---|---|---|
+| plan | — | contents: read, actions: read | none |
+| verify | — | contents: read | none (`verify.yml`, called) |
+| build | release-signing | contents: read | `VIBEFIELD_BUNDLED_INDEX_SECRET` in the stage step; the Apple credentials in the signed-package step |
+| sign | release-signing | contents: read | `VIBEFIELD_RELEASE_SECRET` in the sign step |
+| converge | — | contents: read | none |
+| publish | — | contents: write | none (GITHUB_TOKEN only) |
+
+**Found:**
+- **electron-builder publishes IMPLICITLY under CI or a git tag.** Given no `--publish`, it chooses `onTag` or
+  `onTagOrDraft` (app-builder-lib 26.15.7 `out/publish/PublishManager.js:46-60`). On a `v*` push that would have
+  published a draft from a build nobody signed. `run-electron-builder.mjs` now passes `--publish never` on every build
+  and refuses any other value; electron-builder.yml carries the correction.
+- **A committed source under an output directory never reaches CI.** The policy sources were first written under
+  `apps/desktop/release/`, electron-builder's output dir, which `.gitignore:46` ignores. The witness is the CI
+  emulation (a copy of the tracked tree, no siblings, zod alone), whose sign step failed ENOENT. The sources now live in
+  `apps/desktop/packaging/policy/`, with a correction on D5.
+- **The dependency collector widens the asar.** electron-builder searches apps/desktop too (`appFileCopier.js:236`)
+  and counts `optionalDependencies` as production (`nodeModulesCollector.js:169`). `audit-asar` found the same three
+  `node_modules/@vibecook/truffle-sidecar-darwin-arm64` paths in the builds of 08-16 and 10-14: a second signed
+  `sidecar-slim` inside the archive. `files` gains `"!**/node_modules/**"`. Measured on electron-builder 26.15.7, on one stage, with one variable: without the negation, three paths and a 67-file asar with 3 UNPACKED, which puts the second `sidecar-slim` on disk at `Resources/app.asar.unpacked/node_modules/@vibecook/truffle-sidecar-darwin-arm64/bin/` beside the real `Resources/bin/sidecar-slim`; with it, zero paths and a 64-file asar with 0 unpacked (14,660,408 bytes), one `sidecar-slim` at `Resources/bin`, and `package:dir`, `audit-asar` and the fuses audit green (9 fuses).
+- **The stage does not build field-native** (it names the command); the release builds it, locked.
+- **W8's `app-update.yml` clause could never pass on `package:dir`.** On darwin, electron-builder writes
+  `Resources/app-update.yml` only for a dmg or zip target (`PublishManager.js:77-80`), and the D12 build has none. The
+  claim is corrected at its sources (the plan's W8 row and §3, and L1's entry above). The PM ruled (a) at 15:19Z: the
+  release build job's assertion and its local zip witness are L3b's. `--publish never` leaves the file written.
+
+**Validation:**
+- `pnpm verify` EXIT 0 (verify-3, 15:12:32–15:17:34Z): TS 690 files / 8,698 tests; Rust 23 suites / 313; gen:check clean. verify-1 was red on a typecheck in the new test (fixed); verify-2 on AR-6-0's interrupt poll, the 10-14 lottery (green in verify-3, 7,381 ms).
+- `gate:landing --with-stages` on `3eb90abf` (15:18:51–15:49:59Z): **25/27**, both reds main's own. One is smoke:canvas's DK-14 AIMED. The other is `test`: main's latent 1 ms race in `index-activity-doors.test.ts:548`, where `day()` reads `Date.now()` twice, so a tick between the reads makes the window DAY + 1 ms and the contracts refuse it (`untilMs - sinceMs <= INDEX_ACTIVITY.MAX_WINDOW_MS`; TL `3de3706a`, 10-09). It surfaced under load 112. The file alone is green (20/20, 12.17 s, load 2.77). The one-line fix, `const day = () => { const now = Date.now(); return { sinceMs: now - DAY, untilMs: now }; };`, is L3b's FIRST commit, test-only (the PM, 15:52Z). df 14 → 14 GiB internal, 419 → 419 GiB SSD.
+- The structure test asserts the table above, and that every action is SHA-pinned in every workflow.
+- The scripts' tests:
+  - the sign→verify round trip on the client's chain, and its refusals;
+  - D4/D5 carry and refusal;
+  - the plan cases; the plane rules;
+  - audit-asar on a synthetic archive.
+- actionlint is clean on every workflow.
+- The CI emulation ran the real CLIs end to end in a lane copy with no siblings and zod alone. Signed release 1
+  verified; the unsigned release passed with no anchor; release 2 carried the heads; a tampered feed and a missing
+  policy were refused.
+
+**Owed:**
+- OIDC attestation and an SBOM (EDP-39);
+- the universal build;
+- `release-verify` on a frozen root (TD-1).
+
+**Next:** L3b (WP12d's main-side levers) → L3c (doctor + the Settings card) → L4 (`smoke:update`). James's J1–J4 are in
+the hand-off. They include the reviewer cost: required reviewers gate every deployment, so a scheduled nightly needs two
+approvals ("daily when approved" until he rules).
