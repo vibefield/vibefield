@@ -10710,3 +10710,90 @@ no release workflow, and the tray's "Check for Updates…" rendered disabled.
   N-1 → N apply) waits on WP10.
 - **Root-key rotation:** a rotated root is verified and judged but the adopted set is not persisted, so the next check
   judges from the embedded root again; WP12d persists it in the client state beside the policies.
+
+## WP12 L2a — adoption after an app update: a packaged app adopts only its own build's fieldd and replaces any other, field-native's single-client rule the backstop; and the hello refuses with no server details until the credential is checked, on both daemons (2026-10-15; `2490459e`)
+
+**Why:** after an app update, the shell could adopt the OLD fieldd. Production adoption checked only the user id and
+the contracts major; `expectedBuildId` was dev-only. So the new app could keep running the old app's plugin roots and
+trust anchor, which fieldd reads once at spawn. This is the debt row WP8 promised and L1 filed. The plan's D10 was
+ruled by the PM on 2026-10-15 at 11:18Z. WP12c is split in two: **L2a is adoption**; L2b is the apply, as its own
+landing with its own gate.
+
+**What landed (`2490459e`, one commit):**
+- **The build identity reaches production.**
+  - `StagedReleaseIdentity.buildId` is optional, in ProductInfo's shape.
+  - The stager stamps `<appVersion>+<commit7>` from git, and warns when it cannot.
+  - `readBundledTrust` returns it.
+  - A packaged shell passes it as `expectedBuildId` with `buildMismatch: "replace"`. Development keeps `refuse`.
+- **The supervisor's replace path** (`fieldd-supervisor`):
+  - The probe checks the USER before the build, so another user's daemon is never asked to stop.
+  - On a different or null build, the probe returns the client our token authenticated.
+  - `replaceStaleBuild` sends `system.shutdown` (bounded to 1.5 s), closes the client, and waits up to 3 s for the run
+    file to go or change `bootId`. Then this build's fieldd is spawned either way.
+  - A fieldd that does not stop is **superseded at field-native**: the single-client rule (`mgmt/mod.rs:578-585`)
+    closes its API and it exits. **No signal is ever sent to a pid read from a file.**
+  - `incompatible-contracts`, `user-mismatch` and `foreign-listener` keep spawning, as **named takeovers**
+    (`fieldd.supervisor.takeover {probeFailure}`). The debt row's "three refusals" was ruled out: a refusal would let
+    any same-uid listener stop the app's own fieldd (EL7 backwards).
+  - The post-spawn poll never adopts the old build.
+  - Four new lifecycle events: `replacing_build`, `replaced_build`, `replace_wait_expired`, `takeover`.
+- **The hello order (EL7), both daemons.**
+  - fieldd's contracts-major refusal stays first and now carries no details.
+  - UA-2's user check moved AFTER the credential check. A refusal there withdraws the half-granted connection before
+    the mismatch is said.
+  - field-native gets the same reorder: `refuse_incompatible_major`, with no details.
+- **The support bundle reports the running pair:** fieldd's recorded `buildId`, and field-native's `nativeBuild` from
+  `system.health`. Both are bounded to 1 s ("unavailable" past that), replacing the two `app.getVersion()` stand-ins.
+
+**Validation:**
+- **The witness the debt row closes on**, a real field-native in the kill matrix: `✓ the kill matrix (NF-4, real field-native) > row WP12-D10: another build's fieldd is superseded at field-native; the PTY lives; the new build records itself  721ms` (verify-4).
+  - fieldd A (`build-x`) serves a PTY. Fieldd B (`build-y`) boots while A still serves, with no stop asked, so the
+    backstop is witnessed alone.
+  - A reports `superseded` through `onFatal`, and product.json records `build-y` on B's port.
+  - B lists the same PTY on the same native boot (equal UDS auth token), and terminates it.
+- **`replace.test.ts`, 7 cases**, over the supervisor's fixtures:
+  - replacing another build, and replacing a null build;
+  - a stop that never comes: superseded, never signalled (the recorded pid is the test process itself);
+  - the same build adopted, with nothing asked;
+  - dev refusing;
+  - the user checked first;
+  - a foreign listener as a named takeover.
+- **The hello order:** `user-hello.test.ts` +3 (unauthenticated wrong-user → `UNAUTHORIZED` with no server userId;
+  authenticated → the mismatch with its details; a foreign major → no version and no user). Plus field-native's
+  `a_major_refusal_before_the_credential_carries_no_server_details`.
+- **`pnpm verify` EXIT 0** on the L2a tree (verify-4, 11:35:45–11:40:40Z): vitest 8,602 passed / 17 skipped / 0 failed
+  (+12 over L1's 8,590), cargo 303 / 9 ignored (+1), node --test 169/0, gen:check fresh. One comment-only edit
+  followed it (product-api.ts's doubled EL7 sentence), so the gate's stages are what verify the committed tree.
+  Verify-1…3 were red on the lane's own (see Found).
+- **The landing gate:** `gate:landing --with-stages` on `2490459e` (lane wp12-l2, 11:41:58–12:13:02Z, the internal disk
+  14 → 14 GiB free; `lanes/wp12-l2/gate-2490459e.log`), 26 of 27 ok: verify's fourteen stages, `still`, and every
+  smoke but smoke:canvas, smoke:bundled and smoke:godview included. smoke:canvas (922 s) was red on ONE row, DK-14's
+  AIMED rung (`@'s list open with a pane to send to did not happen within 10000ms`), main's own word for word. Its
+  red-path teardown has the same shape as L1's gate.
+
+**Found:**
+- **A refusal sent before the credential is checked must carry no server details.** fieldd told an unauthenticated
+  local caller its userId (UA-2's check ran before the credential). Both daemons named their contracts version in the
+  major refusal. No reader used either detail.
+- **design-02's D10 lock file was never built.** fieldd has no single-instance lock. Field-native's single-client rule
+  is the mechanism, and EDP §8.4 step 7 already held by it. The erratum is at design-02's D10 line, dated.
+- **The supervisor checked the build before the user.** In replace mode that order would have asked another user's
+  daemon to stop.
+- An ambient `FIELDD_BUILD_ID` still reaches fieldd when the shell sets none: the supervisor spreads the caller's
+  environment, which the shell defaults to `process.env` (a dev run outside the runner, or an older stage). Noted,
+  unchanged.
+- The three verify reds were all the lane's own:
+  - an `exactOptionalPropertyTypes` test option (verify-1);
+  - rustfmt breaking a call at `fn_call_width` (60), not at the 100-column line (verify-2);
+  - fieldd's RPC error data nesting under `details` (verify-3).
+
+**Owed:**
+- **L2b = the apply:**
+  - EDP-35's census veto at `before-quit` (`lifecycle.ts:81-82`); the quit flow can only delay, it has no reason;
+  - EDP-34's safe window;
+  - `restartToInstall` through the quit flow with a reason;
+  - D11's shutdown-before-swap;
+  - planes treated as native-touching until L3's signed planes;
+  - the prepare-restart op with its Rust gen and both-side fixtures;
+  - the tray's "Restart to Update".
+- **L3, then L4** as filed in §WP12 L1. **W10 and W11** wait on James.
