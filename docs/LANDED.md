@@ -10535,3 +10535,84 @@ how pnpm installs the overlay. They land together (the PM's call: one story on t
   fresh publish); rosettad's checksum refusal (RD-D7); CI green on origin with no clone step.
 - The spike's lane rd2 (branch `rd/2-spike`, the throwaway `ice` entry) and its ICE worktree stay until the landing is
   read; nothing of them lands.
+
+## RD-3 — the cargo and Swift overlays: a released cargo plane links back through a generated root `.cargo/config.toml` with Cargo.lock hidden while it stands, and a released Swift plane is the manifest's own rendered release line, which the overlay renders nil — SwiftPM caches a manifest by its contents plus its environment, never a file it reads (2026-10-15; `e38dfdc6`)
+
+**Why:** thinking-release-deps.md §2/§5 — the ladder's third rung (RD-0…RD-4, then RD-6): the overlay that RD-1 and RD-2
+built for npm, for the other two planes, so that a sibling whose cargo or Swift plane is released can be linked back
+with one verb and the committed tree stays prod shape. Nothing flips to prod: ghosttea's fork line `10d0b17` is on no
+remote (RD-4 §4, James's push) and truffle's Swift exact waits on G28, so both mechanisms are proved on stand-ins.
+
+**What landed (`e38dfdc6`):**
+- **Cargo.** A plane is released when the lock records `release.cargo` = `{ git, rev }`; `render --prod` writes its
+  `[patch.crates-io]` rows as git rows. `use NAME` writes a generated, gitignored root `.cargo/config.toml` of
+  absolute-path patches (cargo applies a config file's patch over the manifest's); one the verb did not write is
+  refused, never overwritten or deleted. Stable cargo has no lockfile path of its own (`-Z lockfile-path` is nightly), so
+  the path build rewrites the committed Cargo.lock: it is skip-worktree while the overlay stands, and `use --none`
+  removes the config (and the `.cargo/` it made), clears the mark and restores the lock byte for byte.
+- **Swift.** A plane is released when the lock records `release.swift`; `render --prod` writes
+  `let <name>Release: Version? = nil | "<version>"` into the manifest, and `Package.swift`'s `truffleDependency` is the
+  exact URL row when it carries a version and `.window/truffle` when it is nil (today: nil, so the committed shape
+  resolves exactly as before). `use NAME` renders the SAME line nil in the working tree and `use --none` renders the
+  lock's value back — a line rewrite, never a checkout, so another edit survives. The manifest stays VISIBLE as modified
+  while the overlay stands (the PM's ruling); its Package.resolved, whose URL row the path package drops, is hidden by
+  the lock rule.
+- **The commit rule and preflight.** The pre-commit check refuses ANY commit while a lock is hidden, and a staged
+  release line the lock does not render. Preflight names each state in its own words: a generated `.cargo/config.toml`
+  with no overlay FAILs; a root `.cargo/config.toml` this repo did not write WARNs (gitignored, so `git status` will not
+  show it); a hidden lock WARNs while its overlay stands and FAILs after; a manifest's release line is checked against
+  the lock, or the overlay's nil; a released git + rev row is the render check's.
+- `use` installs through pnpm only when the overlay's npm half changed, and its closing line names each half linked; the
+  shape names the cargo rev only when it is not the checkout's own. CLAUDE.md's overlay paragraph gains both halves and
+  `.window/truffle`'s role after G28 (flagged for James's review). `.gitignore` names `/.cargo/config.toml`.
+- No interaction with the truffle bump (the History lead's EL8 lane): `truffle-core` is an exact registry row, not a
+  patch.
+
+**Validation (lane rd3; stand-ins on the throwaway branch `rd/3-spike`: ghosttea's cargo plane released as git + rev at
+`10d0b17` through `file://`, truffle's Swift plane at `0.7.14`, unsatisfiable until G28 — its refusal is the witness):**
+- Cargo: prod `cargo check -p field-native` rc 0 from `…/electron-ghostty?rev=10d0b17…`; `use ghosttea` → Cargo.lock
+  `S`, `cargo check` rc 0 from the checkout with `git status` empty; a commit while hidden refused (`siblings:render
+  FAIL: Cargo.lock is skip-worktree — an overlay is active …`); `use --none` → the lock `H`, `git status` empty, the git
+  rev again. Repeated in the second window after the directory cleanup.
+- Swift, through the real verbs in ONE environment (`xcodebuild -resolvePackageDependencies`): the exact row refused
+  (`Dependencies could not be resolved because root depends on 'truffle' 0.7.14.`); `use truffle` → the line nil,
+  Package.resolved `S`, `git status` exactly ` M apps/ios/VibeFieldKit/Package.swift`, preflight OK with its two words;
+  the rendered nil line resolved (`Truffle: …/.window/truffle @ local`); a commit refused; `use --none` → the line
+  `"0.7.14"`, `git diff` empty; the exact row refused again.
+- The kit compile from a fresh derivedData: `** BUILD SUCCEEDED **`, 378 compile lines, `.window/truffle @ local`.
+- `pnpm verify` EXIT 0 on `bee8bcab` (vitest 8,525 / 17 skipped, cargo 302 / 9 ignored, node --test 169/0) and on
+  `020a0fac` before it; siblings-shape.test.mjs 17/17.
+- **The landing gate:** `gate:landing --with-stages` on `86cc9b3b` (lane rd3, 09:05:39–09:36:40Z, the internal disk 15 → 14
+  GiB free; `lanes/rd3/gate-86cc9b3b.log`, the gated sha kept in its name), 26 of 27 ok — verify's fourteen stages,
+  `still`, and every smoke but smoke:canvas, smoke:bundled included. smoke:canvas (925 s) red on ONE row, DK-14's AIMED
+  rung (`@'s list open with a pane to send to did not happen within 10000ms`) — main's own, word for word, as RD-1's and
+  WP8's gates named it. **Landed as `e38dfdc6`, a tree-identical reword of the gated `86cc9b3b`: tree `2ccf6992`, diff
+  empty, only the Tests line filled** (the placeholder was the builder's miss before the gate; the PM's ruling of 09:38Z
+  makes it the rule — a reword after the gate lands only when tree-identical by tree hash, and the ledger names both).
+
+**Found:**
+- **SwiftPM's manifest cache eliminated the first build.** RD-3 first read a gitignored `.siblings-overlay` FILE beside
+  the manifest (Xcode's GUI passes no shell environment). `swift package dump-package` read it in every mode, and
+  `xcodebuild` ignored it. M1–M6 moved only the cache key: the file present, the same environment → the stale URL row;
+  a never-seen variable → the path package; the file GONE, that variable again → the path package still (stale the other
+  way); the manifest's own line → right both ways. The key is the manifest's contents plus its environment, never a file
+  it reads (§3·A). The environment variant "worked" only because a new variable is a new key.
+- **Kit builds and verify keep TMPDIR=/tmp; derived data and cargo targets go on the SSD** (the PM's house rule, from
+  this window). With TMPDIR moved to the SSD for the full internal disk, the kit compile was red, rc 65:
+  `metal: error: unable to make temporary file: Operation not permitted` in GhostteaKit's "Compile Ghosttea Metal shaders"
+  CustomTask — SwiftPM's build-tool plugin sandbox lets `xcrun metal` write only under the system temp, even with
+  `-skipPackagePluginValidation`. Green on `/tmp`. Written into docs/desk-gates.md's hygiene.
+- **Preflight's third warning was the builder's bug, and taught a rule:** under a Swift-only overlay preflight warned
+  `the dev overlay names truffle but .pnpmfile.cjs is missing` — the check assumed every overlay name has a released npm
+  half. **An overlay name has up to three planes, and only a released plane has a half to check.** Fixed: the warning
+  names only an overlay with a released npm plane (proved on the spike: exactly the two intended warnings).
+- `xcodebuild -resolvePackageDependencies` with `-derivedDataPath` needs `-scheme` (rc 64, `The flag -scheme,
+  -testProductsPath, or -xctestrun is required when specifying -derivedDataPath.`) — the first Swift pass was void on it.
+- Package.resolved has Cargo.lock's hazard class once truffle's committed shape is a URL: built under the same rule,
+  live only after G28.
+
+**Owed:**
+- RD-5 per sibling as RD-4's pipelines land (James's hands: `draft/handover/2026-10-15-rd4-james-pipelines.md`); the
+  ghosttea fork's `release.cargo` once `10d0b17` is on its remote; truffle's `release.swift` at G28. Then RD-6.
+- The Swift overlay in Xcode's GUI is a premise, not a witness — nothing here can drive the GUI.
+- The spike's branch `rd/3-spike` stays in lane rd3 until the landing is read; nothing of it lands.

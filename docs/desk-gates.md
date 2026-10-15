@@ -180,6 +180,13 @@ lane's field-native, rebuilt after gen:check), the dev runner's 131. The orchest
   worktree whose `target` linked elsewhere still built its `field-native` into the shared one — give it `CARGO_TARGET_DIR`,
   and link its `target` to the same place (the suites look for `<checkout>/target/debug/field-native`). Since DK-19's merge
   (`695ff9d1`) the lane's Rust sources equal main's: PJ-3's two constants are no longer a difference.
+- **TMPDIR when the internal disk is full** (RD-3, 2026-10-15; the PM's house rule): **kit builds and verify keep
+  `TMPDIR=/tmp`; derived data and cargo targets go on the SSD.** With TMPDIR moved to the SSD the kit compile was red,
+  rc 65 — `metal: error: unable to make temporary file: Operation not permitted` in GhostteaKit's "Compile Ghosttea
+  Metal shaders" task: SwiftPM's build-tool plugin sandbox lets `xcrun metal` write only under the system temp, even
+  with `-skipPackagePluginValidation`. verify and the smokes keep `/tmp` for their short unix-socket paths (the
+  `vf-smoke-*` homes above). An SSD TMPDIR is fine for cargo, `-resolvePackageDependencies` and plain scripts; put
+  `-derivedDataPath` and `CARGO_TARGET_DIR` on the SSD, which is where the bulk goes.
 
 ## The doors (plan (74))
 
