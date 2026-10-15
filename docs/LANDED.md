@@ -11212,3 +11212,49 @@ approvals ("daily when approved" until he rules).
 
 **Next:** L3c, the doctor surface and Settings' update card (DESIGN.md and `docs/UI_SYSTEM.md` bind it), then L4
 (`smoke:update`).
+
+## WP12 L3c-i — the updater on the host bridge: one projection the tray and the Settings card both render, seven narrow doors strict both ways, the two-phase apply both paths share, the channel as a deliberate downgrade, and the support bundle's first doctor surface (2026-10-15; `d9d2d40f`)
+
+**Why:** `build-wp12-updater.md` §13 is L3c's reading.
+- The PM ruled at 18:17Z: C1, the HOST BRIDGE, because an updater must work with fieldd broken (EDP §11.3); C2, the
+  two-phase apply; C3, the card on Settings › General for now; C4–C6 at the leans.
+- The split: L3c-i (main), then L3c-ii (the renderer).
+- §11's "the renderer reaches main only through fieldd's shell-provider doors" is corrected at source. Provider doors
+  are one-shot, and main already pushes `desktopState` and runs main-owned actions over the bridge.
+
+**What landed (`d9d2d40f`):**
+- **C1:**
+  - `UpdateView` rides `desktopState.update`.
+  - Seven `IPC_CHANNELS.update*` doors. ESR §6.2's table moved first; the pinned set goes 22 → 29.
+  - `registerUpdateDoors()` gates on the registered sender and strict-parses every payload both ways.
+  - The preload's `update` namespace is exactly those seven doors; field-app's `FieldUpdatesHost` is types only.
+- **C2:**
+  - `prepareRestart()` (a fresh policy, the levers, the planes, ONE census snapshot) returns a token bound to its ids.
+  - `confirmRestart(token)` acts on exactly that snapshot, one use, with fieldd's re-check as the last word.
+  - Replaced, spent, past 2 min, or for a changed update means `expired`: a fresh prepare.
+  - The tray runs prepare → the native box → confirm.
+- **C6:**
+  - `setChannel()` is persisted and audited (`app.update.channel`); `allowDowngrade` is set deliberately from the
+    channels.
+  - `view()` is the ONE projection: the tray's `trayUpdateOf(view)` and `desktopState.update` both come from it.
+- **C4:** the support bundle's `doctor/status.json` carries the updater's lines.
+
+**Found:**
+- **`allowDowngrade` had been forced `false` at boot.** C6 now sets it deliberately from the channels, so before this a
+  nightly client's own flag was wrong at boot (EDP-36: set deliberately, never inherited).
+- **The strict request parsing that refuses an extra key is the EDP-38 wall made testable.** No door can carry a
+  smuggled path or URL, and `update-doors.test.ts` proves the refusal.
+
+**Validation:**
+- `pnpm verify` EXIT 0 (verify-3, 18:37Z): vitest 8781 passed / 0 failed / 16 skipped across 26 suites (electron-shell 1887 + 2 skipped, contracts 995), cargo 313 passed / 9 ignored. Verify-1 and verify-2 were each red on ONE electron-shell type error at the prepareRestart door (a `readonly` array, then a passthrough schema's index signature that the `CensusSession` interface lacks); the door now copies each session field by field, and tsc alone was green (11 s) before verify-3 was armed.
+- `gate:landing --with-stages` on `d9d2d40f` (18:39–19:11Z, armed at load 9.28 after the guard waited 30 s): 26/27 green, every stage included (the fieldd stage green this time). The one red is smoke:canvas's DK-14 AIMED line (`@'s list open with a pane to send to did not happen within 10000ms`), main's own named red. Internal disk 13 GiB at both ends.
+- `update-doors` and `preload-update`: exactly seven doors, the gate, strict refusals both ways.
+- The two-phase apply:
+  - the card's snapshot holds when a session is born after it, and no box of main's appears;
+  - the token's whole life;
+  - the tray's box left open past 2 min;
+  - a refusal's words, with no box.
+- `setChannel` and `view()`; the tray projection table; the bundle's doctor; `shell.test`'s pinned channels.
+
+**Next:** L3c-ii, the Settings card (the consent from Settings), the Diagnostics doctor block and the catalog specimen.
+James's eyes are owed after it.
