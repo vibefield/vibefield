@@ -19,27 +19,29 @@ import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import {
   cargoPatchRows,
+  committedNpmRow,
   goSidecarState,
   LOCK_FILE,
-  linkRow,
   newestSourceMtime,
+  npmPlane,
+  OVERLAY_PNPMFILE,
+  OVERLAY_STATE,
   patchPath,
   readLock,
+  readOverlay,
   rosettadBinary,
   siblingDir,
   siblingDirty,
   siblingHead,
+  siblingShape,
 } from "./siblings.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const problems = [];
 const warnings = [];
-// The dependency SHAPE, printed on every run (RD-5a, 2026-10-14; RD-D10's
-// "preflight prints the shape"): what each sibling reaches this tree as — a
-// link: row, an exact registry pin, a binary built from its checkout, a cargo
-// patch, a SwiftPM path package. `prod` only when nothing is a checkout; until
-// RD-1's overlay exists, a committed link: row is what makes the tree `dev`.
-const shape = [];
+// The dependency SHAPE is printed on every run (RD-5a, 2026-10-14; RD-D10's "preflight prints the shape"): what
+// each sibling reaches this tree as, and since RD-1 (2026-10-15) the local overlay over it — one derivation,
+// `siblingShape` in scripts/siblings.mjs, which `pnpm siblings` and `use` print in the same words.
 
 // --- cargo-typify (contracts gen; gen:check diffs are version-sensitive) -----
 const TYPIFY_EXPECTED = "cargo-typify 0.7.0";
@@ -155,9 +157,13 @@ const PIN_EXPECTATIONS = [
 for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
   // A co-development window replaces this registry pin with a revision-backed
   // link. The sibling checks below verify the exact path and checkout revision.
+  // Since RD-1 a lock entry also names a RELEASED sibling's packages (the overlay's link targets), so the window is
+  // the committed dev plane only: a released package keeps its exact row, and this table still holds it.
   if (
     packageName &&
-    Object.values(readLock(root)?.siblings ?? {}).some((entry) => entry.packages?.[packageName])
+    Object.values(readLock(root)?.siblings ?? {}).some(
+      (entry) => entry.packages?.[packageName] && npmPlane(entry) === "dev",
+    )
   ) {
     continue;
   }
@@ -245,8 +251,10 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
     const lockPackages = new Map();
     for (const [name, entry] of Object.entries(lock.siblings)) {
       const dir = siblingDir(root, entry);
-      for (const [pkg, packageDir] of Object.entries(entry.packages ?? {})) {
-        lockPackages.set(pkg, linkRow(entry, packageDir));
+      // RD-1: the committed row is what the lock RENDERS — the release version on a released npm plane, the
+      // link: row into the pinned checkout on a dev one (`render --prod` writes exactly this).
+      for (const pkg of Object.keys(entry.packages ?? {})) {
+        lockPackages.set(pkg, committedNpmRow(entry, pkg));
       }
       if (!existsSync(dir)) {
         problems.push(
@@ -286,7 +294,7 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
         problems.push(
           `sibling family rule: ${name} (${value}) is a link: row ${LOCK_FILE} does not declare — a path dependency needs a revision pin (declare it, then \`pnpm siblings:pin\`)`,
         );
-      } else if (Object.keys(lock.siblings[sibling]?.packages ?? {}).length > 0) {
+      } else if (lock.siblings[sibling] && npmPlane(lock.siblings[sibling]) === "dev") {
         problems.push(
           `sibling family rule: ${name} (${value}) is not in ${LOCK_FILE} while ${sibling}'s other packages are link: rows — the family is ALL lock-backed link: rows or ALL exact versions, never mixed`,
         );
@@ -296,21 +304,22 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
         );
       }
     }
-    for (const [name, entry] of Object.entries(lock.siblings)) {
-      const parts = [];
-      const linked = Object.keys(entry.packages ?? {}).length;
-      if (linked > 0) parts.push(`npm link ×${linked}`);
-      const exact = family.filter(([, pkg]) => familyOf(pkg)?.sibling === name);
-      if (linked === 0 && exact.length > 0) {
-        parts.push(
-          `npm exact ${[...new Set(exact.map(([, , value]) => value))].join("/")} ×${exact.length}`,
+    // RD-1: the local overlay names only lock siblings with a RELEASED plane — a hand-edited state file that
+    // names anything else would link what the lock never declared — and it is rendered from the lock it was
+    // written under (a pin move since then leaves it pointing at the old revision's packages).
+    const overlay = readOverlay(root);
+    for (const name of overlay) {
+      const entry = lock.siblings[name];
+      if (entry === undefined || npmPlane(entry) !== "prod") {
+        problems.push(
+          `the dev overlay (${OVERLAY_STATE}) links ${name}, which ${LOCK_FILE} does not declare as a released sibling — \`node scripts/siblings.mjs use --none\`, then \`use\` the siblings again`,
         );
       }
-      if (entry.cargo) parts.push(`${entry.cargo.crate} built from the checkout`);
-      const patched = Object.keys(entry.patch ?? {}).length;
-      if (patched > 0) parts.push(`cargo patch ×${patched}`);
-      if (entry.swift) parts.push("swift path package");
-      shape.push(`${name} ${parts.join(" + ") || "checkout"} @ ${entry.sha.slice(0, 7)}`);
+    }
+    if (overlay.length > 0 && !existsSync(resolve(root, OVERLAY_PNPMFILE))) {
+      warnings.push(
+        `the dev overlay names ${overlay.join(", ")} but ${OVERLAY_PNPMFILE} is missing — \`node scripts/siblings.mjs render --dev\``,
+      );
     }
     // The CARGO half of the family rule (RFC 025 window). Every crate a lock
     // entry declares under `patch` must have a [patch.crates-io] row naming that
@@ -574,7 +583,13 @@ try {
 // --- report ------------------------------------------------------------------
 for (const w of warnings) console.warn(`preflight WARN: ${w}`);
 for (const p of problems) console.error(`preflight FAIL: ${p}`);
-if (shape.length > 0) console.log(`shape: dev — ${shape.join(" · ")}`);
-else console.log("shape: prod — no sibling checkout in the build");
+{
+  const { line, overlay } = siblingShape(root);
+  console.log(line);
+  if (overlay.length > 0)
+    console.log(
+      `overlay: ${overlay.join(", ")} (${OVERLAY_PNPMFILE}) — linked locally over the committed shape`,
+    );
+}
 if (problems.length > 0) process.exit(1);
 console.log(warnings.length > 0 ? `preflight OK (${warnings.length} warning(s))` : "preflight OK");

@@ -35,7 +35,7 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { milleAliases } from "./mille-aliases.mjs";
-import { readLock, siblingDir } from "./siblings.mjs";
+import { linkedPackages, readLock, siblingDir } from "./siblings.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const TRACKED = ["loro-crdt", "@vibecook/ice", "@vibecook/strata-ecs", "react", "react-dom"];
@@ -65,12 +65,10 @@ function members() {
   // the sibling checkout's node_modules, never from this tree's — exactly the
   // "direct sibling link duplicating React" case above. The linked package
   // directories are search roots too, so the law covers the seam a link opens.
-  const lock = readLock(ROOT);
-  for (const entry of Object.values(lock?.siblings ?? {})) {
-    for (const packageDir of Object.values(entry.packages ?? {})) {
-      const dir = join(siblingDir(ROOT, entry), packageDir);
-      if (existsSync(join(dir, "package.json"))) out.push(dir);
-    }
+  // RD-1: the packages LINKED in this tree (the committed dev rows and the local overlay's), never every package a
+  // lock entry names — a released sibling's packages install from the registry, and its checkout is not a seam.
+  for (const { dir } of linkedPackages(ROOT).values()) {
+    if (existsSync(join(dir, "package.json"))) out.push(dir);
   }
   return out;
 }

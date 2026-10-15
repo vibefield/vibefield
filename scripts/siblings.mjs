@@ -25,8 +25,25 @@
 // (EL8). A dirty sibling only WARNs — co-developing it is the normal state;
 // the pin is about the base revision.
 //
-// Usage: node scripts/siblings.mjs <status|pin [--skip-typecheck] [NAME...]|stamp|fetch NAME|install-js|build-js|build|bin>
-//   status  print each sibling's path, HEAD, pin, and dirtiness (never fails)
+// RD-1 (2026-10-15, thinking-release-deps.md §2 — one lock, two coordinates, two shapes): an entry may carry a
+// `release` block beside its checkout coordinate — the PROD coordinate per plane (`npm`: the exact version every
+// one of its `packages` is pinned at). A plane with a release is committed in prod shape (exact rows); a plane
+// without one is committed in dev shape (link: rows, path patches) until RD-5 records its release. `render --prod`
+// writes the committed rows from the lock (on today's tree a no-op — the committed tree IS its output), and the
+// pre-commit hook asks it to check the STAGED tree. The dev OVERLAY links a released sibling's checkout back in,
+// locally: generated under .vibefield/dev/ (ignored), never a committed file. RD-2 proves how pnpm installs it.
+//
+// Usage: node scripts/siblings.mjs <status|use [NAME...|--none]|render --prod [--check] [--staged]|render --dev|
+//                                   pin [--skip-typecheck] [NAME...]|stamp|fetch NAME|install-js|build-js|build|bin>
+//   status  the shape first (as preflight prints it), then each sibling's path, HEAD, pin, dirtiness and release
+//           coordinate (never fails)
+//   use     link the named RELEASED siblings over their prod coordinate in a local overlay (adds to the overlay);
+//           `use --none` removes the overlay — the tree is its committed shape, which is what CI sees; bare `use`
+//           prints it
+//   render  `--prod`: write the committed sibling rows (pnpm-workspace.yaml overrides, Cargo.toml
+//           [patch.crates-io]) from the lock; `--check` writes nothing and exits 1 on a difference; `--staged`
+//           checks the index instead of the working tree (the pre-commit hook). `--dev`: re-render the overlay files
+//           from the lock for the siblings `use` recorded
 //   pin     record the named siblings' current HEADs (all when omitted), build
 //           rosettad at it (a no-op when fresh), prove the agent catalog
 //           against the new pins (wall R23, the rosetta half REQUIRED), then
@@ -135,6 +152,390 @@ export function cargoPatchRows(root = REPO_ROOT) {
     rows.set(named[1], path === null ? null : path[1]);
   }
   return { rows, unreadable };
+}
+
+// --- RD-1: two coordinates, two shapes ------------------------------------------
+
+/** Where the dev overlay lives: under the dev runner's isolated state, ignored by git. */
+export const OVERLAY_DIR = ".vibefield/dev";
+export const OVERLAY_STATE = `${OVERLAY_DIR}/siblings.json`;
+export const OVERLAY_PNPMFILE = `${OVERLAY_DIR}/siblings.pnpmfile.cjs`;
+
+/** The npm plane of an entry: `none` (no packages), `dev` (committed as link: rows — no release yet) or `prod`
+ * (committed as the exact `release.npm` version). */
+export function npmPlane(entry) {
+  if (Object.keys(entry.packages ?? {}).length === 0) return "none";
+  return typeof entry.release?.npm === "string" ? "prod" : "dev";
+}
+
+/** The row a lock package carries in the COMMITTED overrides block: the release version when its sibling's npm
+ * plane is released, else the link: row into the pinned checkout. One rule, three askers: `render --prod` writes
+ * it, the pre-commit hook and preflight check it. */
+export function committedNpmRow(entry, pkg) {
+  return npmPlane(entry) === "prod" ? entry.release.npm : linkRow(entry, entry.packages[pkg]);
+}
+
+/** The row a lock crate carries in the COMMITTED [patch.crates-io] section: a `git`+`rev` patch when the sibling's
+ * cargo plane is released (RD-D5's prod coordinate for a fork line), else the path into the pinned checkout. */
+export function committedCargoRow(entry, crate) {
+  const release = entry.release?.cargo;
+  if (release?.git && release?.rev) return `{ git = "${release.git}", rev = "${release.rev}" }`;
+  return `{ path = "${patchPath(entry, entry.patch[crate])}" }`;
+}
+
+/** The siblings the local overlay links, as `use` recorded them (`[]` when there is no overlay). */
+export function readOverlay(root = REPO_ROOT) {
+  try {
+    const state = JSON.parse(readFileSync(join(root, OVERLAY_STATE), "utf8"));
+    return Array.isArray(state.linked) ? state.linked.filter((n) => typeof n === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Every npm package LINKED in this tree right now, `Map<pkg, { sibling, dir, via }>`: the committed dev rows
+ * (`via: "committed"`) and the overlay's links over a released sibling (`via: "overlay"`). The question the
+ * single-copy guard and the shape both ask — never `entry.packages` alone, which since RD-1 also names a released
+ * sibling's packages (the overlay's link targets) that this tree installs from the registry. */
+export function linkedPackages(
+  root = REPO_ROOT,
+  lock = readLock(root),
+  overlay = readOverlay(root),
+) {
+  const out = new Map();
+  for (const [name, entry] of Object.entries(lock?.siblings ?? {})) {
+    const plane = npmPlane(entry);
+    const via =
+      plane === "dev" ? "committed" : plane === "prod" && overlay.includes(name) ? "overlay" : null;
+    if (via === null) continue;
+    for (const [pkg, packageDir] of Object.entries(entry.packages)) {
+      out.set(pkg, { sibling: name, dir: join(siblingDir(root, entry), packageDir), via });
+    }
+  }
+  return out;
+}
+
+/** The dependency SHAPE (RD-D10): what each sibling reaches this tree as, plane by plane, with the overlay
+ * marked. `mode` is `prod` only when no plane is a checkout. One function, printed by preflight, `status` and
+ * `use` in the same words. */
+export function siblingShape(root = REPO_ROOT, lock = readLock(root), overlay = readOverlay(root)) {
+  const parts = [];
+  let dev = false;
+  for (const [name, entry] of Object.entries(lock?.siblings ?? {})) {
+    const planes = [];
+    const linked = Object.keys(entry.packages ?? {}).length;
+    const npm = npmPlane(entry);
+    if (npm === "dev") {
+      planes.push(`npm link ×${linked}`);
+      dev = true;
+    } else if (npm === "prod" && overlay.includes(name)) {
+      planes.push(`npm link ×${linked} (overlay over ${entry.release.npm})`);
+      dev = true;
+    } else if (npm === "prod") {
+      planes.push(`npm exact ${entry.release.npm} ×${linked}`);
+    }
+    if (entry.cargo) {
+      planes.push(`${entry.cargo.crate} built from the checkout`);
+      dev = true;
+    }
+    const patched = Object.keys(entry.patch ?? {}).length;
+    if (patched > 0) {
+      planes.push(entry.release?.cargo ? `cargo git patch ×${patched}` : `cargo patch ×${patched}`);
+      if (!entry.release?.cargo) dev = true;
+    }
+    if (entry.swift) {
+      planes.push("swift path package");
+      dev = true;
+    }
+    if (entry.go) {
+      planes.push(`${entry.go.binary} built from the checkout`);
+      dev = true;
+    }
+    parts.push(`${name} ${planes.join(" + ") || "checkout"} @ ${entry.sha.slice(0, 7)}`);
+  }
+  const line = dev
+    ? `shape: dev — ${parts.join(" · ")}`
+    : parts.length > 0
+      ? `shape: prod — ${parts.join(" · ")}`
+      : "shape: prod — no sibling checkout in the build";
+  return { mode: dev ? "dev" : "prod", parts, overlay, line };
+}
+
+/** The `overrides:` block of pnpm-workspace.yaml as a line range `[start, end)` (start = the first row after the
+ * key), or null when the file has none. A row is only ever rewritten inside it: the same package name also appears
+ * in `minimumReleaseAgeExclude`, as a list item this must never touch. */
+function overridesRange(lines) {
+  const start = lines.findIndex((l) => /^overrides:\s*$/.test(l));
+  if (start < 0) return null;
+  let end = start + 1;
+  while (end < lines.length && (lines[end].length === 0 || /^\s/.test(lines[end]))) end += 1;
+  return [start + 1, end];
+}
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+
+/** Rewrite the overrides rows named in `rows` (`Map<pkg, value>`) in place, keeping each line's indentation, key
+ * quoting and value quoting. `{ text, changed: [{pkg, from, to}], missing: [pkg] }` — a row the block does not
+ * carry is MISSING, never appended: where a row sits (under which comment) is a human's choice, made once. */
+export function applyNpmRows(text, rows) {
+  const lines = text.split("\n");
+  const range = overridesRange(lines);
+  const changed = [];
+  const missing = [];
+  for (const [pkg, value] of rows) {
+    const re = new RegExp(
+      `^(\\s+)(['"]?)${escapeRe(pkg)}\\2(\\s*:\\s*)(['"]?)([^\\s'"#]+)\\4(.*)$`,
+    );
+    let hit = false;
+    if (range !== null) {
+      for (let i = range[0]; i < range[1]; i += 1) {
+        const m = lines[i].match(re);
+        if (m === null) continue;
+        hit = true;
+        if (m[5] !== value) {
+          changed.push({ pkg, from: m[5], to: value });
+          lines[i] = `${m[1]}${m[2]}${pkg}${m[2]}${m[3]}${m[4]}${value}${m[4]}${m[6]}`;
+        }
+        break;
+      }
+    }
+    if (!hit) missing.push(pkg);
+  }
+  return { text: lines.join("\n"), changed, missing };
+}
+
+/** The cargo half of `applyNpmRows`: rows inside `[patch.crates-io]`, one per line (the shape `cargoPatchRows`
+ * reads), rewritten as `crate = <row>`. */
+export function applyCargoRows(text, rows) {
+  const lines = text.split("\n");
+  const changed = [];
+  const missing = [];
+  for (const [crate, row] of rows) {
+    let inSection = false;
+    let hit = false;
+    for (let i = 0; i < lines.length; i += 1) {
+      const trimmed = lines[i].trim();
+      if (trimmed.startsWith("[")) {
+        inSection = trimmed === "[patch.crates-io]";
+        continue;
+      }
+      if (!inSection) continue;
+      const m = lines[i].match(
+        new RegExp(`^(\\s*)${escapeRe(crate)}(\\s*=\\s*)(\\{.*\\})(\\s*(?:#.*)?)$`),
+      );
+      if (m === null) continue;
+      hit = true;
+      if (m[3] !== row) {
+        changed.push({ pkg: crate, from: m[3], to: row });
+        lines[i] = `${m[1]}${crate}${m[2]}${row}${m[4]}`;
+      }
+      break;
+    }
+    if (!hit) missing.push(crate);
+  }
+  return { text: lines.join("\n"), changed, missing };
+}
+
+/** A file as the index holds it (`git show :<rel>`), or null when the index has no such path. */
+function stagedText(root, rel) {
+  try {
+    return execFileSync("git", ["show", `:${rel}`], {
+      cwd: root,
+      stdio: ["ignore", "pipe", "ignore"],
+      maxBuffer: 64 * 1024 * 1024,
+    }).toString();
+  } catch {
+    return null;
+  }
+}
+
+/** `render --prod`: the committed sibling rows written (or, with `check`, compared) from the lock. `staged` reads
+ * the lock and both manifests from the git index — the pre-commit hook's question: does the commit about to be
+ * made carry exactly the shape its own lock renders? Returns the exit code; every difference is said in words. */
+export function renderProd(root = REPO_ROOT, { check = false, staged = false } = {}) {
+  const read = (rel) => {
+    if (staged) return stagedText(root, rel);
+    try {
+      return readFileSync(join(root, rel), "utf8");
+    } catch {
+      return null;
+    }
+  };
+  const lockText = read(LOCK_FILE);
+  const lock = lockText === null ? null : JSON.parse(lockText);
+  const npmRows = new Map();
+  const cargoRows = new Map();
+  for (const entry of Object.values(lock?.siblings ?? {})) {
+    for (const pkg of Object.keys(entry.packages ?? {}))
+      npmRows.set(pkg, committedNpmRow(entry, pkg));
+    for (const crate of Object.keys(entry.patch ?? {}))
+      cargoRows.set(crate, committedCargoRow(entry, crate));
+  }
+  const where = staged ? " (staged)" : "";
+  const problems = [];
+  const writes = [];
+  for (const [rel, rows, apply] of [
+    ["pnpm-workspace.yaml", npmRows, applyNpmRows],
+    ["Cargo.toml", cargoRows, applyCargoRows],
+  ]) {
+    if (rows.size === 0) continue;
+    const text = read(rel);
+    if (text === null) {
+      problems.push(
+        `${rel}${where} is absent but ${LOCK_FILE} renders ${rows.size} row(s) into it`,
+      );
+      continue;
+    }
+    const result = apply(text, rows);
+    for (const pkg of result.missing) {
+      problems.push(
+        `${rel}${where} has no row for ${pkg} — ${LOCK_FILE} renders "${rows.get(pkg)}"; add the row once (where it sits is a human's choice), render keeps it`,
+      );
+    }
+    for (const { pkg, from, to } of result.changed) {
+      const how = check
+        ? `${rel}${where}: ${pkg} reads ${from} but ${LOCK_FILE} renders ${to}`
+        : `render: ${rel}: ${pkg} ${from} → ${to}`;
+      (check ? problems : writes).push(how);
+    }
+    if (!check && result.changed.length > 0) writeFileSync(join(root, rel), result.text);
+  }
+  for (const line of writes) console.log(line);
+  for (const line of problems) console.error(`siblings:render FAIL: ${line}`);
+  if (problems.length > 0) {
+    if (staged) {
+      console.error(
+        "siblings:render: the commit would carry a sibling shape its own lock does not render — a dev overlay that leaked, or a hand-edited row. Fix the row (`node scripts/siblings.mjs render --prod`) or move the pin in the lock (EL8); SKIP_SHAPE=1 bypasses, said in the commit.",
+      );
+    }
+    return 1;
+  }
+  if (check || writes.length === 0) {
+    console.log(
+      `siblings:render: the committed rows${where} are the lock's (${npmRows.size} npm, ${cargoRows.size} cargo)`,
+    );
+  }
+  return 0;
+}
+
+/** The overlay's pnpmfile source: a `readPackage` hook that turns every importer's dependency on a linked package
+ * into a `link:` to the checkout (absolute — the hook runs for nested importers too). Generated, never edited. */
+export function overlayPnpmfile(links) {
+  const table = JSON.stringify(Object.fromEntries(links), null, 2);
+  return `// GENERATED by \`node scripts/siblings.mjs use\` (RD-1) — the local dev overlay over the committed prod shape.
+// Never committed (it lives under .vibefield/, which git ignores); \`use --none\` deletes it. RD-2 proves how pnpm
+// installs through it (thinking-release-deps.md §3: selected by the environment, a dev lockfile beside it).
+const LINKS = ${table};
+const FIELDS = ["dependencies", "devDependencies", "optionalDependencies"];
+function readPackage(pkg) {
+  for (const field of FIELDS) {
+    const deps = pkg[field];
+    if (!deps) continue;
+    for (const name of Object.keys(LINKS)) if (Object.hasOwn(deps, name)) deps[name] = \`link:\${LINKS[name]}\`;
+  }
+  return pkg;
+}
+module.exports = { hooks: { readPackage } };
+`;
+}
+
+/** `render --dev`: the overlay files for the siblings `linked` names (each must be a released sibling), written
+ * under .vibefield/dev — or removed when `linked` is empty. Returns `{ links: Map<pkg, absDir> }`. */
+export function renderOverlay(root, linked, lock = readLock(root)) {
+  const links = new Map();
+  for (const name of linked) {
+    const entry = lock?.siblings?.[name];
+    if (entry === undefined) throw new Error(`siblings:use: unknown sibling ${name}`);
+    if (npmPlane(entry) !== "prod") continue;
+    for (const [pkg, packageDir] of Object.entries(entry.packages)) {
+      links.set(pkg, join(siblingDir(root, entry), packageDir));
+    }
+  }
+  const state = join(root, OVERLAY_STATE);
+  const pnpmfile = join(root, OVERLAY_PNPMFILE);
+  if (linked.length === 0) {
+    rmSync(state, { force: true });
+    rmSync(pnpmfile, { force: true });
+    return { links };
+  }
+  mkdirSync(join(root, OVERLAY_DIR), { recursive: true });
+  writeFileSync(
+    state,
+    `${JSON.stringify(
+      {
+        linked: [...linked].sort(),
+        lock: createHash("sha256")
+          .update(readFileSync(join(root, LOCK_FILE)))
+          .digest("hex")
+          .slice(0, 16),
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  if (links.size > 0) writeFileSync(pnpmfile, overlayPnpmfile(links));
+  else rmSync(pnpmfile, { force: true });
+  return { links };
+}
+
+/** `use NAME…` / `use --none` / `use`: the per-sibling switch (RD-D2). Only a sibling with a released plane can be
+ * overlaid — one committed in dev shape is linked already, and saying so is the answer, not an error. */
+export function useSiblings(root, args) {
+  const lock = readLock(root);
+  if (lock === null) {
+    console.error(`siblings:use FAIL: ${LOCK_FILE} is absent — nothing to link`);
+    return 1;
+  }
+  const current = readOverlay(root);
+  if (args.length === 0) {
+    console.log(siblingShape(root, lock, current).line);
+    console.log(
+      current.length > 0 ? `overlay: ${current.join(", ")}` : "overlay: none — the committed shape",
+    );
+    return 0;
+  }
+  let next;
+  if (args.includes("--none")) {
+    if (args.length > 1) {
+      console.error("siblings:use FAIL: --none takes no sibling names");
+      return 2;
+    }
+    next = [];
+  } else {
+    const unknown = args.filter((n) => n.startsWith("--") || !Object.hasOwn(lock.siblings, n));
+    if (unknown.length > 0) {
+      console.error(
+        `siblings:use FAIL: unknown sibling ${unknown.join(" ")} — the lock names ${Object.keys(lock.siblings).join(", ")}`,
+      );
+      return 2;
+    }
+    next = [...new Set(current)];
+    for (const name of args) {
+      const entry = lock.siblings[name];
+      if (npmPlane(entry) === "prod") {
+        if (!next.includes(name)) next.push(name);
+        continue;
+      }
+      console.log(
+        `siblings:use: ${name} is committed in dev shape already (no release coordinate in ${LOCK_FILE}) — its checkout is what this tree builds; RD-5 records its release`,
+      );
+    }
+  }
+  const { links } = renderOverlay(root, next, lock);
+  console.log(siblingShape(root, lock, next).line);
+  if (next.length === 0) {
+    console.log(
+      "overlay: none — the committed shape, which is what CI sees. Reinstall to drop installed links: pnpm install",
+    );
+  } else {
+    console.log(
+      `overlay: ${next.join(", ")} — ${links.size} npm package(s) linked in ${OVERLAY_PNPMFILE}`,
+    );
+    console.log(
+      "  the overlay is WRITTEN; how pnpm installs through it (the pnpmfile selected by the environment, a dev lockfile under .vibefield/dev) is RD-2's spike — until it lands nothing installs it",
+    );
+  }
+  return 0;
 }
 
 function git(dir, args) {
@@ -281,7 +682,11 @@ export function stamp(root = REPO_ROOT) {
   const lock = readLock(root);
   if (lock === null) return "no-siblings-lock";
   const sidecar = goSidecar(root);
-  return Object.entries(lock.siblings)
+  // RD-1: the overlay is part of what a run builds — a cache filled with a sibling linked must never answer for the
+  // committed shape, and the reverse (thinking-release-deps.md §2, "the Nx sibling stamp reads the mode").
+  const overlay = readOverlay(root);
+  const mode = overlay.length > 0 ? ` overlay:${[...overlay].sort().join(",")}` : "";
+  return `${Object.entries(lock.siblings)
     .map(([name, entry]) => {
       const base = `${name}@${siblingStamp(siblingDir(root, entry))}`;
       if (sidecar === null || sidecar.name !== name) return base;
@@ -293,7 +698,7 @@ export function stamp(root = REPO_ROOT) {
       }
       return `${base}+${sidecar.binary}:${built}`;
     })
-    .join(" ");
+    .join(" ")}${mode}`;
 }
 
 const targetDirCache = new Map();
@@ -564,10 +969,26 @@ function status(root) {
     console.log(`${LOCK_FILE}: absent (registry mode — no siblings)`);
     return 0;
   }
+  // RD-1: the shape first, in preflight's words, then the overlay — the mode is a fact, never a secret (RD-D10).
+  const overlay = readOverlay(root);
+  console.log(siblingShape(root, lock, overlay).line);
+  console.log(
+    overlay.length > 0 ? `overlay: ${overlay.join(", ")} (${OVERLAY_PNPMFILE})` : "overlay: none",
+  );
   for (const [name, entry] of Object.entries(lock.siblings)) {
     const dir = siblingDir(root, entry);
+    const release = entry.release
+      ? ` · release ${Object.entries(entry.release)
+          .map(
+            ([plane, value]) =>
+              `${plane} ${typeof value === "string" ? value : JSON.stringify(value)}`,
+          )
+          .join(", ")}`
+      : "";
     if (!existsSync(dir)) {
-      console.log(`${name.padEnd(10)} MISSING at ${dir} (pinned ${entry.sha.slice(0, 12)})`);
+      console.log(
+        `${name.padEnd(10)} MISSING at ${dir} (pinned ${entry.sha.slice(0, 12)})${release}`,
+      );
       continue;
     }
     const head = siblingHead(dir);
@@ -580,9 +1001,13 @@ function status(root) {
           : `HEAD ${head.slice(0, 12)} ≠ pin ${entry.sha.slice(0, 12)}`;
     const tree = dirty === null ? "" : dirty ? " · dirty" : " · clean";
     const built = [entry.cargo?.crate, entry.go?.binary].filter(Boolean).join(" + ");
-    console.log(`${name.padEnd(10)} ${dir}  ${rev}${tree}${built ? ` · ${built}` : ""}`);
+    console.log(`${name.padEnd(10)} ${dir}  ${rev}${tree}${built ? ` · ${built}` : ""}${release}`);
     for (const [pkg, packageDir] of Object.entries(entry.packages ?? {})) {
-      console.log(`           ${pkg} → ${linkRow(entry, packageDir)}`);
+      const committed = committedNpmRow(entry, pkg);
+      const overlaid = npmPlane(entry) === "prod" && overlay.includes(name);
+      console.log(
+        `           ${pkg} → ${committed}${overlaid ? `  (overlay: ${linkRow(entry, packageDir)})` : ""}`,
+      );
     }
     for (const [crate, crateDir] of Object.entries(entry.patch ?? {})) {
       console.log(`           ${crate} → [patch.crates-io] path = "${patchPath(entry, crateDir)}"`);
@@ -907,6 +1332,34 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const command = process.argv[2] ?? "status";
   const handlers = {
     status,
+    use: (root) => useSiblings(root, process.argv.slice(3)),
+    render: (root) => {
+      const args = process.argv.slice(3);
+      const known = new Set(["--prod", "--dev", "--check", "--staged"]);
+      const unknown = args.filter((arg) => !known.has(arg));
+      const prod = args.includes("--prod");
+      const dev = args.includes("--dev");
+      if (unknown.length > 0 || prod === dev || (dev && args.length > 1)) {
+        console.error(
+          "usage: node scripts/siblings.mjs render --prod [--check] [--staged] | render --dev (re-renders the overlay `use` recorded)",
+        );
+        return 2;
+      }
+      if (dev) {
+        const linked = readOverlay(root);
+        const { links } = renderOverlay(root, linked);
+        console.log(
+          linked.length > 0
+            ? `siblings:render: overlay ${linked.join(", ")} re-rendered (${links.size} npm package(s))`
+            : "siblings:render: no overlay recorded — nothing to render (`use NAME` records one)",
+        );
+        return 0;
+      }
+      return renderProd(root, {
+        check: args.includes("--check"),
+        staged: args.includes("--staged"),
+      });
+    },
     pin: (root) => {
       const args = process.argv.slice(3);
       const flags = args.filter((arg) => arg.startsWith("--"));
@@ -936,7 +1389,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const handler = handlers[command];
   if (handler === undefined) {
     console.error(
-      "usage: node scripts/siblings.mjs <status|pin [--skip-typecheck] [NAME...]|stamp|fetch NAME|install-js|build-js|build|bin>",
+      "usage: node scripts/siblings.mjs <status|use [NAME...|--none]|render --prod [--check] [--staged]|render --dev|pin [--skip-typecheck] [NAME...]|stamp|fetch NAME|install-js|build-js|build|bin>",
     );
     process.exit(2);
   }

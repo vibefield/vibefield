@@ -1,0 +1,12 @@
+#!/bin/sh
+# RD-1 (RD-D10, thinking-release-deps.md §2): the commit carries exactly the sibling shape its own lock renders. The
+# STAGED pnpm-workspace.yaml overrides and Cargo.toml [patch.crates-io] rows must equal what siblings.lock.json renders
+# for them (`node scripts/siblings.mjs render --prod --check --staged`): a released sibling's row is its exact version, a
+# dev one's its link: or path into the pinned checkout. So a dev overlay that leaked into a manifest, a hand-edited
+# link:, or a path patch the lock does not pin is refused here, before it is a commit. The overlay itself lives under
+# .vibefield/ (ignored) and never reaches the index. SKIP_SHAPE=1 to bypass — say so in the commit.
+if [ -n "$SKIP_SHAPE" ]; then
+  echo "pre-commit: SKIP_SHAPE set — the sibling shape check did not run" >&2
+  exit 0
+fi
+exec node scripts/siblings.mjs render --prod --check --staged

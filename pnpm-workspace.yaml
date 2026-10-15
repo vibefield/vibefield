@@ -299,9 +299,11 @@ overrides:
   # (RD-5a, 2026-10-14: rosetta is published and its rows left this block for
   # exact pins above; puppeteer's follow at the release that carries what the
   # pin has — its 0.2.1 lacks PJ-6's resume selection and the SWF commits.)
-  # EXIT (W-D8): replace each row with an exact version, delete the lock
-  # entries, drop electron-shell's sibling-mode `server.fs.allow` branch; the
-  # walls and preflight's family rule stay.
+  # EXIT (RD-5; W-D8 as amended at RD-1, 2026-10-15): record the sibling's
+  # `release` in siblings.lock.json and `pnpm siblings render --prod` writes these
+  # rows exact — the lock entry STAYS as the dev overlay's coordinate
+  # (`pnpm siblings use NAME`); the walls and preflight's family rule stay. The
+  # pre-commit hook refuses a staged row the lock does not render.
   # Godview performance window (2026-09-27), revision in siblings.lock.json.
   # Rebuild with `npm run build --workspace @vibecook/ghosttea-react` in that
   # checkout after edits. Exit: a published release carrying these fixes.

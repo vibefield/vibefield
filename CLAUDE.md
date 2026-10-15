@@ -147,8 +147,13 @@ see fails the pin loudly (the new SHAs stay recorded; `--skip-typecheck` for the
 `scripts/siblings.mjs` is the ONE reader of the lock (preflight, `check:deps`, the Nx cache stamp
 and the dev runner all go through it). Sibling *sources* reach the fieldd and renderer builds
 through esbuild's and Vite's own input tracking, never through the runner's watchers, so the
-"never watches sibling trees" law below stands. Exit (W-D8) is a version edit: replace each
-`link:` row with an exact version and delete the lock entry.
+"never watches sibling trees" law below stands. **Two coordinates, two shapes (RD-1, 2026-10-15,
+`thinking-release-deps.md`):** a lock entry may carry a `release` block — the prod coordinate per plane — beside its
+checkout; a released plane is committed EXACT, an unreleased one as its `link:`/path rows. `pnpm siblings render --prod`
+writes the committed rows from the lock (`--check` compares), and the pre-commit hook refuses a commit whose staged
+rows its own lock does not render. `pnpm siblings use NAME` links a released sibling's checkout back in a LOCAL overlay
+under `.vibefield/dev/` (never a committed file); `use --none` removes it. Exit (RD-5, superseding W-D8's "delete the
+entry") is a `release` recorded in the lock and the rows re-rendered — the entry stays as the overlay's coordinate.
 
 **rosetta's checkout is dedicated to its pin (W-D10, 2026-10-03):** `../rosetta-pin` is a DETACHED
 checkout at the lock's revision, with its `repository` in the lock so `node scripts/siblings.mjs fetch rosetta`
