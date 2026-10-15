@@ -11,6 +11,7 @@ import {
   type SettingsSubpage,
 } from "../../panels/SettingsDialog";
 import { buttonCls } from "../../panels/settings-ui";
+import { UpdatesDoctorView, UpdatesSectionView } from "../../panels/UpdatesSection";
 import { AgentsSettingsPreview } from "../AgentsSettingsPreview";
 import { FIXTURE_ME, FIXTURE_OTHERS_WAITING } from "../account-fixtures";
 import { AGENTS_FIXTURE_STATES, type AgentsFixtureState } from "../agents-fixtures";
@@ -25,6 +26,14 @@ import {
 } from "../profiles-fixtures";
 import { TerminalSettingsPreview } from "../TerminalSettingsPreview";
 import { TERMINAL_FIXTURE_STATES, type TerminalFixtureState } from "../terminal-settings-fixtures";
+import {
+  UPDATES_DOCTOR_FIXTURE,
+  UPDATES_FIXTURE_NOW,
+  UPDATES_HELD_STATES,
+  UPDATES_PATH_STATES,
+  type UpdatesFixtureState,
+  updatesFixture,
+} from "../updates-settings-fixtures";
 
 export function SurfacesSection(): ReactElement {
   const [appearancePick, setAppearancePick] = useState<ThemePreference>("auto");
@@ -104,6 +113,22 @@ export function SurfacesSection(): ReactElement {
         bleed
       >
         <TerminalSettingsSpecimen />
+      </Specimen>
+
+      <Specimen
+        title="Updates — Settings › General: the update's path"
+        source="panels/UpdatesSection.tsx"
+        bleed
+      >
+        <UpdatesSettingsSpecimen states={UPDATES_PATH_STATES} label="Update card state" />
+      </Specimen>
+
+      <Specimen title="Updates — held, honest, and absent" source="panels/UpdatesSection.tsx" bleed>
+        <UpdatesSettingsSpecimen states={UPDATES_HELD_STATES} label="Update card held state" />
+      </Specimen>
+
+      <Specimen title="Updater — Settings › Diagnostics" source="panels/UpdatesSection.tsx" bleed>
+        <UpdatesDoctorSpecimen />
       </Specimen>
 
       <div className="vf-ds-grid vf-ds-grid-2">
@@ -214,6 +239,64 @@ function TerminalSettingsSpecimen(): ReactElement {
         subpage={subpage}
       >
         <TerminalSettingsPreview key={state} state={state} onSubpage={setSubpage} />
+      </SettingsDialog>
+    </div>
+  );
+}
+
+/** Settings › General's update card in the shipping dialog (WP12d L3c-ii, §13 C5): `UpdatesSectionView` over the
+ * projections and answers main gives, every production state, never a replica. */
+function UpdatesSettingsSpecimen({
+  states,
+  label,
+}: {
+  states: readonly UpdatesFixtureState[];
+  label: string;
+}): ReactElement {
+  const [state, setState] = useState<UpdatesFixtureState>(states[0] ?? "current");
+  return (
+    <div className="vf-ds-settings-stage vf-ds-agents-stage" data-updates-settings-catalog="">
+      <div className="vf-ds-production-statebar">
+        <span>Production state</span>
+        <UiSegmentedControl options={states} value={state} onChange={setState} label={label} />
+      </div>
+      <SettingsDialog
+        className="vf-ds-settings-dialog"
+        activePage="general"
+        onSelectPage={() => undefined}
+        onClose={() => undefined}
+        onUndo={() => undefined}
+        onRedo={() => undefined}
+        historyBusy={false}
+        undoAvailable={false}
+        redoAvailable={false}
+        account={{ me: FIXTURE_ME, others: FIXTURE_OTHERS_WAITING, onSwitch: () => undefined }}
+        subpage={null}
+      >
+        <UpdatesSectionView key={state} now={UPDATES_FIXTURE_NOW} {...updatesFixture(state)} />
+      </SettingsDialog>
+    </div>
+  );
+}
+
+/** Settings › Diagnostics' updater block over the doctor's lines main writes (C4). */
+function UpdatesDoctorSpecimen(): ReactElement {
+  return (
+    <div className="vf-ds-settings-stage" data-updates-doctor-catalog="">
+      <SettingsDialog
+        className="vf-ds-settings-dialog"
+        activePage="diagnostics"
+        onSelectPage={() => undefined}
+        onClose={() => undefined}
+        onUndo={() => undefined}
+        onRedo={() => undefined}
+        historyBusy={false}
+        undoAvailable={false}
+        redoAvailable={false}
+        account={{ me: FIXTURE_ME, others: FIXTURE_OTHERS_WAITING, onSwitch: () => undefined }}
+        subpage={null}
+      >
+        <UpdatesDoctorView state={UPDATES_DOCTOR_FIXTURE} />
       </SettingsDialog>
     </div>
   );

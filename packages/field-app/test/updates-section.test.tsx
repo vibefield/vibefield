@@ -1,0 +1,376 @@
+// @vitest-environment happy-dom
+
+import type {
+  DesktopShellState,
+  UpdateConfirmResult,
+  UpdatePrepareResult,
+  UpdateView,
+} from "@vibefield/contracts";
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { type FieldHost, type FieldUpdatesHost, setHost } from "../src/host";
+import { UpdatesDoctorSection, UpdatesSection } from "../src/panels/UpdatesSection";
+
+// WP12d (L3c-ii; build-wp12-updater.md §13 C2/C3/C4, the PM's ruling 2026-10-15 18:17Z) — the Settings card on its real
+// controller over a fake host. The card IS the consent from Settings: Restart takes ONE snapshot (prepare), the red
+// second click acts on THAT token (confirm), and a release that ends nothing asks nothing more — no apply asks twice.
+// A lower channel says EDP-36's sentence before it takes.
+
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+const noopLogger: FieldHost["logger"] = {
+  child: () => noopLogger,
+  trace() {},
+  debug() {},
+  info() {},
+  warn() {},
+  error() {},
+  fatal() {},
+  isLevelEnabled: () => false,
+};
+
+const TOKEN = "t".repeat(32);
+const VERSION = "1.2.0";
+const CONSENT = {
+  message: "Updating ends 2 terminal sessions",
+  lead: `VibeField ${VERSION} replaces the terminal service, which ends:`,
+  listed: ["claude — ~/Projects/vibe-field", "zsh — ~/Projects/rosetta"],
+  more: 0,
+  confirm: "End 2 sessions and update",
+};
+const BASE: UpdateView = {
+  phase: "idle",
+  channel: "nightly",
+  buildChannel: "nightly",
+  enabled: true,
+  lastCheckAt: null,
+  applyWired: true,
+};
+const STAGED: UpdateView = { ...BASE, phase: "staged", version: VERSION, sessions: 2 };
+
+let root: Root | null = null;
+let container: HTMLDivElement | null = null;
+
+afterEach(() => {
+  if (root !== null) act(() => root?.unmount());
+  root = null;
+  container?.remove();
+  container = null;
+});
+
+function fakeUpdates(
+  answers: {
+    prepare?: UpdatePrepareResult;
+    confirm?: UpdateConfirmResult;
+    doctor?: () => Promise<{ lines: string[] }>;
+  } = {},
+): FieldUpdatesHost & { [K in keyof FieldUpdatesHost]: ReturnType<typeof vi.fn> } {
+  return {
+    check: vi.fn(async () => undefined),
+    setEnabled: vi.fn(async () => undefined),
+    setChannel: vi.fn(async () => undefined),
+    decline: vi.fn(async () => undefined),
+    prepareRestart: vi.fn(
+      async () =>
+        answers.prepare ?? {
+          ok: true,
+          token: TOKEN,
+          version: VERSION,
+          keepsSessions: false,
+          sessions: [
+            { sessionId: "s1", title: "claude", cwd: "~/Projects/vibe-field" },
+            { sessionId: "s2", title: "zsh", cwd: "~/Projects/rosetta" },
+          ],
+          expiresAt: 1,
+          consent: CONSENT,
+        },
+    ),
+    confirmRestart: vi.fn(async () => answers.confirm ?? { ok: true }),
+    doctor: vi.fn(answers.doctor ?? (async () => ({ lines: ["updates: idle · channel nightly"] }))),
+  } as never;
+}
+
+function host(updates: FieldUpdatesHost | null): void {
+  setHost({
+    logger: noopLogger,
+    getConnection: async () => ({ port: 1, token: "test" }),
+    onPrepareClose: () => () => undefined,
+    completeClose: () => undefined,
+    ...(updates === null ? {} : { updates }),
+  });
+}
+
+const desktop = (update: UpdateView | undefined): DesktopShellState =>
+  ({
+    tray: {
+      availability: "available",
+      placement: "visible",
+      backgroundShellEffective: false,
+      issue: null,
+    },
+    ...(update === undefined ? {} : { update }),
+  }) as DesktopShellState;
+
+async function mount(update: UpdateView | undefined): Promise<void> {
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  await act(async () => {
+    root?.render(createElement(UpdatesSection, { desktopState: desktop(update) }));
+  });
+}
+
+async function rerender(update: UpdateView | undefined): Promise<void> {
+  await act(async () => {
+    root?.render(createElement(UpdatesSection, { desktopState: desktop(update) }));
+  });
+}
+
+const text = (): string => container?.textContent ?? "";
+const button = (label: string): HTMLButtonElement => {
+  const found = [...(container?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+    (candidate) => candidate.textContent?.trim() === label,
+  );
+  if (found === undefined) throw new Error(`no button "${label}" in: ${text()}`);
+  return found;
+};
+const click = async (label: string): Promise<void> => {
+  await act(async () => {
+    button(label).click();
+  });
+};
+
+describe("the update card (Settings › General)", () => {
+  it("says no updater runs where none does — a build without a release identity", async () => {
+    host(null);
+    await mount(undefined);
+    expect(text()).toContain("This build doesn't update itself");
+    expect(container?.querySelector('[data-updates-phase="absent"]')).not.toBeNull();
+  });
+
+  it("the card is the consent: Restart takes ONE snapshot, the red second click acts on THAT token", async () => {
+    const updates = fakeUpdates();
+    host(updates);
+    await mount(STAGED);
+    expect(text()).toContain(`VibeField ${VERSION} is ready — restart to finish updating`);
+    expect(text()).toContain("Restarting ends 2 terminal sessions. You choose when.");
+
+    await click("Restart to update…");
+    expect(updates.prepareRestart).toHaveBeenCalledTimes(1);
+    expect(updates.confirmRestart).not.toHaveBeenCalled();
+    const consent = container?.querySelector("[data-updates-consent]");
+    expect(consent?.textContent).toContain("Updating ends 2 terminal sessions");
+    expect(consent?.textContent).toContain("claude — ~/Projects/vibe-field");
+    expect(consent?.textContent).toContain("zsh — ~/Projects/rosetta");
+    // red text, and Cancel holds focus — Cancel is the tray box's default: nothing ends by accident
+    expect(button("End 2 sessions and update").dataset.variant).toBe("danger");
+    expect(document.activeElement).toBe(button("Cancel"));
+
+    await click("End 2 sessions and update");
+    expect(updates.confirmRestart).toHaveBeenCalledWith(TOKEN);
+    expect(text()).toContain("Restarting VibeField…");
+  });
+
+  it("Cancel and Escape drop the snapshot: nothing is confirmed", async () => {
+    const updates = fakeUpdates();
+    host(updates);
+    await mount(STAGED);
+    await click("Restart to update…");
+    await click("Cancel");
+    expect(container?.querySelector("[data-updates-consent]")).toBeNull();
+
+    await click("Restart to update…");
+    await act(async () => {
+      container
+        ?.querySelector("[data-updates-consent]")
+        ?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(container?.querySelector("[data-updates-consent]")).toBeNull();
+    expect(updates.confirmRestart).not.toHaveBeenCalled();
+  });
+
+  it("a release that ends nothing asks nothing more: one click prepares and confirms", async () => {
+    const updates = fakeUpdates({
+      prepare: {
+        ok: true,
+        token: TOKEN,
+        version: VERSION,
+        keepsSessions: true,
+        sessions: [],
+        expiresAt: 1,
+      },
+    });
+    host(updates);
+    await mount({ ...STAGED, keepsSessions: true });
+    expect(text()).toContain("Your terminal sessions keep running.");
+    await click("Restart to update");
+    expect(updates.confirmRestart).toHaveBeenCalledWith(TOKEN);
+    expect(container?.querySelector("[data-updates-consent]")).toBeNull();
+  });
+
+  it("says main's own words when the apply does not start — at prepare, and an expired snapshot at confirm", async () => {
+    const refused = fakeUpdates({
+      prepare: {
+        ok: false,
+        reason: "policy-unreachable",
+        words: {
+          message: "VibeField didn't install the update",
+          detail:
+            "VibeField checks the update policy before installing and couldn't reach it; try again when online.",
+        },
+      },
+    });
+    host(refused);
+    await mount(STAGED);
+    await click("Restart to update…");
+    expect(container?.querySelector('[role="alert"]')?.textContent).toBe(
+      "VibeField didn't install the update. VibeField checks the update policy before installing and couldn't reach it; try again when online.",
+    );
+    expect(refused.confirmRestart).not.toHaveBeenCalled();
+    act(() => root?.unmount());
+    root = null;
+    container?.remove();
+
+    const expired = fakeUpdates({
+      confirm: {
+        ok: false,
+        reason: "expired",
+        words: {
+          message: "VibeField didn't install the update",
+          detail:
+            "The list of sessions it would end may have changed while you decided. Nothing changed; choose Restart to Update again.",
+        },
+      },
+    });
+    host(expired);
+    await mount(STAGED);
+    await click("Restart to update…");
+    await click("End 2 sessions and update");
+    expect(container?.querySelector('[role="alert"]')?.textContent).toContain(
+      "choose Restart to Update again",
+    );
+    // the next Restart takes a fresh snapshot
+    await click("Restart to update…");
+    expect(expired.prepareRestart).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops a consent whose staged version went — the card never shows a stale list", async () => {
+    host(fakeUpdates());
+    await mount(STAGED);
+    await click("Restart to update…");
+    expect(container?.querySelector("[data-updates-consent]")).not.toBeNull();
+    await rerender({ ...BASE, phase: "idle" });
+    expect(container?.querySelector("[data-updates-consent]")).toBeNull();
+  });
+
+  it("asks through the doors: check, the switch, skip", async () => {
+    const updates = fakeUpdates();
+    host(updates);
+    await mount(STAGED);
+    await click("Check for updates");
+    expect(updates.check).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      container?.querySelector<HTMLButtonElement>('[role="switch"]')?.click();
+    });
+    expect(updates.setEnabled).toHaveBeenCalledWith(false);
+    await click("Skip this version");
+    expect(updates.decline).toHaveBeenCalledWith(VERSION);
+  });
+
+  it("says EDP-36's sentence before a lower channel takes; a higher one takes at once", async () => {
+    const updates = fakeUpdates();
+    host(updates);
+    await mount(BASE); // a nightly build on nightly
+    await act(async () => {
+      container?.querySelector<HTMLButtonElement>('button[data-id="stable"]')?.click();
+    });
+    expect(updates.setChannel).not.toHaveBeenCalled();
+    expect(container?.querySelector('[data-updates-downgrade="stable"]')?.textContent).toContain(
+      "Return to stable — reinstalls the latest stable release.",
+    );
+    await click("Return to stable");
+    expect(updates.setChannel).toHaveBeenCalledWith("stable");
+
+    act(() => root?.unmount());
+    root = null;
+    container?.remove();
+    const upward = fakeUpdates();
+    host(upward);
+    await mount({ ...BASE, channel: "stable", buildChannel: "stable" });
+    await act(async () => {
+      container?.querySelector<HTMLButtonElement>('button[data-id="beta"]')?.click();
+    });
+    expect(upward.setChannel).toHaveBeenCalledWith("beta");
+    expect(container?.querySelector("[data-updates-downgrade]")).toBeNull();
+  });
+
+  it("shows real progress with its number, and the advisory line as a sentence, never a block", async () => {
+    host(fakeUpdates());
+    await mount({
+      ...BASE,
+      phase: "downloading",
+      version: VERSION,
+      percent: 42,
+      unsupportedBelow: "1.1.0",
+    });
+    const bar = container?.querySelector('[role="progressbar"]');
+    expect(bar?.getAttribute("aria-valuenow")).toBe("42");
+    expect(text()).toContain(`Downloading VibeField ${VERSION} · 42%`);
+    expect(text()).toContain("older than the oldest one its publisher supports (1.1.0)");
+    expect(button("Check for updates").disabled).toBe(true);
+  });
+});
+
+describe("the updater block (Settings › Diagnostics)", () => {
+  it("renders the doctor's lines as the panel's key and value rows, and Refresh reads again", async () => {
+    const updates = fakeUpdates({
+      doctor: async () => ({
+        lines: ["updates: staged · channel nightly", "update cache: 186.4 MB"],
+      }),
+    });
+    host(updates);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(createElement(UpdatesDoctorSection));
+    });
+    expect(container.querySelector('[data-updates-doctor="ready"]')?.textContent).toBe(
+      "updatesstaged · channel nightlyupdate cache186.4 MB",
+    );
+    await click("Refresh");
+    expect(updates.doctor).toHaveBeenCalledTimes(2);
+  });
+
+  it("says when no updater runs, and when it does not answer", async () => {
+    host(null);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(createElement(UpdatesDoctorSection));
+    });
+    expect(text()).toContain("No updater runs in this build.");
+    act(() => root?.unmount());
+    root = null;
+    container.remove();
+
+    host(
+      fakeUpdates({
+        doctor: async () => {
+          throw new Error("the bridge is gone");
+        },
+      }),
+    );
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(createElement(UpdatesDoctorSection));
+    });
+    expect(text()).toContain(
+      "The updater didn't answer: the bridge is gone. Refresh to ask again.",
+    );
+  });
+});

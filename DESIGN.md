@@ -1667,6 +1667,28 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   ("needs app X · contracts Y"), no action; a vanished entry lists "dropped from
   registry"; an all-clear reads "everything current". The checked time is stated
   ("checked HH:MM:SS"), never implied fresh.
+- **The desktop update card** (WP12d L3c-ii, 2026-10-15; `build-wp12-updater.md` §13; Settings › General after
+  Desktop): the app's own updater, main's, over the host bridge.
+  - **One state line**, in words, with its number and its provenance:
+    - "VibeField is up to date · checked 14:02";
+    - "Downloading VibeField X · 42%", over a 3px bar that moves on real progress only (no spinner);
+    - "VibeField X is ready — restart to finish updating" (never "installed": macOS stages, EDP-34).
+  - **The policy's answers** read in `--vf-ink-attention` ("Updates are paused by VibeField's publisher", "This update
+    needs a newer macOS"). A failed check reads in `--vf-ink-danger` with "Check again". These are the inks, because a
+    state word is read (§2.5). Offline is quiet: "Couldn't check — offline · VibeField tries again on its own".
+  - **The notices** (a refusal, the advisory line, a bridge that didn't answer) are the kit's neutral `InlineNotice`,
+    and their words carry the meaning.
+  - **The card IS the consent** (C2):
+    - "Restart to update…" takes ONE snapshot. The consent names what ends in main's own words, the very words the
+      tray's box joins.
+    - It is the two-step destructive confirm below: "End N sessions and update" in `--vf-red` text, with Cancel focused
+      (the tray box's default).
+    - A release that ends nothing restarts on the one click. No apply asks twice.
+  - **A lower channel** says EDP-36's sentence before it takes ("Return to stable — reinstalls the latest stable
+    release").
+  - **The advisory UNSUPPORTED line** is a sentence, never a block.
+  - **Settings › Diagnostics' "Updater" block** renders the doctor's lines as `SystemSection`'s key/value rows. A support
+    bundle's `doctor/status.json` carries the same lines.
 - **The destructive uninstall affordance** (P7; spec §16.5): registry/sideload rows
   carry a "···" overflow revealing two acts — "uninstall" (muted, keeps data) and
   "remove data too" (the destructive variant: `--vf-red` text, visually distinct BEFORE

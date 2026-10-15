@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   type BoxContent,
   CONSENT_LISTED_MAX,
+  censusNotice,
   consentBox,
+  consentWords,
   policyNotice,
   quitNotice,
   stagedTrayLabel,
@@ -72,6 +74,17 @@ describe("the consent box (EDP-35, DESIGN.md §9)", () => {
     speaksInSection9(many);
   });
 
+  it("L3c-ii — is consentWords joined: the card lays out the very words the tray's box says", () => {
+    const words = consentWords("0.9.0", sessions(CONSENT_LISTED_MAX + 2));
+    const box = consentBox("0.9.0", sessions(CONSENT_LISTED_MAX + 2));
+    expect(words.message).toBe(box.message);
+    expect(words.confirm).toBe(box.buttons[1]);
+    expect([words.lead, ...words.listed, `and ${words.more} more`].join("\n")).toBe(box.detail);
+    expect(words.listed).toHaveLength(CONSENT_LISTED_MAX);
+    expect(words.more).toBe(2);
+    expect(consentWords("0.9.0", sessions(2)).more).toBe(0);
+  });
+
   it("names an untitled session rather than printing a blank line", () => {
     const box = consentBox("0.9.0", [{ sessionId: "s-1" }]);
     expect(box.detail.split("\n")[1]).toBe("untitled session");
@@ -122,6 +135,7 @@ describe("the policy notices (L3b-i, B1/B2; DESIGN.md §9: what happened, what h
       policyNotice({ kind: "killed", channel: "beta" }),
       policyNotice({ kind: "yanked", version: "1.2.0" }),
       policyNotice({ kind: "floor-unmet", version: "1.2.0", floor: "15.0" }),
+      censusNotice(), // L3c-ii — the census unread: nothing ended, and why
     ];
     for (const box of boxes) {
       expect(box.message).toBe("VibeField didn't install the update");

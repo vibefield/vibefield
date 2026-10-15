@@ -314,6 +314,9 @@ export function trayUpdateOf(view: UpdateView): TrayUpdateState {
   switch (view.phase) {
     case "checking":
       return { kind: "checking" };
+    // L3c-ii — a found update that is not downloading (skipped, or updates off) is quiet in the menu
+    case "available":
+      return { kind: "idle" };
     case "downloading":
       return { kind: "downloading", percent: view.percent ?? 0 };
     case "staged":

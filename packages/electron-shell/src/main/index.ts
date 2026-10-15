@@ -1961,15 +1961,27 @@ async function main(
         prepareRestart: async () => {
           const prepared = await updates.prepareRestart();
           if (!prepared.ok) return prepared;
-          // the wire's sessions are plain records (the contract passes unknown keys through): each is copied out
-          // field by field, so the controller's snapshot is never handed over by reference
+          // the wire's records are plain (the contract passes unknown keys through): the sessions and the consent's
+          // words are copied out field by field, so the controller's snapshot is never handed over by reference
+          const { sessions, consent, ...rest } = prepared;
           return {
-            ...prepared,
-            sessions: prepared.sessions.map(({ sessionId, title, cwd }) => ({
+            ...rest,
+            sessions: sessions.map(({ sessionId, title, cwd }) => ({
               sessionId,
               ...(title === undefined ? {} : { title }),
               ...(cwd === undefined ? {} : { cwd }),
             })),
+            ...(consent === undefined
+              ? {}
+              : {
+                  consent: {
+                    message: consent.message,
+                    lead: consent.lead,
+                    listed: [...consent.listed],
+                    more: consent.more,
+                    confirm: consent.confirm,
+                  },
+                }),
           };
         },
         confirmRestart: (token) => updates.confirmRestart(token),

@@ -74,24 +74,43 @@ export const CONSENT_LISTED_MAX = 5;
 
 const plural = (n: number, one: string, many: string): string => (n === 1 ? one : many);
 
-/** EDP-35's consent box, in DESIGN.md §9's voice: the wording IS the consequence. */
-export function consentBox(version: string, sessions: readonly CensusSession[]): BoxContent {
+/** EDP-35's consent, in DESIGN.md §9's voice: the wording IS the consequence. Composed ONCE (L3c-ii): the tray's box
+ * joins these words, and the Settings card lays the same words out, so the two cannot say different things. */
+export type ConsentWords = {
+  readonly message: string;
+  readonly lead: string;
+  readonly listed: readonly string[];
+  readonly more: number;
+  readonly confirm: string;
+};
+
+export function consentWords(version: string, sessions: readonly CensusSession[]): ConsentWords {
   const n = sessions.length;
-  const noun = plural(n, "terminal session", "terminal sessions");
   const listed = sessions.slice(0, CONSENT_LISTED_MAX).map((session) => {
     const title = session.title?.trim() || "untitled session";
     return session.cwd ? `${title} — ${session.cwd}` : title;
   });
-  const more = n - listed.length;
+  return {
+    message: `Updating ends ${n} ${plural(n, "terminal session", "terminal sessions")}`,
+    lead: `VibeField ${version} replaces the terminal service, which ends:`,
+    listed,
+    more: n - listed.length,
+    confirm: `End ${n} ${plural(n, "session", "sessions")} and update`,
+  };
+}
+
+/** EDP-35's consent box: `consentWords`, joined for a native dialog. */
+export function consentBox(version: string, sessions: readonly CensusSession[]): BoxContent {
+  const words = consentWords(version, sessions);
   const lines = [
-    `VibeField ${version} replaces the terminal service, which ends:`,
-    ...listed,
-    ...(more > 0 ? [`and ${more} more`] : []),
+    words.lead,
+    ...words.listed,
+    ...(words.more > 0 ? [`and ${words.more} more`] : []),
   ];
   return {
-    message: `Updating ends ${n} ${noun}`,
+    message: words.message,
     detail: lines.join("\n"),
-    buttons: ["Cancel", `End ${n} ${plural(n, "session", "sessions")} and update`],
+    buttons: ["Cancel", words.confirm],
     defaultId: 0,
     cancelId: 0,
   };
@@ -140,6 +159,19 @@ export function policyNotice(
   return {
     message: "VibeField didn't install the update",
     detail,
+    buttons: ["OK"],
+    defaultId: 0,
+    cancelId: 0,
+  };
+}
+
+/** L3c-ii — the census could not be read when the person chose to update: VibeField ends no session it cannot name, and
+ * says so (before, the tray's click did nothing visible here: an act with no sentence, which EDP-35 forbids). */
+export function censusNotice(): BoxContent {
+  return {
+    message: "VibeField didn't install the update",
+    detail:
+      "VibeField couldn't read which terminal sessions are running, so it ended none. Nothing changed; try again in a moment.",
     buttons: ["OK"],
     defaultId: 0,
     cancelId: 0,

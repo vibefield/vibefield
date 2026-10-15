@@ -390,6 +390,29 @@ describe("UI system ownership boundaries", () => {
     expect(fixture).not.toContain("setAppTheme");
   });
 
+  it("keeps the update card's fixture an ADAPTER — main's projections, answers and doctor lines, never the card's markup (WP12d L3c-ii)", () => {
+    // The catalog stands in for main: the `desktopState.update` projections, the doors' answers (the consent's words,
+    // a refusal's) and the doctor's lines. The specimens mount the shipping views over them — never the card's own
+    // classes, never its controller, never the host's doors.
+    const fixture = source("design-system/updates-settings-fixtures.ts");
+    expect(fixture).toContain("UpdateView");
+    expect(fixture).toContain("UpdateConsentWords");
+    expect(fixture).not.toMatch(/className=|<[A-Za-z]/u);
+    expect(fixture).not.toContain("vf-profiles-confirm");
+    expect(fixture).not.toContain("getHost");
+    // the panel's TYPES only (the flow and the doctor's state): no view, no controller
+    expect(fixture).toContain(
+      'import type { UpdatesDoctorState, UpdatesFlow } from "../panels/UpdatesSection";',
+    );
+    expect(fixture).not.toMatch(/import \{[^}]*\} from "\.\.\/panels\/UpdatesSection"/u);
+    const page = source("design-system/sections/SurfacesSection.tsx");
+    expect(page).toMatch(
+      /<UpdatesSectionView key=\{state\} now=\{UPDATES_FIXTURE_NOW\} \{\.\.\.updatesFixture\(state\)\} \/>/u,
+    );
+    expect(page).not.toMatch(/<UpdatesSection\s/u);
+    expect(page).not.toMatch(/<UpdatesDoctorSection\s/u);
+  });
+
   it("keeps the edges' fixture an ADAPTER — tiles and an open drawer, never the trays' markup (FR-4)", () => {
     // The catalog stands in for what a host supplies — the stills, which drawer
     // the owner holds, the view — and mounts the shipping tray view on both
@@ -633,6 +656,9 @@ describe("UI system ownership boundaries", () => {
       "PeerCursorView",
       "arrowBoxAt",
       "peerLabel",
+      // WP12d (L3c-ii) — Settings › General's update card and Settings › Diagnostics' updater block, over fixtures
+      "UpdatesSectionView",
+      "UpdatesDoctorView",
     ]) {
       expect(catalog).toContain(productionView);
     }
@@ -653,6 +679,9 @@ describe("UI system ownership boundaries", () => {
     expect(page).toMatch(/<PeersPlate\s/u);
     // …and Send to…'s flight (DK-14)
     expect(page).toMatch(/<SendFlightPlate\s/u);
+    // …and the update card and the updater block mounted in the shipping dialog (WP12d L3c-ii)
+    expect(page).toMatch(/<UpdatesSectionView\s/u);
+    expect(page).toMatch(/<UpdatesDoctorView\s/u);
     // …and the board risen behind the line in both scenes that raise Objects (the playground, the view frame's stage)
     expect(page).toMatch(/<StageBoard\s/u);
     expect(viewFrame).toMatch(/<StageBoard\s/u);
@@ -734,6 +763,7 @@ describe("UI system ownership boundaries", () => {
       "frame/HeadView.tsx",
       "account/MeMenu.tsx",
       "panels/AppearanceSection.tsx",
+      "panels/UpdatesSection.tsx",
       "field/desk/bar/SelectionBar.tsx",
       "field/desk/bar/SelectionBarView.tsx",
       "field/desk/bar/KindGlyph.tsx",

@@ -1,12 +1,13 @@
 import type { AuditAppendV1 } from "@vibefield/contracts/diagnostics";
 import { describe, expect, it, vi } from "vitest";
 import type { UpdatePrepared, UpdateQuitPlan } from "../../src/main/quit-flow";
-import type {
-  ApplyPort,
-  BoxContent,
-  CensusSnapshot,
-  StageOutcome,
-  StopOutcome,
+import {
+  type ApplyPort,
+  type BoxContent,
+  type CensusSnapshot,
+  consentWords,
+  type StageOutcome,
+  type StopOutcome,
 } from "../../src/main/updates/apply";
 import {
   type CancellationLike,
@@ -302,6 +303,10 @@ describe("restartToInstall — WP12c's apply, order (A)", () => {
     apply.snapshot = { known: false };
     expect(await controller.restartToInstall()).toEqual({ ok: false, reason: "census-unknown" });
     expect(apply.plan).toBeNull();
+    // L3c-ii — and the click is said, not swallowed: the tray tells the person nothing ended and why
+    expect(apply.notices.map((notice) => notice.detail)).toEqual([
+      "VibeField couldn't read which terminal sessions are running, so it ended none. Nothing changed; try again in a moment.",
+    ]);
     expect(controller.state).toMatchObject({
       kind: "staged",
       blockedBy: "census-unknown",
@@ -826,6 +831,17 @@ describe("the silent self-apply (B4) and the staged cache (B6)", () => {
 // token to it; `confirmRestart` acts on exactly that snapshot (fieldd's re-check is the last word); an expired,
 // replaced or spent token is `expired` — a fresh prepare, never a silent proceed. No apply asks twice.
 describe("the two-phase apply (C2) and the one projection (C6)", () => {
+  // L3c-ii — an expired snapshot answers with main's own sentence, the one the tray's notice says
+  const EXPIRED = {
+    ok: false,
+    reason: "expired",
+    words: {
+      message: "VibeField didn't install the update",
+      detail:
+        "The list of sessions it would end may have changed while you decided. Nothing changed; choose Restart to Update again.",
+    },
+  };
+
   async function staged(
     opts: Parameters<typeof stagedController>[0],
     sessions: CensusSnapshot = LIVE,
@@ -848,6 +864,11 @@ describe("the two-phase apply (C2) and the one projection (C6)", () => {
       sessions: LIVE.sessions,
     });
     if (!prepared.ok) return;
+    // L3c-ii — the consent's words travel with the snapshot: the very words the tray's box joins
+    expect(prepared.consent).toEqual(consentWords(STAGED_VERSION, LIVE.sessions));
+    expect(prepared.consent?.message).toBe(
+      `Updating ends ${LIVE.sessions.length} terminal sessions`,
+    );
     // a session is born after the snapshot: the stop still names exactly what the person saw (fieldd re-checks)
     r.apply.snapshot = {
       known: true,
@@ -866,33 +887,21 @@ describe("the two-phase apply (C2) and the one projection (C6)", () => {
     const first = await r.controller.prepareRestart();
     const second = await r.controller.prepareRestart();
     if (!first.ok || !second.ok) throw new Error("prepare refused");
-    expect(await r.controller.confirmRestart(first.token)).toEqual({
-      ok: false,
-      reason: "expired",
-    });
+    expect(await r.controller.confirmRestart(first.token)).toEqual(EXPIRED);
     // the wrong token spent the snapshot too: the right one now needs a fresh prepare
-    expect(await r.controller.confirmRestart(second.token)).toEqual({
-      ok: false,
-      reason: "expired",
-    });
+    expect(await r.controller.confirmRestart(second.token)).toEqual(EXPIRED);
 
     const third = await r.controller.prepareRestart();
     if (!third.ok) throw new Error("prepare refused");
     expect(third.expiresAt).toBe(NOW + PREPARE_TTL_MS);
     clock.now += PREPARE_TTL_MS + 1;
-    expect(await r.controller.confirmRestart(third.token)).toEqual({
-      ok: false,
-      reason: "expired",
-    });
+    expect(await r.controller.confirmRestart(third.token)).toEqual(EXPIRED);
 
     clock.now = NOW;
     const fourth = await r.controller.prepareRestart();
     if (!fourth.ok) throw new Error("prepare refused");
     r.controller.decline(STAGED_VERSION);
-    expect(await r.controller.confirmRestart(fourth.token)).toEqual({
-      ok: false,
-      reason: "expired",
-    });
+    expect(await r.controller.confirmRestart(fourth.token)).toEqual(EXPIRED);
     expect(r.apply.plan).toBeNull(); // nothing ever proceeded
   });
 
@@ -976,5 +985,43 @@ describe("the two-phase apply (C2) and the one projection (C6)", () => {
     r.controller.setEnabled(false);
     expect(r.controller.view().enabled).toBe(false);
     expect(heard.length).toBeGreaterThan(0);
+  });
+
+  it("L3c-ii — no consent words where nothing ends: an untouched release, or no live session", async () => {
+    const plane: NativePlane = {
+      digest: "e".repeat(64),
+      members: ["bin/field-native", "bin/field-terminal-host", "bin/sidecar-slim"],
+    };
+    const untouched = await staged({ nativePlane: plane, manifestNative: plane });
+    const keeps = await untouched.controller.prepareRestart();
+    expect(keeps).toMatchObject({ ok: true, keepsSessions: true, sessions: [] });
+    expect(keeps.ok && keeps.consent).toBeUndefined();
+
+    const quiet = await staged({}, { known: true, sessions: [] });
+    const none = await quiet.controller.prepareRestart();
+    expect(none).toMatchObject({ ok: true, keepsSessions: false, sessions: [] });
+    expect(none.ok && none.consent).toBeUndefined();
+  });
+
+  it("L3c-ii — a found update that does not download is `available`, never a check that never ends", async () => {
+    const off = await stagedController({});
+    off.controller.setEnabled(false);
+    await off.controller.check("manual"); // a person's check still runs with updates off, and downloads nothing
+    expect(off.controller.view()).toMatchObject({
+      phase: "available",
+      version: STAGED_VERSION,
+      enabled: false,
+    });
+    expect(off.controller.view().declined).toBeUndefined();
+
+    const skipped = await stagedController({});
+    skipped.controller.decline(STAGED_VERSION);
+    await skipped.controller.check("manual");
+    expect(skipped.controller.view()).toMatchObject({
+      phase: "available",
+      version: STAGED_VERSION,
+      declined: true,
+      enabled: true,
+    });
   });
 });

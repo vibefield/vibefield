@@ -275,6 +275,8 @@ describe("trayUpdateOf — the tray's half of the one projection", () => {
     [{ phase: "idle" }, { kind: "idle" }],
     [{ phase: "offline" }, { kind: "idle" }],
     [{ phase: "checking" }, { kind: "checking" }],
+    // L3c-ii — a found update held by a skip or the off switch is quiet, never a check that never ends
+    [{ phase: "available", version: "1.2.0", declined: true }, { kind: "idle" }],
     [
       { phase: "downloading", version: "1.2.0", percent: 41 },
       { kind: "downloading", percent: 41 },

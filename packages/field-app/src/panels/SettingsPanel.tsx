@@ -47,6 +47,7 @@ import {
   SettingsSwitch,
 } from "./settings-ui";
 import { TerminalSettings } from "./terminal/TerminalSettings";
+import { UpdatesDoctorSection, UpdatesSection } from "./UpdatesSection";
 
 const LazyDiagnosticsSection = lazy(() =>
   import("./DiagnosticsSection").then((module) => ({
@@ -432,6 +433,8 @@ export function SettingsPanel({
           desktopState={desktopState}
           onSettingsChanged={markSettingsChanged}
         />
+        {/* WP12d (L3c-ii, §13 C3) — the update card, after Desktop for now */}
+        <UpdatesSection desktopState={desktopState} />
         <SettingsSection
           title="Settings history"
           description="User preferences are stored in the synced Loro settings document."
@@ -570,6 +573,8 @@ export function SettingsPanel({
     pageContent = (
       <div className="space-y-4">
         <SystemSection />
+        {/* WP12d (L3c-ii, §13 C4) — the updater's doctor lines, the same a support bundle carries */}
+        <UpdatesDoctorSection />
         <SettingsSection
           title="Diagnostics viewer"
           description="Inspect logs, crashes, debug leases, and support bundle contents."

@@ -34,7 +34,10 @@ import {
   type BoxContent,
   type CensusSession,
   type CensusSnapshot,
+  type ConsentWords,
+  censusNotice,
   consentBox,
+  consentWords,
   expiredNotice,
   policyNotice,
   quitNotice,
@@ -204,6 +207,8 @@ export type RestartOutcome =
         // C2 (L3c-i): the prepared snapshot went stale before the answer — a fresh prepare, never a silent proceed
         | "expired"
         | LeverRefusal;
+      /** L3c-ii — what the person reads, where the card needs main's sentence (an expired snapshot) */
+      readonly words?: { readonly message: string; readonly detail: string };
     };
 
 /** C2 (L3c-i) — the first phase's answer: the snapshot a consent shows and the token bound to its ids, or a refusal
@@ -216,6 +221,8 @@ export type PrepareOutcome =
       readonly keepsSessions: boolean;
       readonly sessions: readonly CensusSession[];
       readonly expiresAt: number;
+      /** L3c-ii — present only when the apply ends sessions: the consent's one set of words */
+      readonly consent?: ConsentWords;
     }
   | {
       readonly ok: false;
@@ -538,8 +545,15 @@ export class UpdateController {
     };
     switch (state.kind) {
       case "checking":
-      case "available":
         return { phase: "checking", ...common };
+      // L3c-ii — found and held (skipped, or updates off): never "checking", which would never end
+      case "available":
+        return {
+          phase: "available",
+          version: state.version,
+          ...(this.client.declined.includes(state.version) ? { declined: true } : {}),
+          ...common,
+        };
       case "downloading":
         return { phase: "downloading", version: state.version, percent: state.percent, ...common };
       case "staged":
@@ -705,7 +719,7 @@ export class UpdateController {
       const confirmed = await this.confirmRestart(prepared.token, silent ? "silent" : "person");
       if (!confirmed.ok && confirmed.reason === "expired" && !silent && apply !== undefined)
         await apply.notify(expiredNotice());
-      return confirmed;
+      return confirmed.ok ? confirmed : { ok: false, reason: confirmed.reason };
     } finally {
       this.restarting = false;
     }
@@ -740,7 +754,7 @@ export class UpdateController {
       state.kind !== "staged" ||
       state.version !== prepared.version
     ) {
-      return { ok: false, reason: "expired" };
+      return { ok: false, reason: "expired", words: wordsOf(expiredNotice()) };
     }
     const apply = this.options.apply;
     if (apply === undefined || !apply.wired) return { ok: false, reason: "apply-unbuilt" };
@@ -821,14 +835,23 @@ export class UpdateController {
       const snapshot = await this.readCensus();
       if (!snapshot.known) {
         this.audit(UPDATES_AUDIT_ACTIONS.APPLY, "denied", "CENSUS_UNKNOWN", { version });
-        return { ok: false, reason: "census-unknown" };
+        return { ok: false, reason: "census-unknown", words: wordsOf(censusNotice()) };
       }
       sessions = snapshot.sessions;
     }
     const token = `${randomUUID()}${randomUUID()}`.replace(/-/g, "");
     const expiresAt = this.now() + PREPARE_TTL_MS;
     this.prepared = { token, version, native, sessions, expiresAt };
-    return { ok: true, token, version, keepsSessions: !native, sessions, expiresAt };
+    return {
+      ok: true,
+      token,
+      version,
+      keepsSessions: !native,
+      sessions,
+      expiresAt,
+      // L3c-ii — the consent's words travel with the snapshot, so the card says what the tray's box says
+      ...(sessions.length > 0 ? { consent: consentWords(version, sessions) } : {}),
+    };
   }
 
   /** B4 (EDP-34, §11.3) — apply a staged update ON ITS OWN when the safe window holds: windowless ∧ tray-resident ∧ the

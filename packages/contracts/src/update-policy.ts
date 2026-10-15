@@ -419,6 +419,8 @@ export const UpdateView = z
     phase: z.enum([
       "idle",
       "checking",
+      // L3c-ii — found, and NOT downloading: the person skipped it, or turned updates off (a manual check still runs)
+      "available",
       "downloading",
       "staged",
       "paused",
@@ -426,8 +428,10 @@ export const UpdateView = z
       "failed",
       "offline",
     ]),
-    /** downloading or staged */
+    /** available, downloading or staged */
     version: z.string().min(1).max(64).optional(),
+    /** available: the person skipped this version ("Skip this version"), held across restarts */
+    declined: z.boolean().optional(),
     /** downloading: coarse, 0–100 */
     percent: z.number().min(0).max(100).optional(),
     /** staged: the live sessions the last census read, or `unknown` (the verb holds) */
@@ -470,6 +474,24 @@ export const UpdateWords = z
   .object({ message: z.string().min(1).max(256), detail: z.string().min(1).max(1024) })
   .passthrough();
 
+/** L3c-ii — the consent's words, composed ONCE in main (`consentWords`): the tray's native box joins them, the Settings
+ * card lays them out — the same sentence either way. Present only when the apply would end sessions. */
+export const UpdateConsentWords = z
+  .object({
+    /** "Updating ends 2 terminal sessions" */
+    message: z.string().min(1).max(256),
+    /** "VibeField 1.2.0 replaces the terminal service, which ends:" */
+    lead: z.string().min(1).max(512),
+    /** up to five sessions as `title — cwd` */
+    listed: z.array(z.string().min(1).max(4700)).max(16),
+    /** the sessions past the listed ones ("and K more") */
+    more: z.number().int().nonnegative(),
+    /** the destructive act's own words: "End 2 sessions and update" */
+    confirm: z.string().min(1).max(128),
+  })
+  .passthrough();
+export type UpdateConsentWords = z.infer<typeof UpdateConsentWords>;
+
 /** C2, the first phase: a FRESH policy, the planes, and ONE census snapshot — with a token bound to its ids. The
  * second phase acts on exactly that snapshot (fieldd's re-check is the last word); an expired token means a fresh
  * prepare, never a silent proceed. */
@@ -483,6 +505,8 @@ export const UpdatePrepareResult = z.discriminatedUnion("ok", [
       keepsSessions: z.boolean(),
       sessions: z.array(UpdateConsentSession).max(4096),
       expiresAt: z.number().int().nonnegative(),
+      /** L3c-ii — the consent's words when the apply ends sessions; absent, nothing ends and no consent is asked */
+      consent: UpdateConsentWords.optional(),
     })
     .passthrough(),
   z
@@ -497,7 +521,14 @@ export type UpdatePrepareResult = z.infer<typeof UpdatePrepareResult>;
 
 export const UpdateConfirmResult = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true) }).passthrough(),
-  z.object({ ok: z.literal(false), reason: z.string().min(1).max(64) }).passthrough(),
+  z
+    .object({
+      ok: z.literal(false),
+      reason: z.string().min(1).max(64),
+      /** L3c-ii — what the person reads (an expired snapshot says to choose Restart to Update again) */
+      words: UpdateWords.optional(),
+    })
+    .passthrough(),
 ]);
 export type UpdateConfirmResult = z.infer<typeof UpdateConfirmResult>;
 
