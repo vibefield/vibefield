@@ -95,8 +95,28 @@ export type UpdatePolicySource = z.infer<typeof UpdatePolicySource>;
 /** WP12-D11 (L3a) — `release-manifest.json`: the release's bytes per plane, signed by `release` like the feed. The
  * planes a release TOUCHES are computed — each plane's digest against the previous release's manifest — never declared
  * by hand (a hand-declared list is how a native change rides a "shell-only" release). The first release touches every
- * plane. The client reads it from L3b on; until then every release counts as touching field-native. */
+ * plane. The client reads it from L3b on; until then every release counts as touching field-native.
+ *
+ * L3b-i (the PM's ruling 2026-10-15 16:03Z, B3): the client decides by DIGEST, never by `touched` alone (a client may
+ * skip releases, and nightly releases are deleted at 14 days). It hashes its OWN installed field-native plane and
+ * compares it with the head's — and that plane is field-native AND every executable it execs from its own directory
+ * (`field-terminal-host`; `sidecar-slim` or `truffle-sidecar`, whichever it finds), so the manifest NAMES the plane's
+ * members and a missing or extra member reads as touched. Each digest line is `path\0sha256`, the path relative to the
+ * app's resources directory for a file inside it (`bin/field-native`) and relative to the app otherwise. */
 export const RELEASE_MANIFEST_FILE = "release-manifest.json" as const;
+
+/** The release workflow's platform keys (`builds` below; `release.yml`'s matrix): `<mac|win|linux>-<arch>`. */
+export function releasePlatformKey(platform: string, arch: string): string {
+  const os = platform === "darwin" ? "mac" : platform === "win32" ? "win" : platform;
+  return `${os}-${arch}`;
+}
+
+const ReleasePlaneDigest = z.object({
+  digest: z.string().regex(/^[0-9a-f]{64}$/),
+  files: z.number().int().nonnegative(),
+  /** the plane's members, resources-relative and sorted (REQUIRED for field-native: B3 compares the set itself) */
+  members: z.array(z.string().min(1).max(256)).max(64).optional(),
+});
 export const ReleaseManifest = z
   .object({
     schemaVersion: z.literal(1),
@@ -109,20 +129,42 @@ export const ReleaseManifest = z
     /** per platform build, per plane: a sha256 over the plane's sorted `path\0sha256` lines, and its file count */
     builds: z.record(
       z.string().min(1).max(32),
-      z.record(
-        z.enum(UPDATE_PLANES_LIST),
-        z.object({
-          digest: z.string().regex(/^[0-9a-f]{64}$/),
-          files: z.number().int().nonnegative(),
-        }),
-      ),
+      z.record(z.enum(UPDATE_PLANES_LIST), ReleasePlaneDigest),
     ),
     /** the planes whose digest differs from the previous release's on any platform (every plane on a first release) */
     touched: z.array(z.enum(UPDATE_PLANES_LIST)),
     /** the tag the comparison was made against; null on a first release */
     previous: z.string().min(1).max(128).nullable(),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((manifest, ctx) => {
+    for (const [platform, planes] of Object.entries(manifest.builds)) {
+      const native = planes["field-native"];
+      if (native === undefined) continue;
+      const members = native.members;
+      if (members === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["builds", platform, "field-native", "members"],
+          message: "the field-native plane names its members",
+        });
+        continue;
+      }
+      const sorted = [...new Set(members)].sort();
+      if (sorted.length !== members.length || sorted.some((m, i) => m !== members[i]))
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["builds", platform, "field-native", "members"],
+          message: "members are sorted and unique",
+        });
+      if (members.length !== native.files)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["builds", platform, "field-native", "files"],
+          message: "files counts the members",
+        });
+    }
+  });
 export type ReleaseManifest = z.infer<typeof ReleaseManifest>;
 
 // WP12-D4 (build-wp12-updater.md §3) — `channels.json`, the channel heads. Every release carries it, signed by the
@@ -213,6 +255,10 @@ export const UPDATES_SERVICE = {
   /** WP12c (§10 S1) — the session census could not be read (the inventory unobserved, the link down, no answer inside
    * its bound): the apply HOLDS (EDP-33: never auto-escalated), and the tray says so instead of offering the verb. */
   STATE_CENSUS_UNKNOWN: "census-unknown",
+  /** WP12d (L3b-i, the PM's ruling 2026-10-15 16:03Z, B2) — an apply needs a FRESH verified policy, read at the click;
+   * the origin could not be reached (offline, a network error, no answer in its bound), so the apply HOLDS. No offline
+   * allowance: the kill switch is 1.0's only emergency lever, and its worth is how fast clients see it. */
+  STATE_POLICY_UNREACHABLE: "policy-unreachable",
 } as const;
 export type UpdatesUnavailableState = (typeof UPDATES_SERVICE)[Exclude<
   keyof typeof UPDATES_SERVICE,
@@ -227,7 +273,10 @@ export const UPDATES_AUDIT_ACTIONS = {
   VERIFY: "app.update.verify",
   DECLINE: "app.update.decline",
   /** WP12c (L2b-ii) — the apply: `succeeded` as the install is handed to Squirrel, `denied`/`failed` with the refusal's
-   * reason (`SQUIRREL_TIMEOUT`, `SQUIRREL_REFUSED`, `SESSIONS_CHANGED`, `INSTALL_FAILED`), the consented count in attrs. */
+   * reason (`SQUIRREL_TIMEOUT`, `SQUIRREL_REFUSED`, `SESSIONS_CHANGED`, `INSTALL_FAILED`), the consented count in attrs.
+   * WP12d (L3b-i) adds the levers' refusals — `KILLED`, `YANKED`, `FLOOR_UNMET` on `app.update.verify` (a check that
+   * found a release it may not offer) and on `app.update.apply` (a policy re-read at the click), and
+   * `POLICY_UNREACHABLE` / `POLICY_UNVERIFIED` on `app.update.apply`. */
   APPLY: "app.update.apply",
 } as const;
 

@@ -3,6 +3,7 @@ import {
   type BoxContent,
   CONSENT_LISTED_MAX,
   consentBox,
+  policyNotice,
   quitNotice,
   stagedTrayLabel,
 } from "../../src/main/updates/apply";
@@ -103,6 +104,35 @@ describe("the tray's staged verb (the macOS menu convention: Title Case, an elli
     [4, "Update Ends 4 Sessions…"],
   ] as const)("sessions %s → %s", (count, label) => {
     expect(stagedTrayLabel(count)).toBe(label);
+  });
+
+  it("a release that keeps the floor's sessions (B3) is the plain verb, whatever the count", () => {
+    expect(stagedTrayLabel(3, true)).toBe("Restart to Update");
+    expect(stagedTrayLabel("unknown", true)).toBe("Restart to Update");
+    // not wired here: still no verb
+    expect(stagedTrayLabel(undefined, true)).toBe("Update Downloaded");
+  });
+});
+
+describe("the policy notices (L3b-i, B1/B2; DESIGN.md §9: what happened, what happens next, no apology)", () => {
+  it("each says the update did not install, and why, with one plain button", () => {
+    const boxes = [
+      policyNotice({ kind: "unreachable" }),
+      policyNotice({ kind: "unverified" }),
+      policyNotice({ kind: "killed", channel: "beta" }),
+      policyNotice({ kind: "yanked", version: "1.2.0" }),
+      policyNotice({ kind: "floor-unmet", version: "1.2.0", floor: "15.0" }),
+    ];
+    for (const box of boxes) {
+      expect(box.message).toBe("VibeField didn't install the update");
+      expect(box.buttons).toEqual(["OK"]);
+      expect(box.detail).not.toMatch(/sorry|unfortunately/i);
+    }
+    expect(boxes[0]?.detail).toBe(
+      "VibeField checks the update policy before installing and couldn't reach it; try again when online.",
+    );
+    expect(boxes[2]?.detail).toContain("the beta channel");
+    expect(boxes[4]?.detail).toContain("needs macOS 15.0 or later");
   });
 });
 

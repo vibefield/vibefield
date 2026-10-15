@@ -1,6 +1,6 @@
 // Types for release-manifest.mjs (WP12 L3a): the tests import it from TypeScript.
 export type Plane = "shell" | "fieldd" | "field-native";
-export type PlaneHashes = Record<Plane, { digest: string; files: number }>;
+export type PlaneHashes = Record<Plane, { digest: string; files: number; members?: string[] }>;
 export declare const PLANES: readonly Plane[];
 export declare class ReleaseManifestError extends Error {}
 export declare function planeOf(resourcesRelative: string | null): Plane;

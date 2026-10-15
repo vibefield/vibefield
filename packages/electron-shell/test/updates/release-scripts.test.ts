@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   ChannelHeads,
   ReleaseManifest,
+  releasePlatformKey,
   UpdatePolicy,
   UpdatePolicySource,
 } from "@vibefield/contracts";
@@ -64,7 +65,28 @@ function releaseDir(): string {
     join(dir, "latest-mac.yml"),
     "version: 0.1.0-nightly.20261016\nfiles:\n  - url: VibeField-mac.zip\n    sha512: AAAA\n    size: 1\npath: VibeField-mac.zip\nsha512: AAAA\nreleaseDate: '2026-10-16T03:00:00.000Z'\n",
   );
-  writeFileSync(join(dir, "release-manifest.json"), '{"schemaVersion":1}\n');
+  // a well-formed manifest naming this release: the client's chain reads it at step 6b (L3b-i, B3), so a stub refuses
+  writeFileSync(
+    join(dir, "release-manifest.json"),
+    `${JSON.stringify(
+      mergeManifest({
+        version: "0.1.0-nightly.20261016",
+        tag: "nightly-20261016",
+        channel: "nightly",
+        commit: "c".repeat(40),
+        builds: {
+          "mac-arm64": {
+            shell: { digest: "1".repeat(64), files: 1 },
+            fieldd: { digest: "2".repeat(64), files: 1 },
+            "field-native": { digest: "3".repeat(64), files: 1, members: ["bin/field-native"] },
+          },
+        },
+        previous: null,
+      }),
+      null,
+      2,
+    )}\n`,
+  );
   return dir;
 }
 
@@ -320,6 +342,8 @@ describe("release-manifest (D11): the planes are computed from bytes", () => {
     expect(planeOf("bin/field-native")).toBe("field-native");
     expect(planeOf("bin/field-terminal-host")).toBe("field-native");
     expect(planeOf("bin/sidecar-slim.exe")).toBe("field-native");
+    // L3b-i (B3): the floor execs `truffle-sidecar` from its own directory when `sidecar-slim` is absent (mesh.rs)
+    expect(planeOf("bin/truffle-sidecar")).toBe("field-native");
     expect(planeOf("bin/fieldd")).toBe("fieldd");
     expect(planeOf("bin/rosettad")).toBe("fieldd");
     expect(planeOf("plugins/bundled/vibefield.browser/manifest.json")).toBe("fieldd");
@@ -365,6 +389,21 @@ describe("release-manifest (D11): the planes are computed from bytes", () => {
     });
     expect(changed.touched).toEqual(["field-native"]);
     expect(changed.previous).toBe("nightly-20261015");
+  });
+
+  it("names the field-native plane's members, resources-relative — the client compares the set (B3)", () => {
+    const planes = hashPlanes(fakeApp("native-1"));
+    expect(planes["field-native"]).toMatchObject({ files: 1, members: ["bin/field-native"] });
+    expect(planes.fieldd.members).toBeUndefined();
+  });
+
+  it("keys a build by the release workflow's platform key, the one the client computes", () => {
+    expect(releasePlatformKey("darwin", "arm64")).toBe("mac-arm64");
+    expect(releasePlatformKey("win32", "x64")).toBe("win-x64");
+    expect(releasePlatformKey("linux", "x64")).toBe("linux-x64");
+    const yml = readFileSync(join(REPO, ".github", "workflows", "release.yml"), "utf8");
+    const platforms = [...yml.matchAll(/^ {10}- platform: ([a-z0-9-]+)$/gm)].map((m) => m[1]);
+    expect(platforms).toEqual(["mac-arm64"]);
   });
 });
 

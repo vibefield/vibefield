@@ -53,8 +53,9 @@ export interface ApplyPort {
   /** Arm the quit flow's update mode with this plan, then quit; false = a quit is already underway. */
   quitForUpdate(plan: UpdateQuitPlan): boolean;
   /** Hold fieldd (nothing may start it from here), then its consented stop: `system.shutdown {native: {stop, sessions,
-   * toVersion}}`. A refusal stops nothing and RELEASES the hold. */
-  stopDaemons(sessions: readonly string[], version: string): Promise<StopOutcome>;
+   * toVersion}}`. A refusal stops nothing and RELEASES the hold. `native: false` (L3b-i, B3: the release leaves the
+   * floor's bytes alone) asks fieldd's plain stop, and the floor and its sessions live on. */
+  stopDaemons(sessions: readonly string[], version: string, native: boolean): Promise<StopOutcome>;
   /** Squirrel's staging, bounded. */
   stage(boundMs: number): Promise<StageOutcome>;
   /** `quitAndInstall()`. */
@@ -111,9 +112,48 @@ export function quitNotice(reason: "squirrel-timeout" | "install-failed"): BoxCo
   };
 }
 
+/** Why the apply did not start, said before anything is torn down (L3b-i, B1/B2; DESIGN.md §9). The person clicked
+ * "Restart to Update"; nothing changed, and the words say what happens next. */
+export function policyNotice(
+  why:
+    | { readonly kind: "unreachable" }
+    | { readonly kind: "unverified" }
+    | { readonly kind: "killed"; readonly channel: string }
+    | { readonly kind: "yanked"; readonly version: string }
+    | { readonly kind: "floor-unmet"; readonly version: string; readonly floor: string },
+): BoxContent {
+  const detail = (() => {
+    switch (why.kind) {
+      case "unreachable":
+        // the PM's words (2026-10-15 16:03Z)
+        return "VibeField checks the update policy before installing and couldn't reach it; try again when online.";
+      case "unverified":
+        return "VibeField checks the update policy before installing, and the policy it found didn't verify. Nothing changed; it checks again next time.";
+      case "killed":
+        return `Updates on the ${why.channel} channel are paused by VibeField's publisher. Nothing changed; your current version keeps running.`;
+      case "yanked":
+        return `VibeField ${why.version} was withdrawn after it downloaded, so it won't install. Nothing changed; the next update replaces it.`;
+      case "floor-unmet":
+        return `VibeField ${why.version} needs macOS ${why.floor} or later. Nothing changed; your current version keeps running.`;
+    }
+  })();
+  return {
+    message: "VibeField didn't install the update",
+    detail,
+    buttons: ["OK"],
+    defaultId: 0,
+    cancelId: 0,
+  };
+}
+
 /** The tray's verb for a staged update (the macOS menu convention the tray already uses: Title Case, an ellipsis for
- * a verb that asks). `undefined` sessions = not wired here; `"unknown"` = the census could not be read. */
-export function stagedTrayLabel(sessions: number | "unknown" | undefined): string {
+ * a verb that asks). `undefined` sessions = not wired here; `"unknown"` = the census could not be read. A release that
+ * leaves the floor alone (`keepsSessions`, L3b-i B3) ends no session, so its verb is the plain one whatever the count. */
+export function stagedTrayLabel(
+  sessions: number | "unknown" | undefined,
+  keepsSessions = false,
+): string {
+  if (keepsSessions && sessions !== undefined) return "Restart to Update";
   if (sessions === undefined || sessions === "unknown") return "Update Downloaded";
   if (sessions === 0) return "Restart to Update";
   return `Update Ends ${sessions} ${plural(sessions, "Session", "Sessions")}…`;

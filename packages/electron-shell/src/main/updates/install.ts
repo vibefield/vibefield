@@ -5,7 +5,7 @@
 import { SystemShutdownResult, TerminalListResult } from "@vibefield/contracts";
 import type { AuditAppendV1 } from "@vibefield/contracts/diagnostics";
 import type { FielddHandle } from "@vibefield/fieldd-supervisor";
-import { dialog, autoUpdater as squirrel } from "electron";
+import { dialog, net, autoUpdater as squirrel } from "electron";
 import { autoUpdater, CancellationToken } from "electron-updater";
 import type { QuitFlow } from "../quit-flow";
 import {
@@ -19,9 +19,25 @@ import {
 } from "./apply";
 import { UpdateController, type UpdateControllerOptions, type UpdaterPort } from "./controller";
 import type { UpdateIdentity } from "./identity";
+import { hashNativePlane } from "./native-plane";
 import { VibeFieldUpdateProvider } from "./provider";
 import { UpdateStateStore } from "./state-store";
-import { feedFileFor } from "./verify-chain";
+import { type FetchBytes, feedFileFor } from "./verify-chain";
+
+/** How long one document fetch of the click's fresh policy check may take (B2; the whole check is bounded too). */
+const FETCH_BOUND_MS = 15_000;
+
+/** L3b-i (B2) — the click's own byte fetcher, on Chromium's network stack (the system proxy, direct HTTPS — EDP-38),
+ * like the provider's: a 404 is an absent file, every other answer or failure THROWS (unreachable, never a pass). */
+export const electronFetchBytes: FetchBytes = async (url) => {
+  const response = await net.fetch(url, {
+    cache: "no-store",
+    signal: AbortSignal.timeout(FETCH_BOUND_MS),
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`HTTP ${response.status} for an update document`);
+  return new Uint8Array(await response.arrayBuffer());
+};
 
 export function installUpdateController(options: {
   readonly identity: UpdateIdentity;
@@ -34,7 +50,13 @@ export function installUpdateController(options: {
   readonly apply?: ApplyPort;
   readonly currentVersion?: string;
   readonly safeWindowContext?: UpdateControllerOptions["safeWindowContext"];
+  /** L3b-i — the host OS's version (B1's floor), and the installed app's resources directory with this build's
+   * release platform key (B3's native plane) */
+  readonly hostOsVersion?: () => string | null;
+  readonly resourcesPath?: string;
+  readonly platformKey?: string;
 }): UpdateController {
+  const resourcesPath = options.resourcesPath;
   return new UpdateController({
     updater: autoUpdater as unknown as UpdaterPort,
     feedOptions: (context) => ({
@@ -54,6 +76,11 @@ export function installUpdateController(options: {
     ...(options.currentVersion !== undefined ? { currentVersion: options.currentVersion } : {}),
     ...(options.safeWindowContext !== undefined
       ? { safeWindowContext: options.safeWindowContext }
+      : {}),
+    fetch: electronFetchBytes,
+    ...(options.hostOsVersion !== undefined ? { hostOsVersion: options.hostOsVersion } : {}),
+    ...(resourcesPath !== undefined && options.platformKey !== undefined
+      ? { nativePlane: () => hashNativePlane(resourcesPath), platformKey: options.platformKey }
       : {}),
     log: options.log,
   });
@@ -128,7 +155,7 @@ export function createElectronApplyPort(deps: {
       return true;
     },
 
-    async stopDaemons(sessions, version): Promise<StopOutcome> {
+    async stopDaemons(sessions, version, native): Promise<StopOutcome> {
       // the hold FIRST: when fieldd goes, its client closes, and an unheld coordinator would start a new pair
       const handle = deps.fieldd.holdForUpdate();
       if (handle === null) {
@@ -139,7 +166,9 @@ export function createElectronApplyPort(deps: {
         const answer = SystemShutdownResult.safeParse(
           await handle.client.request(
             "system.shutdown",
-            { native: { stop: true, sessions: [...sessions], toVersion: version } },
+            // B3: a release that leaves the floor's bytes alone stops fieldd alone (its plain stop), and the
+            // floor and its sessions live on for the next fieldd to adopt
+            native ? { native: { stop: true, sessions: [...sessions], toVersion: version } } : {},
             { timeoutMs: STOP_DAEMONS_BOUND_MS },
           ),
         );
@@ -148,7 +177,7 @@ export function createElectronApplyPort(deps: {
           return { ok: false, reason: "fieldd did not stop" };
         }
         deps.log.info("desktop.update.daemons_stopped", "The daemons stopped for the update", {
-          native: answer.data.native ?? null,
+          native: native ? (answer.data.native ?? null) : "kept",
           sessions: sessions.length,
         });
         return { ok: true };

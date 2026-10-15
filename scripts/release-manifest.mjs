@@ -5,8 +5,10 @@
 // platform — a hand-declared plane list is how a native change rides a "shell-only" release. The sign step signs it.
 //
 // The planes, by path under the app's resources directory:
-//   - field-native: `bin/field-native`, `bin/field-terminal-host`, `bin/sidecar-slim` (the floor and its
-//     `current_exe()` siblings);
+//   - field-native: `bin/field-native` and EVERY executable it execs from its own directory — `bin/field-terminal-host`
+//     (`config.rs` `cell_binary()`), `bin/sidecar-slim` or `bin/truffle-sidecar` (`mesh.rs` `SIDECAR_NAMES`). The
+//     manifest NAMES these members: the client compares the set as well as the digest (L3b-i, the PM's ruling
+//     2026-10-15 16:03Z, B3), because a release that adds or drops one changes what the running floor can exec;
 //   - fieldd: every OTHER file under `bin/` (fieldd's SEA and the sidecars it resolves beside itself, rosettad, which
 //     it supervises) and `plugins/` (the roots it reads at spawn);
 //   - shell: every other file in the app (Electron, the asar, the frameworks, the identity).
@@ -29,7 +31,13 @@ import { join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const PLANES = ["shell", "fieldd", "field-native"];
-const NATIVE_FLOOR = new Set(["field-native", "field-terminal-host", "sidecar-slim"]);
+// Main's `native-plane.ts` names the same set (its cross-test holds the two to one digest).
+const NATIVE_FLOOR = new Set([
+  "field-native",
+  "field-terminal-host",
+  "sidecar-slim",
+  "truffle-sidecar",
+]);
 
 export class ReleaseManifestError extends Error {}
 
@@ -65,27 +73,34 @@ function walk(root, dir, out) {
   }
 }
 
-/** Every file of the app, hashed (a symlink by its target text: a bundle's framework links are part of its bytes). */
+/** Every file of the app, hashed (a symlink by its target text: a bundle's framework links are part of its bytes).
+ * A line's path is resources-relative for a file inside the resources directory, app-relative otherwise; the
+ * field-native plane also names its members (sorted). */
 export function hashPlanes(app) {
   const resources = resourcesDirOf(app);
   const files = [];
   walk(app, app, files);
   const lines = { shell: [], fieldd: [], "field-native": [] };
+  const nativeMembers = [];
   for (const path of files) {
-    const rel = relative(app, path).split(sep).join("/");
     const inResources = path.startsWith(resources + sep);
-    const plane = planeOf(inResources ? relative(resources, path).split(sep).join("/") : null);
+    const rel = relative(inResources ? resources : app, path)
+      .split(sep)
+      .join("/");
+    const plane = planeOf(inResources ? rel : null);
     const stat = lstatSync(path);
     const content = stat.isSymbolicLink()
       ? Buffer.from(`link:${readlinkSync(path)}`)
       : readFileSync(path);
     lines[plane].push(`${rel}\0${createHash("sha256").update(content).digest("hex")}`);
+    if (plane === "field-native") nativeMembers.push(rel);
   }
   const planes = {};
   for (const plane of PLANES) {
     planes[plane] = {
       digest: createHash("sha256").update(lines[plane].sort().join("\n")).digest("hex"),
       files: lines[plane].length,
+      ...(plane === "field-native" ? { members: nativeMembers.sort() } : {}),
     };
   }
   return planes;

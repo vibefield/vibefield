@@ -16,10 +16,11 @@ import {
   IPC_CHANNELS,
   LAYOUT,
   PluginModuleResolution,
+  releasePlatformKey,
   type ScreenshotCaptureResult,
   type ShellCommand,
   ShellCommandRequest,
-  UPDATE_PLANES,
+  UPDATES_SERVICE,
   type UserRecord,
   type UsersCreateParams,
 } from "@vibefield/contracts";
@@ -1824,14 +1825,17 @@ async function main(
           log: logger,
           ...(applyPort !== undefined ? { apply: applyPort } : {}),
           currentVersion: app.getVersion(),
-          // EDP-34's context for doctor; every plane is touched until L3's signed planes, and the display clause
-          // has no reader until L3 (it fails closed)
+          // EDP-34's context for doctor; the planes are the controller's (L3b-i, B3: a signed manifest's digest), and
+          // the display clause has no reader until L3b-ii (it fails closed)
           safeWindowContext: () => ({
             windowless: registry.primary() === null,
             trayResident: trayController?.keepsAliveWithoutWindows() ?? false,
             displayHeldAwake: "unknown",
-            planes: UPDATE_PLANES,
           }),
+          // L3b-i — the policy's OS floor (B1), and the installed native plane against the release manifest (B3)
+          hostOsVersion: () => process.getSystemVersion(),
+          resourcesPath: process.resourcesPath,
+          platformKey: releasePlatformKey(process.platform, process.arch),
         });
   if (updateIdentity?.originOverridden === true) {
     logger.warn(
@@ -2193,7 +2197,8 @@ const UPDATE_LAUNCH_DELAY_MS = 30_000;
 const UPDATE_CENSUS_REFRESH_MS = 60_000;
 
 /** The tray's projection of the update state. Offline is quiet and retryable (EDP §11.2), so it reads as idle; a
- * refusal or a failure reads as failed, with its details in the log and the audit, never in the menu. */
+ * refusal or a failure reads as failed, with its details in the log and the audit, never in the menu — except the
+ * policy's own answers (L3b-i, B1), which are not failures: a kill switch reads `paused`, an unmet OS floor `unsupported`. */
 function trayUpdateOf(state: UpdateState): TrayUpdateState {
   switch (state.kind) {
     case "checking":
@@ -2201,12 +2206,17 @@ function trayUpdateOf(state: UpdateState): TrayUpdateState {
     case "downloading":
       return { kind: "downloading", percent: state.percent };
     case "staged":
+      if (state.blockedBy === "killed") return { kind: "paused" };
       return {
         kind: "staged",
         version: state.version,
         ...(state.sessions !== undefined ? { sessions: state.sessions } : {}),
+        ...(state.keepsSessions === true ? { keepsSessions: true } : {}),
       };
     case "error":
+      if (state.unavailable?.state === UPDATES_SERVICE.STATE_KILLED) return { kind: "paused" };
+      if (state.unavailable?.state === UPDATES_SERVICE.STATE_FLOOR_UNMET)
+        return { kind: "unsupported" };
       return state.code === "offline" ? { kind: "idle" } : { kind: "failed" };
     default:
       return { kind: "idle" };

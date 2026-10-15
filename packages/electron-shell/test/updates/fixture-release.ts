@@ -110,6 +110,10 @@ export class FixtureOrigin {
       policyExpires?: string;
       trustRootVersion?: number;
       trustRootSigner?: Key;
+      /** L3b-i — a channel's levers (killSwitch, yanked, floors, requireUserConfirmation, minSupported) */
+      levers?: Partial<Record<UpdateChannel, Record<string, unknown>>>;
+      /** L3b-i — who signs the policies (the release key by default) */
+      policySigner?: Key;
     },
   ): void {
     const trust = canonical(this.trustRootDoc(opts.trustRootVersion ?? 1));
@@ -141,10 +145,46 @@ export class FixtureOrigin {
           killSwitch: false,
           requireUserConfirmation: false,
           floors: {},
+          ...(opts.levers?.[channel] ?? {}),
         },
-        this.release,
+        opts.policySigner ?? this.release,
       );
     }
+  }
+
+  /** L3b-i (6b) — the head's signed release manifest, its field-native plane as given for `mac-arm64`. */
+  putManifest(
+    tag: string,
+    version: string,
+    native: { readonly digest: string; readonly members: readonly string[] },
+    opts: { signer?: Key; nameTag?: string; nameVersion?: string } = {},
+  ): void {
+    const hex = (c: string) => c.repeat(64);
+    this.putJson(
+      tag,
+      "release-manifest.json",
+      {
+        schemaVersion: 1,
+        version: opts.nameVersion ?? version,
+        tag: opts.nameTag ?? tag,
+        channel: "nightly",
+        commit: "a".repeat(40),
+        builds: {
+          "mac-arm64": {
+            shell: { digest: hex("1"), files: 2 },
+            fieldd: { digest: hex("2"), files: 1 },
+            "field-native": {
+              digest: native.digest,
+              files: native.members.length,
+              members: [...native.members],
+            },
+          },
+        },
+        touched: ["shell", "fieldd", "field-native"],
+        previous: null,
+      },
+      opts.signer ?? this.release,
+    );
   }
 
   putFeed(tag: string, version: string, signer: Key | null = this.release): void {

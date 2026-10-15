@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   atLeast,
+  feedVersionOf,
   NOTHING_REMEMBERED,
   newestTagFromAtom,
   type RememberedVersions,
@@ -246,5 +247,92 @@ describe("the update chain (TD §4, D4, D5)", () => {
       '<feed><entry><link href="https://github.com/o/r/releases/tag/nightly-20261016"/></entry><entry><link href="https://github.com/o/r/releases/tag/v0.9.0-beta.3"/></entry></feed>';
     expect(newestTagFromAtom(atom)).toBe("nightly-20261016");
     expect(newestTagFromAtom("<feed></feed>")).toBeNull();
+  });
+});
+
+// WP12d (L3b-i, build-wp12-updater.md §12 B3) — step 6b: the head's signed release manifest, read so the native plane
+// is judged by digest. Absent is honest (`null`: every plane counts as touched); one that does not verify, or names
+// another release, refuses the chain like a bad feed.
+describe("step 6b — the head's release manifest (B3)", () => {
+  const NATIVE = {
+    digest: "d".repeat(64),
+    members: ["bin/field-native", "bin/field-terminal-host", "bin/sidecar-slim"],
+  };
+
+  it("a signed manifest naming the head comes back parsed, with the feed's version", async () => {
+    const fx = world();
+    fx.putManifest(NIGHTLY, "0.9.0-nightly.20261016", NATIVE);
+    const result = await run(fx);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.headVersion).toBe("0.9.0-nightly.20261016");
+    expect(result.manifest?.builds["mac-arm64"]?.["field-native"]).toEqual({
+      digest: NATIVE.digest,
+      files: 3,
+      members: NATIVE.members,
+    });
+  });
+
+  it("a release without one is `null`, never a refusal", async () => {
+    const result = await run(world());
+    expect(result).toMatchObject({
+      ok: true,
+      manifest: null,
+      headVersion: "0.9.0-nightly.20261016",
+    });
+  });
+
+  it("refuses a manifest signed by another key, or naming another release", async () => {
+    const forged = world();
+    forged.putManifest(NIGHTLY, "0.9.0-nightly.20261016", NATIVE, { signer: forged.stranger });
+    expect(await run(forged)).toMatchObject({
+      ok: false,
+      state: "feed-unverified",
+      detail: "release-manifest.json does not verify by the release role",
+    });
+    const elsewhere = world();
+    elsewhere.putManifest(NIGHTLY, "0.9.0-nightly.20261016", NATIVE, {
+      nameTag: "nightly-20261015",
+    });
+    expect(await run(elsewhere)).toMatchObject({ ok: false, state: "feed-unverified" });
+    const otherVersion = world();
+    otherVersion.putManifest(NIGHTLY, "0.9.0-nightly.20261016", NATIVE, {
+      nameVersion: "0.9.0-nightly.20261015",
+    });
+    expect(await run(otherVersion)).toMatchObject({ ok: false, state: "feed-unverified" });
+  });
+
+  it("refuses a manifest whose native plane does not name its members", async () => {
+    const fx = world();
+    fx.putManifest(NIGHTLY, "0.9.0-nightly.20261016", { digest: NATIVE.digest, members: [] });
+    // `files` counts the members, so an empty list with files 0 is well-formed; a missing list is not:
+    const result = await run(fx);
+    expect(result.ok).toBe(true);
+    fx.putJson(
+      NIGHTLY,
+      "release-manifest.json",
+      {
+        schemaVersion: 1,
+        version: "0.9.0-nightly.20261016",
+        tag: NIGHTLY,
+        channel: "nightly",
+        commit: "a".repeat(40),
+        builds: { "mac-arm64": { "field-native": { digest: NATIVE.digest, files: 3 } } },
+        touched: ["field-native"],
+        previous: null,
+      },
+      fx.release,
+    );
+    expect(await run(fx)).toMatchObject({
+      ok: false,
+      state: "feed-unverified",
+      detail: expect.stringMatching(/names its members/),
+    });
+  });
+
+  it("reads the feed's version line, quoted or not", () => {
+    expect(feedVersionOf("version: 0.9.0\nfiles: []\n")).toBe("0.9.0");
+    expect(feedVersionOf("files: []\nversion: '1.2.3-beta.1'\n")).toBe("1.2.3-beta.1");
+    expect(feedVersionOf("files: []\n")).toBeNull();
   });
 });

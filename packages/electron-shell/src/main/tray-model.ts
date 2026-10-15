@@ -12,7 +12,12 @@ export type TrayUpdateState =
       readonly version: string;
       /** WP12c — the live sessions the census read: the verb says them (EDP-35); `"unknown"` holds the verb */
       readonly sessions?: number | "unknown";
+      /** L3b-i (B3) — the release leaves the floor alone, so the verb ends no session whatever the count */
+      readonly keepsSessions?: boolean;
     }
+  // L3b-i (B1) — the policy's answers, which are not failures: the kill switch, and an OS below the release's floor
+  | { readonly kind: "paused" }
+  | { readonly kind: "unsupported" }
   | { readonly kind: "failed" };
 
 export interface TraySnapshot {
@@ -135,10 +140,11 @@ function updateItem(
       // is downloaded and the item says so instead of offering a restart that would do nothing. With live sessions
       // the verb IS the consequence (EDP-35): "Update Ends N Sessions…" — the plain verb never renders beside it.
       const sessions = snapshot.update.sessions;
+      const keepsSessions = snapshot.update.keepsSessions === true;
       if (
         actions.restartToUpdate === undefined ||
         sessions === undefined ||
-        sessions === "unknown"
+        (sessions === "unknown" && !keepsSessions)
       ) {
         return {
           id: "update",
@@ -149,11 +155,23 @@ function updateItem(
       const enabled = actionable;
       return {
         id: "update",
-        label: stagedTrayLabel(sessions),
+        label: stagedTrayLabel(sessions, keepsSessions),
         ...availability(platform, enabled),
         ...(enabled ? { click: actions.restartToUpdate } : {}),
       };
     }
+    case "paused":
+      return {
+        id: "update",
+        label: "Updates Paused",
+        ...availability(platform, false),
+      };
+    case "unsupported":
+      return {
+        id: "update",
+        label: "Update Needs a Newer macOS",
+        ...availability(platform, false),
+      };
     case "failed":
       return {
         id: "update",

@@ -12,8 +12,11 @@
 //      switch for stable rides tomorrow's nightly), verified and judged; its `channel` must be the client's.
 //   6. the HEAD release's `latest*.yml` + `.sig`, verified — and only now is anything handed to electron-updater,
 //      whose own sha512 check of the payload descends from these signed bytes.
+//   6b. (WP12d, L3b-i, B3) the HEAD release's `release-manifest.json` + `.sig`, verified, naming the head and its
+//      version: the planes it touches are read by DIGEST from it (`native-plane.ts`). A release without one is `null`
+//      (every plane counts as touched); one that does not verify, or names another release, refuses the chain.
 // The policy's levers (killSwitch, yanked, floors, requireUserConfirmation, minSupported) are WP12d's: this chain
-// verifies the document and returns it parsed.
+// verifies the document and returns it parsed, and `decide.ts` applies them (L3b-i, B1).
 //
 // Remembered versions (TD-10): each document is remembered the moment it is ACCEPTED, even when a later step
 // refuses — a verified document is a fact, and forgetting it would let a replay of an older one through next time.
@@ -22,6 +25,8 @@ import {
   CHANNEL_HEADS_FILE,
   ChannelHeads,
   judgeSignedDocument,
+  RELEASE_MANIFEST_FILE,
+  ReleaseManifest,
   SIGNATURE_SUFFIX,
   TRUST_ROOT_FILE,
   type TrustRoot,
@@ -74,6 +79,10 @@ export interface VerifiedChain {
   /** The verified feed's file name and exact text, for electron-updater's `parseUpdateInfo`. */
   readonly feedFile: string;
   readonly feedText: string;
+  /** the verified feed's `version:` (null when the line is absent; electron-updater's own parse then refuses it) */
+  readonly headVersion: string | null;
+  /** the head's verified release manifest (6b); null for a release that carries none */
+  readonly manifest: ReleaseManifest | null;
   readonly trustRoot: TrustRoot;
   readonly heads: ChannelHeads;
   readonly policy: UpdatePolicy;
@@ -103,6 +112,12 @@ export function newestTagFromAtom(atom: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** A verified feed's `version:` line (electron-builder writes it first, unquoted or quoted). */
+export function feedVersionOf(feedText: string): string | null {
+  const match = feedText.match(/^version:[ \t]*['"]?([^'"\s]+)['"]?[ \t]*$/m);
+  return match === null ? null : match[1]!;
 }
 
 /** The platform's feed file name, as electron-builder writes it. */
@@ -325,12 +340,49 @@ export async function verifyUpdateChain(input: ChainInput): Promise<ChainResult>
   } catch {
     return refuse(UPDATES_SERVICE.STATE_FEED_UNVERIFIED, `${input.feedFile} is not UTF-8`);
   }
+  const headVersion = feedVersionOf(feedText);
+
+  // 6b. the head's release manifest, by the release role (B3)
+  const manifestDoc = await signed(headBase, RELEASE_MANIFEST_FILE);
+  let manifest: ReleaseManifest | null = null;
+  if (manifestDoc.bytes !== null) {
+    if (
+      manifestDoc.sigText === null ||
+      !verifySignedBytes(Buffer.from(manifestDoc.bytes), manifestDoc.sigText, releaseAnchor)
+    ) {
+      return refuse(
+        UPDATES_SERVICE.STATE_FEED_UNVERIFIED,
+        `${RELEASE_MANIFEST_FILE} does not verify by the release role`,
+      );
+    }
+    let parsed: ReturnType<typeof ReleaseManifest.safeParse>;
+    try {
+      parsed = ReleaseManifest.safeParse(json(manifestDoc.bytes));
+    } catch {
+      return refuse(UPDATES_SERVICE.STATE_FEED_UNVERIFIED, `${RELEASE_MANIFEST_FILE} is not JSON`);
+    }
+    if (!parsed.success) {
+      return refuse(
+        UPDATES_SERVICE.STATE_FEED_UNVERIFIED,
+        `${RELEASE_MANIFEST_FILE} is malformed: ${parsed.error.issues[0]?.message ?? "unknown"}`,
+      );
+    }
+    if (parsed.data.tag !== head || parsed.data.version !== headVersion) {
+      return refuse(
+        UPDATES_SERVICE.STATE_FEED_UNVERIFIED,
+        `${RELEASE_MANIFEST_FILE} names ${parsed.data.tag} ${parsed.data.version}, not ${head} ${headVersion ?? "(no version)"}`,
+      );
+    }
+    manifest = parsed.data;
+  }
   return {
     ok: true,
     head,
     headBase,
     feedFile: input.feedFile,
     feedText,
+    headVersion,
+    manifest,
     trustRoot,
     heads,
     policy,

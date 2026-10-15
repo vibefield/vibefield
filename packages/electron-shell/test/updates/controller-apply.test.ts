@@ -10,9 +10,11 @@ import type {
 } from "../../src/main/updates/apply";
 import {
   type CancellationLike,
+  FRESH_POLICY_BOUND_MS,
   UpdateController,
   type UpdaterPort,
 } from "../../src/main/updates/controller";
+import type { NativePlane } from "../../src/main/updates/native-plane";
 import { UpdateRefusal } from "../../src/main/updates/refusal";
 import { type StoreFs, UpdateStateStore } from "../../src/main/updates/state-store";
 import type { ChainResult, FetchBytes, VerifiedChain } from "../../src/main/updates/verify-chain";
@@ -84,6 +86,7 @@ class FakeApply implements ApplyPort {
   boxes: BoxContent[] = [];
   notices: BoxContent[] = [];
   stoppedWith: string[] | null = null;
+  stoppedNative: boolean | null = null;
   constructor(timeline: string[]) {
     this.timeline = timeline;
   }
@@ -101,9 +104,14 @@ class FakeApply implements ApplyPort {
     this.plan = plan;
     return true;
   }
-  async stopDaemons(sessions: readonly string[]): Promise<StopOutcome> {
+  async stopDaemons(
+    sessions: readonly string[],
+    _version: string,
+    native: boolean,
+  ): Promise<StopOutcome> {
     this.timeline.push("fieldd:stop");
     this.stoppedWith = [...sessions];
+    this.stoppedNative = native;
     return this.stop;
   }
   async stage(): Promise<StageOutcome> {
@@ -122,11 +130,25 @@ class FakeApply implements ApplyPort {
   }
 }
 
-async function stagedController(opts: { initial?: string | null; currentVersion?: string } = {}) {
+async function stagedController(
+  opts: {
+    initial?: string | null;
+    currentVersion?: string;
+    /** the click's fetcher: the fixture's by default; `null` = none wired */
+    fetch?: FetchBytes | null;
+    /** B3: the installed native plane (absent = not wired, so every release reads touched) */
+    nativePlane?: NativePlane;
+    /** B3: the head's manifest names this native plane */
+    manifestNative?: NativePlane;
+    hostOs?: string;
+  } = {},
+) {
   const fx = new FixtureOrigin();
   fx.setReleases([NIGHTLY]);
   fx.putRelease(NIGHTLY, { heads: { nightly: NIGHTLY, beta: null, stable: null } });
   fx.putFeed(NIGHTLY, STAGED_VERSION);
+  if (opts.manifestNative !== undefined)
+    fx.putManifest(NIGHTLY, STAGED_VERSION, opts.manifestNative);
   const timeline: string[] = [];
   const apply = new FakeApply(timeline);
   const audits: AuditAppendV1[] = [];
@@ -148,8 +170,13 @@ async function stagedController(opts: { initial?: string | null; currentVersion?
     now: () => NOW,
     apply,
     ...(opts.currentVersion !== undefined ? { currentVersion: opts.currentVersion } : {}),
+    ...(opts.fetch === null ? {} : { fetch: opts.fetch ?? fx.fetch }),
+    ...(opts.nativePlane !== undefined
+      ? { nativePlane: async () => opts.nativePlane!, platformKey: "mac-arm64" }
+      : {}),
+    ...(opts.hostOs !== undefined ? { hostOsVersion: () => opts.hostOs! } : {}),
   });
-  return { controller, apply, timeline, audits, files };
+  return { controller, apply, timeline, audits, files, fx };
 }
 
 async function staged(sessions: CensusSnapshot = { known: true, sessions: [] }) {
@@ -382,5 +409,198 @@ describe("the next launch carries the last apply's OUTCOME to the ledger, once",
     });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(audits).toEqual([]);
+  });
+});
+
+// WP12d (L3b-i, build-wp12-updater.md §12; the PM's ruling 2026-10-15 16:03Z) — two reads in front of the census, both
+// before anything is torn down. B2: a FRESH verified policy at the click (no offline allowance); a lever that now
+// refuses stops the apply. B3: the native plane by digest from that same chain — untouched keeps the floor and its
+// sessions (no census, no box, `native: false`), anything else is today's path.
+describe("restartToInstall — L3b-i: the fresh policy (B2) and the planes by digest (B3)", () => {
+  const LOCAL: NativePlane = {
+    digest: "e".repeat(64),
+    members: ["bin/field-native", "bin/field-terminal-host", "bin/sidecar-slim"],
+  };
+  const OFFLINE: FetchBytes = async () => {
+    throw new Error("net::ERR_INTERNET_DISCONNECTED");
+  };
+
+  async function stagedWith(
+    opts: Parameters<typeof stagedController>[0],
+    sessions: CensusSnapshot = { known: true, sessions: [] },
+  ) {
+    const rig = await stagedController(opts);
+    rig.apply.snapshot = sessions;
+    await rig.controller.check("manual");
+    rig.timeline.length = 0;
+    rig.audits.length = 0;
+    return rig;
+  }
+
+  /** The policy re-published after the download: a higher version, its levers as given. */
+  function republish(
+    fx: FixtureOrigin,
+    levers: Record<string, unknown>,
+    signer?: FixtureOrigin["stranger"],
+  ) {
+    fx.putRelease(NIGHTLY, {
+      heads: { nightly: NIGHTLY, beta: null, stable: null },
+      policyVersion: { nightly: 4 },
+      levers: { nightly: levers },
+      ...(signer !== undefined ? { policySigner: signer } : {}),
+    });
+  }
+
+  it("offline at the click HOLDS `policy-unreachable`, in the PM's words, and tears nothing down", async () => {
+    const rig = await stagedWith({ fetch: OFFLINE }, LIVE);
+    expect(await rig.controller.restartToInstall()).toEqual({
+      ok: false,
+      reason: "policy-unreachable",
+    });
+    expect(rig.apply.notices.map((box) => box.detail)).toEqual([
+      "VibeField checks the update policy before installing and couldn't reach it; try again when online.",
+    ]);
+    expect(rig.timeline).toEqual(["fieldd:audit:outcome:denied", "notify"]);
+    expect(rig.audits[0]).toMatchObject({
+      action: "app.update.apply",
+      outcome: "denied",
+      reasonCode: "POLICY_UNREACHABLE",
+    });
+    expect(rig.controller.state).toMatchObject({ kind: "staged", blockedBy: "policy-unreachable" });
+    expect(rig.apply.plan).toBeNull();
+  });
+
+  it("no fetcher wired is unreachable too — never an apply on the policy the download saw", async () => {
+    const rig = await stagedWith({ fetch: null });
+    expect(await rig.controller.restartToInstall()).toEqual({
+      ok: false,
+      reason: "policy-unreachable",
+    });
+    expect(rig.apply.plan).toBeNull();
+  });
+
+  it("a fetch that never answers is unreachable after the bound", async () => {
+    const rig = await stagedWith({ fetch: () => new Promise<never>(() => undefined) });
+    vi.useFakeTimers();
+    try {
+      const outcome = rig.controller.restartToInstall();
+      await vi.advanceTimersByTimeAsync(FRESH_POLICY_BOUND_MS);
+      expect(await outcome).toEqual({ ok: false, reason: "policy-unreachable" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a kill switch published after the download stops the apply: held `killed`, said, nothing torn down", async () => {
+    const rig = await stagedWith({});
+    republish(rig.fx, { killSwitch: true });
+    expect(await rig.controller.restartToInstall()).toEqual({ ok: false, reason: "killed" });
+    expect(rig.apply.notices[0]?.detail).toBe(
+      "Updates on the nightly channel are paused by VibeField's publisher. Nothing changed; your current version keeps running.",
+    );
+    expect(rig.audits[0]).toMatchObject({ action: "app.update.apply", reasonCode: "KILLED" });
+    expect(rig.controller.state).toMatchObject({ kind: "staged", blockedBy: "killed" });
+    expect(rig.apply.plan).toBeNull();
+    expect(rig.timeline).not.toContain("fieldd:census");
+  });
+
+  it("a yank published after the download forgets the staged version; a floor above this Mac skips it", async () => {
+    const yanked = await stagedWith({});
+    republish(yanked.fx, { yanked: [STAGED_VERSION] });
+    expect(await yanked.controller.restartToInstall()).toEqual({ ok: false, reason: "yanked" });
+    expect(yanked.controller.state).toEqual({ kind: "not-available" });
+    expect(yanked.audits[0]).toMatchObject({ reasonCode: "YANKED" });
+    const floored = await stagedWith({ hostOs: "15.1.0" });
+    republish(floored.fx, { floors: { os: "99.0" } });
+    expect(await floored.controller.restartToInstall()).toEqual({
+      ok: false,
+      reason: "floor-unmet",
+    });
+    expect(floored.apply.notices[0]?.detail).toContain("needs macOS 99.0 or later");
+    expect(floored.controller.state).toMatchObject({
+      kind: "error",
+      unavailable: { state: "floor-unmet" },
+    });
+  });
+
+  it("a policy that no longer verifies holds `policy-unverified`, its state in the ledger", async () => {
+    const rig = await stagedWith({});
+    republish(rig.fx, {}, rig.fx.stranger);
+    expect(await rig.controller.restartToInstall()).toEqual({
+      ok: false,
+      reason: "policy-unverified",
+    });
+    expect(rig.audits[0]).toMatchObject({
+      reasonCode: "POLICY_UNVERIFIED",
+      attrs: { state: "feed-unverified" },
+    });
+    expect(rig.apply.plan).toBeNull();
+  });
+
+  it("B3 untouched: live sessions, yet no census, no box — fieldd stops alone and the floor keeps them", async () => {
+    const rig = await stagedWith({ nativePlane: LOCAL, manifestNative: LOCAL }, LIVE);
+    expect(rig.controller.state).toMatchObject({ kind: "staged", keepsSessions: true });
+    expect(rig.controller.state).not.toHaveProperty("blockedBy");
+    expect(rig.controller.doctorLines()).toContain(
+      `native plane: untouched by ${STAGED_VERSION} — its sessions keep running`,
+    );
+    expect(await rig.controller.restartToInstall()).toEqual({ ok: true });
+    expect(rig.apply.boxes).toEqual([]);
+    expect(rig.timeline).toEqual(["fieldd:audit:attempt", "quit"]);
+    await rig.apply.plan!.prepare();
+    expect(rig.apply.stoppedNative).toBe(false);
+    expect(rig.apply.stoppedWith).toEqual([]);
+    noFielddAfterTheStop(rig.timeline);
+  });
+
+  it("B3 touched — another digest, an extra member, or no manifest: the census, the box, the floor stopped", async () => {
+    const cases: Array<Parameters<typeof stagedController>[0]> = [
+      { nativePlane: LOCAL, manifestNative: { ...LOCAL, digest: "f".repeat(64) } },
+      {
+        nativePlane: LOCAL,
+        manifestNative: { ...LOCAL, members: [...LOCAL.members, "bin/truffle-sidecar"].sort() },
+      },
+      { nativePlane: LOCAL },
+    ];
+    for (const opts of cases) {
+      const rig = await stagedWith(opts, LIVE);
+      expect(rig.controller.state).toMatchObject({ kind: "staged", blockedBy: "sessions" });
+      expect(await rig.controller.restartToInstall()).toEqual({ ok: true });
+      expect(rig.apply.boxes[0]?.message).toBe("Updating ends 2 terminal sessions");
+      await rig.apply.plan!.prepare();
+      expect(rig.apply.stoppedNative).toBe(true);
+    }
+  });
+
+  it("B3 when the head moved past the staged version: its manifest says nothing of the staged bytes — touched", async () => {
+    const rig = await stagedWith({ nativePlane: LOCAL, manifestNative: LOCAL }, LIVE);
+    const NEXT = "nightly-20261017";
+    rig.fx.setReleases([NEXT, NIGHTLY]);
+    rig.fx.putRelease(NEXT, {
+      heads: { nightly: NEXT, beta: null, stable: null },
+      headsVersion: 11,
+      policyVersion: { nightly: 4 },
+    });
+    rig.fx.putFeed(NEXT, "0.9.0-nightly.20261017");
+    rig.fx.putManifest(NEXT, "0.9.0-nightly.20261017", LOCAL);
+    expect(await rig.controller.restartToInstall()).toEqual({ ok: true });
+    expect(rig.apply.boxes).toHaveLength(1);
+    await rig.apply.plan!.prepare();
+    expect(rig.apply.stoppedNative).toBe(true);
+    expect(rig.controller.doctorLines()).toContain(
+      "native plane: touched (head-moved) — the apply ends its sessions",
+    );
+  });
+
+  it("doctor names the policy and its levers", async () => {
+    const rig = await stagedWith({ currentVersion: "0.8.0" });
+    republish(rig.fx, { yanked: ["0.8.0"], requireUserConfirmation: true, minSupported: "0.9.0" });
+    await rig.controller.check("manual");
+    const lines = rig.controller.doctorLines();
+    expect(lines).toContain("policy: v4 for nightly — confirmation required, 1 yanked");
+    expect(lines).toContain("the running version 0.8.0 is yanked; the next update replaces it");
+    expect(lines).toContain(
+      "UNSUPPORTED: 0.8.0 is below the minimum supported 0.9.0 (advisory, never a block)",
+    );
   });
 });

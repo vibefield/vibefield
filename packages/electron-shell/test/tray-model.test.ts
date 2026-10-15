@@ -98,6 +98,20 @@ describe("buildTrayMenu", () => {
     [{ kind: "staged", version: "2.0.0", sessions: 0 }, "Restart to Update", true],
     [{ kind: "staged", version: "2.0.0", sessions: 1 }, "Update Ends 1 Session…", true],
     [{ kind: "staged", version: "2.0.0", sessions: 3 }, "Update Ends 3 Sessions…", true],
+    // L3b-i (B3) — a release that leaves the floor alone ends no session: the plain verb, whatever the count
+    [
+      { kind: "staged", version: "2.0.0", sessions: 3, keepsSessions: true },
+      "Restart to Update",
+      true,
+    ],
+    [
+      { kind: "staged", version: "2.0.0", sessions: "unknown", keepsSessions: true },
+      "Restart to Update",
+      true,
+    ],
+    // L3b-i (B1) — the policy's answers are not failures
+    [{ kind: "paused" }, "Updates Paused", false],
+    [{ kind: "unsupported" }, "Update Needs a Newer macOS", false],
     [{ kind: "failed" }, "Update Check Failed", false],
   ] satisfies readonly (readonly [TrayUpdateState, string, boolean])[])(
     "projects update state $kind",
