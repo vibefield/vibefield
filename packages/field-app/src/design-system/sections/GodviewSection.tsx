@@ -11,6 +11,18 @@ import { PeekPlate } from "../PeekPreview";
 import { SpawnBloomPreview } from "../SpawnBloomPreview";
 import { SwarmBodiesPreview } from "../SwarmBodiesPreview";
 
+/** The curtain's specimen question: two agents to resume, a shell pane to
+ * reopen, and a bare shell that cannot come back — every line it can say. */
+const LAST_RUN_QUESTION = {
+  asOf: "2026-10-15T20:39:12.000Z",
+  agents: [
+    { id: "run-studio-q", name: "Claude Code in vibe-field" },
+    { id: "run-studio-r", name: "Codex in puppeteer" },
+  ],
+  shells: 1,
+  unplaced: 1,
+};
+
 export function GodviewSection({ dark = false }: { dark?: boolean } = {}): ReactElement {
   // Godview follows the app's theme (FC-D7): in the catalog, the page's.
   const theme = dark ? "dark" : "light";
@@ -94,6 +106,20 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
       >
         <div data-spawn-bloom-list-catalog="">
           <SpawnBloomPreview view="list" />
+        </div>
+      </Specimen>
+      <Specimen
+        title="What the last run left — the curtain over last run's picture, every view still under it, the view circles live (LR, James 2026-10-15)"
+        source="godview/LastRunCurtain.tsx · godview/last-run.ts"
+        bleed
+      >
+        <div data-godview-last-run-catalog="">
+          <GodviewPreview
+            door={profilesDoor}
+            theme={theme}
+            deckState="away"
+            lastRun={{ phase: "asking", question: LAST_RUN_QUESTION }}
+          />
         </div>
       </Specimen>
       <Specimen

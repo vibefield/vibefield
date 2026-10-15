@@ -13,6 +13,8 @@ import {
   GodviewTuningPanel,
   godviewTuningStyle,
 } from "../godview/GodviewTuningPanel";
+import { LastRunCurtain } from "../godview/LastRunCurtain";
+import type { LastRunState } from "../godview/last-run";
 import { GodviewAgentsProvider } from "../godview/monitor/GodviewAgentsProvider";
 import type { MonitorDoor } from "../godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../godview/monitor/useMonitorAgents";
@@ -36,7 +38,10 @@ import type { MonitorPaneFacts } from "../godview/monitor/useMonitorAgents";
  * `deckState` is the terminals' state the stage opens in (the monitor alone,
  * away), and `deckControls` puts the Lip's buttons on it, owned here for the
  * page's life: a catalog has no session to call the terminals back with, so
- * what they put away stays away until the page is loaded again. */
+ * what they put away stays away until the page is loaded again. `lastRun`
+ * stands the last run's curtain over the stage (LR): the monitor in its still
+ * mode over the door's fixture rows — the data source replaced, never the
+ * curtain's or the stage's markup — its answers inert on the page. */
 export function GodviewPreview({
   door = null,
   panes,
@@ -47,6 +52,7 @@ export function GodviewPreview({
   systemControl = false,
   deckState: initialDeckState = "up",
   deckControls = false,
+  lastRun,
 }: {
   door?: MonitorDoor | null;
   panes?: MonitorPaneFacts;
@@ -64,6 +70,8 @@ export function GodviewPreview({
   deckState?: GodviewDeckState;
   /** the Lip's buttons, live on the page (round 3, GV-D7) */
   deckControls?: boolean;
+  /** the last run's question, standing over the stage (LR) */
+  lastRun?: LastRunState;
 } = {}): ReactElement {
   const [viewId, setViewId] = useState(initialView);
   const [deckState, setDeckState] = useState<GodviewDeckState>(initialDeckState);
@@ -120,7 +128,18 @@ export function GodviewPreview({
               initialProfile={initialProfile}
               theme={theme}
               onSelectView={setViewId}
+              still={lastRun !== undefined}
             />
+          }
+          curtain={
+            lastRun !== undefined ? (
+              <LastRunCurtain
+                state={lastRun}
+                onRestore={() => undefined}
+                onStartClean={() => undefined}
+                onContinue={() => undefined}
+              />
+            ) : undefined
           }
           tuningPanel={
             <GodviewTuningPanel
