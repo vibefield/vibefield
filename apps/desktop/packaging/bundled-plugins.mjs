@@ -182,6 +182,14 @@ async function stage({ stage: stageDir, plugins, "app-version": appVersion }) {
     productName: l.fields.productName.value,
     updateChannel: l.fields.updateChannel.value,
     updateOrigin: l.fields.updateOrigin.value,
+    // WP12's build-time floor: the updater never accepts a signed document below what this build was staged with.
+    // The trust-root's version is known here; the channel heads have no build-time source; each channel policy's floor
+    // joins when WP12d stages the committed policy sources.
+    updateFloors: {
+      trustRoot: trust.doc.version,
+      channels: null,
+      policy: { nightly: null, beta: null, stable: null },
+    },
   });
   writeFileSync(join(identityDir, RELEASE_IDENTITY_FILE), `${JSON.stringify(identity, null, 2)}\n`);
   chmodTree(root);

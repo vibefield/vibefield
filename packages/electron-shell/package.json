@@ -30,6 +30,7 @@
     "@vibefield/live-surfaces": "workspace:*",
     "@vibefield/logging": "workspace:*",
     "@vibefield/screenshot": "workspace:*",
+    "@vibefield/trust": "workspace:*",
     "@vibefield/users": "workspace:*",
     "electron-updater": "6.8.9"
   },

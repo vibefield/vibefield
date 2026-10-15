@@ -11,7 +11,7 @@ import {
   cleanAuditTarget,
   sanitizeAuditAttrs,
 } from "@vibefield/audit";
-import type { CallerContext } from "@vibefield/contracts";
+import { type CallerContext, UPDATES_AUDIT_ACTIONS } from "@vibefield/contracts";
 import {
   AuditAppendResultV1 as AuditAppendResultSchemaV1,
   type AuditAppendResultV1,
@@ -36,10 +36,12 @@ export {
 } from "@vibefield/audit";
 
 const MAX_RECOVERY_MARKERS = 64;
-const SHELL_ACTIONS = new Set([
+const SHELL_ACTIONS = new Set<string>([
   "approval.decision",
   "crash.artifact.export",
   "support.bundle.export",
+  // WP12b (TD-3, EDP §11.6): the updater's verification outcomes and declines, named in contracts.
+  ...Object.values(UPDATES_AUDIT_ACTIONS),
 ]);
 
 export interface AuditServiceOptions {

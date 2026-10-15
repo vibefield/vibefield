@@ -560,6 +560,43 @@ const RULES = [
     applies: (p) => SOURCE_EXT.test(p),
     importTest: (s, p) => peekPaneImport(s) && !peekPaneMayImport(p),
   },
+  {
+    id: "R27",
+    // WP12 D2 (build-wp12-updater.md): the ONE trust verifier (TD-2/TD-3) is Node-only spine code — fieldd, the kit,
+    // the stager and Electron MAIN (the UpdateProvider) verify with it; it is node:crypto, so browser-compatible code
+    // never imports it. R2 already keeps the kit (`@vibefield/plugin-*`) out of main; this keeps the verifier out of
+    // every browser bundle.
+    enforce: true,
+    description:
+      "@vibefield/trust (node:crypto) is imported only by Node hosts — never by field-app, design-kit, plugin-sdk, plugin-runtime, live-surfaces, or electron-shell's preload/renderer-host",
+    applies: (p) =>
+      SOURCE_EXT.test(p) &&
+      underAny(p, [
+        "packages/field-app",
+        "packages/design-kit",
+        "packages/plugin-sdk",
+        "packages/plugin-runtime",
+        "packages/live-surfaces",
+        "packages/electron-shell/src/preload",
+        "packages/electron-shell/src/renderer-host",
+      ]),
+    importTest: (s) => importsModule(s, "@vibefield/trust"),
+  },
+  {
+    id: "R28",
+    // WP12 D2: the verifier's own dependencies stay contracts + node: — no Electron (main composes it, vitest drives
+    // it bare) and no kit (the kit depends on IT, never the reverse).
+    enforce: true,
+    description: "packages/trust/src imports only @vibefield/contracts, node:* and its own files",
+    applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/trust/src"),
+    importTest: (s) =>
+      !(
+        s.startsWith("node:") ||
+        s === "@vibefield/contracts" ||
+        s.startsWith("./") ||
+        s.startsWith("../")
+      ),
+  },
 ];
 
 // P2 (R26) — the Peek's watch-only pane, by its directory or its module names.
@@ -1148,6 +1185,26 @@ function runSelfTest() {
       id: "R26",
       file: "packages/field-app/src/frame/uses-pane.tsx",
       body: 'import { LivePeekPane } from "./peek-pane/LivePeekPane";\nexport const p = LivePeekPane;\n',
+    }, // WP12 D2 (R27/R28): the verifier is Node-only, and its own imports are contracts + node: only.
+    {
+      id: "R27",
+      file: "packages/field-app/src/uses-trust.ts",
+      body: 'import { verifySignedBytes } from "@vibefield/trust";\nexport const v = verifySignedBytes;\n',
+    },
+    {
+      id: "R27",
+      file: "packages/electron-shell/src/preload/uses-trust.ts",
+      body: 'import { verifyTrustRoot } from "@vibefield/trust";\nexport const v = verifyTrustRoot;\n',
+    },
+    {
+      id: "R28",
+      file: "packages/trust/src/uses-electron.ts",
+      body: 'import { app } from "electron";\nexport const a = app;\n',
+    },
+    {
+      id: "R28",
+      file: "packages/trust/src/uses-kit.ts",
+      body: 'import { canonicalJson } from "@vibefield/plugin-build";\nexport const c = canonicalJson;\n',
     },
   ];
   const cleans = [

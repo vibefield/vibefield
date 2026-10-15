@@ -53,7 +53,8 @@ in the split.
   environment (renderer, workers, Node daemons; Rust side generated). Keep it dependency-free.
 - **Node-only spine libraries**, consumed by the Node hosts (fieldd, Electron main), never by
   browser-compatible code: `logging` + `audit` (LOG track), `users` (UA track), `screenshot`
-  (SNAP track — the host side of the native screenshot helper; wall R19 keeps Electron out).
+  (SNAP track — the host side of the native screenshot helper; wall R19 keeps Electron out), `trust` (WP12 D2 — the
+  ONE Ed25519 + trust-root verifier fieldd, the kit, the stager and main's update provider share; walls R27/R28).
 - **Daemon plane:** `fieldd` · `field-native` (the sole Cargo workspace member — the Windows
   screenshot helper crate under `apps/desktop/native` is its OWN workspace root, SNAP-D7) ·
   `fieldd-supervisor` (a library inside Electron main, never its own process) ·

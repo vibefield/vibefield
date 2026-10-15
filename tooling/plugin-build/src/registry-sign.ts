@@ -17,7 +17,8 @@
 // to misconfigure and a fixed 64-byte signature, which is why they suit a
 // "shipped key" scheme better than RSA (verify-item §27.9's minisign-class).
 
-import { createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify } from "node:crypto";
+import { createPrivateKey, generateKeyPairSync, sign } from "node:crypto";
+import { verifyEd25519 } from "@vibefield/trust";
 
 // The signed object — RegistryIndex — is a VibeField wire shape and lives in
 // @vibefield/contracts (plugin-distribution.ts), not here: these primitives
@@ -84,14 +85,6 @@ export function verifyRegistryIndex(
   signature: string,
   publicKey: string,
 ): boolean {
-  try {
-    const key = createPublicKey({
-      key: Buffer.from(publicKey, "base64"),
-      format: "der",
-      type: "spki",
-    });
-    return verify(null, indexBytes, key, Buffer.from(signature, "base64"));
-  } catch {
-    return false;
-  }
+  // the ONE Ed25519 check lives in @vibefield/trust since WP12 (D2); the registry's name for it stays
+  return verifyEd25519(indexBytes, signature, publicKey);
 }

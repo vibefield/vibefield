@@ -9,5 +9,10 @@
   "appId": "com.jamesyong.vibefield",
   "productName": "VibeField",
   "updateChannel": "beta",
-  "updateOrigin": "https://github.com/vibefield/vibefield/releases"
+  "updateOrigin": "https://github.com/vibefield/vibefield/releases",
+  "updateFloors": {
+    "trustRoot": 1,
+    "channels": null,
+    "policy": { "nightly": null, "beta": null, "stable": null }
+  }
 }

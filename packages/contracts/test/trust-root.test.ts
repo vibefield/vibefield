@@ -10,7 +10,14 @@ import {
   TrustRoot,
   trustRoleKeys,
 } from "../src/trust-root";
-import { UpdatePolicy } from "../src/update-policy";
+import {
+  CHANNEL_HEADS_FILE,
+  ChannelHeads,
+  UPDATE_CHANNELS,
+  UPDATES_SERVICE,
+  UpdatePolicy,
+  updatePolicyFile,
+} from "../src/update-policy";
 
 // TD-0 (specs/trust-and-distribution.md §2, §3, §6.3; TD-1, TD-9, TD-10) — the refusals each shape
 // owes, made inline from the golden fixtures (every file in fixtures/ must parse, so a refusal case
@@ -177,6 +184,76 @@ describe("the update policy (EDP-37 + TD-3/TD-10)", () => {
     expect(
       issues(UpdatePolicy.safeParse({ ...clone(base), expires: "1970-01-01T00:00:00Z" })).join(),
     ).toMatch(/expire before/);
+  });
+});
+
+describe("the channel heads (WP12-D4) and the per-channel policy names (WP12-D5)", () => {
+  const base = fixture<Json & { heads: Json }>("channel-heads.valid.json");
+
+  it("names one policy file per channel and the heads file", () => {
+    expect(UPDATE_CHANNELS.map(updatePolicyFile)).toEqual([
+      "update-policy.nightly.json",
+      "update-policy.beta.json",
+      "update-policy.stable.json",
+    ]);
+    expect(CHANNEL_HEADS_FILE).toBe("channels.json");
+  });
+
+  it("accepts a channel with no head yet (null), and a head of each channel's own tag shape", () => {
+    const heads = ChannelHeads.parse({
+      ...clone(base),
+      heads: { nightly: "nightly-20261016", beta: null, stable: "v0.9.0" },
+    });
+    expect(heads.heads.beta).toBeNull();
+  });
+
+  it("refuses a head of another channel's shape — a beta client must never resolve a nightly", () => {
+    for (const [channel, head] of [
+      ["beta", "nightly-20261016"],
+      ["stable", "v0.9.0-beta.3"],
+      ["nightly", "v0.9.0"],
+      ["beta", "v0.9.0"],
+    ] as const) {
+      const doc = clone(base);
+      doc.heads = { ...doc.heads, [channel]: head };
+      expect(issues(ChannelHeads.safeParse(doc)).join(), `${channel} ← ${head}`).toMatch(
+        new RegExp(`${channel} head`),
+      );
+    }
+  });
+
+  it("refuses heads without their freshness fields, and an expiry before generation", () => {
+    for (const field of [
+      "schemaVersion",
+      "version",
+      "generatedAt",
+      "expires",
+      "trustRootVersion",
+      "heads",
+    ]) {
+      const doc = clone(base);
+      delete doc[field];
+      expect(ChannelHeads.safeParse(doc).success, field).toBe(false);
+    }
+    expect(
+      issues(ChannelHeads.safeParse({ ...clone(base), expires: "1970-01-01T00:00:00Z" })).join(),
+    ).toMatch(/expire before/);
+  });
+
+  it("states the updater's honest states, TD §4's four clauses among them", () => {
+    expect(UPDATES_SERVICE.SERVICE).toBe("updates");
+    const states = Object.entries(UPDATES_SERVICE)
+      .filter(([key]) => key !== "SERVICE")
+      .map(([, state]) => state);
+    for (const clause of [
+      "feed-unverified",
+      "policy-expired",
+      "policy-rollback",
+      "trust-root-rejected",
+    ]) {
+      expect(states).toContain(clause);
+    }
+    expect(new Set(states).size).toBe(states.length);
   });
 });
 

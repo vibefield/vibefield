@@ -210,7 +210,7 @@ import {
   TransportCredit,
 } from "../src/terminal-pipeline";
 import { TrustRoot } from "../src/trust-root";
-import { UpdatePolicy } from "../src/update-policy";
+import { ChannelHeads, UpdateClientStateFile, UpdatePolicy } from "../src/update-policy";
 import {
   WorkspaceCloseTicketParams,
   WorkspaceCloseTicketResult,
@@ -302,6 +302,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "trust-root": TrustRoot,
   "registry-index-v2": RegistryIndexV2,
   "update-policy": UpdatePolicy,
+  // WP12a (build-wp12-updater.md D4): the channel heads every release carries (refusals in trust-root.test.ts).
+  "channel-heads": ChannelHeads,
+  // WP12b: the updater's persisted client state (Electron main's `updates/state.json`).
+  "update-client-state": UpdateClientStateFile,
   // WP8a: the packaged app's signed bundled-plugin index (refusals in plugin-distribution.test.ts).
   "bundled-plugin-index": BundledPluginIndex,
   // WP8b: the stage's public identity (Resources/identity/release-identity.json).

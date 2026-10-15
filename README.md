@@ -19,6 +19,7 @@ a private mesh across machines, and an iPhone companion.
 | `packages/fieldd-client` | renderer/worker client — loopback WS + React hooks |
 | `packages/fieldd-supervisor` | Node-only fieldd discovery/adopt/spawn/shutdown library — executes inside Electron main, never a process of its own |
 | `packages/screenshot` | `@vibefield/screenshot` — Node-only host of the native screenshot helper (SNAP track): spawns one `--once` helper, reads its one-line protocol (`contracts/src/screenshot.ts`), owns the timers and the still ring; Electron main composes it, wall R19 keeps Electron out |
+| `packages/trust` | `@vibefield/trust` — Node-only: the ONE Ed25519 check and trust-root verifier (TD-2/TD-3) that fieldd, the authoring kit (re-exported), the stager and Electron main's update provider all call; walls R27/R28 keep it out of browser code and keep its own imports to contracts + `node:` (WP12 D2) |
 | `packages/electron-shell` | Electron main + preload + the tiny renderer host, and the renderer's vite build — a composition root with no product logic |
 | `packages/field-app` | the browser-compatible renderer product: boot machine, DocManager, the FieldView units (session/canvas/persistence/chrome/previews), HUD |
 | `packages/design-kit` | the design kit — tokens, primitives, glyphs, the face and the logo (DESIGN.md made code; its DOM and GL card dressing left with the desk, DK-17) |
