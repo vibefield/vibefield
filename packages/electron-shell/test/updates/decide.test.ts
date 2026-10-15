@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type DecideContext, type DecideState, decideUpdate } from "../../src/main/updates/decide";
+import {
+  type CensusCount,
+  type DecideContext,
+  type DecideState,
+  decideUpdate,
+} from "../../src/main/updates/decide";
 
 // WP12b (EDP §11.1, D14) — the ONE decision as a truth table: every row names its trigger, state, census and the
 // action. Tray, Settings and the quit flow render this output and decide nothing themselves.
@@ -15,7 +20,13 @@ const base: DecideContext = {
 };
 
 const rows: ReadonlyArray<
-  readonly [string, DecideState, number, Partial<DecideContext>, ReturnType<typeof decideUpdate>]
+  readonly [
+    string,
+    DecideState,
+    CensusCount,
+    Partial<DecideContext>,
+    ReturnType<typeof decideUpdate>,
+  ]
 > = [
   ["a launch checks", { kind: "idle" }, 0, { trigger: "launch" }, { kind: "check" }],
   ["a manual check checks", { kind: "idle" }, 0, { trigger: "manual" }, { kind: "check" }],
@@ -118,6 +129,20 @@ const rows: ReadonlyArray<
     { kind: "offer-restart", version: "1.0.0" },
   ],
   [
+    "staged with an UNKNOWN census is held — never read as zero (§10 S1)",
+    { kind: "staged", version: "1.0.0" },
+    "unknown",
+    { trigger: "downloaded", applyWired: true },
+    { kind: "hold", version: "1.0.0", reason: "census-unknown" },
+  ],
+  [
+    "an unknown census holds even where the gate is unbuilt",
+    { kind: "staged", version: "1.0.0" },
+    "unknown",
+    { trigger: "downloaded" },
+    { kind: "hold", version: "1.0.0", reason: "census-unknown" },
+  ],
+  [
     "a declined staged version is never offered",
     { kind: "staged", version: "1.0.0" },
     0,
@@ -133,6 +158,14 @@ describe("decideUpdate — the truth table", () => {
 
   it("never offers a restart while sessions live, whatever else holds", () => {
     for (const applyWired of [true, false]) {
+      for (const census of [1, "unknown"] as const) {
+        const action = decideUpdate({ kind: "staged", version: "1.0.0" }, census, {
+          ...base,
+          trigger: "downloaded",
+          applyWired,
+        });
+        expect(action.kind).not.toBe("offer-restart");
+      }
       const action = decideUpdate({ kind: "staged", version: "1.0.0" }, 1, {
         ...base,
         trigger: "downloaded",

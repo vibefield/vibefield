@@ -147,6 +147,14 @@ export const UPDATES_SERVICE = {
   STATE_KILLED: "killed",
   /** the host is below the policy's OS (or glibc) floor; the release is skipped, never installed (EDP-37) */
   STATE_FLOOR_UNMET: "floor-unmet",
+  /** WP12c (L2b-ii, `build-wp12-updater.md` §10 S3/S4) — the apply was refused and NOTHING was torn down, or what was
+   * torn down came back (the pair respawned from the current bytes): Squirrel.Mac refused or timed out on the payload
+   * (`squirrel-timeout`, its own named reason — a silent hang never masquerades as a gate), or its install failed after
+   * the daemons stopped. The reason rides the refusal's detail, in doctor and in audit. */
+  STATE_APPLY_REFUSED: "apply-refused",
+  /** WP12c (§10 S1) — the session census could not be read (the inventory unobserved, the link down, no answer inside
+   * its bound): the apply HOLDS (EDP-33: never auto-escalated), and the tray says so instead of offering the verb. */
+  STATE_CENSUS_UNKNOWN: "census-unknown",
 } as const;
 export type UpdatesUnavailableState = (typeof UPDATES_SERVICE)[Exclude<
   keyof typeof UPDATES_SERVICE,
@@ -160,9 +168,35 @@ export type UpdatesUnavailableState = (typeof UPDATES_SERVICE)[Exclude<
 export const UPDATES_AUDIT_ACTIONS = {
   VERIFY: "app.update.verify",
   DECLINE: "app.update.decline",
+  /** WP12c (L2b-ii) — the apply: `succeeded` as the install is handed to Squirrel, `denied`/`failed` with the refusal's
+   * reason (`SQUIRREL_TIMEOUT`, `SQUIRREL_REFUSED`, `SESSIONS_CHANGED`, `INSTALL_FAILED`), the consented count in attrs. */
+  APPLY: "app.update.apply",
 } as const;
 
 const RememberedVersion = z.number().int().min(1).nullable();
+
+/** WP12c (L2b-ii, `build-wp12-updater.md` §10 S4; the PM's rulings 13:36–13:38Z) — the last apply, written
+ * SYNCHRONOUSLY before every exit the apply takes. After the daemon stop fieldd is gone, and the shell's audit row
+ * travels through fieldd (wall R17), so the `app.update.apply` OUTCOME row is appended from here at the next launch,
+ * once (`audited`); its ATTEMPT row was appended before the stop.
+ *  - `installing`: the install was handed to Squirrel (`quitAndInstall`);
+ *  - `relaunched`: Squirrel refused the payload (nothing armed) — the app relaunched on the current bytes;
+ *  - `exited`: Squirrel timed out, or the install never took over — the app quit WITHOUT relaunch, because Squirrel may
+ *    have armed the install (a downloaded update is applied at the next start: `electron.d.ts:2103-2104`). */
+export const UpdateLastApply = z
+  .object({
+    at: z.number().int().nonnegative(),
+    version: z.string().min(1).max(64),
+    branch: z.enum(["installing", "relaunched", "exited"]),
+    reason: z.enum(["squirrel-refused", "squirrel-timeout", "install-failed"]).optional(),
+    /** how many sessions the person consented to end (0 at census zero) */
+    consented: z.number().int().nonnegative(),
+    /** the ATTEMPT row's operation id, so the outcome row appended at the next launch names the same operation */
+    operationId: z.string().min(1).max(128).optional(),
+    audited: z.boolean().default(false),
+  })
+  .passthrough();
+export type UpdateLastApply = z.infer<typeof UpdateLastApply>;
 
 /** WP12b (build-wp12-updater.md §3) — the updater's persisted CLIENT state (`<userData>/updates/state.json`): the
  * person's choices and TD-10's remembered versions. Written by Electron main only, never by the renderer (EDP-38).
@@ -191,6 +225,8 @@ export const UpdateClientStateFile = z
         policy: { nightly: null, beta: null, stable: null },
       }),
     lastCheckAt: z.number().int().nonnegative().nullable().default(null),
+    /** WP12c — the last apply's branch (`UpdateLastApply`); null = none since the state began */
+    lastApply: UpdateLastApply.nullable().default(null),
   })
   .passthrough();
 export type UpdateClientStateFile = z.infer<typeof UpdateClientStateFile>;

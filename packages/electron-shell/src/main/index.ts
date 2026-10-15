@@ -19,6 +19,7 @@ import {
   type ScreenshotCaptureResult,
   type ShellCommand,
   ShellCommandRequest,
+  UPDATE_PLANES,
   type UserRecord,
   type UsersCreateParams,
 } from "@vibefield/contracts";
@@ -73,7 +74,7 @@ import {
   registerViewSet,
   registerWindowBootstrap,
 } from "./ipc";
-import { installLifecycle } from "./lifecycle";
+import { installLifecycle, type LifecycleFlow } from "./lifecycle";
 import { LiveSurfaceAuthority } from "./live-surfaces/authority";
 import {
   createProductionLiveSurfaceSupport,
@@ -131,7 +132,7 @@ import type { TrayLinkState, TraySnapshot, TrayUpdateState } from "./tray-model"
 import { createElectronTrayRuntime } from "./tray-native";
 import type { UpdateState } from "./updates/controller";
 import { readUpdateIdentity } from "./updates/identity";
-import { installUpdateController } from "./updates/install";
+import { createElectronApplyPort, installUpdateController } from "./updates/install";
 import { applyProfileUpdate, dealOwedFace } from "./users-profile";
 import { ViewRegistry } from "./view";
 import { hasInsetLights, LightsRegistry } from "./window-lights";
@@ -196,6 +197,8 @@ const DEVELOPMENT_EXTENSION = desktopDevelopmentExtension();
 
 let supervisor: FielddSupervisor | null = null;
 let fielddHandles: FielddHandleCoordinator | null = null;
+/** WP12c — the quit flow, for the update apply's quit (assigned once the lifecycle is installed). */
+let lifecycleFlow: LifecycleFlow | null = null;
 /** P8b-2 — the live fieldd client the plugin protocol authorizes against. Null
  * until the pair is up, which is the honest state: with no authority reachable,
  * no plugin module is servable. */
@@ -1781,6 +1784,36 @@ async function main(
   // delay and a resume checks when the last check is stale (EDP §11.2, no interval stays alive). The apply waits for
   // WP12c's gate — nothing installs on a quit.
   const updateIdentity = readUpdateIdentity(resources);
+  // WP12c (L2b-ii, build-wp12-updater.md §10) — the apply's port: the census and the consented stop through the held
+  // coordinator (from the stop on, nothing may start fieldd), Squirrel staged only after the stop, the quit flow's
+  // update mode. macOS only; elsewhere a staged update stays `apply-unbuilt`.
+  const applyPort =
+    updateIdentity === null
+      ? undefined
+      : createElectronApplyPort({
+          platform: process.platform,
+          fieldd: {
+            ensure: () => ensureFieldd(),
+            holdForUpdate: () => fielddHandles?.holdForUpdate() ?? null,
+            releaseHold: () => fielddHandles?.releaseHold(),
+          },
+          quitFlow: () => lifecycleFlow,
+          quitApp: () => app.quit(),
+          restore: () => {
+            // an update quit that aborted before the stop: the app stays, the window comes back
+            registry.cancelShutdown();
+            lifecycleFlow?.resetAfterAbortedQuit();
+            trayController?.update({ quitting: false });
+            void revealPrimaryWindow().catch((error: unknown) => {
+              logger.error(
+                "desktop.update.restore_failed",
+                "The primary window could not reopen after an aborted update quit",
+                error,
+              );
+            });
+          },
+          log: logger,
+        });
   const updates =
     updateIdentity === null
       ? null
@@ -1789,6 +1822,16 @@ async function main(
           statePath: join(app.getPath("userData"), "updates", "state.json"),
           appendAudit: (record) => appendShellAudit(record),
           log: logger,
+          ...(applyPort !== undefined ? { apply: applyPort } : {}),
+          currentVersion: app.getVersion(),
+          // EDP-34's context for doctor; every plane is touched until L3's signed planes, and the display clause
+          // has no reader until L3 (it fails closed)
+          safeWindowContext: () => ({
+            windowless: registry.primary() === null,
+            trayResident: trayController?.keepsAliveWithoutWindows() ?? false,
+            displayHeldAwake: "unknown",
+            planes: UPDATE_PLANES,
+          }),
         });
   if (updateIdentity?.originOverridden === true) {
     logger.warn(
@@ -1822,6 +1865,17 @@ async function main(
         ? {
             checkForUpdates: async () => {
               await updates.check("manual");
+            },
+          }
+        : {}),
+      ...(updates !== null && applyPort?.wired === true
+        ? {
+            restartToUpdate: async () => {
+              const outcome = await updates.restartToInstall();
+              logger.info("desktop.update.restart_requested", "Restart to Update was chosen", {
+                ok: outcome.ok,
+                reason: outcome.ok ? null : outcome.reason,
+              });
             },
           }
         : {}),
@@ -1880,8 +1934,18 @@ async function main(
     launchCheck.unref?.();
     const onResume = (): void => void updates.check("resume");
     powerMonitor.on("resume", onResume);
+    // WP12c — while an update waits staged, the census is re-read now and then so the tray's verb says the sessions
+    // it would end (EDP-35); the controller never reads it once the daemons have stopped.
+    const censusWatch =
+      applyPort?.wired === true
+        ? setInterval(() => {
+            if (updates.state.kind === "staged") void updates.refreshCensus();
+          }, UPDATE_CENSUS_REFRESH_MS)
+        : null;
+    censusWatch?.unref?.();
     shellDisposers.add(() => {
       clearTimeout(launchCheck);
+      if (censusWatch !== null) clearInterval(censusWatch);
       powerMonitor.removeListener("resume", onResume);
       updates.dispose();
     });
@@ -2101,6 +2165,7 @@ if (!hasInstanceLock) {
       logger,
       closeLogging: closeEvidence,
     });
+    lifecycleFlow = flow;
     if (MODE === "dev") {
       installDevSignalQuit(process, () => app.quit());
     }
@@ -2124,6 +2189,8 @@ if (!hasInstanceLock) {
 
 /** WP12b — the bounded post-ready delay before the one launch check (EDP §11.2). */
 const UPDATE_LAUNCH_DELAY_MS = 30_000;
+/** WP12c — how often a staged update re-reads the session census for the tray's verb. */
+const UPDATE_CENSUS_REFRESH_MS = 60_000;
 
 /** The tray's projection of the update state. Offline is quiet and retryable (EDP §11.2), so it reads as idle; a
  * refusal or a failure reads as failed, with its details in the log and the audit, never in the menu. */
@@ -2134,7 +2201,11 @@ function trayUpdateOf(state: UpdateState): TrayUpdateState {
     case "downloading":
       return { kind: "downloading", percent: state.percent };
     case "staged":
-      return { kind: "staged", version: state.version };
+      return {
+        kind: "staged",
+        version: state.version,
+        ...(state.sessions !== undefined ? { sessions: state.sessions } : {}),
+      };
     case "error":
       return state.code === "offline" ? { kind: "idle" } : { kind: "failed" };
     default:

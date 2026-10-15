@@ -99,6 +99,42 @@ describe("fieldd main-process recovery", () => {
     expect(upstream).toHaveBeenCalledTimes(2);
   });
 
+  // WP12c (L2b-ii; the PM's ruling 13:40Z: "after the daemon stop, nothing may call ensureFieldd(), which spawns") —
+  // the update holds the coordinator BEFORE the stop: when fieldd goes, its closed client must start NOTHING (a pair
+  // under a possibly armed install), and every ensure() refuses until the app exits.
+  it("held for an update: a closed client recovers nothing and ensure() refuses — the no-spawn probe", async () => {
+    const statusListeners = new Set<() => void>();
+    const current = handle("boot-1", []);
+    const client = current.client as unknown as { status: string };
+    current.client.onStatusChange = (listener) => {
+      statusListeners.add(listener);
+      return () => statusListeners.delete(listener);
+    };
+    const upstream = vi.fn().mockResolvedValue(current) as unknown as FielddSupervisor["ensure"];
+    const coordinator = new FielddHandleCoordinator(upstream);
+    await coordinator.ensure();
+    expect(upstream).toHaveBeenCalledTimes(1);
+
+    expect(coordinator.holdForUpdate()).toBe(current); // the stop request rides the CURRENT handle
+    client.status = "closed"; // fieldd stopped for the update
+    for (const listener of [...statusListeners]) listener();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await expect(coordinator.ensure()).rejects.toThrow(/held for an app update/);
+    expect(upstream).toHaveBeenCalledTimes(1); // no spawn was attempted
+  });
+
+  it("an update that aborted BEFORE the stop releases the hold, and recovery works again", async () => {
+    const current = handle("boot-1", []);
+    const upstream = vi.fn().mockResolvedValue(current) as unknown as FielddSupervisor["ensure"];
+    const coordinator = new FielddHandleCoordinator(upstream);
+    await coordinator.ensure();
+    coordinator.holdForUpdate();
+    expect(coordinator.isHeld).toBe(true);
+    coordinator.releaseHold();
+    await expect(coordinator.ensure()).resolves.toBe(current);
+    expect(upstream).toHaveBeenCalledTimes(2);
+  });
+
   it("re-probes an adopted handle whose reconnect loop outlives the grace period", async () => {
     vi.useFakeTimers();
     try {

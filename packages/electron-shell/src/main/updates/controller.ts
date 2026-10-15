@@ -3,9 +3,9 @@
 // failure to a bounded code (no remote text in privileged UI), persists the person's choices and TD-10's remembered
 // versions, and appends refusals and declines to the audit ledger (TD §4).
 //
-// What L1 (WP12b) deliberately does not do: APPLY. electron-updater's `autoInstallOnAppQuit` defaults to true, which
-// would install a staged update on any quit, past EDP-35's census gate; it is forced off here, and a staged update is
-// HELD (`apply-unbuilt`) until WP12c wires the gate and `restartToInstall`.
+// electron-updater's `autoInstallOnAppQuit` defaults to true, which would install a staged update on any quit, past
+// EDP-35's census gate; it is forced off here. WP12c (L2b-ii) wires the apply — `restartToInstall()` over an
+// `ApplyPort` (`apply.ts`), macOS only — and where no port is wired a staged update stays HELD (`apply-unbuilt`).
 
 import { randomUUID } from "node:crypto";
 import {
@@ -15,8 +15,17 @@ import {
   type UpdatesUnavailableState,
 } from "@vibefield/contracts";
 import type { AuditAppendV1 } from "@vibefield/contracts/diagnostics";
-import { decideUpdate, type UpdateAction, type UpdateTrigger } from "./decide";
+import type { UpdatePrepared, UpdateQuitPlan } from "../quit-flow";
+import {
+  type ApplyPort,
+  type CensusSnapshot,
+  consentBox,
+  quitNotice,
+  SQUIRREL_STAGE_MS,
+} from "./apply";
+import { type CensusCount, decideUpdate, type UpdateAction, type UpdateTrigger } from "./decide";
 import { UpdateRefusal } from "./refusal";
+import { type SafeWindowContext, safeWindow, safeWindowLine } from "./safe-window";
 import type { UpdateClientState, UpdateStateStore } from "./state-store";
 import {
   type ChainResult,
@@ -38,7 +47,9 @@ export type UpdateState =
       readonly kind: "staged";
       readonly version: string;
       readonly stagedAt: number;
-      readonly blockedBy?: "sessions" | "apply-unbuilt";
+      readonly blockedBy?: "sessions" | "census-unknown" | "apply-unbuilt";
+      /** WP12c — the live sessions the last census read (the tray's verb says them); absent where unwired */
+      readonly sessions?: number | "unknown";
     }
   | {
       readonly kind: "error";
@@ -96,9 +107,32 @@ export interface UpdateControllerOptions {
   readonly now?: () => number;
   /** EDP §11.2: a resume checks only when the last check is at least this old. Default 6 h. */
   readonly staleMs?: number;
-  /** EDP-33/35: VibeField-hosted live sessions. 0 until WP12c reads the terminal inventory. */
-  readonly census?: () => number;
+  /** WP12c (L2b-ii) — the apply's world: the census, the consent box, the quit flow, the daemons' stop, Squirrel.
+   * Absent (or `wired: false`), a staged update is HELD `apply-unbuilt` (§10 S5). */
+  readonly apply?: ApplyPort;
+  /** The running app's version: the outcome of a handed-off install is judged against it at the next launch. */
+  readonly currentVersion?: string;
+  /** WP12c (§10 S7) — EDP-34's context minus the census (the controller holds that); doctor names the failing clause */
+  readonly safeWindowContext?: () => Omit<SafeWindowContext, "census">;
 }
+
+/** What `restartToInstall()` answered. `ok: true` = the update quit is underway (the flow owns the rest). */
+export type RestartOutcome =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly reason:
+        | "not-staged"
+        | "apply-unbuilt"
+        | "declined"
+        | "disabled"
+        | "census-unknown"
+        | "consent-declined"
+        | "quit-underway";
+    };
+
+/** How long the apply's ATTEMPT row may take to reach fieldd's audit before the apply goes on without it. */
+const AUDIT_ATTEMPT_BOUND_MS = 2_000;
 
 const SIX_HOURS = 6 * 60 * 60 * 1000;
 const OFFLINE_CODES = new Set([
@@ -137,6 +171,10 @@ export class UpdateController {
   /** A client state that could not be read and was moved aside at construction (said loudly; WP12 §3). */
   private recovered: { readonly at: number; readonly movedAside: string } | null = null;
   private disposed = false;
+  /** WP12c — the last census count (decide reads it synchronously); 0 until a wired port reads it */
+  private censusCount: CensusCount = 0;
+  /** WP12c — set once the daemons' consented stop succeeded: from then on nothing here may reach fieldd */
+  private daemonsStopped = false;
   private readonly now: () => number;
   private readonly onProgress = (progress: { percent: number }): void => {
     if (this.stateValue.kind === "downloading") {
@@ -184,6 +222,10 @@ export class UpdateController {
     );
     updater.on("download-progress", this.onProgress);
     updater.on("error", this.onError);
+    // WP12c — an apply that exited after the daemon stop recorded its outcome here; fieldd is alive again at this
+    // launch, so its OUTCOME row reaches the ledger now, once.
+    if (this.client.lastApply !== null && !this.client.lastApply.audited)
+      void this.deliverLastApply();
   }
 
   get state(): UpdateState {
@@ -215,14 +257,14 @@ export class UpdateController {
   }
 
   decide(trigger: UpdateTrigger): UpdateAction {
-    return decideUpdate(this.stateValue, this.options.census?.() ?? 0, {
+    return decideUpdate(this.stateValue, this.censusCount, {
       trigger,
       enabled: this.enabled,
       lastCheckAt: this.client.lastCheckAt,
       now: this.now(),
       staleMs: this.options.staleMs ?? SIX_HOURS,
       declined: this.client.declined,
-      applyWired: false,
+      applyWired: this.options.apply?.wired === true,
     });
   }
 
@@ -283,6 +325,10 @@ export class UpdateController {
       `updates: ${state.kind} · channel ${this.channel}${this.enabled ? "" : " · turned off"}`,
       `last check: ${this.client.lastCheckAt === null ? "never" : new Date(this.client.lastCheckAt).toISOString()}`,
     ];
+    const windowContext = this.options.safeWindowContext;
+    if (state.kind === "staged" && windowContext !== undefined) {
+      lines.push(safeWindowLine(safeWindow({ ...windowContext(), census: this.censusCount })));
+    }
     if (state.kind === "staged") {
       lines.push(
         `staged ${state.version} since ${new Date(state.stagedAt).toISOString()}${
@@ -293,6 +339,16 @@ export class UpdateController {
     if (state.kind === "error" && state.unavailable !== undefined) {
       lines.push(`UNAVAILABLE {service: "updates", state: "${state.unavailable.state}"}`);
     }
+    const last = this.client.lastApply;
+    if (last !== null) {
+      lines.push(
+        `last apply: ${last.version} at ${new Date(last.at).toISOString()} — ${last.branch}${
+          last.reason !== undefined ? ` (${last.reason})` : ""
+        }; ${last.consented} session${last.consented === 1 ? "" : "s"} consented${
+          last.audited ? "" : "; outcome not yet in the audit ledger"
+        }`,
+      );
+    }
     if (this.recovered !== null) {
       lines.push(
         `the update state was unreadable at ${new Date(this.recovered.at).toISOString()}; moved aside to ${this.recovered.movedAside}; restarted from the build's floor`,
@@ -301,9 +357,214 @@ export class UpdateController {
     return lines;
   }
 
-  /** WP12c wires the apply through the one census-aware gate (EDP-35). Until then: honestly refused. */
-  async restartToInstall(): Promise<{ ok: false; reason: "apply-unbuilt" }> {
-    return { ok: false, reason: "apply-unbuilt" };
+  /** WP12c (L2b-ii; `build-wp12-updater.md` §10, the PM's rulings 13:31–13:40Z) — the person's "Restart to Update",
+   * in EDP §11.5's order with one law on top (an irreversible step goes after the last refusal):
+   *   1. ONE census snapshot (unknown holds) → 2. the consent box when sessions live (Cancel holds) → the ATTEMPT row
+   *   while fieldd lives → 3. the quit flow's update mode: the durable close, then `prepare()` = the daemons' consented
+   *   stop with the snapshot's ids (a refusal ABORTS: nothing stopped, the window reopens) → 4. Squirrel's staging
+   *   (only now: a staged payload is applied at the next start, `electron.d.ts:2103-2104`) → 5. `quitAndInstall()`.
+   * From the stop on, every branch exits and nothing here reaches fieldd; `lastApply` names the branch first. */
+  async restartToInstall(): Promise<RestartOutcome> {
+    const state = this.stateValue;
+    if (state.kind !== "staged") return { ok: false, reason: "not-staged" };
+    const apply = this.options.apply;
+    if (apply === undefined || !apply.wired) return { ok: false, reason: "apply-unbuilt" };
+    if (this.client.declined.includes(state.version)) return { ok: false, reason: "declined" };
+    if (!this.enabled) return { ok: false, reason: "disabled" };
+    const version = state.version;
+    const snapshot = await this.readCensus();
+    if (!snapshot.known) {
+      this.audit(UPDATES_AUDIT_ACTIONS.APPLY, "denied", "CENSUS_UNKNOWN", { version });
+      return { ok: false, reason: "census-unknown" };
+    }
+    if (snapshot.sessions.length > 0) {
+      const consented = await apply.confirm(consentBox(version, snapshot.sessions));
+      if (!consented) return { ok: false, reason: "consent-declined" };
+    }
+    const sessions = snapshot.sessions.map((session) => session.sessionId);
+    const operationId = randomUUID();
+    await this.auditAttempt(operationId, { version, consented: String(sessions.length) });
+    if (!apply.quitForUpdate(this.updatePlan(apply, version, sessions, operationId))) {
+      return { ok: false, reason: "quit-underway" };
+    }
+    return { ok: true };
+  }
+
+  /** The quit flow's plan for one apply. `prepare` is the only place the daemons stop. */
+  private updatePlan(
+    apply: ApplyPort,
+    version: string,
+    sessions: readonly string[],
+    operationId: string,
+  ): UpdateQuitPlan {
+    const consented = sessions.length;
+    return {
+      prepare: async (): Promise<UpdatePrepared> => {
+        const stopped = await apply.stopDaemons(sessions, version);
+        if (!stopped.ok) return { kind: "abort", reason: stopped.reason };
+        // The daemons are down. From here every branch exits, and nothing may reach fieldd (that would START it).
+        this.daemonsStopped = true;
+        const staged = await apply.stage(SQUIRREL_STAGE_MS);
+        if (staged.kind === "staged") {
+          this.recordLastApply({ version, branch: "installing", consented, operationId });
+          return { kind: "install" };
+        }
+        if (staged.kind === "refused") {
+          // Squirrel's own error: nothing is armed, so the app relaunches on the current bytes
+          this.recordLastApply({
+            version,
+            branch: "relaunched",
+            reason: "squirrel-refused",
+            consented,
+            operationId,
+          });
+          return { kind: "exit", relaunch: true, reason: "squirrel-refused" };
+        }
+        // no answer in the bound: Squirrel may still arm, so the app quits WITHOUT relaunch, after saying so
+        this.recordLastApply({
+          version,
+          branch: "exited",
+          reason: "squirrel-timeout",
+          consented,
+          operationId,
+        });
+        await apply.notify(quitNotice("squirrel-timeout"));
+        return { kind: "exit", relaunch: false, reason: "squirrel-timeout" };
+      },
+      install: () => apply.install(),
+      aborted: (reason) => {
+        // before the stop: fieldd lives, so this outcome reaches the ledger now
+        this.audit(UPDATES_AUDIT_ACTIONS.APPLY, "denied", "SESSIONS_CHANGED", { version, reason });
+        this.setState({ ...this.stagedOf(version), blockedBy: "sessions" });
+        apply.restore();
+        void this.refreshCensus();
+      },
+      installStalled: async () => {
+        this.recordLastApply({
+          version,
+          branch: "exited",
+          reason: "install-failed",
+          consented,
+          operationId,
+        });
+        await apply.notify(quitNotice("install-failed"));
+      },
+    };
+  }
+
+  /** WP12c — the census, ONE snapshot, through the port (bounded there); also refreshes the tray's count. */
+  private async readCensus(): Promise<CensusSnapshot> {
+    const apply = this.options.apply;
+    if (apply === undefined || !apply.wired) return { known: true, sessions: [] };
+    const snapshot = await apply.census().catch((): CensusSnapshot => ({ known: false }));
+    this.censusCount = snapshot.known ? snapshot.sessions.length : "unknown";
+    const state = this.stateValue;
+    if (state.kind === "staged") {
+      const next = this.decide("downloaded");
+      const { blockedBy: _previous, ...rest } = state;
+      this.setState(
+        next.kind === "hold"
+          ? { ...rest, sessions: this.censusCount, blockedBy: next.reason }
+          : { ...rest, sessions: this.censusCount },
+      );
+    }
+    return snapshot;
+  }
+
+  /** WP12c — re-read the census so the tray's verb stays honest (never while the daemons are stopped). */
+  async refreshCensus(): Promise<void> {
+    if (this.daemonsStopped || this.disposed) return;
+    await this.readCensus();
+  }
+
+  private stagedOf(version: string): UpdateState & { kind: "staged" } {
+    const state = this.stateValue;
+    return state.kind === "staged" && state.version === version
+      ? state
+      : { kind: "staged", version, stagedAt: this.now() };
+  }
+
+  /** WP12c — synchronous, before every exit the apply takes (the store writes atomically and at once). */
+  private recordLastApply(entry: {
+    version: string;
+    branch: "installing" | "relaunched" | "exited";
+    reason?: "squirrel-refused" | "squirrel-timeout" | "install-failed";
+    consented: number;
+    operationId: string;
+  }): void {
+    this.persist({
+      ...this.client,
+      lastApply: {
+        at: this.now(),
+        version: entry.version,
+        branch: entry.branch,
+        ...(entry.reason !== undefined ? { reason: entry.reason } : {}),
+        consented: entry.consented,
+        operationId: entry.operationId,
+        audited: false,
+      },
+    });
+  }
+
+  /** WP12c — at the next launch, the OUTCOME row for an apply that exited after the stop, once. A handed-off install
+   * succeeded when this app now runs the version it installed. */
+  private async deliverLastApply(): Promise<void> {
+    const last = this.client.lastApply;
+    const append = this.options.appendAudit;
+    if (last === null || last.audited || append === undefined) return;
+    const installed = last.branch === "installing" && this.options.currentVersion === last.version;
+    const reasonCode = installed
+      ? undefined
+      : last.branch === "installing"
+        ? "INSTALL_NOT_APPLIED"
+        : (last.reason ?? "unknown").toUpperCase().replace(/-/g, "_");
+    try {
+      await append({
+        action: UPDATES_AUDIT_ACTIONS.APPLY,
+        target: { kind: "app-update", id: this.channel },
+        phase: "outcome",
+        outcome: installed ? "succeeded" : "failed",
+        ...(reasonCode !== undefined ? { reasonCode } : {}),
+        operationId: last.operationId ?? randomUUID(),
+        attrs: { version: last.version, branch: last.branch, consented: String(last.consented) },
+      });
+      this.persist({ ...this.client, lastApply: { ...last, audited: true } });
+    } catch (error) {
+      this.options.log.warn(
+        "desktop.update.apply_outcome_unaudited",
+        "The last apply's outcome did not reach the audit ledger; it is tried again at the next launch",
+        { error: String(error) },
+      );
+    }
+  }
+
+  /** WP12c — the apply's ATTEMPT row, through fieldd while it lives, awaited and bounded. */
+  private async auditAttempt(operationId: string, attrs: Record<string, string>): Promise<void> {
+    const append = this.options.appendAudit;
+    if (append === undefined) return;
+    const record: AuditAppendV1 = {
+      action: UPDATES_AUDIT_ACTIONS.APPLY,
+      target: { kind: "app-update", id: this.channel },
+      phase: "attempt",
+      operationId,
+      attrs,
+    };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      append(record).catch((error: unknown) => {
+        this.options.log.warn(
+          "desktop.update.audit_failed",
+          "The apply's attempt row was not appended",
+          {
+            error: String(error),
+          },
+        );
+      }),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, AUDIT_ATTEMPT_BOUND_MS);
+      }),
+    ]);
+    if (timer !== undefined) clearTimeout(timer);
   }
 
   dispose(): void {
@@ -345,6 +606,11 @@ export class UpdateController {
     if (this.download !== token) return;
     this.download = null;
     this.setState({ kind: "staged", version, stagedAt: this.now() });
+    if (this.options.apply?.wired === true) {
+      // WP12c — the census decides what the tray offers (the verb, the consent, or a hold)
+      await this.readCensus();
+      return;
+    }
     const next = this.decide("downloaded");
     if (next.kind === "hold")
       this.setState({ kind: "staged", version, stagedAt: this.now(), blockedBy: next.reason });
@@ -390,7 +656,8 @@ export class UpdateController {
     attrs?: Record<string, string>,
   ): void {
     const append = this.options.appendAudit;
-    if (append === undefined) return;
+    // after the daemon stop an append would START fieldd (it travels through `ensureFieldd`): never
+    if (append === undefined || this.daemonsStopped) return;
     const record: AuditAppendV1 = {
       action,
       target: { kind: "app-update", id: this.channel },

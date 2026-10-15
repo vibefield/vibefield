@@ -91,7 +91,13 @@ describe("buildTrayMenu", () => {
     [{ kind: "idle" }, "Check for Updates…", true],
     [{ kind: "checking" }, "Checking for Updates…", false],
     [{ kind: "downloading", percent: 41.6 }, "Downloading Update… 42%", false],
-    [{ kind: "staged", version: "2.0.0" }, "Restart to Update", true],
+    // WP12c (§10 S2) — the verb follows the census: none read yet or unreadable holds the verb; zero is the plain
+    // restart; live sessions make the wording the consequence (EDP-35), singular and plural
+    [{ kind: "staged", version: "2.0.0" }, "Update Downloaded", false],
+    [{ kind: "staged", version: "2.0.0", sessions: "unknown" }, "Update Downloaded", false],
+    [{ kind: "staged", version: "2.0.0", sessions: 0 }, "Restart to Update", true],
+    [{ kind: "staged", version: "2.0.0", sessions: 1 }, "Update Ends 1 Session…", true],
+    [{ kind: "staged", version: "2.0.0", sessions: 3 }, "Update Ends 3 Sessions…", true],
     [{ kind: "failed" }, "Update Check Failed", false],
   ] satisfies readonly (readonly [TrayUpdateState, string, boolean])[])(
     "projects update state $kind",
@@ -105,7 +111,7 @@ describe("buildTrayMenu", () => {
     const a = actions();
     delete a.restartToUpdate;
     const menu = buildTrayMenu(
-      snapshot({ update: { kind: "staged", version: "2.0.0" } }),
+      snapshot({ update: { kind: "staged", version: "2.0.0", sessions: 0 } }),
       a,
       "linux",
     );

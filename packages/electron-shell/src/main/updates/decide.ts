@@ -4,8 +4,8 @@
 // `UpdatePolicy` is the signed policy document's contract in @vibefield/contracts.)
 //
 // L1 (WP12b) decides checks, downloads and whether a staged update is offered. The apply gate (EDP-34's safe window,
-// EDP-35's census) is WP12c's: until it is wired, a staged update is HELD with `apply-unbuilt` — and electron-updater's
-// install-on-quit stays off, so nothing applies behind the gate.
+// EDP-35's census) is WP12c's: where it is not wired (L2b-ii wires macOS), a staged update is HELD with `apply-unbuilt`
+// — and electron-updater's install-on-quit stays off, so nothing applies behind the gate.
 
 export type UpdateTrigger = "launch" | "manual" | "resume" | "available" | "downloaded";
 
@@ -29,7 +29,7 @@ export interface DecideContext {
   readonly staleMs: number;
   /** Versions the person declined (persisted across restarts and a staged download). */
   readonly declined: readonly string[];
-  /** WP12c's apply gate exists. False in L1. */
+  /** WP12c's apply gate exists on this platform (L2b-ii: macOS; Windows and Linux keep `apply-unbuilt`, §10 S5). */
   readonly applyWired: boolean;
 }
 
@@ -40,18 +40,21 @@ export type UpdateAction =
   | {
       readonly kind: "hold";
       readonly version: string;
-      readonly reason: "sessions" | "apply-unbuilt";
+      readonly reason: "sessions" | "census-unknown" | "apply-unbuilt";
     }
   | {
       readonly kind: "none";
       readonly reason: "disabled" | "in-flight" | "fresh" | "declined" | "nothing-to-do";
     };
 
-/** `census`: VibeField-hosted live sessions (EDP-33/35: never auto-escalated past live sessions). 0 until WP12c reads
- * the terminal inventory. */
+/** VibeField-hosted live sessions (EDP-33/35), read from the floor's own inventory; `"unknown"` when it cannot be read
+ * (the inventory unobserved, the link down, no answer in its bound) — which HOLDS, never reads as zero (§10 S1). */
+export type CensusCount = number | "unknown";
+
+/** `census`: never auto-escalated past live sessions; an unknown census holds too. */
 export function decideUpdate(
   state: DecideState,
-  census: number,
+  census: CensusCount,
   context: DecideContext,
 ): UpdateAction {
   const { trigger } = context;
@@ -78,6 +81,8 @@ export function decideUpdate(
   // trigger === "downloaded"
   if (state.kind !== "staged") return { kind: "none", reason: "nothing-to-do" };
   if (context.declined.includes(state.version)) return { kind: "none", reason: "declined" };
+  if (census === "unknown")
+    return { kind: "hold", version: state.version, reason: "census-unknown" };
   if (census > 0) return { kind: "hold", version: state.version, reason: "sessions" };
   if (!context.applyWired) return { kind: "hold", version: state.version, reason: "apply-unbuilt" };
   return { kind: "offer-restart", version: state.version };

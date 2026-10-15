@@ -1,0 +1,150 @@
+import { describe, expect, it } from "vitest";
+import {
+  type BoxContent,
+  CONSENT_LISTED_MAX,
+  consentBox,
+  quitNotice,
+  stagedTrayLabel,
+} from "../../src/main/updates/apply";
+import { type SafeWindowContext, safeWindow } from "../../src/main/updates/safe-window";
+
+// WP12c (L2b-ii, build-wp12-updater.md §10 S2/S7; the PM's rulings 13:31Z, 13:37Z) — the apply's words, PINNED to
+// DESIGN.md §9 ("Voice"): sentence case · buttons say what they do · states tell the truth with numbers · errors say
+// what happened and what to do next · they don't apologize and are never vague. And EDP-34's predicate as a table.
+
+const PROPER = new Set(["VibeField"]);
+const APOLOGY = /\b(sorry|unfortunately|oops|please|apolog)/i;
+const VAGUE_BUTTONS = new Set(["OK", "Ok", "Yes", "No", "Submit", "Continue", "Proceed"]);
+
+/** §9's sentence case: the first word capitalised; every later word lowercase unless it is a proper name, a number
+ * or a version. */
+function sentenceCase(text: string): boolean {
+  const words = text.split(/\s+/).filter((word) => /[A-Za-z]/.test(word));
+  return words.every((word, index) => {
+    const bare = word.replace(/[^A-Za-z0-9.+-]/g, "");
+    if (PROPER.has(bare) || /^\d/.test(bare)) return true;
+    return index === 0 ? /^[A-Z]/.test(bare) : bare === bare.toLowerCase();
+  });
+}
+
+function speaksInSection9(box: BoxContent): void {
+  expect(sentenceCase(box.message), box.message).toBe(true);
+  for (const button of box.buttons) {
+    expect(VAGUE_BUTTONS.has(button), `a button says what it does: ${button}`).toBe(false);
+    expect(sentenceCase(button), button).toBe(true);
+  }
+  expect(APOLOGY.test(`${box.message} ${box.detail}`)).toBe(false);
+}
+
+const sessions = (n: number) =>
+  Array.from({ length: n }, (_, i) => ({
+    sessionId: `s-${i}`,
+    title: `zsh ${i}`,
+    cwd: `/Users/me/p${i}`,
+  }));
+
+describe("the consent box (EDP-35, DESIGN.md §9)", () => {
+  it("says the consequence with its number, lists the sessions, and its buttons say what they do", () => {
+    const box = consentBox("0.9.0", sessions(3));
+    speaksInSection9(box);
+    expect(box.message).toBe("Updating ends 3 terminal sessions");
+    expect(box.detail.split("\n")).toEqual([
+      "VibeField 0.9.0 replaces the terminal service, which ends:",
+      "zsh 0 — /Users/me/p0",
+      "zsh 1 — /Users/me/p1",
+      "zsh 2 — /Users/me/p2",
+    ]);
+    expect(box.buttons).toEqual(["Cancel", "End 3 sessions and update"]);
+    // Cancel is the default AND the cancel: nothing ends by accident
+    expect(box.defaultId).toBe(0);
+    expect(box.cancelId).toBe(0);
+  });
+
+  it("is singular for one session and counts the sessions past the listed few", () => {
+    const one = consentBox("0.9.0", sessions(1));
+    expect(one.message).toBe("Updating ends 1 terminal session");
+    expect(one.buttons[1]).toBe("End 1 session and update");
+    const many = consentBox("0.9.0", sessions(CONSENT_LISTED_MAX + 3));
+    const lines = many.detail.split("\n");
+    expect(lines).toHaveLength(1 + CONSENT_LISTED_MAX + 1);
+    expect(lines.at(-1)).toBe("and 3 more");
+    speaksInSection9(many);
+  });
+
+  it("names an untitled session rather than printing a blank line", () => {
+    const box = consentBox("0.9.0", [{ sessionId: "s-1" }]);
+    expect(box.detail.split("\n")[1]).toBe("untitled session");
+  });
+});
+
+describe("the quit notices (the PM's ruling 13:37Z: the person is told before the window goes)", () => {
+  it.each(["squirrel-timeout", "install-failed"] as const)(
+    "%s says what happened and what to do next",
+    (reason) => {
+      const box = quitNotice(reason);
+      speaksInSection9(box);
+      expect(box.message).toBe("VibeField is quitting to finish the update");
+      expect(box.detail).toMatch(/Open VibeField again/);
+      expect(box.buttons).toEqual(["Quit"]);
+    },
+  );
+
+  it("the timeout's notice carries its number", () => {
+    expect(quitNotice("squirrel-timeout").detail).toMatch(/2 minutes/);
+  });
+});
+
+describe("the tray's staged verb (the macOS menu convention: Title Case, an ellipsis for a verb that asks)", () => {
+  it.each([
+    [undefined, "Update Downloaded"],
+    ["unknown", "Update Downloaded"],
+    [0, "Restart to Update"],
+    [1, "Update Ends 1 Session…"],
+    [4, "Update Ends 4 Sessions…"],
+  ] as const)("sessions %s → %s", (count, label) => {
+    expect(stagedTrayLabel(count)).toBe(label);
+  });
+});
+
+describe("EDP-34's safe window — the predicate, as a truth table", () => {
+  const open: SafeWindowContext = {
+    windowless: true,
+    trayResident: true,
+    displayHeldAwake: false,
+    planes: ["shell", "fieldd", "field-native"],
+    census: 0,
+  };
+  it.each([
+    ["every clause holds", {}, { open: true }],
+    ["a window is open", { windowless: false }, { open: false, clause: "windowless" }],
+    ["not tray-resident", { trayResident: false }, { open: false, clause: "tray-resident" }],
+    [
+      "the display is held awake",
+      { displayHeldAwake: true },
+      { open: false, clause: "display-awake-unheld" },
+    ],
+    [
+      "the display clause has no reader yet — fails closed",
+      { displayHeldAwake: "unknown" },
+      { open: false, clause: "display-awake-unheld" },
+    ],
+    [
+      "a native-touching release with live sessions",
+      { census: 2 },
+      { open: false, clause: "plane-gate" },
+    ],
+    [
+      "a native-touching release with an unknown census",
+      { census: "unknown" },
+      { open: false, clause: "plane-gate" },
+    ],
+    ["a shell-only release ignores the census", { planes: ["shell"], census: 2 }, { open: true }],
+    [
+      "the first failing clause is the one named",
+      { windowless: false, census: 2 },
+      { open: false, clause: "windowless" },
+    ],
+  ] as const)("%s", (_name, over, expected) => {
+    expect(safeWindow({ ...open, ...(over as Partial<SafeWindowContext>) })).toEqual(expected);
+  });
+});

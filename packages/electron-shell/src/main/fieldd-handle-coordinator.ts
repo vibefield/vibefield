@@ -39,6 +39,10 @@ export class FielddHandleCoordinator {
   private reprobeTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly listeners = new Set<HandleListener>();
   private disposed = false;
+  /** WP12c (`build-wp12-updater.md` §10 S3/S4; the PM's ruling 13:40Z) — set just before an update stops the daemons:
+   * after the daemon stop nothing may call `ensure()`, which SPAWNS (a pair under a possibly armed install), and the
+   * auto-recovery below must not either. Released only by an abort that stopped nothing. */
+  private held = false;
 
   constructor(
     private readonly upstreamEnsure: FielddSupervisor["ensure"],
@@ -53,6 +57,8 @@ export class FielddHandleCoordinator {
 
   async ensure(options?: { signal?: AbortSignal }): Promise<FielddHandle> {
     if (this.disposed) throw new Error("fieldd handle coordinator is disposed");
+    if (this.held)
+      throw new Error("fieldd is held for an app update: nothing may start it until the app exits");
     let handle: FielddHandle;
     try {
       handle = await this.upstreamEnsure(options);
@@ -65,7 +71,7 @@ export class FielddHandleCoordinator {
       this.stopCurrentStatus?.();
       this.current = handle;
       this.stopCurrentStatus = handle.client.onStatusChange(() => {
-        if (this.disposed || this.current !== handle) return;
+        if (this.disposed || this.current !== handle || this.held) return;
         if (handle.client.status === "ready") {
           this.clearReprobeTimer();
           return;
@@ -101,6 +107,23 @@ export class FielddHandleCoordinator {
       for (const listener of [...this.listeners]) this.notify(listener, handle);
     }
     return handle;
+  }
+
+  /** WP12c — an update is about to stop the daemons: from now `ensure()` refuses and a closed client recovers
+   * nothing. The current handle stays readable (`current`) for the stop request itself. */
+  holdForUpdate(): FielddHandle | null {
+    this.held = true;
+    this.clearReprobeTimer();
+    return this.current;
+  }
+
+  /** WP12c — the update aborted BEFORE the stop (nothing stopped): recovery and `ensure()` work again. */
+  releaseHold(): void {
+    this.held = false;
+  }
+
+  get isHeld(): boolean {
+    return this.held;
   }
 
   onHandle(listener: HandleListener): () => void {

@@ -1,3 +1,5 @@
+import { stagedTrayLabel } from "./updates/apply";
+
 export type TrayLinkState = "starting" | "ready" | "reconnecting" | "unavailable";
 export type TrayEvidenceState = "healthy" | "degraded";
 export type TrayUpdateState =
@@ -5,7 +7,12 @@ export type TrayUpdateState =
   | { readonly kind: "checking" }
   | { readonly kind: "downloading"; readonly percent: number }
   // EDP §11.1 / WP12 D14: "ready" renamed — macOS stages, nothing installs in place (EDP-34)
-  | { readonly kind: "staged"; readonly version: string }
+  | {
+      readonly kind: "staged";
+      readonly version: string;
+      /** WP12c — the live sessions the census read: the verb says them (EDP-35); `"unknown"` holds the verb */
+      readonly sessions?: number | "unknown";
+    }
   | { readonly kind: "failed" };
 
 export interface TraySnapshot {
@@ -124,15 +131,25 @@ function updateItem(
       };
     }
     case "staged": {
-      // The verb renders only when an apply exists (WP12c's gate); before that the update is downloaded, and the
-      // item says so instead of offering a restart that would do nothing.
-      if (actions.restartToUpdate === undefined) {
-        return { id: "update", label: "Update Downloaded", ...availability(platform, false) };
+      // The verb renders only when an apply exists (WP12c's gate) and the census could be read; otherwise the update
+      // is downloaded and the item says so instead of offering a restart that would do nothing. With live sessions
+      // the verb IS the consequence (EDP-35): "Update Ends N Sessions…" — the plain verb never renders beside it.
+      const sessions = snapshot.update.sessions;
+      if (
+        actions.restartToUpdate === undefined ||
+        sessions === undefined ||
+        sessions === "unknown"
+      ) {
+        return {
+          id: "update",
+          label: stagedTrayLabel(undefined),
+          ...availability(platform, false),
+        };
       }
       const enabled = actionable;
       return {
         id: "update",
-        label: "Restart to Update",
+        label: stagedTrayLabel(sessions),
         ...availability(platform, enabled),
         ...(enabled ? { click: actions.restartToUpdate } : {}),
       };

@@ -8,7 +8,11 @@
 
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { type UpdateChannel, UpdateClientStateFile } from "@vibefield/contracts";
+import {
+  type UpdateChannel,
+  UpdateClientStateFile,
+  type UpdateLastApply,
+} from "@vibefield/contracts";
 import { NOTHING_REMEMBERED, type RememberedVersions } from "./verify-chain";
 
 export interface UpdateClientState {
@@ -17,6 +21,8 @@ export interface UpdateClientState {
   readonly declined: readonly string[];
   readonly remembered: RememberedVersions;
   readonly lastCheckAt: number | null;
+  /** WP12c (§10 S4) — the last apply's branch, written before every exit it takes */
+  readonly lastApply: UpdateLastApply | null;
 }
 
 export const FRESH_CLIENT_STATE: UpdateClientState = {
@@ -25,6 +31,7 @@ export const FRESH_CLIENT_STATE: UpdateClientState = {
   declined: [],
   remembered: NOTHING_REMEMBERED,
   lastCheckAt: null,
+  lastApply: null,
 };
 
 export interface StoreFs {
@@ -87,6 +94,7 @@ export class UpdateStateStore {
         declined: data.declined,
         remembered: data.remembered,
         lastCheckAt: data.lastCheckAt,
+        lastApply: data.lastApply,
       },
       recovered: null,
     };
@@ -100,6 +108,7 @@ export class UpdateStateStore {
       declined: [...state.declined],
       remembered: state.remembered,
       lastCheckAt: state.lastCheckAt,
+      lastApply: state.lastApply,
     };
     this.fs.writeAtomic(this.path, `${JSON.stringify(doc, null, 2)}\n`);
   }

@@ -215,6 +215,12 @@ export class WindowRegistry {
     queued?.reject(new Error("primary window reopen cancelled: shell is shutting down"));
   }
 
+  /** WP12c (`build-wp12-updater.md` §10 S4) — an update quit that ABORTED before the daemons stopped: the app stays,
+   * so the primary window may open again. The only caller is that abort; an ordinary quit never cancels. */
+  cancelShutdown(): void {
+    this.shuttingDown = false;
+  }
+
   /** The one create-or-reveal operation for initial boot, tray, Dock
    * activation, second-instance, and future deep links. Concurrent callers
    * share the same preparation promise and can never create a second canvas. */

@@ -14,6 +14,15 @@ import type { WindowRegistry } from "./window-policy";
 // and never enter this flow. Adopted daemons are never killed — that law
 // lives in the supervisor itself.
 
+/** The quit flow plus WP12c's undo for an update quit that ABORTED after `before-quit` had durable-closed the windows
+ * (`build-wp12-updater.md` §10 S4: the daemon's re-check refused, so nothing stopped and the app stays). */
+export interface LifecycleFlow extends QuitFlow {
+  /** Clear what the aborted quit left behind here — the durable-close replay flags and the observed-quit mark — so the
+   * next ordinary quit durable-closes the reopened window again. The caller cancels the registry's shutdown and the
+   * tray's `quitting`, then reopens the primary window. */
+  resetAfterAbortedQuit(): void;
+}
+
 export function installLifecycle(opts: {
   registry: WindowRegistry;
   getSupervisor: () => FielddSupervisor | null;
@@ -23,7 +32,7 @@ export function installLifecycle(opts: {
   disposeShell: () => void;
   logger: Logger;
   closeLogging: () => Promise<void>;
-}): QuitFlow {
+}): LifecycleFlow {
   const logger = opts.logger.child({ component: "lifecycle" });
   const flow = createQuitFlow({
     closeWindows: () => opts.registry.disposeAll(),
@@ -35,6 +44,7 @@ export function installLifecycle(opts: {
       await opts.closeLogging();
     },
     exit: (code) => app.exit(code),
+    relaunch: () => app.relaunch(),
     onFatal: (error) =>
       logger.fatal("desktop.lifecycle.fatal", "Electron shell encountered a fatal error", error),
     onTeardownError: (error) =>
@@ -99,5 +109,16 @@ export function installLifecycle(opts: {
     }
     flow.willQuit(() => e.preventDefault());
   });
-  return flow;
+  return {
+    ...flow,
+    resetAfterAbortedQuit() {
+      quitAfterPrimaryCloses = false;
+      replayingNativeQuit = false;
+      quitObserved = false;
+      logger.info(
+        "desktop.lifecycle.update_quit_aborted",
+        "An update quit was aborted before the daemons stopped; the app stays",
+      );
+    },
+  };
 }
