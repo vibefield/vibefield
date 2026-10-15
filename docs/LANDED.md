@@ -10360,7 +10360,24 @@ EXIT 65). On the lane's tip `903d0773`, all EXIT 0:
 - the PJ-7 simulator witness.
 
 Gated here on the exact tree, `gate:landing --with-stages` in full plus the kit's suite and the witness
-(`lanes/land3/logs/<this commit>/`).
+(`lanes/land3/logs/5b47d5de/`):
+- **`gate:landing --with-stages`: 24 of 26 gates green.** Every verify stage, `still`, and the smokes smoke, no-gpu,
+  no-webgpu, plugin-restart, plugin, godview, terminal-door, terminal-direct and studio.
+- **smoke:kind-faults red on the occluded row only,** which can never pass offscreen (fix7's Found).
+- **smoke:canvas red on three rows:**
+  - the occluded row;
+  - DK-14's AIMED rung, main's since W7, whose test-only fix is the MV lead's;
+  - HAND_CALENDAR ("the bar came back 250 ms after the landing, not 200").
+- **HAND_CALENDAR was red on this lane only, and a second sample (`sample2/`) did not clear it.** That sample was red
+  on HAND_CALENDAR again, on HAND_WHITEBOARD (red on fix7's control on `fb9efdb3`) and on COVER HISTORY (red in fix7's
+  first sample), besides the occluded row and DK-14.
+- **It is not fix8's, by construction.** Outside `apps/ios`, fix8 changes only DESIGN.md's prose and this ledger. No
+  build or smoke code reads DESIGN.md; only `project-ink.test.ts` does, green in `test`. So smoke:canvas built and ran
+  the same app as main `34a1171c`.
+- **The bar judge's 250 ms** is the offscreen frame clock's quantum, which has now reddened HAND_WHITEBOARD,
+  HAND_NOTEBOOK and HAND_CALENDAR in turn.
+- **The kit's whole suite** (1,120 tests in 12 bundles, `kit-landing.log`) **and the witness**
+  (`PlaceLaunchLoopbackTests`, `witness.log`) **are green on the same tree.**
 
 **Found:**
 - The PJ-7 phone fixture leaves its files-host temp dir (`/tmp/vf-fh-*`) behind on SIGTERM.
