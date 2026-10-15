@@ -88,6 +88,31 @@ async function connect(daemon: FielddDaemon): Promise<WsRpc> {
   return rpc;
 }
 
+/** WP12 L2b — a local admin (`native.admin`, the shell's own scope class) beside `terminal.attach`: the consented
+ * stop is `system.shutdown`, local-admin only. */
+async function connectAdmin(daemon: FielddDaemon): Promise<WsRpc> {
+  const grant = daemon.tokens.mint(["native.admin", "terminal.attach"], "kill-matrix-admin");
+  const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+  await new Promise<void>((resolve, reject) => {
+    ws.once("open", resolve);
+    ws.once("error", reject);
+  });
+  cleanup.push(() => ws.close());
+  const rpc = new WsRpc(ws);
+  await helloAs(rpc, grant.token);
+  return rpc;
+}
+
+/** Is a process alive? Signal 0 asks the kernel without delivering anything. */
+const alive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 /** TP-S3e — the OUTSIDE observer's coordinates. The product ticket is routed
  * (WS doors + grants) now, so a UDS automation client reads the fieldd-plane
  * truth the daemon itself pairs on: the NF-D8 endpoints from the mgmt hello. */
@@ -304,6 +329,94 @@ describe("the kill matrix (NF-4, real field-native)", () => {
       expect(term.terminated).toBe(true);
     });
   }, 60_000);
+
+  // WP12 L2b (`build-wp12-updater.md` §9 R2; design-00 EL1's 2026-10-15 note) — the ONE consented exception to the
+  // two-planes law: an update that touches field-native stops the floor, and only when fieldd's OWN live set is
+  // exactly the set the person consented to end. The floor here is spawned by the test, so fieldd ADOPTED it and
+  // holds no pid: the floor stops ITSELF (`native.lifecycle.shutdown` → the SIGTERM drain), and the socket closing is
+  // the witness — the update path's case by construction.
+  it("row WP12-R2a: a consented stop ends exactly the consented set — the floor drains, records its intent, and the next boot says planned", async () => {
+    const native = await spawnNative();
+    await withNativeLog(native, async () => {
+      const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      cleanup.push(() => daemon.stop());
+      let ownerAsked = false;
+      daemon.onShutdownRequest(() => {
+        ownerAsked = true;
+      });
+      const rpc = await connectAdmin(daemon);
+      const a = await createRetrying(rpc, { shell: HOLD }, native, 30_000);
+      const b = await createRetrying(rpc, { shell: HOLD }, native, 30_000);
+      const rows = await poll(async () => {
+        const listed = await listOf(rpc);
+        const both = [a, b].map((s) => listed.find((t) => t.sessionId === s.sessionId));
+        return both.every((row) => row?.pid !== undefined) ? both : undefined;
+      });
+      const pids = rows.map((row) => row?.pid as number);
+      expect(pids.every(alive)).toBe(true);
+      expect(daemon.native.lastExit).toBe("unplanned"); // this floor's first boot recorded nothing
+
+      const exited = new Promise<number | null>((resolve) =>
+        native.child.once("exit", (code) => resolve(code)),
+      );
+      const answer = (await rpc.call("system.shutdown", {
+        native: { stop: true, sessions: [b.sessionId, a.sessionId], toVersion: "0.9.0+test" },
+      })) as { stopping: boolean; native?: string };
+      expect(answer).toMatchObject({ stopping: true, native: "closed" });
+      expect(daemon.health().restartScheduled).toMatchObject({ reason: "update" });
+      await expect(exited).resolves.toBe(0); // the drain, not a kill
+      await poll(async () => (pids.some(alive) ? undefined : true), 5_000);
+      await poll(async () => (ownerAsked ? true : undefined), 2_000);
+      const intent = JSON.parse(
+        readFileSync(join(native.dir, "native", "restart-intent.json"), "utf8"),
+      ) as Record<string, unknown>;
+      expect(intent).toMatchObject({ schemaVersion: 1, reason: "update", toVersion: "0.9.0+test" });
+      await daemon.stop();
+
+      // the next floor on this root TAKES the intent and says how its predecessor ended
+      const next = await spawnNative(native.dir);
+      const nextDaemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      cleanup.push(() => nextDaemon.stop());
+      expect(nextDaemon.native.lastExit).toBe("planned");
+      expect(nextDaemon.health().nativeLastExit).toBe("planned");
+      expect(() => readFileSync(join(next.dir, "native", "restart-intent.json"))).toThrow();
+    });
+  }, 90_000);
+
+  it("row WP12-R2b: a session born after consent refuses the stop — nothing ends, and births reopen", async () => {
+    const native = await spawnNative();
+    await withNativeLog(native, async () => {
+      const daemon = await bootstrap({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+      cleanup.push(() => daemon.stop());
+      let ownerAsked = false;
+      daemon.onShutdownRequest(() => {
+        ownerAsked = true;
+      });
+      const rpc = await connectAdmin(daemon);
+      const consented = await createRetrying(rpc, { shell: HOLD }, native, 30_000);
+      // the person consents to end ONE session; then a second is born
+      const late = await createRetrying(rpc, { shell: HOLD }, native, 30_000);
+      const refusal = await rpc
+        .call("system.shutdown", { native: { stop: true, sessions: [consented.sessionId] } })
+        .then(
+          () => undefined,
+          (error: { rpc?: RpcErrorShape }) => error.rpc,
+        );
+      expect(refusal?.data).toMatchObject({
+        kind: "PRECONDITION_FAILED",
+        details: { live: [consented.sessionId, late.sessionId].sort(), births: 0 },
+      });
+      // nothing ended: the floor serves, both sessions are listed, the shutdown owner was never asked
+      expect(native.child.exitCode).toBeNull();
+      const listed = (await listOf(rpc)).map((t) => t.sessionId);
+      expect(listed).toEqual(expect.arrayContaining([consented.sessionId, late.sessionId]));
+      expect(ownerAsked).toBe(false);
+      expect(daemon.health().restartScheduled).toBeNull();
+      // and births reopened with the refusal
+      const after = await createRetrying(rpc, { shell: HOLD }, native, 30_000);
+      expect(after.sessionId).toBeTruthy();
+    });
+  }, 90_000);
 
   it("rows 3+6: a dead floor refuses honestly; a replacement boot empties the inventory and re-arms", async () => {
     const native = await spawnNative();

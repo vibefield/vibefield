@@ -1233,6 +1233,11 @@ export const FILES = {
    * VibeField ROOT — never under a user root: per-vault caps are subordinate
    * to one machine-wide budget, and kernel refusal stays the final authority. */
   CUSTODY_ADMISSION_LEDGER: "custody-admission.v1.json",
+  /** WP12 L2b (`build-wp12-updater.md` §9 R3) — field-native's restart intent, written by
+   * `native.lifecycle.prepareRestart` before the floor stops for an update and taken (read, then removed) by the
+   * next boot, which reports it as `HelloAck.lastExit`. Presence is the encoding; a file that does not parse reads
+   * `unplanned` (biased safe). field-native's, under its own dir. */
+  RESTART_INTENT: "restart-intent.json",
 } as const;
 
 /** UA-D10 — the on-disk layout under a data root, as REGISTRY DATA: relative
@@ -1276,6 +1281,7 @@ export const LAYOUT = {
    * (M16), so this is a LAYOUT file and not a STORES slice. */
   PROJECT_IDENTITY_FILE: ["fieldd", "project-identity.json"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
+  RESTART_INTENT_FILE: ["native", FILES.RESTART_INTENT],
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
   // `TERMINAL_MIRROR_WRITE_FILE` = `native/terminal-mirror-write.key`, MF-2a's
   // minted mirror-write capability. A durable secret on disk, readable by every

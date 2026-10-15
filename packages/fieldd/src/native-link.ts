@@ -6,6 +6,7 @@ import {
   isPipeEndpoint,
   MESH_CONTROL_LIMITS,
   NATIVE_SUPERVISION,
+  NativeLastExit,
   PingAck,
   TerminalEndpoints,
   type TerminalRouteCell,
@@ -164,6 +165,10 @@ export class NativeLink extends EventEmitter {
    * is a real question — undefined means the daemon predates GT-2d, which is
    * itself an answer (it is at least that old). */
   nativeBuild: string | undefined;
+  /** WP12 L2b (`build-wp12-updater.md` §9 R3) — how the floor before this one ended (`HelloAck.lastExit`), taken
+   * from its restart intent at its boot. undefined = the floor did not say (it predates the field, or runs
+   * embedded) — never read as `unplanned`. Provenance for health and the logs, never parsed for behavior. */
+  lastExit: NativeLastExit | undefined;
   /** TM-1/TM-2 (MF-1l) — "this floor's terminal doors are PUBLISHED on the
    * tailnet", the floor's own word (`HelloAck.terminalMesh`), re-learned at
    * every re-pair.
@@ -386,6 +391,7 @@ export class NativeLink extends EventEmitter {
       terminal?: unknown;
       terminalRoutes?: unknown;
       nativeBuild?: unknown;
+      lastExit?: unknown;
       serverMac?: unknown;
     };
     const expected = computeAckMac(secretHex, nonce, this.opts.bootId);
@@ -422,6 +428,9 @@ export class NativeLink extends EventEmitter {
     // that did not answer the question — the same honest blank a pre-GT-2d
     // daemon leaves, never a guess.
     this.nativeBuild = typeof record.nativeBuild === "string" ? record.nativeBuild : undefined;
+    // WP12 L2b — on its own terms like the label: anything outside the vocabulary is a floor that did not say.
+    const lastExit = NativeLastExit.safeParse(record.lastExit);
+    this.lastExit = lastExit.success ? lastExit.data : undefined;
     // TM-1/TM-2 (MF-1l): read on its own terms like `nativeBuild`, and for the
     // same reason — a floor whose ROUTES are malformed still answers "are the
     // doors published", and the reverse. Anything but a boolean is a floor

@@ -35,6 +35,7 @@ import {
   ClientKind,
   Hello,
   HelloAck,
+  NativeLastExit,
   PairingMac,
   RpcError,
   RpcFailure,
@@ -104,6 +105,11 @@ import {
   MeshStartResult,
   MeshStopResult,
   NativeHealth,
+  NativePrepareRestartParams,
+  NativePrepareRestartResult,
+  NativeRestartReason,
+  NativeShutdownParams,
+  NativeShutdownResult,
   ObservedState,
   ObservedTerminal,
   ObservedTerminalCell,
@@ -199,6 +205,14 @@ const BASE_SHARED = {
   MeshEgressRouteRef,
   MeshEgressRoute,
   MeshEgressRouteTable,
+  // WP12 L2b (build-wp12-updater.md §9 R2/R3) — the restart intent, the floor's self-stop, and the hello ack's
+  // `lastExit`, named so field-native reads typed values, never strings
+  NativeLastExit,
+  NativeRestartReason,
+  NativePrepareRestartParams,
+  NativePrepareRestartResult,
+  NativeShutdownParams,
+  NativeShutdownResult,
 } as const;
 
 // Logging/diagnostics (LOG-42) — ONLY the native-consumed subset. Audit,
@@ -262,6 +276,11 @@ const ENTRIES: Record<string, ZodTypeAny> = {
   "mesh-egress-route-bound": MeshEgressRouteBound,
   "mesh-egress-route-ref": MeshEgressRouteRef,
   "mesh-egress-route-table": MeshEgressRouteTable,
+  // WP12 L2b (build-wp12-updater.md §9 R2/R3) — the floor records its restart intent, then stops itself
+  "native-prepare-restart-params": NativePrepareRestartParams,
+  "native-prepare-restart-result": NativePrepareRestartResult,
+  "native-shutdown-params": NativeShutdownParams,
+  "native-shutdown-result": NativeShutdownResult,
   "log-record-v1": LogRecordV1,
   "logging-health-v1": LoggingHealthV1,
   "diagnostic-log-snapshot-v1": DiagnosticLogSnapshotV1,

@@ -426,6 +426,23 @@ export const METHODS: MethodDef[] = [
     locality: "local",
     subscription: true,
   }),
+  // WP12 L2b (build-wp12-updater.md §9 R2/R3) — an update that touches field-native: fieldd records the restart
+  // intent, then asks the floor to stop itself (the SIGTERM drain, no signal, no pid). Both are authorized by the
+  // single-client rule alone — a superseded connection is refused before any effect (mgmt.ts).
+  defineMethod({
+    surface: "mgmt",
+    method: "native.lifecycle.prepareRestart",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.lifecycle.shutdown",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
   // the mgmt row `native.terminal.mirrorWriteCapability`, by which the floor
   // handed its mirror-write capability to its ONE paired management client so

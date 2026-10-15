@@ -36,25 +36,45 @@ async fn main() -> anyhow::Result<()> {
         boot_id = %running.boot_id,
         "field-native ready"
     );
-    shutdown_signal().await?;
+    let state = running.state.clone();
+    shutdown_signal(state.restart.shutdown_requested()).await?;
     running.shutdown().await;
     Ok(())
 }
 
+/// Every way this floor is asked to stop, each landing on the ONE drain (`RunningDaemon::shutdown`).
+///
+/// The third arm, `requested`, is WP12 L2b's `native.lifecycle.shutdown` (`build-wp12-updater.md` §9 R2): the paired
+/// fieldd asks the floor to stop itself for an update the person consented to (or at census zero). It runs exactly
+/// what SIGTERM runs — nothing new ends a session: kill-matrix row S2-B and the terminal unit's SIGTERM sweep
+/// (`tests/terminal_unit.rs`, `shutdown_sweeps_every_session_within_budget`) pin that this drain ends the cells and their PTYs. A verb rather than a signal because an
+/// adopted floor has no pid its fieldd could aim at, and on Windows a signal is a hard kill.
 #[cfg(unix)]
-async fn shutdown_signal() -> anyhow::Result<()> {
+async fn shutdown_signal(requested: impl std::future::Future<Output = ()>) -> anyhow::Result<()> {
     use tokio::signal::unix::{signal, SignalKind};
 
     let mut terminate = signal(SignalKind::terminate())?;
     tokio::select! {
         result = tokio::signal::ctrl_c() => result?,
         _ = terminate.recv() => {}
+        () = requested => tracing::info!(
+            event = "field_native.lifecycle.shutdown_requested",
+            component = "lifecycle",
+            "the paired client asked this floor to stop"
+        ),
     }
     Ok(())
 }
 
 #[cfg(not(unix))]
-async fn shutdown_signal() -> anyhow::Result<()> {
-    tokio::signal::ctrl_c().await?;
+async fn shutdown_signal(requested: impl std::future::Future<Output = ()>) -> anyhow::Result<()> {
+    tokio::select! {
+        result = tokio::signal::ctrl_c() => result?,
+        () = requested => tracing::info!(
+            event = "field_native.lifecycle.shutdown_requested",
+            component = "lifecycle",
+            "the paired client asked this floor to stop"
+        ),
+    }
     Ok(())
 }

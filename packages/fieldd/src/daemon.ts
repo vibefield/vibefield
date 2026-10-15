@@ -92,6 +92,7 @@ import {
   METHODS,
   type MeshSyncPosture,
   type NativeHealth,
+  type NativeLastExit,
   type NativeLinkState,
   PluginsDisableParams,
   PluginsEnableParams,
@@ -117,6 +118,7 @@ import {
   ProjectSessionsParams,
   ProjectSubscribeParams,
   RendererParticipantIdentity,
+  type RestartScheduled,
   ROWS,
   SCOPES,
   type Scope,
@@ -130,6 +132,7 @@ import {
   type ShellOpenExternalResult,
   SOCKETS,
   STORES,
+  SystemShutdownParams,
   type TerminalConfigDocument,
   TerminalConfigExportRequest,
   type TerminalConfigExportResult,
@@ -529,6 +532,12 @@ export interface FielddHealth {
    * `null` = it did not say, which means a daemon predating GT-2d — itself the
    * tell, and never a claim that the build is unknowable. */
   nativeBuild: string | null;
+  /** WP12 L2b (`build-wp12-updater.md` §9 R3) — how the floor before this one ended, in its own word
+   * (`HelloAck.lastExit`): `planned` = it was stopped for an update. `null` = it did not say. */
+  nativeLastExit: NativeLastExit | null;
+  /** WP12 L2b (§9 R3, the PM's correction 12:22Z) — a planned restart, announced here BEFORE the floor is asked to
+   * stop: the local carrier (D36 keeps this stream on its device). `null` = none scheduled. */
+  restartScheduled: RestartScheduled | null;
   native: NativeHealth | null;
   /** AR-0 — fieldd's EXTERNAL judgment of the agent-index daemon (rosettad):
    * unconfigured / starting / ready / restarting / failed / stopped and the
@@ -1501,6 +1510,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     let artifactsRef: ArtifactService | null = null;
     let detachArtifactHealth: (() => void) | null = null;
     const healthListeners = new Set<(h: FielddHealth) => void>();
+    // WP12 L2b — set by the consented stop below, the moment before the floor is asked to go
+    let restartScheduled: RestartScheduled | null = null;
     const health = (): FielddHealth => ({
       fieldd: {
         state: "up",
@@ -1515,6 +1526,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       nativeLinkDetail: supervisor.stateDetail,
       nativePid: supervisor.currentPid ?? null,
       nativeBuild: native.nativeBuild ?? null,
+      nativeLastExit: native.lastExit ?? null,
+      restartScheduled,
       native: latestHealth,
       rosettad: rosettad?.health() ?? ROSETTAD_UNCONFIGURED, // the projection, never state()
       workspace: workspace.supervisor.health(),
@@ -1851,12 +1864,91 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // the process owner's registered shutdown runs — the same graceful path the
     // unix signal handlers take, now reachable on every platform. Unregistered
     // (a library embedding without a process owner) the verb says so honestly.
-    api.register("system.shutdown", () => {
+    //
+    // WP12 L2b (`build-wp12-updater.md` §9 R2; design-00 EL1's 2026-10-15 note) — `native` is the ONE consented
+    // exception to the two-planes law: an update that touches field-native stops the floor too. The census is
+    // re-verified HERE, at the point of effect, with the terminal service closed to births: only an exact match
+    // between the live set and the set the person consented to end (`[]` at census zero), with no birth in flight,
+    // stops the floor; anything else refuses and reopens births. The floor then stops itself through
+    // `NativeSupervisor.stopForUpdate` (prepareRestart → shutdown → the socket closing; the ladder only for a floor
+    // this fieldd spawned), and fieldd follows. Without `native`, unchanged: fieldd alone, the floor lives on.
+    let stoppingForUpdate = false;
+    const stopNativeForUpdate = async (
+      asked: NonNullable<SystemShutdownParams["native"]>,
+    ): Promise<"closed" | "forced" | "lingering"> => {
+      if (stoppingForUpdate)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "a stop for an update is already underway",
+          false,
+        );
+      const census = terminals.closeToBirthsForStop();
+      if (census === undefined) {
+        terminals.reopenToBirths();
+        throw new RpcCallError(
+          "UNAVAILABLE",
+          "the terminal inventory has not been observed, so the floor's sessions cannot be counted",
+          true,
+          { service: "terminal", state: "unobserved" },
+        );
+      }
+      const consented = new Set(asked.sessions);
+      const exact =
+        census.births === 0 &&
+        census.live.length === consented.size &&
+        census.live.every((sessionId) => consented.has(sessionId));
+      if (!exact) {
+        terminals.reopenToBirths();
+        logger.info(
+          "fieldd.lifecycle.native_stop_refused",
+          "A stop for an update was refused: the live sessions are not the consented set",
+          { live: census.live.length, consented: consented.size, births: census.births },
+        );
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          census.births > 0
+            ? "a session is being born that the consent does not name; ask again"
+            : "the live sessions differ from the set consented to end; ask again",
+          false,
+          { live: census.live, births: census.births },
+        );
+      }
+      stoppingForUpdate = true;
+      restartScheduled = {
+        reason: "update",
+        planes: ["shell", "fieldd", "field-native"],
+        at: Date.now(),
+      };
+      logger.info(
+        "fieldd.lifecycle.native_stop_consented",
+        "Stopping the floor for an update: the live sessions are exactly the consented set",
+        { sessions: census.live.length },
+      );
+      emitHealth();
+      return await supervisor.stopForUpdate({
+        reason: "update",
+        ...(asked.toVersion !== undefined ? { toVersion: asked.toVersion } : {}),
+      });
+    };
+    api.register("system.shutdown", async (_ctx, params) => {
       if (!shutdownRequested) return { stopping: false, detail: "no shutdown owner registered" };
-      logger.info("fieldd.lifecycle.shutdown_requested", "system.shutdown received");
+      const parsed = SystemShutdownParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected {} or { native: { stop: true, sessions: string[], toVersion? } }",
+          false,
+        );
+      const nativeStop =
+        parsed.data.native === undefined
+          ? undefined
+          : await stopNativeForUpdate(parsed.data.native);
+      logger.info("fieldd.lifecycle.shutdown_requested", "system.shutdown received", {
+        native: nativeStop ?? null,
+      });
       const callback = shutdownRequested;
       setImmediate(() => callback());
-      return { stopping: true };
+      return { stopping: true, ...(nativeStop === undefined ? {} : { native: nativeStop }) };
     });
     // TC-D1 — the escalation affordance: after respawn intensity trips to the
     // permanent honest "gone", a human (or the shell's restart button)

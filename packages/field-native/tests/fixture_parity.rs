@@ -7,9 +7,10 @@ use field_native::contracts::{
     DesiredState, DiagnosticLogDeltaV1, DiagnosticLogSnapshotV1, ErrorData, Hello, HelloAck,
     LogRecordV1, LoggingHealthV1, MeshEgressProxy, MeshEgressRouteAddParams, MeshEgressRouteBound,
     MeshEgressRouteRef, MeshEgressRouteTable, MeshLaneCloseRequest, MeshLaneClosed,
-    MeshLaneOpenRequest, MeshLanePeerOpened, MeshSelfIdentity, NativeHealth, ObservedState,
-    PeerInfo, RpcRequest, RpcResponse, ServeConfig, ServeEntry, StoreSnapshot,
-    TerminalRouteSnapshot, TerminalRoutesStreamPayload,
+    MeshLaneOpenRequest, MeshLanePeerOpened, MeshSelfIdentity, NativeHealth,
+    NativePrepareRestartParams, NativePrepareRestartResult, NativeShutdownParams,
+    NativeShutdownResult, ObservedState, PeerInfo, RpcRequest, RpcResponse, ServeConfig,
+    ServeEntry, StoreSnapshot, TerminalRouteSnapshot, TerminalRoutesStreamPayload,
 };
 use serde_json::Value;
 use std::{fs, path::PathBuf};
@@ -69,6 +70,9 @@ fn hello_ack_fixture() {
     // can be true over (cells always; the flag means the tailnet door).
     // Emitted here, so strict.
     roundtrip::<HelloAck>("hello-ack.terminal-mesh.json", true);
+    // WP12 L2b (§9 R3) — the ack saying how the previous floor ended (`lastExit`), taken from the restart intent
+    // at boot. Emitted here, so strict.
+    roundtrip::<HelloAck>("hello-ack.last-exit.json", true);
     // DS-D15's client half (2026-10-01) — the PRODUCT door's ack naming the
     // device its daemon is (`deviceId`). fieldd emits it, field-native never
     // does; strict anyway, because the generated type is shared and a field it
@@ -278,4 +282,17 @@ fn semver_pattern_is_enforced() {
         serde_json::from_value::<Hello>(bad).is_err(),
         "pattern-invalid contractsVersion must be rejected"
     );
+}
+
+/// WP12 L2b (`build-wp12-updater.md` §9 R2/R3) — the restart intent and the floor's self-stop. field-native READS the
+/// params and EMITS the results, so every one is strict; a reason outside the vocabulary is refused, never coerced.
+#[test]
+fn restart_verb_fixtures() {
+    roundtrip::<NativePrepareRestartParams>("native-prepare-restart-params.valid.json", true);
+    roundtrip::<NativePrepareRestartResult>("native-prepare-restart-result.valid.json", true);
+    roundtrip::<NativeShutdownParams>("native-shutdown-params.valid.json", true);
+    roundtrip::<NativeShutdownResult>("native-shutdown-result.valid.json", true);
+    let mut whim = load("native-shutdown-params.valid.json");
+    whim["reason"] = serde_json::json!("whim");
+    assert!(serde_json::from_value::<NativeShutdownParams>(whim).is_err());
 }

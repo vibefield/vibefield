@@ -16,6 +16,8 @@ pub mod pairing;
 pub mod registries;
 /// TC-D6(b)/(e) — refusal classification and descriptor-pressure gauging.
 pub mod resource_pressure;
+// WP12 L2b — the restart intent and the floor's self-stop (build-wp12-updater.md §9 R2/R3)
+pub mod restart;
 /// TC-D6(a) — the descriptor-limit raise every boot owes itself.
 pub mod rlimit;
 /// EL7 — how a secret is created on disk (0600 at birth, never following a
@@ -121,6 +123,17 @@ pub async fn bootstrap_with_logging(
     let pairing_file = config.pairing_file();
     let secret = pairing::load_or_create_secret(&pairing_file)?;
 
+    // WP12 L2b (§9 R3) — take the restart intent the previous floor recorded, BEFORE anything else can write one:
+    // how that floor ended rides every hello this boot answers (`lastExit`).
+    let restart_intent_file = config.restart_intent_file();
+    let last_exit = restart::take_last_exit(&restart_intent_file);
+    tracing::info!(
+        event = "field_native.lifecycle.last_exit",
+        component = "bootstrap",
+        last_exit = %last_exit,
+        "how the previous floor ended"
+    );
+
     // TM-3 (2026-09-14) — the boot act that minted this floor's mirror-write
     // capability beside the pairing secret above is GONE, with the file, the
     // env var and the mgmt door it fed. A floor mints one secret on disk now,
@@ -168,6 +181,7 @@ pub async fn bootstrap_with_logging(
         config::MeshPlan::resolve(&config),
         logging.clone(),
     );
+    state.restart.configure(restart_intent_file, last_exit);
 
     // NF-D8/§4.3: the endpoints reach fieldd through the pairing hello (off the
     // route snapshot wired two lines above — TM-1 retired the second, fixed

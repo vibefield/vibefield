@@ -1124,6 +1124,72 @@
       ],
       "additionalProperties": true
     },
+    "NativeLastExit": {
+      "type": "string",
+      "enum": [
+        "planned",
+        "unplanned"
+      ]
+    },
+    "NativeRestartReason": {
+      "type": "string",
+      "enum": [
+        "update"
+      ]
+    },
+    "NativePrepareRestartParams": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "$ref": "#/definitions/NativeRestartReason"
+        },
+        "toVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "additionalProperties": true
+    },
+    "NativePrepareRestartResult": {
+      "type": "object",
+      "properties": {
+        "recorded": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "recorded"
+      ],
+      "additionalProperties": true
+    },
+    "NativeShutdownParams": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "$ref": "#/definitions/NativeRestartReason"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "additionalProperties": true
+    },
+    "NativeShutdownResult": {
+      "type": "object",
+      "properties": {
+        "stopping": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "stopping"
+      ],
+      "additionalProperties": true
+    },
     "LogAttributesV1": {
       "type": "object",
       "additionalProperties": {
@@ -1741,6 +1807,9 @@
         },
         "serverMac": {
           "type": "string"
+        },
+        "lastExit": {
+          "$ref": "#/definitions/NativeLastExit"
         }
       },
       "required": [

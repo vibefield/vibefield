@@ -803,3 +803,144 @@ async fn a_node_on_an_unflagged_floor_pushes_nothing() {
 
     daemon.shutdown().await;
 }
+
+// ---- WP12 L2b (build-wp12-updater.md §9 R2/R3): the restart intent and the floor's self-stop ----------------------
+
+async fn boot_in(dir: &tempfile::TempDir) -> RunningDaemon {
+    bootstrap(NativeConfig::for_data_dir(dir.path().to_path_buf()))
+        .await
+        .expect("bootstrap")
+}
+
+fn intent_file(dir: &tempfile::TempDir) -> std::path::PathBuf {
+    NativeConfig::for_data_dir(dir.path().to_path_buf()).restart_intent_file()
+}
+
+#[tokio::test]
+async fn a_planned_stop_is_recorded_and_the_next_boot_says_so_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let daemon = boot_in(&dir).await;
+    let mut c = TestClient::connect(&daemon).await;
+    let ack = c.hello(&daemon, 1).await;
+    assert_eq!(
+        ack["result"]["lastExit"], "unplanned",
+        "a first boot recorded no intent: {ack}"
+    );
+
+    c.send(
+        json!({"jsonrpc":"2.0","id":2,"method":"native.lifecycle.prepareRestart",
+        "params":{"reason":"update","toVersion":"0.9.0+2490459"}}),
+    )
+    .await;
+    let prepared = c.recv().await;
+    assert_eq!(prepared["result"]["recorded"], true, "{prepared}");
+    assert!(
+        intent_file(&dir).exists(),
+        "the intent is on disk before the stop"
+    );
+
+    c.send(
+        json!({"jsonrpc":"2.0","id":3,"method":"native.lifecycle.shutdown",
+        "params":{"reason":"update"}}),
+    )
+    .await;
+    let stopping = c.recv().await;
+    assert_eq!(stopping["result"]["stopping"], true, "{stopping}");
+    // main's third arm: the request reaches the ONE drain
+    timeout(
+        Duration::from_secs(2),
+        daemon.state.restart.shutdown_requested(),
+    )
+    .await
+    .expect("the paired client's shutdown wakes main's third arm");
+    daemon.shutdown().await;
+
+    let next = boot_in(&dir).await;
+    let mut c = TestClient::connect(&next).await;
+    assert_eq!(c.hello(&next, 1).await["result"]["lastExit"], "planned");
+    assert!(!intent_file(&dir).exists(), "the boot TOOK the intent");
+    next.shutdown().await;
+
+    let after = boot_in(&dir).await;
+    let mut c = TestClient::connect(&after).await;
+    assert_eq!(
+        c.hello(&after, 1).await["result"]["lastExit"],
+        "unplanned",
+        "an intent describes ONE stop"
+    );
+    after.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_superseded_client_can_neither_record_an_intent_nor_stop_the_floor() {
+    let dir = tempfile::tempdir().unwrap();
+    let daemon = boot_in(&dir).await;
+    let mut stale = TestClient::connect(&daemon).await;
+    assert!(stale.hello(&daemon, 1).await["result"].is_object());
+    let mut current = TestClient::connect(&daemon).await;
+    assert!(current.hello(&daemon, 1).await["result"].is_object());
+    assert_eq!(stale.recv().await["method"], "native.lifecycle.superseded");
+
+    // The stale connection's reader loop still runs (its write half is what closed), so its requests reach the
+    // per-request single-client guard — the verbs' ONLY authorization — and are refused before any effect.
+    for (id, method, params) in [
+        (
+            2,
+            "native.lifecycle.prepareRestart",
+            json!({"reason":"update"}),
+        ),
+        (3, "native.lifecycle.shutdown", json!({"reason":"update"})),
+    ] {
+        let mut line = json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}).to_string();
+        line.push('\n');
+        let _ = stale.writer.write_all(line.as_bytes()).await;
+    }
+    assert!(
+        timeout(
+            Duration::from_millis(400),
+            daemon.state.restart.shutdown_requested()
+        )
+        .await
+        .is_err(),
+        "a superseded client stopped the floor"
+    );
+    assert!(
+        !intent_file(&dir).exists(),
+        "a superseded client recorded an intent"
+    );
+
+    // the current client is untouched by any of it
+    current
+        .send(json!({"jsonrpc":"2.0","id":2,"method":"native.lifecycle.ping","params":{}}))
+        .await;
+    assert!(current.recv().await["result"]["bootId"].is_string());
+    daemon.shutdown().await;
+}
+
+#[tokio::test]
+async fn a_malformed_restart_request_is_refused_and_changes_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let daemon = boot_in(&dir).await;
+    let mut c = TestClient::connect(&daemon).await;
+    assert!(c.hello(&daemon, 1).await["result"].is_object());
+    for (id, method) in [
+        (2, "native.lifecycle.prepareRestart"),
+        (3, "native.lifecycle.shutdown"),
+    ] {
+        c.send(json!({"jsonrpc":"2.0","id":id,"method":method,"params":{"reason":"whim"}}))
+            .await;
+        let refused = c.recv().await;
+        assert_eq!(
+            refused["error"]["data"]["kind"], "PRECONDITION_FAILED",
+            "{method}: {refused}"
+        );
+    }
+    assert!(!intent_file(&dir).exists());
+    assert!(timeout(
+        Duration::from_millis(300),
+        daemon.state.restart.shutdown_requested()
+    )
+    .await
+    .is_err());
+    daemon.shutdown().await;
+}

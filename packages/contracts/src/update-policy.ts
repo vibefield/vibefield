@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SemverString } from "./envelope";
+import { NativeRestartReason } from "./mgmt";
 import { IsoInstant } from "./trust-root";
 
 // TD-0 / WP12a — `update-policy.json`, a release asset beside the update feed (EDP-37; distribution
@@ -193,3 +194,57 @@ export const UpdateClientStateFile = z
   })
   .passthrough();
 export type UpdateClientStateFile = z.infer<typeof UpdateClientStateFile>;
+
+/** EDP-33 — the planes a release can touch. Which ones a release touches selects its consent model; until WP12e's
+ * signed planes (L3), every release is treated as touching field-native (`build-wp12-updater.md` §2, §9). */
+export const UPDATE_PLANES = ["shell", "fieldd", "field-native"] as const;
+export const UpdatePlane = z.enum(UPDATE_PLANES);
+export type UpdatePlane = z.infer<typeof UpdatePlane>;
+
+/** WP12 L2b (§9 R3, the PM's correction 12:22Z) — a planned restart, announced on `system.health` before the stop
+ * (`FielddHealth.restartScheduled`; null when none is scheduled). The LOCAL carrier only: `system.health.subscribe` is
+ * local to its device (D36). The phone/peer half is `DeviceSlice.restart`, owed to the DS track. */
+export const RestartScheduled = z
+  .object({
+    reason: NativeRestartReason,
+    planes: z.array(UpdatePlane).min(1),
+    /** epoch millis */
+    at: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type RestartScheduled = z.infer<typeof RestartScheduled>;
+
+/** `system.shutdown` params (scope `native.admin`, local only). Absent `native` = fieldd stops alone and field-native
+ * and its sessions keep running — the two-planes law (EL1), unchanged.
+ *
+ * `native` = WP12 L2b's ONE consented exception (design-00 EL1's 2026-10-15 note; §9 R2): an update that touches
+ * field-native stops the floor too. `sessions` is the set the person consented to end — `[]` at census zero. fieldd
+ * closes the terminal service to births, then compares its OWN live set (the observed inventory plus every session
+ * born and not yet observed) with `sessions`: any difference, a birth in flight, or an unobserved inventory refuses
+ * (`PRECONDITION_FAILED {live}` / `UNAVAILABLE {service: "terminal", state: "unobserved"}`) and reopens births; only
+ * an exact match stops the floor (`native.lifecycle.prepareRestart` → `native.lifecycle.shutdown`), then fieldd. */
+export const SystemShutdownParams = z
+  .object({
+    native: z
+      .object({
+        stop: z.literal(true),
+        sessions: z.array(z.string().min(1).max(256)).max(4096),
+        /** the app version the restart installs — recorded in the floor's intent, never parsed for behavior */
+        toVersion: z.string().min(1).max(128).optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+export type SystemShutdownParams = z.infer<typeof SystemShutdownParams>;
+
+export const SystemShutdownResult = z
+  .object({
+    stopping: z.boolean(),
+    detail: z.string().optional(),
+    /** present when `native` was asked: how the floor's stop went (`closed` = its management socket closed; `forced` =
+     * the kill ladder's backstop ran on a spawned floor; `lingering` = neither inside the bound) */
+    native: z.enum(["closed", "forced", "lingering"]).optional(),
+  })
+  .passthrough();
+export type SystemShutdownResult = z.infer<typeof SystemShutdownResult>;

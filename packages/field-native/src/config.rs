@@ -235,6 +235,11 @@ impl NativeConfig {
     pub fn pairing_file(&self) -> PathBuf {
         self.join_layout(crate::registries::layout::PAIRING_FILE)
     }
+    /// 0600 — WP12 L2b's restart intent (`restart.rs`): written by `native.lifecycle.prepareRestart`, taken by
+    /// the next boot.
+    pub fn restart_intent_file(&self) -> PathBuf {
+        self.join_layout(crate::registries::layout::RESTART_INTENT_FILE)
+    }
 
     /// The app-owned Ghostty config overlay the terminal unit loads after the
     /// user's own Ghostty files (GT-3). It sits in the native dir, not the run

@@ -1025,6 +1025,75 @@ describe("TerminalService (NF-3, mock native)", () => {
     expect(actions).toContain("terminal.ticket.mint");
   });
 
+  it("the consented stop counts a session born and not yet observed, and refuses an unobserved floor (WP12 L2b)", async () => {
+    // §9 R2: the census is re-verified at the point of effect. GT-1's race is exactly the case a careless census
+    // misses — create answered, the inventory has not listed it — so a consent of [] must NOT stop a floor that
+    // holds a session the person never saw. And a floor never observed cannot be counted at all.
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    const floor = await startFakeFloor();
+    mock.terminalRoutes = keyedRoutes(1, [
+      {
+        cellInstanceId: 1,
+        cellBootId: "cell-s1",
+        endpoints: floor.endpoints,
+        workloadClass: "interactive",
+        role: "class",
+        grantKey: KEY_I,
+        doors: {
+          controlUrl: "ws://127.0.0.1:50016/control",
+          framesUrl: "ws://127.0.0.1:50016/frames",
+        },
+      },
+    ]);
+    mock.observedState = observed([]);
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    let ownerAsked = false;
+    daemon.onShutdownRequest(() => {
+      ownerAsked = true;
+    });
+    const grant = daemon.tokens.mint(["native.admin", "terminal.attach"], "terminal-test");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, grant.token);
+
+    const created = TerminalCreateOpenResult.parse(await rpc.call("terminal.create", {}));
+    const refused = await rpc.callErr("system.shutdown", { native: { stop: true, sessions: [] } });
+    expect(refused.data).toMatchObject({
+      kind: "PRECONDITION_FAILED",
+      details: { live: [created.sessionId], births: 0 },
+    });
+    expect(ownerAsked).toBe(false);
+    expect(daemon.health().restartScheduled).toBeNull();
+    // the refusal reopened births
+    await expect(rpc.call("terminal.create", {})).resolves.toBeDefined();
+
+    // a malformed ask is refused before anything is closed
+    const malformed = await rpc.callErr("system.shutdown", {
+      native: { stop: false, sessions: [] },
+    });
+    expect(malformed.data?.kind).toBe("PRECONDITION_FAILED");
+
+    // a floor this fieldd never observed cannot be counted: UNAVAILABLE, never a stop on an empty claim
+    const dark = makeDataDir();
+    await startMock(dark); // observedState stays null: the inventory is never observed
+    const blind = await bootstrap({ dataDir: dark, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => blind.stop());
+    blind.onShutdownRequest(() => {
+      ownerAsked = true;
+    });
+    const blindRpc = await openRpc(blind.controlPort);
+    await helloAs(blindRpc, blind.tokens.mint(["native.admin"], "terminal-test").token);
+    const unobserved = await blindRpc.callErr("system.shutdown", {
+      native: { stop: true, sessions: [] },
+    });
+    expect(unobserved.data).toMatchObject({
+      kind: "UNAVAILABLE",
+      details: { service: "terminal", state: "unobserved" },
+    });
+    expect(ownerAsked).toBe(false);
+  });
+
   it("a control socket dying mid-terminate is UNAVAILABLE, never 'already gone' (NF-6)", async () => {
     // The same fake floor, told to die on the terminate request — the review's
     // measured hole (a SIGKILLed floor read as {terminated:false} and audited

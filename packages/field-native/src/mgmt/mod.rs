@@ -25,7 +25,10 @@ pub mod mesh;
 mod mesh_egress;
 
 use crate::config::MeshPlan;
-use crate::contracts::{DesiredState, Hello, TerminalRouteSnapshot, TerminalRoutesStreamPayload};
+use crate::contracts::{
+    DesiredState, Hello, NativePrepareRestartParams, NativePrepareRestartResult,
+    NativeShutdownParams, NativeShutdownResult, TerminalRouteSnapshot, TerminalRoutesStreamPayload,
+};
 #[cfg(test)]
 use crate::contracts::{TerminalEndpoints, TerminalRouteCell};
 use crate::local_ipc;
@@ -384,6 +387,69 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
                     .unwrap_or(0);
                 send(&tx, ok(id, json!({"bootId": state.boot_id, "ts": ts})));
             }
+            // WP12 L2b (`build-wp12-updater.md` §9 R2/R3) — an update that touches this floor. Both verbs are
+            // authorized by the single-client rule and nothing else: a superseded connection was refused above,
+            // before any effect, with the same `superseded` answer every mutating verb gets.
+            "native.lifecycle.prepareRestart" => {
+                let reply = match serde_json::from_value::<NativePrepareRestartParams>(params) {
+                    Ok(intent) => {
+                        let recorded = state.restart.record(&intent, &state.boot_id).unwrap_or_else(|error| {
+                            tracing::warn!(
+                                event = "field_native.lifecycle.restart_intent_failed",
+                                component = "lifecycle",
+                                error = %error,
+                                "the restart intent could not be recorded; the next boot will read unplanned"
+                            );
+                            false
+                        });
+                        tracing::info!(
+                            event = "field_native.lifecycle.restart_prepared",
+                            component = "lifecycle",
+                            reason = %intent.reason,
+                            recorded,
+                            "the paired client recorded a restart intent"
+                        );
+                        ok(id, json!(NativePrepareRestartResult { recorded }))
+                    }
+                    Err(e) => err(
+                        id,
+                        "PRECONDITION_FAILED",
+                        -32005,
+                        &format!("bad restart intent: {e}"),
+                        false,
+                        None,
+                    ),
+                };
+                send(&tx, reply);
+            }
+            "native.lifecycle.shutdown" => {
+                match serde_json::from_value::<NativeShutdownParams>(params) {
+                    Ok(request) => {
+                        tracing::info!(
+                            event = "field_native.lifecycle.shutdown_accepted",
+                            component = "lifecycle",
+                            reason = %request.reason,
+                            connection = conn_id,
+                            "the paired client asked this floor to stop; the SIGTERM drain follows"
+                        );
+                        // The reply first, then main's third arm: the drain that follows aborts the accept loop but
+                        // not this connection's writer, and fieldd's witness is the socket closing either way.
+                        send(&tx, ok(id, json!(NativeShutdownResult { stopping: true })));
+                        state.restart.request_shutdown();
+                    }
+                    Err(e) => send(
+                        &tx,
+                        err(
+                            id,
+                            "PRECONDITION_FAILED",
+                            -32005,
+                            &format!("bad shutdown request: {e}"),
+                            false,
+                            None,
+                        ),
+                    ),
+                }
+            }
             "native.lifecycle.observed.subscribe" => {
                 let sub_id = state.sub_id();
                 let snapshot = serde_json::to_value(&*state.observed_tx.borrow()).unwrap();
@@ -651,6 +717,11 @@ async fn handle_hello(
     // indistinguishable from one that predates the field. Secret-free — a
     // boolean, never the capability, the node's name, or a port (EL7).
     ack["terminalMesh"] = json!(state.terminal_mesh_published());
+    // WP12 L2b (§9 R3) — how the floor before this boot ended, taken from the restart intent at boot. Absent from
+    // an unconfigured (embedded) floor: it cannot say, and silence is not `unplanned`.
+    if let Some(last_exit) = state.restart.last_exit() {
+        ack["lastExit"] = json!(last_exit);
+    }
     (ok(id, ack), true)
 }
 
@@ -659,10 +730,15 @@ async fn handle_hello(
 /// older than the tree that started the pairing; a July native answering an
 /// August fieldd reports its missing units perfectly honestly and reads as a
 /// product bug. The crate version is always available; `FIELDD_BUILD_ID` is the
-/// development snapshot identity, inherited from the fieldd that spawned this
-/// process (bin.ts hands its whole environment down) — present in dev, absent
-/// in a packaged run, which is why it is a suffix and not a requirement. A
-/// build label, never a secret and never parsed for behavior.
+/// app's build identity, inherited from the fieldd that spawned this process
+/// (bin.ts hands its whole environment down): the dev runner's snapshot id in
+/// development and, since WP12 L2a (2026-10-15), the staged identity's
+/// `<appVersion>+<commit7>` in a packaged run — so a packaged label names the
+/// app build that SPAWNED this floor, which is how an old floor under a new app
+/// shows in a support bundle. *(Corrected 2026-10-15, WP12 L2b: this said the
+/// stamp was "absent in a packaged run"; L2a made it present.)* Still a suffix,
+/// not a requirement — a fieldd started by hand may carry none. A build label,
+/// never a secret and never parsed for behavior.
 fn native_build() -> String {
     const BASE: &str = concat!("field-native/", env!("CARGO_PKG_VERSION"));
     match std::env::var("FIELDD_BUILD_ID") {

@@ -1058,6 +1058,9 @@ impl Hello {
 #[doc = "        \"type\": \"string\""]
 #[doc = "      }"]
 #[doc = "    },"]
+#[doc = "    \"lastExit\": {"]
+#[doc = "      \"$ref\": \"#/definitions/NativeLastExit\""]
+#[doc = "    },"]
 #[doc = "    \"nativeBuild\": {"]
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
@@ -1099,6 +1102,12 @@ pub struct HelloAck {
     pub device_id: ::std::option::Option<::std::string::String>,
     #[serde(rename = "grantedScopes")]
     pub granted_scopes: ::std::vec::Vec<::std::string::String>,
+    #[serde(
+        rename = "lastExit",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub last_exit: ::std::option::Option<NativeLastExit>,
     #[serde(
         rename = "nativeBuild",
         default,
@@ -5219,6 +5228,340 @@ impl ::std::convert::TryFrom<::std::string::String> for NativeHealthState {
         value.parse()
     }
 }
+#[doc = "`NativeLastExit`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"planned\","]
+#[doc = "    \"unplanned\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum NativeLastExit {
+    #[serde(rename = "planned")]
+    Planned,
+    #[serde(rename = "unplanned")]
+    Unplanned,
+}
+impl ::std::fmt::Display for NativeLastExit {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Planned => f.write_str("planned"),
+            Self::Unplanned => f.write_str("unplanned"),
+        }
+    }
+}
+impl ::std::str::FromStr for NativeLastExit {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "planned" => Ok(Self::Planned),
+            "unplanned" => Ok(Self::Unplanned),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for NativeLastExit {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for NativeLastExit {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NativeLastExit {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`NativePrepareRestartParams`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"reason\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"reason\": {"]
+#[doc = "      \"$ref\": \"#/definitions/NativeRestartReason\""]
+#[doc = "    },"]
+#[doc = "    \"toVersion\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"maxLength\": 128,"]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativePrepareRestartParams {
+    pub reason: NativeRestartReason,
+    #[serde(
+        rename = "toVersion",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub to_version: ::std::option::Option<NativePrepareRestartParamsToVersion>,
+}
+impl NativePrepareRestartParams {
+    pub fn builder() -> builder::NativePrepareRestartParams {
+        Default::default()
+    }
+}
+#[doc = "`NativePrepareRestartParamsToVersion`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 128,"]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct NativePrepareRestartParamsToVersion(::std::string::String);
+impl ::std::ops::Deref for NativePrepareRestartParamsToVersion {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<NativePrepareRestartParamsToVersion> for ::std::string::String {
+    fn from(value: NativePrepareRestartParamsToVersion) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for NativePrepareRestartParamsToVersion {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 128usize {
+            return Err("longer than 128 characters".into());
+        }
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for NativePrepareRestartParamsToVersion {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for NativePrepareRestartParamsToVersion {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NativePrepareRestartParamsToVersion {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for NativePrepareRestartParamsToVersion {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`NativePrepareRestartResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"recorded\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"recorded\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativePrepareRestartResult {
+    pub recorded: bool,
+}
+impl NativePrepareRestartResult {
+    pub fn builder() -> builder::NativePrepareRestartResult {
+        Default::default()
+    }
+}
+#[doc = "`NativeRestartReason`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"update\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum NativeRestartReason {
+    #[serde(rename = "update")]
+    Update,
+}
+impl ::std::fmt::Display for NativeRestartReason {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Update => f.write_str("update"),
+        }
+    }
+}
+impl ::std::str::FromStr for NativeRestartReason {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "update" => Ok(Self::Update),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for NativeRestartReason {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for NativeRestartReason {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NativeRestartReason {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`NativeShutdownParams`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"reason\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"reason\": {"]
+#[doc = "      \"$ref\": \"#/definitions/NativeRestartReason\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeShutdownParams {
+    pub reason: NativeRestartReason,
+}
+impl NativeShutdownParams {
+    pub fn builder() -> builder::NativeShutdownParams {
+        Default::default()
+    }
+}
+#[doc = "`NativeShutdownResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"stopping\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"stopping\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeShutdownResult {
+    pub stopping: bool,
+}
+impl NativeShutdownResult {
+    pub fn builder() -> builder::NativeShutdownResult {
+        Default::default()
+    }
+}
 #[doc = "`ObservedState`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -8716,6 +9059,10 @@ pub mod builder {
         >,
         granted_scopes:
             ::std::result::Result<::std::vec::Vec<::std::string::String>, ::std::string::String>,
+        last_exit: ::std::result::Result<
+            ::std::option::Option<super::NativeLastExit>,
+            ::std::string::String,
+        >,
         native_build: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
             ::std::string::String,
@@ -8745,6 +9092,7 @@ pub mod builder {
                 contracts_version: Err("no value supplied for contracts_version".to_string()),
                 device_id: Ok(Default::default()),
                 granted_scopes: Err("no value supplied for granted_scopes".to_string()),
+                last_exit: Ok(Default::default()),
                 native_build: Ok(Default::default()),
                 server_kind: Err("no value supplied for server_kind".to_string()),
                 server_mac: Ok(Default::default()),
@@ -8784,6 +9132,16 @@ pub mod builder {
             self.granted_scopes = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for granted_scopes: {e}"));
+            self
+        }
+        pub fn last_exit<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::NativeLastExit>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.last_exit = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for last_exit: {e}"));
             self
         }
         pub fn native_build<T>(mut self, value: T) -> Self
@@ -8864,6 +9222,7 @@ pub mod builder {
                 contracts_version: value.contracts_version?,
                 device_id: value.device_id?,
                 granted_scopes: value.granted_scopes?,
+                last_exit: value.last_exit?,
                 native_build: value.native_build?,
                 server_kind: value.server_kind?,
                 server_mac: value.server_mac?,
@@ -8880,6 +9239,7 @@ pub mod builder {
                 contracts_version: Ok(value.contracts_version),
                 device_id: Ok(value.device_id),
                 granted_scopes: Ok(value.granted_scopes),
+                last_exit: Ok(value.last_exit),
                 native_build: Ok(value.native_build),
                 server_kind: Ok(value.server_kind),
                 server_mac: Ok(value.server_mac),
@@ -11307,6 +11667,185 @@ pub mod builder {
                 boot_id: Ok(value.boot_id),
                 state: Ok(value.state),
                 units: Ok(value.units),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativePrepareRestartParams {
+        reason: ::std::result::Result<super::NativeRestartReason, ::std::string::String>,
+        to_version: ::std::result::Result<
+            ::std::option::Option<super::NativePrepareRestartParamsToVersion>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for NativePrepareRestartParams {
+        fn default() -> Self {
+            Self {
+                reason: Err("no value supplied for reason".to_string()),
+                to_version: Ok(Default::default()),
+            }
+        }
+    }
+    impl NativePrepareRestartParams {
+        pub fn reason<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::NativeRestartReason>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.reason = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for reason: {e}"));
+            self
+        }
+        pub fn to_version<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<
+                ::std::option::Option<super::NativePrepareRestartParamsToVersion>,
+            >,
+            T::Error: ::std::fmt::Display,
+        {
+            self.to_version = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for to_version: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativePrepareRestartParams> for super::NativePrepareRestartParams {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativePrepareRestartParams,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                reason: value.reason?,
+                to_version: value.to_version?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativePrepareRestartParams> for NativePrepareRestartParams {
+        fn from(value: super::NativePrepareRestartParams) -> Self {
+            Self {
+                reason: Ok(value.reason),
+                to_version: Ok(value.to_version),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativePrepareRestartResult {
+        recorded: ::std::result::Result<bool, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativePrepareRestartResult {
+        fn default() -> Self {
+            Self {
+                recorded: Err("no value supplied for recorded".to_string()),
+            }
+        }
+    }
+    impl NativePrepareRestartResult {
+        pub fn recorded<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<bool>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.recorded = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for recorded: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativePrepareRestartResult> for super::NativePrepareRestartResult {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativePrepareRestartResult,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                recorded: value.recorded?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativePrepareRestartResult> for NativePrepareRestartResult {
+        fn from(value: super::NativePrepareRestartResult) -> Self {
+            Self {
+                recorded: Ok(value.recorded),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeShutdownParams {
+        reason: ::std::result::Result<super::NativeRestartReason, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeShutdownParams {
+        fn default() -> Self {
+            Self {
+                reason: Err("no value supplied for reason".to_string()),
+            }
+        }
+    }
+    impl NativeShutdownParams {
+        pub fn reason<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::NativeRestartReason>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.reason = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for reason: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeShutdownParams> for super::NativeShutdownParams {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeShutdownParams,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                reason: value.reason?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeShutdownParams> for NativeShutdownParams {
+        fn from(value: super::NativeShutdownParams) -> Self {
+            Self {
+                reason: Ok(value.reason),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeShutdownResult {
+        stopping: ::std::result::Result<bool, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeShutdownResult {
+        fn default() -> Self {
+            Self {
+                stopping: Err("no value supplied for stopping".to_string()),
+            }
+        }
+    }
+    impl NativeShutdownResult {
+        pub fn stopping<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<bool>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.stopping = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for stopping: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeShutdownResult> for super::NativeShutdownResult {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeShutdownResult,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                stopping: value.stopping?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeShutdownResult> for NativeShutdownResult {
+        fn from(value: super::NativeShutdownResult) -> Self {
+            Self {
+                stopping: Ok(value.stopping),
             }
         }
     }

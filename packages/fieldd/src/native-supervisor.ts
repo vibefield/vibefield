@@ -1,5 +1,10 @@
 import { EventEmitter } from "node:events";
-import { NATIVE_SUPERVISION, type NativeLinkState } from "@vibefield/contracts";
+import {
+  NATIVE_SUPERVISION,
+  type NativeLinkState,
+  type NativePrepareRestartParams,
+  NativePrepareRestartResult,
+} from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { NativeLink } from "./native-link";
 import { RpcCallError } from "./native-link";
@@ -112,6 +117,111 @@ export class NativeSupervisor extends EventEmitter {
       return; // the socket close → redial → respawn path takes it from here
     }
     await this.considerRespawn("manual restart requested");
+  }
+
+  /** WP12 L2b (`build-wp12-updater.md` §9 R2; the PM's ruling 2026-10-15 12:20Z) — stop the floor for an update, in
+   * ONE place and in this order:
+   *   1. suppress respawn (and the heartbeat: misses during the drain would read as a wedge);
+   *   2. `native.lifecycle.prepareRestart` — the intent the next boot reports as `lastExit`;
+   *   3. `native.lifecycle.shutdown` — the floor runs its own SIGTERM drain;
+   *   4. a bounded wait for the management socket to close — the witness;
+   *   5. the kill ladder ONLY if this fieldd holds a pid (a floor it spawned) and the wait passed.
+   * An ADOPTED floor — the update path's case by construction — has no pid: the socket closing is the whole witness,
+   * and one that does not close inside the bound is reported `lingering`, never signalled. The caller
+   * (`system.shutdown` in daemon.ts) has already matched the person's consent against the live set. */
+  async stopForUpdate(
+    intent: NativePrepareRestartParams,
+    bounds: { closeWaitMs?: number; rungMs?: number } = {},
+  ): Promise<"closed" | "forced" | "lingering"> {
+    const closeWaitMs = bounds.closeWaitMs ?? 5_000;
+    const rungMs = bounds.rungMs ?? 2_000;
+    const link = this.opts.link;
+    this.stop(); // 1
+    const fields = { reason: intent.reason, pid: this.pid ?? null };
+    try {
+      const answer = NativePrepareRestartResult.safeParse(
+        await link.request("native.lifecycle.prepareRestart", intent, { deadlineMs: rungMs }),
+      );
+      this.logger.info(
+        "fieldd.native_supervisor.restart_prepared",
+        "The floor recorded its restart intent",
+        {
+          ...fields,
+          recorded: answer.success ? answer.data.recorded : null,
+        },
+      );
+    } catch (error) {
+      // the stop goes on: a floor that could not record reads `unplanned` at its next boot — honest, not blocking
+      this.logger.warn(
+        "fieldd.native_supervisor.restart_intent_failed",
+        "The floor did not record its restart intent; its next boot will read unplanned",
+        { ...fields, error: error instanceof Error ? error.message : String(error) },
+      );
+    }
+    try {
+      await link.request(
+        "native.lifecycle.shutdown",
+        { reason: intent.reason },
+        { deadlineMs: rungMs },
+      );
+    } catch {
+      // a floor already draining may close before its reply lands; the socket closing is the witness either way
+    }
+    if (await this.closedWithin(closeWaitMs)) return this.stoppedForUpdate("closed", fields);
+    if (this.pid === undefined || !this.opts.killNative) {
+      this.logger.warn(
+        "fieldd.native_supervisor.stop_lingering",
+        "The floor did not close inside the bound, and this fieldd holds no pid for it (adopted): reported, never signalled",
+        { ...fields, closeWaitMs },
+      );
+      return "lingering";
+    }
+    const pid = this.pid;
+    this.logger.warn(
+      "fieldd.native_supervisor.stop_forced",
+      "The floor this fieldd spawned did not close inside the bound; the kill ladder is the backstop",
+      { ...fields, closeWaitMs },
+    );
+    this.opts.killNative(pid, "SIGTERM");
+    if (!(await this.closedWithin(rungMs))) {
+      this.opts.killNative(pid, "SIGKILL");
+      await this.closedWithin(rungMs);
+    }
+    return this.stoppedForUpdate("forced", fields);
+  }
+
+  /** Resolves true the moment the management link reports its socket closed, false when `ms` passes first. */
+  private closedWithin(ms: number): Promise<boolean> {
+    const link = this.opts.link;
+    if (!link.connected) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const done = (closed: boolean): void => {
+        clearTimeout(timer);
+        link.off("reconnecting", onClose);
+        link.off("closed", onClose);
+        resolve(closed);
+      };
+      const onClose = (): void => done(true);
+      const timer = setTimeout(() => done(!link.connected), ms);
+      link.on("reconnecting", onClose);
+      link.on("closed", onClose);
+    });
+  }
+
+  private stoppedForUpdate(
+    how: "closed" | "forced",
+    fields: Record<string, unknown>,
+  ): "closed" | "forced" {
+    this.setState("gone", "stopped for an app update; the next shell starts a fresh floor");
+    this.logger.info(
+      "fieldd.native_supervisor.stopped_for_update",
+      "The floor stopped for an update",
+      {
+        ...fields,
+        how,
+      },
+    );
+    return how;
   }
 
   stop(): void {

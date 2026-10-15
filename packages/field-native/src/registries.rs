@@ -147,6 +147,7 @@ pub mod terminal_pipeline_close_codes {
 pub mod files {
     pub const TERMINAL_CONFIG: &str = "config.ghostty";
     pub const CUSTODY_ADMISSION_LEDGER: &str = "custody-admission.v1.json";
+    pub const RESTART_INTENT: &str = "restart-intent.json";
 }
 
 /// UA-D10 — the on-disk layout under a data root, as segments. One authority;
@@ -170,6 +171,7 @@ pub mod layout {
     pub const TERMINAL_BINDINGS_FILE: &[&str] = &["fieldd", "terminal-bindings.json"];
     pub const PROJECT_IDENTITY_FILE: &[&str] = &["fieldd", "project-identity.json"];
     pub const TERMINAL_CONFIG_FILE: &[&str] = &["native", "config.ghostty"];
+    pub const RESTART_INTENT_FILE: &[&str] = &["native", "restart-intent.json"];
     pub const MGMT_SOCKET: &[&str] = &["native", "run", "mgmt.sock"];
     pub const MESHDATA_SOCKET: &[&str] = &["native", "run", "meshdata.sock"];
     pub const TERMINAL_CONTROL_SOCKET: &[&str] = &["native", "run", "termctl.sock"];
@@ -227,6 +229,7 @@ pub mod layout {
         ("TERMINAL_BINDINGS_FILE", TERMINAL_BINDINGS_FILE),
         ("PROJECT_IDENTITY_FILE", PROJECT_IDENTITY_FILE),
         ("TERMINAL_CONFIG_FILE", TERMINAL_CONFIG_FILE),
+        ("RESTART_INTENT_FILE", RESTART_INTENT_FILE),
         ("MGMT_SOCKET", MGMT_SOCKET),
         ("MESHDATA_SOCKET", MESHDATA_SOCKET),
         ("TERMINAL_CONTROL_SOCKET", TERMINAL_CONTROL_SOCKET),

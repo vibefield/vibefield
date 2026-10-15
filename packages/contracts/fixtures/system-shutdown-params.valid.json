@@ -1,0 +1,7 @@
+{
+  "native": {
+    "stop": true,
+    "sessions": ["01JA7SESSIONAAAAAAAAAAAAAA", "01JA7SESSIONBBBBBBBBBBBBBB"],
+    "toVersion": "0.9.0+2490459"
+  }
+}

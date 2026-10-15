@@ -197,6 +197,14 @@ export const TerminalRouteSnapshot = z
   .passthrough();
 export type TerminalRouteSnapshot = z.infer<typeof TerminalRouteSnapshot>;
 
+/** WP12 L2b (`build-wp12-updater.md` §9 R3) — how the floor BEFORE this boot ended, read once at boot from the
+ * restart intent `native.lifecycle.prepareRestart` records (`<data>/native/restart-intent.json`, presence-encoded):
+ * `planned` = the intent was there and parsed — the previous floor was stopped for an update; `unplanned` = no intent
+ * was recorded (a crash, a kill, a logout, a reboot, a first boot), and a file that does not parse reads `unplanned`
+ * too (biased safe). Provenance for doctor and the logs, never parsed for behavior. */
+export const NativeLastExit = z.enum(["planned", "unplanned"]);
+export type NativeLastExit = z.infer<typeof NativeLastExit>;
+
 export const HelloAck = z
   .object({
     contractsVersion: SemverString,
@@ -266,6 +274,9 @@ export const HelloAck = z
      * be restarted once before a newer fieldd will pair with it, which is a
      * pair bounce, and the refusal says so. */
     serverMac: z.string().optional(),
+    /** WP12 L2b — mgmt surface only: how the previous floor ended (`NativeLastExit`). Absent on every product
+     * ack and from a floor predating it; a tolerant reader treats absence as "this floor cannot say". */
+    lastExit: NativeLastExit.optional(),
   })
   .passthrough();
 export type HelloAck = z.infer<typeof HelloAck>;

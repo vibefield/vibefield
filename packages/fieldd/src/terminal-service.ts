@@ -401,6 +401,14 @@ export class TerminalService {
    * interactive cell, which answered "unknown session", and its husk stood on
    * the agent cell for good. A terminate that lands forgets it at once. */
   private readonly bornIn = new Map<string, string>();
+  /** WP12 L2b (`build-wp12-updater.md` §9 R2) — the consented stop's census reads the observed inventory PLUS what
+   * this service birthed and the floor has not listed yet (GT-1: create outruns the inventory by design), and counts
+   * births still in flight, so a session the person never saw cannot end without their consent. */
+  private readonly bornUnseen = new Set<string>();
+  private birthsInFlight = 0;
+  /** Set while a consented stop is deciding or underway: `create`/`spawn` refuse instead of birthing a session the
+   * consent never named. */
+  private closedToBirths = false;
   /** Which floor observation `terminals` came from — undefined until the first
    * one applies, which is exactly the state `list`/`get` refuse in. */
   private lastObservation: TerminalObservation | undefined;
@@ -553,7 +561,10 @@ export class TerminalService {
         if (parsed.success) {
           this.terminals = parsed.data.terminals;
           // a placed session follows its tag from here on (see `bornIn`)
-          for (const terminal of this.terminals) this.bornIn.delete(terminal.sessionId);
+          for (const terminal of this.terminals) {
+            this.bornIn.delete(terminal.sessionId);
+            this.bornUnseen.delete(terminal.sessionId);
+          }
           // SB-2 — a bound shell's record ends with its session
           this.bindings.observe(this.terminals.map((terminal) => terminal.sessionId));
           // Kept, not discarded (GT-5b): these two fields are what let a
@@ -1051,6 +1062,7 @@ export class TerminalService {
     bound: boolean;
     profileSet?: string | undefined;
   }> {
+    this.refuseWhileStopping();
     // TC-D6(d) — the per-pair session cap at the create seam, counted from the
     // observed inventory WHEN THERE IS ONE. Before the first observation the
     // cap has nothing to count and create must NOT gate on observation —
@@ -1265,6 +1277,7 @@ export class TerminalService {
     session: TerminalRuntimeSession;
     cellBootId?: string | undefined;
   }> {
+    this.refuseWhileStopping();
     if (this.observation() !== undefined && this.terminals.length >= TERMINAL_SESSION_CAP) {
       throw new RpcCallError(
         "RESOURCE_EXHAUSTED",
@@ -1354,9 +1367,11 @@ export class TerminalService {
     session: TerminalRuntimeSession;
     cellBootId?: string | undefined;
   }> {
+    this.birthsInFlight += 1;
     try {
       const summary = await client.createSession(options);
       if (cell.key !== LEGACY_CELL_KEY) this.bornIn.set(summary.id, cell.key);
+      this.bornUnseen.add(summary.id);
       // The routed renderer needs the engine's real decimal handle before it
       // can mount. Carry the summary from the birth that already has it;
       // waiting for observed inventory here would recreate GT-1's race.
@@ -1452,6 +1467,8 @@ export class TerminalService {
             }]`,
         true,
       );
+    } finally {
+      this.birthsInFlight -= 1;
     }
   }
 
@@ -1749,6 +1766,34 @@ export class TerminalService {
 
   // ---- internals ----
 
+  /** WP12 L2b (§9 R2) — the consented stop's census, read with the service CLOSED to births: from here until
+   * `reopenToBirths`, `create`/`spawn` refuse. `live` is the observed inventory plus every session this service
+   * birthed and the floor has not listed yet; `births` counts births still in flight (any is a refusal for the
+   * caller — a session is being born the consent never named). undefined = the inventory was never observed, which
+   * the caller refuses as `unobserved`: fieldd may not claim a floor holds nothing it has not seen. */
+  closeToBirthsForStop(): { live: string[]; births: number } | undefined {
+    this.closedToBirths = true;
+    if (this.lastObservation === undefined) return undefined;
+    const live = new Set(this.terminals.map((terminal) => terminal.sessionId));
+    for (const sessionId of this.bornUnseen) live.add(sessionId);
+    return { live: [...live].sort(), births: this.birthsInFlight };
+  }
+
+  /** The stop was refused: births are welcome again. */
+  reopenToBirths(): void {
+    this.closedToBirths = false;
+  }
+
+  private refuseWhileStopping(): void {
+    if (!this.closedToBirths) return;
+    throw new RpcCallError(
+      "UNAVAILABLE",
+      "the terminal floor is stopping for an app update; no new session can start until it restarts",
+      true,
+      { service: "terminal", state: "restarting" },
+    );
+  }
+
   /** The refusal `list`/`get` owe a caller before the first snapshot applies. */
   private requireObserved(): void {
     if (this.lastObservation !== undefined) return;
@@ -2000,6 +2045,8 @@ export class TerminalService {
       // the birth cell outlives the exit: a listener below may close the husk (see `bornIn`)
       const { sessionId } = event;
       setTimeout(() => this.bornIn.delete(sessionId), BORN_IN_EXIT_GRACE_MS).unref?.();
+      // WP12 L2b — a birth that ended before any inventory listed it is no longer live
+      this.bornUnseen.delete(sessionId);
       // SB-2 — a bound birth that ended before any inventory listed it waits
       // no longer: the next inventory without it ends its record
       this.bindings.exited(sessionId);

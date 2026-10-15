@@ -70,6 +70,10 @@
     "native",
     "config.ghostty"
   ],
+  "RESTART_INTENT_FILE": [
+    "native",
+    "restart-intent.json"
+  ],
   "MGMT_SOCKET": [
     "native",
     "run",

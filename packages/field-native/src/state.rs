@@ -144,6 +144,9 @@ pub struct DaemonState {
     /// Process-owned native diagnostic producer. Embedded unit tests omit it;
     /// the production main installs it before service composition.
     pub logging: Option<NativeLogging>,
+    /// WP12 L2b (`build-wp12-updater.md` §9 R2/R3) — the restart intent's file, how the previous floor ended, and
+    /// the request that stops this floor. Configured at boot; embedded unit daemons leave it unconfigured.
+    pub restart: crate::restart::RestartControl,
     next_conn_id: AtomicU64,
     next_sub_id: AtomicU64,
 }
@@ -177,6 +180,7 @@ impl DaemonState {
             terminal_routes,
             terminal_mesh,
             logging,
+            restart: crate::restart::RestartControl::default(),
             next_conn_id: AtomicU64::new(1),
             next_sub_id: AtomicU64::new(1),
         })

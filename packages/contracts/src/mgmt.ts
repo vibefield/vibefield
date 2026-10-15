@@ -186,6 +186,43 @@ export type NativeLinkState = z.infer<typeof NativeLinkState>;
 export const PingAck = z.object({ bootId: z.string(), ts: z.number().int() }).passthrough();
 export type PingAck = z.infer<typeof PingAck>;
 
+/** WP12 L2b (`build-wp12-updater.md` §9 R2/R3) — why the floor is asked to restart. One reason today: an app update
+ * that touches field-native, after the person's consent or at census zero (EDP-33/35). */
+export const NativeRestartReason = z.enum(["update"]);
+export type NativeRestartReason = z.infer<typeof NativeRestartReason>;
+
+/** `native.lifecycle.prepareRestart` — record the restart intent BEFORE the floor is stopped, so the next boot can
+ * tell a planned stop from a crash (`HelloAck.lastExit`). The floor writes `<data>/native/restart-intent.json`
+ * atomically; its presence is the encoding. Authorization is the single-client rule: only the current paired
+ * client is served, and a superseded connection's call refuses `UNAUTHORIZED` ("this connection was superseded by
+ * a newer management client") before any effect. */
+export const NativePrepareRestartParams = z
+  .object({
+    reason: NativeRestartReason,
+    /** the app version the restart installs — provenance for the logs, never parsed for behavior */
+    toVersion: z.string().min(1).max(128).optional(),
+  })
+  .passthrough();
+export type NativePrepareRestartParams = z.infer<typeof NativePrepareRestartParams>;
+
+export const NativePrepareRestartResult = z.object({ recorded: z.boolean() }).passthrough();
+export type NativePrepareRestartResult = z.infer<typeof NativePrepareRestartResult>;
+
+/** `native.lifecycle.shutdown` — the floor stops ITSELF: it replies, then runs the same graceful drain SIGTERM runs
+ * (a third arm of field-native's `shutdown_signal()`; the terminal unit's G7 drain ends the cells and their PTYs, as
+ * kill-matrix row S2-B and the Rust SIGTERM sweep pin), and exits. No signal and no pid: an ADOPTED floor — the
+ * update path's case by construction — has no pid fieldd could aim at, and on Windows a signal is a hard kill.
+ *
+ * Authorization is the single-client rule and nothing else: field-native serves only the current paired client,
+ * so a superseded connection's call refuses `UNAUTHORIZED` ("this connection was superseded by a newer management
+ * client") before any effect, exactly as every other mutating verb does. fieldd calls it only inside its own
+ * consented stop (`system.shutdown` with `native`: the live set equals the set the person consented to end). */
+export const NativeShutdownParams = z.object({ reason: NativeRestartReason }).passthrough();
+export type NativeShutdownParams = z.infer<typeof NativeShutdownParams>;
+
+export const NativeShutdownResult = z.object({ stopping: z.boolean() }).passthrough();
+export type NativeShutdownResult = z.infer<typeof NativeShutdownResult>;
+
 /** TC-D1/TC-D2 supervision timings (fieldd-side). Detection-to-STATE is ≤250ms
  * (two misses of interval+deadline 100/100); the DESTRUCTIVE step (kill +
  * respawn of a wedged floor) waits out WEDGE_CONFIRM_MS of continued misses,

@@ -141,6 +141,10 @@ import {
   MeshLanePeerOpened,
   MeshSelfIdentity,
   NativeHealth,
+  NativePrepareRestartParams,
+  NativePrepareRestartResult,
+  NativeShutdownParams,
+  NativeShutdownResult,
   ObservedState,
   PeerInfo,
   ServeConfig,
@@ -210,7 +214,14 @@ import {
   TransportCredit,
 } from "../src/terminal-pipeline";
 import { TrustRoot } from "../src/trust-root";
-import { ChannelHeads, UpdateClientStateFile, UpdatePolicy } from "../src/update-policy";
+import {
+  ChannelHeads,
+  RestartScheduled,
+  SystemShutdownParams,
+  SystemShutdownResult,
+  UpdateClientStateFile,
+  UpdatePolicy,
+} from "../src/update-policy";
 import {
   WorkspaceCloseTicketParams,
   WorkspaceCloseTicketResult,
@@ -245,6 +256,15 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures")
 const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   hello: Hello,
   "hello-ack": HelloAck,
+  // WP12 L2b (build-wp12-updater.md §9 R2/R3) — the floor's restart intent and its self-stop (both generated for
+  // field-native, parity-checked in fixture_parity.rs), and the product side of the consented stop (TS-only).
+  "native-prepare-restart-params": NativePrepareRestartParams,
+  "native-prepare-restart-result": NativePrepareRestartResult,
+  "native-shutdown-params": NativeShutdownParams,
+  "native-shutdown-result": NativeShutdownResult,
+  "system-shutdown-params": SystemShutdownParams,
+  "system-shutdown-result": SystemShutdownResult,
+  "restart-scheduled": RestartScheduled,
   "rpc-request": RpcRequest,
   "rpc-response": RpcResponse,
   // SP-1 — the door's keepalive notification, whole (no id)
