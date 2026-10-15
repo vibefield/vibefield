@@ -156,6 +156,22 @@ Device runs: open the project in Xcode — automatic signing with the committed
 team (`DEVELOPMENT_TEAM` landed in IOS-1a, the desktop's frozen-identity
 precedent; a Team ID is public material).
 
+**Reading an attach on a device** (fix8, 2026-10-15). Every phase of a
+terminal attach writes one line: the tap, the mint asked and answered, the leg
+slot, each leg dialing, the mesh's session asked for and made (with its
+milliseconds), the hello sent, accepted or refused, control and frames
+acknowledged, the first frame, a step's deadline (`stopped waiting at dial
+after 20 s`), a run's end. They go to the unified log as subsystem
+`com.jamesyong.vibefield.kit`, category `attach` — Console.app with the phone
+selected, filtered `subsystem:com.jamesyong.vibefield.kit category:attach` —
+and a Debug build also prints each as `[attach] …` on stdout, which is what a
+`devicectl … --console` capture carries (it does not carry the unified log). A
+Debug build also watches its main thread: one that has not answered for 2 s
+writes `main thread stalled N s, last attach phase: …` through the same path,
+and `main thread answered again after N s` when it does. No line carries a
+grant, a MAC, a nonce, a URL or a login — a door's cell boot id, a session id,
+a refusal's code and an error's domain and number are the most it says.
+
 For installation and updates on an iPhone away from the Mac, follow
 [the TestFlight setup](TESTFLIGHT.md). The release helper builds a signed
 device archive and uploads it using Xcode's existing Apple account:

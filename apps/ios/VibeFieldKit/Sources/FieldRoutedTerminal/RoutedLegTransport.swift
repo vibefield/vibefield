@@ -46,6 +46,8 @@ public struct URLSessionRoutedTransport: RoutedLegTransport {
 
   private let configuration: URLSessionConfiguration
   private let provider: SessionProvider
+  /// fix8 — where the session factory's bracket is written.
+  private let log: TerminalAttachLog
 
   /// The biggest frame this client will take.
   ///
@@ -59,20 +61,52 @@ public struct URLSessionRoutedTransport: RoutedLegTransport {
   /// spend this process's memory a message at a time.
   public static let maximumFrameBytes = 4 * 1024 * 1024
 
-  public init(timeout: TimeInterval = 15, session: SessionProvider? = nil) {
+  public init(
+    timeout: TimeInterval = 15, session: SessionProvider? = nil, log: TerminalAttachLog = .silent
+  ) {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.timeoutIntervalForRequest = timeout
     configuration.waitsForConnectivity = false
     self.configuration = configuration
     self.provider = session ?? { URLSession(configuration: $0) }
+    self.log = log
   }
 
   public func connect(to url: URL) async throws -> any RoutedLegConnection {
-    let session = try await provider(configuration)
+    // fix8 — the session factory, bracketed: on the phone it is the mesh's
+    // `node.urlSession(configuration:)`, and PJ-7's second run could not tell
+    // whether a leg's call to it ever came back.
+    let leg = Self.legLabel(url)
+    log("\(leg): asking the mesh for a session")
+    let asked = ContinuousClock.now
+    let session: URLSession
+    do {
+      session = try await provider(configuration)
+    } catch {
+      log.error(
+        "\(leg): no mesh session after \(Self.milliseconds(since: asked)) ms — "
+          + TerminalAttachLog.reason(error))
+      throw error
+    }
+    log("\(leg): mesh session in \(Self.milliseconds(since: asked)) ms")
     let task = session.webSocketTask(with: url)
     task.maximumMessageSize = Self.maximumFrameBytes
     task.resume()
     return WebSocketLeg(task: task, session: session)
+  }
+
+  /// A leg as its lines name it — `leg control cell=<boot id>` — from the
+  /// door's PATH alone: never its host, never its query.
+  public static func legLabel(_ url: URL) -> String {
+    let parts = url.pathComponents
+    let channel = parts.last ?? "-"
+    let cell = parts.count >= 2 ? parts[parts.count - 2] : "-"
+    return "leg \(channel) cell=\(cell)"
+  }
+
+  public static func milliseconds(since start: ContinuousClock.Instant) -> Int64 {
+    let parts = (ContinuousClock.now - start).components
+    return parts.seconds * 1000 + parts.attoseconds / 1_000_000_000_000_000
   }
 }
 

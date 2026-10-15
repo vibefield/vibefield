@@ -41,6 +41,7 @@ public struct TerminalAttachLog: Sendable {
 
   /// The device's: the unified log, and stdout in DEBUG.
   public static let device = TerminalAttachLog { level, line in
+    memory.write(line)
     switch level {
     case .info: logger.notice("\(line, privacy: .public)")
     case .error: logger.error("\(line, privacy: .public)")
@@ -53,11 +54,36 @@ public struct TerminalAttachLog: Sendable {
   /// Nothing written — for the rows that do not read the lines.
   public static let silent = TerminalAttachLog { _, _ in }
 
+  /// The newest line written through `device`: the main-thread stall witness
+  /// says it beside a stall, which places a stopped main thread in the attach.
+  public static var lastLine: String? { memory.read() }
+
+  private static let memory = LineMemory()
+
   /// An error's domain and number, never its description: a URL error's
   /// description carries the URL it failed on.
   public static func reason(_ error: any Error) -> String {
     if error is CancellationError { return "cancelled" }
     let bridged = error as NSError
     return "\(bridged.domain) \(bridged.code)"
+  }
+}
+
+/// One line, kept under a lock: written from whichever isolation logs, read by
+/// the witness's own queue.
+private final class LineMemory: @unchecked Sendable {
+  private let lock = NSLock()
+  private var line: String?
+
+  func write(_ next: String) {
+    lock.lock()
+    line = next
+    lock.unlock()
+  }
+
+  func read() -> String? {
+    lock.lock()
+    defer { lock.unlock() }
+    return line
   }
 }

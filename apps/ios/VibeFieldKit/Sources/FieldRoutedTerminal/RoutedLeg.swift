@@ -80,6 +80,9 @@ final class RoutedLeg {
   static let maximumBufferedBytes = 4 * 1024 * 1024
   private var heartbeatSequence: Int64 = 0
   private var stopped = false
+  /// fix8 — this leg's lines, under its name (`leg control cell=…`).
+  private let log: TerminalAttachLog
+  private let label: String
 
   /// The floor on the heartbeat interval. The cadence is the CELL's TTL divided
   /// by three (two missed beats still leave a third inside the window), and the
@@ -89,17 +92,22 @@ final class RoutedLeg {
   private static let heartbeatDivisor = 3
 
   init(
-    channel: RoutedChannel, url: URL, transport: any RoutedLegTransport, callbacks: Callbacks
+    channel: RoutedChannel, url: URL, transport: any RoutedLegTransport, callbacks: Callbacks,
+    log: TerminalAttachLog = .silent
   ) {
     self.channel = channel
     self.url = url
     self.transport = transport
     self.callbacks = callbacks
+    self.log = log
+    label = URLSessionRoutedTransport.legLabel(url)
   }
 
   /// Dial, and send the hello as the FIRST frame — the door's own rule, and the
   /// reason nothing else may be sent until an accept has been read.
   func open(hello: JSONValue) {
+    log("\(label): dialing")
+    let dialed = ContinuousClock.now
     // `Task` inherits this method's actor context, so the whole pump runs on the
     // main actor: every `await` suspends without blocking it, and the state this
     // leg touches never needs a second isolation to reason about.
@@ -113,6 +121,13 @@ final class RoutedLeg {
           return
         }
         try await connection.send(.text(text))
+        // The first send completes only once the WebSocket handshake has: this
+        // line is the socket open, not merely asked for.
+        if !self.stopped {
+          self.log(
+            "\(self.label): hello sent \(URLSessionRoutedTransport.milliseconds(since: dialed)) ms "
+              + "after dialing")
+        }
         while !Task.isCancelled {
           let frame = try await connection.receive()
           if self.receive(frame) { return }
@@ -128,7 +143,10 @@ final class RoutedLeg {
         case .some(let code):
           self.fail(.closed(code: code, reason: Self.name(of: code)))
         case .none:
-          self.fail(.dropped(String(describing: error)))
+          // the line carries the error's domain and number; its description
+          // can carry the door's URL
+          self.log.error("\(self.label): dropped — \(TerminalAttachLog.reason(error))")
+          self.fail(.dropped(String(describing: error)), said: true)
         }
       }
     }
@@ -230,6 +248,7 @@ final class RoutedLeg {
           return true
         }
         phase = .refused(refusal.code)
+        log.error("\(label): refused \(refusal.code)")
         callbacks.onRefused(refusal)
         return true
       case .legHeartbeatAck:
@@ -267,6 +286,7 @@ final class RoutedLeg {
     }
     self.accepted = accepted
     phase = .accepted
+    log("\(label): accepted, leg generation \(accepted.legGeneration)")
     startHeartbeat(ttlMs: accepted.heartbeatTtlMs, connectionSetId: accepted.connectionSetId,
       legGeneration: accepted.legGeneration)
     callbacks.onAccepted(accepted)
@@ -301,8 +321,11 @@ final class RoutedLeg {
     }
   }
 
-  private func fail(_ failure: RoutedLegFailure) {
+  /// `said`: the line was already written where the error was in hand — a
+  /// socket's error is said by its domain and number, never its description.
+  private func fail(_ failure: RoutedLegFailure, said: Bool = false) {
     guard !stopped else { return }
+    if !said { log.error("\(label): \(String(failure.description.prefix(200)))") }
     stopped = true
     phase = .failed(failure)
     heartbeat?.cancel()

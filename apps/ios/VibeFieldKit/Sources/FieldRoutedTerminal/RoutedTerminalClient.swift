@@ -232,7 +232,7 @@ public final class RoutedTerminalClient {
       capacities: RoutedReceiverCapacities = .phone,
       legBudget: PhoneConnectionBudget? = nil,
       stepDeadline: Duration = .seconds(20),
-      log: TerminalAttachLog = .device
+      log: TerminalAttachLog = .silent
     ) {
       self.ticketProvider = ticketProvider
       self.renewalProvider = renewalProvider
@@ -739,6 +739,11 @@ public final class RoutedTerminalClient {
     //
     // fix8 — and waits no longer than a step may (`AttachStep.slot`): a slot
     // nobody gives back is torn down by the deadline, which cancels this wait.
+    let log = options.log
+    log(
+      "slot asked — \(ledger.inUse(.terminalLegs)) of \(ledger.limit(.terminalLegs)) legs in use, "
+        + "\(ledger.waiting(for: .terminalLegs)) waiting")
+    let asked = ContinuousClock.now
     legGrantTask = Task { [weak self] in
       let legs = RoutedChannel.allCases.count
       guard let grant = try? await ledger.acquire(.terminalLegs, count: legs) else { return }
@@ -751,6 +756,7 @@ public final class RoutedTerminalClient {
       }
       self.legGrantTask = nil
       self.legGrant = grant
+      log("slot granted after \(URLSessionRoutedTransport.milliseconds(since: asked)) ms")
       self.openLegs(ticket, token: token)
       self.reconcileStep()
     }
@@ -784,10 +790,10 @@ public final class RoutedTerminalClient {
 
     control = RoutedLeg(
       channel: .control, url: ticket.endpoints.controlUrl, transport: transport,
-      callbacks: callbacks(for: .control, token: token))
+      callbacks: callbacks(for: .control, token: token), log: options.log)
     frames = RoutedLeg(
       channel: .frames, url: ticket.endpoints.framesUrl, transport: transport,
-      callbacks: callbacks(for: .frames, token: token))
+      callbacks: callbacks(for: .frames, token: token), log: options.log)
     control?.open(hello: hello(.control))
     frames?.open(hello: hello(.frames))
   }
@@ -917,6 +923,9 @@ public final class RoutedTerminalClient {
       guard var session = sessions[attached.sessionId],
         session.activationId == attached.activationId
       else { return }
+      if session.control != .attached {
+        options.log("control acknowledged session=\(attached.sessionId)")
+      }
       session.control = .attached
       // A rights DOWNGRADE applies the moment the cell accepts the newer
       // generation — the accepted rights are the cell's answer, never the ones
@@ -980,6 +989,11 @@ public final class RoutedTerminalClient {
       }
       session.identity = attached.trfIdentity
       session.resumeToken = attached.resumeToken
+      switch attached.outcome {
+      case .resumeAccepted: options.log("frames acknowledged session=\(attached.sessionId), resuming")
+      case .seedRequired(let reason):
+        options.log("frames acknowledged session=\(attached.sessionId), seeding (\(reason))")
+      }
       switch attached.outcome {
       case .resumeAccepted(let from, _):
         session.frames = .resuming
@@ -1192,6 +1206,9 @@ public final class RoutedTerminalClient {
               // again forever.
               self.repairRefused(sessionId: sessionId, activationId: activationId)
             }
+            // fix8 — the frame landed a hop after its unit: the attach's step
+            // moves here (the first frame), not at the unit
+            self.reconcileStep()
           }
         }
       } catch {
@@ -1239,6 +1256,9 @@ public final class RoutedTerminalClient {
           // cannot back up and marks the lineage broken instead.
           self.lineageBroke(sessionId: sessionId, activationId: activationId)
         }
+        // fix8 — the frame landed a hop after its unit: the attach's step moves
+        // here (the first frame), not at the unit
+        self.reconcileStep()
       }
     }
   }
@@ -1710,9 +1730,9 @@ public final class RoutedTerminalClient {
   /// Move `step` to what the client now holds, arming that step's deadline.
   private func reconcileStep() {
     if let sessionId = ticket?.sessionId, let session = sessions[sessionId],
-      session.presentationReady
+      session.presentationReady, presented.insert(session.activationId).inserted
     {
-      presented.insert(session.activationId)
+      options.log("first frame presented — live session=\(sessionId)")
     }
     let next = derivedStep
     guard next != step else { return }
@@ -1738,6 +1758,11 @@ public final class RoutedTerminalClient {
   /// this generation — and the state says where it stopped.
   private func stall(at step: AttachStep) {
     lastRefusal = "the attach stopped waiting at \(step.rawValue)"
+    let parts = options.stepDeadline.components
+    let seconds = max(1, parts.seconds + (parts.attoseconds > 0 ? 1 : 0))
+    options.log.error(
+      "stopped waiting at \(step.rawValue) after \(seconds) s "
+        + "session=\(ticket?.sessionId ?? "-") cell=\(ticket?.route.cellBootId ?? "-")")
     teardown()
     state = .stalled(step)
     reconcileStep()
@@ -1745,6 +1770,13 @@ public final class RoutedTerminalClient {
 
   /// A `ticketProvider` call starting or ending, for `derivedStep`.
   private func mint(began: Bool, for sessionId: String, refused: (any Error)? = nil) {
+    if began {
+      options.log("ticket asked again session=\(sessionId)")
+    } else if let refused {
+      options.log.error("ticket refused session=\(sessionId) — \(TerminalAttachLog.reason(refused))")
+    } else {
+      options.log("ticket answered session=\(sessionId)")
+    }
     mintInFlight = began
     reconcileStep()
   }

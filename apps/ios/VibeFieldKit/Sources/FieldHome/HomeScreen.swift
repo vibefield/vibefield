@@ -275,6 +275,9 @@ public struct HomeScreen: View {
     .fullScreenCover(isPresented: swarmLabBinding) { SwarmLabView(focus: swarmLabFocusValue) }
     .onAppear {
       #if DEBUG
+        // fix8 — a main thread that stops answering for 2 s is said on the
+        // console, beside the attach's last phase; a second start is nothing
+        MainThreadWitness.shared.start()
         if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-vf-demo-workspace=") }) {
           workspaceLaunch = WorkspaceFixtureDoor.model()
           createSheet = workspaceLaunch

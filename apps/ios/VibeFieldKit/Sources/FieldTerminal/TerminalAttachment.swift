@@ -196,8 +196,8 @@ public final class TerminalAttachment {
     log: TerminalAttachLog = .device
   ) {
     self.init(
-      transport: URLSessionRoutedTransport(session: session), appearance: appearance, door: door,
-      renewal: renewal, budget: budget, deadline: deadline, log: log)
+      transport: URLSessionRoutedTransport(session: session, log: log), appearance: appearance,
+      door: door, renewal: renewal, budget: budget, deadline: deadline, log: log)
   }
 
   /// The seam the tests hold: a transport with no sockets behind it. Every
@@ -294,6 +294,7 @@ public final class TerminalAttachment {
     frame = nil
     attachID &+= 1
     let attach = attachID
+    log("tap: attach session=\(sessionID) on \(deviceName ?? "that desktop")")
     attachTask?.cancel()
     attachTask = Task { [weak self] in
       guard let self else { return }
@@ -303,17 +304,26 @@ public final class TerminalAttachment {
       // because a mint that is refused has no socket to report itself on: the
       // door's sentence is the whole answer and it must reach a face.
       let ticket: RoutedTerminalTicket
+      self.log("mint asked session=\(sessionID)")
+      let asked = ContinuousClock.now
       do {
         ticket = try await self.mint(for: sessionID, within: self.deadline)
       } catch is MintDeadline {
         guard attach == self.attachID, !Task.isCancelled else { return }
+        self.log.error(
+          "mint stopped after \(Self.seconds(self.deadline)) s session=\(sessionID)")
         self.localPhase = .stalled(Self.stallWords(.ticket, after: self.deadline))
         return
       } catch {
         guard attach == self.attachID, !Task.isCancelled else { return }
+        let words = self.doorRefusal ?? TerminalAttachLog.reason(error)
+        self.log.error("mint refused: \(words)")
         self.localPhase = .refused(self.doorRefusal ?? Self.shortReason(error))
         return
       }
+      self.log(
+        "mint answered session=\(sessionID) cell=\(ticket.route.cellBootId) in "
+          + "\(URLSessionRoutedTransport.milliseconds(since: asked)) ms")
       guard attach == self.attachID, !Task.isCancelled else { return }
       self.open(ticket, sessionID: sessionID, attach: attach)
     }
@@ -335,6 +345,9 @@ public final class TerminalAttachment {
     client = nil
     sink = nil
     localPhase = .ended(Self.runEndedWords(device: deviceName))
+    log(
+      "run exited on \(deviceName ?? "that desktop") — attach stopped "
+        + "session=\(sessionID ?? "-")")
   }
 
   nonisolated static func runEndedWords(device: String?) -> String {
@@ -373,6 +386,7 @@ public final class TerminalAttachment {
 
   /// The user's own act — the one legitimate road back to `idle`.
   public func detach() async {
+    log("detached session=\(sessionID ?? "-")")
     attachTask?.cancel()
     attachTask = nil
     await teardown(resetPhase: true)
@@ -704,6 +718,7 @@ public final class TerminalAttachment {
   /// scene.
   public func resumeFromForeground() {
     guard let sessionID else { return }
+    log("back in the foreground session=\(sessionID)")
     if case .suspended = phase {
       // The re-attach takes the seat itself (`open`).
       attach(sessionID: sessionID, cols: grid.columns, rows: grid.rows, deviceName: deviceName)
@@ -724,6 +739,7 @@ public final class TerminalAttachment {
   /// between a state this phone chose and one it discovered later.
   public func suspendForBackground() {
     guard client != nil else { return }
+    log("suspended in the background session=\(sessionID ?? "-")")
     client?.close()
     client = nil
     sink = nil
