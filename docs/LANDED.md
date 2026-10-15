@@ -10467,3 +10467,71 @@ Plan: `draft/specs/build-wp8-bundled-plugins.md` (with its §10 addendum).
 - The plan's owed items stand, named, not this lane's:
   - after an update, adoption keeps an old fieldd's roots (WP12c);
   - a second `sidecar-slim` rides inside `app.asar` (WP10).
+
+## RD-1 + RD-2 — one lock, two coordinates, two shapes: a sibling's `release` is its prod coordinate, `pnpm siblings render --prod` writes the committed rows and the pre-commit hook holds them, and `pnpm siblings use NAME` links a released sibling through a gitignored root `.pnpmfile.cjs` with a dev lockfile — the committed lock is never the overlay's (2026-10-15; `60eb1cf5` `c4431a62`)
+
+**Why:** thinking-release-deps.md §2/§3/§5 — the fourth rung of the prod-builder brief's order (RD-0…RD-4, then RD-6):
+the committed repo in prod shape, development a local overlay generated from the same lock, one verb to link a sibling
+and one to stand on the published pins again. RD-1 builds the verbs and the mode; RD-2 is the npm spike that decides
+how pnpm installs the overlay. They land together (the PM's call: one story on the RD row).
+
+**What landed:**
+- **RD-1 (`60eb1cf5`).** `siblings.lock.json` gains a `release` block per entry — the prod coordinate per plane (`npm`:
+  one exact version for all the sibling's `packages`; `cargo`: `{ git, rev }`). A plane with a release is committed
+  exact; one without stays committed as its link:/path rows. rosetta's entry carries both coordinates (`packages`
+  clients/ts and clients/room — the overlay's link targets — and `release.npm` 0.1.1). `scripts/siblings.mjs`:
+  `render --prod [--check] [--staged]` writes (or compares) the committed overrides and `[patch.crates-io]` rows from
+  the lock, in place (on today's tree a no-op: "12 npm, 6 cargo"); `use NAME…`, `use --none`, bare `use`; `status`
+  prints the shape first; `siblingShape` is the one derivation of the shape (preflight, status and use print it in the
+  same words, the overlay marked); `linkedPackages` the one answer to "which packages are linked here" (check:deps asks
+  it); the Nx stamp carries the overlay. Preflight checks each package's committed row as the lock renders it. A new
+  `scripts/git-hooks/pre-commit` runs `render --prod --check --staged`: a commit whose staged rows its own lock does not
+  render is refused in words (SKIP_SHAPE=1 bypasses, said in the commit). `pnpm siblings` is the bare CLI.
+- **RD-2 (`c4431a62`).** The overlay is a gitignored ROOT `.pnpmfile.cjs` that pnpm loads for every command. Its
+  `updateConfig` sets the overrides (each linked package → `link:` its checkout; every relative link: row made absolute),
+  `lockfileDir` (the dev lock, `.vibefield/dev/pnpm-lock.yaml`) and `virtualStoreDir` (the tree's one store); its
+  `readPackage` gives the root manifest the linked packages' own dependencies. `use NAME` seeds the dev lock from the
+  committed one (importers rebased) and installs; a root `postinstall` (`siblings.mjs align`) links each linked package's
+  dependencies and peers into its checkout and re-points pnpm's hidden hoist; `use --none` installs the committed lock
+  frozen and points the hoist back at the store's release copy; every switch ends with `ensureElectronBinary`.
+  Preflight FAILS a root pnpmfile with no overlay recorded and WARNs an overlay that is not installed. `.gitignore`
+  names `/.pnpmfile.cjs`.
+
+**Validation:**
+- RD-1: `pnpm verify` EXIT 0 in lane rd1 (07:07Z; vitest 8,525 / 17 skipped, cargo 302 / 9, node --test 160/160); the
+  hook refused a staged leaked-overlay row and passed the clean tree.
+- RD-2, the spike (lane rd2, ICE 0.16.0 as the stand-in, linked from a worktree at `54b02b8`): **the dev-shape proof is
+  run 2 plus the suite re-run** — `pnpm verify` in dev shape with ICE linked: vitest 8,525 passed / 17 skipped / 0
+  failed, node --test 163/1 (the one red the guard's own unit test, environment-dependent through Node's search beyond
+  the root, fixed in `c4431a62`), then the dev-runner suite 164/0 in BOTH shapes; check:deps one copy each of loro,
+  ICE, strata, React and react-dom in both shapes; `git status` naming only the sources after every switch.
+- **The prod-shape proof is the landing gate:** `gate:landing --with-stages` on `c4431a62` — 07:46:14–08:17:44Z, 26 of 27 ok (`lanes/rd1/gate-c4431a62.log`): verify's fourteen stages in prod shape (the dev-runner suite 164/0, cargo 302 / 9 ignored), `still`, and every smoke but smoke:canvas, smoke:bundled included.
+- Timings: `use ice` 5–7 s, `use --none` 4–5 s; the overlay survived `pnpm exec`, `pnpm run` and a plain `pnpm install`.
+
+**Found:**
+- **pnpm 11.13.1's mechanics decide the overlay** (§3's dated note): a pnpmfile's readPackage loses to the workspace
+  `overrides` (`createReadPackageHook` pushes `createVersionsOverrider` last); any pnpmfile writes `pnpmfileChecksum`
+  into the lock it installs with; a moved lockfile directory resolves relative `link:` overrides against itself and
+  builds a second store; a `link:`'s own dependencies are never installed; and an overlay selected by the environment
+  dies at the next bare `pnpm exec` (`verify-deps-before-run: install`). The root `.pnpmfile.cjs` answers all five;
+  skip-worktree was not needed.
+- **A switch's re-import drops output built outside the content store.** The way back's frozen install re-imports the
+  virtual store (`Packages: +494`), and Electron's binary (its own install.js) is not in it: the first both-shapes verify
+  was red in both shapes on smoke-profile's ENOENT alone. The resolution never moves Electron (resolution-only installs
+  keep `electron@43.1.1(supports-color@7.2.0)` in every variant). The guard handles it and says so; neither the shape
+  line nor check:deps shows it; run 2's way back is the live witness (`electron-guard=[1]`). CI never switches shape.
+- **`minimumReleaseAgeExclude` takes name globs** (`@vibecook/*`), read from pnpm's source; the refusal itself needs a
+  fresh publish to witness.
+- **Erratum at source (RD-1):** CLAUDE.md's AR-0 paragraph and the overrides block's comment said the npm exit deletes
+  the lock entry; since RD-1 the entry stays as the overlay's coordinate. Both corrected where they stand; CLAUDE.md also
+  names the verbs, the hook and where the overlay lives — flagged for James's review.
+- **The gate's one red is main's:** smoke:canvas (929 s) on ONE row, DK-14's AIMED rung (`@'s list open with a pane to send to did not happen within 10000ms`), word for word the red RD-5a proved main's and WP8's gate named; the occluded, HAND and COVER rows all passed.
+
+**Owed:**
+- RD-3: the ghosttea patch into a generated cargo config, `Package.swift` reading the environment, preflight checking
+  both shapes. RD-4: the five repos' pipelines (mostly James's hands) — its hand-off. RD-5 per sibling, then RD-6.
+- §6's witnesses still open: puppeteer linked with an HMR edit (it is committed dev until RD-5); the dev lock's snapshot
+  keys equal the committed lock's outside the linked subtrees (a peer-suffix move shows there); an age refusal (needs a
+  fresh publish); rosettad's checksum refusal (RD-D7); CI green on origin with no clone step.
+- The spike's lane rd2 (branch `rd/2-spike`, the throwaway `ice` entry) and its ICE worktree stay until the landing is
+  read; nothing of them lands.
