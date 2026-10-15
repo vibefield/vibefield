@@ -4,7 +4,8 @@ export type TrayUpdateState =
   | { readonly kind: "idle" }
   | { readonly kind: "checking" }
   | { readonly kind: "downloading"; readonly percent: number }
-  | { readonly kind: "ready"; readonly version: string }
+  // EDP §11.1 / WP12 D14: "ready" renamed — macOS stages, nothing installs in place (EDP-34)
+  | { readonly kind: "staged"; readonly version: string }
   | { readonly kind: "failed" };
 
 export interface TraySnapshot {
@@ -122,8 +123,13 @@ function updateItem(
         ...availability(platform, false),
       };
     }
-    case "ready": {
-      const enabled = actionable && actions.restartToUpdate !== undefined;
+    case "staged": {
+      // The verb renders only when an apply exists (WP12c's gate); before that the update is downloaded, and the
+      // item says so instead of offering a restart that would do nothing.
+      if (actions.restartToUpdate === undefined) {
+        return { id: "update", label: "Update Downloaded", ...availability(platform, false) };
+      }
+      const enabled = actionable;
       return {
         id: "update",
         label: "Restart to Update",

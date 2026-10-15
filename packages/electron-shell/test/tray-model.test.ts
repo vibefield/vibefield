@@ -91,7 +91,7 @@ describe("buildTrayMenu", () => {
     [{ kind: "idle" }, "Check for Updates…", true],
     [{ kind: "checking" }, "Checking for Updates…", false],
     [{ kind: "downloading", percent: 41.6 }, "Downloading Update… 42%", false],
-    [{ kind: "ready", version: "2.0.0" }, "Restart to Update", true],
+    [{ kind: "staged", version: "2.0.0" }, "Restart to Update", true],
     [{ kind: "failed" }, "Update Check Failed", false],
   ] satisfies readonly (readonly [TrayUpdateState, string, boolean])[])(
     "projects update state $kind",
@@ -100,6 +100,18 @@ describe("buildTrayMenu", () => {
       expect(byId(menu, "update")).toMatchObject({ label, enabled });
     },
   );
+
+  it("says a staged update is downloaded, not 'Restart', while no apply exists (WP12c's gate)", () => {
+    const a = actions();
+    delete a.restartToUpdate;
+    const menu = buildTrayMenu(
+      snapshot({ update: { kind: "staged", version: "2.0.0" } }),
+      a,
+      "linux",
+    );
+    expect(byId(menu, "update")).toMatchObject({ label: "Update Downloaded", enabled: false });
+    expect(byId(menu, "update")?.click).toBeUndefined();
+  });
 
   it("honestly disables the idle update item when no updater capability exists", () => {
     const a = actions();

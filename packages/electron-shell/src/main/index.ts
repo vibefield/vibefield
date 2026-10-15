@@ -44,6 +44,7 @@ import {
   MessageChannelMain,
   nativeImage,
   nativeTheme,
+  powerMonitor,
   screen,
   session,
   shell,
@@ -126,8 +127,11 @@ import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { fileThemeStore, THEME_FILE, ThemeOwner } from "./theme";
 import { TrayController } from "./tray-controller";
 import { TrayEvidenceMonitor } from "./tray-evidence";
-import type { TrayLinkState, TraySnapshot } from "./tray-model";
+import type { TrayLinkState, TraySnapshot, TrayUpdateState } from "./tray-model";
 import { createElectronTrayRuntime } from "./tray-native";
+import type { UpdateState } from "./updates/controller";
+import { readUpdateIdentity } from "./updates/identity";
+import { installUpdateController } from "./updates/install";
 import { applyProfileUpdate, dealOwedFace } from "./users-profile";
 import { ViewRegistry } from "./view";
 import { hasInsetLights, LightsRegistry } from "./window-lights";
@@ -1772,6 +1776,27 @@ async function main(
   else if (healthObservationUnavailable) evidenceMonitor.markRemoteUnavailable();
   shellDisposers.add(() => evidenceMonitor?.dispose());
 
+  // WP12b (EDP §11.1; build-wp12-updater.md) — the updater, PACKAGED builds only: VibeField's signed-feed provider
+  // (TD-3) behind one controller. The tray offers a manual check; one launch check runs after a bounded post-ready
+  // delay and a resume checks when the last check is stale (EDP §11.2, no interval stays alive). The apply waits for
+  // WP12c's gate — nothing installs on a quit.
+  const updateIdentity = readUpdateIdentity(resources);
+  const updates =
+    updateIdentity === null
+      ? null
+      : installUpdateController({
+          identity: updateIdentity,
+          statePath: join(app.getPath("userData"), "updates", "state.json"),
+          appendAudit: (record) => appendShellAudit(record),
+          log: logger,
+        });
+  if (updateIdentity?.originOverridden === true) {
+    logger.warn(
+      "desktop.update.origin_override",
+      "A dev-keyed build reads updates from VIBEFIELD_UPDATE_ORIGIN",
+      { origin: updateIdentity.origin },
+    );
+  }
   trayController = new TrayController({
     runtime: createElectronTrayRuntime(resources),
     initial: {
@@ -1793,6 +1818,13 @@ async function main(
       },
       openSettings: () => revealSurface("open-settings"),
       openDiagnostics: () => revealSurface("open-diagnostics"),
+      ...(updates !== null
+        ? {
+            checkForUpdates: async () => {
+              await updates.check("manual");
+            },
+          }
+        : {}),
       ...(screenshotHelperAvailable ? { takeScreenshot: async () => takeScreenshot() } : {}),
       setBackgroundShell: (enabled) =>
         setAppPreference(APP_PREFERENCE_KEYS.BACKGROUND_SHELL, enabled),
@@ -1840,6 +1872,20 @@ async function main(
     },
     onDesktopState: publishDesktopState,
   });
+  if (updates !== null) {
+    shellDisposers.add(
+      updates.subscribe((state) => trayController?.update({ update: trayUpdateOf(state) })),
+    );
+    const launchCheck = setTimeout(() => void updates.check("launch"), UPDATE_LAUNCH_DELAY_MS);
+    launchCheck.unref?.();
+    const onResume = (): void => void updates.check("resume");
+    powerMonitor.on("resume", onResume);
+    shellDisposers.add(() => {
+      clearTimeout(launchCheck);
+      powerMonitor.removeListener("resume", onResume);
+      updates.dispose();
+    });
+  }
   let primaryHasOpened = registry.primary() !== null;
   enforceBackgroundEscapeHatch = (): void => {
     const controller = trayController;
@@ -2064,4 +2110,24 @@ if (!hasInstanceLock) {
     await closeEvidence();
     app.exit(1);
   });
+}
+
+/** WP12b — the bounded post-ready delay before the one launch check (EDP §11.2). */
+const UPDATE_LAUNCH_DELAY_MS = 30_000;
+
+/** The tray's projection of the update state. Offline is quiet and retryable (EDP §11.2), so it reads as idle; a
+ * refusal or a failure reads as failed, with its details in the log and the audit, never in the menu. */
+function trayUpdateOf(state: UpdateState): TrayUpdateState {
+  switch (state.kind) {
+    case "checking":
+      return { kind: "checking" };
+    case "downloading":
+      return { kind: "downloading", percent: state.percent };
+    case "staged":
+      return { kind: "staged", version: state.version };
+    case "error":
+      return state.code === "offline" ? { kind: "idle" } : { kind: "failed" };
+    default:
+      return { kind: "idle" };
+  }
 }

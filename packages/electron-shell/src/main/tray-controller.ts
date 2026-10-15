@@ -102,7 +102,7 @@ export function trayImageKind(snapshot: TraySnapshot): TrayImageKind {
   if (
     snapshot.evidence === "degraded" ||
     snapshot.update.kind === "failed" ||
-    snapshot.update.kind === "ready"
+    snapshot.update.kind === "staged"
   ) {
     return "attention";
   }
