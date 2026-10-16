@@ -1537,6 +1537,24 @@
                     <td><p><code>agent-session.test.ts</code></p></td>
                   </tr>
                   <tr>
+                    <td><span class="route">agent.lastRun</span></td>
+                    <td><p><code>—</code> → <code>AgentLastRunResult</code>: <code>{state: "none"}</code>, or <code>{state: "left", asOf, board: AgentModelSnapshot, gone: AgentLastRunGone[]}</code> — the picture this desktop's last run left and the rows in it whose sessions did not survive (<code>{id, kind: "agent" | "terminal", sessionId?}</code>)</p></td>
+                    <td><p><code>agent.observe</code> · local only</p></td>
+                    <td><p>yes</p></td>
+                    <td><p>LR (James, 2026-10-15, "fieldd keeps it"). Not upstream: fieldd's <code>LastRunKeeper</code> (<code>agent-last-run.ts</code>) over the model board's own projection. <code>agents/last-board.json</code> is the local cut a window reads, rewritten at most once per 1.5 s and only while the floor is connected (a floor that died first would otherwise write its sessions' exits over the picture of them running); <code>agents/left-board.json</code> holds the picture a boot or a returning floor found its sessions missing from, until a window answers. An agent is <code>gone</code> when it was running in the picture, is no longer in the fold, and its signed record can still continue it; a bare terminal when the floor no longer lists it. A picture with nothing gone is forgotten on its own (GT-3's silence). <code>UNAVAILABLE {service: "agent-last-run", state: "starting"}</code> until reattach has settled, the floor has listed its sessions and 3 s have passed; a peer daemon and a tailnet caller are refused <code>FORBIDDEN_SCOPE</code> (a desktop's last run is its own windows', like the model board it pictures). The restore is <code>agent.resume {runtimeRunId}</code> per gone agent, through the signed record, never through a row of these files.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>agent-last-run.test.ts</code>, <code>godview-last-run.test.tsx</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">agent.lastRunForget</span></td>
+                    <td><p><code>—</code> → <code>AgentLastRunForgetResult {forgotten}</code></p></td>
+                    <td><p><code>agent.spawn</code> · local only</p></td>
+                    <td><p>yes</p></td>
+                    <td><p>LR — the answer is in (restore or start clean), so the held picture goes; <code>forgotten: false</code> when there was none. Spawn's scope because it is the other half of the restore decision whose first half is <code>agent.resume</code>: a reader of the board cannot make a desktop forget what its last run left. Refused to a peer daemon and a tailnet caller as <code>agent.lastRun</code> is.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>agent-last-run.test.ts</code></p></td>
+                  </tr>
+                  <tr>
                     <td><span class="route">agent.interrupt</span></td>
                     <td><p><code>AgentInterruptParams</code> → <code>AgentInterruptResult</code> (a discriminated union on <code>accepted</code>)</p></td>
                     <td><p><code>agent.control</code></p></td>
