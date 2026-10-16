@@ -17,8 +17,17 @@ const LINE = /^\s*(\d+)\s+(\d+)\s+(.*)$/u;
 
 /** What a command line runs, named for the report — read from the command alone (an environment names other binaries). */
 export function processName(command) {
-  if (command.includes("Electron Helper") || command.includes("chrome_crashpad_handler"))
+  if (
+    command.includes("Electron Helper") ||
+    command.includes("chrome_crashpad_handler") ||
+    // WP12 L4 — a PACKAGED app's helpers carry its product name (`VibeField Helper (Renderer).app/…`)
+    /Helper(?: \([^)]*\))?\.app\/Contents\/MacOS\//u.test(command)
+  )
     return "electron-helper";
+  // WP12 L4 — the packaged layout (`smoke:update`): the shell, and fieldd's SEA beside the floor in `Resources/bin`
+  if (/\.app\/Contents\/MacOS\/VibeField(\s|$)/u.test(command)) return "vibefield";
+  if (/\/Resources\/bin\/fieldd(\s|$)/u.test(command)) return "fieldd";
+  if (/\/sidecar-slim(\s|$)/u.test(command)) return "sidecar-slim";
   if (/\/field-terminal-host(\s|$)/u.test(command)) return "field-terminal-host";
   if (/\/field-native(\s|$)/u.test(command)) return "field-native";
   if (/[/\\]fieldd[/\\]dist[/\\]bin\.cjs/u.test(command)) return "fieldd";

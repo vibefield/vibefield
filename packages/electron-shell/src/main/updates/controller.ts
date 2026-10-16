@@ -1296,6 +1296,17 @@ export class UpdateController {
     if (this.download !== token) return;
     this.download = null;
     this.setState({ kind: "staged", version, stagedAt: this.now() });
+    // WP12 L4 (R4) — a staged update leaves a line: what is staged, and the sha512 its payload was checked against (the
+    // signed feed's). Before this, nothing outside the process said "staged" — a doctor gap of its own.
+    const sha512 = feedSha512Of(this.lastVerified?.feedText ?? "");
+    this.options.log.info(
+      "desktop.update.staged",
+      "An update is downloaded; it installs at the next restart",
+      {
+        version,
+        ...(sha512 !== null ? { sha512 } : {}),
+      },
+    );
     // B3 — the verdict from the chain that found this version (its head IS the staged one, or it reads touched)
     await this.judgeNative(this.lastVerified, version);
     if (this.options.apply?.wired === true) {
@@ -1413,6 +1424,12 @@ function wordsBox(words: { readonly message: string; readonly detail: string }):
     defaultId: 0,
     cancelId: 0,
   };
+}
+
+/** The verified feed's top-level `sha512:` (electron-builder writes it unquoted or quoted), the payload's checked hash. */
+export function feedSha512Of(feedText: string): string | null {
+  const match = feedText.match(/^sha512:[ \t]*['"]?([^'"\s]+)['"]?[ \t]*$/m);
+  return match === null ? null : match[1]!;
 }
 
 /** The channels, lowest first (the segmented control's order). */

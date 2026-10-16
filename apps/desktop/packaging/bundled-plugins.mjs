@@ -72,6 +72,8 @@ const SIG = contracts.SIGNATURE_SUFFIX;
 const LEDGER = "apps/desktop/packaging/release-identity.json";
 const EMBEDDED = "apps/desktop/packaging/trust-root.json";
 const SECRET_ENV = "VIBEFIELD_BUNDLED_INDEX_SECRET";
+/** WP12 L4 (R1) — `smoke:update`'s bundled key for a stage on ITS trust-root; read only beside `--dev-trust-root`. */
+const SMOKE_BUNDLED_SECRET_ENV = "VIBEFIELD_SMOKE_BUNDLED_SECRET";
 const DATA_MODE = 0o644;
 
 /** A plugin named repo-relative (the stager's list) or absolute (a test's fixture). */
@@ -138,6 +140,43 @@ function devTrustRoot() {
   };
 }
 
+/** WP12 L4 (R1; build-wp12-updater.md §14, the PM's ruling 2026-10-15 21:41Z) — a DEV stage on the trust-root
+ * `smoke:update` minted, so the smoke's fixture origin can sign what this build trusts. The root-signed document is public
+ * (a file the smoke wrote); the bundled key that signs this stage's index arrives in this process's environment from the
+ * smoke and is never written; the root and release secrets never leave the smoke. EL7: a RELEASE stage never takes one —
+ * `${SECRET_ENV}` set refuses the flag. */
+function smokeTrustRoot(path) {
+  if (process.env[SECRET_ENV])
+    refuse(
+      `--dev-trust-root is a DEV stage's: ${SECRET_ENV} is set, which makes this a release stage — a release stage stages only James's trust-root (TD-1)`,
+    );
+  const secret = process.env[SMOKE_BUNDLED_SECRET_ENV];
+  if (!secret)
+    refuse(
+      `--dev-trust-root needs ${SMOKE_BUNDLED_SECRET_ENV}: the smoke's bundled key, which signs this stage's index`,
+    );
+  if (!existsSync(path) || !existsSync(path + SIG))
+    refuse(`--dev-trust-root ${path}: the document or its ${SIG} is missing`);
+  const bytes = readFileSync(path);
+  const sigText = readFileSync(path + SIG, "utf8");
+  // a first embedding: the document is verified by its OWN root, as a dev stage's always is
+  const own = JSON.parse(bytes.toString("utf8"))?.root ?? {};
+  const verdict = verifyTrustRoot(bytes, sigText, {
+    keys: own.keys ?? [],
+    threshold: own.threshold ?? 1,
+  });
+  if (!verdict.ok) refuse(`--dev-trust-root ${path} does not verify: ${verdict.reason}`);
+  if (!verdict.doc.roles.bundled.keys.includes(keygen.publicKeyOf(secret)))
+    refuse(`${SMOKE_BUNDLED_SECRET_ENV}'s public half is not the smoke trust-root's bundled key`);
+  return {
+    bytes,
+    sigText,
+    doc: verdict.doc,
+    rootKeys: verdict.doc.root.keys,
+    bundledSecret: secret,
+  };
+}
+
 /** WP12 D10 — `<appVersion>+<commit7>` from this checkout; omitted (said) when git cannot name the commit, which
  * leaves that app on the old adoption rule rather than inventing an identity. */
 function stagedBuildId(appVersion) {
@@ -184,14 +223,23 @@ function committedPolicyFloors() {
   return floors;
 }
 
-async function stage({ stage: stageDir, plugins, "app-version": appVersion }) {
+async function stage({
+  stage: stageDir,
+  plugins,
+  "app-version": appVersion,
+  "dev-trust-root": smokeRoot,
+}) {
   if (!stageDir || !plugins || !appVersion)
     refuse("stage needs --stage, --plugins and --app-version");
   const secret = process.env[SECRET_ENV];
+  // a smoke trust-root is DEV by construction: `smokeTrustRoot` refuses when the release secret is set
   const keyClass = secret ? "release" : "dev";
   let trust;
   let bundledSecret;
-  if (keyClass === "release") {
+  if (smokeRoot !== undefined) {
+    trust = smokeTrustRoot(smokeRoot);
+    bundledSecret = trust.bundledSecret;
+  } else if (keyClass === "release") {
     trust = releaseTrustRoot();
     if (!trust.doc.roles.bundled.keys.includes(keygen.publicKeyOf(secret)))
       refuse(`${SECRET_ENV}'s public half is not the trust-root's bundled key`);
@@ -239,7 +287,12 @@ async function stage({ stage: stageDir, plugins, "app-version": appVersion }) {
   writeFileSync(join(identityDir, RELEASE_IDENTITY_FILE), `${JSON.stringify(identity, null, 2)}\n`);
   chmodTree(root);
   chmodTree(identityDir);
-  return { ok: true, keyClass, plugins: Object.keys(result.index.plugins) };
+  return {
+    ok: true,
+    keyClass,
+    ...(smokeRoot !== undefined ? { trust: "smoke" } : {}),
+    plugins: Object.keys(result.index.plugins),
+  };
 }
 
 async function verify({ stage: stageDir, plugins, "require-release-key": requireRelease }) {

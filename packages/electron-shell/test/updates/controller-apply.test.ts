@@ -1024,4 +1024,16 @@ describe("the two-phase apply (C2) and the one projection (C6)", () => {
       enabled: true,
     });
   });
+
+  it("L4 (R4) — a staged update leaves its line: the version and the sha512 the signed feed gave its payload", async () => {
+    const r = await staged({});
+    const log = (
+      r.controller as unknown as { options: { log: { info: ReturnType<typeof vi.fn> } } }
+    ).options.log;
+    expect(log.info).toHaveBeenCalledWith(
+      "desktop.update.staged",
+      "An update is downloaded; it installs at the next restart",
+      { version: STAGED_VERSION, sha512: "AAAA" },
+    );
+  });
 });

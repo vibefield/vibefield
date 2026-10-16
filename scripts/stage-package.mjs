@@ -54,6 +54,9 @@ const outAbs = resolve(repoRoot, outRel);
 const verifyOnly = args.includes("--verify");
 const requireComplete = args.includes("--require-complete");
 const requireReleaseKey = args.includes("--require-release-key");
+// WP12 L4 (R1) — `smoke:update`'s trust-root for a DEV stage (public, root-signed); the producer refuses it on a release
+// stage. Its bundled key reaches the producer only through the environment the smoke gave this process.
+const devTrustRoot = argValue("--dev-trust-root");
 
 // Modes are SET rather than inherited (§7.4 "executable permission bits are asserted after
 // staging"; §13.2 "exact executable modes"). A stage whose modes depend on the umask of whoever
@@ -745,10 +748,16 @@ for (const rel of BUNDLED_PLUGINS) {
   if (!existsSync(join(repoRoot, rel, "dist")))
     fail(`required input missing: ${rel}/dist (for plugins/bundled) — run \`pnpm build\` first`);
 }
+let smokeTrust = false;
 if (!verifyOnly) {
   stage(plan);
   const desktopVersion = plan.manifest.version;
-  const produced = runProducer("stage", ["--app-version", desktopVersion]);
+  const produced = runProducer("stage", [
+    "--app-version",
+    desktopVersion,
+    ...(devTrustRoot !== undefined ? ["--dev-trust-root", resolve(devTrustRoot)] : []),
+  ]);
+  smokeTrust = produced.trust === "smoke";
   if (!produced.ok)
     fail(`bundled plugins were not produced: ${(produced.problems ?? []).join("; ")}`);
 }
@@ -790,12 +799,15 @@ if (existsSync(smokeAbs)) {
 // The bundled report line (WP8 W5): what shipped, and which keys signed it — DEV in capitals.
 console.log(
   `\nplugins/bundled: ${bundled.plugins?.length ?? 0} plugin(s) (${(bundled.plugins ?? []).join(", ") || "none"}), ` +
-    `index ${bundled.ok ? "signed and verified" : "NOT VERIFIED"}, KEY CLASS: ${(bundled.keyClass ?? "unknown").toUpperCase()}`,
+    `index ${bundled.ok ? "signed and verified" : "NOT VERIFIED"}, KEY CLASS: ${(bundled.keyClass ?? "unknown").toUpperCase()}${smokeTrust ? ", smoke trust-root" : ""}`,
 );
 if (bundled.keyClass === "dev")
   console.warn(
-    "  DEV-KEYED: the trust-root and the bundled index were signed by keys minted for this stage only — " +
-      "a release stage needs VIBEFIELD_BUNDLED_INDEX_SECRET and James's trust-root (TD-1)",
+    smokeTrust
+      ? "  DEV-KEYED: the trust-root and the bundled index were signed by keys `smoke:update` minted for its run, " +
+          "held only in its process — this build trusts that run's fixture origin and nothing else"
+      : "  DEV-KEYED: the trust-root and the bundled index were signed by keys minted for this stage only — " +
+          "a release stage needs VIBEFIELD_BUNDLED_INDEX_SECRET and James's trust-root (TD-1)",
   );
 
 if (plan.missing.length > 0) {

@@ -2,6 +2,7 @@ import type { AuditAppendV1 } from "@vibefield/contracts/diagnostics";
 import { describe, expect, it, vi } from "vitest";
 import {
   type CancellationLike,
+  feedSha512Of,
   UpdateController,
   type UpdaterPort,
   updateErrorOf,
@@ -284,5 +285,14 @@ describe("the UpdateController (WP12b)", () => {
     );
     expect(updateErrorOf(new Error("net::ERR_INTERNET_DISCONNECTED")).code).toBe("offline");
     expect(updateErrorOf(new Error("something else")).code).toBe("failed");
+  });
+});
+
+// WP12 L4 (R4) — the staged line's sha512 is the verified feed's top-level one, as electron-builder writes it
+describe("feedSha512Of", () => {
+  it("reads the top-level sha512, unquoted or quoted, and nothing from a file entry alone", () => {
+    expect(feedSha512Of("version: 1.2.0\nsha512: abc+/=\n")).toBe("abc+/=");
+    expect(feedSha512Of("version: 1.2.0\nsha512: 'abc+/='\n")).toBe("abc+/=");
+    expect(feedSha512Of("version: 1.2.0\nfiles:\n  - url: x.zip\n    sha512: abc\n")).toBeNull();
   });
 });

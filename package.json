@@ -21,6 +21,7 @@
     "smoke:plugin-restart": "pnpm --filter @vibefield/desktop smoke:plugin-restart",
     "smoke:kind-faults": "pnpm --filter @vibefield/desktop smoke:kind-faults",
     "smoke:bundled": "pnpm --filter @vibefield/desktop smoke:bundled",
+    "smoke:update": "pnpm --filter @vibefield/desktop smoke:update",
     "smoke:plugin": "pnpm --filter @vibefield/desktop smoke:plugin",
     "playground": "node apps/plugin-playground/bin/plugin-playground.mjs",
     "still": "pnpm --filter @vibefield/plugin-playground still",
