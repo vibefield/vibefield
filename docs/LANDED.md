@@ -11326,3 +11326,145 @@ WP12d is complete with this slice.
   - the tray's row.
 
 **Next:** L4 (WP12f, `smoke:update`). James's eyes on the card: the catalog's three Updates specimens, then a real window.
+
+## LR + the phone's attach freeze — Godview opens on what the last run left, still, under the restore question; the phone's terminal stops freezing on attach; the freeway is ruled (2026-10-16; `2f619656` `23725dc8` `0088a459` `f53f3d19` `bfe44a25`)
+
+**Why:** James's focus session (2026-10-15/16; brief `draft/handover/2026-10-15-focus-session-brief.md`). He drives the
+desktop and the phone and rules design questions in one line; the focus session finds causes, fixes, and he re-tests.
+- **LR (James, 2026-10-15):** "if there are unclosed sessions from last app run, this restore dialogue should be shown
+  at the godview at the center, and there should be bubbles shown in the swarmview based on previous status, same for
+  each view, a static view of previous snapshoted last state shown in each view, and … a semi transparent overlay on
+  top … asking whether they want the previous sessions to be restored or cleared out and start clean." Ruled at every
+  lean, 22:47Z: LR-1 fieldd keeps the picture · LR-2 Restore resumes agents · LR-3 the view circles stay live above it.
+- **The attach freeze (PJ-7's run 3):** the phone's ATTACH sat at "connecting over the mesh" forever; the desktop door
+  accepted both legs and closed them `4004 LEG_TIMEOUT` 15 s later.
+
+**What landed:**
+- **LR, the backend (`2f619656`):**
+  - Contracts: `AgentLastRunResult` (`{state: "none"}` | `{state: "left", asOf, board: AgentModelSnapshot, gone}`),
+    `AgentLastRunGone {id, kind: "agent" | "terminal", sessionId?}`, `AgentLastRunForgetResult`; the methods
+    `agent.lastRun` (agent.observe) and `agent.lastRunForget` (agent.spawn), both idempotent and local; the layout
+    rows `AGENT_LAST_BOARD_FILE` / `AGENT_LEFT_BOARD_FILE` (`pnpm gen`); fixtures on both sides.
+  - fieldd's `LastRunKeeper` (`agent-last-run.ts`): the model board's own projection pictured to `last-board.json` at
+    most every 1.5 s and only while the floor is connected; a boot (or a returning floor) that finds the picture's
+    sessions missing holds it as `left-board.json` until a window answers; `gone` = agents that were running, are not
+    in the fold and whose signed record can continue (`continuable`), and bare terminals the floor no longer lists; a
+    picture with nothing gone forgets itself (GT-3's silence); `UNAVAILABLE {state: "starting"}` until reattach has
+    settled, the floor has listed and 3 s have passed; refused to peer daemons and tailnet callers.
+- **LR, the window (`2f619656`):**
+  - `last-run.ts`: one store per window — ask (retrying a retryable or transport refusal for up to 45 s), compose the
+    question, a still board port, Restore (every gone agent through `agent.resume {runtimeRunId}` in parallel, shells
+    reopened by the deck in their folders), Start clean (`agent.lastRunForget`), the deck's answer (`deckAnswer`).
+  - `LastRunCurtain`: the veil of the monitor's own ground and, centred, the count huge, a mono line of what each
+    answer does, Restore and Start clean drawn alike (neither is the safe one); "N of M agents resumed" with each
+    failure's reason, then Continue.
+  - The stage and the monitor: every view draws the held picture STILL (animations off, its commands and Peek
+    withheld, the section inert) through `MonitorFeedOverride`; the view circles stay live above the curtain (LR-3);
+    the deck is inert while curtained and asks through `deckAnswer` — GT-3's deck-only restore question retired.
+  - DESIGN.md §8 "What the last run left — the curtain"; transitions by `@starting-style` (no keyframes, GT-D15.1).
+  - The smoke's restore rungs read the consent's new shape (`{agents, shells, unplaced}`) and the "Restore" label.
+- **LR in the catalog (`23725dc8`):** the shipping stage, monitor (still) and curtain over the profile tabs' fixture
+  door (UI_SYSTEM's rule).
+- **The attach freeze (`0088a459`):** `TerminalSurface` installs its handlers once (trampolines through the
+  coordinator's latest surface) and sets a view property only when its value changed. The cause, from lldb on the
+  device: every `updateUIView` re-assigned `onGridSizeChange`, whose `didSet` in ghosttea's view re-reported the same
+  grid → `setViewport` → `resizeGeometry` → another SwiftUI update, so the main thread spun and the legs' heartbeats
+  never ran. `MainThreadWitness` repeats a long stall's line and keeps the phase the stall started in.
+- **The doors page (`f53f3d19`):** `docs/agent-plane/api.html` names `agent.lastRun` and `agent.lastRunForget`;
+  `AGENT_PLANE.md`'s doors row names the last run.
+- **The deck's frame tests (`bfe44a25`, test-only):** the landing gate's `test` stage passed all 2571 field-app
+  tests and failed on one Vitest "Unhandled Rejection: floor unavailable" from `godview-deck-frames.test.tsx` — the
+  test made `createAnswer = Promise.reject(…)` before mounting, and LR's `agent.lastRun` ask is one more step before
+  the deck's `terminal.create` takes it, so under load Node reported the waiting rejection. `refused(error)` marks
+  it handled where it is made, at the file's three eager sites; no product code changes.
+
+**Ruled with this landing (James, 2026-10-16 21:21Z; `draft/thinking-freeway.md`, DECISIONS the FW row):** the
+freeway — one link from the phone to its desktop's floor, opened at connect, every plane a stream on it. FW-D1 the
+floor signs each terminal join (fieldd approves the link once, revocable, audited; TM-D8's recorded upgrade) · FW-D2
+on tap the live screen is already there (previews of listed sessions, recent ones hot) · FW-D3 local scrollback in
+ghosttea (one release with the History lead's v0.13.0); and at 22:16Z, on the History lead's two conflicts, FW-D4 the
+freeway runs in its own process, the floor's child (TC-L1c and DS-L5 hold) · FW-D5 a freeway per desktop (DS-D13
+holds). F1 — the link and terminals over it — is next.
+
+**Validation:**
+- `pnpm gate:landing --with-stages` on `f53f3d19` (2026-10-16 21:49:37–22:24:58Z; load 8/14/17 at its start, the
+  `test` stage at 33→118): 21 of 27 green. The six reds, attributed by the PM's protocol (a CONTROL runs at the gate's
+  own load; a PROOF arms only at a 1-min load < 10; each line with its 1-min loads, start→end):
+  - `test` RED (33→118): field-app's 2571 tests passed, and one Vitest "Unhandled Rejection: floor unavailable" from
+    `godview-deck-frames.test.tsx` → the 5th commit `bfe44a25`, test-only (its rows below).
+  - `smoke:canvas` RED (23→13) and `smoke:kind-faults` RED (15→14): the control on main `2c3b9266` (the same lane, the
+    same offscreen v2 shim, armed 22:40:21Z at load 14.6) RED with the same rows — canvas 930 s at 15→13 (the occluded
+    row, HAND_WHITEBOARD at 251 ms, DK-14's @-list, IDLE's 3 submits, and the offscreen cover class on COVER GODVIEW
+    where the tree's named COVER HISTORY), kind-faults 80 s at 13→14 (the occluded row) → not LR's.
+  - `smoke:godview` RED (22→15), `smoke:studio` RED (19→17), `smoke:bundled` RED (17→17): GREEN on main in the control
+    (147 s at 14→16, 27 s at 16→17, 93 s at 17→17 — bundled on the shim, which clears it) → PROOFS on `bfe44a25`, the
+    final code tree, at load < 10: `smoke:godview` ok 147 s (8→5; all five typed-agent items, `type-it` launched managed
+    with `--session-id` and `--settings`, the pane's shell its parent; LR's restore rung asked `{agents 0, shells 1,
+    unplaced 0}`) · `smoke:studio` ok 26 s (5→7; field-native freshly compiled and booted) · `smoke:bundled` without the
+    shim ok 93 s (7→7; loads, corrupt, forged) — 2026-10-16 23:28:59–23:33:25Z.
+- The 5th commit's rows on `bfe44a25`, each armed at a 1-min load < 10: field-app's `tsc` alone ok 17 s (7→6) · biome
+  on the file ok (6→6) · the file alone ×5, 66 of 66 each (6→6, 6→6, 6→5, 5→5, 5→6) · field-app's suite alone ok 77 s
+  (6→76, the suite's own load): 215 files, 2571 passed, no error — 2026-10-16 23:10–23:25Z.
+- Before the gate, each touched suite alone (2026-10-15): field-app 2568 passed / 3 skipped; fieldd 2277 passed / 29
+  skipped (including `agent-last-run.test.ts`, 12 rows); contracts 1005 passed; tsc, biome and `check:walls` clean.
+  The kit's FieldTerminalTests 136 passed on the simulator (`aLongStallKeepsItsPhase` new).
+- On James's phone (2026-10-16, the fixed build over devicectl with the console read): four consecutive ATTACHes of
+  session `15c4e12e` reached "first frame presented — live", no stall line.
+
+**Found:**
+- **What one phone tap costs (the phone's own `[attach]` lines, four taps):** `terminal.openTicket` 115–176 ms; two
+  new sockets 245–302 ms before either says hello; then hello, attach control, attach frames + the seed, three round
+  trips in sequence; the legs are torn down on leave. `tailscale ping` Mac → iPhone (the OS nodes) is direct at
+  **11 ms** — and nothing reads the floor's `connectionType` for VibeField's own nodes, so whether the phone's link is
+  direct or relayed is unknown (the freeway's F0).
+- **The protocol already multiplexes; the phone does not use it:** a cell is a class host (K=2 + solos) holding many
+  sessions, one connection set carries up to 256 activations, and the phone builds a client per tap.
+- **A cell's birth or exit drops every phone leg on :9422** (truffle's proxy re-declares by remove-then-add). *Corrected
+  at source the same evening:* the focus session first told James this happens on every terminal's start/exit — sessions
+  live inside cells, so only a cell's birth or exit does it.
+- **Scrolling on the phone is a round trip per step** (the engine scrolls the view's viewport; the phone holds only the
+  visible screen) — FW-D3.
+- **The second agent's audit** (`draft/diagnose/index.html` + `flows.html`, 2026-10-16, source-anchored), beside B1
+  (fixed here): **D1** the one-slot frame bridge can drop deltas; **B2** `SceneApplied` is sent when bytes are published,
+  before the renderer applied them; **D2** `requestReseed` asks the cell for nothing; **B3** a reconnect shows "session
+  ended"; **B4** a backgrounded attach can still connect; **R1** the desktop window's control legs time out `4004` while
+  its heartbeat rides throttled renderer timers (`window-policy.ts:44` `backgroundThrottling: true`; cause not
+  correlated yet); **R2** the packaged sidecar (0.7.14) lacks the dev sidecar's WebSocket target-path forward; **T1**
+  the kit's tests stop before the renderer. D1/B2/D2/B3/B4 fold into the freeway's F1 (`thinking-freeway.md` §5).
+- The `pnpm dev` runner exited at 22:54:41Z on 10-15 and left its Electron and field-native behind; cause not found
+  (excerpt kept in the focus session's notes).
+- LR: a floor restart under a living fieldd asks a window that is already open only at its mount — the curtain appears
+  after the window's next open, not live.
+- **Four silent field-native boots in the landing gate (22:23:22–22:24:47Z):** `smoke:studio` and all three
+  `smoke:bundled` runs failed `field-native did not come up before the readiness deadline` (fieldd's 10 s). In each,
+  field-native's log file was never created although the process existed (found by name at teardown and reaped) —
+  field-native opens `logs/system/field-native.ndjson` synchronously in `NativeLogging::install`, the first thing `main`
+  does after reading its config, and a normal boot writes its first line 5 ms after fieldd's `boot_started` — so each was
+  held between exec and `NativeLogging::install` for longer than 10 s, before any readiness work. runningboardd first
+  resolved studio's pid 37 s after its spawn; the system log holds no syspolicyd/amfid verdict for it; a fresh binary
+  alone does not explain it (the control's on main was freshly compiled and booted). Cause not found. The only hypothesis
+  the facts admit, *not established*: the 28 MB dev binary's page-in at exec under I/O contention — the bundled runs
+  exec'd it from the lane's cargo target on the SSD while other sessions' rustc and truffle-4a's compiles contended that
+  disk; studio's ran a copy written to `/tmp` 2 s earlier.
+- **`smoke:godview`'s typed agent, item 2 (`type-it`), red once in the gate:** one typed-once line that produced
+  nothing: no stub call, no new shell, no fold row, no fieldd launch line; delivery of the seven keystrokes vs a launcher
+  that stopped before the stub cannot be told apart from what is kept; mechanism NOT established. Not a shell slow to
+  its prompt: the pane's shell ran item 1's two typed lines at their first attempt 1.7 s before. The first red of this
+  rung on record (every prior gate green); the control green on main at load 14 (the row's own start; the control
+  armed at 14.6), the proof green on the tree at load 8
+  (8→5, 23:28:59Z).
+
+**Owed:**
+- On the device: typing, keyboard show/hide and rotation on the fixed build (only "live" was witnessed).
+- R1's fix shape (a worker heartbeat · a hidden leg's longer TTL · a recovering re-dial) — James's ruling, carried with
+  the freeway's F1 record (the window's own legs are not on the freeway).
+- The runner's 22:54Z exit, if it recurs.
+- LR's live ask when the floor restarts under an open window.
+- F0–F1 of the freeway (`draft/thinking-freeway.md` §11).
+- fieldd's readiness-deadline error says whether the child lives and whether its log stream opened, so a boot held
+  before its logger reads as that, not as a slow floor.
+- `smoke:godview`'s typed agent item 2 confirms delivery (the name echoed in the pane, or a shell-side marker on the
+  same line) before waiting on the monitor.
+- `smoke:bundled` prints the shell's fatal reason when Electron exits before the smoke speaks: the gate's three runs said
+  only `exit 1`, and the reason (`desktop.lifecycle.fatal`, fieldd's readiness refusal) was in each run's
+  `desktop.ndjson`.
