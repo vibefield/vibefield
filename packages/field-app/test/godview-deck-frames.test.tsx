@@ -579,6 +579,18 @@ function installHost(): void {
   } as unknown as FieldHost);
 }
 
+/** A refused answer the fixture hands out later, marked handled where it is
+ * made. The deck reaches `terminal.create` only after its own steps (LR's ask
+ * first), and React may yield across a task before then — an eager
+ * `Promise.reject` waiting that long is reported unhandled although the deck
+ * receives it. The deck still sees the rejection: a second handler changes
+ * nothing for the first. */
+function refused(error: Error): Promise<never> {
+  const answer = Promise.reject(error);
+  answer.catch(() => undefined);
+  return answer;
+}
+
 async function settle(): Promise<void> {
   // Theme facts follow DOM mutations through a MutationObserver task.
   await act(async () => {
@@ -1074,7 +1086,7 @@ describe("the deck's pane frames", () => {
       },
     ];
     foldRows = [managedSummary({ terminalSessionId: "pty-1", alive: false })];
-    createAnswer = Promise.reject(new Error("floor unavailable"));
+    createAnswer = refused(new Error("floor unavailable"));
     await mountDeck();
     expect(workspace.panes[0]?.session.id).toBe("pty-1");
     expect(requests.filter((call) => call.method === "terminal.create")).toHaveLength(1);
@@ -2030,7 +2042,7 @@ describe("births under an Agent Profile (SB-3)", () => {
   it("hands the door fieldd's own words for a refused birth and faults nothing — the next birth goes through", async () => {
     const host = await mountDeck();
     const phase = terminalPoolSnapshot().phase;
-    createAnswer = Promise.reject(
+    createAnswer = refused(
       new FielddRpcError(
         "NOT_FOUND",
         "that profile no longer exists",
@@ -2069,7 +2081,7 @@ describe("births under an Agent Profile (SB-3)", () => {
   it("still faults the pool when fieldd could not be reached at all", async () => {
     const host = await mountDeck();
     // the client's own error for a request that never reached fieldd: no wire code
-    createAnswer = Promise.reject(new FielddRpcError("UNAVAILABLE", "connection closed", true));
+    createAnswer = refused(new FielddRpcError("UNAVAILABLE", "connection closed", true));
     await act(async () => {
       await deckDoor?.createTerminal({ profileSet: "work" });
     });
