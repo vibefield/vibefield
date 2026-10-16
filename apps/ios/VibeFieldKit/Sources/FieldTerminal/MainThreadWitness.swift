@@ -22,6 +22,8 @@ import Foundation
     private let target: DispatchQueue
     private let threshold: Double
     private let interval: Double
+    /// How often a stall that goes on is said again (10 s on the device).
+    private let repeatEvery: Double
     private let log: TerminalAttachLog
     private let lastPhase: @Sendable () -> String?
     private let queue = DispatchQueue(label: "com.jamesyong.vibefield.main-witness")
@@ -29,15 +31,19 @@ import Foundation
     private var timer: DispatchSourceTimer?
     private var pingSent: DispatchTime?
     private var reported: Double = 0
+    /// The attach phase the current stall began in (read once per stall).
+    private var stalledPhase = "none"
 
     public init(
       target: DispatchQueue = .main, threshold: Double = 2, interval: Double = 0.5,
+      repeatEvery: Double = 10,
       log: TerminalAttachLog = .device,
       lastPhase: @escaping @Sendable () -> String? = { TerminalAttachLog.lastLine }
     ) {
       self.target = target
       self.threshold = threshold
       self.interval = interval
+      self.repeatEvery = repeatEvery
       self.log = log
       self.lastPhase = lastPhase
     }
@@ -60,6 +66,7 @@ import Foundation
         timer = nil
         pingSent = nil
         reported = 0
+        stalledPhase = "none"
       }
     }
 
@@ -74,10 +81,14 @@ import Foundation
         return
       }
       let waited = Self.seconds(from: sent, to: now)
-      guard waited > threshold, reported == 0 || waited - reported >= 10 else { return }
+      guard waited > threshold, reported == 0 || waited - reported >= repeatEvery else { return }
+      // The phase is read ONCE, as the stall is first seen: read again, it is
+      // this witness's own previous line, and every repeat nested the last
+      // (run 3, 2026-10-15 — "stalled 33 s, last attach phase: main thread
+      // stalled 23 s, last attach phase: …").
+      if reported == 0 { stalledPhase = lastPhase() ?? "none" }
       reported = waited
-      log.error(
-        "main thread stalled \(Self.words(waited)) s, last attach phase: \(lastPhase() ?? "none")")
+      log.error("main thread stalled \(Self.words(waited)) s, last attach phase: \(stalledPhase)")
     }
 
     private func answered(sent: DispatchTime) {
@@ -85,6 +96,7 @@ import Foundation
       pingSent = nil
       guard reported > 0 else { return }
       reported = 0
+      stalledPhase = "none"
       log("main thread answered again after \(Self.words(Self.seconds(from: sent, to: .now()))) s")
     }
 

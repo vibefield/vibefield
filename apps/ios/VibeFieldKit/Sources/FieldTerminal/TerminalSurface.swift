@@ -115,6 +115,20 @@ public struct TerminalSurface: UIViewRepresentable {
     var appliedFocus: Bool?
     /// IOS-5c's re-ask nonce, remembered beside the intent it qualifies.
     var appliedFocusEpoch: Int = 0
+    /// FS-1 (focus session 2026-10-15) — the latest surface's handlers. The
+    /// Metal view is handed TRAMPOLINES into this once, at make, and an update
+    /// replaces only what they read: re-assigning the view's own closures on
+    /// every SwiftUI update was the phone's frozen attach. Ghosttea's
+    /// `onGridSizeChange` setter re-REPORTS the grid even when it is unchanged
+    /// (`updateGridSize(notifyUnchanged: true)`), so every update called back
+    /// into the attachment from inside the update pass, and the card's layout
+    /// never settled — the main thread spun in `_UIHostingView.layoutSubviews`
+    /// with both legs dialled and never read (run 3, PJ-7).
+    var latest: TerminalSurface?
+    /// Whether the grid callback was live at the last update: turning it on
+    /// asks the view for the grid it already has, once (the reason the
+    /// setter re-reports at all).
+    var appliedControlsGridSize: Bool?
   }
 
   public func makeCoordinator() -> Coordinator { Coordinator() }
@@ -122,10 +136,12 @@ public struct TerminalSurface: UIViewRepresentable {
   public func makeUIView(context: Context) -> UIView {
     let container = UIView()
     container.backgroundColor = .clear
+    context.coordinator.latest = self
     do {
       let view = try GhostteaTerminalMetalView(terminalFrame: container.bounds)
       view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-      configure(view)
+      installHandlers(view, coordinator: context.coordinator)
+      configure(view, coordinator: context.coordinator)
       view.applyConfiguration(configuration)
       context.coordinator.appliedConfigurationRevision = configuration.revision
       container.addSubview(view)
@@ -141,8 +157,9 @@ public struct TerminalSurface: UIViewRepresentable {
   }
 
   public func updateUIView(_ container: UIView, context: Context) {
+    context.coordinator.latest = self
     guard let view = context.coordinator.metalView else { return }
-    configure(view)
+    configure(view, coordinator: context.coordinator)
     view.setTerminalVisible(visible)
     applyFocus(view, coordinator: context.coordinator)
     if context.coordinator.appliedConfigurationRevision != configuration.revision {
@@ -197,19 +214,48 @@ public struct TerminalSurface: UIViewRepresentable {
     }
   }
 
-  private func configure(_ view: GhostteaTerminalMetalView) {
-    view.showsTerminalAccessoryRow = showsKitAccessoryRow
-    view.keyboardAppearance = keyboardAppearance
-    view.onGridSizeChange = controlsGridSize ? onGridSize : nil
-    view.onNeedsFullRefresh = onNeedsFullRefresh
-    view.onHardwareKeyEvent = onHardwareInput
-    view.onSoftwareInputEvent = onSoftwareInput
-    view.onMouseInputEvent = onMouseInput
-    view.onScrollRows = onScrollRows
-    view.onClipboardWrite = onClipboardWrite
-    view.onSelectionCommit = onSelectionCommit
-    view.onSelectAll = onSelectAll
-    view.accessibilityTerminalTitle = accessibilityTitle
-    view.accessibilityConnectionState = accessibilityConnectionState
+  /// The view's handlers, ONCE: each forwards to the latest surface the
+  /// coordinator holds, so an update never touches a property whose setter
+  /// does work (FS-1).
+  private func installHandlers(_ view: GhostteaTerminalMetalView, coordinator: Coordinator) {
+    view.onNeedsFullRefresh = { [weak coordinator] in coordinator?.latest?.onNeedsFullRefresh() }
+    view.onHardwareKeyEvent = { [weak coordinator] event in
+      coordinator?.latest?.onHardwareInput(event) ?? false
+    }
+    view.onSoftwareInputEvent = { [weak coordinator] event in
+      coordinator?.latest?.onSoftwareInput(event)
+    }
+    view.onMouseInputEvent = { [weak coordinator] event in coordinator?.latest?.onMouseInput(event) }
+    view.onScrollRows = { [weak coordinator] rows in coordinator?.latest?.onScrollRows(rows) }
+    view.onClipboardWrite = { [weak coordinator] text in coordinator?.latest?.onClipboardWrite(text) }
+    view.onSelectionCommit = { [weak coordinator] selection in
+      coordinator?.latest?.onSelectionCommit(selection)
+    }
+    view.onSelectAll = { [weak coordinator] in coordinator?.latest?.onSelectAll() }
+  }
+
+  /// What an update may change, each written only when it differs: the grid
+  /// callback's presence (its setter re-reports the grid), the accessory row
+  /// (its setter reloads the input views), the accessibility strings (their
+  /// setters rebuild the elements). FS-1.
+  private func configure(_ view: GhostteaTerminalMetalView, coordinator: Coordinator) {
+    if view.showsTerminalAccessoryRow != showsKitAccessoryRow {
+      view.showsTerminalAccessoryRow = showsKitAccessoryRow
+    }
+    if view.keyboardAppearance != keyboardAppearance {
+      view.keyboardAppearance = keyboardAppearance
+    }
+    if coordinator.appliedControlsGridSize != controlsGridSize {
+      coordinator.appliedControlsGridSize = controlsGridSize
+      view.onGridSizeChange =
+        controlsGridSize
+        ? { [weak coordinator] size in coordinator?.latest?.onGridSize(size) } : nil
+    }
+    if view.accessibilityTerminalTitle != accessibilityTitle {
+      view.accessibilityTerminalTitle = accessibilityTitle
+    }
+    if view.accessibilityConnectionState != accessibilityConnectionState {
+      view.accessibilityConnectionState = accessibilityConnectionState
+    }
   }
 }

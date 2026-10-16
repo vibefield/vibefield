@@ -262,5 +262,53 @@ import Testing
       #expect(stall.contains("last attach phase: leg control cell=c1: asking the mesh for a session"))
       #expect(lines.count("main thread stalled") == 1)
     }
+
+    @Test(
+      "run 3: a stall said again names the phase it BEGAN in — never the witness's own last line",
+      .timeLimit(.minutes(1)))
+    func aLongStallKeepsItsPhase() async throws {
+      let lines = Lines()
+      let target = DispatchQueue(label: "run3.test.fake-main")
+      // The device's own memory of the last line, as the witness reads it by
+      // default: the stall line itself lands in it.
+      let memory = LastLineBox("leg control cell=c1: mesh session in 0 ms")
+      let sink = lines.log
+      let log = TerminalAttachLog { _, line in
+        memory.set(line)
+        sink(line)
+      }
+      let witness = MainThreadWitness(
+        target: target, threshold: 0.2, interval: 0.05, repeatEvery: 0.3, log: log,
+        lastPhase: { memory.get() })
+      witness.start()
+      defer { witness.stop() }
+
+      target.async { Thread.sleep(forTimeInterval: 1.0) }
+      try await Self.until("the stall to be said three times") {
+        lines.count("main thread stalled") >= 3
+      }
+      let stalls = lines.all.filter { $0.contains("main thread stalled") }
+      for stall in stalls {
+        #expect(stall.hasSuffix("last attach phase: leg control cell=c1: mesh session in 0 ms"))
+        #expect(!stall.contains("last attach phase: main thread stalled"))
+      }
+    }
   #endif
+}
+
+/// The device sink's one remembered line, for the witness to read.
+private final class LastLineBox: @unchecked Sendable {
+  private let lock = NSLock()
+  private var line: String?
+  init(_ line: String) { self.line = line }
+  func set(_ next: String) {
+    lock.lock()
+    line = next
+    lock.unlock()
+  }
+  func get() -> String? {
+    lock.lock()
+    defer { lock.unlock() }
+    return line
+  }
 }
