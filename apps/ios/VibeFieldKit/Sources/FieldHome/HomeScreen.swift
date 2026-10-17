@@ -2255,9 +2255,16 @@ public struct HomeScreen: View {
     // --- end IOS-5b ---
     guard let attachment else { return }
     self.attachment = nil
-    // FW-D2 — the session stays live on its lane, its scene kept current, so
-    // opening it again is instant; past the three newest it is let go.
-    guard let sessionID = attachment.attachedSessionID, let deviceID else {
+    // FW-D2 — the session stays on its lane with its picture, so opening it
+    // again paints at once and needs no mint and no dial; past the three
+    // newest it is let go. It is PARKED (demand none), not left live: a view
+    // the cell still presents keeps the geometry seat, and a closed card held
+    // the desktop's PTY at phone size until the app went to the background
+    // (the seat audit, 2026-10-17). Parking detaches the view, which releases
+    // the seat cell-side; a live kept session needs a release the protocol can
+    // answer (the seat announcement), which is TM's to add. Parked at once, so
+    // a reopen can never be parked by a park still on its way.
+    guard let sessionID = attachment.attachedSessionID, let deviceID, attachment.park() else {
       Task { await attachment.detach() }
       return
     }

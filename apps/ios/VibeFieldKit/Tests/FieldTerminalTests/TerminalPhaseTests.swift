@@ -1,7 +1,7 @@
 import FieldProduct
-import FieldRoutedTerminal
 import Testing
 
+@testable import FieldRoutedTerminal
 @testable import FieldTerminal
 
 /// The card's faces, decided without a simulator.
@@ -36,6 +36,25 @@ import Testing
     // phone's terminal tab jumping up and down (James, 2026-10-17).
     #expect(TerminalAttachment.phase(for: .attached, session: nil, presented: true) == .live)
     #expect(TerminalAttachment.phase(for: .attached, session: nil, presented: false) == .connecting)
+  }
+
+  @Test func aCellThatStoppedPresentingIsSaidAndNotLive() throws {
+    // Live through a reseed is not live through a stop: a cell that stopped
+    // presenting this viewer has ended its pump, and nothing restarts it — a
+    // `.live` there was a frozen screen with no word (the scroll audit,
+    // 2026-10-17). The phase says it, and its banner offers RETRY.
+    var session = RoutedSessionState(sessionId: "s", activationId: "a")
+    session.control = .attached
+    session.status = try RoutedActivationStatus(
+      json: .object([
+        "sessionId": .string("s"), "activationId": .string("a"),
+        "cellStatusSequence": .int(1), "leaseTtlMs": .int(6_000),
+        "presentation": .object(["state": .string("stopped"), "reason": .string("overload")]),
+        "input": .object(["state": .string("suspended"), "reason": .string("overload")]),
+      ]))
+    #expect(
+      TerminalAttachment.phase(for: .attached, session: session, presented: true)
+        == .suspended("this screen stopped updating — the desktop said overload"))
   }
 
   @Test func reconnectingAndStaleRouteReadAsConnecting() {

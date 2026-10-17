@@ -341,7 +341,13 @@ public final class TerminalAttachment {
   public func attach(
     sessionID: String, cols: UInt16, rows: UInt16, deviceName: String? = nil
   ) {
-    grid = GhostteaTerminalGridSize(columns: cols, rows: rows)
+    // The grid a take is made with is the VIEW's measured one whenever there
+    // is one. A kept session's view, re-hosted at the size it had, never
+    // reports its grid again (the same geometry is an early return), so the
+    // host's placeholder sized the desktop's PTY to 80×24 on every reopen
+    // (the scroll audit, 2026-10-17). A view not yet laid out has none, and
+    // the placeholder holds only until the surface measures it.
+    grid = scene.view?.currentGridSize ?? GhostteaTerminalGridSize(columns: cols, rows: rows)
     let previous = self.sessionID
     // Another session's picture must not stand under this one's name; the same
     // session's last picture may, until the new activation's seed replaces it.
@@ -469,23 +475,35 @@ public final class TerminalAttachment {
 
   /// The user's own act — the one legitimate road back to `idle`.
   ///
-  /// On SHARED lanes the session is PARKED, not dropped: the cell detaches the
-  /// view (demand `none`), the activation and its grant stay, the scene keeps
-  /// its picture — and attaching it again is a demand on legs already up.
+  /// On SHARED lanes the session is PARKED, not dropped (`park`); otherwise
+  /// the attachment's own lane closes.
   public func detach() async {
     log("detached session=\(sessionID ?? "-")")
+    if park() { return }
     attachTask?.cancel()
     attachTask = nil
-    if !ownsLanes, let client, let sessionID, client.sessions[sessionID] != nil {
-      client.declare(demand: .none, for: sessionID)
-      noticeTask?.cancel()
-      noticeTask = nil
-      notice = nil
-      localPhase = .idle
-      log("parked on its lane session=\(sessionID)")
-      return
-    }
     await teardown(resetPhase: true, letGo: sessionID)
+  }
+
+  /// Park the session on its SHARED lane, at once: the cell detaches the view
+  /// (demand `none`) — which also releases the geometry seat — while the
+  /// activation and its grant stay and the scene keeps its picture, so
+  /// attaching it again is a demand on legs already up. `false` with no
+  /// shared lane carrying the session, and nothing is changed.
+  @discardableResult
+  public func park() -> Bool {
+    guard !ownsLanes, let client, let sessionID, client.sessions[sessionID] != nil else {
+      return false
+    }
+    attachTask?.cancel()
+    attachTask = nil
+    client.declare(demand: .none, for: sessionID)
+    noticeTask?.cancel()
+    noticeTask = nil
+    notice = nil
+    localPhase = .idle
+    log("parked on its lane session=\(sessionID)")
+    return true
   }
 
   /// Let this attachment's session go for good — the card's cache evicted it:
@@ -1010,7 +1028,16 @@ public final class TerminalAttachment {
       // as `connecting` hid the input card and raised a status line on every
       // resize, each of which resized the pane again (James, 2026-10-17: "the
       // entire tab just jumps up down like crazy").
-      return session?.presentationReady == true || presented ? .live : .connecting
+      if session?.presentationReady == true { return .live }
+      guard presented else { return .connecting }
+      // …but a cell that STOPPED presenting this viewer is not catching up: its
+      // pump has ended and nothing restarts it, so calling that live was a
+      // frozen screen with no word (the scroll audit, 2026-10-17). It is said,
+      // and RETRY is a fresh activation.
+      if case .stopped(let reason) = session?.status?.presentation {
+        return .suspended("this screen stopped updating — the desktop said \(reason)")
+      }
+      return .live
     case .reconnecting, .staleRoute: return .connecting
     case .refused(let code): return .refused(code)
     case .failed(let reason): return .failed(reason)
