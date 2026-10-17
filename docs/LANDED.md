@@ -11672,3 +11672,60 @@ red until James pushes it.
   desktop's size again); the wheel scrolls codex.
 - The cell's seat announcement (TPv3 §6, the audit's §1a) stays the design: with it a pane takes only when another view
   holds the seat, and a displaced holder can say so.
+
+## smoke:canvas's aimed draft calls the terminals up first — DK-14's AIMED row was main's own red from W7 to here, never a flake (2026-10-17; `c524837d5`, test-only, through lane mvland (`mv/canvas-aimed`) on `e1bc6111`)
+
+**Why:** DK-14's AIMED row checks that a draft already aimed takes the chip with no @, and that send arms. It went red
+in every smoke:canvas from 10-12 on: PORTALS' PT-5c2, 5d, 6a and 6b gates, the dui lane, and RD-5a's landing gate on 10-14
+("DK-14: @'s list open with a pane to send to did not happen within 10000ms"). It was carried as a flake that a rerun
+passes, but it never passed: **main's smoke:canvas was red from W7 (`42f8d5b6`, 10-12) to this landing.** land3's
+landing gate ran verify, smoke and smoke:godview only, so main never ran smoke:canvas in that time. W7's entry carries the
+History lead's correction, and ROADMAP's law is now the whole list at every landing. PORTALS named the cause on 10-12, and
+the PM gave the row to the MV lead on 10-14. **James's ruling:** "Fast-forward now" (asked 2026-10-14 19:51Z, answered
+2026-10-17 15:57Z; main had moved on, so it lands rebased).
+
+**The cause** (read from the code and the logs, then measured on main): W7 opens a launch with the terminals away and
+the deck uncalled (`GodviewOverlay`'s `called`). So there is no workspace and no shell. On Canvas the line's door then lends
+no pane, and @'s Send to says "No panes open yet" (`at-list.ts`). The product is right: a person who has called no
+terminal has no pane to send to. The row's precondition ("the pane the deck shows") is what had gone stale: before W7, the
+deck birthed a shell at every launch. Only smoke:godview called the terminals up, through the Godview markers' lab seam
+(`window.__vfGodviewDeck.up()`).
+
+**What landed** (`c524837d5`; no product file):
+- `testing/smoke.ts` loads the canvas run with `godviewMarkers: "1"`, for the lab seam alone. The markers add console lines
+  and the deck wrapper's witness; the canvas run reads neither.
+- `testing/smoke-send-to.ts`: the AIMED row calls the terminals up first (`askGodviewDeckUp`, the helper smoke:godview's
+  rows share), as a person's first call would.
+  - Since LR, the called deck asks the last run's question itself (`last-run.ts`). A fresh smoke profile left nothing, so it
+    answers start clean at once and the deck births its opening shell, the pane the row aims at.
+  - The bound is 20 s instead of 10, because it now counts that birth.
+  - A failure names what the deck ask did (`sayingDeckAsk`) and Send to's own words.
+  - `SMOKE_CANVAS_SEND_AIMED` records `paneMs`, and the file's header names the row and its precondition.
+
+**Validation:** this is a test-only change over a gated main (`e1bc6111`: one stack gate 24/27 under a LOCKED screen, the
+desk smokes' second samples owed), so its evidence is verify plus the row's own smoke. The logs are in
+`lanes/mvland/logs/c524837d5/`.
+- `pnpm verify` on `c524837d5`: EXIT 0, 16:03–16:09Z, no failed test. field-native was built from the lane into its own
+  target (`/Volumes/SamsungRed/rust/mvland`).
+- **smoke:canvas alone, on the shown window, with James's leave:** ok, EXIT 0, 16:14:54–16:29:57Z (903 s). Load was 9/36/37
+  at the start and 9 at the rows that record it.
+  - All 99 row lines passed. AIMED aimed at the opening shell 88 ms after the call; the draft read "Clock ", send armed,
+    and the act found the draft aimed.
+  - The HAND bars came back in 218–235 ms, inside the bound: main's known ~250 ms class did not occur.
+  - COUNTERS ran: since W7, AIMED's throw had skipped it.
+  - This run also discharges `e1bc6111`'s owed smoke:canvas sample.
+- **Before the rebase, on `562ea33a`** (`lanes/mvland/logs/f160cc66{,-solo2}/`):
+  - gate:landing 12/12 on the exact tree, and smoke:canvas 2/2 (the pane in 138 and 141 ms).
+  - Those smokes ran the lane's field-native built at `8a851973`, whose Rust is `562ea33a`'s.
+  - Main's control on `a508721e` (prod-builder, `lanes/rd5a-ctl/ctl-run{1,2}/`) was red 2/2 on the AIMED words, and RD-5a's
+    gate and its solo rerun were red on AIMED alone.
+
+**Found:**
+- No smoke:canvas log on disk from 10-06 to 10-14 had a `SMOKE_CANVAS_SEND_AIMED` line, and the dui lane's "green" log
+  carried the same red. A red carried as a flake should be checked against a control before anyone calls it one.
+- The 10-14 verify was red once on fieldd's agent-gateway row 3 (the shell's pid asserted dead the moment the agent's is),
+  under a PORTALS gate's load. `c2860c5d2` (DEBTS, with fix7) since makes the row wait for the shell's death.
+
+**Owed:** the canvas run now leaves the terminals called (minimized, the shell kept) for the rows after AIMED: THUMB, REST,
+the covers, peers, faults, pad and the pane rows. That is the deck those rows were written against before W7, and every
+row passed under it here.
