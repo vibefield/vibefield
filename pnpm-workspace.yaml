@@ -348,15 +348,14 @@ minimumReleaseAgeExclude:
   # exact; our own packages, reviewed as an EL8 pin.
   - '@vibefield/rosetta-protocol@0.1.1'
   - '@vibefield/rosetta-room@0.1.1'
-  # AH-1b — the exact T2 release is a reviewed executable input, not an
-  # unreviewed transitive update. All platform packages move in lockstep.
-  # 0.7.12 → 0.7.14 (2026-09-16, UA-P-X): the RFC 025 petition window's exit.
-  # This is the row that gives the PACKAGED app a login-gated node — the window
-  # ran the FLOOR against a sibling-built sidecar but left apps/desktop on the
-  # registry's protocol 4, and a gated node refuses a sidecar below protocol 5.
-  # Root Cargo.toml's closure note carries the whole event.
-  - '@vibecook/truffle-sidecar-darwin-arm64@0.7.14'
-  - '@vibecook/truffle-sidecar-darwin-x64@0.7.14'
-  - '@vibecook/truffle-sidecar-linux-arm64@0.7.14'
-  - '@vibecook/truffle-sidecar-linux-x64@0.7.14'
-  - '@vibecook/truffle-sidecar-win32-x64@0.7.14'
+  # The truffle pins are exact and move together as one EL8 commit across the three places.
+  # 0.7.14 → 0.7.19 (2026-10-17, the truffle bump, ruling B): published
+  # 2026-10-17 08:13Z, inside the release-age window on the day the pin moves.
+  # Sidecar protocol 8 with T6 — the row that lets a PACKAGED app admit the
+  # phone's product hello, and the one the floor's QUIC lanes (>= 6) and egress
+  # (>= 7) need under the 0.7.19 core.
+  - '@vibecook/truffle-sidecar-darwin-arm64@0.7.19'
+  - '@vibecook/truffle-sidecar-darwin-x64@0.7.19'
+  - '@vibecook/truffle-sidecar-linux-arm64@0.7.19'
+  - '@vibecook/truffle-sidecar-linux-x64@0.7.19'
+  - '@vibecook/truffle-sidecar-win32-x64@0.7.19'

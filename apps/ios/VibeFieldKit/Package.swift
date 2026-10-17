@@ -98,10 +98,11 @@ let package = Package(
     //
     // **THE WINDOW CLOSED ON 2026-09-16 (UA-P-X) — BUT NOT ON THIS PLANE.**
     // truffle 0.7.14 published RFC 025's login-scoped nodes (tag `v0.7.14`,
-    // commit 9f0d6287), and cargo and npm both took it: `truffle-core` is a
-    // registry pin again and apps/desktop installs the protocol-5 sidecar. This
-    // row could not follow, and the reason is a VICE, not a choice — both ways
-    // out are closed, each measured rather than assumed.
+    // commit 9f0d6287), and cargo and npm both took it, then moved together
+    // again to 0.7.19 on 2026-10-17 (the truffle bump): `truffle-core` is a
+    // registry pin and apps/desktop installs the 0.7.19 sidecars, which speak
+    // protocol 8. This row could not follow, and the reason is a VICE, not a
+    // choice — both ways out are closed, each measured rather than assumed.
     //
     // Forward to 0.7.14 is UNSATISFIABLE. `ghosttea` declares
     // `.package(url: truffleRepository, exact: "0.7.12")` of its own, and every
@@ -125,11 +126,18 @@ let package = Package(
     //     FieldTruffleRuntime.swift:157: 'MeshNode' has no member 'loginAllow'
     //     FieldStoreDoors+Mesh.swift:140: 'Peer' has no member 'loginName'
     //
+    // At the 0.7.19 pin the vice holds in the same shape: forward to
+    // `exact: "0.7.19"` is unsatisfiable, because ghosttea's newest Swift tag
+    // (v0.12.0), its pinned 218e11f and this kit's `exact: "0.10.1"` all still
+    // declare `let truffleVersion: Version = "0.7.12"`.
+    //
     // So the path package STAYS until the one thing that can free it lands: a
-    // ghosttea Swift release whose `truffleVersion` is 0.7.14. That is GT-4's
-    // cargo conflict in the other direction and it resolves upstream the same
-    // way — nothing in this repo can do it. Filed as the Apple plane's exit
-    // precondition; the root Cargo.toml's closure note names it too.
+    // ghosttea Swift release whose `truffleVersion` is the crate's pin, 0.7.19
+    // (a later pin needs a matching later release), and `truffleRelease` stays
+    // nil until it does. That is GT-4's cargo conflict in the other direction
+    // and it resolves upstream the same way — nothing in this repo can do it.
+    // Filed as the Apple plane's exit precondition; the root Cargo.toml's
+    // closure note names it too.
     //
     // What the window's remaining half still is, and why it is shaped this way:
     // a path package's identity is its DIRECTORY NAME, so reaching the checkout
@@ -143,16 +151,20 @@ let package = Package(
     // warns about the URL-vs-path identity conflict on every resolve and says it
     // will one day be an error — that warning is the cost of the override.
     //
-    // The checkout this reads is the RELEASED code, not a pre-release: on
-    // 2026-09-16 `../truffle-rfc025` was advanced to 9f0d6287, the commit tagged
-    // `truffle-v0.7.14`, and siblings.lock.json pins exactly that (`pnpm
-    // siblings:pin`, an EL8 event — and the one sibling pin that raises no
+    // The checkout this reads is the RELEASED code, not a pre-release:
+    // siblings.lock.json pins `../truffle-rfc025` at 1218b64, the commit tagged
+    // `truffle-v0.7.19` (an EL8 event — and the one sibling pin that raises no
     // unpushed-revision warning, because it IS a published tag). So all three
-    // planes now read 0.7.14; this one just reaches it through a path package
+    // planes read 0.7.19; this one just reaches it through a path package
     // instead of a version, because ghosttea's exact pin will not let a version
     // through. That is the whole residue of the window, and the ghosttea release
     // is what ends it. (RD-3: the row is `truffleDependency`, above — the path package while `truffleRelease` is
     // nil, in the committed dev shape and under the overlay; the exact release once the lock records one.)
+    //
+    // Under this plane, 0.7.19's `apple/Sources` and `Package.swift` products
+    // are byte-identical to 0.7.14's; only TailscaleKit's binary target differs
+    // (`ts1.104.1-go1.27.2`, checksum `f8a61a74…`), so the kit downloads a new
+    // xcframework, which only a run on a phone exercises.
     truffleDependency,
   ],
   targets: [

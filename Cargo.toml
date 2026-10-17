@@ -66,12 +66,13 @@ opt-level = 3
 # `truffle-core`/`truffle-sidecar` 0.7.14 and `@vibecook/truffle-sidecar-*`@0.7.14
 # (protocol 5). Closed with it: this requirement is a registry pin again and the
 # [patch.crates-io] section is deleted · siblings.lock.json's `truffle` entry lost
-# its `patch` and `go` keys · preflight's PIN_EXPECTATIONS names 0.7.14 · the five
-# npm sidecar rows read 0.7.14, which is what finally gives the packaged app a
-# login-gated node · scripts/stage-package.mjs needed no edit and was VERIFIED
-# rather than assumed (sidecarStagingSource reads `npm` once the `go` key goes) ·
-# the CI header's RFC 025 note is retired. mesh.rs and mgmt/mesh.rs needed no edit
-# either, confirmed by building rather than by reading.
+# its `patch` and `go` keys · preflight's PIN_EXPECTATIONS and the five npm
+# sidecar rows moved to 0.7.14 (both name 0.7.19 since the bump below), which is
+# what finally gave the packaged app a login-gated node · scripts/stage-package.mjs
+# needed no edit and was VERIFIED rather than assumed (sidecarStagingSource reads
+# `npm` once the `go` key goes) · the CI header's RFC 025 note is retired. mesh.rs
+# and mgmt/mesh.rs needed no edit either, confirmed by building rather than by
+# reading.
 #
 # WHAT DID NOT CLOSE — the SwiftPM plane, and it is not this repo's to close. The
 # kit is in a vice, both jaws measured:
@@ -88,12 +89,13 @@ opt-level = 3
 # So `apps/ios/VibeFieldKit/.window/truffle` and the path package STAY, and the
 # lock keeps a truffle entry carrying the `swift` half alone. This is GT-4's
 # conflict in the other direction and it resolves upstream the same way: a
-# ghosttea Swift release whose truffleVersion is 0.7.14. THAT is the Apple
-# plane's exit, and it is the whole remaining exit list. No version divergence
-# remains, though: `../truffle-rfc025` was advanced to 9f0d6287 — the commit
-# tagged `truffle-v0.7.14` — and siblings.lock.json pins it there, so every plane
-# reads 0.7.14 code and the path package is a delivery mechanism, not a different
-# truffle.
+# ghosttea Swift release whose truffleVersion is this file's pin, 0.7.19 since
+# the bump below (0.7.14 when the window closed). THAT is the Apple plane's exit,
+# and it is the whole remaining exit list. No version divergence remains,
+# though: siblings.lock.json pins `../truffle-rfc025` at 1218b64, the commit
+# tagged `truffle-v0.7.19` (9f0d6287, `truffle-v0.7.14`, until the bump), so
+# every plane reads 0.7.19 code and the path package is a delivery mechanism,
+# not a different truffle.
 #
 # A window's machinery therefore stays live in scripts/siblings.mjs, and the
 # lesson is recorded where the next one will read it: a petition window can be
@@ -102,7 +104,50 @@ opt-level = 3
 # because closing means returning to ordinary resolution, where a dependency's
 # own exact pin is an equal constraint. An exit list must name that upstream
 # precondition the day the window opens, not discover it at the exit.
-truffle-core = "=0.7.14"
+#
+# THE BUMP TO 0.7.19 (2026-10-17; James ruled B on 2026-10-15 20:52Z — one
+# event, after his T6 cut — re-ruled to 0.7.18 at 2026-10-16 23:31Z, and to
+# 0.7.19 when 0.7.18 burned: draft/handover/2026-10-15-truffle-bump-plan.md).
+# ONE EL8 event moves the crate and the five npm sidecars together.
+# `truffle-v0.7.19` = 1218b64, published 2026-10-17 08:13Z, is 0.7.18's content
+# plus the zip fix: the 0.7.18 tag (04b3e33) was never published, because
+# cargo-deny reddened on RUSTSEC-2026-0367/0368/0369 (zip, which reaches truffle
+# only through truffle-cli and the bench; this graph has no zip row). What it
+# carries past 0.7.14:
+#   · 0.7.15 — authenticated UDP relays at sidecar protocol 6 (975e416). A
+#     production provider's QUIC and UDP now FAIL CLOSED instead of falling back
+#     to a direct 0.0.0.0 socket, so doc-sync's 9440/9441 lanes need a sidecar
+#     >= 6. The one new dependency is hmac 0.13, already in this lock.
+#   · 0.7.16 — RFC 026 egress at protocol 7 (Node::loopback / egress_* /
+#     egress_http_proxy; NetworkError::EgressError), the API field-native's
+#     `truffle-egress` arm was compiled against on the branch (92ab2b7) and which
+#     shipped byte-identical but for two doc hunks.
+#   · 0.7.17 — T6 (7b66411): a WebSocket upgrade through a bound route keeps the
+#     target's path and query, so a PACKAGED app admits the phone's product hello.
+#     The local override sidecar retires with it.
+#   · after 0.7.17 — the macOS per-connection stall and the 30 s dial hangs
+#     (7ef088e), device approval and a late-known login
+#     (NodeBuilder::on_network_status, c78e868), a restarted peer's session
+#     recovered promptly with one dial per peer (9eb8ddc, the session rewrite
+#     under the synced store), `VERSION` and `Node::sidecar_pid` (68a967c).
+# Its sidecar speaks PROTOCOL 8, which adds no command: only a repeated "running"
+# status once the node's own login is known after a fast restart. The core gates
+# nothing on >= 8 (its gates stay 5 login, 6 UDP/QUIC, 7 egress), and the
+# node-to-node wire reads unchanged (QUIC PROTOCOL_VERSION 1, the WS hello, the
+# synced store), so a phone or a second desktop still on 0.7.14 is EXPECTED to
+# talk to this one. That rests on a reading: 9eb8ddc rewrote the session layer
+# under the roster and the store, and its mixed-version behaviour has one
+# witness, field-native's mixed-version probe, which this bump adds (a 0.7.19
+# node and an older peer, through both restarts). field-native needs NO source
+# change to build at its default features: every truffle API it calls is
+# unchanged or only grew (read at the tag, call site by call site; the build is
+# the check).
+# The SwiftPM vice is UNCHANGED: ghosttea's newest Swift tag (v0.12.0) and its
+# pinned 218e11f still declare truffle exact 0.7.12, so forward to 0.7.19 is as
+# unsatisfiable as forward to 0.7.14 was. The path package stays, and only the
+# checkout behind it moves (siblings.lock.json → 1218b64; Package.swift's
+# truffleRelease stays nil).
+truffle-core = "=0.7.19"
 # NF-0 (native-floor spec NF-D1): ghosttea graduated to crates.io the same way,
 # 2026-07-29 — exact pin, upgrades are deliberate events. NF-7 (2026-08-01) bumped
 # 0.6.0 → 0.7.0 for the G7/G8/G9 petition landings (shutdown drain, silent serve,

@@ -90,9 +90,10 @@ const PIN_EXPECTATIONS = [
   // A REGISTRY pin again since 2026-09-16 (UA-P-X): truffle 0.7.14 shipped RFC
   // 025's login-scoped nodes, so the requirement names a crates.io version
   // rather than the sibling checkout's 0.7.13 that the petition window needed.
-  // Cargo.toml's closure note carries what that window was and every place its
-  // exit touched.
-  { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.14"/m, label: 'truffle-core = "=0.7.14"' },
+  // 0.7.14 → 0.7.19 on 2026-10-17 (the truffle bump, ruling B): egress, T6 and
+  // sidecar protocol 8, the crate and the five npm sidecars in one EL8 event.
+  // Cargo.toml's closure note carries both events and every place they touched.
+  { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.19"/m, label: 'truffle-core = "=0.7.19"' },
   // The FINAL 0.16.0 on `latest` since PORTALS PT-6b (M24 LT1–LT5; LT5 — I52 — the reference
   // kinds' drivers idle unless their own object is in hand). Before it, prereleases on `next`
   // from PT-2 (0.16.0-portals.2 — LT1 + LT2, the live face and the hand's input; PT-3:

@@ -58,7 +58,9 @@ jobs:
       # is on no remote FAILS this step loudly — a verify that ran without the siblings would
       # be a verify of a different tree. Fresh detached checkouts are clean and at the pin, so
       # preflight's revision + dirty checks both pass. No shallow clone: a pin may sit behind
-      # the branch tip. truffle is not fetched — see the RFC 025 note in this file's header.
+      # the branch tip. truffle is fetched too since the 0.7.19 bump recorded its public
+      # `repository` (2026-10-17): its checkout is the SwiftPM path package's (../truffle-rfc025, the
+      # tag truffle-v0.7.19), which preflight requires — see the RFC 025 note in this file's header.
       #
       # puppeteer's own install happens below, AFTER this tree's (it needs pnpm from the
       # packageManager field): since AR-2 fieldd imports puppeteer, so the linked packages'
@@ -66,7 +68,7 @@ jobs:
       - name: Fetch sibling checkouts at the pinned revisions (EL8, siblings.lock.json)
         run: |
           set -euo pipefail
-          for name in puppeteer rosetta; do
+          for name in puppeteer rosetta truffle; do
             node scripts/siblings.mjs fetch "$name"
           done
 
