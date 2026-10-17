@@ -43,7 +43,7 @@ fn endpoint_for(root: &std::path::Path, file: &str) -> String {
 }
 
 fn spawn_cell(root: &std::path::Path, instance: u32) -> (Child, String, String) {
-    spawn_cell_with_env(root, instance, &[])
+    spawn_cell_with_env(root, instance, &[], Stdio::null())
 }
 
 /// N-M6 — `spawn_cell` with variables planted in the CELL PROCESS's own
@@ -54,6 +54,7 @@ fn spawn_cell_with_env(
     root: &std::path::Path,
     instance: u32,
     env: &[(&str, &str)],
+    stderr: Stdio,
 ) -> (Child, String, String) {
     let control = endpoint_for(
         root,
@@ -80,7 +81,7 @@ fn spawn_cell_with_env(
         ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(stderr)
         .spawn()
         .expect("spawn field-terminal-host");
     (child, control, frame)
@@ -253,6 +254,107 @@ async fn a_leash_drain_broadcasts_exits_to_witnesses() {
         "the drain's exit broadcast must reach the witness"
     );
     let _ = wait_exit(child, Duration::from_secs(10));
+}
+
+/// One control hello to a door: the reply's `type` and its `code`, if any.
+async fn control_hello(url: &str, grant: &serde_json::Value) -> (String, String) {
+    let (mut ws, _) = tokio::time::timeout(
+        Duration::from_secs(5),
+        tokio_tungstenite::connect_async(url.to_owned()),
+    )
+    .await
+    .expect("dial within 5s")
+    .expect("the cell's door accepts the upgrade");
+    ws.send(Message::Text(tp_mint::hello("control", grant, None).into()))
+        .await
+        .expect("send hello");
+    let reply = tokio::time::timeout(Duration::from_secs(5), ws.next())
+        .await
+        .expect("a reply within 5s")
+        .expect("a reply")
+        .expect("a frame");
+    let Message::Text(text) = reply else {
+        panic!("expected a text reply, got {reply:?}");
+    };
+    let reply: serde_json::Value = serde_json::from_str(text.as_str()).expect("json");
+    let field = |name: &str| reply[name].as_str().unwrap_or_default().to_owned();
+    (field("type"), field("code"))
+}
+
+/// F1 — a stdin line after the bootstrap is an update. The floor's `revokeClient` reaches the
+/// REAL cell's door, which then refuses that client's grants below the wall even on a set it
+/// never saw, and admits one at the wall; a line that does not parse is reported and ignored;
+/// EOF is still the leash. The cell's own stderr says when the wall stands, which orders the
+/// dials after it.
+#[tokio::test]
+async fn a_revoke_client_line_walls_the_clients_older_grants_and_the_leash_still_drains() {
+    let root = short_root();
+    let (mut child, _control, _frame) = spawn_cell_with_env(root.path(), 21, &[], Stdio::piped());
+    let mut stdin = child.stdin.take().expect("stdin");
+    let stdout = child.stdout.take().expect("stdout");
+    let stderr = child.stderr.take().expect("stderr");
+    let (said, heard) = std::sync::mpsc::channel::<String>();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+            if said.send(line).is_err() {
+                break;
+            }
+        }
+    });
+    let bootstrap = serde_json::json!({
+        "token": "tok-revoke",
+        "grantKey": hex::encode(vec![0x5e_u8; 32]),
+        "grantKeyGeneration": 1,
+    });
+    writeln!(stdin, "{bootstrap}").expect("bootstrap");
+    let mut lines = BufReader::new(stdout).lines();
+    let hello: field_native::cell::CellHello =
+        serde_json::from_str(&lines.next().expect("hello").expect("read hello")).expect("parse");
+    let doors = hello.doors.expect("a keyed cell serves its doors");
+    let minter = tp_mint::TestMinter::new(&hello.cell_boot_id);
+
+    writeln!(stdin, "not an update").expect("a line");
+    let wall =
+        serde_json::json!({ "revokeClient": { "clientId": "win:1#1", "beforeGeneration": 5 } });
+    writeln!(stdin, "{wall}").expect("the revoke");
+    let mut events = Vec::new();
+    while !events
+        .iter()
+        .any(|line: &String| line.contains("field_native.cell.revoke_client"))
+    {
+        let line = heard
+            .recv_timeout(Duration::from_secs(10))
+            .expect("the cell says the wall stands");
+        events.push(line);
+    }
+    let unparsed = events
+        .iter()
+        .any(|line| line.contains("field_native.cell.update_unparsed"));
+    assert!(
+        unparsed,
+        "the line that did not parse is reported: {events:?}"
+    );
+
+    let below = minter.transport(tp_mint::TransportSpec::basic("set-never-seen", 4, "n-r4"));
+    let refused = control_hello(&doors.control_url, &below).await;
+    assert_eq!(
+        refused,
+        (
+            "ConnectionRefused".to_owned(),
+            "GRANT_GENERATION_ROLLBACK".to_owned()
+        )
+    );
+    let at = minter.transport(tp_mint::TransportSpec::basic("set-never-seen", 5, "n-r5"));
+    assert_eq!(
+        control_hello(&doors.control_url, &at).await.0,
+        "ConnectionAccepted"
+    );
+
+    drop(stdin);
+    let report: field_native::cell::CellExitReport =
+        serde_json::from_str(&lines.next().expect("exit line").expect("read exit")).expect("parse");
+    assert!(report.drained.is_some());
+    assert!(wait_exit(child, Duration::from_secs(10)).success());
 }
 
 /// TP-S3a — the bootstrap carries the grant key, the hello carries the doors,
@@ -526,6 +628,7 @@ async fn a_real_pty_never_inherits_the_daemon_private_prefixes() {
             ("FIELDD_SMUGGLE", "fieldd-must-not-escape"),
             ("VF_CELL_CONTROL", "this-one-must-arrive"),
         ],
+        Stdio::null(),
     );
     let mut stdin = child.stdin.take().expect("stdin");
     let stdout = child.stdout.take().expect("stdout");

@@ -21,6 +21,13 @@
 //!
 //! The attach high-water (`{clientId, sessionId}`) lives here too for TP-S3b
 //! — same shape, same tombstone rule; unused by the S3a door.
+//!
+//! - CLIENT FLOORS (F1's `RevokeClient {clientId, beforeGeneration}`, the
+//!   floor relaying the freeway host's revoke): no grant for that client
+//!   below its floor is admitted, transport or attach, whatever set or session
+//!   it names — one the ledger has never seen included — so a grant minted
+//!   before the revoke is refused whatever path it arrives by. A floor is kept
+//!   as a tombstone is, until every grant minted below it has expired.
 
 use super::grant::{Channel, TransportClaims};
 use crate::registries::terminal_pipeline as tp;
@@ -90,6 +97,8 @@ pub struct TransportLedger {
     max_grant_lifetime_ms: u64,
     transport_high_water: HashMap<String, HighWater>,
     attach_high_water: HashMap<(String, String), HighWater>,
+    /// clientId → the generation its grants are refused below (`RevokeClient`)
+    client_floors: HashMap<String, HighWater>,
     /// (nonce, channel) → retain-until (expiresAt + skew)
     nonces: HashMap<(String, Channel), u64>,
 }
@@ -107,6 +116,7 @@ impl TransportLedger {
             max_grant_lifetime_ms,
             transport_high_water: HashMap::new(),
             attach_high_water: HashMap::new(),
+            client_floors: HashMap::new(),
             nonces: HashMap::new(),
         }
     }
@@ -136,6 +146,9 @@ impl TransportLedger {
             if claims.transport_grant_generation < hw {
                 return Err(TransportRefusal::GrantGenerationRollback);
             }
+        }
+        if self.below_floor(&claims.client_id, claims.transport_grant_generation) {
+            return Err(TransportRefusal::GrantGenerationRollback);
         }
         if self.nonces.contains_key(&(claims.nonce.clone(), channel)) {
             return Err(TransportRefusal::GrantNonceReplayed);
@@ -191,6 +204,9 @@ impl TransportLedger {
         grant_generation: u64,
         now_ms: u64,
     ) -> bool {
+        if self.below_floor(client_id, grant_generation) {
+            return false;
+        }
         let key = (client_id.to_string(), session_id.to_string());
         match self.attach_high_water.get_mut(&key) {
             Some(h) if grant_generation < h.generation => false,
@@ -216,6 +232,26 @@ impl TransportLedger {
         }
     }
 
+    /// `RevokeClient`: from now on the client's grants below `before_generation` are refused, on
+    /// every set and session. A floor only rises.
+    pub fn revoke_client(&mut self, client_id: &str, before_generation: u64, now_ms: u64) {
+        let raised = HighWater {
+            generation: before_generation,
+            first_accepted_at_ms: now_ms,
+        };
+        let floor = self
+            .client_floors
+            .entry(client_id.to_string())
+            .or_insert(raised);
+        if before_generation > floor.generation {
+            *floor = raised;
+        }
+    }
+
+    fn below_floor(&self, client_id: &str, generation: u64) -> bool {
+        (self.client_floors.get(client_id)).is_some_and(|floor| generation < floor.generation)
+    }
+
     /// The set's current high-water, if any (tests and the door's snapshot).
     pub fn transport_high_water(&self, connection_set_id: &str) -> Option<u64> {
         self.transport_high_water
@@ -232,6 +268,7 @@ impl TransportLedger {
         };
         self.transport_high_water.retain(|_, h| ttl(h) > now_ms);
         self.attach_high_water.retain(|_, h| ttl(h) > now_ms);
+        self.client_floors.retain(|_, h| ttl(h) > now_ms);
     }
 
     /// Sizes, for the door's snapshot and the bounded-memory rows.
@@ -379,5 +416,33 @@ mod tests {
             l.accept_attach_generation("c", "other", 1, 5),
             "per session"
         );
+    }
+
+    #[test]
+    fn a_revoked_client_is_refused_below_its_floor_on_every_set_and_session_until_the_tombstone_ttl(
+    ) {
+        let mut l = TransportLedger::new(1_000, 60_000);
+        l.revoke_client("win:1#1", 5, 10_000);
+        // Never seen: a set, a session — refused below the floor all the same.
+        let below = claims("set-new", 4, "n-1", 10_000);
+        assert_eq!(
+            l.check_transport(&below, Channel::Control, None),
+            Err(TransportRefusal::GrantGenerationRollback)
+        );
+        assert!(!l.accept_attach_generation("win:1#1", "s-new", 4, 10_000));
+        // At the floor and above: admitted, and another client is untouched.
+        assert!(l
+            .check_transport(&claims("set-new", 5, "n-2", 10_000), Channel::Control, None)
+            .is_ok());
+        assert!(l.accept_attach_generation("win:1#1", "s-new", 5, 10_000));
+        assert!(l.accept_attach_generation("win:2#1", "s-new", 1, 10_000));
+        // A floor only rises.
+        l.revoke_client("win:1#1", 3, 10_000);
+        assert!(!l.accept_attach_generation("win:1#1", "s-other", 4, 10_000));
+        // Kept until every grant minted below it has expired (lifetime + skew), then let go.
+        l.prune(10_000 + 61_000 - 1);
+        assert!(!l.accept_attach_generation("win:1#1", "s-third", 4, 10_000));
+        l.prune(10_000 + 61_000);
+        assert!(l.accept_attach_generation("win:1#1", "s-third", 4, 10_000));
     }
 }

@@ -37,7 +37,7 @@ use ghosttea::{ipc, TerminalService, TerminalServiceConfig, TerminalServiceListe
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, BufReader};
 
 /// The non-secret half of the bootstrap, straight off argv.
 #[derive(Debug, Clone)]
@@ -82,6 +82,15 @@ pub struct CellBootstrap {
 pub struct CellDoors {
     pub control_url: String,
     pub frames_url: String,
+}
+
+/// A later stdin line (F1): an order for the running cell. Today one kind, the freeway host's
+/// revoke as the floor relays it to every cell (its own type, so the two pipes cannot drift).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CellUpdate {
+    #[serde(default)]
+    pub revoke_client: Option<crate::freeway::host::RevokeClient>,
 }
 
 /// stdout line 1 — printed only once the serve plane holds. The parent binds
@@ -296,14 +305,12 @@ pub async fn run_cell(args: CellArgs) -> Result<()> {
     write_stdout_line(&serde_json::to_string(&hello).context("serialize hello")?)
         .context("write hello — is the parent still listening?")?;
 
-    // The leash: consume (and discard) anything else on stdin until EOF.
-    let leash = async move {
-        let mut sink = [0u8; 256];
-        loop {
-            match stdin.read(&mut sink).await {
-                Ok(0) | Err(_) => break,
-                Ok(_) => continue,
-            }
+    // The leash: every later stdin line is an update (F1's `revokeClient`), and EOF asks for
+    // the drain.
+    let mut updates = stdin.lines();
+    let leash = async {
+        while let Ok(Some(line)) = updates.next_line().await {
+            apply_update(door.as_ref(), &line);
         }
     };
 
@@ -382,6 +389,35 @@ const WRITER_FLUSH_GRACE: Duration = Duration::from_millis(250);
 
 /// One protocol line to stdout, flushed, error surfaced to the caller — the
 /// only writer stdout has (diagnostics ride stderr).
+/// One later stdin line, applied. A line that does not parse is reported by its position and
+/// otherwise ignored: the floor is its only writer, and the cell serves on.
+fn apply_update(door: Option<&Door>, line: &str) {
+    let update: CellUpdate = match serde_json::from_str(line) {
+        Ok(update) => update,
+        Err(error) => {
+            tracing::warn!(
+                event = "field_native.cell.update_unparsed",
+                component = "terminal",
+                class = ?error.classify(),
+                column = error.column(),
+                "a stdin update did not parse; ignored"
+            );
+            return;
+        }
+    };
+    // Without T1 doors this cell admits no grant, so a revoke has nothing to refuse.
+    if let (Some(revoke), Some(door)) = (update.revoke_client, door) {
+        door.revoke_client(&revoke.client_id, revoke.before_generation);
+        tracing::info!(
+            event = "field_native.cell.revoke_client",
+            component = "terminal",
+            client = %revoke.client_id,
+            before = revoke.before_generation,
+            "a client's grants below its wall are refused and its activations ended"
+        );
+    }
+}
+
 fn write_stdout_line(line: &str) -> std::io::Result<()> {
     use std::io::Write;
     let mut out = std::io::stdout().lock();

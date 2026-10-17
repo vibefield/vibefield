@@ -531,6 +531,20 @@ impl Door {
             .unwrap_or(0)
     }
 
+    /// `RevokeClient {clientId, beforeGeneration}` (F1, the floor relaying the freeway host's
+    /// revoke): the ledger refuses the client's grants below `before_generation` on every set and
+    /// session, and its activations end `right-revoked`. Its legs stay; nothing they carry can
+    /// attach again.
+    pub fn revoke_client(&self, client_id: &str, before_generation: u64) {
+        let effects = {
+            let mut reg = self.state.registry.lock().unwrap();
+            reg.ledger
+                .revoke_client(client_id, before_generation, unix_ms());
+            reg.activations.revoke_client(client_id)
+        };
+        perform(&self.state, effects);
+    }
+
     /// Stop accepting, close every leg `1001`, and give the close frames a
     /// bounded moment to leave. Idempotent.
     pub async fn shutdown(&self) {

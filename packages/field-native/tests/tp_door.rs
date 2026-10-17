@@ -364,6 +364,36 @@ async fn the_structured_class_answers_connection_refused_with_the_named_code() {
     door.shutdown().await;
 }
 
+/// F1 — `RevokeClient`: below the client's wall a grant is a rollback, on a set this door has
+/// never seen; at the wall it is admitted; another client is untouched.
+#[tokio::test]
+async fn a_revoked_client_is_refused_below_its_wall_even_on_a_set_the_door_never_saw() {
+    let m = minter();
+    let door = Door::serve(config(&m)).await.expect("serve");
+    let live = m.transport(TransportSpec::basic("set-live", 2, "n-l2"));
+    let (mut control, _) = dial(&door.control_url(), None).await;
+    expect_accepted(say_hello(&mut control, "control", &live, None).await);
+    door.revoke_client("win:1#1", 5);
+
+    let below = m.transport(TransportSpec::basic("set-unseen", 4, "n-u4"));
+    let (mut ws, _) = dial(&door.control_url(), None).await;
+    expect_refused(
+        say_hello(&mut ws, "control", &below, None).await,
+        "GRANT_GENERATION_ROLLBACK",
+        false,
+    );
+    let at = m.transport(TransportSpec::basic("set-unseen", 5, "n-u5"));
+    let (mut ws, _) = dial(&door.control_url(), None).await;
+    expect_accepted(say_hello(&mut ws, "control", &at, None).await);
+    let other = m.transport(TransportSpec {
+        client_id: "win:2#1",
+        ..TransportSpec::basic("set-other", 1, "n-o1")
+    });
+    let (mut ws, _) = dial(&door.control_url(), None).await;
+    expect_accepted(say_hello(&mut ws, "control", &other, None).await);
+    door.shutdown().await;
+}
+
 #[tokio::test]
 async fn one_leg_per_channel_with_higher_generation_replacement() {
     let m = minter();

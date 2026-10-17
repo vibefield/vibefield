@@ -1966,6 +1966,20 @@ impl ActivationTable {
         effects
     }
 
+    /// `RevokeClient` (F1): every activation of the client ends `right-revoked`, the reason a
+    /// lapsed grant already gives.
+    pub fn revoke_client(&mut self, client_id: &str) -> Vec<Effect> {
+        let ids: Vec<String> = (self.by_id.values())
+            .filter(|a| a.client_id == client_id)
+            .map(|a| a.activation_id.clone())
+            .collect();
+        let mut effects = Vec::new();
+        for id in ids {
+            effects.extend(self.invalidate(&id, "right-revoked", false));
+        }
+        effects
+    }
+
     /// Periodic: attach deadlines, grant expiry, lag by time. Returns statuses
     /// to send and the activations to drop.
     pub fn tick(&mut self, now_ms: u64) -> Vec<Effect> {
@@ -2902,6 +2916,18 @@ mod tests {
         let effects = t.geometry_finalize(&sink, p, GeometryOutcome::EngineRefused, NOW);
         perform(effects);
         assert_eq!(texts(&mut rx).pop().unwrap()["code"], "VIEW_SUPERSEDED");
+    }
+
+    #[test]
+    fn a_revoked_client_loses_every_activation_and_no_one_else_does() {
+        let mut t = ActivationTable::new("cb");
+        let rights = [AttachRight::Read];
+        attach_live_with_view(&mut t, "freeway:p#n~hb", "s1", "a1", 1, &rights);
+        attach_live_with_view(&mut t, "freeway:p#n~hb", "s2", "a2", 1, &rights);
+        attach_live_with_view(&mut t, "win:1#1", "s1", "b1", 2, &rights);
+        perform(t.revoke_client("freeway:p#n~hb"));
+        assert!(t.get("a1").is_none() && t.get("a2").is_none());
+        assert!(t.get("b1").is_some(), "another client's activation stands");
     }
 
     #[test]
