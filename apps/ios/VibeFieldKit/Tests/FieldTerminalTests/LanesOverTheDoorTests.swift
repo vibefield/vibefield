@@ -100,4 +100,44 @@ import Testing
     #expect(await door.controlAttaches.count == 1)
     lanes.closeAll()
   }
+
+  /// The sweep's P1 (2026-10-17): a session reopened on its lane — the
+  /// freeway's fast path, "back on its lane — no mint, no dial" — must still
+  /// PAINT. Its sink and re-mint were keyed to the tap that made them, so the
+  /// re-tap's new counter turned every later frame into a refusal and the card
+  /// read live over a frozen screen. The row above stopped at the demand and
+  /// never sent a frame, which is how that shipped; this one sends one after
+  /// the re-tap.
+  @MainActor
+  @Test func aSessionReopenedOnItsLaneStillPaints() async throws {
+    let door = CellDoorHarness()
+    let port = try await door.start()
+    defer { Task { await door.stop() } }
+    let frames = try LaneFrames.load()
+    let lanes = TerminalLanes(
+      transport: URLSessionRoutedTransport(),
+      door: { asked in try AttachmentOverTheDoorTests.ticketJSON(port: port, sessionId: asked) })
+    let rendered = AttachmentOverTheDoorTests.RenderedFrames()
+    let attachment = TerminalAttachment(lanes: lanes, appearance: .default, scene: rendered.scene)
+    try await attachToLive(attachment, session: "sess-a", door: door, attaches: 1)
+    let activation = try #require(await door.controlAttach).activationId
+    await door.sendUnit(
+      try Script.frame(
+        session: "sess-a", activation: activation, sequence: 1, creditEpoch: 1, base: nil,
+        result: Script.stamp(1), payload: frames.seed))
+    try await AttachmentOverTheDoorTests.until("the seed to paint") {
+      await MainActor.run { rendered.frames.count == 1 }
+    }
+
+    // The re-tap: the same session, its legs whole — the fast path.
+    attachment.attach(sessionID: "sess-a", cols: 80, rows: 24, deviceName: "studio")
+    await door.sendUnit(
+      try Script.frame(
+        session: "sess-a", activation: activation, sequence: 2, creditEpoch: 1, base: nil,
+        result: Script.stamp(2), payload: frames.seed))
+    try await AttachmentOverTheDoorTests.until("a frame after the re-tap to paint") {
+      await MainActor.run { rendered.frames.count == 2 }
+    }
+    lanes.closeAll()
+  }
 }

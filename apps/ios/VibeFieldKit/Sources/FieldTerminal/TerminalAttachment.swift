@@ -181,6 +181,14 @@ public final class TerminalAttachment {
   /// the new one. The client is rebuilt per attach, so this is the cheap check
   /// that a task started before the rebuild is not still writing to it.
   @ObservationIgnored private var attachID: UInt64 = 0
+  /// The binding the CURRENT sink and re-mint were made for. A frame or a
+  /// re-mint belongs to this attachment exactly when it arrives on the binding
+  /// the attachment holds — never by which TAP made it. Keyed to `attachID`, a
+  /// re-tap of a session still whole on its lane (the freeway's fast path) kept
+  /// a sink whose every frame was then refused: the reopened card read live over
+  /// a frozen screen (the sweep's P1, 2026-10-17). It moves only when a sink is
+  /// installed or let go (`bind`, `unbind`).
+  @ObservationIgnored private var binding: UInt64 = 0
   /// fix8 — how long any one step of an attach may wait (the mint here, each
   /// `RoutedTerminalClient.AttachStep` in the client) before the card says
   /// where it stopped.
@@ -371,7 +379,7 @@ public final class TerminalAttachment {
       // in place — ask the cell for the view again. Nothing is minted, nothing
       // dialed: the freeway's tap, on today's transport.
       if !self.ownsLanes, let held = self.lanes.client(holding: sessionID),
-        self.resume(on: held, sessionID: sessionID, attach: attach)
+        self.resume(on: held, sessionID: sessionID)
       {
         return
       }
@@ -400,7 +408,7 @@ public final class TerminalAttachment {
         "mint answered session=\(sessionID) cell=\(ticket.route.cellBootId) in "
           + "\(URLSessionRoutedTransport.milliseconds(since: asked)) ms")
       guard attach == self.attachID, !Task.isCancelled else { return }
-      self.open(ticket, sessionID: sessionID, attach: attach)
+      self.open(ticket, sessionID: sessionID)
     }
   }
 
@@ -418,7 +426,7 @@ public final class TerminalAttachment {
     attachTask = nil
     letGo(sessionID)
     client = nil
-    sink = nil
+    unbind()
     localPhase = .ended(Self.runEndedWords(device: deviceName))
     log(
       "run exited on \(deviceName ?? "that desktop") — attach stopped "
@@ -489,7 +497,7 @@ public final class TerminalAttachment {
     attachTask = nil
     letGo(sessionID)
     client = nil
-    sink = nil
+    unbind()
     localPhase = .idle
     sessionID = nil
   }
@@ -499,10 +507,11 @@ public final class TerminalAttachment {
   /// cell re-attaches the view and SEEDS it (a view left live would send only
   /// deltas onto a scene this sink may never have held). `false` when the lane's
   /// activation is not whole, and only a fresh attach can bring it back.
-  private func resume(on client: RoutedTerminalClient, sessionID: String, attach: UInt64) -> Bool {
+  private func resume(on client: RoutedTerminalClient, sessionID: String) -> Bool {
     guard client.sessions[sessionID]?.bothLegsAttached == true else { return false }
-    let sink = makeSink(attach: attach)
-    lanes.adopt(sessionID, sink: sink, reticket: reticket(attach: attach))
+    let binding = bind()
+    let sink = makeSink(binding: binding)
+    lanes.adopt(sessionID, sink: sink, reticket: reticket(binding: binding))
     self.sink = sink
     self.client = client
     localPhase = nil
@@ -515,21 +524,21 @@ public final class TerminalAttachment {
   }
 
   /// This attachment's frames: its scene, behind the identity and lineage rules.
-  private func makeSink(attach: UInt64) -> RoutedTerminalFrameSink {
+  private func makeSink(binding: UInt64) -> RoutedTerminalFrameSink {
     RoutedTerminalFrameSink(
       render: { [weak self] frame in
-        guard let self, attach == self.attachID else { return false }
+        guard let self, binding == self.binding else { return false }
         return self.scene.render(frame)
       },
       identityFailed: { [weak self] _, reason in
-        guard let self, attach == self.attachID else { return }
+        guard let self, binding == self.binding else { return }
         // The cell stamped a frame with handles it did not declare. There is no
         // repair for that inside the activation — the scene on screen may be
         // another session's — so the attachment fails with the reason, loudly.
         self.localPhase = .failed(reason)
       },
       activationEnded: { [weak self] _, reason in
-        guard let self, attach == self.attachID else { return }
+        guard let self, binding == self.binding else { return }
         self.note("the scene stopped advancing — \(reason)")
       })
   }
@@ -547,18 +556,18 @@ public final class TerminalAttachment {
   /// `.refused` phase and only the FIRST attach could set that. The door's
   /// sentence is the whole answer here exactly as it is on the first attach, so
   /// it reaches the card the same way.
-  private func reticket(attach: UInt64) -> TerminalLanes.Reticket {
+  private func reticket(binding: UInt64) -> TerminalLanes.Reticket {
     { [weak self] session in
       guard let self else { throw CancellationError() }
       do {
         let ticket = try await self.mintTicket(for: session)
-        guard attach == self.attachID else { throw CancellationError() }
+        guard binding == self.binding else { throw CancellationError() }
         // A mint that came back retires the refusal an earlier one left on the
         // card: the client is this session's authority again.
         if case .refused = self.localPhase { self.localPhase = nil }
         return ticket
       } catch {
-        guard attach == self.attachID else { throw error }
+        guard binding == self.binding else { throw error }
         self.localPhase = .refused(self.doorRefusal ?? Self.shortReason(error))
         throw error
       }
@@ -578,13 +587,27 @@ public final class TerminalAttachment {
     lanes.release(session)
   }
 
-  private func open(_ ticket: RoutedTerminalTicket, sessionID: String, attach: UInt64) {
-    let sink = makeSink(attach: attach)
+  /// A new binding for the sink about to be installed: every closure made for
+  /// an earlier one belongs to nobody from here on.
+  private func bind() -> UInt64 {
+    binding &+= 1
+    return binding
+  }
+
+  /// Let the sink go, and every closure made for it with it.
+  private func unbind() {
+    sink = nil
+    binding &+= 1
+  }
+
+  private func open(_ ticket: RoutedTerminalTicket, sessionID: String) {
+    let binding = bind()
+    let sink = makeSink(binding: binding)
     // The cell's lane — opened by its first ticket, carrying every session the
     // phone shows on that cell — with this session's frames routed to `sink`.
     // P0-C's renewal, the leg budget and fix8's step deadline are the lane's.
     let client = lanes.lane(
-      for: ticket, sessionId: sessionID, sink: sink, reticket: reticket(attach: attach))
+      for: ticket, sessionId: sessionID, sink: sink, reticket: reticket(binding: binding))
     self.sink = sink
     self.client = client
     self.sessionID = sessionID
@@ -648,7 +671,7 @@ public final class TerminalAttachment {
     // a shared lane forgets only the session this attachment is letting go.
     if ownsLanes { lanes.closeAll() } else { letGo(session) }
     client = nil
-    sink = nil
+    unbind()
     notice = nil
     if resetPhase {
       localPhase = .idle
@@ -888,7 +911,7 @@ public final class TerminalAttachment {
     attachTask = nil
     lanes.closeAll()
     client = nil
-    sink = nil
+    unbind()
     localPhase = .suspended("paused in the background")
   }
 
