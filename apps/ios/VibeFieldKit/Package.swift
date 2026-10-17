@@ -324,7 +324,7 @@ let package = Package(
     ),
     .testTarget(
       name: "FieldFreewayTests",
-      dependencies: ["FieldFreeway"],
+      dependencies: ["FieldFreeway", "FieldProduct"],
       // The contracts' OWN frame vector, copied in (EL9 on the third side): the bytes the
       // TypeScript tests and the host's `freeway::frame` tests decode are the bytes these do.
       // `pnpm check:ios-fixtures` keeps the word "copy" true.
