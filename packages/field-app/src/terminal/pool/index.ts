@@ -2,6 +2,7 @@
 // here and never reach past it — placement, the transport table and the runtime
 // factory are the pool's own business (TP-L-C).
 
+export type { RoutedInputRefusal } from "../routed/encode-input";
 export type { RemoteRefusal, RemoteRefusalState } from "../routed/remote-refusal";
 export type { SessionSeat } from "../routed/session-seat";
 export type { CellBootId, TerminalShellPolicy } from "./cell-transport";
@@ -30,6 +31,7 @@ export {
   createTerminalSession,
   disposeTerminalPool,
   floorReadWithin,
+  hearTerminalInputRefusals,
   openDormantTransport,
   openTerminalPool,
   type ProjectedSessionDemand,

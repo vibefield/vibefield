@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import type { GhostteaTerminalRuntime, RoutedTerminalInputContext } from "@vibecook/ghosttea-react";
-import { SendInput, type TerminalOpenTicket } from "@vibefield/contracts";
+import { SendInput, TERMINAL_PIPELINE, type TerminalOpenTicket } from "@vibefield/contracts";
 import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
 import { describe, expect, it, vi } from "vitest";
 import { getRendererLogger, type RendererLogger, setRendererLogger } from "../src/logging";
@@ -267,6 +267,38 @@ describe("createRoutedTerminalHost — the G23 product adapter", () => {
     await expect(binding.host.terminate?.("sess-1", "user")).rejects.toThrow("floor unavailable");
     expect(onTerminated).not.toHaveBeenCalled();
     expect(sequenceOf(binding, "act-1")).toBe(1);
+  });
+
+  it("tells its owner of a paste too large for one message, and hands the runtime nothing (D6)", () => {
+    const onInputRefusal = vi.fn();
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: vi.fn() } as unknown as FielddClient,
+      onInputRefusal,
+    });
+    const tooLarge: RoutedTerminalInputContext = {
+      ...inputContext("act-1"),
+      operation: { kind: "paste", text: "x".repeat(TERMINAL_PIPELINE.MAX_CONTROL_MESSAGE_BYTES) },
+    };
+    // the one-message seam: never parted, refused — and the owner is told
+    expect(binding.host.encodeInput?.(tooLarge)).toBeNull();
+    expect(onInputRefusal).toHaveBeenCalledTimes(1);
+    // its own size, and the most of it one message carries — less than that
+    expect(onInputRefusal).toHaveBeenCalledWith({
+      sessionId: "sess-1",
+      kind: "paste",
+      bytes: TERMINAL_PIPELINE.MAX_CONTROL_MESSAGE_BYTES,
+      limitBytes: expect.any(Number),
+    });
+    expect(onInputRefusal.mock.calls[0]?.[0].limitBytes).toBeLessThan(
+      TERMINAL_PIPELINE.MAX_CONTROL_MESSAGE_BYTES,
+    );
+    // the refusal spent nothing: the activation's next input is its first
+    expect(sequenceOf(binding, "act-1")).toBe(1);
+    // a disposed host refuses nothing aloud
+    binding.dispose();
+    onInputRefusal.mockClear();
+    expect(binding.host.encodeInput?.(tooLarge)).toBeNull();
+    expect(onInputRefusal).not.toHaveBeenCalled();
   });
 });
 

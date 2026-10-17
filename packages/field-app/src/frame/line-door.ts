@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { DeckPlaced } from "../godview/deck-placement";
+import type { RoutedInputRefusal } from "../terminal/pool";
 
 // WHAT GODVIEW LENDS THE LINE (One Frame FR-2; DESIGN.md §8 "The line").
 // The line is the frame's and Godview is a view below it, but two of the
@@ -368,4 +369,40 @@ export function hearLineSays(hear: (text: string) => void): () => void {
   return () => {
     lineHearers.delete(hear);
   };
+}
+
+// ── WHAT A TERMINAL COULD NOT TAKE (D6) ─────────────────────────────────────
+// A paste (⌘V in a pane) or typed text that the terminal refused because it is
+// larger than the link to it carries (`terminal/routed/encode-input.ts`). The
+// runtime says nothing of an input it was never handed, so the line does, in
+// the note an act's outcome is said in (DESIGN.md §8 "The line"): what
+// happened, with its numbers — which are what to do instead — in under 70
+// characters beside the pane's name, so it is read before the note fades.
+
+/** A size in the note's words, counted in thousands as Finder counts it
+ * (DESIGN.md §9): bytes below a kilobyte, whole KB below a megabyte, then MB
+ * and GB to a tenth. `round` says which way — a size is rounded up and what
+ * fits of it down, so the two never read as equal. The unit is chosen after
+ * the rounding: 999,999 bytes rounded up is "1 MB", never "1000 KB". */
+function sizeWords(bytes: number, round: (value: number) => number): string {
+  if (bytes < 1_000) return bytes === 1 ? "1 byte" : `${bytes} bytes`;
+  const kb = round(bytes / 1_000);
+  if (kb < 1_000) return `${kb} KB`;
+  const mb = round(bytes / 100_000) / 10;
+  if (mb < 1_000) return `${mb} MB`;
+  return `${round(bytes / 100_000_000) / 10} GB`;
+}
+
+/** What the line says of a refused input, naming the pane as @'s list names it
+ * (`name`; absent — no pane of the deck shows that session — "the terminal"):
+ * its size, and how much of it one paste (or typed text) carries — both the
+ * text's own bytes, so "of it": the second is this text's, its escapes
+ * counted, not a fixed figure. */
+export function inputRefusalNote(refusal: RoutedInputRefusal, name?: string): string {
+  const into = name ?? "the terminal";
+  const size = sizeWords(refusal.bytes, Math.ceil);
+  const fits = sizeWords(refusal.limitBytes, Math.floor);
+  const verb = refusal.kind === "text" ? "typed" : "pasted";
+  const what = refusal.kind === "paste" ? "one paste" : "typed text";
+  return `Not ${verb} into ${into} — ${size}, and ${what} carries ${fits} of it`;
 }

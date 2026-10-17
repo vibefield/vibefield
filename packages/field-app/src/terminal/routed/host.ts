@@ -25,7 +25,7 @@ import {
 import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
 import { requestResolvingOutcome } from "../../forwarded-call";
 import { getRendererLogger } from "../../logging";
-import { createRoutedInputEncoder } from "./encode-input";
+import { createRoutedInputEncoder, type RoutedInputRefusal } from "./encode-input";
 import { type RemoteRefusal, remoteRefusalOf } from "./remote-refusal";
 import type { SessionSeatAnnouncement } from "./session-seat";
 
@@ -86,6 +86,11 @@ export interface RoutedTerminalHostOptions {
    * (`session-seat.ts`); the pool keeps the newest, so a stale one is its to
    * drop. */
   readonly onSessionSeat?: (sessionId: string, seat: SessionSeatAnnouncement) => void;
+  /** D6 — a paste or typed text the input encoder refused for its size, told
+   * synchronously from inside the runtime's input call: the runtime itself says
+   * nothing about an input it was not handed, so this is the person's only
+   * word of it (the pool hands it to the line). */
+  readonly onInputRefusal?: (refusal: RoutedInputRefusal) => void;
 }
 
 export interface RoutedTerminalHostBinding {
@@ -264,7 +269,10 @@ function isTimedOut(cause: unknown): boolean {
 export function createRoutedTerminalHost(
   options: RoutedTerminalHostOptions,
 ): RoutedTerminalHostBinding {
-  const input = createRoutedInputEncoder({ maxTrackedSessions: TERMINAL_SESSION_CAP });
+  const input = createRoutedInputEncoder({
+    maxTrackedSessions: TERMINAL_SESSION_CAP,
+    onRefused: (refusal) => options.onInputRefusal?.(refusal),
+  });
   const activations = new Map<string, string>();
   const primedTickets = new Map<string, TerminalOpenTicketValue>();
   /** sessionId → the cellBootId its ticket named (TP-S3f): the custody fact a
@@ -674,6 +682,12 @@ export function createRoutedTerminalHost(
         withdrawAsks(sessionId);
       }
     },
+    // ONE message per operation is all the pinned runtime's seam carries
+    // (ghosttea-react `#sendRoutedInput` sends what this returns, once), and it
+    // tells this host nothing of what a leg negotiated — so a paste too large
+    // for one message is refused here, in words (`onInputRefusal`), never parted.
+    // `input.encodeInputs` takes its place when the seam can send an ordered
+    // list all-or-none and name the leg's capabilities (D6's upstream half).
     encodeInput: input.encodeInput,
   };
 

@@ -308,7 +308,8 @@
 
 /* ── THE LINE'S NOTE: the views track's note, over the piece it speaks for ─
    Over create, centred (6 + 196 + 2 + 6 + 16 from the line's left); over send,
-   its right edge on send's, so a long sentence never leaves the window. */
+   its right edge on send's, so a long sentence grows leftward, never past the
+   window's right edge (in a window too narrow for it, past the left edge). */
 .vf-line-note {
   position: absolute;
   bottom: calc(100% + 10px);

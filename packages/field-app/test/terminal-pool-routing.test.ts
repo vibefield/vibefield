@@ -22,11 +22,12 @@
  *      — which REFUSES a placement key.
  */
 
-import { ProductSessionRosterItem } from "@vibefield/contracts";
+import { ProductSessionRosterItem, TERMINAL_PIPELINE } from "@vibefield/contracts";
 import { FielddRpcError } from "@vibefield/fieldd-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FieldHost } from "../src/host";
 import { setHost } from "../src/host";
+import { getRendererLogger, type RendererLogger, setRendererLogger } from "../src/logging";
 
 let runtimesMade = 0;
 /** A case's own floor read, in place of the runtime's `listSessions` answer. */
@@ -964,6 +965,103 @@ describe("a floor read that does not answer has one budget, the routed host's", 
       );
     } finally {
       vi.useRealTimers();
+    }
+  });
+});
+
+// D6 — the routed host's word of a paste too large for one message reaches
+// whoever says it (the line), from INSIDE the runtime's input call, and is in
+// the log either way.
+describe("a refused paste is said, never only dropped (D6)", () => {
+  const tooLarge = {
+    sessionId: "s-1",
+    viewId: "v-1",
+    activationId: "a-1",
+    leaseEpoch: 7,
+    inputSequence: 1,
+    operation: { kind: "paste", text: "x".repeat(TERMINAL_PIPELINE.MAX_CONTROL_MESSAGE_BYTES) },
+  };
+
+  /** The pool's other lines (an open's own) are not this row's: only the refusal's are kept. */
+  function recordingLogger(lines: string[]): RendererLogger {
+    const keep = (line: string): void => {
+      if (line.includes("input_refus")) lines.push(line);
+    };
+    const logger: RendererLogger = {
+      child: () => logger,
+      trace: () => undefined,
+      debug: () => undefined,
+      info: (event) => keep(`info ${event}`),
+      warn: (event) => keep(`warn ${event}`),
+      error: (event) => keep(`error ${event}`),
+      fatal: () => undefined,
+      isLevelEnabled: () => true,
+    };
+    return logger;
+  }
+
+  it("hands the refusal to each hearer as it happens, and logs it louder when no one heard", async () => {
+    const previous = getRendererLogger();
+    const lines: string[] = [];
+    setRendererLogger(recordingLogger(lines));
+    const heard: unknown[] = [];
+    const stop = pool.hearTerminalInputRefusals((refusal) => heard.push(refusal));
+    try {
+      pool.openTerminalPool(fieldd, { sessionIds: [] });
+      await settle();
+      const host = (runtimeOptions[0] as { host?: { encodeInput?(context: unknown): unknown } })
+        .host;
+
+      expect(host?.encodeInput?.(tooLarge), "the runtime is handed nothing").toBeNull();
+      expect(heard).toMatchObject([
+        {
+          sessionId: "s-1",
+          kind: "paste",
+          bytes: TERMINAL_PIPELINE.MAX_CONTROL_MESSAGE_BYTES,
+        },
+      ]);
+      expect(lines).toEqual(["info renderer.terminal.input_refused"]);
+
+      stop();
+      expect(host?.encodeInput?.(tooLarge)).toBeNull();
+      expect(heard, "an undone hearer hears nothing more").toHaveLength(1);
+      expect(lines).toEqual([
+        "info renderer.terminal.input_refused",
+        "warn renderer.terminal.input_refused",
+      ]);
+    } finally {
+      stop();
+      setRendererLogger(previous);
+    }
+  });
+
+  it("a hearer that throws cannot throw into the runtime's input call", async () => {
+    const previous = getRendererLogger();
+    const lines: string[] = [];
+    const stops: Array<() => void> = [];
+    setRendererLogger(recordingLogger(lines));
+    try {
+      pool.openTerminalPool(fieldd, { sessionIds: [] });
+      await settle();
+      const host = (runtimeOptions[0] as { host?: { encodeInput?(context: unknown): unknown } })
+        .host;
+      const heard: unknown[] = [];
+      stops.push(
+        pool.hearTerminalInputRefusals(() => {
+          throw new Error("a broken line");
+        }),
+        pool.hearTerminalInputRefusals((refusal) => heard.push(refusal)),
+      );
+
+      expect(() => host?.encodeInput?.(tooLarge)).not.toThrow();
+      expect(heard, "the next hearer is still told").toHaveLength(1);
+      expect(lines).toEqual([
+        "error renderer.terminal.input_refusal_unsaid",
+        "info renderer.terminal.input_refused",
+      ]);
+    } finally {
+      for (const stop of stops) stop();
+      setRendererLogger(previous);
     }
   });
 });

@@ -24,6 +24,7 @@ import {
   clipboardStore,
   useClipboardItems,
 } from "../hud/edge-tray/clipboard-store";
+import { hearTerminalInputRefusals, type RoutedInputRefusal } from "../terminal/pool";
 import {
   type AtMini,
   type AtRow,
@@ -64,6 +65,7 @@ import {
   type HistoryLineDoor,
   hearLineSays,
   historyCreateWaits,
+  inputRefusalNote,
   jumpNote,
   type LineViewDoor,
   newTerminalNote,
@@ -132,6 +134,11 @@ export interface ComposerProps {
   clipboard?: ClipboardStore;
   host?: ComposerHost;
   writeClipboard?: (text: string) => Promise<void>;
+  /** D6 — where the line hears a paste or typed text a terminal refused for its
+   * size (undefined: the window's terminal pool; the tests hand it a fixture).
+   * A hearer of its own beside `hearLineSays`, which carries words alone: the
+   * note needs the pane's name, which only the line knows. */
+  inputRefusals?: (hear: (refusal: RoutedInputRefusal) => void) => () => void;
   /** Whether the line binds its window keys (B, ⌘T). The catalog's live line
    * does not: its page is not a window the line owns. */
   bindKeys?: boolean;
@@ -298,6 +305,7 @@ export function Composer({
   clipboard = clipboardStore,
   host: hostProp,
   writeClipboard = defaultWriteClipboard,
+  inputRefusals = hearTerminalInputRefusals,
   bindKeys = true,
 }: ComposerProps): ReactElement {
   const published = useGodviewLineDoor();
@@ -382,6 +390,16 @@ export function Composer({
   // what the frame says on the line — a live row the Peek opened that could
   // not be shown (P2), in Jump to's words
   useEffect(() => hearLineSays((text) => say(text, "create")), [say]);
+  // D6 — a paste (or typed text) a terminal refused for its size: said where an
+  // act's outcome is, the pane named as @'s list names it
+  const doorRef = useRef(door);
+  doorRef.current = door;
+  useEffect(() => {
+    return inputRefusals((refusal) => {
+      const pane = doorRef.current?.panes.find((entry) => entry.sessionId === refusal.sessionId);
+      say(inputRefusalNote(refusal, pane?.name), "send");
+    });
+  }, [inputRefusals, say]);
 
   /** Redraw the editor from `next` and put the caret `caret` places in. */
   const redraw = useCallback((next: readonly DraftPart[], caret: number | null) => {

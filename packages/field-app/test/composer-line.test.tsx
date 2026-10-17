@@ -27,6 +27,7 @@ import { pasteIntoPane } from "../src/godview/line-panes";
 import { type FieldHost, setHost } from "../src/host";
 import { ClipboardStore } from "../src/hud/edge-tray/clipboard-store";
 import type { RendererLogger } from "../src/logging";
+import type { RoutedInputRefusal } from "../src/terminal/pool";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -38,6 +39,14 @@ let setViewNow: ((view: FrameView) => void) | null = null;
 let setHeldNow: ((held: boolean) => void) | null = null;
 let boardOpenNow = false;
 let toggles: boolean[] = [];
+/** D6 — the line's hearer of refused input, as the pool would hold it. */
+let hearRefusal: ((refusal: RoutedInputRefusal) => void) | null = null;
+const inputRefusals = (hear: (refusal: RoutedInputRefusal) => void): (() => void) => {
+  hearRefusal = hear;
+  return () => {
+    if (hearRefusal === hear) hearRefusal = null;
+  };
+};
 
 function door(overrides: Partial<LineViewDoor> = {}): LineViewDoor {
   return {
@@ -125,6 +134,7 @@ function mount(view: FrameView, options: Partial<Mount> = {}): Mount {
         clipboard={used.clipboard}
         host={{ screenshotStillUrl: (path) => `still://${path}` }}
         writeClipboard={used.write}
+        inputRefusals={inputRefusals}
       />
     );
   }
@@ -425,6 +435,51 @@ describe("the interim send (thinking-four-views §11)", () => {
     });
     expect(q(".vf-line-note").textContent).toBe("Not sent — the clipboard refused it");
     expect(editor().textContent).toBe("keep me");
+  });
+});
+
+// D6 — a paste a terminal refuses for its size: the runtime says nothing of an
+// input it was not handed, so the line says it, in the note an act's outcome is
+// said in (DESIGN.md §8, §9).
+describe("what a terminal could not take (D6)", () => {
+  it("says a refused paste on the line: the pane, its size, and how much of it one paste carries", () => {
+    mount("godview");
+    act(() => {
+      hearRefusal?.({ sessionId: "s-vibe", kind: "paste", bytes: 300_000, limitBytes: 261_958 });
+    });
+    expect(q(".vf-line-note").textContent).toBe(
+      "Not pasted into vibe-field — 300 KB, and one paste carries 261 KB of it",
+    );
+    expect(q(".vf-line-note").getAttribute("data-at")).toBe("send");
+  });
+
+  it("names the terminal plainly when no pane shows it, and says typed text in its own words", () => {
+    mount("canvas");
+    act(() => {
+      hearRefusal?.({ sessionId: "s-gone", kind: "text", bytes: 299_001, limitBytes: 261_958 });
+    });
+    // 299,001 bytes is said as 300 KB: a size is rounded up, what fits down, never equal
+    expect(q(".vf-line-note").textContent).toBe(
+      "Not typed into the terminal — 300 KB, and typed text carries 261 KB of it",
+    );
+  });
+
+  it("says a paste past what the parts carry in tenths of a megabyte", () => {
+    mount("godview");
+    act(() => {
+      hearRefusal?.({ sessionId: "s-ros", kind: "paste", bytes: 4_194_306, limitBytes: 4_194_304 });
+    });
+    expect(q(".vf-line-note").textContent).toBe(
+      "Not pasted into rosetta — 4.2 MB, and one paste carries 4.1 MB of it",
+    );
+  });
+
+  it("stops hearing when the line goes", () => {
+    mount("godview");
+    expect(hearRefusal).not.toBeNull();
+    act(() => root?.unmount());
+    root = null;
+    expect(hearRefusal).toBeNull();
   });
 });
 

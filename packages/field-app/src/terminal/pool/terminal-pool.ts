@@ -13,6 +13,7 @@ import { getHost } from "../../host";
 import { getRendererLogger } from "../../logging";
 import { registerTerminalPerfSource } from "../../perf/terminal-perf-source";
 import { terminalLinkOpener } from "../links";
+import type { RoutedInputRefusal } from "../routed/encode-input";
 import { createRoutedTerminalHost, type RoutedTerminalHostBinding } from "../routed/host";
 import type { RemoteRefusal } from "../routed/remote-refusal";
 import {
@@ -294,6 +295,53 @@ function recordSessionSeat(sessionId: string, announced: SessionSeatAnnouncement
   sessionSeats.set(sessionId, seat);
   sessionSeatsView = new Map(sessionSeats);
   publish();
+}
+
+/** D6 — who hears a paste or typed text a terminal refused for its size: the
+ * line, which says it. An event, not state — nothing about it lasts. */
+const inputRefusalHearers = new Set<(refusal: RoutedInputRefusal) => void>();
+
+/** The routed host's `onInputRefusal`, from INSIDE the runtime's input call:
+ * each hearer is told, none can throw into that call, and the refusal is in
+ * the log either way — at warn when no one was there to say it. */
+function announceInputRefusal(refusal: RoutedInputRefusal): void {
+  let heard = false;
+  for (const hear of [...inputRefusalHearers]) {
+    try {
+      hear(refusal);
+      heard = true;
+    } catch (cause) {
+      logger().error(
+        "renderer.terminal.input_refusal_unsaid",
+        "A refused paste could not be said",
+        cause,
+      );
+    }
+  }
+  const fields = {
+    sessionId: refusal.sessionId,
+    kind: refusal.kind,
+    bytes: refusal.bytes,
+    limitBytes: refusal.limitBytes,
+  };
+  if (heard) {
+    logger().info("renderer.terminal.input_refused", "Input too large to send was refused", fields);
+  } else {
+    logger().warn(
+      "renderer.terminal.input_refused",
+      "Input too large to send was refused, and nothing on screen said so",
+      fields,
+    );
+  }
+}
+
+/** D6 — hear each paste or typed text a terminal refuses for its size, as it
+ * is refused. Returns the undo. */
+export function hearTerminalInputRefusals(hear: (refusal: RoutedInputRefusal) => void): () => void {
+  inputRefusalHearers.add(hear);
+  return () => {
+    inputRefusalHearers.delete(hear);
+  };
 }
 
 /** Write one row of the record (undefined: the shell is under none). */
@@ -631,6 +679,7 @@ function ensureRuntime(): GhostteaTerminalRuntime {
     onTerminated: forgetRoutedSession,
     onRemoteRefusal: recordRemoteRefusal,
     onSessionSeat: recordSessionSeat,
+    onInputRefusal: announceInputRefusal,
   });
   // GT-8b: the same client carries ⌘-clicked links to fieldd's
   // `terminal.link.open` — one runtime per window, so one opener for every
