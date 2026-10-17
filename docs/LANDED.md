@@ -11560,3 +11560,115 @@ session, run after it. WP12's DEV-provable half is complete.
 into the boot, the 30 s launch delay, the verdict and the quit. It also doesn't say whether the shell left on SIGTERM
 (the quit flow bounds its teardown at 4 s) or at the SIGKILL 20 s later; with one helper outliving every quit, the
 second is possible. A result line that names the verdict's time and how the shell left settles it.
+
+## TM/DS — the terminal doors publish after a fresh pair start: the serve drivers declare again when the mesh node comes up and record a serve the node reports live, and the floor's serve stream subscribes before it snapshots (2026-10-17; `6521616f` `b7de8660`)
+
+**What James saw:** twice after a fresh pair start (10-16 23:56Z, 10-17 00:33Z) the phone read "not publishing its
+terminal doors" until fieldd alone was restarted. Both boots logged `RpcCallError: mesh node not up` at fieldd's start and
+`mesh.node_ready` about a second later.
+
+**Found** (`draft/handover/2026-10-17-focus-audit.md` §3), three candidates, two convicted:
+- **(a) convicted by a mock row** that failed on `b5de2156`: a declaration the node refused while it was still coming up
+  (the declare closure's `removeServe` answered UNAVAILABLE, so it returned before `lastTerminalServeSpec` was set) was
+  never declared again. Nothing told the route drivers the node had come up; ArtifactService's maintenance reconcile is
+  why the product serve recovered and the terminal one did not.
+- **(c) convicted by the code:** `native.mesh.serve.subscribe` took the snapshot, sent it, and then spawned a forwarder
+  that subscribed INSIDE its own task (`mgmt/mesh.rs:1464`). A proxy that started between the two was never reported, so
+  fieldd's fused view stayed at `starting` and the serve was never published.
+- **(b) open:** the live boots also show a post-ready removal reaching the sidecar (NOT_FOUND, 6 ms after
+  `mesh.node_ready`); whether it cost the declaration cannot be read from info-level logs. The two warn lines below make
+  the next one readable.
+
+**Fix:**
+- `6521616f` (fieldd), one mechanism for both drivers:
+  - `MeshClient.noteNodeState`, fed from the floor's own health stream (`meshNodeUp`: the `mesh-gateway` unit at `up`,
+    tolerant of a floor that sends no units). On a turn to up it re-places the desired set and emits `node-up`.
+  - The terminal and index route drivers refresh on `node-up`.
+  - `RouteServeDriver` records a serve the node reports LIVE at its signature instead of declaring it again — F-M5's
+    other half: a remove-then-add would drop every connection on the listener.
+  - The deferred lines (the driver's `declare_deferred`, both closures' `remove_deferred`) are at WARN.
+- `b7de8660` (field-native): the serve stream subscribes before it snapshots and hands the receiver to the forwarder; an
+  event from before the snapshot replays after it, and the client merges by `serveId`.
+
+**Tests:** terminal-serve.test.ts "a declaration refused while the mesh node was down lands when the node comes up — and
+nothing else changed" (red on `b5de2156`); mesh-client.test.ts "a turn to UP re-places the desired set and says node-up
+once" and `meshNodeUp`'s reading; route-serve.test.ts "records a serve the node now reports live …" and its converse.
+fieldd's full suite 2282 passed / 29 skipped (185 files); field-native 313 passed / 0 failed / 9 ignored across 23
+binaries in its own target; tsc, biome, rustfmt and clippy `-D warnings` clean.
+
+**Validation — one gate for the stack** (`6521616f` → `b7de8660` → `c5c59813`, the PM's ruling 2026-10-17 04:17Z: two
+finished, disjoint slices, James waiting on the desktop half). `pnpm gate:landing --with-stages` on `c5c59813` in
+`/Volumes/SamsungRed/focus-gt` (its own cargo target, its ghosttea worktree at `218e11f`), armed 04:30:52Z at load
+6.17/7.36/8.10, James's dev app stopped (the runner's SIGINT; his floor and its two cells stayed up, by design), ended
+05:05:11Z: **24/27**.
+- Green: the eleven stages before `test` (typecheck 71 s, lint:rust 44 s), `test:rust` 95 s, `gen:check`, `still`,
+  `smoke`, `smoke:canvas:no-gpu`, `smoke:canvas:no-webgpu`, `smoke:plugin-restart`, `smoke:plugin`, `smoke:godview`
+  149 s, `smoke:terminal-door`, `smoke:terminal-direct`, `smoke:studio`, `smoke:bundled`.
+- `test` RED at load 30→170: `@vibefield/fieldd:test`, whose printed output stops mid-line with no vitest summary and
+  no failing row named — Nx's output cap (`docs/desk-gates.md`'s hygiene list: "OWED — a red test stage must name its
+  row", per-project vitest report files). Read alone on the same tip with the gate's environment (the lane's cargo
+  target, `FIELDD_ROSETTAD_BIN`), armed 05:06:09Z at load 9.04: 185 files passed / 3 skipped, 2300 tests passed / 11
+  skipped, exit 0 — the real-rosettad rows included.
+- `smoke:canvas` RED (930 s, load 23→11) on five rungs — the occluded row ("the occluder did not cover the window …
+  visible: false"), HAND_NOTEBOOK and HAND_WHITEBOARD (the bar back at 251 and 252 ms, not 200: one 250 ms class),
+  DK-14 (main's own since W7), COVER GODVIEW and COVER HISTORY (the cover's first frame showed the canvas hidden, not
+  the live desk). `smoke:kind-faults` RED (load 10→11) on the occluded row.
+- **The screen was LOCKED from 04:22:31Z** (`CGSSessionScreenIsLocked`, before the gate armed) and the display slept at
+  04:57:41Z: every desk smoke drew under the lock, which is what the occluded and COVER rungs read. These are main's own
+  words from tonight's control on main, and neither slice is touched by them; the pin's own witnesses — `smoke:godview`,
+  `smoke:terminal-door`, `smoke:terminal-direct`, the routed terminal panes — are green.
+- **OWED:** `smoke:canvas` and `smoke:kind-faults`, each alone at load < 10 once James unlocks the screen, run BEFORE
+  the freeway branch lands. A row then red with words that are NOT main's is a follow-up fix on main, named to its slice.
+
+## DS/GT — the ghosttea pin moves to `feat/geometry-take` on `10d0b17`: the desktop takes the seat back (on a focus gain, and on a press of a pane that has focus) and its wheel reaches a program that tracks the mouse; the deck's cast is retired (2026-10-17; `c5c59813`; ghosttea `218e11f`, EL8)
+
+**What James saw:** once the phone attached, "desktop never gets back resize control, no matter how i click or input"
+(03:36Z, and again at 04:00Z with the phone's seat fixes installed), and the desktop pane could not scroll codex (10-16,
+again 04:00Z).
+
+**Causes:**
+- The seat (the audit's §1a): the pinned ghosttea-react predated `takeGeometryOnFocus`, so the deck's prop rode a cast
+  that did nothing and the desktop never took the seat. The branch that adds it takes only on a focus GAIN, and a phone's
+  take moves no focus on the desktop — its window and pane keep it — so pinning the branch as it stood would not have
+  fixed James's case.
+- The wheel (the audit's D0): a routed frame goes from its frames leg straight to the render worker; only the legacy
+  bridge read mouse modes, from frame headers on the main thread. `isMouseTracking` stayed false for every routed
+  session, so the wheel became a local scroll, which the engine turns into arrow keys on codex's alternate screen.
+
+**The pin, one EL8 event** — ghosttea `feat/geometry-take-on-pin` (James's `feat/geometry-take` untouched):
+- feat/geometry-take's eight commits cherry-picked onto the pin `10d0b17` (`aa4f762`→`8b83f50`, `83b8e04`→`aaac935`,
+  `d952944`→`619e8fa`, `a24a28d`→`70d6dbd`, `4027551`→`3337654`, `d613e50`→`b311d3e`, `5c9b533`→`569daaa`,
+  `13103a3`→`280dbe1`), one conflict in `routed-control.ts` (the pin's `replacements` map beside `aa4f762`'s retyped
+  `pendingGeometry`; both kept);
+- `42a61ed`: the worker says a routed session's mouse modes (`terminal-modes`) when a committed frame changes them,
+  again after a re-attach; the runtime takes them through the legacy path's one setter;
+- `218e11f`: a press of a pane that already has focus takes, under the focus gain's own policy (opted in, controls
+  resize, takes input; a mirror never does) — so a press takes exactly once either way.
+- React only: nothing under `native/` moved, so the six cargo patches compile the same sources.
+- VibeField: the lock's one sha line (`siblings:pin` typechecked the 27 consumer projects green; its serializer's
+  re-escape of the file was not kept); `takeGeometryOnFocus` is a real prop on the deck, the cast and its note gone.
+
+**Erratum (mine, before anything consumed it):** `42a61ed` was first committed as `b8663ff` with a message claiming
+`tsc --noEmit` clean. That run never happened: a lane's ghosttea root has no `tsc` (install-js skips the workspace root;
+TypeScript is per package), and the `perl -e 'alarm N; exec @ARGV'` timeout wrapper exits 0 when its exec fails. The
+package's own tsc (TypeScript 7.0.2) then ran — a planted type error turns it red — and the message was amended before
+the pin recorded it. A timeout wrapper must `exec(@ARGV) or exit 127`, and a claimed run needs the tool's own line.
+
+**Checks:** ghosttea-react at `218e11f` — tsc `--noEmit` exit 0, vitest 41 files / 341 tests, prettier 3.9.5 `--check`
+clean on the changed files; preflight OK (one warning, rosettad freshness, from before); biome; field-app typecheck;
+godview-deck.test.tsx 72/72.
+
+**Validation:** the stack's one gate, in the entry above — 24/27; `test` the Nx output cap, read alone green; the two
+desk smokes red under the LOCKED screen on main's own words, their second samples OWED before the freeway branch lands.
+The pin's own witnesses are green: `smoke:godview`, `smoke:terminal-door`, `smoke:terminal-direct`. **The pin is on an
+UNPUSHED branch** — ghosttea `feat/geometry-take-on-pin` at `218e11f` is local to this Mac — so CI's sibling fetch is
+red until James pushes it.
+
+**Owed:**
+- James pushes ghosttea: `feat/geometry-take-on-pin` is local, so CI's sibling fetch of `218e11f` is red until it is on
+  the remote. His `../ghosttea-0.11.2` has the new branch checked out at `218e11f` (its `ci/npm-publish-waits` stands as
+  it was).
+- The desktop witness on his machine: the phone takes the seat; a press of the deck's pane takes it back (the PTY is the
+  desktop's size again); the wheel scrolls codex.
+- The cell's seat announcement (TPv3 §6, the audit's §1a) stays the design: with it a pane takes only when another view
+  holds the seat, and a displaced holder can say so.
