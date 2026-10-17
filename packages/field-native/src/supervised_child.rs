@@ -9,10 +9,14 @@
 //! - later stdin lines are UPDATES, and stdin's EOF is the LEASH: the child drains itself out,
 //!   and past the drain budget it is killed;
 //! - stdout lines after the hello are the child's own to say (a cell's exit report, the host's
-//!   joins and leaves).
+//!   joins and leaves);
+//! - a descriptor the child inherits (the freeway host's floor-held listener) is placed at
+//!   `INHERITED_FD` by `inherit`, the one place that knows `dup2`'s trap.
 
 use serde::de::DeserializeOwned;
 use std::ffi::OsString;
+#[cfg(unix)]
+use std::os::fd::RawFd;
 use std::path::Path;
 use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
@@ -21,6 +25,38 @@ use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 
 /// How long a child has to say its last line once it has exited.
 const LAST_LINE: Duration = Duration::from_millis(500);
+
+/// Where a child finds the descriptor it inherits (`field-freeway-host --listener-fd 3`).
+#[cfg(unix)]
+pub const INHERITED_FD: RawFd = 3;
+
+/// Hand `fd` to the child at `INHERITED_FD`, open across the exec. `dup2` onto itself is a
+/// no-op that LEAVES close-on-exec set: a descriptor the parent already holds at 3 (a test
+/// process's first socket is just that) would be closed by the exec, and the child would adopt
+/// whatever lands there next. That case clears the flag instead.
+#[cfg(unix)]
+pub fn inherit(command: &mut std::process::Command, fd: RawFd) {
+    use std::os::unix::process::CommandExt;
+    // SAFETY: only `fcntl` and `dup2`, both async-signal-safe, between fork and exec.
+    unsafe {
+        command.pre_exec(move || {
+            let placed = if fd == INHERITED_FD {
+                let flags = libc::fcntl(fd, libc::F_GETFD);
+                if flags == -1 {
+                    -1
+                } else {
+                    libc::fcntl(fd, libc::F_SETFD, flags & !libc::FD_CLOEXEC)
+                }
+            } else {
+                libc::dup2(fd, INHERITED_FD)
+            };
+            if placed == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+}
 
 /// What a child's forwarded stderr lines are logged as.
 #[derive(Debug, Clone, Copy)]

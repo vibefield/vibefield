@@ -43,6 +43,12 @@ impl Admit {
         self.nodes
             .insert(node_id.to_owned(), (device_id.to_owned(), role));
     }
+
+    /// The device and role a node links as, if it is admitted.
+    pub fn get(&self, node_id: &str) -> Option<(&str, PeerRole)> {
+        let (device_id, role) = self.nodes.get(node_id)?;
+        Some((device_id.as_str(), *role))
+    }
 }
 
 /// This host, as its welcome names it.

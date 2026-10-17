@@ -13,6 +13,8 @@
 //!   reassembly of a fragmented message (pinned by `freeway-frames.vector.json`);
 //! - `hello` — the link's first frame, decided: the two forms, the admit table, a phone's approval
 //!   bound to THIS connection's node, the welcome or the refusal and its close code;
+//! - `host` — the process: stdin's bootstrap and updates, the accept loop, one link per node, the
+//!   revoke's wall and the restart, stdout's hello and reports;
 //! - `keyring` — a phone's tickets and renewals, fieldd's minter ported onto the host's boot and keys;
 //! - `link` — one admitted link, run: stream 0's heartbeat and acks, the keyring's opens, each
 //!   terminal leg spliced to its cell's door;
@@ -27,8 +29,11 @@ pub mod approval;
 pub mod door;
 pub mod frame;
 pub mod hello;
+pub mod host;
 pub mod keyring;
 pub mod link;
 pub mod mint;
 pub mod mux;
+#[cfg(test)]
+mod testing;
 pub mod writer;
