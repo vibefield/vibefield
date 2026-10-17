@@ -54,7 +54,7 @@ mod tp_mint;
 mod common;
 
 use common::{authkey, build_node, probe_app_id, redact, rendezvous, sidecar, AUTHKEY_ENV};
-use field_native::mgmt::mesh::{build_serve_config, ServeConfigInput};
+use field_native::mgmt::mesh::{build_serve_config, SecretDoor, ServeConfigInput};
 use field_native::registries::ports::TERMINAL_CELLS_SERVE;
 use field_native::services::terminal_client::ControlClient;
 use field_native::{bootstrap, config::NativeConfig, RunningDaemon};
@@ -178,6 +178,7 @@ fn production_cell_route_config(
         allow,
         tls: Some(false),
         path_secret: None,
+        secret_door: SecretDoor::Product,
         routes: &routes,
     })
     .expect("the production routes arm accepts the shape fieldd sends")

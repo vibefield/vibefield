@@ -1,0 +1,14 @@
+{
+  "serveId": "freeway",
+  "name": "freeway",
+  "listenPort": 9425,
+  "target": {
+    "kind": "port",
+    "port": 50123,
+    "scheme": "http"
+  },
+  "allow": ["person@example.com"],
+  "tls": false,
+  "pathSecret": "ZnJlZXdheS1wYXRoLXNlY3JldC1maXh0dXJl",
+  "secretDoor": "freeway"
+}

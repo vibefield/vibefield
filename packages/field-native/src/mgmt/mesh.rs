@@ -881,6 +881,10 @@ async fn serve_add(
         },
     };
     let path_secret = params.get("pathSecret").and_then(Value::as_str);
+    let secret_door = match SecretDoor::parse(params.get("secretDoor").and_then(Value::as_str)) {
+        Ok(door) => door,
+        Err(msg) => return err(id, "PRECONDITION_FAILED", -32005, &msg, false, None),
+    };
     let routes = params.get("routes").cloned().unwrap_or(Value::Null);
     let allow_globs: Vec<String> = allow
         .as_array()
@@ -899,6 +903,7 @@ async fn serve_add(
         allow: allow_globs,
         tls,
         path_secret,
+        secret_door,
         routes: &routes,
     }) {
         Ok(c) => c,
@@ -927,6 +932,9 @@ async fn serve_add(
             }
             if let Some(secret) = path_secret {
                 record["pathSecret"] = json!(secret);
+                if secret_door == SecretDoor::Freeway {
+                    record["secretDoor"] = json!("freeway");
+                }
             }
             state.mesh.record_serve(serve_id, record).await;
             // The add response echoes the declared config back to fieldd (which already
@@ -988,6 +996,33 @@ async fn serve_add(
 ///
 /// `strip_prefix` stays FALSE for the same reason it always was: nothing may be
 /// removed from what the backend sees, because what the backend sees IS the proof.
+/// F1 — which door a serve's `pathSecret` proves to: fieldd's product door (`/t/`) or the freeway
+/// host's (`/f/`, `freeway::door`). The segment is the TARGET's, beside the secret, so the public
+/// side of the proxy names neither.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SecretDoor {
+    #[default]
+    Product,
+    Freeway,
+}
+
+impl SecretDoor {
+    pub fn parse(value: Option<&str>) -> Result<Self, String> {
+        match value {
+            None | Some("product") => Ok(Self::Product),
+            Some("freeway") => Ok(Self::Freeway),
+            Some(_) => Err("secretDoor must be product|freeway".into()),
+        }
+    }
+
+    fn segment(self) -> &'static str {
+        match self {
+            Self::Product => "t",
+            Self::Freeway => "f",
+        }
+    }
+}
+
 pub struct ServeConfigInput<'a> {
     pub serve_id: &'a str,
     pub name: &'a str,
@@ -997,6 +1032,8 @@ pub struct ServeConfigInput<'a> {
     pub allow: Vec<String>,
     pub tls: Option<bool>,
     pub path_secret: Option<&'a str>,
+    /// Which door `path_secret` proves to: its segment rides the target beside the secret.
+    pub secret_door: SecretDoor,
     /// TM-2 — the declared path routes of a `kind: "routes"` serve. Ignored by
     /// every other target kind, so the product and artifact shapes are
     /// byte-for-byte what they were.
@@ -1096,9 +1133,13 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
         allow,
         tls,
         path_secret,
+        secret_door,
         routes: declared_routes,
     } = input;
     let tls = tls.unwrap_or(true); // upstream default; the product serve passes false
+    if secret_door != SecretDoor::Product && path_secret.is_none() {
+        return Err("secretDoor is only meaningful with pathSecret".into());
+    }
     if path_secret.is_some() && preview_dir.is_some() {
         return Err("previewDir is not supported with pathSecret".into());
     }
@@ -1147,7 +1188,10 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
                 // its provenance proof and the secret never has to be published.
                 Some(secret) => routes.push(ProxyRoute {
                     prefix: "/".into(),
-                    target_url: Some(format!("{scheme}://127.0.0.1:{port}/t/{secret}")),
+                    target_url: Some(format!(
+                        "{scheme}://127.0.0.1:{port}/{}/{secret}",
+                        secret_door.segment()
+                    )),
                     dir: None,
                     fallback: None,
                     strip_prefix: false, // LOAD-BEARING — see fn doc (EL7 provenance proof)
@@ -1608,8 +1652,44 @@ mod tests {
             allow: vec![],
             tls: None,
             path_secret: None,
+            secret_door: SecretDoor::Product,
             routes: &NO_ROUTES,
         }
+    }
+
+    /// F1 — the freeway host's door takes the same proof under its own segment: `/f/<secret>` on
+    /// the TARGET, the public root bare. A freeway door without a secret, and a door no one has,
+    /// are refused.
+    #[test]
+    fn a_freeway_secret_rides_the_freeway_doors_target_and_the_product_door_is_unchanged() {
+        let target = json!({"kind": "port", "port": 50123});
+        let cfg = build_serve_config(ServeConfigInput {
+            listen_port: Some(9425),
+            tls: Some(false),
+            path_secret: Some("s3cr3t"),
+            secret_door: SecretDoor::Freeway,
+            ..serve_input("freeway", &target)
+        })
+        .expect("the freeway serve builds");
+        assert_eq!(cfg.routes.len(), 1);
+        let route = &cfg.routes[0];
+        assert_eq!(route.prefix, "/");
+        assert_eq!(
+            route.target_url.as_deref(),
+            Some("http://127.0.0.1:50123/f/s3cr3t")
+        );
+        assert!(!route.strip_prefix, "what the backend sees IS the proof");
+        assert_eq!(cfg.listen_port, 9425);
+        let unsecret = build_serve_config(ServeConfigInput {
+            secret_door: SecretDoor::Freeway,
+            ..serve_input("freeway", &target)
+        });
+        assert!(
+            unsecret.is_err(),
+            "a freeway door proves nothing without its secret"
+        );
+        assert_eq!(SecretDoor::parse(None), Ok(SecretDoor::Product));
+        assert!(SecretDoor::parse(Some("files")).is_err());
     }
 
     /// UA-P-0d (D7) — the secret moved from the PUBLIC prefix to the TARGET's

@@ -8635,6 +8635,13 @@ impl<'de> ::serde::Deserialize<'de> for SemverString {
 #[doc = "        \"$ref\": \"#/definitions/ServeRoute\""]
 #[doc = "      }"]
 #[doc = "    },"]
+#[doc = "    \"secretDoor\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"enum\": ["]
+#[doc = "        \"product\","]
+#[doc = "        \"freeway\""]
+#[doc = "      ]"]
+#[doc = "    },"]
 #[doc = "    \"serveId\": {"]
 #[doc = "      \"type\": \"string\","]
 #[doc = "      \"minLength\": 1"]
@@ -8675,6 +8682,12 @@ pub struct ServeConfig {
     pub preview_dir: ::std::option::Option<ServeConfigPreviewDir>,
     #[serde(default, skip_serializing_if = "::std::vec::Vec::is_empty")]
     pub routes: ::std::vec::Vec<ServeRoute>,
+    #[serde(
+        rename = "secretDoor",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub secret_door: ::std::option::Option<ServeConfigSecretDoor>,
     #[serde(
         rename = "serveId",
         default,
@@ -8756,6 +8769,78 @@ impl<'de> ::serde::Deserialize<'de> for ServeConfigPreviewDir {
             .map_err(|e: self::error::ConversionError| {
                 <D::Error as ::serde::de::Error>::custom(e.to_string())
             })
+    }
+}
+#[doc = "`ServeConfigSecretDoor`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"product\","]
+#[doc = "    \"freeway\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum ServeConfigSecretDoor {
+    #[serde(rename = "product")]
+    Product,
+    #[serde(rename = "freeway")]
+    Freeway,
+}
+impl ::std::fmt::Display for ServeConfigSecretDoor {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Product => f.write_str("product"),
+            Self::Freeway => f.write_str("freeway"),
+        }
+    }
+}
+impl ::std::str::FromStr for ServeConfigSecretDoor {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "product" => Ok(Self::Product),
+            "freeway" => Ok(Self::Freeway),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for ServeConfigSecretDoor {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for ServeConfigSecretDoor {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ServeConfigSecretDoor {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
     }
 }
 #[doc = "`ServeConfigServeId`"]
@@ -15628,6 +15713,10 @@ pub mod builder {
             ::std::string::String,
         >,
         routes: ::std::result::Result<::std::vec::Vec<super::ServeRoute>, ::std::string::String>,
+        secret_door: ::std::result::Result<
+            ::std::option::Option<super::ServeConfigSecretDoor>,
+            ::std::string::String,
+        >,
         serve_id: ::std::result::Result<
             ::std::option::Option<super::ServeConfigServeId>,
             ::std::string::String,
@@ -15644,6 +15733,7 @@ pub mod builder {
                 path_secret: Ok(Default::default()),
                 preview_dir: Ok(Default::default()),
                 routes: Ok(Default::default()),
+                secret_door: Ok(Default::default()),
                 serve_id: Ok(Default::default()),
                 target: Err("no value supplied for target".to_string()),
                 tls: Ok(Default::default()),
@@ -15711,6 +15801,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for routes: {e}"));
             self
         }
+        pub fn secret_door<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::ServeConfigSecretDoor>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.secret_door = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for secret_door: {e}"));
+            self
+        }
         pub fn serve_id<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::option::Option<super::ServeConfigServeId>>,
@@ -15754,6 +15854,7 @@ pub mod builder {
                 path_secret: value.path_secret?,
                 preview_dir: value.preview_dir?,
                 routes: value.routes?,
+                secret_door: value.secret_door?,
                 serve_id: value.serve_id?,
                 target: value.target?,
                 tls: value.tls?,
@@ -15769,6 +15870,7 @@ pub mod builder {
                 path_secret: Ok(value.path_secret),
                 preview_dir: Ok(value.preview_dir),
                 routes: Ok(value.routes),
+                secret_door: Ok(value.secret_door),
                 serve_id: Ok(value.serve_id),
                 target: Ok(value.target),
                 tls: Ok(value.tls),

@@ -489,12 +489,18 @@ export const ServeConfig = z
     routes: z.array(ServeRoute).optional(),
     /** Optional app-owned static preview root mounted ahead of the source route. */
     previewDir: z.string().min(1).optional(),
-    /** C3 provenance proof: when set, the serve is a single route
-     * `/t/<pathSecret>` → the target with strip_prefix OFF, so the backend
-     * sees the secret on every proxied request. Only the sidecar's route
-     * config and the declaring daemon hold it — a same-uid local caller
-     * (EL7's adversary) cannot mint tailnet identity without it. */
+    /** C3 provenance proof: when set, the serve is ONE route — the bare root `/` → the target with
+     * `/<door>/<pathSecret>` as the TARGET's path, strip_prefix OFF — so the sidecar adds the secret
+     * on forward, the caller dials the root knowing nothing, and the backend sees the secret on every
+     * proxied request. Only the sidecar's route config and the declaring daemon hold it — a same-uid
+     * local caller (EL7's adversary) cannot mint tailnet identity without it. *Corrected 2026-10-17
+     * at source:* this said the route was the PUBLIC `/t/<pathSecret>`, which UA-P-0d (D7,
+     * 2026-09-15) moved onto the target; the floor's `build_serve_config` and its erratum are the
+     * authority. */
     pathSecret: z.string().optional(),
+    /** F1 — which door `pathSecret` proves to: fieldd's product door (`/t/`, the default) or the
+     * freeway host's (`/f/`). Only with `pathSecret`. */
+    secretDoor: z.enum(["product", "freeway"]).optional(),
   })
   .passthrough();
 export type ServeConfig = z.infer<typeof ServeConfig>;

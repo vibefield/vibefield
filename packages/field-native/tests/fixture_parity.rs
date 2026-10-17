@@ -172,6 +172,7 @@ fn mgmt_mesh_fixtures() {
     roundtrip::<PeerInfo>("peer-info.valid.json", true);
     roundtrip::<StoreSnapshot>("store-snapshot.valid.json", true);
     roundtrip::<ServeConfig>("serve-config.valid.json", true);
+    roundtrip::<ServeConfig>("serve-config.freeway.json", true);
     // TM-2 (F-H3, 2026-09-14) — THE SHAPE FIELDD REALLY SENDS for the terminal
     // cell listener: `target.kind: "routes"` plus one route per live cell. The
     // contract described two target arms while this one had been on the wire

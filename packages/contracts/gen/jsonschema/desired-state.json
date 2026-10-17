@@ -778,6 +778,13 @@
         },
         "pathSecret": {
           "type": "string"
+        },
+        "secretDoor": {
+          "type": "string",
+          "enum": [
+            "product",
+            "freeway"
+          ]
         }
       },
       "required": [
