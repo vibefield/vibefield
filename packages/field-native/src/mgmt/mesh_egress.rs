@@ -5,10 +5,15 @@
 //! Answered BEFORE the mesh facade's node gate, and the order of the refusals
 //! below is the contract:
 //!
-//!  1. `egress-unsupported` first, for EVERY verb. It is a capability fact
-//!     about this floor's sidecar and holds whether or not a node is up; a
-//!     reader told `mesh-down` instead would wait for a node that can never
-//!     carry egress.
+//!  1. `egress-unsupported` first, for EVERY verb, from an arm that cannot
+//!     carry egress (`UnsupportedEgress`, a build without the feature). It is
+//!     a capability fact about this floor's build and holds whether or not a
+//!     node is up; a reader told `mesh-down` instead would wait for a node that
+//!     can never carry egress. The default arm is the truffle one (TB-E), whose
+//!     `supported()` is true: this floor cannot read its sidecar's protocol
+//!     without a node (`Node` publishes none), so a sidecar below protocol 7
+//!     answers `egress-unsupported` from the node, per call, once a node is
+//!     up; before one is, the verbs answer as 2 and 3 say.
 //!  2. The table reads (`route.list`, `route.subscribe`) and `route.remove`
 //!     need no node: with none, the table is empty (a teardown reset it), so
 //!     they answer honestly from what is there.

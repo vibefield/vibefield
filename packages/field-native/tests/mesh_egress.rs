@@ -5,15 +5,18 @@
 //! node cannot be built headlessly (the wall `force_node_presence_for_tests`
 //! documents), so the node-carried arms here are `FakeEgress` — real loopback
 //! listeners splicing to a door the test owns — under a FORCED node presence.
-//! They prove the facade (verbs, shapes, refusals, reset, stream) and the
-//! production default (`egress-unsupported` on every verb). tsnet's own
-//! egress is the petition window's witness, on two desktops with the
-//! Tailscale app quit.
+//! They prove the facade (verbs, shapes, refusals, reset, stream) and both
+//! arms' answers with no node: the default build's truffle arm (TB-E,
+//! 2026-10-17: `mesh-down` and an empty table) and the unsupported arm
+//! (`egress-unsupported` on every verb — the revert build's, and what a sidecar
+//! below protocol 7 earns per call). tsnet's own egress is
+//! `mesh_egress_probe.rs`'s on one machine, and the two-desktop run with the
+//! Tailscale app quit is James's.
 use field_native::contracts::{
     MeshEgressProxy, MeshEgressRouteBound, MeshEgressRouteRef, MeshEgressRouteTable, MeshMode,
 };
 use field_native::local_ipc;
-use field_native::services::mesh_egress::{FakeEgress, ProxyGrant};
+use field_native::services::mesh_egress::{FakeEgress, ProxyGrant, UnsupportedEgress};
 use field_native::{bootstrap, config::NativeConfig, pairing, RunningDaemon};
 use serde_json::{json, Value};
 use std::collections::VecDeque;
@@ -200,13 +203,15 @@ async fn fake_floor() -> (
     (dir, daemon, fake, door)
 }
 
-/// THE PRODUCTION DEFAULT. truffle-core 0.7.14's sidecar has no egress, so
-/// every verb answers the golden `egress-unsupported` — and says so with no
-/// node up, which is the point of answering it before the node gate: a floor
-/// that said `mesh-down` here would send fieldd waiting for a node that can
-/// never carry egress. (Built without `truffle-egress`; the feature build's
-/// default is the next row's.)
-#[cfg(not(feature = "truffle-egress"))]
+/// THE UNSUPPORTED ARM: every verb answers the golden `egress-unsupported`,
+/// and says so with no node up. That is the point of answering it before the
+/// node gate: a floor that said `mesh-down` here would send fieldd waiting for
+/// a node that can never carry egress.
+///
+/// TB-E (2026-10-17) — the default build is the truffle arm (the next row), so
+/// the arm is installed here explicitly and the golden keeps a real-socket
+/// witness in every build: the revert build's default, and the answer fieldd
+/// falls back to the OS network on.
 #[tokio::test]
 async fn a_floor_without_rfc_026_answers_every_verb_egress_unsupported() {
     let (_dir, daemon) = boot(|c| c).await;
@@ -214,6 +219,17 @@ async fn a_floor_without_rfc_026_answers_every_verb_egress_unsupported() {
         !daemon.state.mesh.node_present(),
         "the default posture has no node"
     );
+    if cfg!(not(feature = "truffle-egress")) {
+        assert_eq!(
+            daemon.state.mesh.egress().arm(),
+            "unsupported",
+            "a build without the feature (TB-E's revert) defaults to this arm"
+        );
+    }
+    daemon
+        .state
+        .mesh
+        .install_egress_for_tests(Arc::new(UnsupportedEgress));
     let mut mgmt = Mgmt::connect(&daemon).await;
     let unsupported = golden("error-data.egress-unsupported.json");
     for (method, params) in [
@@ -239,13 +255,16 @@ async fn a_floor_without_rfc_026_answers_every_verb_egress_unsupported() {
     daemon.shutdown().await;
 }
 
-/// DS-1b (2026-10-01) — the FEATURE build's default is the real arm. With no
-/// node it is no longer `egress-unsupported` (the arm can carry egress once a
-/// node exists): the acts answer `mesh-down`, the table reads answer empty,
-/// and a forced presence with no node behind it still answers `mesh-down`,
-/// because the arm asks the node itself and there is none. A protocol-5
-/// sidecar under this arm answers `egress-unsupported` per call, from the core
-/// (`truffle_refusal`); the real tailnet is `mesh_egress_probe.rs`'s.
+/// DS-1b (2026-10-01) — the FEATURE build's default is the real arm, and since
+/// TB-E (2026-10-17) the feature is in the default features, so this is the
+/// PRODUCTION default. With no node it is no longer `egress-unsupported` (the
+/// arm can carry egress once a node exists): the acts answer `mesh-down`, the
+/// table reads answer empty, and a forced presence with no node behind it still
+/// answers `mesh-down`, because the arm asks the node itself and there is none.
+/// fieldd fails such a dial closed rather than riding the OS network (DS-L5). A
+/// sidecar below protocol 7 under this arm answers `egress-unsupported` per call,
+/// from the core (`truffle_refusal`); the real tailnet is
+/// `mesh_egress_probe.rs`'s.
 #[cfg(feature = "truffle-egress")]
 #[tokio::test]
 async fn the_truffle_arm_without_a_node_answers_mesh_down_and_an_empty_table() {

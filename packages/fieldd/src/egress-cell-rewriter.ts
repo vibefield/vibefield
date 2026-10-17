@@ -38,19 +38,23 @@ import {
 //    refuse a query today, so the query half is a guard against stripping one
 //    silently, never a pair that drops it.
 //  · No road is `egress_unavailable`, honestly: a floor whose sidecar predates
-//    RFC 026 (today's production answer), the mesh down, the owner not in the
-//    roster, a pair that is not one cell serve's — never a half pair, never
-//    the owner's own coordinate.
+//    RFC 026 or whose build lacks the egress feature, the mesh down (the
+//    default build with no node), the owner not in the roster, a pair that is
+//    not one cell serve's — never a half pair, never the owner's own
+//    coordinate.
 //  · The route comes DOWN when the owner leaves the roster (EgressRoutes drops
 //    it and removes it from the floor; the rewriter gives its reference back)
 //    and at daemon stop (`dispose`: the last release removes each route). A
 //    superseded daemon keeps them (`keepFloorRoutes`): the floor answers only
 //    its successor, which re-answers each route by its id.
 //
-// LIVE when the sidecar speaks protocol 6 (truffle RFC 026, consumed at the
-// petition window, EL8). Until then every rewrite here answers
-// `egress_unavailable`, as NO_EGRESS did, but now with the floor's reason
-// in the record (`fieldd.mesh.egress.route_unavailable`).
+// LIVE in the default build (TB-E): field-native's truffle arm, over
+// truffle-core 0.7.19 and its protocol-8 sidecar (RFC 026 egress needs
+// protocol 7). With a node up, an ensure binds a real loopback route. With no
+// node the floor answers `mesh-down`, and a sidecar below 7 or a build without
+// the feature answers `egress-unsupported`; either way the rewrite is
+// `egress_unavailable`, with the floor's reason in the record
+// (`fieldd.mesh.egress.route_unavailable`).
 
 const CELLS = PORTS.TERMINAL_CELLS_SERVE;
 

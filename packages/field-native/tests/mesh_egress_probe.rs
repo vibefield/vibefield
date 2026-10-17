@@ -21,20 +21,22 @@
 //! join a tailnet headlessly; its bring-up is an interactive login), so the
 //! node is the harness's, not the floor's own bring-up; both nodes sit on one
 //! machine (no DERP between networks); and the Tailscale app is not asserted
-//! quit. That run, two desktops with the app QUIT, is James's after the pin
-//! moves.
+//! quit. That run, two desktops with the app QUIT, is James's.
 //!
-//! Needs the feature AND a local patch (truffle-core 0.7.14 has no egress), a
-//! sidecar built from the same branch, and `TRUFFLE_TEST_AUTHKEY` (the
-//! harness reads `.env` walking up from this crate; from another worktree,
-//! export it in the shell that runs cargo):
+//! Needs `TRUFFLE_TEST_AUTHKEY` (the harness reads `.env` walking up from this
+//! crate; from another worktree, export it in the shell that runs cargo) and a
+//! sidecar at protocol >= 7. Since the 0.7.19 pin that is the VENDORED one
+//! (`apps/desktop`'s `@vibecook/truffle-sidecar-*`, protocol 8, after `pnpm
+//! install`), which `common::sidecar()` prefers, and since TB-E the feature is a
+//! default one:
 //!
 //! ```sh
-//! FIELD_NATIVE_SIDECAR_PATH=<truffle-rfc025/packages/sidecar-slim built with go build> \
-//! cargo test -p field-native --features truffle-egress \
-//!   --config <a file holding [patch.crates-io] truffle-core = { path = "<truffle-rfc025>/crates/truffle-core" }> \
-//!   --test mesh_egress_probe -- --ignored --nocapture
+//! cargo test -p field-native --test mesh_egress_probe -- --ignored --nocapture
 //! ```
+//!
+//! Read the `[probe] sidecar=` line: an exported `FIELD_NATIVE_SIDECAR_PATH`
+//! outranks the vendored binary, and a stale one (the retired protocol-5
+//! override) answers every egress verb `egress-unsupported`.
 #![cfg(feature = "truffle-egress")]
 
 mod common;
@@ -261,7 +263,7 @@ fn is_loopback(address: &str) -> bool {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[ignore = "joins a real tailnet; needs TRUFFLE_TEST_AUTHKEY, the feature, the local patch, a protocol-6 sidecar"]
+#[ignore = "joins a real tailnet; needs TRUFFLE_TEST_AUTHKEY and a sidecar >= protocol 7 (the vendored 0.7.19)"]
 async fn a_peer_door_is_reached_through_the_floors_egress_and_names_the_floors_node() {
     let Some(key) = authkey() else {
         eprintln!("[skip] mesh_egress_probe: {AUTHKEY_ENV} not set");

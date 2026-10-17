@@ -50,10 +50,19 @@ windows-sys = { version = "0.61.2", features = [
 
 [features]
 # DS-1 — the REAL egress arm (`services/mesh_egress.rs`, `TruffleEgress`),
-# written against the RFC 026 API the wave plan names. OFF by default and it
-# must stay off: truffle-core =0.7.14 (the EL8 pin above) has no egress, so the
-# arm does not compile against it. Turning it on is the petition window's
-# deliberate act, beside the pin move — never a casual build flag.
+# written against the RFC 026 API the wave plan names.
+#
+# ON BY DEFAULT since 2026-10-17 (DECISIONS, the TB-E row). James ruled the
+# truffle bump B on 2026-10-15 20:52Z, and its field-native step is "make it
+# production: the feature on by default, with UnsupportedEgress left only for a
+# sidecar below 7" (draft/handover/2026-10-15-truffle-bump-plan.md §3). The pin
+# under it is truffle-core =0.7.19 (the root Cargo.toml), which ships RFC 026, and
+# the five npm sidecars at 0.7.19 speak protocol 8 (egress needs 7). A node whose
+# sidecar predates 7 still answers `egress-unsupported`, per call, from the core.
+# REVERT, without touching the pin: delete `"truffle-egress"` from `default`
+# below. The build is then `UnsupportedEgress` again, and fieldd rides the OS
+# network.
+default = ["truffle-egress"]
 truffle-egress = []
 
 [dev-dependencies]

@@ -1821,6 +1821,15 @@
               (<code>agent.spawn</code>, <code>agent.resume</code>, routable since DS-2) stand under the
               same carry-only-what-you-would-mint guard as the two terminal verbs since the landing's
               fix-up.
+              <em>Corrected 2026-10-17 (the truffle bump, TB-E):</em> "protocol 6" was the
+              <code>rfc026-egress</code> branch's number. The release renumbered, and RFC 026 egress
+              needs sidecar protocol 7 (truffle 0.7.16). The pin is 0.7.19, whose vendored sidecar
+              speaks 8, and field-native's default build is the truffle arm. So the route is LIVE in
+              the default build once the floor's node is up. With no node the floor answers
+              <code>mesh-down</code>, and a forwarded ticket still answers
+              <code>UNAVAILABLE egress_unavailable</code>. <code>egress-unsupported</code> is now the
+              answer of a build without the <code>truffle-egress</code> feature, or of a sidecar below
+              protocol 7.
               <em>Landing note 2026-10-01 (DS-4e):</em> <code>terminal.sessions</code> is
               <code>federate</code> too — a read, so never keyed, and carried only for a self principal
               (<code>FORWARDED_SELF_ONLY</code>, beside the mints): a window mounts another desktop's

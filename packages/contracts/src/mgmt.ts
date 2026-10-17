@@ -623,7 +623,13 @@ export type MeshLaneClosed = z.infer<typeof MeshLaneClosed>;
 // CONTROL ONLY: an address, a credential, a route row. Nothing that rides an
 // egress path ever crosses this channel (EL2).
 //
-// Until the sidecar speaks RFC 026 the floor answers every verb
+// The floor answers these verbs from its node: truffle-core 0.7.19 and its
+// protocol-8 sidecar carry egress (RFC 026 needs protocol 7), and
+// field-native's default build is the truffle arm. Before a node is up, the
+// acts that need one (`proxy`, `httpProxy`, `route.add`) answer `mesh-down`,
+// the table reads answer an empty table, and `route.remove` finds nothing
+// (`NOT_FOUND`). A build without the `truffle-egress` feature, or a node whose
+// sidecar predates protocol 7, answers every verb
 // `UNAVAILABLE {service: "mesh", state: "egress-unsupported"}`. That is a
 // capability fact, not a transient: fieldd keeps dialling over the OS network
 // and says so once per link (`mesh.egress.fallback_os_network`).

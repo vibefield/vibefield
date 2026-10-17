@@ -69,11 +69,21 @@ export class MockMgmtServer {
   /** when set, every native.mesh.* call answers UNAVAILABLE (node not up) */
   meshUnavailable = false;
   /** DS-1 — the floor's EGRESS, answered ahead of every mesh gate (as the real
-   * floor's `mgmt/mesh_egress.rs` is). `"unsupported"` — the default, and
-   * production's answer until truffle ships RFC 026 — refuses every verb
-   * `egress-unsupported`; `"mesh-down"` refuses the acts that need a node
-   * while the table reads answer; a `MockEgress` serves from its own table.
-   * `pushEgressTable()` / `resetEgress()` drive the table stream. */
+   * floor's `mgmt/mesh_egress.rs` is). `"unsupported"` — the default — refuses
+   * every verb `egress-unsupported`; `"mesh-down"` refuses the acts that need a
+   * node while the table reads answer; a `MockEgress` serves from its own table.
+   * `pushEgressTable()` / `resetEgress()` drive the table stream.
+   *
+   * field-native's default build is the truffle arm (TB-E), so a production
+   * floor with NO node answers `"mesh-down"`, and one with a node serves real
+   * routes (a `MockEgress` here). `"unsupported"` models a build without the
+   * `truffle-egress` feature (TB-E's revert) or a sidecar below protocol 7. It
+   * is the DEFAULT on purpose: it is the one answer whose road is the OS
+   * network, and the suites that are not about egress dial their peers' doors
+   * directly on loopback through `FloorEgress`. A `"mesh-down"` default would
+   * fail every such dial closed (DS-L5). The production shape with no node is
+   * asserted where egress is the subject (`test/egress.test.ts`, "the default
+   * build with no node"). */
   egress: "unsupported" | "mesh-down" | MockEgress = "unsupported";
   /** UA-P-0j — the floor's mesh POSTURE, modelled only for a suite that opts
    * in; `undefined` (the default) keeps the scripted node every older row

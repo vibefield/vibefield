@@ -28,9 +28,13 @@ import { Socks5Agent, Socks5Error, type Socks5Stage } from "./socks5";
 //     {peer, port}, dropped (and said so) when the peer leaves the roster or
 //     the floor's table resets. `FakeEgressRoutes` is its test double.
 //
-// Today the floor answers `egress-unsupported` for everything (truffle-core
-// 0.7.14 has no egress), so every path here resolves to "the OS network" and
-// every route to `undefined` — honestly, and with the floor's own reason.
+// The truffle pin is 0.7.19 and field-native's default build is the real arm
+// (TB-E). With a node up, a dial rides the node's SOCKS5 (E1) and a route is a
+// loopback listener the sidecar binds (E2). With no node, the floor answers
+// `mesh-down`, so a dial FAILS CLOSED, `UNAVAILABLE {service: "mesh"}`, and does
+// not ride the OS Tailscale app (DS-L5, as ruled). Only a sidecar below protocol
+// 7 (answered per call, a fact of the floor's boot) or a build without the
+// feature sends the dial to the OS network.
 //
 // DS-1b (2026-10-01, review D4 + D5) — FALLS BACK ONLY ON UNSUPPORTED.
 // Design-06 §3's "falls back, logged" was read as ANY refusal, and wave 1

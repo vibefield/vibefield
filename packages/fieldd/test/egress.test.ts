@@ -129,7 +129,10 @@ describe("DS-1 — the floor's answer, classified honestly", () => {
 });
 
 describe("DS-1 — MeshClient's egress verbs over the real link", () => {
-  it("hears production's answer today: every verb egress-unsupported", async () => {
+  // `egress-unsupported` is the answer of a build without the feature or of a
+  // sidecar below protocol 7. Production's default arm is the truffle one, and
+  // the next row holds its no-node answer.
+  it("hears an unsupported floor's answer: every verb egress-unsupported", async () => {
     const { mesh } = await floor();
     await expect(mesh.egressProxy()).rejects.toMatchObject({
       kind: "UNAVAILABLE",
@@ -137,6 +140,26 @@ describe("DS-1 — MeshClient's egress verbs over the real link", () => {
       details: { service: "mesh", state: "egress-unsupported" },
     });
     expect(await resolveEgressPath(mesh)).toEqual({ kind: "direct", state: "egress-unsupported" });
+  });
+
+  // TB-E (2026-10-17) — THE DEFAULT BUILD WITH NO NODE. field-native's truffle
+  // arm answers a proxy ask `mesh-down` (retryable) until a node is up, and that
+  // is NOT the OS network: the path is `unavailable`, so a PeerLink dial fails
+  // closed (DS-L5; peer-link-egress.test.ts holds the dial itself over a scripted
+  // source). This is the shape TB-E makes production, held over the real link.
+  it("hears the default build with no node: mesh-down, and the path fails closed", async () => {
+    const { mock, mesh } = await floor();
+    mock.egress = "mesh-down";
+    await expect(mesh.egressProxy()).rejects.toMatchObject({
+      kind: "UNAVAILABLE",
+      retryable: true,
+      details: { service: "mesh", state: "mesh-down" },
+    });
+    expect(await resolveEgressPath(mesh)).toEqual({
+      kind: "unavailable",
+      state: "mesh-down",
+      detail: "disabled",
+    });
   });
 
   it("returns the proxies, a bound route, the table and its stream, each held to the contract", async () => {

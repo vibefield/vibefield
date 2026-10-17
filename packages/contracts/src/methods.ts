@@ -670,9 +670,14 @@ export const METHODS: MethodDef[] = [
   // DS-1 — EGRESS (design-02 §2.4's egress bullet; shapes in mgmt.ts). The
   // mirror image of `serve`: a desktop reaches a peer THROUGH its own node, so
   // no desktop-to-desktop path needs the OS Tailscale app (DS-L5). CONTROL
-  // only, like lanes: an address, a credential, a route row. Until truffle
-  // ships RFC 026 the floor answers every one of these `UNAVAILABLE {service:
-  // "mesh", state: "egress-unsupported"}`, and fieldd falls back honestly.
+  // only, like lanes: an address, a credential, a route row. The default floor
+  // answers these from its node (RFC 026 shipped in truffle 0.7.16, sidecar
+  // protocol 7; the pin is 0.7.19). With no node, `proxy`, `httpProxy` and
+  // `route.add` answer `mesh-down`, the table reads answer an empty table, and
+  // `route.remove` finds nothing (`NOT_FOUND`). `UNAVAILABLE {service: "mesh",
+  // state: "egress-unsupported"}` is a featureless build's or a sidecar below
+  // 7's answer, and only it takes fieldd to the OS network, where it falls back
+  // honestly.
   defineMethod({
     surface: "mgmt",
     method: "native.mesh.egress.proxy",

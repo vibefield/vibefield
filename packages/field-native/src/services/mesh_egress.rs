@@ -11,23 +11,29 @@
 //! over `open_tcp` was considered and rejected: it would put the floor back
 //! in the byte path (design-02 §2.4).
 //!
-//! THREE ARMS, one trait, because the substrate does not exist yet:
+//! THREE ARMS, one trait:
 //!
-//!   [`UnsupportedEgress`] — PRODUCTION TODAY. truffle-core 0.7.14's sidecar
-//!       has no egress verb, so every call answers `egress-unsupported`: a
-//!       capability fact that holds for the floor's life, which is what lets
-//!       fieldd fall back to the OS network without retrying.
+//!   `TruffleEgress` — PRODUCTION since 2026-10-17 (DECISIONS, the TB-E row):
+//!       the cargo feature `truffle-egress` is in field-native's DEFAULT
+//!       features. COMPILED 2026-10-01 (DS-1b) against truffle-core as built on
+//!       truffle's `rfc026-egress` branch at `92ab2b7` (RFC 026, sidecar
+//!       protocol 6), through a local `[patch.crates-io]` that never entered
+//!       this repo. The release that shipped it (0.7.16; the pin is 0.7.19)
+//!       carries the same API, with `egress.rs` byte-identical but for two
+//!       doc hunks. A node whose sidecar predates RFC 026 is refused by the
+//!       core before it asks, and `truffle_refusal` answers that
+//!       `egress-unsupported` PER CALL. The sidecar binary is fixed for the
+//!       floor's boot, so fieldd's per-boot cache of that answer holds, and a
+//!       mixed fleet degrades to the OS network honestly.
+//!   [`UnsupportedEgress`] — the REVERT arm: what a build without the feature
+//!       answers (TB-E's revert drops it from `default`). Every call answers
+//!       `egress-unsupported`, a capability fact that holds for the floor's
+//!       life, which is what lets fieldd fall back to the OS network without
+//!       retrying. It is the same wire answer the truffle arm gives for a
+//!       sidecar below protocol 7.
 //!   [`FakeEgress`] — TESTS. Real loopback listeners that splice to an address
 //!       the test controls, so the facade, the table, the reset and fieldd's
 //!       consumers are exercised without a tailnet.
-//!   `TruffleEgress` — the real arm, behind the cargo feature
-//!       `truffle-egress`, OFF by default. COMPILED 2026-10-01 (DS-1b) against
-//!       truffle-core as built on truffle's `rfc026-egress` branch at
-//!       `92ab2b7` (RFC 026, sidecar protocol 6), through a local
-//!       `[patch.crates-io]` that never enters this repo. The pinned 0.7.14
-//!       has none of it, so the feature flips only at the petition window that
-//!       moves truffle-core AND the npm sidecars together (EL8), a deliberate
-//!       event, never a casual one.
 //!
 //! The route table is REBUILT-NOT-PERSISTED like every facade table: a node
 //! teardown or rebuild calls [`EgressBackend::reset`], and the facade's
@@ -129,7 +135,9 @@ pub trait EgressBackend: Send + Sync {
     async fn reset(&self) -> usize;
 }
 
-/// The arm production builds today (see the module note).
+/// The arm production builds (see the module note): `TruffleEgress` under the
+/// default features since TB-E (2026-10-17), `UnsupportedEgress` in a build
+/// without them.
 pub fn default_backend() -> Arc<dyn EgressBackend> {
     #[cfg(feature = "truffle-egress")]
     {
@@ -141,8 +149,9 @@ pub fn default_backend() -> Arc<dyn EgressBackend> {
     }
 }
 
-/// PRODUCTION TODAY — the sidecar truffle-core 0.7.14 ships has no egress verb
-/// (petition T7), so every call is the same honest answer.
+/// The REVERT arm: a floor built without `truffle-egress` (TB-E's revert)
+/// answers every call `egress-unsupported`, the same honest answer the truffle
+/// arm gives, per call, for a sidecar below protocol 7.
 pub struct UnsupportedEgress;
 
 #[async_trait::async_trait]
@@ -521,9 +530,8 @@ fn coded_refusal(code: String, message: String) -> EgressError {
 /// COMPILED 2026-10-01 (DS-1b) under a local `[patch.crates-io]` that points
 /// truffle-core at that branch and never enters this repo; the wave-1 arm,
 /// written to a relay, mapped `NetworkError` and did not compile (review D6).
-/// The feature stays OFF: the pinned 0.7.14 has none of this, and it flips
-/// only at the petition window that moves truffle-core AND the npm sidecars
-/// together, protocol 5 → 6 (EL8). That build is the check again.
+/// ON BY DEFAULT since 2026-10-17 (TB-E), over the released crate (0.7.19):
+/// every signature above is unchanged at the tag, and the build is the check.
 #[cfg(feature = "truffle-egress")]
 #[derive(Default)]
 pub struct TruffleEgress {
@@ -765,10 +773,66 @@ mod tests {
         assert_eq!(arm.reset().await, 0);
     }
 
+    /// TB-E (2026-10-17) — the DEFAULT build is the truffle arm.
+    #[cfg(feature = "truffle-egress")]
+    #[test]
+    fn production_builds_the_truffle_arm() {
+        let arm = default_backend();
+        assert_eq!(arm.arm(), "truffle");
+        assert!(
+            arm.supported(),
+            "the facade asks the node; a sidecar below 7 answers per call"
+        );
+    }
+
+    /// TB-E's revert path (`truffle-egress` out of `default`) builds the
+    /// unsupported arm. Runs only in such a build, e.g. `cargo test -p
+    /// field-native --no-default-features`.
     #[cfg(not(feature = "truffle-egress"))]
     #[test]
-    fn production_builds_the_unsupported_arm_until_the_petition_window() {
+    fn a_build_without_the_feature_answers_from_the_unsupported_arm() {
         assert_eq!(default_backend().arm(), "unsupported");
+    }
+
+    /// TB-E — "UnsupportedEgress left only for a sidecar below 7": the floor
+    /// cannot read its sidecar's protocol (`Node` publishes none), so the truffle
+    /// arm answers that sidecar per call. The core refuses an egress verb below
+    /// protocol 7 with `NetworkError::Unsupported` before it asks the sidecar
+    /// (truffle-v0.7.19 `provider.rs` `egress_ready`), `truffle_refusal` maps it
+    /// to `Unsupported`, and the mirror must hand that through unchanged on both
+    /// of its paths: the add, and the table re-read a failed add makes. Anything
+    /// else would turn the wire's `egress-unsupported`, which fieldd caches for
+    /// the boot and answers with the OS network, into a retryable state.
+    #[tokio::test]
+    async fn a_sidecar_below_protocol_7_reads_unsupported_through_the_mirror() {
+        struct Predates;
+        #[async_trait::async_trait]
+        impl RouteSubstrate for Predates {
+            async fn add(
+                &self,
+                _: &str,
+                _: &str,
+                _: Option<&str>,
+            ) -> Result<EgressRoute, EgressError> {
+                Err(EgressError::Unsupported)
+            }
+            async fn remove(&self, _: &str) -> Result<(), EgressError> {
+                Err(EgressError::Unsupported)
+            }
+            async fn list(&self) -> Result<Vec<EgressRoute>, EgressError> {
+                Err(EgressError::Unsupported)
+            }
+        }
+        let mirror = RouteMirror::default();
+        assert_eq!(
+            mirror.add(&Predates, "r1", TARGET, None).await,
+            Err(EgressError::Unsupported)
+        );
+        assert_eq!(
+            mirror.remove(Some(&Predates), "r1").await,
+            Err(EgressError::Unsupported)
+        );
+        assert_eq!(mirror.reset().await, 0, "nothing was bound");
     }
 
     #[tokio::test]
