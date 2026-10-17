@@ -717,7 +717,16 @@ public final class TerminalAttachment {
   /// nothing once another pane has taken it (a mere resize never claims), and
   /// a take still waiting for its leg goes with the newest grid.
   public func setViewport(cols: UInt16, rows: UInt16) {
-    grid = GhostteaTerminalGridSize(columns: cols, rows: rows)
+    let next = GhostteaTerminalGridSize(columns: cols, rows: rows)
+    // The grid is the view's bounds less its insets — its safe area included
+    // (ghosttea's `includesSafeAreaInsets`) — so the line carries both: a
+    // grid smaller than the pane it is drawn in says which one shrank it.
+    if next != grid, let view = scene.view {
+      log(
+        "grid \(cols)×\(rows) — the view \(Int(view.bounds.height)) pt tall, its safe area "
+          + "\(Int(view.safeAreaInsets.bottom)) pt at the bottom session=\(sessionID ?? "-")")
+    }
+    grid = next
     guard let client, let sessionID else { return }
     client.resizeGeometry(cols: Int(cols), rows: Int(rows), for: sessionID)
   }

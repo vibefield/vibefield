@@ -664,9 +664,13 @@ public final class RoutedTerminalClient {
       return
     }
     guard !geometryAsks.contains(where: { $0.sessionId == sessionId }) else { return }
-    guard holdsGeometry(sessionId), let session = sessions[sessionId],
-      session.rights.contains(.geometry)
-    else { return }
+    guard let session = sessions[sessionId], session.rights.contains(.geometry) else { return }
+    guard holdsGeometry(sessionId) else {
+      options.log(
+        "seat: \(grid.cols)×\(grid.rows) measured and kept — \(seatWords(session.geometryHolder)) "
+          + "session=\(sessionId)")
+      return
+    }
     sendClaim(
       sessionId: sessionId, grid: grid, revision: session.geometryRevision, intent: .resize,
       retried: false)
@@ -702,6 +706,18 @@ public final class RoutedTerminalClient {
         "rows": .int(Int64(grid.rows)),
         "expectRevision": .int(revision),
       ])
+    options.log(
+      "seat \(intent) \(grid.cols)×\(grid.rows) at r\(revision)\(retried ? ", the one retry" : "") "
+        + "session=\(sessionId)")
+  }
+
+  /// Whose seat this client believes it is, in a line's words.
+  private func seatWords(_ holder: RoutedGeometryHolder?) -> String {
+    guard let holder else { return "the seat is empty" }
+    guard let ticket, holder.isClaimant(clientId: ticket.clientId, viewId: options.viewId) else {
+      return "another view holds the seat"
+    }
+    return "this view holds the seat"
   }
 
   private func sendTransfer(
@@ -725,6 +741,9 @@ public final class RoutedTerminalClient {
         "cols": .int(Int64(grid.cols)),
         "rows": .int(Int64(grid.rows)),
       ])
+    options.log(
+      "seat take from another view \(grid.cols)×\(grid.rows) at r\(revision)"
+        + "\(retried ? ", the one retry" : "") session=\(sessionId)")
   }
 
   /// The one retry of a refused take, against what the refusal ANNOUNCED.
@@ -1137,6 +1156,9 @@ public final class RoutedTerminalClient {
       session.geometryRevision = committed.geometryRevision
       session.geometryHolder = committed.holder
       sessions[sessionId] = session
+      options.log(
+        "seat committed \(committed.cols)×\(committed.rows) r\(committed.geometryRevision) — "
+          + "\(seatWords(committed.holder)) session=\(sessionId)")
       // The pane's grid moved while the verb was in flight: ONE resize of the
       // seat this view now holds carries the newest grid.
       if holdsGeometry(sessionId), let wanted = wantedGrids[sessionId],
@@ -1152,6 +1174,11 @@ public final class RoutedTerminalClient {
       guard let refused = try? RoutedGeometryRefused(json: body) else { return }
       lastRefusal = refused.code
       let ask = geometryAsks.isEmpty ? nil : geometryAsks.removeFirst()
+      options.log(
+        "seat refused \(refused.code)"
+          + (refused.geometryRevision.map { " r\($0) — \(seatWords(refused.currentHolder))" }
+            ?? " — no seat named")
+          + " session=\(ask?.sessionId ?? soleAttachedSession ?? "-")")
       // THE REFUSAL IS THE ANNOUNCEMENT: a revision says where the seat is now,
       // and its holder (or none: the seat is empty) is the belief from here.
       // A refusal naming no revision says nothing about the seat.
