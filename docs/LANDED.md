@@ -10988,7 +10988,7 @@ the plan three times:
   - root-rotation persistence;
   - the release workflow and its TD-3 `sign` step;
   - the asar allowlist audit.
-- **L4 = WP12f, `smoke:update`:** the real Squirrel run on DEV-signed builds, which witnesses the order (A) branches.
+- **L4 = WP12f, `smoke:update`:** the real Squirrel run on DEV-signed builds, which witnesses the order (A) branches. *Corrected 2026-10-17 (WP12 L4 `18aa2a25`, §14 R6, the PM's ruling 2026-10-15 21:41Z): L4 witnesses Squirrel's FIRST touch, at download completion (`MacUpdater.js:209-219`: `setFeedURL`, then `dispatchUpdateDownloaded`), not the apply; the order (A) branches stay unit-witnessed here and their physical run is W11's — no input injection on this Mac; the silent path's display clause reads the live display (`pmset`); EDP §13.5 keeps smoke triggers out of the production asar.*
 - **W10 and W11** wait on James.
 - **The phone/peer half of the restart announcement, plus the kit's `doorWords` arm,** are the DS track's.
 
@@ -11468,3 +11468,95 @@ holds). F1 — the link and terminals over it — is next.
 - `smoke:bundled` prints the shell's fatal reason when Electron exits before the smoke speaks: the gate's three runs said
   only `exit 1`, and the reason (`desktop.lifecycle.fatal`, fieldd's readiness refusal) was in each run's
   `desktop.ndjson`.
+
+## WP12 L4 — `pnpm smoke:update`: a DEV-keyed packaged app against a loopback fixture origin, five runs judged from outside the process, and W8's remainder on the zip a person downloads (2026-10-17; `18aa2a25`)
+
+**Why:** `build-wp12-updater.md` §4 WP12f and §14, ruled by the PM on 2026-10-15 at 21:41Z:
+- R1: the stage's DEV-only `--dev-trust-root`;
+- R4: the staged line;
+- R6: the apply stays W11;
+- R7: a landing-only row 30.
+
+The leans stood for the rest: R2, the zip; R3, no knob; R5, every run inside its temp root. Built during James's focus
+session, run after it. WP12's DEV-provable half is complete.
+
+**What landed (`18aa2a25`):**
+- **The fixture origin:** `apps/desktop/packaging/update-fixture.mjs`.
+  - The run's keys are minted in memory, and its trust-root is root-signed (public).
+  - Release trees are signed by `release-sign`'s own `signRelease`; `latest-mac.yml` names a random payload by its sha512.
+  - A loopback server in GitHub's shape counts every request.
+- **The smoke:** `apps/desktop/packaging/run-update-smoke.mjs`.
+  - It builds the zip a person downloads, staged on the run's trust-root, and runs W8's audits on that app.
+  - Each of the five runs gets an unzipped copy inside its own root (`HOME`, `FIELDD_DATA_DIR`, `--user-data-dir`).
+  - It judges from outside the process: the desktop log, the fixture's requests, and electron-updater's cache.
+- **R1:** `bundled-plugins.mjs` `--dev-trust-root`, with the bundled key in `VIBEFIELD_SMOKE_BUNDLED_SECRET`, in the
+  stager's environment only. A release stage (`VIBEFIELD_BUNDLED_INDEX_SECRET` set) refuses it. The stage report reads
+  "KEY CLASS: DEV, smoke trust-root".
+- **R4:** the controller logs `desktop.update.staged {version, sha512}`, the sha512 being the verified feed's.
+- **The reaper** (`smoke-daemons.mjs`) names the packaged layout.
+- **desk-gates:** row 30 and its doors.
+
+**Found:**
+- **A staged update left no trace outside the process** (R4). No log line said "staged", and the state file holds no
+  state kind. A support bundle or a person reading the log could not tell a downloaded update from none. Closed by
+  `desktop.update.staged`.
+- **The existing `VIBEFIELD_BUNDLED_INDEX_SECRET` could not carry the smoke's bundled key: it IS the stager's release
+  switch** (`keyClass = secret ? "release" : "dev"`). The smoke's key has a DEV-only env of its own, and that switch's
+  presence refuses `--dev-trust-root`.
+- **A reaper keyed on dev process names misses a packaged layout.** `smoke-daemons.mjs` knew `Electron Helper` and
+  `fieldd/dist/bin.cjs`. A packaged app's helpers ("VibeField Helper (…)") weren't flagged as helpers, and fieldd's SEA in
+  `Resources/bin` went unnamed. The packaged names are now taught and tested.
+- **§2·A finding 3 was wrong, and is corrected at its source.** Squirrel is first touched at download completion
+  (`MacUpdater.js:209-219`), not at `quitAndInstall`.
+- **§4's `package:dir` premise could never reach `staged`.** A `--dir` build has no `app-update.yml`, and
+  electron-updater's download reads it. Corrected at its source; the smoke builds the zip (R2).
+- **R5, what landed outside the runs' roots:** nothing. None of the nine real-home paths (`~/Library/Logs/VibeField`, the updater's and the app's caches, Application
+  Support, Preferences, Saved Application State, HTTPStorages, WebKit) was created or touched by the five runs
+  (`SMOKE_UPDATE_FOOTPRINT {"outsideTheRoot":[]}`).
+
+**Validation:**
+- `pnpm verify` EXIT 0 at `c357a38b`, the tree `18aa2a25` carries (only the message was amended after; 00:49:30→00:56:02Z,
+  armed at load 8.05): vitest 8863 passed, 0 failed, 16 skipped; cargo 313 passed, 9 ignored; dev-runner's `node --test`
+  180/180. electron-shell's tsc ran alone first, both configs, 0 errors.
+- The zip build, in the row (armed at load 9.40): field-native release 38.2 s; `package:stage --dev-trust-root` 34.4 s,
+  its report "KEY CLASS: DEV, smoke trust-root"; `--mac zip --arm64` 48.3 s (electron-builder signs with no identity; the
+  fuse flip re-applies the ad-hoc signature). W8 on the built app: audit-app-update, audit-asar and audit-fuses (9 fuses,
+  0 transitional), all green.
+- `pnpm smoke:update` EXIT 0 (01:02:49→01:09:46Z; load 9.40 at arm, 26–31 during). Five runs, all green:
+  - staged: `0.1.1-beta.1`; the line's and the cache's sha512 are the signed feed's; 12 requests, the zip once;
+  - forged: `feed-unverified`, 9 requests, no payload;
+  - rollback: `policy-rollback`, 7 requests, no payload;
+  - killed: `killed`, 11 requests, no payload;
+  - unresolved: `channel-unresolved`, 5 requests, no payload, and the nightly's feed never asked for.
+  Each run took 56.4–56.5 s. Each left fieldd (two processes), field-native, two field-terminal-hosts, rosettad and one
+  helper: production leaves its daemons running by design, and the row reaped every one. The root was removed.
+- R6, Squirrel's first touch, at download completion: electron-updater's Squirrel.Mac proxy came up on loopback
+  ("Creating proxy server for native Squirrel.Mac" → "… is listening"), the step before `setFeedURL`, and no updater
+  error followed on the ad-hoc-signed package. Squirrel's own fetch waits for `quitAndInstall`: W11's.
+- `pnpm gate:landing --with-stages` on `18aa2a25` (01:15:45→01:49:44Z, armed at load 9.95; 11 GiB free before and
+  after): 25/27, the 16 stages green.
+  - The two reds were armed straight out of the test stage's load 309, because the one-minute average lags:
+    - smoke:canvas at 40: DK-14 (main's own) and two PEERS IDLE timing rows ("the peer was away 7500 ms after its last
+      move — before its 8 s"; "the idle peer was never hidden");
+    - smoke:kind-faults at 17: "PRESENCE REST: the window was 6199 ms, under its 6200".
+  - Second samples, each alone: smoke:canvas (armed at 9.44) red only on DK-14, main's own; smoke:kind-faults green
+    (armed past the guard's 10-minute bound at 11.28, on ambient desktop load, no build running).
+  - The owed `gate:landing --wait-load N` (desk-gates' hygiene list) is this mechanism. It is widened at its source:
+    the wait belongs before each desk row, not only the first gate.
+- Unit tests:
+  - `update-fixture.test.ts`: the five runs by the client's own chain over loopback, `release-verify` agreeing, and EL7.
+  - The staged line and `feedSha512Of`.
+  - The stager's smoke root and its refusals.
+  - The packaged process names.
+  - `update-smoke.test.mjs`: the judging, the app env free of secrets, the footprint diff.
+
+**Waiting, never passed:**
+- W10: a real nightly verified by the embedded release key. It needs TD-1's keys, J2's rulesets and J3's first dispatch.
+- W11: the signed N-1 → N apply. It needs WP10 and J4. The physical apply can't be driven here: there's no input
+  injection on this Mac, the silent path's display clause reads the live display, and EDP §13.5 keeps smoke triggers out
+  of the asar.
+
+**Owed, the row's own timing:** every run took 56.4–56.5 s, whether it made 5 requests or 12. The row doesn't split that
+into the boot, the 30 s launch delay, the verdict and the quit. It also doesn't say whether the shell left on SIGTERM
+(the quit flow bounds its teardown at 4 s) or at the SIGKILL 20 s later; with one helper outliving every quit, the
+second is possible. A result line that names the verdict's time and how the shell left settles it.
