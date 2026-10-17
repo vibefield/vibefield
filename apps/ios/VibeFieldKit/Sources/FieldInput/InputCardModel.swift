@@ -289,6 +289,9 @@ public final class InputCardModel {
   // --- IOS-5d: the same bookkeeping for the `+` menu, which is a presentation
   // for the same reason the fan is and takes the keyboard the same way.
   @ObservationIgnored private var keyboardWasUpBeforeMenu = false
+  /// The door a `+` menu pick asked for, until the menu has left
+  /// (`requestSurface` → `menuDidLeave`).
+  @ObservationIgnored private var pendingSurface: CardSurface?
   // --- end IOS-5b -----------------------------------------------------------
 
   public init() {}
@@ -679,6 +682,7 @@ public final class InputCardModel {
     keypadShown = false
     plusMenuOpen = false
     keyboardWasUpBeforeMenu = false
+    pendingSurface = nil
     surface = nil
     // --- end IOS-5d
   }
@@ -782,18 +786,23 @@ public final class InputCardModel {
   /// presentations of the same controller, and asking for the second while the
   /// first is still dismissing is a sheet that never appears — the finding
   /// IOS-5c recorded when it moved the review sheet off the root. So the menu
-  /// goes first and the door follows it.
+  /// goes first and the door follows it — when the menu has LEFT, on its own
+  /// signal (`menuDidLeave`). Corrected 2026-10-17: the door used to follow a
+  /// 260 ms sleep, a guess at the popover's animation; James's rule is no
+  /// sleeps, and the menu's disappearance is the fact the guess stood in for.
   public func requestSurface(_ wanted: CardSurface) {
+    pendingSurface = wanted
     closePlusMenu(restoringKeyboard: false)
-    Task { @MainActor [weak self] in
-      try? await Task.sleep(for: .milliseconds(Self.surfaceHandoff))
-      self?.surface = wanted
-    }
   }
 
-  /// Long enough for a popover to finish leaving. Named because a bare 260 in
-  /// the middle of a `Task` reads as a guess rather than as a handoff.
-  static let surfaceHandoff = 260
+  /// The `+` menu's popover has finished leaving: the door a pick asked for
+  /// opens now, on the presentation it can win. A dismissal with no pick
+  /// opens nothing.
+  public func menuDidLeave() {
+    guard let wanted = pendingSurface else { return }
+    pendingSurface = nil
+    surface = wanted
+  }
 
   /// The door closed, however it was closed.
   public func closeSurface() {

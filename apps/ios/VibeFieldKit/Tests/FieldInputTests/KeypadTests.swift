@@ -218,4 +218,32 @@ struct PlusMenuTests {
     #expect(model.plusMenuOpen == false)
     #expect(model.surface == nil)
   }
+
+  /// A popover and a sheet are presentations of the same controller, so a
+  /// door picked from the menu opens when the menu has LEFT — on the menu's
+  /// own signal, never a clock (it was a 260 ms sleep until 2026-10-17).
+  @Test("a picked door opens when the menu has left, and not before")
+  func aPickOpensOnTheMenusDeparture() {
+    let model = InputCardModel()
+    model.showPlusMenu()
+    model.requestSurface(.snippets)
+    #expect(model.plusMenuOpen == false)
+    #expect(model.surface == nil, "the menu is still leaving")
+    model.menuDidLeave()
+    #expect(model.surface == .snippets)
+  }
+
+  @Test("a menu that leaves with no pick opens nothing — nor does a pick a closed card forgot")
+  func aDepartureWithoutAPickOpensNothing() {
+    let model = InputCardModel()
+    model.showPlusMenu()
+    model.closePlusMenu()
+    model.menuDidLeave()
+    #expect(model.surface == nil)
+    model.showPlusMenu()
+    model.requestSurface(.clipboardHistory)
+    model.reset()
+    model.menuDidLeave()
+    #expect(model.surface == nil)
+  }
 }

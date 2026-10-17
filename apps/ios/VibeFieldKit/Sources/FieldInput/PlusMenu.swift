@@ -90,6 +90,8 @@ struct PlusMenuList: View {
       divider
       row("Clipboard history", glyph: .clipboard, surface: .clipboardHistory)
     }
+    // The popover has finished leaving: a door picked from it can present now.
+    .onDisappear { model.menuDidLeave() }
     // `.menu` — `padding: 4` around 44 pt rows.
     .padding(4)
     // The canvas's 252, and wider at accessibility sizes: `Clipboard history`
