@@ -7,8 +7,12 @@
 //! Module map — each file owns one concern:
 //! - `approval` — the phone's approval, verified at its hello: fieldd's envelope under the floor's
 //!   freeway key (pinned by `freeway-approval-mac.vector.json`);
+//! - `door` — the WebSocket on the floor-held listener: the secret path, the injected identity, the
+//!   hello within its deadline, answered on stream 0;
 //! - `frame` — the frame codec (`u8 frameType` · LEB128 `streamId` · payload) and one stream's
 //!   reassembly of a fragmented message (pinned by `freeway-frames.vector.json`);
+//! - `hello` — the link's first frame, decided: the two forms, the admit table, a phone's approval
+//!   bound to THIS connection's node, the welcome or the refusal and its close code;
 //! - `mint` — a phone's two cell grants, TPv3's envelopes under the host's own issuer and the
 //!   cell's key (FW-D1);
 //! - `mux` — the link's streams: ids by parity, never reused; each frame's meaning for its
@@ -17,7 +21,9 @@
 //!   fragments and WINDOW.
 
 pub mod approval;
+pub mod door;
 pub mod frame;
+pub mod hello;
 pub mod mint;
 pub mod mux;
 pub mod writer;
