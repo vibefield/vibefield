@@ -6,6 +6,9 @@
  * of what Godview lends the line (its panes named as the swarm names them).
  * The line's DOM, keys and owner are `composer-line.test.tsx`'s.
  */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { atDefaultHot, atList, atMove, atStops, atTakeable } from "../src/frame/at-list";
 import {
@@ -21,7 +24,7 @@ import {
   spliceDraft,
 } from "../src/frame/draft";
 import { foldSurface } from "../src/frame/frame-surface";
-import type { LinePane } from "../src/frame/line-door";
+import { inputRefusalNote, inputRefusalWhy, type LinePane } from "../src/frame/line-door";
 import { linePanesOf, newTerminalOutcome } from "../src/godview/line-panes";
 
 const chip = { id: "c1", kind: "capture", label: "1440 × 900", path: "/stills/a.png" } as const;
@@ -102,7 +105,49 @@ describe("the draft (DESIGN.md §8)", () => {
     expect(sendNote({ kind: "copied-input-closed", name: "vibe-field" })).toBe(
       "Copied — vibe-field's pane is not taking input",
     );
+    const tooLarge = sendNote({
+      kind: "copied-too-large",
+      name: "vibe-field",
+      why: "300 KB, and one paste carries 261 KB of it",
+    });
+    expect(tooLarge).toBe(
+      "Copied — too large for vibe-field: 300 KB, and one paste carries 261 KB of it",
+    );
     expect(sendNote({ kind: "copy-refused" })).toBe("Not sent — the clipboard refused it");
+  });
+
+  it("says a refused input's numbers as Finder counts them, the size never reading as what fits (D6)", () => {
+    const why = (bytes: number, limitBytes: number, kind: "paste" | "text" = "paste") =>
+      inputRefusalWhy({ sessionId: "s", kind, bytes, limitBytes });
+    // in thousands (DESIGN.md §9): one byte over 262 KB is 263, never 262
+    expect(why(262_145, 262_144)).toBe("263 KB, and one paste carries 262 KB of it");
+    // past a megabyte, tenths — the size up, what fits down
+    expect(why(4_194_305, 4_194_304)).toBe("4.2 MB, and one paste carries 4.1 MB of it");
+    expect(why(300_000, 261_958, "text")).toBe("300 KB, and typed text carries 261 KB of it");
+    // the unit is chosen after the rounding: never "1000 KB"
+    expect(why(999_999, 261_958)).toBe("1 MB, and one paste carries 261 KB of it");
+    expect(why(2_500_000_001, 4_194_304)).toBe("2.6 GB, and one paste carries 4.1 MB of it");
+  });
+
+  it("says, of a refused input, exactly the words DESIGN.md §8 records (D6)", () => {
+    // the doc wraps its lines; a sentence is the same sentence across a wrap
+    const design = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../../../DESIGN.md"),
+      "utf8",
+    ).replace(/\s+/g, " ");
+    const refusal = (kind: "paste" | "text") =>
+      ({ sessionId: "s", kind, bytes: 300_000, limitBytes: 261_958 }) as const;
+    for (const words of [
+      inputRefusalNote(refusal("paste"), "vibe-field"),
+      inputRefusalNote(refusal("text"), "vibe-field"),
+      sendNote({
+        kind: "copied-too-large",
+        name: "vibe-field",
+        why: inputRefusalWhy(refusal("paste")),
+      }),
+    ]) {
+      expect(design).toContain(`"${words}"`);
+    }
   });
 
   it("gives each view its own create, and only Canvas a bare plus (FR-3, FC-D3)", () => {

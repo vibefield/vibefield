@@ -48,7 +48,10 @@ export interface LineViewDoor {
   /** Paste `text` into the input of the pane showing `sessionId` — the road ⌘V
    * takes, so the pane brackets it and nothing presses Return. True when the
    * pane took it; false, with nothing handed to the pane, while its input is
-   * closed (a paste there would be dropped), and the line copies instead. */
+   * closed (a paste there would be dropped), and the line copies instead.
+   * D6: a paste too large for the pane's terminal is claimed and then refused
+   * INSIDE this call — the line hears that refusal (`inputRefusals`) and copies
+   * then too; true alone never says the paste was sent. */
   paste(sessionId: string, text: string): boolean;
   /** AR-8c — whether `place` can mount now: the deck has its door. */
   readonly canPlace: boolean;
@@ -393,16 +396,20 @@ function sizeWords(bytes: number, round: (value: number) => number): string {
   return `${round(bytes / 100_000_000) / 10} GB`;
 }
 
-/** What the line says of a refused input, naming the pane as @'s list names it
- * (`name`; absent — no pane of the deck shows that session — "the terminal"):
- * its size, and how much of it one paste (or typed text) carries — both the
- * text's own bytes, so "of it": the second is this text's, its escapes
- * counted, not a fixed figure. */
-export function inputRefusalNote(refusal: RoutedInputRefusal, name?: string): string {
-  const into = name ?? "the terminal";
+/** Why a terminal refused an input, in numbers: its size, and how much of it
+ * one paste (or typed text) carries — both the text's own bytes, so "of it":
+ * the second is this text's, its escapes counted, not a fixed figure. */
+export function inputRefusalWhy(refusal: RoutedInputRefusal): string {
   const size = sizeWords(refusal.bytes, Math.ceil);
   const fits = sizeWords(refusal.limitBytes, Math.floor);
-  const verb = refusal.kind === "text" ? "typed" : "pasted";
   const what = refusal.kind === "paste" ? "one paste" : "typed text";
-  return `Not ${verb} into ${into} — ${size}, and ${what} carries ${fits} of it`;
+  return `${size}, and ${what} carries ${fits} of it`;
+}
+
+/** What the line says of a refused input, naming the pane as @'s list names it
+ * (`name`; absent — no pane of the deck shows that session — "the terminal"). */
+export function inputRefusalNote(refusal: RoutedInputRefusal, name?: string): string {
+  const into = name ?? "the terminal";
+  const verb = refusal.kind === "text" ? "typed" : "pasted";
+  return `Not ${verb} into ${into} — ${inputRefusalWhy(refusal)}`;
 }

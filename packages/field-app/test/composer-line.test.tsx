@@ -474,12 +474,78 @@ describe("what a terminal could not take (D6)", () => {
     );
   });
 
+  it("keeps each refusal under 70 characters beside the pane's name, to be read before it fades", async () => {
+    // The note lives 2.4s (DESIGN.md §8) as one nowrap line right-aligned on
+    // send (composer.css) — a longer sentence is gone before it is read, and in
+    // a narrow window runs past its left edge.
+    const name = "vibe-field";
+    const said: number[] = [];
+    const used = mount("godview", {
+      door: door({
+        paste: (sessionId) => {
+          hearRefusal?.({ sessionId, kind: "paste", bytes: 999_850_000, limitBytes: 261_958 });
+          return true;
+        },
+      }),
+    });
+    // Sizes as the units roll over (999.9 MB is the longest a clipboard says),
+    // and what fits as it can be: a message's room of plain text, of nothing
+    // but control characters (six bytes each), a paste in parts.
+    for (const kind of ["paste", "text"] as const) {
+      for (const bytes of [300_000, 999_999, 4_194_306, 999_850_000, 2_500_000_001]) {
+        for (const limitBytes of [43_690, 261_958, 4_194_304]) {
+          act(() => {
+            hearRefusal?.({ sessionId: "s-vibe", kind, bytes, limitBytes });
+          });
+          said.push((q(".vf-line-note").textContent ?? "").length - name.length);
+        }
+      }
+    }
+    // …and the line's own send of such a draft, its longest
+    typeText("@");
+    press(editor(), { key: "Enter" });
+    typeText("the log");
+    await act(async () => {
+      press(editor(), { key: "Enter" });
+    });
+    expect(used.write).toHaveBeenCalledWith("the log");
+    expect(q(".vf-line-note").textContent).toBe(
+      "Copied — too large for vibe-field: 999.9 MB, and one paste carries 261 KB of it",
+    );
+    said.push((q(".vf-line-note").textContent ?? "").length - name.length);
+    expect(Math.max(...said)).toBeLessThan(70);
+  });
+
   it("stops hearing when the line goes", () => {
     mount("godview");
     expect(hearRefusal).not.toBeNull();
     act(() => root?.unmount());
     root = null;
     expect(hearRefusal).toBeNull();
+  });
+
+  it("copies a draft the aimed pane's terminal refuses for its size, and never says it was pasted", async () => {
+    // the pane claims the paste, as ghosttea's handler does, and its terminal
+    // refuses it INSIDE the call, as the encoder does
+    const paste = vi.fn((sessionId: string) => {
+      hearRefusal?.({ sessionId, kind: "paste", bytes: 300_000, limitBytes: 261_958 });
+      return true;
+    });
+    const used = mount("godview", { door: door({ paste }) });
+    typeText("@");
+    press(editor(), { key: "Enter" });
+    typeText("run the tests");
+    await act(async () => {
+      press(editor(), { key: "Enter" });
+    });
+    expect(paste).toHaveBeenCalledWith("s-vibe", "run the tests");
+    expect(used.write).toHaveBeenCalledWith("run the tests");
+    expect(q(".vf-line-note").textContent).toBe(
+      "Copied — too large for vibe-field: 300 KB, and one paste carries 261 KB of it",
+    );
+    // sent all the same: the words go, the aim stays
+    expect(editor().textContent).toBe("");
+    expect(q('.vf-line-chip[data-chip="aim"]').textContent).toContain("vibe-field");
   });
 });
 

@@ -248,6 +248,9 @@ export type SendOutcome =
   | { readonly kind: "copied" }
   | { readonly kind: "copied-off-screen"; readonly name: string }
   | { readonly kind: "copied-input-closed"; readonly name: string }
+  /** D6 — the pane's terminal refused the paste for its size; `why` is its
+   * numbers, in the line's words (`inputRefusalWhy`). */
+  | { readonly kind: "copied-too-large"; readonly name: string; readonly why: string }
   | { readonly kind: "copy-refused" };
 
 export function sendNote(outcome: SendOutcome): string {
@@ -260,6 +263,8 @@ export function sendNote(outcome: SendOutcome): string {
       return `Copied — ${outcome.name}'s pane is not on screen`;
     case "copied-input-closed":
       return `Copied — ${outcome.name}'s pane is not taking input`;
+    case "copied-too-large":
+      return `Copied — too large for ${outcome.name}: ${outcome.why}`;
     case "copy-refused":
       return "Not sent — the clipboard refused it";
   }

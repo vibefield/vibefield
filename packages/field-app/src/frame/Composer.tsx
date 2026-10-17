@@ -66,6 +66,7 @@ import {
   hearLineSays,
   historyCreateWaits,
   inputRefusalNote,
+  inputRefusalWhy,
   jumpNote,
   type LineViewDoor,
   newTerminalNote,
@@ -102,6 +103,13 @@ import type { ViewKeys } from "./views";
 /** How long the line's note speaks (DESIGN.md §8). */
 const NOTE_MS = 2_400;
 
+/** D6 — the line's own send, pasting into a pane: the refusal its terminal
+ * answers inside the paste lands here, for the send's outcome to say. */
+interface PasteAttempt {
+  readonly sessionId: string;
+  refused: RoutedInputRefusal | null;
+}
+
 /** What a host lends the line: the capture door and the still scheme. */
 export type ComposerHost = Pick<FieldHost, "screenshotCapture" | "screenshotStillUrl">;
 
@@ -137,7 +145,8 @@ export interface ComposerProps {
   /** D6 — where the line hears a paste or typed text a terminal refused for its
    * size (undefined: the window's terminal pool; the tests hand it a fixture).
    * A hearer of its own beside `hearLineSays`, which carries words alone: the
-   * note needs the pane's name, which only the line knows. */
+   * send needs the refusal itself, and the note the pane's name, which only the
+   * line knows. */
   inputRefusals?: (hear: (refusal: RoutedInputRefusal) => void) => () => void;
   /** Whether the line binds its window keys (B, ⌘T). The catalog's live line
    * does not: its page is not a window the line owns. */
@@ -391,11 +400,19 @@ export function Composer({
   // not be shown (P2), in Jump to's words
   useEffect(() => hearLineSays((text) => say(text, "create")), [say]);
   // D6 — a paste (or typed text) a terminal refused for its size: said where an
-  // act's outcome is, the pane named as @'s list names it
+  // act's outcome is, the pane named as @'s list names it. While the line's OWN
+  // send is pasting into that pane, the refusal is the send's: it is refused
+  // inside the paste, and the send's outcome says it (and copies instead).
   const doorRef = useRef(door);
   doorRef.current = door;
+  const pasting = useRef<PasteAttempt | null>(null);
   useEffect(() => {
     return inputRefusals((refusal) => {
+      const attempt = pasting.current;
+      if (attempt !== null && attempt.sessionId === refusal.sessionId) {
+        attempt.refused = refusal;
+        return;
+      }
       const pane = doorRef.current?.panes.find((entry) => entry.sessionId === refusal.sessionId);
       say(inputRefusalNote(refusal, pane?.name), "send");
     });
@@ -603,25 +620,41 @@ export function Composer({
     const pane =
       aim === null ? undefined : door?.panes.find((entry) => entry.sessionId === aim.sessionId);
     let outcome: SendOutcome;
-    if (
-      aim !== null &&
-      pane !== undefined &&
-      door?.onScreen === true &&
-      door.paste(aim.sessionId, text)
-    ) {
+    // D6 — a pane whose terminal refuses the paste for its size says so INSIDE
+    // the paste (the hearer above fills `refused`), while its handler claims the
+    // event all the same: a claim with a refusal is not a paste.
+    const attempt: PasteAttempt | null =
+      aim !== null && pane !== undefined && door?.onScreen === true
+        ? { sessionId: aim.sessionId, refused: null }
+        : null;
+    let took = false;
+    if (attempt !== null && door !== null) {
+      pasting.current = attempt;
+      try {
+        took = door.paste(attempt.sessionId, text);
+      } finally {
+        pasting.current = null;
+      }
+    }
+    const refused = attempt?.refused ?? null;
+    if (aim !== null && took && refused === null) {
       outcome = { kind: "pasted", name: aim.name };
     } else {
       try {
         await writeClipboard(text);
-        // An aimed pane that did not take it: the deck is off screen, or it is
-        // shown and its door refused (the pane's input is closed).
-        outcome =
-          aim !== null && pane !== undefined
-            ? {
-                kind: door?.onScreen === true ? "copied-input-closed" : "copied-off-screen",
-                name: aim.name,
-              }
-            : { kind: "copied" };
+        // An aimed pane that did not take it: its terminal refused it for its
+        // size, the deck is off screen, or it is shown and its door refused
+        // (the pane's input is closed).
+        if (aim !== null && refused !== null) {
+          outcome = { kind: "copied-too-large", name: aim.name, why: inputRefusalWhy(refused) };
+        } else if (aim !== null && pane !== undefined) {
+          outcome = {
+            kind: door?.onScreen === true ? "copied-input-closed" : "copied-off-screen",
+            name: aim.name,
+          };
+        } else {
+          outcome = { kind: "copied" };
+        }
       } catch {
         outcome = { kind: "copy-refused" };
       }
