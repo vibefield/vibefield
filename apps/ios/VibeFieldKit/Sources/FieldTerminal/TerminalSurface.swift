@@ -46,7 +46,11 @@ public struct TerminalSurface: UIViewRepresentable {
   let keyboardAppearance: UIKeyboardAppearance
   let accessibilityTitle: String
   let accessibilityConnectionState: String
+  /// The terminal's SETTLED grid, for the seat (`SettledGrid`).
   let onGridSize: (GhostteaTerminalGridSize) -> Void
+  /// A grid measured and held — the card leaving — with the reason, for the
+  /// host to say; never the seat's.
+  let onGridHeld: (GhostteaTerminalGridSize, String) -> Void
   let onNeedsFullRefresh: () -> Void
   let onHardwareInput: (GhostteaHardwareKeyEvent) -> Bool
   let onSoftwareInput: (GhostteaSoftwareInputEvent) -> Void
@@ -75,6 +79,7 @@ public struct TerminalSurface: UIViewRepresentable {
     accessibilityTitle: String = "Remote terminal",
     accessibilityConnectionState: String = "Attached over the mesh",
     onGridSize: @escaping (GhostteaTerminalGridSize) -> Void = { _ in },
+    onGridHeld: @escaping (GhostteaTerminalGridSize, String) -> Void = { _, _ in },
     onNeedsFullRefresh: @escaping () -> Void = {},
     onHardwareInput: @escaping (GhostteaHardwareKeyEvent) -> Bool = { _ in false },
     onSoftwareInput: @escaping (GhostteaSoftwareInputEvent) -> Void = { _ in },
@@ -98,6 +103,7 @@ public struct TerminalSurface: UIViewRepresentable {
     self.accessibilityTitle = accessibilityTitle
     self.accessibilityConnectionState = accessibilityConnectionState
     self.onGridSize = onGridSize
+    self.onGridHeld = onGridHeld
     self.onNeedsFullRefresh = onNeedsFullRefresh
     self.onHardwareInput = onHardwareInput
     self.onSoftwareInput = onSoftwareInput
@@ -145,6 +151,43 @@ public struct TerminalSurface: UIViewRepresentable {
     /// never also a tap.
     @objc func handleTap() {
       latest?.onTap()
+    }
+
+    /// What the seat has been told, and what waits (2026-10-17).
+    var settledGrid = SettledGrid()
+    /// A dismissal of this card that has begun, watched for being called off.
+    var watchingDismissal = false
+
+    /// A grid the Metal view measured: the seat's when it is settled.
+    func measured(_ size: GhostteaTerminalGridSize) {
+      let leaving = metalView?.isInDismissingPresentation ?? false
+      if leaving { watchDismissal() }
+      report(settledGrid.measured(size, leaving: leaving))
+    }
+
+    private func report(_ report: SettledGrid.Report) {
+      guard let latest else { return }
+      switch report {
+      case .send(let grid): latest.onGridSize(grid)
+      case .held(let grid, let because): latest.onGridHeld(grid, because)
+      case .unchanged: break
+      }
+    }
+
+    /// A dismissal the person calls off leaves the card at rest again, and its
+    /// grid is the terminal's once more.
+    private func watchDismissal() {
+      guard !watchingDismissal, let transition = metalView?.presentedRoot?.transitionCoordinator
+      else { return }
+      watchingDismissal = true
+      _ = transition.animate(alongsideTransition: nil) { [weak self] context in
+        MainActor.assumeIsolated {
+          guard let self else { return }
+          self.watchingDismissal = false
+          guard context.isCancelled, let grid = self.metalView?.currentGridSize else { return }
+          self.measured(grid)
+        }
+      }
     }
   }
 
@@ -269,7 +312,7 @@ public struct TerminalSurface: UIViewRepresentable {
       coordinator.appliedControlsGridSize = controlsGridSize
       view.onGridSizeChange =
         controlsGridSize
-        ? { [weak coordinator] size in coordinator?.latest?.onGridSize(size) } : nil
+        ? { [weak coordinator] size in coordinator?.measured(size) } : nil
     }
     if view.accessibilityTerminalTitle != accessibilityTitle {
       view.accessibilityTerminalTitle = accessibilityTitle
@@ -277,5 +320,30 @@ public struct TerminalSurface: UIViewRepresentable {
     if view.accessibilityConnectionState != accessibilityConnectionState {
       view.accessibilityConnectionState = accessibilityConnectionState
     }
+  }
+}
+
+extension UIView {
+  /// The view controller PRESENTED around this view — the root of its nearest
+  /// controller's parent chain — when the view is in a presentation at all.
+  fileprivate var presentedRoot: UIViewController? {
+    var responder = next
+    while let current = responder, !(current is UIViewController) { responder = current.next }
+    var controller = responder as? UIViewController
+    while let parent = controller?.parent { controller = parent }
+    return controller?.presentingViewController == nil ? nil : controller
+  }
+
+  /// Whether UIKit is dismissing the presentation this view is in: a sheet's
+  /// swipe down from its first point — UIKit runs it as an interactive
+  /// dismissal from the start of the drag and cancels it if the sheet springs
+  /// back — or a dismissal asked in code.
+  fileprivate var isInDismissingPresentation: Bool {
+    guard let root = presentedRoot else { return false }
+    if root.isBeingDismissed { return true }
+    // A presented controller in an interactive transition that is not its own
+    // presentation, with nothing presented over it, is being dragged away.
+    return !root.isBeingPresented && root.presentedViewController == nil
+      && root.transitionCoordinator?.isInteractive == true
   }
 }

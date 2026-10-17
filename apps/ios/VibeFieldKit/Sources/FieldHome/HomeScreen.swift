@@ -1834,6 +1834,7 @@ public struct HomeScreen: View {
         accessibilityTitle: title ?? "Remote terminal",
         accessibilityConnectionState: attachmentNote ?? "attached",
         onGridSize: { size in attachment.setViewport(cols: size.columns, rows: size.rows) },
+        onGridHeld: { size, reason in attachment.noteHeldGrid(size, because: reason) },
         onNeedsFullRefresh: { attachment.requestFullRefresh() },
         onHardwareInput: { attachment.handleHardwareKey($0) },
         onSoftwareInput: { attachment.handleSoftwareInput($0) },

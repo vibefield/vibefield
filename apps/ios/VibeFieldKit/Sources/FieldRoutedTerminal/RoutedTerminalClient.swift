@@ -665,6 +665,10 @@ public final class RoutedTerminalClient {
     }
     guard !geometryAsks.contains(where: { $0.sessionId == sessionId }) else { return }
     guard let session = sessions[sessionId], session.rights.contains(.geometry) else { return }
+    // A parked session presents no view: the cell refuses any geometry verb
+    // for it (VIEW_NOT_PRESENTING), so none is sent — the grid waits in
+    // `wantedGrids` for the take that brings the view back.
+    guard session.demand == .live else { return }
     guard holdsGeometry(sessionId) else {
       options.log(
         "seat: \(grid.cols)×\(grid.rows) measured and kept — \(seatWords(session.geometryHolder)) "

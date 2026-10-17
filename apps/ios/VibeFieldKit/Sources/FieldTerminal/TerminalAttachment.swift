@@ -731,6 +731,12 @@ public final class TerminalAttachment {
     client.resizeGeometry(cols: Int(cols), rows: Int(rows), for: sessionID)
   }
 
+  /// A grid the surface measured and held — the card leaving (`SettledGrid`):
+  /// said, never sent to the seat.
+  public func noteHeldGrid(_ held: GhostteaTerminalGridSize, because reason: String) {
+    log("grid \(held.columns)×\(held.rows) held — \(reason) session=\(sessionID ?? "-")")
+  }
+
   /// DS-D5 — the person engaged this pane: its keyboard came up. That is a
   /// focus gain like the card's opening, so the pane takes the seat — last
   /// write wins — with the grid the surface measured. A pane that lost the

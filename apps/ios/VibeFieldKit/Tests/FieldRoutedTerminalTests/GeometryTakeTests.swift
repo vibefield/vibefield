@@ -108,6 +108,30 @@ private func seatTakenByTheDesk(
     #expect(client.sessions[session]?.geometryRevision == 1)
   }
 
+  /// A PARKED session presents no view (demand none detaches it), so the cell
+  /// refuses every geometry verb for it — and a closed card's last layout pass
+  /// sent one anyway, refused VIEW_NOT_PRESENTING on James's phone (03:57Z).
+  /// None is sent; the grid waits for the take that brings the view back.
+  @Test func aParkedSessionSendsNoResize() async throws {
+    let (client, control) = try await attached()
+    defer { client.close() }
+    client.takeGeometry(cols: 45, rows: 17, for: session)
+    try await settle("the take") { await count("ClaimGeometry", on: control) == 1 }
+    try await control.deliver(.geometryCommitted, committed(me, revision: 1, cols: 45, rows: 17))
+    try await settle("this view holds the seat") { client.holdsGeometry(session) }
+
+    client.declare(demand: .none, for: session)
+    client.resizeGeometry(cols: 45, rows: 31, for: session)
+    try await Task.sleep(for: .milliseconds(30))
+    #expect(await count("ClaimGeometry", on: control) == 1, "no verb for a parked session")
+
+    // The view back: its take carries the grid measured meanwhile.
+    client.declare(demand: .live, for: session)
+    client.takeGeometry(cols: 45, rows: 31, for: session)
+    try await settle("the take on return") { await count("ClaimGeometry", on: control) == 2 }
+    #expect(await control.lastSent("ClaimGeometry")?["rows"]?.intValue == 31)
+  }
+
   /// Focus on a seat ANOTHER view holds sends exactly ONE TransferGeometry from
   /// the announced holder to this view, at the announced revision — and no
   /// claim. Its shape is the contract's golden, key for key.
