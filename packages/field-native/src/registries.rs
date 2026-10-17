@@ -122,7 +122,7 @@ pub mod terminal_pipeline {
     pub const MAX_CATCHUP_BYTES: u64 = 8388608;
     pub const CREDIT_ACCOUNT_DRAIN_TTL_MS: u64 = 5000;
     pub const CELL_LEASE_TTL_MS: u64 = 6000;
-    pub const INPUT_LAG_SUSPEND_REVISIONS: u64 = 64;
+    pub const INPUT_LAG_SUSPEND_MS: u64 = 1500;
     pub const ATTACH_RENEWAL_MARGIN_MS: u64 = 60000;
     pub const SEED_FRAME_WAIT_MS: u64 = 2000;
     pub const URGENT_RESERVE_BYTES: u64 = 2097152;

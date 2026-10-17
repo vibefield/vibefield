@@ -24,7 +24,7 @@ use super::wire::{
     TrfIdentity, JSON_MAX_SAFE_INTEGER,
 };
 use crate::registries::terminal_pipeline as tp;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
@@ -148,18 +148,24 @@ pub struct Activation {
     /// The protocol-safe lineage allocated for the engine's opaque `u64`
     /// session epoch when the frames leg attached.
     pub scene_epoch: Option<SceneEpoch>,
-    /// the newest revision the pump has SENT (the worker's eventual current)
-    pub newest_sent: Option<u64>,
     /// the revision of the first seed sent — presenting once applied
     pub seed_revision: Option<u64>,
     /// C3 — the first revision the pump sent after an overload stop: the scene
     /// is advancing again once the worker applies it (presenting once more).
     pub resume_revision: Option<u64>,
     pub pump_running: bool,
-    pub last_unit_sent_at: Option<Instant>,
-    pub last_scene_applied_at: Option<Instant>,
+    /// C5 — the lag ledger: every unit sent in this lineage and not yet
+    /// covered by a `SceneApplied`, as (revision, when sent), oldest first.
+    /// The lag call is the age of its FRONT (`lagging`).
+    pub unacked: VecDeque<(u64, Instant)>,
     last_status_sent_at: Option<Instant>,
 }
+
+/// The lag ledger's bound per activation (memory, not a wire number). Past
+/// it the newest entry absorbs each further unit — its revision moves up, its
+/// earlier send time stays — which can only OVERSTATE the age: a worker that
+/// many units behind is lagging.
+const UNACKED_UNITS_CAP: usize = 1024;
 
 impl Activation {
     fn has_right(&self, right: AttachRight) -> bool {
@@ -734,8 +740,8 @@ impl ActivationTable {
         } else if now_ms + tp::ATTACH_RENEWAL_MARGIN_MS >= a.grant_expires_at_ms {
             a.input = Input::Suspended("right-expired");
         } else if Self::lagging(a) {
-            // the cell's own lag call, two ways: too many revisions ahead of the
-            // last applied, OR a unit sent with no SceneApplied within the delay
+            // the cell's own lag call: a unit the worker has not acknowledged
+            // for longer than the bound
             a.input = Input::Suspended("lagging");
         } else {
             a.input = Input::Allowed;
@@ -743,26 +749,16 @@ impl ActivationTable {
         a.input != before
     }
 
-    /// The cell's lag call: revisions ahead of the last applied, or a unit sent
-    /// with no SceneApplied within the delay bound (§5.4 — the LAG decision is
-    /// the cell's alone).
+    /// The cell's lag call (§5.4 — the LAG decision is the cell's alone): the
+    /// AGE of the oldest unit sent and not yet acknowledged, against
+    /// `INPUT_LAG_SUSPEND_MS`. A time, never a count (C5): a revision count
+    /// fills in half a second of a streaming agent and trips at once on one
+    /// catch-up (a single unit, hundreds of revisions on); and the age is the
+    /// OLDEST unit's — the newest is always young while output flows.
     fn lagging(a: &Activation) -> bool {
-        let by_revisions = a.newest_sent.is_some_and(|newest| {
-            a.accepted
-                .as_ref()
-                .map(|s| s.scene_revision)
-                .is_none_or(|applied| {
-                    newest.saturating_sub(applied) > tp::INPUT_LAG_SUSPEND_REVISIONS
-                })
-        });
-        let by_time = a
-            .last_unit_sent_at
-            .zip(a.last_scene_applied_at)
-            .is_some_and(|(sent, applied)| {
-                sent > applied
-                    && sent.elapsed() > Duration::from_millis(tp::MAX_SCENE_APPLIED_DELAY_MS)
-            });
-        by_revisions || by_time
+        a.unacked.front().is_some_and(|(_, sent)| {
+            sent.elapsed() > Duration::from_millis(tp::INPUT_LAG_SUSPEND_MS)
+        })
     }
 
     // --- Geometry (S3c) ---------------------------------------------------
@@ -1513,12 +1509,10 @@ impl ActivationTable {
             resume_token: None,
             trf_identity: None,
             scene_epoch: None,
-            newest_sent: None,
             seed_revision: None,
             resume_revision: None,
             pump_running: false,
-            last_unit_sent_at: None,
-            last_scene_applied_at: None,
+            unacked: VecDeque::new(),
             last_status_sent_at: None,
         };
         let reply = tagged(
@@ -1632,6 +1626,7 @@ impl ActivationTable {
         if lineage_changed {
             // the new lineage's revisions do not compare with the old one's
             a.resume_revision = None;
+            a.unacked.clear();
         }
         if a.resume_token.is_none() {
             a.resume_token = Some(resume_token);
@@ -1789,7 +1784,6 @@ impl ActivationTable {
         {
             return Vec::new();
         }
-        a.last_scene_applied_at = Some(Instant::now());
         let presentation_before = a.presentation;
         let input_before = a.input;
         let same_epoch = a
@@ -1802,6 +1796,19 @@ impl ActivationTable {
                 .is_none_or(|s| msg.applied_content.scene_revision >= s.scene_revision);
         if advances || !same_epoch {
             a.accepted = Some(msg.applied_content.clone());
+        }
+        // C5 — the worker holds everything through this revision: those units
+        // leave the lag ledger. Only an ack in the units' OWN lineage does —
+        // another lineage's revisions say nothing about this one's.
+        if a.scene_epoch.as_ref() == Some(&msg.applied_content.scene_epoch) {
+            let through = msg.applied_content.scene_revision;
+            while a
+                .unacked
+                .front()
+                .is_some_and(|(revision, _)| *revision <= through)
+            {
+                a.unacked.pop_front();
+            }
         }
         if a.presentation == Presentation::Pending {
             if let Some(seed) = a.seed_revision {
@@ -1840,8 +1847,15 @@ impl ActivationTable {
         let Some(a) = self.by_id.get_mut(activation_id) else {
             return Vec::new();
         };
-        a.newest_sent = Some(revision);
-        a.last_unit_sent_at = Some(Instant::now());
+        // C5 — the lag ledger: what was sent, and when, until the worker says it
+        // holds it (bounded — `UNACKED_UNITS_CAP`).
+        if a.unacked.len() >= UNACKED_UNITS_CAP {
+            if let Some(newest) = a.unacked.back_mut() {
+                newest.0 = revision;
+            }
+        } else {
+            a.unacked.push_back((revision, Instant::now()));
+        }
         if seed && a.seed_revision.is_none() {
             a.seed_revision = Some(revision);
         }
@@ -2388,8 +2402,11 @@ mod tests {
             Some(Instant::now() - Duration::from_millis(tp::PRESENTATION_STATUS_REFRESH_MS + 1));
         perform(t.scene_applied(&frames, quiet, 3_002));
         assert_eq!(texts(&mut crx)[0]["input"]["state"], "allowed");
-        // lag: the pump is 100 revisions ahead of the last applied ⇒ suspended{lagging}
+        // lag: a unit the worker has not acknowledged for longer than the
+        // bound ⇒ suspended{lagging} (C5: its AGE, never how far its revision is)
         t.unit_sent("a1", 120, false);
+        t.by_id.get_mut("a1").unwrap().unacked.back_mut().unwrap().1 =
+            Instant::now() - Duration::from_millis(tp::INPUT_LAG_SUSPEND_MS + 1);
         perform(t.scene_applied(
             &frames,
             SceneApplied {
@@ -2618,6 +2635,68 @@ mod tests {
         let recovered = s.last().expect("the recovery is said");
         assert_eq!(recovered["presentation"]["state"], "presenting");
         assert_eq!(recovered["input"]["state"], "allowed");
+    }
+
+    /// C5 — the lag call is the AGE of the oldest unit the worker has not
+    /// acknowledged, never a revision count. A catch-up that moves the lineage
+    /// hundreds of revisions in ONE unit is not lag; a burst of young units is
+    /// not lag however many revisions it spans; the OLDEST unacknowledged unit
+    /// aging past the bound is lag even with younger ones behind it (a
+    /// streaming pane never lets the NEWEST grow old); the ack that covers it
+    /// ends it. The ledger is bounded, and the bound only ever overstates the
+    /// age.
+    #[test]
+    fn lag_is_the_age_of_the_oldest_unacknowledged_unit_never_a_revision_count() {
+        let mut t = ActivationTable::new("cb");
+        let (_control, mut crx, frames, _frx) = presenting_activation(&mut t, "a1", "s1", 10);
+        let past_the_bound =
+            || Instant::now() - Duration::from_millis(tp::INPUT_LAG_SUSPEND_MS + 1);
+
+        // a catch-up: one unit, 400 revisions on — young, so not lag
+        t.unit_sent("a1", 410, false);
+        assert!(
+            t.tick(3_100).is_empty(),
+            "a young unit is not lag, whatever its revision"
+        );
+        perform(applied(&mut t, &frames, "a1", "s1", 410, 3_200));
+        assert!(t.get("a1").unwrap().unacked.is_empty());
+
+        // a burst of a hundred young units: not lag either
+        for revision in 411..=510 {
+            t.unit_sent("a1", revision, false);
+        }
+        assert!(t.tick(3_300).is_empty());
+        assert_eq!(t.get("a1").unwrap().input, Input::Allowed);
+
+        // the OLDEST unacknowledged unit past the bound: lagging, though
+        // ninety-nine younger units were sent after it
+        t.by_id
+            .get_mut("a1")
+            .unwrap()
+            .unacked
+            .front_mut()
+            .unwrap()
+            .1 = past_the_bound();
+        perform(t.tick(3_400));
+        let s = texts(&mut crx);
+        assert_eq!(s.last().unwrap()["input"]["state"], "suspended");
+        assert_eq!(s.last().unwrap()["input"]["reason"], "lagging");
+
+        // an ack covering the old unit but not the newest: the oldest left is
+        // young, and input is allowed again
+        perform(applied(&mut t, &frames, "a1", "s1", 450, 3_500));
+        assert_eq!(texts(&mut crx).last().unwrap()["input"]["state"], "allowed");
+        assert_eq!(t.get("a1").unwrap().unacked.front().unwrap().0, 451);
+
+        // bounded: past the cap the newest entry absorbs each further unit
+        let last = 510 + 2 * UNACKED_UNITS_CAP as u64;
+        for revision in 511..=last {
+            t.unit_sent("a1", revision, false);
+        }
+        let a = t.get("a1").unwrap();
+        assert_eq!(a.unacked.len(), UNACKED_UNITS_CAP);
+        assert_eq!(a.unacked.back().unwrap().0, last);
+        assert_eq!(a.unacked.front().unwrap().0, 451);
     }
 
     #[test]

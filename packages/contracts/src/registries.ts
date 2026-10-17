@@ -829,14 +829,18 @@ export const TERMINAL_PIPELINE = {
   CREDIT_ACCOUNT_DRAIN_TTL_MS: 5_000,
   // TP-S3b — the cell's own activation numbers. CELL_LEASE_TTL_MS ≥
   // SCENE_APPLIED_REFRESH_MS + detection + jitter (the TTL inequality, §5.4);
-  // INPUT_LAG_SUSPEND_REVISIONS is the cell's lag call (input → suspended
-  // {lagging} when newest − accepted exceeds it, or when no SceneApplied
-  // arrives within MAX_SCENE_APPLIED_DELAY_MS after a unit was sent);
+  // INPUT_LAG_SUSPEND_MS is the cell's lag call (input → suspended{lagging}
+  // while the OLDEST unit the cell sent and the worker has not acknowledged
+  // with a SceneApplied is older than it) — a time, never a count, and above
+  // MAX_SCENE_APPLIED_DELAY_MS by a round trip, so a worker inside its own ack
+  // bound on a half-second round trip never reads as lagging (C5: a revision
+  // count fills in half a second of a streaming agent, and one catch-up — a
+  // single unit hundreds of revisions on — would trip it at once);
   // ATTACH_RENEWAL_MARGIN_MS closes input that far before the attach grant
   // expires without a renewal; SEED_FRAME_WAIT_MS bounds the wait for the
   // engine's full frame after a refresh.
   CELL_LEASE_TTL_MS: 6_000,
-  INPUT_LAG_SUSPEND_REVISIONS: 64,
+  INPUT_LAG_SUSPEND_MS: 1_500,
   ATTACH_RENEWAL_MARGIN_MS: 60_000,
   SEED_FRAME_WAIT_MS: 2_000,
   // TP-S3d — the writer/admission fairness FLOOR (§8). URGENT_RESERVE_BYTES of

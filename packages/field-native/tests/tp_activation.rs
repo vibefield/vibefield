@@ -507,6 +507,18 @@ async fn the_deck_path_seed_lease_deltas_and_credit() {
     // Continuous progress records every revision without a main-thread status
     // for every frame; the bounded periodic refresh keeps the lease alive.
     tokio::time::sleep(Duration::from_millis(2_100)).await;
+    // Acknowledge the newest frame DELIVERED, as a worker does: the shell's
+    // output line and prompt can follow the echo the loop stopped at, and the
+    // cell's lag call is the age of the oldest unit not yet acknowledged (C5),
+    // so an ack short of them would leave the lease lagging for good.
+    while let Ok(Some(Ok(Message::Binary(unit)))) =
+        tokio::time::timeout(Duration::from_millis(300), frames.next()).await
+    {
+        let (header, _) = decode_envelope(&unit).expect("a presentation envelope");
+        if header["kind"] == "trf1-frame" {
+            last = last.max(header["resultContent"]["sceneRevision"].as_u64().unwrap());
+        }
+    }
     let applied = json!({ "sceneEpoch": result["sceneEpoch"], "sceneRevision": last });
     scene_applied(&mut frames, &session_id, "act-1", &applied).await;
     // The intentionally delayed acknowledgement can also produce a transient

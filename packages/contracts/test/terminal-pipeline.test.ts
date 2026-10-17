@@ -848,6 +848,11 @@ describe("§20 item 5 — numeric defaults with owners, as data", () => {
     expect(TERMINAL_PIPELINE.HEARTBEAT_TTL_MS).toBeGreaterThan(
       2 * TERMINAL_PIPELINE.HEARTBEAT_INTERVAL_MS,
     );
+    // C5 — the cell's lag call leaves a worker room for its own ack bound
+    // plus a round trip: a healthy viewer never reads as lagging
+    expect(TERMINAL_PIPELINE.INPUT_LAG_SUSPEND_MS).toBeGreaterThan(
+      TERMINAL_PIPELINE.MAX_SCENE_APPLIED_DELAY_MS,
+    );
   });
 });
 
