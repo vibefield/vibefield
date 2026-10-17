@@ -962,6 +962,1862 @@ impl ::std::convert::TryFrom<::std::string::String> for ErrorKind {
         value.parse()
     }
 }
+#[doc = "`FreewayAdmitRow`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"deviceId\","]
+#[doc = "    \"role\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"deviceId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"role\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"enum\": ["]
+#[doc = "        \"desktop\","]
+#[doc = "        \"phone\""]
+#[doc = "      ]"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct FreewayAdmitRow {
+    #[serde(rename = "deviceId")]
+    pub device_id: FreewayAdmitRowDeviceId,
+    pub role: FreewayAdmitRowRole,
+}
+impl FreewayAdmitRow {
+    pub fn builder() -> builder::FreewayAdmitRow {
+        Default::default()
+    }
+}
+#[doc = "`FreewayAdmitRowDeviceId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FreewayAdmitRowDeviceId(::std::string::String);
+impl ::std::ops::Deref for FreewayAdmitRowDeviceId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayAdmitRowDeviceId> for ::std::string::String {
+    fn from(value: FreewayAdmitRowDeviceId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FreewayAdmitRowDeviceId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayAdmitRowDeviceId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayAdmitRowDeviceId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayAdmitRowDeviceId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FreewayAdmitRowDeviceId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`FreewayAdmitRowRole`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"desktop\","]
+#[doc = "    \"phone\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum FreewayAdmitRowRole {
+    #[serde(rename = "desktop")]
+    Desktop,
+    #[serde(rename = "phone")]
+    Phone,
+}
+impl ::std::fmt::Display for FreewayAdmitRowRole {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Desktop => f.write_str("desktop"),
+            Self::Phone => f.write_str("phone"),
+        }
+    }
+}
+impl ::std::str::FromStr for FreewayAdmitRowRole {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "desktop" => Ok(Self::Desktop),
+            "phone" => Ok(Self::Phone),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayAdmitRowRole {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayAdmitRowRole {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayAdmitRowRole {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`FreewayDeclareParams`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"admit\","]
+#[doc = "    \"doors\","]
+#[doc = "    \"exposure\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"admit\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/FreewayAdmitRow\""]
+#[doc = "      }"]
+#[doc = "    },"]
+#[doc = "    \"doors\": {"]
+#[doc = "      \"$ref\": \"#/definitions/FreewayDoors\""]
+#[doc = "    },"]
+#[doc = "    \"exposure\": {"]
+#[doc = "      \"$ref\": \"#/definitions/FreewayExposure\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct FreewayDeclareParams {
+    pub admit: ::std::vec::Vec<FreewayAdmitRow>,
+    pub doors: FreewayDoors,
+    pub exposure: FreewayExposure,
+}
+impl FreewayDeclareParams {
+    pub fn builder() -> builder::FreewayDeclareParams {
+        Default::default()
+    }
+}
+#[doc = "`FreewayDeclareResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(transparent)]
+pub struct FreewayDeclareResult(pub ::serde_json::Map<::std::string::String, ::serde_json::Value>);
+impl ::std::ops::Deref for FreewayDeclareResult {
+    type Target = ::serde_json::Map<::std::string::String, ::serde_json::Value>;
+    fn deref(&self) -> &::serde_json::Map<::std::string::String, ::serde_json::Value> {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayDeclareResult>
+    for ::serde_json::Map<::std::string::String, ::serde_json::Value>
+{
+    fn from(value: FreewayDeclareResult) -> Self {
+        value.0
+    }
+}
+impl ::std::convert::From<::serde_json::Map<::std::string::String, ::serde_json::Value>>
+    for FreewayDeclareResult
+{
+    fn from(value: ::serde_json::Map<::std::string::String, ::serde_json::Value>) -> Self {
+        Self(value)
+    }
+}
+#[doc = "`FreewayDoors`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"blob\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"files\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"index\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"product\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct FreewayDoors {
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub blob: ::std::option::Option<FreewayDoorsBlob>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub files: ::std::option::Option<FreewayDoorsFiles>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub index: ::std::option::Option<FreewayDoorsIndex>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub product: ::std::option::Option<FreewayDoorsProduct>,
+}
+impl ::std::default::Default for FreewayDoors {
+    fn default() -> Self {
+        Self {
+            blob: Default::default(),
+            files: Default::default(),
+            index: Default::default(),
+            product: Default::default(),
+        }
+    }
+}
+impl FreewayDoors {
+    pub fn builder() -> builder::FreewayDoors {
+        Default::default()
+    }
+}
+#[doc = "`FreewayDoorsBlob`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FreewayDoorsBlob(::std::string::String);
+impl ::std::ops::Deref for FreewayDoorsBlob {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayDoorsBlob> for ::std::string::String {
+    fn from(value: FreewayDoorsBlob) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FreewayDoorsBlob {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayDoorsBlob {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayDoorsBlob {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayDoorsBlob {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FreewayDoorsBlob {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`FreewayDoorsFiles`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FreewayDoorsFiles(::std::string::String);
+impl ::std::ops::Deref for FreewayDoorsFiles {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayDoorsFiles> for ::std::string::String {
+    fn from(value: FreewayDoorsFiles) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FreewayDoorsFiles {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayDoorsFiles {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayDoorsFiles {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayDoorsFiles {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FreewayDoorsFiles {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`FreewayDoorsIndex`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FreewayDoorsIndex(::std::string::String);
+impl ::std::ops::Deref for FreewayDoorsIndex {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayDoorsIndex> for ::std::string::String {
+    fn from(value: FreewayDoorsIndex) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FreewayDoorsIndex {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayDoorsIndex {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayDoorsIndex {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayDoorsIndex {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FreewayDoorsIndex {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`FreewayDoorsProduct`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FreewayDoorsProduct(::std::string::String);
+impl ::std::ops::Deref for FreewayDoorsProduct {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayDoorsProduct> for ::std::string::String {
+    fn from(value: FreewayDoorsProduct) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FreewayDoorsProduct {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayDoorsProduct {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayDoorsProduct {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayDoorsProduct {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FreewayDoorsProduct {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`FreewayExposure`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"terminals\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"terminals\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct FreewayExposure {
+    pub terminals: bool,
+}
+impl FreewayExposure {
+    pub fn builder() -> builder::FreewayExposure {
+        Default::default()
+    }
+}
+#[doc = "`FreewayJoinRow`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"at\","]
+#[doc = "    \"clientId\","]
+#[doc = "    \"kind\","]
+#[doc = "    \"rights\","]
+#[doc = "    \"sessionId\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"at\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"clientId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"kind\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"enum\": ["]
+#[doc = "        \"joined\","]
+#[doc = "        \"left\""]
+#[doc = "      ]"]
+#[doc = "    },"]
+#[doc = "    \"rights\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"type\": \"string\","]
+#[doc = "        \"enum\": ["]
+#[doc = "          \"geometry\","]
+#[doc = "          \"geometryAdmin\","]
+#[doc = "          \"input\","]
+#[doc = "          \"read\""]
+#[doc = "        ]"]
+#[doc = "      }"]
+#[doc = "    },"]
+#[doc = "    \"sessionId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct FreewayJoinRow {
+    pub at: u64,
+    #[serde(rename = "clientId")]
+    pub client_id: FreewayJoinRowClientId,
+    pub kind: FreewayJoinRowKind,
+    pub rights: ::std::vec::Vec<FreewayJoinRowRightsItem>,
+    #[serde(rename = "sessionId")]
+    pub session_id: FreewayJoinRowSessionId,
+}
+impl FreewayJoinRow {
+    pub fn builder() -> builder::FreewayJoinRow {
+        Default::default()
+    }
+}
+#[doc = "`FreewayJoinRowClientId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FreewayJoinRowClientId(::std::string::String);
+impl ::std::ops::Deref for FreewayJoinRowClientId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayJoinRowClientId> for ::std::string::String {
+    fn from(value: FreewayJoinRowClientId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FreewayJoinRowClientId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayJoinRowClientId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayJoinRowClientId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayJoinRowClientId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FreewayJoinRowClientId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`FreewayJoinRowKind`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"joined\","]
+#[doc = "    \"left\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum FreewayJoinRowKind {
+    #[serde(rename = "joined")]
+    Joined,
+    #[serde(rename = "left")]
+    Left,
+}
+impl ::std::fmt::Display for FreewayJoinRowKind {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Joined => f.write_str("joined"),
+            Self::Left => f.write_str("left"),
+        }
+    }
+}
+impl ::std::str::FromStr for FreewayJoinRowKind {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "joined" => Ok(Self::Joined),
+            "left" => Ok(Self::Left),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayJoinRowKind {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayJoinRowKind {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayJoinRowKind {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`FreewayJoinRowRightsItem`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"geometry\","]
+#[doc = "    \"geometryAdmin\","]
+#[doc = "    \"input\","]
+#[doc = "    \"read\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum FreewayJoinRowRightsItem {
+    #[serde(rename = "geometry")]
+    Geometry,
+    #[serde(rename = "geometryAdmin")]
+    GeometryAdmin,
+    #[serde(rename = "input")]
+    Input,
+    #[serde(rename = "read")]
+    Read,
+}
+impl ::std::fmt::Display for FreewayJoinRowRightsItem {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Geometry => f.write_str("geometry"),
+            Self::GeometryAdmin => f.write_str("geometryAdmin"),
+            Self::Input => f.write_str("input"),
+            Self::Read => f.write_str("read"),
+        }
+    }
+}
+impl ::std::str::FromStr for FreewayJoinRowRightsItem {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "geometry" => Ok(Self::Geometry),
+            "geometryAdmin" => Ok(Self::GeometryAdmin),
+            "input" => Ok(Self::Input),
+            "read" => Ok(Self::Read),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayJoinRowRightsItem {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayJoinRowRightsItem {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayJoinRowRightsItem {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`FreewayJoinRowSessionId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FreewayJoinRowSessionId(::std::string::String);
+impl ::std::ops::Deref for FreewayJoinRowSessionId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayJoinRowSessionId> for ::std::string::String {
+    fn from(value: FreewayJoinRowSessionId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FreewayJoinRowSessionId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayJoinRowSessionId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayJoinRowSessionId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayJoinRowSessionId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FreewayJoinRowSessionId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`FreewayJoinsFrame`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"dropped\","]
+#[doc = "    \"rows\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"dropped\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"rows\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/FreewayJoinRow\""]
+#[doc = "      }"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct FreewayJoinsFrame {
+    pub dropped: u64,
+    pub rows: ::std::vec::Vec<FreewayJoinRow>,
+}
+impl FreewayJoinsFrame {
+    pub fn builder() -> builder::FreewayJoinsFrame {
+        Default::default()
+    }
+}
+#[doc = "`FreewayLinkRow`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"deviceId\","]
+#[doc = "    \"state\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"connectionType\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"deviceId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"rttMs\": {"]
+#[doc = "      \"type\": \"number\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"state\": {"]
+#[doc = "      \"$ref\": \"#/definitions/FreewayLinkState\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct FreewayLinkRow {
+    #[serde(
+        rename = "connectionType",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub connection_type: ::std::option::Option<FreewayLinkRowConnectionType>,
+    #[serde(rename = "deviceId")]
+    pub device_id: FreewayLinkRowDeviceId,
+    #[serde(
+        rename = "rttMs",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub rtt_ms: ::std::option::Option<f64>,
+    pub state: FreewayLinkState,
+}
+impl FreewayLinkRow {
+    pub fn builder() -> builder::FreewayLinkRow {
+        Default::default()
+    }
+}
+#[doc = "`FreewayLinkRowConnectionType`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FreewayLinkRowConnectionType(::std::string::String);
+impl ::std::ops::Deref for FreewayLinkRowConnectionType {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayLinkRowConnectionType> for ::std::string::String {
+    fn from(value: FreewayLinkRowConnectionType) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FreewayLinkRowConnectionType {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayLinkRowConnectionType {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayLinkRowConnectionType {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayLinkRowConnectionType {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FreewayLinkRowConnectionType {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`FreewayLinkRowDeviceId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FreewayLinkRowDeviceId(::std::string::String);
+impl ::std::ops::Deref for FreewayLinkRowDeviceId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayLinkRowDeviceId> for ::std::string::String {
+    fn from(value: FreewayLinkRowDeviceId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FreewayLinkRowDeviceId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayLinkRowDeviceId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayLinkRowDeviceId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayLinkRowDeviceId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FreewayLinkRowDeviceId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`FreewayLinkState`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"dialing\","]
+#[doc = "    \"up\","]
+#[doc = "    \"restarting\","]
+#[doc = "    \"down\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum FreewayLinkState {
+    #[serde(rename = "dialing")]
+    Dialing,
+    #[serde(rename = "up")]
+    Up,
+    #[serde(rename = "restarting")]
+    Restarting,
+    #[serde(rename = "down")]
+    Down,
+}
+impl ::std::fmt::Display for FreewayLinkState {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Dialing => f.write_str("dialing"),
+            Self::Up => f.write_str("up"),
+            Self::Restarting => f.write_str("restarting"),
+            Self::Down => f.write_str("down"),
+        }
+    }
+}
+impl ::std::str::FromStr for FreewayLinkState {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "dialing" => Ok(Self::Dialing),
+            "up" => Ok(Self::Up),
+            "restarting" => Ok(Self::Restarting),
+            "down" => Ok(Self::Down),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayLinkState {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayLinkState {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayLinkState {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`FreewayRevokeParams`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"clientId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct FreewayRevokeParams {
+    #[serde(
+        rename = "clientId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub client_id: ::std::option::Option<FreewayRevokeParamsClientId>,
+}
+impl ::std::default::Default for FreewayRevokeParams {
+    fn default() -> Self {
+        Self {
+            client_id: Default::default(),
+        }
+    }
+}
+impl FreewayRevokeParams {
+    pub fn builder() -> builder::FreewayRevokeParams {
+        Default::default()
+    }
+}
+#[doc = "`FreewayRevokeParamsClientId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FreewayRevokeParamsClientId(::std::string::String);
+impl ::std::ops::Deref for FreewayRevokeParamsClientId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayRevokeParamsClientId> for ::std::string::String {
+    fn from(value: FreewayRevokeParamsClientId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FreewayRevokeParamsClientId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayRevokeParamsClientId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayRevokeParamsClientId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayRevokeParamsClientId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FreewayRevokeParamsClientId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`FreewayRevokeResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"closed\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"closed\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct FreewayRevokeResult {
+    pub closed: u64,
+}
+impl FreewayRevokeResult {
+    pub fn builder() -> builder::FreewayRevokeResult {
+        Default::default()
+    }
+}
+#[doc = "`FreewayState`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"floorBootId\","]
+#[doc = "    \"links\","]
+#[doc = "    \"revision\","]
+#[doc = "    \"up\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"floorBootId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"freewayKeyHex\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"hostBootId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"keyGeneration\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"links\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/FreewayLinkRow\""]
+#[doc = "      }"]
+#[doc = "    },"]
+#[doc = "    \"localSecret\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"pathSecret\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"port\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"maximum\": 65535.0,"]
+#[doc = "      \"minimum\": 1.0"]
+#[doc = "    },"]
+#[doc = "    \"revision\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"up\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct FreewayState {
+    #[serde(rename = "floorBootId")]
+    pub floor_boot_id: FreewayStateFloorBootId,
+    #[serde(
+        rename = "freewayKeyHex",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub freeway_key_hex: ::std::option::Option<FreewayStateFreewayKeyHex>,
+    #[serde(
+        rename = "hostBootId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub host_boot_id: ::std::option::Option<FreewayStateHostBootId>,
+    #[serde(
+        rename = "keyGeneration",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub key_generation: ::std::option::Option<u64>,
+    pub links: ::std::vec::Vec<FreewayLinkRow>,
+    #[serde(
+        rename = "localSecret",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub local_secret: ::std::option::Option<FreewayStateLocalSecret>,
+    #[serde(
+        rename = "pathSecret",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub path_secret: ::std::option::Option<FreewayStatePathSecret>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub port: ::std::option::Option<::std::num::NonZeroU64>,
+    pub revision: u64,
+    pub up: bool,
+}
+impl FreewayState {
+    pub fn builder() -> builder::FreewayState {
+        Default::default()
+    }
+}
+#[doc = "`FreewayStateFloorBootId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FreewayStateFloorBootId(::std::string::String);
+impl ::std::ops::Deref for FreewayStateFloorBootId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayStateFloorBootId> for ::std::string::String {
+    fn from(value: FreewayStateFloorBootId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FreewayStateFloorBootId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayStateFloorBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayStateFloorBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayStateFloorBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FreewayStateFloorBootId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`FreewayStateFreewayKeyHex`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FreewayStateFreewayKeyHex(::std::string::String);
+impl ::std::ops::Deref for FreewayStateFreewayKeyHex {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayStateFreewayKeyHex> for ::std::string::String {
+    fn from(value: FreewayStateFreewayKeyHex) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FreewayStateFreewayKeyHex {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayStateFreewayKeyHex {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayStateFreewayKeyHex {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayStateFreewayKeyHex {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FreewayStateFreewayKeyHex {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`FreewayStateHostBootId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FreewayStateHostBootId(::std::string::String);
+impl ::std::ops::Deref for FreewayStateHostBootId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayStateHostBootId> for ::std::string::String {
+    fn from(value: FreewayStateHostBootId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FreewayStateHostBootId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayStateHostBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayStateHostBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayStateHostBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FreewayStateHostBootId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`FreewayStateLocalSecret`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FreewayStateLocalSecret(::std::string::String);
+impl ::std::ops::Deref for FreewayStateLocalSecret {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayStateLocalSecret> for ::std::string::String {
+    fn from(value: FreewayStateLocalSecret) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FreewayStateLocalSecret {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayStateLocalSecret {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayStateLocalSecret {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayStateLocalSecret {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FreewayStateLocalSecret {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`FreewayStatePathSecret`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FreewayStatePathSecret(::std::string::String);
+impl ::std::ops::Deref for FreewayStatePathSecret {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayStatePathSecret> for ::std::string::String {
+    fn from(value: FreewayStatePathSecret) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FreewayStatePathSecret {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayStatePathSecret {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayStatePathSecret {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayStatePathSecret {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FreewayStatePathSecret {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 #[doc = "`Hello`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -8930,6 +10786,765 @@ pub mod builder {
                 details: Ok(value.details),
                 kind: Ok(value.kind),
                 retryable: Ok(value.retryable),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct FreewayAdmitRow {
+        device_id: ::std::result::Result<super::FreewayAdmitRowDeviceId, ::std::string::String>,
+        role: ::std::result::Result<super::FreewayAdmitRowRole, ::std::string::String>,
+    }
+    impl ::std::default::Default for FreewayAdmitRow {
+        fn default() -> Self {
+            Self {
+                device_id: Err("no value supplied for device_id".to_string()),
+                role: Err("no value supplied for role".to_string()),
+            }
+        }
+    }
+    impl FreewayAdmitRow {
+        pub fn device_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FreewayAdmitRowDeviceId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.device_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for device_id: {e}"));
+            self
+        }
+        pub fn role<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FreewayAdmitRowRole>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.role = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for role: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<FreewayAdmitRow> for super::FreewayAdmitRow {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: FreewayAdmitRow,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                device_id: value.device_id?,
+                role: value.role?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::FreewayAdmitRow> for FreewayAdmitRow {
+        fn from(value: super::FreewayAdmitRow) -> Self {
+            Self {
+                device_id: Ok(value.device_id),
+                role: Ok(value.role),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct FreewayDeclareParams {
+        admit:
+            ::std::result::Result<::std::vec::Vec<super::FreewayAdmitRow>, ::std::string::String>,
+        doors: ::std::result::Result<super::FreewayDoors, ::std::string::String>,
+        exposure: ::std::result::Result<super::FreewayExposure, ::std::string::String>,
+    }
+    impl ::std::default::Default for FreewayDeclareParams {
+        fn default() -> Self {
+            Self {
+                admit: Err("no value supplied for admit".to_string()),
+                doors: Err("no value supplied for doors".to_string()),
+                exposure: Err("no value supplied for exposure".to_string()),
+            }
+        }
+    }
+    impl FreewayDeclareParams {
+        pub fn admit<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::FreewayAdmitRow>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.admit = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for admit: {e}"));
+            self
+        }
+        pub fn doors<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FreewayDoors>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.doors = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for doors: {e}"));
+            self
+        }
+        pub fn exposure<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FreewayExposure>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.exposure = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for exposure: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<FreewayDeclareParams> for super::FreewayDeclareParams {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: FreewayDeclareParams,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                admit: value.admit?,
+                doors: value.doors?,
+                exposure: value.exposure?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::FreewayDeclareParams> for FreewayDeclareParams {
+        fn from(value: super::FreewayDeclareParams) -> Self {
+            Self {
+                admit: Ok(value.admit),
+                doors: Ok(value.doors),
+                exposure: Ok(value.exposure),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct FreewayDoors {
+        blob: ::std::result::Result<
+            ::std::option::Option<super::FreewayDoorsBlob>,
+            ::std::string::String,
+        >,
+        files: ::std::result::Result<
+            ::std::option::Option<super::FreewayDoorsFiles>,
+            ::std::string::String,
+        >,
+        index: ::std::result::Result<
+            ::std::option::Option<super::FreewayDoorsIndex>,
+            ::std::string::String,
+        >,
+        product: ::std::result::Result<
+            ::std::option::Option<super::FreewayDoorsProduct>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for FreewayDoors {
+        fn default() -> Self {
+            Self {
+                blob: Ok(Default::default()),
+                files: Ok(Default::default()),
+                index: Ok(Default::default()),
+                product: Ok(Default::default()),
+            }
+        }
+    }
+    impl FreewayDoors {
+        pub fn blob<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::FreewayDoorsBlob>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.blob = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for blob: {e}"));
+            self
+        }
+        pub fn files<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::FreewayDoorsFiles>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.files = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for files: {e}"));
+            self
+        }
+        pub fn index<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::FreewayDoorsIndex>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.index = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for index: {e}"));
+            self
+        }
+        pub fn product<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::FreewayDoorsProduct>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.product = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for product: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<FreewayDoors> for super::FreewayDoors {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: FreewayDoors,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                blob: value.blob?,
+                files: value.files?,
+                index: value.index?,
+                product: value.product?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::FreewayDoors> for FreewayDoors {
+        fn from(value: super::FreewayDoors) -> Self {
+            Self {
+                blob: Ok(value.blob),
+                files: Ok(value.files),
+                index: Ok(value.index),
+                product: Ok(value.product),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct FreewayExposure {
+        terminals: ::std::result::Result<bool, ::std::string::String>,
+    }
+    impl ::std::default::Default for FreewayExposure {
+        fn default() -> Self {
+            Self {
+                terminals: Err("no value supplied for terminals".to_string()),
+            }
+        }
+    }
+    impl FreewayExposure {
+        pub fn terminals<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<bool>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.terminals = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for terminals: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<FreewayExposure> for super::FreewayExposure {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: FreewayExposure,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                terminals: value.terminals?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::FreewayExposure> for FreewayExposure {
+        fn from(value: super::FreewayExposure) -> Self {
+            Self {
+                terminals: Ok(value.terminals),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct FreewayJoinRow {
+        at: ::std::result::Result<u64, ::std::string::String>,
+        client_id: ::std::result::Result<super::FreewayJoinRowClientId, ::std::string::String>,
+        kind: ::std::result::Result<super::FreewayJoinRowKind, ::std::string::String>,
+        rights: ::std::result::Result<
+            ::std::vec::Vec<super::FreewayJoinRowRightsItem>,
+            ::std::string::String,
+        >,
+        session_id: ::std::result::Result<super::FreewayJoinRowSessionId, ::std::string::String>,
+    }
+    impl ::std::default::Default for FreewayJoinRow {
+        fn default() -> Self {
+            Self {
+                at: Err("no value supplied for at".to_string()),
+                client_id: Err("no value supplied for client_id".to_string()),
+                kind: Err("no value supplied for kind".to_string()),
+                rights: Err("no value supplied for rights".to_string()),
+                session_id: Err("no value supplied for session_id".to_string()),
+            }
+        }
+    }
+    impl FreewayJoinRow {
+        pub fn at<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.at = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for at: {e}"));
+            self
+        }
+        pub fn client_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FreewayJoinRowClientId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.client_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for client_id: {e}"));
+            self
+        }
+        pub fn kind<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FreewayJoinRowKind>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.kind = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for kind: {e}"));
+            self
+        }
+        pub fn rights<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::FreewayJoinRowRightsItem>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.rights = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for rights: {e}"));
+            self
+        }
+        pub fn session_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FreewayJoinRowSessionId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.session_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for session_id: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<FreewayJoinRow> for super::FreewayJoinRow {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: FreewayJoinRow,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                at: value.at?,
+                client_id: value.client_id?,
+                kind: value.kind?,
+                rights: value.rights?,
+                session_id: value.session_id?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::FreewayJoinRow> for FreewayJoinRow {
+        fn from(value: super::FreewayJoinRow) -> Self {
+            Self {
+                at: Ok(value.at),
+                client_id: Ok(value.client_id),
+                kind: Ok(value.kind),
+                rights: Ok(value.rights),
+                session_id: Ok(value.session_id),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct FreewayJoinsFrame {
+        dropped: ::std::result::Result<u64, ::std::string::String>,
+        rows: ::std::result::Result<::std::vec::Vec<super::FreewayJoinRow>, ::std::string::String>,
+    }
+    impl ::std::default::Default for FreewayJoinsFrame {
+        fn default() -> Self {
+            Self {
+                dropped: Err("no value supplied for dropped".to_string()),
+                rows: Err("no value supplied for rows".to_string()),
+            }
+        }
+    }
+    impl FreewayJoinsFrame {
+        pub fn dropped<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.dropped = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for dropped: {e}"));
+            self
+        }
+        pub fn rows<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::FreewayJoinRow>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.rows = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for rows: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<FreewayJoinsFrame> for super::FreewayJoinsFrame {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: FreewayJoinsFrame,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                dropped: value.dropped?,
+                rows: value.rows?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::FreewayJoinsFrame> for FreewayJoinsFrame {
+        fn from(value: super::FreewayJoinsFrame) -> Self {
+            Self {
+                dropped: Ok(value.dropped),
+                rows: Ok(value.rows),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct FreewayLinkRow {
+        connection_type: ::std::result::Result<
+            ::std::option::Option<super::FreewayLinkRowConnectionType>,
+            ::std::string::String,
+        >,
+        device_id: ::std::result::Result<super::FreewayLinkRowDeviceId, ::std::string::String>,
+        rtt_ms: ::std::result::Result<::std::option::Option<f64>, ::std::string::String>,
+        state: ::std::result::Result<super::FreewayLinkState, ::std::string::String>,
+    }
+    impl ::std::default::Default for FreewayLinkRow {
+        fn default() -> Self {
+            Self {
+                connection_type: Ok(Default::default()),
+                device_id: Err("no value supplied for device_id".to_string()),
+                rtt_ms: Ok(Default::default()),
+                state: Err("no value supplied for state".to_string()),
+            }
+        }
+    }
+    impl FreewayLinkRow {
+        pub fn connection_type<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::FreewayLinkRowConnectionType>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.connection_type = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for connection_type: {e}"));
+            self
+        }
+        pub fn device_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FreewayLinkRowDeviceId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.device_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for device_id: {e}"));
+            self
+        }
+        pub fn rtt_ms<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<f64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.rtt_ms = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for rtt_ms: {e}"));
+            self
+        }
+        pub fn state<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FreewayLinkState>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.state = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for state: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<FreewayLinkRow> for super::FreewayLinkRow {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: FreewayLinkRow,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                connection_type: value.connection_type?,
+                device_id: value.device_id?,
+                rtt_ms: value.rtt_ms?,
+                state: value.state?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::FreewayLinkRow> for FreewayLinkRow {
+        fn from(value: super::FreewayLinkRow) -> Self {
+            Self {
+                connection_type: Ok(value.connection_type),
+                device_id: Ok(value.device_id),
+                rtt_ms: Ok(value.rtt_ms),
+                state: Ok(value.state),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct FreewayRevokeParams {
+        client_id: ::std::result::Result<
+            ::std::option::Option<super::FreewayRevokeParamsClientId>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for FreewayRevokeParams {
+        fn default() -> Self {
+            Self {
+                client_id: Ok(Default::default()),
+            }
+        }
+    }
+    impl FreewayRevokeParams {
+        pub fn client_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::FreewayRevokeParamsClientId>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.client_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for client_id: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<FreewayRevokeParams> for super::FreewayRevokeParams {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: FreewayRevokeParams,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                client_id: value.client_id?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::FreewayRevokeParams> for FreewayRevokeParams {
+        fn from(value: super::FreewayRevokeParams) -> Self {
+            Self {
+                client_id: Ok(value.client_id),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct FreewayRevokeResult {
+        closed: ::std::result::Result<u64, ::std::string::String>,
+    }
+    impl ::std::default::Default for FreewayRevokeResult {
+        fn default() -> Self {
+            Self {
+                closed: Err("no value supplied for closed".to_string()),
+            }
+        }
+    }
+    impl FreewayRevokeResult {
+        pub fn closed<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.closed = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for closed: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<FreewayRevokeResult> for super::FreewayRevokeResult {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: FreewayRevokeResult,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                closed: value.closed?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::FreewayRevokeResult> for FreewayRevokeResult {
+        fn from(value: super::FreewayRevokeResult) -> Self {
+            Self {
+                closed: Ok(value.closed),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct FreewayState {
+        floor_boot_id: ::std::result::Result<super::FreewayStateFloorBootId, ::std::string::String>,
+        freeway_key_hex: ::std::result::Result<
+            ::std::option::Option<super::FreewayStateFreewayKeyHex>,
+            ::std::string::String,
+        >,
+        host_boot_id: ::std::result::Result<
+            ::std::option::Option<super::FreewayStateHostBootId>,
+            ::std::string::String,
+        >,
+        key_generation: ::std::result::Result<::std::option::Option<u64>, ::std::string::String>,
+        links: ::std::result::Result<::std::vec::Vec<super::FreewayLinkRow>, ::std::string::String>,
+        local_secret: ::std::result::Result<
+            ::std::option::Option<super::FreewayStateLocalSecret>,
+            ::std::string::String,
+        >,
+        path_secret: ::std::result::Result<
+            ::std::option::Option<super::FreewayStatePathSecret>,
+            ::std::string::String,
+        >,
+        port: ::std::result::Result<
+            ::std::option::Option<::std::num::NonZeroU64>,
+            ::std::string::String,
+        >,
+        revision: ::std::result::Result<u64, ::std::string::String>,
+        up: ::std::result::Result<bool, ::std::string::String>,
+    }
+    impl ::std::default::Default for FreewayState {
+        fn default() -> Self {
+            Self {
+                floor_boot_id: Err("no value supplied for floor_boot_id".to_string()),
+                freeway_key_hex: Ok(Default::default()),
+                host_boot_id: Ok(Default::default()),
+                key_generation: Ok(Default::default()),
+                links: Err("no value supplied for links".to_string()),
+                local_secret: Ok(Default::default()),
+                path_secret: Ok(Default::default()),
+                port: Ok(Default::default()),
+                revision: Err("no value supplied for revision".to_string()),
+                up: Err("no value supplied for up".to_string()),
+            }
+        }
+    }
+    impl FreewayState {
+        pub fn floor_boot_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FreewayStateFloorBootId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.floor_boot_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for floor_boot_id: {e}"));
+            self
+        }
+        pub fn freeway_key_hex<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::FreewayStateFreewayKeyHex>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.freeway_key_hex = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for freeway_key_hex: {e}"));
+            self
+        }
+        pub fn host_boot_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::FreewayStateHostBootId>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.host_boot_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for host_boot_id: {e}"));
+            self
+        }
+        pub fn key_generation<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<u64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.key_generation = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for key_generation: {e}"));
+            self
+        }
+        pub fn links<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::FreewayLinkRow>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.links = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for links: {e}"));
+            self
+        }
+        pub fn local_secret<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::FreewayStateLocalSecret>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.local_secret = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for local_secret: {e}"));
+            self
+        }
+        pub fn path_secret<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::FreewayStatePathSecret>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.path_secret = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for path_secret: {e}"));
+            self
+        }
+        pub fn port<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::num::NonZeroU64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.port = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for port: {e}"));
+            self
+        }
+        pub fn revision<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.revision = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for revision: {e}"));
+            self
+        }
+        pub fn up<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<bool>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.up = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for up: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<FreewayState> for super::FreewayState {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: FreewayState,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                floor_boot_id: value.floor_boot_id?,
+                freeway_key_hex: value.freeway_key_hex?,
+                host_boot_id: value.host_boot_id?,
+                key_generation: value.key_generation?,
+                links: value.links?,
+                local_secret: value.local_secret?,
+                path_secret: value.path_secret?,
+                port: value.port?,
+                revision: value.revision?,
+                up: value.up?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::FreewayState> for FreewayState {
+        fn from(value: super::FreewayState) -> Self {
+            Self {
+                floor_boot_id: Ok(value.floor_boot_id),
+                freeway_key_hex: Ok(value.freeway_key_hex),
+                host_boot_id: Ok(value.host_boot_id),
+                key_generation: Ok(value.key_generation),
+                links: Ok(value.links),
+                local_secret: Ok(value.local_secret),
+                path_secret: Ok(value.path_secret),
+                port: Ok(value.port),
+                revision: Ok(value.revision),
+                up: Ok(value.up),
             }
         }
     }

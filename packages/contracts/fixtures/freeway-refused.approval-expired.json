@@ -1,0 +1,6 @@
+{
+  "type": "FreewayRefused",
+  "code": "APPROVAL_EXPIRED",
+  "retryable": true,
+  "message": "the approval lapsed; renew it over the product door"
+}

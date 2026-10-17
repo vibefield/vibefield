@@ -1,0 +1,19 @@
+{
+  "rows": [
+    {
+      "kind": "joined",
+      "clientId": "freeway:person@example.com#nKMWkU9CYk11CNTRL~hb-01J9F",
+      "sessionId": "sess-01J8Z3K9",
+      "rights": ["geometry", "input", "read"],
+      "at": 1787788805000
+    },
+    {
+      "kind": "left",
+      "clientId": "freeway:person@example.com#nKMWkU9CYk11CNTRL~hb-01J9F",
+      "sessionId": "sess-01J8Z3K9",
+      "rights": ["geometry", "input", "read"],
+      "at": 1787789105000
+    }
+  ],
+  "dropped": 0
+}

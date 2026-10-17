@@ -1,0 +1,12 @@
+{
+  "admit": [
+    {
+      "deviceId": "dev-phone-1",
+      "role": "phone"
+    }
+  ],
+  "doors": {},
+  "exposure": {
+    "terminals": true
+  }
+}

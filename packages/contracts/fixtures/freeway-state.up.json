@@ -1,0 +1,19 @@
+{
+  "revision": 3,
+  "up": true,
+  "floorBootId": "fb-0191b04e-2026",
+  "hostBootId": "hb-01J9F",
+  "port": 53117,
+  "pathSecret": "cGF0aC1zZWNyZXQtZm9yLXRlc3Rz",
+  "localSecret": "bG9jYWwtc2VjcmV0LWZvci10ZXN0cw",
+  "freewayKeyHex": "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff",
+  "keyGeneration": 1,
+  "links": [
+    {
+      "deviceId": "dev-phone-1",
+      "state": "up",
+      "connectionType": "direct",
+      "rttMs": 11.5
+    }
+  ]
+}

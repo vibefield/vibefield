@@ -17,6 +17,7 @@ export * from "./endpoints";
 export * from "./envelope";
 export * from "./errors";
 export * from "./forwarding";
+export * from "./freeway";
 export * from "./live-surfaces";
 export * from "./meshdata";
 export * from "./methods";

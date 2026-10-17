@@ -1,0 +1,8 @@
+{
+  "type": "FreewayPeerHello",
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "capabilities": []
+}

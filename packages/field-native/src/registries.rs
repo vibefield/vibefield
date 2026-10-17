@@ -15,6 +15,7 @@ pub mod ports {
     pub const TERMINAL_CELLS_SERVE: u16 = 9422;
     pub const FIELDD_PRODUCT_SERVE: u16 = 9423;
     pub const INDEX_SERVE: u16 = 9424;
+    pub const FREEWAY_SERVE: u16 = 9425;
     pub const WORKSPACE_SERVE: u16 = 0;
     pub const DOC_SYNC_QUIC: u16 = 9440;
     pub const PRESENCE_UDP: u16 = 9441;
@@ -140,6 +141,40 @@ pub mod terminal_pipeline_close_codes {
     pub const SUPERSEDED: u16 = 4002;
     pub const PROTOCOL: u16 = 4003;
     pub const LEG_TIMEOUT: u16 = 4004;
+}
+
+/// FW (thinking-freeway.md v0.3 §5.1) — the freeway's numbers: the protocol major, the
+/// heartbeat, fragment and window sizes, the stream and ticket bounds, the approval's
+/// life, the joins backlog. One authority with fieldd and the phone. See registries.ts.
+pub mod freeway {
+    pub const PROTOCOL_MAJOR: u64 = 1;
+    pub const HEARTBEAT_MS: u64 = 2000;
+    pub const MISSED_PINGS: u64 = 3;
+    pub const WATERMARK_BYTES: u64 = 65536;
+    pub const MIN_FRAGMENT_BYTES: u64 = 4096;
+    pub const FRAGMENT_BYTES: u64 = 65536;
+    pub const STREAM_WINDOW_BYTES: u64 = 1048576;
+    pub const ACK_EVERY_BYTES: u64 = 65536;
+    pub const MAX_STREAMS: u64 = 64;
+    pub const MAX_TICKETS_PER_ASK: u64 = 64;
+    pub const APPROVAL_TTL_MS: u64 = 1800000;
+    pub const APPROVAL_RENEW_MS: u64 = 1200000;
+    pub const KEYRING_ATTACH_TTL_MS: u64 = 120000;
+    pub const JOIN_BACKLOG_ROWS: u64 = 256;
+}
+
+/// FW — the freeway link's close and open-refusal codes (4400+). See registries.ts.
+pub mod freeway_codes {
+    pub const PROTOCOL: u16 = 4400;
+    pub const APPROVAL: u16 = 4401;
+    pub const NOT_ADMITTED: u16 = 4403;
+    pub const KIND_NOT_SERVED: u16 = 4404;
+    pub const SUPERSEDED: u16 = 4409;
+    pub const PEER_GONE: u16 = 4410;
+    pub const TWIN: u16 = 4411;
+    pub const PROTOCOL_VERSION: u16 = 4426;
+    pub const RESTARTING: u16 = 4503;
+    pub const DOOR_DOWN: u16 = 4504;
 }
 
 /// File names beneath a daemon's own data directory. The plane that OWNS the

@@ -1,0 +1,37 @@
+{
+  "type": "FreewayHello",
+  "protocol": {
+    "major": 1,
+    "minor": 0
+  },
+  "approval": {
+    "protected": {
+      "v": 1,
+      "typ": "FreewayApproval",
+      "iss": "fieldd",
+      "alg": "HS256",
+      "kid": {
+        "floorBootId": "fb-0191b04e-2026",
+        "keyGeneration": 1
+      }
+    },
+    "claims": {
+      "audienceFloorBootId": "fb-0191b04e-2026",
+      "clientId": "freeway:person@example.com#nKMWkU9CYk11CNTRL",
+      "principal": {
+        "kind": "tailnet",
+        "login": "person@example.com",
+        "tailscaleId": "nKMWkU9CYk11CNTRL"
+      },
+      "rights": ["geometry", "input", "read"],
+      "issuedAt": 1787788800000,
+      "expiresAt": 1787790600000,
+      "nonce": "RldBWS1OT05DRS0wMDE"
+    },
+    "mac": "Wq9v3cXo2-4bJmF8sT1yLdKp0uVzQe7RaNhG5iCxB6E"
+  },
+  "device": {
+    "name": "iPhone"
+  },
+  "capabilities": []
+}

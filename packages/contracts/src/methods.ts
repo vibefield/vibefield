@@ -593,6 +593,42 @@ export const METHODS: MethodDef[] = [
     subscription: true,
   }),
 
+  // FW-D4 (thinking-freeway.md v0.3 §4.3, §5.2) — the freeway's floor seam. fieldd
+  // DECLARES (one replace-whole declaration: who is admitted, the loopback doors, the
+  // owner's terminal exposure); the floor REPORTS one revisioned state stream (the
+  // listener's port and secrets, the freeway key, the links) and the joins fieldd audits;
+  // REVOKE closes phone links. `local` all: the floor's facts never federate (NF-L3).
+  defineMethod({
+    surface: "mgmt",
+    method: "native.freeway.declare",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.freeway.state.subscribe",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.freeway.joins.subscribe",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.freeway.revoke",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+
   // C6/D5 — MeshData lane CONTROL. The bytes ride meshdata.sock; nothing here
   // carries a payload. `locality: "local"` is exact and not a copy-paste: the
   // mgmt channel never leaves the device, even though the lane it negotiates is
@@ -1360,6 +1396,21 @@ export const METHODS: MethodDef[] = [
   defineMethod({
     surface: "product",
     method: "terminal.openTicket",
+    scope: "terminal.attach",
+    idempotent: false,
+    locality: "federate",
+  }),
+  // FW-D1 (2026-10-16; thinking-freeway.md v0.3 §3) — `freeway.approve {}`: fieldd's
+  // once-per-link approval of a PHONE (freeway.ts `FreewayApproval`), minted only for a
+  // node fieldd's roster correlates to a phone row and MAC'd with the floor's freeway key;
+  // the freeway host signs every join under it. `terminal.attach`'s scope because it is
+  // what a ticket used to be; `federate` because FW-D5's link to another desktop is
+  // approved by THAT desktop, the ask forwarded through the phone's home as DS-4's ticket
+  // is — authorized as the peer, recorded as the phone, `onBehalfOf` picking the audience
+  // only. A desktop link carries no approval (FW-D6).
+  defineMethod({
+    surface: "product",
+    method: "freeway.approve",
     scope: "terminal.attach",
     idempotent: false,
     locality: "federate",

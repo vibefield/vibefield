@@ -128,6 +128,25 @@ import {
 } from "../src/docs";
 import { Hello, HelloAck, RpcRequest, RpcResponse, TerminalRouteSnapshot } from "../src/envelope";
 import { ErrorData } from "../src/errors";
+import {
+  FreewayApproval,
+  FreewayApproveResult,
+  FreewayClose,
+  FreewayDeclareParams,
+  FreewayDeclareResult,
+  FreewayHello,
+  FreewayJoinsFrame,
+  FreewayLinkMessage,
+  FreewayOpen,
+  FreewayOpened,
+  FreewayOpenRefused,
+  FreewayPeerHello,
+  FreewayRefused,
+  FreewayRevokeParams,
+  FreewayRevokeResult,
+  FreewayState,
+  FreewayWelcome,
+} from "../src/freeway";
 import { LoggingHealthV1, LogRecordV1 } from "../src/logging";
 import { SystemTickNotification } from "../src/methods";
 import {
@@ -302,6 +321,27 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "mesh-egress-route-bound": MeshEgressRouteBound,
   "mesh-egress-route-ref": MeshEgressRouteRef,
   "mesh-egress-route-table": MeshEgressRouteTable,
+  // FW (thinking-freeway.md v0.3 §5.1, §5.2) — the freeway's link wire and its floor seam. The
+  // welcome, the declaration, the state and the revoke each have TWO fixtures on purpose: a phone's
+  // welcome and a desktop's (no client id, no rights), a phone-only declaration and a pair's (the
+  // product door), the state up and down (the host gone: no port, no secrets), one client and all.
+  "freeway-approval": FreewayApproval,
+  "freeway-approve-result": FreewayApproveResult,
+  "freeway-hello": FreewayHello,
+  "freeway-peer-hello": FreewayPeerHello,
+  "freeway-welcome": FreewayWelcome,
+  "freeway-refused": FreewayRefused,
+  "freeway-link": FreewayLinkMessage,
+  "freeway-open": FreewayOpen,
+  "freeway-opened": FreewayOpened,
+  "freeway-open-refused": FreewayOpenRefused,
+  "freeway-close": FreewayClose,
+  "freeway-declare-params": FreewayDeclareParams,
+  "freeway-declare-result": FreewayDeclareResult,
+  "freeway-state": FreewayState,
+  "freeway-revoke-params": FreewayRevokeParams,
+  "freeway-revoke-result": FreewayRevokeResult,
+  "freeway-joins-frame": FreewayJoinsFrame,
   "doc-registry-entry": DocRegistryEntry,
   "doc-holders-slice": DocHoldersSlice,
   "doc-library-entry": DocLibraryEntry,

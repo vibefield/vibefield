@@ -4,13 +4,14 @@
 // deliberate unknown fields are parse-tolerance checks only — serde's default
 // ignore-unknown IS the tolerant reader; field-native never echoes those shapes.
 use field_native::contracts::{
-    DesiredState, DiagnosticLogDeltaV1, DiagnosticLogSnapshotV1, ErrorData, Hello, HelloAck,
-    LogRecordV1, LoggingHealthV1, MeshEgressProxy, MeshEgressRouteAddParams, MeshEgressRouteBound,
-    MeshEgressRouteRef, MeshEgressRouteTable, MeshLaneCloseRequest, MeshLaneClosed,
-    MeshLaneOpenRequest, MeshLanePeerOpened, MeshSelfIdentity, NativeHealth,
-    NativePrepareRestartParams, NativePrepareRestartResult, NativeShutdownParams,
-    NativeShutdownResult, ObservedState, PeerInfo, RpcRequest, RpcResponse, ServeConfig,
-    ServeEntry, StoreSnapshot, TerminalRouteSnapshot, TerminalRoutesStreamPayload,
+    DesiredState, DiagnosticLogDeltaV1, DiagnosticLogSnapshotV1, ErrorData, FreewayDeclareParams,
+    FreewayDeclareResult, FreewayJoinsFrame, FreewayRevokeParams, FreewayRevokeResult,
+    FreewayState, Hello, HelloAck, LogRecordV1, LoggingHealthV1, MeshEgressProxy,
+    MeshEgressRouteAddParams, MeshEgressRouteBound, MeshEgressRouteRef, MeshEgressRouteTable,
+    MeshLaneCloseRequest, MeshLaneClosed, MeshLaneOpenRequest, MeshLanePeerOpened,
+    MeshSelfIdentity, NativeHealth, NativePrepareRestartParams, NativePrepareRestartResult,
+    NativeShutdownParams, NativeShutdownResult, ObservedState, PeerInfo, RpcRequest, RpcResponse,
+    ServeConfig, ServeEntry, StoreSnapshot, TerminalRouteSnapshot, TerminalRoutesStreamPayload,
 };
 use serde_json::Value;
 use std::{fs, path::PathBuf};
@@ -129,6 +130,34 @@ fn mgmt_lifecycle_fixtures() {
     roundtrip::<DesiredState>("desired-state.observed-boot.json", true);
     roundtrip::<ObservedState>("observed-state.valid.json", true);
     roundtrip::<ObservedState>("observed-state.unknown-field.json", false); // tolerant reader (P3)
+}
+
+#[test]
+fn mgmt_freeway_fixtures() {
+    // FW-D4 (thinking-freeway.md v0.3 §4.3, §5.2) — the freeway's floor seam. The floor EMITS the
+    // state stream, the joins and the revoke's answer, so those are strict; the declaration and the
+    // revoke's params are inbound, where strict costs nothing and pins every field. Two fixtures
+    // each where the shape has two lives: a phone-only declaration and a pair's, the state up and
+    // down (the host gone: no port, no secrets), one client revoked and all, a quiet joins frame
+    // and one that counts what the backlog dropped.
+    roundtrip::<FreewayDeclareParams>("freeway-declare-params.phone.json", true);
+    roundtrip::<FreewayDeclareParams>("freeway-declare-params.pair.json", true);
+    roundtrip::<FreewayDeclareResult>("freeway-declare-result.valid.json", true);
+    roundtrip::<FreewayState>("freeway-state.up.json", true);
+    roundtrip::<FreewayState>("freeway-state.down.json", true);
+    roundtrip::<FreewayRevokeParams>("freeway-revoke-params.one.json", true);
+    roundtrip::<FreewayRevokeParams>("freeway-revoke-params.all.json", true);
+    roundtrip::<FreewayRevokeResult>("freeway-revoke-result.valid.json", true);
+    roundtrip::<FreewayJoinsFrame>("freeway-joins-frame.valid.json", true);
+    roundtrip::<FreewayJoinsFrame>("freeway-joins-frame.overflow.json", true);
+
+    // The roles are the two hellos a link can open with; the Rust twin refuses what zod refuses.
+    let mut window = load("freeway-declare-params.phone.json");
+    window["admit"][0]["role"] = Value::String("window".into());
+    assert!(
+        serde_json::from_value::<FreewayDeclareParams>(window).is_err(),
+        "an admitted node is a desktop or a phone, nothing else"
+    );
 }
 
 #[test]

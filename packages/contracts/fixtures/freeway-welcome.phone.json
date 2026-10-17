@@ -1,0 +1,20 @@
+{
+  "type": "FreewayWelcome",
+  "linkId": "lk-01J9F2A",
+  "hostBootId": "hb-01J9F",
+  "floorBootId": "fb-0191b04e-2026",
+  "deviceId": "dev-desktop-a",
+  "clientId": "freeway:person@example.com#nKMWkU9CYk11CNTRL~hb-01J9F",
+  "rights": ["geometry", "input", "read"],
+  "limits": {
+    "fragmentBytes": 65536,
+    "streamWindowBytes": 1048576,
+    "maxStreams": 64
+  },
+  "heartbeatMs": 2000,
+  "approvalExpiresAt": 1787790600000,
+  "path": {
+    "connectionType": "direct",
+    "endpoint": "192.168.1.20:41641"
+  }
+}

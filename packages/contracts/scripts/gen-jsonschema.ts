@@ -19,6 +19,10 @@
 // packaged identity (plugin-distribution.ts's BundledPluginIndex,
 // src/release-identity.ts): the stager writes it, the kit, fieldd and the shell
 // read it, field-native never does.
+// The freeway (FW-D4, src/freeway.ts) is HALF here: its floor seam — `native.freeway.declare`, the
+// state stream, the joins, revoke — which field-native reads and writes. Its LINK wire (frames, the
+// stream-0 messages, the open kinds) is the freeway host's, hand-written in Rust as the cell's TPv3
+// wire is (`tp/wire.rs`), and pinned to these schemas by the `freeway-*` fixtures on both sides.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -53,6 +57,20 @@ import {
   TerminalWorkloadClass,
 } from "../src/envelope";
 import { ErrorData, ErrorKind, UnavailableDetails } from "../src/errors";
+import {
+  FreewayAdmitRow,
+  FreewayDeclareParams,
+  FreewayDeclareResult,
+  FreewayDoors,
+  FreewayExposure,
+  FreewayJoinRow,
+  FreewayJoinsFrame,
+  FreewayLinkRow,
+  FreewayLinkState,
+  FreewayRevokeParams,
+  FreewayRevokeResult,
+  FreewayState,
+} from "../src/freeway";
 import {
   LOG_LEVEL_VALUES_V1,
   LogAttributesV1,
@@ -281,6 +299,13 @@ const ENTRIES: Record<string, ZodTypeAny> = {
   "native-prepare-restart-result": NativePrepareRestartResult,
   "native-shutdown-params": NativeShutdownParams,
   "native-shutdown-result": NativeShutdownResult,
+  // FW-D4 — the freeway's floor seam: fieldd declares, the floor reports state and joins, revoke
+  "freeway-declare-params": FreewayDeclareParams,
+  "freeway-declare-result": FreewayDeclareResult,
+  "freeway-state": FreewayState,
+  "freeway-revoke-params": FreewayRevokeParams,
+  "freeway-revoke-result": FreewayRevokeResult,
+  "freeway-joins-frame": FreewayJoinsFrame,
   "log-record-v1": LogRecordV1,
   "logging-health-v1": LoggingHealthV1,
   "diagnostic-log-snapshot-v1": DiagnosticLogSnapshotV1,
@@ -338,6 +363,21 @@ const bundle = tightenLoggingWireSchema(
       // `terminalMesh` push). BUNDLE-ONLY, not BASE_SHARED: nothing else embeds
       // it, and BASE_SHARED is copied verbatim into all 21 per-entry files.
       TerminalRoutesStreamPayload,
+      // FW-D4 — the freeway's floor seam (src/freeway.ts). BUNDLE-ONLY for the
+      // same reason: its rows are embedded by its own messages alone, and each is
+      // named here so typify resolves it rather than a nested path.
+      FreewayAdmitRow,
+      FreewayDoors,
+      FreewayExposure,
+      FreewayDeclareParams,
+      FreewayDeclareResult,
+      FreewayLinkState,
+      FreewayLinkRow,
+      FreewayState,
+      FreewayRevokeParams,
+      FreewayRevokeResult,
+      FreewayJoinRow,
+      FreewayJoinsFrame,
     },
   }),
 );

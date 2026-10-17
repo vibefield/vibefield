@@ -1,0 +1,18 @@
+{
+  "admit": [
+    {
+      "deviceId": "dev-phone-1",
+      "role": "phone"
+    },
+    {
+      "deviceId": "dev-desktop-b",
+      "role": "desktop"
+    }
+  ],
+  "doors": {
+    "product": "ws://127.0.0.1:53120/fw/ZmllbGRkLWZyZWV3YXktc2VjcmV0"
+  },
+  "exposure": {
+    "terminals": false
+  }
+}

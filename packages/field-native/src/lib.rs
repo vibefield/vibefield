@@ -5,6 +5,9 @@
 pub mod admission;
 pub mod cell;
 pub mod config;
+// typify writes `Default` by hand for a struct whose every field is optional (the freeway's
+// doors, a revoke of every client); the file is regenerated, so the lint is answered here.
+#[allow(clippy::derivable_impls)]
 pub mod contracts;
 pub mod endpoints;
 pub mod local_ipc;

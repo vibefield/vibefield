@@ -108,6 +108,14 @@ export const PORTS = {
    * egress route may target only a door that demands its own grant); it joins
    * that list at the pin move, in review. */
   INDEX_SERVE: 9424,
+  /** The freeway (FW-D1, FW-D6; `draft/thinking-freeway.md` v0.3 §3) — ONE link per peer, the
+   * phone's to each desktop it shows and one per desktop pair, every plane a stream on it. Its
+   * OWN tailnet listener with one static route to the floor-held loopback door's secret path
+   * (`/f/<pathSecret>`): a route list changes only by remove-then-add, which drops every
+   * connection on it, and the freeway's route never changes while its floor lives. Numbers are
+   * assigned at landing, in landing order (the PM, 2026-10-17 02:39Z): `BLOB_SERVE` takes the
+   * next free one at its own landing. */
+  FREEWAY_SERVE: 9425,
   /** FS-1b: the files worker binds an ephemeral loopback listener per generation. */
   WORKSPACE_SERVE: 0,
   /** doc-sync lanes over the mesh (QUIC, snapshot-per-stream). */
@@ -1099,6 +1107,80 @@ export const PHONE_BUDGET = {
   DOORS_PER_DESKTOP: 1,
   TERMINAL_LEGS: 6,
   WEB_VIEWS: 1,
+} as const;
+
+/** The freeway's numbers (FW-D1…D7; `draft/thinking-freeway.md` v0.3 §3, §5, §6). The link adds
+ * no message bound of its own: a stream's message bound is its plane's (`terminal-leg` = TPv3's,
+ * `product` = the door's).
+ *  - PROTOCOL_MAJOR: the link's protocol; a hello naming another major is refused
+ *    `PROTOCOL_VERSION` (4426).
+ *  - HEARTBEAT_MS / MISSED_PINGS: `Ping` each way this often; this many missed and the link is
+ *    dead. Every pong is a round-trip sample (FW-L8). Load-bearing: the sidecar's splice drops a
+ *    direction idle for 10 minutes.
+ *  - WATERMARK_BYTES: the host's OWN unsent queue per socket. It bounds the host only; the path
+ *    below is bounded by the end-to-end in-flight cap counted by `Ack` (FW-L7).
+ *  - MIN_FRAGMENT_BYTES / FRAGMENT_BYTES: a message is cut into fragments of about 5 ms at the
+ *    measured delivery rate, never smaller than the first or larger than the second.
+ *  - STREAM_WINDOW_BYTES: a WINDOW stream's initial credit (every kind but a terminal leg, which
+ *    runs TPv3's own).
+ *  - ACK_EVERY_BYTES: the receiver sends `Ack` after delivering this many bytes (or carries it on
+ *    a Pong).
+ *  - MAX_STREAMS: streams open at once on one link (≤ 100, QUIC's per-direction bound, so F4
+ *    changes no number).
+ *  - MAX_TICKETS_PER_ASK: sessions one `terminal-tickets` stream may name.
+ *  - APPROVAL_TTL_MS / APPROVAL_RENEW_MS: a phone's approval lives 30 min and the phone renews it
+ *    at 20 — the honest ceiling on "fieldd down" for new joins.
+ *  - KEYRING_ATTACH_TTL_MS: an attach grant the host mints for the phone's keyring lives 2 min
+ *    (re-minted while the link lives) — the first wall of a revoke. An attached activation renews
+ *    on TPv3's own schedule.
+ *  - JOIN_BACKLOG_ROWS: joins and leaves the floor holds for fieldd's audit while fieldd is away;
+ *    past it the floor counts what it dropped, and the audit says how many it lost. */
+export const FREEWAY = {
+  PROTOCOL_MAJOR: 1,
+  HEARTBEAT_MS: 2_000,
+  MISSED_PINGS: 3,
+  WATERMARK_BYTES: 65_536,
+  MIN_FRAGMENT_BYTES: 4_096,
+  FRAGMENT_BYTES: 65_536,
+  STREAM_WINDOW_BYTES: 1024 * 1024,
+  ACK_EVERY_BYTES: 65_536,
+  MAX_STREAMS: 64,
+  MAX_TICKETS_PER_ASK: 64,
+  APPROVAL_TTL_MS: 30 * 60_000,
+  APPROVAL_RENEW_MS: 20 * 60_000,
+  KEYRING_ATTACH_TTL_MS: 120_000,
+  JOIN_BACKLOG_ROWS: 256,
+} as const;
+
+/** `FREEWAY_CODES` (v0.3 §5.1), on `TERMINAL_PIPELINE_CLOSE_CODES`' precedent: the link's own
+ * codes. A WebSocket close of the whole link, or the `code` of an `OPEN_REFUSED` (the host
+ * refusing one stream). A stream's CLOSE never uses these: it carries its leg's own close code
+ * verbatim. */
+export const FREEWAY_CODES = {
+  /** a text WebSocket message, or a frame that does not parse */
+  PROTOCOL: 4400,
+  /** the phone's approval did not verify or has lapsed — or an approval-only kind opened on a
+   * desktop link */
+  APPROVAL: 4401,
+  /** the node is not in fieldd's `admit` set, not a self principal, or not the node the welcome
+   * names */
+  NOT_ADMITTED: 4403,
+  /** the kind is not served here (an off-device terminal with `exposure.terminals` off, or an
+   * unknown kind) */
+  KIND_NOT_SERVED: 4404,
+  /** a newer link from the same node took this one's place (its host restarted) */
+  SUPERSEDED: 4409,
+  /** the peer left fieldd's `admit` set (unlink, relink as a new device, roster removal) */
+  PEER_GONE: 4410,
+  /** a true cross-dial between two desktops: the link the lower device id dialed is kept, this
+   * one closes */
+  TWIN: 4411,
+  /** the hello named a protocol major this host does not speak */
+  PROTOCOL_VERSION: 4426,
+  /** after a `Restarting` frame: the host is going down on purpose */
+  RESTARTING: 4503,
+  /** an OPEN the host held for its door timed out (the door's daemon did not come back in time) */
+  DOOR_DOWN: 4504,
 } as const;
 
 /** Socket file names under the daemon run dirs; paths are stable across restarts (external-mode law). */

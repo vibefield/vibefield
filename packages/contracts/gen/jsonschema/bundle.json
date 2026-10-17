@@ -1991,6 +1991,264 @@
       ],
       "additionalProperties": true
     },
+    "FreewayAdmitRow": {
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "desktop",
+            "phone"
+          ]
+        }
+      },
+      "required": [
+        "deviceId",
+        "role"
+      ],
+      "additionalProperties": true
+    },
+    "FreewayDoors": {
+      "type": "object",
+      "properties": {
+        "product": {
+          "type": "string",
+          "minLength": 1
+        },
+        "index": {
+          "type": "string",
+          "minLength": 1
+        },
+        "files": {
+          "type": "string",
+          "minLength": 1
+        },
+        "blob": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "FreewayExposure": {
+      "type": "object",
+      "properties": {
+        "terminals": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "terminals"
+      ],
+      "additionalProperties": true
+    },
+    "FreewayDeclareParams": {
+      "type": "object",
+      "properties": {
+        "admit": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FreewayAdmitRow"
+          }
+        },
+        "doors": {
+          "$ref": "#/definitions/FreewayDoors"
+        },
+        "exposure": {
+          "$ref": "#/definitions/FreewayExposure"
+        }
+      },
+      "required": [
+        "admit",
+        "doors",
+        "exposure"
+      ],
+      "additionalProperties": true
+    },
+    "FreewayDeclareResult": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "FreewayLinkState": {
+      "type": "string",
+      "enum": [
+        "dialing",
+        "up",
+        "restarting",
+        "down"
+      ]
+    },
+    "FreewayLinkRow": {
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "state": {
+          "$ref": "#/definitions/FreewayLinkState"
+        },
+        "connectionType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rttMs": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "deviceId",
+        "state"
+      ],
+      "additionalProperties": true
+    },
+    "FreewayState": {
+      "type": "object",
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "up": {
+          "type": "boolean"
+        },
+        "floorBootId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hostBootId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "pathSecret": {
+          "type": "string",
+          "minLength": 1
+        },
+        "localSecret": {
+          "type": "string",
+          "minLength": 1
+        },
+        "freewayKeyHex": {
+          "type": "string",
+          "minLength": 1
+        },
+        "keyGeneration": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FreewayLinkRow"
+          }
+        }
+      },
+      "required": [
+        "revision",
+        "up",
+        "floorBootId",
+        "links"
+      ],
+      "additionalProperties": true
+    },
+    "FreewayRevokeParams": {
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "FreewayRevokeResult": {
+      "type": "object",
+      "properties": {
+        "closed": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "closed"
+      ],
+      "additionalProperties": true
+    },
+    "FreewayJoinRow": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "joined",
+            "left"
+          ]
+        },
+        "clientId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rights": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "geometry",
+              "geometryAdmin",
+              "input",
+              "read"
+            ]
+          }
+        },
+        "at": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "kind",
+        "clientId",
+        "sessionId",
+        "rights",
+        "at"
+      ],
+      "additionalProperties": true
+    },
+    "FreewayJoinsFrame": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FreewayJoinRow"
+          }
+        },
+        "dropped": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "rows",
+        "dropped"
+      ],
+      "additionalProperties": true
+    },
     "Hello": {
       "type": "object",
       "properties": {

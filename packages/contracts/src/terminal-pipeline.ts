@@ -448,10 +448,33 @@ export const RemoteCellEndpointSet = remoteEndpointSet(
 );
 export type RemoteCellEndpointSet = z.infer<typeof RemoteCellEndpointSet>;
 
+/** FW-D1 (2026-10-16; thinking-freeway.md v0.3 §5.1) — a cell's two legs as STREAMS on a freeway
+ * link: `freeway://cell/<cellBootId>/control` and `…/frames`. A coordinate the freeway transport
+ * opens a `terminal-leg` stream for, never a socket address. Each URL names its own channel, and
+ * both name ONE cell: a pair split across cells is two half-lanes, refused here. */
+const FREEWAY_CONTROL_LEG = /^freeway:\/\/cell\/([A-Za-z0-9._-]+)\/control$/;
+const FREEWAY_FRAMES_LEG = /^freeway:\/\/cell\/([A-Za-z0-9._-]+)\/frames$/;
+export const FreewayCellEndpointSet = z
+  .object({
+    controlUrl: z.string().regex(FREEWAY_CONTROL_LEG, "a freeway://cell/<boot>/control URL"),
+    framesUrl: z.string().regex(FREEWAY_FRAMES_LEG, "a freeway://cell/<boot>/frames URL"),
+  })
+  .passthrough()
+  .refine(
+    (set) =>
+      FREEWAY_CONTROL_LEG.exec(set.controlUrl)?.[1] === FREEWAY_FRAMES_LEG.exec(set.framesUrl)?.[1],
+    { message: "both legs name one cell" },
+  );
+export type FreewayCellEndpointSet = z.infer<typeof FreewayCellEndpointSet>;
+
 /** What a ticket's `endpoints` may be. The LOOPBACK shape is tried first: the
- * two are disjoint by host class, so the order is documentation rather than
- * precedence — a URL cannot satisfy both. */
-export const TicketEndpointSet = z.union([CellEndpointSet, RemoteCellEndpointSet]);
+ * three are disjoint by scheme and host class, so the order is documentation
+ * rather than precedence — a URL cannot satisfy two. */
+export const TicketEndpointSet = z.union([
+  CellEndpointSet,
+  RemoteCellEndpointSet,
+  FreewayCellEndpointSet,
+]);
 export type TicketEndpointSet = z.infer<typeof TicketEndpointSet>;
 
 /** Compose one cell's remote door set from the serve's own base URL (truffle's
