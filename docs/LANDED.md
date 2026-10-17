@@ -11446,6 +11446,12 @@ holds). F1 — the link and terminals over it — is next.
   the facts admit, *not established*: the 28 MB dev binary's page-in at exec under I/O contention — the bundled runs
   exec'd it from the lane's cargo target on the SSD while other sessions' rustc and truffle-4a's compiles contended that
   disk; studio's ran a copy written to `/tmp` 2 s earlier.
+  **A second sighting (2026-10-17, focus/tp-catchup's live witness, dated at its source):** after a by-pid stop of the
+  pair, the dev runner's second start from the lane exec'd field-native at ~06:55:03Z and its first line came at
+  06:55:38.6Z (boot, ready and the cells serving within ~1 s after); fieldd's bootstrap failed at its 10 s deadline
+  (06:55:13.8Z) and came back on the next window bootstrap at 06:57:30Z, ready in 0.17 s. The run before it (a fresh
+  snapshot path too) booted 1.1 s after fieldd. Not the log lock (field-native's logging takes in-process mutexes
+  only). The readiness-error diagnosability row stands.
 - **`smoke:godview`'s typed agent, item 2 (`type-it`), red once in the gate:** one typed-once line that produced
   nothing: no stub call, no new shell, no fold row, no fieldd launch line; delivery of the seven keystrokes vs a launcher
   that stopped before the stub cannot be told apart from what is kept; mechanism NOT established. Not a shell slow to
@@ -11729,3 +11735,121 @@ desk smokes' second samples owed), so its evidence is verify plus the row's own 
 **Owed:** the canvas run now leaves the terminals called (minimized, the shell kept) for the rows after AIMED: THUMB, REST,
 the covers, peers, faults, pad and the pane rows. That is the deck those rows were written against before W7, and every
 row passed under it here.
+
+## TP-S3d — an activation's own catch-up is not background to its own deltas: the frames writer reorders only across activations, and a phone card closed and reopened keeps its scene (2026-10-17; `0e15237a` `d609aa90`)
+
+**What James saw:** "as long as i slide to close it and then tap bubble to bring it up, the scroll just broke and froze,
+can tap either" (05:42Z, on the dev build carrying the seat and swipe fixes). A first attach scrolled; a close and
+reopen froze the picture and held every swipe and tap.
+
+**Cause (the focus audit's C1 — named at 02:29Z, convicted at 06:24Z):**
+- A reopen declares demand none → live. The pump repairs that lineage break with a CATCH-UP transfer (base = the
+  revision it last sent, result = a forced full frame), queued as `Outbound::Bulk`, and its next deltas as urgent
+  `Outbound::Binary`.
+- The frames writer's `pick_next` drained the urgent lane before ANY bulk — for all activations — so codex's next delta
+  (it redraws on the reopen's keyboard and resize) overtook its OWN activation's catch-up on the wire.
+- The worker reads `activationSequence` as what §5 says it is, "only a correctness check on an ordered socket": every
+  unit of the overtaken catch-up arrived behind a later one and was dropped without a trace. The scene stayed on the
+  base the catch-up was to replace, every later delta named a base the sink never held, and nothing repairs a lineage
+  break (the audit's D2/C6) — so it stayed frozen, input held, for good.
+- TP-S3d's own words were "a background transfer yields to an urgent incremental": another activation's, never the
+  delta's own base.
+
+**The fix (`0e15237a`, field-native's `tp` — the `field-terminal-host` cell):** `Outbound::Binary(bytes,
+Option<Arc<str>>)` and `Outbound::Bulk(bytes, Arc<str>)` name their activation (the pump tags both; the calibration echo
+is `None`). The writer's `Lanes` record each unit's arrival order; an urgent unit waits only while a bulk unit of its OWN
+activation that arrived before it is still queued, and that bulk unit goes first. Other activations' urgent units, and
+units of no activation, still pass every bulk unit — the bulk-induced-HOL floor holds for them — and a delta queued
+BEFORE its activation's catch-up still goes first.
+
+**The kit (`d609aa90`, diagnostics):** the phone's sequence check says what it drops — "frames: unit #N (kind) dropped —
+#M of its activation arrived first". The drop is unchanged.
+
+Both were rebased from `0fc42241` `49a9f8fa` onto `003cec64` before the gate; `git diff 49a9f8fa d609aa90 -- apps/ios
+packages/field-native` is empty, so the checks and the witness below were made on the same cell and kit.
+
+**How it was found:** dev phone builds from focus/freeway carrying uncommitted diagnostics (exact input-gate reasons,
+the cell's presentation/input changes, the sink's refusal runs with their stamps, each transfer's begin and outcome):
+- console 13 (06:13Z): after a reopen "a delta did not fit the scene held"; the drop line "input is held: the picture
+  is seeding — the sink holds a different scene";
+- console 14 (06:24Z): "refused 1 in a row — a delta on r3798 where the scene holds r3797 (renderer: 0 stale, 0 full
+  refreshes asked)", and no catch-up begin anywhere in the run;
+- the mechanism's second witness, the same build (06:36Z): a reopen while codex was quiet logged "a catchup of 37322
+  bytes begins, on r4012 to r4014" → "a frame applied after 214 refused" and the stuck scene recovered; the next reopen
+  froze again ("a delta on r4025 where the scene holds r4018", no begin).
+
+**Erratum (mine, corrected to James at 05:56Z before anything consumed it):** at 05:46Z I told James the touch takes
+caused it ("each committed take re-seeded the view, and input was held through every re-seed"). ghosttea applies a
+resize only `if prepared.size_changed()` (`native/ghosttea/src/session.rs`) and the cell's commit only bumps the lease
+revision (`tp/activation.rs` `geometry_finalize`); the engage skip built on the claim was reverted, never committed.
+
+**Checks:** `cargo fmt -p field-native --check` 0 · `cargo clippy -p field-native --all-targets -- -D warnings` 0 ·
+`cargo test -p field-native --lib` 174 passed, 0 failed, 1 ignored (armed 06:38:31Z at 1-min load 9.19, the lane's own
+target) · the mutation probe: with the hold switched off the new row `an_activations_delta_never_overtakes_its_own_queued_transfer`
+FAILS with the old order (the delta first), `door.rs` restored blob-identical (`dee36d0d`; 06:40:23Z at 9.36) · TP-S3d's
+row moved to `Lanes`, meaning unchanged · the kit, built and run whole on this branch: 1121 tests in 213 suites, 12 runs
+passed, 0 failed, 0 restarts (07:42:56Z at 9.80).
+
+**Validation:**
+- **Before / after, on James's floor** (his word 06:42Z; `pnpm dev` from this lane on his own dev root, the cell
+  confirmed by `nm` as the fixed `field-terminal-host`): BEFORE, 2 of 3 reopens froze (console 14: r3798/r3797 and
+  r4025/r4018; the third, with codex quiet, recovered through its catch-up); AFTER, 0 of 3 (console 16, 06:59–07:00Z:
+  2 seeds and 3 reopen catch-ups on the glass, 0 refusals, 0 dropped units, no lag flapping).
+- **The gate:** `pnpm gate:landing --with-stages` on `d609aa90` in `/Volumes/SamsungRed/focus-tp` (its own cargo
+  target, `TMPDIR=/tmp`), armed 16:58:22Z at load 4.76/15.23/17.18 with James's lane dev app stopped at his word (16:51Z,
+  relayed by VF-PM), ended 17:31:50Z: **24/27**.
+  - Green: preflight, check:walls, check:retired, check:ios-fixtures, icons:check · typecheck 74 s · lint · fmt ·
+    lint:rust 26 s · bundle:assert · `test` 193 s (load 10→124) · `test:rust` 95 s · gen:check · still · smoke ·
+    smoke:canvas:no-gpu · smoke:canvas:no-webgpu · smoke:plugin-restart · smoke:plugin · smoke:godview 150 s ·
+    smoke:terminal-door · smoke:terminal-direct · smoke:studio · smoke:bundled 93 s (the smokes at load 5–8).
+  - `check:deps` RED (0 s) on the LANE's layout, not the tree's. The checker found a second loro-crdt 1.13.8,
+    @vibecook/ice 0.16.0 and @vibecook/strata-ecs 0.13.0 under `/Users/jamesyong/Projects/project100/vibe-field/node_modules/.pnpm/`,
+    reached through the react and react-dom it resolved from that checkout: the lane's `../mille-pin` was a symlink to
+    James's, whose generated `node_modules/react` links into his checkout (the class "a lane needs its own mille-pin
+    worktree"). `d609aa90` moves no dependency: `git diff 003cec64 d609aa90` changes four source files and no manifest,
+    lock or sibling file. The lane was then given its own puppeteer, mille-pin and ghosttea-0.11.2 worktrees at the lock's
+    revisions (`d3e82aa7`, `c8160d58`, `218e11fc`; 17:35Z, installed and built from the lane), and `check:deps` alone on
+    them said "ok — one copy each of loro-crdt@1.13.8, @vibecook/ice@0.16.0, @vibecook/strata-ecs@0.13.0, react@19.2.7"
+    (17:37Z, load 3.12).
+  - `smoke:canvas` RED (923 s, load 14→6) on four rungs: the occluded row ("the occluder did not cover the window …
+    visible: false"), HAND_WHITEBOARD and HAND_CALENDAR (the bar back at 250 and 252 ms, not 200: the 250 ms class), and
+    COVER HISTORY (the cover's first frame showed the canvas hidden, not the live desk). `smoke:kind-faults` RED (79 s,
+    load 7→5) on the occluded row. **The screen was LOCKED from 16:39:25Z** (`CGSSessionScreenLockedTime`) and the display
+    off from 16:39:30Z, before the gate armed: every desk smoke drew under the lock — the same classes `e1bc6111`'s 04:30Z
+    gate recorded under its lock. DK-14 is green, after `c524837d`.
+  - Teardown: every smoke's `SMOKE_DAEMONS` left `[]`; `/tmp/vf-smoke-pWDx50` was left (the known class).
+  - **The two desk samples, each ALONE with the screen unlocked** (2026-10-18, James's word at 20:08Z relayed by
+    VF-PM; shown; the lane's own sibling worktrees):
+    `smoke:canvas` ok (922 s, armed 20:11:00Z at 1-min load 6.96, load 7/8/7→12/11/9) · `smoke:kind-faults` ok (79 s,
+    armed 20:27:02Z at 1-min load 8.97, load 9/10/9→8/10/9).
+    The lock's rungs are gone with the lock, and both `SMOKE_DAEMONS` left `[]`. They are also the second samples
+    main has owed since `e1bc6111`'s gate: this tree is main's with the fix on top.
+
+**Found:**
+- **The cell binary is pinned by James's `.env`.** Line 7 sets `FIELD_NATIVE_CELL_BIN` to his checkout's shared-target
+  `field-terminal-host` — and the cell (door, pump, frames writer) IS that binary; the field-native daemon has no `tp`
+  module. A lane's dev app on his dev root ran main's cells until the launching env set the variable (Node's
+  `--env-file` lets the environment win); caught by `nm` before James tested. Row: the dev runner names the cell it
+  launches (path and build id).
+- **The dev runner's SIGTERM teardown does not reach the daemons — three times:** 06:44:46Z, 06:52:52Z and 16:57:19Z
+  (runner 67364, before this gate). Each logged `stopping (SIGTERM)`, then pnpm exited 143 BEFORE
+  `electron.stop({ stopDaemons: true })`; at 16:57:19Z the runner was gone within a second. Electron (reparented),
+  fieldd with its children, field-native with its cells and `nx watch` survived each time, and the runner's
+  `esbuild --service` at least twice (the first run's found at 07:59Z at ~12% CPU, the third's pid 67392); each was
+  stopped by pid, Electron first (16:57:36Z the last). The likely class of the 10-15 22:54:41Z exit that orphaned
+  Electron and field-native. Row.
+- **A second sighting of the silent-boot class** (§LR's Found, "Four silent field-native boots"): added there.
+- **A rebase under a running dev app restarts it** (16:33:40Z): rebasing this branch onto `003cec64` (docs and smoke
+  tests only) checked out the base and re-applied the branch's commits, rewriting `tp/*.rs` on disk. The runner logged
+  "native inputs changed; rebuilding field-native", stopped fieldd and restarted the window; field-native and its cells
+  were adopted, so the sessions stayed. I told VF-PM his app saw nothing, and corrected it within the hour. A worktree a
+  dev app runs from is not rebased, checked out or reset without the person's word.
+- **The lane linked James's sibling checkouts** (the `check:deps` red above): a lane that gates takes its own
+  worktrees of puppeteer, mille-pin and ghosttea first, as focus-land and hl-bump had.
+- C1's desktop face (a PROTOCOL close of the frames connection for every pane on the cell) shares the cause; its own
+  witness is owed.
+
+**Owed:** the swipe after a reopen, on the phone; the desktop face's
+witness on the fixed writer; D2/C6 — no way back from ANY lineage break (the cell has no reseed door; the phone's
+`requestReseed` edits local state only) — stays open (ROADMAP "Open debts", TP-S3d's follow-ups). No DECISIONS row: a
+defect, no design.
