@@ -325,7 +325,13 @@ impl GrantVerifier {
         if protected.get("v").and_then(Value::as_u64) != Some(1) {
             return Err(PreAuthFailure::new(C::GrantKeyUnknown, "protected.v"));
         }
-        if protected.get("iss").and_then(Value::as_str) != Some("fieldd") {
+        // Two issuers hold this cell's key: fieldd, for a window's and a desktop peer's grants,
+        // and the freeway host, for a phone's (FW-D1, `freeway::mint`) — both from the key the
+        // floor minted, the issuer the honest provenance under the MAC.
+        if !matches!(
+            protected.get("iss").and_then(Value::as_str),
+            Some("fieldd" | "field-native")
+        ) {
             return Err(PreAuthFailure::new(C::GrantKeyUnknown, "protected.iss"));
         }
         if protected.get("alg").and_then(Value::as_str) != Some("HS256") {

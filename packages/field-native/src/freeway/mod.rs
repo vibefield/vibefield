@@ -7,11 +7,14 @@
 //! Module map — each file owns one concern:
 //! - `frame` — the frame codec (`u8 frameType` · LEB128 `streamId` · payload) and one stream's
 //!   reassembly of a fragmented message (pinned by `freeway-frames.vector.json`);
+//! - `mint` — a phone's two cell grants, TPv3's envelopes under the host's own issuer and the
+//!   cell's key (FW-D1);
 //! - `mux` — the link's streams: ids by parity, never reused; each frame's meaning for its
 //!   stream; one reassembly per stream; the WINDOW grants a receiver owes;
 //! - `writer` — which frame goes next: the four classes, the in-flight cap, each stream's order,
 //!   fragments and WINDOW.
 
 pub mod frame;
+pub mod mint;
 pub mod mux;
 pub mod writer;
