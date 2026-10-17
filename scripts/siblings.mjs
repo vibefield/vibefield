@@ -1327,6 +1327,51 @@ export function sidecarStagingSource(root = REPO_ROOT, platform = process.platfo
   };
 }
 
+/** WHICH truffle sidecar a DEVELOPMENT floor runs (`pnpm dev`): the dev half of
+ * the decision above, by the same rule (2026-10-17, the truffle bump).
+ *
+ * A packaged floor finds its sidecar beside itself, where the stage put the
+ * pinned one. A debug floor does not: `target/debug` is cargo's, and on a machine
+ * whose `~/.cargo/config.toml` shares one target dir across checkouts it holds
+ * whatever `sidecar-slim` any checkout's truffle build last dropped there. On
+ * 2026-10-17 that was a tailscale v1.104.1 egress-era binary of unknown
+ * provenance, with a Jul 16 pre-RFC-025 `~/.config/truffle/bin/sidecar-slim`
+ * behind it. A dev floor left to search would run one of those, so the dev
+ * runner hands the floor this answer as `FIELD_NATIVE_SIDECAR_PATH`
+ * (`tooling/dev-runner/src/electron-stack.mjs`), the way it hands fieldd the
+ * lock's rosettad.
+ *
+ * - `{ source: "npm", path }` — no window: the registry package `apps/desktop`
+ *   installs at the EL8 pin (`@vibecook/truffle-sidecar-<platform>-<arch>`);
+ *   `path` is null until `pnpm install` has put it on disk.
+ * - `{ source: "window", path }` — a window is open and its sidecar is fresh.
+ * - `{ source: "window", path: null, reason }` — a window is open and its
+ *   sidecar is missing or stale. The floor must not quietly run the registry
+ *   binary beside a window build (the staging refusal's reason). With no
+ *   answer the floor's own search order decides, and the reason says what to
+ *   run.
+ *
+ * `path: null` means "set nothing". It is never a path to nothing, because the
+ * floor treats `FIELD_NATIVE_SIDECAR_PATH` as authoritative and would report
+ * the mesh Degraded rather than search. */
+export function devSidecar(root = REPO_ROOT, platform = process.platform, arch = process.arch) {
+  const staging = sidecarStagingSource(root, platform);
+  if (staging.source === "window") return { source: "window", path: staging.sidecar.path };
+  if (staging.source === "refuse") return { source: "window", path: null, reason: staging.reason };
+  const binary = platform === "win32" ? "sidecar-slim.exe" : "sidecar-slim";
+  const path = join(
+    root,
+    "apps",
+    "desktop",
+    "node_modules",
+    "@vibecook",
+    `truffle-sidecar-${platform}-${arch}`,
+    "bin",
+    binary,
+  );
+  return { source: "npm", path: existsSync(path) ? path : null };
+}
+
 // --- CLI ---------------------------------------------------------------------
 
 /** Fetch only absent checkouts. Existing developer trees, including dirty trees,

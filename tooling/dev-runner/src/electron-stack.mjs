@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
-import { rosettadBinary } from "../../../scripts/siblings.mjs";
+import { devSidecar, rosettadBinary } from "../../../scripts/siblings.mjs";
 import { buildChildEnv } from "./env.mjs";
 import { terminateChild } from "./processes.mjs";
 import { readDevProduct, stopVerifiedDevProduct } from "./product.mjs";
@@ -41,6 +41,56 @@ const defaultResolveRosettadBin = createRosettadBinResolver();
  * 2026-10-19). */
 const FLOOR_CHILD_OVERRIDES = ["FIELD_NATIVE_CELL_BIN", "FIELD_NATIVE_FREEWAY_BIN"];
 
+/** The truffle sidecar the dev floor runs, asked at every Electron launch
+ * (2026-10-17, the truffle bump; `devSidecar` in siblings.mjs says why a debug
+ * floor cannot be left to find one beside itself). Answers
+ * `{ path, warning }`:
+ *
+ * - The launching shell's explicit `FIELD_NATIVE_SIDECAR_PATH` (or truffle's
+ *   own `TRUFFLE_SIDECAR_PATH`) WINS, exactly as field-native ranks it. It is
+ *   the authoritative override, and a petition window's run line or a probe may
+ *   mean it. When it is not the lock's choice the answer carries a WARNING
+ *   naming both, because that is how the retired T6 override (a protocol-5
+ *   build under `.vibefield/sidecar/`) would keep running after 0.7.19 without a
+ *   word. Only this read is memoized: the process's own environment cannot
+ *   change under it. The warning names the variable that made the choice.
+ * - Else the lock's choice (`devSidecar`), asked afresh each launch, so a
+ *   `pnpm install` mid-session reaches the floor at the next launch.
+ * - `path: null` sets nothing, and the floor's own search order answers. The
+ *   launch also STRIPS both variables then (the rosettad pattern, c5804e6a),
+ *   because a null path means neither held a non-empty value, and an inherited
+ *   EMPTY one would reach the floor as an authoritative override naming nothing
+ *   (`var_os` reads `Some("")`), which reports the mesh Degraded instead of
+ *   searching. */
+export function createSidecarPathResolver({ env = process.env, lookup = devSidecar } = {}) {
+  let explicit;
+  return () => {
+    if (explicit === undefined) {
+      const name = ["FIELD_NATIVE_SIDECAR_PATH", "TRUFFLE_SIDECAR_PATH"].find(
+        (key) => env[key] !== undefined && env[key] !== "",
+      );
+      explicit = name === undefined ? null : { name, path: env[name] };
+    }
+    const pinned = lookup();
+    if (explicit === null) {
+      return {
+        path: pinned.path,
+        ...(pinned.reason !== undefined ? { warning: pinned.reason } : {}),
+      };
+    }
+    if (pinned.path === explicit.path) return { path: explicit.path };
+    const lockChoice = pinned.path ?? `${pinned.source}, not on disk`;
+    return {
+      path: explicit.path,
+      warning:
+        `${explicit.name} names ${explicit.path}, not the lock's sidecar (${lockChoice}). ` +
+        "The floor runs the named one; unset it to run the pin",
+    };
+  };
+}
+
+const defaultResolveSidecarPath = createSidecarPathResolver();
+
 export function createElectronStack({
   paths,
   viteUrl,
@@ -52,6 +102,7 @@ export function createElectronStack({
   electronExecutable = createRequire(import.meta.url)("electron"),
   spawnProcess = spawn,
   resolveRosettadBin = defaultResolveRosettadBin,
+  resolveSidecarPath = defaultResolveSidecarPath,
   readProduct = readDevProduct,
   stopProduct = stopVerifiedDevProduct,
   terminate = terminateChild,
@@ -85,6 +136,8 @@ export function createElectronStack({
         ignored.length > 0 ? ` (${ignored.join(", ")} from the environment ignored)` : "";
       log.info(`daemon plane ${daemonBuildId}: ${cell} and ${host}${unheeded}`);
     }
+    const sidecar = resolveSidecarPath();
+    if (sidecar.warning !== undefined) log.warn(`[sidecar] ${sidecar.warning}`);
     const env = buildChildEnv(process.env, {
       set: {
         VITE_DEV_SERVER_URL: viteUrl,
@@ -106,6 +159,12 @@ export function createElectronStack({
         // on disk: an unset variable is fieldd's honest "unconfigured", a path
         // to nothing would be a spawn failure dressed as configuration.
         ...(rosettadBin !== null ? { FIELDD_ROSETTAD_BIN: rosettadBin } : {}),
+        // The truffle sidecar the floor runs (the truffle bump, 2026-10-17):
+        // the shell's explicit choice, else the lock's pin (`devSidecar`).
+        // fieldd hands field-native its own environment, so this reaches the
+        // floor. Absent when neither names a file on disk (and an inherited
+        // empty one is stripped below), and then the floor's own search answers.
+        ...(sidecar.path !== null ? { FIELD_NATIVE_SIDECAR_PATH: sidecar.path } : {}),
         FIELD_LOG_DIR: paths.logRoot,
       },
       // This flag is set only by Electron main for its fieldd child. Inheriting
@@ -118,10 +177,15 @@ export function createElectronStack({
       // an empty string the comment above forbids) and fieldd would point at a
       // binary the runner never chose. When the resolver names one it is set
       // above; when it does not, the inherited variable is removed.
+      // The truffle bump (2026-10-17): the sidecar is the same shape. A null
+      // path means neither variable held a non-empty value, so this removes
+      // only empties — which the floor would otherwise read as an
+      // authoritative override naming nothing, and go Degraded.
       unset: [
         "ELECTRON_RUN_AS_NODE",
         ...FLOOR_CHILD_OVERRIDES,
         ...(rosettadBin === null ? ["FIELDD_ROSETTAD_BIN"] : []),
+        ...(sidecar.path === null ? ["FIELD_NATIVE_SIDECAR_PATH", "TRUFFLE_SIDECAR_PATH"] : []),
       ],
     });
 

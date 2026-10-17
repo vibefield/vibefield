@@ -1,13 +1,19 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
-import { createElectronStack, createRosettadBinResolver } from "../src/electron-stack.mjs";
+import {
+  createElectronStack,
+  createRosettadBinResolver,
+  createSidecarPathResolver,
+} from "../src/electron-stack.mjs";
 
 function setup({
   studioOpen = true,
   studioPhysical = false,
   rosettadBin = null,
   resolveRosettadBin = () => rosettadBin,
+  sidecarPath = null,
+  resolveSidecarPath = () => ({ path: sidecarPath }),
 } = {}) {
   const child = new EventEmitter();
   Object.assign(child, { pid: 1234, exitCode: null, signalCode: null, connected: true });
@@ -16,6 +22,7 @@ function setup({
   const exits = [];
   const commands = [];
   const said = [];
+  const warnings = [];
   let spawnArgs = null;
   let terminateArgs = null;
   const stack = createElectronStack({
@@ -38,7 +45,9 @@ function setup({
       info(line) {
         said.push(line);
       },
-      warn() {},
+      warn(message) {
+        warnings.push(message);
+      },
       error() {},
     },
     onUnexpectedExit(value) {
@@ -48,6 +57,9 @@ function setup({
     // AR-0: the sibling lock's rosettad, resolved outside the unit (the
     // default reads siblings.lock.json and asks cargo — not a unit's business)
     resolveRosettadBin,
+    // the truffle bump: the dev floor's sidecar, resolved outside the unit too
+    // (the default reads siblings.lock.json and the vendored package)
+    resolveSidecarPath,
     spawnProcess(...args) {
       spawnArgs = args;
       child.send = (message, callback) => {
@@ -86,6 +98,7 @@ function setup({
     exits,
     commands,
     said,
+    warnings,
     getSpawnArgs: () => spawnArgs,
     getTerminateArgs: () => terminateArgs,
     stack,
@@ -180,7 +193,8 @@ test("the default resolver memoizes only the shell's explicit choice, never a mi
 });
 
 /** Run `body` with `name` set to `value` in THIS process (absent for
- * undefined), and restore whatever the launching shell had. */
+ * undefined), and restore whatever the launching shell had: a developer's
+ * `.env` may export FIELD_NATIVE_SIDECAR_PATH, which `buildChildEnv` passes on. */
 async function withVariable(name, value, body) {
   const had = Object.hasOwn(process.env, name);
   const previous = process.env[name];
@@ -257,6 +271,128 @@ test("the cell and the freeway host are named once per daemon identity, never at
       ]);
     }),
   );
+});
+
+const VENDORED =
+  "/repo/apps/desktop/node_modules/@vibecook/truffle-sidecar-darwin-arm64/bin/sidecar-slim";
+
+test("hands the floor the lock's sidecar as FIELD_NATIVE_SIDECAR_PATH (the truffle bump)", async () => {
+  const fixture = setup({ sidecarPath: VENDORED });
+  await fixture.stack.start(runtime);
+  const [, , options] = fixture.getSpawnArgs();
+  assert.equal(options.env.FIELD_NATIVE_SIDECAR_PATH, VENDORED);
+  assert.deepEqual(fixture.warnings, []);
+});
+
+test("sets no FIELD_NATIVE_SIDECAR_PATH when nothing names a file, so the floor searches", async () => {
+  await withVariable("FIELD_NATIVE_SIDECAR_PATH", undefined, async () => {
+    const fixture = setup({ sidecarPath: null });
+    await fixture.stack.start(runtime);
+    const [, , options] = fixture.getSpawnArgs();
+    // never an empty string or a path to nothing: the floor treats the variable
+    // as authoritative and would report Degraded instead of searching
+    assert.equal("FIELD_NATIVE_SIDECAR_PATH" in options.env, false);
+  });
+});
+
+test("strips an inherited EMPTY sidecar variable when the resolver names none (the rosettad pattern)", async () => {
+  // The row above removes the variable, so it cannot tell the strip from its
+  // absence; this one exports it, as a shell with `FIELD_NATIVE_SIDECAR_PATH=`
+  // in its .env does. The resolver reads an empty value as no choice, but the
+  // floor reads it as an authoritative override naming nothing (`var_os` gives
+  // Some("")), and would report the mesh Degraded instead of searching.
+  await withVariable("FIELD_NATIVE_SIDECAR_PATH", "", async () => {
+    await withVariable("TRUFFLE_SIDECAR_PATH", "", async () => {
+      const fixture = setup({ sidecarPath: null });
+      await fixture.stack.start(runtime);
+      const [, , options] = fixture.getSpawnArgs();
+      assert.equal("FIELD_NATIVE_SIDECAR_PATH" in options.env, false);
+      assert.equal("TRUFFLE_SIDECAR_PATH" in options.env, false);
+    });
+  });
+});
+
+test("a resolver warning reaches the runner's log at launch", async () => {
+  const fixture = setup({
+    resolveSidecarPath: () => ({
+      path: "/repo/.vibefield/sidecar/sidecar-slim-0.7.14-ws-target-path",
+      warning: "FIELD_NATIVE_SIDECAR_PATH names the override, not the lock's sidecar",
+    }),
+  });
+  await fixture.stack.start(runtime);
+  assert.equal(
+    fixture.getSpawnArgs()[2].env.FIELD_NATIVE_SIDECAR_PATH,
+    "/repo/.vibefield/sidecar/sidecar-slim-0.7.14-ws-target-path",
+  );
+  assert.equal(fixture.warnings.length, 1);
+  assert.match(fixture.warnings[0], /^\[sidecar\] .*not the lock's sidecar/);
+});
+
+test("the sidecar resolver: the lock's pin, unless the shell names one, and then it says so", () => {
+  let asked = 0;
+  const pin = () => {
+    asked += 1;
+    return { source: "npm", path: VENDORED };
+  };
+  // no explicit choice: the pin, asked afresh every launch
+  const unset = createSidecarPathResolver({ env: {}, lookup: pin });
+  assert.deepEqual(unset(), { path: VENDORED });
+  assert.deepEqual(unset(), { path: VENDORED });
+  assert.equal(asked, 2);
+
+  // the shell's choice wins, exactly as field-native ranks it, and a foreign one warns
+  const override = "/repo/.vibefield/sidecar/sidecar-slim-0.7.14-ws-target-path";
+  const foreign = createSidecarPathResolver({
+    env: { FIELD_NATIVE_SIDECAR_PATH: override },
+    lookup: pin,
+  })();
+  assert.equal(foreign.path, override);
+  assert.match(
+    foreign.warning,
+    /names .*sidecar-slim-0\.7\.14-ws-target-path, not the lock's sidecar/,
+  );
+  assert.match(foreign.warning, /truffle-sidecar-darwin-arm64/);
+
+  // naming the pin itself is no warning
+  assert.deepEqual(
+    createSidecarPathResolver({ env: { FIELD_NATIVE_SIDECAR_PATH: VENDORED }, lookup: pin })(),
+    { path: VENDORED },
+  );
+  // truffle's own name counts as a choice, below field-native's, and its
+  // warning names the variable that made the choice
+  const truffleChoice = createSidecarPathResolver({
+    env: { TRUFFLE_SIDECAR_PATH: "/t/sidecar" },
+    lookup: pin,
+  })();
+  assert.equal(truffleChoice.path, "/t/sidecar");
+  assert.match(truffleChoice.warning, /^TRUFFLE_SIDECAR_PATH names \/t\/sidecar, not the lock's/);
+  assert.equal(
+    createSidecarPathResolver({
+      env: { FIELD_NATIVE_SIDECAR_PATH: "/f/sidecar", TRUFFLE_SIDECAR_PATH: "/t/sidecar" },
+      lookup: pin,
+    })().path,
+    "/f/sidecar",
+  );
+  // an empty variable is no choice
+  assert.deepEqual(
+    createSidecarPathResolver({ env: { FIELD_NATIVE_SIDECAR_PATH: "" }, lookup: pin })(),
+    { path: VENDORED },
+  );
+  // nothing on disk: nothing set; a foreign choice still says what the pin is
+  const none = () => ({ source: "npm", path: null });
+  assert.deepEqual(createSidecarPathResolver({ env: {}, lookup: none })(), { path: null });
+  const foreignNone = createSidecarPathResolver({
+    env: { FIELD_NATIVE_SIDECAR_PATH: override },
+    lookup: none,
+  })();
+  assert.equal(foreignNone.path, override);
+  assert.match(foreignNone.warning, /\(npm, not on disk\)/);
+  // a window whose sidecar is not built: nothing set, and the reason is said
+  const unbuilt = () => ({ source: "window", path: null, reason: "run `pnpm siblings:build`" });
+  assert.deepEqual(createSidecarPathResolver({ env: {}, lookup: unbuilt })(), {
+    path: null,
+    warning: "run `pnpm siblings:build`",
+  });
 });
 
 test("starts Electron directly with isolated state and the daemon build identity", async () => {

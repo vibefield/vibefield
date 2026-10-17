@@ -20,6 +20,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   cargoPatchRows,
+  devSidecar,
   goSidecar,
   goSidecarState,
   patchPath,
@@ -224,6 +225,47 @@ test("staging REFUSES when the window's sidecar is older than its source", () =>
   const choice = sidecarStagingSource(root, "darwin");
   assert.equal(choice.source, "refuse");
   assert.match(choice.reason, /stale/);
+});
+
+// The truffle bump (2026-10-17): the DEV floor's sidecar, by the staging rule.
+// A debug field-native in a shared cargo target dir finds whatever sidecar the
+// last truffle build left beside it, so the dev runner hands it this answer.
+
+test("a dev floor runs the vendored registry sidecar when no window is open", () => {
+  const root = fixtureRoot({ lock: { siblings: {} } });
+  // before `pnpm install`: nothing on disk, so nothing to name
+  assert.deepEqual(devSidecar(root, "darwin", "arm64"), { source: "npm", path: null });
+  const bin = join(root, "apps/desktop/node_modules/@vibecook/truffle-sidecar-darwin-arm64/bin");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(join(bin, "sidecar-slim"), "binary");
+  assert.deepEqual(devSidecar(root, "darwin", "arm64"), {
+    source: "npm",
+    path: join(bin, "sidecar-slim"),
+  });
+  // the package is per platform AND arch, and Windows ships the .exe
+  const win = join(root, "apps/desktop/node_modules/@vibecook/truffle-sidecar-win32-x64/bin");
+  mkdirSync(win, { recursive: true });
+  writeFileSync(join(win, "sidecar-slim.exe"), "binary");
+  assert.equal(devSidecar(root, "win32", "x64").path, join(win, "sidecar-slim.exe"));
+  assert.equal(devSidecar(root, "darwin", "x64").path, null, "another arch's package is not ours");
+});
+
+test("a dev floor runs the WINDOW's sidecar while a window is open", () => {
+  const root = goFixture();
+  assert.deepEqual(devSidecar(root, "darwin", "arm64"), {
+    source: "window",
+    path: join(root, "target", "debug", "sidecar-slim"),
+  });
+});
+
+test("a dev floor is handed nothing, with the reason, when the window's sidecar is not built", () => {
+  for (const built of ["missing", "stale"]) {
+    const choice = devSidecar(goFixture({ built }), "darwin", "arm64");
+    assert.equal(choice.source, "window", built);
+    // never the registry binary beside a window build, and never a path to nothing
+    assert.equal(choice.path, null, built);
+    assert.match(choice.reason, /pnpm siblings:build/, built);
+  }
 });
 
 test("stage-package.mjs consults the decision and keeps its refusal", () => {
