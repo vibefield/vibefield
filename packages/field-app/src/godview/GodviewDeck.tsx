@@ -24,7 +24,6 @@ import {
 import { AgentInterruptResult, AgentSpawnResult, type DeviceInfo } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
-  type ComponentProps,
   type CSSProperties,
   type ReactElement,
   useCallback,
@@ -151,35 +150,6 @@ import "@vibecook/ghosttea-react/workspace.css";
 // demand when they go. Everything below the acquisition is unchanged — the
 // restore gate, the pane faces, the door, the persisted layout are all still the
 // deck's, because they are about a deck and not about a window.
-
-/**
- * DS-4 — THE DECK TAKES ON FOCUS. DS-D5, ruled 2026-09-30 with James's note:
- * "the latest focused pane takes full control include resizing, LWW. no matter
- * it is local pane, remote desktop pane or mobile pane" (TPv3 §6 amended the
- * same day). The lease stays explicit (TP-D2) and the policy sits in the host:
- * when a controller pane gains focus, it TAKES the seat — `ClaimGeometry` on an
- * empty seat, else one `TransferGeometry` to itself, which the cell authorizes on
- * the pane's own `geometry` right (field-native `activation.rs`). A mirror is
- * `controlsResize:false` and never takes.
- *
- * The deck asks for it with ghosttea's workspace prop `takeGeometryOnFocus`
- * (gt-take, `feat/geometry-take` `a24a28d`): each SURFACE takes on its own focus,
- * because it owns the three facts a take needs — its view id, its grid, and
- * whether its input has focus. The pinned workspace (ghosttea `8a0930e`)
- * predates the prop and ignores it, so it rides through a cast until the pin
- * moves; that move is the one-line cleanup.
- *
- * NO FALLBACK until then. A deck-side road that re-sent the controller's
- * `claimResizeControl` on every focus edge was built and retired in DS-4: on the
- * pinned runtime a surface's mount claim followed by its focus claim is exactly
- * the overlapping-claims case gt-take fixed upstream (`5c9b533` — the pinned
- * runtime re-sends no grid after a refused overlap, so a pane can stay at its
- * first size), and a refused release loses the reply correlation every later
- * claim depends on (`aa4f762`). The take waits for the runtime that fixes both.
- */
-const TAKE_GEOMETRY_ON_FOCUS = { takeGeometryOnFocus: true } as unknown as Partial<
-  ComponentProps<typeof GhostteaWorkspace>
->;
 
 /** The terminal's cell grid, in ghosttea's own fixed metrics: the pitch the
  * launch draws its dots on (QL-2, `pane-launcher.css` "the launch"), so the
@@ -2359,7 +2329,25 @@ export function GodviewDeck({
           showTitlebar={false}
           active={active}
           paneVisibility={paneVisibility}
-          {...TAKE_GEOMETRY_ON_FOCUS}
+          // DS-4 — THE DECK TAKES THE SEAT (DS-D5, ruled 2026-09-30 with James's
+          // note: "the latest focused pane takes full control include resizing,
+          // LWW. no matter it is local pane, remote desktop pane or mobile pane";
+          // TPv3 §6 amended the same day). The lease stays explicit (TP-D2) and
+          // the policy sits in the host: each SURFACE takes when it gains focus,
+          // and when it is pressed while it has focus — `ClaimGeometry` on an
+          // empty seat, else one `TransferGeometry` to itself, which the cell
+          // authorizes on the pane's own `geometry` right (field-native
+          // `activation.rs`) — because it owns the three facts a take needs: its
+          // view id, its grid, and whether its input has focus. A mirror is
+          // `controlsResize:false` and never takes.
+          // Until 2026-10-17 the pinned workspace predated this prop and the
+          // deck passed it through a cast that did nothing, so a phone that took
+          // the seat held the desktop's PTY at phone size however the pane was
+          // clicked (James). The pin carries it now: ghosttea `feat/geometry-take`
+          // on `10d0b17`, with the overlapping-claims (`569daaa`) and
+          // reply-correlation (`8b83f50`) fixes the deck-side road retired in DS-4
+          // had waited for, and the press take (`218e11f`).
+          takeGeometryOnFocus
         />
         {/* The frames follow the panes ghosttea laid out (GT-6). Mounted
             inside the zoom host so a zoomed pane keeps its frame through the
