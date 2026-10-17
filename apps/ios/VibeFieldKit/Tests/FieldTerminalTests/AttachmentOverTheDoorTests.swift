@@ -313,6 +313,40 @@ import Testing
     await attachment.detach()
   }
 
+  /// DS-D5 — the person engaging the pane (its keyboard coming up) is a focus
+  /// gain too: it takes the seat again, with the grid measured since. Without
+  /// it a pane that lost the seat stayed at another pane's size until the card
+  /// was opened again (James, 2026-10-17: "cant restore back no matter what").
+  @MainActor
+  @Test func engagingThePaneTakesTheSeatAgain() async throws {
+    let door = CellDoorHarness()
+    let port = try await door.start()
+    defer { Task { await door.stop() } }
+    let session = "sess-01J8Z3K9"
+    let attachment = TerminalAttachment(
+      transport: URLSessionRoutedTransport(), appearance: .default,
+      door: { _ in try Self.ticketJSON(port: port, sessionId: session) })
+
+    attachment.attach(sessionID: session, cols: 80, rows: 24, deviceName: "studio")
+    attachment.setViewport(cols: 60, rows: 30)
+    let control = try await Self.value("the control leg to attach") { await door.controlAttach }
+    await door.send(
+      .controlLegAttached,
+      Script.controlAttached(
+        session: session, activation: control.activationId, rights: ["geometry", "input", "read"]),
+      on: .control)
+    _ = try await Self.value("the take on focus") { await door.geometryVerbs.first }
+
+    attachment.setViewport(cols: 60, rows: 14)  // the keyboard came up
+    attachment.engage()
+    try await Self.until("the engagement's take") { await door.geometryVerbs.count == 2 }
+    let again = await door.geometryVerbs[1]
+    #expect(again["type"]?.stringValue == "ClaimGeometry")
+    #expect(again["cols"]?.intValue == 60)
+    #expect(again["rows"]?.intValue == 14)
+    await attachment.detach()
+  }
+
   /// DS-4b — a grant without `geometry` sends no lease verb on focus.
   @MainActor
   @Test func aPaneWithoutTheGeometryRightTakesNothing() async throws {

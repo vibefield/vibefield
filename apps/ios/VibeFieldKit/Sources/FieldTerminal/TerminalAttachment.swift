@@ -731,6 +731,20 @@ public final class TerminalAttachment {
     client.resizeGeometry(cols: Int(cols), rows: Int(rows), for: sessionID)
   }
 
+  /// DS-D5 — the person engaged this pane: its keyboard came up. That is a
+  /// focus gain like the card's opening, so the pane takes the seat — last
+  /// write wins — with the grid the surface measured. A pane that lost the
+  /// seat (another pane took it, or a take did not land) otherwise stays at
+  /// that pane's size until the card is opened again, because a mere resize
+  /// never claims (James, 2026-10-17: "cant restore back no matter what"). A
+  /// pane that still holds it claims its own seat, which the cell commits as
+  /// a resize.
+  public func engage() {
+    guard client != nil, let sessionID else { return }
+    log("engaged — taking the seat session=\(sessionID)")
+    takeSeat()
+  }
+
   /// DS-4b — this pane gained focus: take the seat, ONCE. The client owns the
   /// one retry the cell's announcement may earn; the host never retries.
   private func takeSeat() {
