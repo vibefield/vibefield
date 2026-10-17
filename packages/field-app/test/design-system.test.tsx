@@ -237,9 +237,19 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "sent:mac",
       "faces:mac",
       "sent-aimed:mac",
+      "refused:mac",
       "gv:other",
       "flight:null",
     ]);
+    // D6 — the failure: a paste too large for its pane, said over send in the
+    // product's own words (`inputRefusalNote` over a fixture refusal)
+    const refused = container?.querySelector(
+      '.vf-ds-line-plate[data-state="refused"] .vf-line-note',
+    );
+    expect(refused?.getAttribute("data-at")).toBe("send");
+    expect(refused?.textContent).toBe(
+      "Not pasted into vibe-field — 300 KB, and one paste carries 261 KB of it",
+    );
     // DK-14 — Send to…: a note's chip in its paper with the @ typed and the list open; the faces by kind; the flight
     const sent = container?.querySelector('.vf-ds-line-plate[data-state="sent"]');
     expect(

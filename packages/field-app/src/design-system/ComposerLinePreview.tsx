@@ -1,14 +1,22 @@
 import { deskPalette } from "@vibecook/ice/desk/objects";
 import type { FrameView } from "@vibefield/contracts";
-import { type CSSProperties, type ReactElement, useLayoutEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactElement,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { type AtList, type AtMini, atDefaultHot, atList } from "../frame/at-list";
 import { AtMenuView, ChipFlierView, ComposerLineView } from "../frame/ComposerLine";
 import type { DeskChip, DraftPart, LineAim } from "../frame/draft";
-import type { LinePane, LineViewDoor } from "../frame/line-door";
+import { inputRefusalNote, type LinePane, type LineViewDoor } from "../frame/line-door";
 import { SEND_MOTION } from "../frame/line-send";
 import { ViewsTrackView } from "../frame/ViewsTrack";
 import type { ViewKeys } from "../frame/views";
 import { ClipboardStore } from "../hud/edge-tray/clipboard-store";
+import type { RoutedInputRefusal } from "../terminal/pool";
 
 // The line's fixture ADAPTER (One Frame FR-2; docs/UI_SYSTEM.md): the shipping
 // line — `ComposerLineView`, @'s `AtMenuView`, the views track at its left end
@@ -21,7 +29,8 @@ import { ClipboardStore } from "../hud/edge-tray/clipboard-store";
  * sentence), @ open, aimed, Objects out, an object in hand (the create faint —
  * DK-13, R14), Godview's create, History's — and Send to…'s (DK-14): a note's
  * chip landed with the @ typed and the list open, the chip's faces by kind, and
- * an aimed draft that took a chip with no @, send armed. */
+ * an aimed draft that took a chip with no @, send armed — and a failure (D6): a
+ * paste too large for its pane's terminal, said over send. */
 export const LINE_STATES = [
   "rest",
   "typing",
@@ -34,6 +43,7 @@ export const LINE_STATES = [
   "sent",
   "faces",
   "sent-aimed",
+  "refused",
 ] as const;
 export type LineState = (typeof LINE_STATES)[number];
 
@@ -49,6 +59,7 @@ export const LINE_STATE_LABEL: Record<LineState, string> = {
   sent: "Send to… — a note's chip, the @ typed",
   faces: "Send to… — a kind's name, several, a missing face",
   "sent-aimed": "Send to… — aimed: no @, send armed",
+  refused: "A paste too large for its pane — said over send",
 };
 
 const VIEW_OF: Record<LineState, FrameView> = {
@@ -63,6 +74,7 @@ const VIEW_OF: Record<LineState, FrameView> = {
   sent: "canvas",
   faces: "canvas",
   "sent-aimed": "canvas",
+  refused: "godview",
 };
 
 /** A fixture still: an SVG drawn here, so a thumbnail shows a real image
@@ -90,6 +102,16 @@ export const FIXTURE_CLIPBOARD: readonly AtMini[] = [
   { id: "c2", label: "820 × 512", path: "/stills/2.png", url: lineFixtureStill("terminal", 28) },
   { id: "c3", label: "1200 × 750", path: "/stills/3.png", url: lineFixtureStill("note", 48) },
 ];
+
+/** D6 — what a pane's terminal answers a ⌘V too large for it, in fixture: a
+ * 300 KB paste of plain text, of which one message carries 261 KB. The words
+ * are the product's own (`inputRefusalNote`), never a copy of them. */
+export const FIXTURE_REFUSAL: RoutedInputRefusal = {
+  sessionId: "s-vibe",
+  kind: "paste",
+  bytes: 300_000,
+  limitBytes: 261_958,
+};
 
 /** What Godview lends the line, in fixture: three panes on screen, a new
  * terminal that opens, a paste that lands, a resumed session that mounts, a
@@ -211,6 +233,14 @@ export function ComposerLinePlate({
             : state === "sent-aimed"
               ? SENT_AIMED
               : [];
+  // The refusal's note lives 2.4s and goes, as in the product; on its plate it
+  // is said again every 2.6s, so the state can be looked at rather than caught.
+  const [said, setSaid] = useState(1);
+  useEffect(() => {
+    if (state !== "refused") return;
+    const timer = window.setInterval(() => setSaid((count) => count + 1), 2_600);
+    return () => window.clearInterval(timer);
+  }, [state]);
   // @'s list grows from the @ it was typed at, 10 before it — measured as the
   // controller measures it, here off the plate the line stands in.
   const plateRef = useRef<HTMLDivElement>(null);
@@ -259,6 +289,15 @@ export function ComposerLinePlate({
         canSend={state === "typing" || state === "sent-aimed" || state === "faces"}
         atOpen={list !== null}
         editorRef={editorRef}
+        note={
+          state === "refused"
+            ? {
+                seq: said,
+                text: inputRefusalNote(FIXTURE_REFUSAL, FIXTURE_PANES[0]?.name),
+                at: "send",
+              }
+            : null
+        }
       />
       {list === null ? null : <AtMenuView list={list} hot={atDefaultHot(list)} left={atLeft} />}
     </div>

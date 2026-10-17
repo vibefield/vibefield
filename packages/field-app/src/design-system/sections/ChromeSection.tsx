@@ -205,6 +205,8 @@ export function ChromeSection({
           — faint while an object is in hand, "Put it down first" (R14). Send to… (DK-14): a note's
           chip in its paper and ink with the @ typed after it, a kind's name, several, a missing
           face's type, an aimed draft that took one with no @ — and the chip in flight to the caret.
+          A failure (D6): a paste too large for its pane's terminal, said over send in the line's
+          own words, its size and how much of it one paste carries.
         </p>
       </Specimen>
 

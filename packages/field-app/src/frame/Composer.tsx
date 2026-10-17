@@ -143,10 +143,10 @@ export interface ComposerProps {
   host?: ComposerHost;
   writeClipboard?: (text: string) => Promise<void>;
   /** D6 — where the line hears a paste or typed text a terminal refused for its
-   * size (undefined: the window's terminal pool; the tests hand it a fixture).
-   * A hearer of its own beside `hearLineSays`, which carries words alone: the
-   * send needs the refusal itself, and the note the pane's name, which only the
-   * line knows. */
+   * size (undefined: the window's terminal pool; the tests hand it a fixture,
+   * and the catalog draws the state as a plate of the line's view). A hearer of
+   * its own beside `hearLineSays`, which carries words alone: the send needs the
+   * refusal itself, and the note the pane's name, which only the line knows. */
   inputRefusals?: (hear: (refusal: RoutedInputRefusal) => void) => () => void;
   /** Whether the line binds its window keys (B, ⌘T). The catalog's live line
    * does not: its page is not a window the line owns. */
