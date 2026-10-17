@@ -1146,7 +1146,10 @@ public struct HomeScreen: View {
         // pixels; nothing here can run in Release.
         if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-card") {
           demoInputCard = true
-          inputCard.sink = { act in print("input act:", act) }
+          inputCard.sink = { act in
+            print("input act:", act)
+            return true
+          }
           if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-live") {
             inputCard.mode = .live
           } else {
@@ -1778,6 +1781,11 @@ public struct HomeScreen: View {
   /// and it is the reason `FieldInput` never learns what a Ghosttea type is.
   private func installInputSink(on attachment: TerminalAttachment) {
     inputCard.sink = { act in
+      // Taken exactly when the terminal accepts input now — the gate every
+      // verb below forwards through, read before the act is spent. A declined
+      // act is said on the card (the attachment's notice), and the card keeps
+      // what was typed.
+      let taken = attachment.acceptsInput
       switch act {
       case .keystroke(let stroke): attachment.press(stroke)
       case .sendDraft(let text): attachment.sendDraft(text)
@@ -1786,6 +1794,7 @@ public struct HomeScreen: View {
       case .paste(let text): attachment.pasteText(text)
       // --- end IOS-5c
       }
+      return taken
     }
     // --- IOS-5b: the second half of the same join --------------------------
     // In Draft the composer intercepts a latched character before it reaches

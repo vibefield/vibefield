@@ -98,7 +98,7 @@ struct KeyboardOwnerTests {
   func focusIsLocal() {
     let model = InputCardModel()
     var acts: [InputAct] = []
-    model.sink = { acts.append($0) }
+    model.sink = { acts.append($0); return true }
     model.requestKeyboard()
     model.dismissKeyboard()
     #expect(acts.isEmpty)

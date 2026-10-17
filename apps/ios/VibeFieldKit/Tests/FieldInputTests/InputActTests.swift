@@ -15,7 +15,7 @@ struct InputActTests {
   private func card() -> (InputCardModel, Recorder) {
     let model = InputCardModel()
     let recorder = Recorder()
-    model.sink = { recorder.acts.append($0) }
+    model.sink = { recorder.acts.append($0); return true }
     return (model, recorder)
   }
 
@@ -52,6 +52,23 @@ struct InputActTests {
     model.draft = "   "
     model.tapSend()
     #expect(recorder.acts == [.sendDraft("   ")])
+  }
+
+  /// The input audit (2026-10-17): Send cleared the draft before the terminal
+  /// answered, so a Send declined while input was held — a reseed after a
+  /// resize, a return to the foreground — lost every word. What was typed is
+  /// the user's until the terminal TOOK it.
+  @Test("a Send the terminal declines keeps the draft")
+  func aDeclinedSendKeepsTheDraft() {
+    let model = InputCardModel()
+    var taken = false
+    model.sink = { _ in taken }
+    model.draft = "make test"
+    model.tapSend()
+    #expect(model.draft == "make test")
+    taken = true
+    model.tapSend()
+    #expect(model.draft.isEmpty)
   }
 
   // MARK: - Rail keys
@@ -174,14 +191,15 @@ struct InputActTests {
   }
 
   /// A card with no host is not a broken card — the demo fixture is exactly
-  /// this, and it must not trap.
+  /// this, and it must not trap. With no terminal behind it nothing is TAKEN,
+  /// so the draft stays the user's (2026-10-17: it used to clear regardless).
   @Test("a card with no sink still takes taps")
   func silentWithoutASink() {
     let model = InputCardModel()
     model.draft = "nowhere to go"
     model.tapSend()
     model.tapKey(.escape)
-    #expect(model.draft.isEmpty)
+    #expect(model.draft == "nowhere to go")
   }
 
   // MARK: - The latch in Live mode (IOS-5b)

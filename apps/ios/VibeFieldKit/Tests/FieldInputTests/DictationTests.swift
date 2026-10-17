@@ -140,7 +140,7 @@ struct DictationTests {
   func sendClearsTheSpan() {
     let model = InputCardModel()
     let recorder = Recorder()
-    model.sink = { recorder.acts.append($0) }
+    model.sink = { recorder.acts.append($0); return true }
     model.appendDictation("git status")
     model.tapSend()
     #expect(recorder.acts == [.sendDraft("git status")])
@@ -176,7 +176,7 @@ struct DictationTests {
   func dictationReachesSend() {
     let model = InputCardModel()
     let recorder = Recorder()
-    model.sink = { recorder.acts.append($0) }
+    model.sink = { recorder.acts.append($0); return true }
     model.draft = "cd repo &&"
     model.appendDictation("get status")
     model.appendDictation("git status")

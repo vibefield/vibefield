@@ -14,7 +14,7 @@ struct KeypadTests {
   private func card() -> (InputCardModel, Recorder) {
     let model = InputCardModel()
     let recorder = Recorder()
-    model.sink = { recorder.acts.append($0) }
+    model.sink = { recorder.acts.append($0); return true }
     return (model, recorder)
   }
 

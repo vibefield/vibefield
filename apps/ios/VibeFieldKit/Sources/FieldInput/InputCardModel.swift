@@ -272,8 +272,10 @@ public final class InputCardModel {
   // --- end IOS-5d -----------------------------------------------------------
   /// Installed by the host at attach, cleared when the card closes. Absent is
   /// a card with nowhere to send — it still renders and still accepts taps,
-  /// which is what the demo fixture is.
-  public var sink: ((InputAct) -> Void)?
+  /// which is what the demo fixture is. It answers whether the terminal TOOK
+  /// the act: what the user typed is theirs until it did (the input audit,
+  /// 2026-10-17 — a Send while input was held lost the whole draft).
+  public var sink: ((InputAct) -> Bool)?
 
   /// The armed latch's clock. Held so a second tap, a consumed key, or a mode
   /// flip can cancel it — a stale timer disarming a latch the user re-armed is
@@ -375,9 +377,10 @@ public final class InputCardModel {
   /// what "run it" means with nothing left to say (D-i6 — an absence is an
   /// honest state, not a greyed-out control).
   public func tapSend() {
-    let text = draft
-    draft = ""
-    emit(.sendDraft(text))
+    // The draft clears only when the terminal took it: a Send declined while
+    // input is held (a reseed after a resize) keeps every word, and the
+    // attachment says why.
+    if emit(.sendDraft(draft)) { draft = "" }
   }
 
   /// The `>_` key. The draft persists across the flip in both directions; only
@@ -527,15 +530,18 @@ public final class InputCardModel {
   /// SEND on the review sheet.
   public func confirmPasteReview() {
     guard let pending = pendingPasteReview else { return }
-    pendingPasteReview = nil
     // --- IOS-5d: what SEND means is the pending paste's own, not this
     // method's — a snippet marked "sends Enter" arrives here to RUN.
-    switch pending.commit {
-    case .paste: emit(.paste(pending.text))
-    case .type: emit(.typeText(pending.text))
-    case .run: emit(.sendDraft(pending.text))
-    }
+    let taken =
+      switch pending.commit {
+      case .paste: emit(.paste(pending.text))
+      case .type: emit(.typeText(pending.text))
+      case .run: emit(.sendDraft(pending.text))
+      }
     // --- end IOS-5d
+    // The review stays up when the terminal declined it, so SEND can be
+    // pressed again rather than the paste being dropped.
+    if taken { pendingPasteReview = nil }
   }
 
   /// CANCEL, and every other way the sheet can close. Nothing is sent and the
@@ -873,7 +879,9 @@ public final class InputCardModel {
   }
   // --- end IOS-5b -----------------------------------------------------------
 
-  private func emit(_ act: InputAct) {
-    sink?(act)
+  /// The act to the host, and whether the terminal took it (no host: not taken).
+  @discardableResult
+  private func emit(_ act: InputAct) -> Bool {
+    sink?(act) ?? false
   }
 }

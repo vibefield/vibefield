@@ -38,7 +38,7 @@ struct AcceptPasteTests {
   private func card() -> (InputCardModel, Recorder) {
     let model = InputCardModel()
     let recorder = Recorder()
-    model.sink = { recorder.acts.append($0) }
+    model.sink = { recorder.acts.append($0); return true }
     return (model, recorder)
   }
 
@@ -124,6 +124,18 @@ struct AcceptPasteTests {
     model.confirmPasteReview()
     #expect(recorder.acts == [.paste(long)])
     #expect(model.pendingPasteReview == nil)
+  }
+
+  /// A SEND the terminal declines (input held) keeps the review up, so SEND
+  /// can be pressed again instead of the paste being dropped (2026-10-17).
+  @Test("a SEND the terminal declines stays in review")
+  func aDeclinedSendStaysInReview() {
+    let model = InputCardModel()
+    model.sink = { _ in false }
+    model.toggleMode()
+    model.acceptPaste(long)
+    model.confirmPasteReview()
+    #expect(model.pendingPasteReview?.text == long)
   }
 
   @Test("CANCEL sends nothing and keeps nothing")
