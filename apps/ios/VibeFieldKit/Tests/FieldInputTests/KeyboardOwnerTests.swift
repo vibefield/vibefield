@@ -104,6 +104,36 @@ struct KeyboardOwnerTests {
     #expect(acts.isEmpty)
   }
 
+  /// James, 2026-10-17: a tap on the terminal raised the bare system keyboard
+  /// while a separate chip raised the designed one. The tap is the card's now:
+  /// down → the designed input in the current mode, up → read mode.
+  @Test("a tap on the terminal raises the designed input, in the current mode")
+  func tapRaisesInTheCurrentMode() {
+    let draft = InputCardModel()
+    let start = draft.keyboardRequests
+    draft.tapTerminal()
+    #expect(draft.keyboardOwner == .composer)
+    #expect(draft.keyboardRequests == start + 1)
+    let live = InputCardModel()
+    live.toggleMode()
+    live.dismissKeyboard()
+    live.tapTerminal()
+    #expect(live.keyboardOwner == .terminal)
+  }
+
+  @Test("a tap with the keyboard up puts it down — the keypad too")
+  func tapWithTheKeyboardUpIsReadMode() {
+    let model = InputCardModel()
+    model.requestKeyboard()
+    model.tapTerminal()
+    #expect(model.keyboardOwner == .none)
+    model.requestKeyboard()
+    model.setKeypad(true)
+    model.tapTerminal()
+    #expect(model.keyboardOwner == .none)
+    #expect(model.keypadShown == false)
+  }
+
   @Test("closing the card leaves nothing holding the keyboard")
   func resetClosesIt() {
     let model = InputCardModel()

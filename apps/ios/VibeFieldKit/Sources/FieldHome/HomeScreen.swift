@@ -1827,7 +1827,11 @@ public struct HomeScreen: View {
           UIPasteboard.general.string = text
           noteCopied(bytes: text.utf8.count)
         },
-        onRenderFailure: { renderFailure = $0 }
+        onRenderFailure: { renderFailure = $0 },
+        // The tap raises the card's own input, never a bare keyboard — and
+        // only where this device may type (K-D2): a view-only terminal's tap
+        // raises nothing.
+        onTap: { if inputCardFace == .shown { inputCard.tapTerminal() } }
       )
     }
   }

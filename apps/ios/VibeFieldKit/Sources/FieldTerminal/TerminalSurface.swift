@@ -56,6 +56,11 @@ public struct TerminalSurface: UIViewRepresentable {
   let onSelectionCommit: (GhostteaTerminalSelection) -> Void
   let onSelectAll: () -> Void
   let onRenderFailure: (String) -> Void
+  /// A tap on the terminal, for the host to answer. The view never takes the
+  /// keyboard on a tap of its own (`configure` turns ghosttea's tap focus
+  /// off): the card owns the keyboard, and a second owner was the bare system
+  /// keyboard James found under the designed one (2026-10-17).
+  let onTap: () -> Void
 
   public init(
     scene: TerminalScene,
@@ -78,7 +83,8 @@ public struct TerminalSurface: UIViewRepresentable {
     onClipboardWrite: @escaping (String) -> Void = { _ in },
     onSelectionCommit: @escaping (GhostteaTerminalSelection) -> Void = { _ in },
     onSelectAll: @escaping () -> Void = {},
-    onRenderFailure: @escaping (String) -> Void = { _ in }
+    onRenderFailure: @escaping (String) -> Void = { _ in },
+    onTap: @escaping () -> Void = {}
   ) {
     self.scene = scene
     self.visible = visible
@@ -101,10 +107,11 @@ public struct TerminalSurface: UIViewRepresentable {
     self.onSelectionCommit = onSelectionCommit
     self.onSelectAll = onSelectAll
     self.onRenderFailure = onRenderFailure
+    self.onTap = onTap
   }
 
   @MainActor
-  public final class Coordinator {
+  public final class Coordinator: NSObject {
     var metalView: GhostteaTerminalMetalView?
     /// The reference's own guard, coordinator-held: reapply the configuration
     /// only when its revision changed. Our revisions digest the renderer
@@ -131,6 +138,14 @@ public struct TerminalSurface: UIViewRepresentable {
     /// asks the view for the grid it already has, once (the reason the
     /// setter re-reports at all).
     var appliedControlsGridSize: Bool?
+
+    /// The container's tap, forwarded like every other handler (FS-1). It
+    /// cancels no touches, and UIKit's own exclusivity fails it whenever the
+    /// view's long press or pan claims the touch, so a hold or a scroll is
+    /// never also a tap.
+    @objc func handleTap() {
+      latest?.onTap()
+    }
   }
 
   public func makeCoordinator() -> Coordinator { Coordinator() }
@@ -139,6 +154,10 @@ public struct TerminalSurface: UIViewRepresentable {
     let container = UIView()
     container.backgroundColor = .clear
     context.coordinator.latest = self
+    let tap = UITapGestureRecognizer(
+      target: context.coordinator, action: #selector(Coordinator.handleTap))
+    tap.cancelsTouchesInView = false
+    container.addGestureRecognizer(tap)
     guard let view = scene.hostedView() else {
       // Reported on the next main-actor turn so the honest error state never
       // mutates observable state from inside a SwiftUI update pass.
@@ -237,6 +256,12 @@ public struct TerminalSurface: UIViewRepresentable {
     if view.showsTerminalAccessoryRow != showsKitAccessoryRow {
       view.showsTerminalAccessoryRow = showsKitAccessoryRow
     }
+    // The view's own tap focus is the second keyboard owner: a tap made it
+    // first responder and raised the bare system keyboard under the card's
+    // designed one. The host answers taps (`onTap`). ghosttea's scroll,
+    // long-press and pointer gestures still take focus on their own — its
+    // focus policy is upstream's to fix (one ghosttea release, EL8).
+    if view.focusesInputOnTap { view.focusesInputOnTap = false }
     if view.keyboardAppearance != keyboardAppearance {
       view.keyboardAppearance = keyboardAppearance
     }

@@ -443,6 +443,16 @@ public final class InputCardModel {
     keyboardRequests += 1
   }
 
+  /// A tap on the terminal (James, 2026-10-17: "just popup the designed one
+  /// when click terminal"). The card owns the keyboard, so the terminal never
+  /// raises one of its own (`TerminalSurface` turns ghosttea's tap focus off):
+  /// with the keyboard down a tap asks for it in the CURRENT mode — nothing
+  /// switches modes on its own — and with it up a tap puts it down, the read
+  /// mode the keyboard lab kept ("tap-terminal-to-dismiss").
+  public func tapTerminal() {
+    if keyboardOwner == .none { requestKeyboard() } else { dismissKeyboard() }
+  }
+
   /// Put it down. The swipe on the rail, and the one act that can leave the
   /// card with no responder while a mode is still selected.
   public func dismissKeyboard() {
