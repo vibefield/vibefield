@@ -2,6 +2,7 @@
 // fixtures pin the shapes on both sides (fixtures.test.ts here; the floor seam's in field-native's
 // fixture_parity.rs, the link wire's in the host's own tests); these rows pin the REFUSALS, which a
 // golden cannot show, and the registry facts the host and fieldd both read.
+import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,7 +25,7 @@ import {
   FREEWAY_FRAME,
   PORTS,
 } from "../src/registries";
-import { SessionAttachGrant, TicketEndpointSet } from "../src/terminal-pipeline";
+import { grantSigningInput, SessionAttachGrant, TicketEndpointSet } from "../src/terminal-pipeline";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
 const fixture = (name: string): Record<string, unknown> =>
@@ -141,6 +142,27 @@ describe("FW — a ticket's legs may be streams on the link", () => {
     expect(FreewaySessionAttachGrant.safeParse(asFieldd).success).toBe(false);
     expect(SessionAttachGrant.safeParse(grant).success).toBe(false);
     expect(SessionAttachGrant.safeParse(asFieldd).success).toBe(true);
+  });
+});
+
+describe("FW-D1 — the approval is TPv3's envelope under the floor's freeway key", () => {
+  it("pins its signing input and MAC, which the host verifies at the phone's hello", () => {
+    const v = fixture("freeway-approval-mac.vector.json") as {
+      keyHex: string;
+      approval: { protected: object; claims: object; signingInput: string; mac: string };
+    };
+    const { protected: header, claims, signingInput, mac } = v.approval;
+    expect(grantSigningInput(header as never, claims)).toBe(signingInput);
+    const expected = createHmac("sha256", Buffer.from(v.keyHex, "hex"))
+      .update(signingInput, "utf8")
+      .digest("base64url");
+    expect(expected).toBe(mac);
+    // The header is under the MAC: an approval re-typed as a grant is another MAC.
+    const retyped = { ...header, typ: "SessionAttachGrant" };
+    const other = createHmac("sha256", Buffer.from(v.keyHex, "hex"))
+      .update(grantSigningInput(retyped as never, claims), "utf8")
+      .digest("base64url");
+    expect(other).not.toBe(mac);
   });
 });
 

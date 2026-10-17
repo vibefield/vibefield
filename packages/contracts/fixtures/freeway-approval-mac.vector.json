@@ -1,0 +1,31 @@
+{
+  "note": "FW-D1 approval MAC — mac = base64url(HMAC-SHA256(freewayKey, canonicalJson({protected, claims}))), TPv3's envelope and JCS bytes; fieldd mints (`freeway.approve`), the freeway host verifies at the phone's hello; key = the floor's freeway key (`native.freeway.state.subscribe` freewayKeyHex)",
+  "keyHex": "a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5",
+  "approval": {
+    "protected": {
+      "v": 1,
+      "typ": "FreewayApproval",
+      "iss": "fieldd",
+      "alg": "HS256",
+      "kid": {
+        "floorBootId": "fb-0191b04e-2026",
+        "keyGeneration": 1
+      }
+    },
+    "claims": {
+      "audienceFloorBootId": "fb-0191b04e-2026",
+      "clientId": "freeway:person@example.com#nKMWkU9CYk11CNTRL",
+      "principal": {
+        "kind": "tailnet",
+        "login": "person@example.com",
+        "tailscaleId": "nKMWkU9CYk11CNTRL"
+      },
+      "rights": ["geometry", "input", "read"],
+      "issuedAt": 1787788800000,
+      "expiresAt": 1787790600000,
+      "nonce": "RldBWS1OT05DRS0wMDE"
+    },
+    "signingInput": "{\"claims\":{\"audienceFloorBootId\":\"fb-0191b04e-2026\",\"clientId\":\"freeway:person@example.com#nKMWkU9CYk11CNTRL\",\"expiresAt\":1787790600000,\"issuedAt\":1787788800000,\"nonce\":\"RldBWS1OT05DRS0wMDE\",\"principal\":{\"kind\":\"tailnet\",\"login\":\"person@example.com\",\"tailscaleId\":\"nKMWkU9CYk11CNTRL\"},\"rights\":[\"geometry\",\"input\",\"read\"]},\"protected\":{\"alg\":\"HS256\",\"iss\":\"fieldd\",\"kid\":{\"floorBootId\":\"fb-0191b04e-2026\",\"keyGeneration\":1},\"typ\":\"FreewayApproval\",\"v\":1}}",
+    "mac": "T7no75_YEXC1Xy1lx4MCggR9jERemL_aol5O8fThlj4"
+  }
+}
