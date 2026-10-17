@@ -937,7 +937,10 @@ import Testing
 
   /// Losing ONE leg invalidates every activation on the SET — the other leg's
   /// activations are no longer two-legged, so they are not activations — and the
-  /// client asks for a fresh ticket rather than re-dialing.
+  /// client asks for a fresh ticket rather than re-dialing. The SESSIONS are not
+  /// ended by it: a lost leg is the connection's lifetime, and each session waits
+  /// for the next legs' activation (the audit's B3, 2026-10-17: a blip read "this
+  /// session ended — leg-dead" with no retry).
   ///
   /// There is no socket-level retry BY DESIGN: a transport grant's
   /// `(nonce, channel)` is consumed at first use and held until the grant
@@ -955,10 +958,40 @@ import Testing
     await live.frames.hangUp(code: nil)
     try await settle("reconnecting") { client.state == .reconnecting }
     #expect(client.needsTicket)
-    #expect(client.sessions[session]?.control == .ended(reason: "leg-dead"))
+    #expect(client.sessions[session]?.control == .attaching)
+    #expect(client.sessions[session]?.lastRefusal != nil)
     try await settle("the sink is told") { await sink.endings.contains("\(live.activation):leg-dead") }
     // Exactly ONE dial per leg: nothing retried the socket.
     #expect(transport.dials.count == 2)
+    client.close()
+  }
+
+  /// B3 — the cell's own `revoked{leg-dead}` is the same loss seen from its side
+  /// (`leg_closed`): the activation is over, the session is not, and the legs are
+  /// the set's to replace when this side sees the close. Re-attaching on the
+  /// revoke alone would race that replacement on legs that are going.
+  @Test func theCellsLegDeadRevokeEndsTheActivationNotTheSession() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(
+        session: session, activation: live.activation, sequence: 1, presentation: "revoked",
+        input: "revoked", reason: "leg-dead"))
+    try await settle("the activation ends") {
+      await sink.endings.contains("\(live.activation):leg-dead")
+    }
+    #expect(client.sessions[session]?.control == .attaching)
+    #expect(client.sessions[session]?.lastRefusal == "leg-dead")
+    #expect(transport.dials.count == 2)
+
+    await live.frames.hangUp(code: nil)
+    try await settle("reconnecting") { client.state == .reconnecting }
+    #expect(client.sessions[session]?.control == .attaching)
     client.close()
   }
 
@@ -1307,8 +1340,10 @@ import Testing
     client.close()
   }
 
-  /// …and only a lapse re-attaches: a revoke for any other reason still ends
-  /// the session, in the cell's own words.
+  /// …and only a lapse re-attaches. A lost leg waits for the set's next legs
+  /// (`theCellsLegDeadRevokeEndsTheActivationNotTheSession`); a revoke for any
+  /// other reason — the cell's `replaced`, or one this client does not know —
+  /// still ends the session here, in the cell's own words.
   @Test func aRevokeForAnyOtherReasonStillEndsTheSession() async throws {
     let transport = ScriptedTransport()
     let sink = RoutedFrameRecorder()

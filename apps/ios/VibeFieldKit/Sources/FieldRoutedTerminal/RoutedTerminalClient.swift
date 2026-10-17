@@ -1169,6 +1169,17 @@ public final class RoutedTerminalClient {
           reattach(sessionId: status.sessionId)
           return
         }
+        if Self.lostLeg(reason) {
+          // B3 — the cell saw a leg of this activation die, and closed it: the
+          // set re-dials when this side sees the close (`legFailed`), and the
+          // new legs attach every session they carry. The session is the same
+          // one, and re-attaching here, on the legs being replaced, would only
+          // race that.
+          session.lastRefusal = reason
+          sessions[status.sessionId] = session
+          noteAttachment()
+          return
+        }
         session.control = .ended(reason: reason)
         session.frames = .failed(reason)
         sessions[status.sessionId] = session
@@ -1764,6 +1775,12 @@ public final class RoutedTerminalClient {
     reason == "right-revoked" || reason == "attach-deadline"
   }
 
+  /// A revoke that ended the activation with its LEG (`leg-dead` — the cell's
+  /// `leg_closed`): the connection's lifetime, not the session's.
+  static func lostLeg(_ reason: String) -> Bool {
+    reason == "leg-dead"
+  }
+
   /// Re-attach one session with a FRESH ticket, keeping the legs when they can
   /// carry it.
   ///
@@ -1840,7 +1857,12 @@ public final class RoutedTerminalClient {
     renewals[session.sessionId]?.cancel()
     renewals[session.sessionId] = nil
     session.transfer = nil
-    if case .refused = session.control {} else { session.control = .ended(reason: reason) }
+    // The ACTIVATION is over, and the session is not, by this alone: what it is
+    // next is the caller's word — the cell's `removed` ends it, a lapse
+    // re-attaches it, a lost leg leaves it waiting for the set's next legs.
+    // Reading every end as the session's turned a leg blip into "this session
+    // ended — leg-dead" with no retry (the audit's B3, 2026-10-17).
+    if session.control == .attached { session.control = .attaching }
     session.frames = .failed(reason)
     let sessionId = session.sessionId
     let activationId = session.activationId

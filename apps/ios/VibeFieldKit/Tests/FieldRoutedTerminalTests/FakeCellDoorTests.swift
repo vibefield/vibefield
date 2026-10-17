@@ -174,11 +174,13 @@ import Testing
     try await settle("credit on epoch 1") { await door.totalCreditReturned() == Int64(unit.count) }
 
     // The frames leg goes. Every activation on the SET ends — an activation is
-    // two legs, so either one going ends it.
+    // two legs, so either one going ends it…
     await door.hangUp(.frames)
     try await settle("reconnecting") { client.state == .reconnecting }
     #expect(client.needsTicket)
-    #expect(client.sessions[session]?.control == .ended(reason: "leg-dead"))
+    // …and the session waits for the next legs' activation: the leg's end is
+    // not the session's (B3).
+    #expect(client.sessions[session]?.control == .attaching)
     try await settle("the sink is told") { await sink.endings.contains("\(first):leg-dead") }
 
     // A fresh ticket, and the cell answers with a higher leg generation.
