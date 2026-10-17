@@ -48,8 +48,8 @@ public struct TerminalSurface: UIViewRepresentable {
   let accessibilityConnectionState: String
   /// The terminal's SETTLED grid, for the seat (`SettledGrid`).
   let onGridSize: (GhostteaTerminalGridSize) -> Void
-  /// A grid measured and held — the card leaving — with the reason, for the
-  /// host to say; never the seat's.
+  /// A grid measured and held — the keyboard moving, the card leaving — with
+  /// the reason, for the host to say; never the seat's.
   let onGridHeld: (GhostteaTerminalGridSize, String) -> Void
   let onNeedsFullRefresh: () -> Void
   let onHardwareInput: (GhostteaHardwareKeyEvent) -> Bool
@@ -155,6 +155,9 @@ public struct TerminalSurface: UIViewRepresentable {
 
     /// What the seat has been told, and what waits (2026-10-17).
     var settledGrid = SettledGrid()
+    /// UIKit's keyboard will- and did-notifications, observed while this
+    /// surface hosts the view.
+    var keyboardObservers: [NSObjectProtocol] = []
     /// A dismissal of this card that has begun, watched for being called off.
     var watchingDismissal = false
 
@@ -172,6 +175,31 @@ public struct TerminalSurface: UIViewRepresentable {
       case .held(let grid, let because): latest.onGridHeld(grid, because)
       case .unchanged: break
       }
+    }
+
+    func observeKeyboard() {
+      guard keyboardObservers.isEmpty else { return }
+      let center = NotificationCenter.default
+      keyboardObservers = [
+        center.addObserver(
+          forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+          MainActor.assumeIsolated { self?.settledGrid.keyboardWillMove() }
+        },
+        center.addObserver(
+          forName: UIResponder.keyboardDidChangeFrameNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+          MainActor.assumeIsolated {
+            guard let self else { return }
+            self.report(self.settledGrid.keyboardDidMove())
+          }
+        },
+      ]
+    }
+
+    func stopObservingKeyboard() {
+      for observer in keyboardObservers { NotificationCenter.default.removeObserver(observer) }
+      keyboardObservers = []
     }
 
     /// A dismissal the person calls off leaves the card at rest again, and its
@@ -216,6 +244,7 @@ public struct TerminalSurface: UIViewRepresentable {
     view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     view.resumeGPU()
     installHandlers(view, coordinator: context.coordinator)
+    context.coordinator.observeKeyboard()
     configure(view, coordinator: context.coordinator)
     view.applyConfiguration(configuration)
     context.coordinator.appliedConfigurationRevision = configuration.revision
@@ -238,6 +267,7 @@ public struct TerminalSurface: UIViewRepresentable {
 
   public static func dismantleUIView(_ container: UIView, coordinator: Coordinator) {
     // The scene keeps the view and its picture; only the GPU is let go.
+    coordinator.stopObservingKeyboard()
     coordinator.metalView?.suspendGPU()
     coordinator.metalView?.removeFromSuperview()
     coordinator.metalView = nil

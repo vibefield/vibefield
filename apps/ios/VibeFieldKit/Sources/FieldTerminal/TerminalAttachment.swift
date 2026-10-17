@@ -731,8 +731,8 @@ public final class TerminalAttachment {
     client.resizeGeometry(cols: Int(cols), rows: Int(rows), for: sessionID)
   }
 
-  /// A grid the surface measured and held — the card leaving (`SettledGrid`):
-  /// said, never sent to the seat.
+  /// A grid the surface measured and held — the keyboard moving, or the card
+  /// leaving (`SettledGrid`): said, never sent to the seat.
   public func noteHeldGrid(_ held: GhostteaTerminalGridSize, because reason: String) {
     log("grid \(held.columns)×\(held.rows) held — \(reason) session=\(sessionID ?? "-")")
   }
