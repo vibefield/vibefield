@@ -457,6 +457,23 @@ public enum RoutedSessionEvent: Sendable, Equatable {
   }
 }
 
+/// The facts of an `exited` event, kept on the session it names
+/// (`RoutedSessionState.exit`): the code or the signal, whether the end was
+/// asked for, and the engine's own outcome word. Nothing here is inferred.
+public struct RoutedSessionExit: Sendable, Equatable {
+  public let code: Int64?
+  public let signal: String?
+  public let requestedTermination: String?
+  public let outcome: String
+
+  public init(code: Int64?, signal: String?, requestedTermination: String?, outcome: String) {
+    self.code = code
+    self.signal = signal
+    self.requestedTermination = requestedTermination
+    self.outcome = outcome
+  }
+}
+
 /// DS-4b — who holds a session's geometry seat, as the CELL names it: the
 /// claimant (`clientId` + a non-reused `viewId`) and the `holderGeneration`
 /// the cell minted at the claim or transfer that seated it (TPv3 §6). A view

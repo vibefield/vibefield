@@ -61,6 +61,11 @@ public struct RoutedSessionState: Sendable {
   /// The cell's own words for the last refusal, kept after the state moved on so
   /// a face can say WHY rather than showing an empty pane.
   public internal(set) var lastRefusal: String?
+  /// The cell said this session's run EXITED, with its facts. The run is over,
+  /// so input is held from here; the activation is not ended by it — frames
+  /// already in flight still land, so the last screen is the run's own — and
+  /// ends when the cell removes the session or a leg goes.
+  public internal(set) var exit: RoutedSessionExit?
 
   /// BOTH legs are attached for this activation.
   ///
@@ -129,6 +134,9 @@ public struct RoutedSessionState: Sendable {
   /// The terms of `InputAllowed(a)`, stated once, as `presentationHeldBecause`
   /// states its own.
   public var inputHeldBecause: String? {
+    // First: a run that exited takes no keys whatever the legs say, and a key
+    // sent to it went nowhere with no word (the audit's P8, 2026-10-17).
+    if let exit { return "the run exited — \(exit.outcome)" }
     if let held = presentationHeldBecause { return held }
     guard let status else { return "the cell has said nothing yet" }
     guard case .allowed = status.input else { return "the cell holds input: \(status.input)" }
@@ -291,9 +299,6 @@ public final class RoutedTerminalClient {
   /// True while the client is waiting for a ticket it cannot mint.
   public private(set) var needsTicket = false
   public private(set) var negotiatedCapabilities: [String] = []
-  /// Cell → client lifecycle events, behind the negotiated capability. The
-  /// caller drains them; the client never invents an exit.
-  public private(set) var sessionEvents: [RoutedSessionEvent] = []
 
   private let transport: any RoutedLegTransport
   private let sink: any RoutedFrameSink
@@ -829,12 +834,6 @@ public final class RoutedTerminalClient {
       ])
   }
 
-  public func drainSessionEvents() -> [RoutedSessionEvent] {
-    let drained = sessionEvents
-    sessionEvents = []
-    return drained
-  }
-
   // MARK: Dialing
 
   private func dial(_ ticket: RoutedTerminalTicket) {
@@ -983,6 +982,9 @@ public final class RoutedTerminalClient {
     session.inputRightDeadlineMs = Self.inputRightDeadline(for: grant)
     session.resumeToken = previous?.resumeToken
     session.appliedContent = previous?.appliedContent
+    // The run's exit is the SESSION's, not the activation's, and the cell says
+    // it once: a fresh activation of an exited run is still one.
+    session.exit = previous?.exit
     sessions[sessionId] = session
 
     var controlBody: [String: JSONValue] = [
@@ -1224,13 +1226,34 @@ public final class RoutedTerminalClient {
       if let ask, ask.intent == .take, !ask.retried { retryTake(ask, after: refused) }
 
     case .sessionEvent:
+      // Each event lands on the session it names, as the cell's own fact, never
+      // invented. They once went to a queue for "the caller" to drain, and no
+      // caller ever did: a run that exited read live and took keys into nothing
+      // (the audit's P8, 2026-10-17).
       guard let event = try? RoutedSessionEvent(json: body) else { return }
-      sessionEvents.append(event)
-      if case .removed(let sessionId) = event, var session = sessions[sessionId] {
+      switch event {
+      case .exited(let sessionId, let code, let signal, let requested, let outcome):
+        guard var session = sessions[sessionId] else { return }
+        session.exit = RoutedSessionExit(
+          code: code, signal: signal, requestedTermination: requested, outcome: outcome)
+        sessions[sessionId] = session
+        options.log(
+          "session exited — \(outcome)" + (code.map { " code \($0)" } ?? "")
+            + (signal.map { " signal \($0)" } ?? "") + " session=\(sessionId)")
+        noteAttachment()
+      case .removed(let sessionId):
+        guard var session = sessions[sessionId] else { return }
         session.control = .ended(reason: "removed")
         endActivation(&session, reason: "removed")
         sessions[sessionId] = session
         noteAttachment()
+      case .resync:
+        // The cell's deltas dropped; this client holds no inventory of its own
+        // to reconcile (the field's roster is the phone's), so it is said.
+        options.log("session events: the cell's own deltas dropped (resync)")
+      case .unknown(let kind):
+        // Tolerant reader: additive kinds behind the same capability.
+        options.log("session events: unknown kind \(kind) dropped")
       }
 
     default:

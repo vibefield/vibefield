@@ -1105,15 +1105,27 @@ import Testing
   // MARK: Lifecycle events
 
   /// `SessionEvent` rides the control leg behind the negotiated capability, and
-  /// the client SURFACES it rather than acting on an exit it cannot corroborate.
-  /// `removed` unregisters; `resync` is the cell's honest "my deltas dropped".
-  @Test func lifecycleEventsAreSurfacedAndNeverInvented() async throws {
+  /// each event lands on the session it names, as the cell's own fact. They
+  /// once went to a queue for "the caller", and no caller drained it: a run
+  /// that had exited read live and took keys into nothing (the audit's P8,
+  /// 2026-10-17). `exited` holds input with its facts and leaves the
+  /// activation up, so the run's last frames still land; `removed` ends it;
+  /// `resync` and an unknown kind are said, and never close a leg.
+  @Test func lifecycleEventsLandOnTheirSessionAndAreNeverInvented() async throws {
     let transport = ScriptedTransport()
     let sink = RoutedFrameRecorder()
     let client = client(transport, sink: sink)
     client.open(try ticket())
     let live = try await attached(transport: transport, sink: sink, client: client)
     #expect(client.negotiatedCapabilities.contains("session-events"))
+    let seed = try Script.frame(
+      session: session, activation: live.activation, sequence: 1, creditEpoch: 1, base: nil,
+      result: Script.stamp(100), payload: Data("TRF1-full".utf8))
+    await live.frames.deliver(.binary(seed))
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(session: session, activation: live.activation, sequence: 1))
+    try await settle("typing is allowed") { client.sessions[session]?.inputAllowed == true }
 
     try await live.control.deliver(
       .sessionEvent,
@@ -1123,21 +1135,35 @@ import Testing
           "exitSignal": .null, "requestedTermination": .null, "exitOutcome": .string("completed"),
         ])
       ])
+    try await settle("the exit lands") { client.sessions[session]?.exit != nil }
+    #expect(
+      client.sessions[session]?.exit
+        == RoutedSessionExit(code: 0, signal: nil, requestedTermination: nil, outcome: "completed"))
+    #expect(client.sessions[session]?.inputHeldBecause == "the run exited — completed")
+    // The exit is not the activation's end: the legs stay, and a frame the run
+    // wrote before it died still lands.
+    #expect(client.sessions[session]?.control == .attached)
+    let last = try Script.frame(
+      session: session, activation: live.activation, sequence: 2, creditEpoch: 1,
+      base: Script.stamp(100), result: Script.stamp(101), payload: Data("TRF1-delta".utf8))
+    await live.frames.deliver(.binary(last))
+    try await settle("the run's last frame") { await sink.deltaFrames == 2 }
+
     try await live.control.deliver(
       .sessionEvent, ["event": .object(["kind": .string("resync")])])
-    try await live.control.deliver(
-      .sessionEvent, ["event": .object(["kind": .string("someFutureKind")])])
-    try await settle("three events") { client.sessionEvents.count == 3 }
-
-    let drained = client.drainSessionEvents()
-    #expect(drained[0] == .exited(
-      sessionId: session, exitCode: 0, exitSignal: nil, requestedTermination: nil,
-      exitOutcome: "completed"))
-    #expect(drained[1] == .resync)
     // An unknown kind is drop-and-LOG at the receiver — a tolerant reader, never
     // a leg close, because future variants are additive behind this capability.
-    #expect(drained[2] == .unknown(kind: "someFutureKind"))
-    #expect(client.sessionEvents.isEmpty)
+    try await live.control.deliver(
+      .sessionEvent, ["event": .object(["kind": .string("someFutureKind")])])
+    try await live.control.deliver(
+      .sessionEvent,
+      ["event": .object(["kind": .string("removed"), "sessionId": .string(session)])])
+    try await settle("the removal ends it") {
+      client.sessions[session]?.control == .ended(reason: "removed")
+    }
+    #expect(client.sessions[session]?.exit?.outcome == "completed")
+    #expect(await live.control.isClosed == false)
+    #expect(await live.frames.isClosed == false)
     client.close()
   }
 

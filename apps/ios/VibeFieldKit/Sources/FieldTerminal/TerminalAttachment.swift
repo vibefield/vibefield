@@ -280,7 +280,7 @@ public final class TerminalAttachment {
     guard let client, let sessionID else { return .idle }
     return Self.phase(
       for: client.state, session: client.sessions[sessionID],
-      presented: client.hasPresented(sessionID), deadline: deadline)
+      presented: client.hasPresented(sessionID), deadline: deadline, device: deviceName)
   }
 
   /// Whether the CELL accepted this client's right to type. The grant asks; the
@@ -439,8 +439,16 @@ public final class TerminalAttachment {
         + "session=\(sessionID ?? "-")")
   }
 
-  nonisolated static func runEndedWords(device: String?) -> String {
-    "its run exited on \(device ?? "that desktop")"
+  /// A run that exited, in the desktop pane face's terms (`describePane`): a
+  /// signal or a nonzero code is said, a clean exit is only "exited", and an
+  /// exit whose code never came is "ended" — never an invented one. The field's
+  /// word (fix8) carries no facts and reads as the clean exit it reports.
+  nonisolated static func runEndedWords(device: String?, exit: RoutedSessionExit? = nil) -> String {
+    let who = device ?? "that desktop"
+    guard let exit else { return "its run exited on \(who)" }
+    if let signal = exit.signal { return "its run on \(who) was ended by \(signal)" }
+    guard let code = exit.code else { return "its run ended on \(who)" }
+    return code == 0 ? "its run exited on \(who)" : "its run exited on \(who) with code \(code)"
   }
 
   /// The first mint, bounded by the step deadline. The door's own call timeout
@@ -1092,11 +1100,14 @@ public final class TerminalAttachment {
 
   /// The client's state → the card's phase. A session that ENDED outranks the
   /// set's state: the connection may be perfectly healthy and the thing the
-  /// card is about gone.
+  /// card is about gone. A run the cell said EXITED is ended with its facts
+  /// first — before its removal ends the activation too, and after it, so the
+  /// card keeps the run's words rather than the removal's.
   nonisolated static func phase(
     for state: RoutedTerminalClient.State, session: RoutedSessionState?, presented: Bool = false,
-    deadline: Duration = stepDeadline
+    deadline: Duration = stepDeadline, device: String? = nil
   ) -> TerminalPhase {
+    if let exit = session?.exit { return .ended(runEndedWords(device: device, exit: exit)) }
     if let session, case .ended(let reason) = session.control { return .ended(reason) }
     switch state {
     case .off: return .idle

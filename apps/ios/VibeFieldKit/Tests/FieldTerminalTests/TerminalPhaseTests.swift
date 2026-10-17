@@ -57,6 +57,39 @@ import Testing
         == .suspended("this screen stopped updating — the desktop said overload"))
   }
 
+  @Test func aRunTheCellSaidExitedIsEndedWithItsFacts() {
+    // The audit's P8 (2026-10-17): the cell's `exited` went to a queue no one
+    // drained, so a run that had exited read live and took keys into nothing.
+    // Its facts end the card while the legs are still up — and after the
+    // removal ends the activation, the run's words stay rather than "removed".
+    var session = RoutedSessionState(sessionId: "s", activationId: "a")
+    session.control = .attached
+    session.exit = RoutedSessionExit(
+      code: 1, signal: nil, requestedTermination: nil, outcome: "completed")
+    #expect(
+      TerminalAttachment.phase(for: .attached, session: session, presented: true, device: "studio")
+        == .ended("its run exited on studio with code 1"))
+    #expect(session.inputHeldBecause == "the run exited — completed")
+    session.control = .ended(reason: "removed")
+    #expect(
+      TerminalAttachment.phase(for: .attached, session: session, presented: true, device: "studio")
+        == .ended("its run exited on studio with code 1"))
+
+    let words = { (exit: RoutedSessionExit) in
+      TerminalAttachment.runEndedWords(device: "studio", exit: exit)
+    }
+    #expect(
+      words(.init(code: 0, signal: nil, requestedTermination: nil, outcome: "completed"))
+        == "its run exited on studio")
+    #expect(
+      words(.init(code: nil, signal: "SIGTERM", requestedTermination: "kill", outcome: "killed"))
+        == "its run on studio was ended by SIGTERM")
+    // The floor knows it ended and not how: said so, never an invented code.
+    #expect(
+      words(.init(code: nil, signal: nil, requestedTermination: nil, outcome: "unknown"))
+        == "its run ended on studio")
+  }
+
   @Test func reconnectingAndStaleRouteReadAsConnecting() {
     // Both are "somebody is actively getting this back", and the BANNER is
     // where the difference is said — a phase that spelled them apart would make
