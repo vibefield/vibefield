@@ -10,6 +10,8 @@ pub mod config;
 #[allow(clippy::derivable_impls)]
 pub mod contracts;
 pub mod endpoints;
+/// FW — the freeway host's library (`field-freeway-host`): the link's frame codec first.
+pub mod freeway;
 pub mod local_ipc;
 pub mod logging;
 pub mod manager;

@@ -7,8 +7,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
-  FREEWAY_FRAGMENT_BIT,
-  FREEWAY_FRAME,
   FreewayDeclareParams,
   FreewayLinkMessage,
   FreewayOpen,
@@ -19,7 +17,13 @@ import {
   FreewayWelcome,
 } from "../src/freeway";
 import { METHODS } from "../src/methods";
-import { FREEWAY, FREEWAY_CODES, PORTS } from "../src/registries";
+import {
+  FREEWAY,
+  FREEWAY_CODES,
+  FREEWAY_FRAGMENT_BIT,
+  FREEWAY_FRAME,
+  PORTS,
+} from "../src/registries";
 import { SessionAttachGrant, TicketEndpointSet } from "../src/terminal-pipeline";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");

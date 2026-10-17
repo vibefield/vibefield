@@ -177,6 +177,20 @@ pub mod freeway_codes {
     pub const DOOR_DOWN: u16 = 4504;
 }
 
+/// FW — the link's frame types (`u8`) and the FRAGMENT bit a TEXT or BINARY frame may carry.
+/// See registries.ts.
+pub mod freeway_frame {
+    pub const LINK: u8 = 0;
+    pub const OPEN: u8 = 1;
+    pub const OPENED: u8 = 2;
+    pub const TEXT: u8 = 3;
+    pub const BINARY: u8 = 4;
+    pub const CLOSE: u8 = 5;
+    pub const WINDOW: u8 = 6;
+    pub const OPEN_REFUSED: u8 = 7;
+    pub const FRAGMENT_BIT: u8 = 128;
+}
+
 /// File names beneath a daemon's own data directory. The plane that OWNS the
 /// file joins the name to its data dir; readers ask that plane for the path.
 pub mod files {

@@ -1,0 +1,132 @@
+{
+  "description": "FW (thinking-freeway.md v0.3 §5.1, 2026-10-17): the freeway link's frame bytes — one binary WebSocket message = u8 frameType (FREEWAY_FRAME, with FREEWAY_FRAGMENT_BIT on TEXT/BINARY) · LEB128 streamId · payload. `frames` decode to their fields and encode back byte for byte; `refused` are framing errors every reader closes the link on (4400 PROTOCOL). Pinned by test/freeway-frames.test.ts here, field-native's freeway::frame tests, and the kit's freeway transport.",
+  "frames": [
+    {
+      "name": "a Ping on the link",
+      "frameType": "LINK",
+      "fragment": false,
+      "streamId": 0,
+      "payloadHex": "7b2274797065223a2250696e67222c22736571223a34312c2273656e7441744d73223a313738373738383831323030307d",
+      "frameHex": "00007b2274797065223a2250696e67222c22736571223a34312c2273656e7441744d73223a313738373738383831323030307d"
+    },
+    {
+      "name": "a terminal leg opened by the dialer",
+      "frameType": "OPEN",
+      "fragment": false,
+      "streamId": 1,
+      "payloadHex": "7b226b696e64223a227465726d696e616c2d6c6567222c2263656c6c426f6f744964223a2263622d37663361396331652d32303236222c226368616e6e656c223a226672616d6573227d",
+      "frameHex": "01017b226b696e64223a227465726d696e616c2d6c6567222c2263656c6c426f6f744964223a2263622d37663361396331652d32303236222c226368616e6e656c223a226672616d6573227d"
+    },
+    {
+      "name": "the open answered",
+      "frameType": "OPENED",
+      "fragment": false,
+      "streamId": 1,
+      "payloadHex": "7b7d",
+      "frameHex": "02017b7d"
+    },
+    {
+      "name": "one text message on a two-byte stream id",
+      "frameType": "TEXT",
+      "fragment": false,
+      "streamId": 300,
+      "payloadHex": "68656c6c6f",
+      "frameHex": "03ac0268656c6c6f"
+    },
+    {
+      "name": "a binary message's first fragment",
+      "frameType": "BINARY",
+      "fragment": true,
+      "streamId": 3,
+      "payloadHex": "000102",
+      "frameHex": "8403000102"
+    },
+    {
+      "name": "…and its last",
+      "frameType": "BINARY",
+      "fragment": false,
+      "streamId": 3,
+      "payloadHex": "0304",
+      "frameHex": "04030304"
+    },
+    {
+      "name": "a stream closed with its leg's own code",
+      "frameType": "CLOSE",
+      "fragment": false,
+      "streamId": 1,
+      "payloadHex": "7b22636f6465223a313030307d",
+      "frameHex": "05017b22636f6465223a313030307d"
+    },
+    {
+      "name": "a window of 1 MiB on an acceptor's stream",
+      "frameType": "WINDOW",
+      "fragment": false,
+      "streamId": 2,
+      "payloadHex": "808040",
+      "frameHex": "0602808040"
+    },
+    {
+      "name": "an open the host refused",
+      "frameType": "OPEN_REFUSED",
+      "fragment": false,
+      "streamId": 5,
+      "payloadHex": "7b22636f6465223a343530342c227374617465223a227468652070726f6475637420646f6f722069732072657374617274696e67222c22726574727961626c65223a747275657d",
+      "frameHex": "07057b22636f6465223a343530342c227374617465223a227468652070726f6475637420646f6f722069732072657374617274696e67222c22726574727961626c65223a747275657d"
+    },
+    {
+      "name": "a three-byte stream id",
+      "frameType": "TEXT",
+      "fragment": false,
+      "streamId": 16384,
+      "payloadHex": "",
+      "frameHex": "03808001"
+    }
+  ],
+  "refused": [
+    {
+      "name": "an empty message",
+      "frameHex": "",
+      "why": "no frame type"
+    },
+    {
+      "name": "a frame type v1 does not have",
+      "frameHex": "0801",
+      "why": "unknown frame type 0x08"
+    },
+    {
+      "name": "FRAGMENT on a frame other than TEXT or BINARY",
+      "frameHex": "81017b7d",
+      "why": "fragment bit on OPEN"
+    },
+    {
+      "name": "LINK on a stream other than 0",
+      "frameHex": "00017b7d",
+      "why": "LINK is stream 0's alone"
+    },
+    {
+      "name": "a stream's frame on stream 0",
+      "frameHex": "03006869",
+      "why": "stream 0 carries LINK alone"
+    },
+    {
+      "name": "a stream id cut short",
+      "frameHex": "0380",
+      "why": "truncated LEB128"
+    },
+    {
+      "name": "no stream id at all",
+      "frameHex": "03",
+      "why": "truncated LEB128"
+    },
+    {
+      "name": "a stream id past u64",
+      "frameHex": "03ffffffffffffffffff02",
+      "why": "LEB128 overflows u64"
+    },
+    {
+      "name": "a window followed by stray bytes",
+      "frameHex": "060280804000",
+      "why": "WINDOW's payload is one LEB128"
+    }
+  ]
+}

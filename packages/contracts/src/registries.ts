@@ -1152,6 +1152,32 @@ export const FREEWAY = {
   JOIN_BACKLOG_ROWS: 256,
 } as const;
 
+/** The freeway link's frame types (`u8`; v0.3 §5.1), the payload each carries, and on which
+ * streams. A registry, not freeway.ts's own, so the host's codec reads them by generation
+ * (NF-D9) — `registries.rs` `freeway_frame`. */
+export const FREEWAY_FRAME = {
+  /** stream 0 only: a `FreewayLinkMessage` (JSON) */
+  LINK: 0x00,
+  /** either way, on a new stream id: a `FreewayOpen` (JSON) */
+  OPEN: 0x01,
+  /** the reply: a `FreewayOpened` (JSON) — the stream is up */
+  OPENED: 0x02,
+  /** either way: one UTF-8 message (or fragment) of the stream's protocol */
+  TEXT: 0x03,
+  /** either way: one binary message (or fragment) of the stream's protocol */
+  BINARY: 0x04,
+  /** either way: a `FreewayClose` (JSON) — the stream is over */
+  CLOSE: 0x05,
+  /** either way: a LEB128 count of bytes granted (every kind but a terminal leg) */
+  WINDOW: 0x06,
+  /** the reply: a `FreewayOpenRefused` (JSON) — the HOST refused the open */
+  OPEN_REFUSED: 0x07,
+} as const;
+
+/** Set on a TEXT or BINARY frame type: more fragments of this message follow. The receiver
+ * reassembles per stream, up to the kind's own message bound. */
+export const FREEWAY_FRAGMENT_BIT = 0x80;
+
 /** `FREEWAY_CODES` (v0.3 §5.1), on `TERMINAL_PIPELINE_CLOSE_CODES`' precedent: the link's own
  * codes. A WebSocket close of the whole link, or the `code` of an `OPEN_REFUSED` (the host
  * refusing one stream). A stream's CLOSE never uses these: it carries its leg's own close code

@@ -21,7 +21,8 @@ import { RestartScheduled } from "./update-policy";
 // pass through neither Node (EL2) nor the floor (TC-L1c, DS-L5).
 //
 // One binary WebSocket message is one FRAME: `u8 frameType` · LEB128 `streamId` · payload
-// (`FREEWAY_FRAME`). Stream 0 is the LINK: its JSON payloads below are `type`-tagged. Other streams
+// (`FREEWAY_FRAME`, a registry so the host's codec reads it by generation; `freeway-frames.vector`
+// pins the bytes). Stream 0 is the LINK: its JSON payloads below are `type`-tagged. Other streams
 // open with an OPEN whose JSON payload is `kind`-tagged — the dialer opens odd ids, the acceptor
 // even ones — and TEXT/BINARY may follow an OPEN at once (optimistic open). A `terminal-leg` stream
 // then carries the routed protocol (TPv3) end to end: TEXT and BINARY verbatim, the leg's close
@@ -30,30 +31,6 @@ import { RestartScheduled } from "./update-policy";
 // This is the v1 wire, written once (v0.3 §5.1): the desktop pair (FD1) adds kinds and the
 // desktop paths, never a frame. TS + the host's Rust + the kit's Swift, pinned by the `freeway-*`
 // fixtures on every side (EL9). Tolerant reader: every object `.passthrough()`.
-
-/** The frame types (`u8`), the payload each carries, and on which streams. */
-export const FREEWAY_FRAME = {
-  /** stream 0 only: a `FreewayLinkMessage` (JSON) */
-  LINK: 0x00,
-  /** either way, on a new stream id: a `FreewayOpen` (JSON) */
-  OPEN: 0x01,
-  /** the reply: a `FreewayOpened` (JSON) — the stream is up */
-  OPENED: 0x02,
-  /** either way: one UTF-8 message (or fragment) of the stream's protocol */
-  TEXT: 0x03,
-  /** either way: one binary message (or fragment) of the stream's protocol */
-  BINARY: 0x04,
-  /** either way: a `FreewayClose` (JSON) — the stream is over */
-  CLOSE: 0x05,
-  /** either way: a LEB128 count of bytes granted (every kind but a terminal leg) */
-  WINDOW: 0x06,
-  /** the reply: a `FreewayOpenRefused` (JSON) — the HOST refused the open */
-  OPEN_REFUSED: 0x07,
-} as const;
-
-/** Set on a TEXT or BINARY frame type: more fragments of this message follow. The receiver
- * reassembles per stream, up to the kind's own message bound. */
-export const FREEWAY_FRAGMENT_BIT = 0x80;
 
 /** The traffic classes (FW-L7). `urgent` drains strictly first; the others by deficit round-robin,
  * 8:2:1 by bytes. A product stream's class is its METHOD's; a terminal leg's control is `urgent`,
