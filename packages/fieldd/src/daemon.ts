@@ -206,7 +206,13 @@ import { EgressRoutes, FloorEgress, resolveEgressPath } from "./egress";
 import { EgressCellRewriter } from "./egress-cell-rewriter";
 import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
-import { FREEWAY_SERVE_ID, FreewayFloor, FreewayServeDriver, freewayDeclaration } from "./freeway";
+import {
+  FREEWAY_SERVE_ID,
+  FreewayApprover,
+  FreewayFloor,
+  FreewayServeDriver,
+  freewayDeclaration,
+} from "./freeway";
 import { clipActivity, createActivityReader, monitorHistoryPort } from "./index-activity";
 import { IndexCatalog } from "./index-catalog";
 import { IndexMesh } from "./index-mesh";
@@ -5767,6 +5773,24 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       },
       serves: () => mesh.serves(),
       logger: logger.child({ component: "freeway.serve" }),
+    });
+    // FW-D1 — the phone's approval: fieldd's one mint for a link (the host mints every grant after
+    // it), audited like a ticket. The roster decides who is a phone; the floor's state holds the key.
+    const freewayApprover = new FreewayApprover({
+      state: () => freewayFloor.state(),
+      roster: devices,
+    });
+    api.register("freeway.approve", async (ctx, params) => {
+      const ask = freewayApprover.check(ctx, params);
+      return await audit.required(
+        ctx,
+        { action: "freeway.approval.mint", target: { kind: "device", id: ask.deviceId } },
+        () => freewayApprover.mint(ask),
+        (approved) => ({
+          outcome: "succeeded",
+          attrs: { expiresAt: approved.expiresAt, rights: [...ask.rights] },
+        }),
+      );
     });
     freewayFloor.on("state", () => void freewayServe.refresh());
     links.on("changed", () => void freewayServe.refresh());

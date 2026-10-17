@@ -290,6 +290,21 @@ export const INDEX_TICKET = {
   TTL_MS: 10 * 60 * 1000,
 } as const;
 
+/** F1 (thinking-freeway.md v0.3 §3) — `freeway.approve`'s honest refusals, the index ticket's
+ * pattern: `UnavailableDetails.service` and the states a phone reads. */
+export const FREEWAY_APPROVAL = {
+  /** `UnavailableDetails.service` on every refusal */
+  SERVICE: "freeway",
+  /** the floor's state has not been read yet, or this floor predates the freeway */
+  STATE_UNREAD: "unread",
+  /** the freeway host is not running: no declaration yet, between generations, or parked */
+  STATE_DOWN: "down",
+  /** this desktop's roster does not correlate the calling node to a device (yet) */
+  STATE_UNCORRELATED: "uncorrelated",
+  /** FW-D5's approval forwarded through a self peer daemon for a phone (F1b) */
+  STATE_FORWARDING_UNBUILT: "forwarding-unbuilt",
+} as const;
+
 /** TC-D6(c) — per-class scrollback byte caps, enforced at the NATIVE create
  * seam (so they live in the genned registry, one authority both planes read).
  * This is a byte cap, not a row cap. The 2026-09-27 review corrects BASE-1's

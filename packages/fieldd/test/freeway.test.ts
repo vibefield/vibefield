@@ -3,11 +3,25 @@
 // reads it (armed once, re-armed after a refusal, a stale revision ignored, a new floor boot taken
 // whole), the declaration's delivery (every connect, every change, one at a time, newest last), and
 // the serve — the floor-held listener's door, gated on the linked login, and silent until the floor
-// has been read, so a restarted fieldd withdraws nothing it has not seen (FW-L10).
-import { FreewayDeclareParams, type FreewayState, PORTS } from "@vibefield/contracts";
+// has been read, so a restarted fieldd withdraws nothing it has not seen (FW-L10) — and the phone's
+// approval: its refusals in the order a caller hears them, and the MAC the fixture vector pins.
+import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
+import {
+  approvalSigningInput,
+  type CallerContext,
+  FREEWAY,
+  FREEWAY_APPROVAL,
+  FreewayApproveResult,
+  FreewayDeclareParams,
+  type FreewayState,
+  PORTS,
+} from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import {
   FREEWAY_SERVE_ID,
+  type FreewayApprovalRoster,
+  FreewayApprover,
   FreewayFloor,
   type FreewayNative,
   type FreewayRoster,
@@ -16,6 +30,7 @@ import {
   freewayServeSpec,
 } from "../src/freeway";
 import type { ServeSpec } from "../src/mesh-client";
+import { RpcCallError } from "../src/native-link";
 
 const LOGIN = "person@example.com";
 const SECRET = "ab".repeat(32);
@@ -262,5 +277,170 @@ describe("F1 — the freeway's serve", () => {
     await driver.refresh();
     expect(declared.at(-1)?.pathSecret).toBe("12".repeat(32));
     expect(declared).toHaveLength(3);
+  });
+});
+
+const VECTOR = JSON.parse(
+  readFileSync(
+    new URL("../../contracts/fixtures/freeway-approval-mac.vector.json", import.meta.url),
+    "utf8",
+  ),
+) as {
+  keyHex: string;
+  approval: {
+    protected: { kid: { floorBootId: string; keyGeneration: number } };
+    claims: {
+      principal: { login: string; tailscaleId: string };
+      rights: Array<"geometry" | "input" | "read">;
+      issuedAt: number;
+      expiresAt: number;
+      nonce: string;
+    };
+    mac: string;
+    signingInput: string;
+  };
+};
+
+const PHONE_NODE = "nPHONE01";
+const ROWS: Record<
+  string,
+  { node: string; row: { self: boolean; capabilities?: { docHost?: boolean } } }
+> = {
+  "dev-phone": { node: PHONE_NODE, row: { self: false } },
+  "dev-desk-b": { node: "nDESK01", row: { self: false, capabilities: { docHost: true } } },
+  "dev-a": { node: "nSELF01", row: { self: true, capabilities: { docHost: true } } },
+};
+const ROSTER: FreewayApprovalRoster = {
+  deviceIdByNodeId: (node) => Object.keys(ROWS).find((deviceId) => ROWS[deviceId]?.node === node),
+  get: (deviceId) => ROWS[deviceId]?.row,
+};
+
+function caller(principal: CallerContext["principal"]): CallerContext {
+  return { principal, transport: "ws-tailnet", receivedAt: 0 };
+}
+const fromPhone = (node = PHONE_NODE) =>
+  caller({ kind: "tailnet", login: LOGIN, self: true, tailscaleId: node });
+
+/** The refusal a call answers with: its kind, whether it may be retried, and its state. */
+function refusal(call: () => unknown): { kind: string; retryable: boolean; state?: unknown } {
+  try {
+    call();
+  } catch (error) {
+    if (!(error instanceof RpcCallError)) throw error;
+    const state = (error.details as { state?: unknown } | undefined)?.state;
+    return {
+      kind: error.kind,
+      retryable: error.retryable,
+      ...(state !== undefined ? { state } : {}),
+    };
+  }
+  throw new Error("expected a refusal");
+}
+
+describe("F1 — the phone's approval (`freeway.approve`)", () => {
+  it("mints exactly the bytes the fixture vector pins — the MAC the host's verifier recomputes", () => {
+    const { approval } = VECTOR;
+    const approver = new FreewayApprover({
+      state: () =>
+        floorState({
+          floorBootId: approval.protected.kid.floorBootId,
+          keyGeneration: approval.protected.kid.keyGeneration,
+          freewayKeyHex: VECTOR.keyHex,
+        }),
+      roster: ROSTER,
+      now: () => approval.claims.issuedAt,
+      ttlMs: approval.claims.expiresAt - approval.claims.issuedAt,
+      nonce: () => approval.claims.nonce,
+    });
+    const minted = approver.mint({
+      deviceId: "dev-phone",
+      login: approval.claims.principal.login,
+      tailscaleId: approval.claims.principal.tailscaleId,
+      rights: approval.claims.rights,
+    });
+    const { signingInput, ...envelope } = approval;
+    expect(approvalSigningInput(minted.approval.protected, minted.approval.claims)).toBe(
+      signingInput,
+    );
+    expect(minted.approval).toEqual(envelope);
+    expect(minted.expiresAt).toBe(approval.claims.expiresAt);
+    expect(FreewayApproveResult.parse(minted)).toEqual(minted);
+  });
+
+  it("gives a phone every self right under the floor boot's key, a fresh nonce each time, for the approval's life", () => {
+    const approver = new FreewayApprover({
+      state: () => floorState(),
+      roster: ROSTER,
+      now: () => 5_000,
+    });
+    const ask = approver.check(fromPhone(), {});
+    expect(ask).toEqual({
+      deviceId: "dev-phone",
+      login: LOGIN,
+      tailscaleId: PHONE_NODE,
+      rights: ["geometry", "input", "read"],
+    });
+    const one = approver.mint(ask);
+    const two = approver.mint(ask);
+    expect(one.approval.claims.nonce).not.toBe(two.approval.claims.nonce);
+    expect(one.approval.protected.kid).toEqual({ floorBootId: "fb-1", keyGeneration: 1 });
+    expect(one.approval.claims).toMatchObject({
+      audienceFloorBootId: "fb-1",
+      clientId: `freeway:${LOGIN}#${PHONE_NODE}`,
+      principal: { kind: "tailnet", login: LOGIN, tailscaleId: PHONE_NODE },
+      issuedAt: 5_000,
+      expiresAt: 5_000 + FREEWAY.APPROVAL_TTL_MS,
+    });
+    const mac = createHmac("sha256", Buffer.from("ef".repeat(32), "hex"))
+      .update(approvalSigningInput(one.approval.protected, one.approval.claims), "utf8")
+      .digest("base64url");
+    expect(one.approval.mac).toBe(mac);
+  });
+
+  it("refuses in the order a caller hears them, and the mint reads the host's life again", () => {
+    let state: FreewayState | null = floorState();
+    const approver = new FreewayApprover({ state: () => state, roster: ROSTER });
+    expect(refusal(() => approver.check(fromPhone(), "approve me"))).toEqual({
+      kind: "PRECONDITION_FAILED",
+      retryable: false,
+    });
+    expect(
+      refusal(() => approver.check(caller({ kind: "peer-fieldd", deviceId: "dev-desk-b" }), {})),
+    ).toEqual({
+      kind: "UNAVAILABLE",
+      retryable: false,
+      state: FREEWAY_APPROVAL.STATE_FORWARDING_UNBUILT,
+    });
+    const window = caller({ kind: "local-token", tokenId: "t", scopes: ["terminal.attach"] });
+    expect(refusal(() => approver.check(window, {})).kind).toBe("FORBIDDEN_SCOPE");
+    const notSelf = caller({ kind: "tailnet", login: LOGIN, tailscaleId: PHONE_NODE });
+    expect(refusal(() => approver.check(notSelf, {})).kind).toBe("FORBIDDEN_SCOPE");
+    const noNode = caller({ kind: "tailnet", login: LOGIN, self: true });
+    expect(refusal(() => approver.check(noNode, {}))).toEqual({
+      kind: "PRECONDITION_FAILED",
+      retryable: false,
+    });
+    expect(refusal(() => approver.check(fromPhone("nSTRANGER"), {}))).toEqual({
+      kind: "UNAVAILABLE",
+      retryable: true,
+      state: FREEWAY_APPROVAL.STATE_UNCORRELATED,
+    });
+    expect(refusal(() => approver.check(fromPhone("nDESK01"), {})).kind).toBe("FORBIDDEN_SCOPE");
+    expect(refusal(() => approver.check(fromPhone("nSELF01"), {})).kind).toBe("FORBIDDEN_SCOPE");
+    state = null;
+    expect(refusal(() => approver.check(fromPhone(), {}))).toEqual({
+      kind: "UNAVAILABLE",
+      retryable: true,
+      state: FREEWAY_APPROVAL.STATE_UNREAD,
+    });
+    state = floorState();
+    const ask = approver.check(fromPhone(), {});
+    state = floorState({ revision: 2, up: false });
+    delete state.freewayKeyHex;
+    expect(refusal(() => approver.mint(ask))).toEqual({
+      kind: "UNAVAILABLE",
+      retryable: true,
+      state: FREEWAY_APPROVAL.STATE_DOWN,
+    });
   });
 });

@@ -155,6 +155,12 @@ export class MockMgmtServer {
    * withheld its unrevised snapshot (and supplied `helloTerminal` instead)
    * while its subscription answered `{revision: 0, cells: []}` anyway. */
   routesSubscribeSnapshot: unknown = undefined;
+  /** F1 — when set, `native.freeway.state.subscribe` answers this snapshot (and `pushDelta`
+   * reaches it); null = a floor that predates the freeway, whose subscribe falls through to the
+   * generic `{n:0}` — the payload fieldd must read as "not a state". */
+  freewayState: unknown = null;
+  /** F1 — every `native.freeway.declare`'s params, in order. */
+  readonly freewayDeclarations: unknown[] = [];
   /** TM-1 (MF-1l) — the floor's word that its terminal doors are PUBLISHED on
    * the tailnet, carried on the hello ack. `null` = a floor that predates the
    * field and says nothing, which every consumer must read as NO (a tappable
@@ -333,6 +339,24 @@ export class MockMgmtServer {
           jsonrpc: "2.0",
           id: msg.id,
           result: { subId, snapshot: this.observedState },
+        })}\n`,
+      );
+      return;
+    }
+    if (msg.method === "native.freeway.declare") {
+      this.freewayDeclarations.push(msg.params);
+      sock.write(`${JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: {} })}\n`);
+      return;
+    }
+    if (msg.method === "native.freeway.state.subscribe" && this.freewayState !== null) {
+      this.subscriptionRequests.push(msg.method);
+      const subId = `s${this.nextSub++}`;
+      this.issued.push({ sock, subId, method: msg.method });
+      sock.write(
+        `${JSON.stringify({
+          jsonrpc: "2.0",
+          id: msg.id,
+          result: { subId, snapshot: this.freewayState },
         })}\n`,
       );
       return;

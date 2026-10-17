@@ -1,18 +1,32 @@
+import { createHmac, randomBytes } from "node:crypto";
 import { EventEmitter } from "node:events";
 import {
+  approvalSigningInput,
+  type CallerContext,
+  FREEWAY,
+  FREEWAY_APPROVAL,
   type FreewayAdmitRow,
+  type FreewayApprovalClaims,
+  type FreewayApprovalProtected,
+  FreewayApproveParams,
+  type FreewayApproveResult,
   type FreewayDeclareParams,
   FreewayState,
+  GRANT_ALG,
+  GRANT_ENVELOPE_VERSION,
   PORTS,
+  type SessionAttachRight,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { ServeSpec, ServeState } from "./mesh-client";
+import { RpcCallError } from "./native-link";
 import {
   RouteServeDriver,
   type RouteServeLog,
   routeServeSpec,
   type ServedProcess,
 } from "./route-serve";
+import { rightsFor } from "./terminal-grants";
 
 // F1 (draft/thinking-freeway.md v0.3 §3, §4.3, §6) — FIELDD'S HALF OF THE FREEWAY. The floor holds
 // the link plane's listener and secrets for its boot and supervises the freeway host on them; what
@@ -28,7 +42,8 @@ import {
 // says nothing until the floor's state has been read, because a boot that has not heard the floor
 // yet knows nothing it could withdraw on.
 //
-// The phone's approval (`freeway.approve`) and the audit of its joins are the next slices.
+// The phone's approval (`freeway.approve`, below) is fieldd's ONE mint for the link: the host
+// mints every grant after it from its own keyring. The audit of its joins is the next slice.
 
 /** What fieldd's declaration reads of the roster: THIS desktop's own id (the welcome names it,
  * FW-L9), its self peers in the roster keyspace, and the ONE desktop predicate (FW-DF-1:
@@ -264,5 +279,155 @@ export class FreewayServeDriver extends RouteServeDriver {
   override refresh(): Promise<void> {
     if (this.read() === null) return Promise.resolve();
     return super.refresh();
+  }
+}
+
+/** What `freeway.approve` reads of the roster: the calling node's device, and that device's row. */
+export interface FreewayApprovalRoster {
+  deviceIdByNodeId(nodeId: string): string | undefined;
+  get(
+    deviceId: string,
+  ): { self: boolean; capabilities?: { docHost?: boolean } | undefined } | undefined;
+}
+
+export interface FreewayApproverOptions {
+  /** the floor's state now (`FreewayFloor.state`): the key, its generation, the audience */
+  state: () => FreewayState | null;
+  roster: FreewayApprovalRoster;
+  /** the approval's life (`FREEWAY.APPROVAL_TTL_MS`; a test seam, never longer — the host
+   * refuses a longer one) */
+  ttlMs?: number;
+  now?: () => number;
+  /** the approval's nonce (16 random bytes, base64url; a test seam) */
+  nonce?: () => string;
+}
+
+/** What an approval is for, once every refusal has been said: the phone, as the roster knows it,
+ * and what its link may do. */
+export interface FreewayApprovalAsk {
+  /** the phone's roster device id — the audit's target */
+  deviceId: string;
+  login: string;
+  /** the sidecar-injected node id, which the roster correlated to the phone's row */
+  tailscaleId: string;
+  rights: SessionAttachRight[];
+}
+
+/**
+ * F1 (FW-D1) — `freeway.approve {}`: fieldd approves a PHONE's link, once, and the host mints every
+ * grant after it. The refusals, in the order a caller hears them:
+ *  - a malformed ask: PRECONDITION_FAILED;
+ *  - a self peer daemon forwarding for a phone (FW-D5): UNAVAILABLE `forwarding-unbuilt`, retryable
+ *    false — F1b's;
+ *  - anyone but this person's own device over the tailnet (a window, the shell, a plugin, an
+ *    agent): FORBIDDEN_SCOPE — an approval is the phone's;
+ *  - a door whose sidecar injected no node id: PRECONDITION_FAILED — an approval binds to the node
+ *    that holds it (the host refuses one naming another node, 4403);
+ *  - a node the roster does not correlate to a device: UNAVAILABLE `uncorrelated`, retryable — a
+ *    phone that just joined is correlated a moment later;
+ *  - a device the roster says is a desktop (`docHost`) or is this one: FORBIDDEN_SCOPE — a desktop
+ *    link carries no approval (FW-D6), and the system Tailscale app's node publishes no device id
+ *    at all, so it never correlates (Note 6);
+ *  - the floor not read, or the host down: UNAVAILABLE `unread` / `down`, retryable.
+ *
+ * The approval: TPv3's envelope under the floor's FREEWAY key (per floor boot, read off the state
+ * stream; memory-only, never logged), `principal.tailscaleId` the roster's correlation and never a
+ * claim, `rights` by `rightsFor`, a fresh nonce, `FREEWAY.APPROVAL_TTL_MS`. A guest never gets here:
+ * its preset holds no `terminal.attach`.
+ */
+export class FreewayApprover {
+  constructor(private readonly opts: FreewayApproverOptions) {}
+
+  /** Every refusal, before anything is minted or audited. */
+  check(ctx: CallerContext, params: unknown): FreewayApprovalAsk {
+    if (!FreewayApproveParams.safeParse(params ?? {}).success)
+      throw new RpcCallError("PRECONDITION_FAILED", "expected {}", false);
+    const principal = ctx.principal;
+    if (principal.kind === "peer-fieldd")
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "an approval forwarded for a phone on another desktop is not served yet (FW-D5)",
+        false,
+        { service: FREEWAY_APPROVAL.SERVICE, state: FREEWAY_APPROVAL.STATE_FORWARDING_UNBUILT },
+      );
+    if (principal.kind !== "tailnet" || principal.self !== true)
+      throw new RpcCallError(
+        "FORBIDDEN_SCOPE",
+        "an approval is the phone's: only this person's own phone, over the tailnet, holds one",
+        false,
+        { method: "freeway.approve", principal: principal.kind },
+      );
+    const tailscaleId = principal.tailscaleId;
+    if (tailscaleId === undefined)
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the door injected no node id, and an approval binds to the node that holds it",
+        false,
+      );
+    const deviceId = this.opts.roster.deviceIdByNodeId(tailscaleId);
+    const row = deviceId === undefined ? undefined : this.opts.roster.get(deviceId);
+    if (deviceId === undefined || row === undefined)
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "this desktop's roster does not know the calling node yet",
+        true,
+        { service: FREEWAY_APPROVAL.SERVICE, state: FREEWAY_APPROVAL.STATE_UNCORRELATED },
+      );
+    if (row.self || row.capabilities?.docHost === true)
+      throw new RpcCallError(
+        "FORBIDDEN_SCOPE",
+        "an approval is a phone's; a desktop's link carries none",
+        false,
+        { method: "freeway.approve", principal: "desktop" },
+      );
+    this.live();
+    return { deviceId, login: principal.login, tailscaleId, rights: rightsFor(principal) };
+  }
+
+  /** The mint itself — called inside the audit's attempt (daemon.ts). The key, its generation and
+   * the audience are read in ONE tick from the state answering now. */
+  mint(ask: FreewayApprovalAsk): FreewayApproveResult {
+    const state = this.live();
+    const now = (this.opts.now ?? Date.now)();
+    const header: FreewayApprovalProtected = {
+      v: GRANT_ENVELOPE_VERSION,
+      typ: "FreewayApproval",
+      iss: "fieldd",
+      alg: GRANT_ALG,
+      kid: { floorBootId: state.floorBootId, keyGeneration: state.keyGeneration },
+    };
+    const claims: FreewayApprovalClaims = {
+      audienceFloorBootId: state.floorBootId,
+      // the minter's; the host's keyring id adds its own boot (`~<hostBootId>`)
+      clientId: `freeway:${ask.login}#${ask.tailscaleId}`,
+      principal: { kind: "tailnet", login: ask.login, tailscaleId: ask.tailscaleId },
+      rights: ask.rights,
+      issuedAt: now,
+      expiresAt: now + (this.opts.ttlMs ?? FREEWAY.APPROVAL_TTL_MS),
+      nonce: (this.opts.nonce ?? (() => randomBytes(16).toString("base64url")))(),
+    };
+    const mac = createHmac("sha256", Buffer.from(state.freewayKeyHex, "hex"))
+      .update(approvalSigningInput(header, claims), "utf8")
+      .digest("base64url");
+    return { approval: { protected: header, claims, mac }, expiresAt: claims.expiresAt };
+  }
+
+  /** The state an approval can be minted under: read, the host up, the key said. */
+  private live(): FreewayState & { freewayKeyHex: string; keyGeneration: number } {
+    const state = this.opts.state();
+    if (state === null)
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "the floor has not said whether the freeway runs",
+        true,
+        { service: FREEWAY_APPROVAL.SERVICE, state: FREEWAY_APPROVAL.STATE_UNREAD },
+      );
+    const { freewayKeyHex, keyGeneration } = state;
+    if (!state.up || freewayKeyHex === undefined || keyGeneration === undefined)
+      throw new RpcCallError("UNAVAILABLE", "the freeway host is not running", true, {
+        service: FREEWAY_APPROVAL.SERVICE,
+        state: FREEWAY_APPROVAL.STATE_DOWN,
+      });
+    return { ...state, freewayKeyHex, keyGeneration };
   }
 }
