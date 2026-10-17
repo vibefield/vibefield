@@ -64,7 +64,7 @@
     {
       "sessionId": "sess-01J8Z4QX",
       "refusal": {
-        "code": "SESSION_NOT_FOUND",
+        "code": "NOT_FOUND",
         "message": "no such session on this desktop",
         "retryable": false
       }

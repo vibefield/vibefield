@@ -64,8 +64,9 @@ pub struct Shared {
 /// What the host tells a running link.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LinkCommand {
-    /// Close it with this code: 4409 a newer link from its node took its place, 4410 its access
-    /// was revoked, 1001 the host is going.
+    /// Close it with this code: 4401 its approval was revoked (the phone asks fieldd for another,
+    /// which fieldd decides), 4409 a newer link from its node took its place, 4410 its node left
+    /// fieldd's admit set, 1001 the host is going.
     Close(u16),
     /// A planned restart: this `FreewayRestarting` first, then 4503.
     Restart(Value),
@@ -86,6 +87,7 @@ pub enum LinkEnd {
 fn code_name(code: u16) -> &'static str {
     match code {
         codes::PROTOCOL => "PROTOCOL",
+        codes::APPROVAL => "APPROVAL",
         codes::SUPERSEDED => "SUPERSEDED",
         codes::PEER_GONE => "PEER_GONE",
         codes::RESTARTING => "RESTARTING",
@@ -204,6 +206,7 @@ pub async fn run(
         let keyring = (shared.keyrings.entry(client.clone()))
             .or_insert_with(|| Keyring::new(client.clone(), admitted.rights.clone()));
         keyring.set_rights(admitted.rights.clone());
+        keyring.reopen();
     }
     let mut link = Link {
         mux: Mux::new(Role::Acceptor),
@@ -776,6 +779,7 @@ mod tests {
     /// and the lines the links report.
     struct TestHost {
         port: u16,
+        shared: Arc<Mutex<Shared>>,
         links: mpsc::UnboundedReceiver<mpsc::UnboundedSender<LinkCommand>>,
         reports: mpsc::UnboundedReceiver<Value>,
     }
@@ -787,9 +791,10 @@ mod tests {
         let shared = Arc::new(Mutex::new(Shared { floor, keyrings }));
         let (links_out, links) = mpsc::unbounded_channel();
         let (reports_out, reports) = mpsc::unbounded_channel();
+        let serving = shared.clone();
         tokio::spawn(async move {
             while let Ok((stream, _)) = listener.accept().await {
-                let shared = shared.clone();
+                let shared = serving.clone();
                 let (links_out, reports_out) = (links_out.clone(), reports_out.clone());
                 tokio::spawn(async move {
                     let mut admit = Admit::default();
@@ -815,6 +820,7 @@ mod tests {
         });
         TestHost {
             port,
+            shared,
             links,
             reports,
         }
@@ -1147,6 +1153,36 @@ mod tests {
             drop(ws);
         }
         assert_eq!(generations, vec![(Some(1), Some(1)), (Some(2), Some(2))]);
+    }
+
+    #[tokio::test]
+    async fn a_revoked_link_mints_nothing_and_a_new_one_mints_at_the_wall() {
+        let host = host_on(PeerRole::Phone, floor("ws://127.0.0.1:1", true), fixed).await;
+        let tickets = br#"{"kind":"terminal-tickets","sessionIds":["sess-a"]}"#;
+        let mut ws = dial(host.port, phone_hello()).await;
+        send(&mut ws, FrameType::Open, 1, tickets).await;
+        assert_eq!(next(&mut ws).await.0, FrameType::Opened);
+        assert_eq!(next(&mut ws).await.0, FrameType::Close);
+        let client = format!("freeway:{LOGIN}#{NODE}~hb-1");
+        let before = {
+            let mut shared = host.shared.lock().unwrap();
+            shared.keyrings.get_mut(&client).unwrap().revoke()
+        };
+        assert_eq!(before, 2);
+        // Still open until its close lands, the revoked link is answered and mints nothing.
+        send(&mut ws, FrameType::Open, 3, tickets).await;
+        let (kind, _, opened) = next(&mut ws).await;
+        assert_eq!(kind, FrameType::Opened);
+        assert_eq!(
+            json_of(&opened)["tickets"][0]["refusal"]["code"],
+            "UNAUTHORIZED"
+        );
+        // The phone, approved again, opens a new link: it mints at the wall the cells were given.
+        let mut again = dial(host.port, phone_hello()).await;
+        send(&mut again, FrameType::Open, 1, tickets).await;
+        let (_, _, opened) = next(&mut again).await;
+        let claims = &json_of(&opened)["tickets"][0]["ticket"]["attachGrant"]["claims"];
+        assert_eq!(claims["grantGeneration"], json!(before));
     }
 
     #[tokio::test]

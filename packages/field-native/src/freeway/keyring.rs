@@ -13,7 +13,9 @@
 //! - A revoke (§6's second wall) names the generation every cell must refuse below, one above every
 //!   grant out, and every later mint starts there: the cell's ledger admits an EQUAL generation and
 //!   refuses a lower one (`tp/ledger.rs`), so a client re-approved within the boot is never a
-//!   rollback, on a cell it used or one it never did.
+//!   rollback, on a cell it used or one it never did. Until a new link opens for the client (its
+//!   hello verified again), the keyring mints nothing: the revoked link, still closing, can never
+//!   hand out a grant at or above `beforeGeneration` that the cells would take on any path.
 //!
 //! The ledgers are the host BOOT's, as the client id is: the host keeps one keyring per client
 //! across its links, so a phone that reconnects mints on from its own high-water.
@@ -65,7 +67,7 @@ impl Refusal {
 }
 
 const NO_SESSION: Refusal = Refusal {
-    code: "SESSION_NOT_FOUND",
+    code: "NOT_FOUND",
     message: "no such session on this desktop",
     retryable: false,
 };
@@ -73,6 +75,11 @@ const NO_CELL: Refusal = Refusal {
     code: "UNAVAILABLE",
     message: "the session's terminal host is not serving",
     retryable: true,
+};
+const REVOKED: Refusal = Refusal {
+    code: "UNAUTHORIZED",
+    message: "this link's approval was revoked",
+    retryable: false,
 };
 const STALE: Refusal = Refusal {
     code: "CONFLICT",
@@ -85,6 +92,8 @@ pub struct Keyring {
     rights: Vec<AttachRight>,
     /// Every mint is above this: a revoke's `beforeGeneration`, less one.
     floor: u64,
+    /// A revoke stands until `reopen`.
+    revoked: bool,
     transport_generations: HashMap<String, u64>,
     attach_generations: HashMap<String, u64>,
     renewals: HashMap<String, VecDeque<(String, Value)>>,
@@ -96,6 +105,7 @@ impl Keyring {
             client_id,
             rights,
             floor: 0,
+            revoked: false,
             transport_generations: HashMap::new(),
             attach_generations: HashMap::new(),
             renewals: HashMap::new(),
@@ -123,8 +133,14 @@ impl Keyring {
             .unwrap_or(0);
         let before = minted.max(self.floor) + 1;
         self.floor = before - 1;
+        self.revoked = true;
         self.renewals.clear();
         before
+    }
+
+    /// A new link for the client, its hello verified: a revoke before it no longer stands.
+    pub fn reopen(&mut self) {
+        self.revoked = false;
     }
 
     /// `terminal-tickets {sessionIds}` → the `FreewayOpened {tickets}` answer, a row per session.
@@ -150,6 +166,9 @@ impl Keyring {
         placement: &Placement,
         now_ms: u64,
     ) -> Value {
+        if self.revoked {
+            return json!({ "refusal": REVOKED.json() });
+        }
         if let Some(remembered) = self
             .renewals
             .get(session_id)
@@ -183,6 +202,9 @@ impl Keyring {
         placement: &Placement,
         now_ms: u64,
     ) -> Result<Value, Refusal> {
+        if self.revoked {
+            return Err(REVOKED);
+        }
         let (session, cell) = route(session_id, placement)?;
         let cell_boot_id = &cell.key.cell_boot_id;
         let generation = bump(&mut self.transport_generations, cell_boot_id, self.floor);
@@ -385,6 +407,14 @@ mod tests {
         ring.renew("sess-a", 1, "rq-1", &placement(), NOW);
         // Out: transport 1 on the cell, attach 1 and 2 on sess-a.
         assert_eq!(ring.revoke(), 3);
+        // Until a new link reopens it, the keyring mints nothing.
+        let refused = ring.tickets(&["sess-a".into()], &placement(), NOW);
+        assert_eq!(refused["tickets"][0]["refusal"], REVOKED.json());
+        assert_eq!(
+            ring.renew("sess-a", 2, "rq-2", &placement(), NOW),
+            json!({ "refusal": REVOKED.json() })
+        );
+        ring.reopen();
         // A remembered renewal is a grant from before the revoke: never handed out again.
         assert_eq!(
             ring.renew("sess-a", 1, "rq-1", &placement(), NOW),
