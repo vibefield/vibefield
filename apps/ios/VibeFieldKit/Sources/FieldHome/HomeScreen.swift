@@ -1387,9 +1387,10 @@ public struct HomeScreen: View {
       }
       switch phase {
       case .active:
-        // Routes internally: suspended-by-app becomes a real resume, a live
-        // session only re-snapshots. Calling upstream's resume on a session
-        // that never left would force a spurious reconnect.
+        // Routes internally: suspended-by-app becomes a real resume, and a
+        // session that only went inactive has nothing to do. Calling
+        // upstream's resume on a session that never left would force a
+        // spurious reconnect.
         attachment?.resumeFromForeground()
         // --- IOS-5c: coming back is the other honest moment to look at the
         // pasteboard — copying happens in the app the user just left.

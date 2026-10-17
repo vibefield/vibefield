@@ -902,21 +902,18 @@ public final class TerminalAttachment {
   }
 
   /// §8.2: coming back to the foreground re-attaches at once rather than
-  /// waiting for a schedule. A session that never suspended only wants a fresh
-  /// scene.
+  /// waiting for a schedule — and only a SUSPENDED attachment has anything to
+  /// resume: the background closed its lanes, and the re-attach takes the seat
+  /// itself (`open`). A session that only went inactive (Control Center, a
+  /// notification, a call banner, Face ID) kept its legs and its scene, so
+  /// there is nothing to refresh and no focus to retake. Corrected 2026-10-17
+  /// (the sweep's P3): this re-snapshot asked the cell for nothing (D2) and
+  /// held input on an idle prompt until output moved, and its take re-took the
+  /// seat from a desktop the person never left.
   public func resumeFromForeground() {
-    guard let sessionID else { return }
+    guard let sessionID, case .suspended = phase else { return }
     log("back in the foreground session=\(sessionID)")
-    if case .suspended = phase {
-      // The re-attach takes the seat itself (`open`).
-      attach(sessionID: sessionID, cols: grid.columns, rows: grid.rows, deviceName: deviceName)
-      return
-    }
-    requestFullRefresh()
-    // DS-4b — the app came back to this pane: a focus gain, so a take — the
-    // person may have worked at a desktop meanwhile, and the pane they focused
-    // last is this one again.
-    takeSeat()
+    attach(sessionID: sessionID, cols: grid.columns, rows: grid.rows, deviceName: deviceName)
   }
 
   /// §8.2's other half: an orderly suspend, not two sockets left to rot.

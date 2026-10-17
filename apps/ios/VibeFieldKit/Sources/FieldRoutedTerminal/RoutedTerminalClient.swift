@@ -568,6 +568,14 @@ public final class RoutedTerminalClient {
   /// reporting progress it can no longer back up, and the cell sends a seed.
   /// The same mechanism `lineageBroke` uses when the sink rejects a delta —
   /// stated once, in one place, with one behaviour.
+  ///
+  /// *Corrected 2026-10-17 (the scroll audit; the second audit's D2): the cell
+  /// has no such trigger. `scene_applied` only records (`tp/activation.rs`), and
+  /// the pump reseeds on start, hub lag, starvation, oversize and demand `none`
+  /// only (`tp/presentation.rs`) — so on an idle session this asks the cell for
+  /// nothing, and input stays held until output moves. What works today is a
+  /// demand cycle (`none` → `live`), which also detaches the view and releases
+  /// the geometry seat. A real repair verb is owed in the contract (TM's).*
   public func requestReseed(for sessionId: String) {
     guard var session = sessions[sessionId] else { return }
     session.appliedContent = nil

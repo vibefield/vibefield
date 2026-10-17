@@ -302,8 +302,14 @@ import Testing
     try await Task.sleep(for: .milliseconds(80))
     #expect(await door.geometryVerbs.count == 1, "a resize is not a take")
 
+    // An inactive blip (Control Center, a notification) is not a gain: the
+    // person never left this pane, so nothing is retaken — and nothing is
+    // re-snapshotted to hold input on an idle prompt (the sweep's P3,
+    // 2026-10-17). A return from the background re-attaches, and THAT take is
+    // the attach's own, as above.
     attachment.resumeFromForeground()
-    try await Self.until("the second gain's take") { await door.geometryVerbs.count == 2 }
+    try await Task.sleep(for: .milliseconds(80))
+    #expect(await door.geometryVerbs.count == 1, "an inactive blip is not a take")
     await attachment.detach()
   }
 
@@ -324,8 +330,8 @@ import Testing
       Script.controlAttached(
         session: session, activation: control.activationId, rights: ["input", "read"]),
       on: .control)
+    // The attach's own take is the focus gain; without the right it sends no verb.
     _ = try await Self.value("the frames leg to attach") { await door.framesAttach }
-    attachment.resumeFromForeground()
     try await Task.sleep(for: .milliseconds(120))
     #expect(await door.geometryVerbs.isEmpty)
     await attachment.detach()
