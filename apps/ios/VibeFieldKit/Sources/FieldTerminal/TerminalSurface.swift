@@ -2,6 +2,7 @@ import GhostteaCore
 import GhostteaTerminal
 import SwiftUI
 import UIKit
+import UIKit.UIGestureRecognizerSubclass
 
 /// The Metal terminal wrapped for SwiftUI — our `GhostteaSharedTerminalSurface`.
 ///
@@ -65,6 +66,10 @@ public struct TerminalSurface: UIViewRepresentable {
   /// off): the card owns the keyboard, and a second owner was the bare system
   /// keyboard James found under the designed one (2026-10-17).
   let onTap: () -> Void
+  /// A touch of the terminal — any gesture's first finger down — for the host
+  /// to answer: the device the person touched last has the size (James,
+  /// 2026-10-17, "any touch takes").
+  let onTouch: () -> Void
 
   public init(
     scene: TerminalScene,
@@ -89,7 +94,8 @@ public struct TerminalSurface: UIViewRepresentable {
     onSelectionCommit: @escaping (GhostteaTerminalSelection) -> Void = { _ in },
     onSelectAll: @escaping () -> Void = {},
     onRenderFailure: @escaping (String) -> Void = { _ in },
-    onTap: @escaping () -> Void = {}
+    onTap: @escaping () -> Void = {},
+    onTouch: @escaping () -> Void = {}
   ) {
     self.scene = scene
     self.visible = visible
@@ -114,6 +120,7 @@ public struct TerminalSurface: UIViewRepresentable {
     self.onSelectAll = onSelectAll
     self.onRenderFailure = onRenderFailure
     self.onTap = onTap
+    self.onTouch = onTouch
   }
 
   @MainActor
@@ -151,6 +158,13 @@ public struct TerminalSurface: UIViewRepresentable {
     /// never also a tap.
     @objc func handleTap() {
       latest?.onTap()
+    }
+
+    /// Every touch of the terminal, at its first finger down (James,
+    /// 2026-10-17: the last-touched device has the size). It recognizes beside
+    /// the view's own gestures and claims and delays no touch.
+    @objc func handleTouch() {
+      latest?.onTouch()
     }
 
     /// What the seat has been told, and what waits (2026-10-17).
@@ -253,6 +267,10 @@ public struct TerminalSurface: UIViewRepresentable {
       target: context.coordinator, action: #selector(Coordinator.handleTap))
     tap.cancelsTouchesInView = false
     container.addGestureRecognizer(tap)
+    let touch = TouchDownRecognizer(
+      target: context.coordinator, action: #selector(Coordinator.handleTouch))
+    touch.delegate = context.coordinator
+    container.addGestureRecognizer(touch)
     guard let view = scene.hostedView() else {
       // Reported on the next main-actor turn so the honest error state never
       // mutates observable state from inside a SwiftUI update pass.
@@ -399,5 +417,32 @@ extension UIView {
     // presentation, with nothing presented over it, is being dragged away.
     return !root.isBeingPresented && root.presentedViewController == nil
       && root.transitionCoordinator?.isInteractive == true
+  }
+}
+
+extension TerminalSurface.Coordinator: UIGestureRecognizerDelegate {
+  /// The touch-down gesture recognizes beside every gesture the Metal view
+  /// owns — its pan, its long press, the container's tap — never instead of one.
+  public func gestureRecognizer(
+    _ gestureRecognizer: UIGestureRecognizer,
+    shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+  ) -> Bool {
+    gestureRecognizer is TouchDownRecognizer || otherGestureRecognizer is TouchDownRecognizer
+  }
+}
+
+/// A gesture that recognizes at a touch's first finger down and claims nothing:
+/// it never cancels or delays the touch it sees (2026-10-17).
+final class TouchDownRecognizer: UIGestureRecognizer {
+  override init(target: Any?, action: Selector?) {
+    super.init(target: target, action: action)
+    cancelsTouchesInView = false
+    delaysTouchesBegan = false
+    delaysTouchesEnded = false
+  }
+
+  override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+    super.touchesBegan(touches, with: event)
+    if state == .possible { state = .recognized }
   }
 }

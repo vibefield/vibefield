@@ -1850,7 +1850,10 @@ public struct HomeScreen: View {
         // The tap raises the card's own input, never a bare keyboard — and
         // only where this device may type (K-D2): a view-only terminal's tap
         // raises nothing.
-        onTap: { if inputCardFace == .shown { inputCard.tapTerminal() } }
+        onTap: { if inputCardFace == .shown { inputCard.tapTerminal() } },
+        // Any touch of the terminal takes the size (DS-D5, James 2026-10-17:
+        // "any touch takes"): the device the person touched last has it.
+        onTouch: { attachment.engage() }
       )
     }
   }
