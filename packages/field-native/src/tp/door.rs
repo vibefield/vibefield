@@ -58,10 +58,11 @@ use super::unix_ms;
 use super::wire::{
     capability_intersection, encode_envelope, inbound_tags, select_version, tagged,
     AttachControlLeg, AttachFramesLeg, AttachRefused, CalibrationPing, ClaimGeometry,
-    ConnectionAccepted, ConnectionHello, ConnectionRefused, DeclareDemand, InputOp, LegHeartbeat,
-    LegHeartbeatAck, ProtocolLimits, ReceiverCapacities, ReleaseGeometry, SceneApplied, SendInput,
-    SessionEvent, SessionEventKind, Tagged, TransferGeometry, TransportCredit, TrfIdentity,
-    GEOMETRY_EVENTS_CAPABILITY, SESSION_EVENTS_CAPABILITY,
+    ConnectionAccepted, ConnectionHello, ConnectionRefused, DeclareDemand, InputOp, InputRefused,
+    LegHeartbeat, LegHeartbeatAck, ProtocolLimits, ReceiverCapacities, ReleaseGeometry,
+    SceneApplied, SendInput, SessionEvent, SessionEventKind, Tagged, TransferGeometry,
+    TransportCredit, TrfIdentity, GEOMETRY_EVENTS_CAPABILITY, INPUT_REFUSALS_CAPABILITY,
+    SESSION_EVENTS_CAPABILITY,
 };
 use crate::registries::terminal_pipeline as tp;
 use crate::registries::terminal_pipeline_close_codes as close;
@@ -1059,6 +1060,11 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
         && negotiated_capabilities
             .iter()
             .any(|c| c == GEOMETRY_EVENTS_CAPABILITY);
+    // C5: the hello asked to be told when its input is refused (`InputRefused`)
+    let input_refusals = channel == Channel::Control
+        && negotiated_capabilities
+            .iter()
+            .any(|c| c == INPUT_REFUSALS_CAPABILITY);
     let initial_windows = (channel == Channel::Frames).then(|| {
         hello
             .receiver_capacities
@@ -1212,7 +1218,7 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
                     Some(Ok(Message::Ping(_))) | Some(Ok(Message::Pong(_))) | Some(Ok(Message::Frame(_))) => {}
                     Some(Ok(Message::Binary(_))) => break (close::PROTOCOL, "PROTOCOL:binary-inbound".to_string()),
                     Some(Ok(Message::Text(text))) => {
-                        match handle_text(&state, &leg, &set_identity, channel, text.as_str()) {
+                        match handle_text(&state, &leg, &set_identity, channel, input_refusals, text.as_str()) {
                             Ok(keepalive) => {
                                 if keepalive {
                                     deadline.as_mut().reset(tokio::time::Instant::now() + ttl);
@@ -1468,12 +1474,14 @@ fn parse_hello(text: &str, channel: Channel) -> Result<ConnectionHello, PreAuthF
 
 /// One inbound text frame on an ACCEPTED leg. `Ok(true)` re-arms the receipt
 /// deadline (a heartbeat or a calibration ping), `Ok(false)` does not,
-/// `Err(reason)` is a PROTOCOL close naming the reason.
+/// `Err(reason)` is a PROTOCOL close naming the reason. `input_refusals`: this
+/// leg's hello negotiated `InputRefused` (C5).
 fn handle_text(
     state: &Arc<DoorState>,
     leg: &LegRef,
     set: &SetIdentity,
     channel: Channel,
+    input_refusals: bool,
     text: &str,
 ) -> Result<bool, String> {
     let tag: Tagged = serde_json::from_str(text).map_err(|_| "untagged".to_string())?;
@@ -1548,11 +1556,20 @@ fn handle_text(
             let msg: SendInput =
                 serde_json::from_str(text).map_err(|e| format!("send-input:{e}"))?;
             let now = unix_ms();
-            let decision = {
+            // The answer is read under the same lock as the verdict, so it
+            // names the lease that refused, never a later one.
+            let (decision, answer) = {
                 let reg = state.registry.lock().unwrap();
-                reg.activations.send_input(leg, &msg, now)
+                let decision = reg.activations.send_input(leg, &msg, now);
+                let answer = match &decision {
+                    InputDecision::Drop(dropped) if input_refusals => {
+                        reg.activations.input_refusal(leg, &msg, *dropped)
+                    }
+                    _ => None,
+                };
+                (decision, answer)
             };
-            handle_input(state, &msg, decision);
+            handle_input(state, leg, &msg, decision, answer);
             Ok(false)
         }
         (Channel::Frames, "AttachFramesLeg") => {
@@ -1847,12 +1864,20 @@ fn perform_geometry_op(
 
 /// A `SendInput` the table ruled on. On `Proceed` the door runs the engine input
 /// op OUTSIDE the registry lock — the geometry lock order (registry → ghosttea
-/// authority; ghosttea is a leaf and never re-enters). A `Drop` is silent and
-/// audited: §5.4 rejects disallowed input with NO wire reply, and accepted
-/// input's only answer is the echo frame the pump carries. ghosttea's
-/// `authorize_input` is the engine backstop — a read-only or superseded view
-/// refuses there too.
-fn handle_input(state: &Arc<DoorState>, msg: &SendInput, decision: InputDecision) {
+/// authority; ghosttea is a leaf and never re-enters). A `Drop` is audited, and
+/// answered with `InputRefused` on the caller's leg when its hello negotiated
+/// `input-refusals` and `answer` says what it may be told (mark 22's refusal
+/// half, reversed 2026-10-18); on any other leg it is silent — dropped and
+/// audited, no wire reply. Accepted input's only answer is the echo frame the
+/// pump carries. ghosttea's `authorize_input` is the engine backstop — a
+/// read-only or superseded view refuses there too.
+fn handle_input(
+    state: &Arc<DoorState>,
+    leg: &LegRef,
+    msg: &SendInput,
+    decision: InputDecision,
+    answer: Option<&'static str>,
+) {
     let proceed = match decision {
         InputDecision::Drop(reason) => {
             // §5.4's drop-and-AUDIT: the structural refusals are rare and must
@@ -1876,6 +1901,21 @@ fn handle_input(state: &Arc<DoorState>, msg: &SendInput, decision: InputDecision
                     activation_id = %msg.activation_id,
                     "a SendInput was refused cell-side"
                 );
+            }
+            // C5 — and, on a leg that negotiated `input-refusals`, the caller
+            // is TOLD: this op, by its sequence, in the lease's words, so the
+            // client can say that THIS input went nowhere.
+            if let Some(answer) = answer {
+                leg.send_text(tagged(
+                    "InputRefused",
+                    &InputRefused {
+                        session_id: msg.session_id.clone(),
+                        activation_id: msg.activation_id.clone(),
+                        lease_epoch: msg.lease_epoch,
+                        input_sequence: msg.input_sequence,
+                        reason: answer.to_string(),
+                    },
+                ));
             }
             return;
         }

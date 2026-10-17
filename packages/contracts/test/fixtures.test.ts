@@ -222,6 +222,7 @@ import {
   FramesLegAttached,
   GeometryCommitted,
   GeometryState,
+  InputRefused,
   PresentationEnvelopeHeader,
   PresentationStatus,
   ProductSessionRosterItem,
@@ -632,6 +633,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "tp-transport-credit": TransportCredit,
   "tp-roster-item": ProductSessionRosterItem,
   "tp-send-input": SendInput,
+  // audit C5's answer half — a SendInput the cell refused at its gate, told in words (`input-refusals`).
+  "tp-input-refused": InputRefused,
   "tp-session-event": SessionEvent,
   "tp-envelope-header": PresentationEnvelopeHeader,
   "tp-attach-refused": AttachRefused,

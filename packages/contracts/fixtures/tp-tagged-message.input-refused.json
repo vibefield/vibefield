@@ -1,0 +1,8 @@
+{
+  "type": "InputRefused",
+  "sessionId": "s1",
+  "activationId": "act-1",
+  "leaseEpoch": 3,
+  "inputSequence": 12,
+  "reason": "stale-lease-epoch"
+}

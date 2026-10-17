@@ -1674,7 +1674,10 @@ async fn an_oversized_delta_is_carried_by_a_catchup_transfer() {
 /// human-input epoch (`record_input(true)` advances it; every refusal and the
 /// dedup return first), so a replayed `inputSequence`, a stale `leaseEpoch` and
 /// a read-only viewer all leave the epoch UNMOVED — and no reply rides the wire
-/// either way (§5.4: drop-and-audit).
+/// for any of them: the replay is the engine's own dedup, silent on every leg,
+/// and this leg's hello does not negotiate `input-refusals`, so the cell gate's
+/// two refusals are dropped and audited (§5.4; the negotiated leg's answer is
+/// `refused_input_is_answered_on_a_negotiated_leg_and_silent_otherwise`).
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn wire_input_types_into_the_real_pty_and_every_fence_holds() {
     let h = harness().await;
@@ -1867,6 +1870,145 @@ async fn wire_input_types_into_the_real_pty_and_every_fence_holds() {
         session.summary().exited,
         "the typed `exit` reached the real PTY and ended /bin/sh"
     );
+    h.door.shutdown().await;
+}
+
+/// The next text message of `type_` on a leg, reading through the lease's
+/// status traffic.
+async fn next_text_of(ws: &mut Ws, type_: &str) -> Value {
+    for _ in 0..64 {
+        match next_reply(ws).await {
+            Reply::Text(v) if v["type"] == type_ => return v,
+            Reply::Text(v) if v["type"] == "CellActivationStatus" => continue,
+            other => panic!("expected {type_}, got {other:?}"),
+        }
+    }
+    panic!("no {type_} among the next 64 messages");
+}
+
+/// C5 — refused input gets an ANSWER on a control leg whose hello
+/// negotiated `input-refusals`: `InputRefused` names the op by its sequence
+/// and says why in the lease's word. A message naming no activation of the
+/// caller's own leg is never answered (EL7), accepted input is still answered
+/// only by its echo, and a leg that did not negotiate it hears nothing — the
+/// kit closes its leg on an unknown tag.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn refused_input_is_answered_on_a_negotiated_leg_and_silent_otherwise() {
+    let h = harness().await;
+    let session = spawn_session(&h.source);
+    let session_id = session.id();
+    let grant = h
+        .minter
+        .transport(TransportSpec::basic("set-ir", 1, "n-set-ir-1"));
+    let mut control = dial(&h.door.control_url()).await;
+    send_json(
+        &mut control,
+        serde_json::from_str(&hello_with_capabilities(
+            "control",
+            &grant,
+            None,
+            json!(["session-events", "input-refusals"]),
+        ))
+        .unwrap(),
+    )
+    .await;
+    let accepted = expect_text(next_reply(&mut control).await, "ConnectionAccepted");
+    assert_eq!(
+        accepted["capabilities"],
+        json!(["session-events", "input-refusals"])
+    );
+    let mut frames = dial(&h.door.frames_url()).await;
+    send_json(
+        &mut frames,
+        serde_json::from_str(&hello("frames", &grant, Some(caps(4_000_000, 2_000_000)))).unwrap(),
+    )
+    .await;
+    expect_text(next_reply(&mut frames).await, "ConnectionAccepted");
+    attach_both(
+        &h,
+        &mut control,
+        &mut frames,
+        &session_id,
+        "act-ir",
+        &["input", "read"],
+        true,
+    )
+    .await;
+    let send_input = |session_id: &str, activation: &str, lease: u64, seq: u64| {
+        json!({
+            "type": "SendInput",
+            "sessionId": session_id,
+            "activationId": activation,
+            "leaseEpoch": lease,
+            "inputSequence": seq,
+            "op": { "kind": "text", "text": "x" },
+        })
+    };
+
+    // 1. the lease is PENDING (the seed is not applied yet): refused, and SAID
+    send_json(&mut control, send_input(&session_id, "act-ir", 0, 1)).await;
+    let refused = next_text_of(&mut control, "InputRefused").await;
+    assert_eq!(refused["sessionId"], session_id);
+    assert_eq!(refused["activationId"], "act-ir");
+    assert_eq!(refused["inputSequence"], 1);
+    assert_eq!(refused["reason"], "pending");
+
+    // 2. a stale lease epoch: the placement fence by name, the epoch echoed
+    send_json(&mut control, send_input(&session_id, "act-ir", 9, 2)).await;
+    let stale = next_text_of(&mut control, "InputRefused").await;
+    assert_eq!(stale["inputSequence"], 2);
+    assert_eq!(stale["leaseEpoch"], 9);
+    assert_eq!(stale["reason"], "stale-lease-epoch");
+
+    // 3. an id this leg does not own is NEVER answered (EL7): one socket is
+    //    read in order, so the next answer is sequence 4's, never 3's
+    send_json(&mut control, send_input(&session_id, "act-nobody", 0, 3)).await;
+    send_json(&mut control, send_input(&session_id, "act-ir", 9, 4)).await;
+    let next = next_text_of(&mut control, "InputRefused").await;
+    assert_eq!(
+        next["inputSequence"], 4,
+        "an id the caller does not own is never answered"
+    );
+
+    // 4. accepted input is still answered only by its echo frame
+    let (_kind, _base, result, _bytes, _headers) = receive_transfer(&mut frames).await;
+    scene_applied(&mut frames, &session_id, "act-ir", &result).await;
+    status_until(&mut control, "input allowed", |s| {
+        s["input"]["state"] == "allowed"
+    })
+    .await;
+    send_json(&mut control, send_input(&session_id, "act-ir", 0, 5)).await;
+    assert!(
+        tokio::time::timeout(
+            Duration::from_millis(300),
+            next_text_of(&mut control, "InputRefused")
+        )
+        .await
+        .is_err(),
+        "accepted input is never acknowledged on the control leg"
+    );
+
+    // 5. a leg that did NOT negotiate it hears nothing (another session, so
+    //    the same client's key is free; its lease stays pending)
+    let session_b = spawn_session(&h.source);
+    let (mut plain, echoed) = connect_control(&h, "set-ir-plain", json!(["session-events"])).await;
+    assert_eq!(echoed, json!(["session-events"]));
+    send_json(
+        &mut plain,
+        json!({
+            "type": "AttachControlLeg",
+            "activationId": "act-plain",
+            "attachGrant": h.attach_grant(&session_b.id(), 1, &["input", "read"]),
+            "initialDemand": { "mode": "live" },
+        }),
+    )
+    .await;
+    expect_text(next_reply(&mut plain).await, "ControlLegAttached");
+    send_json(&mut plain, send_input(&session_b.id(), "act-plain", 0, 1)).await;
+    match tokio::time::timeout(Duration::from_millis(300), plain.next()).await {
+        Err(_) => {}
+        Ok(other) => panic!("the un-negotiated leg heard something: {other:?}"),
+    }
     h.door.shutdown().await;
 }
 

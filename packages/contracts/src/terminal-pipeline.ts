@@ -640,7 +640,10 @@ export type ProtocolVersion = z.infer<typeof ProtocolVersion>;
  * series (`SendInputOp`) into ONE engine paste. Load-bearing the other way
  * round: the CLIENT sends the new kind, and a cell that did not echo the
  * string refuses the unknown kind at its reader and closes the control leg
- * (PROTOCOL) — so a client sends parts only on a leg whose accept echoed it. */
+ * (PROTOCOL) — so a client sends parts only on a leg whose accept echoed it.
+ * `input-refusals` (mark 22's refusal half, reversed 2026-10-18; audit C5): the client can
+ * receive `InputRefused`, the cell's answer to a `SendInput` it turned away —
+ * load-bearing the same way as `geometry-events`. */
 export const KNOWN_CAPABILITIES = [
   "resume",
   "snapshot-demand",
@@ -648,6 +651,7 @@ export const KNOWN_CAPABILITIES = [
   "session-events",
   "geometry-events",
   "paste-parts",
+  "input-refusals",
 ] as const;
 export type KnownCapability = (typeof KNOWN_CAPABILITIES)[number];
 
@@ -1338,7 +1342,9 @@ export type SendInputOp = z.infer<typeof SendInputOp>;
 /** client → cell, CONTROL leg (the input thread; §5.4/§18.1). Gated by the
  * activation's `input` lease dimension and fenced by ghosttea's `authorize_input`
  * over `(view, client, attachmentEpoch, inputSequence)`. A refused / stale /
- * replayed message is DROPPED and audited — there is no per-keystroke ack. */
+ * replayed message is DROPPED and audited — there is no per-keystroke ack. A
+ * client that negotiated `input-refusals` is TOLD of a refusal at the cell's
+ * own gate (`InputRefused`); accepted input still answers only with its echo. */
 export const SendInput = z
   .object({
     ...ActivationTriple,
@@ -1348,6 +1354,49 @@ export const SendInput = z
   })
   .passthrough();
 export type SendInput = z.infer<typeof SendInput>;
+
+/** Why the cell turned a `SendInput` away at its own gate. When the lease's
+ * `input` dimension refused, the reason is the lease's own word — the one the
+ * client already reads in `CellActivationStatus` (`lagging`, `overload`,
+ * `right-expired`, `pending`, `not-granted`, `right-revoked`, `exited`); the two
+ * fences that are not lease state name themselves: `stale-lease-epoch` (the
+ * message's placement is not the activation's route binding) and `no-view`
+ * (demand none — nothing to type into). Tolerant: a receiver words an unknown
+ * reason generically and never refuses the message over it. */
+export const INPUT_REFUSED_REASONS = [
+  "lagging",
+  "overload",
+  "right-expired",
+  "pending",
+  "not-granted",
+  "right-revoked",
+  "exited",
+  "stale-lease-epoch",
+  "no-view",
+] as const;
+
+/** cell → client, CONTROL leg, ONLY on a leg whose hello negotiated the
+ * `input-refusals` capability (TP-D25: an un-negotiated client closes its leg on
+ * any unknown tag, so the gate is load-bearing). The answer to ONE `SendInput`
+ * the cell refused at its own gate — the message's own triple and
+ * `inputSequence`, echoed, and the reason — so a client can say that THIS input
+ * went nowhere. The rule is TPv3 mark 22's refusal half as James reversed it
+ * on 2026-10-18: a leg that negotiated `input-refusals` is answered; any other
+ * leg's refusal is dropped and audited with no wire reply (§5.4's
+ * drop-and-audit). Not an acknowledgement: accepted input still answers only
+ * with its echo frame. Never sent for a message that names no activation of
+ * the caller's own control leg — a refusal must not confirm an id the caller
+ * does not own (EL7) — nor for the engine's own fence (`authorize_input`'s
+ * replay dedup is a no-op by design). */
+export const InputRefused = z
+  .object({
+    ...ActivationTriple,
+    leaseEpoch: JsonSafeU64,
+    inputSequence: JsonSafeU64,
+    reason: z.string().min(1),
+  })
+  .passthrough();
+export type InputRefused = z.infer<typeof InputRefused>;
 
 // ---------------------------------------------------------------------------
 // Session events (spec §5.4, TP-S3f / petition G24) — the lifecycle verb,
@@ -1676,6 +1725,7 @@ export const TpMessageType = z.enum([
   "TransferGeometry",
   "SendInput",
   "SessionEvent",
+  "InputRefused",
   "GeometryCommitted",
   "GeometryRefused",
   "GeometryState",
@@ -1705,6 +1755,7 @@ export const TP_MESSAGE_SCHEMAS: Readonly<Record<TpMessageType, ZodTypeAny>> = {
   TransferGeometry,
   SendInput,
   SessionEvent,
+  InputRefused,
   GeometryCommitted,
   GeometryRefused,
   GeometryState,
@@ -1753,6 +1804,7 @@ export const TP_LEG_OUTBOUND: Readonly<Record<TransportChannel, readonly TpMessa
     // item 42 — only on a leg that negotiated `geometry-events`, like
     // `SessionEvent` on `session-events`.
     "GeometryState",
+    "InputRefused",
   ],
   frames: [
     "ConnectionAccepted",

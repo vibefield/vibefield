@@ -383,9 +383,10 @@ impl GeometryOutcome {
 /// The door's marching orders for one `SendInput`.
 #[derive(Debug)]
 pub enum InputDecision {
-    /// Refuse silently and audit — no wire reply (§5.4: the cell ALWAYS rejects
-    /// input while it is not allowed; the echo of accepted input is a frame). The
-    /// reason is the audit tag.
+    /// Refuse and audit (§5.4: the cell ALWAYS rejects input while it is not
+    /// allowed; the echo of accepted input is a frame). The reason is the audit
+    /// tag. The CALLER is told only on a leg that negotiated `input-refusals`,
+    /// in the words `input_refusal` allows (C5) — silent otherwise.
     Drop(&'static str),
     /// Authorized — the door runs the engine input op on the resolved view.
     Proceed(InputProceed),
@@ -1304,9 +1305,10 @@ impl ActivationTable {
     /// `SendInput` (§5.4, TP-S3-input) — the cell-side gate for one input op.
     /// PURE read: it resolves the caller activation, applies every cell-side
     /// fence, and hands back the coordinates the door feeds ghosttea (whose own
-    /// `authorize_input` is the engine backstop). A failed gate is a silent
-    /// `Drop` — no wire reply, per §5.4. `now_ms` drives the renewal-margin
-    /// expiry check so a stale-`Allowed` lease cannot leak input past the margin.
+    /// `authorize_input` is the engine backstop). A failed gate is a `Drop`,
+    /// answered only where `input_refusal` allows it (C5). `now_ms` drives the
+    /// renewal-margin expiry check so a stale-`Allowed` lease cannot leak input
+    /// past the margin.
     pub fn send_input(&self, leg: &LegRef, msg: &SendInput, now_ms: u64) -> InputDecision {
         let Some(a) = self.by_id.get(&msg.activation_id) else {
             return InputDecision::Drop("no-activation");
@@ -1343,6 +1345,35 @@ impl ActivationTable {
             attachment_epoch,
             input_sequence: msg.input_sequence,
         })
+    }
+
+    /// C5 — what the CALLER of a refused `SendInput` may be told:
+    /// the `InputRefused` reason, or None. When the lease refused it is the
+    /// lease's own input reason (`lagging`, `overload`, `pending`,
+    /// `not-granted`, …) — the word the client already reads in
+    /// `CellActivationStatus`; when another fence did, that fence's name
+    /// (`stale-lease-epoch`, `right-expired`, `no-view`). NEVER an answer for a
+    /// message naming no activation of the caller's own control leg
+    /// (`no-activation`, `wrong-leg`): a refusal must not confirm an id the
+    /// caller does not own (EL7).
+    pub fn input_refusal(
+        &self,
+        leg: &LegRef,
+        msg: &SendInput,
+        dropped: &'static str,
+    ) -> Option<&'static str> {
+        let a = self.by_id.get(&msg.activation_id)?;
+        if a.control.connection_id != leg.connection_id || a.session_id != msg.session_id {
+            return None;
+        }
+        match dropped {
+            "no-activation" | "wrong-leg" => None,
+            "input-not-allowed" => Some(match a.input {
+                Input::Suspended(reason) | Input::Revoked(reason) => reason,
+                Input::Allowed => dropped,
+            }),
+            fence => Some(fence),
+        }
     }
 
     /// `AttachControlLeg` after the grant VERIFIED and the attach high-water
@@ -4825,5 +4856,92 @@ mod tests {
             t.send_input(&control2, &msg("a2", "s2", 0, 1), 3_000),
             InputDecision::Drop("input-not-allowed")
         ));
+    }
+
+    /// C5 — what the caller of a refused `SendInput` may be TOLD
+    /// (`InputRefused`): the lease's own input reason when the lease refused,
+    /// the fence's name when another fence did, and nothing at all for a
+    /// message that names no activation of the caller's own control leg (EL7).
+    #[test]
+    fn a_refused_input_is_answered_in_the_leases_words_and_never_to_a_stranger() {
+        fn msg(activation: &str, session: &str, lease: u64) -> SendInput {
+            SendInput {
+                session_id: session.into(),
+                activation_id: activation.into(),
+                lease_epoch: lease,
+                input_sequence: 1,
+                op: InputOp::Text { text: "x".into() },
+            }
+        }
+        fn answer(
+            t: &ActivationTable,
+            leg: &LegRef,
+            m: &SendInput,
+            now_ms: u64,
+        ) -> Option<&'static str> {
+            match t.send_input(leg, m, now_ms) {
+                InputDecision::Drop(dropped) => t.input_refusal(leg, m, dropped),
+                InputDecision::Proceed(_) => panic!("expected a refusal"),
+            }
+        }
+        let mut t = ActivationTable::new("cb");
+        let (control, _crx, frames, _frx) = presenting_activation(&mut t, "a1", "s1", 10);
+
+        // the lease refused: its own word, `lagging`
+        t.unit_sent("a1", 11, false);
+        t.by_id.get_mut("a1").unwrap().unacked.back_mut().unwrap().1 =
+            Instant::now() - Duration::from_millis(tp::INPUT_LAG_SUSPEND_MS + 1);
+        perform(t.tick(3_100));
+        assert_eq!(
+            answer(&t, &control, &msg("a1", "s1", 0), 3_100),
+            Some("lagging")
+        );
+
+        // caught up; the placement fence names itself
+        perform(applied(&mut t, &frames, "a1", "s1", 11, 3_200));
+        assert_eq!(
+            answer(&t, &control, &msg("a1", "s1", 5), 3_200),
+            Some("stale-lease-epoch")
+        );
+        // the renewal-margin backstop, while the lease still reads allowed
+        assert_eq!(
+            answer(&t, &control, &msg("a1", "s1", 0), 600_000),
+            Some("right-expired")
+        );
+
+        // strangers are never answered: an unknown id, a foreign leg, a
+        // session the activation is not
+        let (foreign, _rx) = leg(99);
+        assert_eq!(answer(&t, &control, &msg("zz", "s1", 0), 3_200), None);
+        assert_eq!(answer(&t, &foreign, &msg("a1", "s1", 0), 3_200), None);
+        assert_eq!(answer(&t, &control, &msg("a1", "s9", 0), 3_200), None);
+
+        // demand none parks the view: nothing to type into, said so
+        perform(t.declare_demand(
+            &control,
+            DeclareDemand {
+                session_id: "s1".into(),
+                activation_id: "a1".into(),
+                lease_epoch: 0,
+                demand_sequence: 1,
+                demand: SourceDemand {
+                    mode: SourceDemandMode::None,
+                    cadence_class: None,
+                    urgency: None,
+                },
+            },
+        ));
+        t.view_detached("a1");
+        assert_eq!(
+            answer(&t, &control, &msg("a1", "s1", 0), 3_300),
+            Some("no-view")
+        );
+
+        // an overload stop: the lease's word again
+        perform(t.presentation_stopped("a1", "overload", 3_400));
+        assert_eq!(
+            answer(&t, &control, &msg("a1", "s1", 0), 3_400),
+            Some("overload")
+        );
     }
 }

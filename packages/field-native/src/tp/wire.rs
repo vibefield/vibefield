@@ -672,6 +672,23 @@ pub enum SessionEventKind {
     Resync,
 }
 
+/// Contracts `InputRefused` (cell → client, CONTROL leg; audit C5, TPv3 mark 22's
+/// refusal half, reversed 2026-10-18) — the cell's answer to ONE `SendInput` it
+/// refused at its own gate: the message's triple and `inputSequence`, echoed,
+/// and the reason in the lease's words. Emitted ONLY on a control leg whose
+/// hello negotiated `input-refusals`: an un-negotiated client closes its leg on
+/// any unknown tag. Pinned by `tp-input-refused.lagging.json` and its tagged
+/// twin on both sides (EL9).
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct InputRefused {
+    pub session_id: String,
+    pub activation_id: String,
+    pub lease_epoch: u64,
+    pub input_sequence: u64,
+    pub reason: String,
+}
+
 /// The presentation envelope's binary framing (contracts
 /// `encodePresentationEnvelope`): `'T' 'P' 1 0 u32BE headerLen | header JSON |
 /// payload`. The header is built as a `Value` because `baseContent` has three
@@ -707,20 +724,27 @@ pub fn decode_envelope(bytes: &[u8]) -> Option<(Value, &[u8])> {
 }
 
 /// The wire capabilities this cell speaks. Of the TP-D25 profile it speaks
-/// `session-events` (TP-S3f/G24: the cell → client `SessionEvent` verb) and,
-/// since item 42 (2026-10-19), `geometry-events` (the cell → client
-/// `GeometryState` verb) — both gated on the negotiation because an
-/// un-negotiated client closes its leg on any unknown tag — and none of the
-/// other three (`resume`, `snapshot-demand`, `profiling-envelope`) yet. A
-/// client's unknown strings are ignored (tolerant reader); the echoed
-/// intersection is the negotiation.
-pub const CELL_CAPABILITIES: &[&str] = &[SESSION_EVENTS_CAPABILITY, GEOMETRY_EVENTS_CAPABILITY];
+/// `session-events` (TP-S3f/G24: the cell → client `SessionEvent` verb), since
+/// item 42 (2026-10-19) `geometry-events` (the cell → client `GeometryState`
+/// verb), and `input-refusals` (audit C5, TPv3 mark 22's refusal half,
+/// reversed 2026-10-18: `InputRefused`, the answer to a refused `SendInput`) —
+/// each gated on the negotiation, because an un-negotiated client closes its
+/// leg on any unknown tag — and none of the other three (`resume`,
+/// `snapshot-demand`, `profiling-envelope`) yet. A client's unknown strings are
+/// ignored (tolerant reader); the echoed intersection is the negotiation.
+pub const CELL_CAPABILITIES: &[&str] = &[
+    SESSION_EVENTS_CAPABILITY,
+    GEOMETRY_EVENTS_CAPABILITY,
+    INPUT_REFUSALS_CAPABILITY,
+];
 
 /// The negotiated `session-events` capability string, spelled once.
 pub const SESSION_EVENTS_CAPABILITY: &str = "session-events";
 
 /// The negotiated `geometry-events` capability string, spelled once (item 42).
 pub const GEOMETRY_EVENTS_CAPABILITY: &str = "geometry-events";
+/// The negotiated `input-refusals` capability string, spelled once.
+pub const INPUT_REFUSALS_CAPABILITY: &str = "input-refusals";
 
 pub fn capability_intersection(client: &[String]) -> Vec<String> {
     client
@@ -995,6 +1019,51 @@ mod tests {
             (newer.kind.as_str(), newer.os.as_deref()),
             ("watch", Some("watchos"))
         );
+    }
+
+    /// C5 — `input-refusals` is negotiated only when asked for; a hello that
+    /// does not name it negotiates none of it.
+    #[test]
+    fn the_cell_negotiates_input_refusals_only_when_asked() {
+        let negotiated =
+            capability_intersection(&["session-events".to_string(), "input-refusals".to_string()]);
+        assert_eq!(
+            negotiated,
+            vec![
+                SESSION_EVENTS_CAPABILITY.to_string(),
+                INPUT_REFUSALS_CAPABILITY.to_string()
+            ]
+        );
+        assert!(
+            !capability_intersection(&["resume".to_string(), "session-events".to_string()])
+                .contains(&INPUT_REFUSALS_CAPABILITY.to_string())
+        );
+    }
+
+    /// C5 — the emit direction, as `SessionEvent`'s: the cell SERIALIZES the
+    /// refusal and the goldens pin the exact JSON the TS schema parses.
+    #[test]
+    fn input_refused_serializes_to_the_contracts_fixtures() {
+        let lagging = InputRefused {
+            session_id: "sess-01J8Z3K9".into(),
+            activation_id: "act-01".into(),
+            lease_epoch: 4,
+            input_sequence: 7,
+            reason: "lagging".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(&lagging).unwrap(),
+            fixture("tp-input-refused.lagging.json")
+        );
+        let stale = InputRefused {
+            session_id: "s1".into(),
+            activation_id: "act-1".into(),
+            lease_epoch: 3,
+            input_sequence: 12,
+            reason: "stale-lease-epoch".into(),
+        };
+        let on_wire: Value = serde_json::from_str(&tagged("InputRefused", &stale)).unwrap();
+        assert_eq!(on_wire, fixture("tp-tagged-message.input-refused.json"));
     }
 
     #[test]

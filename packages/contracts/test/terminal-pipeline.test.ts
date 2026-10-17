@@ -34,6 +34,8 @@ import {
   grantSigningInput,
   grantValidityAt,
   highWaterTombstoneTtlMs,
+  INPUT_REFUSED_REASONS,
+  InputRefused,
   KNOWN_CAPABILITIES,
   PRESENTATION_ENVELOPE_MAX_HEADER_BYTES,
   PresentationEnvelopeHeader,
@@ -835,6 +837,36 @@ describe("the seat announced — GeometryState (spec §6, item 42)", () => {
       undefined,
     );
     expect(grantSigningInput(v.attach.protected, v.attach.claims)).toBe(v.attach.signingInput);
+  });
+});
+
+describe("the refusal's answer — InputRefused (mark 22's refusal half; audit C5)", () => {
+  it("the fixture parses, and the reason is a tolerant string", () => {
+    const body = fixture("tp-input-refused.lagging.json");
+    const refused = InputRefused.parse(body);
+    expect(refused).toMatchObject({ activationId: "act-01", inputSequence: 7, reason: "lagging" });
+    expect(INPUT_REFUSED_REASONS).toContain(refused.reason);
+    // a reason this build predates still parses: the receiver words it
+    // generically and never refuses the message over it
+    expect(InputRefused.safeParse({ ...body, reason: "some-future-fence" }).success).toBe(true);
+    expect(InputRefused.safeParse({ ...body, reason: "" }).success).toBe(false);
+    expect(InputRefused.safeParse({ ...body, inputSequence: -1 }).success).toBe(false);
+  });
+
+  it("the verb is OUTBOUND on control only, behind a known capability", () => {
+    const tagged = fixture("tp-tagged-message.input-refused.json");
+    expect(decodeTpMessage(tagged, TP_LEG_OUTBOUND.control).ok).toBe(true);
+    expect(decodeTpMessage(tagged, TP_LEG_INBOUND.control)).toMatchObject({
+      ok: false,
+      error: "not-allowed-here",
+    });
+    expect(decodeTpMessage(tagged, TP_LEG_OUTBOUND.frames)).toMatchObject({
+      ok: false,
+      error: "not-allowed-here",
+    });
+    // Load-bearing, as session-events is: the kit closes its leg on an unknown
+    // tag, so the cell speaks it only to a hello that asked.
+    expect(KNOWN_CAPABILITIES).toContain("input-refusals");
   });
 });
 
