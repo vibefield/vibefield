@@ -14,6 +14,13 @@ import GhostteaTerminal
 ///   45×5, and the desktop and the reopened card's codex were left at five rows.
 ///   A leaving card's grids are dropped: the seat keeps the grid the card last
 ///   rested at.
+///
+/// A grid at rest is told at the END of the run loop's turn that measured it,
+/// never from inside the layout pass: the keyboard's will-notification can
+/// reach this value after the pass that measured its first grid (SwiftUI's own
+/// observer may lay out first), and in the same turn it still turns that grid
+/// into the keyboard's motion. The first build told from inside the pass and
+/// sent 45×10 mid-motion (James's phone, 05:22Z).
 struct SettledGrid {
   enum Report: Equatable {
     /// Tell the seat this grid.
@@ -25,12 +32,16 @@ struct SettledGrid {
   }
 
   private var keyboardMoving = false
+  /// Measured at rest in this turn, told when the turn ends.
+  private var pending: GhostteaTerminalGridSize?
   private var held: GhostteaTerminalGridSize?
   private var sent: GhostteaTerminalGridSize?
 
-  /// A grid the pane measured; `leaving` while its card is being dismissed.
+  /// A grid the pane measured; `leaving` while its card is being dismissed. A
+  /// grid at rest waits for `turnEnded`.
   mutating func measured(_ grid: GhostteaTerminalGridSize, leaving: Bool) -> Report {
     if leaving {
+      pending = nil
       held = nil
       return .held(grid, because: "the card is leaving")
     }
@@ -38,13 +49,26 @@ struct SettledGrid {
       held = grid
       return .held(grid, because: "the keyboard is moving")
     }
+    pending = grid
+    return .unchanged
+  }
+
+  /// The end of the turn that measured a grid at rest: tell it, when it is news.
+  mutating func turnEnded() -> Report {
+    guard let grid = pending else { return .unchanged }
+    pending = nil
     return send(grid)
   }
 
   /// UIKit's keyboard will-notification: what is measured from here is the
-  /// keyboard's motion, until its did-notification.
-  mutating func keyboardWillMove() {
+  /// keyboard's motion, until its did-notification — and so is a grid measured
+  /// earlier in this turn and not yet told.
+  mutating func keyboardWillMove() -> Report {
     keyboardMoving = true
+    guard let grid = pending else { return .unchanged }
+    pending = nil
+    held = grid
+    return .held(grid, because: "the keyboard is moving")
   }
 
   /// UIKit's keyboard did-notification: the newest grid held meanwhile, when

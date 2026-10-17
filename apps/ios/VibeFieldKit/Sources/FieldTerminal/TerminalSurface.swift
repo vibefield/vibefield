@@ -160,12 +160,28 @@ public struct TerminalSurface: UIViewRepresentable {
     var keyboardObservers: [NSObjectProtocol] = []
     /// A dismissal of this card that has begun, watched for being called off.
     var watchingDismissal = false
+    /// The end of this run loop turn is already asked for (`SettledGrid`).
+    var turnEndAsked = false
 
-    /// A grid the Metal view measured: the seat's when it is settled.
+    /// A grid the Metal view measured: the seat's when it is settled. One at
+    /// rest is told when this turn ends.
     func measured(_ size: GhostteaTerminalGridSize) {
       let leaving = metalView?.isInDismissingPresentation ?? false
       if leaving { watchDismissal() }
       report(settledGrid.measured(size, leaving: leaving))
+      askForTheTurnEnd()
+    }
+
+    private func askForTheTurnEnd() {
+      guard !turnEndAsked else { return }
+      turnEndAsked = true
+      DispatchQueue.main.async { [weak self] in
+        MainActor.assumeIsolated {
+          guard let self else { return }
+          self.turnEndAsked = false
+          self.report(self.settledGrid.turnEnded())
+        }
+      }
     }
 
     private func report(_ report: SettledGrid.Report) {
@@ -177,17 +193,25 @@ public struct TerminalSurface: UIViewRepresentable {
       }
     }
 
+    /// Observed on the POSTING thread (`queue: nil`; UIKit posts these on the
+    /// main thread), synchronously: a block given to the main queue runs on a
+    /// later turn, after the layout pass the keyboard's frame triggers has
+    /// already measured the grid — the first build sent 45×10 that way on
+    /// James's phone (2026-10-17 05:22Z).
     func observeKeyboard() {
       guard keyboardObservers.isEmpty else { return }
       let center = NotificationCenter.default
       keyboardObservers = [
         center.addObserver(
-          forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: .main
+          forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: nil
         ) { [weak self] _ in
-          MainActor.assumeIsolated { self?.settledGrid.keyboardWillMove() }
+          MainActor.assumeIsolated {
+            guard let self else { return }
+            self.report(self.settledGrid.keyboardWillMove())
+          }
         },
         center.addObserver(
-          forName: UIResponder.keyboardDidChangeFrameNotification, object: nil, queue: .main
+          forName: UIResponder.keyboardDidChangeFrameNotification, object: nil, queue: nil
         ) { [weak self] _ in
           MainActor.assumeIsolated {
             guard let self else { return }
