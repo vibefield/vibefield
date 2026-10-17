@@ -1044,6 +1044,48 @@ import Testing
     client.close()
   }
 
+  /// The History lead's D6 (2026-10-17) — a paste larger than the cell's
+  /// control-message cap closed the WHOLE control leg: the cell's reader drops
+  /// a connection on an oversize message. Past the announced cap it is refused
+  /// here, with the text's own size and how much of IT one message carries, and
+  /// nothing is sent; the leg stays, and the next paste goes.
+  @Test func aPasteTooLargeForOneControlMessageIsRefusedWithItsNumbers() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    let seed = try Script.frame(
+      session: session, activation: live.activation, sequence: 1, creditEpoch: 1, base: nil,
+      result: Script.stamp(100), payload: Data("TRF1-full".utf8))
+    await live.frames.deliver(.binary(seed))
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(session: session, activation: live.activation, sequence: 1))
+    try await settle("typing is allowed") { client.sessions[session]?.inputAllowed == true }
+
+    // The vector's cell announces 65,536 bytes a control message.
+    let large = String(repeating: "a", count: 100_000)
+    let refused = try #require(client.paste(large, to: session))
+    #expect(refused.kind == .pasted)
+    #expect(refused.bytes == 100_000)
+    #expect(refused.fits < 65_536 && refused.fits > 65_000)
+    // Quotes cost two bytes each on the wire, so "of it" is THIS text's figure.
+    let quoted = String(repeating: "\"", count: 40_000)
+    let escaped = try #require(client.send(text: quoted, to: session))
+    #expect(escaped.kind == .typed)
+    #expect(escaped.bytes == 40_000)
+    #expect(escaped.fits < 32_768 && escaped.fits > 32_000)
+    #expect(await live.control.allSent("SendInput").isEmpty)
+    #expect(await live.control.isClosed == false)
+
+    #expect(client.paste("echo fits", to: session) == nil)
+    try await settle("the next paste goes") {
+      await live.control.allSent("SendInput").count == 1
+    }
+    client.close()
+  }
+
   // MARK: Loss and replacement
 
   /// Losing ONE leg invalidates every activation on the SET — the other leg's

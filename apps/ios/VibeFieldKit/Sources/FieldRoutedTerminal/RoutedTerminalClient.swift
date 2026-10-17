@@ -533,12 +533,17 @@ public final class RoutedTerminalClient {
 
   // MARK: The control verbs
 
-  public func send(text: String, to sessionId: String) {
-    sendInput(sessionId: sessionId, op: .object(["kind": .string("text"), "text": .string(text)]))
+  /// Typed text. Nil when sent (or held at the input gate, which says why
+  /// elsewhere); a refusal, with its numbers, when it is too large to send.
+  @discardableResult
+  public func send(text: String, to sessionId: String) -> RoutedInputRefusal? {
+    sendText(text, .typed, to: sessionId)
   }
 
-  public func paste(_ text: String, to sessionId: String) {
-    sendInput(sessionId: sessionId, op: .object(["kind": .string("paste"), "text": .string(text)]))
+  /// A paste — see `send(text:to:)`.
+  @discardableResult
+  public func paste(_ text: String, to sessionId: String) -> RoutedInputRefusal? {
+    sendText(text, .pasted, to: sessionId)
   }
 
   /// A keystroke, in ghosttea's own `KeyInput` serde spelling — the cell
@@ -2070,15 +2075,79 @@ public final class RoutedTerminalClient {
     guard session.inputAllowed else { return }
     session.inputSequence += 1
     sessions[sessionId] = session
-    control?.send(
-      .sendInput,
-      [
-        "sessionId": .string(sessionId),
-        "activationId": .string(session.activationId),
-        "leaseEpoch": .int(leaseEpoch(for: sessionId)),
-        "inputSequence": .int(session.inputSequence),
-        "op": op,
-      ])
+    control?.send(.sendInput, inputBody(sessionId: sessionId, session: session, op: op))
+  }
+
+  private func inputBody(sessionId: String, session: RoutedSessionState, op: JSONValue)
+    -> [String: JSONValue]
+  {
+    [
+      "sessionId": .string(sessionId),
+      "activationId": .string(session.activationId),
+      "leaseEpoch": .int(leaseEpoch(for: sessionId)),
+      "inputSequence": .int(session.inputSequence),
+      "op": op,
+    ]
+  }
+
+  /// Typed text or a paste: the two inputs whose size a person chose. The
+  /// cell's reader caps a control message at the `maxControlMessageBytes` it
+  /// announced and CLOSES THE WHOLE LEG on a larger one (tungstenite's
+  /// `max_message_size`, `tp/door.rs` `ws_config`), so a 300 KB paste tore down
+  /// the control of every session on the lane. One past the cap is refused
+  /// here, with its numbers, and never sent. It is measured by the one encoder
+  /// the leg sends with, never a mirror of its escaping: `JSONEncoder` escapes
+  /// `/` where `JSON.stringify` does not, and quotes and controls cost more
+  /// than their own bytes (the History lead's D6, 2026-10-17).
+  private func sendText(
+    _ text: String, _ kind: RoutedInputRefusal.Kind, to sessionId: String
+  ) -> RoutedInputRefusal? {
+    let wire = kind == .pasted ? "paste" : "text"
+    func op(_ text: String) -> JSONValue {
+      .object(["kind": .string(wire), "text": .string(text)])
+    }
+    if var next = sessions[sessionId], next.inputAllowed {
+      // The message exactly as it would go: its own sequence included.
+      next.inputSequence += 1
+      let limit = limits.maxControlMessageBytes
+      func fits(_ text: String) -> Bool {
+        let body = inputBody(sessionId: sessionId, session: next, op: op(text))
+        guard let message = try? RoutedWire.encode(.sendInput, body) else { return false }
+        return message.utf8.count <= limit
+      }
+      if !fits(text) {
+        let refusal = RoutedInputRefusal(
+          kind: kind, bytes: text.utf8.count, fits: Self.longestPrefix(of: text, fitting: fits))
+        options.log(
+          "input refused: \(wire) of \(refusal.bytes) bytes, one message carries \(refusal.fits) "
+            + "of it (cap \(limit)) session=\(sessionId)")
+        return refusal
+      }
+    }
+    sendInput(sessionId: sessionId, op: op(text))
+    return nil
+  }
+
+  /// The own UTF-8 of `text`'s longest prefix, cut between code points, that
+  /// `fits` — found by bisection over the real measure, so the figure a person
+  /// is told can never disagree with what the leg would send. Zero when not
+  /// even an empty text fits.
+  static func longestPrefix(of text: String, fitting fits: (String) -> Bool) -> Int {
+    let scalars = Array(text.unicodeScalars)
+    func prefix(_ count: Int) -> String {
+      var view = String.UnicodeScalarView()
+      view.append(contentsOf: scalars[..<count])
+      return String(view)
+    }
+    guard fits(prefix(0)) else { return 0 }
+    guard !fits(text) else { return text.utf8.count }
+    var low = 0  // fits
+    var high = scalars.count  // does not
+    while high - low > 1 {
+      let middle = (low + high) / 2
+      if fits(prefix(middle)) { low = middle } else { high = middle }
+    }
+    return prefix(low).utf8.count
   }
 
   private func leaseEpoch(for sessionId: String) -> Int64 {

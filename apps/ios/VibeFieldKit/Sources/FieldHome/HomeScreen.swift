@@ -1788,16 +1788,22 @@ public struct HomeScreen: View {
       // verb below forwards through, read before the act is spent. A declined
       // act is said on the card (the attachment's notice), and the card keeps
       // what was typed.
-      let taken = attachment.acceptsInput
+      //
+      // Text is taken only when the terminal took it: a draft or a paste too
+      // large for the link's control message is refused and said, and the card
+      // keeps it (the History lead's D6, 2026-10-17) — the gate read before the
+      // act would have cleared a draft that was never sent.
       switch act {
-      case .keystroke(let stroke): attachment.press(stroke)
-      case .sendDraft(let text): attachment.sendDraft(text)
-      case .typeText(let text): attachment.typeText(text)
+      case .keystroke(let stroke):
+        let taken = attachment.acceptsInput
+        attachment.press(stroke)
+        return taken
+      case .sendDraft(let text): return attachment.sendDraft(text)
+      case .typeText(let text): return attachment.typeText(text)
       // --- IOS-5c: a block, with no Enter behind it.
-      case .paste(let text): attachment.pasteText(text)
+      case .paste(let text): return attachment.pasteText(text)
       // --- end IOS-5c
       }
-      return taken
     }
     // --- IOS-5b: the second half of the same join --------------------------
     // In Draft the composer intercepts a latched character before it reaches

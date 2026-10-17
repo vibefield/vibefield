@@ -823,15 +823,18 @@ public final class TerminalAttachment {
   /// The card's own verbs must NOT re-enter the latch: the model already spent
   /// it when the user tapped the key (`tapKey`, `interceptCharacter`), and a
   /// second consumption here would put Ctrl on the Enter that follows a Send.
-  private func deliverSoftwareInput(_ event: GhostteaSoftwareInputEvent) {
+  ///
+  /// True when the terminal took it — the card keeps a draft it did not.
+  @discardableResult
+  private func deliverSoftwareInput(_ event: GhostteaSoftwareInputEvent) -> Bool {
     switch event {
-    case .text(let text): forward { $0.send(text: text, to: $1) }
-    case .enter: forward { $0.send(text: "\r", to: $1) }
+    case .text(let text): return forwardText(text, pasted: false)
+    case .enter: return forward { _ = $0.send(text: "\r", to: $1) }
     case .deleteBackward:
       let key = RoutedKeyInput(key: "Backspace", code: "Backspace")
-      forward { $0.send(key: key, to: $1) }
-    case .paste(let text): forward { $0.paste(text, to: $1) }
-    case .key(let key): _ = handleHardwareKey(key)
+      return forward { $0.send(key: key, to: $1) }
+    case .paste(let text): return forwardText(text, pasted: true)
+    case .key(let key): return handleHardwareKey(key)
     }
   }
   // --- end IOS-5b -----------------------------------------------------------
@@ -962,26 +965,34 @@ public final class TerminalAttachment {
   ///
   /// An empty draft is Enter alone, which is the whole point of a Send that is
   /// never disabled (D-i6). The draft is NOT trimmed.
-  public func sendDraft(_ text: String) {
+  ///
+  /// A draft the terminal did not take is not followed by its Enter — Enter
+  /// alone would run whatever the prompt already held — and the false answer
+  /// keeps the draft on the card.
+  @discardableResult
+  public func sendDraft(_ text: String) -> Bool {
     commitComposition()
-    if !text.isEmpty { deliverSoftwareInput(.paste(text)) }
-    deliverSoftwareInput(.enter)
+    if !text.isEmpty, !deliverSoftwareInput(.paste(text)) { return false }
+    return deliverSoftwareInput(.enter)
   }
 
   /// Literal text with no Enter behind it — the keypad's symbol keys and the
   /// chips that type an answer without committing it.
-  public func typeText(_ text: String) {
-    guard !text.isEmpty else { return }
+  @discardableResult
+  public func typeText(_ text: String) -> Bool {
+    guard !text.isEmpty else { return true }
     commitComposition()
-    deliverSoftwareInput(.text(text))
+    return deliverSoftwareInput(.text(text))
   }
 
   // --- IOS-5c
   /// One block of text as a paste, with NO Enter behind it.
-  public func pasteText(_ text: String) {
-    guard !text.isEmpty else { return }
+  @discardableResult
+  public func pasteText(_ text: String) -> Bool {
+    guard !text.isEmpty else { return true }
     commitComposition()
-    handleSoftwareInput(.paste(text))
+    // A paste never meets the latch (`latchedKeystroke`): it goes straight on.
+    return deliverSoftwareInput(.paste(text))
   }
   // --- end IOS-5c
 
@@ -1053,13 +1064,32 @@ public final class TerminalAttachment {
 
   /// Every input verb funnels through one gate, so "who may type" is answered
   /// in exactly one place and a declined keystroke always says so.
-  private func forward(_ send: (RoutedTerminalClient, String) -> Void) {
-    guard let client, let sessionID else { return }
+  @discardableResult
+  private func forward(_ send: (RoutedTerminalClient, String) -> Void) -> Bool {
+    guard let client, let sessionID else { return false }
     guard acceptsInput else {
       note(inputRefusalNote)
-      return
+      return false
     }
     send(client, sessionID)
+    return true
+  }
+
+  /// Typed text and a paste, the inputs whose size a person chose. The client
+  /// refuses one too large for the link's control message, and it is SAID
+  /// here in its numbers (`inputTooLargeNote`) — never sent to close the leg,
+  /// never dropped unsaid. True when the terminal took it.
+  private func forwardText(_ text: String, pasted: Bool) -> Bool {
+    var refusal: RoutedInputRefusal?
+    let passed = forward { client, session in
+      refusal = pasted ? client.paste(text, to: session) : client.send(text: text, to: session)
+    }
+    guard passed else { return false }
+    guard let refusal else { return true }
+    note(Self.inputTooLargeNote(refusal))
+    log("input refused for its size — \(refusal.bytes) bytes, one message carries \(refusal.fits) "
+      + "session=\(sessionID ?? "-")")
+    return false
   }
 
   /// Why this keystroke went nowhere, in the most specific words available.
@@ -1099,6 +1129,38 @@ public final class TerminalAttachment {
   }
 
   // MARK: - Pure mappings (pinned by tests)
+
+  /// A size in the note's words, counted in thousands as Finder counts it
+  /// (DESIGN.md §9): bytes below a kilobyte, whole KB below a megabyte, then MB
+  /// and GB to a tenth — the desktop's own `sizeWords` (D6). `up` says which
+  /// way: a size is rounded up and what fits of it down, so the two never read
+  /// as equal. The unit is chosen after the rounding: 999,999 bytes up is
+  /// "1 MB", never "1000 KB".
+  nonisolated static func sizeWords(_ bytes: Int, up: Bool) -> String {
+    if bytes < 1_000 { return bytes == 1 ? "1 byte" : "\(bytes) bytes" }
+    func round(_ value: Double) -> Int { Int(up ? value.rounded(.up) : value.rounded(.down)) }
+    func tenths(_ value: Int) -> String {
+      value % 10 == 0 ? "\(value / 10)" : "\(value / 10).\(value % 10)"
+    }
+    let kb = round(Double(bytes) / 1_000)
+    if kb < 1_000 { return "\(kb) KB" }
+    let mb = round(Double(bytes) / 100_000)
+    if mb < 10_000 { return "\(tenths(mb)) MB" }
+    return "\(tenths(round(Double(bytes) / 100_000_000))) GB"
+  }
+
+  /// An input refused for its size, in the desktop's D6 sentence: its size,
+  /// and how much of IT one paste (or typed text) carries — both the text's
+  /// own bytes, "of it" because the second counts this text's escapes. The
+  /// card names no pane, so the terminal is "the terminal".
+  nonisolated static func inputTooLargeNote(_ refusal: RoutedInputRefusal) -> String {
+    let size = sizeWords(refusal.bytes, up: true)
+    let fits = sizeWords(refusal.fits, up: false)
+    switch refusal.kind {
+    case .pasted: return "Not pasted into the terminal — \(size), and one paste carries \(fits) of it"
+    case .typed: return "Not typed into the terminal — \(size), and typed text carries \(fits) of it"
+    }
+  }
 
   /// The client's state → the card's phase. A session that ENDED outranks the
   /// set's state: the connection may be perfectly healthy and the thing the

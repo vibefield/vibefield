@@ -457,6 +457,28 @@ public enum RoutedSessionEvent: Sendable, Equatable {
   }
 }
 
+/// Typed text or a paste the client refused because one control message
+/// cannot carry it (`RoutedTerminalClient.send(text:to:)`). Both sizes are the
+/// TEXT's own UTF-8, the measure a person can check: `bytes` its whole size,
+/// `fits` how much of THIS text one message carries, its escapes counted —
+/// always below `bytes`.
+public struct RoutedInputRefusal: Sendable, Equatable {
+  public enum Kind: Sendable, Equatable {
+    case typed
+    case pasted
+  }
+
+  public let kind: Kind
+  public let bytes: Int
+  public let fits: Int
+
+  public init(kind: Kind, bytes: Int, fits: Int) {
+    self.kind = kind
+    self.bytes = bytes
+    self.fits = fits
+  }
+}
+
 /// The facts of an `exited` event, kept on the session it names
 /// (`RoutedSessionState.exit`): the code or the signal, whether the end was
 /// asked for, and the engine's own outcome word. Nothing here is inferred.
