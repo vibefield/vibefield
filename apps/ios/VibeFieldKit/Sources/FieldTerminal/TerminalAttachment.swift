@@ -842,7 +842,14 @@ public final class TerminalAttachment {
   /// they arrive continuously and a rejection cue would strobe, so they drop
   /// quietly when input is not accepted.
   public func handleMouse(_ event: GhostteaTerminalMouseEvent) {
-    guard acceptsInput else { return }
+    let wheel = event.button == .scrollUp || event.button == .scrollDown
+    guard acceptsInput else {
+      if wheel { noteScroll("the wheel dropped — input is held") }
+      return
+    }
+    if wheel {
+      noteScroll("the wheel \(event.button == .scrollUp ? "up" : "down") sent to the program")
+    }
     let modifiers = event.modifiers
     let mouse = RoutedMouseInput(
       action: Self.mouseAction(event.action),
@@ -866,8 +873,25 @@ public final class TerminalAttachment {
   }
 
   public func handleScroll(rows: Int) {
-    guard rows != 0, acceptsInput else { return }
+    guard rows != 0 else { return }
+    guard acceptsInput else {
+      noteScroll("viewport rows dropped — input is held")
+      return
+    }
+    noteScroll("viewport rows \(rows < 0 ? "up" : "down") sent")
     forward { $0.scroll(rows: rows, for: $1) }
+  }
+
+  /// What the last scroll did, said when it CHANGES — one line per state, not
+  /// one per event. James's swipes scrolled codex nowhere on the phone
+  /// (2026-10-17 05:25Z) and nothing said whether a swipe went out as the
+  /// program's wheel, as viewport rows, or was dropped while input was held.
+  @ObservationIgnored private var scrollNote: String?
+
+  private func noteScroll(_ note: String) {
+    guard note != scrollNote else { return }
+    scrollNote = note
+    log("scroll: \(note) session=\(sessionID ?? "-")")
   }
 
   /// The keyboard is coming up: put the view back on the bottom, where the
