@@ -7,8 +7,11 @@
 //! Module map — each file owns one concern:
 //! - `frame` — the frame codec (`u8 frameType` · LEB128 `streamId` · payload) and one stream's
 //!   reassembly of a fragmented message (pinned by `freeway-frames.vector.json`);
+//! - `mux` — the link's streams: ids by parity, never reused; each frame's meaning for its
+//!   stream; one reassembly per stream; the WINDOW grants a receiver owes;
 //! - `writer` — which frame goes next: the four classes, the in-flight cap, each stream's order,
 //!   fragments and WINDOW.
 
 pub mod frame;
+pub mod mux;
 pub mod writer;
