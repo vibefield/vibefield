@@ -1205,7 +1205,9 @@ export const FREEWAY_CODES = {
   PROTOCOL_VERSION: 4426,
   /** after a `Restarting` frame: the host is going down on purpose */
   RESTARTING: 4503,
-  /** an OPEN the host held for its door timed out (the door's daemon did not come back in time) */
+  /** an OPEN whose door did not answer: one the host held for its door timed out (the door's daemon
+   * did not come back in time), or a terminal leg's cell door did not answer within TPv3's hello
+   * deadline (that cell is gone; the session's next ticket names its door) */
   DOOR_DOWN: 4504,
 } as const;
 

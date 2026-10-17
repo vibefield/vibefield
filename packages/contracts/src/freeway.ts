@@ -369,8 +369,9 @@ export const FreewayOpened = z.union([
 ]);
 export type FreewayOpened = z.infer<typeof FreewayOpened>;
 
-/** The HOST's refusal of one open (`KIND_NOT_SERVED`, `APPROVAL` on a desktop link,
- * `DOOR_DOWN` for a held open that timed out, …): `state` says what the far side is doing. */
+/** The HOST's refusal of one open (`KIND_NOT_SERVED`, `APPROVAL` on a desktop link or once a
+ * phone's approval lapses, `DOOR_DOWN` for a held open that timed out or a terminal leg whose cell
+ * door did not answer, …): `state` says what the far side is doing. */
 export const FreewayOpenRefused = z
   .object({ code: FreewayCode, state: z.string().min(1), retryable: z.boolean() })
   .passthrough();

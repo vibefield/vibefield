@@ -9,7 +9,8 @@
 //!   delivery rate)), and below the floor it never goes. P0 bypasses the cap; every byte counts.
 //! - **A stream's order is never broken.** Each stream is one FIFO — its OPEN, its messages
 //!   fragment by fragment, its CLOSE — and a class change (the phone's `Priority`) moves the
-//!   whole stream. The cell's own writer once let a delta overtake its activation's catch-up
+//!   whole stream; its CLOSE (or OPEN_REFUSED) is its last frame, after which the stream is over
+//!   here. The cell's own writer once let a delta overtake its activation's catch-up
 //!   (the focus audit's C1); this writer reorders only ACROSS streams.
 //! - **Fragments** are sized by the caller to about 5 ms of the path, clamped to
 //!   `FREEWAY.MIN_FRAGMENT_BYTES`…`FREEWAY.FRAGMENT_BYTES`.
@@ -262,6 +263,7 @@ impl Writer {
                 continue;
             }
             let head = state.queue.front_mut()?;
+            let last = matches!(head.kind, FrameType::Close | FrameType::OpenRefused);
             let frame = if head.kind == FrameType::Text || head.kind == FrameType::Binary {
                 let end = (head.sent + fragment_bytes).min(head.payload.len());
                 let chunk = &head.payload[head.sent..end];
@@ -289,7 +291,9 @@ impl Writer {
             if head.sent >= head.payload.len() {
                 state.queue.pop_front();
             }
-            if !state.queue.is_empty() {
+            if last {
+                self.streams.remove(&stream);
+            } else if !state.queue.is_empty() {
                 self.rings[index].push_back(stream);
             }
             // A frame the codec refuses is this build's fault, never the peer's to read: it is
@@ -366,6 +370,9 @@ mod tests {
             message = stream.push(frame).unwrap();
         }
         assert_eq!(message, Some(Message::Binary(vec![7; 10_000])));
+        // The CLOSE was the stream's last frame: nothing queued after it is written.
+        writer.queue(1, FrameType::Text, b"after the close".to_vec());
+        assert_eq!(writer.next_frame(), None);
     }
 
     #[test]

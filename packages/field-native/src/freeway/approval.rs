@@ -134,10 +134,16 @@ pub fn verify(
     if now_ms.saturating_add(skew) < typed.issued_at {
         return Err(Invalid("claims.issuedAt"));
     }
-    if now_ms >= typed.expires_at.saturating_add(skew) {
+    if lapsed(typed.expires_at, now_ms) {
         return Err(ApprovalRefusal::Expired);
     }
     Ok(typed)
+}
+
+/// Whether an approval that expires at `expires_at` has lapsed at `now_ms`, with TPv3's skew: the
+/// hello's check, and a running link's (whose approval lapses under it, v0.3 §4.4), are this one.
+pub fn lapsed(expires_at: u64, now_ms: u64) -> bool {
+    now_ms >= expires_at.saturating_add(tp::MAX_CLOCK_SKEW_MS)
 }
 
 #[cfg(test)]

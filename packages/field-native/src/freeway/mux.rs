@@ -59,8 +59,14 @@ pub enum Event<'a> {
     Message { stream: u64, message: Message },
     /// A fragment of a message not yet whole.
     Pending { stream: u64 },
-    /// The peer's CLOSE (`FreewayClose`).
-    Closed { stream: u64, close: &'a [u8] },
+    /// The peer's CLOSE (`FreewayClose`). `answer_owed` while this side has not sent its own:
+    /// send it, behind whatever it still has to say on the stream. Otherwise the peer's answered
+    /// this side's, and the stream is gone.
+    Closed {
+        stream: u64,
+        close: &'a [u8],
+        answer_owed: bool,
+    },
     /// The peer granted this many bytes on a windowed stream this side writes (for the writer).
     Window { stream: u64, bytes: u64 },
     /// A frame for a stream that has closed: it crossed the close in flight.
@@ -158,6 +164,12 @@ impl Mux {
                 self.streams.remove(&stream);
             }
         }
+    }
+
+    /// This side refused a stream it had accepted — its far door did not answer — and the stream
+    /// is gone: the peer's frames that crossed the refusal are `Late`.
+    pub fn forget(&mut self, stream: u64) {
+        self.streams.remove(&stream);
     }
 
     /// This side delivered `bytes` of the stream to its local door: the WINDOW frame to send, once
@@ -263,12 +275,14 @@ impl Mux {
             }
             FrameType::Close => {
                 state.peer_closed = true;
-                if state.we_closed {
+                let answer_owed = !state.we_closed;
+                if !answer_owed {
                     self.streams.remove(&stream);
                 }
                 Ok(Event::Closed {
                     stream,
                     close: frame.payload,
+                    answer_owed,
                 })
             }
             FrameType::Window => {
@@ -428,7 +442,10 @@ mod tests {
                 &frame(FrameType::Close, stream, br#"{"code":4004}"#),
                 |_| None
             ),
-            Ok(Event::Closed { .. })
+            Ok(Event::Closed {
+                answer_owed: true,
+                ..
+            })
         ));
         assert_eq!(
             dialer.receive(&frame(FrameType::Text, stream, b"after"), |_| None),
@@ -438,6 +455,26 @@ mod tests {
         assert_eq!(
             dialer.receive(&frame(FrameType::Text, stream, b"late"), |_| None),
             Ok(Event::Late { stream })
+        );
+        // This side closes first: the peer's CLOSE is its answer, owed none, and the stream is gone.
+        let ours_first = dialer.open(TERMINAL).unwrap();
+        dialer
+            .receive(&frame(FrameType::Opened, ours_first, b"{}"), |_| None)
+            .unwrap();
+        dialer.close(ours_first);
+        assert!(matches!(
+            dialer.receive(
+                &frame(FrameType::Close, ours_first, br#"{"code":1000}"#),
+                |_| None
+            ),
+            Ok(Event::Closed {
+                answer_owed: false,
+                ..
+            })
+        ));
+        assert_eq!(
+            dialer.receive(&frame(FrameType::Text, ours_first, b"late"), |_| None),
+            Ok(Event::Late { stream: ours_first })
         );
     }
 

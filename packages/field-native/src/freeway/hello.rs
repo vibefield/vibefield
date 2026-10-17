@@ -10,7 +10,7 @@
 //! an approval copied to another node is useless there. The link's client id is the minter's:
 //! `freeway:<login>#<node>~<hostBootId>` (§6) — built from the transport's identity, never a claim.
 
-use super::approval::{self, ApprovalKey, ApprovalRefusal};
+use super::approval::{self, ApprovalClaims, ApprovalKey, ApprovalRefusal};
 use crate::registries::{freeway as limits, freeway_codes as codes};
 use crate::tp::grant::AttachRight;
 use serde_json::{json, Value};
@@ -59,6 +59,8 @@ pub struct Host<'a> {
 pub struct Admitted {
     pub device_id: String,
     pub role: PeerRole,
+    /// Who the sidecar said is on it: a phone's renewal must name the same node and login.
+    pub identity: Identity,
     /// The phone's, for its grants; a desktop link mints none.
     pub client_id: Option<String>,
     pub rights: Vec<AttachRight>,
@@ -186,6 +188,7 @@ pub fn decide(
         return Ok(Admitted {
             device_id: device_id.clone(),
             role: *role,
+            identity: identity.clone(),
             client_id: None,
             rights: Vec::new(),
             approval_expires_at: None,
@@ -193,14 +196,7 @@ pub fn decide(
         });
     }
     let approval = hello.get("approval").ok_or(APPROVAL_INVALID)?;
-    let claims = approval::verify(key, approval, now_ms).map_err(|refusal| match refusal {
-        ApprovalRefusal::Invalid(_) => APPROVAL_INVALID,
-        ApprovalRefusal::Expired => APPROVAL_EXPIRED,
-    })?;
-    if claims.principal.tailscale_id != identity.node_id || claims.principal.login != identity.login
-    {
-        return Err(NOT_THIS_NODE);
-    }
+    let claims = check_approval(approval, identity, key, now_ms)?;
     let client_id = format!(
         "freeway:{}#{}~{}",
         identity.login, identity.node_id, host.host_boot_id
@@ -211,11 +207,32 @@ pub fn decide(
     Ok(Admitted {
         device_id: device_id.clone(),
         role: *role,
+        identity: identity.clone(),
         client_id: Some(client_id),
         rights: claims.rights,
         approval_expires_at: Some(claims.expires_at),
         welcome,
     })
+}
+
+/// A phone's approval, checked: it verifies (4401 `APPROVAL_INVALID` / `APPROVAL_EXPIRED`) and
+/// names THIS connection's node and login (4403 `IDENTITY_MISMATCH`). The hello's check, and the
+/// link's at every `Renew`, so a renewal can never move a link to another device.
+pub fn check_approval(
+    approval: &Value,
+    identity: &Identity,
+    key: &ApprovalKey,
+    now_ms: u64,
+) -> Result<ApprovalClaims, Refused> {
+    let claims = approval::verify(key, approval, now_ms).map_err(|refusal| match refusal {
+        ApprovalRefusal::Invalid(_) => APPROVAL_INVALID,
+        ApprovalRefusal::Expired => APPROVAL_EXPIRED,
+    })?;
+    if claims.principal.tailscale_id != identity.node_id || claims.principal.login != identity.login
+    {
+        return Err(NOT_THIS_NODE);
+    }
+    Ok(claims)
 }
 
 #[cfg(test)]

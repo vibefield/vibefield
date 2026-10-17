@@ -21,10 +21,13 @@ use std::collections::{HashMap, VecDeque};
 /// How many renewal answers a session remembers, as fieldd's minter does.
 const RENEWAL_MEMORY: usize = 8;
 
-/// A cell the floor handed the host: its grant key and route revision.
+/// A cell the floor handed the host: its grant key, route revision, and its two loopback doors
+/// (the route row's `doors`), which the host dials for the phone's legs.
 pub struct CellRoute {
     pub key: GrantKey,
     pub route_revision: u64,
+    pub control_url: String,
+    pub frames_url: String,
 }
 
 /// A session the floor placed: its cell, and custody's lease epoch once it is exposed.
@@ -87,6 +90,12 @@ impl Keyring {
             attach_generations: HashMap::new(),
             renewals: HashMap::new(),
         }
+    }
+
+    /// A renewal's rights are the next mints' (the grants already out keep theirs until they
+    /// lapse).
+    pub fn set_rights(&mut self, rights: Vec<AttachRight>) {
+        self.rights = rights;
     }
 
     /// `terminal-tickets {sessionIds}` → the `FreewayOpened {tickets}` answer, a row per session.
@@ -241,6 +250,8 @@ mod tests {
             CellRoute {
                 key: key(),
                 route_revision: 12,
+                control_url: "ws://127.0.0.1:9/control".into(),
+                frames_url: "ws://127.0.0.1:9/frames".into(),
             },
         );
         placement.sessions.insert(
