@@ -458,6 +458,14 @@ export class DeviceService extends EventEmitter {
     return [...this.selfPeers.values()].map((peer) => peer.tailscaleId);
   }
 
+  /** F1 — the same self-peer set in the ROSTER keyspace: the devices the freeway host may
+   * admit (thinking-freeway.md v0.3 §4.3), each to be told desktop from phone by `isDocHost`.
+   * Built from the tailnet's own WhoIs, as `selfPeerIds` is, and never THIS device. */
+  selfPeerDeviceIds(): string[] {
+    const ids = [...this.selfPeers.values()].map((peer) => peer.deviceId);
+    return ids.filter((deviceId) => deviceId !== this.deviceId);
+  }
+
   /** UA-P-0f (D5) — the fan-out list doc-sync and presence share, in the shape
    * they already take (`SyncPeer`: the dial id plus liveness).
    *

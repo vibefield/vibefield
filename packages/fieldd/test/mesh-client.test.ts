@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { ARTIFACT_SERVE_PREFIX, isPipeEndpoint, PORTS, SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
-import { MeshClient, meshNodeUp, type ServeState } from "../src/mesh-client";
+import { MeshClient, meshNodeUp, type ServeSpec, type ServeState } from "../src/mesh-client";
 import { NativeLink } from "../src/native-link";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { nativeEndpoint } from "./native-harness";
@@ -222,7 +222,9 @@ describe("MeshClient", () => {
   // P0-S (2026-09-24) — the floor outlives fieldd, so a restarted fieldd's
   // MeshClient meets serves its PREDECESSOR placed. `serve.list` carries no
   // target, secret or allow, so adopting a listed serve kept the dead fieldd's
-  // `product` door forever.
+  // `product` door forever. *(2026-10-17, F1: it carries the declared target,
+  // allow and tls — never the secret, which is per fieldd boot here, so this
+  // row stands; the floor-owned freeway serve is adopted, below.)*
   it("REPLACES a desired serve a predecessor placed, instead of adopting it", async () => {
     const { mock, mesh } = await setup();
     // the node already holds `product`, aimed at a fieldd that no longer exists
@@ -245,6 +247,55 @@ describe("MeshClient", () => {
     expect(mock.meshRemoveCalls).toBe(1);
     expect(mock.meshAddCalls).toBe(1);
     expect(mock.meshServes.get("product")?.target).toEqual({ kind: "port", port: 50_002 });
+  });
+
+  // F1 (FW-L10) — the freeway's serve is the FLOOR's: its listener and secret are the floor
+  // boot's, and the floor admits no other freeway-door serve, so a restarted fieldd adopts the
+  // one its predecessor declared when it is this spec — and every phone link on it stands.
+  const freeway = (over: Partial<ServeSpec> = {}): ServeSpec => ({
+    serveId: "freeway",
+    name: "freeway",
+    listenPort: PORTS.FREEWAY_SERVE,
+    target: { kind: "port", port: 50_123 },
+    tls: false,
+    allow: ["person@example.com"],
+    pathSecret: "ab".repeat(32),
+    secretDoor: "freeway",
+    ...over,
+  });
+  const listed = (spec: ServeSpec) => ({
+    serveId: spec.serveId ?? spec.name,
+    name: spec.name,
+    listenPort: spec.listenPort ?? 0,
+    target: spec.target,
+    url: "http://mock.ts.net:9425",
+    ...(spec.allow !== undefined ? { allow: spec.allow } : {}),
+    ...(spec.tls !== undefined ? { tls: spec.tls } : {}),
+  });
+
+  it("ADOPTS a predecessor's freeway-door serve that is this spec — nothing removed, nothing added", async () => {
+    const { mock, mesh } = await setup();
+    mock.meshServes.set("freeway", listed(freeway()));
+    const states = await mesh.setServes([freeway()]);
+    expect(states[0]).toMatchObject({ status: "active", url: "http://mock.ts.net:9425" });
+    expect(mock.meshRemoveCalls).toBe(0);
+    expect(mock.meshAddCalls).toBe(0);
+    // adopted means placed: the next reconcile against the same node is quiet too
+    await mesh.reconcile();
+    expect(mock.meshRemoveCalls + mock.meshAddCalls).toBe(0);
+  });
+
+  it("REPLACES a freeway-door serve that differs — another login, or another floor boot's port", async () => {
+    const { mock, mesh } = await setup();
+    mock.meshServes.set("freeway", listed(freeway({ allow: ["someone@else.com"] })));
+    await mesh.setServes([freeway()]);
+    expect([mock.meshRemoveCalls, mock.meshAddCalls]).toEqual([1, 1]);
+    expect(mock.meshServes.get("freeway")?.allow).toEqual(["person@example.com"]);
+    // PLACED by this client, then the floor's listener moves: placed is no licence to keep it
+    await mesh.setServes([freeway({ target: { kind: "port", port: 50_124 } })]);
+    expect([mock.meshRemoveCalls, mock.meshAddCalls]).toEqual([2, 2]);
+    expect(mock.meshServes.get("freeway")?.target).toEqual({ kind: "port", port: 50_124 });
+    expect(mock.meshAddParams.at(-1)).toMatchObject({ secretDoor: "freeway" });
   });
 
   it("ADOPTS a serve this client placed: a reconcile against the same node adds nothing", async () => {

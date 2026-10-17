@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { ServeSpec, ServeState } from "./mesh-client";
 
@@ -52,7 +53,11 @@ export interface ServedRoute {
  * the root). `null` = nothing routable right now. */
 export type ServedTargets =
   | { kind: "routes"; routes: readonly ServedRoute[] }
-  | { kind: "port"; port: number };
+  | { kind: "port"; port: number }
+  /** F1 — the WHOLE listener onto one loopback port whose door checks a path secret its own
+   * process was handed (the freeway host's `/f/<pathSecret>`, minted by the floor). The secret
+   * rides the serve's TARGET (`secretDoor`), so a caller dials the bare root knowing nothing. */
+  | { kind: "secret"; port: number; pathSecret: string; door: "freeway" };
 
 /** Escape a LITERAL login for truffle's `allow` globs. The sidecar matches with
  * Go `path.Match`, lowercased on both sides, so a login's own glob
@@ -87,6 +92,19 @@ export function routeServeSpec(
       routes: targets.routes.map(({ prefix, targetPort }) => ({ prefix, targetPort })),
     };
   }
+  if (targets.kind === "secret") {
+    return {
+      serveId: process.serveId,
+      name: process.serveId,
+      listenPort: process.listenPort,
+      target: { kind: "port", port: targets.port },
+      tls: false,
+      allow: [serveAllowGlob(input.linkedLogin)],
+      // the process's OWN door's proof, which it checks on every request
+      pathSecret: targets.pathSecret,
+      secretDoor: targets.door,
+    };
+  }
   return {
     serveId: process.serveId,
     name: process.serveId,
@@ -103,15 +121,25 @@ export function routeServeSpec(
  * on its listener, so a driver must tell "the readings replayed" from "a route
  * moved". For a routes serve that is the listener, the gate and the routes —
  * byte for byte TM-2's key; a whole-listener serve's target IS its route, so
- * its port joins the key (a rosettad restart lands on a new one). */
+ * its port joins the key (a rosettad restart lands on a new one). A secret
+ * target's secret joins it as a DIGEST (F1: a new floor boot is a new secret,
+ * possibly on a recycled port), never the secret: a key is a value a reader
+ * may print. The live view never carries a secret, so such a serve is matched
+ * by declaring, never by reading it back. */
 export function routeServeSignature(spec: ServeSpec | null): string {
   if (spec === null) return "none";
+  const secret = spec.pathSecret === undefined ? [] : [secretDigest(spec.pathSecret)];
   return JSON.stringify([
     spec.listenPort,
     spec.allow ?? [],
     (spec.routes ?? []).map((r) => [r.prefix, r.targetPort]),
     ...(spec.target.kind === "port" ? [spec.target.port] : []),
+    ...secret,
   ]);
+}
+
+function secretDigest(secret: string): string {
+  return createHash("sha256").update(secret, "utf8").digest("hex").slice(0, 16);
 }
 
 /** The live serve of one process — `active` in the fused view, with a URL —

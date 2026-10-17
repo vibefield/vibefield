@@ -90,6 +90,27 @@ describe("SP-3 — the change key", () => {
     expect(routeServeSignature(null)).toBe("none");
   });
 
+  it("moves with a secret target's secret, which it holds only as a digest (F1)", () => {
+    const secret = (pathSecret: string) =>
+      routeServeSpec(PROCESS, {
+        published: true,
+        linkedLogin: LOGIN,
+        targets: { kind: "secret", port: 51234, pathSecret, door: "freeway" },
+      });
+    const a = "ab".repeat(32);
+    expect(secret(a)).toMatchObject({
+      target: { kind: "port", port: 51234 },
+      pathSecret: a,
+      secretDoor: "freeway",
+    });
+    // a new floor boot's secret on a recycled port is a new serve
+    expect(routeServeSignature(secret(a))).toBe(routeServeSignature(secret(a)));
+    expect(routeServeSignature(secret(a))).not.toBe(routeServeSignature(secret("cd".repeat(32))));
+    // a key is a value a reader may print: never the secret
+    expect(routeServeSignature(secret(a))).not.toContain(a);
+    expect(routeServeSignature(secret(a))).not.toBe(at(51234));
+  });
+
   it("is TM-2's key, character for character, for a routes serve", () => {
     const spec = routeServeSpec(
       { serveId: "terminal", listenPort: PORTS.TERMINAL_CELLS_SERVE },

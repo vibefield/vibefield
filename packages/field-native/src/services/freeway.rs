@@ -182,6 +182,17 @@ impl FreewayHandle {
     }
 
     /// The revisioned state (contracts `FreewayState`), the full value at every change.
+    /// Whether a serve aimed at `port` with `path_secret` targets THIS floor boot's listener and
+    /// secret — the only freeway-door serve mgmt admits (`serve.add`, FW-L10): a freeway serve the
+    /// node lists is then this boot's own, which is what lets a restarted fieldd adopt it rather
+    /// than replace it and drop every link on it. The secret is compared in constant time.
+    pub fn is_door(&self, port: u64, path_secret: &str) -> bool {
+        let boot = &self.shared.boot;
+        boot.listener.is_some()
+            && port == u64::from(boot.port)
+            && crate::freeway::door::same(path_secret.as_bytes(), boot.path_secret.as_bytes())
+    }
+
     pub fn state_rx(&self) -> watch::Receiver<Value> {
         self.shared.state.subscribe()
     }
@@ -772,6 +783,22 @@ mod tests {
         assert_eq!((&state["up"], &state["links"]), (&json!(false), &json!([])));
         assert!(state.get("pathSecret").is_none());
         assert_eq!(handle.revoke(Some("anyone".into())).await, Ok(0));
+    }
+
+    #[test]
+    fn the_door_is_this_boots_listener_and_secret_and_nothing_near_them() {
+        let (unit, _dir) = unit();
+        let handle = unit.handle();
+        let boot = &unit.shared.boot;
+        let port = u64::from(boot.port);
+        assert!(handle.is_door(port, &boot.path_secret));
+        assert!(!handle.is_door(port + 1, &boot.path_secret), "another port");
+        assert!(
+            !handle.is_door(port, "0".repeat(64).as_str()),
+            "another secret"
+        );
+        let prefix = &boot.path_secret[..boot.path_secret.len() - 1];
+        assert!(!handle.is_door(port, prefix), "a prefix of the secret");
     }
 
     fn declaration() -> Value {

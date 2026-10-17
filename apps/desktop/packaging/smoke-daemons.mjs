@@ -2,8 +2,8 @@ import { execFileSync } from "node:child_process";
 
 // DK-18 (plan (39)) — THE ROW: after a smoke exits, no daemon of its run lives. `run-smoke.mjs` marks the run — one variable
 // in Electron's environment, `VF_SMOKE_RUN`, the run's profile name — and every process the smoke starts inherits it
-// (fieldd, field-native, its terminal cells, fieldd's workers), so once Electron has exited, a process still carrying it was
-// left behind by the smoke, whatever its pid. The smoke's own teardown stops them and WAITS for them
+// (fieldd, field-native, its terminal cells and its freeway host, fieldd's workers), so once Electron has exited, a process
+// still carrying it was left behind by the smoke, whatever its pid. The smoke's own teardown stops them and WAITS for them
 // (`packages/electron-shell/src/testing/smoke-daemons.ts`); this row is its witness, taken outside Electron, after it.
 // Electron's own Chromium children carry the mark too and go with it: they get a moment to (`HELPER_SETTLE_MS`); nothing else
 // gets any. What is found is said (`SMOKE_DAEMONS`), reaped, and makes the run red.

@@ -135,7 +135,7 @@ fn link_frame(payload: &[u8]) -> Option<Vec<u8>> {
 }
 
 /// Constant time over equal lengths: a prober learns nothing from how long a guess took.
-fn same(a: &[u8], b: &[u8]) -> bool {
+pub(crate) fn same(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 

@@ -206,6 +206,7 @@ import { EgressRoutes, FloorEgress, resolveEgressPath } from "./egress";
 import { EgressCellRewriter } from "./egress-cell-rewriter";
 import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
+import { FREEWAY_SERVE_ID, FreewayFloor, FreewayServeDriver, freewayDeclaration } from "./freeway";
 import { clipActivity, createActivityReader, monitorHistoryPort } from "./index-activity";
 import { IndexCatalog } from "./index-catalog";
 import { IndexMesh } from "./index-mesh";
@@ -356,6 +357,11 @@ export interface FielddConfig {
   /** AR-1 test seam: the home rosettad's discovery scans (`--home`).
    * Production passes the OS user's own home, explicitly (topology R7). */
   rosettadHome?: string;
+  /** F1 (thinking-freeway.md v0.3 §4.3) — the owner's word on off-device terminals over the
+   * freeway (`exposure.terminals`; today's `FIELD_NATIVE_TERMINAL_MESH`, moved into fieldd's
+   * policy). ON unless this says `false`, per the bump's interim ruling; off, the host refuses the
+   * terminal kinds `KIND_NOT_SERVED`. A code seam: no environment variable reaches it. */
+  freewayTerminals?: boolean;
   /** SP-3 — publish rosettad's loopback listener on the tailnet as ONE serve
    * on `PORTS.INDEX_SERVE` (the route-per-process driver's second user,
    * index-serve.ts). OFF unless set, and nothing sets it: bin.ts passes no
@@ -5585,12 +5591,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // SP-3 — rosettad's serve, held for the same reason (index-serve.ts); null
     // forever while `indexDirectPlane` is off, because nothing declares it
     let lastIndexServeSpec: ServeSpec | null = null;
+    // F1 — the freeway host's serve, held for the same reason (freeway.ts)
+    let lastFreewayServeSpec: ServeSpec | null = null;
     const desiredServes = (): ServeSpec[] => {
       const product = productServeSpec();
       return [
         ...(product === null ? [] : [product]),
         ...(lastTerminalServeSpec === null ? [] : [lastTerminalServeSpec]),
         ...(lastIndexServeSpec === null ? [] : [lastIndexServeSpec]),
+        ...(lastFreewayServeSpec === null ? [] : [lastFreewayServeSpec]),
         ...(lastArtifactServeSpecs ?? []),
       ];
     };
@@ -5718,6 +5727,53 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       mesh.on("node-up", () => void indexServe.refresh());
       void indexServe.refresh();
     }
+    // F1 (thinking-freeway.md v0.3 §3, §4.3) — THE FREEWAY: fieldd's one declaration to the floor
+    // (who the host admits and with which hello, and the owner's word on off-device terminals),
+    // the floor's state back, and the serve that puts the host on the tailnet. The declaration is
+    // re-sent at every connect (a new floor boot forgets it) and on every roster change (this
+    // desktop's id moves when the mesh identity lands; a desktop's slice turns a "phone" row into
+    // a desktop one, FW-DF-1).
+    const freewayFloor = new FreewayFloor({
+      native,
+      declaration: () => freewayDeclaration(devices, config.freewayTerminals !== false),
+      logger: logger.child({ component: "freeway" }),
+    });
+    const freewayServe = new FreewayServeDriver({
+      state: () => freewayFloor.state(),
+      linkedLogin,
+      declare: async (spec) => {
+        if (spec === null) {
+          // the terminal's F-M5 answer for a withdrawal: a removal that failed did not land
+          try {
+            await mesh.removeServe(FREEWAY_SERVE_ID);
+          } catch (error) {
+            serveLog.warn(
+              "fieldd.freeway_serve.remove_deferred",
+              "The freeway listener could not be taken down; it stays declared",
+              { error: String(error) },
+            );
+            return false;
+          }
+          lastFreewayServeSpec = null;
+          await mesh.setServes(desiredServes());
+          return true;
+        }
+        // NO remove-then-add (FW-L10): MeshClient adopts the serve the node lists when it is this
+        // spec, and replaces it when it is not, so a restarted fieldd leaves every link standing.
+        lastFreewayServeSpec = spec;
+        const states = await mesh.setServes(desiredServes());
+        const placed = states.find((state) => (state.serveId ?? state.name) === FREEWAY_SERVE_ID);
+        return placed?.status === "active";
+      },
+      serves: () => mesh.serves(),
+      logger: logger.child({ component: "freeway.serve" }),
+    });
+    freewayFloor.on("state", () => void freewayServe.refresh());
+    links.on("changed", () => void freewayServe.refresh());
+    mesh.on("node-up", () => void freewayServe.refresh());
+    devices.on("changed", () => void freewayFloor.declare());
+    native.on("connected", () => void freewayFloor.connected());
+    void freewayFloor.connected();
     const artifacts = new ArtifactService({
       dataDir: config.dataDir,
       // UA-P-0c (D6) — the account an artifact's audience defaults to. The same
@@ -5837,6 +5893,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
         peers.dispose();
         indexServe?.dispose(); // SP-3 — stop re-aiming rosettad's serve before the mesh goes
+        freewayServe.dispose(); // F1 — the floor keeps the serve: FW-L10
+        freewayFloor.dispose();
         // DS-1b — a superseded daemon KEEPS its egress routes: the floor answers
         // only the successor now, which re-answers each route by its id
         egressCellRewriter?.dispose({ keepFloorRoutes: true });
@@ -5891,6 +5949,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       federatedSubs.dispose();
       peers.dispose();
       indexServe?.dispose(); // SP-3 — stop re-aiming rosettad's serve before the mesh goes
+      freewayServe.dispose(); // F1 — the floor keeps the serve: FW-L10
+      freewayFloor.dispose();
       egressCellRewriter?.dispose(); // DS-1b — the last release takes each route off the floor
       void egressRoutes.dispose();
       terminalServe.dispose(); // TM-2 — stop reconciling routes before the mesh goes
@@ -6285,6 +6345,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
           peers.dispose();
           indexServe?.dispose(); // SP-3 — stop re-aiming rosettad's serve before the mesh goes
+          freewayServe.dispose(); // F1 — the floor keeps the serve: FW-L10
+          freewayFloor.dispose();
           // DS-1b — the egress routes this daemon placed come off the floor
           // while the mgmt link still stands: the rewriter gives back its
           // references (the last release removes each route), and the port

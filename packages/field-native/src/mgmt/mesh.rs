@@ -909,6 +909,24 @@ async fn serve_add(
         Ok(c) => c,
         Err(msg) => return err(id, "PRECONDITION_FAILED", -32005, &msg, false, None),
     };
+    // F1 (FW-L10) — a freeway-door serve goes onto THIS floor boot's listener with its path secret,
+    // or nowhere. A freeway serve the node lists is then this boot's own, so a fieldd that restarts
+    // under the floor adopts it instead of replacing it (which would drop every link on it), and
+    // one replayed from an earlier floor boot — its port possibly recycled — is refused here.
+    if secret_door == SecretDoor::Freeway
+        && !aims_at_freeway_door(&target, path_secret, |port, secret| {
+            state.freeway.is_door(port, secret)
+        })
+    {
+        return err(
+            id,
+            "PRECONDITION_FAILED",
+            -32005,
+            "a freeway-door serve must target this floor's freeway listener with its path secret",
+            false,
+            None,
+        );
+    }
     let effective_listen_port = cfg.listen_port;
     match node.proxy().add(cfg).await {
         Ok(info) => {
@@ -1021,6 +1039,20 @@ impl SecretDoor {
             Self::Freeway => "f",
         }
     }
+}
+
+/// Whether a serve's target is the floor's freeway door: a `port` target the floor's
+/// `is_door` vouches for, with the secret it was given. Pure over the check, for its tests.
+fn aims_at_freeway_door(
+    target: &Value,
+    path_secret: Option<&str>,
+    is_door: impl Fn(u64, &str) -> bool,
+) -> bool {
+    let port = (target.get("kind").and_then(Value::as_str) == Some("port"))
+        .then(|| target.get("port").and_then(Value::as_u64))
+        .flatten();
+    port.zip(path_secret)
+        .is_some_and(|(port, secret)| is_door(port, secret))
 }
 
 pub struct ServeConfigInput<'a> {
@@ -1690,6 +1722,24 @@ mod tests {
         );
         assert_eq!(SecretDoor::parse(None), Ok(SecretDoor::Product));
         assert!(SecretDoor::parse(Some("files")).is_err());
+    }
+
+    /// F1 (FW-L10) — the handler's admission rule for a freeway-door serve: a port target the
+    /// floor's own check vouches for, with its secret, and nothing else.
+    #[test]
+    fn a_freeway_door_serve_aims_at_the_floors_listener_with_its_secret_or_nowhere() {
+        let door = |port: u64, secret: &str| port == 50123 && secret == "s3cr3t";
+        let port = json!({"kind": "port", "port": 50123});
+        assert!(aims_at_freeway_door(&port, Some("s3cr3t"), door));
+        assert!(
+            !aims_at_freeway_door(&port, Some("stale"), door),
+            "an earlier boot's secret"
+        );
+        let recycled = json!({"kind": "port", "port": 50124});
+        assert!(!aims_at_freeway_door(&recycled, Some("s3cr3t"), door));
+        assert!(!aims_at_freeway_door(&port, None, door), "no secret");
+        let routes = json!({"kind": "routes", "port": 50123});
+        assert!(!aims_at_freeway_door(&routes, Some("s3cr3t"), door));
     }
 
     /// UA-P-0d (D7) — the secret moved from the PUBLIC prefix to the TARGET's

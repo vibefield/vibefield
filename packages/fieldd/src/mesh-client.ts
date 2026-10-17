@@ -58,6 +58,9 @@ export interface ServeSpec {
    * registers so proxied requests prove they came through the sidecar.
    * Forwarded verbatim to native.mesh.serve.add. */
   pathSecret?: string;
+  /** F1 — which door `pathSecret` proves to: the product door (`/t/`, the
+   * default) or the freeway host's (`/f/`). Forwarded verbatim. */
+  secretDoor?: "product" | "freeway";
 }
 
 /** One declared serve's public verdict. `status` is the FUSED truth — the C2
@@ -230,7 +233,7 @@ export class MeshClient extends EventEmitter {
   private async doReconcile(): Promise<void> {
     try {
       const listed = (await this.link.request("native.mesh.serve.list", {})) as {
-        serves: Array<{ serveId?: string; name: string; url?: string; listenPort?: number }>;
+        serves: ListedServe[];
       };
       const live = new Map(listed.serves.map((s) => [s.serveId ?? s.name, s]));
 
@@ -262,10 +265,29 @@ export class MeshClient extends EventEmitter {
 
       for (const [serveId, spec] of this.desired) {
         const existing = live.get(serveId);
+        // F1 (FW-L10) — A FREEWAY-DOOR SERVE IS THE FLOOR'S. Its target is the
+        // floor-held listener and its secret the floor boot's, and the floor
+        // admits no other freeway-door serve (`serve.add`), so one the node
+        // lists is this floor boot's own whoever placed it. A restarted fieldd
+        // therefore ADOPTS it when its declared listener, target, allow and tls
+        // equal this spec — replacing it would drop every phone link on it —
+        // and replaces it (below) when they differ, placed or not: a new login,
+        // or a spec replayed from an earlier floor boot.
+        const floorDoor = spec.secretDoor === "freeway";
+        if (existing !== undefined && floorDoor && sameFloorDoorServe(existing, spec)) {
+          this.placed.add(serveId);
+          this.states.set(serveId, {
+            ...spec,
+            status: "active",
+            ...(existing.url ? { url: existing.url } : {}),
+          });
+          continue; // keep runtime — the node's live status is the truth
+        }
         // AH-1's artifact serves are adopted as before: their own durable
         // remove-before-add queue owns what a restart left behind.
         if (
           existing !== undefined &&
+          !floorDoor &&
           (this.placed.has(serveId) || serveId.startsWith(ARTIFACT_SERVE_PREFIX))
         ) {
           this.states.set(serveId, {
@@ -285,7 +307,12 @@ export class MeshClient extends EventEmitter {
           // after the new fieldd bound 52527). `serve.list` carries no target,
           // secret or allow to compare, so first sight REPLACES: remove, then
           // add. truffle's proxy has no update; the one blink is on a listener
-          // whose backend is already gone.
+          // whose backend is already gone. *(2026-10-17, F1: the listing does
+          // carry the declared target, allow and tls — the floor re-hydrates
+          // them from its cache, `serve_entry_json` — but never the secret, and
+          // a fieldd-owned serve's secret is per fieldd boot, so first sight
+          // still replaces. The floor-owned freeway serve is the exception
+          // above.)*
           try {
             await this.link.request("native.mesh.serve.remove", { serveId });
           } catch (error) {
@@ -647,6 +674,31 @@ function coerceRuntimeEntry(raw: unknown): ({ name: string } & Partial<RuntimeEn
  * The SPEC is returned, never zod's output: this VALIDATES, it does not
  * reshape. (The schema is `.passthrough()`, so a caller's unknown fields ride
  * along exactly as the tolerant-reader law says they must.) */
+/** One serve as `native.mesh.serve.list` projects it: the declared target,
+ * allow and tls re-hydrated from the floor's cache, never a secret. */
+interface ListedServe {
+  serveId?: string;
+  name: string;
+  url?: string;
+  listenPort?: number;
+  target?: { kind?: string; port?: number } | null;
+  allow?: string[] | null;
+  tls?: boolean;
+}
+
+/** Whether a listed freeway-door serve is the one this spec declares: the same
+ * listener, port target, allow and tls. The secret cannot be compared and need
+ * not be — the floor admits a freeway-door serve only with its own. */
+function sameFloorDoorServe(listed: ListedServe, spec: ServeSpec): boolean {
+  if (spec.target.kind !== "port" || listed.target?.kind !== "port") return false;
+  return (
+    listed.listenPort === spec.listenPort &&
+    listed.target.port === spec.target.port &&
+    JSON.stringify(listed.allow ?? []) === JSON.stringify(spec.allow ?? []) &&
+    (listed.tls ?? null) === (spec.tls ?? null)
+  );
+}
+
 function contractValidSpec(spec: ServeSpec): ServeSpec {
   const parsed = ServeConfig.safeParse(spec);
   if (parsed.success) return spec;
