@@ -542,6 +542,23 @@ public final class RoutedTerminalClient {
       op: .object(["kind": .string("scroll-to"), "row": .int(Int64(row))]))
   }
 
+  /// Scroll to the BOTTOM — the active area — which then follows output.
+  ///
+  /// A `scroll-to` row at or past the active area pins the viewport there
+  /// (ghostty's `PageList` `.row`: `n >= total_rows - rows` → `.active`), so
+  /// the contract's largest row means the bottom whatever has scrolled in
+  /// since this client's last frame. A total read off that frame would land
+  /// short under output and stop following.
+  public func scrollToBottom(for sessionId: String) {
+    sendInput(
+      sessionId: sessionId,
+      op: .object(["kind": .string("scroll-to"), "row": .int(Self.bottomRow)]))
+  }
+
+  /// `JsonSafeU64`'s ceiling (`Number.MAX_SAFE_INTEGER`): the largest row a
+  /// `scroll-to` may carry, and so the one that always names the bottom.
+  static let bottomRow: Int64 = 9_007_199_254_740_991
+
   /// Ask for a fresh authoritative scene.
   ///
   /// There is no "send me a seed" verb on the wire, and inventing one would be

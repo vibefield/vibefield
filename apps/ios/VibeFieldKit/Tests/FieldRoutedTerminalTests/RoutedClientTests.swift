@@ -680,6 +680,32 @@ import Testing
     client.close()
   }
 
+  /// The keyboard's bottom (James, 2026-10-17): the contract's largest
+  /// `scroll-to` row, which the engine pins to the active area whatever has
+  /// scrolled in since the last frame — never a total read off that frame.
+  @Test func scrollToBottomAsksForTheContractsLargestRow() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    let frame = try Script.frame(
+      session: session, activation: live.activation, sequence: 1, creditEpoch: 1, base: nil,
+      result: Script.stamp(10), payload: Data("TRF1-seed".utf8))
+    await live.frames.deliver(.binary(frame))
+    try await settle("the frame applies") { await sink.deltaFrames == 1 }
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(session: session, activation: live.activation, sequence: 1))
+    try await settle("input allowed") { client.sessions[session]?.inputAllowed == true }
+
+    client.scrollToBottom(for: session)
+    let sent = try await settled("the scroll") { await live.control.lastSent("SendInput") }
+    #expect(sent["op"]?["kind"]?.stringValue == "scroll-to")
+    #expect(sent["op"]?["row"]?.intValue == 9_007_199_254_740_991)
+    client.close()
+  }
+
   /// A SEED the sink refuses is not an applied scene (TM-r3, K-H1).
   ///
   /// `applyFullFrame` returned `Void`, so a refusal was indistinguishable from

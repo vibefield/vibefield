@@ -1262,7 +1262,14 @@ export type TerminalMouseInput = z.infer<typeof TerminalMouseInput>;
 /** The input operation — discriminated on `kind`, one-for-one with ghosttea-react's
  * `RoutedTerminalInputOperation` and ghosttea's engine methods
  * (`send_text`/`paste`/`key`/`mouse`/`scroll`/`scroll_to`/`interrupt`). Scroll
- * `rows` is SIGNED (negative scrolls up); `scroll-to` `row` is an absolute index. */
+ * `rows` is SIGNED (negative scrolls up); `scroll-to` `row` is an absolute index.
+ * A `scroll-to` row at or past the active area pins the viewport TO the active
+ * area — the bottom, which then follows output (ghostty's `PageList` `.row`:
+ * `n >= total_rows - rows` → `.active`) — so the bottom is asked for with this
+ * schema's largest row, `Number.MAX_SAFE_INTEGER`, never with a total read off a
+ * client's last frame (short under output). The phone asks for it as its
+ * keyboard comes up (2026-10-17). The viewport is the SESSION's: every viewer
+ * of the session moves with it. */
 export const SendInputOp = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("text"), text: z.string() }).passthrough(),
   z.object({ kind: z.literal("paste"), text: z.string() }).passthrough(),

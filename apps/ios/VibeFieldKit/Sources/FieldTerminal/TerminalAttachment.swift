@@ -823,6 +823,17 @@ public final class TerminalAttachment {
     forward { $0.scroll(rows: rows, for: $1) }
   }
 
+  /// The keyboard is coming up: put the view back on the bottom, where the
+  /// prompt is (James, 2026-10-17: "when keyboard is up, it suppose to scroll
+  /// the terminal content all the way botton so i can input"). Asked at the
+  /// INTENT, before the keyboard's resize lands — the input that resize holds
+  /// cannot drop it — and a view already at the bottom moves nowhere. The
+  /// viewport is the session's, so the desktop's pane follows it down too.
+  public func followBottom() {
+    guard acceptsInput, let client, let sessionID else { return }
+    client.scrollToBottom(for: sessionID)
+  }
+
   // MARK: - The input card's verbs (IOS-5a)
 
   /// One rail key. A stroke this layout cannot encode is a no-op and says

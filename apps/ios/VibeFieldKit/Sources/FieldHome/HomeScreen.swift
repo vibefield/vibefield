@@ -1626,6 +1626,11 @@ public struct HomeScreen: View {
         .presentationCornerRadius(40)
         .fieldGlassSheet()
     }
+    // A keyboard coming up — any owner, either mode — puts the view back on
+    // the bottom first, so the prompt is on screen to type into.
+    .onChange(of: inputCard.keyboardOwner) { old, new in
+      if old == .none, new != .none { attachment?.followBottom() }
+    }
     // --- IOS-5a: the card rides the bottom safe area, above the keyboard ---
     .safeAreaInset(edge: .bottom, spacing: 0) {
       if inputCardFace == .shown {
