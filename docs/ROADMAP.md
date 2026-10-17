@@ -226,7 +226,7 @@
 > PASSED) · DS-6 the history catalog replicated, the merged doors, search by asking. See LANDED §DS wave 1, `work/ds-wave1-review-2026-10-01.md`,
 > `work/ds-wave1-2026-09-30.md`.
 > Next: **James merges and releases the four sibling branches and moves the pins (truffle on a petition window with the five npm
-> sidecars, protocol 5 → 6; rosetta's pin move carries PROTOCOL_VERSION 24; puppeteer; ghosttea) → DS-1b (consume RFC 026: fail-closed
+> sidecars, protocol 5 → 6 *(corrected 2026-10-17: 6 was the `rfc026-egress` branch's number; the release gave 6 to authenticated UDP relays at 0.7.15 and shipped egress at 7 in 0.7.16, and the pin that consumed it is 0.7.19, protocol 8)*; rosetta's pin move carries PROTOCOL_VERSION 24; puppeteer; ghosttea) → DS-1b (consume RFC 026: fail-closed
 > per floor boot, the real arm re-typed, the two-desktop witness with the Tailscale app QUIT) → DS-5b (PA-32's bias as the install
 > set's merge rule, then settings cross) → D1 (the peer daemon's identity transport-derived) → DS-7 transcripts by ticket · DS-8 the
 > phone re-homes · DS-9 E3 and artifacts in the app · DS-4b/4c** — and still owed from the companion page: the mini-app bridge and
@@ -1739,17 +1739,21 @@ through to a SPAWN over a root a live daemon may hold (`supervisor.ts:108-117`; 
 - Neither sha is on a remote branch, and mille's `c8160d5` (EL8 `45e63dbf`, 2026-10-08) is unpushed too. Until
   James publishes the siblings in the RL1(c) order above, `node scripts/siblings.mjs fetch` cannot create these checkouts on another machine.
 
-**Four sibling branches await James (2026-10-01, DS wave 1 — still true after wave 2, whose DS-1b consumed RFC 026 on this side, so truffle's pin move is what flips `truffle-egress` ON; each pin move is its own EL8 event):** truffle `rfc026-egress` (5 commits on `9f0d628` = v0.7.14: RFC 026 egress, sidecar protocol 5 → 6, `Node::loopback`/`egress_*`, NAPI; consumed by VibeField's `TruffleEgress` arm only when the feature turns on — DS-1b — on a petition window that moves `truffle-core` AND the five npm sidecars together) · rosetta `feat/direct-plane-grants` (5 commits on `496bcdd`: RO-1 bearer + RO-10 grants; rosetta main is already PROTOCOL_VERSION 24 against the pin's 23 — the lanes ran a protocol-23 `rosettad` built at `/Volumes/SamsungRed/rust/ds-rosettad-pin`; the pin move carries 24 and the follower sends the bearer, review follow-ups in `petitions/README.md` RO-10) · puppeteer `feat/device-dimension` (5 commits on `a4b5290`: PU-17) · ghosttea `feat/geometry-take` (7 commits on `8a0930e`: G23's take, `takeGeometryOnFocus`) — PINNED 2026-10-17 as `feat/geometry-take-on-pin` `218e11f` (LANDED "DS/GT — the ghosttea pin moves …"). Reviews: `work/ds-wave1-review-2026-10-01.md`. ·
+**Four sibling branches await James (2026-10-01, DS wave 1 — still true after wave 2, whose DS-1b consumed RFC 026 on this side, so truffle's pin move is what flips `truffle-egress` ON; each pin move is its own EL8 event):** truffle `rfc026-egress` (5 commits on `9f0d628` = v0.7.14: RFC 026 egress, sidecar protocol 5 → 6 *(the branch's number; egress shipped at 7 in 0.7.16, corrected 2026-10-17)*, `Node::loopback`/`egress_*`, NAPI; consumed by VibeField's `TruffleEgress` arm only when the feature turns on — DS-1b — on a petition window that moves `truffle-core` AND the five npm sidecars together) · rosetta `feat/direct-plane-grants` (5 commits on `496bcdd`: RO-1 bearer + RO-10 grants; rosetta main is already PROTOCOL_VERSION 24 against the pin's 23 — the lanes ran a protocol-23 `rosettad` built at `/Volumes/SamsungRed/rust/ds-rosettad-pin`; the pin move carries 24 and the follower sends the bearer, review follow-ups in `petitions/README.md` RO-10) · puppeteer `feat/device-dimension` (5 commits on `a4b5290`: PU-17) · ghosttea `feat/geometry-take` (7 commits on `8a0930e`: G23's take, `takeGeometryOnFocus`) — PINNED 2026-10-17 as `feat/geometry-take-on-pin` `218e11f` (LANDED "DS/GT — the ghosttea pin moves …"). Reviews: `work/ds-wave1-review-2026-10-01.md`. ·
 
-**The desktop's sidecar is a LOCAL OVERRIDE since P0-H (2026-09-25):** `.env`'s `FIELD_NATIVE_SIDECAR_PATH`
-names `.vibefield/sidecar/sidecar-slim-0.7.14-ws-target-path`, truffle 0.7.14's `sidecar-slim` built with
-petition T6's patch (the WebSocket forward keeps the route's target path). The pins below are UNCHANGED —
-the five npm sidecar packages still read 0.7.14 and `siblings.lock.json` still names `9f0d6287` — so a
-fresh checkout, or a `.env` without that line, runs the released sidecar and the phone is refused at its
-hello. The exit is a truffle release carrying T6 and one EL8 event moving the npm rows to it; then the
-override directory goes. ·
+**The desktop's sidecar is the PIN again (the truffle bump, 2026-10-17; it was a LOCAL OVERRIDE from P0-H,
+2026-09-25):** T6 shipped in truffle 0.7.17 (7b66411), and the EL8 event moved the crate and the five npm sidecar
+packages to 0.7.19 together, with `siblings.lock.json` at `1218b64` (the tag). The override's exit happened, and the
+override is RETIRED. `.vibefield/sidecar/` (untracked, in James's checkout only) and `.env`'s `FIELD_NATIVE_SIDECAR_PATH`
+line are James's to delete at the landing. Until he does, `pnpm dev` keeps running the named protocol-5 binary and
+the dev runner warns that it is not the pin. Without that line `pnpm dev` hands the floor the vendored sidecar
+(`devSidecar` in `scripts/siblings.mjs`), and a packaged app runs the one staged beside field-native.
+*Corrected at source, same day:* the paragraph here said "a fresh checkout, or a `.env` without that line, runs the
+released sidecar". That was true of a PACKAGED app only. A debug floor searched beside itself first (`target/debug`,
+which a shared cargo target dir fills with whatever sidecar any checkout's truffle build left there), then the machine
+installs, and never the vendored package. The dev runner's `FIELD_NATIVE_SIDECAR_PATH` is the fix. ·
 
-truffle `=0.7.12` (exact crates-io + exact platform sidecar packages; T2 consumed at AH-1) — **Erratum 2026-09-22: `=0.7.14` since UA-P-X 2026-09-16 (`723cb356`): `Cargo.toml` `truffle-core = "=0.7.14"` and the five npm sidecar packages at 0.7.14; the SwiftPM plane still reaches the same commit by path (G28). The manifests are the authority, never this clause** ·
+truffle `=0.7.12` (exact crates-io + exact platform sidecar packages; T2 consumed at AH-1) — **Erratum 2026-09-22: `=0.7.14` since UA-P-X 2026-09-16 (`723cb356`): `Cargo.toml` `truffle-core = "=0.7.14"` and the five npm sidecar packages at 0.7.14; the SwiftPM plane still reaches the same commit by path (G28). The manifests are the authority, never this clause** — **and `=0.7.19` since the truffle bump (2026-10-17, ruling B): the crate and the five npm sidecar packages at 0.7.19 (sidecar protocol 8), the SwiftPM plane by path at the tag `truffle-v0.7.19` (`1218b64`), `truffleRelease` still nil** ·
 ghosttea `=0.12.0` on the cargo and npm planes (GT-8b `b76644a0`, 2026-09-25; `=0.11.1` since the lockstep bump `85f7d769`; preflight pins the
 cargo row and all four npm rows — *errata 2026-09-14, TM-1 `afc35b15`: this line said "+
 **`ghosttea-truffle =0.11.1`**"; that crate LEFT the workspace with the TSP1 adapter when the

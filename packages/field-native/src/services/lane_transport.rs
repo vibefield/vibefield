@@ -280,9 +280,15 @@ impl LossyHub {
             .bind_udp(PRESENCE_UDP_PORT)
             .await
             .map_err(|error| anyhow::anyhow!("bind UDP {PRESENCE_UDP_PORT}: {error}"))?;
-        // Route authority is `(tailnet source IP, origin lane id)`. Truffle's
-        // test-only direct fallback is not WireGuard-authenticated and binds
-        // 0.0.0.0, so accepting it here would turn a LAN sender into a peer.
+        // Route authority is `(tailnet source IP, origin lane id)`, so only a
+        // WireGuard-authenticated socket may carry it. A provider whose
+        // `trust_mode()` is `Authenticated`, which TailscaleProvider is, never
+        // falls back (truffle 0.7.15, 975e416): below sidecar protocol 6
+        // `bind_udp` is refused ("authenticated UDP requires sidecar protocol
+        // v6"), and only an explicit `UnverifiedLoopback` test provider falls
+        // back, onto 127.0.0.1 (transport/udp.rs and quic.rs). The check is
+        // defence in depth: a truffle that loosened that would be refused here
+        // rather than trusted.
         anyhow::ensure!(
             matches!(&socket, DatagramSocket::Network { .. }),
             "presence UDP requires the authenticated network provider"

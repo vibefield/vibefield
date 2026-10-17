@@ -249,10 +249,14 @@ pub async fn try_build_node(
 /// `@vibecook/truffle-sidecar-*` packages were pre-RFC-025 "while the petition
 /// window is open", and told the caller to point `FIELD_NATIVE_SIDECAR_PATH` at
 /// the sidecar `pnpm siblings:build` produced. UA-P-X closed the npm half of
-/// that window: `apps/desktop` installs 0.7.14 (protocol 5), so `sidecar()`'s
-/// vendored preference now resolves the RIGHT binary and the override is no
-/// longer needed for a gated node. The window is still open on the SwiftPM
-/// plane only — see CLAUDE.md, which is the authority for the pins.
+/// that window (`apps/desktop` installed 0.7.14, protocol 5), and the truffle
+/// bump moved the install to 0.7.19, whose sidecar speaks protocol 8 (>= 5 for
+/// this gate, >= 6 for the QUIC/UDP lanes, >= 7 for egress), so `sidecar()`'s
+/// vendored preference resolves the RIGHT binary and the override is no
+/// longer needed for a gated node. `apps/desktop/package.json`
+/// is the authority, and the `[probe] sidecar=` line each run prints is what it
+/// actually ran. The window is still open on the SwiftPM plane only — see
+/// CLAUDE.md, which is the authority for the pins.
 pub async fn build_gated_node(
     app_id: &str,
     name: &str,

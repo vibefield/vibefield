@@ -60,13 +60,24 @@
 //! `FIELD_NATIVE_SIDECAR_PATH=target/debug/sidecar-slim`, with the note that
 //! `common::sidecar()` prefers the VENDORED npm sidecar, which was pre-RFC-025
 //! while the petition window was open, "and a gated node refuses to start
-//! against it (correctly, loudly)". UA-P-X closed the npm half of that window:
-//! `apps/desktop` installs the protocol-5 sidecar, so the vendored preference
-//! now resolves the RIGHT binary and the override is no longer needed. The
-//! window stays open on the SwiftPM plane only (CLAUDE.md is the authority).
-//! `Node` publishes no sidecar protocol version, so the protocol-5 assertion
-//! here is indirect and exact: a gated node REFUSES TO START below 5, so
-//! `build_gated_node` returning `Ok` IS the witness that it speaks 5.
+//! against it (correctly, loudly)". UA-P-X closed the npm half of that window
+//! (`apps/desktop` installed 0.7.14's protocol-5 sidecar), and the truffle bump
+//! moved the install to 0.7.19, whose sidecar speaks 8, so the vendored
+//! preference resolves the RIGHT binary and the override is no longer needed.
+//! The window stays open on the SwiftPM plane only (CLAUDE.md is the
+//! authority). `Node` publishes no sidecar protocol version, so the protocol-5
+//! assertion here is indirect: a gated node REFUSES TO START below 5, so
+//! `build_gated_node` returning `Ok` IS the witness that it speaks at least 5,
+//! the gate's floor, which is all a gated build can witness.
+//!
+//! The 0.7.19 pin brings its session rewrite (9eb8ddc), and with it two new
+//! answers a dial can give:
+//! - a dial that never completes reads "WS dial timed out after 45s"
+//!   (SESSION_DIAL_TIMEOUT), which `dial_verdict` files as Inconclusive;
+//! - an ungated hello now REFUSES (4003) a WhoIs that is empty, unparseable or
+//!   has no nodeId, where 0.7.14 admitted it unverified. A real tailnet's WhoIs
+//!   carries the nodeId, so neither row expects it, but a flaky WhoIs now reads
+//!   as a refusal rather than an admission.
 
 mod common;
 
@@ -156,9 +167,9 @@ async fn await_login(node: &Node<TailscaleProvider>, whose: &str) -> String {
         }
         assert!(
             Instant::now() < deadline,
-            "{whose} never learned its own login — is this sidecar protocol 5? \
-             `common::sidecar()` prefers the vendored npm one, which IS protocol 5 since \
-             UA-P-X, so check that FIELD_NATIVE_SIDECAR_PATH is not pointing at an older \
+            "{whose} never learned its own login — is this sidecar protocol 5 or newer? \
+             `common::sidecar()` prefers the vendored npm one, which is protocol 8 at the \
+             0.7.19 pin, so check that FIELD_NATIVE_SIDECAR_PATH is not pointing at an older \
              build (an explicit override outranks the vendored pin)"
         );
         tokio::time::sleep(Duration::from_millis(500)).await;

@@ -207,7 +207,11 @@ physics at 30 Hz blended to the display's rate, drag, tap-and-nudge,
 hold-to-create, the arrival curve, VoiceOver elements per body), both themes,
 the session card with live status, the mock fleet driving the **same**
 snapshot shape and classifier the daemon feed will drive; since IOS-2 the mesh leg: `ghosttea` pinned
-`exact: "0.10.1"` (truffle 0.7.12, lockstep with field-native), the in-process
+`exact: "0.10.1"` (truffle 0.7.12, lockstep with field-native — *corrected
+2026-10-17: lockstep no longer holds by version. field-native is at truffle 0.7.19,
+and the kit reaches that same code through the path package `.window/truffle`,
+because ghosttea's Swift tags still declare truffle exact 0.7.12; see
+`VibeFieldKit/Package.swift`*), the in-process
 Tailscale runtime, kept up by itself while signed in (2026-10-18; a deliberate CONNECT act until then) — since IOS-4i in VibeField's
 own truffle namespace, the only one a desktop is visible in — in-app login
 (Safari sheet), the online-peer roster, and the mesh chip the bubbles

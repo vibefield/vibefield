@@ -1,10 +1,11 @@
 //! DS-1b — the egress witness on a REAL tailnet (design-06 §3, DS-L5): floor A
 //! answers `native.mesh.egress.proxy` and `native.mesh.egress.route.*` over its
 //! real management socket, through the truffle arm, from truffle's RFC 026
-//! crate and a protocol-6 sidecar built from the same branch; node B serves a
-//! door; and B's sidecar names A's NODE on every request that came through A's
-//! egress — E1 (the node's own SOCKS5, PeerLink's road) and E2 (a loopback
-//! route with a fixed target, the terminal rewriter's road).
+//! crate and a sidecar that speaks egress (protocol 7 or newer; the vendored
+//! 0.7.19 speaks 8); node B serves a door; and B's sidecar names A's NODE on
+//! every request that came through A's egress — E1 (the node's own SOCKS5,
+//! PeerLink's road) and E2 (a loopback route with a fixed target, the terminal
+//! rewriter's road).
 //!
 //! WHAT IS REAL: two ephemeral nodes on the tailnet `.env`'s key names; the
 //! floor, bootstrapped in-process, with its management facade, its egress

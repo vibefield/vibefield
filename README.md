@@ -44,7 +44,10 @@ and the mesh sidecar comes from npm rather than being built from source (Go is n
 prereq). The iOS kit's path package STAYS: ghosttea pins truffle `exact: "0.7.12"` in every
 published Swift tag, so the kit can move neither to 0.7.14 nor back to 0.7.12 (its own sources
 need RFC 025's login API) — the unblock is a ghosttea Swift release, and `Cargo.toml`'s closure
-note carries it. So the repo does not build standalone. Every revision is pinned in
+note carries it. *(2026-10-17, the truffle bump: the cargo and npm planes moved to 0.7.19
+together, and `../truffle-rfc025` is pinned at the tag `truffle-v0.7.19`; the vice is unchanged,
+so the ghosttea release the kit now waits for is one at truffle 0.7.19. `Cargo.toml` is the
+authority for the number.)* So the repo does not build standalone. Every revision is pinned in
 `siblings.lock.json`:
 `pnpm siblings` prints the state, `pnpm preflight` fails on drift, `pnpm siblings:pin` is the
 deliberate upgrade — it records the new SHAs, builds rosettad at them, proves the agent catalog

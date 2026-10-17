@@ -35,6 +35,12 @@
 //!       the test controls, so the facade, the table, the reset and fieldd's
 //!       consumers are exercised without a tailnet.
 //!
+//! Protocol numbers here are the release's. "Sidecar protocol 6" above is the
+//! BRANCH's number (`92ab2b7`: `SIDECAR_V6_EGRESS = 6`). In the release 0.7.15
+//! gave protocol 6 to authenticated UDP relays, and RFC 026 egress shipped at
+//! protocol 7 in 0.7.16 (`SIDECAR_V7_EGRESS`, truffle-v0.7.19 `provider.rs`).
+//! The sidecar the 0.7.19 pin vendors speaks 8, which adds no command.
+//!
 //! The route table is REBUILT-NOT-PERSISTED like every facade table: a node
 //! teardown or rebuild calls [`EgressBackend::reset`], and the facade's
 //! `route.subscribe` stream pushes the emptied table — the reset fieldd reads.
@@ -496,7 +502,9 @@ impl RouteMirror {
 
 /// RFC 026 §4's coded refusals, as the sidecar on truffle's `rfc026-egress`
 /// answers them (`packages/sidecar-slim/egress.go`; the core already turns a
-/// `NOT_RUNNING` into `NetworkError::NotRunning`), onto the facade's arms. The
+/// `NOT_RUNNING` into `NetworkError::NotRunning`), onto the facade's arms.
+/// Re-read at the release (2026-10-17): truffle-v0.7.19's `egress.go` answers
+/// exactly these sixteen codes, no more and no fewer. The
 /// code and message ride verbatim; only the CLASS is decided here, because the
 /// class is what the wire's error kind tells a reader: `Refused`
 /// (PRECONDITION_FAILED) is the caller's to fix, `Failed` (INTERNAL) is the
@@ -550,7 +558,8 @@ fn truffle_refusal(error: truffle_core::NodeError) -> EgressError {
         // `ensure_not_stopped` (the node was stopped), or the provider is not
         // running (`egress_ready`, or the sidecar's own NOT_RUNNING)
         NodeError::Stopped | NodeError::Network(NetworkError::NotRunning) => EgressError::MeshDown,
-        // a sidecar below protocol 6: the core refuses before it asks
+        // a sidecar below protocol 7: the core refuses before it asks
+        // (`egress_ready`, SIDECAR_V7_EGRESS)
         NodeError::Network(NetworkError::Unsupported(_)) => EgressError::Unsupported,
         NodeError::Network(NetworkError::EgressError { code, message }) => {
             coded_refusal(code, message)
@@ -1187,7 +1196,10 @@ mod tests {
         );
         assert_eq!(
             truffle_refusal(net(NetworkError::Unsupported(
-                "sidecar protocol v5 predates RFC 026 egress (egress:add)".into()
+                // the core's own words at truffle-v0.7.19 (`egress_ready`)
+                "sidecar protocol v6 predates RFC 026 egress (egress:add); upgrade the \
+                 sidecar binary (needs v7)"
+                    .into()
             ))),
             EgressError::Unsupported
         );

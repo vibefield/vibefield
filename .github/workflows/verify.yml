@@ -16,10 +16,11 @@
 # the cargo and npm halves the same day (UA-P-X): the [patch.crates-io] row is gone and the
 # sidecars come from npm. The SWIFT half stayed open — ghosttea pins truffle exactly at
 # 0.7.12 in every published tag, so the kit can move neither forward nor back (Cargo.toml's
-# closure note has both errors) — so the lock STILL names ../truffle-rfc025 and this step
-# still does not fetch it: its pin is a revision on a LOCAL branch (integration/rfc025) that
-# exists on no remote, so preflight fails here with "truffle checkout missing" until a
-# ghosttea Swift release at truffle 0.7.14 frees the kit. And that is not the only blocker:
+# closure note has both errors) — so the lock STILL names ../truffle-rfc025. The cargo and npm
+# planes are at 0.7.19, the lock pins that checkout at the PUBLISHED tag truffle-v0.7.19
+# (1218b64) and records its public `repository`, so the fetch step below creates it at the
+# tag; the release that frees the kit is a ghosttea Swift one at truffle 0.7.19. And truffle
+# was not the only blocker:
 # `pnpm siblings:pin` warns when a pinned revision is unpushed, and on 2026-09-16 it warned
 # for ALL THREE siblings — puppeteer's and rosetta's pins are unpushed too, so this workflow
 # could not be green with or without truffle. Stated rather than patched around: teaching the

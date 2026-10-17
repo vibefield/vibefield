@@ -52,7 +52,7 @@ test notes, and assignment to **Personal iPhone** are complete.
 | Apple Developer team | `9F79X9D26S` (Shikang Yong) |
 | Marketing version | `0.1` |
 | Minimum iPhone / iPad OS | `18.1` |
-| Swift dependencies | Ghosttea `0.10.1`, Truffle `0.7.12` (exact pins) |
+| Swift dependencies | Ghosttea `0.10.1` (exact) · Truffle by the path package `VibeFieldKit/.window/truffle`, at the tag `truffle-v0.7.19` (`siblings.lock.json`; *corrected 2026-10-17: this said "Truffle `0.7.12` (exact pins)", true before the RFC 025 window*) |
 | Distribution | App Store Connect, internal TestFlight only |
 
 The team must have an active Apple Developer Program membership. In Xcode >

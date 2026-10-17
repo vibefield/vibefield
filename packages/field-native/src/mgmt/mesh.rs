@@ -999,11 +999,18 @@ async fn serve_add(
 /// secret never leaves this machine. The backend sees exactly what it saw before,
 /// which is why fieldd's door is untouched.
 ///
-/// Hardware erratum (2026-09-25): the probe below verified ordinary HTTP only.
-/// Truffle 0.7.14's WebSocket hijack bypasses ReverseProxy and omits the target
-/// path, so a phone reaches the local door and receives "invalid token". The
-/// sidecar must apply the same director before hijacking; preserve this private
-/// target path rather than putting the secret back into a public URL.
+/// WebSockets: the probe below verifies ordinary HTTP only. A hijacked
+/// WebSocket upgrade bypasses ReverseProxy, and it keeps the target path only
+/// because the sidecar runs the route's proxy Director before it dials:
+/// petition T6, shipped in truffle 0.7.17 (7b66411, "WebSocket upgrades keep
+/// the route's target path and query") and consumed at the 0.7.19 pin. So the
+/// packaged product route below (`/` → `http://127.0.0.1:<port>/t/<secret>`)
+/// reaches fieldd WITH its path; a sidecar without T6 drops it, and the phone
+/// reaches the local door and receives "invalid token". Preserve this private
+/// target path rather than putting the secret back into a public URL. Matching
+/// is unchanged, so path-less cell routes still deliver `/control` and
+/// `/frames`. The live witness of T6 on the routed shape is
+/// `terminal_cell_route_probe`, plus the signed-in phone reaching a packaged build.
 ///
 /// For ordinary HTTP, sidecar-slim
 /// builds every route handler with `httputil.NewSingleHostReverseProxy`
