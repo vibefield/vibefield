@@ -1825,7 +1825,9 @@ public struct HomeScreen: View {
         // the terminal is still the one that would take it. `onFocusChange`
         // reports what the responder call actually achieved, and the card's
         // closed row is that answer rendered.
-        wantsFocus: inputCard.mode == .live && inputCard.terminalFocused,
+        // The input audit's F: the card names the keyboard's ONE owner, and a
+        // hand-off is that owner's take alone (`ResponderRole`).
+        focus: inputCard.responderRole(for: .terminal),
         focusEpoch: inputCard.keyboardRequests,
         onFocusChange: { focused in inputCard.terminalFocused = focused },
         // --- end IOS-5c

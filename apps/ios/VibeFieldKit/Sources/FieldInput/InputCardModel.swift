@@ -440,6 +440,29 @@ public final class InputCardModel {
     }
   }
 
+  /// The three views a keyboard can belong to: the composer field, the
+  /// terminal's Metal view, and the hidden host that carries the keypad in Live.
+  public enum Responder: Sendable {
+    case composer
+    case terminal
+    case keypadHost
+  }
+
+  /// What `responder` does with the keyboard now (`ResponderRole`): the
+  /// keyboard's owner takes it, every other responder yields, and only with no
+  /// owner at all does the holder release it — so a hand-off is ONE call, the
+  /// new owner's (the input audit's F, 2026-10-17).
+  public func responderRole(for responder: Responder) -> ResponderRole {
+    let takes =
+      switch responder {
+      case .composer: fieldFocused
+      case .terminal: mode == .live && terminalFocused
+      case .keypadHost: keypadShown && mode == .live
+      }
+    if takes { return .take }
+    return keyboardOwner == .none ? .release : .yield
+  }
+
   /// The KEYBOARD chip: ask for it back, for whichever mode is current.
   public func requestKeyboard() {
     switch mode {

@@ -1,4 +1,5 @@
 import FieldDesign
+import FieldTerminal
 import SwiftUI
 import UIKit
 
@@ -122,7 +123,7 @@ struct ComposerField: UIViewRepresentable {
       view.text = model.draft
       view.refreshPlaceholder()
     }
-    context.coordinator.applyFocus(model.fieldFocused, to: view)
+    context.coordinator.applyFocus(model.responderRole(for: .composer), to: view)
     // --- IOS-5d: the `⋯` keypad rises in the system keyboard's place.
     // --- IOS-5e: and it is told the reader's text size, because its height
     // depends on it and a `UIInputView` that is not in a window yet cannot ask.
@@ -141,7 +142,7 @@ struct ComposerField: UIViewRepresentable {
     private let height: Binding<CGFloat>
     /// The focus intent last acted on — see `TerminalSurface.applyFocus`; the
     /// same rule holds here, for the same reason.
-    private var appliedFocus: Bool?
+    private var appliedFocus: ResponderRole?
     private var reportedHeight: CGFloat?
     // --- IOS-5d ------------------------------------------------------------
     /// The keypad, made once and kept.
@@ -183,12 +184,12 @@ struct ComposerField: UIViewRepresentable {
     }
 
     func textViewDidBeginEditing(_ textView: UITextView) {
-      appliedFocus = true
+      appliedFocus = .take
       model.fieldFocused = true
     }
 
     func textViewDidEndEditing(_ textView: UITextView) {
-      appliedFocus = false
+      appliedFocus = .release
       // Only Draft's field reports its own loss: in Live the terminal took the
       // keyboard on purpose, and saying "the field lost focus" there would
       // fight the mode for ownership of the same flag.
@@ -197,11 +198,14 @@ struct ComposerField: UIViewRepresentable {
 
     /// Responder changes ride the next main turn — a keyboard raised from
     /// inside a SwiftUI update pass resizes this view's own ancestors mid-pass.
-    func applyFocus(_ wanted: Bool, to view: UITextView) {
-      guard appliedFocus != wanted else { return }
-      appliedFocus = wanted
+    /// A yield is no call: the new owner's take moves the keyboard
+    /// (`ResponderRole`).
+    func applyFocus(_ role: ResponderRole, to view: UITextView) {
+      guard appliedFocus != role else { return }
+      appliedFocus = role
+      guard role != .yield else { return }
       Task { @MainActor in
-        if wanted {
+        if role == .take {
           guard !view.isFirstResponder else { return }
           view.becomeFirstResponder()
         } else if view.isFirstResponder {

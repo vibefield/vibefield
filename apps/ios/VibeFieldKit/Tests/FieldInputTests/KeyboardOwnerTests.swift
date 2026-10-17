@@ -1,3 +1,4 @@
+import FieldTerminal
 import Testing
 
 @testable import FieldInput
@@ -132,6 +133,37 @@ struct KeyboardOwnerTests {
     model.tapTerminal()
     #expect(model.keyboardOwner == .none)
     #expect(model.keypadShown == false)
+  }
+
+  /// The input audit's F (2026-10-17): a hand-off is ONE call, the new owner's
+  /// take — UIKit moves first responder from the old owner in one keyboard
+  /// transition. The old owner YIELDS and makes no call: a resign of its own,
+  /// racing the take, dropped the keyboard and raised it again — two resizes on
+  /// every `>_`, `⋯` and `abc`. Only a keyboard put down is a release.
+  @Test("a hand-off is the new owner's take alone")
+  func aHandOffIsTheNewOwnersTakeAlone() {
+    let model = InputCardModel()
+    func roles() -> [ResponderRole] {
+      [
+        model.responderRole(for: .composer), model.responderRole(for: .terminal),
+        model.responderRole(for: .keypadHost),
+      ]
+    }
+    #expect(roles() == [.release, .release, .release])
+    model.requestKeyboard()
+    #expect(roles() == [.take, .yield, .yield])
+    model.toggleMode()  // `>_` into Live: the terminal takes, the composer yields
+    #expect(roles() == [.yield, .take, .yield])
+    model.setKeypad(true)  // `⋯` in Live: the keypad's host takes, the terminal yields
+    #expect(roles() == [.yield, .yield, .take])
+    model.setKeypad(false)  // `abc`: the terminal takes the keys back
+    #expect(roles() == [.yield, .take, .yield])
+    model.toggleMode()  // `>_` into Draft: the composer takes, the terminal yields
+    #expect(roles() == [.take, .yield, .yield])
+    model.setKeypad(true)  // `⋯` in Draft: the field keeps the keys, its letters swapped
+    #expect(roles() == [.take, .yield, .yield])
+    model.dismissKeyboard()
+    #expect(roles() == [.release, .release, .release])
   }
 
   @Test("closing the card leaves nothing holding the keyboard")

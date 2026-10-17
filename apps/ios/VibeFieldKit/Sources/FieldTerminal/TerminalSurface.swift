@@ -26,12 +26,14 @@ public struct TerminalSurface: UIViewRepresentable {
   /// replaces it, and two rows of terminal keys stacked on each other would be
   /// two latches disagreeing about who armed Ctrl.
   let showsKitAccessoryRow: Bool
-  /// Whether the Metal view should hold the keyboard. Live mode is exactly
-  /// this: the terminal IS the `UITextInput`, so making it first responder is
-  /// the whole of "typing goes straight through".
-  let wantsFocus: Bool
+  /// What the Metal view does with the keyboard (`ResponderRole`). Live mode is
+  /// a take: the terminal IS the `UITextInput`, so making it first responder is
+  /// the whole of "typing goes straight through". Handing the keys to the
+  /// composer or the keypad is a yield — their take moves the keyboard — and
+  /// only a keyboard put down is a release.
+  let focus: ResponderRole
   // --- IOS-5c
-  /// A nonce the host bumps to ask for focus AGAIN at the same `wantsFocus`.
+  /// A nonce the host bumps to ask for focus AGAIN at the same `focus`.
   /// The keyboard can go down without this view being told (an interactive
   /// dismissal resigns it), and a second request that carries no new value
   /// would otherwise be skipped by the guard below — which is right for every
@@ -77,7 +79,7 @@ public struct TerminalSurface: UIViewRepresentable {
     configuration: GhostteaTerminalPresentationConfig,
     controlsGridSize: Bool = true,
     showsKitAccessoryRow: Bool = false,
-    wantsFocus: Bool = false,
+    focus: ResponderRole = .release,
     focusEpoch: Int = 0,
     onFocusChange: @escaping (Bool) -> Void = { _ in },
     keyboardAppearance: UIKeyboardAppearance = .default,
@@ -102,7 +104,7 @@ public struct TerminalSurface: UIViewRepresentable {
     self.configuration = configuration
     self.controlsGridSize = controlsGridSize
     self.showsKitAccessoryRow = showsKitAccessoryRow
-    self.wantsFocus = wantsFocus
+    self.focus = focus
     self.focusEpoch = focusEpoch
     self.onFocusChange = onFocusChange
     self.keyboardAppearance = keyboardAppearance
@@ -134,7 +136,7 @@ public struct TerminalSurface: UIViewRepresentable {
     /// made once per FLIP rather than on every SwiftUI update — asking a view
     /// that already holds the keyboard to become first responder again is how
     /// a keyboard learns to flicker.
-    var appliedFocus: Bool?
+    var appliedFocus: ResponderRole?
     /// IOS-5c's re-ask nonce, remembered beside the intent it qualifies.
     var appliedFocusEpoch: Int = 0
     /// FS-1 (focus session 2026-10-15) — the latest surface's handlers. The
@@ -322,15 +324,18 @@ public struct TerminalSurface: UIViewRepresentable {
   private func applyFocus(_ view: GhostteaTerminalMetalView, coordinator: Coordinator) {
     // --- IOS-5c: the epoch joins the guard, so an unchanged intent can still
     // be re-asked; the outcome is reported either way.
-    guard coordinator.appliedFocus != wantsFocus || coordinator.appliedFocusEpoch != focusEpoch
+    guard coordinator.appliedFocus != focus || coordinator.appliedFocusEpoch != focusEpoch
     else { return }
     coordinator.appliedFocusEpoch = focusEpoch
     // --- end IOS-5c
-    coordinator.appliedFocus = wantsFocus
-    let wanted = wantsFocus
+    coordinator.appliedFocus = focus
+    // A yield is no call at all: the new owner's take moves the keyboard, and
+    // a resign here could run first and drop it in between (`ResponderRole`).
+    guard focus != .yield else { return }
+    let role = focus
     let report = onFocusChange
     Task { @MainActor in
-      if wanted {
+      if role == .take {
         if view.canBecomeFirstResponder, !view.isFirstResponder {
           _ = view.becomeFirstResponder()
         }

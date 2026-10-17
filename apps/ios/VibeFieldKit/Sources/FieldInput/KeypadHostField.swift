@@ -1,3 +1,4 @@
+import FieldTerminal
 import SwiftUI
 import UIKit
 
@@ -129,9 +130,10 @@ final class KeypadResponderView: UIView, UIKeyInput {
 struct KeypadHost: UIViewRepresentable {
   let model: InputCardModel
 
-  /// True while this responder should be holding the keyboard: the keypad is
-  /// up AND the terminal is the one that would otherwise have the keys.
-  private var wantsResponder: Bool { model.keypadShown && model.mode == .live }
+  /// What this responder does with the keyboard: it takes it while the keypad
+  /// is up AND the terminal is the one that would otherwise have the keys, and
+  /// yields to whichever responder owns it otherwise (`ResponderRole`).
+  private var role: ResponderRole { model.responderRole(for: .keypadHost) }
 
   func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -156,22 +158,23 @@ struct KeypadHost: UIViewRepresentable {
       }
     }
     // --- end IOS-5e
-    let wanted = wantsResponder
-    guard context.coordinator.applied != wanted else { return }
-    context.coordinator.applied = wanted
+    let role = self.role
+    guard context.coordinator.applied != role else { return }
+    context.coordinator.applied = role
     // The keypad is built on FIRST use, never at `makeUIView`. It is a
     // `UIHostingController`, and standing one up inside the SwiftUI update
     // pass that is already laying this card out is a nested host inside its
     // own parent's layout — which cost the whole card one silent render before
     // it was moved here.
-    if wanted, view.inputView == nil {
+    if role == .take, view.inputView == nil {
       view.inputView = KeypadInputView(model: model, isAccessibilitySize: accessibility)
     }
     // The same discipline the composer and the terminal surface both follow:
     // a responder change made inside a SwiftUI update pass resizes this view's
-    // own ancestors mid-pass.
+    // own ancestors mid-pass — and a yield makes none.
+    guard role != .yield else { return }
     Task { @MainActor in
-      if wanted {
+      if role == .take {
         guard !view.isFirstResponder else { return }
         _ = view.becomeFirstResponder()
       } else if view.isFirstResponder {
@@ -186,8 +189,8 @@ struct KeypadHost: UIViewRepresentable {
 
   @MainActor
   final class Coordinator {
-    /// The intent last acted on, so an unchanged one is not re-applied — a
+    /// The role last acted on, so an unchanged one is not re-applied — a
     /// `becomeFirstResponder` per update pass would fight the keyboard.
-    var applied: Bool?
+    var applied: ResponderRole?
   }
 }
