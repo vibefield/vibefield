@@ -261,6 +261,11 @@ struct Shared {
     /// assumes (interactive class, agent class, then solos by instance — so
     /// the legacy `cells[0]` mirror stays the interactive host).
     route_rows: Mutex<BTreeMap<u32, TerminalRouteCell>>,
+    /// F1 — each running cell's stdin, for a line the floor relays to every cell (the freeway
+    /// host's `revokeClient`). A generation registers its sender right after its hello and BEFORE
+    /// its route row, so any grant a client could hold for the cell is minted after the sender is
+    /// there; the sender goes with the row at the generation's end.
+    cell_updates: Mutex<BTreeMap<u32, UnboundedSender<Value>>>,
     /// TC-S3 — per-class plane states, composed into the unit's health.
     class_states: Mutex<BTreeMap<&'static str, ClassPlaneState>>,
     /// TC-S3 — per-cell session counts, maintained by the inventory pumps.
@@ -565,6 +570,17 @@ impl TerminalHandle {
         self.shared.routes.subscribe()
     }
 
+    /// F1 — the next stdin line of every running cell (the freeway host's `revokeClient`, as
+    /// the floor relays it): how many cells it was handed to. A cell that is not running holds no
+    /// grant to refuse, and one born later holds none minted before.
+    pub fn tell_cells(&self, line: &Value) -> usize {
+        let cells = self.shared.cell_updates.lock().unwrap();
+        cells
+            .values()
+            .filter(|cell| cell.send(line.clone()).is_ok())
+            .count()
+    }
+
     /// TC-D6(e), the immediate half: a create the kernel refused for
     /// descriptors puts the unit in `fd_pressure` NOW rather than at the next
     /// sample. A refusal is stronger evidence than any sample — it already
@@ -628,6 +644,7 @@ impl TerminalUnit {
                 })
                 .0,
                 route_rows: Mutex::new(BTreeMap::new()),
+                cell_updates: Mutex::new(BTreeMap::new()),
                 // Seeded so the composition has both classes from the first
                 // health read — an absent class would compose as "all up" the
                 // moment the other served.
@@ -1469,6 +1486,7 @@ async fn run_cell_generation(
         &mut reap,
     )
     .await;
+    shared.cell_updates.lock().unwrap().remove(&instance);
     shared.route_remove(instance);
     let _ = report.send(CellReport { instance, end });
 }
@@ -1552,6 +1570,12 @@ async fn run_cell_generation_inner(
             };
         }
     };
+    let (updates_out, mut updates) = tokio::sync::mpsc::unbounded_channel();
+    shared
+        .cell_updates
+        .lock()
+        .unwrap()
+        .insert(instance, updates_out);
     shared.route_upsert(
         instance,
         TerminalRouteCell {
@@ -1624,32 +1648,49 @@ async fn run_cell_generation_inner(
             _ = async { let _ = reap.wait_for(|reap| *reap).await; } => {}
         }
     };
-    tokio::select! {
-        _ = requested => {
-            // The leash: EOF asks the cell to drain; past the budget, kill.
-            let drained = cell.drain(drain_budget).await;
-            if drained.overran {
-                tracing::warn!(
-                    event = "field_native.terminal.cell_drain_overrun",
-                    component = "terminal",
-                    instance,
-                    "The cell outlived its drain budget and was killed; drain unknown"
-                );
-            } else if let Some(line) = drained.last_line {
-                log_cell_exit_report(instance, &line);
+    // Pinned across the loop: an update is relayed and the wait goes on. `Child::wait` is
+    // cancel-safe, so each turn arms it afresh.
+    tokio::pin!(requested);
+    loop {
+        tokio::select! {
+            _ = &mut requested => {
+                // The leash: EOF asks the cell to drain; past the budget, kill.
+                let drained = cell.drain(drain_budget).await;
+                if drained.overran {
+                    tracing::warn!(
+                        event = "field_native.terminal.cell_drain_overrun",
+                        component = "terminal",
+                        instance,
+                        "The cell outlived its drain budget and was killed; drain unknown"
+                    );
+                } else if let Some(line) = drained.last_line {
+                    log_cell_exit_report(instance, &line);
+                }
+                return CellEnd::Stopped;
             }
-            CellEnd::Stopped
-        }
-        status = cell.wait() => {
-            // Crashed (a requested stop never reaches here first). The exit
-            // report is best-effort — a SIGKILLed cell wrote none.
-            let mut detail = format!("{status:?}");
-            if let Some(line) = cell.last_line().await {
-                log_cell_exit_report(instance, &line);
-                detail = format!("{detail}; {line}");
+            status = cell.wait() => {
+                // Crashed (a requested stop never reaches here first). The exit
+                // report is best-effort — a SIGKILLed cell wrote none.
+                let mut detail = format!("{status:?}");
+                if let Some(line) = cell.last_line().await {
+                    log_cell_exit_report(instance, &line);
+                    detail = format!("{detail}; {line}");
+                }
+                let attribution = read_crumb_attribution(crumb, Some(&hello.cell_boot_id));
+                return CellEnd::Crashed { detail, attribution };
             }
-            let attribution = read_crumb_attribution(crumb, Some(&hello.cell_boot_id));
-            CellEnd::Crashed { detail, attribution }
+            Some(line) = updates.recv() => {
+                // A cell whose stdin is gone is dying; its wait says why.
+                if let Err(error) = cell.update(&line).await {
+                    tracing::warn!(
+                        event = "field_native.terminal.cell_update_failed",
+                        component = "terminal",
+                        instance,
+                        error = %error,
+                        "A stdin update did not reach the cell"
+                    );
+                }
+            }
         }
     }
 }
@@ -2673,6 +2714,7 @@ mod tests {
             })
             .0,
             route_rows: Mutex::new(BTreeMap::new()),
+            cell_updates: Mutex::new(BTreeMap::new()),
             class_states: Mutex::new(BTreeMap::new()),
             occupancy: watch::channel(BTreeMap::new()).0,
             strikes: Mutex::new(std::collections::HashMap::new()),

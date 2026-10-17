@@ -54,6 +54,9 @@ pub struct RunningDaemon {
     /// impossible, a pipe name has no relationship to the data dir on disk).
     pub pairing_file: std::path::PathBuf,
     pub bridge: services::mesh_bridge::BridgeHandle,
+    /// The terminal unit's door, for wiring (the freeway host's revoke reaches every cell
+    /// through it) and for tests.
+    pub terminal: services::terminal::TerminalHandle,
     pub boot_id: String,
     pub state: Arc<state::DaemonState>,
     server: tokio::task::JoinHandle<()>,
@@ -204,7 +207,7 @@ pub async fn bootstrap_with_logging(
     // then runs with the kernel as the only admission authority.
     let admission = admission::AdmissionLedger::resolve(&config.data_dir, &boot_id);
     let terminal_inventory =
-        services::terminal::install_inventory(terminal_handle, state.clone(), admission);
+        services::terminal::install_inventory(terminal_handle.clone(), state.clone(), admission);
 
     let health_refresh = tokio::spawn({
         let mgr = mgr.clone();
@@ -235,6 +238,7 @@ pub async fn bootstrap_with_logging(
         meshdata_endpoint,
         pairing_file,
         bridge: bridge_handle,
+        terminal: terminal_handle,
         mgmt_endpoint,
         boot_id,
         state,

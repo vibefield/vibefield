@@ -6,6 +6,8 @@
 //! work. The supervisor half (spawn/restart/routes) gets its own rows; the
 //! product-fidelity crash story lives in fieldd's kill matrix.
 
+#[path = "support/tp_dial.rs"]
+mod tp_dial;
 #[path = "support/tp_mint.rs"]
 mod tp_mint;
 
@@ -256,31 +258,6 @@ async fn a_leash_drain_broadcasts_exits_to_witnesses() {
     let _ = wait_exit(child, Duration::from_secs(10));
 }
 
-/// One control hello to a door: the reply's `type` and its `code`, if any.
-async fn control_hello(url: &str, grant: &serde_json::Value) -> (String, String) {
-    let (mut ws, _) = tokio::time::timeout(
-        Duration::from_secs(5),
-        tokio_tungstenite::connect_async(url.to_owned()),
-    )
-    .await
-    .expect("dial within 5s")
-    .expect("the cell's door accepts the upgrade");
-    ws.send(Message::Text(tp_mint::hello("control", grant, None).into()))
-        .await
-        .expect("send hello");
-    let reply = tokio::time::timeout(Duration::from_secs(5), ws.next())
-        .await
-        .expect("a reply within 5s")
-        .expect("a reply")
-        .expect("a frame");
-    let Message::Text(text) = reply else {
-        panic!("expected a text reply, got {reply:?}");
-    };
-    let reply: serde_json::Value = serde_json::from_str(text.as_str()).expect("json");
-    let field = |name: &str| reply[name].as_str().unwrap_or_default().to_owned();
-    (field("type"), field("code"))
-}
-
 /// F1 — a stdin line after the bootstrap is an update. The floor's `revokeClient` reaches the
 /// REAL cell's door, which then refuses that client's grants below the wall even on a set it
 /// never saw, and admits one at the wall; a line that does not parse is reported and ignored;
@@ -336,7 +313,8 @@ async fn a_revoke_client_line_walls_the_clients_older_grants_and_the_leash_still
     );
 
     let below = minter.transport(tp_mint::TransportSpec::basic("set-never-seen", 4, "n-r4"));
-    let refused = control_hello(&doors.control_url, &below).await;
+    let refused =
+        tp_dial::control_hello(&doors.control_url, tp_mint::hello("control", &below, None)).await;
     assert_eq!(
         refused,
         (
@@ -346,7 +324,9 @@ async fn a_revoke_client_line_walls_the_clients_older_grants_and_the_leash_still
     );
     let at = minter.transport(tp_mint::TransportSpec::basic("set-never-seen", 5, "n-r5"));
     assert_eq!(
-        control_hello(&doors.control_url, &at).await.0,
+        tp_dial::control_hello(&doors.control_url, tp_mint::hello("control", &at, None))
+            .await
+            .0,
         "ConnectionAccepted"
     );
 
