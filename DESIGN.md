@@ -889,12 +889,26 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   vibe-field's pane is not taking input" while the pane is shown and its input is closed (a terminal
   still reopening after a change of view, a read-only one), where a paste would be dropped. "Pasted
   into" is never said for a paste the pane did not take. *Corrected 2026-10-11:* it was said while
-  the pane's input was closed, and the paste was lost. The
+  the pane's input was closed, and the paste was lost. A paste larger than a terminal can take — ⌘V
+  into a pane — is never dropped unsaid either: the note says its size and how much of it one paste
+  carries, both as Finder counts the text (§9 — its own bytes, in thousands; its tabs, quotes and
+  control characters cost the link more, so the second figure is this paste's, "of it", not a fixed
+  one), the size rounded up and what fits down so the two never read as equal — "Not pasted into
+  vibe-field — 300 KB, and one paste carries 261 KB of it". Typed text that large says "Not typed
+  into vibe-field — 300 KB, and typed text carries 261 KB of it"; a session no pane of the deck
+  shows is "the terminal". The phone's terminal card says the same sentence, with "the terminal" for
+  the name and the limit its leg negotiated, so one paste reads alike on every device. A draft SENT
+  that large is copied, as any aim the pane cannot take: "Copied — too large for vibe-field: 300 KB,
+  and one paste carries 261 KB of it" — the pane's handler claims the paste it refuses, so "Pasted
+  into" is never said over that refusal. Each is under 70 characters beside the pane's name, to be
+  read in the note's 2.4s; what to do next is in its numbers. The
   note is the views track's note (solid, 12/500 in secondary ink, rising 4px as it fades in), over
-  send with its right edge on send's (so a long sentence never leaves the window) — or, for create's
-  outcomes ("Terminal opened in the active pane": it takes the focused pane, GV-D4 — "… in a new
-  pane" retired with the re-ruling of 2026-10-18), centred over create — for 2.4s. Sending clears the draft's words
-  and chips and keeps the aim.
+  send with its right edge on send's (so a long sentence grows leftward, never past the window's
+  right edge) — or, for create's outcomes ("Terminal opened in the active pane": it takes the
+  focused pane, GV-D4 — "… in a new pane" retired with the re-ruling of 2026-10-18), centred over
+  create — for 2.4s. *Corrected 2026-10-18:* this said a long sentence never leaves the window; in
+  a window too narrow for it, its first words run past the left edge. Sending clears the draft's
+  words and chips and keeps the aim.
   **One surface at a time, at the line** (One Frame FR-4, F11): @'s list and the objects are ONE
   owner's two surfaces — opening either folds the other — and Settings, the palette, the docs
   explorer, the Artifact panel and the Me menu fold them as they folded the tray. The Me menu and
@@ -2929,6 +2943,13 @@ numbers and provenance — "syncing history…", "external terminal — state on
 "needs approval · 4m" — and never overstate what we know (EL5). Errors say what happened
 and what to do next; they don't apologize and they're never vague. No filler, no lorem:
 demo content is real-shaped (AAPL, San Francisco, 64°).
+
+**Sizes are said as Finder counts them**, in thousands — bytes, KB, MB, GB (the terminal settings
+page, the line's notes) — and a size a person did not make, such as a link's message, is never
+said as theirs. A count in 1024s names itself KiB or MiB (Diagnostics). Where a size meets a
+limit, the size is rounded up and the limit down, so the two never read as equal. *Ruled
+2026-10-18 (James). Known deviation, owed: the desk readout's GPU memory says MB for a count in
+1024s (`panels/DeskReadout.tsx`).*
 
 *Status 2026-10-12: ruled and built. Built: the Lip and its two buttons, the groove, the frame's tone and the well (GV-D7, GV-D12); where a session with no pane opens (GV-D4); the terminals away and called up as they were left (GV-D5's call, GV-D6); the edge's three outcomes and their readouts, and the monitor making room; maximized, the bar the window's title bar (GV-D11); the monitor alone at launch, the first call bringing last run's panes with the one it called (GV-D5, N14 (a)); ⌘W on the last pane minimizing them (N16 (a)); rest, the drawing's share above a floor on every height (N15 (a)).*
 **The terminals' wrapper says the window's own words** (Godview, §8, the deck; One Frame §23.2 —
