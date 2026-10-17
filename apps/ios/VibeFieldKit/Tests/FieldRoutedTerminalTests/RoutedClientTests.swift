@@ -256,6 +256,7 @@ import Testing
     // Attached, but no status yet: neither predicate holds — an activation with
     // no lease is not ready, and saying otherwise would be a false ready.
     #expect(client.sessions[session]?.presentationReady == false)
+    #expect(client.sessions[session]?.presentationHeldBecause == "the cell has said nothing yet")
 
     // A frame makes the frames leg active, then the lease arrives.
     let frame = try Script.frame(
@@ -268,6 +269,7 @@ import Testing
       Script.status(session: session, activation: live.activation, sequence: 1))
     try await settle("presenting") { client.sessions[session]?.presentationReady == true }
     #expect(client.sessions[session]?.inputAllowed == true)
+    #expect(client.sessions[session]?.inputHeldBecause == nil)
 
     // The cell suspends input for lag. Presentation continues; typing does not.
     try await live.control.deliver(
@@ -278,6 +280,10 @@ import Testing
     try await settle("input suspended") { client.sessions[session]?.inputAllowed == false }
     #expect(client.sessions[session]?.presentationReady == true)
     #expect(client.sessions[session]?.status?.input == .suspended(reason: "lagging"))
+    // …and the drop says which term held it.
+    #expect(
+      client.sessions[session]?.inputHeldBecause
+        == "the cell holds input: suspended(reason: \"lagging\")")
 
     let before = await live.control.allSent("SendInput").count
     client.send(text: "ls\n", to: session)

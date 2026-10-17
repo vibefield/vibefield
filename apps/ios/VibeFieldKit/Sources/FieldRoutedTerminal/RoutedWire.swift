@@ -205,6 +205,11 @@ public struct RoutedSceneStamp: Sendable, Equatable {
   }
 }
 
+extension RoutedSceneStamp: CustomStringConvertible {
+  /// A stamp in a log line's words: the revision, and the lineage's generation.
+  public var description: String { "r\(sceneRevision) of generation \(modelGeneration)" }
+}
+
 public struct RoutedConnectionAccepted: Sendable {
   public let protocolMajor: Int64
   public let protocolMinor: Int64

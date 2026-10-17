@@ -58,6 +58,12 @@ public final class RoutedTerminalFrameSink: RoutedFrameSink {
   private let identityFailed: @MainActor (String, String) -> Void
   /// Told when an activation ended, with the cell's (or the client's) reason.
   private let ended: @MainActor (String, String) -> Void
+  /// Told, in a sentence, which rule refused a frame: the first refusal of a
+  /// run, then each power of two, then the frame that ends the run. A console
+  /// names the rule without a line per frame (2026-10-17: after a reopen every
+  /// delta was refused, and nothing said whether the stamps or the renderer did).
+  private let noted: @MainActor (String) -> Void
+  private var refusedInARow = 0
 
   private var bound: Bound?
   private var content: RoutedSceneStamp?
@@ -70,11 +76,13 @@ public final class RoutedTerminalFrameSink: RoutedFrameSink {
   public init(
     render: @escaping @MainActor (Data) -> Bool,
     identityFailed: @escaping @MainActor (_ session: String, _ reason: String) -> Void = { _, _ in },
-    activationEnded: @escaping @MainActor (_ session: String, _ reason: String) -> Void = { _, _ in }
+    activationEnded: @escaping @MainActor (_ session: String, _ reason: String) -> Void = { _, _ in },
+    noted: @escaping @MainActor (_ sentence: String) -> Void = { _ in }
   ) {
     self.render = render
     self.identityFailed = identityFailed
     self.ended = activationEnded
+    self.noted = noted
   }
 
   // MARK: RoutedFrameSink
@@ -99,10 +107,11 @@ public final class RoutedTerminalFrameSink: RoutedFrameSink {
     _ payload: Data, session: String, activation: String, content: RoutedSceneStamp
   ) -> Bool {
     guard admits(payload, session: session, activation: activation) else { return false }
-    guard rendered(payload) else { return false }
+    guard rendered(payload, "a whole scene at \(content)") else { return false }
     self.content = content
     appliedFullFrames += 1
     lastOutcome = .applied
+    endRefusalRun()
     return true
   }
 
@@ -118,29 +127,46 @@ public final class RoutedTerminalFrameSink: RoutedFrameSink {
     if let base, let held = content, RoutedSceneStamp.compare(base, held) != 0 {
       rejectedFrames += 1
       lastOutcome = .rejectedLineage
+      noteRefusal("a delta on \(base) where the scene holds \(held)")
       return false
     }
     if let base, content == nil, base.sceneRevision != 0 {
       rejectedFrames += 1
       lastOutcome = .rejectedLineage
+      noteRefusal("a delta on \(base) where the scene holds nothing")
       return false
     }
-    guard rendered(payload) else { return false }
+    guard rendered(payload, "a delta to \(result)") else { return false }
     self.content = result
     appliedDeltaFrames += 1
     lastOutcome = .applied
+    endRefusalRun()
     return true
   }
 
   /// Hand the frame to the renderer and keep its verdict. A refusal leaves the
   /// held stamp where it was: the scene still shows the frame before this one.
-  private func rendered(_ payload: Data) -> Bool {
+  private func rendered(_ payload: Data, _ what: @autoclosure () -> String) -> Bool {
     guard render(Data(payload)) else {
       rejectedFrames += 1
       lastOutcome = .rejectedByRenderer
+      noteRefusal("the renderer would not take \(what())")
       return false
     }
     return true
+  }
+
+  private func noteRefusal(_ why: String) {
+    refusedInARow += 1
+    if refusedInARow & (refusedInARow - 1) == 0 {
+      noted("refused \(refusedInARow) in a row — \(why)")
+    }
+  }
+
+  private func endRefusalRun() {
+    guard refusedInARow > 0 else { return }
+    noted("a frame applied after \(refusedInARow) refused")
+    refusedInARow = 0
   }
 
   public func activationEnded(session: String, activation: String, reason: String) {
@@ -173,8 +199,11 @@ public final class RoutedTerminalFrameSink: RoutedFrameSink {
   private func admits(_ payload: Data, session: String, activation: String) -> Bool {
     guard let bound, bound.activation == activation, bound.session == session else {
       // Not this sink's activation. The client already discards superseded
-      // content; this is the second wall, and it is silent because a
+      // content; this is the second wall, and it counts nothing because a
       // replacement is the normal cost of a reconnect, not a fault.
+      noteRefusal(
+        bound.map { "a frame for \(activation) reached the sink of \($0.activation)" }
+          ?? "a frame reached a sink bound to no activation")
       return false
     }
     let frame: TRF1Frame
@@ -183,6 +212,7 @@ public final class RoutedTerminalFrameSink: RoutedFrameSink {
     } catch {
       rejectedFrames += 1
       lastOutcome = .undecodable(String(describing: error))
+      noteRefusal("a frame would not decode: \(error)")
       return false
     }
     // The handles ride the wire as DECIMAL STRINGS (JSON cannot carry a u64),
@@ -197,6 +227,7 @@ public final class RoutedTerminalFrameSink: RoutedFrameSink {
         "a frame carried TRF1 handles \(frame.sessionHandle)/\(frame.viewHandle) "
         + "where the cell declared \(declared.sessionHandle)/\(declared.viewHandle)"
       lastOutcome = .rejectedIdentity(reason)
+      noteRefusal(reason)
       self.bound = nil
       content = nil
       identityFailed(session, reason)

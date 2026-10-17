@@ -558,6 +558,16 @@ public final class TerminalAttachment {
       activationEnded: { [weak self] _, reason in
         guard let self, binding == self.binding else { return }
         self.note("the scene stopped advancing — \(reason)")
+      },
+      noted: { [weak self] sentence in
+        guard let self, binding == self.binding else { return }
+        // The renderer's own counters say WHICH of its rules refused: a frame
+        // older than the scene, or a scene it must have whole first.
+        let renderer = self.scene.view.map {
+          " (renderer: \($0.diagnostics.staleFrames) stale, "
+            + "\($0.diagnostics.fullRefreshRequests) full refreshes asked)"
+        }
+        self.log("frames: \(sentence)\(renderer ?? "") session=\(self.sessionID ?? "-")")
       })
   }
 
@@ -762,6 +772,7 @@ public final class TerminalAttachment {
   /// would not decode).
   public func requestFullRefresh() {
     guard let client, let sessionID else { return }
+    log("the renderer asked for a full refresh session=\(sessionID)")
     client.requestReseed(for: sessionID)
   }
 
@@ -844,7 +855,7 @@ public final class TerminalAttachment {
   public func handleMouse(_ event: GhostteaTerminalMouseEvent) {
     let wheel = event.button == .scrollUp || event.button == .scrollDown
     guard acceptsInput else {
-      if wheel { noteScroll("the wheel dropped — input is held") }
+      if wheel { noteScroll("the wheel dropped — input is held: \(inputHeldWords)") }
       return
     }
     if wheel {
@@ -875,7 +886,7 @@ public final class TerminalAttachment {
   public func handleScroll(rows: Int) {
     guard rows != 0 else { return }
     guard acceptsInput else {
-      noteScroll("viewport rows dropped — input is held")
+      noteScroll("viewport rows dropped — input is held: \(inputHeldWords)")
       return
     }
     noteScroll("viewport rows \(rows < 0 ? "up" : "down") sent")
@@ -887,6 +898,12 @@ public final class TerminalAttachment {
   /// (2026-10-17 05:25Z) and nothing said whether a swipe went out as the
   /// program's wheel, as viewport rows, or was dropped while input was held.
   @ObservationIgnored private var scrollNote: String?
+
+  /// Why input is held, from the client's own gate (`inputHeldBecause`).
+  private var inputHeldWords: String {
+    guard let client, let sessionID else { return "no terminal is attached" }
+    return client.sessions[sessionID]?.inputHeldBecause ?? "this session is not on its lane"
+  }
 
   private func noteScroll(_ note: String) {
     guard note != scrollNote else { return }

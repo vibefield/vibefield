@@ -90,29 +90,51 @@ public struct RoutedSessionState: Sendable {
   /// not ready closed input for the length of every frame's render, so a TUI's
   /// output stream held the phone's keyboard shut (2026-10-17). A seed in
   /// flight has no applied scene under it and stays not ready.
-  public var presentationReady: Bool {
-    guard control == .attached, let status else { return false }
+  public var presentationReady: Bool { presentationHeldBecause == nil }
+
+  /// The terms of `PresentationReady(a)`, stated ONCE: the first that fails, in
+  /// a line's words, or nil when the presentation is ready. The verdict above
+  /// and `inputHeldBecause` both read it, so a reason can never name a term
+  /// the verdict did not fail on (a dropped gesture says it; the phone's swipes
+  /// after a reopen, 2026-10-17, dropped with no reason given).
+  public var presentationHeldBecause: String? {
+    guard control == .attached else { return "the control leg is \(control)" }
+    guard let status else { return "the cell has said nothing yet" }
     switch frames {
     case .active: break
     case .applying where appliedContent != nil: break
-    case .attaching, .resuming, .seeding, .applying, .failed: return false
+    case .seeding, .applying:
+      return "the picture is \(frames)" + (lastSeedReason.map { " — \($0)" } ?? "")
+    case .attaching, .resuming, .failed:
+      return "the picture is \(frames)"
     }
-    guard case .presenting = status.presentation else { return false }
-    guard leaseLive else { return false }
-    guard let accepted = status.acceptedContent else { return true }
-    guard let applied = appliedContent else { return false }
-    guard let order = RoutedSceneStamp.compare(applied, accepted) else { return false }
-    return order >= 0
+    guard case .presenting = status.presentation else {
+      return "the cell's presentation is \(status.presentation)"
+    }
+    guard leaseLive else { return "the presentation lease ran out" }
+    guard let accepted = status.acceptedContent else { return nil }
+    guard let applied = appliedContent else { return "no scene is applied" }
+    guard let order = RoutedSceneStamp.compare(applied, accepted) else {
+      return "the applied scene is of another lineage than the cell's"
+    }
+    return order >= 0 ? nil : "the applied scene is behind the cell's"
   }
 
   /// `InputAllowed(a)` = `PresentationReady(a)` ∧ the cell's input dimension
   /// allowed ∧ the attach right still inside its local expiry margin. The LAG
   /// decision is the cell's alone — it holds newest and accepted — and arrives
   /// as `input: suspended{lagging}`; nothing here computes lag.
-  public var inputAllowed: Bool {
-    guard presentationReady, let status else { return false }
-    guard case .allowed = status.input else { return false }
-    return rights.contains(.input) && inputRightLive
+  public var inputAllowed: Bool { inputHeldBecause == nil }
+
+  /// The terms of `InputAllowed(a)`, stated once, as `presentationHeldBecause`
+  /// states its own.
+  public var inputHeldBecause: String? {
+    if let held = presentationHeldBecause { return held }
+    guard let status else { return "the cell has said nothing yet" }
+    guard case .allowed = status.input else { return "the cell holds input: \(status.input)" }
+    guard rights.contains(.input) else { return "this view has no input right" }
+    guard inputRightLive else { return "the input right ran out" }
+    return nil
   }
 
   /// Timers are eager notifications, never the authority: every lease is checked
@@ -582,6 +604,7 @@ public final class RoutedTerminalClient {
     session.frames = .seeding
     session.lastSeedReason = "the viewer asked for a fresh scene"
     sessions[sessionId] = session
+    options.log("frames: a fresh scene asked for — input waits for a seed session=\(sessionId)")
   }
 
   /// Declare what this viewer wants. `live` attaches the cell's view (and starts
@@ -1115,6 +1138,11 @@ public final class RoutedTerminalClient {
       // Sequences are per-namespace and monotonic; an older one is a reorder and
       // is dropped rather than applied backwards.
       if let held = session.status, status.cellStatusSequence < held.cellStatusSequence { return }
+      if session.status?.presentation != status.presentation || session.status?.input != status.input {
+        options.log(
+          "the cell: presentation \(status.presentation), input \(status.input) "
+            + "session=\(status.sessionId)")
+      }
       session.status = status
       session.nowMs = Self.nowMs()
       // `leaseTtlMs` is the CELL's number and reached a bare `+` here, so a cell
@@ -1266,16 +1294,25 @@ public final class RoutedTerminalClient {
       apply(frame: envelope, header: header, session: &session)
     case .transferBegin:
       do {
-        session.transfer = try RoutedTransfer(
+        let transfer = try RoutedTransfer(
           header: header, budgetBytes: options.capacities.stagingBytesPerSession)
+        session.transfer = transfer
+        options.log(
+          "frames: a \(transfer.kind) of \(transfer.totalBytes) bytes begins, "
+            + "\(transfer.baseContent.map { "on \($0)" } ?? "on nothing") to \(transfer.resultContent) "
+            + "session=\(header.sessionId)")
       } catch {
         session.frames = .failed(String(describing: error))
         session.lastRefusal = String(describing: error)
+        options.log("frames: a transfer refused at its start — \(error) session=\(header.sessionId)")
       }
     case .transferChunk:
       guard var transfer = session.transfer,
         transfer.transferId == header.transfer?.transferId
-      else { break }
+      else {
+        options.log("frames: a chunk for no transfer in flight session=\(header.sessionId)")
+        break
+      }
       do {
         try transfer.stage(header, payload: envelope.payload)
         session.transfer = transfer
@@ -1283,14 +1320,19 @@ public final class RoutedTerminalClient {
         session.transfer = nil
         session.frames = .failed(String(describing: error))
         session.lastRefusal = String(describing: error)
+        options.log("frames: a transfer chunk refused — \(error) session=\(header.sessionId)")
       }
     case .transferEnd:
       guard let transfer = session.transfer, transfer.transferId == header.transfer?.transferId
-      else { break }
+      else {
+        options.log("frames: a transfer end for no transfer in flight session=\(header.sessionId)")
+        break
+      }
       session.transfer = nil
       do {
         let bytes = try transfer.finish()
         let content = transfer.resultContent
+        let kind = transfer.kind
         let sessionId = session.sessionId
         let activationId = session.activationId
         // NOT `appliedContent = content; frames = .active` here. The sink has
@@ -1307,6 +1349,7 @@ public final class RoutedTerminalClient {
             bytes, session: sessionId, activation: activationId, content: content)
           guard let self else { return }
           if applied {
+            self.options.log("frames: the \(kind) to \(content) is on the glass session=\(sessionId)")
             self.frameApplied(
               sessionId: sessionId, activationId: activationId, content: content)
           } else {
@@ -1322,6 +1365,7 @@ public final class RoutedTerminalClient {
       } catch {
         session.frames = .failed(String(describing: error))
         session.lastRefusal = String(describing: error)
+        options.log("frames: a transfer would not finish — \(error) session=\(header.sessionId)")
       }
     case .calibration:
       break
@@ -1419,10 +1463,15 @@ public final class RoutedTerminalClient {
 
   private func lineageBroke(sessionId: String, activationId: String) {
     guard var session = sessions[sessionId], session.activationId == activationId else { return }
+    let reason = "the sink holds a different scene"
+    let already = session.appliedContent == nil && session.lastSeedReason == reason
     session.appliedContent = nil
     session.frames = .seeding
-    session.lastSeedReason = "the sink holds a different scene"
+    session.lastSeedReason = reason
     sessions[sessionId] = session
+    if !already {
+      options.log("frames: a delta did not fit the scene held — input waits for a seed session=\(sessionId)")
+    }
   }
 
   /// An AUTHORITATIVE scene the sink refused — a completed transfer, or a
@@ -1447,6 +1496,9 @@ public final class RoutedTerminalClient {
     session.refusedRepairs += 1
     let refusals = session.refusedRepairs
     session.appliedContent = nil
+    options.log(
+      "frames: the sink refused a whole scene (\(refusals) of \(Self.maxRefusedRepairs)) "
+        + "session=\(sessionId)")
     if refusals < Self.maxRefusedRepairs {
       session.frames = .seeding
       session.lastSeedReason = "the sink would not take the scene the cell sent"

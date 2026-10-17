@@ -172,6 +172,35 @@ import Testing
     #expect(sink.lastOutcome == .rejectedLineage)
   }
 
+  /// A run of refusals is named by its rule — the first, then each power of
+  /// two — and the frame that ends it says how long it ran (2026-10-17: after
+  /// a reopen every delta was refused, and nothing said which rule did it).
+  @MainActor
+  @Test func aRunOfRefusalsIsNamedByItsRuleNotByALinePerFrame() throws {
+    let frames = try LaneFrames.load()
+    var sentences: [String] = []
+    let sink = RoutedTerminalFrameSink(render: { _ in true }, noted: { sentences.append($0) })
+    sink.bindActivation(session: "s-1", activation: "act-1", identity: try handles(frames.seed))
+    sink.applyFullFrame(frames.seed, session: "s-1", activation: "act-1", content: stamp(4))
+
+    for revision: Int64 in 10..<15 {
+      _ = sink.applyDeltaFrame(
+        frames.delta, session: "s-1", activation: "act-1", base: stamp(revision),
+        result: stamp(revision + 1))
+    }
+    let held = "where the scene holds r4 of generation 1"
+    #expect(
+      sentences == [
+        "refused 1 in a row — a delta on r10 of generation 1 \(held)",
+        "refused 2 in a row — a delta on r11 of generation 1 \(held)",
+        "refused 4 in a row — a delta on r13 of generation 1 \(held)",
+      ])
+
+    _ = sink.applyDeltaFrame(
+      frames.delta, session: "s-1", activation: "act-1", base: stamp(4), result: stamp(5))
+    #expect(sentences.last == "a frame applied after 5 refused")
+  }
+
   @MainActor
   @Test func aFrameForASupersededActivationIsSilentlyDiscarded() throws {
     // A replacement is the normal cost of a reconnect, not a fault: the content
