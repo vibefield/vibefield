@@ -18,8 +18,13 @@
 //!   = last sent, `result` = the new revision) once credit allows. A full frame
 //!   is exactly the spec's "coalesced delta bounded by the model".
 //! - A transfer is CHUNKED to `maxChunkBytes` and always COMPLETES: a starved
-//!   chunk waits for credit (bounded by `maxActivationCatchupMs`, else the
-//!   activation stops `{overload}` instead of waiting forever).
+//!   chunk waits for credit. Past `maxActivationCatchupMs` with nothing
+//!   admissible the pump SAYS so — `presentation: stopped{overload}`, once per
+//!   stall — and keeps waiting: overload is a STATE the returning credit
+//!   recovers (the table puts the activation back to presenting once a unit
+//!   sent after the stop is applied), never the pump's end (C3: a pump that
+//!   returned there would leave `pump_running` set with nothing to restart
+//!   it, and the stop permanent).
 //! - An oversized catalog-reset frame is already self-contained: transfer it
 //!   directly. Refreshing in response would make two viewers refresh each other.
 //! - Frames for other sessions on a shared hub are skipped by handle; the
@@ -60,7 +65,8 @@ pub trait PumpHost: Send + Sync + 'static {
     ) -> Admission;
     /// A unit (a delta or a whole transfer) was sent ending at `revision`.
     fn unit_sent(&self, activation_id: &str, revision: u64, seed: bool);
-    /// The pump could not converge within the bound.
+    /// The pump could not converge within the bound. Said once per stall; the
+    /// pump keeps waiting for the credit that recovers it.
     fn presentation_stopped(&self, activation_id: &str, reason: &'static str);
     /// Does the activation want frames right now (demand live, view attached)?
     fn wants_frames(&self, activation_id: &str) -> bool;
@@ -130,6 +136,8 @@ struct Pump<H: PumpHost> {
 
 enum Step {
     Continue,
+    /// The full frame did not come: the lineage still needs one — ask again.
+    Retry,
     End,
 }
 
@@ -182,6 +190,7 @@ async fn run_pump<H: PumpHost>(
                     needs_full = false;
                     continue;
                 }
+                Step::Retry => continue,
                 Step::End => break,
             }
         }
@@ -294,7 +303,8 @@ impl<H: PumpHost> Pump<H> {
     }
 
     /// Force a FULL frame from the engine and send it as a transfer (seed the
-    /// first time, catch-up after). Waits for credit per chunk (bounded).
+    /// first time, catch-up after). Waits for credit per chunk (overload said
+    /// past the bound, the wait kept).
     async fn full_frame(&mut self, rx: &mut broadcast::Receiver<ghosttea::FramePacket>) -> Step {
         // Wait for admissible credit BEFORE forcing the engine: a refresh with
         // nowhere to send it would only churn the model.
@@ -312,9 +322,13 @@ impl<H: PumpHost> Pump<H> {
             let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
             match tokio::time::timeout(remaining, rx.recv()).await {
                 Err(_) => {
+                    // The forced frame never reached us: the receiver lagged past
+                    // it, or the engine was too busy to render one in time. Say
+                    // so and ask again (at most one refresh per `seed_wait`) —
+                    // ending here would leave the activation stopped for good (C3).
                     self.host
                         .presentation_stopped(&self.start.activation_id, "overload");
-                    return Step::End;
+                    return Step::Retry;
                 }
                 Ok(Err(broadcast::error::RecvError::Closed)) => return Step::End,
                 Ok(Err(broadcast::error::RecvError::Lagged(_))) => continue,
@@ -409,10 +423,11 @@ impl<H: PumpHost> Pump<H> {
         Step::Continue
     }
 
-    /// Block until `bytes` of BULK WOULD be admissible (or the bound passes →
-    /// overload). Non-mutating: the real charge happens when the unit is sent.
+    /// Block until `bytes` of BULK WOULD be admissible (past the bound the pump
+    /// says overload and waits on — `starved`). Non-mutating: the real charge
+    /// happens when the unit is sent.
     async fn wait_for_credit(&self, bytes: u64) -> Result<(), ()> {
-        let deadline = tokio::time::Instant::now() + self.start.catchup_bound;
+        let mut deadline = Some(tokio::time::Instant::now() + self.start.catchup_bound);
         loop {
             match self.host.can_admit(
                 self.start.connection_id,
@@ -421,29 +436,45 @@ impl<H: PumpHost> Pump<H> {
                 UnitClass::Bulk,
             ) {
                 Admission::Admitted => return Ok(()),
-                Admission::Starved => {
-                    if self.stop.load(Ordering::Acquire) {
-                        return Err(());
-                    }
-                    let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-                    if remaining.is_zero() {
-                        self.host
-                            .presentation_stopped(&self.start.activation_id, "overload");
-                        return Err(());
-                    }
-                    let _ = tokio::time::timeout(remaining, self.notify.notified()).await;
-                }
+                Admission::Starved => self.starved(&mut deadline).await?,
                 Admission::Gone => return Err(()),
             }
         }
     }
 
-    /// Send one BULK transfer envelope once admitted (waiting for credit,
-    /// bounded), then behind the writer's bulk-ahead backpressure. Credit is
-    /// charged first; only once admitted do we acquire the writer permits — so a
-    /// credit-starved loop never leaks bulk permits.
+    /// One starved wait (§8): parked until a `WakePump` (credit returned,
+    /// demand moved), the stop flag, or the convergence bound. When the bound
+    /// passes with nothing admissible the pump SAYS so — `presentation:
+    /// stopped{overload}`, once for this wait — and then waits with no bound:
+    /// the credit that returns is what recovers it (C3), and a dead leg ends
+    /// the pump through `Gone`, the stop flag or the writer's closed semaphore,
+    /// never through this. `Err` = the pump was stopped.
+    async fn starved(&self, deadline: &mut Option<tokio::time::Instant>) -> Result<(), ()> {
+        if self.stop.load(Ordering::Acquire) {
+            return Err(());
+        }
+        let Some(at) = *deadline else {
+            self.notify.notified().await;
+            return Ok(());
+        };
+        let remaining = at.saturating_duration_since(tokio::time::Instant::now());
+        if remaining.is_zero() {
+            self.host
+                .presentation_stopped(&self.start.activation_id, "overload");
+            *deadline = None;
+            return Ok(());
+        }
+        let _ = tokio::time::timeout(remaining, self.notify.notified()).await;
+        Ok(())
+    }
+
+    /// Send one BULK transfer envelope once admitted (waiting for credit; past
+    /// the bound the pump says overload and waits on — `starved`), then behind
+    /// the writer's bulk-ahead backpressure. Credit is charged first; only once
+    /// admitted do we acquire the writer permits — so a credit-starved loop
+    /// never leaks bulk permits.
     async fn send_admitted(&mut self, unit: Vec<u8>) -> Result<(), ()> {
-        let deadline = tokio::time::Instant::now() + self.start.catchup_bound;
+        let mut deadline = Some(tokio::time::Instant::now() + self.start.catchup_bound);
         loop {
             match self.host.try_admit(
                 self.start.connection_id,
@@ -452,18 +483,7 @@ impl<H: PumpHost> Pump<H> {
                 UnitClass::Bulk,
             ) {
                 Admission::Admitted => break,
-                Admission::Starved => {
-                    if self.stop.load(Ordering::Acquire) {
-                        return Err(());
-                    }
-                    let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-                    if remaining.is_zero() {
-                        self.host
-                            .presentation_stopped(&self.start.activation_id, "overload");
-                        return Err(());
-                    }
-                    let _ = tokio::time::timeout(remaining, self.notify.notified()).await;
-                }
+                Admission::Starved => self.starved(&mut deadline).await?,
                 Admission::Gone => return Err(()),
             }
         }
@@ -601,5 +621,154 @@ mod tests {
             after, before,
             "idle viewers must not manufacture engine frames"
         );
+    }
+
+    /// An idle `/bin/sh` on its own hub — nothing prints unless asked.
+    fn idle_session(hub: &FrameHub) -> Arc<Session> {
+        Session::spawn(
+            SpawnOptions {
+                executable: "/bin/sh".into(),
+                args: vec!["-c".into(), "exec sleep 30".into()],
+                cwd: None,
+                env: HashMap::new(),
+                environment: Some(SessionEnvironment::Clean {
+                    variables: HashMap::from([("PATH".into(), "/usr/bin:/bin".into())]),
+                }),
+                cols: 80,
+                rows: 24,
+                persistence: Persistence::KeepUntilExit,
+                program_kind: SessionProgramKind::Application,
+                owner_id: None,
+                scrollback_bytes: None,
+            },
+            hub.clone(),
+            Arc::new(Mutex::new(TextEngine::discover().unwrap())),
+            Arc::new(|_, _| {}),
+        )
+        .unwrap()
+    }
+
+    async fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while !done() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap_or_else(|_| panic!("timeout: {what}"));
+    }
+
+    /// A door whose credit is withheld until the test opens it.
+    #[derive(Default)]
+    struct WithheldCredit {
+        open: AtomicBool,
+        stops: AtomicUsize,
+        seeds: AtomicUsize,
+    }
+
+    impl WithheldCredit {
+        fn admission(&self) -> Admission {
+            if self.open.load(Ordering::SeqCst) {
+                Admission::Admitted
+            } else {
+                Admission::Starved
+            }
+        }
+    }
+
+    impl PumpHost for WithheldCredit {
+        fn try_admit(&self, _: u64, _: &str, _: u64, _: UnitClass) -> Admission {
+            self.admission()
+        }
+        fn can_admit(&self, _: u64, _: &str, _: u64, _: UnitClass) -> Admission {
+            self.admission()
+        }
+        fn unit_sent(&self, _: &str, _: u64, seed: bool) {
+            if seed {
+                self.seeds.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        fn presentation_stopped(&self, _: &str, reason: &'static str) {
+            assert_eq!(reason, "overload");
+            self.stops.fetch_add(1, Ordering::SeqCst);
+        }
+        fn wants_frames(&self, _: &str) -> bool {
+            true
+        }
+    }
+
+    /// C3 — credit withheld past the convergence bound: the pump says
+    /// `stopped{overload}` ONCE and keeps waiting, parked, never finished —
+    /// nothing would restart a pump that returned there. The credit returning
+    /// (the door's `WakePump` on a `TransportCredit`) recovers it: the seed it
+    /// was holding goes out.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn an_overload_stop_is_said_once_and_the_returning_credit_recovers_the_pump() {
+        let hub = FrameHub::new(32);
+        let session = idle_session(&hub);
+        let host = Arc::new(WithheldCredit::default());
+        let (out, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let drain = tokio::spawn(async move { while received.recv().await.is_some() {} });
+        let pump = spawn_pump(
+            host.clone(),
+            PumpStart {
+                activation_id: "starved".into(),
+                session_id: session.id(),
+                lease_epoch: 0,
+                connection_id: 1,
+                credit_epoch: 1,
+                frames: LegRef {
+                    connection_id: 1,
+                    leg_generation: 1,
+                    out,
+                    bulk_credit: None,
+                    geometry_events: false,
+                },
+                session: session.clone(),
+                hub: hub.clone(),
+                session_handle: session.summary().handle.parse().unwrap(),
+                scene_epoch: SceneEpoch {
+                    cell_boot_id: "overload-test".into(),
+                    model_generation: 1,
+                },
+                max_chunk_bytes: 1024,
+                max_urgent_unit_bytes: 1 << 20,
+                seed_wait: Duration::from_secs(5),
+                catchup_bound: Duration::from_millis(100),
+            },
+        );
+
+        // Past the bound with nothing admissible: the stop is SAID…
+        wait_until("the overload stop", || {
+            host.stops.load(Ordering::SeqCst) == 1
+        })
+        .await;
+        // …once — four more bounds pass while starved, and the pump is parked,
+        // not finished.
+        tokio::time::sleep(Duration::from_millis(400)).await;
+        assert_eq!(
+            host.stops.load(Ordering::SeqCst),
+            1,
+            "a stall is said once, never once per bound"
+        );
+        assert!(
+            !pump.task.is_finished(),
+            "an overload stop is a state, never the pump's end"
+        );
+        assert_eq!(host.seeds.load(Ordering::SeqCst), 0);
+
+        // The credit returns: the seed the pump was holding goes out.
+        host.open.store(true, Ordering::SeqCst);
+        pump.notify.notify_one();
+        wait_until("the recovered seed", || {
+            host.seeds.load(Ordering::SeqCst) == 1
+        })
+        .await;
+        assert_eq!(host.stops.load(Ordering::SeqCst), 1);
+
+        pump.stop();
+        pump.task.await.unwrap();
+        drain.abort();
+        session.terminate(TerminationSource::User).unwrap();
     }
 }

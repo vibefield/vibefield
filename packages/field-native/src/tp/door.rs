@@ -106,7 +106,8 @@ pub struct DoorConfig {
     /// how long the pump waits for the engine's forced full frame (seed/catch-up)
     pub seed_wait: Duration,
     /// the activation-time convergence bound: a seed+catch-up that cannot be
-    /// admitted within it stops the activation `{overload}` (§8, `maxActivationCatchupMs`)
+    /// admitted within it stops the activation's presentation `{overload}` (§8,
+    /// `maxActivationCatchupMs`) until the credit that returns recovers it (C3)
     pub catchup_bound: Duration,
 }
 

@@ -632,6 +632,104 @@ async fn credit_gates_the_stream_and_returning_it_resumes_flow() {
     h.door.shutdown().await;
 }
 
+/// The next `CellActivationStatus` on `control` that `pred` accepts, reading
+/// through the lease's other traffic (lagging flips, refreshes).
+async fn status_until(control: &mut Ws, what: &str, mut pred: impl FnMut(&Value) -> bool) -> Value {
+    for _ in 0..64 {
+        match next_reply_within(control, Duration::from_secs(10)).await {
+            Reply::Text(v) if v["type"] == "CellActivationStatus" => {
+                if pred(&v) {
+                    return v;
+                }
+            }
+            Reply::Text(_) => continue,
+            other => panic!("{what}: expected a status, got {other:?}"),
+        }
+    }
+    panic!("{what}: not among the next 64 control messages");
+}
+
+/// C3 — a credit stall that outlives the convergence bound: the lease says
+/// `stopped{overload}` (input suspended with it), and the credit returning
+/// RECOVERS it — one catch-up transfer, the worker's ack, and the lease
+/// `presenting` with input allowed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_overload_stop_recovers_when_the_credit_returns() {
+    let h = harness_cfg(|config| config.catchup_bound = Duration::from_millis(400)).await;
+    let session = spawn_session(&h.source);
+    let session_id = session.id();
+    // credit_gates' window: the seed fits with room for a burst, never the flood
+    let (mut control, mut frames, epoch) = connect(&h, "set-ov", 1, caps(8_000_000, 30_000)).await;
+    attach_both(
+        &h,
+        &mut control,
+        &mut frames,
+        &session_id,
+        "act-ov",
+        &["input", "read"],
+        true,
+    )
+    .await;
+    let (kind, _base, result, _bytes, _headers) = receive_transfer(&mut frames).await;
+    assert_eq!(kind, "seed");
+    scene_applied(&mut frames, &session_id, "act-ov", &result).await;
+    status_until(&mut control, "presenting after the seed", |s| {
+        s["presentation"]["state"] == "presenting"
+    })
+    .await;
+
+    // Discrete lines, NO credit returned: the deltas fill the account, the
+    // lineage breaks, and the repair waits on bulk credit past the bound.
+    let feeder = {
+        let session = session.clone();
+        tokio::spawn(async move {
+            for i in 0..200u32 {
+                type_into(&session, &format!("echo {i}-{}\n", "=".repeat(60)));
+                tokio::time::sleep(Duration::from_millis(12)).await;
+            }
+        })
+    };
+    let stopped = status_until(&mut control, "the overload stop", |s| {
+        s["presentation"]["state"] == "stopped"
+    })
+    .await;
+    assert_eq!(stopped["presentation"]["reason"], "overload");
+    assert_eq!(stopped["input"]["state"], "suspended");
+    feeder.abort();
+    assert!(
+        h.door
+            .snapshot()
+            .activations
+            .iter()
+            .any(|a| a.0 == "act-ov"),
+        "an overload stop never ends the activation"
+    );
+
+    // The credit returns: ONE catch-up repairs the lineage, the worker applies
+    // it, and the lease is presenting again — said, not inferred.
+    return_credit(
+        &mut frames,
+        epoch,
+        1,
+        20_000_000,
+        vec![("act-ov", 20_000_000)],
+    )
+    .await;
+    let (kind, base, repaired, _bytes, _headers) = receive_transfer(&mut frames).await;
+    assert_eq!(
+        kind, "catchup",
+        "the recovery is a catch-up, never a reseed"
+    );
+    assert!(!base.is_null());
+    scene_applied(&mut frames, &session_id, "act-ov", &repaired).await;
+    let recovered = status_until(&mut control, "presenting after the recovery", |s| {
+        s["presentation"]["state"] == "presenting"
+    })
+    .await;
+    assert_eq!(recovered["input"]["state"], "allowed");
+    h.door.shutdown().await;
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn read_only_never_input_allowed_demand_none_detaches_and_frames_loss_revokes() {
     let h = harness().await;

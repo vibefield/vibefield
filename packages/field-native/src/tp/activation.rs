@@ -152,6 +152,9 @@ pub struct Activation {
     pub newest_sent: Option<u64>,
     /// the revision of the first seed sent — presenting once applied
     pub seed_revision: Option<u64>,
+    /// C3 — the first revision the pump sent after an overload stop: the scene
+    /// is advancing again once the worker applies it (presenting once more).
+    pub resume_revision: Option<u64>,
     pub pump_running: bool,
     pub last_unit_sent_at: Option<Instant>,
     pub last_scene_applied_at: Option<Instant>,
@@ -722,6 +725,10 @@ impl ActivationTable {
             // `not-granted` from birth, `right-revoked` from a downgrade)
         } else if !a.has_right(AttachRight::Input) {
             a.input = Input::Revoked("not-granted");
+        } else if let Presentation::Stopped(reason) = a.presentation {
+            // the scene is not advancing, and the lease says why in the
+            // spec's own word for both dimensions (`overload`), not `pending`
+            a.input = Input::Suspended(reason);
         } else if a.presentation != Presentation::Presenting {
             a.input = Input::Suspended("pending");
         } else if now_ms + tp::ATTACH_RENEWAL_MARGIN_MS >= a.grant_expires_at_ms {
@@ -1508,6 +1515,7 @@ impl ActivationTable {
             scene_epoch: None,
             newest_sent: None,
             seed_revision: None,
+            resume_revision: None,
             pump_running: false,
             last_unit_sent_at: None,
             last_scene_applied_at: None,
@@ -1621,6 +1629,10 @@ impl ActivationTable {
             .is_some_and(|f| f.connection_id == leg.connection_id)
             && !lineage_changed;
         a.frames = Some(leg.clone());
+        if lineage_changed {
+            // the new lineage's revisions do not compare with the old one's
+            a.resume_revision = None;
+        }
         if a.resume_token.is_none() {
             a.resume_token = Some(resume_token);
         }
@@ -1798,6 +1810,16 @@ impl ActivationTable {
                 }
             }
         }
+        // C3 — an overload stop is a state, not an end: the first unit the pump
+        // sent after it, applied, means the scene is advancing again. This is
+        // the contracts' `stalled → presenting` row, which both clients take.
+        if a.presentation == Presentation::Stopped("overload")
+            && a.resume_revision
+                .is_some_and(|resume| msg.applied_content.scene_revision >= resume)
+        {
+            a.presentation = Presentation::Presenting;
+            a.resume_revision = None;
+        }
         Self::recompute_input(a, now_ms);
         // Progress is recorded for every frame, but unchanged leases need only
         // refresh before their TTL. State transitions still reach main immediately.
@@ -1823,10 +1845,20 @@ impl ActivationTable {
         if seed && a.seed_revision.is_none() {
             a.seed_revision = Some(revision);
         }
+        // C3 — the first unit after an overload stop: `scene_applied` turns the
+        // lease back to presenting once the worker has applied it.
+        if a.presentation == Presentation::Stopped("overload") && a.resume_revision.is_none() {
+            a.resume_revision = Some(revision);
+        }
         Vec::new()
     }
 
-    /// The pump reports an overload stop (§8: recovery terminates bounded).
+    /// The pump reports an overload stop (§8: recovery terminates bounded — in
+    /// a STATE: the pump keeps waiting, and the credit that returns recovers
+    /// it through `unit_sent` + `scene_applied`). One stall can outlive several
+    /// bounded waits (each chunk of a transfer starving past the bound): the
+    /// lease says it once, and a repeat report only moves the recovery on to a
+    /// unit sent after it.
     pub fn presentation_stopped(
         &mut self,
         activation_id: &str,
@@ -1836,7 +1868,18 @@ impl ActivationTable {
         let Some(a) = self.by_id.get_mut(activation_id) else {
             return Vec::new();
         };
+        // The same stop said again: nothing new for the wire — but a report IS
+        // the pump starved now, parked in a wait with no bound that will never
+        // report again. A recovery unit sent BEFORE this report does not end
+        // the stop: its ack would turn the lease presenting (input allowed)
+        // over a pump still parked and a screen still frozen. Only a unit sent
+        // after this report does.
+        if a.presentation == Presentation::Stopped(reason) {
+            a.resume_revision = None;
+            return Vec::new();
+        }
         a.presentation = Presentation::Stopped(reason);
+        a.resume_revision = None;
         Self::recompute_input(a, now_ms);
         vec![Self::status_effect(a)]
     }
@@ -2388,6 +2431,193 @@ mod tests {
         assert_eq!(s[0]["presentation"]["state"], "revoked");
         assert_eq!(s[0]["presentation"]["reason"], "leg-dead");
         assert!(t.is_empty());
+    }
+
+    type Rx = tokio::sync::mpsc::UnboundedReceiver<Outbound>;
+
+    /// An input-granted activation on legs of its own, both attached with the
+    /// view up — PENDING (no seed yet). The receivers are drained.
+    fn attached_activation(
+        t: &mut ActivationTable,
+        activation_id: &str,
+        session: &str,
+    ) -> (LegRef, Rx, LegRef, Rx) {
+        let base = 10 * (t.len() as u64 + 1);
+        let (control, mut crx) = leg(base);
+        let (frames, mut frx) = leg(base + 1);
+        t.open_credit(base + 1, 1, ReceiverCapacities::CELL_CAPS, 0);
+        let rights = [AttachRight::Input, AttachRight::Read];
+        perform(t.attach_control(AttachControlInput {
+            now_ms: 2_000,
+            set: &set(),
+            leg: &control,
+            msg: control_msg(activation_id, None, true),
+            claims: claims(session, 1, &rights),
+            session_known: true,
+        }));
+        t.view_attached(activation_id, activation_id, 7);
+        perform(t.attach_frames(AttachFramesInput {
+            set: &set(),
+            leg: &frames,
+            msg: AttachFramesLeg {
+                activation_id: activation_id.into(),
+                attach_grant: serde_json::json!({}),
+                resume: None,
+            },
+            claims: claims(session, 1, &rights),
+            trf_identity: Some(TrfIdentity {
+                session_handle: "77".into(),
+                view_handle: "77".into(),
+            }),
+            resume_token: "rt".into(),
+            session_epoch: 0,
+        }));
+        texts(&mut crx);
+        texts(&mut frx);
+        (control, crx, frames, frx)
+    }
+
+    /// `attached_activation`, then its seed at `seed` sent and applied:
+    /// presenting, input allowed. The receivers are drained.
+    fn presenting_activation(
+        t: &mut ActivationTable,
+        activation_id: &str,
+        session: &str,
+        seed: u64,
+    ) -> (LegRef, Rx, LegRef, Rx) {
+        let (control, mut crx, frames, frx) = attached_activation(t, activation_id, session);
+        t.unit_sent(activation_id, seed, true);
+        perform(applied(t, &frames, activation_id, session, seed, 3_000));
+        let s = texts(&mut crx);
+        assert_eq!(s.last().unwrap()["input"]["state"], "allowed");
+        (control, crx, frames, frx)
+    }
+
+    /// The worker's `SceneApplied` for `revision`, in the activation's lineage.
+    fn applied(
+        t: &mut ActivationTable,
+        frames: &LegRef,
+        activation_id: &str,
+        session: &str,
+        revision: u64,
+        now_ms: u64,
+    ) -> Vec<Effect> {
+        let scene_epoch = t
+            .get(activation_id)
+            .and_then(|a| a.scene_epoch.clone())
+            .expect("a frames-attached activation");
+        t.scene_applied(
+            frames,
+            SceneApplied {
+                session_id: session.into(),
+                activation_id: activation_id.into(),
+                lease_epoch: 0,
+                applied_content: SceneContentStamp {
+                    scene_epoch,
+                    scene_revision: revision,
+                },
+            },
+            now_ms,
+        )
+    }
+
+    /// C3 — `stopped{overload}` is a STATE, never an end. The lease says it
+    /// once (input `suspended{overload}`, the spec's word, not `pending`); an
+    /// ack of a unit sent BEFORE the stop moves nothing; the first unit sent
+    /// after it — the transfer the returning credit let through — applied, is
+    /// presenting again with input allowed.
+    #[test]
+    fn an_overload_stop_is_said_once_and_recovers_when_a_unit_sent_after_it_applies() {
+        let mut t = ActivationTable::new("cb");
+        let (_control, mut crx, frames, _frx) = presenting_activation(&mut t, "a1", "s1", 10);
+
+        perform(t.presentation_stopped("a1", "overload", 3_100));
+        let s = texts(&mut crx);
+        assert_eq!(s.len(), 1);
+        assert_eq!(s[0]["presentation"]["state"], "stopped");
+        assert_eq!(s[0]["presentation"]["reason"], "overload");
+        assert_eq!(s[0]["input"]["state"], "suspended");
+        assert_eq!(s[0]["input"]["reason"], "overload");
+        // the same stall, said again by another bounded wait: nothing new
+        assert!(t.presentation_stopped("a1", "overload", 3_200).is_empty());
+
+        // an ack of what was sent BEFORE the stop is not the recovery
+        perform(applied(&mut t, &frames, "a1", "s1", 10, 3_300));
+        assert_eq!(
+            t.get("a1").unwrap().presentation,
+            Presentation::Stopped("overload")
+        );
+
+        // the credit returned: the pump's catch-up went out ending at 40 and a
+        // delta followed at 41; an ack short of 40 is still not the recovery
+        t.unit_sent("a1", 40, false);
+        t.unit_sent("a1", 41, false);
+        assert_eq!(t.get("a1").unwrap().resume_revision, Some(40));
+        perform(applied(&mut t, &frames, "a1", "s1", 39, 3_400));
+        assert_eq!(
+            t.get("a1").unwrap().presentation,
+            Presentation::Stopped("overload")
+        );
+        texts(&mut crx);
+
+        // …and the catch-up applied IS: presenting, input allowed, said at once
+        perform(applied(&mut t, &frames, "a1", "s1", 40, 3_500));
+        let s = texts(&mut crx);
+        let recovered = s.last().expect("the recovery is said");
+        assert_eq!(recovered["presentation"]["state"], "presenting");
+        assert_eq!(recovered["input"]["state"], "allowed");
+        assert_eq!(t.get("a1").unwrap().resume_revision, None);
+
+        // A stop while the SEED was still starved (the activation pending)
+        // recovers the same way: the seed that finally goes out, applied.
+        let (_control, mut crx2, frames2, _frx2) = attached_activation(&mut t, "b1", "s2");
+        perform(t.presentation_stopped("b1", "overload", 3_000));
+        let s = texts(&mut crx2);
+        assert_eq!(s[0]["presentation"]["reason"], "overload");
+        assert_eq!(s[0]["input"]["reason"], "overload");
+        t.unit_sent("b1", 5, true);
+        perform(applied(&mut t, &frames2, "b1", "s2", 5, 3_100));
+        let s = texts(&mut crx2);
+        assert_eq!(s.last().unwrap()["presentation"]["state"], "presenting");
+        assert_eq!(s.last().unwrap()["input"]["state"], "allowed");
+    }
+
+    /// C3 — a stop said AGAIN after a recovery unit went out is the pump
+    /// starved again, parked with no bound: the unit sent before that report
+    /// does not end the stop, or its ack would read presenting (input allowed)
+    /// over a frozen screen with nothing left to report it. Only a unit sent
+    /// after the latest report recovers.
+    #[test]
+    fn a_stop_said_again_after_a_recovery_unit_waits_for_a_unit_sent_after_it() {
+        let mut t = ActivationTable::new("cb");
+        let (_control, mut crx, frames, _frx) = presenting_activation(&mut t, "a1", "s1", 10);
+
+        perform(t.presentation_stopped("a1", "overload", 3_100));
+        // trickling credit let a catch-up through, ending at 40…
+        t.unit_sent("a1", 40, false);
+        assert_eq!(t.get("a1").unwrap().resume_revision, Some(40));
+        // …and the next one starved past the bound before 40 was acknowledged
+        assert!(t.presentation_stopped("a1", "overload", 3_200).is_empty());
+        assert_eq!(t.get("a1").unwrap().resume_revision, None);
+        texts(&mut crx);
+
+        // 40 applied: the scene reached 40, but the pump is starved again
+        perform(applied(&mut t, &frames, "a1", "s1", 40, 3_300));
+        let a = t.get("a1").unwrap();
+        assert_eq!(a.presentation, Presentation::Stopped("overload"));
+        assert_eq!(a.input, Input::Suspended("overload"));
+        for s in texts(&mut crx) {
+            assert_eq!(s["presentation"]["state"], "stopped");
+        }
+
+        // the credit returned for real: a unit sent after the report, applied
+        t.unit_sent("a1", 55, false);
+        assert_eq!(t.get("a1").unwrap().resume_revision, Some(55));
+        perform(applied(&mut t, &frames, "a1", "s1", 55, 3_400));
+        let s = texts(&mut crx);
+        let recovered = s.last().expect("the recovery is said");
+        assert_eq!(recovered["presentation"]["state"], "presenting");
+        assert_eq!(recovered["input"]["state"], "allowed");
     }
 
     #[test]
