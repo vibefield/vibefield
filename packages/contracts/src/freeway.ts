@@ -3,6 +3,7 @@ import { FREEWAY, FREEWAY_CODES } from "./registries";
 import {
   CellTransportGrant,
   Counter,
+  canonicalJson,
   EpochMs,
   FreewayCellEndpointSet,
   GRANT_ALG,
@@ -105,6 +106,16 @@ export const FreewayApproval = z
   })
   .passthrough();
 export type FreewayApproval = z.infer<typeof FreewayApproval>;
+
+/** The exact bytes under an approval's MAC: the RFC 8785 canonical form of `{ protected, claims }`,
+ * as `grantSigningInput` is a cell grant's, typed for the approval's own header. Pinned by
+ * `fixtures/freeway-approval-mac.vector.json`, which the host's verifier recomputes. */
+export function approvalSigningInput(
+  protectedHeader: FreewayApprovalProtected,
+  claims: FreewayApprovalClaims,
+): string {
+  return canonicalJson({ protected: protectedHeader, claims });
+}
 
 /** `freeway.approve {}` → the approval and when it lapses. Forwarded for FW-D5 (a self peer
  * daemon carrying `onBehalfOf {clientKind: "phone"}`): `onBehalfOf` picks the audience only. */

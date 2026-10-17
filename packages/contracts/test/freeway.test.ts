@@ -8,6 +8,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  approvalSigningInput,
+  FreewayApproval,
   FreewayDeclareParams,
   FreewayLinkMessage,
   FreewayOpen,
@@ -152,6 +154,8 @@ describe("FW-D1 — the approval is TPv3's envelope under the floor's freeway ke
       approval: { protected: object; claims: object; signingInput: string; mac: string };
     };
     const { protected: header, claims, signingInput, mac } = v.approval;
+    const approval = FreewayApproval.parse({ protected: header, claims, mac });
+    expect(approvalSigningInput(approval.protected, approval.claims)).toBe(signingInput);
     expect(grantSigningInput(header as never, claims)).toBe(signingInput);
     const expected = createHmac("sha256", Buffer.from(v.keyHex, "hex"))
       .update(signingInput, "utf8")
