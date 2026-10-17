@@ -1,0 +1,26 @@
+{
+  "attachGrant": {
+    "protected": {
+      "v": 1,
+      "typ": "SessionAttachGrant",
+      "iss": "field-native",
+      "alg": "HS256",
+      "kid": {
+        "cellBootId": "cb-7f3a9c1e-2026",
+        "keyGeneration": 1
+      }
+    },
+    "claims": {
+      "audienceCellBootId": "cb-7f3a9c1e-2026",
+      "clientId": "freeway:person@example.com#nKMWkU9CYk11CNTRL~hb-01J9F",
+      "sessionId": "sess-01J8Z3K9",
+      "leaseEpoch": 4,
+      "routeRevision": 12,
+      "grantGeneration": 1,
+      "rights": ["geometry", "input", "read"],
+      "issuedAt": 1787788800000,
+      "expiresAt": 1787788920000
+    },
+    "mac": "Hk2pXo9vT4bQm7sL1yFdKa0uVzWe8RcNjG6iDxC3B5E"
+  }
+}

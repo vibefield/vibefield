@@ -9,7 +9,7 @@ import Foundation
 //   close. Three heartbeats with no pong is a dead link.
 // - streams ≥ 1, odd because the phone dials: an OPEN of a kind (`terminal-leg`, `terminal-tickets`,
 //   `terminal-renew`), the host's OPENED or OPEN_REFUSED, messages both ways (fragmented at the
-//   welcome's `fragmentBytes`), and one CLOSE from each side.
+//   welcome's `fragmentBytes`), and one CLOSE from each side; the link's end ends each one `.ended`.
 // It reads off the main actor (FW-DF-6): every frame is handled on this actor, and a stream's
 // messages reach their consumer through that stream's own ordered queue.
 
@@ -55,7 +55,7 @@ public struct FreewayWelcome: Sendable, Equatable {
   }
 }
 
-/// How a link ended. Every pending open and renewal, and every open stream, hears it.
+/// How a link ended. Every pending open and renewal, and every open stream (`.ended`), hears it.
 public enum FreewayLinkEnd: Error, Sendable, Equatable {
   /// The host refused the hello (`FreewayRefused`) — `APPROVAL_EXPIRED`, `NOT_ADMITTED`, … — and
   /// closed.
@@ -99,9 +99,11 @@ public enum FreewayLinkError: Error, Sendable, Equatable {
 public enum FreewayStreamEvent: Sendable, Equatable {
   case text(String)
   case binary(Data)
-  /// The stream's end: its protocol's close code verbatim (§5.1). A link that ends ends every
-  /// stream with `1001`, which is how a leg reads its link going.
+  /// The host's CLOSE: the stream's protocol close code verbatim (§5.1).
   case closed(code: Int, reason: String?)
+  /// The link under the stream ended — no code of the stream's own, which is how a leg tells its
+  /// link going (a dropped socket) from its cell closing it.
+  case ended(FreewayLinkEnd)
 }
 
 /// A stream the phone opened, and its host's answer.
@@ -619,7 +621,7 @@ public actor FreewayLink {
     endState = reason
     for (id, state) in streams {
       state.opening?.resume(throwing: reason)
-      state.events.yield(.closed(code: 1001, reason: "the link ended"))
+      state.events.yield(.ended(reason))
       state.events.finish()
       streams[id] = nil
     }

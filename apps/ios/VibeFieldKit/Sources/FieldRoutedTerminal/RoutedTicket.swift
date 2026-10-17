@@ -15,14 +15,21 @@ import Foundation
 /// **no query, no fragment.** Tokens never ride URLs — authority is the grant in
 /// the first frame — and a URL carrying either is refused here rather than
 /// dialed, because the failure mode it guards against is a secret in a log.
+///
+/// F1 adds the FREEWAY's shape (`FreewayCellEndpointSet`): `freeway://cell/<cellBootId>/control|frames`,
+/// the cell's two legs as streams on the phone's link to the desktop, never a socket address.
+/// Strict the way the contract is: each URL names its own channel, and both name ONE cell (a pair
+/// split across cells, or across shapes, is two half-lanes, refused). Which transport dials which
+/// shape is the caller's: this reader only says what was named.
 public struct RoutedCellEndpoints: Sendable, Equatable {
   public let controlUrl: URL
   public let framesUrl: URL
   public let unknownFields: [String]
 
   public init(controlUrl: URL, framesUrl: URL) throws {
-    self.controlUrl = try Self.checked(controlUrl, "controlUrl")
-    self.framesUrl = try Self.checked(framesUrl, "framesUrl")
+    self.controlUrl = try Self.checked(controlUrl, "controlUrl", .control)
+    self.framesUrl = try Self.checked(framesUrl, "framesUrl", .frames)
+    try Self.oneCell(self.controlUrl, self.framesUrl)
     self.unknownFields = []
   }
 
@@ -36,8 +43,9 @@ public struct RoutedCellEndpoints: Sendable, Equatable {
     guard let framesUrl = URL(string: frames) else {
       throw WireDecodeError(shape: "RemoteCellEndpointSet", reason: "framesUrl is not a URL")
     }
-    self.controlUrl = try Self.checked(controlUrl, "controlUrl")
-    self.framesUrl = try Self.checked(framesUrl, "framesUrl")
+    self.controlUrl = try Self.checked(controlUrl, "controlUrl", .control)
+    self.framesUrl = try Self.checked(framesUrl, "framesUrl", .frames)
+    try Self.oneCell(self.controlUrl, self.framesUrl)
     self.unknownFields = fields.unknownFields
   }
 
@@ -48,10 +56,38 @@ public struct RoutedCellEndpoints: Sendable, Equatable {
     }
   }
 
-  private static func checked(_ url: URL, _ field: String) throws -> URL {
+  /// The freeway's scheme: a leg the link's transport opens as a `terminal-leg` stream.
+  public static let freewayScheme = "freeway"
+
+  /// The cell and channel a `freeway://cell/<cellBootId>/<channel>` URL names; nil for any other
+  /// URL. The contract's own pattern: the boot id is `[A-Za-z0-9._-]+`, and nothing else rides.
+  public static func freewayLeg(_ url: URL) -> (cellBootId: String, channel: RoutedChannel)? {
+    guard url.scheme?.lowercased() == freewayScheme,
+      let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
+      parts.host == "cell", parts.port == nil, parts.user == nil, parts.password == nil,
+      parts.query == nil, parts.fragment == nil
+    else { return nil }
+    let segments = parts.path.split(separator: "/", omittingEmptySubsequences: false)
+    guard segments.count == 3, segments[0].isEmpty, let channel = RoutedChannel(rawValue: String(segments[2]))
+    else { return nil }
+    let boot = segments[1]
+    let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+    guard !boot.isEmpty, boot.unicodeScalars.allSatisfy(allowed.contains) else { return nil }
+    return (String(boot), channel)
+  }
+
+  private static func checked(_ url: URL, _ field: String, _ channel: RoutedChannel) throws -> URL {
+    if url.scheme?.lowercased() == freewayScheme {
+      guard let leg = freewayLeg(url), leg.channel == channel else {
+        throw WireDecodeError(
+          shape: "FreewayCellEndpointSet",
+          reason: "\(field) is not a freeway://cell/<cellBootId>/\(channel.rawValue) URL")
+      }
+      return url
+    }
     guard let scheme = url.scheme?.lowercased(), scheme == "ws" || scheme == "wss" else {
       throw WireDecodeError(
-        shape: "RemoteCellEndpointSet", reason: "\(field) is not a ws:// or wss:// URL")
+        shape: "RemoteCellEndpointSet", reason: "\(field) is not a ws://, wss:// or freeway:// URL")
     }
     guard let parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
       throw WireDecodeError(shape: "RemoteCellEndpointSet", reason: "\(field) is not a URL")
@@ -65,6 +101,20 @@ public struct RoutedCellEndpoints: Sendable, Equatable {
       throw WireDecodeError(shape: "RemoteCellEndpointSet", reason: "\(field) has no host")
     }
     return url
+  }
+
+  /// A freeway pair names one cell, and a pair is one shape: a lane split across cells or shapes
+  /// is two half-lanes.
+  private static func oneCell(_ control: URL, _ frames: URL) throws {
+    let legs = (freewayLeg(control), freewayLeg(frames))
+    switch legs {
+    case (nil, nil):
+      return
+    case (let control?, let frames?) where control.cellBootId == frames.cellBootId:
+      return
+    default:
+      throw WireDecodeError(shape: "FreewayCellEndpointSet", reason: "both legs name one cell")
+    }
   }
 }
 

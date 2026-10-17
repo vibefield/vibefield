@@ -129,9 +129,16 @@ const sheetFixtures = [
   "project-summary.recipe-place.json",
 ];
 // F1 — the freeway's frame bytes, which the kit's codec is held to.
-const freewayFixtures = ["freeway-frames.vector.json"];
+const freewayFixtures = [
+  "freeway-frames.vector.json",
+  "freeway-opened.tickets.json",
+  "freeway-opened.attach-grant.json",
+  "freeway-opened.renew-refused.json",
+];
 const requiredMirrors = [
   ["freeway", freewayFixtures, ["Tests/FieldFreewayTests"]],
+  // the routed reader's own bundle reads the freeway ticket's endpoints
+  ["freeway", ["freeway-opened.tickets.json"], ["Tests/FieldRoutedTerminalTests"]],
   ["workspace", workspaceFixtures, ["Tests/FieldWorkspaceTests", "Sources/FieldWorkspace"]],
   ["project", projectFixtures, ["Tests/FieldProductTests"]],
   ["project", historyFixtures, ["Tests/FieldHistoryTests", "Sources/FieldHistory"]],

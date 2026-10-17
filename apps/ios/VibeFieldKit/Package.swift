@@ -233,11 +233,12 @@ let package = Package(
     .target(name: "FieldRoutedTerminal", dependencies: ["FieldProduct"]),
     // The FREEWAY (F1, draft/thinking-freeway.md v0.3): the phone's one link to a desktop — a
     // WebSocket of VibeField's own over a raw tailnet stream (`MeshNode.dial`, FW-DF-11), its frame
-    // codec, and the link that multiplexes the terminal legs and the host's tickets onto it. Like
-    // the routed client it takes FieldProduct for the tolerant-reader vocabulary and nothing else:
-    // the byte stream is a protocol here, and the mesh leg hands it a dialed connection, so truffle
-    // stays FieldMesh's to import.
-    .target(name: "FieldFreeway", dependencies: ["FieldProduct"]),
+    // codec, and the link that multiplexes the terminal legs and the host's tickets onto it. It
+    // takes FieldProduct for the tolerant-reader vocabulary and FieldRoutedTerminal for the one
+    // seam a leg rides (`RoutedLegTransport`) — never the other way round: the routed client stays
+    // free to move upstream knowing nothing of the freeway. The byte stream is a protocol here, and
+    // the mesh leg hands it a dialed connection, so truffle stays FieldMesh's to import.
+    .target(name: "FieldFreeway", dependencies: ["FieldProduct", "FieldRoutedTerminal"]),
     // The input card (IOS-5a): the composer, the rail, the latch — K-D1's own
     // target rather than more of FieldHome. The IOS-3 review's finding was that
     // every serious bug it found lived in the one module with no test target,
@@ -324,7 +325,7 @@ let package = Package(
     ),
     .testTarget(
       name: "FieldFreewayTests",
-      dependencies: ["FieldFreeway", "FieldProduct"],
+      dependencies: ["FieldFreeway", "FieldProduct", "FieldRoutedTerminal"],
       // The contracts' OWN frame vector, copied in (EL9 on the third side): the bytes the
       // TypeScript tests and the host's `freeway::frame` tests decode are the bytes these do.
       // `pnpm check:ios-fixtures` keeps the word "copy" true.

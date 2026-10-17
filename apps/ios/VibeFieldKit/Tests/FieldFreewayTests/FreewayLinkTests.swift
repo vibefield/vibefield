@@ -271,7 +271,7 @@ struct FreewayLinkTests {
     await link.close()
   }
 
-  @Test("the link's end ends every stream 1001 and says why — here, a newer link took its place")
+  @Test("the link's end ends every stream with it, and says why — here, a newer link took its place")
   func endEndsStreams() async throws {
     let (link, host, _) = try await within(5, "connect") { try await connected() }
     let opening = Task { try await link.open(
@@ -284,8 +284,7 @@ struct FreewayLinkTests {
     try await host.close(code: 4409, reason: "SUPERSEDED")
     var events = stream.events.makeAsyncIterator()
     #expect(
-      await events.next()
-        == .closed(code: 1001, reason: "the link ended"))
+      await events.next() == .ended(.closed(code: 4409, reason: "SUPERSEDED")))
     #expect(
       try await within(5, "the link's end") { try await link.ended() }
         == .closed(code: 4409, reason: "SUPERSEDED"))
