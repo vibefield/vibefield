@@ -2,6 +2,7 @@ import FieldProduct
 import FieldRoutedTerminal
 import Foundation
 import GhostteaFrame
+import GhostteaTerminal
 import Metal
 import Testing
 
@@ -272,6 +273,28 @@ import Testing
     #expect(scene.render(frames.delta))
     #expect(scene.render(frames.delta) == false)
     #expect(scene.failure == nil)
+  }
+
+  /// The input audit's H (2026-10-17): a card verb goes out AFTER the system
+  /// keyboard's composition. With marked text on the shipping view, a rail key
+  /// first sends the composed text on (the view's own `unmarkText`), so its
+  /// Enter can never run the line ahead of it.
+  @MainActor
+  @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil, "needs a Metal device"))
+  func aCardKeyCommitsTheCompositionFirst() throws {
+    final class Sent { var events: [GhostteaSoftwareInputEvent] = [] }
+    let scene = TerminalScene()
+    let view = try #require(scene.hostedView())
+    let sent = Sent()
+    view.onSoftwareInputEvent = { sent.events.append($0) }
+    view.setMarkedText("你好", selectedRange: NSRange(location: 2, length: 0))
+    #expect(view.markedTextRange != nil)
+    let lanes = TerminalLanes(
+      transport: URLSessionRoutedTransport(), door: { _ in throw CancellationError() })
+    let attachment = TerminalAttachment(lanes: lanes, appearance: .default, scene: scene)
+    attachment.press(TerminalKeystroke(.enter))
+    #expect(sent.events == [.text("你好")])
+    #expect(view.markedTextRange == nil)
   }
 }
 

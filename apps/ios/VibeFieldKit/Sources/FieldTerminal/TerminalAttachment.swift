@@ -854,11 +854,22 @@ public final class TerminalAttachment {
 
   // MARK: - The input card's verbs (IOS-5a)
 
+  /// Every card verb goes out AFTER whatever the system keyboard is still
+  /// composing (pinyin, kana): sent while the view held marked text, Enter ran
+  /// the line and "你好" arrived after it (the input audit's H, 2026-10-17).
+  /// ghosttea's own accessory row commits first; the card's verbs do the same,
+  /// through the view's public `unmarkText`, which sends the composed text.
+  private func commitComposition() {
+    guard let view = scene.view, view.markedTextRange != nil else { return }
+    view.unmarkText()
+  }
+
   /// One rail key. A stroke this layout cannot encode is a no-op and says
   /// nothing: the rail only offers keys it can send, so an unencodable one is
   /// a programming error rather than news for the user.
   public func press(_ stroke: TerminalKeystroke) {
     guard let event = stroke.ghostteaEvent() else { return }
+    commitComposition()
     _ = handleHardwareKey(event)
   }
 
@@ -872,6 +883,7 @@ public final class TerminalAttachment {
   /// An empty draft is Enter alone, which is the whole point of a Send that is
   /// never disabled (D-i6). The draft is NOT trimmed.
   public func sendDraft(_ text: String) {
+    commitComposition()
     if !text.isEmpty { deliverSoftwareInput(.paste(text)) }
     deliverSoftwareInput(.enter)
   }
@@ -880,6 +892,7 @@ public final class TerminalAttachment {
   /// chips that type an answer without committing it.
   public func typeText(_ text: String) {
     guard !text.isEmpty else { return }
+    commitComposition()
     deliverSoftwareInput(.text(text))
   }
 
@@ -887,6 +900,7 @@ public final class TerminalAttachment {
   /// One block of text as a paste, with NO Enter behind it.
   public func pasteText(_ text: String) {
     guard !text.isEmpty else { return }
+    commitComposition()
     handleSoftwareInput(.paste(text))
   }
   // --- end IOS-5c
