@@ -568,9 +568,12 @@ async fn the_routes_subscription_serves_a_revised_snapshot() {
 // ---- TM-1 (MF-1l) — the hello says whether the terminal doors are on the
 // tailnet, and the answer is never inferred from an empty cell list ----
 
-/// The default floor: no flag, no gateway, doors loopback-only. The field is
-/// PRESENT and false — absence means "a floor that predates the field", and a
-/// floor that can answer must not be mistaken for one that cannot.
+/// The test constructor's floor: flag off, no gateway, doors loopback-only. The
+/// field is PRESENT and false — absence means "a floor that predates the
+/// field", and a floor that can answer must not be mistaken for one that
+/// cannot. (TB-T, 2026-10-17: the PRODUCT default is flag ON — an unset
+/// variable reads on — so a production floor's shape before linking is the
+/// next row's, flag on and no gateway, which publishes nothing either.)
 #[tokio::test]
 async fn the_hello_says_the_terminal_doors_are_not_published() {
     let (_dir, daemon) = boot().await;
@@ -579,7 +582,7 @@ async fn the_hello_says_the_terminal_doors_are_not_published() {
 
     assert_eq!(
         ack["result"]["terminalMesh"], false,
-        "a floor with the flag unset publishes nothing, and says so: {ack}"
+        "a floor with the flag off publishes nothing, and says so: {ack}"
     );
     assert!(
         ack["result"].get("terminalMesh").is_some(),

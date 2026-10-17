@@ -12,6 +12,42 @@ use std::path::PathBuf;
 /// reader is still worth having; the reason given for it was not true.
 pub const TERMINAL_MESH_ENV: &str = "FIELD_NATIVE_TERMINAL_MESH";
 
+/// TB-T (2026-10-17) — what [`TERMINAL_MESH_ENV`]'s value asks, as a pure
+/// function of it, so the default has a witness without the process
+/// environment (which every test in a binary shares).
+///
+/// ON WHEN UNSET. James ruled the terminal doors default ON for a linked
+/// desktop on 2026-10-16 23:31Z, his "go ahead" to the cross-device plan
+/// (`draft/handover/2026-10-15-truffle-bump-plan.md`:72;
+/// `draft/history-finish/surveys/s-cross-device-links.md` §2 item 6: with the
+/// flag off by default and no launcher setting it, a packaged desktop served
+/// the phone no terminals). OFF only when the value says so: `0`, `false`,
+/// `off` or `no`, trimmed and in any case. Every other value reads on, `1` and
+/// `true` included, so a stale `=1` line still means what it meant.
+///
+/// "For a LINKED desktop" is not this flag's to decide, and it does not need
+/// to be. Publishing also needs the gateway's node ([`MeshPlan::publishes`]),
+/// and the node exists only once linking starts it (UA-P-0a). While a login is
+/// being captured, the floor refuses `native.mesh.serve.add` (the capture-mode
+/// belt in `mgmt/mesh.rs`) and fieldd's terminal serve driver waits for the
+/// linked login. So no door reaches the tailnet under an unknown account, and
+/// an unlinked desktop, which has no node, publishes nothing.
+///
+/// REVERT: per machine, `FIELD_NATIVE_TERMINAL_MESH=0` in the environment that
+/// launches the app (fieldd hands field-native its own environment). For the
+/// product, `None => true` below goes back to `None => false`.
+pub fn terminal_mesh_requested(value: Option<&str>) -> bool {
+    match value.map(str::trim) {
+        None => true,
+        Some(value) => {
+            !(value == "0"
+                || ["false", "off", "no"]
+                    .iter()
+                    .any(|off| value.eq_ignore_ascii_case(off)))
+        }
+    }
+}
+
 // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
 // `TERMINAL_MIRROR_WRITE_ENV` = `FIELD_NATIVE_TERMINAL_MIRROR_WRITE`, the
 // mirror-write capability's env home, with the mint and the file it named. The
@@ -85,7 +121,8 @@ impl MeshPlan {
 /// field-native configuration (design-02 §2.8). Registries default from
 /// @vibefield/contracts constants; env overrides (dev):
 /// FIELD_NATIVE_DATA_DIR · FIELD_NATIVE_MESH=1 · FIELD_NATIVE_SIDECAR_PATH ·
-/// FIELD_NATIVE_TERMINAL_MESH=1.
+/// FIELD_NATIVE_TERMINAL_MESH=0 (the doors are ON unless it says otherwise,
+/// since TB-T — [`terminal_mesh_requested`]).
 #[derive(Clone, Debug)]
 pub struct NativeConfig {
     pub data_dir: PathBuf,
@@ -114,9 +151,12 @@ pub struct NativeConfig {
     pub mesh_enabled: bool,
     /// explicit sidecar binary path; falls back to the truffle search order.
     pub sidecar_override: Option<PathBuf>,
-    /// TM-1 — the terminal floor publishes its doors on the tailnet. OFF by
-    /// default. It selects no serve shape: cells serve either way (TM-D7), and
-    /// this asks only whether their doors are reachable from off-device.
+    /// TM-1 — the terminal floor publishes its doors on the tailnet. ON by
+    /// default in `from_env` since TB-T (2026-10-17, James's ruling; see
+    /// [`terminal_mesh_requested`] for the reading and the revert), and `false`
+    /// in the test constructors below, which keep every surface opt-in. It
+    /// selects no serve shape: cells serve either way (TM-D7), and this asks only
+    /// whether their doors are reachable from off-device.
     ///
     /// It is a SEPARATE switch from `mesh_enabled` because the two are not the
     /// same question — one asks whether this device has a tailnet identity at
@@ -181,9 +221,8 @@ impl NativeConfig {
         let sidecar_override = std::env::var_os("FIELD_NATIVE_SIDECAR_PATH")
             .or_else(|| std::env::var_os("TRUFFLE_SIDECAR_PATH"))
             .map(PathBuf::from);
-        let terminal_mesh_enabled = std::env::var(TERMINAL_MESH_ENV)
-            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
+        let terminal_mesh_enabled =
+            terminal_mesh_requested(std::env::var(TERMINAL_MESH_ENV).ok().as_deref());
         let cell_bin_override = std::env::var_os("FIELD_NATIVE_CELL_BIN").map(PathBuf::from);
         let freeway_bin_override = std::env::var_os("FIELD_NATIVE_FREEWAY_BIN").map(PathBuf::from);
         let isolation_window_override = std::env::var("FIELD_NATIVE_ISOLATION_WINDOW_MS")
@@ -214,7 +253,9 @@ impl NativeConfig {
         })
     }
 
-    /// Test/dev constructor: mesh off, no overrides.
+    /// Test/dev constructor: mesh off, no overrides. The terminal doors stay OFF
+    /// here, unlike `from_env`'s default since TB-T: a test asks for every
+    /// surface it exercises, and with no node nothing would publish anyway.
     pub fn for_data_dir(data_dir: PathBuf) -> Self {
         Self {
             data_dir,
@@ -482,9 +523,10 @@ mod tests {
     use super::*;
 
     /// TM-1 — the plan is a two-state answer to ONE question, and `Off` is the
-    /// default. It used to select a serve shape; the row that asserted that is
-    /// gone with the shape (`tests/terminal_mesh.rs`, deleted), and what is
-    /// left is the derivation this file owns.
+    /// test constructor's default. It used to select a serve shape; the row
+    /// that asserted that is gone with the shape (`tests/terminal_mesh.rs`,
+    /// deleted), and what is left is the derivation this file owns. The
+    /// PRODUCT default (on, TB-T) is the next row's.
     #[test]
     fn the_plan_is_off_unless_the_flag_asks_for_the_tailnet_door() {
         let mut config = NativeConfig::for_data_dir(std::path::PathBuf::from("/tmp/vf-plan"));
@@ -494,6 +536,33 @@ mod tests {
         config.terminal_mesh_enabled = true;
         assert_eq!(MeshPlan::resolve(&config), MeshPlan::Requested);
         assert!(!MeshPlan::resolve(&config).is_off());
+    }
+
+    /// TB-T (2026-10-17) — THE PRODUCT DEFAULT IS ON, and only an explicit
+    /// "off" turns it off. James ruled the terminal doors on for a linked
+    /// desktop (2026-10-16 23:31Z). A pure function rather than `from_env`,
+    /// because the environment is shared by every test in this binary.
+    #[test]
+    fn the_terminal_doors_default_on_and_only_an_explicit_off_turns_them_off() {
+        assert!(
+            terminal_mesh_requested(None),
+            "unset is ON: the ruled product default"
+        );
+        for on in ["1", "true", "TRUE", "yes", "on", "", " 1 "] {
+            assert!(terminal_mesh_requested(Some(on)), "{on:?} reads on");
+        }
+        for off in [
+            "0",
+            "false",
+            "False",
+            "off",
+            "OFF",
+            "no",
+            " 0 ",
+            "\tfalse\n",
+        ] {
+            assert!(!terminal_mesh_requested(Some(off)), "{off:?} reads off");
+        }
     }
 
     /// N-M4 — THE READING, over all four combinations of its two halves.
