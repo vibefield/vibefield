@@ -130,6 +130,7 @@ use crate::resource_pressure::{
 };
 use crate::services::terminal_client::{ControlClient, SessionSummary};
 use crate::state::DaemonState;
+use crate::supervised_child::{ChildSpec, StartFailure, StderrLabel, SupervisedChild};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -1485,7 +1486,6 @@ async fn run_cell_generation_inner(
     allowed_origins: &[String],
     reap: &mut watch::Receiver<bool>,
 ) -> CellEnd {
-    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
     let mut stopping = shared.stopping.subscribe();
     // A stale crumb from a re-used ordinal after an unclean floor boot must
     // not color this generation (the cell also fences by boot id).
@@ -1496,94 +1496,57 @@ async fn run_cell_generation_inner(
     // route row over the paired mgmt channel and nowhere else (EL7: never env,
     // never disk, never logs); the cell receives it at spawn from TP-S3a on.
     let grant_key = mint_grant_key();
-    let mut child = match tokio::process::Command::new(bin)
-        .arg("--control")
-        .arg(control)
-        .arg("--frame")
-        .arg(frame)
-        .arg("--config")
-        .arg(config_file)
-        .arg("--instance")
-        .arg(instance.to_string())
-        .arg("--crumb")
-        .arg(crumb)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-    {
-        Ok(child) => child,
-        Err(error) => {
+    // The bootstrap line: the token AND the grant key ride the pipe, never argv
+    // or env (EL7); the renderer Origins the doors admit ride beside them
+    // (TP-S3a — a non-secret, but one seam). The child's shape — argv, the
+    // bootstrap, the hello, stderr, the leash — is the floor's ONE
+    // `SupervisedChild` (FW-D4), which the freeway host runs on too.
+    let spec = ChildSpec {
+        bin,
+        args: vec![
+            "--control".into(),
+            control.into(),
+            "--frame".into(),
+            frame.into(),
+            "--config".into(),
+            config_file.as_os_str().to_owned(),
+            "--instance".into(),
+            instance.to_string().into(),
+            "--crumb".into(),
+            crumb.as_os_str().to_owned(),
+        ],
+        bootstrap: serde_json::json!({
+            "token": token,
+            "grantKey": grant_key,
+            "grantKeyGeneration": 1,
+            "allowedOrigins": allowed_origins,
+        }),
+        hello_deadline: Duration::from_millis(registries::cell_supervision::HELLO_DEADLINE_MS),
+        stderr: StderrLabel {
+            event: "field_native.terminal.cell_stderr",
+            component: "terminal",
+            what: "cell",
+            instance,
+        },
+    };
+    let (mut cell, hello) = match SupervisedChild::start::<CellHello>(spec).await {
+        Ok(started) => started,
+        Err(StartFailure::Spawn(error)) => {
             return CellEnd::Crashed {
                 detail: format!("spawn failed: {error}"),
                 attribution: Attribution::Unknown,
             }
         }
-    };
-    let mut stdin = child.stdin.take().expect("piped stdin");
-    let stdout = child.stdout.take().expect("piped stdout");
-    let stderr = child.stderr.take().expect("piped stderr");
-    // The cell's diagnostics become the floor's, labeled — the parent owns log
-    // routing (the cell writes plain lines to its stderr). The guard lives to
-    // the end of this generation.
-    let _stderr_forward = TaskGuard(tokio::spawn(async move {
-        let mut lines = BufReader::new(stderr).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            tracing::info!(
-                event = "field_native.terminal.cell_stderr",
-                component = "terminal",
-                instance,
-                line = %line,
-                "cell"
-            );
-        }
-    }));
-    // The bootstrap line: the token AND the grant key ride the pipe, never argv
-    // or env (EL7); the renderer Origins the doors admit ride beside them
-    // (TP-S3a — a non-secret, but one seam).
-    let bootstrap = format!(
-        "{}\n",
-        serde_json::json!({
-            "token": token,
-            "grantKey": grant_key,
-            "grantKeyGeneration": 1,
-            "allowedOrigins": allowed_origins,
-        })
-    );
-    if let Err(error) = stdin.write_all(bootstrap.as_bytes()).await {
-        let _ = child.start_kill();
-        let _ = child.wait().await;
-        return CellEnd::Crashed {
-            detail: format!("bootstrap write failed: {error}"),
-            attribution: read_crumb_attribution(crumb, None),
-        };
-    }
-    let mut lines = BufReader::new(stdout).lines();
-    let hello_deadline = Duration::from_millis(registries::cell_supervision::HELLO_DEADLINE_MS);
-    let hello: CellHello = match tokio::time::timeout(hello_deadline, lines.next_line()).await {
-        Ok(Ok(Some(line))) => match serde_json::from_str(&line) {
-            Ok(hello) => hello,
-            Err(error) => {
-                let _ = child.start_kill();
-                let _ = child.wait().await;
-                return CellEnd::Crashed {
-                    detail: format!("hello did not parse: {error}"),
-                    attribution: read_crumb_attribution(crumb, None),
-                };
-            }
-        },
-        Ok(Ok(None)) | Ok(Err(_)) => {
-            let _ = child.wait().await;
-            return CellEnd::Crashed {
-                detail: "the cell exited before its hello".into(),
-                attribution: read_crumb_attribution(crumb, None),
+        Err(failure) => {
+            let detail = match failure {
+                StartFailure::Bootstrap(error) => format!("bootstrap write failed: {error}"),
+                StartFailure::HelloUnparsed(error) => format!("hello did not parse: {error}"),
+                StartFailure::ExitedBeforeHello => "the cell exited before its hello".into(),
+                StartFailure::NoHello(deadline) => format!("no hello within {deadline:?} — killed"),
+                StartFailure::Spawn(_) => unreachable!("answered above"),
             };
-        }
-        Err(_) => {
-            let _ = child.start_kill();
-            let _ = child.wait().await;
             return CellEnd::Crashed {
-                detail: format!("no hello within {hello_deadline:?} — killed"),
+                detail,
                 attribution: read_crumb_attribution(crumb, None),
             };
         }
@@ -1663,31 +1626,24 @@ async fn run_cell_generation_inner(
     tokio::select! {
         _ = requested => {
             // The leash: EOF asks the cell to drain; past the budget, kill.
-            drop(stdin);
-            let waited = tokio::time::timeout(drain_budget, child.wait()).await;
-            if waited.is_err() {
-                let _ = child.start_kill();
-                let _ = child.wait().await;
+            let drained = cell.drain(drain_budget).await;
+            if drained.overran {
                 tracing::warn!(
                     event = "field_native.terminal.cell_drain_overrun",
                     component = "terminal",
                     instance,
                     "The cell outlived its drain budget and was killed; drain unknown"
                 );
-            } else if let Ok(Ok(Some(line))) =
-                tokio::time::timeout(Duration::from_millis(500), lines.next_line()).await
-            {
+            } else if let Some(line) = drained.last_line {
                 log_cell_exit_report(instance, &line);
             }
             CellEnd::Stopped
         }
-        status = child.wait() => {
+        status = cell.wait() => {
             // Crashed (a requested stop never reaches here first). The exit
             // report is best-effort — a SIGKILLed cell wrote none.
             let mut detail = format!("{status:?}");
-            if let Ok(Ok(Some(line))) =
-                tokio::time::timeout(Duration::from_millis(500), lines.next_line()).await
-            {
+            if let Some(line) = cell.last_line().await {
                 log_cell_exit_report(instance, &line);
                 detail = format!("{detail}; {line}");
             }

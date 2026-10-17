@@ -31,6 +31,8 @@ pub mod rlimit;
 pub mod secret_file;
 pub mod services;
 pub mod state;
+/// FW-D4 — the floor's ONE supervised child: the cells' shape, and the freeway host's.
+pub mod supervised_child;
 /// TP-S3a — the cell-side T1 door layer (terminal-pipeline-v3 §5.1/§8, TP-D26):
 /// grant verification, the transport ledger, the wire types and the WS doors.
 pub mod tp;
