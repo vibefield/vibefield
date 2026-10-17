@@ -66,6 +66,10 @@ public struct RoutedSessionState: Sendable {
   /// already in flight still land, so the last screen is the run's own — and
   /// ends when the cell removes the session or a leg goes.
   public internal(set) var exit: RoutedSessionExit?
+  /// This activation has been ended (`endActivation`) — once: a teardown ends
+  /// what a revoke or a lost leg did not already, and the sink hears each end
+  /// once. A fresh activation is a fresh state.
+  var activationEnded = false
 
   /// BOTH legs are attached for this activation.
   ///
@@ -335,6 +339,15 @@ public final class RoutedTerminalClient {
   public func hasPresented(_ sessionId: String) -> Bool {
     guard let session = sessions[sessionId] else { return false }
     return presented.contains(session.activationId)
+  }
+
+  /// Whether this client carries a LIVE activation of `sessionId`: both its
+  /// legs up, and the session attached on both. The client answers rather than
+  /// the session's own state, which cannot see the legs — a caller's fast path
+  /// ("no mint, no dial") asks here (P5).
+  public func hasLiveActivation(_ sessionId: String) -> Bool {
+    guard control != nil, frames != nil else { return false }
+    return sessions[sessionId]?.bothLegsAttached == true
   }
   /// D1 — each session's last queued apply, which its next one waits on
   /// (`enqueueApply`).
@@ -1078,9 +1091,11 @@ public final class RoutedTerminalClient {
         // left `open` no branch that attaches over live legs, so the fresh grant
         // was stored, never used, and the card read "connecting…" for good.
         reattach(sessionId: sessionId)
-      } else {
-        state = .refused(code: refused.code)
       }
+      // Any other refusal is THIS session's answer, and stays on it: the set's
+      // state is every session's on these legs, and setting it here painted
+      // one card's refusal on every card of the lane — and left `open` no
+      // branch that attaches, so RETRY minted a grant and used none (P5).
 
     case .framesLegAttached:
       guard let attached = try? RoutedFramesLegAttached(json: body) else { return }
@@ -1851,6 +1866,8 @@ public final class RoutedTerminalClient {
   /// read `attached` after the leg died would be exactly the blank the design
   /// refuses — a face saying "connected" over a socket that is not there.
   private func endActivation(_ session: inout RoutedSessionState, reason: String) {
+    guard !session.activationEnded else { return }
+    session.activationEnded = true
     // Law (2)/(3): the account goes DRAINING — already-admitted bytes are never
     // pretended away — and stays reported until the cell has seen them.
     ledger.drain(activationId: session.activationId, nowMs: Self.nowMs())
@@ -1880,6 +1897,15 @@ public final class RoutedTerminalClient {
   }
 
   private func teardownLegs() {
+    // Every activation rode these legs, so none outlives them. A failure that
+    // tore the legs down used to leave its sessions reading attached, and the
+    // card's RETRY took that for a live lane — "back on its lane, no mint, no
+    // dial" over closed sockets (the audit's P5, 2026-10-17). A lost leg ends
+    // its activations first, in its own words (`legFailed`).
+    for (sessionId, var session) in sessions where !session.activationEnded {
+      endActivation(&session, reason: "legs-closed")
+      sessions[sessionId] = session
+    }
     control?.close()
     frames?.close()
     control = nil

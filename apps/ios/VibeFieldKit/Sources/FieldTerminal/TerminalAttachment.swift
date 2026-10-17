@@ -366,9 +366,11 @@ public final class TerminalAttachment {
       // The same session on this attachment, still whole on its SHARED lane: a
       // session left live keeps a current scene, so the card paints it now and
       // only takes the seat; a parked one asks the cell for its view again, and
-      // a seed follows. No mint, no dial either way.
+      // a seed follows. No mint, no dial either way — and only when the CLIENT
+      // says the activation is live: a session's own state cannot see the legs,
+      // and a RETRY after a failure took a torn-down lane for this (P5).
       if !self.ownsLanes, previous == sessionID, let held = self.client,
-        held.sessions[sessionID]?.bothLegsAttached == true
+        held.hasLiveActivation(sessionID)
       {
         if held.sessions[sessionID]?.demand == RoutedDemand.none {
           held.requestReseed(for: sessionID)
@@ -534,7 +536,7 @@ public final class TerminalAttachment {
   /// deltas onto a scene this sink may never have held). `false` when the lane's
   /// activation is not whole, and only a fresh attach can bring it back.
   private func resume(on client: RoutedTerminalClient, sessionID: String) -> Bool {
-    guard client.sessions[sessionID]?.bothLegsAttached == true else { return false }
+    guard client.hasLiveActivation(sessionID) else { return false }
     let binding = bind()
     let sink = makeSink(binding: binding)
     lanes.adopt(sessionID, sink: sink, reticket: reticket(binding: binding))
@@ -1109,6 +1111,15 @@ public final class TerminalAttachment {
   ) -> TerminalPhase {
     if let exit = session?.exit { return .ended(runEndedWords(device: device, exit: exit)) }
     if let session, case .ended(let reason) = session.control { return .ended(reason) }
+    // An attach refusal is this SESSION's answer while its legs stand: the
+    // set's state is every session's, and a refusal written there painted
+    // every card on the lane (the audit's P5). Once the legs are gone the
+    // set's own state is the news.
+    if let session, case .refused(let code, _) = session.control,
+      state == .attached || state == .ready
+    {
+      return .refused(code)
+    }
     switch state {
     case .off: return .idle
     case .connecting, .ready: return .connecting

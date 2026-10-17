@@ -933,6 +933,76 @@ import Testing
     client.close()
   }
 
+  /// P5 (2026-10-17) — an attach refusal is ONE session's answer: it stays on
+  /// that session, the set stays attached for every other session on its legs,
+  /// and a fresh ticket for the refused one attaches over the same legs. It used
+  /// to set the SET's state, which painted the refusal on every card of the lane
+  /// and left `open` no branch that attaches — RETRY minted, and used nothing.
+  @Test func anAttachRefusalStaysOnItsSession() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    let second = "sess-second"
+    client.open(try TicketFactory.make(sessionId: second))
+    try await settle("a second attach") {
+      await live.control.allSent("AttachControlLeg").count == 2
+    }
+    let refused = await live.control.allSent("AttachControlLeg")[1]["activationId"]?.stringValue
+    try await live.control.deliver(
+      .attachRefused,
+      [
+        "activationId": .string(refused ?? ""), "code": .string("SESSION_NOT_FOUND"),
+        "retryable": .bool(false),
+      ])
+    try await settle("the refusal lands on its session") {
+      client.sessions[second]?.control == .refused(code: "SESSION_NOT_FOUND", retryable: false)
+    }
+    #expect(client.state == .attached)
+    #expect(client.sessions[session]?.control == .attached)
+    #expect(client.hasLiveActivation(session))
+    #expect(!client.hasLiveActivation(second))
+
+    // The card's RETRY is a fresh ticket, and it attaches over the legs that are up.
+    client.open(try TicketFactory.make(sessionId: second))
+    try await settle("the retry attaches") {
+      await live.control.allSent("AttachControlLeg").count == 3
+    }
+    #expect(transport.dials.count == 2)
+    client.close()
+  }
+
+  /// P5 — a failure tears the legs down, and every activation on them ends with
+  /// them: no session reads attached over closed sockets, so the card's RETRY (a
+  /// fresh ticket) dials, rather than taking a dead lane for a live one ("back
+  /// on its lane — no mint, no dial", over nothing).
+  @Test func aFailureEndsEveryActivationOnItsLegsSoATicketDials() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    let wrong = try Script.frame(
+      session: session, activation: live.activation, sequence: 1, creditEpoch: 99, base: nil,
+      result: Script.stamp(1), payload: Data(count: 10))
+    await live.frames.deliver(.binary(wrong))
+    try await settle("the failure") {
+      if case .failed = client.state { return true } else { return false }
+    }
+    #expect(client.sessions[session]?.control == .attaching)
+    #expect(!client.hasLiveActivation(session))
+    try await settle("the sink is told") {
+      await sink.endings.contains("\(live.activation):legs-closed")
+    }
+
+    client.open(try ticket())
+    try await settle("a fresh dial") { transport.dials.count == 4 }
+    #expect(client.state == .connecting)
+    client.close()
+  }
+
   // MARK: Loss and replacement
 
   /// Losing ONE leg invalidates every activation on the SET — the other leg's

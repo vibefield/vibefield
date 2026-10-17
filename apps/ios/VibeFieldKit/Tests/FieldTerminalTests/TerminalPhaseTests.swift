@@ -90,6 +90,21 @@ import Testing
         == "its run ended on studio")
   }
 
+  @Test func anAttachRefusalIsItsSessionsWhileTheLegsStand() {
+    // P5 (2026-10-17): the refusal lives on the SESSION — the set's state is
+    // every card's on the lane — and it is said while the legs stand. Once
+    // they are gone, the set's own state is the news.
+    var session = RoutedSessionState(sessionId: "s", activationId: "a")
+    session.control = .refused(code: "SESSION_NOT_FOUND", retryable: false)
+    #expect(
+      TerminalAttachment.phase(for: .attached, session: session) == .refused("SESSION_NOT_FOUND"))
+    #expect(
+      TerminalAttachment.phase(for: .ready, session: session) == .refused("SESSION_NOT_FOUND"))
+    #expect(
+      TerminalAttachment.phase(for: .failed(reason: "no route"), session: session)
+        == .failed("no route"))
+  }
+
   @Test func reconnectingAndStaleRouteReadAsConnecting() {
     // Both are "somebody is actively getting this back", and the BANNER is
     // where the difference is said — a phase that spelled them apart would make
