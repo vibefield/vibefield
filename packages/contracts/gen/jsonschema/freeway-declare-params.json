@@ -1193,6 +1193,10 @@
     "FreewayDeclareParams": {
       "type": "object",
       "properties": {
+        "deviceId": {
+          "type": "string",
+          "minLength": 1
+        },
         "admit": {
           "type": "array",
           "items": {
@@ -1253,6 +1257,7 @@
         }
       },
       "required": [
+        "deviceId",
         "admit",
         "doors",
         "exposure"

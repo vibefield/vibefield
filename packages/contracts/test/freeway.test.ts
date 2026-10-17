@@ -174,6 +174,11 @@ describe("FW — the floor seam", () => {
     expect(FreewayDeclareParams.safeParse({ ...declare, admit }).success).toBe(false);
   });
 
+  it("names this desktop, whose roster id the welcome carries (FW-L9)", () => {
+    const { deviceId: _, ...nameless } = fixture("freeway-declare-params.phone.json");
+    expect(FreewayDeclareParams.safeParse(nameless).success).toBe(false);
+  });
+
   it("states the state stream's revision and floor boot even with the host gone", () => {
     const down = fixture("freeway-state.down.json");
     expect(FreewayState.safeParse(down).success).toBe(true);

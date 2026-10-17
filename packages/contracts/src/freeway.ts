@@ -419,9 +419,16 @@ export const FreewayExposure = z.object({ terminals: z.boolean() }).passthrough(
 export type FreewayExposure = z.infer<typeof FreewayExposure>;
 
 /** `native.freeway.declare` — the floor keeps the last one in memory and replays it to every host
- * generation, so revocation is state and a host restart while fieldd is down forgets nothing. */
+ * generation, so revocation is state and a host restart while fieldd is down forgets nothing.
+ * `deviceId` is THIS desktop's roster device id, which the welcome carries as the dialer's
+ * consistency check (FW-L9): fieldd holds the roster, and neither the floor nor the host does. */
 export const FreewayDeclareParams = z
-  .object({ admit: z.array(FreewayAdmitRow), doors: FreewayDoors, exposure: FreewayExposure })
+  .object({
+    deviceId: z.string().min(1),
+    admit: z.array(FreewayAdmitRow),
+    doors: FreewayDoors,
+    exposure: FreewayExposure,
+  })
   .passthrough();
 export type FreewayDeclareParams = z.infer<typeof FreewayDeclareParams>;
 export const FreewayDeclareResult = z.object({}).passthrough();

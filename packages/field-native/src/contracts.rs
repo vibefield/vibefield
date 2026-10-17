@@ -1150,6 +1150,7 @@ impl ::std::convert::TryFrom<::std::string::String> for FreewayAdmitRowRole {
 #[doc = "  \"type\": \"object\","]
 #[doc = "  \"required\": ["]
 #[doc = "    \"admit\","]
+#[doc = "    \"deviceId\","]
 #[doc = "    \"doors\","]
 #[doc = "    \"exposure\""]
 #[doc = "  ],"]
@@ -1159,6 +1160,10 @@ impl ::std::convert::TryFrom<::std::string::String> for FreewayAdmitRowRole {
 #[doc = "      \"items\": {"]
 #[doc = "        \"$ref\": \"#/definitions/FreewayAdmitRow\""]
 #[doc = "      }"]
+#[doc = "    },"]
+#[doc = "    \"deviceId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
 #[doc = "    },"]
 #[doc = "    \"doors\": {"]
 #[doc = "      \"$ref\": \"#/definitions/FreewayDoors\""]
@@ -1174,12 +1179,82 @@ impl ::std::convert::TryFrom<::std::string::String> for FreewayAdmitRowRole {
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 pub struct FreewayDeclareParams {
     pub admit: ::std::vec::Vec<FreewayAdmitRow>,
+    #[serde(rename = "deviceId")]
+    pub device_id: FreewayDeclareParamsDeviceId,
     pub doors: FreewayDoors,
     pub exposure: FreewayExposure,
 }
 impl FreewayDeclareParams {
     pub fn builder() -> builder::FreewayDeclareParams {
         Default::default()
+    }
+}
+#[doc = "`FreewayDeclareParamsDeviceId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FreewayDeclareParamsDeviceId(::std::string::String);
+impl ::std::ops::Deref for FreewayDeclareParamsDeviceId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayDeclareParamsDeviceId> for ::std::string::String {
+    fn from(value: FreewayDeclareParamsDeviceId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FreewayDeclareParamsDeviceId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayDeclareParamsDeviceId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayDeclareParamsDeviceId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayDeclareParamsDeviceId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FreewayDeclareParamsDeviceId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
     }
 }
 #[doc = "`FreewayDeclareResult`"]
@@ -10847,6 +10922,8 @@ pub mod builder {
     pub struct FreewayDeclareParams {
         admit:
             ::std::result::Result<::std::vec::Vec<super::FreewayAdmitRow>, ::std::string::String>,
+        device_id:
+            ::std::result::Result<super::FreewayDeclareParamsDeviceId, ::std::string::String>,
         doors: ::std::result::Result<super::FreewayDoors, ::std::string::String>,
         exposure: ::std::result::Result<super::FreewayExposure, ::std::string::String>,
     }
@@ -10854,6 +10931,7 @@ pub mod builder {
         fn default() -> Self {
             Self {
                 admit: Err("no value supplied for admit".to_string()),
+                device_id: Err("no value supplied for device_id".to_string()),
                 doors: Err("no value supplied for doors".to_string()),
                 exposure: Err("no value supplied for exposure".to_string()),
             }
@@ -10868,6 +10946,16 @@ pub mod builder {
             self.admit = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for admit: {e}"));
+            self
+        }
+        pub fn device_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FreewayDeclareParamsDeviceId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.device_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for device_id: {e}"));
             self
         }
         pub fn doors<T>(mut self, value: T) -> Self
@@ -10898,6 +10986,7 @@ pub mod builder {
         ) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
                 admit: value.admit?,
+                device_id: value.device_id?,
                 doors: value.doors?,
                 exposure: value.exposure?,
             })
@@ -10907,6 +10996,7 @@ pub mod builder {
         fn from(value: super::FreewayDeclareParams) -> Self {
             Self {
                 admit: Ok(value.admit),
+                device_id: Ok(value.device_id),
                 doors: Ok(value.doors),
                 exposure: Ok(value.exposure),
             }

@@ -158,6 +158,13 @@ fn mgmt_freeway_fixtures() {
         serde_json::from_value::<FreewayDeclareParams>(window).is_err(),
         "an admitted node is a desktop or a phone, nothing else"
     );
+    // The declaration names this desktop: the welcome's `deviceId` comes from nowhere else.
+    let mut nameless = load("freeway-declare-params.phone.json");
+    nameless.as_object_mut().unwrap().remove("deviceId");
+    assert!(
+        serde_json::from_value::<FreewayDeclareParams>(nameless).is_err(),
+        "a declaration without this desktop's device id"
+    );
 }
 
 #[test]
