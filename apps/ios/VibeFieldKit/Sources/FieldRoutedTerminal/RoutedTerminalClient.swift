@@ -1146,7 +1146,15 @@ public final class RoutedTerminalClient {
       return
     }
     if header.activationSequence <= session.activationSequence {
-      // Per-activation monotonic — a correctness check on an ordered socket.
+      // Per-activation monotonic — a correctness check on an ordered socket. A
+      // unit behind a later one of its activation means the cell broke that
+      // order, and dropping it can leave the scene waiting on a base it will
+      // never hold: said, never silent (2026-10-17 — a catch-up overtaken by a
+      // delta was dropped here without a trace, and the phone's scene froze).
+      options.log(
+        "frames: unit #\(header.activationSequence) (\(header.kind)) dropped — "
+          + "#\(session.activationSequence) of its activation arrived first "
+          + "session=\(header.sessionId)")
       return
     }
     session.activationSequence = header.activationSequence
