@@ -15,6 +15,10 @@
 //!   door that does not answer within TPv3's hello deadline is OPEN_REFUSED 4504 `DOOR_DOWN`: the
 //!   cell is gone, and the session's next ticket names its door. With `exposure.terminals` off,
 //!   no terminal kind is served (4404).
+//! - the host's word, as `LinkCommand`s: a newer link from the same node supersedes this one (4409),
+//!   a revoke closes it (4410), a planned restart says `Restarting` first (4503).
+//! - the audit (FW-L3): a session's first ticket on the link is its join, the link's end every
+//!   join's leave, each reported as a line for the floor to carry to fieldd, the only writer.
 
 use super::approval::{self, ApprovalKey};
 use super::door::Ws;
@@ -48,6 +52,25 @@ pub struct FloorState {
     pub approval_key: ApprovalKey,
 }
 
+/// What every link of this host shares: the floor's word, and each phone's keyring by client id.
+/// A keyring's ledgers are the host BOOT's, as the client id is (`…~<hostBootId>`): a phone that
+/// reconnects within one boot mints on from its own high-water instead of meeting it at the cell
+/// (`GRANT_GENERATION_ROLLBACK`, not retryable — fieldd's TP-R21, `terminal-grants.ts`).
+pub struct Shared {
+    pub floor: FloorState,
+    pub keyrings: HashMap<String, Keyring>,
+}
+
+/// What the host tells a running link.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LinkCommand {
+    /// Close it with this code: 4409 a newer link from its node took its place, 4410 its access
+    /// was revoked, 1001 the host is going.
+    Close(u16),
+    /// A planned restart: this `FreewayRestarting` first, then 4503.
+    Restart(Value),
+}
+
 /// Why a link ended.
 #[derive(Debug, PartialEq, Eq)]
 pub enum LinkEnd {
@@ -55,8 +78,19 @@ pub enum LinkEnd {
     Closed,
     /// No pong for three heartbeats.
     Dead,
-    /// This side closed it with a link code (4400 for a framing error).
-    Refused(u16),
+    /// This side closed it with this code: 4400 for the peer's framing, or the host's word.
+    Code(u16),
+}
+
+/// A close code's name, as the close frame's reason.
+fn code_name(code: u16) -> &'static str {
+    match code {
+        codes::PROTOCOL => "PROTOCOL",
+        codes::SUPERSEDED => "SUPERSEDED",
+        codes::PEER_GONE => "PEER_GONE",
+        codes::RESTARTING => "RESTARTING",
+        _ => "",
+    }
 }
 
 /// A `FreewayOpen` this host serves, read.
@@ -135,12 +169,16 @@ struct Link {
     mux: Mux,
     writer: Writer,
     identity: Identity,
-    /// A phone's: its tickets' minter. A desktop link mints none.
-    keyring: Option<Keyring>,
+    /// A phone's client id: its keyring's key in `Shared`. A desktop link mints nothing.
+    client: Option<String>,
     approval_expires_at: Option<u64>,
-    floor: Arc<Mutex<FloorState>>,
+    shared: Arc<Mutex<Shared>>,
     legs: HashMap<u64, mpsc::UnboundedSender<WsMessage>>,
     leg_events: mpsc::UnboundedSender<Leg>,
+    /// The host's stdout lines: this link's joins and leaves.
+    reports: mpsc::UnboundedSender<Value>,
+    /// Each session joined on this link, with the rights it joined with.
+    joined: HashMap<String, Value>,
     /// Every byte of the peer's frames, and the count this side last acknowledged.
     received: u64,
     acknowledged: u64,
@@ -149,26 +187,35 @@ struct Link {
     now: fn() -> u64,
 }
 
-/// Run one admitted link until it ends.
+/// Run one admitted link until it ends: the host's word comes on `commands`, the link's joins
+/// and leaves go out on `reports`.
 pub async fn run(
     ws: Ws,
     admitted: Admitted,
-    floor: Arc<Mutex<FloorState>>,
+    shared: Arc<Mutex<Shared>>,
+    mut commands: mpsc::UnboundedReceiver<LinkCommand>,
+    reports: mpsc::UnboundedSender<Value>,
     now: fn() -> u64,
 ) -> LinkEnd {
     let (mut sink, mut source) = ws.split();
     let (leg_events, mut legs_in) = mpsc::unbounded_channel();
-    let keyring =
-        (admitted.client_id.clone()).map(|client| Keyring::new(client, admitted.rights.clone()));
+    if let Some(client) = &admitted.client_id {
+        let mut shared = shared.lock().unwrap();
+        let keyring = (shared.keyrings.entry(client.clone()))
+            .or_insert_with(|| Keyring::new(client.clone(), admitted.rights.clone()));
+        keyring.set_rights(admitted.rights.clone());
+    }
     let mut link = Link {
         mux: Mux::new(Role::Acceptor),
         writer: Writer::new(),
         identity: admitted.identity.clone(),
-        keyring,
+        client: admitted.client_id.clone(),
         approval_expires_at: admitted.approval_expires_at,
-        floor,
+        shared,
         legs: HashMap::new(),
         leg_events,
+        reports,
+        joined: HashMap::new(),
         received: 0,
         acknowledged: 0,
         missed: 0,
@@ -188,15 +235,25 @@ pub async fn run(
                 Some(Ok(WsMessage::Binary(bytes))) => {
                     link.received += bytes.len() as u64;
                     if let Err(code) = link.on_frame(&bytes) {
-                        break LinkEnd::Refused(code);
+                        break LinkEnd::Code(code);
                     }
                     link.acknowledge();
                 }
-                Some(Ok(WsMessage::Text(_))) => break LinkEnd::Refused(codes::PROTOCOL),
+                Some(Ok(WsMessage::Text(_))) => break LinkEnd::Code(codes::PROTOCOL),
                 Some(Ok(WsMessage::Ping(_) | WsMessage::Pong(_) | WsMessage::Frame(_))) => {}
                 Some(Ok(WsMessage::Close(_))) | Some(Err(_)) | None => break LinkEnd::Closed,
             },
             Some(event) = legs_in.recv() => link.on_leg(event),
+            Some(command) = commands.recv() => match command {
+                LinkCommand::Close(code) => break LinkEnd::Code(code),
+                LinkCommand::Restart(restarting) => {
+                    // Ahead of anything the writer still holds: the peer reads it before the close.
+                    if let Some(frame) = link_frame(&restarting) {
+                        let _ = sink.send(WsMessage::Binary(frame.into())).await;
+                    }
+                    break LinkEnd::Code(codes::RESTARTING);
+                }
+            },
             _ = heartbeat.tick() => {
                 if link.missed >= limits::MISSED_PINGS {
                     break LinkEnd::Dead;
@@ -205,30 +262,52 @@ pub async fn run(
             }
         }
     };
-    if let LinkEnd::Refused(code) = end {
-        let frame = CloseFrame {
-            code: CloseCode::from(code),
-            reason: "PROTOCOL".into(),
-        };
-        let _ = sink.send(WsMessage::Close(Some(frame))).await;
+    if let LinkEnd::Code(code) = end {
+        let _ = sink.send(close_message(code, code_name(code))).await;
+    }
+    let now = (link.now)();
+    for (session, rights) in std::mem::take(&mut link.joined) {
+        link.report("left", &session, &rights, now);
     }
     end
 }
 
+/// A stream-0 message, framed.
+fn link_frame(message: &Value) -> Option<Vec<u8>> {
+    let payload = serde_json::to_vec(message).ok()?;
+    let frame = Frame {
+        kind: FrameType::Link,
+        fragment: false,
+        stream: 0,
+        payload: &payload,
+    };
+    encode(&frame).ok()
+}
+
 impl Link {
     fn link_message(&mut self, message: &Value) {
-        let Ok(payload) = serde_json::to_vec(message) else {
-            return;
-        };
-        let frame = Frame {
-            kind: FrameType::Link,
-            fragment: false,
-            stream: 0,
-            payload: &payload,
-        };
-        if let Ok(frame) = encode(&frame) {
+        if let Some(frame) = link_frame(message) {
             self.writer.queue_link(frame);
         }
+    }
+
+    /// A session's first ticket on this link is its join; the link's end is every join's leave.
+    fn join(&mut self, session: &str, rights: &Value, now: u64) {
+        if self.joined.contains_key(session) {
+            return;
+        }
+        self.joined.insert(session.to_owned(), rights.clone());
+        self.report("joined", session, rights, now);
+    }
+
+    fn report(&self, kind: &str, session: &str, rights: &Value, at: u64) {
+        let Some(client) = &self.client else {
+            return;
+        };
+        let row = json!({ "clientId": client, "sessionId": session, "rights": rights, "at": at });
+        let mut line = serde_json::Map::new();
+        line.insert(kind.to_owned(), row);
+        let _ = self.reports.send(Value::Object(line));
     }
 
     fn ping(&mut self) {
@@ -249,7 +328,7 @@ impl Link {
 
     /// One frame from the peer; `Err` is the link's close code.
     fn on_frame(&mut self, bytes: &[u8]) -> Result<(), u16> {
-        let terminals = self.floor.lock().unwrap().terminals;
+        let terminals = self.shared.lock().unwrap().floor.terminals;
         match self.mux.receive(bytes, |open| spec(open, terminals)) {
             Ok(event) => {
                 self.on_event(event);
@@ -356,21 +435,23 @@ impl Link {
     /// A phone's `Renew`: checked as its hello was, then the link's approval, and its next mints'
     /// rights, are the new one's. A desktop link carries no approval; its `Renew` is not read.
     fn renew(&mut self, approval: &Value) {
-        let Some(keyring) = self.keyring.as_mut() else {
+        let Some(client) = &self.client else {
             return;
         };
         let now = (self.now)();
-        let checked = {
-            let floor = self.floor.lock().unwrap();
-            check_approval(approval, &self.identity, &floor.approval_key, now)
-        };
-        let answer = match checked {
-            Ok(claims) => {
-                self.approval_expires_at = Some(claims.expires_at);
-                keyring.set_rights(claims.rights);
-                json!({ "type": "Renewed", "approvalExpiresAt": claims.expires_at })
+        let answer = {
+            let mut shared = self.shared.lock().unwrap();
+            let Shared { floor, keyrings } = &mut *shared;
+            match check_approval(approval, &self.identity, &floor.approval_key, now) {
+                Ok(claims) => {
+                    self.approval_expires_at = Some(claims.expires_at);
+                    if let Some(keyring) = keyrings.get_mut(client) {
+                        keyring.set_rights(claims.rights);
+                    }
+                    json!({ "type": "Renewed", "approvalExpiresAt": claims.expires_at })
+                }
+                Err(refused) => refused.payload(),
             }
-            Err(refused) => refused.payload(),
         };
         self.link_message(&answer);
     }
@@ -396,20 +477,30 @@ impl Link {
 
     /// A keyring request: OPENED with the keyring's answer, then CLOSE 1000.
     fn answer(&mut self, stream: u64, request: Request, now: u64) {
-        let Some(keyring) = self.keyring.as_mut() else {
+        let minted = self.client.as_ref().and_then(|client| {
+            let mut shared = self.shared.lock().unwrap();
+            let Shared { floor, keyrings } = &mut *shared;
+            let keyring = keyrings.get_mut(client)?;
+            let answer = match request {
+                Request::Tickets(ids) => keyring.tickets(&ids, &floor.placement, now),
+                Request::Renew {
+                    session,
+                    expect,
+                    request,
+                } => keyring.renew(&session, expect, &request, &floor.placement, now),
+            };
+            Some((answer, json!(keyring.rights())))
+        });
+        let Some((answer, rights)) = minted else {
             let state = "an approval-only kind on a desktop link";
             return self.refuse(stream, codes::APPROVAL, state, false);
         };
-        let floor = self.floor.lock().unwrap();
-        let answer = match request {
-            Request::Tickets(ids) => keyring.tickets(&ids, &floor.placement, now),
-            Request::Renew {
-                session,
-                expect,
-                request,
-            } => keyring.renew(&session, expect, &request, &floor.placement, now),
-        };
-        drop(floor);
+        let ticketed = (answer["tickets"].as_array().into_iter().flatten())
+            .filter(|row| row.get("ticket").is_some())
+            .filter_map(|row| row["sessionId"].as_str());
+        for session in ticketed.map(str::to_owned).collect::<Vec<_>>() {
+            self.join(&session, &rights, now);
+        }
         self.writer.open(stream, Class::Urgent, false);
         self.queue_json(stream, FrameType::Opened, &answer);
         self.end_stream(stream, 1000, "");
@@ -417,8 +508,8 @@ impl Link {
 
     fn dial_leg(&mut self, stream: u64, cell: &str, control: bool) {
         let url = {
-            let floor = self.floor.lock().unwrap();
-            let route = floor.placement.cells.get(cell);
+            let shared = self.shared.lock().unwrap();
+            let route = shared.floor.placement.cells.get(cell);
             route.map(|route| match control {
                 true => route.control_url.clone(),
                 false => route.frames_url.clone(),
@@ -615,7 +706,7 @@ mod tests {
         json!({ "protected": protected, "claims": claims, "mac": mac })
     }
 
-    fn floor(cell: &str, terminals: bool) -> Arc<Mutex<FloorState>> {
+    fn floor(cell: &str, terminals: bool) -> FloorState {
         let mut placement = Placement::default();
         placement.cells.insert(
             "cb-1".into(),
@@ -637,11 +728,11 @@ mod tests {
                 lease_epoch: None,
             },
         );
-        Arc::new(Mutex::new(FloorState {
+        FloorState {
             placement,
             terminals,
             approval_key: approval_key(),
-        }))
+        }
     }
 
     /// A cell's door, faked: it echoes every message, closes with 4003 when told "bye", and
@@ -680,30 +771,64 @@ mod tests {
         (format!("ws://127.0.0.1:{port}"), ended)
     }
 
-    /// A host serving one link on a loopback port; the vector's node is admitted as `role`.
-    async fn host_on(role: PeerRole, floor: Arc<Mutex<FloorState>>, now: fn() -> u64) -> u16 {
+    /// A host on a loopback port, the vector's node admitted as `role`. Like the binary, it runs
+    /// every link it accepts on one `Shared`; it hands back each link's commands, in accept order,
+    /// and the lines the links report.
+    struct TestHost {
+        port: u16,
+        links: mpsc::UnboundedReceiver<mpsc::UnboundedSender<LinkCommand>>,
+        reports: mpsc::UnboundedReceiver<Value>,
+    }
+
+    async fn host_on(role: PeerRole, floor: FloorState, now: fn() -> u64) -> TestHost {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
+        let keyrings = HashMap::new();
+        let shared = Arc::new(Mutex::new(Shared { floor, keyrings }));
+        let (links_out, links) = mpsc::unbounded_channel();
+        let (reports_out, reports) = mpsc::unbounded_channel();
         tokio::spawn(async move {
-            let (stream, _) = listener.accept().await.unwrap();
-            let mut admit = Admit::default();
-            admit.insert(NODE, "dev-b", role);
-            let key = approval_key();
-            let host = Host {
-                link_id: "lk-1",
-                host_boot_id: "hb-1",
-                floor_boot_id: FLOOR_BOOT,
-                device_id: "dev-a",
-            };
-            let config = DoorConfig::new("s3cret".into());
-            let decided = |payload: &[u8], identity: &Identity| {
-                decide(payload, identity, &admit, &key, &host, now())
-            };
-            if let Some((ws, admitted)) = accept(stream, &config, decided).await {
-                run(ws, admitted, floor, now).await;
+            while let Ok((stream, _)) = listener.accept().await {
+                let shared = shared.clone();
+                let (links_out, reports_out) = (links_out.clone(), reports_out.clone());
+                tokio::spawn(async move {
+                    let mut admit = Admit::default();
+                    admit.insert(NODE, "dev-b", role);
+                    let key = approval_key();
+                    let host = Host {
+                        link_id: "lk-1",
+                        host_boot_id: "hb-1",
+                        floor_boot_id: FLOOR_BOOT,
+                        device_id: "dev-a",
+                    };
+                    let config = DoorConfig::new("s3cret".into());
+                    let decided = |payload: &[u8], identity: &Identity| {
+                        decide(payload, identity, &admit, &key, &host, now())
+                    };
+                    if let Some((ws, admitted)) = accept(stream, &config, decided).await {
+                        let (commands_out, commands) = mpsc::unbounded_channel();
+                        let _ = links_out.send(commands_out);
+                        run(ws, admitted, shared, commands, reports_out, now).await;
+                    }
+                });
             }
         });
-        port
+        TestHost {
+            port,
+            links,
+            reports,
+        }
+    }
+
+    /// The link's close, past any frames before it: (code, reason).
+    async fn close_of(ws: &mut Client) -> (u16, String) {
+        loop {
+            let message = tokio::time::timeout(Duration::from_secs(5), ws.next());
+            let message = message.await.expect("a close").expect("a message").unwrap();
+            if let WsMessage::Close(Some(frame)) = message {
+                return (u16::from(frame.code), frame.reason.to_string());
+            }
+        }
     }
 
     /// Dial the host as the vector's node, say `hello`, and read the welcome.
@@ -774,8 +899,8 @@ mod tests {
     #[tokio::test]
     async fn a_leg_is_spliced_to_its_cell_and_each_close_is_answered_once() {
         let (cell, _) = fake_cell().await;
-        let port = host_on(PeerRole::Desktop, floor(&cell, true), fixed).await;
-        let mut ws = dial(port, desktop_hello()).await;
+        let host = host_on(PeerRole::Desktop, floor(&cell, true), fixed).await;
+        let mut ws = dial(host.port, desktop_hello()).await;
         let leg = br#"{"kind":"terminal-leg","cellBootId":"cb-1","channel":"control"}"#;
         send(&mut ws, FrameType::Open, 1, leg).await;
         // Optimistic: the routed hello rides right behind the open, before the leg is up.
@@ -831,8 +956,8 @@ mod tests {
     #[tokio::test]
     async fn a_leg_goes_with_its_link() {
         let (cell, mut ended) = fake_cell().await;
-        let port = host_on(PeerRole::Desktop, floor(&cell, true), fixed).await;
-        let mut ws = dial(port, desktop_hello()).await;
+        let host = host_on(PeerRole::Desktop, floor(&cell, true), fixed).await;
+        let mut ws = dial(host.port, desktop_hello()).await;
         let leg = br#"{"kind":"terminal-leg","cellBootId":"cb-1","channel":"frames"}"#;
         send(&mut ws, FrameType::Open, 1, leg).await;
         assert_eq!(next(&mut ws).await, (FrameType::Opened, 1, b"{}".to_vec()));
@@ -843,8 +968,8 @@ mod tests {
 
     #[tokio::test]
     async fn the_link_acks_what_it_received_and_refuses_what_it_cannot_serve() {
-        let port = host_on(PeerRole::Desktop, floor("ws://127.0.0.1:1", true), fixed).await;
-        let mut ws = dial(port, desktop_hello()).await;
+        let host = host_on(PeerRole::Desktop, floor("ws://127.0.0.1:1", true), fixed).await;
+        let mut ws = dial(host.port, desktop_hello()).await;
         send(
             &mut ws,
             FrameType::Link,
@@ -891,7 +1016,7 @@ mod tests {
 
         // With terminals not exposed, no terminal kind is served at all.
         let hidden = host_on(PeerRole::Desktop, floor("ws://127.0.0.1:1", false), fixed).await;
-        let mut ws = dial(hidden, desktop_hello()).await;
+        let mut ws = dial(hidden.port, desktop_hello()).await;
         send(&mut ws, FrameType::Open, 1, frames).await;
         let (kind, _, refused) = next(&mut ws).await;
         assert_eq!(kind, FrameType::OpenRefused);
@@ -906,8 +1031,8 @@ mod tests {
         fn now() -> u64 {
             CLOCK.load(Ordering::SeqCst)
         }
-        let port = host_on(PeerRole::Phone, floor("ws://127.0.0.1:1", true), now).await;
-        let mut ws = dial(port, phone_hello()).await;
+        let mut host = host_on(PeerRole::Phone, floor("ws://127.0.0.1:1", true), now).await;
+        let mut ws = dial(host.port, phone_hello()).await;
         let tickets = br#"{"kind":"terminal-tickets","sessionIds":["sess-a"]}"#;
         send(&mut ws, FrameType::Open, 1, tickets).await;
         let (kind, stream, opened) = next(&mut ws).await;
@@ -915,6 +1040,18 @@ mod tests {
         let ticket = &json_of(&opened)["tickets"][0]["ticket"];
         let client = format!("freeway:{LOGIN}#{NODE}~hb-1");
         assert_eq!(ticket["attachGrant"]["claims"]["clientId"], json!(client));
+        // The session's first ticket is its join, reported for fieldd's audit.
+        let rights = json!(["geometry", "input", "read"]);
+        let joined = host.reports.recv().await.unwrap();
+        let row = &joined["joined"];
+        assert_eq!(
+            (&row["clientId"], &row["sessionId"]),
+            (&json!(client), &json!("sess-a"))
+        );
+        assert_eq!(
+            (&row["rights"], &row["at"]),
+            (&rights, &json!(ISSUED + 1_000))
+        );
         assert_eq!(
             ticket["endpoints"]["controlUrl"],
             "freeway://cell/cb-1/control"
@@ -962,6 +1099,13 @@ mod tests {
             (FrameType::Close, 5, json!({ "code": 1000 }))
         );
         send(&mut ws, FrameType::Close, 5, br#"{"code":1000}"#).await;
+        // A second ticket on the same link is the same join.
+        send(&mut ws, FrameType::Open, 7, tickets).await;
+        let (kind, stream, _) = next(&mut ws).await;
+        assert_eq!((kind, stream), (FrameType::Opened, 7));
+        let (kind, stream, _) = next(&mut ws).await;
+        assert_eq!((kind, stream), (FrameType::Close, 7));
+        send(&mut ws, FrameType::Close, 7, br#"{"code":1000}"#).await;
 
         // fieldd's approval for another node, well signed, never renews this link.
         let other = approval_for("nOTHER", ISSUED + limits::APPROVAL_TTL_MS);
@@ -973,6 +1117,67 @@ mod tests {
         assert_eq!(
             (&refused["type"], &refused["code"]),
             (&json!("FreewayRefused"), &json!("IDENTITY_MISMATCH"))
+        );
+
+        // The renewal joined nothing new; the link's end is the join's leave.
+        drop(ws);
+        let left = tokio::time::timeout(Duration::from_secs(5), host.reports.recv());
+        let left = left.await.expect("the leave").unwrap();
+        assert_eq!(
+            (&left["left"]["sessionId"], &left["left"]["rights"]),
+            (&json!("sess-a"), &rights)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_phone_that_reconnects_within_the_boot_mints_on_from_its_own_high_water() {
+        let host = host_on(PeerRole::Phone, floor("ws://127.0.0.1:1", true), fixed).await;
+        let tickets = br#"{"kind":"terminal-tickets","sessionIds":["sess-a"]}"#;
+        let mut generations = Vec::new();
+        for _ in 0..2 {
+            let mut ws = dial(host.port, phone_hello()).await;
+            send(&mut ws, FrameType::Open, 1, tickets).await;
+            let (_, _, opened) = next(&mut ws).await;
+            let claims =
+                |grant: &str| json_of(&opened)["tickets"][0]["ticket"][grant]["claims"].clone();
+            let transport = claims("transportGrant")["transportGrantGeneration"].as_u64();
+            let attach = claims("attachGrant")["grantGeneration"].as_u64();
+            generations.push((transport, attach));
+            // The link ends: the next dial is the phone coming back, under the same client id.
+            drop(ws);
+        }
+        assert_eq!(generations, vec![(Some(1), Some(1)), (Some(2), Some(2))]);
+    }
+
+    #[tokio::test]
+    async fn the_hosts_word_closes_a_link_with_its_code_and_a_restart_says_so_first() {
+        let mut host = host_on(PeerRole::Desktop, floor("ws://127.0.0.1:1", true), fixed).await;
+        let mut ws = dial(host.port, desktop_hello()).await;
+        let commands = host.links.recv().await.unwrap();
+        commands
+            .send(LinkCommand::Close(codes::SUPERSEDED))
+            .unwrap();
+        assert_eq!(
+            close_of(&mut ws).await,
+            (codes::SUPERSEDED, "SUPERSEDED".to_owned())
+        );
+
+        let mut ws = dial(host.port, desktop_hello()).await;
+        let commands = host.links.recv().await.unwrap();
+        let restarting = json!({
+            "type": "Restarting", "reason": "update", "planes": ["field-native"], "ttlMs": 8_000,
+        });
+        commands
+            .send(LinkCommand::Restart(restarting.clone()))
+            .unwrap();
+        let (kind, stream, payload) = next(&mut ws).await;
+        assert_eq!(
+            (kind, stream, json_of(&payload)),
+            (FrameType::Link, 0, restarting)
+        );
+        assert_eq!(
+            close_of(&mut ws).await,
+            (codes::RESTARTING, "RESTARTING".to_owned())
         );
     }
 }

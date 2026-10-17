@@ -10,6 +10,13 @@
 //!   (generation per {client, session}, the approval's rights, the keyring's short life).
 //! - A renewal is a CAS on the generation the phone holds, idempotent by its request id, with the
 //!   last few answers remembered per session (fieldd's `RENEWAL_MEMORY`).
+//! - A revoke (§6's second wall) names the generation every cell must refuse below, one above every
+//!   grant out, and every later mint starts there: the cell's ledger admits an EQUAL generation and
+//!   refuses a lower one (`tp/ledger.rs`), so a client re-approved within the boot is never a
+//!   rollback, on a cell it used or one it never did.
+//!
+//! The ledgers are the host BOOT's, as the client id is: the host keeps one keyring per client
+//! across its links, so a phone that reconnects mints on from its own high-water.
 
 use super::mint::{attach_grant, transport_grant, AttachMint, TransportMint};
 use crate::registries::{freeway as limits, terminal_pipeline as tp};
@@ -76,6 +83,8 @@ const STALE: Refusal = Refusal {
 pub struct Keyring {
     client_id: String,
     rights: Vec<AttachRight>,
+    /// Every mint is above this: a revoke's `beforeGeneration`, less one.
+    floor: u64,
     transport_generations: HashMap<String, u64>,
     attach_generations: HashMap<String, u64>,
     renewals: HashMap<String, VecDeque<(String, Value)>>,
@@ -86,6 +95,7 @@ impl Keyring {
         Self {
             client_id,
             rights,
+            floor: 0,
             transport_generations: HashMap::new(),
             attach_generations: HashMap::new(),
             renewals: HashMap::new(),
@@ -96,6 +106,25 @@ impl Keyring {
     /// lapse).
     pub fn set_rights(&mut self, rights: Vec<AttachRight>) {
         self.rights = rights;
+    }
+
+    pub fn rights(&self) -> &[AttachRight] {
+        &self.rights
+    }
+
+    /// A revoke: the `beforeGeneration` for every cell's `RevokeClient`, one above every grant
+    /// this keyring minted. Later mints start there, and no remembered renewal (a grant from
+    /// before) is handed out again.
+    pub fn revoke(&mut self) -> u64 {
+        let minted = (self.transport_generations.values())
+            .chain(self.attach_generations.values())
+            .copied()
+            .max()
+            .unwrap_or(0);
+        let before = minted.max(self.floor) + 1;
+        self.floor = before - 1;
+        self.renewals.clear();
+        before
     }
 
     /// `terminal-tickets {sessionIds}` → the `FreewayOpened {tickets}` answer, a row per session.
@@ -156,7 +185,7 @@ impl Keyring {
     ) -> Result<Value, Refusal> {
         let (session, cell) = route(session_id, placement)?;
         let cell_boot_id = &cell.key.cell_boot_id;
-        let generation = bump(&mut self.transport_generations, cell_boot_id);
+        let generation = bump(&mut self.transport_generations, cell_boot_id, self.floor);
         let nonce = BASE64URL_NOPAD.encode(&rand::random::<[u8; 16]>());
         let connection_set_id = format!("{}@{}", self.client_id, cell_boot_id);
         let transport = transport_grant(
@@ -194,7 +223,7 @@ impl Keyring {
         now_ms: u64,
     ) -> Result<Value, Refusal> {
         let (session, cell) = route(session_id, placement)?;
-        let generation = bump(&mut self.attach_generations, session_id);
+        let generation = bump(&mut self.attach_generations, session_id, self.floor);
         Ok(attach_grant(
             &cell.key,
             &AttachMint {
@@ -220,9 +249,9 @@ fn route<'a>(
     Ok((session, cell))
 }
 
-fn bump(generations: &mut HashMap<String, u64>, key: &str) -> u64 {
+fn bump(generations: &mut HashMap<String, u64>, key: &str, floor: u64) -> u64 {
     let generation = generations.entry(key.to_owned()).or_insert(0);
-    *generation += 1;
+    *generation = (*generation).max(floor) + 1;
     *generation
 }
 
@@ -347,5 +376,39 @@ mod tests {
             ring.renew("sess-none", 0, "rq-3", &placement(), NOW),
             json!({ "refusal": NO_SESSION.json() })
         );
+    }
+
+    #[test]
+    fn a_revoke_names_one_above_every_grant_out_and_every_later_mint_starts_there() {
+        let mut ring = keyring();
+        ring.tickets(&["sess-a".into()], &placement(), NOW);
+        ring.renew("sess-a", 1, "rq-1", &placement(), NOW);
+        // Out: transport 1 on the cell, attach 1 and 2 on sess-a.
+        assert_eq!(ring.revoke(), 3);
+        // A remembered renewal is a grant from before the revoke: never handed out again.
+        assert_eq!(
+            ring.renew("sess-a", 1, "rq-1", &placement(), NOW),
+            json!({ "refusal": STALE.json() })
+        );
+        // Both counters mint at the floor now — the transport one jumps from 1 to 3 — so the
+        // cells, told to refuse below 3, take them.
+        let verifier = GrantVerifier::new(key(), GrantValidityLimits::default());
+        let answer = ring.tickets(&["sess-a".into()], &placement(), NOW + 1);
+        let ticket = &answer["tickets"][0]["ticket"];
+        let transport = verifier
+            .verify_transport(&ticket["transportGrant"], NOW + 1)
+            .unwrap();
+        let attach = verifier
+            .verify_attach(&ticket["attachGrant"], NOW + 1)
+            .unwrap();
+        assert_eq!(
+            (
+                transport.transport_grant_generation,
+                attach.grant_generation
+            ),
+            (3, 3)
+        );
+        // A second revoke with nothing minted since is still above everything out.
+        assert_eq!(ring.revoke(), 4);
     }
 }
