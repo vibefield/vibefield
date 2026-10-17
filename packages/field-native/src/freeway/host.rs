@@ -144,6 +144,9 @@ pub enum HostReport {
     Left(JoinRow),
     /// For every cell's stdin, as the floor fans it out.
     RevokeClient(RevokeClient),
+    /// A revoke order's answer, after its walls: how many phone links it closed. Orders are
+    /// answered in the order they came, so the floor matches each to its caller.
+    Revoked(Revoked),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -168,6 +171,12 @@ pub struct JoinRow {
     pub session_id: String,
     pub rights: Vec<AttachRight>,
     pub at: u64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Revoked {
+    pub closed: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -471,12 +480,20 @@ impl Core {
         for wall in walls {
             self.line(&HostReport::RevokeClient(wall));
         }
+        let mut closed = 0;
         let links = self.links.lock().unwrap();
         for entry in links.by_node.values() {
-            if entry.client.as_deref().is_some_and(matches) {
-                let _ = entry.commands.send(LinkCommand::Close(codes::APPROVAL));
+            if entry.client.as_deref().is_some_and(matches)
+                && entry
+                    .commands
+                    .send(LinkCommand::Close(codes::APPROVAL))
+                    .is_ok()
+            {
+                closed += 1;
             }
         }
+        drop(links);
+        self.line(&HostReport::Revoked(Revoked { closed }));
     }
 
     fn restart(&self, order: RestartOrder) {
@@ -777,6 +794,10 @@ mod tests {
         assert_eq!(
             close_of(&mut ws).await,
             (codes::APPROVAL, "APPROVAL".to_owned())
+        );
+        assert_eq!(
+            rig.report().await,
+            HostReport::Revoked(Revoked { closed: 1 })
         );
         assert!(matches!(rig.report().await, HostReport::Left(join) if join.client_id == client));
         assert_eq!(rig.report().await, row(LinkState::Down));

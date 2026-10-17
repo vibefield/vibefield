@@ -122,11 +122,15 @@ fn hand_over(_: &mut Command, _: Inherited) -> Result<(), StartFailure> {
     Err(StartFailure::Spawn(std::io::Error::new(unsupported, why)))
 }
 
+/// A child's stdout, as lines.
+pub type ChildLines = Lines<BufReader<ChildStdout>>;
+
 /// A child that said its hello.
 pub struct SupervisedChild {
     child: Child,
     stdin: Option<ChildStdin>,
-    lines: Lines<BufReader<ChildStdout>>,
+    /// Its stdout, unless a caller took it (`take_lines`).
+    lines: Option<ChildLines>,
     stderr: tokio::task::JoinHandle<()>,
 }
 
@@ -174,7 +178,7 @@ impl SupervisedChild {
         let mut supervised = Self {
             child,
             stdin: Some(stdin),
-            lines: BufReader::new(stdout).lines(),
+            lines: Some(BufReader::new(stdout).lines()),
             stderr,
         };
         let bootstrap = format!("{}\n", spec.bootstrap);
@@ -186,7 +190,8 @@ impl SupervisedChild {
             supervised.kill().await;
             return Err(StartFailure::Bootstrap(error));
         }
-        match tokio::time::timeout(spec.hello_deadline, supervised.lines.next_line()).await {
+        let lines = (supervised.lines.as_mut()).expect("a child's stdout is its own until taken");
+        match tokio::time::timeout(spec.hello_deadline, lines.next_line()).await {
             Ok(Ok(Some(line))) => match serde_json::from_str(&line) {
                 Ok(hello) => Ok((supervised, hello)),
                 Err(error) => {
@@ -213,7 +218,13 @@ impl SupervisedChild {
 
     /// The child's next stdout line after its hello; `None` once it has closed stdout.
     pub async fn next_line(&mut self) -> Option<String> {
-        self.lines.next_line().await.ok().flatten()
+        self.lines.as_mut()?.next_line().await.ok().flatten()
+    }
+
+    /// Hand the child's stdout to a caller that reads its lines beside `wait` (one `select!`
+    /// cannot borrow the child for both). `next_line` and `last_line` answer `None` after.
+    pub fn take_lines(&mut self) -> Option<ChildLines> {
+        self.lines.take()
     }
 
     /// The child's own end, when no drain was asked (a crash). Its last line is `last_line`'s.
@@ -223,7 +234,8 @@ impl SupervisedChild {
 
     /// The child's last stdout line, if it says one within half a second.
     pub async fn last_line(&mut self) -> Option<String> {
-        tokio::time::timeout(LAST_LINE, self.lines.next_line())
+        let lines = self.lines.as_mut()?;
+        tokio::time::timeout(LAST_LINE, lines.next_line())
             .await
             .ok()?
             .ok()?
@@ -278,6 +290,24 @@ mod tests {
             },
             inherit: None,
         }
+    }
+
+    #[tokio::test]
+    async fn a_caller_that_takes_the_lines_reads_them_beside_the_wait() {
+        let script = r#"read boot; echo '{"pid": 1}'; echo one; echo two"#;
+        let (mut child, _) = SupervisedChild::start::<Hello>(sh(script)).await.unwrap();
+        let mut lines = child.take_lines().expect("the child's stdout");
+        let (line, status) = tokio::join!(
+            async {
+                let one = lines.next_line().await.unwrap();
+                let two = lines.next_line().await.unwrap();
+                (one, two)
+            },
+            child.wait()
+        );
+        assert_eq!(line, (Some("one".into()), Some("two".into())));
+        assert!(status.unwrap().success());
+        assert_eq!(child.next_line().await, None, "taken is taken");
     }
 
     #[cfg(unix)]

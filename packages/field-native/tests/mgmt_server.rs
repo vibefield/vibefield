@@ -944,3 +944,84 @@ async fn a_malformed_restart_request_is_refused_and_changes_nothing() {
     .is_err());
     daemon.shutdown().await;
 }
+
+/// The reply to request `id`, and the notifications that came before it.
+async fn reply(c: &mut TestClient, id: u64) -> (Value, Vec<Value>) {
+    let mut notes = Vec::new();
+    loop {
+        let line = c.recv().await;
+        if line["id"] == json!(id) {
+            return (line, notes);
+        }
+        notes.push(line);
+    }
+}
+
+/// F1 — the four `native.freeway.*` arms answer on the paired channel. A declaration the contract
+/// refuses is PRECONDITION_FAILED, never quoting its text (its doors carry secrets); a valid one is
+/// `{}`, and the state subscription's deltas show the host come up on it; a revoke with no phone
+/// link answers `{closed: 0}`; the joins subscription answers its first frame.
+#[tokio::test]
+async fn the_freeway_arms_answer_on_the_paired_channel() {
+    let (_dir, daemon) = boot().await;
+    let mut c = TestClient::connect(&daemon).await;
+    c.hello(&daemon, 1).await;
+    let subscribe =
+        json!({"jsonrpc":"2.0","id":2,"method":"native.freeway.state.subscribe","params":{}});
+    c.send(subscribe).await;
+    let (subscribed, _) = reply(&mut c, 2).await;
+    assert_eq!(
+        subscribed["result"]["snapshot"]["up"],
+        json!(false),
+        "{subscribed}"
+    );
+
+    let doors = json!({ "product": "ws://127.0.0.1:1/fw/a-secret-never-said" });
+    let exposure = json!({ "terminals": true });
+    let window = json!([{ "deviceId": "dev-b", "role": "window" }]);
+    let refused =
+        json!({ "deviceId": "dev-a", "admit": window, "doors": doors, "exposure": exposure });
+    c.send(json!({"jsonrpc":"2.0","id":3,"method":"native.freeway.declare","params": refused}))
+        .await;
+    let (refused, _) = reply(&mut c, 3).await;
+    assert_eq!(
+        refused["error"]["data"]["kind"], "PRECONDITION_FAILED",
+        "{refused}"
+    );
+    assert!(
+        !refused.to_string().contains("a-secret-never-said"),
+        "{refused}"
+    );
+
+    let admitted = json!([{ "deviceId": "dev-b", "role": "phone" }]);
+    let declared =
+        json!({ "deviceId": "dev-a", "admit": admitted, "doors": doors, "exposure": exposure });
+    c.send(json!({"jsonrpc":"2.0","id":4,"method":"native.freeway.declare","params": declared}))
+        .await;
+    let (accepted, mut notes) = reply(&mut c, 4).await;
+    assert_eq!(accepted["result"], json!({}), "{accepted}");
+    while !notes
+        .iter()
+        .any(|note| note["params"]["payload"]["up"] == json!(true))
+    {
+        let note = c.recv().await;
+        assert_eq!(note["method"], "native.freeway.state.delta", "{note}");
+        notes.push(note);
+    }
+
+    let revoke = json!({"jsonrpc":"2.0","id":5,"method":"native.freeway.revoke","params":{}});
+    c.send(revoke).await;
+    let (revoked, _) = reply(&mut c, 5).await;
+    assert_eq!(revoked["result"], json!({ "closed": 0 }), "{revoked}");
+
+    let joins =
+        json!({"jsonrpc":"2.0","id":6,"method":"native.freeway.joins.subscribe","params":{}});
+    c.send(joins).await;
+    let (joins, _) = reply(&mut c, 6).await;
+    assert_eq!(
+        joins["result"]["snapshot"],
+        json!({ "rows": [], "dropped": 0 }),
+        "{joins}"
+    );
+    daemon.shutdown().await;
+}

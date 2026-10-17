@@ -141,6 +141,8 @@ pub struct DaemonState {
     /// node actually up?) is read from `mesh` as each hello is written, because
     /// a node can come and go while a floor keeps serving PTYs.
     pub terminal_mesh: MeshPlan,
+    /// F1 — the freeway unit's door: `native.freeway.*` reach it.
+    pub freeway: crate::services::freeway::FreewayHandle,
     /// Process-owned native diagnostic producer. Embedded unit tests omit it;
     /// the production main installs it before service composition.
     pub logging: Option<NativeLogging>,
@@ -164,6 +166,7 @@ impl DaemonState {
         bridge: BridgeHandle,
         terminal_routes: watch::Receiver<TerminalRouteSnapshot>,
         terminal_mesh: MeshPlan,
+        freeway: crate::services::freeway::FreewayHandle,
         logging: Option<NativeLogging>,
     ) -> Arc<Self> {
         let (health_tx, _) = watch::channel(health);
@@ -179,6 +182,7 @@ impl DaemonState {
             bridge,
             terminal_routes,
             terminal_mesh,
+            freeway,
             logging,
             restart: crate::restart::RestartControl::default(),
             next_conn_id: AtomicU64::new(1),

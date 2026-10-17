@@ -529,6 +529,67 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
             "native.diagnostics.lease.revoke" => {
                 send(&tx, diagnostics::lease_revoke(&state, &params, id));
             }
+            // F1 — the freeway unit (thinking-freeway.md v0.3 §4.3, §5.2).
+            "native.freeway.declare" => {
+                let parsed = serde_json::from_value::<crate::contracts::FreewayDeclareParams>(
+                    params.clone(),
+                );
+                let reply = match parsed.map(|declaration| serde_json::to_value(&declaration)) {
+                    Ok(Ok(declaration)) => {
+                        state.freeway.declare(declaration);
+                        ok(id, json!({}))
+                    }
+                    // Its class alone: a declaration's doors carry secrets.
+                    Ok(Err(error)) | Err(error) => err(
+                        id,
+                        "PRECONDITION_FAILED",
+                        -32005,
+                        &format!("the declaration did not parse ({:?})", error.classify()),
+                        false,
+                        None,
+                    ),
+                };
+                send(&tx, reply);
+            }
+            "native.freeway.state.subscribe" => {
+                // Snapshot now, the FULL state as each delta (TC-D15's pattern): a missed delta
+                // is repaired by the next one.
+                let sub_id = state.sub_id();
+                let mut rx = state.freeway.state_rx();
+                let snapshot = rx.borrow_and_update().clone();
+                send(
+                    &tx,
+                    ok(id, json!({ "subId": sub_id.clone(), "snapshot": snapshot })),
+                );
+                spawn_forwarder(tx.clone(), rx, "native.freeway.state.delta", sub_id);
+            }
+            "native.freeway.joins.subscribe" => {
+                let sub_id = state.sub_id();
+                let (first, frames) = state.freeway.subscribe_joins();
+                send(
+                    &tx,
+                    ok(id, json!({ "subId": sub_id.clone(), "snapshot": first })),
+                );
+                spawn_joins_forwarder(tx.clone(), frames, sub_id);
+            }
+            "native.freeway.revoke" => {
+                let client = params
+                    .get("clientId")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
+                let reply = match state.freeway.revoke(client).await {
+                    Ok(closed) => ok(id, json!({ "closed": closed })),
+                    Err(_) => err(
+                        id,
+                        "UNAVAILABLE",
+                        -32006,
+                        "the freeway host did not answer the revoke",
+                        true,
+                        Some(json!({ "service": "freeway", "state": "restarting" })),
+                    ),
+                };
+                send(&tx, reply);
+            }
             m if m.starts_with("native.mesh.") => {
                 mesh_queue.enqueue(conn_id, &tx, method, params, id, line.len() + 1);
             }
@@ -1397,6 +1458,25 @@ fn spawn_forwarder<T>(
         while rx.changed().await.is_ok() {
             let payload = serde_json::to_value(&*rx.borrow()).unwrap();
             let note = json!({"jsonrpc":"2.0","method": method, "params": {"subId": sub_id, "payload": payload}});
+            if tx.send(OutMsg::Line(note.to_string())).is_err() {
+                break;
+            }
+        }
+    });
+}
+
+/// `native.freeway.joins.subscribe`'s later frames, as `.delta` (fieldd's NativeLink routes a
+/// notification by that suffix).
+fn spawn_joins_forwarder(
+    tx: MgmtOutbox,
+    mut frames: tokio::sync::mpsc::UnboundedReceiver<Value>,
+    sub_id: String,
+) {
+    tokio::spawn(async move {
+        while let Some(frame) = frames.recv().await {
+            let params = json!({ "subId": sub_id, "payload": frame });
+            let note =
+                json!({"jsonrpc":"2.0","method":"native.freeway.joins.delta","params": params});
             if tx.send(OutMsg::Line(note.to_string())).is_err() {
                 break;
             }

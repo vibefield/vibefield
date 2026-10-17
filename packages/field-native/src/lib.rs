@@ -69,6 +69,9 @@ pub struct RunningDaemon {
     /// `observed.terminals` pump. Held so shutdown can abort it before the
     /// drain runs.
     terminal_inventory: tokio::task::JoinHandle<()>,
+    /// F1: the freeway unit's feeds (cells, sessions, peers). Held so shutdown can abort them
+    /// before the unit stops.
+    freeway_feeds: Vec<tokio::task::JoinHandle<()>>,
     manager: Arc<manager::NativeServiceManager>,
     logging: Option<logging::NativeLogging>,
 }
@@ -87,6 +90,9 @@ impl RunningDaemon {
         // session registry from here on, and a pump still reconciling would
         // only publish inventory nobody is subscribed to any more.
         self.terminal_inventory.abort();
+        for feed in &self.freeway_feeds {
+            feed.abort();
+        }
         self.manager.stop_all().await;
         tracing::info!(
             event = "field_native.lifecycle.stopped",
@@ -152,8 +158,8 @@ pub async fn bootstrap_with_logging(
     // units push health transitions (e.g. mesh auth flow) via this channel;
     // a refresh task re-aggregates and publishes on every ping
     let (ping_tx, mut ping_rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-    let (units, mesh_handle, bridge_handle, terminal_handle) =
-        services::build_units(&config, secret, ping_tx);
+    let (units, mesh_handle, bridge_handle, terminal_handle, freeway_handle) =
+        services::build_units(&config, secret, &boot_id, ping_tx);
     let mgr = Arc::new(manager::NativeServiceManager::new(units)?);
     mgr.start_all().await;
     let health = mgr.health(&boot_id);
@@ -189,6 +195,7 @@ pub async fn bootstrap_with_logging(
         // the mgmt plane composes it with the gateway's live node into the
         // hello's `terminalMesh` without learning what either one is.
         config::MeshPlan::resolve(&config),
+        freeway_handle.clone(),
         logging.clone(),
     );
     state.restart.configure(restart_intent_file, last_exit);
@@ -208,6 +215,14 @@ pub async fn bootstrap_with_logging(
     let admission = admission::AdmissionLedger::resolve(&config.data_dir, &boot_id);
     let terminal_inventory =
         services::terminal::install_inventory(terminal_handle.clone(), state.clone(), admission);
+    // F1: the freeway unit's word — the cells off the route snapshot, the sessions off the
+    // observed inventory, the peers off the mesh node — is WIRING too: the unit learns rows, never
+    // what a route, an inventory or a node is.
+    let freeway_feeds = vec![
+        services::freeway::feed_cells(freeway_handle.clone(), terminal_handle.routes_rx()),
+        services::freeway::feed_sessions(freeway_handle.clone(), state.observed_tx.subscribe()),
+        services::freeway::feed_peers(freeway_handle, state.mesh.clone()),
+    ];
 
     let health_refresh = tokio::spawn({
         let mgr = mgr.clone();
@@ -246,6 +261,7 @@ pub async fn bootstrap_with_logging(
         health_refresh,
         lane_transport,
         terminal_inventory,
+        freeway_feeds,
         manager: mgr,
         logging,
     })

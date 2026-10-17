@@ -130,6 +130,9 @@ pub struct NativeConfig {
     /// back to the sibling of this executable — cargo and the packaged app
     /// both place the two binaries side by side.
     pub cell_bin_override: Option<PathBuf>,
+    /// F1 — explicit `field-freeway-host` binary path (FIELD_NATIVE_FREEWAY_BIN, the same seam);
+    /// production falls back to the sibling of this executable, as the cell's does.
+    pub freeway_bin_override: Option<PathBuf>,
     /// TC-S3 — spawn-isolation window override in ms (test seam,
     /// FIELD_NATIVE_ISOLATION_WINDOW_MS): the kill matrix cannot wait out the
     /// production five minutes to watch a class LEAVE isolation. Floor-side
@@ -145,6 +148,22 @@ pub struct NativeConfig {
     /// authority, the list is hygiene. Rides the cell bootstrap line (a
     /// non-secret), never the cell's env.
     pub allowed_origins: Vec<String>,
+}
+
+/// A binary cargo and the packaged app place beside this executable. Sibling first (the
+/// packaged and `cargo run` layout), then one level up: an EMBEDDED test's current_exe lives in
+/// target/debug/deps/ while cargo puts bin targets in target/debug/. Existence-checked, so a
+/// supervisor's "cannot be located" detail stays honest when neither holds the binary.
+fn sibling_binary(stem: &str) -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let name = if cfg!(windows) {
+        format!("{stem}.exe")
+    } else {
+        stem.to_owned()
+    };
+    let parent = exe.parent()?;
+    let candidates = [parent.join(&name), parent.parent()?.join(&name)];
+    candidates.into_iter().find(|candidate| candidate.exists())
 }
 
 impl NativeConfig {
@@ -166,6 +185,7 @@ impl NativeConfig {
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
         let cell_bin_override = std::env::var_os("FIELD_NATIVE_CELL_BIN").map(PathBuf::from);
+        let freeway_bin_override = std::env::var_os("FIELD_NATIVE_FREEWAY_BIN").map(PathBuf::from);
         let isolation_window_override = std::env::var("FIELD_NATIVE_ISOLATION_WINDOW_MS")
             .ok()
             .and_then(|value| value.trim().parse::<u64>().ok());
@@ -188,6 +208,7 @@ impl NativeConfig {
             sidecar_override,
             terminal_mesh_enabled,
             cell_bin_override,
+            freeway_bin_override,
             isolation_window_override,
             allowed_origins,
         })
@@ -203,6 +224,7 @@ impl NativeConfig {
             sidecar_override: None,
             terminal_mesh_enabled: false,
             cell_bin_override: None,
+            freeway_bin_override: None,
             isolation_window_override: None,
             allowed_origins: Vec::new(),
         }
@@ -219,6 +241,7 @@ impl NativeConfig {
             sidecar_override: None,
             terminal_mesh_enabled: false,
             cell_bin_override: None,
+            freeway_bin_override: None,
             isolation_window_override: None,
             allowed_origins: Vec::new(),
         }
@@ -339,20 +362,18 @@ impl NativeConfig {
         if let Some(explicit) = &self.cell_bin_override {
             return Some(explicit.clone());
         }
-        let exe = std::env::current_exe().ok()?;
-        let name = if cfg!(windows) {
-            "field-terminal-host.exe"
-        } else {
-            "field-terminal-host"
-        };
-        // Sibling first (the packaged and `cargo run` layout), then one level
-        // up: an EMBEDDED test's current_exe lives in target/debug/deps/ while
-        // cargo puts bin targets in target/debug/ — existence-checked so the
-        // supervisor's "cannot be located" detail stays honest when neither
-        // holds a binary.
-        let parent = exe.parent()?;
-        let candidates = [parent.join(name), parent.parent()?.join(name)];
-        candidates.into_iter().find(|candidate| candidate.exists())
+        sibling_binary("field-terminal-host")
+    }
+
+    /// F1 — where `field-freeway-host` lives: the explicit override (FIELD_NATIVE_FREEWAY_BIN),
+    /// else this executable's sibling. Existence-checked either way: a floor without the host
+    /// installed (a packaged build that does not ship it yet) says so as the unit's disabled
+    /// state, never as a crash loop.
+    pub fn freeway_binary(&self) -> Option<PathBuf> {
+        match &self.freeway_bin_override {
+            Some(explicit) => explicit.exists().then(|| explicit.clone()),
+            None => sibling_binary("field-freeway-host"),
+        }
     }
 
     #[cfg(windows)]

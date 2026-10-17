@@ -1,3 +1,4 @@
+pub mod freeway;
 pub mod lane_transport;
 mod lossy_lane;
 pub mod mesh;
@@ -29,24 +30,36 @@ use tokio::sync::mpsc::UnboundedSender;
 pub fn build_units(
     config: &NativeConfig,
     secret: [u8; 32],
+    boot_id: &str,
     ping: UnboundedSender<()>,
 ) -> (
     Vec<Box<dyn NativeService>>,
     mesh::MeshHandle,
     mesh_bridge::BridgeHandle,
     terminal::TerminalHandle,
+    freeway::FreewayHandle,
 ) {
     let mesh_unit = mesh::MeshUnit::new(config, ping.clone());
     let handle = mesh_unit.handle();
     let terminal_unit = terminal::TerminalUnit::new(config, ping.clone());
     let terminal_handle = terminal_unit.handle();
-    let bridge = mesh_bridge::MeshBridge::new(config, secret, ping);
+    let bridge = mesh_bridge::MeshBridge::new(config, secret, ping.clone());
     let bridge_handle = bridge.handle();
+    // F1 — after the terminal unit, whose cells the host's walls reach.
+    let freeway_unit = freeway::FreewayUnit::new(config, boot_id, ping, terminal_handle.clone());
+    let freeway_handle = freeway_unit.handle();
     let units: Vec<Box<dyn NativeService>> = vec![
         Box::new(mesh_unit),
         Box::new(terminal_unit),
         Box::new(bridge),
+        Box::new(freeway_unit),
         Box::new(stubs::StubService::new("process", &[])),
     ];
-    (units, handle, bridge_handle, terminal_handle)
+    (
+        units,
+        handle,
+        bridge_handle,
+        terminal_handle,
+        freeway_handle,
+    )
 }
