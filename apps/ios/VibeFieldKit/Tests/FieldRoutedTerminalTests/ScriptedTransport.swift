@@ -554,16 +554,23 @@ struct SettleTimedOut: Error, CustomStringConvertible {
   var description: String { "timed out waiting for \(what)" }
 }
 
-/// D1's witness (the second audit, 2026-10-16): a sink that holds its FIRST
-/// apply open until released, and records the stamps it applied in the order it
-/// applied them. A client that hands frames over one task each lets the second
-/// frame in while the first is still applying — the actor is reentrant — and
-/// `started` reads 2; a client that waits per session never does.
-actor SlowFirstSink: RoutedFrameSink {
+/// A sink that holds ONE apply open until released — the `holding`th, the
+/// first by default — and records the stamps it applied in the order it
+/// applied them. D1's witness (the second audit, 2026-10-16) holds the first: a
+/// client that hands frames over one task each lets the second frame in while
+/// the first is still applying — the actor is reentrant — and `started` reads
+/// 2; a client that waits per session never does. Holding a later one is a
+/// frame in flight over a scene already applied (§5.4's `active`, 2026-10-17).
+actor HeldApplySink: RoutedFrameSink {
   private(set) var started = 0
   private(set) var applied: [Int64] = []
+  private let holding: Int
   private var gate: CheckedContinuation<Void, Never>?
   private var released = false
+
+  init(holding: Int = 1) {
+    self.holding = holding
+  }
 
   func release() {
     released = true
@@ -594,7 +601,7 @@ actor SlowFirstSink: RoutedFrameSink {
 
   private func admit() async {
     started += 1
-    guard started == 1, !released else { return }
+    guard started == holding, !released else { return }
     await withCheckedContinuation { gate = $0 }
   }
 }

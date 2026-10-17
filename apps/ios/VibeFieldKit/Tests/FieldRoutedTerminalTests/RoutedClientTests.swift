@@ -608,7 +608,7 @@ import Testing
   /// not see the second until it returns, and nothing is acknowledged early.
   @Test func framesReachTheSinkInArrivalOrderEvenWhenAnApplyIsSlow() async throws {
     let transport = ScriptedTransport()
-    let sink = SlowFirstSink()
+    let sink = HeldApplySink()
     let client = RoutedTerminalClient(
       transport: transport, sink: sink, options: .init(viewId: "view-1"))
     client.open(try ticket())
@@ -635,6 +635,48 @@ import Testing
       await live.frames.lastSent("SceneApplied")?["appliedContent"]?["sceneRevision"]?.intValue
         == 101
     }
+    client.close()
+  }
+
+  /// §5.4 — a frame IN FLIGHT over an applied scene is still the worker's
+  /// `active` state, not a seed. Reading `.applying` as not ready closed input
+  /// for the length of every frame's render: while a TUI streamed, keystrokes
+  /// were declined ("waiting for the terminal to catch up") and the card's
+  /// phase fell to `connecting` on every frame (James's phone, 2026-10-17).
+  @Test func aFrameInFlightOverAnAppliedSceneKeepsPresentationAndInput() async throws {
+    let transport = ScriptedTransport()
+    let sink = HeldApplySink(holding: 2)
+    let client = RoutedTerminalClient(
+      transport: transport, sink: sink, options: .init(viewId: "view-1"))
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    let seed = try Script.frame(
+      session: session, activation: live.activation, sequence: 1, creditEpoch: 1, base: nil,
+      result: Script.stamp(100), payload: Data("TRF1-full".utf8))
+    await live.frames.deliver(.binary(seed))
+    try await settle("the seed applies") { await sink.applied == [100] }
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(session: session, activation: live.activation, sequence: 1))
+    try await settle("input allowed") { client.sessions[session]?.inputAllowed == true }
+
+    let delta = try Script.frame(
+      session: session, activation: live.activation, sequence: 2, creditEpoch: 1,
+      base: Script.stamp(100), result: Script.stamp(101), payload: Data("TRF1-delta".utf8))
+    await live.frames.deliver(.binary(delta))
+    try await settle("the delta's apply is held open") { await sink.started == 2 }
+    #expect(client.sessions[session]?.frames == .applying)
+    #expect(client.sessions[session]?.presentationReady == true)
+    #expect(client.sessions[session]?.inputAllowed == true)
+    let before = await live.control.allSent("SendInput").count
+    client.send(text: "l", to: session)
+    try await settle("the keystroke goes out mid-frame") {
+      await live.control.allSent("SendInput").count == before + 1
+    }
+
+    await sink.release()
+    try await settle("the delta applies") { await sink.applied == [100, 101] }
     client.close()
   }
 

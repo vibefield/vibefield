@@ -270,7 +270,9 @@ public final class TerminalAttachment {
   public var phase: TerminalPhase {
     if let localPhase { return localPhase }
     guard let client, let sessionID else { return .idle }
-    return Self.phase(for: client.state, session: client.sessions[sessionID], deadline: deadline)
+    return Self.phase(
+      for: client.state, session: client.sessions[sessionID],
+      presented: client.hasPresented(sessionID), deadline: deadline)
   }
 
   /// Whether the CELL accepted this client's right to type. The grant asks; the
@@ -280,6 +282,13 @@ public final class TerminalAttachment {
     guard let client, let sessionID else { return false }
     return client.sessions[sessionID]?.rights.contains(.input) ?? false
   }
+
+  /// The GRANT's answer to "may this viewer type": the input right the cell
+  /// accepted, still live. It moves with the grant and never with a frame, so
+  /// it is what the card's chrome is built on. `acceptsInput` is the
+  /// per-keystroke gate: it drops for a moment on every reseed, and chrome
+  /// that followed it re-laid the pane into the next resize (2026-10-17).
+  public var mayType: Bool { readWrite && !writeGrantExpired }
 
   /// `InputAllowed(a)` — every term of it, computed by the client: both legs
   /// attached, the cell presenting, the lease live against a local deadline,
@@ -952,7 +961,7 @@ public final class TerminalAttachment {
   /// set's state: the connection may be perfectly healthy and the thing the
   /// card is about gone.
   nonisolated static func phase(
-    for state: RoutedTerminalClient.State, session: RoutedSessionState?,
+    for state: RoutedTerminalClient.State, session: RoutedSessionState?, presented: Bool = false,
     deadline: Duration = stepDeadline
   ) -> TerminalPhase {
     if let session, case .ended(let reason) = session.control { return .ended(reason) }
@@ -962,8 +971,12 @@ public final class TerminalAttachment {
     case .attached:
       // Attached is not presenting. A session whose legs are up but whose first
       // frame has not landed is still connecting, and saying `live` over it
-      // would be the blank this design refuses.
-      return session?.presentationReady == true ? .live : .connecting
+      // would be the blank this design refuses. Past that first frame it stays
+      // live: a reseed holds input until the scene catches up, and reading it
+      // as `connecting` hid the input card and raised a status line on every
+      // resize, each of which resized the pane again (James, 2026-10-17: "the
+      // entire tab just jumps up down like crazy").
+      return session?.presentationReady == true || presented ? .live : .connecting
     case .reconnecting, .staleRoute: return .connecting
     case .refused(let code): return .refused(code)
     case .failed(let reason): return .failed(reason)

@@ -110,16 +110,17 @@ struct DiscoveryActionTests {
 /// has been offered for this session" while its desktop pane was live. The
 /// run's field row carried its terminal (fieldd: `hosted: "local"` and the
 /// pane's session id, adopted runs included); the card had no act for it.
+/// FW-D2 (2026-10-17): the card rising IS the attach — no slot draws ATTACH.
 @Suite("fix7 — an agent's card opens its own terminal")
 struct TerminalSlotTests {
-  @Test("an agent's run whose face offers its terminal draws ATTACH — never the absence")
+  @Test("an agent's run whose face offers its terminal is the terminal from the first frame — never an ATTACH, never the absence")
   func agentAttaches() {
-    #expect(FieldHomeModel.terminalSlot(attached: false, remote: false, agentAttachable: true) == .agentInvitation)
+    #expect(FieldHomeModel.terminalSlot(attached: false, remote: false, agentAttachable: true) == .live)
   }
 
-  @Test("a peer's session invites as before; attached is live; nothing to open is the absence, with its reason")
+  @Test("a peer's session states its facts; attached is live; nothing to open is the absence, with its reason")
   func theOtherSlots() {
-    #expect(FieldHomeModel.terminalSlot(attached: false, remote: true, agentAttachable: false) == .peerInvitation)
+    #expect(FieldHomeModel.terminalSlot(attached: false, remote: true, agentAttachable: false) == .peer)
     #expect(FieldHomeModel.terminalSlot(attached: true, remote: false, agentAttachable: true) == .live)
     #expect(FieldHomeModel.terminalSlot(attached: true, remote: true, agentAttachable: false) == .live)
     #expect(FieldHomeModel.terminalSlot(attached: false, remote: false, agentAttachable: false) == .absence)
@@ -246,21 +247,24 @@ struct WriteCopyTests {
 /// disabled-affordance shape D-i6 forbids.
 @Suite("the input card's face")
 struct InputCardFaceTests {
+  /// The card follows the GRANT (`mayType`), never `InputAllowed`: that gate
+  /// also holds input while a reseed catches up, and a card that left with it
+  /// grew the pane into the next resize (2026-10-17).
   @Test("a live session this device may type into shows the card")
   func liveAndWritable() {
-    #expect(FieldHomeModel.inputCardFace(phase: .live, acceptsInput: true) == .shown)
+    #expect(FieldHomeModel.inputCardFace(phase: .live, mayType: true) == .shown)
   }
 
   /// The honest view-only line already says why. A rail under it would be a
   /// promise the next tap breaks.
   @Test("a live view-only session shows no card")
   func liveViewOnly() {
-    #expect(FieldHomeModel.inputCardFace(phase: .live, acceptsInput: false) == .hidden)
+    #expect(FieldHomeModel.inputCardFace(phase: .live, mayType: false) == .hidden)
   }
 
-  /// `acceptsInput` is composed upstream and can outlive the phase that made
-  /// it true by one observation; the phase is asked for too so a suspended
-  /// session cannot hold a keyboard up on a stale grant.
+  /// The grant can outlive the phase that made it worth a card by one
+  /// observation; the phase is asked for too so a suspended session cannot
+  /// hold a keyboard up on a stale grant.
   @Test("no other phase shows a card, whatever the grant says")
   func everyOtherPhaseHides() {
     let phases: [TerminalPhase] = [
@@ -271,8 +275,8 @@ struct InputCardFaceTests {
       .failed("the mesh is not up on this device"),
     ]
     for phase in phases {
-      #expect(FieldHomeModel.inputCardFace(phase: phase, acceptsInput: true) == .hidden)
-      #expect(FieldHomeModel.inputCardFace(phase: phase, acceptsInput: false) == .hidden)
+      #expect(FieldHomeModel.inputCardFace(phase: phase, mayType: true) == .hidden)
+      #expect(FieldHomeModel.inputCardFace(phase: phase, mayType: false) == .hidden)
     }
   }
 }

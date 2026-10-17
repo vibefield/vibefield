@@ -131,21 +131,25 @@ enum FieldHomeModel {
   /// peer's; TM-5 retired that store, and the agent's card lost its tap — only
   /// the DEBUG `-vf-auto-attach` still reached an attachment. The run's own
   /// face (`agentTerminalFace`) says whether its terminal can be opened.
+  ///
+  /// FW-D2 (James, 2026-10-17: "no more attach button for me to manually
+  /// click to connect"): opening the card IS the attach, so no slot draws
+  /// ATTACH. A run whose face offers its terminal is `.live` from the card's
+  /// first frame — attached, or attaching, or saying in the attach's own
+  /// words why it could not.
   enum TerminalSlot: Equatable {
-    /// an attachment speaks for itself
+    /// a terminal, or one on its way: the attachment speaks for itself
     case live
-    /// a peer's session (IOS-3a): ATTACH
-    case peerInvitation
-    /// an agent's own run whose face offers its terminal (IOS-4c): ATTACH
-    case agentInvitation
+    /// a peer's session (IOS-3a): which machine, and whether it is shared —
+    /// since TM-5 no peer row names a session this phone can mint for
+    case peer
     /// nothing to open, and why (the face's words)
     case absence
   }
 
   static func terminalSlot(attached: Bool, remote: Bool, agentAttachable: Bool) -> TerminalSlot {
-    if attached { return .live }
-    if remote { return .peerInvitation }
-    return agentAttachable ? .agentInvitation : .absence
+    if attached || agentAttachable { return .live }
+    return remote ? .peer : .absence
   }
 
   /// fix8 — whether the card's run has EXITED, by its own face (PJ-7's second
@@ -170,17 +174,21 @@ enum FieldHomeModel {
   /// has no write key for this host") already says why, and a dead keyboard
   /// under it would say it a second time and worse.
   ///
-  /// `acceptsInput` alone would very nearly do — the attachment composes it
-  /// from the live phase and the grant — but the phase is asked for again
-  /// here so this stays a total function of what the card can see, and so a
-  /// suspended session cannot keep a keyboard up on a stale `true`.
+  /// `mayType` is the GRANT's answer (`TerminalAttachment.mayType`: the input
+  /// right, accepted and live) and never the per-keystroke gate. Corrected
+  /// 2026-10-17: this read `acceptsInput`, on the reading that it composed only
+  /// the phase and the grant. It is `InputAllowed`, which also holds input
+  /// while the scene catches up after a reseed, so the card left on every
+  /// resize, the pane grew into another resize, and the card came back: the
+  /// phone's terminal tab jumped up and down without end. The phase is asked
+  /// for as well, so a suspended session cannot keep a keyboard up.
   enum InputCardFace: Equatable {
     case hidden
     case shown
   }
 
-  static func inputCardFace(phase: TerminalPhase, acceptsInput: Bool) -> InputCardFace {
-    guard phase == .live, acceptsInput else { return .hidden }
+  static func inputCardFace(phase: TerminalPhase, mayType: Bool) -> InputCardFace {
+    guard phase == .live, mayType else { return .hidden }
     return .shown
   }
 

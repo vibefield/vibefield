@@ -83,8 +83,20 @@ public struct RoutedSessionState: Sendable {
   /// both legs' leases live, the cell's presentation dimension presenting, the
   /// lease unexpired against a LOCAL deadline, and this client's applied content
   /// at or past what the cell has accepted.
+  ///
+  /// A frame IN FLIGHT over an applied scene is the spec's `active` worker
+  /// state, not a seed: what the glass holds is this lineage's, and the content
+  /// term below is what says whether it has caught up. Reading `.applying` as
+  /// not ready closed input for the length of every frame's render, so a TUI's
+  /// output stream held the phone's keyboard shut (2026-10-17). A seed in
+  /// flight has no applied scene under it and stays not ready.
   public var presentationReady: Bool {
-    guard control == .attached, frames == .active, let status else { return false }
+    guard control == .attached, let status else { return false }
+    switch frames {
+    case .active: break
+    case .applying where appliedContent != nil: break
+    case .attaching, .resuming, .seeding, .applying, .failed: return false
+    }
     guard case .presenting = status.presentation else { return false }
     guard leaseLive else { return false }
     guard let accepted = status.acceptedContent else { return true }
@@ -288,6 +300,15 @@ public final class RoutedTerminalClient {
   /// fix8 — activations that have presented once. Past their first frame an
   /// activation is not attaching any more, and no attach deadline applies.
   private var presented: Set<String> = []
+
+  /// Whether `sessionId`'s CURRENT activation has presented a frame. Past that
+  /// first frame a reseed (a resize, a repair) is the scene catching up, not
+  /// the session connecting: `presentationReady` drops until the reseed is
+  /// applied and holds INPUT meanwhile, but the screen is up.
+  public func hasPresented(_ sessionId: String) -> Bool {
+    guard let session = sessions[sessionId] else { return false }
+    return presented.contains(session.activationId)
+  }
   /// D1 — each session's last queued apply, which its next one waits on
   /// (`enqueueApply`).
   private var applyTails: [String: Task<Void, Never>] = [:]

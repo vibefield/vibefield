@@ -1309,23 +1309,10 @@ public struct HomeScreen: View {
               ?? bubbles.first(where: { $0.remote?.attachable == true })
               ?? bubbles.first(where: { $0.status == .working })
               ?? bubbles.first
+            // RETIRED 2026-10-17 (FW-D2): `-vf-auto-attach`, which carried
+            // the run on through ATTACH a second after the card rose. Opening
+            // a card IS the attach now, so this open already mints and dials.
             if let wanted { openCard(on: wanted) }
-            // `-vf-auto-attach` carries the run one step further: on a phone
-            // whose mesh is up against a serving desktop, this is the whole
-            // path — hear the fold, choose, mint, dial — with no finger on the
-            // glass. Without a mesh it proves the honest-failure path instead,
-            // which is the other thing worth seeing.
-            //
-            // The guard is the CARD's own face, which `openCard` above has
-            // just set the subject for: asking the bubble directly would have
-            // to re-derive the join, and two answers to "may this attach" is
-            // exactly what the face exists to prevent.
-            if ProcessInfo.processInfo.arguments.contains("-vf-auto-attach"),
-              let wanted, cardTerminalFace.offersAttach
-            {
-              try? await Task.sleep(for: .seconds(1))
-              beginAttachment(to: wanted)
-            }
           }
         }
       #endif
@@ -1436,12 +1423,18 @@ public struct HomeScreen: View {
     // the card says so and stops dialing a terminal the desktop let go of.
     .onChange(of: cardTerminalFace) { _, face in
       if FieldHomeModel.runHasExited(face) { attachment?.runEnded() }
+      // FW-D2 — a card raised before its run's terminal was offered (the
+      // board's join, or the desktop's doors, still on their way) attaches the
+      // moment the face offers it, as the open would have.
+      if selection != nil, face.offersAttach, let cardBubble { beginAttachment(to: cardBubble) }
     }
     .sheet(item: $selection, onDismiss: { closeCard() }) { selected in
       sessionCard(selected)
-        // Attaching earns the room: a terminal at the 0.55 detent is a
-        // letterbox, and the keyboard would take what is left.
-        .presentationDetents(attachment == nil ? [.fraction(0.55), .large] : [.large])
+        // A terminal earns the room from the card's first frame: at the 0.55
+        // detent it is a letterbox, the keyboard would take what is left, and
+        // a card that opened small and grew as its attach began moved twice.
+        .presentationDetents(
+          attachment == nil && !cardTerminalFace.offersAttach ? [.fraction(0.55), .large] : [.large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(40)
         .fieldGlassSheet()
@@ -1618,7 +1611,6 @@ public struct HomeScreen: View {
       statusDetail: attachmentDetail,
       statusActions: attachmentActions,
       cooled: attachment?.banner?.coolsTerminal ?? false,
-      onAttach: { if let bubble { beginAttachment(to: bubble) } },
       onSettings: { cardSettingsOpen = true },
       terminalReason: cardTerminalFace.note,
       agentAttachable: cardTerminalFace.offersAttach
@@ -1773,8 +1765,7 @@ public struct HomeScreen: View {
       if demoInputCard { return .shown }
     #endif
     guard let attachment else { return .hidden }
-    return FieldHomeModel.inputCardFace(
-      phase: attachment.phase, acceptsInput: attachment.acceptsInput)
+    return FieldHomeModel.inputCardFace(phase: attachment.phase, mayType: attachment.mayType)
   }
 
   /// The card emits acts; the attachment has verbs. This is the whole join,
@@ -2063,11 +2054,12 @@ public struct HomeScreen: View {
       // the standing one, and the standing one is the GRANT's answer: since
       // TM-D3 the right to type is a claim the cell accepted, not a key this
       // phone holds, so there is nothing here for a person to go and fix.
+      // The standing line is the grant's (`readWrite`), never the keystroke
+      // gate's: `acceptsInput` drops on every reseed, and a line that came and
+      // went with it moved the pane each time. A keystroke in that moment is
+      // declined in its own words, as the notice above.
       if let notice = attachment.notice { return notice }
-      guard !attachment.acceptsInput else { return nil }
-      return attachment.readWrite
-        ? "waiting for the desktop to allow input"
-        : "view only — this desktop granted read without input"
+      return attachment.readWrite ? nil : "view only — this desktop granted read without input"
     case .suspended(let why): return why
     case .refused(let words): return words
     case .ended(let why): return "ended — \(why)"
@@ -2137,6 +2129,12 @@ public struct HomeScreen: View {
     inputCard.history = clipboardHistory
     // --- end IOS-5d
     selection = SessionSelection(id: bubble.id)
+    // FW-D2 (James, 2026-10-17: "the terminal should already connect and show
+    // the terminal content, no more attach button") — opening the card IS the
+    // attach. A kept session comes back painted from its lane; any other mints
+    // and dials now. The card's own face is the guard (`beginAttachment`), so
+    // a run with no terminal to offer opens on its reason, as before.
+    beginAttachment(to: bubble)
   }
 
   private func beginAttachment(to bubble: FieldBubble) {
@@ -2167,11 +2165,17 @@ public struct HomeScreen: View {
     attaching = true
     renderFailure = nil
     attachRefusal = nil
+    // The card this attach is for. Every open attaches since FW-D2, so a card
+    // closed while the mesh is asked is an ordinary path: its attachment must
+    // not be installed under whichever card opens next.
+    let card = selection?.id
     Task {
       defer { attaching = false }
-      guard let urlSession = await mesh.urlSessionProvider else {
-        // Honest rather than inert: the button did something, and the reason
-        // it went nowhere is the mesh, not the session and not the renderer.
+      let urlSession = await mesh.urlSessionProvider
+      guard selection?.id == card else { return }
+      guard let urlSession else {
+        // Honest rather than inert: the card asked for something, and the
+        // reason it went nowhere is the mesh, not the session or the renderer.
         attachRefusal = "the mesh is not up on this device — connect it first"
         return
       }

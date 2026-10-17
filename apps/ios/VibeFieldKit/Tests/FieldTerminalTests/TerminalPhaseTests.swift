@@ -28,6 +28,16 @@ import Testing
     #expect(TerminalAttachment.phase(for: .attached, session: nil) == .connecting)
   }
 
+  @Test func aSessionThatHasPresentedStaysLiveThroughAReseed() {
+    // Past its first frame a session is live: a reseed (a resize, a repair)
+    // holds INPUT until the scene catches up, but the screen is up. Reading it
+    // as connecting hid the input card and raised a status line on every
+    // resize, and each of those re-laid the pane into the next one — the
+    // phone's terminal tab jumping up and down (James, 2026-10-17).
+    #expect(TerminalAttachment.phase(for: .attached, session: nil, presented: true) == .live)
+    #expect(TerminalAttachment.phase(for: .attached, session: nil, presented: false) == .connecting)
+  }
+
   @Test func reconnectingAndStaleRouteReadAsConnecting() {
     // Both are "somebody is actively getting this back", and the BANNER is
     // where the difference is said — a phase that spelled them apart would make

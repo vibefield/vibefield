@@ -15,8 +15,9 @@ struct CardAction: Identifiable {
 /// live status above the surface where its terminal renders.
 ///
 /// Two faces, one anatomy. An agent's card says what the agent is doing; a
-/// peer's terminal says which machine it lives on and offers the one act that
-/// matters — **attach**. There is deliberately no session list here (IOS-3):
+/// peer's terminal says which machine it lives on. Neither offers ATTACH any
+/// more (FW-D2, 2026-10-17): the card rising IS the attach, so its terminal
+/// is connecting or live from its first frame. There is deliberately no session list here (IOS-3):
 /// discovery puts every session on the field as its own bubble, so a list
 /// inside the card would be a second way to choose something the field has
 /// already laid out.
@@ -57,7 +58,6 @@ struct SessionCardView<Terminal: View>: View {
   /// still copyable, but it is plainly not live. Dimming says that without a
   /// word, which is the honest way to say it while the words are busy.
   let cooled: Bool
-  let onAttach: () -> Void
   /// IOS-8g — the terminal's appearance sheet, from the card's own `···`:
   /// the TERMINAL chip that stood in the field's top-right corner moved here,
   /// because what it opens is about the terminal this card holds, and the
@@ -68,7 +68,8 @@ struct SessionCardView<Terminal: View>: View {
   /// says it, or where there is nothing honest to say.
   var terminalReason: String?
   /// fix7 — the run's own face offers its terminal (`AgentTerminalFace
-  /// .offersAttach`): an agent's card draws ATTACH, as a peer's does
+  /// .offersAttach`): the host attaches as the card rises, and the slot is
+  /// the terminal from the first frame (FW-D2)
   var agentAttachable: Bool = false
   /// The act that fixes "no write key for this host" (IOS-3c), when there is
   /// one to offer. `nil` means not offered and draws nothing — this card never
@@ -120,19 +121,16 @@ struct SessionCardView<Terminal: View>: View {
             }
           }
         }
-        Text(subtitle(bubble))
+        // Unlisted, the line says exactly one fact, and only the one we hold:
+        // the LISTING is gone. Whether the session ended is the attachment's to
+        // say, and it does — saying it here too would be a second answer, and a
+        // guess. It takes the subtitle's place rather than a line of its own: a
+        // third line that came and went with discovery re-laid the terminal
+        // under it, and every re-lay is a resize at the desktop (2026-10-17).
+        Text(listed ? subtitle(bubble) : "the mesh has stopped listing this session")
           .font(FieldType.mono(9))
-          .foregroundStyle(FieldPalette.textMuted)
+          .foregroundStyle(listed ? FieldPalette.textMuted : FieldPalette.textFaint)
           .lineLimit(1)
-        if !listed {
-          // Exactly one fact, and only the one we hold: the LISTING is gone.
-          // Whether the session ended is the attachment's to say, and it does —
-          // saying it here too would be a second answer, and a guess.
-          Text("the mesh has stopped listing this session")
-            .font(FieldType.mono(8))
-            .foregroundStyle(FieldPalette.textFaint)
-            .lineLimit(1)
-        }
       }
 
       Spacer()
@@ -222,54 +220,23 @@ struct SessionCardView<Terminal: View>: View {
         attached: isAttached, remote: bubble.remote != nil, agentAttachable: agentAttachable)
       {
       case .live:
-        VStack(spacing: 0) {
-          terminal()
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .opacity(cooled ? 0.55 : 1)
-            .animation(FieldMotion.ease(0.24), value: cooled)
-          if statusNote != nil || !statusActions.isEmpty {
-            VStack(spacing: 6) {
-              if let statusNote {
-                Text(statusNote)
-                  .font(FieldType.mono(10, .medium))
-                  .foregroundStyle(FieldPalette.textMain)
-                  .multilineTextAlignment(.center)
-              }
-              if let statusDetail {
-                Text(statusDetail)
-                  .font(FieldType.mono(9))
-                  .foregroundStyle(FieldPalette.textMuted)
-                  .multilineTextAlignment(.center)
-              }
-              if !statusActions.isEmpty {
-                HStack(spacing: 8) {
-                  ForEach(statusActions) { action in
-                    Button(action: action.run) {
-                      Text(action.label)
-                        .font(FieldType.mono(9, .heavy))
-                        .tracking(FieldType.tracking(0.1, of: 9))
-                        .foregroundStyle(FieldPalette.textMain)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .overlay(
-                          RoundedRectangle(cornerRadius: 6)
-                            .strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                  }
-                }
-                .padding(.top, 2)
-              }
-            }
-            .padding(.top, 10)
+        terminal()
+          .clipShape(RoundedRectangle(cornerRadius: 14))
+          .opacity(cooled ? 0.55 : 1)
+          .animation(FieldMotion.ease(0.24), value: cooled)
+          // The attachment's words ride OVER the terminal, never beside it: a
+          // line in a row of its own resized the pane each time it came or
+          // went, and a resize is a round trip to the desktop's PTY that, until
+          // 2026-10-17, brought the line back (James: "a line of status text
+          // jumping around"). Top, because the bottom rows are where a prompt
+          // and the typing are.
+          .overlay(alignment: .top) {
+            statusPanel.animation(FieldMotion.ease(0.24), value: statusNote)
           }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 14)
-      case .peerInvitation:
-        if let remote = bubble.remote { invitation(remote) }
-      case .agentInvitation:
-        agentInvitation()
+          .padding(.horizontal, 14)
+          .padding(.vertical, 14)
+      case .peer:
+        if let remote = bubble.remote { peerFacts(remote) }
       case .absence:
         agentTerminalAbsence(bubble)
       }
@@ -277,9 +244,59 @@ struct SessionCardView<Terminal: View>: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
-  /// A peer's session, not yet attached: the one act, and the truth about
-  /// what it will get you.
-  private func invitation(_ remote: RemoteFacet) -> some View {
+  /// What the attachment says, and the acts its banner offers, on the card's
+  /// own panel over the terminal's top edge.
+  @ViewBuilder
+  private var statusPanel: some View {
+    if statusNote != nil || !statusActions.isEmpty {
+      VStack(spacing: 6) {
+        if let statusNote {
+          Text(statusNote)
+            .font(FieldType.mono(10, .medium))
+            .foregroundStyle(FieldPalette.textMain)
+            .multilineTextAlignment(.center)
+        }
+        if let statusDetail {
+          Text(statusDetail)
+            .font(FieldType.mono(9))
+            .foregroundStyle(FieldPalette.textMuted)
+            .multilineTextAlignment(.center)
+        }
+        if !statusActions.isEmpty {
+          HStack(spacing: 8) {
+            ForEach(statusActions) { action in
+              Button(action: action.run) {
+                Text(action.label)
+                  .font(FieldType.mono(9, .heavy))
+                  .tracking(FieldType.tracking(0.1, of: 9))
+                  .foregroundStyle(FieldPalette.textMain)
+                  .padding(.horizontal, 10)
+                  .padding(.vertical, 6)
+                  .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                      .strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
+              }
+              .buttonStyle(.plain)
+            }
+          }
+          .padding(.top, 2)
+        }
+      }
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
+      .background(
+        RoundedRectangle(cornerRadius: 8).fill(FieldPalette.panelBackground.opacity(0.92)))
+      .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
+      .padding(.horizontal, 12)
+      .padding(.top, 10)
+      .transition(.opacity)
+    }
+  }
+
+  /// A peer's session: which machine it lives on and whether it is shared.
+  /// No act (FW-D2): opening the card is the attach, and since TM-5 a peer's
+  /// row names no session this phone can mint a ticket for.
+  private func peerFacts(_ remote: RemoteFacet) -> some View {
     VStack(spacing: 12) {
       Text("TERMINAL")
         .font(FieldType.mono(9, .heavy))
@@ -287,17 +304,6 @@ struct SessionCardView<Terminal: View>: View {
         .foregroundStyle(FieldPalette.textMuted)
 
       if remote.attachable {
-        Button(action: onAttach) {
-          Text("ATTACH")
-            .font(FieldType.mono(11, .heavy))
-            .tracking(FieldType.tracking(0.12, of: 11))
-            .foregroundStyle(FieldPalette.panelBackground)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 9)
-            .background(RoundedRectangle(cornerRadius: 8).fill(FieldPalette.textMain))
-        }
-        .buttonStyle(.plain)
-
         // `remote.readWrite` says the SESSION is shared for writing — it rides
         // in a host advertisement broadcast to the whole mesh and knows
         // nothing about who is asking. Whether THIS device may type is decided
@@ -335,34 +341,9 @@ struct SessionCardView<Terminal: View>: View {
     }
   }
 
-  /// fix7 — an agent's own run whose terminal can be opened: the one act, and
-  /// what the face says about it (an unobserved run, an ended one still open
-  /// to read). Whether it lands is the ticket's answer, said by the attachment.
-  private func agentInvitation() -> some View {
-    VStack(spacing: 12) {
-      Text("TERMINAL")
-        .font(FieldType.mono(9, .heavy))
-        .tracking(FieldType.tracking(0.18, of: 9))
-        .foregroundStyle(FieldPalette.textMuted)
-      Button(action: onAttach) {
-        Text("ATTACH")
-          .font(FieldType.mono(11, .heavy))
-          .tracking(FieldType.tracking(0.12, of: 11))
-          .foregroundStyle(FieldPalette.panelBackground)
-          .padding(.horizontal, 18)
-          .padding(.vertical, 9)
-          .background(RoundedRectangle(cornerRadius: 8).fill(FieldPalette.textMain))
-      }
-      .buttonStyle(.plain)
-      .accessibilityLabel("Attach to this run's terminal")
-      Text(statusNote ?? terminalReason ?? "this run's own terminal, on its desktop")
-        .font(FieldType.mono(9))
-        .foregroundStyle(FieldPalette.textMuted)
-        .multilineTextAlignment(.center)
-        .lineSpacing(3)
-        .padding(.horizontal, 28)
-    }
-  }
+  // RETIRED 2026-10-17 (FW-D2): `agentInvitation`, the ATTACH an agent's run
+  // drew while its face offered its terminal. The card rising is the attach,
+  // so that face is the live slot, connecting, from its first frame.
 
   /// An agent's card with no terminal under it, and WHY — which since IOS-4c
   /// is a real question with four answers rather than one standing apology.
@@ -417,13 +398,12 @@ extension SessionCardView where Terminal == EmptyView {
     bubble: FieldBubble?,
     listed: Bool = true,
     statusNote: String? = nil,
-    onAttach: @escaping () -> Void,
     onSettings: @escaping () -> Void = {}
   ) {
     self.init(
       bubble: bubble, listed: listed, isAttached: false,
       statusNote: statusNote, statusDetail: nil,
-      statusActions: [], cooled: false, onAttach: onAttach, onSettings: onSettings
+      statusActions: [], cooled: false, onSettings: onSettings
     ) {
       EmptyView()
     }
