@@ -128,7 +128,10 @@ const sheetFixtures = [
   "agent-models.auth-required.json",
   "project-summary.recipe-place.json",
 ];
+// F1 — the freeway's frame bytes, which the kit's codec is held to.
+const freewayFixtures = ["freeway-frames.vector.json"];
 const requiredMirrors = [
+  ["freeway", freewayFixtures, ["Tests/FieldFreewayTests"]],
   ["workspace", workspaceFixtures, ["Tests/FieldWorkspaceTests", "Sources/FieldWorkspace"]],
   ["project", projectFixtures, ["Tests/FieldProductTests"]],
   ["project", historyFixtures, ["Tests/FieldHistoryTests", "Sources/FieldHistory"]],
@@ -378,6 +381,79 @@ const pins = [
   phoneBudgetPin("TERMINAL_LEGS", "terminalLegs"),
   phoneBudgetPin("WEB_VIEWS", "webViews"),
 ];
+
+/**
+ * F1 — a freeway value the phone's link BRANCHES on, read from ITS OWN block of registries.ts.
+ * The block matters: `FREEWAY_CODES.PROTOCOL` is 4400 and `TERMINAL_PIPELINE_CLOSE_CODES.PROTOCOL`
+ * is 4003, and a whole-file pattern would read the first. The match may not leave the block.
+ * Captured text is compared verbatim (`_` grouping, `30 * 60_000`, `0x00`).
+ */
+const FREEWAY_CONTRACT = "apps/ios/VibeFieldKit/Sources/FieldFreeway/FreewayContract.swift";
+const NUMBER = "[0-9_]+(?: \\* [0-9_]+)*";
+const HEX = "0x[0-9A-Fa-f]+";
+function freewayPin(block, key, swiftName, { indent = 2, value = NUMBER, type = "" } = {}) {
+  return {
+    name: `${block}.${key}`,
+    origin: {
+      file: REGISTRIES,
+      pattern: new RegExp(
+        `export const ${block} = \\{(?:(?!\\n\\} as const;)[\\s\\S])*?\\n {2}${key}: (${value}),\\n`,
+      ),
+      label: `${block}.${key}`,
+    },
+    copy: {
+      file: FREEWAY_CONTRACT,
+      pattern: new RegExp(`^ {${indent}}public static let ${swiftName}${type} = (${value})$`, "m"),
+      label: `FreewayContract.${swiftName}`,
+    },
+  };
+}
+pins.push(
+  freewayPin("PORTS", "FREEWAY_SERVE", "servePort"),
+  freewayPin("FREEWAY", "PROTOCOL_MAJOR", "protocolMajor"),
+  freewayPin("FREEWAY", "MISSED_PINGS", "missedPings"),
+  freewayPin("FREEWAY", "ACK_EVERY_BYTES", "ackEveryBytes"),
+  freewayPin("FREEWAY", "APPROVAL_TTL_MS", "approvalTtlMs"),
+  freewayPin("FREEWAY", "APPROVAL_RENEW_MS", "approvalRenewMs"),
+  freewayPin("FREEWAY", "MAX_TICKETS_PER_ASK", "maxTicketsPerAsk"),
+  ...[
+    ["LINK", "link"],
+    ["OPEN", "open"],
+    ["OPENED", "opened"],
+    ["TEXT", "text"],
+    ["BINARY", "binary"],
+    ["CLOSE", "close"],
+    ["WINDOW", "window"],
+    ["OPEN_REFUSED", "openRefused"],
+  ].map(([key, swift]) =>
+    freewayPin("FREEWAY_FRAME", key, swift, { indent: 4, value: HEX, type: ": UInt8" }),
+  ),
+  {
+    name: "FREEWAY_FRAGMENT_BIT",
+    origin: {
+      file: REGISTRIES,
+      pattern: new RegExp(`^export const FREEWAY_FRAGMENT_BIT = (${HEX});$`, "m"),
+      label: "FREEWAY_FRAGMENT_BIT",
+    },
+    copy: {
+      file: FREEWAY_CONTRACT,
+      pattern: new RegExp(`^ {2}public static let fragmentBit: UInt8 = (${HEX})$`, "m"),
+      label: "FreewayContract.fragmentBit",
+    },
+  },
+  ...[
+    ["PROTOCOL", "protocolError"],
+    ["APPROVAL", "approval"],
+    ["NOT_ADMITTED", "notAdmitted"],
+    ["KIND_NOT_SERVED", "kindNotServed"],
+    ["SUPERSEDED", "superseded"],
+    ["PEER_GONE", "peerGone"],
+    ["TWIN", "twin"],
+    ["PROTOCOL_VERSION", "protocolVersion"],
+    ["RESTARTING", "restarting"],
+    ["DOOR_DOWN", "doorDown"],
+  ].map(([key, swift]) => freewayPin("FREEWAY_CODES", key, swift, { indent: 4 })),
+);
 
 const pinProblems = [];
 const notices = [];

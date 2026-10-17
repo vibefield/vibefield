@@ -38,6 +38,7 @@ let package = Package(
     .library(name: "FieldMesh", targets: ["FieldMesh"]),
     .library(name: "FieldTerminal", targets: ["FieldTerminal"]),
     .library(name: "FieldRoutedTerminal", targets: ["FieldRoutedTerminal"]),
+    .library(name: "FieldFreeway", targets: ["FieldFreeway"]),
     .library(name: "FieldInput", targets: ["FieldInput"]),
     .library(name: "FieldSwarm", targets: ["FieldSwarm"]),
     .library(name: "FieldHome", targets: ["FieldHome"]),
@@ -230,6 +231,13 @@ let package = Package(
     // routed-client core (petition G27), and the two FieldProduct types are the
     // whole of what such a move would have to take or replace.
     .target(name: "FieldRoutedTerminal", dependencies: ["FieldProduct"]),
+    // The FREEWAY (F1, draft/thinking-freeway.md v0.3): the phone's one link to a desktop — a
+    // WebSocket of VibeField's own over a raw tailnet stream (`MeshNode.dial`, FW-DF-11), its frame
+    // codec, and the link that multiplexes the terminal legs and the host's tickets onto it. Like
+    // the routed client it takes FieldProduct for the tolerant-reader vocabulary and nothing else:
+    // the byte stream is a protocol here, and the mesh leg hands it a dialed connection, so truffle
+    // stays FieldMesh's to import.
+    .target(name: "FieldFreeway", dependencies: ["FieldProduct"]),
     // The input card (IOS-5a): the composer, the rail, the latch — K-D1's own
     // target rather than more of FieldHome. The IOS-3 review's finding was that
     // every serious bug it found lived in the one module with no test target,
@@ -312,6 +320,14 @@ let package = Package(
       // the TypeScript tests parse and the Rust cell's fixture tests parse are
       // the bytes these tests parse. `pnpm check:ios-fixtures` is what keeps the
       // word "copy" true.
+      resources: [.copy("Fixtures")]
+    ),
+    .testTarget(
+      name: "FieldFreewayTests",
+      dependencies: ["FieldFreeway"],
+      // The contracts' OWN frame vector, copied in (EL9 on the third side): the bytes the
+      // TypeScript tests and the host's `freeway::frame` tests decode are the bytes these do.
+      // `pnpm check:ios-fixtures` keeps the word "copy" true.
       resources: [.copy("Fixtures")]
     ),
     .testTarget(
