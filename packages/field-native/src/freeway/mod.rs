@@ -13,6 +13,7 @@
 //!   reassembly of a fragmented message (pinned by `freeway-frames.vector.json`);
 //! - `hello` — the link's first frame, decided: the two forms, the admit table, a phone's approval
 //!   bound to THIS connection's node, the welcome or the refusal and its close code;
+//! - `keyring` — a phone's tickets and renewals, fieldd's minter ported onto the host's boot and keys;
 //! - `mint` — a phone's two cell grants, TPv3's envelopes under the host's own issuer and the
 //!   cell's key (FW-D1);
 //! - `mux` — the link's streams: ids by parity, never reused; each frame's meaning for its
@@ -24,6 +25,7 @@ pub mod approval;
 pub mod door;
 pub mod frame;
 pub mod hello;
+pub mod keyring;
 pub mod mint;
 pub mod mux;
 pub mod writer;

@@ -1,0 +1,7 @@
+{
+  "refusal": {
+    "code": "CONFLICT",
+    "message": "the session's grant is at generation 2, not 1",
+    "retryable": false
+  }
+}

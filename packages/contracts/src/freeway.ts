@@ -323,7 +323,6 @@ export const FreewayTicketRefusal = z
   .passthrough();
 export type FreewayTicketRefusal = z.infer<typeof FreewayTicketRefusal>;
 
-/** One session's answer: a ticket, or why there is none. */
 /** FW-D1 — a phone's cell grants are the freeway HOST's, minted from keys the floor generated, so
  * they name `field-native` as their issuer: honest provenance, never a host signing as fieldd.
  * TPv3's envelopes otherwise, verified by the cell with its own key. Scoped to the link's own
@@ -346,6 +345,7 @@ export const FreewayOpenTicket = TerminalOpenTicket.extend({
 });
 export type FreewayOpenTicket = z.infer<typeof FreewayOpenTicket>;
 
+/** One session's answer: a ticket, or why there is none. */
 export const FreewayTicketRow = z
   .object({
     sessionId: z.string().min(1),
@@ -358,9 +358,13 @@ export const FreewayTicketRow = z
   });
 export type FreewayTicketRow = z.infer<typeof FreewayTicketRow>;
 
+/** An open's answer: a `terminal-tickets` row set, a `terminal-renew` grant — or that renewal's
+ * refusal (its CAS lost: `CONFLICT`; or no such session), the tickets rows' own refusal shape — or
+ * `{}` for a leg that is up. */
 export const FreewayOpened = z.union([
   z.object({ tickets: z.array(FreewayTicketRow) }).passthrough(),
   z.object({ attachGrant: FreewaySessionAttachGrant }).passthrough(),
+  z.object({ refusal: FreewayTicketRefusal }).passthrough(),
   z.object({}).passthrough(),
 ]);
 export type FreewayOpened = z.infer<typeof FreewayOpened>;
