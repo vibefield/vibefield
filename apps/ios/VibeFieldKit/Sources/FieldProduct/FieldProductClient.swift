@@ -132,6 +132,11 @@ public final class FieldProductClient {
     /// SP-2 (h) — where each subscription's bytes-per-second line goes, and
     /// what this door is called in it (FieldLink passes the desktop's id).
     public var trafficLog: @Sendable (SubscriptionTraffic) -> Void
+    /// F0 — whether an open door is measured (`DoorRoundTrip`): off by default
+    /// so a suite's own ping accounting stays exact; a phone's door turns it on.
+    public var measuresRoundTrip: Bool
+    /// F0 — where each measured round trip goes.
+    public var roundTripLog: @Sendable (String?, Duration) -> Void
     public var logLabel: String?
     /// SP-2 (g) — the phone's budget this door's socket counts against. Nil:
     /// no budget (a loopback door, most tests).
@@ -147,6 +152,8 @@ public final class FieldProductClient {
       clock: any ProductClock = SystemProductClock(),
       mayDial: (@Sendable () async -> Bool)? = nil,
       trafficLog: @escaping @Sendable (SubscriptionTraffic) -> Void = SubscriptionTraffic.log,
+      measuresRoundTrip: Bool = false,
+      roundTripLog: @escaping @Sendable (String?, Duration) -> Void = DoorRoundTrip.log,
       logLabel: String? = nil,
       doorBudget: ProductDoorBudget? = nil
     ) {
@@ -159,6 +166,8 @@ public final class FieldProductClient {
       self.clock = clock
       self.mayDial = mayDial
       self.trafficLog = trafficLog
+      self.measuresRoundTrip = measuresRoundTrip
+      self.roundTripLog = roundTripLog
       self.logLabel = logLabel
       self.doorBudget = doorBudget
     }
@@ -177,6 +186,9 @@ public final class FieldProductClient {
   /// Diagnostics, never a state: protocol pings sent, and doors the receive
   /// deadline closed for silence.
   @ObservationIgnored public private(set) var pingsSent = 0
+  /// F0 — the door's last measured round trip (`DoorRoundTrip`); nil before the
+  /// first pong and while no door is open.
+  public private(set) var roundTrip: Duration?
   @ObservationIgnored public private(set) var silentDoorCloses = 0
   /// SP-2 (d) — dials the roster turned away (a diagnostic, never a state).
   @ObservationIgnored public private(set) var parkedDials = 0
@@ -221,6 +233,7 @@ public final class FieldProductClient {
   @ObservationIgnored private var lastSentAt: Duration = .zero
   @ObservationIgnored private var watchdogTask: Task<Void, Never>?
   @ObservationIgnored private var pingTask: Task<Void, Never>?
+  @ObservationIgnored private var roundTripTask: Task<Void, Never>?
   @ObservationIgnored private var keepalivePaused = false
   /// SP-2 (h) — ONE timer for every subscription's traffic window, armed only
   /// while a window holds bytes: an idle board wakes nothing to say so.
@@ -602,6 +615,30 @@ public final class FieldProductClient {
     watchdogTask = nil
     pingTask?.cancel()
     pingTask = nil
+    roundTripTask?.cancel()
+    roundTripTask = nil
+    roundTrip = nil
+  }
+
+  /// F0 — measure the open door: a ping timed to its pong now, then every
+  /// `DoorRoundTrip.every`. A transport with no ping, or a socket that refuses
+  /// one, ends the measuring and nothing else — a dead socket is the
+  /// keepalive's to judge, never this probe's.
+  private func measureRoundTrips(_ connection: any ProductConnection, token: Int) {
+    roundTripTask?.cancel()
+    guard options.measuresRoundTrip else { return }
+    roundTripTask = Task { [weak self] in
+      while !Task.isCancelled {
+        let started = ContinuousClock.now
+        do { try await connection.ping() } catch { return }
+        let took = ContinuousClock.now - started
+        guard let self, token == self.generation else { return }
+        self.noteInbound(token: token)
+        self.roundTrip = took
+        self.options.roundTripLog(self.options.logLabel, took)
+        do { try await Task.sleep(for: DoorRoundTrip.every) } catch { return }
+      }
+    }
   }
 
   /// ANY inbound frame is liveness — a result, an event, a tick, a notification
@@ -923,6 +960,7 @@ public final class FieldProductClient {
       lastErrorGeneration = -1
       state = .ready(ProductReady(ack: ack))
       flushReadyWaiters(nil)
+      measureRoundTrips(connection, token: token)
       await replaySubscriptions(token: token)
     } catch {
       guard token == generation else { return }

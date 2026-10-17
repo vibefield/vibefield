@@ -58,6 +58,9 @@ actor CellDoorHarness {
   /// message at a higher generation, so the last one alone cannot tell a
   /// renewal from a re-attach.
   private(set) var controlAttaches: [JSONValue] = []
+  /// The freeway's lanes — every `DeclareDemand`, in order, whole: leaving a
+  /// session on a shared lane parks it (`none`) and coming back asks again.
+  private(set) var demands: [JSONValue] = []
   private(set) var framesAttach: Attach?
   private(set) var framesResume: JSONValue?
   private(set) var requestHeaders: [[(name: String, value: String)]] = []
@@ -241,6 +244,8 @@ actor CellDoorHarness {
       framesAttach = Attach(
         sessionId: "", activationId: value["activationId"]?.stringValue ?? "")
       framesResume = value["resume"]
+    case "DeclareDemand":
+      demands.append(value)
     case "TransportCredit":
       credits.append(value)
     case "SceneApplied":

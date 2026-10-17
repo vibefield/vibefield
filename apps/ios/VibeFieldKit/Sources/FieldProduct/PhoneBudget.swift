@@ -22,8 +22,10 @@ public enum PhoneBudget {
   /// to the same owner waits for the first's slot. The number stays per
   /// desktop until SP-D12 rules.*
   public static let doorsPerDesktop = 1
-  /// One attached terminal: its control leg and its frames leg.
-  public static let terminalLegs = 2
+  /// Three lanes (FW-D2, 2026-10-16): a control leg and a frames leg to each of
+  /// up to three terminal cells, each lane carrying every session the phone
+  /// shows on its cell (`TerminalLanes`).
+  public static let terminalLegs = 6
   /// One web view. Nothing on the phone opens one yet (SP-4).
   public static let webViews = 1
 }

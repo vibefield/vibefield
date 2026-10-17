@@ -4,14 +4,15 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { PHONE_BUDGET } from "../src/registries";
 
-// SP-2 (g) — the phone's connection budget, as BUILT (SP-D12 is OPEN). The kit
-// mirrors these numbers as Swift literals and enforces them; `pnpm
-// check:ios-fixtures` pins the mirror to this table verbatim, so a move here
-// that the phone did not make is a red there, not a silent disagreement.
+// SP-2 (g) — the phone's connection budget, as BUILT (SP-D12's terminal half
+// ruled by FW-D2, 2026-10-16; the rest is OPEN). The kit mirrors these numbers
+// as Swift literals and enforces them; `pnpm check:ios-fixtures` pins the
+// mirror to this table verbatim, so a move here that the phone did not make is
+// a red there, not a silent disagreement.
 
 describe("SP-2 — PHONE_BUDGET, today's as-built numbers", () => {
-  it("is one door per self desktop, one attached terminal's two legs, one web view", () => {
-    expect(PHONE_BUDGET).toEqual({ DOORS_PER_DESKTOP: 1, TERMINAL_LEGS: 2, WEB_VIEWS: 1 });
+  it("is one door per self desktop, three terminal lanes' legs, one web view", () => {
+    expect(PHONE_BUDGET).toEqual({ DOORS_PER_DESKTOP: 1, TERMINAL_LEGS: 6, WEB_VIEWS: 1 });
   });
 
   it("counts terminal legs in whole attachments (a control leg and a frames leg each)", () => {

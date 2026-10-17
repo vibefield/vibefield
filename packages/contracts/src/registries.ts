@@ -1082,20 +1082,22 @@ export const PEER_FIELDD_SCOPES: readonly Scope[] = [
  *    total until DS-8 homes it to ONE desktop, DS-D13), so the number that is
  *    true today is per desktop: a REPLACEMENT door waits for its predecessor's
  *    socket to close.
- *  - TERMINAL_LEGS: one attached terminal — its control leg and its frames leg
- *    (a routed attachment is a connection SET of two legs; the card attaches one
- *    session at a time).
+ *  - TERMINAL_LEGS: three LANES (the freeway's FW-D2, 2026-10-16, which rules
+ *    SP-D12's terminal half): a lane is one connection set — a control leg and
+ *    a frames leg — to one terminal CELL, carrying every session the phone shows
+ *    on that cell, the open card's and the ones kept live after it. A desktop
+ *    runs a host per workload class (K=2) plus solos, so three lanes hold both
+ *    class hosts and one solo; a fourth cell's lane waits for a slot.
  *  - WEB_VIEWS: one. Nothing on the phone opens one yet (SP-4).
- * SP-D12 is OPEN (James rules it): its lean is one door to the HOME desktop,
- * at most TWO attached terminals (the open card and one warm), one web view.
- * When it rules, this table moves and the kit's mirror
+ * SP-D12 is otherwise OPEN (James rules it): its lean is one door to the HOME
+ * desktop and one web view. When it rules, this table moves and the kit's mirror
  * (`apps/ios/VibeFieldKit/Sources/FieldProduct/PhoneBudget.swift`) moves with
  * it — `pnpm check:ios-fixtures` pins the two verbatim, so one moving alone is
  * a red. TS-only: no daemon opens any of these, and the native plane has no
  * reader. */
 export const PHONE_BUDGET = {
   DOORS_PER_DESKTOP: 1,
-  TERMINAL_LEGS: 2,
+  TERMINAL_LEGS: 6,
   WEB_VIEWS: 1,
 } as const;
 

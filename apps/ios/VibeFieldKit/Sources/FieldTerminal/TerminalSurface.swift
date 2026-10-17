@@ -10,10 +10,13 @@ import UIKit
 ///   `preconditionFailure`: we render one card in a field, not a whole app,
 ///   and a card degrades to an honest UNAVAILABLE face rather than taking the
 ///   app down.
-/// - `frame` is optional: the card mounts the surface while the attachment is
-///   still synchronizing, before a first frame exists.
+/// - The surface HOSTS the view its `TerminalScene` owns and never applies a
+///   frame itself (the second audit's D1 and B2, 2026-10-16): frames reach the
+///   scene in order as they arrive, so one that lands between two SwiftUI
+///   updates is applied rather than overwritten, and a view that outlives this
+///   surface keeps its picture for the next one to host.
 public struct TerminalSurface: UIViewRepresentable {
-  let frame: Data?
+  let scene: TerminalScene
   let visible: Bool
   let configuration: GhostteaTerminalPresentationConfig
   let controlsGridSize: Bool
@@ -55,7 +58,7 @@ public struct TerminalSurface: UIViewRepresentable {
   let onRenderFailure: (String) -> Void
 
   public init(
-    frame: Data?,
+    scene: TerminalScene,
     visible: Bool,
     configuration: GhostteaTerminalPresentationConfig,
     controlsGridSize: Bool = true,
@@ -77,7 +80,7 @@ public struct TerminalSurface: UIViewRepresentable {
     onSelectAll: @escaping () -> Void = {},
     onRenderFailure: @escaping (String) -> Void = { _ in }
   ) {
-    self.frame = frame
+    self.scene = scene
     self.visible = visible
     self.configuration = configuration
     self.controlsGridSize = controlsGridSize
@@ -103,7 +106,6 @@ public struct TerminalSurface: UIViewRepresentable {
   @MainActor
   public final class Coordinator {
     var metalView: GhostteaTerminalMetalView?
-    var appliedFrame: Data?
     /// The reference's own guard, coordinator-held: reapply the configuration
     /// only when its revision changed. Our revisions digest the renderer
     /// values, so this is exactly "reapply when the presentation changed".
@@ -137,22 +139,26 @@ public struct TerminalSurface: UIViewRepresentable {
     let container = UIView()
     container.backgroundColor = .clear
     context.coordinator.latest = self
-    do {
-      let view = try GhostteaTerminalMetalView(terminalFrame: container.bounds)
-      view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-      installHandlers(view, coordinator: context.coordinator)
-      configure(view, coordinator: context.coordinator)
-      view.applyConfiguration(configuration)
-      context.coordinator.appliedConfigurationRevision = configuration.revision
-      container.addSubview(view)
-      context.coordinator.metalView = view
-    } catch {
+    guard let view = scene.hostedView() else {
       // Reported on the next main-actor turn so the honest error state never
       // mutates observable state from inside a SwiftUI update pass.
-      let reason = "Metal terminal unavailable — \(String(describing: error))"
+      let reason = scene.failure ?? "Metal terminal unavailable"
       let report = onRenderFailure
       Task { report(reason) }
+      return container
     }
+    // The scene's view may arrive from a surface that went away (its picture
+    // kept, its GPU resources let go) — this one takes it over.
+    view.removeFromSuperview()
+    view.frame = container.bounds
+    view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    view.resumeGPU()
+    installHandlers(view, coordinator: context.coordinator)
+    configure(view, coordinator: context.coordinator)
+    view.applyConfiguration(configuration)
+    context.coordinator.appliedConfigurationRevision = configuration.revision
+    container.addSubview(view)
+    context.coordinator.metalView = view
     return container
   }
 
@@ -166,23 +172,12 @@ public struct TerminalSurface: UIViewRepresentable {
       view.applyConfiguration(configuration)
       context.coordinator.appliedConfigurationRevision = configuration.revision
     }
-    guard let frame, context.coordinator.appliedFrame != frame else { return }
-    // Recorded even when rejected, so one bad frame is retried zero times —
-    // the repair is a fresh authoritative snapshot, not the same bytes again.
-    context.coordinator.appliedFrame = frame
-    do {
-      try view.apply(frame: frame)
-    } catch {
-      // A frame the renderer cannot decode is a discontinuity only a full
-      // snapshot repairs (the reference assertionFailures here; a card asks
-      // for repair instead).
-      let refresh = onNeedsFullRefresh
-      Task { refresh() }
-    }
   }
 
   public static func dismantleUIView(_ container: UIView, coordinator: Coordinator) {
+    // The scene keeps the view and its picture; only the GPU is let go.
     coordinator.metalView?.suspendGPU()
+    coordinator.metalView?.removeFromSuperview()
     coordinator.metalView = nil
   }
 

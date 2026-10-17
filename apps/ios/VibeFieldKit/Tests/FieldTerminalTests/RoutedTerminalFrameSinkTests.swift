@@ -2,6 +2,7 @@ import FieldProduct
 import FieldRoutedTerminal
 import Foundation
 import GhostteaFrame
+import Metal
 import Testing
 
 @testable import FieldTerminal
@@ -31,7 +32,10 @@ import Testing
     // what `TerminalSurface` applies.
     let frames = try LaneFrames.load()
     var published: [Data] = []
-    let sink = RoutedTerminalFrameSink(publish: { published.append($0) })
+    let sink = RoutedTerminalFrameSink(render: {
+        published.append($0)
+        return true
+      })
     sink.bindActivation(
       session: "s-1", activation: "act-1", identity: try handles(frames.seed))
     let applied = sink.applyFullFrame(
@@ -54,7 +58,10 @@ import Testing
     var published: [Data] = []
     var failures: [String] = []
     let sink = RoutedTerminalFrameSink(
-      publish: { published.append($0) },
+      render: {
+        published.append($0)
+        return true
+      },
       identityFailed: { _, reason in failures.append(reason) })
     sink.bindActivation(
       session: "s-1", activation: "act-1",
@@ -84,7 +91,10 @@ import Testing
     let frames = try LaneFrames.load()
     let real = try handles(frames.seed)
     var published: [Data] = []
-    let sink = RoutedTerminalFrameSink(publish: { published.append($0) })
+    let sink = RoutedTerminalFrameSink(render: {
+        published.append($0)
+        return true
+      })
     sink.bindActivation(
       session: "s-1", activation: "act-1",
       identity: RoutedTrfIdentity(
@@ -107,7 +117,7 @@ import Testing
     let frames = try LaneFrames.load()
     var failures: [String] = []
     let sink = RoutedTerminalFrameSink(
-      publish: { _ in }, identityFailed: { _, reason in failures.append(reason) })
+      render: { _ in true }, identityFailed: { _, reason in failures.append(reason) })
     sink.bindActivation(
       session: "s-1", activation: "act-1",
       identity: RoutedTrfIdentity(sessionHandle: "999999", viewHandle: "999999"))
@@ -121,7 +131,10 @@ import Testing
   @MainActor
   @Test func bytesThatAreNotTRF1NeverReachTheRenderer() throws {
     var published: [Data] = []
-    let sink = RoutedTerminalFrameSink(publish: { published.append($0) })
+    let sink = RoutedTerminalFrameSink(render: {
+        published.append($0)
+        return true
+      })
     sink.bindActivation(
       session: "s-1", activation: "act-1",
       identity: RoutedTrfIdentity(sessionHandle: "1", viewHandle: "1"))
@@ -142,7 +155,7 @@ import Testing
     // The rule the client cannot answer: only the sink knows what is on screen.
     let frames = try LaneFrames.load()
     let identity = try handles(frames.seed)
-    let sink = RoutedTerminalFrameSink(publish: { _ in })
+    let sink = RoutedTerminalFrameSink(render: { _ in true })
     sink.bindActivation(session: "s-1", activation: "act-1", identity: identity)
     sink.applyFullFrame(frames.seed, session: "s-1", activation: "act-1", content: stamp(4))
 
@@ -166,7 +179,10 @@ import Testing
     var published: [Data] = []
     var failures: [String] = []
     let sink = RoutedTerminalFrameSink(
-      publish: { published.append($0) }, identityFailed: { _, reason in failures.append(reason) })
+      render: {
+        published.append($0)
+        return true
+      }, identityFailed: { _, reason in failures.append(reason) })
     sink.bindActivation(
       session: "s-1", activation: "act-2", identity: try handles(frames.seed))
     let applied = sink.applyFullFrame(
@@ -187,7 +203,7 @@ import Testing
     // it would let the first delta land on a scene from another attach.
     let frames = try LaneFrames.load()
     let identity = try handles(frames.seed)
-    let sink = RoutedTerminalFrameSink(publish: { _ in })
+    let sink = RoutedTerminalFrameSink(render: { _ in true })
     sink.bindActivation(session: "s-1", activation: "act-1", identity: identity)
     sink.applyFullFrame(frames.seed, session: "s-1", activation: "act-1", content: stamp(7))
     sink.bindActivation(session: "s-1", activation: "act-2", identity: identity)
@@ -204,7 +220,7 @@ import Testing
     let frames = try LaneFrames.load()
     var endings: [String] = []
     let sink = RoutedTerminalFrameSink(
-      publish: { _ in }, activationEnded: { _, reason in endings.append(reason) })
+      render: { _ in true }, activationEnded: { _, reason in endings.append(reason) })
     sink.bindActivation(
       session: "s-1", activation: "act-1", identity: try handles(frames.seed))
     sink.activationEnded(session: "s-1", activation: "act-1", reason: "leg-dead")
@@ -214,6 +230,48 @@ import Testing
     sink.activationEnded(session: "s-1", activation: "act-1", reason: "leg-dead")
 
     #expect(endings == ["leg-dead"])
+  }
+
+  @MainActor
+  @Test func aFrameTheRendererRefusesIsNotApplied() throws {
+    // B2 (the second audit, 2026-10-16): "applied" is the RENDERER's word now.
+    // A frame every rule here admits but the retained scene refuses is not
+    // claimed, and the stamp stays on the frame the scene still shows — so the
+    // next delta built on that frame still lands.
+    let frames = try LaneFrames.load()
+    var takes = true
+    let sink = RoutedTerminalFrameSink(render: { _ in takes })
+    sink.bindActivation(session: "s-1", activation: "act-1", identity: try handles(frames.seed))
+    #expect(sink.applyFullFrame(frames.seed, session: "s-1", activation: "act-1", content: stamp(1)))
+
+    takes = false
+    #expect(
+      sink.applyDeltaFrame(
+        frames.delta, session: "s-1", activation: "act-1", base: stamp(1), result: stamp(2))
+        == false)
+    #expect(sink.lastOutcome == .rejectedByRenderer)
+    #expect(sink.appliedDeltaFrames == 0)
+
+    takes = true
+    #expect(
+      sink.applyDeltaFrame(
+        frames.delta, session: "s-1", activation: "act-1", base: stamp(1), result: stamp(2)))
+  }
+
+  @MainActor
+  @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil, "needs a Metal device"))
+  func aRealSceneTakesTheSeedThenTheDeltaAndRefusesTheDeltaTwice() throws {
+    // T1 (the second audit): the frame path is witnessed AT the renderer, not at
+    // a published value. The lane's real seed and delta go through the shipping
+    // scene — a Metal view's retained state — which takes the seed, takes the
+    // delta built on it, and refuses that delta a second time (its sequence is
+    // behind the scene): the verdict the sink now hands the client.
+    let frames = try LaneFrames.load()
+    let scene = TerminalScene()
+    #expect(scene.render(frames.seed))
+    #expect(scene.render(frames.delta))
+    #expect(scene.render(frames.delta) == false)
+    #expect(scene.failure == nil)
   }
 }
 

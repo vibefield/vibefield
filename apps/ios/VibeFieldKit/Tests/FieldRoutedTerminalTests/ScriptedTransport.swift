@@ -553,3 +553,48 @@ struct SettleTimedOut: Error, CustomStringConvertible {
   let what: String
   var description: String { "timed out waiting for \(what)" }
 }
+
+/// D1's witness (the second audit, 2026-10-16): a sink that holds its FIRST
+/// apply open until released, and records the stamps it applied in the order it
+/// applied them. A client that hands frames over one task each lets the second
+/// frame in while the first is still applying — the actor is reentrant — and
+/// `started` reads 2; a client that waits per session never does.
+actor SlowFirstSink: RoutedFrameSink {
+  private(set) var started = 0
+  private(set) var applied: [Int64] = []
+  private var gate: CheckedContinuation<Void, Never>?
+  private var released = false
+
+  func release() {
+    released = true
+    gate?.resume()
+    gate = nil
+  }
+
+  func bindActivation(session: String, activation: String, identity: RoutedTrfIdentity) {}
+
+  func applyFullFrame(
+    _ payload: Data, session: String, activation: String, content: RoutedSceneStamp
+  ) async -> Bool {
+    await admit()
+    applied.append(content.sceneRevision)
+    return true
+  }
+
+  func applyDeltaFrame(
+    _ payload: Data, session: String, activation: String, base: RoutedSceneStamp?,
+    result: RoutedSceneStamp
+  ) async -> Bool {
+    await admit()
+    applied.append(result.sceneRevision)
+    return true
+  }
+
+  func activationEnded(session: String, activation: String, reason: String) {}
+
+  private func admit() async {
+    started += 1
+    guard started == 1, !released else { return }
+    await withCheckedContinuation { gate = $0 }
+  }
+}

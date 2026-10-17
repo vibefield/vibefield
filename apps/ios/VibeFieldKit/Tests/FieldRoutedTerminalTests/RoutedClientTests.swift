@@ -601,6 +601,43 @@ import Testing
     client.close()
   }
 
+  /// D1 (the second audit, 2026-10-16) — frames reach the sink in the order they
+  /// arrived, ONE AT A TIME per session. Each used to start its own task, and
+  /// nothing ordered two tasks: a delta could reach the sink while the frame it
+  /// builds on was still applying. A sink that holds the first apply open must
+  /// not see the second until it returns, and nothing is acknowledged early.
+  @Test func framesReachTheSinkInArrivalOrderEvenWhenAnApplyIsSlow() async throws {
+    let transport = ScriptedTransport()
+    let sink = SlowFirstSink()
+    let client = RoutedTerminalClient(
+      transport: transport, sink: sink, options: .init(viewId: "view-1"))
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    let seed = try Script.frame(
+      session: session, activation: live.activation, sequence: 1, creditEpoch: 1, base: nil,
+      result: Script.stamp(100), payload: Data("TRF1-full".utf8))
+    let delta = try Script.frame(
+      session: session, activation: live.activation, sequence: 2, creditEpoch: 1,
+      base: Script.stamp(100), result: Script.stamp(101), payload: Data("TRF1-delta".utf8))
+    await live.frames.deliver(.binary(seed))
+    await live.frames.deliver(.binary(delta))
+
+    try await settle("the first apply to start") { await sink.started == 1 }
+    // Both units are in; the second's apply must still be waiting.
+    try await Task.sleep(for: .milliseconds(150))
+    #expect(await sink.started == 1)
+    #expect(await live.frames.lastSent("SceneApplied") == nil)
+
+    await sink.release()
+    try await settle("both frames applied, in order") { await sink.applied == [100, 101] }
+    try await settle("the newest acknowledgement") {
+      await live.frames.lastSent("SceneApplied")?["appliedContent"]?["sceneRevision"]?.intValue
+        == 101
+    }
+    client.close()
+  }
+
   /// A SEED the sink refuses is not an applied scene (TM-r3, K-H1).
   ///
   /// `applyFullFrame` returned `Void`, so a refusal was indistinguishable from

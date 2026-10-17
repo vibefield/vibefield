@@ -69,6 +69,16 @@ import Testing
     var description: String { "tp-remote-open-ticket.valid.json is not in the test bundle" }
   }
 
+  /// The renderer's seat in this suite: every frame the attachment's scene was
+  /// handed, in order, each one taken.
+  @MainActor final class RenderedFrames {
+    private(set) var frames: [Data] = []
+    lazy var scene = TerminalScene(applying: { [unowned self] frame in
+      self.frames.append(frame)
+      return true
+    })
+  }
+
   // MARK: Waiting
 
   /// Wait for something to become true, bounded, and FAIL AS ITSELF on a
@@ -137,6 +147,7 @@ import Testing
     let identity = try decodeTRF1Frame(frames.seed)
     let session = "sess-01J8Z3K9"
     let mints = Mints()
+    let rendered = RenderedFrames()
 
     let attachment = TerminalAttachment(
       transport: URLSessionRoutedTransport(),
@@ -145,7 +156,8 @@ import Testing
         #expect(asked == session)
         mints.record()
         return try Self.ticketJSON(port: port, sessionId: session)
-      })
+      },
+      scene: rendered.scene)
 
     attachment.attach(sessionID: session, cols: 80, rows: 24, deviceName: "studio")
 
@@ -185,7 +197,7 @@ import Testing
       base: nil, result: seedStamp, payload: frames.seed)
     await door.sendUnit(unit)
     try await Self.until("the seed frame to reach the renderer") {
-      await MainActor.run { attachment.frame == frames.seed }
+      await MainActor.run { rendered.frames == [frames.seed] }
     }
 
     // 4. The cell says it is presenting and input is allowed; only then is the
@@ -359,12 +371,14 @@ import Testing
     let frames = try LaneFrames.load()
     let identity = try decodeTRF1Frame(frames.seed)
     let session = "sess-01J8Z3K9"
+    let rendered = RenderedFrames()
     let attachment = TerminalAttachment(
       transport: URLSessionRoutedTransport(),
       appearance: .default,
       door: { _ in
         try Self.ticketJSON(port: port, sessionId: session, attachLifetimeMs: 30_000)
-      })
+      },
+      scene: rendered.scene)
 
     attachment.attach(sessionID: session, cols: 80, rows: 24, deviceName: "studio")
     let control = try await Self.value("the control leg to attach") { await door.controlAttach }
@@ -386,7 +400,7 @@ import Testing
         session: session, activation: activation, sequence: 1, creditEpoch: 1,
         base: nil, result: seedStamp, payload: frames.seed))
     try await Self.until("the seed frame to reach the renderer") {
-      await MainActor.run { attachment.frame == frames.seed }
+      await MainActor.run { rendered.frames == [frames.seed] }
     }
     // The cell says presenting AND input allowed. The cell is not the one that
     // closed input — this device is, on its own copy of the margin — which is
@@ -593,7 +607,7 @@ import Testing
     #expect(banner.title == "studio is not publishing its terminal doors on the tailnet")
     #expect(banner.coolsTerminal)
     #expect(banner.actions.contains(TerminalBanner.Action.retryNow))
-    #expect(attachment.frame == nil)
+    #expect(attachment.scene.view == nil)
   }
 
   @MainActor

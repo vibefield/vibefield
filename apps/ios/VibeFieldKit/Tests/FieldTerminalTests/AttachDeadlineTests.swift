@@ -161,10 +161,11 @@ import Testing
     let port = try await door.start()
     defer { Task { await door.stop() } }
 
-    // An earlier client's legs, never released — the leak the brief asked
-    // about: whoever holds them, this attach must not wait for them forever.
+    // Earlier clients' legs — the whole budget — never released: the leak the
+    // brief asked about. Whoever holds them, this attach must not wait for them
+    // forever.
     let ledger = PhoneConnectionBudget()
-    let leaked = try await ledger.acquire(.terminalLegs, count: 2)
+    let leaked = try await ledger.acquire(.terminalLegs, count: PhoneBudget.terminalLegs)
     let attachment = TerminalAttachment(
       transport: URLSessionRoutedTransport(),
       appearance: .default,

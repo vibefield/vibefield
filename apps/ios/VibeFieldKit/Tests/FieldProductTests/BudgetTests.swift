@@ -109,8 +109,9 @@ private func budgetedClient(_ door: FakeDoor, _ ledger: PhoneConnectionBudget, d
   /// taken once however often it is given.
   @Test func waitersAreAdmittedInOrderAndACancelledOneLeaves() async throws {
     let ledger = PhoneConnectionBudget()
-    let held = try await ledger.acquire(.terminalLegs, count: 2)
-    #expect(ledger.inUse(.terminalLegs) == 2)
+    // the whole budget held, so the next ask has to wait
+    let held = try await ledger.acquire(.terminalLegs, count: PhoneBudget.terminalLegs)
+    #expect(ledger.inUse(.terminalLegs) == PhoneBudget.terminalLegs)
 
     var order: [String] = []
     let first = Task { @MainActor in
@@ -138,7 +139,7 @@ private func budgetedClient(_ door: FakeDoor, _ ledger: PhoneConnectionBudget, d
   @Test func anAskBeyondTheWholeBudgetIsRefused() async throws {
     let ledger = PhoneConnectionBudget()
     await #expect(throws: PhoneConnectionBudget.BeyondTheBudget.self) {
-      _ = try await ledger.acquire(.terminalLegs, count: 3)
+      _ = try await ledger.acquire(.terminalLegs, count: PhoneBudget.terminalLegs + 1)
     }
     #expect(ledger.waiting(for: .terminalLegs) == 0)
     #expect(ledger.limit(.door(desktop: "x")) == PhoneBudget.doorsPerDesktop)
@@ -149,7 +150,7 @@ private func budgetedClient(_ door: FakeDoor, _ ledger: PhoneConnectionBudget, d
   /// registry; this pins it where the kit runs, outside `pnpm verify`).
   @Test func theMirrorIsTheAsBuiltTable() {
     #expect(PhoneBudget.doorsPerDesktop == 1)
-    #expect(PhoneBudget.terminalLegs == 2)
+    #expect(PhoneBudget.terminalLegs == 6)
     #expect(PhoneBudget.webViews == 1)
   }
 }

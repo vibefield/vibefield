@@ -728,6 +728,9 @@ public final class FieldLink {
     // SP-2 (h) — each subscription's bytes-per-second line names the desktop
     // it came from by its durable id; never by its door's URL.
     options.logLabel = deviceId
+    // F0 (the freeway, 2026-10-16) — how far this desktop's door is, measured
+    // at hello and every 30 s: the console line a slow road is read by
+    options.measuresRoundTrip = true
     // SP-2 (g) — one door per self desktop, held in the phone's ledger from the
     // dial to the close: a replacement waits for its predecessor's socket.
     options.doorBudget = ProductDoorBudget(ledger: budget, desktop: deviceId)

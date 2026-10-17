@@ -124,9 +124,10 @@ public final class TerminalAttachment {
   /// raw JSON.
   public typealias SessionProvider = URLSessionRoutedTransport.SessionProvider
 
-  /// The last rendered TRF1 frame, fed to `TerminalSurface`. The CELL's bytes,
-  /// verbatim — nothing on this device re-encodes a frame any more.
-  public private(set) var frame: Data?
+  /// This session's retained scene: the cell's TRF1, verbatim, applied in order
+  /// the moment each frame arrives (D1, B2 — `TerminalScene`), and the view
+  /// `TerminalSurface` hosts. Nothing on this device re-encodes a frame.
+  @ObservationIgnored public let scene: TerminalScene
   /// What the appearance sheet's values project to. Under T this styles the
   /// DEVICE's half of the render (background, opacity, shaders, padding); the
   /// glyphs and every explicitly-styled colour arrive rasterized inside the
@@ -159,14 +160,19 @@ public final class TerminalAttachment {
   @ObservationIgnored public var softwareInputLatch: (() -> TerminalModifiers)?
   // --- end IOS-5b -----------------------------------------------------------
 
-  @ObservationIgnored private let door: TicketDoor
-  @ObservationIgnored private let renewal: RenewalDoor?
-  /// SP-2 (g) — the phone's budget this attachment's two legs count against.
-  @ObservationIgnored private let budget: PhoneConnectionBudget?
-  @ObservationIgnored private let transport: any RoutedLegTransport
+  /// The desktop's lanes this session rides (`TerminalLanes`): the door, the
+  /// renewal, the leg budget and one routed client per cell.
+  @ObservationIgnored private let lanes: TerminalLanes
+  /// Lanes made for this attachment alone close with it, as the per-tap client
+  /// always did; SHARED lanes outlive it, so leaving parks the session instead
+  /// and coming back is a demand, not a dial.
+  @ObservationIgnored private let ownsLanes: Bool
   @ObservationIgnored private var client: RoutedTerminalClient?
   @ObservationIgnored private var sink: RoutedTerminalFrameSink?
   @ObservationIgnored private var sessionID: String?
+  /// The session this attachment shows or last showed — how the home screen
+  /// keeps a closed card's session live (`HomeScreen.keptAttachments`).
+  public var attachedSessionID: String? { sessionID }
   @ObservationIgnored private var deviceName: String?
   @ObservationIgnored private var attachTask: Task<Void, Never>?
   @ObservationIgnored private var noticeTask: Task<Void, Never>?
@@ -197,27 +203,60 @@ public final class TerminalAttachment {
   ) {
     self.init(
       transport: URLSessionRoutedTransport(session: session, log: log), appearance: appearance,
-      door: door, renewal: renewal, budget: budget, deadline: deadline, log: log)
+      door: door, renewal: renewal, budget: budget, deadline: deadline, log: log,
+      scene: TerminalScene())
   }
 
   /// The seam the tests hold: a transport with no sockets behind it. Every
   /// shipping caller takes the initializer above — this one exists so the
   /// attachment's own state machine can be driven without a server, which is
   /// the same split `RoutedTerminalClient` keeps one layer down.
-  public init(
+  public convenience init(
     transport: any RoutedLegTransport,
     appearance: TerminalAppearance,
     door: @escaping TicketDoor,
     renewal: RenewalDoor? = nil,
     budget: PhoneConnectionBudget? = nil,
     deadline: Duration = TerminalAttachment.stepDeadline,
-    log: TerminalAttachLog = .device
+    log: TerminalAttachLog = .device,
+    // A scene that takes every frame unseen: a suite not about rendering keeps
+    // reaching live without a Metal view, and a suite about frames passes its own.
+    scene: TerminalScene = TerminalScene(applying: { _ in true })
   ) {
-    self.transport = transport
+    self.init(
+      lanes: TerminalLanes(
+        transport: transport, door: door, renewal: renewal, budget: budget, deadline: deadline,
+        log: log),
+      ownsLanes: true, appearance: appearance, deadline: deadline, log: log, scene: scene)
+  }
+
+  /// One session on a desktop's SHARED lanes (the freeway's kit half, F1): the
+  /// lanes keep the cell's connection set across attachments, and leaving parks
+  /// this session rather than closing anything.
+  public convenience init(
+    lanes: TerminalLanes,
+    appearance: TerminalAppearance,
+    deadline: Duration = TerminalAttachment.stepDeadline,
+    log: TerminalAttachLog = .device,
+    scene: TerminalScene = TerminalScene()
+  ) {
+    self.init(
+      lanes: lanes, ownsLanes: false, appearance: appearance, deadline: deadline, log: log,
+      scene: scene)
+  }
+
+  private init(
+    lanes: TerminalLanes,
+    ownsLanes: Bool,
+    appearance: TerminalAppearance,
+    deadline: Duration,
+    log: TerminalAttachLog,
+    scene: TerminalScene
+  ) {
+    self.lanes = lanes
+    self.ownsLanes = ownsLanes
+    self.scene = scene
     self.appearance = appearance
-    self.door = door
-    self.renewal = renewal
-    self.budget = budget
     self.deadline = deadline
     self.log = log
     presentation = presentationConfig(for: appearance)
@@ -286,20 +325,47 @@ public final class TerminalAttachment {
     sessionID: String, cols: UInt16, rows: UInt16, deviceName: String? = nil
   ) {
     grid = GhostteaTerminalGridSize(columns: cols, rows: rows)
+    let previous = self.sessionID
+    // Another session's picture must not stand under this one's name; the same
+    // session's last picture may, until the new activation's seed replaces it.
+    if previous != sessionID { scene.clear() }
     self.sessionID = sessionID
     self.deviceName = deviceName
     localPhase = .connecting
     doorRefusal = nil
     notice = nil
-    frame = nil
     attachID &+= 1
     let attach = attachID
     log("tap: attach session=\(sessionID) on \(deviceName ?? "that desktop")")
     attachTask?.cancel()
     attachTask = Task { [weak self] in
       guard let self else { return }
-      await self.teardown(resetPhase: false)
+      // The same session on this attachment, still whole on its SHARED lane: a
+      // session left live keeps a current scene, so the card paints it now and
+      // only takes the seat; a parked one asks the cell for its view again, and
+      // a seed follows. No mint, no dial either way.
+      if !self.ownsLanes, previous == sessionID, let held = self.client,
+        held.sessions[sessionID]?.bothLegsAttached == true
+      {
+        if held.sessions[sessionID]?.demand == RoutedDemand.none {
+          held.requestReseed(for: sessionID)
+          held.declare(demand: .live, for: sessionID)
+        }
+        self.localPhase = nil
+        self.takeSeat()
+        self.log("back on its lane session=\(sessionID) — no mint, no dial")
+        return
+      }
+      await self.teardown(resetPhase: false, letGo: previous == sessionID ? nil : previous)
       guard attach == self.attachID, !Task.isCancelled else { return }
+      // A SHARED lane still carrying this session: its activation and grant are
+      // in place — ask the cell for the view again. Nothing is minted, nothing
+      // dialed: the freeway's tap, on today's transport.
+      if !self.ownsLanes, let held = self.lanes.client(holding: sessionID),
+        self.resume(on: held, sessionID: sessionID, attach: attach)
+      {
+        return
+      }
       // The FIRST ticket is awaited here rather than handed to the client,
       // because a mint that is refused has no socket to report itself on: the
       // door's sentence is the whole answer and it must reach a face.
@@ -341,7 +407,7 @@ public final class TerminalAttachment {
     attachID &+= 1  // a mint or a ticket still in flight belongs to nobody now
     attachTask?.cancel()
     attachTask = nil
-    client?.close()
+    letGo(sessionID)
     client = nil
     sink = nil
     localPhase = .ended(Self.runEndedWords(device: deviceName))
@@ -385,18 +451,66 @@ public final class TerminalAttachment {
   }
 
   /// The user's own act — the one legitimate road back to `idle`.
+  ///
+  /// On SHARED lanes the session is PARKED, not dropped: the cell detaches the
+  /// view (demand `none`), the activation and its grant stay, the scene keeps
+  /// its picture — and attaching it again is a demand on legs already up.
   public func detach() async {
     log("detached session=\(sessionID ?? "-")")
     attachTask?.cancel()
     attachTask = nil
-    await teardown(resetPhase: true)
+    if !ownsLanes, let client, let sessionID, client.sessions[sessionID] != nil {
+      client.declare(demand: .none, for: sessionID)
+      noticeTask?.cancel()
+      noticeTask = nil
+      notice = nil
+      localPhase = .idle
+      log("parked on its lane session=\(sessionID)")
+      return
+    }
+    await teardown(resetPhase: true, letGo: sessionID)
   }
 
-  private func open(_ ticket: RoutedTerminalTicket, sessionID: String, attach: UInt64) {
-    let sink = RoutedTerminalFrameSink(
-      publish: { [weak self] frame in
-        guard let self, attach == self.attachID else { return }
-        self.frame = frame
+  /// Let this attachment's session go for good — the card's cache evicted it:
+  /// its lane keeps its legs for the others, and the cell lets the activation
+  /// lapse (`RoutedTerminalClient.forget`).
+  public func release() {
+    attachID &+= 1
+    attachTask?.cancel()
+    attachTask = nil
+    letGo(sessionID)
+    client = nil
+    sink = nil
+    localPhase = .idle
+    sessionID = nil
+  }
+
+  /// A shared lane carries this session: point its frames at THIS attachment,
+  /// and ask the cell for the view again — demand `none` then `live`, so the
+  /// cell re-attaches the view and SEEDS it (a view left live would send only
+  /// deltas onto a scene this sink may never have held). `false` when the lane's
+  /// activation is not whole, and only a fresh attach can bring it back.
+  private func resume(on client: RoutedTerminalClient, sessionID: String, attach: UInt64) -> Bool {
+    guard client.sessions[sessionID]?.bothLegsAttached == true else { return false }
+    let sink = makeSink(attach: attach)
+    lanes.adopt(sessionID, sink: sink, reticket: reticket(attach: attach))
+    self.sink = sink
+    self.client = client
+    localPhase = nil
+    client.requestReseed(for: sessionID)
+    client.declare(demand: .none, for: sessionID)
+    client.declare(demand: .live, for: sessionID)
+    takeSeat()
+    log("resumed on its lane session=\(sessionID) — no mint, no dial")
+    return true
+  }
+
+  /// This attachment's frames: its scene, behind the identity and lineage rules.
+  private func makeSink(attach: UInt64) -> RoutedTerminalFrameSink {
+    RoutedTerminalFrameSink(
+      render: { [weak self] frame in
+        guard let self, attach == self.attachID else { return false }
+        return self.scene.render(frame)
       },
       identityFailed: { [weak self] _, reason in
         guard let self, attach == self.attachID else { return }
@@ -409,47 +523,59 @@ public final class TerminalAttachment {
         guard let self, attach == self.attachID else { return }
         self.note("the scene stopped advancing — \(reason)")
       })
-    let client = RoutedTerminalClient(
-      transport: transport,
-      sink: sink,
-      options: .init(
-        // Every leg replacement is a FRESH MINT: the cell consumes a transport
-        // grant's `(nonce, channel)` at first use, so a re-dial with the ticket
-        // in hand can only ever earn `GRANT_NONCE_REPLAYED`. The client owns the
-        // backoff; this closure owns the door.
-        //
-        // And the FACE (TM-r3, K-M2). The client retries a refused mint forever
-        // under the state `.reconnecting`, which the card renders as "connecting
-        // over the mesh…" — so a desktop that had stopped publishing its doors
-        // read as a slow connection: no banner, no reason, no end. `doorRefusal`
-        // was being kept and shown to nobody, because the banner only consults
-        // it in the `.refused` phase and only the FIRST attach could set that.
-        // The door's sentence is the whole answer here exactly as it is on the
-        // first attach, so it reaches the card the same way.
-        ticketProvider: { [weak self] session in
-          guard let self else { throw CancellationError() }
-          do {
-            let ticket = try await self.mintTicket(for: session)
-            guard attach == self.attachID else { throw CancellationError() }
-            // A mint that came back retires the refusal an earlier one left on
-            // the card: the client is this session's authority again.
-            if case .refused = self.localPhase { self.localPhase = nil }
-            return ticket
-          } catch {
-            guard attach == self.attachID else { throw error }
-            self.localPhase = .refused(self.doorRefusal ?? Self.shortReason(error))
-            throw error
-          }
-        },
-        // P0-C — the grant is renewed ahead of the cell's input margin, so a
-        // long session keeps both its input and its activation.
-        renewalProvider: Self.renewalProvider(renewal),
-        viewId: "phone-\(UUID().uuidString.lowercased())",
-        // SP-2 (g) — the two legs count against the phone's budget.
-        legBudget: budget,
-        // fix8 — and no step of the attach waits longer than this
-        stepDeadline: deadline,
-        log: log))
+  }
+
+  /// Every leg replacement is a FRESH MINT: the cell consumes a transport
+  /// grant's `(nonce, channel)` at first use, so a re-dial with the ticket in
+  /// hand can only ever earn `GRANT_NONCE_REPLAYED`. The client owns the
+  /// backoff; this closure owns the door.
+  ///
+  /// And the FACE (TM-r3, K-M2). The client retries a refused mint forever
+  /// under the state `.reconnecting`, which the card renders as "connecting
+  /// over the mesh…" — so a desktop that had stopped publishing its doors read
+  /// as a slow connection: no banner, no reason, no end. `doorRefusal` was being
+  /// kept and shown to nobody, because the banner only consults it in the
+  /// `.refused` phase and only the FIRST attach could set that. The door's
+  /// sentence is the whole answer here exactly as it is on the first attach, so
+  /// it reaches the card the same way.
+  private func reticket(attach: UInt64) -> TerminalLanes.Reticket {
+    { [weak self] session in
+      guard let self else { throw CancellationError() }
+      do {
+        let ticket = try await self.mintTicket(for: session)
+        guard attach == self.attachID else { throw CancellationError() }
+        // A mint that came back retires the refusal an earlier one left on the
+        // card: the client is this session's authority again.
+        if case .refused = self.localPhase { self.localPhase = nil }
+        return ticket
+      } catch {
+        guard attach == self.attachID else { throw error }
+        self.localPhase = .refused(self.doorRefusal ?? Self.shortReason(error))
+        throw error
+      }
+    }
+  }
+
+  /// Let one session go: lanes made for this attachment close with it (the
+  /// per-tap client's old end); a shared lane forgets the session and keeps
+  /// its legs for the others.
+  private func letGo(_ session: String?) {
+    if ownsLanes {
+      lanes.closeAll()
+      return
+    }
+    guard let session else { return }
+    lanes.client(holding: session)?.forget(sessionId: session)
+    lanes.release(session)
+  }
+
+  private func open(_ ticket: RoutedTerminalTicket, sessionID: String, attach: UInt64) {
+    let sink = makeSink(attach: attach)
+    // The cell's lane — opened by its first ticket, carrying every session the
+    // phone shows on that cell — with this session's frames routed to `sink`.
+    // P0-C's renewal, the leg budget and fix8's step deadline are the lane's.
+    let client = lanes.lane(
+      for: ticket, sessionId: sessionID, sink: sink, reticket: reticket(attach: attach))
     self.sink = sink
     self.client = client
     self.sessionID = sessionID
@@ -493,7 +619,7 @@ public final class TerminalAttachment {
   /// other error keeps whatever the door said.
   private func mintTicket(for session: String) async throws -> RoutedTerminalTicket {
     do {
-      let answer = try await door(session)
+      let answer = try await lanes.door(session)
       let ticket = try RoutedTerminalTicket(json: answer)
       doorRefusal = nil
       return ticket
@@ -506,13 +632,14 @@ public final class TerminalAttachment {
     }
   }
 
-  private func teardown(resetPhase: Bool) async {
+  private func teardown(resetPhase: Bool, letGo session: String?) async {
     noticeTask?.cancel()
     noticeTask = nil
-    client?.close()
+    // A lane of this attachment's own always closes (the per-tap client's end);
+    // a shared lane forgets only the session this attachment is letting go.
+    if ownsLanes { lanes.closeAll() } else { letGo(session) }
     client = nil
     sink = nil
-    frame = nil
     notice = nil
     if resetPhase {
       localPhase = .idle
@@ -737,10 +864,20 @@ public final class TerminalAttachment {
   /// behind a backgrounded app, and the cell closes a leg that misses its
   /// heartbeat deadline (`4004`) — so closing deliberately is the difference
   /// between a state this phone chose and one it discovered later.
+  ///
+  /// An attach still on its way counts too (the second audit's B4): one waiting
+  /// on its ticket has no client yet, and used to be left to finish behind the
+  /// suspended app and dial anyway. Its generation is retired with the task, so
+  /// a late answer lands on nobody. Every lane closes and leaves the lanes —
+  /// on shared lanes that is every card's, which iOS would close regardless —
+  /// so the next attach opens fresh ones rather than finding a closed client.
   public func suspendForBackground() {
-    guard client != nil else { return }
+    guard client != nil || attachTask != nil else { return }
     log("suspended in the background session=\(sessionID ?? "-")")
-    client?.close()
+    attachID &+= 1
+    attachTask?.cancel()
+    attachTask = nil
+    lanes.closeAll()
     client = nil
     sink = nil
     localPhase = .suspended("paused in the background")

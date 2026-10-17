@@ -8,8 +8,11 @@ import GhostteaFrame
 /// Under T there is no replica and no on-device encode. The cell renders the
 /// session once (TP-L-B′) and every viewer decodes; what used to be logical grid
 /// rows re-encoded here is now the same binary damage frame the deck applies.
-/// `TerminalAttachment` publishes what this sink hands it and `TerminalSurface`
-/// calls `apply(frame:)` with it.
+/// A frame that passes the rules below goes to `render` — the attachment's
+/// `TerminalScene`, which applies it to the retained scene at once — and the
+/// renderer's own verdict is this sink's answer (the second audit's B2,
+/// 2026-10-16: "applied" used to mean "published to a slot SwiftUI would read
+/// later", so the cell heard applied for frames the glass had not taken).
 ///
 /// This type owns TWO things the client above it deliberately does not:
 ///
@@ -30,6 +33,9 @@ public final class RoutedTerminalFrameSink: RoutedFrameSink {
   public enum Outcome: Sendable, Equatable {
     case applied
     case rejectedLineage
+    /// Every rule here passed and the renderer still would not take the frame:
+    /// it would not decode it whole, or its own sequence check refused it.
+    case rejectedByRenderer
     /// The frame's own handles are not the pair the cell declared for this
     /// activation. Two identities must never route to two replicas.
     case rejectedIdentity(String)
@@ -44,9 +50,9 @@ public final class RoutedTerminalFrameSink: RoutedFrameSink {
     let identity: RoutedTrfIdentity
   }
 
-  /// Where a frame goes once it has passed every rule. The attachment installs
-  /// this; nothing else may.
-  private let publish: @MainActor (Data) -> Void
+  /// Where a frame goes once it has passed every rule, answering whether the
+  /// retained scene took it. The attachment installs this; nothing else may.
+  private let render: @MainActor (Data) -> Bool
   /// Told when an activation's own identity rule failed, so the attachment can
   /// end the activation rather than sit on a scene it must not trust.
   private let identityFailed: @MainActor (String, String) -> Void
@@ -62,11 +68,11 @@ public final class RoutedTerminalFrameSink: RoutedFrameSink {
   public private(set) var rejectedFrames = 0
 
   public init(
-    publish: @escaping @MainActor (Data) -> Void,
+    render: @escaping @MainActor (Data) -> Bool,
     identityFailed: @escaping @MainActor (_ session: String, _ reason: String) -> Void = { _, _ in },
     activationEnded: @escaping @MainActor (_ session: String, _ reason: String) -> Void = { _, _ in }
   ) {
-    self.publish = publish
+    self.render = render
     self.identityFailed = identityFailed
     self.ended = activationEnded
   }
@@ -93,10 +99,10 @@ public final class RoutedTerminalFrameSink: RoutedFrameSink {
     _ payload: Data, session: String, activation: String, content: RoutedSceneStamp
   ) -> Bool {
     guard admits(payload, session: session, activation: activation) else { return false }
+    guard rendered(payload) else { return false }
     self.content = content
     appliedFullFrames += 1
     lastOutcome = .applied
-    publish(Data(payload))
     return true
   }
 
@@ -119,10 +125,21 @@ public final class RoutedTerminalFrameSink: RoutedFrameSink {
       lastOutcome = .rejectedLineage
       return false
     }
+    guard rendered(payload) else { return false }
     self.content = result
     appliedDeltaFrames += 1
     lastOutcome = .applied
-    publish(Data(payload))
+    return true
+  }
+
+  /// Hand the frame to the renderer and keep its verdict. A refusal leaves the
+  /// held stamp where it was: the scene still shows the frame before this one.
+  private func rendered(_ payload: Data) -> Bool {
+    guard render(Data(payload)) else {
+      rejectedFrames += 1
+      lastOutcome = .rejectedByRenderer
+      return false
+    }
     return true
   }
 

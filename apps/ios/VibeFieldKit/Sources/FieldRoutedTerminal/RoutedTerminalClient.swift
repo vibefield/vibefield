@@ -117,7 +117,7 @@ public struct RoutedSessionState: Sendable {
   /// `GeometryCommitted` and from refusals, never assumed.
   public internal(set) var geometryRevision: Int64 = 0
   public internal(set) var geometryHolder: RoutedGeometryHolder?
-  internal var demand: RoutedDemand = .live
+  public internal(set) var demand: RoutedDemand = .live
   internal var framesAttachSent = false
   internal var transfer: RoutedTransfer?
   internal var activationSequence: Int64 = -1
@@ -288,6 +288,9 @@ public final class RoutedTerminalClient {
   /// fix8 — activations that have presented once. Past their first frame an
   /// activation is not attaching any more, and no attach deadline applies.
   private var presented: Set<String> = []
+  /// D1 — each session's last queued apply, which its next one waits on
+  /// (`enqueueApply`).
+  private var applyTails: [String: Task<Void, Never>] = [:]
 
   // MARK: DS-4b — the lease verbs' bookkeeping
 
@@ -445,6 +448,24 @@ public final class RoutedTerminalClient {
     teardown()
     state = .off
     reconcileStep()
+  }
+
+  /// Let ONE session go and keep the legs for the others (the freeway's lanes,
+  /// `TerminalLanes`): its view is detached at the cell (demand `none`), its
+  /// renewal stops, and this client forgets it — so the cell lets the
+  /// activation lapse at its grant's expiry, and a later attach of it starts a
+  /// fresh activation. Closing the client is the whole set's end; this is one
+  /// passenger's.
+  public func forget(sessionId: String) {
+    guard sessions[sessionId] != nil else { return }
+    declare(demand: .none, for: sessionId)
+    renewals[sessionId]?.cancel()
+    renewals[sessionId] = nil
+    sessions[sessionId] = nil
+    grants[sessionId] = nil
+    pendingTakes[sessionId] = nil
+    wantedGrids[sessionId] = nil
+    noteAttachment()
   }
 
   // MARK: The control verbs
@@ -1010,7 +1031,11 @@ public final class RoutedTerminalClient {
       let identity = attached.trfIdentity
       let sessionId = attached.sessionId
       let activationId = attached.activationId
-      Task { [sink] in await sink.bindActivation(session: sessionId, activation: activationId, identity: identity) }
+      // D1 — on the session's apply chain, so the binding is in place before the
+      // seed that follows it is handed over (two loose tasks promised no order)
+      enqueueApply(sessionId: sessionId) { [sink] in
+        await sink.bindActivation(session: sessionId, activation: activationId, identity: identity)
+      }
       noteAttachment()
 
     case .cellActivationStatus:
@@ -1200,24 +1225,22 @@ public final class RoutedTerminalClient {
         // the far side of the await or not at all.
         session.frames = .applying
         let sink = self.sink
-        Task { [weak self] in
+        enqueueApply(sessionId: sessionId) { [weak self] in
           let applied = await sink.applyFullFrame(
             bytes, session: sessionId, activation: activationId, content: content)
-          await MainActor.run { [weak self] in
-            guard let self else { return }
-            if applied {
-              self.frameApplied(
-                sessionId: sessionId, activationId: activationId, content: content)
-            } else {
-              // A full frame IS the repair. One the sink will not take leaves
-              // nothing to fall back to, so it is counted rather than asked for
-              // again forever.
-              self.repairRefused(sessionId: sessionId, activationId: activationId)
-            }
-            // fix8 — the frame landed a hop after its unit: the attach's step
-            // moves here (the first frame), not at the unit
-            self.reconcileStep()
+          guard let self else { return }
+          if applied {
+            self.frameApplied(
+              sessionId: sessionId, activationId: activationId, content: content)
+          } else {
+            // A full frame IS the repair. One the sink will not take leaves
+            // nothing to fall back to, so it is counted rather than asked for
+            // again forever.
+            self.repairRefused(sessionId: sessionId, activationId: activationId)
           }
+          // fix8 — the frame landed a hop after its unit: the attach's step
+          // moves here (the first frame), not at the unit
+          self.reconcileStep()
         }
       } catch {
         session.frames = .failed(String(describing: error))
@@ -1245,29 +1268,44 @@ public final class RoutedTerminalClient {
     // be carrying a scene the glass never held into whatever came next.
     session.frames = .applying
     let sink = self.sink
-    Task { [weak self] in
+    enqueueApply(sessionId: sessionId) { [weak self] in
       let applied = await sink.applyDeltaFrame(
         payload, session: sessionId, activation: activationId, base: base, result: result)
-      await MainActor.run { [weak self] in
-        guard let self else { return }
-        if applied {
-          self.frameApplied(sessionId: sessionId, activationId: activationId, content: result)
-        } else if base == nil {
-          // A frame with NO base is self-contained: it is the repair, not a
-          // step onto one. Refusing it is the same answer a refused transfer
-          // gives and is counted the same way.
-          self.repairRefused(sessionId: sessionId, activationId: activationId)
-        } else {
-          // The sink holds a scene this delta does not describe. The honest
-          // repair is a reseed, and the cell's own trigger for one is a
-          // `SceneApplied` that does not advance — so this client says nothing it
-          // cannot back up and marks the lineage broken instead.
-          self.lineageBroke(sessionId: sessionId, activationId: activationId)
-        }
-        // fix8 — the frame landed a hop after its unit: the attach's step moves
-        // here (the first frame), not at the unit
-        self.reconcileStep()
+      guard let self else { return }
+      if applied {
+        self.frameApplied(sessionId: sessionId, activationId: activationId, content: result)
+      } else if base == nil {
+        // A frame with NO base is self-contained: it is the repair, not a
+        // step onto one. Refusing it is the same answer a refused transfer
+        // gives and is counted the same way.
+        self.repairRefused(sessionId: sessionId, activationId: activationId)
+      } else {
+        // The sink holds a scene this delta does not describe. The honest
+        // repair is a reseed, and the cell's own trigger for one is a
+        // `SceneApplied` that does not advance — so this client says nothing it
+        // cannot back up and marks the lineage broken instead.
+        self.lineageBroke(sessionId: sessionId, activationId: activationId)
       }
+      // fix8 — the frame landed a hop after its unit: the attach's step moves
+      // here (the first frame), not at the unit
+      self.reconcileStep()
+    }
+  }
+
+  /// D1 (the second audit, 2026-10-16) — frames reach the sink ONE AT A TIME per
+  /// session, in the order their units arrived. Each frame used to start its own
+  /// unstructured `Task`, and two tasks started back to back carry no promise to
+  /// run in that order: a delta that overtook its base was a lineage break the
+  /// cell then had to reseed. A session's next apply now waits on the one before
+  /// it; a stale activation's queued frames are still dropped where they land
+  /// (`frameApplied`, the sink's binding).
+  private func enqueueApply(
+    sessionId: String, _ apply: @escaping @MainActor () async -> Void
+  ) {
+    let previous = applyTails[sessionId]
+    applyTails[sessionId] = Task { @MainActor in
+      await previous?.value
+      await apply()
     }
   }
 
@@ -1406,9 +1444,17 @@ public final class RoutedTerminalClient {
     // move, and only the caller can make it.
     needsTicket = true
     teardownLegs()
-    if refusal.retryable, let sessionId = ticket?.sessionId {
+    if refusal.retryable, let sessionId = reticketSession {
       requestFreshTicket(for: sessionId, because: .refused(code: refusal.code))
     }
+  }
+
+  /// Which session a fresh ticket for the SET is minted through: the last
+  /// ticket's, while this client still carries it, else any it carries — a
+  /// session let go (`forget`) is never minted back onto the legs.
+  private var reticketSession: String? {
+    if let named = ticket?.sessionId, sessions[named] != nil { return named }
+    return sessions.keys.sorted().first ?? ticket?.sessionId.flatMap { grants[$0] == nil ? nil : $0 }
   }
 
   private func legFailed(_ failure: RoutedLegFailure, on channel: RoutedChannel) {
@@ -1423,7 +1469,7 @@ public final class RoutedTerminalClient {
     }
     teardownLegs()
 
-    guard let sessionId = ticket?.sessionId else {
+    guard let sessionId = reticketSession else {
       state = .failed(reason: failure.description)
       return
     }
@@ -1647,7 +1693,10 @@ public final class RoutedTerminalClient {
     let sessionId = session.sessionId
     let activationId = session.activationId
     let sink = self.sink
-    Task { await sink.activationEnded(session: sessionId, activation: activationId, reason: reason) }
+    // D1 — after every frame of this activation already handed over
+    enqueueApply(sessionId: sessionId) {
+      await sink.activationEnded(session: sessionId, activation: activationId, reason: reason)
+    }
   }
 
   private func fail(_ reason: String) {
@@ -1696,6 +1745,9 @@ public final class RoutedTerminalClient {
     // fix8 — a mint still in flight belongs to the generation just retired
     mintInFlight = false
     presented = []
+    // D1 — what was queued belonged to the activations just retired; their
+    // frames are refused where they land, so the chains need not be waited on
+    applyTails = [:]
   }
 
   // MARK: fix8 — the attach's steps, each with a deadline

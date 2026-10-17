@@ -128,6 +128,13 @@ public struct HomeScreen: View {
   @State private var cardSettingsOpen = false
   @State private var discoveryPolling = false
   @State private var attachment: TerminalAttachment?
+  /// The freeway's kit half (FW-D1/D2, 2026-10-16): each desktop's terminal
+  /// LANES — one connection set per cell, kept across cards — and the sessions
+  /// a closed card left LIVE on them, newest last. Opening one of those again
+  /// shows its current screen at once; a fourth pushes the oldest out
+  /// (`TerminalAttachment.release`).
+  @State private var terminalLanes: [String: TerminalLanes] = [:]
+  @State private var keptAttachments: [KeptTerminal] = []
   /// Latched for the width of the directory lookup. `isAttached` hides the
   /// button, but that flip is on the far side of an `await`, and two taps
   /// inside that window would build two lifecycles — the first of which
@@ -1405,6 +1412,9 @@ public struct HomeScreen: View {
         // The orderly counterpart — without it `resumeFromForeground` has
         // nothing to resume from (upstream §8.2).
         attachment?.suspendForBackground()
+        // and every desktop's lanes with it: iOS keeps no socket behind a
+        // suspended app, and a kept session re-attaches when it is opened
+        for lanes in terminalLanes.values { lanes.closeAll() }
       default:
         break
       }
@@ -1797,7 +1807,7 @@ public struct HomeScreen: View {
   private func liveTerminal(title: String?) -> some View {
     if let attachment {
       TerminalSurface(
-        frame: attachment.frame,
+        scene: attachment.scene,
         visible: true,
         configuration: attachment.presentation,
         // --- IOS-5a: two modes, two first responders. The kit's own
@@ -2165,21 +2175,31 @@ public struct HomeScreen: View {
         attachRefusal = "the mesh is not up on this device — connect it first"
         return
       }
-      let attachment = TerminalAttachment(
-        session: urlSession,
-        appearance: appearance,
-        door: { [link] session in
-          guard let link else { throw NoDesktopDoor() }
-          return try await link.openTerminalTicket(on: deviceID, sessionId: session)
-        },
-        // P0-C — the renewal rides the same desktop's door as the mint
-        renewal: { [link] session, generation, requestId in
-          guard let link else { throw NoDesktopDoor() }
-          return try await link.renewTerminalGrant(
-            on: deviceID, sessionId: session, expectGeneration: generation, requestId: requestId)
-        },
-        // SP-2 (g) — the same ledger the link's doors count against.
-        budget: .shared)
+      let lanes =
+        terminalLanes[deviceID]
+        ?? TerminalLanes(
+          session: urlSession,
+          door: { [link] session in
+            guard let link else { throw NoDesktopDoor() }
+            return try await link.openTerminalTicket(on: deviceID, sessionId: session)
+          },
+          // P0-C — the renewal rides the same desktop's door as the mint
+          renewal: { [link] session, generation, requestId in
+            guard let link else { throw NoDesktopDoor() }
+            return try await link.renewTerminalGrant(
+              on: deviceID, sessionId: session, expectGeneration: generation, requestId: requestId)
+          },
+          // SP-2 (g) — the same ledger the link's doors count against.
+          budget: .shared)
+      terminalLanes[deviceID] = lanes
+      // A session a closed card left live comes back as it is — its scene holds
+      // the current screen, so the card paints at once — and otherwise a new
+      // attachment rides the desktop's lanes.
+      let kept = keptAttachments.firstIndex { $0.deviceID == deviceID && $0.sessionID == sessionID }
+      let attachment =
+        kept.map { keptAttachments.remove(at: $0).attachment }
+        ?? TerminalAttachment(lanes: lanes, appearance: appearance)
+      attachment.apply(appearance: appearance)
       self.attachment = attachment
       attachedDeviceID = deviceID
       // --- IOS-5a ---
@@ -2205,6 +2225,7 @@ public struct HomeScreen: View {
   /// Both halves unconditionally — the subject outlives the listing by design,
   /// so nothing else would ever clear it.
   private func closeCard() {
+    let deviceID = attachedDeviceID
     cardBubble = nil
     attachedDeviceID = nil
     renderFailure = nil
@@ -2221,7 +2242,27 @@ public struct HomeScreen: View {
     // --- end IOS-5b ---
     guard let attachment else { return }
     self.attachment = nil
-    Task { await attachment.detach() }
+    // FW-D2 — the session stays live on its lane, its scene kept current, so
+    // opening it again is instant; past the three newest it is let go.
+    guard let sessionID = attachment.attachedSessionID, let deviceID else {
+      Task { await attachment.detach() }
+      return
+    }
+    keptAttachments.removeAll { $0.deviceID == deviceID && $0.sessionID == sessionID }
+    keptAttachments.append(KeptTerminal(deviceID: deviceID, sessionID: sessionID, attachment: attachment))
+    while keptAttachments.count > Self.keptTerminals {
+      keptAttachments.removeFirst().attachment.release()
+    }
+  }
+
+  /// How many closed cards' sessions stay live (FW-D2's "recent ones hot").
+  static let keptTerminals = 3
+
+  /// A closed card's session, kept live on its desktop's lanes.
+  struct KeptTerminal {
+    let deviceID: String
+    let sessionID: String
+    let attachment: TerminalAttachment
   }
 
   // MARK: - Write keys
