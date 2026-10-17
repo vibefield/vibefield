@@ -1528,6 +1528,7 @@ async fn run_cell_generation_inner(
             what: "cell",
             instance,
         },
+        inherit: None,
     };
     let (mut cell, hello) = match SupervisedChild::start::<CellHello>(spec).await {
         Ok(started) => started,

@@ -30,6 +30,13 @@ const LAST_LINE: Duration = Duration::from_millis(500);
 #[cfg(unix)]
 pub const INHERITED_FD: RawFd = 3;
 
+/// A descriptor a child inherits: a Unix fd. The Windows socket-handle path is not built, and
+/// a Windows start that names one says so.
+#[cfg(unix)]
+pub type Inherited = RawFd;
+#[cfg(windows)]
+pub type Inherited = std::os::windows::io::RawSocket;
+
 /// Hand `fd` to the child at `INHERITED_FD`, open across the exec. `dup2` onto itself is a
 /// no-op that LEAVES close-on-exec set: a descriptor the parent already holds at 3 (a test
 /// process's first socket is just that) would be closed by the exec, and the child would adopt
@@ -77,6 +84,9 @@ pub struct ChildSpec<'a> {
     pub bootstrap: serde_json::Value,
     pub hello_deadline: Duration,
     pub stderr: StderrLabel,
+    /// A descriptor the child finds at `INHERITED_FD`: the freeway host's floor-held listener.
+    /// A cell inherits none.
+    pub inherit: Option<Inherited>,
 }
 
 /// Why a child never said its hello. The caller says it in its own words.
@@ -96,6 +106,20 @@ pub struct Drained {
     pub overran: bool,
     /// The child's last stdout line, said within half a second of its exit.
     pub last_line: Option<String>,
+}
+
+#[cfg(unix)]
+fn hand_over(command: &mut Command, fd: Inherited) -> Result<(), StartFailure> {
+    inherit(command.as_std_mut(), fd);
+    Ok(())
+}
+
+#[cfg(windows)]
+fn hand_over(_: &mut Command, _: Inherited) -> Result<(), StartFailure> {
+    let unsupported = std::io::ErrorKind::Unsupported;
+    let why =
+        "an inherited descriptor rides a Unix fd; the Windows socket-handle path is not built";
+    Err(StartFailure::Spawn(std::io::Error::new(unsupported, why)))
 }
 
 /// A child that said its hello.
@@ -118,13 +142,16 @@ impl SupervisedChild {
     pub async fn start<H: DeserializeOwned>(
         spec: ChildSpec<'_>,
     ) -> Result<(Self, H), StartFailure> {
-        let mut child = Command::new(spec.bin)
+        let mut command = Command::new(spec.bin);
+        command
             .args(&spec.args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(StartFailure::Spawn)?;
+            .stderr(Stdio::piped());
+        if let Some(descriptor) = spec.inherit {
+            hand_over(&mut command, descriptor)?;
+        }
+        let mut child = command.spawn().map_err(StartFailure::Spawn)?;
         let stdin = child.stdin.take().expect("piped stdin");
         let stdout = child.stdout.take().expect("piped stdout");
         let stderr = child.stderr.take().expect("piped stderr");
@@ -249,7 +276,28 @@ mod tests {
                 what: "child",
                 instance: 0,
             },
+            inherit: None,
         }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_descriptor_handed_over_is_the_childs_at_three_and_none_is_there_otherwise() {
+        use std::os::fd::AsRawFd;
+        #[derive(Deserialize)]
+        struct Found {
+            socket: bool,
+        }
+        let script = r#"read boot; if [ -S /dev/fd/3 ]; then echo '{"socket":true}'; else echo '{"socket":false}'; fi; cat >/dev/null"#;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut handed = sh(script);
+        handed.inherit = Some(listener.as_raw_fd());
+        let (child, found) = SupervisedChild::start::<Found>(handed).await.unwrap();
+        assert!(found.socket, "the child finds the listener at descriptor 3");
+        child.drain(Duration::from_secs(2)).await;
+        let (child, found) = SupervisedChild::start::<Found>(sh(script)).await.unwrap();
+        assert!(!found.socket, "nothing is handed over unasked");
+        child.drain(Duration::from_secs(2)).await;
     }
 
     #[tokio::test]
