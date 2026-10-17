@@ -283,9 +283,16 @@ pub async fn handle(
         "native.mesh.serve.list" => ok(id, json!({"serves": serve_entries(state, &node).await})),
         "native.mesh.serve.subscribe" => {
             let sub_id = state.sub_id();
+            // Subscribe BEFORE the snapshot (2026-10-17). The forwarder used to
+            // subscribe inside its own task, after the snapshot had been sent, so
+            // a proxy that started in between was never reported: fieldd's fused
+            // view stayed at the snapshot's `starting` and the serve was never
+            // published. An event from before the snapshot replays after it, in
+            // order, and the client merges by serveId — the last word wins.
+            let rx = node.proxy().subscribe();
             let snapshot = json!({"serves": serve_entries(state, &node).await});
             send(tx, ok(id, json!({"subId": sub_id, "snapshot": snapshot})));
-            spawn_serve_forwarder(state.clone(), tx.clone(), node, sub_id);
+            spawn_serve_forwarder(state.clone(), tx.clone(), node, sub_id, rx);
             return;
         }
         _ => err(id, "NOT_FOUND", -32601, "method not found", false, None),
@@ -1459,9 +1466,16 @@ fn spawn_store_forwarder(tx: Tx, store: Arc<JsonStore>, sub_id: String) {
 /// cache lookup is needed to correlate. On broadcast Lagged we re-project a full
 /// snapshot (P5) — the Stopped proxy is already gone from `proxy().list()`, so the
 /// per-event delta (not a list rebuild) is what carries a stop honestly.
-fn spawn_serve_forwarder(state: Arc<DaemonState>, tx: Tx, node: Arc<MeshNode>, sub_id: String) {
+/// `rx` is subscribed by the caller BEFORE it takes the snapshot, so no event
+/// falls between the two.
+fn spawn_serve_forwarder(
+    state: Arc<DaemonState>,
+    tx: Tx,
+    node: Arc<MeshNode>,
+    sub_id: String,
+    mut rx: tokio::sync::broadcast::Receiver<ProxyEvent>,
+) {
     tokio::spawn(async move {
-        let mut rx = node.proxy().subscribe();
         loop {
             match rx.recv().await {
                 Ok(ev) => {
