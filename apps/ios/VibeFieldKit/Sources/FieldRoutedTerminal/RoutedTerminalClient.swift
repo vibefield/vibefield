@@ -527,6 +527,8 @@ public final class RoutedTerminalClient {
     pendingTakes[sessionId] = nil
     wantedGrids[sessionId] = nil
     noteAttachment()
+    // A step this session was the one waiting on is no one's now (P6).
+    reconcileStep()
   }
 
   // MARK: The control verbs
@@ -1969,30 +1971,44 @@ public final class RoutedTerminalClient {
       return legGrantTask != nil ? .slot : .dial
     case .ready, .attached:
       if mintInFlight { return .ticket }
-      guard let sessionId = ticket?.sessionId, let session = sessions[sessionId] else {
-        return .control
-      }
-      if presented.contains(session.activationId) { return nil }
-      switch session.control {
-      case .attaching: return .control
-      case .refused, .ended: return nil
-      case .attached: break
-      }
-      switch session.frames {
-      case .attaching: return .frames
-      case .failed: return nil
-      case .resuming, .seeding, .applying, .active: break
-      }
-      return session.presentationReady ? nil : .firstFrame
+      // The sessions the set still CARRIES, each on its own step, and the least
+      // advanced is the set's. It was the last ticket's session alone, and a
+      // `forget` of that one left the set waiting on an attach nobody would
+      // make: 20 s later the whole lane stalled, and every card on it said
+      // "couldn't reach" (the audit's P6, 2026-10-17).
+      let pending = Set(sessions.values.compactMap(pendingStep(of:)))
+      return AttachStep.allCases.first(where: pending.contains)
     }
+  }
+
+  /// What one carried session's attach waits on, nil when nothing: it has
+  /// presented, it is parked (demand `none` — the cell owes it no frame), or
+  /// it was refused, ended or failed, each of which is said, not waited out.
+  private func pendingStep(of session: RoutedSessionState) -> AttachStep? {
+    if presented.contains(session.activationId) || session.demand == .none { return nil }
+    switch session.control {
+    case .attaching: return .control
+    case .refused, .ended: return nil
+    case .attached: break
+    }
+    switch session.frames {
+    case .attaching: return .frames
+    case .failed: return nil
+    case .resuming, .seeding, .applying, .active: break
+    }
+    return session.presentationReady ? nil : .firstFrame
   }
 
   /// Move `step` to what the client now holds, arming that step's deadline.
   private func reconcileStep() {
-    if let sessionId = ticket?.sessionId, let session = sessions[sessionId],
-      session.presentationReady, presented.insert(session.activationId).inserted
-    {
-      options.log("first frame presented — live session=\(sessionId)")
+    // Every session's first presented frame, not the last ticket's alone: a
+    // second session on a shared lane was never recorded as presented, so each
+    // reseed read it as connecting again (`hasPresented`), and the steps above
+    // would wait on a frame it had shown long ago (P6).
+    for (sessionId, session) in sessions where session.presentationReady {
+      if presented.insert(session.activationId).inserted {
+        options.log("first frame presented — live session=\(sessionId)")
+      }
     }
     let next = derivedStep
     guard next != step else { return }

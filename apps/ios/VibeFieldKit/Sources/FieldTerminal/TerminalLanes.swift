@@ -109,11 +109,22 @@ public final class TerminalLanes {
     retickets[sessionId] = reticket
   }
 
-  /// A session's attachment let it go: its frames have nowhere to go now.
+  /// A session's attachment let it go: its frames have nowhere to go now. A
+  /// lane left carrying no session closes — its legs held two of the phone's
+  /// leg slots for no one, and it went on watching attaches nobody would make
+  /// (the audit's P6, 2026-10-17). "Carrying" is this map's word, so a session
+  /// still dialing its first legs on the lane keeps it open.
   func release(_ sessionId: String) {
-    if let cell = cellOf[sessionId] { lanes[cell]?.sink.forget(sessionId) }
+    guard let cell = cellOf[sessionId] else {
+      retickets[sessionId] = nil
+      return
+    }
+    lanes[cell]?.sink.forget(sessionId)
     cellOf[sessionId] = nil
     retickets[sessionId] = nil
+    if !cellOf.values.contains(cell), let lane = lanes.removeValue(forKey: cell) {
+      lane.client.close()
+    }
   }
 
   /// Every lane closed — the app went to the background (iOS keeps no socket

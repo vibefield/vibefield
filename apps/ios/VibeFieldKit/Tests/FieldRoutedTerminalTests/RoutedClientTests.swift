@@ -1003,6 +1003,47 @@ import Testing
     client.close()
   }
 
+  /// P6 (2026-10-17) — the set's step is read off the sessions it still
+  /// CARRIES, and every session's first frame is recorded. Both were the last
+  /// ticket's session alone: a session presenting while the ticket named
+  /// another was never "presented", and a `forget` of the ticket's session left
+  /// the set waiting on an attach nobody would make — 20 s later the whole lane
+  /// stalled, and every card on it said "couldn't reach".
+  @Test func theStepIsTheCarriedSessionsAndAForgetStallsNothing() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = RoutedTerminalClient(
+      transport: transport, sink: sink,
+      options: .init(viewId: "view-1", stepDeadline: .seconds(1)))
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    // The last ticket names a second session, whose attach the cell has not
+    // answered — and the FIRST one presents meanwhile.
+    let second = "sess-second"
+    client.open(try TicketFactory.make(sessionId: second))
+    try await settle("a second attach") {
+      await live.control.allSent("AttachControlLeg").count == 2
+    }
+    let seed = try Script.frame(
+      session: session, activation: live.activation, sequence: 1, creditEpoch: 1, base: nil,
+      result: Script.stamp(100), payload: Data("TRF1-full".utf8))
+    await live.frames.deliver(.binary(seed))
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(session: session, activation: live.activation, sequence: 1))
+    try await settle("the first session presents") { client.hasPresented(session) }
+    #expect(client.step == .control)
+
+    client.forget(sessionId: second)
+    #expect(client.step == nil)
+    // Past the deadline the forgotten attach would have stalled the set at.
+    try await Task.sleep(for: .milliseconds(1_300))
+    #expect(client.state == .attached)
+    #expect(client.hasLiveActivation(session))
+    client.close()
+  }
+
   // MARK: Loss and replacement
 
   /// Losing ONE leg invalidates every activation on the SET — the other leg's

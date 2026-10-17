@@ -101,6 +101,30 @@ import Testing
     lanes.closeAll()
   }
 
+  /// P6 (2026-10-17) — a lane left carrying no session closes: its legs held
+  /// two of the phone's leg slots for no one, and it went on watching attaches
+  /// nobody would make. One session let go of two keeps the lane.
+  @MainActor
+  @Test func aLaneWhoseLastSessionIsReleasedCloses() async throws {
+    let door = CellDoorHarness()
+    let port = try await door.start()
+    defer { Task { await door.stop() } }
+    let lanes = TerminalLanes(
+      transport: URLSessionRoutedTransport(),
+      door: { asked in try AttachmentOverTheDoorTests.ticketJSON(port: port, sessionId: asked) })
+    let first = TerminalAttachment(
+      lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
+    try await attachToLive(first, session: "sess-a", door: door, attaches: 1)
+    let second = TerminalAttachment(
+      lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
+    try await attachToLive(second, session: "sess-b", door: door, attaches: 2)
+
+    first.release()
+    #expect(lanes.openLanes == 1)
+    second.release()
+    #expect(lanes.openLanes == 0)
+  }
+
   /// The sweep's P1 (2026-10-17): a session reopened on its lane — the
   /// freeway's fast path, "back on its lane — no mint, no dial" — must still
   /// PAINT. Its sink and re-mint were keyed to the tap that made them, so the
