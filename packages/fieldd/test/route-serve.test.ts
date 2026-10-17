@@ -178,4 +178,62 @@ describe("SP-3 — the reconcile, for a whole-listener process", () => {
     await d.refresh();
     expect(declared).toHaveLength(2);
   });
+
+  // F-M5's other half (2026-10-17): a declaration that did not land at once
+  // (a first subscription read the serve `starting`) can be LIVE a moment
+  // later on the node's own news. The next reading records it rather than
+  // declaring again: a remove-then-add would drop every connection on it.
+  it("records a serve the node now reports live at the same signature, and never declares it again", async () => {
+    let live: ServeState[] = [];
+    const declared: Array<ServeSpec | null> = [];
+    const d = new RouteServeDriver({
+      desired: () =>
+        routeServeSpec(PROCESS, {
+          published: true,
+          linkedLogin: LOGIN,
+          targets: { kind: "port", port: 51234 },
+        }),
+      declare: async (spec) => {
+        declared.push(spec);
+        return false; // placed, but the first reading said `starting`
+      },
+      serves: () => live,
+      log: LOG,
+    });
+    await d.refresh();
+    expect(declared).toHaveLength(1);
+    const spec = declared[0]!;
+    live = [{ ...spec, status: "active", url: "http://node.ts.net:9499" }]; // the node's `running`
+    await d.refresh();
+    await d.refresh();
+    expect(declared, "recorded, not declared again").toHaveLength(1);
+  });
+
+  it("declares again when the live serve is NOT the signature the readings call for", async () => {
+    const declared: Array<ServeSpec | null> = [];
+    let port = 51234;
+    const d = new RouteServeDriver({
+      desired: () =>
+        routeServeSpec(PROCESS, {
+          published: true,
+          linkedLogin: LOGIN,
+          targets: { kind: "port", port },
+        }),
+      declare: async (spec) => {
+        declared.push(spec);
+        return true;
+      },
+      serves: () => {
+        const at = declared.at(-1);
+        return at ? [{ ...at, status: "active" as const, url: "http://node.ts.net:9499" }] : [];
+      },
+      log: LOG,
+    });
+    await d.refresh();
+    port = 51240; // the process restarted on a new port
+    await d.refresh();
+    expect(declared.map((s) => (s?.target.kind === "port" ? s.target.port : null))).toEqual([
+      51234, 51240,
+    ]);
+  });
 });

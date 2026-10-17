@@ -578,4 +578,39 @@ describe("TM-2 — daemon.ts drives the routes off the floor's own readings", ()
       productRemovesBefore,
     );
   });
+
+  // 2026-10-17 — on a fresh pair start (23:56Z and 00:33Z, James's dev app) the
+  // floor's mesh node came up a second AFTER fieldd's boot, and fieldd never
+  // published the terminal doors until fieldd alone was restarted: the phone
+  // read "not publishing its terminal doors". The candidates are in
+  // draft/handover/2026-10-17-focus-audit.md §3 (serve-driver); this row is
+  // candidate (a): a declaration the down node refused, and nothing that
+  // re-declares it when the node comes up.
+  it("a declaration refused while the mesh node was down lands when the node comes up — and nothing else changed", async () => {
+    const meshUnit = (state: string) => ({
+      state: "up",
+      bootId: "floor-boot-1",
+      units: [{ unit: "mesh-gateway", state }],
+    });
+    const { daemon, mock } = await boot({
+      terminalMesh: true,
+      login: LOGIN,
+      seed: (m) => {
+        m.meshUnavailable = true;
+        m.healthSnapshot = meshUnit("starting");
+      },
+    });
+    // fieldd asked; the down node refused; nothing is published
+    await poll(() => (mock.meshCalls.includes("native.mesh.serve.remove") ? true : undefined));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(terminalAdds(mock)).toEqual([]);
+    expect(publishedTerminalMesh(daemon)).toBe(false);
+
+    // the node comes up — the ONLY change: no route moved, no link event
+    mock.meshUnavailable = false;
+    mock.pushHealth(meshUnit("up"));
+    const landed = await poll(() => terminalAdds(mock)[0]);
+    expect(landed["routes"]).toEqual([{ prefix: "/cell/cb-1", targetPort: 51001 }]);
+    await poll(() => (publishedTerminalMesh(daemon) === true ? true : undefined));
+  });
 });

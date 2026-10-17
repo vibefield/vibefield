@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { ARTIFACT_SERVE_PREFIX, isPipeEndpoint, PORTS, SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
-import { MeshClient, type ServeState } from "../src/mesh-client";
+import { MeshClient, meshNodeUp, type ServeState } from "../src/mesh-client";
 import { NativeLink } from "../src/native-link";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { nativeEndpoint } from "./native-harness";
@@ -139,6 +139,39 @@ describe("MeshClient", () => {
     ]);
     expect(states[0]!.status).toBe("pending");
     expect((details as { state?: string } | null)?.state).toBe("starting");
+  });
+
+  // 2026-10-17 — the node's own word, from the floor's health: a turn to UP
+  // places the desired set again (a down or restarted node holds none of it)
+  // and says "node-up" once, for what could not even be declared while it was
+  // down; a report that does not change the state does nothing.
+  it("a turn to UP re-places the desired set and says node-up once", async () => {
+    const { mock, mesh } = await setup();
+    mock.meshUnavailable = true;
+    await mesh.setServes([{ name: "site", target: { kind: "dir", path: "/tmp/site" } }]);
+    expect(mesh.serves()[0]!.status).toBe("pending");
+    let ups = 0;
+    mesh.on("node-up", () => (ups += 1));
+    mesh.noteNodeState(false);
+    expect(ups).toBe(0);
+    mock.meshUnavailable = false;
+    mesh.noteNodeState(true);
+    await until(() => mesh.serves()[0]?.status === "active");
+    mesh.noteNodeState(true); // the same word again is not news
+    expect(ups).toBe(1);
+    expect(mock.meshAddCalls).toBe(1);
+  });
+
+  it("reads the node's state off the floor's health: the mesh-gateway unit at up", () => {
+    const health = (state: string) => ({
+      state: "up" as const,
+      bootId: "f",
+      units: [{ unit: "mesh-gateway", state: state as "up" }],
+    });
+    expect(meshNodeUp(health("up"))).toBe(true);
+    expect(meshNodeUp(health("starting"))).toBe(false);
+    expect(meshNodeUp({ state: "up", bootId: "f", units: [] })).toBe(false);
+    expect(meshNodeUp(undefined)).toBe(false);
   });
 
   it("store passthrough returns the slice snapshot", async () => {

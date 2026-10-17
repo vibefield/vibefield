@@ -225,7 +225,7 @@ import { LinkService, otherUserLinks } from "./link-service";
 import { McpService } from "./mcp-service";
 import { type BoardDelta, type BoardProjection, type LocalBoard, MeshBoard } from "./mesh-board";
 import { MESH_BUS_CARRIES_CONTENT } from "./mesh-bus";
-import { MeshClient, type ServeSpec } from "./mesh-client";
+import { MeshClient, meshNodeUp, type ServeSpec } from "./mesh-client";
 import { MeshLaneLink } from "./mesh-lane";
 import { NativeLink, RpcCallError } from "./native-link";
 import { NativeSupervisor } from "./native-supervisor";
@@ -1579,10 +1579,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       {},
       (payload) => {
         latestHealth = payload as NativeHealth; // deltas + reconnect re-snapshots (P5)
+        // the mesh node's own word reaches the mesh facade, which re-places the
+        // desired serves on a turn to up and says so ("node-up")
+        mesh.noteNodeState(meshNodeUp(latestHealth));
         emitHealth();
       },
     );
     latestHealth = snapshot as NativeHealth;
+    mesh.noteNodeState(meshNodeUp(latestHealth));
     // link down/up flips stream immediately (each backoff attempt re-emits; cheap and honest)
     native.on("reconnecting", emitHealth);
     native.on("connected", emitHealth);
@@ -5632,7 +5636,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         try {
           await mesh.removeServe(TERMINAL_SERVE_ID);
         } catch (error) {
-          serveLog.debug(
+          // At warn (2026-10-17): this is the step a fresh pair start failed
+          // at while the mesh node was still coming up, and at debug it left
+          // nothing to read.
+          serveLog.warn(
             "fieldd.terminal_serve.remove_deferred",
             "The terminal listener could not be taken down; the previous routes stay declared",
             { error: String(error) },
@@ -5646,10 +5653,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         const placed = states.find((state) => (state.serveId ?? state.name) === TERMINAL_SERVE_ID);
         return placed?.status === "active";
       },
+      serves: () => mesh.serves(),
       logger: logger.child({ component: "terminal.serve" }),
     });
     native.on("terminal-endpoints", () => void terminalServe.refresh());
     links.on("changed", () => void terminalServe.refresh());
+    // 2026-10-17 — the mesh node coming UP is a reading this driver depends on:
+    // a declaration the down node refused is declared again then, or the doors
+    // stayed unpublished until fieldd restarted (a fresh pair start, twice).
+    mesh.on("node-up", () => void terminalServe.refresh());
     // the hello may already have landed before this driver existed — the
     // route snapshot is STATE, so reading it once here is the same answer the
     // event would have carried, and a second read is free (idempotent by
@@ -5676,7 +5688,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               try {
                 await mesh.removeServe(INDEX_SERVE_ID);
               } catch (error) {
-                serveLog.debug(
+                serveLog.warn(
                   "fieldd.index_serve.remove_deferred",
                   "The index listener could not be taken down; the previous target stays declared",
                   { error: String(error) },
@@ -5691,12 +5703,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               );
               return placed?.status === "active";
             },
+            serves: () => mesh.serves(),
             logger: logger.child({ component: "index.serve" }),
           })
         : null;
     if (indexServe !== null) {
       rosettad?.on("transition", () => void indexServe.refresh());
       links.on("changed", () => void indexServe.refresh());
+      // the terminal's own reason, the same mechanism
+      mesh.on("node-up", () => void indexServe.refresh());
       void indexServe.refresh();
     }
     const artifacts = new ArtifactService({

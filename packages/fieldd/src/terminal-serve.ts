@@ -122,6 +122,8 @@ export interface TerminalServeDriverOptions {
    * gone for a withdrawal.
    */
   declare: (spec: ServeSpec | null) => Promise<boolean>;
+  /** the mesh's live serve view — a declaration found landed later (route-serve.ts) */
+  serves?: () => readonly ServeState[];
   logger?: Logger;
 }
 
@@ -215,6 +217,7 @@ export class TerminalServeDriver extends RouteServeDriver {
           linkedLogin: opts.linkedLogin(),
         }),
       declare: opts.declare,
+      ...(opts.serves !== undefined ? { serves: opts.serves } : {}),
       log: TERMINAL_SERVE_LOG,
       ...(opts.logger !== undefined ? { logger: opts.logger } : {}),
     });

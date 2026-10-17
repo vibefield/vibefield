@@ -154,6 +154,9 @@ export interface RouteServeDriverOptions {
    * gone for a withdrawal.
    */
   declare: (spec: ServeSpec | null) => Promise<boolean>;
+  /** The mesh's fused serve view (`MeshClient.serves()`): what is LIVE, which
+   * is how a declaration that did not land at once is found landed later. */
+  serves?: () => readonly ServeState[];
   log: RouteServeLog;
   logger?: Logger;
 }
@@ -203,6 +206,17 @@ export class RouteServeDriver {
       const spec = this.desired();
       const signature = routeServeSignature(spec);
       if (signature === this.declared) return;
+      // F-M5's other half (2026-10-17): a declaration that did not land at
+      // once can land a moment later on the node's own news — the runtime's
+      // `running` after a first subscription read `starting` — and a serve
+      // already LIVE at exactly this signature needs no remove-then-add, which
+      // would drop every connection on its listener. It is recorded, not
+      // declared again. (A first refresh still always declares, F-H1: the live
+      // view lists only what THIS daemon declared.)
+      if (spec !== null && this.liveAt(spec, signature)) {
+        this.declared = signature;
+        return;
+      }
       const { log } = this.driver;
       try {
         const landed = await this.driver.declare(spec);
@@ -212,8 +226,10 @@ export class RouteServeDriver {
           // error state), and for a removal that failed. None of those put the
           // serve on the tailnet, so none of them may be remembered: a
           // remembered signature is exactly what stops the next event from
-          // retrying.
-          this.logger.debug(log.deferred, log.deferredMessage, {
+          // retrying. Said at warn (2026-10-17): a declaration that silently
+          // did not land is how the phone read "not publishing its terminal
+          // doors" with nothing in the log.
+          this.logger.warn(log.deferred, log.deferredMessage, {
             routes: spec?.routes?.length ?? 0,
           });
           return;
@@ -229,7 +245,7 @@ export class RouteServeDriver {
         );
       } catch (error) {
         // Same law for a bridge that throws outright.
-        this.logger.debug(log.deferred, log.deferredMessage, { error: String(error) });
+        this.logger.warn(log.deferred, log.deferredMessage, { error: String(error) });
       }
     });
     this.chain = run.then(
@@ -237,6 +253,13 @@ export class RouteServeDriver {
       () => undefined,
     );
     return this.chain;
+  }
+
+  /** Whether the serve is LIVE at this signature right now (`publishedServe`:
+   * active, with a URL) — the node's word, not what this driver asked for. */
+  private liveAt(spec: ServeSpec, signature: string): boolean {
+    const live = publishedServe(this.driver.serves?.() ?? [], spec.serveId ?? spec.name);
+    return live !== undefined && routeServeSignature(live) === signature;
   }
 
   /** Stop reconciling. Does NOT withdraw the serve — and the reason that used

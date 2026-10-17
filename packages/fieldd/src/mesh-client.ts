@@ -6,6 +6,7 @@ import {
   MeshEgressRouteBound,
   MeshEgressRouteRef,
   MeshEgressRouteTable,
+  type NativeHealth,
   ServeConfig,
   ServeStatus,
 } from "@vibefield/contracts";
@@ -120,12 +121,29 @@ export class MeshClient extends EventEmitter {
   /** reconciles SERIALIZE (never skip): a caller's pass always starts after
    * its own desired-set mutation — a skip-guard here silently no-ops. */
   private chain: Promise<void> = Promise.resolve();
+  /** The node's state as the floor last reported it (`noteNodeState`);
+   * `undefined` before the first report. */
+  private nodeUp: boolean | undefined;
 
   constructor(private readonly link: NativeLink) {
     super();
     link.on("connected", () => {
       void this.reconcile(); // fresh native boot may have an empty node — replay
     });
+  }
+
+  /** The mesh node's own state, as the floor's health reports it (its
+   * `mesh-gateway` unit, `meshNodeUp`). On a turn to UP the desired set is
+   * placed again — a node that was down, or that restarted, holds none of it —
+   * and "node-up" is emitted for what could not even be declared while it was
+   * down (the serve drivers). 2026-10-17: on a fresh pair start the node came
+   * up a second after fieldd, and nothing re-declared the terminal doors. */
+  noteNodeState(up: boolean): void {
+    const was = this.nodeUp;
+    this.nodeUp = up;
+    if (!up || was === true) return;
+    void this.reconcile();
+    this.emit("node-up");
   }
 
   /** Replace the desired serve set and reconcile now. */
@@ -640,4 +658,14 @@ function contractValidSpec(spec: ServeSpec): ServeSpec {
 
 function serveKey(spec: Pick<ServeSpec, "serveId" | "name">): string {
   return spec.serveId ?? spec.name;
+}
+
+/** Whether the floor's health says its mesh node is UP: the `mesh-gateway`
+ * unit (contracts `UnitHealth`) at `up`. The node's own word, read where the
+ * floor publishes it — never inferred from a call that happened to answer.
+ * Tolerant: the payload arrives cast, and a floor that sends no `units` (an
+ * older or skewed one) reads as "not known up", never as a throw. */
+export function meshNodeUp(health: NativeHealth | undefined): boolean {
+  const units: readonly NativeHealth["units"][number][] | undefined = health?.units;
+  return units?.some((unit) => unit.unit === "mesh-gateway" && unit.state === "up") ?? false;
 }

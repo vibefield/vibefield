@@ -146,6 +146,8 @@ export interface IndexServeDriverOptions {
   linkedLogin: () => string | null;
   /** remove-then-add through the mesh; true iff the node now matches (F-M5) */
   declare: (spec: ServeSpec | null) => Promise<boolean>;
+  /** the mesh's live serve view — a declaration found landed later (route-serve.ts) */
+  serves?: () => readonly ServeState[];
   logger?: Logger;
 }
 
@@ -161,6 +163,7 @@ export class IndexServeDriver extends RouteServeDriver {
           linkedLogin: opts.linkedLogin(),
         }),
       declare: opts.declare,
+      ...(opts.serves !== undefined ? { serves: opts.serves } : {}),
       log: INDEX_SERVE_LOG,
       ...(opts.logger !== undefined ? { logger: opts.logger } : {}),
     });
