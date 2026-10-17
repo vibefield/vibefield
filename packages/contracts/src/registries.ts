@@ -852,6 +852,14 @@ export const TERMINAL_PIPELINE = {
   URGENT_RESERVE_BYTES: 2_097_152,
   MAX_BULK_BYTES_ADMITTED_AHEAD: 4_194_304,
   MAX_URGENT_PRESENTATION_UNIT_BYTES: 1_048_576,
+  // TM/D6 (2026-10-17) — the most ONE paste may carry: the UTF-8 bytes of its
+  // whole text, before the engine brackets and sanitizes it. A paste whose
+  // SendInput would pass MAX_CONTROL_MESSAGE_BYTES rides as `paste-part`s on a
+  // leg that negotiated `paste-parts`, and the cell reassembles at most this
+  // much of it into one engine paste; a larger paste is refused where it is
+  // made, in words. Owner: the CELL, which holds one open paste per activation.
+  // 4 MiB is sixteen control messages of plain text.
+  MAX_PASTE_BYTES: 4_194_304,
 } as const;
 
 /** TPv3 — WebSocket close codes on the cell doors (terminal-pipeline-v3 §5.1):

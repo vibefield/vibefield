@@ -635,13 +635,19 @@ export type ProtocolVersion = z.infer<typeof ProtocolVersion>;
  * cell → client `GeometryState` verb — the geometry seat's holder and committed
  * size, pushed to the control leg of every activation of the session on each
  * change of either. Load-bearing for the same reason: ghosttea-react and the
- * kit close a leg on an unknown tag, so the cell never sends it unasked. */
+ * kit close a leg on an unknown tag, so the cell never sends it unasked.
+ * `paste-parts` (TM/D6, 2026-10-17): the cell reassembles a `paste-part`
+ * series (`SendInputOp`) into ONE engine paste. Load-bearing the other way
+ * round: the CLIENT sends the new kind, and a cell that did not echo the
+ * string refuses the unknown kind at its reader and closes the control leg
+ * (PROTOCOL) — so a client sends parts only on a leg whose accept echoed it. */
 export const KNOWN_CAPABILITIES = [
   "resume",
   "snapshot-demand",
   "profiling-envelope",
   "session-events",
   "geometry-events",
+  "paste-parts",
 ] as const;
 export type KnownCapability = (typeof KNOWN_CAPABILITIES)[number];
 
@@ -1292,10 +1298,35 @@ export type TerminalMouseInput = z.infer<typeof TerminalMouseInput>;
  * schema's largest row, `Number.MAX_SAFE_INTEGER`, never with a total read off a
  * client's last frame (short under output). The phone asks for it as its
  * keyboard comes up (2026-10-17). The viewport is the SESSION's: every viewer
- * of the session moves with it. */
+ * of the session moves with it.
+ *
+ * `paste-part` (TM/D6, 2026-10-17) is the wire's own, the one kind with no
+ * engine method of its own: ONE `paste` whose message would pass
+ * `MAX_CONTROL_MESSAGE_BYTES`, sent in order as parts, each its own SendInput
+ * under its own `inputSequence`. It is sent ONLY on a leg whose accept echoed
+ * `paste-parts`. The cell's rules:
+ * - `index` 0 opens the activation's paste (a paste still open is discarded);
+ *   each next part is the previous `index` + 1 on the same activation.
+ * - `last: true` closes it: the cell makes ONE engine `paste` of the whole
+ *   text, fenced under the last part's `inputSequence`, so the engine brackets
+ *   it once and sanitizes it whole — never a bracketed paste per part.
+ * - A part out of order, any other op on the activation while a paste is open,
+ *   a dropped part, the activation's end, or a whole past `MAX_PASTE_BYTES`
+ *   discards the open paste, audited: a paste arrives whole or not at all.
+ * Splitting into `text` ops would bypass the engine's paste encoding (the
+ * brackets, its ESC/control stripping), and into `paste` ops would make N
+ * bracketed pastes, which is why neither existing kind can carry it. */
 export const SendInputOp = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("text"), text: z.string() }).passthrough(),
   z.object({ kind: z.literal("paste"), text: z.string() }).passthrough(),
+  z
+    .object({
+      kind: z.literal("paste-part"),
+      index: RustU32,
+      last: z.boolean(),
+      text: z.string(),
+    })
+    .passthrough(),
   z.object({ kind: z.literal("key"), key: TerminalKeyInput }).passthrough(),
   z.object({ kind: z.literal("mouse"), mouse: TerminalMouseInput }).passthrough(),
   z.object({ kind: z.literal("scroll"), rows: JsonSafeI64 }).passthrough(),

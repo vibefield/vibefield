@@ -648,6 +648,36 @@ describe("the input verb — SendInput (spec \u00a75.4, TP-S3-input)", () => {
     ).toBe(false);
   });
 
+  it("a paste-part series parses: consecutive parts of one activation, whole when joined", () => {
+    const first = SendInput.parse(fixture("tp-send-input.paste-part.json"));
+    const last = SendInput.parse(fixture("tp-send-input.paste-part-last.json"));
+    if (first.op.kind !== "paste-part" || last.op.kind !== "paste-part") throw new Error("kind");
+    expect([first.op.index, first.op.last]).toEqual([0, false]);
+    expect([last.op.index, last.op.last]).toEqual([1, true]);
+    expect(last.activationId).toBe(first.activationId);
+    expect(last.inputSequence).toBe(first.inputSequence + 1);
+    // the cell's ONE engine paste is the parts' text joined, in index order
+    expect(JSON.parse(first.op.text + last.op.text)).toEqual({ rows: [1, 2, 3] });
+  });
+
+  it("a paste-part's index is a u32 and its last flag is required", () => {
+    const op = fixture("tp-send-input.paste-part.json").op;
+    expect(SendInputOp.safeParse({ ...op, index: 0xffff_ffff }).success).toBe(true);
+    expect(SendInputOp.safeParse({ ...op, index: 0x1_0000_0000 }).success).toBe(false);
+    expect(SendInputOp.safeParse({ ...op, index: -1 }).success).toBe(false);
+    expect(SendInputOp.safeParse({ kind: "paste-part", index: 0, text: "x" }).success).toBe(false);
+    expect(SendInputOp.safeParse({ ...op, last: "yes" }).success).toBe(false);
+  });
+
+  it("parts are negotiated, and they carry more than one control message", () => {
+    // Load-bearing: an un-negotiated cell's reader refuses the unknown kind
+    // and closes the control leg, so parts ride only behind the capability.
+    expect(KNOWN_CAPABILITIES).toContain("paste-parts");
+    expect(TERMINAL_PIPELINE.MAX_PASTE_BYTES).toBeGreaterThan(
+      TERMINAL_PIPELINE.MAX_CONTROL_MESSAGE_BYTES,
+    );
+  });
+
   it("an unknown kind refuses; the verb is INBOUND on control only", () => {
     expect(SendInputOp.safeParse({ kind: "detonate" }).success).toBe(false);
     const tagged = fixture("tp-tagged-message.send-input.json");

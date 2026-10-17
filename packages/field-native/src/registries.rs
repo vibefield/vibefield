@@ -128,6 +128,7 @@ pub mod terminal_pipeline {
     pub const URGENT_RESERVE_BYTES: u64 = 2097152;
     pub const MAX_BULK_BYTES_ADMITTED_AHEAD: u64 = 4194304;
     pub const MAX_URGENT_PRESENTATION_UNIT_BYTES: u64 = 1048576;
+    pub const MAX_PASTE_BYTES: u64 = 4194304;
 }
 
 /// TPv3 — the cell doors' WebSocket close codes (1008 = silent pre-auth; 4000+
