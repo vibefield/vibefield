@@ -11,6 +11,7 @@ import {
   FreewayApproveParams,
   type FreewayApproveResult,
   type FreewayDeclareParams,
+  FreewayJoinRow,
   FreewayState,
   GRANT_ALG,
   GRANT_ENVELOPE_VERSION,
@@ -43,7 +44,8 @@ import { rightsFor } from "./terminal-grants";
 // yet knows nothing it could withdraw on.
 //
 // The phone's approval (`freeway.approve`, below) is fieldd's ONE mint for the link: the host
-// mints every grant after it from its own keyring. The audit of its joins is the next slice.
+// mints every grant after it from its own keyring, and reports each join and leave, which fieldd
+// audits (FW-L3: it is the only writer).
 
 /** What fieldd's declaration reads of the roster: THIS desktop's own id (the welcome names it,
  * FW-L9), its self peers in the roster keyspace, and the ONE desktop predicate (FW-DF-1:
@@ -68,6 +70,24 @@ export function freewayDeclaration(
   }));
   return { deviceId: roster.currentDeviceId(), admit, doors: {}, exposure: { terminals } };
 }
+
+/** One `native.freeway.joins.subscribe` frame as fieldd audits it: the rows that parse, in order,
+ * what the floor could not hold (`dropped`), and what did not parse — a row the audit cannot say
+ * is counted, never silently skipped. */
+export interface FreewayJoins {
+  rows: FreewayJoinRow[];
+  dropped: number;
+  malformed: number;
+}
+
+/** The host whose keyrings a revoke walls: the floor boot and the host boot inside it. */
+interface HostBoot {
+  floorBootId: string;
+  hostBootId: string;
+}
+
+const sameHost = (a: HostBoot, b: FreewayState | null): boolean =>
+  b !== null && b.floorBootId === a.floorBootId && b.hostBootId === a.hostBootId;
 
 /** The floor link, as far as the freeway needs it (`NativeLink`). */
 export interface FreewayNative {
@@ -97,6 +117,15 @@ export interface FreewayFloorOptions {
  * - The declaration: sent at every connect, because a new floor boot forgets it, and again
  *   whenever fieldd's word changes. Idempotent on the floor; sent only when it differs from the
  *   last one this link carried, and one at a time, so the floor keeps the newest.
+ * - The joins: their own stream, armed the same way; each frame is emitted as `joins` for the
+ *   audit. The floor drains its backlog into a subscription's first frame, so a reconnect's
+ *   replay carries only what was held while fieldd was away.
+ * - The links: each change is a system-log event (§6.4: a link grants nothing beyond what its
+ *   streams' doors grant, so it is not an audit row).
+ * - A revoke (`revokeAll`, on unlink or sign-out): every phone link closes and the host walls every
+ *   keyring it holds. Owed until the floor answers, and owed to THAT host: said again at the next
+ *   connect while it is still the floor's, and settled when it is gone, its keyrings with it — so
+ *   an owed revoke never lands on the links of a host that came up after a relink.
  */
 export class FreewayFloor extends EventEmitter {
   private readonly logger: Logger;
@@ -106,6 +135,10 @@ export class FreewayFloor extends EventEmitter {
   private sent: string | null = null;
   private chain: Promise<void> = Promise.resolve();
   private stream: { dispose: () => void } | null = null;
+  private joinsArmed = false;
+  private joinsArming: Promise<void> | null = null;
+  private joinsStream: { dispose: () => void } | null = null;
+  private owed: HostBoot | null = null;
   private disposed = false;
 
   constructor(private readonly opts: FreewayFloorOptions) {
@@ -119,12 +152,41 @@ export class FreewayFloor extends EventEmitter {
     return this.current;
   }
 
-  /** The link is (re)connected: arm the state stream if it is not, and declare. Never throws. */
+  /** The link is (re)connected: arm both streams if they are not, say an owed revoke, and declare.
+   * Never throws. */
   async connected(): Promise<void> {
     if (this.disposed) return;
     this.sent = null;
-    await this.arm();
+    await Promise.all([this.arm(), this.armJoins()]);
+    // an owed revoke is said again only to the host it was for: one gone took its keyrings with it
+    const owed = this.owed;
+    if (owed !== null) {
+      if (sameHost(owed, this.current)) await this.revokeAll();
+      else this.owed = null;
+    }
     await this.declare();
+  }
+
+  /** Close every phone link and wall every keyring the host holds: unlink, sign-out, another
+   * account. Never throws; a refusal is owed to the host it was meant for (the class's law). */
+  async revokeAll(): Promise<void> {
+    if (this.disposed) return;
+    const state = this.current;
+    const host =
+      state?.up === true && state.hostBootId !== undefined
+        ? { floorBootId: state.floorBootId, hostBootId: state.hostBootId }
+        : null;
+    try {
+      await this.opts.native.request("native.freeway.revoke", {});
+      this.owed = null;
+    } catch (error) {
+      this.owed = host;
+      this.logger.warn(
+        "fieldd.freeway.revoke_deferred",
+        "The floor did not take the revoke; it is said again at the next connect while that host runs",
+        { error: String(error) },
+      );
+    }
   }
 
   /** fieldd's word may have changed: declare it, unless this link already carries exactly it.
@@ -159,7 +221,57 @@ export class FreewayFloor extends EventEmitter {
     this.disposed = true;
     this.stream?.dispose();
     this.stream = null;
+    this.joinsStream?.dispose();
+    this.joinsStream = null;
     this.removeAllListeners();
+  }
+
+  private armJoins(): Promise<void> {
+    if (this.joinsArmed) return Promise.resolve();
+    this.joinsArming ??= this.subscribeJoins().finally(() => {
+      this.joinsArming = null;
+    });
+    return this.joinsArming;
+  }
+
+  private async subscribeJoins(): Promise<void> {
+    try {
+      const stream = await this.opts.native.subscribe(
+        "native.freeway.joins.subscribe",
+        {},
+        (payload) => this.joins(payload),
+      );
+      // disposed while it armed: the stream ends here, unheard
+      if (this.disposed) return stream.dispose();
+      this.joinsArmed = true;
+      this.joinsStream = stream;
+      this.joins(stream.snapshot);
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.freeway.joins_deferred",
+        "The floor's freeway joins stream did not arm; the next connect arms it",
+        { error: String(error) },
+      );
+    }
+  }
+
+  /** A joins frame, read row by row: one row that does not parse is counted, and the rest stand. */
+  private joins(payload: unknown): void {
+    const frame = payload as { rows?: unknown; dropped?: unknown } | null | undefined;
+    if (!Array.isArray(frame?.rows)) return;
+    const rows: FreewayJoinRow[] = [];
+    let malformed = 0;
+    for (const raw of frame.rows) {
+      const row = FreewayJoinRow.safeParse(raw);
+      if (row.success) rows.push(row.data);
+      else malformed += 1;
+    }
+    const dropped =
+      typeof frame.dropped === "number" && Number.isInteger(frame.dropped) && frame.dropped > 0
+        ? frame.dropped
+        : 0;
+    if (rows.length === 0 && dropped === 0 && malformed === 0) return;
+    this.emit("joins", { rows, dropped, malformed } satisfies FreewayJoins);
   }
 
   /** Arm the state stream once; a connect that lands while it arms waits for the same arming. */
@@ -178,6 +290,7 @@ export class FreewayFloor extends EventEmitter {
         {},
         (payload) => this.apply(payload),
       );
+      if (this.disposed) return stream.dispose();
       this.armed = true;
       this.stream = stream;
       this.apply(stream.snapshot);
@@ -190,6 +303,20 @@ export class FreewayFloor extends EventEmitter {
     }
   }
 
+  /** Each link that changed, as a system-log event — the device and its state, never the state's
+   * secrets. A new floor boot ended every link of the old one, and its own links are all new. */
+  private logLinks(prev: FreewayState | null, next: FreewayState): void {
+    const reborn = prev !== null && prev.floorBootId !== next.floorBootId;
+    const before = linkStates(prev);
+    const after = linkStates(next);
+    const said = (deviceId: string, state: string) =>
+      this.logger.info("fieldd.freeway.link", "A freeway link changed", { deviceId, state });
+    for (const deviceId of before.keys())
+      if (reborn || !after.has(deviceId)) said(deviceId, "down");
+    for (const [deviceId, state] of after)
+      if (reborn || before.get(deviceId) !== state) said(deviceId, state);
+  }
+
   private apply(payload: unknown): void {
     const parsed = FreewayState.safeParse(payload);
     if (!parsed.success) return;
@@ -199,8 +326,14 @@ export class FreewayFloor extends EventEmitter {
       return;
     }
     this.current = next;
+    this.logLinks(prev, next);
     this.emit("state", next);
   }
+}
+
+/** How a state's links read in the system log: one event per device whose link changed. */
+function linkStates(state: FreewayState | null): Map<string, string> {
+  return new Map((state?.links ?? []).map((link) => [link.deviceId, link.state]));
 }
 
 /** The engine identity and display name of the freeway's listener. */

@@ -161,6 +161,11 @@ export class MockMgmtServer {
   freewayState: unknown = null;
   /** F1 — every `native.freeway.declare`'s params, in order. */
   readonly freewayDeclarations: unknown[] = [];
+  /** F1 — when set, `native.freeway.joins.subscribe` answers this first frame (and `pushDelta`
+   * reaches it); null = the generic `{n:0}`. */
+  freewayJoins: unknown = null;
+  /** F1 — every `native.freeway.revoke`'s params, in order; answered `{closed: 0}`. */
+  readonly freewayRevokes: unknown[] = [];
   /** TM-1 (MF-1l) — the floor's word that its terminal doors are PUBLISHED on
    * the tailnet, carried on the hello ack. `null` = a floor that predates the
    * field and says nothing, which every consumer must read as NO (a tappable
@@ -346,6 +351,24 @@ export class MockMgmtServer {
     if (msg.method === "native.freeway.declare") {
       this.freewayDeclarations.push(msg.params);
       sock.write(`${JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: {} })}\n`);
+      return;
+    }
+    if (msg.method === "native.freeway.revoke") {
+      this.freewayRevokes.push(msg.params);
+      sock.write(`${JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { closed: 0 } })}\n`);
+      return;
+    }
+    if (msg.method === "native.freeway.joins.subscribe" && this.freewayJoins !== null) {
+      this.subscriptionRequests.push(msg.method);
+      const subId = `s${this.nextSub++}`;
+      this.issued.push({ sock, subId, method: msg.method });
+      sock.write(
+        `${JSON.stringify({
+          jsonrpc: "2.0",
+          id: msg.id,
+          result: { subId, snapshot: this.freewayJoins },
+        })}\n`,
+      );
       return;
     }
     if (msg.method === "native.freeway.state.subscribe" && this.freewayState !== null) {
@@ -562,6 +585,11 @@ export class MockMgmtServer {
     }
     const p = msg.params ?? {};
     switch (msg.method) {
+      // the floor's unlink: the node is retired and its serves with it
+      case "native.mesh.retire":
+        this.meshServes.clear();
+        reply({ result: { retired: true, archivedTo: null } });
+        return;
       case "native.mesh.serve.list":
         reply({ result: { serves: [...this.meshServes.values()] } });
         return;

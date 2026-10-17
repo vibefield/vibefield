@@ -2,8 +2,10 @@
 // scripted floor: the roster's declaration reaches the floor; the host's serve stands on its own
 // port behind the linked login only while the floor says the host is up; a restarted fieldd leaves
 // that serve where it stands, so every phone link on it survives (FW-L10, F1's exit "fieldd
-// restarted mid-session leaves the terminal live"); and the phone's approval is minted under the
-// floor's key, audited, and refused to a desktop's node and while the host is down.
+// restarted mid-session leaves the terminal live"); the phone's approval is minted under the
+// floor's key, audited, and refused to a desktop's node and while the host is down; each join and
+// leave the host reports is an audit row, and what the floor could not hold is said; an unlink
+// revokes every link.
 import { createHmac } from "node:crypto";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -27,7 +29,7 @@ import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { productDoorPath, TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { desktopSlice, registryPeer } from "./peer-roster";
-import { until, WsRpc } from "./ws-rpc";
+import { helloAs, until, WsRpc } from "./ws-rpc";
 
 let cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
@@ -111,6 +113,30 @@ async function fromNode(daemon: FielddDaemon, mock: MockMgmtServer, node: string
     clientKind: "ios",
   });
   return rpc;
+}
+
+async function shellOf(daemon: FielddDaemon): Promise<WsRpc> {
+  const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+  cleanup.push(() => ws.close());
+  await new Promise<void>((resolve, reject) => {
+    ws.once("open", () => resolve());
+    ws.once("error", reject);
+  });
+  const rpc = new WsRpc(ws);
+  await helloAs(rpc, daemon.shellToken, "shell-main");
+  return rpc;
+}
+
+/** The records `read` answers, once it answers any — the ledger is written after the effect, so a
+ * row the floor sent is read until it lands, within `ms`. */
+async function eventually<T>(read: () => Promise<T[]>, label: string, ms = 15_000): Promise<T[]> {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    const found = await read();
+    if (found.length > 0) return found;
+    if (Date.now() > deadline) throw new Error(`eventually: ${label}`);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
 }
 
 async function auditRecords(daemon: FielddDaemon): Promise<AuditRecordV1[]> {
@@ -226,5 +252,52 @@ describe("F1 — fieldd's freeway half on a booted daemon", () => {
       retryable: true,
       details: { service: FREEWAY_APPROVAL.SERVICE, state: FREEWAY_APPROVAL.STATE_DOWN },
     });
+  }, 60_000);
+
+  it("audits each join and leave the host reports, in order, and says what the floor could not hold", async () => {
+    const { dataDir, mock } = await world(upState());
+    const row = (kind: "joined" | "left", at: number) => ({
+      kind,
+      clientId: `freeway:${TEST_LOGIN}#node-phone~hb-1`,
+      sessionId: "term-1",
+      rights: ["geometry", "input", "read"],
+      at,
+    });
+    // what the floor held while no fieldd listened, and how much it could not
+    mock.freewayJoins = { rows: [row("joined", 10)], dropped: 2 };
+    const daemon = await boot(dataDir);
+    const outcomes = async (action: string) =>
+      (await auditRecords(daemon)).filter((r) => r.action === action && r.phase === "outcome");
+    const lost = await eventually(() => outcomes("freeway.joins.lost"), "the lost row");
+    const [joined] = await outcomes("freeway.session.join");
+    expect(joined).toMatchObject({
+      outcome: "succeeded",
+      target: { kind: "terminal", id: "term-1" },
+      attrs: { clientId: `freeway:${TEST_LOGIN}#node-phone~hb-1`, at: 10 },
+    });
+    expect(lost[0]).toMatchObject({
+      outcome: "failed",
+      reasonCode: "BACKLOG_FULL",
+      target: { kind: "freeway", id: "fb-floor" },
+      attrs: { dropped: 2, malformed: 0 },
+    });
+    mock.pushDelta("native.freeway.joins.subscribe", { rows: [row("left", 20)], dropped: 0 });
+    const left = await eventually(() => outcomes("freeway.session.leave"), "the leave row");
+    expect(left[0]).toMatchObject({
+      target: { kind: "terminal", id: "term-1" },
+      attrs: { at: 20 },
+    });
+  }, 60_000);
+
+  it("an unlink revokes every freeway link, and the serve goes with the login", async () => {
+    const { dataDir, mock } = await world(upState());
+    const daemon = await boot(dataDir);
+    await until(() => mock.meshServes.get("freeway") !== undefined, 15_000, "the freeway serve");
+    expect(mock.freewayRevokes).toEqual([]);
+    const shell = await shellOf(daemon);
+    await shell.call("user.link.unlink", {});
+    await until(() => mock.freewayRevokes.length === 1, 15_000, "the revoke");
+    expect(mock.freewayRevokes[0]).toEqual({});
+    expect(mock.meshServes.get("freeway")).toBeUndefined();
   }, 60_000);
 });

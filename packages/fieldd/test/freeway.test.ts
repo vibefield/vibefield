@@ -17,6 +17,7 @@ import {
   type FreewayState,
   PORTS,
 } from "@vibefield/contracts";
+import type { Logger } from "@vibefield/logging";
 import { describe, expect, it } from "vitest";
 import {
   FREEWAY_SERVE_ID,
@@ -31,6 +32,7 @@ import {
 } from "../src/freeway";
 import type { ServeSpec } from "../src/mesh-client";
 import { RpcCallError } from "../src/native-link";
+import { captureLog } from "./peer-roster";
 
 const LOGIN = "person@example.com";
 const SECRET = "ab".repeat(32);
@@ -64,6 +66,9 @@ function floorState(over: Partial<FreewayState> = {}): FreewayState {
 /** The floor link, scripted: what was asked, and the stream's events to push. */
 class ScriptedFloor implements FreewayNative {
   readonly declared: unknown[] = [];
+  revokes = 0;
+  refuseRevoke = false;
+  /** the state stream's: how often it was asked, whether it refuses, its frames, its ends */
   subscribes = 0;
   refuseSubscribe = false;
   refuseDeclare = false;
@@ -72,8 +77,18 @@ class ScriptedFloor implements FreewayNative {
   snapshot: unknown = floorState();
   push: ((payload: unknown) => void) | null = null;
   disposed = 0;
+  /** the joins stream's, the same four */
+  joinSubscribes = 0;
+  joinsSnapshot: unknown = { rows: [], dropped: 0 };
+  pushJoins: ((payload: unknown) => void) | null = null;
+  joinsDisposed = 0;
 
   async request(method: string, params: unknown): Promise<unknown> {
+    if (method === "native.freeway.revoke") {
+      this.revokes += 1;
+      if (this.refuseRevoke) throw new Error("the host did not answer");
+      return { closed: 0 };
+    }
     expect(method).toBe("native.freeway.declare");
     this.declared.push(params);
     if (this.hold !== null) await this.hold;
@@ -86,6 +101,12 @@ class ScriptedFloor implements FreewayNative {
     _params: unknown,
     onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
   ): Promise<{ snapshot: unknown; dispose: () => void }> {
+    if (method === "native.freeway.joins.subscribe") {
+      this.joinSubscribes += 1;
+      await Promise.resolve();
+      this.pushJoins = (payload) => onEvent(payload, "delta");
+      return { snapshot: this.joinsSnapshot, dispose: () => (this.joinsDisposed += 1) };
+    }
     expect(method).toBe("native.freeway.state.subscribe");
     this.subscribes += 1;
     await Promise.resolve();
@@ -95,12 +116,13 @@ class ScriptedFloor implements FreewayNative {
   }
 }
 
-function rig(over: { terminals?: boolean } = {}) {
+function rig(over: { terminals?: boolean; logger?: Logger } = {}) {
   const native = new ScriptedFloor();
   const people = roster();
   const floor = new FreewayFloor({
     native,
     declaration: () => freewayDeclaration(people.view, over.terminals ?? true),
+    ...(over.logger !== undefined ? { logger: over.logger } : {}),
   });
   const heard: FreewayState[] = [];
   floor.on("state", (state: FreewayState) => heard.push(state));
@@ -223,6 +245,90 @@ describe("F1 — the floor's state, as fieldd reads it", () => {
     await floor.connected();
     await floor.declare();
     expect(native.declared).toHaveLength(2);
+  });
+});
+
+describe("F1 — the joins, the links and the revoke", () => {
+  const join = (kind: "joined" | "left", sessionId: string, at: number) => ({
+    kind,
+    clientId: `freeway:${LOGIN}#nPHONE01~hb-1`,
+    sessionId,
+    rights: ["geometry", "input", "read"],
+    at,
+  });
+
+  it("emits each joins frame in the floor's order, a row that does not parse counted and the backlog's loss said", async () => {
+    const { native, floor } = rig();
+    native.joinsSnapshot = { rows: [join("joined", "s-1", 1), { kind: "joined" }], dropped: 3 };
+    const frames: unknown[] = [];
+    floor.on("joins", (frame) => frames.push(frame));
+    await floor.connected();
+    native.pushJoins?.({ rows: [], dropped: 0 }); // says nothing: no frame
+    native.pushJoins?.({ rows: [join("left", "s-1", 2)], dropped: 0 });
+    native.pushJoins?.({ n: 0 }); // a floor that predates the stream: not a frame
+    expect(frames).toEqual([
+      { rows: [join("joined", "s-1", 1)], dropped: 3, malformed: 1 },
+      { rows: [join("left", "s-1", 2)], dropped: 0, malformed: 0 },
+    ]);
+    await floor.connected();
+    expect(native.joinSubscribes).toBe(1);
+    floor.dispose();
+    expect(native.joinsDisposed).toBe(1);
+  });
+
+  it("logs each link that changed — the device and its state, never a secret", async () => {
+    const log = captureLog();
+    const { native, floor } = rig({ logger: log.logger });
+    await floor.connected();
+    native.push?.(floorState({ revision: 2, links: [{ deviceId: "dev-p", state: "up" }] }));
+    native.push?.(floorState({ revision: 3, links: [{ deviceId: "dev-p", state: "up" }] }));
+    native.push?.(floorState({ revision: 4, links: [] }));
+    native.push?.(floorState({ revision: 5, links: [{ deviceId: "dev-p", state: "up" }] }));
+    // a new floor boot: the old one's links ended with it, and its own are new
+    const reborn = floorState({ revision: 1, floorBootId: "fb-2" });
+    native.push?.({ ...reborn, links: [{ deviceId: "dev-p", state: "up" }] });
+    expect(log.events("fieldd.freeway.link")).toEqual([
+      { deviceId: "dev-p", state: "up" },
+      { deviceId: "dev-p", state: "down" },
+      { deviceId: "dev-p", state: "up" },
+      { deviceId: "dev-p", state: "down" },
+      { deviceId: "dev-p", state: "up" },
+    ]);
+    const said = JSON.stringify(log.events("fieldd.freeway.link"));
+    for (const secret of [SECRET, "ef".repeat(32), "cd".repeat(32)])
+      expect(said).not.toContain(secret);
+  });
+
+  it("ends a stream that finishes arming after dispose, unheard", async () => {
+    const { native, floor } = rig();
+    const connecting = floor.connected();
+    floor.dispose();
+    await connecting;
+    expect([native.disposed, native.joinsDisposed]).toEqual([1, 1]);
+    expect(floor.state()).toBeNull();
+  });
+
+  it("revokes once when asked, and owes a refused revoke to the host it was meant for — never to the next one", async () => {
+    const { native, floor } = rig();
+    await floor.connected();
+    await floor.revokeAll();
+    expect(native.revokes).toBe(1);
+    await floor.connected();
+    expect(native.revokes).toBe(1); // answered: nothing owed
+    native.refuseRevoke = true;
+    await floor.revokeAll();
+    native.refuseRevoke = false;
+    await floor.connected(); // the same host is up: said again
+    expect(native.revokes).toBe(3);
+    await floor.connected();
+    expect(native.revokes).toBe(3);
+    native.refuseRevoke = true;
+    await floor.revokeAll();
+    native.refuseRevoke = false;
+    // a relink brought a new host: its links are not the ones the revoke was for
+    native.push?.(floorState({ revision: 2, hostBootId: "hb-2" }));
+    await floor.connected();
+    expect(native.revokes).toBe(4);
   });
 });
 
