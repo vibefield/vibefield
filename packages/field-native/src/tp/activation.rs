@@ -5080,4 +5080,63 @@ mod tests {
         assert!(t.get("b1").is_some());
         assert_eq!(t.session_ids(), vec!["s2".to_string(), "s3".to_string()]);
     }
+
+    /// D5 — the cell's half of a renewal, pinned: input closes at
+    /// the margin (`ATTACH_RENEWAL_MARGIN_MS` before expiry) unless a renewal
+    /// has landed, and a renewal reopens it IN ITS OWN REPLY — the
+    /// `ControlLegAttached` and, behind it, the status that says `allowed`; no
+    /// tick, no second round trip. So a client that renews AHEAD of the margin
+    /// (the kit: margin + 30 s) never sees input close, and the closed window a
+    /// client sees is exactly how late its renewal landed. The desktop's ~9
+    /// minute blip is its runtime asking AT the margin and closing its own
+    /// input first (ghosttea-react `#scheduleRoutedRenewal`) — the upstream half.
+    #[test]
+    fn a_renewal_before_the_margin_never_closes_input_and_one_after_reopens_it_at_once() {
+        let mut t = ActivationTable::new("cb");
+        let (control, mut crx, _frames, _frx) = presenting_activation(&mut t, "a1", "s1", 10);
+        let renew = |t: &mut ActivationTable, generation: u64, now_ms: u64| {
+            let mut renewed = claims("s1", generation, &[AttachRight::Input, AttachRight::Read]);
+            renewed.issued_at = now_ms;
+            renewed.expires_at = now_ms + 600_000;
+            t.attach_control(AttachControlInput {
+                now_ms,
+                set: &set(),
+                leg: &control,
+                msg: control_msg("a1", None, true),
+                claims: renewed,
+                session_known: true,
+            })
+        };
+        let margin_of = |t: &ActivationTable| {
+            t.get("a1").unwrap().grant_expires_at_ms - tp::ATTACH_RENEWAL_MARGIN_MS
+        };
+
+        // the kit's schedule: renewed 30 s AHEAD of the margin — input never
+        // closes, not at the old margin and not after it
+        let ahead = margin_of(&t) - 30_000;
+        assert!(t.tick(ahead).is_empty(), "nothing closes before the margin");
+        perform(renew(&mut t, 2, ahead));
+        let s = texts(&mut crx);
+        assert_eq!(s[0]["type"], "ControlLegAttached");
+        assert_eq!(s[1]["input"]["state"], "allowed");
+        assert!(
+            t.tick(ahead + 30_001).is_empty(),
+            "a renewal in time never closes input"
+        );
+        assert_eq!(t.get("a1").unwrap().input, Input::Allowed);
+
+        // the desktop's schedule (ghosttea-react at its pin): renewed AT the
+        // margin — the tick has closed input by the time the renewal lands…
+        let at = margin_of(&t);
+        perform(t.tick(at));
+        let s = texts(&mut crx);
+        assert_eq!(s.last().unwrap()["input"]["state"], "suspended");
+        assert_eq!(s.last().unwrap()["input"]["reason"], "right-expired");
+        // …and the renewal reopens it in its own reply, with no tick between
+        perform(renew(&mut t, 3, at + 50));
+        let s = texts(&mut crx);
+        assert_eq!(s[0]["type"], "ControlLegAttached");
+        assert_eq!(s[1]["type"], "CellActivationStatus");
+        assert_eq!(s[1]["input"]["state"], "allowed");
+    }
 }
