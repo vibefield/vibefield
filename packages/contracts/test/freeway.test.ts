@@ -66,6 +66,18 @@ describe("FW — the link refuses what it must", () => {
     expect(FreewayLinkMessage.safeParse(future).success).toBe(false);
   });
 
+  it("announces a planned restart in the one plane vocabulary, never a second one", () => {
+    // Ruled 2026-10-17 with the History lead: `RestartScheduled`'s planes, which the shell, fieldd
+    // and the device slice all carry. A planned host restart is a field-native one.
+    const restarting = fixture("freeway-link.restarting.json");
+    expect(FreewayLinkMessage.safeParse(restarting).success).toBe(true);
+    for (const planes of [["host"], ["floor"], ["app"], []]) {
+      expect(FreewayLinkMessage.safeParse({ ...restarting, planes }).success, String(planes)).toBe(
+        false,
+      );
+    }
+  });
+
   it("refuses a welcome that does not say which desktop answered", () => {
     // FW-L9: the welcome's deviceId is the dialer's consistency check; a welcome without one
     // would let a misrouted link through unseen.

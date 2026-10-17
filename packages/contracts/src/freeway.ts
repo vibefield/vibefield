@@ -13,6 +13,7 @@ import {
   TerminalOpenTicket,
   TransportChannel,
 } from "./terminal-pipeline";
+import { RestartScheduled } from "./update-policy";
 
 // THE FREEWAY (FW-D1…D7; `draft/thinking-freeway.md` v0.3 §3–§5) — one link per peer: the phone's
 // to each desktop it shows, opened at connect, and one per desktop pair; every plane a stream on
@@ -267,16 +268,15 @@ export const FreewayRenewed = z
 export type FreewayRenewed = z.infer<typeof FreewayRenewed>;
 
 /** A planned close says so first, so the peer says "restarting" and waits `ttlMs` instead of
- * reading a transport loss. A desktop's own state stays the roster's `DeviceState`. */
-export const FreewayRestarting = z
-  .object({
-    type: z.literal("Restarting"),
-    reason: z.string().min(1),
-    planes: z.array(z.enum(["host", "floor", "app"])),
-    at: EpochMs,
-    ttlMs: Counter,
-  })
-  .passthrough();
+ * reading a transport loss. It is `RestartScheduled` — one reason set and ONE plane set (`shell |
+ * fieldd | field-native`) for every carrier of a planned restart — with the link's tag and the
+ * peer's wait. A planned host restart is a field-native one (the host's bytes ship with the native
+ * plane); an unplanned one is a link loss and is never announced (v0.3 §7). A desktop's own state
+ * stays the roster's `DeviceState`. */
+export const FreewayRestarting = RestartScheduled.extend({
+  type: z.literal("Restarting"),
+  ttlMs: Counter,
+});
 export type FreewayRestarting = z.infer<typeof FreewayRestarting>;
 
 export const FreewayPathChanged = z

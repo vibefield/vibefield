@@ -1,7 +1,7 @@
 {
   "type": "Restarting",
   "reason": "update",
-  "planes": ["app"],
+  "planes": ["shell", "fieldd", "field-native"],
   "at": 1787788830000,
   "ttlMs": 20000
 }
