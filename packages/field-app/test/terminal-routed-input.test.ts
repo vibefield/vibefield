@@ -241,4 +241,24 @@ describe("createRoutedInputEncoder — the SendInput wire encoding (spec §5.4)"
     expect(encoder.encodeInput(context({ kind: "paste", text: emoji }))).toBeNull();
     expect(sequenceOf(encoder.encodeInput(context(text())))).toBe(1);
   });
+
+  it("sends a lone surrogate as U+FFFD, never an escape the cell's reader closes the leg on", () => {
+    const encoder = createRoutedInputEncoder({ maxTrackedSessions: 1 });
+    // A high surrogate with no partner, a low one with none, and a real pair
+    // (U+1F4A5) between them, which must arrive untouched.
+    const broken = "a\uD83Db\uDCA5c\u{1F4A5}d\uD83D";
+    for (const kind of ["paste", "text"] as const) {
+      const message = encoder.encodeInput(context({ kind, text: broken }));
+      const op = SendInput.parse(message).op;
+      expect(op.kind).toBe(kind);
+      if (op.kind !== "paste" && op.kind !== "text") throw new Error(kind);
+      expect(op.text).toBe("a\uFFFDb\uFFFDc\u{1F4A5}d\uFFFD");
+      // what the leg carries is well-formed: no surrogate escape at all
+      expect(JSON.stringify(message)).not.toMatch(/\\ud[89a-f]/i);
+    }
+    // well-formed text is sent as it is, byte for byte
+    const fine = "naïve 日本 \u{1F4A5}";
+    const op = SendInput.parse(encoder.encodeInput(context({ kind: "paste", text: fine }))).op;
+    expect(op).toMatchObject({ kind: "paste", text: fine });
+  });
 });

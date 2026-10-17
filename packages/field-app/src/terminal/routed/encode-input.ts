@@ -23,12 +23,25 @@ import type {
 } from "@vibecook/ghosttea-react";
 import { SendInput, type SendInputOp, TERMINAL_PIPELINE, tagTpMessage } from "@vibefield/contracts";
 
+/** A UTF-16 surrogate with no partner: it has no UTF-8 form. */
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+/** Text as the PTY can take it. `JSON.stringify` writes a lone surrogate as a
+ * `\udXXX` escape, the cell's serde refuses that escape when it reads a Rust
+ * `String`, and `handle_text` makes the refusal a PROTOCOL close of the whole
+ * control leg — every activation on it, for one stray code unit in a paste.
+ * The PTY is fed UTF-8, where a lone surrogate is U+FFFD (`TextEncoder` makes
+ * it the same), so that is the faithful projection, not an invented one. */
+function wellFormed(text: string): string {
+  return text.replace(LONE_SURROGATE, "\uFFFD");
+}
+
 function encodeOp(operation: RoutedTerminalInputOperation): SendInputOp | null {
   switch (operation.kind) {
     case "text":
-      return { kind: "text", text: operation.text };
+      return { kind: "text", text: wellFormed(operation.text) };
     case "paste":
-      return { kind: "paste", text: operation.text };
+      return { kind: "paste", text: wellFormed(operation.text) };
     case "key": {
       const e = operation.event;
       return {
