@@ -1243,15 +1243,14 @@ async fn writer_task(
     mut rx: mpsc::UnboundedReceiver<Outbound>,
     bulk_credit: Option<Arc<Semaphore>>,
 ) {
-    let mut urgent: VecDeque<Outbound> = VecDeque::new();
-    let mut bulk: VecDeque<Vec<u8>> = VecDeque::new();
+    let mut lanes = Lanes::default();
     let mut disconnected = false;
     loop {
         // Pull everything currently queued into the priority lanes (non-blocking),
         // so an urgent unit that arrived during the last write jumps ahead now.
         loop {
             match rx.try_recv() {
-                Ok(item) => enqueue(item, &mut urgent, &mut bulk),
+                Ok(item) => lanes.enqueue(item),
                 Err(mpsc::error::TryRecvError::Empty) => break,
                 Err(mpsc::error::TryRecvError::Disconnected) => {
                     disconnected = true;
@@ -1259,13 +1258,13 @@ async fn writer_task(
                 }
             }
         }
-        match pick_next(&mut urgent, &mut bulk) {
+        match lanes.pick() {
             Pick::Urgent(Outbound::Text(t)) => {
                 if sink.send(Message::Text(t.into())).await.is_err() {
                     break;
                 }
             }
-            Pick::Urgent(Outbound::Binary(b)) => {
+            Pick::Urgent(Outbound::Binary(b, _)) => {
                 if sink.send(Message::Binary(b.into())).await.is_err() {
                     break;
                 }
@@ -1281,7 +1280,7 @@ async fn writer_task(
                 let _ = sink.flush().await;
                 break;
             }
-            Pick::Urgent(Outbound::Bulk(b)) => bulk.push_back(b), // unreachable; keep total
+            Pick::Urgent(bulk @ Outbound::Bulk(..)) => lanes.enqueue(bulk), // unreachable; keep total
             Pick::Bulk(b) => {
                 // ONE chunk, then loop back to re-inspect urgent; return its bytes
                 // to the bulk-ahead window as the wire drains them.
@@ -1299,7 +1298,7 @@ async fn writer_task(
                     break;
                 }
                 match rx.recv().await {
-                    Some(item) => enqueue(item, &mut urgent, &mut bulk),
+                    Some(item) => lanes.enqueue(item),
                     None => break,
                 }
             }
@@ -1311,29 +1310,89 @@ async fn writer_task(
     }
 }
 
-/// The writer's priority pick: the URGENT lane drains fully before any bulk, and
-/// each lane is FIFO. Pulled out of the writer loop so the invariant is unit-
-/// testable without a socket (§8, TP-S3d — the bulk-induced-HOL floor).
+/// The writer's priority pick: the URGENT lane drains before any bulk, and each
+/// lane is FIFO. Pulled out of the writer loop so the invariant is unit-testable
+/// without a socket (§8, TP-S3d — the bulk-induced-HOL floor).
 enum Pick {
     Urgent(Outbound),
     Bulk(Vec<u8>),
     Idle,
 }
 
-fn pick_next(urgent: &mut VecDeque<Outbound>, bulk: &mut VecDeque<Vec<u8>>) -> Pick {
-    if let Some(u) = urgent.pop_front() {
-        Pick::Urgent(u)
-    } else if let Some(b) = bulk.pop_front() {
-        Pick::Bulk(b)
-    } else {
-        Pick::Idle
-    }
+/// A queued unit and the order it ARRIVED in — the one order both lanes share.
+struct Queued<T> {
+    arrival: u64,
+    unit: T,
 }
 
-fn enqueue(item: Outbound, urgent: &mut VecDeque<Outbound>, bulk: &mut VecDeque<Vec<u8>>) {
-    match item {
-        Outbound::Bulk(b) => bulk.push_back(b),
-        other => urgent.push_back(other),
+/// A bulk unit and the activation whose transfer it belongs to.
+struct BulkUnit {
+    bytes: Vec<u8>,
+    activation: Arc<str>,
+}
+
+/// The writer's two lanes. Urgent passes bulk ACROSS activations only
+/// (2026-10-17): an urgent unit waits while a bulk unit of its OWN activation
+/// that arrived before it is still queued, and that bulk unit goes first. A
+/// delta is built on the transfer ahead of it, and the worker drops a unit that
+/// arrives behind a later one of its activation; the delta that overtook its
+/// own catch-up froze the phone's scene for good. Other activations' urgent
+/// units still pass every bulk unit, so the HOL floor holds for them.
+#[derive(Default)]
+struct Lanes {
+    urgent: VecDeque<Queued<Outbound>>,
+    bulk: VecDeque<Queued<BulkUnit>>,
+    arrivals: u64,
+}
+
+impl Lanes {
+    fn enqueue(&mut self, item: Outbound) {
+        self.arrivals += 1;
+        let arrival = self.arrivals;
+        match item {
+            Outbound::Bulk(bytes, activation) => self.bulk.push_back(Queued {
+                arrival,
+                unit: BulkUnit { bytes, activation },
+            }),
+            unit => self.urgent.push_back(Queued { arrival, unit }),
+        }
+    }
+
+    fn pick(&mut self) -> Pick {
+        // The first urgent unit no earlier bulk unit of its activation holds
+        // back goes; failing that, the bulk unit the first held one waits on.
+        let mut waits_on = None;
+        let mut free = None;
+        for (at, queued) in self.urgent.iter().enumerate() {
+            match self.holding(queued) {
+                None => {
+                    free = Some(at);
+                    break;
+                }
+                Some(bulk_at) => {
+                    waits_on.get_or_insert(bulk_at);
+                }
+            }
+        }
+        if let Some(at) = free {
+            let queued = self.urgent.remove(at).expect("an index the scan found");
+            return Pick::Urgent(queued.unit);
+        }
+        match self.bulk.remove(waits_on.unwrap_or(0)) {
+            Some(queued) => Pick::Bulk(queued.unit.bytes),
+            None => Pick::Idle,
+        }
+    }
+
+    /// The earliest bulk unit of `queued`'s own activation that arrived before
+    /// it, if one is still queued. A unit of no activation is never held.
+    fn holding(&self, queued: &Queued<Outbound>) -> Option<usize> {
+        let Outbound::Binary(_, Some(activation)) = &queued.unit else {
+            return None;
+        };
+        self.bulk
+            .iter()
+            .position(|b| b.arrival < queued.arrival && b.unit.activation == *activation)
     }
 }
 
@@ -1510,7 +1569,7 @@ fn handle_text(
             });
             let _ = leg
                 .out
-                .send(Outbound::Binary(encode_envelope(&header, &[])));
+                .send(Outbound::Binary(encode_envelope(&header, &[]), None));
             Ok(true)
         }
         (_, other) if inbound_tags(channel).contains(&other) => {
@@ -2061,49 +2120,94 @@ mod tests {
         assert_eq!((cols, rows), (90, 30));
     }
 
-    /// §8, TP-S3d — the writer's priority invariant: an urgent unit jumps EVERY
-    /// queued bulk chunk, and each lane stays FIFO. This is the bulk-induced-HOL
-    /// floor at the scheduler: a background transfer never delays an urgent
-    /// incremental that is already queued.
-    #[test]
-    fn the_writer_drains_urgent_before_any_bulk_and_fifo_within_each_lane() {
-        let mut urgent: VecDeque<Outbound> = VecDeque::new();
-        let mut bulk: VecDeque<Vec<u8>> = VecDeque::new();
-
-        // A transfer's chunks are queued (bulk) with an urgent incremental in the
-        // MIDDLE — exactly the head-of-line case.
-        enqueue(Outbound::Bulk(b"a-begin".to_vec()), &mut urgent, &mut bulk);
-        enqueue(Outbound::Bulk(b"a-chunk1".to_vec()), &mut urgent, &mut bulk);
-        enqueue(
-            Outbound::Binary(b"b-urgent".to_vec()),
-            &mut urgent,
-            &mut bulk,
-        );
-        enqueue(Outbound::Bulk(b"a-chunk2".to_vec()), &mut urgent, &mut bulk);
-        enqueue(Outbound::Text("ctrl".into()), &mut urgent, &mut bulk);
-
+    /// The bytes each pick would write, in the writer's order.
+    fn drained(lanes: &mut Lanes) -> Vec<Vec<u8>> {
         let mut order: Vec<Vec<u8>> = Vec::new();
         loop {
-            match pick_next(&mut urgent, &mut bulk) {
-                Pick::Urgent(Outbound::Binary(b)) => order.push(b),
+            match lanes.pick() {
+                Pick::Urgent(Outbound::Binary(b, _)) => order.push(b),
                 Pick::Urgent(Outbound::Text(t)) => order.push(t.into_bytes()),
                 Pick::Urgent(other) => panic!("unexpected urgent {other:?}"),
                 Pick::Bulk(b) => order.push(b),
-                Pick::Idle => break,
+                Pick::Idle => return order,
             }
         }
+    }
+
+    fn bulk(bytes: &[u8], activation: &str) -> Outbound {
+        Outbound::Bulk(bytes.to_vec(), Arc::from(activation))
+    }
+
+    fn urgent(bytes: &[u8], activation: &str) -> Outbound {
+        Outbound::Binary(bytes.to_vec(), Some(Arc::from(activation)))
+    }
+
+    fn written(units: &[&[u8]]) -> Vec<Vec<u8>> {
+        units.iter().map(|u| u.to_vec()).collect()
+    }
+
+    /// §8, TP-S3d — the writer's priority invariant: an urgent unit jumps EVERY
+    /// queued bulk chunk of another activation, and each lane stays FIFO. This
+    /// is the bulk-induced-HOL floor at the scheduler: a background transfer
+    /// never delays an urgent incremental that is already queued.
+    #[test]
+    fn the_writer_drains_urgent_before_any_bulk_and_fifo_within_each_lane() {
+        let mut lanes = Lanes::default();
+
+        // A transfer's chunks are queued (bulk) with an urgent incremental in the
+        // MIDDLE — exactly the head-of-line case.
+        lanes.enqueue(bulk(b"a-begin", "a"));
+        lanes.enqueue(bulk(b"a-chunk1", "a"));
+        lanes.enqueue(urgent(b"b-urgent", "b"));
+        lanes.enqueue(bulk(b"a-chunk2", "a"));
+        lanes.enqueue(Outbound::Text("ctrl".into()));
 
         // urgent lane first (FIFO: the binary, then the control text), THEN the
         // bulk lane in FIFO order.
         assert_eq!(
-            order,
-            vec![
-                b"b-urgent".to_vec(),
-                b"ctrl".to_vec(),
-                b"a-begin".to_vec(),
-                b"a-chunk1".to_vec(),
-                b"a-chunk2".to_vec(),
-            ],
+            drained(&mut lanes),
+            written(&[b"b-urgent", b"ctrl", b"a-begin", b"a-chunk1", b"a-chunk2"]),
+        );
+    }
+
+    /// 2026-10-17 — an activation's own catch-up is not background to its own
+    /// deltas. The delta queued after its activation's transfer waits for every
+    /// unit of it, and that transfer goes ahead of another activation's bulk;
+    /// another activation's urgent unit, and a unit of none, still pass both.
+    /// James's phone: the reopen's catch-up (r3797 → r3798) was overtaken by
+    /// codex's next delta, the worker dropped the catch-up's units as behind
+    /// that delta in the activation's sequence, and the scene froze for good.
+    #[test]
+    fn an_activations_delta_never_overtakes_its_own_queued_transfer() {
+        let mut lanes = Lanes::default();
+        lanes.enqueue(bulk(b"c-begin", "c"));
+        lanes.enqueue(bulk(b"a-begin", "a"));
+        lanes.enqueue(bulk(b"a-chunk", "a"));
+        lanes.enqueue(bulk(b"a-end", "a"));
+        lanes.enqueue(urgent(b"a-delta", "a"));
+        lanes.enqueue(urgent(b"b-urgent", "b"));
+        lanes.enqueue(Outbound::Binary(b"calibration".to_vec(), None));
+        assert_eq!(
+            drained(&mut lanes),
+            written(&[
+                b"b-urgent",
+                b"calibration",
+                b"a-begin",
+                b"a-chunk",
+                b"a-end",
+                b"a-delta",
+                b"c-begin",
+            ]),
+        );
+
+        // Only a transfer queued BEFORE a delta holds it: the delta that came
+        // first still goes first, and the one after the catch-up waits for it.
+        lanes.enqueue(urgent(b"a-delta-1", "a"));
+        lanes.enqueue(bulk(b"a-catchup", "a"));
+        lanes.enqueue(urgent(b"a-delta-2", "a"));
+        assert_eq!(
+            drained(&mut lanes),
+            written(&[b"a-delta-1", b"a-catchup", b"a-delta-2"]),
         );
     }
 }

@@ -35,11 +35,20 @@ use tokio::sync::Semaphore;
 /// `Bulk` rides the BULK lane (seed/catch-up transfer chunks). Urgent drains
 /// first and the writer re-inspects it after every bulk chunk, so a background
 /// transfer yields to an urgent incremental at chunk boundaries.
+///
+/// A presentation unit names its ACTIVATION, because the lanes may reorder
+/// only ACROSS activations (2026-10-17): an activation's own catch-up is not
+/// background to its own deltas. Each delta is built on the transfer queued
+/// before it, and the worker drops a unit that arrives behind a later one of
+/// its activation (`activationSequence` is "only a correctness check on an
+/// ordered socket", §5) — so a delta that overtook its catch-up froze the
+/// phone's scene for good. `Binary(_, None)` is a unit of no activation (a
+/// calibration echo).
 #[derive(Debug)]
 pub enum Outbound {
     Text(String),
-    Binary(Vec<u8>),
-    Bulk(Vec<u8>),
+    Binary(Vec<u8>, Option<Arc<str>>),
+    Bulk(Vec<u8>, Arc<str>),
     Close(u16, String),
 }
 

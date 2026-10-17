@@ -117,6 +117,8 @@ pub fn spawn_pump<H: PumpHost>(host: Arc<H>, start: PumpStart) -> PumpHandle {
 struct Pump<H: PumpHost> {
     host: Arc<H>,
     start: PumpStart,
+    /// `start.activation_id`, shared: every unit the writer queues names it.
+    activation: Arc<str>,
     notify: Arc<Notify>,
     stop: Arc<AtomicBool>,
     activation_sequence: u64,
@@ -138,9 +140,11 @@ async fn run_pump<H: PumpHost>(
     stop: Arc<AtomicBool>,
 ) {
     let (mut rx, _baseline) = start.hub.subscribe();
+    let activation: Arc<str> = Arc::from(start.activation_id.as_str());
     let mut pump = Pump {
         host,
         start,
+        activation,
         notify,
         stop,
         activation_sequence: 0,
@@ -275,7 +279,8 @@ impl<H: PumpHost> Pump<H> {
             UnitClass::Urgent,
         ) {
             Admission::Admitted => {
-                if self.start.frames.out.send(Outbound::Binary(unit)).is_err() {
+                let unit = Outbound::Binary(unit, Some(self.activation.clone()));
+                if self.start.frames.out.send(unit).is_err() {
                     return Err(());
                 }
                 self.last_sent = Some(header.revision);
@@ -475,7 +480,7 @@ impl<H: PumpHost> Pump<H> {
         self.start
             .frames
             .out
-            .send(Outbound::Bulk(unit))
+            .send(Outbound::Bulk(unit, self.activation.clone()))
             .map_err(|_| ())
     }
 }
