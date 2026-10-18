@@ -210,7 +210,6 @@ import {
   FREEWAY_SERVE_ID,
   FreewayApprover,
   FreewayFloor,
-  type FreewayJoins,
   FreewayServeDriver,
   freewayDeclaration,
 } from "./freeway";
@@ -5740,9 +5739,45 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // re-sent at every connect (a new floor boot forgets it) and on every roster change (this
     // desktop's id moves when the mesh identity lands; a desktop's slice turns a "phone" row into
     // a desktop one, FW-DF-1).
+    // FW-L3 — fieldd is the only audit writer: a row for each join and leave the host reports, in
+    // the floor's order, and one saying how many rows the floor could not hold (or read) while
+    // fieldd was away — the audit says what it lost, never pretends. The floor lets a row go only
+    // once it is written here (FreewayFloor's joins law).
     const freewayFloor = new FreewayFloor({
       native,
       declaration: () => freewayDeclaration(devices, config.freewayTerminals !== false),
+      audit: {
+        join: async (floorBootId, row) => {
+          await audit.requiredSystem(
+            {
+              action: row.kind === "joined" ? "freeway.session.join" : "freeway.session.leave",
+              target: { kind: "terminal", id: row.sessionId },
+            },
+            () => row,
+            () => ({
+              outcome: "succeeded",
+              attrs: {
+                clientId: row.clientId,
+                rights: [...row.rights],
+                at: row.at,
+                cursor: row.cursor,
+                floorBootId,
+              },
+            }),
+          );
+        },
+        lost: async (floorBootId, lost) => {
+          await audit.requiredSystem(
+            { action: "freeway.joins.lost", target: { kind: "freeway", id: floorBootId } },
+            () => lost,
+            () => ({
+              outcome: "failed",
+              reasonCode: lost.dropped > 0 ? "BACKLOG_FULL" : "MALFORMED",
+              attrs: { ...lost },
+            }),
+          );
+        },
+      },
       logger: logger.child({ component: "freeway" }),
     });
     const freewayServe = new FreewayServeDriver({
@@ -5792,49 +5827,6 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           attrs: { expiresAt: approved.expiresAt, rights: [...ask.rights] },
         }),
       );
-    });
-    // FW-L3 — fieldd is the only audit writer: a row for each join and leave the host reports, in
-    // the floor's order, and one saying how many rows the floor could not hold (or read) while
-    // fieldd was away — the audit says what it lost, never pretends. A row the ledger refuses is
-    // said in the log, with its count.
-    let freewayJoinsAudited: Promise<void> = Promise.resolve();
-    const auditFreewayJoins = async (frame: FreewayJoins): Promise<void> => {
-      for (const row of frame.rows) {
-        await audit.requiredSystem(
-          {
-            action: row.kind === "joined" ? "freeway.session.join" : "freeway.session.leave",
-            target: { kind: "terminal", id: row.sessionId },
-          },
-          () => row,
-          () => ({
-            outcome: "succeeded",
-            attrs: { clientId: row.clientId, rights: [...row.rights], at: row.at },
-          }),
-        );
-      }
-      if (frame.dropped + frame.malformed === 0) return;
-      await audit.requiredSystem(
-        {
-          action: "freeway.joins.lost",
-          target: { kind: "freeway", id: freewayFloor.state()?.floorBootId ?? "unread" },
-        },
-        () => frame,
-        () => ({
-          outcome: "failed",
-          reasonCode: frame.dropped > 0 ? "BACKLOG_FULL" : "MALFORMED",
-          attrs: { dropped: frame.dropped, malformed: frame.malformed },
-        }),
-      );
-    };
-    freewayFloor.on("joins", (frame: FreewayJoins) => {
-      freewayJoinsAudited = freewayJoinsAudited
-        .then(() => auditFreewayJoins(frame))
-        .catch((error: unknown) => {
-          serveLog.warn("fieldd.freeway.joins_unaudited", "Freeway join rows were not audited", {
-            rows: frame.rows.length,
-            error: String(error),
-          });
-        });
     });
     // Unlink, sign-out, another account: every phone link the old login's approvals opened closes,
     // and the host walls every keyring it holds, so the cells floor the grants already out (§6).

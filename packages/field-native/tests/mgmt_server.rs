@@ -1020,8 +1020,22 @@ async fn the_freeway_arms_answer_on_the_paired_channel() {
     let (joins, _) = reply(&mut c, 6).await;
     assert_eq!(
         joins["result"]["snapshot"],
-        json!({ "rows": [], "dropped": 0 }),
+        json!({ "floorBootId": daemon.boot_id, "rows": [], "dropped": 0 }),
         "{joins}"
+    );
+
+    // fieldd's acknowledgment of what it audited; a malformed one names its class alone
+    let ack =
+        json!({"jsonrpc":"2.0","id":7,"method":"native.freeway.joins.ack","params":{"through":3}});
+    c.send(ack).await;
+    let (acked, _) = reply(&mut c, 7).await;
+    assert_eq!(acked["result"], json!({}), "{acked}");
+    let bad = json!({"jsonrpc":"2.0","id":8,"method":"native.freeway.joins.ack","params":{"through":"x"}});
+    c.send(bad).await;
+    let (refused, _) = reply(&mut c, 8).await;
+    assert_eq!(
+        refused["error"]["data"]["kind"], "PRECONDITION_FAILED",
+        "{refused}"
     );
     daemon.shutdown().await;
 }

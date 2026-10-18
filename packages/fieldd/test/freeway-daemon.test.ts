@@ -256,15 +256,16 @@ describe("F1 — fieldd's freeway half on a booted daemon", () => {
 
   it("audits each join and leave the host reports, in order, and says what the floor could not hold", async () => {
     const { dataDir, mock } = await world(upState());
-    const row = (kind: "joined" | "left", at: number) => ({
+    const row = (kind: "joined" | "left", at: number, cursor: number) => ({
       kind,
       clientId: `freeway:${TEST_LOGIN}#node-phone~hb-1`,
       sessionId: "term-1",
       rights: ["geometry", "input", "read"],
       at,
+      cursor,
     });
     // what the floor held while no fieldd listened, and how much it could not
-    mock.freewayJoins = { rows: [row("joined", 10)], dropped: 2 };
+    mock.freewayJoins = { floorBootId: "fb-floor", rows: [row("joined", 10, 1)], dropped: 2 };
     const daemon = await boot(dataDir);
     const outcomes = async (action: string) =>
       (await auditRecords(daemon)).filter((r) => r.action === action && r.phase === "outcome");
@@ -273,7 +274,7 @@ describe("F1 — fieldd's freeway half on a booted daemon", () => {
     expect(joined).toMatchObject({
       outcome: "succeeded",
       target: { kind: "terminal", id: "term-1" },
-      attrs: { clientId: `freeway:${TEST_LOGIN}#node-phone~hb-1`, at: 10 },
+      attrs: { clientId: `freeway:${TEST_LOGIN}#node-phone~hb-1`, at: 10, cursor: 1 },
     });
     expect(lost[0]).toMatchObject({
       outcome: "failed",
@@ -281,12 +282,23 @@ describe("F1 — fieldd's freeway half on a booted daemon", () => {
       target: { kind: "freeway", id: "fb-floor" },
       attrs: { dropped: 2, malformed: 0 },
     });
-    mock.pushDelta("native.freeway.joins.subscribe", { rows: [row("left", 20)], dropped: 0 });
+    // written, then acknowledged: the floor may let the row go
+    await until(() => mock.freewayJoinAcks.length === 1, 15_000, "the acknowledgment");
+    expect(mock.freewayJoinAcks).toEqual([1]);
+    mock.pushDelta("native.freeway.joins.subscribe", {
+      floorBootId: "fb-floor",
+      rows: [row("left", 20, 2)],
+      dropped: 2,
+    });
     const left = await eventually(() => outcomes("freeway.session.leave"), "the leave row");
     expect(left[0]).toMatchObject({
       target: { kind: "terminal", id: "term-1" },
       attrs: { at: 20 },
     });
+    await until(() => mock.freewayJoinAcks.length === 2, 15_000, "the second acknowledgment");
+    expect(mock.freewayJoinAcks).toEqual([1, 2]);
+    // the total did not grow: no second lost row
+    expect(await outcomes("freeway.joins.lost")).toHaveLength(1);
   }, 60_000);
 
   it("an unlink revokes every freeway link, and the serve goes with the login", async () => {

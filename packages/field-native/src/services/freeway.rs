@@ -13,9 +13,10 @@
 //!   sessions — and each later change is a line that replaces its part whole. The update sender is
 //!   registered BEFORE line 1 is read, so a change between the two is a later line, never lost.
 //! - The host's reports: its link rows become the state's `links`; its joins go to fieldd's audit
-//!   on `joins.subscribe` (up to `FREEWAY.JOIN_BACKLOG_ROWS` held while no one listens, the rest
-//!   counted as `dropped`); its `revokeClient` goes to every running cell; its `revoked` answers
-//!   the oldest revoke waiting.
+//!   on `joins.subscribe`, each with this floor boot's next cursor and HELD until fieldd
+//!   acknowledges it (`joins.ack`), so a row in flight when fieldd went is said again, never lost
+//!   (up to `FREEWAY.JOIN_BACKLOG_ROWS` held; the rest counted, a total, as `dropped`); its
+//!   `revokeClient` goes to every running cell; its `revoked` answers the oldest revoke waiting.
 //! - Restart intensity is the cells': at most `RESPAWN_MAX` starts in `RESPAWN_WINDOW_MS`, then the
 //!   unit parks crashed (fieldd decides; the floor never restarts itself). A floor without the
 //!   host installed is `disabled`, saying so, and never degrades the floor.
@@ -66,37 +67,73 @@ struct View {
     links: BTreeMap<String, &'static str>,
 }
 
-#[derive(Default)]
+/// The joins fieldd audits, HELD until it acknowledges them. Each row gets the next cursor of this
+/// floor boot and stays until `ack` passes it, so a row in flight when fieldd's connection went is
+/// in the next subscription's first frame (fieldd writes a cursor once). At most
+/// `FREEWAY.JOIN_BACKLOG_ROWS` are held; a row past that gets no cursor and is counted in `dropped`,
+/// a total for the floor boot, so a frame that never arrives loses no count.
 struct Joins {
-    backlog: VecDeque<Value>,
+    floor_boot_id: String,
+    held: VecDeque<Value>,
+    cursor: u64,
     dropped: u64,
     live: Option<UnboundedSender<Value>>,
 }
 
 impl Joins {
-    /// A row, to the subscriber if one listens, else held (up to the backlog's bound) or counted.
-    fn push(&mut self, row: Value) {
-        if let Some(live) = &self.live {
-            let frame = json!({ "rows": [row.clone()], "dropped": 0 });
-            if live.send(frame).is_ok() {
-                return;
-            }
-            self.live = None;
-        }
-        if self.backlog.len() < limits::JOIN_BACKLOG_ROWS as usize {
-            self.backlog.push_back(row);
-        } else {
-            self.dropped += 1;
+    fn new(floor_boot_id: String) -> Self {
+        Self {
+            floor_boot_id,
+            held: VecDeque::new(),
+            cursor: 0,
+            dropped: 0,
+            live: None,
         }
     }
 
-    /// A subscriber: what was held, and how much was not, as its first frame; every row after.
+    fn frame(&self, rows: Vec<Value>) -> Value {
+        json!({ "floorBootId": self.floor_boot_id, "rows": rows, "dropped": self.dropped })
+    }
+
+    /// A row: held with its cursor and streamed to the subscriber if one listens — or, past the
+    /// bound, counted, and the subscriber told the new total.
+    fn push(&mut self, mut row: Value) {
+        let rows = if self.held.len() < limits::JOIN_BACKLOG_ROWS as usize {
+            self.cursor += 1;
+            row["cursor"] = json!(self.cursor);
+            self.held.push_back(row.clone());
+            vec![row]
+        } else {
+            self.dropped += 1;
+            Vec::new()
+        };
+        if let Some(live) = &self.live {
+            if live.send(self.frame(rows)).is_err() {
+                self.live = None;
+            }
+        }
+    }
+
+    /// A subscriber: every row still held, and the total that could not be, as its first frame;
+    /// every row after.
     fn subscribe(&mut self) -> (Value, mpsc::UnboundedReceiver<Value>) {
         let (out, frames) = mpsc::unbounded_channel();
-        let rows: Vec<Value> = self.backlog.drain(..).collect();
-        let first = json!({ "rows": rows, "dropped": std::mem::take(&mut self.dropped) });
+        let first = self.frame(self.held.iter().cloned().collect());
         self.live = Some(out);
         (first, frames)
+    }
+
+    /// fieldd wrote the audit of every row through `through`: those rows go. An older `through`
+    /// is nothing.
+    fn ack(&mut self, through: u64) {
+        let acked = |row: &Value| {
+            row["cursor"]
+                .as_u64()
+                .is_some_and(|cursor| cursor <= through)
+        };
+        while self.held.front().is_some_and(acked) {
+            self.held.pop_front();
+        }
     }
 }
 
@@ -200,6 +237,11 @@ impl FreewayHandle {
     /// `native.freeway.joins.subscribe`: the first frame, and every one after.
     pub fn subscribe_joins(&self) -> (Value, mpsc::UnboundedReceiver<Value>) {
         self.shared.joins.lock().unwrap().subscribe()
+    }
+
+    /// `native.freeway.joins.ack`: fieldd audited every row through `through`.
+    pub fn ack_joins(&self, through: u64) {
+        self.shared.joins.lock().unwrap().ack(through);
     }
 }
 
@@ -401,7 +443,7 @@ impl FreewayUnit {
             declared: watch::channel(false).0,
             view: Mutex::new(View::default()),
             state,
-            joins: Mutex::new(Joins::default()),
+            joins: Mutex::new(Joins::new(floor_boot_id.to_owned())),
             revokes: Mutex::new(VecDeque::new()),
             stopping: watch::channel(false).0,
             health: Mutex::new(UnitHealth {
@@ -760,8 +802,11 @@ mod tests {
         shared.on_report(joined);
         shared.on_report("not a report");
         let (first, _) = handle.subscribe_joins();
-        let row = json!({ "kind": "joined", "clientId": "freeway:p#n~hb-1", "sessionId": "s-1", "rights": ["read"], "at": 5 });
-        assert_eq!(first, json!({ "rows": [row], "dropped": 0 }));
+        let row = json!({ "kind": "joined", "clientId": "freeway:p#n~hb-1", "sessionId": "s-1", "rights": ["read"], "at": 5, "cursor": 1 });
+        assert_eq!(
+            first,
+            json!({ "floorBootId": "fb-test", "rows": [row], "dropped": 0 })
+        );
 
         // A revoke waits for the host's answer; a wall reaches every running cell (none here).
         let (sent, mut said) = mpsc::unbounded_channel();
@@ -871,25 +916,66 @@ mod tests {
     }
 
     #[test]
-    fn the_joins_are_held_while_no_one_listens_counted_past_the_bound_and_streamed_after() {
-        let mut joins = Joins::default();
+    fn a_join_is_held_until_fieldd_acknowledges_it_and_said_again_to_the_next_subscriber() {
+        let mut joins = Joins::new("fb-test".into());
+        joins.push(json!({ "at": 1 }));
+        joins.push(json!({ "at": 2 }));
+        let (first, mut frames) = joins.subscribe();
+        let cursors = |frame: &Value| -> Vec<u64> {
+            let rows = frame["rows"].as_array().unwrap();
+            rows.iter()
+                .map(|row| row["cursor"].as_u64().unwrap())
+                .collect()
+        };
+        assert_eq!(cursors(&first), vec![1, 2]);
+        assert_eq!(first["floorBootId"], json!("fb-test"));
+        // live, and held all the same: a frame in flight when the connection goes is not lost
+        joins.push(json!({ "at": 3 }));
+        let live = frames.try_recv().unwrap();
+        assert_eq!(cursors(&live), vec![3]);
+        drop(frames);
+        let (again, _frames) = joins.subscribe();
+        assert_eq!(
+            cursors(&again),
+            vec![1, 2, 3],
+            "nothing acknowledged, all said again"
+        );
+        // what fieldd wrote goes; an older acknowledgment is nothing
+        joins.ack(2);
+        joins.ack(1);
+        let (after, _frames) = joins.subscribe();
+        assert_eq!(cursors(&after), vec![3]);
+    }
+
+    #[test]
+    fn past_the_bound_a_join_is_counted_in_a_total_the_next_frame_says() {
+        let mut joins = Joins::new("fb-test".into());
         let bound = limits::JOIN_BACKLOG_ROWS as usize;
         for at in 0..bound + 3 {
             joins.push(json!({ "at": at }));
         }
         let (first, mut frames) = joins.subscribe();
         assert_eq!(first["rows"].as_array().unwrap().len(), bound);
+        assert_eq!(first["dropped"], json!(3));
+        // one more past the bound: no row, the total grows, and the subscriber is told it
+        joins.push(json!({ "at": "over" }));
         assert_eq!(
-            (&first["rows"][0]["at"], &first["dropped"]),
-            (&json!(0), &json!(3))
+            frames.try_recv().unwrap(),
+            json!({ "floorBootId": "fb-test", "rows": [], "dropped": 4 })
         );
-        joins.push(json!({ "at": "live" }));
-        let frame = frames.try_recv().unwrap();
-        assert_eq!(frame, json!({ "rows": [{ "at": "live" }], "dropped": 0 }));
-        // The subscriber gone, rows are held again, and a later one gets them.
+        // the total is the floor boot's: a later subscriber reads it too, never reset
         drop(frames);
-        joins.push(json!({ "at": "held" }));
-        let (first, _frames) = joins.subscribe();
-        assert_eq!(first, json!({ "rows": [{ "at": "held" }], "dropped": 0 }));
+        let (again, _frames) = joins.subscribe();
+        assert_eq!(again["dropped"], json!(4));
+        // room again once fieldd acknowledges: the next row is held, with the next cursor
+        joins.ack(bound as u64);
+        let (mut frames, last) = {
+            let (first, frames) = joins.subscribe();
+            assert_eq!(first["rows"], json!([]));
+            (frames, bound as u64)
+        };
+        joins.push(json!({ "at": "room" }));
+        let frame = frames.try_recv().unwrap();
+        assert_eq!(frame["rows"][0]["cursor"], json!(last + 1));
     }
 }

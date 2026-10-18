@@ -166,6 +166,8 @@ export class MockMgmtServer {
   freewayJoins: unknown = null;
   /** F1 — every `native.freeway.revoke`'s params, in order; answered `{closed: 0}`. */
   readonly freewayRevokes: unknown[] = [];
+  /** F1 — every `native.freeway.joins.ack`'s `through`, in order. */
+  readonly freewayJoinAcks: number[] = [];
   /** TM-1 (MF-1l) — the floor's word that its terminal doors are PUBLISHED on
    * the tailnet, carried on the hello ack. `null` = a floor that predates the
    * field and says nothing, which every consumer must read as NO (a tappable
@@ -350,6 +352,11 @@ export class MockMgmtServer {
     }
     if (msg.method === "native.freeway.declare") {
       this.freewayDeclarations.push(msg.params);
+      sock.write(`${JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: {} })}\n`);
+      return;
+    }
+    if (msg.method === "native.freeway.joins.ack") {
+      this.freewayJoinAcks.push(Number((msg.params as { through?: unknown } | undefined)?.through));
       sock.write(`${JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: {} })}\n`);
       return;
     }

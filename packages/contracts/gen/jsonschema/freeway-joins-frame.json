@@ -1200,6 +1200,10 @@
     "FreewayJoinsFrame": {
       "type": "object",
       "properties": {
+        "floorBootId": {
+          "type": "string",
+          "minLength": 1
+        },
         "rows": {
           "type": "array",
           "items": {
@@ -1235,6 +1239,10 @@
               "at": {
                 "type": "integer",
                 "minimum": 0
+              },
+              "cursor": {
+                "type": "integer",
+                "minimum": 1
               }
             },
             "required": [
@@ -1242,7 +1250,8 @@
               "clientId",
               "sessionId",
               "rights",
-              "at"
+              "at",
+              "cursor"
             ],
             "additionalProperties": true
           }
@@ -1253,6 +1262,7 @@
         }
       },
       "required": [
+        "floorBootId",
         "rows",
         "dropped"
       ],

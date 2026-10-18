@@ -491,7 +491,9 @@ export type FreewayRevokeParams = z.infer<typeof FreewayRevokeParams>;
 export const FreewayRevokeResult = z.object({ closed: count() }).passthrough();
 export type FreewayRevokeResult = z.infer<typeof FreewayRevokeResult>;
 
-/** A join or leave the host reports (FW-L3: fieldd is the only audit writer). */
+/** A join or leave the host reports (FW-L3: fieldd is the only audit writer). `cursor` is the
+ * floor's, rising from 1 within a floor boot: fieldd writes a row's audit once by it, and
+ * acknowledges what it wrote (`native.freeway.joins.ack`). */
 export const FreewayJoinRow = z
   .object({
     kind: z.enum(["joined", "left"]),
@@ -499,14 +501,29 @@ export const FreewayJoinRow = z
     sessionId: z.string().min(1),
     rights: sortedUniqueArray(SessionAttachRight),
     at: count(),
+    cursor: count().min(1),
   })
   .passthrough();
 export type FreewayJoinRow = z.infer<typeof FreewayJoinRow>;
 
-/** `native.freeway.joins.subscribe` frames. While fieldd is away the floor holds up to
- * `FREEWAY.JOIN_BACKLOG_ROWS` and counts the rest in `dropped`, so the audit says how many it
- * lost and never pretends. */
+/** `native.freeway.joins.subscribe` frames. The floor HOLDS each row until fieldd acknowledges
+ * it, so a subscription's first frame is every row not yet acknowledged: a row in flight when the
+ * connection went is said again, and fieldd's cursor writes it once — never lost to a disconnect.
+ * The floor holds up to `FREEWAY.JOIN_BACKLOG_ROWS`; `dropped` counts every row it could not hold
+ * this floor boot, IN TOTAL, so a lost frame loses no count — the audit says the count's growth,
+ * and never pretends. `floorBootId` says whose cursors these are. */
 export const FreewayJoinsFrame = z
-  .object({ rows: z.array(FreewayJoinRow), dropped: count() })
+  .object({
+    floorBootId: z.string().min(1),
+    rows: z.array(FreewayJoinRow),
+    dropped: count(),
+  })
   .passthrough();
 export type FreewayJoinsFrame = z.infer<typeof FreewayJoinsFrame>;
+
+/** `native.freeway.joins.ack {through}` — fieldd has written the audit of every row up to
+ * `through`; the floor lets those rows go. Idempotent: an older `through` is nothing. */
+export const FreewayJoinsAckParams = z.object({ through: count() }).passthrough();
+export type FreewayJoinsAckParams = z.infer<typeof FreewayJoinsAckParams>;
+export const FreewayJoinsAckResult = z.object({}).passthrough();
+export type FreewayJoinsAckResult = z.infer<typeof FreewayJoinsAckResult>;

@@ -623,6 +623,13 @@ export const METHODS: MethodDef[] = [
   }),
   defineMethod({
     surface: "mgmt",
+    method: "native.freeway.joins.ack",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
     method: "native.freeway.revoke",
     scope: null,
     idempotent: true,

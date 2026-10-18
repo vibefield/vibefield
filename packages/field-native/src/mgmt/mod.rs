@@ -572,6 +572,26 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
                 );
                 spawn_joins_forwarder(tx.clone(), frames, sub_id);
             }
+            "native.freeway.joins.ack" => {
+                let parsed = serde_json::from_value::<crate::contracts::FreewayJoinsAckParams>(
+                    params.clone(),
+                );
+                let reply = match parsed {
+                    Ok(ack) => {
+                        state.freeway.ack_joins(ack.through);
+                        ok(id, json!({}))
+                    }
+                    Err(error) => err(
+                        id,
+                        "PRECONDITION_FAILED",
+                        -32005,
+                        &format!("the ack did not parse ({:?})", error.classify()),
+                        false,
+                        None,
+                    ),
+                };
+                send(&tx, reply);
+            }
             "native.freeway.revoke" => {
                 let client = params
                     .get("clientId")

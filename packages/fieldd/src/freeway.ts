@@ -71,13 +71,25 @@ export function freewayDeclaration(
   return { deviceId: roster.currentDeviceId(), admit, doors: {}, exposure: { terminals } };
 }
 
-/** One `native.freeway.joins.subscribe` frame as fieldd audits it: the rows that parse, in order,
- * what the floor could not hold (`dropped`), and what did not parse — a row the audit cannot say
- * is counted, never silently skipped. */
-export interface FreewayJoins {
+/** FW-L3 — fieldd's audit, the joins' only writer. Each call writes one row and resolves once the
+ * ledger took it, or throws. */
+export interface FreewayJoinsAudit {
+  /** One join or leave the host reported. */
+  join(floorBootId: string, row: FreewayJoinRow): Promise<void>;
+  /** How many rows the floor could not hold (`dropped`) and fieldd could not read (`malformed`). */
+  lost(floorBootId: string, lost: { dropped: number; malformed: number }): Promise<void>;
+}
+
+/** Joins taken from the floor and not yet written: the rows not taken before, in cursor order; how
+ * many more rows the floor could not hold (`dropped` is the floor's total, this is its growth);
+ * what did not parse — a row the audit cannot say is counted, never silently skipped; and the
+ * cursor to acknowledge once all of it is written. */
+interface FreewayJoins {
+  floorBootId: string;
   rows: FreewayJoinRow[];
   dropped: number;
   malformed: number;
+  through: number;
 }
 
 /** The host whose keyrings a revoke walls: the floor boot and the host boot inside it. */
@@ -103,6 +115,8 @@ export interface FreewayFloorOptions {
   native: FreewayNative;
   /** the declaration fieldd's policy calls for now (`freewayDeclaration`) */
   declaration: () => FreewayDeclareParams;
+  /** where the joins are written (FW-L3) */
+  audit: FreewayJoinsAudit;
   logger?: Logger;
 }
 
@@ -117,9 +131,14 @@ export interface FreewayFloorOptions {
  * - The declaration: sent at every connect, because a new floor boot forgets it, and again
  *   whenever fieldd's word changes. Idempotent on the floor; sent only when it differs from the
  *   last one this link carried, and one at a time, so the floor keeps the newest.
- * - The joins: their own stream, armed the same way; each frame is emitted as `joins` for the
- *   audit. The floor drains its backlog into a subscription's first frame, so a reconnect's
- *   replay carries only what was held while fieldd was away.
+ * - The joins: their own stream, armed the same way, written to the audit (`audit`) in the floor's
+ *   order. The floor HOLDS every row until fieldd acknowledges it, and fieldd acknowledges only
+ *   through the last frame written whole: a write the ledger refuses stops the line there, nothing
+ *   behind it is acknowledged, and the next frame — a live one, or a reconnect's replay of what
+ *   was never acknowledged — writes on from it. A row is taken once by its cursor per floor boot
+ *   and written once by this fieldd; one that stops first leaves its rows held, and the next
+ *   fieldd writes them (a row written but not yet acknowledged is written again then, under the
+ *   same floor boot and cursor).
  * - The links: each change is a system-log event (§6.4: a link grants nothing beyond what its
  *   streams' doors grant, so it is not an audit row).
  * - A revoke (`revokeAll`, on unlink or sign-out): every phone link closes and the host walls every
@@ -139,6 +158,19 @@ export class FreewayFloor extends EventEmitter {
   private joinsArming: Promise<void> | null = null;
   private joinsStream: { dispose: () => void } | null = null;
   private owed: HostBoot | null = null;
+  /** The current floor boot's joins: the highest cursor taken and the `dropped` total said, the
+   * cursor through which the audit wrote, and the one the floor took. */
+  private joinsSeen: {
+    floorBootId: string;
+    cursor: number;
+    dropped: number;
+    written: number;
+    acked: number;
+  } | null = null;
+  /** Taken and not yet written, in the floor's order. The head is the one being written; a frame
+   * taken meanwhile joins the one behind it, so the line is never longer than two a floor boot. */
+  private readonly unwritten: FreewayJoins[] = [];
+  private joinsWriting: Promise<void> | null = null;
   private disposed = false;
 
   constructor(private readonly opts: FreewayFloorOptions) {
@@ -255,23 +287,132 @@ export class FreewayFloor extends EventEmitter {
     }
   }
 
-  /** A joins frame, read row by row: one row that does not parse is counted, and the rest stand. */
+  /** A joins frame, read row by row: a row already taken is passed over (said again because it was
+   * not yet acknowledged), one that does not parse is counted, and the rest are taken. Every frame
+   * then sets the writer going, since it may owe a retry or an acknowledgment from before. */
   private joins(payload: unknown): void {
-    const frame = payload as { rows?: unknown; dropped?: unknown } | null | undefined;
-    if (!Array.isArray(frame?.rows)) return;
+    if (this.disposed) return;
+    const frame = payload as
+      | { floorBootId?: unknown; rows?: unknown; dropped?: unknown }
+      | null
+      | undefined;
+    if (!Array.isArray(frame?.rows) || typeof frame.floorBootId !== "string") return;
+    const floorBootId = frame.floorBootId;
+    // a new floor boot's cursors start again
+    if (this.joinsSeen?.floorBootId !== floorBootId)
+      this.joinsSeen = { floorBootId, cursor: 0, dropped: 0, written: 0, acked: 0 };
+    const seen = this.joinsSeen;
     const rows: FreewayJoinRow[] = [];
     let malformed = 0;
+    let through = seen.cursor;
     for (const raw of frame.rows) {
       const row = FreewayJoinRow.safeParse(raw);
+      // a row that does not parse is still acknowledged past when its cursor reads, so it is
+      // counted once and does not hold the floor's backlog for the rest of its boot
+      const cursor = row.success ? row.data.cursor : cursorOf(raw);
+      if (cursor !== undefined && cursor <= seen.cursor) continue;
+      if (cursor !== undefined) through = Math.max(through, cursor);
       if (row.success) rows.push(row.data);
       else malformed += 1;
     }
-    const dropped =
+    rows.sort((a, b) => a.cursor - b.cursor);
+    const total =
       typeof frame.dropped === "number" && Number.isInteger(frame.dropped) && frame.dropped > 0
         ? frame.dropped
         : 0;
-    if (rows.length === 0 && dropped === 0 && malformed === 0) return;
-    this.emit("joins", { rows, dropped, malformed } satisfies FreewayJoins);
+    const dropped = Math.max(0, total - seen.dropped);
+    seen.cursor = through;
+    seen.dropped = Math.max(total, seen.dropped);
+    if (rows.length > 0 || dropped > 0 || malformed > 0)
+      this.take({ floorBootId, rows, dropped, malformed, through });
+    void this.writeJoins();
+  }
+
+  /** Into the line: behind the head, a frame joins the one already waiting there. */
+  private take(frame: FreewayJoins): void {
+    const waiting = this.unwritten.length > 1 ? this.unwritten.at(-1) : undefined;
+    if (waiting?.floorBootId !== frame.floorBootId) {
+      this.unwritten.push(frame);
+      return;
+    }
+    waiting.rows.push(...frame.rows);
+    waiting.dropped += frame.dropped;
+    waiting.malformed += frame.malformed;
+    waiting.through = frame.through;
+  }
+
+  /** Write the line, then acknowledge — one pass at a time. A frame taken while a pass runs is
+   * that pass's to write; a pass a refusal stopped leaves the rest to the next frame, never to a
+   * retry of its own, so a ledger that keeps refusing is not hammered. */
+  private writeJoins(): Promise<void> {
+    this.joinsWriting ??= this.writePass().finally(() => {
+      this.joinsWriting = null;
+    });
+    return this.joinsWriting;
+  }
+
+  private async writePass(): Promise<void> {
+    for (;;) {
+      const whole = await this.writeLine();
+      await this.acknowledgeJoins();
+      if (!whole || this.disposed || this.unwritten.length === 0) return;
+    }
+  }
+
+  /** Every frame in the line, in order: its rows, each shifted off as the ledger takes it so a
+   * retry never writes one twice, then its loss. False when a write was refused — the line stops
+   * there. */
+  private async writeLine(): Promise<boolean> {
+    try {
+      for (
+        let frame = this.unwritten[0];
+        frame !== undefined && !this.disposed;
+        frame = this.unwritten[0]
+      ) {
+        for (let row = frame.rows[0]; row !== undefined; row = frame.rows[0]) {
+          await this.opts.audit.join(frame.floorBootId, row);
+          frame.rows.shift();
+        }
+        if (frame.dropped + frame.malformed > 0) {
+          const { dropped, malformed } = frame;
+          await this.opts.audit.lost(frame.floorBootId, { dropped, malformed });
+        }
+        this.unwritten.shift();
+        if (this.joinsSeen?.floorBootId === frame.floorBootId)
+          this.joinsSeen.written = frame.through;
+      }
+      return true;
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.freeway.joins_unaudited",
+        "The audit did not take a freeway join row; the floor holds it, and the next frame writes on from it",
+        {
+          rows: this.unwritten.reduce((n, frame) => n + frame.rows.length, 0),
+          error: String(error),
+        },
+      );
+      return false;
+    }
+  }
+
+  /** The floor may let go of every row through the last frame written whole: said when it has not
+   * taken that yet, and only to the floor boot it is for (an older one's rows went with it). Never
+   * throws: one that does not land is said again by the next pass, the floor holding the rows
+   * meanwhile. */
+  private async acknowledgeJoins(): Promise<void> {
+    const seen = this.joinsSeen;
+    if (this.disposed || seen === null || seen.written <= seen.acked) return;
+    const through = seen.written;
+    try {
+      await this.opts.native.request("native.freeway.joins.ack", { through });
+      seen.acked = Math.max(seen.acked, through);
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.freeway.joins_ack_deferred",
+        "The floor did not take the joins acknowledgment; the next one says it again",
+        { error: String(error) },
+      );
+    }
   }
 
   /** Arm the state stream once; a connect that lands while it arms waits for the same arming. */
@@ -329,6 +470,12 @@ export class FreewayFloor extends EventEmitter {
     this.logLinks(prev, next);
     this.emit("state", next);
   }
+}
+
+/** A join row's cursor, read off a row that does not otherwise parse: a positive integer or none. */
+function cursorOf(raw: unknown): number | undefined {
+  const cursor = (raw as { cursor?: unknown } | null | undefined)?.cursor;
+  return typeof cursor === "number" && Number.isInteger(cursor) && cursor > 0 ? cursor : undefined;
 }
 
 /** How a state's links read in the system log: one event per device whose link changed. */

@@ -5,13 +5,14 @@
 // ignore-unknown IS the tolerant reader; field-native never echoes those shapes.
 use field_native::contracts::{
     DesiredState, DiagnosticLogDeltaV1, DiagnosticLogSnapshotV1, ErrorData, FreewayDeclareParams,
-    FreewayDeclareResult, FreewayJoinsFrame, FreewayRevokeParams, FreewayRevokeResult,
-    FreewayState, Hello, HelloAck, LogRecordV1, LoggingHealthV1, MeshEgressProxy,
-    MeshEgressRouteAddParams, MeshEgressRouteBound, MeshEgressRouteRef, MeshEgressRouteTable,
-    MeshLaneCloseRequest, MeshLaneClosed, MeshLaneOpenRequest, MeshLanePeerOpened,
-    MeshSelfIdentity, NativeHealth, NativePrepareRestartParams, NativePrepareRestartResult,
-    NativeShutdownParams, NativeShutdownResult, ObservedState, PeerInfo, RpcRequest, RpcResponse,
-    ServeConfig, ServeEntry, StoreSnapshot, TerminalRouteSnapshot, TerminalRoutesStreamPayload,
+    FreewayDeclareResult, FreewayJoinsAckParams, FreewayJoinsAckResult, FreewayJoinsFrame,
+    FreewayRevokeParams, FreewayRevokeResult, FreewayState, Hello, HelloAck, LogRecordV1,
+    LoggingHealthV1, MeshEgressProxy, MeshEgressRouteAddParams, MeshEgressRouteBound,
+    MeshEgressRouteRef, MeshEgressRouteTable, MeshLaneCloseRequest, MeshLaneClosed,
+    MeshLaneOpenRequest, MeshLanePeerOpened, MeshSelfIdentity, NativeHealth,
+    NativePrepareRestartParams, NativePrepareRestartResult, NativeShutdownParams,
+    NativeShutdownResult, ObservedState, PeerInfo, RpcRequest, RpcResponse, ServeConfig,
+    ServeEntry, StoreSnapshot, TerminalRouteSnapshot, TerminalRoutesStreamPayload,
 };
 use serde_json::Value;
 use std::{fs, path::PathBuf};
@@ -150,6 +151,8 @@ fn mgmt_freeway_fixtures() {
     roundtrip::<FreewayRevokeResult>("freeway-revoke-result.valid.json", true);
     roundtrip::<FreewayJoinsFrame>("freeway-joins-frame.valid.json", true);
     roundtrip::<FreewayJoinsFrame>("freeway-joins-frame.overflow.json", true);
+    roundtrip::<FreewayJoinsAckParams>("freeway-joins-ack-params.valid.json", true);
+    roundtrip::<FreewayJoinsAckResult>("freeway-joins-ack-result.valid.json", true);
 
     // The roles are the two hellos a link can open with; the Rust twin refuses what zod refuses.
     let mut window = load("freeway-declare-params.phone.json");

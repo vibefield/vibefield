@@ -2230,6 +2230,10 @@
         "at": {
           "type": "integer",
           "minimum": 0
+        },
+        "cursor": {
+          "type": "integer",
+          "minimum": 1
         }
       },
       "required": [
@@ -2237,13 +2241,18 @@
         "clientId",
         "sessionId",
         "rights",
-        "at"
+        "at",
+        "cursor"
       ],
       "additionalProperties": true
     },
     "FreewayJoinsFrame": {
       "type": "object",
       "properties": {
+        "floorBootId": {
+          "type": "string",
+          "minLength": 1
+        },
         "rows": {
           "type": "array",
           "items": {
@@ -2256,9 +2265,28 @@
         }
       },
       "required": [
+        "floorBootId",
         "rows",
         "dropped"
       ],
+      "additionalProperties": true
+    },
+    "FreewayJoinsAckParams": {
+      "type": "object",
+      "properties": {
+        "through": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "through"
+      ],
+      "additionalProperties": true
+    },
+    "FreewayJoinsAckResult": {
+      "type": "object",
+      "properties": {},
       "additionalProperties": true
     },
     "Hello": {

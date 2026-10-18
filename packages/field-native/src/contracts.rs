@@ -1656,6 +1656,7 @@ impl FreewayExposure {
 #[doc = "  \"required\": ["]
 #[doc = "    \"at\","]
 #[doc = "    \"clientId\","]
+#[doc = "    \"cursor\","]
 #[doc = "    \"kind\","]
 #[doc = "    \"rights\","]
 #[doc = "    \"sessionId\""]
@@ -1668,6 +1669,10 @@ impl FreewayExposure {
 #[doc = "    \"clientId\": {"]
 #[doc = "      \"type\": \"string\","]
 #[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"cursor\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 1.0"]
 #[doc = "    },"]
 #[doc = "    \"kind\": {"]
 #[doc = "      \"type\": \"string\","]
@@ -1702,6 +1707,7 @@ pub struct FreewayJoinRow {
     pub at: u64,
     #[serde(rename = "clientId")]
     pub client_id: FreewayJoinRowClientId,
+    pub cursor: ::std::num::NonZeroU64,
     pub kind: FreewayJoinRowKind,
     pub rights: ::std::vec::Vec<FreewayJoinRowRightsItem>,
     #[serde(rename = "sessionId")]
@@ -2002,6 +2008,69 @@ impl<'de> ::serde::Deserialize<'de> for FreewayJoinRowSessionId {
             })
     }
 }
+#[doc = "`FreewayJoinsAckParams`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"through\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"through\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct FreewayJoinsAckParams {
+    pub through: u64,
+}
+impl FreewayJoinsAckParams {
+    pub fn builder() -> builder::FreewayJoinsAckParams {
+        Default::default()
+    }
+}
+#[doc = "`FreewayJoinsAckResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(transparent)]
+pub struct FreewayJoinsAckResult(pub ::serde_json::Map<::std::string::String, ::serde_json::Value>);
+impl ::std::ops::Deref for FreewayJoinsAckResult {
+    type Target = ::serde_json::Map<::std::string::String, ::serde_json::Value>;
+    fn deref(&self) -> &::serde_json::Map<::std::string::String, ::serde_json::Value> {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayJoinsAckResult>
+    for ::serde_json::Map<::std::string::String, ::serde_json::Value>
+{
+    fn from(value: FreewayJoinsAckResult) -> Self {
+        value.0
+    }
+}
+impl ::std::convert::From<::serde_json::Map<::std::string::String, ::serde_json::Value>>
+    for FreewayJoinsAckResult
+{
+    fn from(value: ::serde_json::Map<::std::string::String, ::serde_json::Value>) -> Self {
+        Self(value)
+    }
+}
 #[doc = "`FreewayJoinsFrame`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -2011,12 +2080,17 @@ impl<'de> ::serde::Deserialize<'de> for FreewayJoinRowSessionId {
 #[doc = "  \"type\": \"object\","]
 #[doc = "  \"required\": ["]
 #[doc = "    \"dropped\","]
+#[doc = "    \"floorBootId\","]
 #[doc = "    \"rows\""]
 #[doc = "  ],"]
 #[doc = "  \"properties\": {"]
 #[doc = "    \"dropped\": {"]
 #[doc = "      \"type\": \"integer\","]
 #[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"floorBootId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
 #[doc = "    },"]
 #[doc = "    \"rows\": {"]
 #[doc = "      \"type\": \"array\","]
@@ -2032,11 +2106,81 @@ impl<'de> ::serde::Deserialize<'de> for FreewayJoinRowSessionId {
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 pub struct FreewayJoinsFrame {
     pub dropped: u64,
+    #[serde(rename = "floorBootId")]
+    pub floor_boot_id: FreewayJoinsFrameFloorBootId,
     pub rows: ::std::vec::Vec<FreewayJoinRow>,
 }
 impl FreewayJoinsFrame {
     pub fn builder() -> builder::FreewayJoinsFrame {
         Default::default()
+    }
+}
+#[doc = "`FreewayJoinsFrameFloorBootId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FreewayJoinsFrameFloorBootId(::std::string::String);
+impl ::std::ops::Deref for FreewayJoinsFrameFloorBootId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FreewayJoinsFrameFloorBootId> for ::std::string::String {
+    fn from(value: FreewayJoinsFrameFloorBootId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FreewayJoinsFrameFloorBootId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FreewayJoinsFrameFloorBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FreewayJoinsFrameFloorBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FreewayJoinsFrameFloorBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FreewayJoinsFrameFloorBootId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
     }
 }
 #[doc = "`FreewayLinkRow`"]
@@ -11225,6 +11369,7 @@ pub mod builder {
     pub struct FreewayJoinRow {
         at: ::std::result::Result<u64, ::std::string::String>,
         client_id: ::std::result::Result<super::FreewayJoinRowClientId, ::std::string::String>,
+        cursor: ::std::result::Result<::std::num::NonZeroU64, ::std::string::String>,
         kind: ::std::result::Result<super::FreewayJoinRowKind, ::std::string::String>,
         rights: ::std::result::Result<
             ::std::vec::Vec<super::FreewayJoinRowRightsItem>,
@@ -11237,6 +11382,7 @@ pub mod builder {
             Self {
                 at: Err("no value supplied for at".to_string()),
                 client_id: Err("no value supplied for client_id".to_string()),
+                cursor: Err("no value supplied for cursor".to_string()),
                 kind: Err("no value supplied for kind".to_string()),
                 rights: Err("no value supplied for rights".to_string()),
                 session_id: Err("no value supplied for session_id".to_string()),
@@ -11262,6 +11408,16 @@ pub mod builder {
             self.client_id = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for client_id: {e}"));
+            self
+        }
+        pub fn cursor<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::num::NonZeroU64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.cursor = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for cursor: {e}"));
             self
         }
         pub fn kind<T>(mut self, value: T) -> Self
@@ -11303,6 +11459,7 @@ pub mod builder {
             Ok(Self {
                 at: value.at?,
                 client_id: value.client_id?,
+                cursor: value.cursor?,
                 kind: value.kind?,
                 rights: value.rights?,
                 session_id: value.session_id?,
@@ -11314,6 +11471,7 @@ pub mod builder {
             Self {
                 at: Ok(value.at),
                 client_id: Ok(value.client_id),
+                cursor: Ok(value.cursor),
                 kind: Ok(value.kind),
                 rights: Ok(value.rights),
                 session_id: Ok(value.session_id),
@@ -11321,14 +11479,57 @@ pub mod builder {
         }
     }
     #[derive(Clone, Debug)]
+    pub struct FreewayJoinsAckParams {
+        through: ::std::result::Result<u64, ::std::string::String>,
+    }
+    impl ::std::default::Default for FreewayJoinsAckParams {
+        fn default() -> Self {
+            Self {
+                through: Err("no value supplied for through".to_string()),
+            }
+        }
+    }
+    impl FreewayJoinsAckParams {
+        pub fn through<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.through = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for through: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<FreewayJoinsAckParams> for super::FreewayJoinsAckParams {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: FreewayJoinsAckParams,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                through: value.through?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::FreewayJoinsAckParams> for FreewayJoinsAckParams {
+        fn from(value: super::FreewayJoinsAckParams) -> Self {
+            Self {
+                through: Ok(value.through),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
     pub struct FreewayJoinsFrame {
         dropped: ::std::result::Result<u64, ::std::string::String>,
+        floor_boot_id:
+            ::std::result::Result<super::FreewayJoinsFrameFloorBootId, ::std::string::String>,
         rows: ::std::result::Result<::std::vec::Vec<super::FreewayJoinRow>, ::std::string::String>,
     }
     impl ::std::default::Default for FreewayJoinsFrame {
         fn default() -> Self {
             Self {
                 dropped: Err("no value supplied for dropped".to_string()),
+                floor_boot_id: Err("no value supplied for floor_boot_id".to_string()),
                 rows: Err("no value supplied for rows".to_string()),
             }
         }
@@ -11342,6 +11543,16 @@ pub mod builder {
             self.dropped = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for dropped: {e}"));
+            self
+        }
+        pub fn floor_boot_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FreewayJoinsFrameFloorBootId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.floor_boot_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for floor_boot_id: {e}"));
             self
         }
         pub fn rows<T>(mut self, value: T) -> Self
@@ -11362,6 +11573,7 @@ pub mod builder {
         ) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
                 dropped: value.dropped?,
+                floor_boot_id: value.floor_boot_id?,
                 rows: value.rows?,
             })
         }
@@ -11370,6 +11582,7 @@ pub mod builder {
         fn from(value: super::FreewayJoinsFrame) -> Self {
             Self {
                 dropped: Ok(value.dropped),
+                floor_boot_id: Ok(value.floor_boot_id),
                 rows: Ok(value.rows),
             }
         }

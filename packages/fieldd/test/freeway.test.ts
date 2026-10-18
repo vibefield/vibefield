@@ -3,8 +3,10 @@
 // reads it (armed once, re-armed after a refusal, a stale revision ignored, a new floor boot taken
 // whole), the declaration's delivery (every connect, every change, one at a time, newest last), and
 // the serve — the floor-held listener's door, gated on the linked login, and silent until the floor
-// has been read, so a restarted fieldd withdraws nothing it has not seen (FW-L10) — and the phone's
-// approval: its refusals in the order a caller hears them, and the MAC the fixture vector pins.
+// has been read, so a restarted fieldd withdraws nothing it has not seen (FW-L10) — the joins,
+// written in the floor's order, each once, and acknowledged only through what was written (FW-L3),
+// and the phone's approval: its refusals in the order a caller hears them, and the MAC the fixture
+// vector pins.
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
@@ -14,6 +16,7 @@ import {
   FREEWAY_APPROVAL,
   FreewayApproveResult,
   FreewayDeclareParams,
+  type FreewayJoinRow,
   type FreewayState,
   PORTS,
 } from "@vibefield/contracts";
@@ -24,6 +27,7 @@ import {
   type FreewayApprovalRoster,
   FreewayApprover,
   FreewayFloor,
+  type FreewayJoinsAudit,
   type FreewayNative,
   type FreewayRoster,
   FreewayServeDriver,
@@ -66,6 +70,7 @@ function floorState(over: Partial<FreewayState> = {}): FreewayState {
 /** The floor link, scripted: what was asked, and the stream's events to push. */
 class ScriptedFloor implements FreewayNative {
   readonly declared: unknown[] = [];
+  readonly acks: unknown[] = [];
   revokes = 0;
   refuseRevoke = false;
   /** the state stream's: how often it was asked, whether it refuses, its frames, its ends */
@@ -79,11 +84,22 @@ class ScriptedFloor implements FreewayNative {
   disposed = 0;
   /** the joins stream's, the same four */
   joinSubscribes = 0;
-  joinsSnapshot: unknown = { rows: [], dropped: 0 };
+  joinsSnapshot: unknown = { floorBootId: "fb-1", rows: [], dropped: 0 };
   pushJoins: ((payload: unknown) => void) | null = null;
   joinsDisposed = 0;
 
+  /** acknowledgments the floor refuses, after recording them */
+  refuseAcks = 0;
+
   async request(method: string, params: unknown): Promise<unknown> {
+    if (method === "native.freeway.joins.ack") {
+      this.acks.push(params);
+      if (this.refuseAcks > 0) {
+        this.refuseAcks -= 1;
+        throw new Error("the floor went away");
+      }
+      return {};
+    }
     if (method === "native.freeway.revoke") {
       this.revokes += 1;
       if (this.refuseRevoke) throw new Error("the host did not answer");
@@ -116,17 +132,45 @@ class ScriptedFloor implements FreewayNative {
   }
 }
 
+/** The audit's writer, scripted: each row it took, as `[floorBootId, cursor]` (a loss as
+ * `[floorBootId, {dropped, malformed}]`); the writes its ledger refuses, once each; a write held. */
+class ScriptedAudit implements FreewayJoinsAudit {
+  readonly written: unknown[] = [];
+  /** cursors whose write is refused, and `"lost"` for the loss's */
+  readonly refuse = new Set<number | "lost">();
+  /** while set, a row's write waits for it before the ledger answers */
+  hold: Promise<void> | null = null;
+
+  async join(floorBootId: string, row: FreewayJoinRow): Promise<void> {
+    await (this.hold ?? Promise.resolve());
+    if (this.refuse.delete(row.cursor)) throw new Error("the ledger is full");
+    this.written.push([floorBootId, row.cursor]);
+  }
+
+  async lost(floorBootId: string, lost: { dropped: number; malformed: number }): Promise<void> {
+    await Promise.resolve();
+    if (this.refuse.delete("lost")) throw new Error("the ledger is full");
+    this.written.push([floorBootId, lost]);
+  }
+}
+
+/** Every write and acknowledgment the frames so far set going has landed: they ride promises
+ * alone, and a macrotask runs only once those are done. */
+const settled = () => new Promise<void>((resolve) => setImmediate(resolve));
+
 function rig(over: { terminals?: boolean; logger?: Logger } = {}) {
   const native = new ScriptedFloor();
+  const audit = new ScriptedAudit();
   const people = roster();
   const floor = new FreewayFloor({
     native,
     declaration: () => freewayDeclaration(people.view, over.terminals ?? true),
+    audit,
     ...(over.logger !== undefined ? { logger: over.logger } : {}),
   });
   const heard: FreewayState[] = [];
   floor.on("state", (state: FreewayState) => heard.push(state));
-  return { native, people, floor, heard };
+  return { native, audit, people, floor, heard };
 }
 
 describe("F1 — the declaration fieldd's roster calls for", () => {
@@ -249,31 +293,131 @@ describe("F1 — the floor's state, as fieldd reads it", () => {
 });
 
 describe("F1 — the joins, the links and the revoke", () => {
-  const join = (kind: "joined" | "left", sessionId: string, at: number) => ({
+  const join = (kind: "joined" | "left", sessionId: string, at: number, cursor: number) => ({
     kind,
     clientId: `freeway:${LOGIN}#nPHONE01~hb-1`,
     sessionId,
     rights: ["geometry", "input", "read"],
     at,
+    cursor,
+  });
+  const frame = (floorBootId: string, rows: unknown[], dropped: number) => ({
+    floorBootId,
+    rows,
+    dropped,
   });
 
-  it("emits each joins frame in the floor's order, a row that does not parse counted and the backlog's loss said", async () => {
-    const { native, floor } = rig();
-    native.joinsSnapshot = { rows: [join("joined", "s-1", 1), { kind: "joined" }], dropped: 3 };
-    const frames: unknown[] = [];
-    floor.on("joins", (frame) => frames.push(frame));
+  it("writes each row once by its cursor, then the loss's growth and what did not parse, and acknowledges what it wrote", async () => {
+    const { native, audit, floor } = rig();
+    native.joinsSnapshot = frame(
+      "fb-1",
+      [join("joined", "s-1", 1, 1), { kind: "joined", cursor: 2 }],
+      3,
+    );
     await floor.connected();
-    native.pushJoins?.({ rows: [], dropped: 0 }); // says nothing: no frame
-    native.pushJoins?.({ rows: [join("left", "s-1", 2)], dropped: 0 });
-    native.pushJoins?.({ n: 0 }); // a floor that predates the stream: not a frame
-    expect(frames).toEqual([
-      { rows: [join("joined", "s-1", 1)], dropped: 3, malformed: 1 },
-      { rows: [join("left", "s-1", 2)], dropped: 0, malformed: 0 },
+    await settled();
+    // the row, then the loss: 3 the floor could not hold, 1 that did not parse — acknowledged past
+    expect(audit.written).toEqual([
+      ["fb-1", 1],
+      ["fb-1", { dropped: 3, malformed: 1 }],
     ]);
+    expect(native.acks).toEqual([{ through: 2 }]);
+    native.pushJoins?.(frame("fb-1", [], 3)); // the same total: nothing new to say
+    native.pushJoins?.(frame("fb-1", [join("left", "s-1", 2, 3)], 3));
+    native.pushJoins?.({ n: 0 }); // a floor that predates the stream: not a frame
+    await settled();
+    // a replay of what was never acknowledged: only the new row, and the total's growth
+    native.pushJoins?.(
+      frame(
+        "fb-1",
+        [join("joined", "s-1", 1, 1), join("left", "s-1", 2, 3), join("joined", "s-2", 4, 4)],
+        5,
+      ),
+    );
+    await settled();
+    // a new floor boot: its cursors start again, and its acknowledgment is its own
+    native.pushJoins?.(frame("fb-2", [join("joined", "s-3", 5, 1)], 0));
+    await settled();
+    expect(audit.written).toEqual([
+      ["fb-1", 1],
+      ["fb-1", { dropped: 3, malformed: 1 }],
+      ["fb-1", 3],
+      ["fb-1", 4],
+      ["fb-1", { dropped: 2, malformed: 0 }],
+      ["fb-2", 1],
+    ]);
+    expect(native.acks).toEqual([{ through: 2 }, { through: 3 }, { through: 4 }, { through: 1 }]);
     await floor.connected();
     expect(native.joinSubscribes).toBe(1);
     floor.dispose();
     expect(native.joinsDisposed).toBe(1);
+    // a frame that still arrives is neither written nor acknowledged
+    native.pushJoins?.(frame("fb-2", [join("left", "s-3", 6, 2)], 0));
+    await settled();
+    expect(audit.written).toHaveLength(6);
+    expect(native.acks).toHaveLength(4);
+  });
+
+  it("a write the ledger refuses stops the line there — nothing behind it acknowledged — and the next frame writes on from it, each row once", async () => {
+    const log = captureLog();
+    const { native, audit, floor } = rig({ logger: log.logger });
+    native.joinsSnapshot = frame(
+      "fb-1",
+      [join("joined", "s-1", 1, 1), join("joined", "s-2", 2, 2), join("left", "s-1", 3, 3)],
+      1,
+    );
+    audit.refuse.add(2);
+    await floor.connected();
+    await settled();
+    expect(audit.written).toEqual([["fb-1", 1]]);
+    expect(native.acks).toEqual([]);
+    expect(log.events("fieldd.freeway.joins_unaudited")).toHaveLength(1);
+    // the reconnect's replay takes nothing new, and the line writes on from 2 — never 1 again
+    native.pushJoins?.(native.joinsSnapshot);
+    await settled();
+    expect(audit.written).toEqual([
+      ["fb-1", 1],
+      ["fb-1", 2],
+      ["fb-1", 3],
+      ["fb-1", { dropped: 1, malformed: 0 }],
+    ]);
+    expect(native.acks).toEqual([{ through: 3 }]);
+    // an acknowledgment the floor did not take is said again by the next frame
+    native.refuseAcks = 1;
+    native.pushJoins?.(frame("fb-1", [join("joined", "s-3", 4, 4)], 1));
+    await settled();
+    native.pushJoins?.(frame("fb-1", [join("joined", "s-3", 4, 4)], 1));
+    await settled();
+    expect(audit.written).toHaveLength(5);
+    expect(native.acks).toEqual([{ through: 3 }, { through: 4 }, { through: 4 }]);
+    expect(log.events("fieldd.freeway.joins_ack_deferred")).toHaveLength(1);
+  });
+
+  it("frames that arrive while a row is written are that pass's: in order, behind it as one, acknowledged once", async () => {
+    const { native, audit, floor } = rig();
+    native.joinsSnapshot = frame("fb-1", [join("joined", "s-1", 1, 1)], 0);
+    let release = () => {};
+    audit.hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await floor.connected();
+    native.pushJoins?.(frame("fb-1", [join("joined", "s-2", 2, 2)], 0));
+    native.pushJoins?.(frame("fb-1", [join("left", "s-1", 3, 3)], 1));
+    native.pushJoins?.(frame("fb-1", [join("left", "s-2", 4, 4)], 1));
+    await settled();
+    expect(audit.written).toEqual([]);
+    audit.hold = null;
+    release();
+    await settled();
+    // the three behind the head are one frame, its loss after its rows
+    expect(audit.written).toEqual([
+      ["fb-1", 1],
+      ["fb-1", 2],
+      ["fb-1", 3],
+      ["fb-1", 4],
+      ["fb-1", { dropped: 1, malformed: 0 }],
+    ]);
+    expect(native.acks).toEqual([{ through: 4 }]);
   });
 
   it("logs each link that changed — the device and its state, never a secret", async () => {

@@ -1,18 +1,21 @@
 {
+  "floorBootId": "fb-0191b04e-2026",
   "rows": [
     {
       "kind": "joined",
       "clientId": "freeway:person@example.com#nKMWkU9CYk11CNTRL~hb-01J9F",
       "sessionId": "sess-01J8Z3K9",
       "rights": ["geometry", "input", "read"],
-      "at": 1787788805000
+      "at": 1787788805000,
+      "cursor": 41
     },
     {
       "kind": "left",
       "clientId": "freeway:person@example.com#nKMWkU9CYk11CNTRL~hb-01J9F",
       "sessionId": "sess-01J8Z3K9",
       "rights": ["geometry", "input", "read"],
-      "at": 1787789105000
+      "at": 1787789105000,
+      "cursor": 42
     }
   ],
   "dropped": 0
