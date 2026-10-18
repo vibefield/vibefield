@@ -34,6 +34,7 @@ pub mod keyring;
 pub mod link;
 pub mod mint;
 pub mod mux;
+pub mod path;
 #[cfg(test)]
 mod testing;
 pub mod writer;

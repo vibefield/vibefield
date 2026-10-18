@@ -2,8 +2,10 @@
 //! this side's, and between them:
 //! - stream 0, the link's own: a `Ping` is answered by a `Pong` carrying every byte received so
 //!   far (the peer's writer counts its bytes in flight until acknowledged), with an `Ack` every
-//!   `FREEWAY.ACK_EVERY_BYTES` between; the peer's `Pong` and `Ack` lower this side's in-flight;
-//!   `Priority` moves a stream between classes. Three heartbeats with no pong is dead.
+//!   `FREEWAY.ACK_EVERY_BYTES` between; the peer's `Pong` and `Ack` lower this side's in-flight
+//!   and pace the writer — its cap and fragments from the round trips and delivery rate they
+//!   show (`path`); `Priority` moves a stream between classes. Three heartbeats with no pong is
+//!   dead.
 //! - a phone's approval: `Renew` is checked as the hello's was (the same node and login) and
 //!   answered `Renewed` or `FreewayRefused`. A link whose approval lapses keeps its open streams
 //!   and opens no new ones until renewed (§4.4).
@@ -26,6 +28,7 @@ use super::frame::{encode, Frame, FrameType, Message};
 use super::hello::{check_approval, Admit, Admitted, Identity};
 use super::keyring::{Keyring, Placement};
 use super::mux::{Event, Mux, MuxError, Role, StreamSpec};
+use super::path::Path;
 use super::writer::{Class, Writer};
 use crate::registries::{freeway as limits, freeway_codes as codes, terminal_pipeline as tp};
 use futures_util::{SinkExt, StreamExt};
@@ -191,6 +194,8 @@ struct Link {
     acknowledged: u64,
     missed: u64,
     seq: u64,
+    /// What the peer's pongs and acks say of the path: the writer's cap and fragments.
+    path: Path,
     now: fn() -> u64,
 }
 
@@ -228,6 +233,7 @@ pub async fn run(
         acknowledged: 0,
         missed: 0,
         seq: 0,
+        path: Path::new(),
         now,
     };
     let mut heartbeat = tokio::time::interval(Duration::from_millis(limits::HEARTBEAT_MS));
@@ -325,6 +331,20 @@ impl Link {
         self.link_message(&ping);
     }
 
+    /// The peer's cumulative delivered bytes: the writer's in-flight falls, and the path learns
+    /// the rate.
+    fn delivered(&mut self, now: u64, bytes: u64) {
+        // what the writer takes as delivered: a peer cannot claim a rate past what was written
+        let delivered = self.writer.acked(bytes);
+        self.path.delivered(now, delivered);
+    }
+
+    /// The writer paced to the path as it now reads (v0.3 §5: the cap and the fragment size).
+    fn pace(&mut self) {
+        self.writer.set_cap(self.path.cap());
+        self.writer.set_fragment_bytes(self.path.fragment_bytes());
+    }
+
     /// An `Ack` once `FREEWAY.ACK_EVERY_BYTES` have come since the last acknowledgment.
     fn acknowledge(&mut self) {
         if self.received - self.acknowledged >= limits::ACK_EVERY_BYTES {
@@ -414,13 +434,20 @@ impl Link {
             }
             Some("Pong") => {
                 self.missed = 0;
-                if let Some(bytes) = message["ackBytes"].as_u64() {
-                    self.writer.acked(bytes);
+                let now = (self.now)();
+                // our own clock, echoed: a round trip of this side's
+                if let Some(sent) = message["sentAtMs"].as_u64() {
+                    self.path.rtt(now, now.saturating_sub(sent));
                 }
+                if let Some(bytes) = message["ackBytes"].as_u64() {
+                    self.delivered(now, bytes);
+                }
+                self.pace();
             }
             Some("Ack") => {
                 if let Some(bytes) = message["bytes"].as_u64() {
-                    self.writer.acked(bytes);
+                    self.delivered((self.now)(), bytes);
+                    self.pace();
                 }
             }
             Some("Priority") => {
@@ -812,6 +839,46 @@ mod tests {
         );
         send(&mut ws, FrameType::Close, 5, br#"{"code":1009}"#).await;
         ping_is_next(&mut ws).await;
+    }
+
+    static CLOCK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1_000_000);
+
+    fn ticking() -> u64 {
+        CLOCK.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    #[tokio::test]
+    async fn the_peers_pongs_and_acks_pace_the_writer() {
+        let (cell, _) = fake_cell().await;
+        let host = host_on(PeerRole::Desktop, floor(&cell, true), ticking).await;
+        let mut ws = dial(host.port, desktop_hello()).await;
+        let leg = br#"{"kind":"terminal-leg","cellBootId":"cb-1","channel":"control"}"#;
+        send(&mut ws, FrameType::Open, 1, leg).await;
+        assert_eq!(next(&mut ws).await, (FrameType::Opened, 1, b"{}".to_vec()));
+        // Unpaced: the cell's 20 KB echo is one frame, under the largest fragment.
+        send(&mut ws, FrameType::Binary, 1, &[7; 20_000]).await;
+        let (kind, _, echo) = next(&mut ws).await;
+        assert_eq!((kind, echo.len()), (FrameType::Binary, 20_000));
+
+        // The path, as the peer's answers show it: a 20 ms round trip, and every byte the host
+        // wrote delivered over 100 ms — a slow path, whose 5 ms is under the smallest fragment.
+        // Each step is the host's before the clock moves: it reads the link in order, so a ping's
+        // answer says everything sent before the ping has been read.
+        let now = ticking();
+        let pong = json!({ "type": "Pong", "seq": 1, "sentAtMs": now - 20, "ackBytes": 0 });
+        send(&mut ws, FrameType::Link, 0, pong.to_string().as_bytes()).await;
+        ping_is_next(&mut ws).await;
+        CLOCK.fetch_add(100, std::sync::atomic::Ordering::SeqCst);
+        // a count past what was written is held to it
+        let ack = json!({ "type": "Ack", "bytes": 10_000_000 });
+        send(&mut ws, FrameType::Link, 0, ack.to_string().as_bytes()).await;
+        ping_is_next(&mut ws).await;
+
+        // Paced: the same echo now comes in the smallest fragments the registry allows.
+        send(&mut ws, FrameType::Binary, 1, &[7; 20_000]).await;
+        let (kind, _, first) = next(&mut ws).await;
+        assert_eq!(kind, FrameType::Binary);
+        assert_eq!(first.len(), limits::MIN_FRAGMENT_BYTES as usize);
     }
 
     #[tokio::test]

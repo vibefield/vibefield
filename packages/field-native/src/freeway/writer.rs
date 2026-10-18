@@ -178,9 +178,11 @@ impl Writer {
     }
 
     /// The peer's cumulative delivered bytes (`Ack`, or a Pong's `ackBytes`). An older count is
-    /// a reorder and changes nothing.
-    pub fn acked(&mut self, delivered: u64) {
+    /// a reorder and changes nothing, and a count past what was written is held to it. Answers the
+    /// count this writer now takes as delivered — the one the path may learn a rate from.
+    pub fn acked(&mut self, delivered: u64) -> u64 {
         self.acked = self.acked.max(delivered.min(self.written));
+        self.acked
     }
 
     pub fn in_flight(&self) -> u64 {
