@@ -595,7 +595,6 @@ is regenerated.
    - James deletes `.vibefield/sidecar/` and his `.env` `FIELD_NATIVE_SIDECAR_PATH` line. The dev runner warns while
      the line stays;
    - LANDED's entry;
-   - CLAUDE.md's Machine setup paragraph. It is James's file, and the lane proposes the text;
    - `draft/petitions/README.md`: T6 and T7 consumed.
 
 **James's witnesses, after the landing:**

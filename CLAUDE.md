@@ -72,30 +72,29 @@ in the split.
 
 ## Machine setup
 
-**RFC 025 petition window — OPENED 2026-09-16 (B0), PARTLY CLOSED the same day (UA-P-X).**
-truffle **0.7.14** shipped RFC 025's login-scoped nodes (tag `v0.7.14` = `9f0d6287`, on
-crates.io and npm together), and the CARGO and NPM planes took it: `truffle-core` is an exact
-registry pin again with the `[patch.crates-io]` row deleted, and `apps/desktop` installs the
-protocol-5 sidecar — the half the window could not buy, so a PACKAGED build can now run a
-login-gated node. `siblings.lock.json` keeps a `truffle` entry, reduced to its `swift` key.
+**RFC 025 petition window — OPENED 2026-09-16 (B0), PARTLY CLOSED the same day (UA-P-X); the cargo and npm planes
+moved again to 0.7.19 with the truffle bump (DECISIONS TB).** truffle **0.7.19** (tag `truffle-v0.7.19` = `1218b64`;
+0.7.18 was burned unpublished) is on crates.io and npm together.
+- `truffle-core` is an exact registry pin.
+- `apps/desktop` installs the protocol-8 sidecar. The login gate needs 5, the QUIC/UDP lanes 6 and egress 7; 8 adds no
+  command.
+- T6 shipped with it, so the `.vibefield/sidecar/` override and `.env`'s `FIELD_NATIVE_SIDECAR_PATH` are retired:
+  `pnpm dev` hands the floor the pinned sidecar itself (`devSidecar`).
+- field-native builds the egress arm by default (TB-E) and publishes its terminal doors for a linked desktop by default
+  (TB-T).
+- `siblings.lock.json` keeps a `truffle` entry, reduced to its `swift` key and its public `repository`, so
+  `node scripts/siblings.mjs fetch truffle` creates `../truffle-rfc025` at the pin.
 
-**The SwiftPM plane is still open, and closing it is not ours.** The kit is in a vice with both
-jaws measured: forward to `exact: "0.7.14"` is UNSATISFIABLE, because `ghosttea` declares
-`exact: "0.7.12"` of its own in every published Swift tag through v0.12.0 (re-read at GT-8,
-2026-09-25) and two exact
-requirements cannot both hold; back to `0.7.12` resolves and then does not COMPILE, because
-UA-P-5a taught the kit RFC 025's login API (`MeshConfiguration.loginAllow`,
-`MeshNode.loginName`, `Peer.loginName`) which no 0.7.12 has. So the path package under
-`apps/ios/VibeFieldKit/.window/truffle` STAYS — a path package's identity is its DIRECTORY
-NAME, which is what lets it override ghosttea's remote edge, and it records no revision, so
-`Package.resolved` carries no truffle row (that absence is the shape, not a missing pin).
-**`../truffle-rfc025` is therefore still required to build the iOS plane.** The exit is one
-upstream event: a ghosttea Swift release whose `truffleVersion` is 0.7.14, and that is the whole
-remaining exit list. The phone is NOT on different code meanwhile: `../truffle-rfc025` was
-advanced to `9f0d6287`, the commit tagged `truffle-v0.7.14`, and the lock pins it there, so every
-plane reads 0.7.14 and the path package is only how this one reaches it. `Cargo.toml`'s closure
-note and `Package.swift` carry the resolver's and the compiler's own words; no prose here is
-the authority for a number.
+**The SwiftPM plane is still open, and closing it is not ours.**
+- Forward to `exact: "0.7.19"` is UNSATISFIABLE, because `ghosttea` declares `exact: "0.7.12"` in every published Swift
+  tag through v0.12.0 (re-read 2026-10-17).
+- Back to 0.7.12 resolves and then does not compile (UA-P-5a's login API).
+- So the path package under `apps/ios/VibeFieldKit/.window/truffle` STAYS, with no truffle row in `Package.resolved`, and
+  **`../truffle-rfc025` is still required to build the iOS plane.**
+- The exit is one upstream event: a ghosttea Swift release whose `truffleVersion` equals the crate's version (0.7.19
+  today).
+- `../truffle-rfc025` is pinned at `1218b64`, the commit tagged `truffle-v0.7.19`, so every plane reads 0.7.19 code.
+  `Cargo.toml`'s closure note and `Package.swift` carry the resolver's and the compiler's own words.
 
 > **Errata (2026-09-16):** the paragraph that stood here — "The repo builds standalone since
 > 2026-07-28 … the `../p008/truffle` sibling `[patch.crates-io]` and its `siblings.lock.json`
