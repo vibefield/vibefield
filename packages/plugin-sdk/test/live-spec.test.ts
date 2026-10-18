@@ -4,10 +4,14 @@
 import { describe, expect, it } from "vitest";
 import {
   LIVE_BROWSER_FAILURES,
+  LIVE_SIMULATOR_STATES,
   type LiveBrowserSpec,
+  type LiveSimulatorSpec,
   liveBrowserFailure,
   liveBrowserFailureReason,
   liveBrowserSpec,
+  liveSimulatorFace,
+  liveSimulatorSpec,
 } from "../src/desk";
 
 const PAGE: LiveBrowserSpec = {
@@ -141,5 +145,92 @@ describe("PT-5a — why a browser face failed: the host's word, read by the kind
       " offline",
     ])
       expect(liveBrowserFailure(reason), reason).toBe("failed");
+  });
+});
+
+// PT-S1 — THE DEVICE A SIMULATOR FACE SHOWS: the `spec` a simulator kind hands the host's `LIVE` service (its binding's two
+// CoreSimulator ids, never a UDID; the device's name; the desk's scheme), and the nine honest states the host says back on the
+// face (`info.extra.simulator`) — typed on the door so the plugin and PT-S2's host read one shape.
+const DEVICE: LiveSimulatorSpec = {
+  source: "ios-simulator",
+  deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+  runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+  label: "iPhone 17 Pro",
+  scheme: "light",
+};
+
+describe("PT-S1 — liveSimulatorSpec: the host reads the device a simulator face shows", () => {
+  it("reads the device a simulator kind sends, whole — and only the fields it names", () => {
+    expect(liveSimulatorSpec({ ...DEVICE })).toEqual(DEVICE);
+    expect(liveSimulatorSpec({ ...DEVICE, scheme: "dark" })).toEqual({ ...DEVICE, scheme: "dark" });
+    expect(liveSimulatorSpec({ ...DEVICE, udid: "A1B2C3D4-E5F6-7890-ABCD-EF1234567890" })).toEqual(
+      DEVICE,
+    );
+    // an empty label is a label (the host names the surface itself)
+    expect(liveSimulatorSpec({ ...DEVICE, label: "" })).toEqual({ ...DEVICE, label: "" });
+  });
+
+  it("refuses a spec that is not a simulator's device, or a field it cannot read", () => {
+    for (const bad of [
+      { ...DEVICE, source: "browser" },
+      { ...DEVICE, source: "sck-window" },
+      { ...DEVICE, deviceType: "" },
+      { ...DEVICE, deviceType: 17 },
+      { ...DEVICE, deviceType: "x".repeat(129) },
+      { ...DEVICE, deviceType: "com.apple.CoreSimulator.SimDeviceType.\niPhone" },
+      { ...DEVICE, runtime: "" },
+      { ...DEVICE, runtime: undefined },
+      { ...DEVICE, label: undefined },
+      { ...DEVICE, label: "iPhone\u0007" },
+      { ...DEVICE, scheme: "desk" },
+      {},
+    ])
+      expect(liveSimulatorSpec(bad), JSON.stringify(bad)).toBeUndefined();
+  });
+});
+
+describe("PT-S1 — liveSimulatorFace: the simulator's honest face, the host's word read by the kind", () => {
+  it("the states are a closed set of nine — the PT-S design's §3, in its order", () => {
+    expect(LIVE_SIMULATOR_STATES).toEqual([
+      "no-simulator",
+      "no-permission",
+      "no-device",
+      "off",
+      "booting",
+      "no-window",
+      "live",
+      "at-rest",
+      "stopped",
+    ]);
+  });
+
+  it("reads each state, the device's name the host says and the act it can run", () => {
+    for (const is of LIVE_SIMULATOR_STATES)
+      expect(liveSimulatorFace({ extra: { simulator: { is } } }), is).toEqual({ is });
+    const act = (): void => {};
+    const face = liveSimulatorFace({
+      extra: { simulator: { is: "off", device: "My iPhone", act, later: 1 } },
+    });
+    expect(face).toEqual({ is: "off", device: "My iPhone", act });
+    expect(face?.act).toBe(act);
+  });
+
+  it("says nothing where the host says nothing a kind can read — never a guess", () => {
+    expect(liveSimulatorFace(undefined)).toBeUndefined();
+    expect(liveSimulatorFace({})).toBeUndefined();
+    for (const simulator of [
+      null,
+      "off",
+      { is: "Off" },
+      { is: "asleep" },
+      { is: "live", device: "" },
+      { is: "live", device: 17 },
+      { is: "off", act: "boot" },
+      { is: "off", act: {} },
+    ])
+      expect(
+        liveSimulatorFace({ extra: { simulator } }),
+        JSON.stringify(simulator),
+      ).toBeUndefined();
   });
 });
