@@ -685,8 +685,11 @@ day:** `SendInput` on the control leg (tag 22 of `TpMessageType`, control-inboun
 mirrors the engine's input serde and the Rust fixture test deserializes the golden vectors into
 ghosttea's OWN `KeyInput`/`MouseInput` — the cross-crate drift guard), the cell-door arm (cell gate:
 own leg · `leaseEpoch` placement fence · the `input` lease dimension · a synchronous renewal-margin
-backstop · a presenting view; refusals are drop-and-audit with NO per-keystroke ack; ghosttea's
-`authorize_input` — read-only / stale-epoch / monotonic-sequence — is the engine backstop), and
+backstop · a presenting view; NO per-keystroke ack for accepted input, while every refusal is
+audited and one past the own-leg check is answered with `InputRefused` only on a leg that negotiated
+`input-refusals` (mark 22's refusal half, flipped 2026-10-18) — one naming no activation of the
+caller's own leg is never answered (EL7); ghosttea's `authorize_input` — read-only / stale-epoch /
+monotonic-sequence — is the engine backstop, silent on every leg), and
 field-app's bounded `createRoutedInputEncoder` (one monotonic wire sequence per activation across
 all G23 DOM views/remounts; one slot per admitted session with guarded activation/session/owner
 release; capacity, exhaustion, malformed and unknown input return null — closed, not guessed;
