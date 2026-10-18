@@ -1,9 +1,11 @@
 import FieldAgents
 import FieldDesign
+import FieldFreeway
 import FieldHistory
 import FieldInput
 import FieldMesh
 import FieldProduct
+import FieldRoutedTerminal
 import FieldWorkspace
 import FieldSwarm
 import FieldTerminal
@@ -135,6 +137,8 @@ public struct HomeScreen: View {
   /// (`TerminalAttachment.release`).
   @State private var terminalLanes: [String: TerminalLanes] = [:]
   @State private var keptAttachments: [KeptTerminal] = []
+  /// F1 — each desktop's freeway link, kept warm once dialed (opt-in: `freewayLanes`).
+  @State private var freewayLinks: [String: FreewayDesktopLink] = [:]
   /// Latched for the width of the directory lookup. `isAttached` hides the
   /// button, but that flip is on the far side of an `await`, and two taps
   /// inside that window would build two lifecycles — the first of which
@@ -2213,8 +2217,13 @@ public struct HomeScreen: View {
         attachRefusal = "the mesh is not up on this device — connect it first"
         return
       }
+      let freeway =
+        terminalLanes[deviceID] == nil
+        ? await freewayLanes(deviceID: deviceID, urlSession: urlSession) : nil
+      guard selection?.id == card else { return }
       let lanes =
         terminalLanes[deviceID]
+        ?? freeway
         ?? TerminalLanes(
           session: urlSession,
           door: { [link] session in
@@ -2257,6 +2266,42 @@ public struct HomeScreen: View {
       attachment.attach(
         sessionID: sessionID, cols: 80, rows: 24, deviceName: deviceName)
     }
+  }
+
+  /// F1 — the desktop's terminals on ONE link to it, opt-in (`-vf-freeway`, DEBUG): legs as
+  /// streams, tickets and renewals from its host's keyring, instead of a ticket over the product
+  /// door and two fresh sockets per cell. Opt-in until James's device round witnesses it (F1's
+  /// exit); without the flag nothing here runs and the lanes are today's. No connection budget:
+  /// a leg on the link is a stream, not a socket.
+  private func freewayLanes(
+    deviceID: String, urlSession: @escaping TerminalAttachment.SessionProvider
+  ) async -> TerminalLanes? {
+    #if DEBUG
+      guard ProcessInfo.processInfo.arguments.contains("-vf-freeway"), let link else { return nil }
+      let desktop: FreewayDesktopLink
+      if let kept = freewayLinks[deviceID] {
+        desktop = kept
+      } else {
+        guard
+          let dialing = await mesh.freewayDialing(
+            to: deviceID, deviceName: UIDevice.current.name,
+            approve: { [link] in try await link.approveFreeway(on: deviceID) })
+        else { return nil }
+        desktop = FreewayDesktopLink(dialing)
+        freewayLinks[deviceID] = desktop
+      }
+      return TerminalLanes(
+        transport: FreewayRoutedTransport(
+          freeway: FreewayLegTransport { try await desktop.link() },
+          fallback: URLSessionRoutedTransport(session: urlSession, log: .device)),
+        door: { session in try await FreewayTerminalDoors.ticket(session, on: desktop.link()) },
+        renewal: { session, generation, requestId in
+          try await FreewayTerminalDoors.renew(
+            session, expectGeneration: generation, requestId: requestId, on: desktop.link())
+        })
+    #else
+      return nil
+    #endif
   }
 
   /// The card going away: its subject is released and any attachment with it.

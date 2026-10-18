@@ -1,3 +1,4 @@
+import FieldFreeway
 import FieldProduct
 import Foundation
 import Network
@@ -188,6 +189,31 @@ public final class MeshModel {
       guard let node = runtime?.node else { return nil }
       return { configuration in try await node.urlSession(configuration: configuration) }
     }
+  }
+
+  /// F1 (FW-DF-11) — how the desktop `deviceId` is dialed for its freeway link: a RAW tailnet
+  /// stream from the node to the desktop's freeway serve — never a URL through TailscaleKit's
+  /// loopback SOCKS5 listener, which iOS can make stale while the app is suspended. The peer is
+  /// looked up again at every dial: truffle generation-checks a peer snapshot before dialing, so a
+  /// kept one would fail every redial after the peer re-announced. Nil while there is no runtime or
+  /// the desktop is not in reach.
+  public func freewayDialing(
+    to deviceId: String, deviceName: String?,
+    approve: @escaping @Sendable () async throws -> FieldProduct.JSONValue
+  ) async -> FreewayDesktopLink.Dialing? {
+    guard let runtime, let peer = await runtime.peers().first(where: { $0.deviceId == deviceId })
+    else { return nil }
+    let suffix = await magicDNSSuffix
+    let host = suffix.map { "\(peer.hostname).\($0)" } ?? peer.tailnetIPs.first ?? peer.hostname
+    return FreewayDesktopLink.Dialing(
+      dial: {
+        guard let live = await runtime.peers().first(where: { $0.deviceId == deviceId }) else {
+          throw FreewayDialError.notInReach
+        }
+        return MeshFreewayStream(
+          connection: try await runtime.node.dial(to: live, port: UInt16(FreewayContract.servePort)))
+      },
+      host: host, deviceId: deviceId, approve: approve, deviceName: deviceName)
   }
 
   /// This node's own tailnet domain (`studio.tail1234.ts.net` → `tail1234.ts.net`).

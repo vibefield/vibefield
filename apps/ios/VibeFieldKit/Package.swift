@@ -186,6 +186,8 @@ let package = Package(
         "FieldDesign",
         "FieldAgents",
         "FieldProduct",
+        // F1 — the freeway link's byte stream is a raw dial of the node's, made here
+        "FieldFreeway",
         .product(name: "Truffle", package: "truffle"),
         .product(name: "TruffleTailscale", package: "truffle"),
       ],
@@ -290,7 +292,8 @@ let package = Package(
       name: "FieldHome",
       dependencies: [
         "FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh", "FieldTerminal", "FieldInput",
-        "FieldSwarm", "FieldHistory", "FieldWorkspace", "FieldProduct",
+        "FieldSwarm", "FieldHistory", "FieldWorkspace", "FieldProduct", "FieldFreeway",
+        "FieldRoutedTerminal",
       ],
       resources: [.process("Resources")]
     ),

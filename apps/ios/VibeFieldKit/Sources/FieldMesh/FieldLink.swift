@@ -635,6 +635,16 @@ public final class FieldLink {
     }
   }
 
+  /// F1 (FW-D1) — the phone's approval for its freeway link to `deviceId`, from that desktop's OWN
+  /// door: the approval's audience is that desktop's floor boot, its key signs it, and its fieldd is
+  /// the one that decides the caller is a phone (its roster's phone row). The answer comes back
+  /// unread, `{approval, expiresAt}`, for the link to carry.
+  public func approveFreeway(on deviceId: String) async throws -> JSONValue {
+    try await ownerDoor(deviceId, refusal: Self.noTerminalDoor) { client in
+      try await client.call("freeway.approve", params: .object([:]))
+    }
+  }
+
   /// P0-C — renew a session's attach grant over the desktop that minted it:
   /// `terminal.renewAttach`, a CAS on the generation the phone holds and
   /// idempotent by `requestId` (spec §5.1). The same door and the same scope as
