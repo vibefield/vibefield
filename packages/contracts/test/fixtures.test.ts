@@ -151,6 +151,7 @@ import {
   FreewayState,
   FreewayWelcome,
 } from "../src/freeway";
+import { LiveSurfaceIosSimulatorBindingV1 } from "../src/live-surfaces";
 import { LoggingHealthV1, LogRecordV1 } from "../src/logging";
 import { NativeTickNotification, SystemTickNotification } from "../src/methods";
 import {
@@ -432,6 +433,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "staged-release-identity": StagedReleaseIdentity,
   "log-record": LogRecordV1,
   "logging-health": LoggingHealthV1,
+  // PT-S1 — the device a phone on the desk is bound to: a CoreSimulator device type and runtime, never a UDID
+  // (live-surfaces.ts; TS-only, as all of Live Surfaces is) — the 17 Pro on iOS 26.1, and Apple's own spelling of the
+  // 2nd-generation SE's id (its dashes kept).
+  "ios-simulator-binding": LiveSurfaceIosSimulatorBindingV1,
   "diagnostic-snapshot": DiagnosticLogSnapshotV1,
   "diagnostic-delta": DiagnosticLogDeltaV1,
   "diagnostic-lease": DiagnosticLeaseV1,
