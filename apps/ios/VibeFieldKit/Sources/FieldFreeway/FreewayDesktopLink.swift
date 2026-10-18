@@ -87,6 +87,9 @@ public actor FreewayDesktopLink {
     return try await dial().value
   }
 
+  /// The link standing now, if one is — never a dial (the keyring's: it opens no link for itself).
+  public var standing: FreewayLink? { current }
+
   /// The phone came to the foreground, or its network changed: a link that ended redials now.
   public func wake() {
     guard case .waiting = state else { return }

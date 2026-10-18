@@ -37,7 +37,23 @@ public final class TerminalLanes {
     }
   }
 
+  /// F1 — tickets a keyring minted before the tap (the freeway's `FreewayKeyring`): `take` hands
+  /// one out at most once and holds the session for its attachment, `release` gives it back.
+  public struct Keyring {
+    public var take: @MainActor (String) async -> JSONValue?
+    public var release: @MainActor (String) -> Void
+
+    public init(
+      take: @escaping @MainActor (String) async -> JSONValue?,
+      release: @escaping @MainActor (String) -> Void
+    ) {
+      self.take = take
+      self.release = release
+    }
+  }
+
   let door: TicketDoor
+  private let keyring: Keyring?
   private let transport: any RoutedLegTransport
   private let renewal: RenewalDoor?
   private let budget: PhoneConnectionBudget?
@@ -65,16 +81,35 @@ public final class TerminalLanes {
     transport: any RoutedLegTransport,
     door: @escaping TicketDoor,
     renewal: RenewalDoor? = nil,
+    keyring: Keyring? = nil,
     budget: PhoneConnectionBudget? = nil,
     deadline: Duration = TerminalAttachment.stepDeadline,
     log: TerminalAttachLog = .device
   ) {
     self.transport = transport
     self.door = door
+    self.keyring = keyring
     self.renewal = renewal
     self.budget = budget
     self.deadline = deadline
     self.log = log
+  }
+
+  /// A ticket for one session: the keyring's, minted before the tap, when its
+  /// cell's legs are already UP — there only its attach grant is used — and
+  /// the door's otherwise. A held ticket never reaches a hello: its transport
+  /// grant is one-shot and may sit below one a later mint presented, which the
+  /// cell refuses as a rollback (not retryable).
+  func ticket(for sessionId: String) async throws -> JSONValue {
+    if let held = await keyring?.take(sessionId), legsUp(for: held) { return held }
+    return try await door(sessionId)
+  }
+
+  private func legsUp(for ticket: JSONValue) -> Bool {
+    guard let cell = (try? RoutedTerminalTicket(json: ticket))?.route.cellBootId,
+      let state = lanes[cell]?.client.state
+    else { return false }
+    return state == .ready || state == .attached
   }
 
   /// The lane a ticket names — opened at its cell's first ticket — with this
@@ -115,6 +150,7 @@ public final class TerminalLanes {
   /// (the audit's P6, 2026-10-17). "Carrying" is this map's word, so a session
   /// still dialing its first legs on the lane keeps it open.
   func release(_ sessionId: String) {
+    keyring?.release(sessionId)
     guard let cell = cellOf[sessionId] else {
       retickets[sessionId] = nil
       return

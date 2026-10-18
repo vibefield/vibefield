@@ -139,6 +139,8 @@ public struct HomeScreen: View {
   @State private var keptAttachments: [KeptTerminal] = []
   /// F1 — each desktop's freeway link, kept warm once dialed (opt-in: `freewayLanes`).
   @State private var freewayLinks: [String: FreewayDesktopLink] = [:]
+  /// F1 — each desktop's tickets, minted before the tap for the sessions the field shows on it.
+  @State private var freewayKeyrings: [String: FreewayKeyring] = [:]
   /// Latched for the width of the directory lookup. `isAttached` hides the
   /// button, but that flip is on the far side of an `await`, and two taps
   /// inside that window would build two lifecycles — the first of which
@@ -1357,6 +1359,7 @@ public struct HomeScreen: View {
     // rather than inventing an empty answer.
     .onChange(of: mesh.state) { _, state in
       syncDiscovery(meshIsUp: state == .up, phase: scenePhase)
+      if state == .up { wakeFreewayLinks() }
     }
     // RETIRED 2026-09-14 (TM-3): the IOS-4d trigger that asked each desktop for
     // this device's write key the moment it finished hello. There is no door to
@@ -1399,6 +1402,7 @@ public struct HomeScreen: View {
         // upstream's resume on a session that never left would force a
         // spurious reconnect.
         attachment?.resumeFromForeground()
+        wakeFreewayLinks()
         // --- IOS-5c: coming back is the other honest moment to look at the
         // pasteboard — copying happens in the app the user just left.
         pasteboard.sample()
@@ -1426,6 +1430,12 @@ public struct HomeScreen: View {
       // `tapChip` refuses anything that is no longer on the row.
       inputCard.chips = replyChips(for: match)
       // --- end IOS-5c
+    }
+    // F1 — each desktop's keyring holds tickets for the sessions the field shows on it.
+    .onChange(of: bubbles) { _, next in
+      for (deviceID, keyring) in freewayKeyrings {
+        keyring.want(Self.listedSessions(next, on: deviceID))
+      }
     }
     // fix8 — the row says the run EXITED while the card is still attaching:
     // the card says so and stops dialing a terminal the desktop let go of.
@@ -2290,6 +2300,15 @@ public struct HomeScreen: View {
         desktop = FreewayDesktopLink(dialing)
         freewayLinks[deviceID] = desktop
       }
+      let keyring: FreewayKeyring
+      if let kept = freewayKeyrings[deviceID] {
+        keyring = kept
+      } else {
+        keyring = FreewayKeyring(link: { await desktop.standing })
+        freewayKeyrings[deviceID] = keyring
+        keyring.start()
+      }
+      keyring.want(Self.listedSessions(bubbles, on: deviceID))
       return TerminalLanes(
         transport: FreewayRoutedTransport(
           freeway: FreewayLegTransport { try await desktop.link() },
@@ -2298,10 +2317,28 @@ public struct HomeScreen: View {
         renewal: { session, generation, requestId in
           try await FreewayTerminalDoors.renew(
             session, expectGeneration: generation, requestId: requestId, on: desktop.link())
-        })
+        },
+        keyring: TerminalLanes.Keyring(
+          take: { await keyring.take($0) }, release: { keyring.release($0) }))
     #else
       return nil
     #endif
+  }
+
+  /// The terminal sessions the field shows on one desktop: each run whose join names a PTY there.
+  static func listedSessions(_ bubbles: [FieldBubble], on deviceID: String) -> Set<String> {
+    Set(
+      bubbles.compactMap { bubble -> String? in
+        guard let join = bubble.agent?.join, join.deviceID == deviceID, join.hosted != "none"
+        else { return nil }
+        return join.runtimeSessionID
+      })
+  }
+
+  /// F1 (§3's reconnect) — a freeway link that ended dials again now, not on its backoff: the phone
+  /// came to the foreground, or its mesh came up.
+  private func wakeFreewayLinks() {
+    for desktop in freewayLinks.values { Task { await desktop.wake() } }
   }
 
   /// The card going away: its subject is released and any attachment with it.

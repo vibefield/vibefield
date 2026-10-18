@@ -104,16 +104,35 @@ actor FreewayLegConnection: RoutedLegConnection {
 public enum FreewayTerminalDoors {
   /// One session's ticket (`terminal-tickets`).
   public static func ticket(_ sessionId: String, on link: FreewayLink) async throws -> JSONValue {
+    switch try await tickets([sessionId], on: link)[sessionId] {
+    case .success(let ticket): return ticket
+    case .failure(let refusal): throw refusal
+    case nil: throw refusal(nil, otherwise: "the host answered no ticket for the session")
+    }
+  }
+
+  /// Many sessions' tickets in one ask (`terminal-tickets`, at most
+  /// `FreewayContract.maxTicketsPerAsk`): a row for each session the host answered, its ticket or
+  /// its refusal.
+  public static func tickets(_ sessionIds: [String], on link: FreewayLink) async throws
+    -> [String: Result<JSONValue, FieldProductError>]
+  {
     let stream = try await opened(
       link,
       .object([
-        "kind": .string("terminal-tickets"), "sessionIds": .array([.string(sessionId)]),
+        "kind": .string("terminal-tickets"), "sessionIds": .array(sessionIds.map { .string($0) }),
       ]))
-    let row = (stream.opened["tickets"]?.arrayValue ?? []).first {
-      $0["sessionId"]?.stringValue == sessionId
+    var rows: [String: Result<JSONValue, FieldProductError>] = [:]
+    for row in stream.opened["tickets"]?.arrayValue ?? [] {
+      guard let sessionId = row["sessionId"]?.stringValue else { continue }
+      if let ticket = row["ticket"] {
+        rows[sessionId] = .success(ticket)
+      } else {
+        rows[sessionId] = .failure(
+          refusal(row["refusal"], otherwise: "the host answered no ticket for the session"))
+      }
     }
-    if let ticket = row?["ticket"] { return ticket }
-    throw refusal(row?["refusal"], otherwise: "the host answered no ticket for the session")
+    return rows
   }
 
   /// A renewal of a session's attach grant (`terminal-renew`): a CAS on the generation held,

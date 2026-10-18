@@ -683,13 +683,13 @@ public final class TerminalAttachment {
     }
   }
 
-  /// One mint over the product door, with its refusal kept in the door's own
-  /// words. The daemon's `UNAVAILABLE {service, state}` is turned into a
+  /// One mint — the lanes' (a ticket a keyring held for this session, or the
+  /// door's) — with its refusal kept in the door's own words. The daemon's `UNAVAILABLE {service, state}` is turned into a
   /// sentence here — the honest degraded face the corpus asks for — and every
   /// other error keeps whatever the door said.
   private func mintTicket(for session: String) async throws -> RoutedTerminalTicket {
     do {
-      let answer = try await lanes.door(session)
+      let answer = try await lanes.ticket(for: session)
       let ticket = try RoutedTerminalTicket(json: answer)
       doorRefusal = nil
       return ticket

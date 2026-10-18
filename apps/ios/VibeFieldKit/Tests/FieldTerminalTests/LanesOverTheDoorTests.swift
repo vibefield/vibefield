@@ -164,4 +164,64 @@ import Testing
     }
     lanes.closeAll()
   }
+
+  /// F1's keyring (`draft/thinking-freeway.md` §6): a session whose cell's legs
+  /// are already up attaches on the ticket a keyring held for it — no mint —
+  /// and a held ticket never reaches a hello: with no legs up the door mints
+  /// and the held one goes unused. A session let go goes back to the keyring.
+  @MainActor
+  @Test func aHeldTicketRidesLegsAlreadyUpAndNeverAHello() async throws {
+    let door = CellDoorHarness()
+    let port = try await door.start()
+    defer { Task { await door.stop() } }
+    let mints = AttachmentOverTheDoorTests.Mints()
+    let keys = HeldKeys(tickets: [
+      "sess-a": try AttachmentOverTheDoorTests.ticketJSON(port: port, sessionId: "sess-a"),
+      "sess-b": try AttachmentOverTheDoorTests.ticketJSON(port: port, sessionId: "sess-b"),
+    ])
+    let lanes = TerminalLanes(
+      transport: URLSessionRoutedTransport(),
+      door: { asked in
+        mints.record()
+        return try AttachmentOverTheDoorTests.ticketJSON(port: port, sessionId: asked)
+      },
+      keyring: keys.keyring)
+
+    // No legs up yet: sess-a's held ticket is taken and goes unused; the door mints.
+    let first = TerminalAttachment(
+      lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
+    try await attachToLive(first, session: "sess-a", door: door, attaches: 1)
+    #expect(mints.count == 1)
+    // The legs are up: sess-b attaches on its held ticket — no mint, no second hello.
+    let second = TerminalAttachment(
+      lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
+    try await attachToLive(second, session: "sess-b", door: door, attaches: 2)
+    #expect(mints.count == 1)
+    #expect(await door.helloCount[.control] == 1)
+    #expect(await door.helloCount[.frames] == 1)
+    #expect(keys.taken == ["sess-a", "sess-b"])
+
+    first.release()
+    second.release()
+    #expect(keys.released == ["sess-a", "sess-b"])
+  }
+}
+
+/// A keyring a row fills by hand: what it holds, what was taken, what was let go.
+@MainActor
+final class HeldKeys {
+  var tickets: [String: JSONValue]
+  private(set) var taken: [String] = []
+  private(set) var released: [String] = []
+
+  init(tickets: [String: JSONValue]) { self.tickets = tickets }
+
+  var keyring: TerminalLanes.Keyring {
+    TerminalLanes.Keyring(
+      take: { [self] session in
+        taken.append(session)
+        return tickets.removeValue(forKey: session)
+      },
+      release: { [self] session in released.append(session) })
+  }
 }
