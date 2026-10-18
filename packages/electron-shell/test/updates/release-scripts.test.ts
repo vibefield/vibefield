@@ -365,6 +365,8 @@ describe("release-manifest (D11): the planes are computed from bytes", () => {
   it("assigns each resources path to its plane", () => {
     expect(planeOf("bin/field-native")).toBe("field-native");
     expect(planeOf("bin/field-terminal-host")).toBe("field-native");
+    // F1: the freeway host, which the floor execs from its own directory (`config.rs` `freeway_binary()`)
+    expect(planeOf("bin/field-freeway-host")).toBe("field-native");
     expect(planeOf("bin/sidecar-slim.exe")).toBe("field-native");
     // L3b-i (B3): the floor execs `truffle-sidecar` from its own directory when `sidecar-slim` is absent (mesh.rs)
     expect(planeOf("bin/truffle-sidecar")).toBe("field-native");

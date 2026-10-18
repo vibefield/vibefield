@@ -97,9 +97,15 @@ test("the stage reads field-native's binaries through it, as one list shipped as
   const source = readFileSync(join(REPO_ROOT, "scripts", "stage-package.mjs"), "utf8");
   assert.match(source, /import \{ cargoBinaries \} from "\.\/cargo-target\.mjs"/);
   assert.doesNotMatch(source, /from: `target\/release\//);
-  assert.match(source, /name: "field-native"/);
-  assert.match(source, /name: "field-terminal-host"/);
-  assert.match(source, /`SET {2}\$\{nativeStaged\.join/);
+  // F1: the list is the floor's set (`native-floor.mjs`), each with its gap, and the SET rule is that module's one rule
+  assert.match(
+    source,
+    /import \{ FLOOR_BINARIES, floorSetProblems \} from "\.\/native-floor\.mjs"/,
+  );
+  assert.match(source, /const NATIVE_BINARIES = FLOOR_BINARIES\.map\(/);
+  for (const name of ["field-native", "field-terminal-host", "field-freeway-host"])
+    assert.match(source, new RegExp(`"${name}":\\s+"the `));
+  assert.match(source, /problems\.push\(\.\.\.floorSetProblems\(present\)\)/);
   const harness = readFileSync(
     join(REPO_ROOT, "packages", "fieldd", "test", "native-harness.ts"),
     "utf8",

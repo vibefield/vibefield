@@ -39,6 +39,8 @@ import { BUNDLED_PLUGINS } from "../apps/desktop/packaging/bundled-list.mjs";
 // Tooling (a) — field-native's binaries are read where cargo builds them, never `<repo>/target` by guess.
 import { cargoBinaries } from "./cargo-target.mjs";
 import { auditHostLinks, launchCheck } from "./host-links.mjs";
+// FW (F1) — the floor's set: field-native and the two binaries it resolves beside itself, one release build.
+import { FLOOR_BINARIES, floorSetProblems } from "./native-floor.mjs";
 // Not a dependency — a repo script. scripts/siblings.mjs is the ONE reader of
 // siblings.lock.json (CLAUDE.md §Machine setup), and staging is its fourth
 // consumer after preflight, the Nx cache stamp and the dev runner.
@@ -79,22 +81,24 @@ const MODES_ENFORCEABLE = process.platform !== "win32";
 // directory — CARGO_TARGET_DIR, the other spelling, a config's `build.target-dir`). They were path literals,
 // `target/release/<name>` against the repo root, which a lane's CARGO_TARGET_DIR or the shared target-dir made a
 // stale file or none, staged as a mere warning. They ship as a SET or not at all (verify's SET check), and a missing
-// one is a declared optional gap: warned about loudly, FATAL under --require-complete, the release stage. A third
-// binary is one more row.
+// one is a declared optional gap: warned about loudly, FATAL under --require-complete, the release stage. A fourth
+// binary is one more name in the floor's set and its gap below.
 //   - field-native: the floor.
 //   - field-terminal-host (TC-S2): the floor's terminal cell. Flat under `bin/` is the resolution law, not a
 //     convenience: the floor finds it as a SIBLING of its own executable (field-native `config.rs::cell_binary()`,
 //     with FIELD_NATIVE_CELL_BIN as a test-only override packaging never sets).
-const NATIVE_BINARIES = [
-  {
-    name: "field-native",
-    gap: "the field-native sidecar is absent — the packaged app will have no native plane",
-  },
-  {
-    name: "field-terminal-host",
-    gap: "the terminal cell binary is absent — the native plane will have no terminal",
-  },
-];
+//   - field-freeway-host (F1): the floor's freeway host, by the same law (`config.rs::freeway_binary()`;
+//     FIELD_NATIVE_FREEWAY_BIN is a test and dev seam packaging never sets). The floor starts it on fieldd's first
+//     declaration, and a floor without it reads the freeway `disabled`.
+// The names are the floor's set (`native-floor.mjs`), the one list the SEA probe, the release manifest and the launch
+// check read too; this table says only what each one's absence costs.
+const NATIVE_GAPS = {
+  "field-native": "the field-native sidecar is absent — the packaged app will have no native plane",
+  "field-terminal-host":
+    "the terminal cell binary is absent — the native plane will have no terminal",
+  "field-freeway-host": "the freeway host binary is absent — the native plane will have no freeway",
+};
+const NATIVE_BINARIES = FLOOR_BINARIES.map((name) => ({ name, gap: NATIVE_GAPS[name] }));
 const nativeFile = (name) => (process.platform === "win32" ? `${name}.exe` : name);
 let nativeBuilt = null;
 let nativeUnknown = null;
@@ -729,24 +733,16 @@ const verify = ({ files, manifest }, produced) => {
     }
   }
 
-  // TC-S2, tooling (a) — field-native's binaries (NATIVE_BINARIES) ship as a SET or not at all.
-  // All absent is a declared optional gap above (a preview package with no native plane, warned
-  // about loudly and fatal under --require-complete). Some staged without the rest is not a gap:
-  // the floor resolves its other binaries beside itself, so a floor without its cell boots a native
-  // plane whose terminal unit is permanently Degraded. The half-state is reachable from a target
-  // predating a binary — one that still holds field-native and has never built the newer one —
-  // which is exactly the case that must fail here rather than pack silently. Asserted against the
-  // STAGE, so --verify catches it on a stage this process did not build.
+  // TC-S2, widened at F1 — field-native's binaries (the floor's set, `native-floor.mjs`) ship as a SET or not at all.
+  // All absent is a declared optional gap above (a preview package with no native plane, warned about loudly and fatal
+  // under --require-complete). Some staged without the rest is not a gap: the floor resolves its cell and its freeway
+  // host beside itself, so a floor without its cell boots a terminal unit that stays Degraded, and one without its host
+  // a freeway that reads disabled. The half-state is reachable from a target predating a binary — one that still holds
+  // field-native and has never built the newer one — which is exactly the case that must fail here rather than pack
+  // silently. Asserted against the STAGE, so --verify catches it on a stage this process did not build.
   const nativeStages = NATIVE_BINARIES.map((binary) => `bin/${nativeFile(binary.name)}`);
   const nativeStaged = nativeStages.filter((stage) => present.has(stage));
-  if (nativeStaged.length > 0 && nativeStaged.length < nativeStages.length) {
-    const absent = nativeStages.filter((stage) => !present.has(stage));
-    problems.push(
-      `SET  ${nativeStaged.join(", ")} staged without ${absent.join(", ")} — field-native's ` +
-        `binaries resolve one another as siblings, and these would find none (TC-S2); rebuild ` +
-        `them all with \`pnpm --filter @vibefield/desktop build:native-release\``,
-    );
-  }
+  problems.push(...floorSetProblems(present));
 
   // BP-1b's gate (scripts/host-links.mjs; LANDED "BP-1b"): every staged Mach-O loads only `/usr/lib`, `/System` or the
   // bundle's own paths, and the native binaries start (`--version`), so a package built against a host library refuses

@@ -20,7 +20,8 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-/** A built app's shape: the floor, its cell and its sidecar beside fieldd's binaries, a helper bundle, the shell. */
+/** A built app's shape: the floor, its cell, its freeway host and its sidecar beside fieldd's binaries, a helper bundle,
+ * the shell. */
 function app(files: Record<string, string>): { app: string; resources: string } {
   const root = mkdtempSync(join(tmpdir(), "vf-native-"));
   dirs.push(root);
@@ -39,6 +40,7 @@ const BUILD = {
   "app.asar": "asar",
   "bin/field-native": "floor-1",
   "bin/field-terminal-host": "cell-1",
+  "bin/field-freeway-host": "host-1",
   "bin/sidecar-slim": "sidecar-1",
   "bin/fieldd": "fieldd-1",
   "bin/rosettad": "rosettad-1",
@@ -52,13 +54,14 @@ describe("the native plane: one rule, two hashers (B3)", () => {
     const workflow = hashPlanes(built.app)["field-native"];
     const main = await hashNativePlane(built.resources);
     expect(main.members).toEqual([
+      "bin/field-freeway-host",
       "bin/field-native",
       "bin/field-terminal-host",
       "bin/sidecar-slim",
     ]);
     expect(workflow.members).toEqual(main.members);
     expect(workflow.digest).toBe(main.digest);
-    expect(workflow.files).toBe(3);
+    expect(workflow.files).toBe(4);
   });
 
   it("names every executable the floor execs from its own directory — truffle-sidecar and `.exe` included", async () => {
@@ -89,6 +92,11 @@ describe("the native plane: one rule, two hashers (B3)", () => {
       app({ ...BUILD, "bin/field-terminal-host": "cell-2" }).resources,
     );
     expect(changed.digest).not.toBe(one.digest);
+    // F1 — the freeway host is the floor's: a release that changes only it touches field-native, never fieldd
+    expect(planeOf("bin/field-freeway-host")).toBe("field-native");
+    const host = app({ ...BUILD, "bin/field-freeway-host": "host-2" });
+    expect((await hashNativePlane(host.resources)).digest).not.toBe(one.digest);
+    expect(hashPlanes(host.app).fieldd.digest).toBe(hashPlanes(app(BUILD).app).fieldd.digest);
   });
 
   it("hashes a symlink by its target text, as the manifest does", async () => {

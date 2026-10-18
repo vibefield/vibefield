@@ -402,15 +402,16 @@ if (unsupportedGlobs.length > 0) {
 }
 
 // EDP-13: field-native is always release-mode, architecture-specific, separately signed
-// sidecars staged into resources/bin — never TS build products. Since TC-S2 the crate emits
-// TWO of them (the floor plus its terminal cell), and they stage side by side because the
-// floor resolves the cell as its sibling. Their absence here is the design, so it is stated
-// rather than left looking like an oversight; Cargo's `target/` is excluded for the same
-// reason (and is ~8.5 GB of debug artifacts).
+// sidecars staged into resources/bin — never TS build products. Since F1 the crate emits
+// THREE of them (the floor, its TC-S2 terminal cell and its freeway host), and they stage side
+// by side because the floor resolves the other two as its siblings. Their absence here is the
+// design, so it is stated rather than left looking like an oversight; Cargo's `target/` is
+// excluded for the same reason (and is ~8.5 GB of debug artifacts).
 console.log(
   `\nnot in this census, by design:\n` +
-    `  packages/field-native — ships as separately built release binaries (field-native and\n` +
-    `    its TC-S2 field-terminal-host cell) staged side by side into resources/bin (EDP-13);\n` +
+    `  packages/field-native — ships as separately built release binaries (field-native, its\n` +
+    `    TC-S2 field-terminal-host cell and its F1 field-freeway-host) staged side by side into\n` +
+    `    resources/bin (EDP-13);\n` +
     `    Cargo \`target/\` is not a TS build product and is excluded.\n` +
     `  rosettad (AR-8) — the rosetta sibling's release binary, built in ITS checkout by\n` +
     `    \`pnpm siblings:build\` and staged into resources/bin when present; no build tree here.`,

@@ -13,6 +13,8 @@
 //   3 rollback    policy v2 against a remembered v5 → `policy-rollback`, no payload
 //   4 killed      the kill switch, advertising N → `killed`, no payload
 //   5 unresolved  nightly-only heads for the beta build → `channel-unresolved`; the nightly's feed never asked for
+//   every run     the floor's freeway host runs from the app's own `Contents/Resources/bin` (F1): the floor spawns it on
+//                 fieldd's first declaration, which every boot makes — staged, executable, found as the floor's sibling
 //
 // Each run is held inside its temp root (R5): `HOME` (the production log root and electron-updater's cache follow
 // `os.homedir()`), `FIELDD_DATA_DIR`, `--user-data-dir`, `--allow-dev-trust`, a loopback `VIBEFIELD_UPDATE_ORIGIN`.
@@ -32,6 +34,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -60,6 +63,10 @@ export const RUN_BOUND_MS = 120_000;
 const QUIT_BOUND_MS = 20_000;
 /** electron-updater's cache dir name, as the zip build's `app-update.yml` names it (L3b-ii's B8 witness). */
 export const UPDATER_CACHE_DIR = "@vibefielddesktop-updater";
+/** F1 — the floor spawns its freeway host as `<its own directory>/field-freeway-host --listener-fd 3`. */
+export const FREEWAY_HOST_ARGS = "--listener-fd 3";
+/** How long after a run's verdict its freeway host may still be coming up. */
+const HOST_BOUND_MS = 10_000;
 /** Secrets that must never reach the app's environment (EL7). */
 const SECRET_ENVS = [
   "VIBEFIELD_SMOKE_BUNDLED_SECRET",
@@ -202,6 +209,31 @@ export function footprintSnapshot(paths) {
 export function footprintChanged(before, after) {
   return Object.keys(after).filter(
     (path) => after[path] !== null && (before[path] === null || after[path] > before[path]),
+  );
+}
+
+const realPath = (path) => {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+};
+
+/**
+ * F1 — the run's freeway host: a process of the run named `field-freeway-host` whose executable IS `hostPath` (the app's
+ * `Contents/Resources/bin/field-freeway-host`), with the floor's arguments. Both paths are compared real: `/tmp` is
+ * `/private/tmp`, and the floor's own path is whichever it was exec'd by. `null` when the run has none.
+ */
+export function freewayHostOf(processes, hostPath, real = realPath) {
+  const want = real(hostPath);
+  const args = ` ${FREEWAY_HOST_ARGS}`;
+  return (
+    processes.find((p) => {
+      if (p.name !== "field-freeway-host" || typeof p.command !== "string") return false;
+      const command = p.command.trimEnd();
+      return command.endsWith(args) && real(command.slice(0, -args.length)) === want;
+    }) ?? null
   );
 }
 
@@ -369,6 +401,30 @@ async function oneRun(name, { root, keys, trustRoot, zip, current }) {
       payloadRequests: server.payloadRequests().length,
       requests: server.requests.length,
     };
+  // F1 — the floor's freeway host, from the app's own Resources/bin, while the app still runs
+  const hostPath = join(
+    runRoot,
+    "app",
+    "VibeField.app",
+    "Contents",
+    "Resources",
+    "bin",
+    "field-freeway-host",
+  );
+  let host = null;
+  const hostUntil = Date.now() + HOST_BOUND_MS;
+  while (exited === null) {
+    host = freewayHostOf(listRunProcesses(mark), hostPath);
+    if (host !== null || Date.now() >= hostUntil) break;
+    await sleep(500);
+  }
+  if (host === null) {
+    verdict.ok = false;
+    verdict.problems = [
+      ...(verdict.problems ?? []),
+      "no field-freeway-host of this run ran from the app's Contents/Resources/bin (F1)",
+    ];
+  }
   // the shell's graceful quit; production leaves its daemons running by design (`modes.ts:117-126`) — the row reaps them
   if (exited === null) {
     child.kill("SIGTERM");
@@ -402,6 +458,8 @@ async function oneRun(name, { root, keys, trustRoot, zip, current }) {
     expect: run.expect,
     ms: Date.now() - started,
     ...verdict,
+    freewayHost:
+      host === null ? "absent" : `Contents/Resources/bin/field-freeway-host ${FREEWAY_HOST_ARGS}`,
     ...(name === "staged" ? { squirrelSays } : {}),
   };
   say("SMOKE_UPDATE", result);

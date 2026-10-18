@@ -10,6 +10,7 @@ import {
   appEnv,
   footprintChanged,
   footprintSnapshot,
+  freewayHostOf,
   judgeRun,
   readEvents,
 } from "../../../apps/desktop/packaging/run-update-smoke.mjs";
@@ -199,4 +200,31 @@ test("R5: the footprint names what a run created or touched outside its root, an
     touched,
     created,
   ]);
+});
+
+test("F1: every run's freeway host is the app's own — by real path, with the floor's arguments", () => {
+  const app = "/tmp/vf-update-smoke-x/staged/app/VibeField.app";
+  const hostPath = `${app}/Contents/Resources/bin/field-freeway-host`;
+  // `/tmp` is `/private/tmp`: the floor's own path is whichever it was exec'd by
+  const real = (path) => path.replace(/^\/tmp\//u, "/private/tmp/");
+  const host = (command, name = "field-freeway-host") => ({ pid: 9, name, helper: false, command });
+  const spawned = host(`/private${hostPath} --listener-fd 3`);
+  assert.equal(freewayHostOf([spawned], hostPath, real), spawned);
+  assert.equal(freewayHostOf([host(`${hostPath} --listener-fd 3 `)], hostPath, real)?.pid, 9);
+  // a dev build's host, another run's app, the wrong arguments, no command, another binary: none is this run's
+  for (const other of [
+    host("/r/target/debug/field-freeway-host --listener-fd 3"),
+    host(
+      "/tmp/vf-update-smoke-y/staged/app/VibeField.app/Contents/Resources/bin/field-freeway-host --listener-fd 3",
+    ),
+    host(`${hostPath} --listener-fd 4`),
+    host(`${hostPath}`),
+    host(null),
+    host(
+      `${app}/Contents/Resources/bin/field-terminal-host --listener-fd 3`,
+      "field-terminal-host",
+    ),
+  ])
+    assert.equal(freewayHostOf([other], hostPath, real), null, JSON.stringify(other));
+  assert.equal(freewayHostOf([], hostPath, real), null);
 });

@@ -36,6 +36,7 @@ import {
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { FLOOR_BINARIES } from "../../../scripts/native-floor.mjs";
 
 const root = resolve(import.meta.dirname, "..", "..", "..");
 const args = process.argv.slice(2);
@@ -487,10 +488,11 @@ function sandboxEnv(home, dataDir, nativeBin) {
   };
 }
 
-// TC-S2 — field-native's terminal cell, spawned by the floor as its own sibling. No `.exe`
-// variant: this probe is unix-only throughout (it execs /usr/bin/pkill and pins PATH to
-// /usr/bin:/bin), so a win32 name here would be the only ported line in the file.
-const CELL_NAME = "field-terminal-host";
+// TC-S2 + F1 — field-native's siblings (its terminal cell, its freeway host), spawned by the floor
+// beside itself (`native-floor.mjs`). No `.exe` variant: this probe is unix-only throughout (it
+// execs /usr/bin/pkill and pins PATH to /usr/bin:/bin), so a win32 name here would be the only
+// ported line in the file.
+const FLOOR_SIBLINGS = FLOOR_BINARIES.slice(1);
 
 /** The release field-native, or the debug one; `--native-bin` overrides both. */
 function findNativeBin() {
@@ -569,25 +571,27 @@ async function verify({ exe, manifest }) {
   mkdirSync(dirname(nativeBin), { recursive: true });
   copyFileSync(nativeSource, nativeBin);
   chmodSync(nativeBin, 0o755);
-  // TC-S2 — the floor booted here is a REAL floor, and its terminal unit spawns the cell it
-  // resolves as its own sibling. Copying the cell from the floor's own directory reproduces that
-  // resolution law in the sandbox instead of booting a floor that could only report the cell
-  // missing; taking it from `dirname(nativeSource)` also keeps the pair matched, so a release
-  // floor is never paired with a debug cell.
-  const cellSource = join(dirname(nativeSource), CELL_NAME);
-  const cellPresent = existsSync(cellSource);
-  if (cellPresent) {
-    const cellBin = join(dirname(nativeBin), CELL_NAME);
-    copyFileSync(cellSource, cellBin);
-    chmodSync(cellBin, 0o755);
+  // TC-S2 + F1 — the floor booted here is a REAL floor: its terminal unit spawns the cell, and its
+  // freeway unit the host on fieldd's first declaration, each resolved as its own sibling. Copying
+  // them from the floor's own directory reproduces that resolution law in the sandbox instead of
+  // booting a floor that could only report them missing; taking them from `dirname(nativeSource)`
+  // also keeps the set matched, so a release floor is never paired with a debug sibling.
+  for (const name of FLOOR_SIBLINGS) {
+    const source = join(dirname(nativeSource), name);
+    const present = existsSync(source);
+    if (present) {
+      const bin = join(dirname(nativeBin), name);
+      copyFileSync(source, bin);
+      chmodSync(bin, 0o755);
+    }
+    say(
+      present,
+      present
+        ? `${name} staged beside the floor — ${rel(source)}`
+        : `no ${name} beside ${rel(nativeSource)}; that floor can only report it missing. ` +
+            "Build the set: pnpm --filter @vibefield/desktop build:native-release",
+    );
   }
-  say(
-    cellPresent,
-    cellPresent
-      ? `terminal cell staged beside the floor — ${rel(cellSource)}`
-      : `no ${CELL_NAME} beside ${rel(nativeSource)}; that floor's terminal unit can only ` +
-          `report the cell missing. Build the pair: pnpm --filter @vibefield/desktop build:native-release`,
-  );
   try {
     const ancestors = ancestorsWithNodeModules(sandbox);
     say(

@@ -1,9 +1,10 @@
 // WP12d (L3b-i, `build-wp12-updater.md` §12 B3; the PM's ruling 2026-10-15 16:03Z) — the native plane, read by DIGEST.
 // A release leaves field-native untouched only when the bytes the running floor can still exec are the same: the floor
 // AND every executable it execs from its own directory (`field-terminal-host`, `config.rs` `cell_binary()`;
-// `sidecar-slim` or `truffle-sidecar`, `mesh.rs` `SIDECAR_NAMES`). The client hashes its OWN installed plane and
-// compares it — members and digest — with the head release's signed manifest. Anything it cannot read, or any
-// difference, reads as TOUCHED: today's behaviour, the floor stopped under the census gate.
+// `field-freeway-host`, `freeway_binary()`, F1; `sidecar-slim` or `truffle-sidecar`, `mesh.rs` `SIDECAR_NAMES`). The
+// client hashes its OWN installed plane and compares it — members and digest — with the head release's signed
+// manifest. Anything it cannot read, or any difference, reads as TOUCHED: today's behaviour, the floor stopped under
+// the census gate.
 //
 // `scripts/release-manifest.mjs` computes the manifest's side by the same rule (a line is `bin/<name>\0<sha256>`, the
 // lines sorted, the digest their sha256); the release-scripts tests hold the two to one digest on one fixture app.
@@ -17,6 +18,7 @@ import type { ReleaseManifest } from "@vibefield/contracts";
 export const NATIVE_PLANE_NAMES = [
   "field-native",
   "field-terminal-host",
+  "field-freeway-host",
   "sidecar-slim",
   "truffle-sidecar",
 ] as const;

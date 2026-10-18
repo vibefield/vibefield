@@ -156,6 +156,8 @@ test("the launch check runs each native binary's --version: a name said and exit
       writeFileSync(path, `#!/bin/sh\n${body}\n`);
       chmodSync(path, 0o755);
     };
+    // F1: the floor's whole set is launched — the freeway host beside the floor and its cell
+    assert.deepEqual(LAUNCHED, ["field-native", "field-terminal-host", "field-freeway-host"]);
     for (const name of LAUNCHED) stand(name, `echo "${name} 0.1.0"`);
     assert.deepEqual(launchCheck(dir), []);
     stand("field-terminal-host", 'echo "dyld: Library not loaded" >&2; exit 134');
@@ -165,6 +167,12 @@ test("the launch check runs each native binary's --version: a name said and exit
       problems[0],
       /^field-terminal-host: --version exited 134 — dyld: Library not loaded$/,
     );
+    // a host from before it answered --version (`unknown flag`, exit 2) is refused the same way
+    stand("field-terminal-host", 'echo "field-terminal-host 0.1.0"');
+    stand("field-freeway-host", 'echo "field-freeway-host: unknown flag: --version" >&2; exit 2');
+    assert.deepEqual(launchCheck(dir), [
+      "field-freeway-host: --version exited 2 — field-freeway-host: unknown flag: --version",
+    ]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

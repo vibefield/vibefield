@@ -22,6 +22,7 @@ import { spawnSync } from "node:child_process";
 import { closeSync, lstatSync, openSync, readdirSync, readSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { FLOOR_BINARIES } from "./native-floor.mjs";
 
 /** The load commands that make a dependency, by number (never LC_ID_DYLIB, 0xd: a dylib's own name). */
 export const DEPENDENCY_COMMANDS = new Map([
@@ -39,8 +40,9 @@ export const ALLOWED_PREFIXES = [
   "@loader_path/",
   "@executable_path/",
 ];
-/** The packaged native binaries the launch check runs (the stage's NATIVE_BINARIES, each with `--version`). */
-export const LAUNCHED = ["field-native", "field-terminal-host"];
+/** The packaged native binaries the launch check runs, each with `--version`: the floor's set (`native-floor.mjs`), the
+ * stage's NATIVE_BINARIES — the floor, its terminal cell and, since F1, its freeway host. */
+export const LAUNCHED = FLOOR_BINARIES;
 
 /** One thin image's dependency load commands, from a buffer holding its header and load commands (either byte order). */
 export function imageCommands(buf) {

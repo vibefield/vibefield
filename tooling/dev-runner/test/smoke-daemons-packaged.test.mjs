@@ -1,6 +1,7 @@
 // WP12 L4 (build-wp12-updater.md §14) — the launcher's reaper (`apps/desktop/packaging/smoke-daemons.mjs`) names a
 // PACKAGED app's processes, which `smoke:update` runs: the shell, its helpers (they carry the product name, not
-// Electron's), fieldd's SEA and the floor in `Resources/bin`. A helper is still a helper, given time to follow the shell.
+// Electron's), fieldd's SEA, the floor and its freeway host in `Resources/bin`. A helper is still a helper, given time
+// to follow the shell.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { processName, runProcesses } from "../../../apps/desktop/packaging/smoke-daemons.mjs";
@@ -26,6 +27,11 @@ test("names the packaged layout: the shell, its helpers, fieldd's SEA, the floor
   );
   assert.equal(processName(`${APP}/Contents/Resources/bin/fieldd`), "fieldd");
   assert.equal(processName(`${APP}/Contents/Resources/bin/field-native`), "field-native");
+  // F1 — the floor's freeway host, named by its own basename
+  assert.equal(
+    processName(`${APP}/Contents/Resources/bin/field-freeway-host --listener-fd 3`),
+    "field-freeway-host",
+  );
   assert.equal(
     processName(`${APP}/Contents/Resources/bin/sidecar-slim --socket x`),
     "sidecar-slim",
@@ -45,6 +51,7 @@ test("a packaged run's processes by the mark: helpers flagged, the daemons named
     ],
     [102, 1, `${APP}/Contents/Resources/bin/fieldd`],
     [103, 1, `${APP}/Contents/Resources/bin/field-native`],
+    [104, 103, `${APP}/Contents/Resources/bin/field-freeway-host --listener-fd 3`],
   ];
   const plain = lines.map(([pid, ppid, command]) => `  ${pid}  ${ppid} ${command}`).join("\n");
   const withEnv = lines
@@ -57,6 +64,10 @@ test("a packaged run's processes by the mark: helpers flagged, the daemons named
       [101, "electron-helper", true],
       [102, "fieldd", false],
       [103, "field-native", false],
+      [104, "field-freeway-host", false],
     ],
   );
+  // each carries its command from the plain table, never the environment's (F1's witness reads the host's place)
+  const host = runProcesses(withEnv, plain, mark).find((p) => p.pid === 104);
+  assert.equal(host.command, `${APP}/Contents/Resources/bin/field-freeway-host --listener-fd 3`);
 });

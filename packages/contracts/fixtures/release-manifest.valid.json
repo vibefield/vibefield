@@ -16,8 +16,13 @@
       },
       "field-native": {
         "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-        "files": 3,
-        "members": ["bin/field-native", "bin/field-terminal-host", "bin/sidecar-slim"]
+        "files": 4,
+        "members": [
+          "bin/field-freeway-host",
+          "bin/field-native",
+          "bin/field-terminal-host",
+          "bin/sidecar-slim"
+        ]
       }
     }
   },

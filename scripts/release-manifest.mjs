@@ -6,9 +6,10 @@
 //
 // The planes, by path under the app's resources directory:
 //   - field-native: `bin/field-native` and EVERY executable it execs from its own directory — `bin/field-terminal-host`
-//     (`config.rs` `cell_binary()`), `bin/sidecar-slim` or `bin/truffle-sidecar` (`mesh.rs` `SIDECAR_NAMES`). The
-//     manifest NAMES these members: the client compares the set as well as the digest (L3b-i, the PM's ruling
-//     2026-10-15 16:03Z, B3), because a release that adds or drops one changes what the running floor can exec;
+//     (`config.rs` `cell_binary()`), `bin/field-freeway-host` (`freeway_binary()`, F1), `bin/sidecar-slim` or
+//     `bin/truffle-sidecar` (`mesh.rs` `SIDECAR_NAMES`). The manifest NAMES these members: the client compares the
+//     set as well as the digest (L3b-i, the PM's ruling 2026-10-15 16:03Z, B3), because a release that adds or
+//     drops one changes what the running floor can exec;
 //   - fieldd: every OTHER file under `bin/` (fieldd's SEA and the sidecars it resolves beside itself, rosettad, which
 //     it supervises) and `plugins/` (the roots it reads at spawn);
 //   - shell: every other file in the app (Electron, the asar, the frameworks, the identity).
@@ -29,15 +30,12 @@ import {
 } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { FLOOR_BINARIES } from "./native-floor.mjs";
 
 export const PLANES = ["shell", "fieldd", "field-native"];
-// Main's `native-plane.ts` names the same set (its cross-test holds the two to one digest).
-const NATIVE_FLOOR = new Set([
-  "field-native",
-  "field-terminal-host",
-  "sidecar-slim",
-  "truffle-sidecar",
-]);
+// The floor's set (`native-floor.mjs`: the floor, its cell, its freeway host) and the sidecars it execs from the same
+// directory. Main's `native-plane.ts` names the same set (its cross-test holds the two to one digest).
+const NATIVE_FLOOR = new Set([...FLOOR_BINARIES, "sidecar-slim", "truffle-sidecar"]);
 
 export class ReleaseManifestError extends Error {}
 

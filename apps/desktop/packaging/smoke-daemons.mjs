@@ -54,8 +54,10 @@ export function runProcesses(withEnv, plain, mark) {
     const m = LINE.exec(line);
     if (m === null || !carries.test(m[3] ?? "")) continue;
     const pid = Number(m[1]);
-    const name = processName(commands.get(pid) ?? m[3] ?? "");
-    found.push({ pid, ppid: Number(m[2]), name, helper: name === "electron-helper" });
+    const command = commands.get(pid) ?? null;
+    const name = processName(command ?? m[3] ?? "");
+    // `command` is the plain table's (never the environment's): the path a witness reads a binary's place from
+    found.push({ pid, ppid: Number(m[2]), name, helper: name === "electron-helper", command });
   }
   return found;
 }

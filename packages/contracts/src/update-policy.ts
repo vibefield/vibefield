@@ -100,9 +100,10 @@ export type UpdatePolicySource = z.infer<typeof UpdatePolicySource>;
  * L3b-i (the PM's ruling 2026-10-15 16:03Z, B3): the client decides by DIGEST, never by `touched` alone (a client may
  * skip releases, and nightly releases are deleted at 14 days). It hashes its OWN installed field-native plane and
  * compares it with the head's — and that plane is field-native AND every executable it execs from its own directory
- * (`field-terminal-host`; `sidecar-slim` or `truffle-sidecar`, whichever it finds), so the manifest NAMES the plane's
- * members and a missing or extra member reads as touched. Each digest line is `path\0sha256`, the path relative to the
- * app's resources directory for a file inside it (`bin/field-native`) and relative to the app otherwise. */
+ * (`field-terminal-host`; `field-freeway-host`, F1; `sidecar-slim` or `truffle-sidecar`, whichever it finds), so the
+ * manifest NAMES the plane's members and a missing or extra member reads as touched. Each digest line is
+ * `path\0sha256`, the path relative to the app's resources directory for a file inside it (`bin/field-native`) and
+ * relative to the app otherwise. */
 export const RELEASE_MANIFEST_FILE = "release-manifest.json" as const;
 
 /** The release workflow's platform keys (`builds` below; `release.yml`'s matrix): `<mac|win|linux>-<arch>`. */
