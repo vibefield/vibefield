@@ -8,7 +8,7 @@
 // win32 branch is reachable from a unit test on a mac rather than only from a
 // Windows box.
 import { type ChildProcess, spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { createConnection } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,6 +18,22 @@ import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
  * suffix — only the built file does, and only on win32. */
 export function nativeBinPath(root: string, platform: NodeJS.Platform = process.platform): string {
   return join(root, "target", "debug", platform === "win32" ? "field-native.exe" : "field-native");
+}
+
+/** Where the suites' `cargo build -p field-native` lands: where `nativeBinPath`
+ * looks. A target directory the caller named stands (`CARGO_TARGET_DIR`, or
+ * cargo's other spelling `CARGO_BUILD_TARGET_DIR`); with neither, the
+ * checkout's OWN `target` — the real path behind its link when it has one.
+ * Without this a user-wide `build.target-dir` wins over the link, and a lane's
+ * run builds into another checkout's target and tests a binary it never built
+ * (2026-10-17: a lane's vitest overwrote the main checkout's field-native). */
+export function nativeBuildEnv(
+  root: string,
+  env: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  if (env["CARGO_TARGET_DIR"] || env["CARGO_BUILD_TARGET_DIR"]) return env;
+  const own = join(root, "target");
+  return { ...env, CARGO_TARGET_DIR: existsSync(own) ? realpathSync(own) : own };
 }
 
 /** A temp data root short enough for whatever will be bound underneath it.

@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { nativeBinPath } from "./native-harness";
+import { nativeBinPath, nativeBuildEnv } from "./native-harness";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -27,8 +27,10 @@ export async function setup(): Promise<void> {
   await new Promise<void>((resolveBuild, reject) => {
     // the cargo PACKAGE name — never `.exe`, on any platform. Only the artifact
     // this produces carries the suffix, and only nativeBinPath knows that.
+    // into this checkout's own target, where the suites look (`nativeBuildEnv`)
     const build = spawn("cargo", ["build", "-p", "field-native"], {
       cwd: ROOT,
+      env: nativeBuildEnv(ROOT),
       stdio: ["ignore", "ignore", "pipe"],
     });
     // A failure here kills the entire run, so it must say why — cargo's
