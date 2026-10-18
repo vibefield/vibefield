@@ -636,7 +636,7 @@ design, ruled 2026-10-18). It wears four recipes, written here before any of its
 | the screen's light | by day 1 of its bytes · by night 0.8 · the panel's scatter 0.006 · a still 0.7 · a still under words 0.16 |
 | the night's glow | glare 3.5 mm and 16 mm at 0.06 and 0.04 · spill 24 mm at 0.55 · edge 0.45 |
 | the words on a face | `#e6e8ea` (light, added over the dark panel or a dimmed still, in both lights) |
-| the marks on a still | the rest mark: two bars 1.4 mm wide and 6 mm tall, 2.4 mm apart (the pane's two bars) · the boot mark: a ring 7 mm across and 1.4 mm thick, open 60° at its top · each in the words' ink at 0.9, at the display's centre |
+| the marks on a still | the rest mark: two bars 1.4 mm wide and 6 mm tall, 2.4 mm apart centre to centre (the pane's two bars) · the boot mark: a ring 7 mm across and 1.4 mm thick, open 60° at its top · each in the words' ink at 0.9, at the display's centre |
 
 **The finishes** — each model's launch colours, its first the default: the band's colour (its metal's
 reflectance), the front's ink, and a mirror polish where the metal was finished to one. Approximated
