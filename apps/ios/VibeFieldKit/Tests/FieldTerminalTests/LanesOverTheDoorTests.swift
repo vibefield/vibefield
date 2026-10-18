@@ -205,6 +205,40 @@ import Testing
     second.release()
     #expect(keys.released == ["sess-a", "sess-b"])
   }
+
+  /// F1's focus (§5): the cell of a session that takes the seat — opened, or
+  /// back on its lane on the same attachment — is said to be the one the person
+  /// is looking at.
+  @MainActor
+  @Test func theCellASessionOpensOrComesBackOnIsSaidFocused() async throws {
+    let door = CellDoorHarness()
+    let port = try await door.start()
+    defer { Task { await door.stop() } }
+    let cells = FocusedCells()
+    let lanes = TerminalLanes(
+      transport: URLSessionRoutedTransport(),
+      door: { asked in try AttachmentOverTheDoorTests.ticketJSON(port: port, sessionId: asked) },
+      focused: { cells.said.append($0) })
+    let cell = try #require(
+      try AttachmentOverTheDoorTests.ticketJSON(port: port)["route"]?["cellBootId"]?.stringValue)
+    let attachment = TerminalAttachment(
+      lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
+    try await attachToLive(attachment, session: "sess-a", door: door, attaches: 1)
+    #expect(cells.said == [cell])
+    await attachment.detach()
+    attachment.attach(sessionID: "sess-a", cols: 80, rows: 24, deviceName: "studio")
+    try await AttachmentOverTheDoorTests.until("the demand to come back") {
+      await door.demands.last?["demand"]?["mode"]?.stringValue == "live"
+    }
+    #expect(cells.said == [cell, cell])
+    lanes.closeAll()
+  }
+}
+
+/// The cells a row's lanes said were focused, in order.
+@MainActor
+final class FocusedCells {
+  var said: [String] = []
 }
 
 /// A keyring a row fills by hand: what it holds, what was taken, what was let go.

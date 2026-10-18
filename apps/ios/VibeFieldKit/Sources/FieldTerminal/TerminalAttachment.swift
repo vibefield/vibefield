@@ -772,9 +772,11 @@ public final class TerminalAttachment {
   }
 
   /// DS-4b — this pane gained focus: take the seat, ONCE. The client owns the
-  /// one retry the cell's announcement may earn; the host never retries.
+  /// one retry the cell's announcement may earn; the host never retries. The
+  /// lanes hear it too: on the freeway, the focused cell's frames ride `live`.
   private func takeSeat() {
     guard let client, let sessionID else { return }
+    lanes.focus(sessionID)
     client.takeGeometry(cols: Int(grid.columns), rows: Int(grid.rows), for: sessionID)
   }
 

@@ -80,6 +80,45 @@ struct FreewayLegTests {
     #expect(await connection.closeCode() == nil)
   }
 
+  @Test("the focused cell's frames ride live and every other cell's sync, said only when a leg's class changes")
+  func focus() async throws {
+    let (link, host, _) = try await within(5, "connect") { try await connected() }
+    let focus = FreewayFocus()
+    let transport = FreewayLegTransport(focus: focus) { link }
+    func leg(_ path: String) async throws -> (connection: any RoutedLegConnection, stream: UInt64) {
+      let dialing = Task { try await transport.connect(to: URL(string: "freeway://cell/\(path)")!) }
+      let (stream, _) = try await answerOpen(host, with: .object([:]))
+      return (try await within(5, "the leg") { try await dialing.value }, stream)
+    }
+    func priority(_ stream: UInt64, _ streamClass: String) -> JSONValue {
+      .object([
+        "type": .string("Priority"), "streamId": .int(Int64(stream)), "class": .string(streamClass),
+      ])
+    }
+    let a = try await leg("cb-a/frames")
+    let b = try await leg("cb-b/frames")
+    _ = try await leg("cb-a/control")  // a control leg is P0, never the focus's
+    // the host opened both frames legs live: focusing A says nothing of A, and B goes to sync
+    await focus.focus("cb-a")
+    #expect(try await within(5, "the priority") { try await host.nextLink() } == priority(b.stream, "sync"))
+    await focus.focus("cb-b")
+    #expect(try await within(5, "a priority") { try await host.nextLink() } == priority(a.stream, "sync"))
+    #expect(try await within(5, "a priority") { try await host.nextLink() } == priority(b.stream, "live"))
+    // a frames leg opened behind the focus rides sync from its first frame on
+    let c = try await leg("cb-c/frames")
+    #expect(try await within(5, "the new leg's") { try await host.nextLink() } == priority(c.stream, "sync"))
+    // a leg that ended is classed no more: focusing its own cell says nothing of it, and B goes
+    // to sync; then C's focus is the next thing said, so nothing was said between
+    await a.connection.close()
+    let close = try await within(5, "the close") { try await host.nextFrame() }
+    #expect(close.kind == .close && close.stream == a.stream)
+    await focus.focus("cb-a")
+    #expect(try await within(5, "a priority") { try await host.nextLink() } == priority(b.stream, "sync"))
+    await focus.focus("cb-c")
+    #expect(try await within(5, "a priority") { try await host.nextLink() } == priority(c.stream, "live"))
+    await link.close()
+  }
+
   @Test("each endpoint goes to the transport its shape names")
   func routing() async throws {
     let (link, host, _) = try await within(5, "connect") { try await connected() }

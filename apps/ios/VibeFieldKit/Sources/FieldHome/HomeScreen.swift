@@ -137,10 +137,8 @@ public struct HomeScreen: View {
   /// (`TerminalAttachment.release`).
   @State private var terminalLanes: [String: TerminalLanes] = [:]
   @State private var keptAttachments: [KeptTerminal] = []
-  /// F1 — each desktop's freeway link, kept warm once dialed (opt-in: `freewayLanes`).
-  @State private var freewayLinks: [String: FreewayDesktopLink] = [:]
-  /// F1 — each desktop's tickets, minted before the tap for the sessions the field shows on it.
-  @State private var freewayKeyrings: [String: FreewayKeyring] = [:]
+  /// F1 — each desktop's freeway once its terminals ride it (opt-in: `freewayLanes`).
+  @State private var freeways: [String: Freeway] = [:]
   /// Latched for the width of the directory lookup. `isAttached` hides the
   /// button, but that flip is on the far side of an `await`, and two taps
   /// inside that window would build two lifecycles — the first of which
@@ -1433,8 +1431,8 @@ public struct HomeScreen: View {
     }
     // F1 — each desktop's keyring holds tickets for the sessions the field shows on it.
     .onChange(of: bubbles) { _, next in
-      for (deviceID, keyring) in freewayKeyrings {
-        keyring.want(Self.listedSessions(next, on: deviceID))
+      for (deviceID, freeway) in freeways {
+        freeway.keyring.want(Self.listedSessions(next, on: deviceID))
       }
     }
     // fix8 — the row says the run EXITED while the card is still attaching:
@@ -2288,30 +2286,27 @@ public struct HomeScreen: View {
   ) async -> TerminalLanes? {
     #if DEBUG
       guard ProcessInfo.processInfo.arguments.contains("-vf-freeway"), let link else { return nil }
-      let desktop: FreewayDesktopLink
-      if let kept = freewayLinks[deviceID] {
-        desktop = kept
+      let freeway: Freeway
+      if let kept = freeways[deviceID] {
+        freeway = kept
       } else {
         guard
           let dialing = await mesh.freewayDialing(
             to: deviceID, deviceName: UIDevice.current.name,
             approve: { [link] in try await link.approveFreeway(on: deviceID) })
         else { return nil }
-        desktop = FreewayDesktopLink(dialing)
-        freewayLinks[deviceID] = desktop
+        let desktop = FreewayDesktopLink(dialing)
+        freeway = Freeway(
+          link: desktop, keyring: FreewayKeyring(link: { await desktop.standing }),
+          focus: FreewayFocus())
+        freeways[deviceID] = freeway
+        freeway.keyring.start()
       }
-      let keyring: FreewayKeyring
-      if let kept = freewayKeyrings[deviceID] {
-        keyring = kept
-      } else {
-        keyring = FreewayKeyring(link: { await desktop.standing })
-        freewayKeyrings[deviceID] = keyring
-        keyring.start()
-      }
-      keyring.want(Self.listedSessions(bubbles, on: deviceID))
+      freeway.keyring.want(Self.listedSessions(bubbles, on: deviceID))
+      let (desktop, keyring, focus) = (freeway.link, freeway.keyring, freeway.focus)
       return TerminalLanes(
         transport: FreewayRoutedTransport(
-          freeway: FreewayLegTransport { try await desktop.link() },
+          freeway: FreewayLegTransport(focus: focus) { try await desktop.link() },
           fallback: URLSessionRoutedTransport(session: urlSession, log: .device)),
         door: { session in try await FreewayTerminalDoors.ticket(session, on: desktop.link()) },
         renewal: { session, generation, requestId in
@@ -2319,7 +2314,8 @@ public struct HomeScreen: View {
             session, expectGeneration: generation, requestId: requestId, on: desktop.link())
         },
         keyring: TerminalLanes.Keyring(
-          take: { await keyring.take($0) }, release: { keyring.release($0) }))
+          take: { await keyring.take($0) }, release: { keyring.release($0) }),
+        focused: { cell in Task { await focus.focus(cell) } })
     #else
       return nil
     #endif
@@ -2338,7 +2334,18 @@ public struct HomeScreen: View {
   /// F1 (§3's reconnect) — a freeway link that ended dials again now, not on its backoff: the phone
   /// came to the foreground, or its mesh came up.
   private func wakeFreewayLinks() {
-    for desktop in freewayLinks.values { Task { await desktop.wake() } }
+    for freeway in freeways.values {
+      let desktop = freeway.link
+      Task { await desktop.wake() }
+    }
+  }
+
+  /// One desktop's freeway: its link, kept warm once dialed; the tickets held before the tap; and
+  /// which cell's frames ride `live`.
+  private struct Freeway {
+    let link: FreewayDesktopLink
+    let keyring: FreewayKeyring
+    let focus: FreewayFocus
   }
 
   /// The card going away: its subject is released and any attachment with it.

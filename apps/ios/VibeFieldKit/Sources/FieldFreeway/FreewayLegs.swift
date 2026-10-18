@@ -18,11 +18,16 @@ public enum FreewayLegError: Error, Sendable, Equatable {
 
 /// A cell's legs as streams on the desktop's link: the routed client's transport for a
 /// `freeway://cell/<boot>/<channel>` endpoint. `link` yields the desktop's link — standing, or
-/// dialed for this — and throws when there is none to be had.
+/// dialed for this — and throws when there is none to be had; `focus`, when given, classes each
+/// frames leg by the cell the person is looking at.
 public struct FreewayLegTransport: RoutedLegTransport {
   private let link: @Sendable () async throws -> FreewayLink
+  private let focus: FreewayFocus?
 
-  public init(link: @escaping @Sendable () async throws -> FreewayLink) {
+  public init(
+    focus: FreewayFocus? = nil, link: @escaping @Sendable () async throws -> FreewayLink
+  ) {
+    self.focus = focus
     self.link = link
   }
 
@@ -34,7 +39,58 @@ public struct FreewayLegTransport: RoutedLegTransport {
         "cellBootId": .string(leg.cellBootId),
         "channel": .string(leg.channel.rawValue),
       ]))
-    return FreewayLegConnection(stream: stream)
+    let classed = leg.channel == .frames ? focus : nil
+    await classed?.opened(stream, cell: leg.cellBootId)
+    return FreewayLegConnection(stream: stream, focus: classed)
+  }
+}
+
+/// F1 (thinking-freeway.md v0.3 §5) — which cell's frames ride `live`: the one the person is
+/// looking at. Every other cell's frames leg rides `sync`, so a cell seeding behind the card never
+/// holds back the one in front of it. The host opens a frames leg `live`, so nothing is said until
+/// a focus is, and after it only a leg whose class changes is told (`Priority`).
+public actor FreewayFocus {
+  private struct Key: Hashable {
+    let link: ObjectIdentifier
+    let stream: UInt64
+  }
+
+  private struct Leg {
+    let cell: String
+    let stream: FreewayStream
+    var live: Bool
+  }
+
+  private var focused: String?
+  private var legs: [Key: Leg] = [:]
+
+  public init() {}
+
+  /// The cell the person is looking at now.
+  public func focus(_ cell: String) async {
+    guard cell != focused else { return }
+    focused = cell
+    for key in legs.keys.sorted(by: { $0.stream < $1.stream }) { await settle(key) }
+  }
+
+  func opened(_ stream: FreewayStream, cell: String) async {
+    let key = Key(link: ObjectIdentifier(stream.link), stream: stream.id)
+    legs[key] = Leg(cell: cell, stream: stream, live: true)
+    await settle(key)
+  }
+
+  func ended(_ stream: FreewayStream) {
+    legs[Key(link: ObjectIdentifier(stream.link), stream: stream.id)] = nil
+  }
+
+  private func settle(_ key: Key) async {
+    guard var leg = legs[key] else { return }
+    let live = focused == nil || leg.cell == focused
+    guard live != leg.live else { return }
+    leg.live = live
+    legs[key] = leg
+    // a link that ended took the stream with it, and the leg ends with the stream
+    try? await leg.stream.link.priority(stream: leg.stream.id, class: live ? "live" : "sync")
   }
 }
 
@@ -60,10 +116,13 @@ actor FreewayLegConnection: RoutedLegConnection {
   private let stream: FreewayStream
   private var events: AsyncStream<FreewayStreamEvent>.Iterator
   private var code: Int?
+  /// The focus classing this leg while it stands — a frames leg's.
+  private var focus: FreewayFocus?
 
-  init(stream: FreewayStream) {
+  init(stream: FreewayStream, focus: FreewayFocus? = nil) {
     self.stream = stream
     self.events = stream.events.makeAsyncIterator()
+    self.focus = focus
   }
 
   func send(_ frame: RoutedLegFrame) async throws {
@@ -84,8 +143,10 @@ actor FreewayLegConnection: RoutedLegConnection {
     case .binary(let bytes): return .binary(bytes)
     case .closed(let closed, _):
       code = closed
+      await ended()
       throw FreewayLegError.closed(code: closed)
     case .ended, nil:
+      await ended()
       throw FreewayLegError.closed(code: code)
     }
   }
@@ -93,7 +154,17 @@ actor FreewayLegConnection: RoutedLegConnection {
   /// The cell's close code, once it closed; nil while the leg stands or when its link went.
   func closeCode() async -> Int? { code }
 
-  func close() async { await stream.close() }
+  func close() async {
+    await ended()
+    await stream.close()
+  }
+
+  /// The leg is over: its focus classes it no more.
+  private func ended() async {
+    let focus = self.focus
+    self.focus = nil
+    await focus?.ended(stream)
+  }
 }
 
 /// The host's tickets and renewals on the link — the attachment's `TicketDoor` and `RenewalDoor`,

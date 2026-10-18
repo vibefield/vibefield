@@ -54,6 +54,9 @@ public final class TerminalLanes {
 
   let door: TicketDoor
   private let keyring: Keyring?
+  /// F1 — told the cell of the session the person is looking at (`focus`): the freeway's
+  /// `FreewayFocus` rides that cell's frames `live` and every other cell's `sync`.
+  private let focused: (@MainActor (String) -> Void)?
   private let transport: any RoutedLegTransport
   private let renewal: RenewalDoor?
   private let budget: PhoneConnectionBudget?
@@ -82,6 +85,7 @@ public final class TerminalLanes {
     door: @escaping TicketDoor,
     renewal: RenewalDoor? = nil,
     keyring: Keyring? = nil,
+    focused: (@MainActor (String) -> Void)? = nil,
     budget: PhoneConnectionBudget? = nil,
     deadline: Duration = TerminalAttachment.stepDeadline,
     log: TerminalAttachLog = .device
@@ -89,6 +93,7 @@ public final class TerminalLanes {
     self.transport = transport
     self.door = door
     self.keyring = keyring
+    self.focused = focused
     self.renewal = renewal
     self.budget = budget
     self.deadline = deadline
@@ -125,6 +130,13 @@ public final class TerminalLanes {
     cellOf[sessionId] = cell
     retickets[sessionId] = reticket
     return lane.client
+  }
+
+  /// The person is looking at this session — its attachment took the seat — so its cell is the
+  /// focused one.
+  func focus(_ sessionId: String) {
+    guard let cell = cellOf[sessionId] else { return }
+    focused?(cell)
   }
 
   /// The client already carrying this session's activation, if a lane is.
