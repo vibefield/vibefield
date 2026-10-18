@@ -119,14 +119,6 @@ public struct RemoteFacet: Sendable, Equatable {
   }
 }
 
-/// The pane a session is worked in, and its colour (record §02, revised
-/// 2026-09-12: a pane owns its colour). The phone has one pane — the card
-/// (D-i12) — so a bubble carries this exactly while its card is open.
-public struct PaneLink: Sendable, Equatable {
-  public var color: SwarmColor
-  public init(color: SwarmColor) { self.color = color }
-}
-
 /// One citizen of the field. Exactly one facet is non-nil: a bubble is an
 /// agent's or a peer's, and the absent facet is what tells the model to draw a
 /// hollow rather than a body.
@@ -151,7 +143,10 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
   public var stale: Bool
   /// Worked in the pane the user has in front of them: the open card's subject.
   public var active: Bool
-  public var pane: PaneLink?
+  /// Shown in the phone's one pane, the open card (D-i12). Its band and light
+  /// are the theme's ink, never a pane colour: one pane needs no colour to
+  /// tell it from another (James, 2026-10-18).
+  public var mounted: Bool
   /// Finished something while another session had the card (`UnreadLedger`).
   public var unread: Bool
 
@@ -167,7 +162,7 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
     color: SwarmColor? = nil,
     stale: Bool = false,
     active: Bool = false,
-    pane: PaneLink? = nil,
+    mounted: Bool = false,
     unread: Bool = false
   ) {
     self.id = id
@@ -181,7 +176,7 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
     self.color = color
     self.stale = stale
     self.active = active
-    self.pane = pane
+    self.mounted = mounted
     self.unread = unread
   }
 }
@@ -267,13 +262,12 @@ public func fieldBubble(from row: RemoteSessionRow) -> FieldBubble {
 // MARK: - The field's ledgers (the desktop's `assembleMonitorAgents` + its folds)
 
 /// Everything the field decides ABOUT the rows rather than from them, folded
-/// once per projection: the project colours (D-i13), the one pane's colour
-/// (D-i12), the usage ledger, the unread marks, the stale flags. A plain
+/// once per projection: the project colours (D-i13), the one pane (D-i12),
+/// the usage ledger, the unread marks, the stale flags. A plain
 /// value the home screen keeps and folds; every rule inside is a pure
 /// function with its own tests.
 public struct FieldAssembly: Sendable {
   public var projects: ProjectLedger
-  public var panes: PaneColourLedger
   public var usage: UsageLedger
   public var unread: UnreadLedger
   /// The theme's tint; the home screen swaps it with the colour scheme.
@@ -281,27 +275,16 @@ public struct FieldAssembly: Sendable {
 
   /// The reference's freshness policy: evidence older than this dims the body.
   public static let staleAfterMs: Double = 30_000
-  /// The phone's one pane.
-  public static let cardPaneID = "card"
-
   public init(
     tint: ProjectTint,
     projects: ProjectLedger = .empty,
-    panes: PaneColourLedger = .empty,
     usage: UsageLedger = .empty,
     unread: UnreadLedger = .empty
   ) {
     self.tint = tint
     self.projects = projects
-    self.panes = panes
     self.usage = usage
     self.unread = unread
-  }
-
-  /// The colour the card wears as the phone's pane, dealt on first use.
-  public var paneColor: SwarmColor {
-    let seq = panes.seqByID[Self.cardPaneID] ?? 0
-    return .pane(seq, tint)
   }
 
   /// Fold one projection and dress its rows.
@@ -309,7 +292,6 @@ public struct FieldAssembly: Sendable {
     _ bubbles: [FieldBubble], cardSubjectID: String?, nowMs: Double
   ) -> [FieldBubble] {
     projects = projects.dealing(bubbles.filter { $0.agent != nil }.map(\.project))
-    panes = panes.dealing([Self.cardPaneID])
     // The row's id IS the run (AR-4b), so the ledger's run key is the id; the
     // native session id does not ride the row, and the reference's fold holds
     // a run's history across projections without it.
@@ -324,7 +306,6 @@ public struct FieldAssembly: Sendable {
           hasAgent: bubble.agent != nil,
           statusSinceMs: bubble.agent?.statusSince.map { $0.timeIntervalSince1970 * 1000 })
       }, nowMs: nowMs)
-    let pane = PaneLink(color: paneColor)
     return bubbles.map { bubble in
       var dressed = bubble
       if var facet = bubble.agent {
@@ -342,7 +323,7 @@ public struct FieldAssembly: Sendable {
       }
       dressed.unread = unread.unreadIDs.contains(bubble.id)
       dressed.active = bubble.id == cardSubjectID
-      dressed.pane = dressed.active ? pane : nil
+      dressed.mounted = dressed.active
       return dressed
     }
   }

@@ -79,12 +79,6 @@ private func row(
     for (seq, hue) in hues.enumerated() {
       #expect(abs(projectHue(seq) - hue) < 1e-9, "projectHue(\(seq))")
     }
-    let panes: [Double] = [
-      27.902659126857486, 233.70797738057252, 106.51329563428749, 339.31861388800246,
-    ]
-    for (seq, hue) in panes.enumerated() {
-      #expect(abs(paneHue(seq) - hue) < 1e-9, "paneHue(\(seq))")
-    }
   }
 
   @Test func matchesTheReferenceColourGoldens() {
@@ -100,10 +94,6 @@ private func row(
       #expect(projectTint(seq, .light) == light[seq], "light \(seq)")
       #expect(projectTint(seq, .dark) == dark[seq], "dark \(seq)")
     }
-    #expect(paneTint(0, .light) == "#ca564b")
-    #expect(paneTint(1, .light) == "#008bbf")
-    #expect(paneTint(0, .dark) == "#fb8274")
-    #expect(paneTint(3, .dark) == "#e883c9")
     #expect(oklchToHex(l: 0, c: 0, hueDegrees: 0) == "#000000")
     #expect(oklchToHex(l: 1, c: 0, hueDegrees: 0) == "#ffffff")
     #expect(oklchToHex(l: 0.6, c: 0, hueDegrees: 0) == "#808080")
@@ -126,11 +116,6 @@ private func row(
         let distance = abs(hues[left] - hues[right])
         #expect(min(distance, 360 - distance) > 20)
       }
-    }
-    func distance(_ a: Double, _ b: Double) -> Double { min(abs(a - b), 360 - abs(a - b)) }
-    for seq in 0..<12 {
-      #expect(distance(paneHue(seq), projectHue(seq)) > 40)
-      #expect(paneHue(seq) < 238 || paneHue(seq) >= 265)
     }
   }
 
@@ -181,22 +166,6 @@ private func row(
     #expect(ProjectLedgerCodec.decode(#"{"version":2}"#.data(using: .utf8)!) == .empty)
     #expect(ProjectLedgerCodec.decode(Data("junk".utf8)) == .empty)
   }
-
-  @Test func dealsPanesInTheOrderTheyOpenAndNeverDealsANumberTwice() {
-    var ledger = PaneColourLedger.empty.dealing(["a", "b"])
-    #expect(ledger.seqByID == ["a": 0, "b": 1])
-    let same = ledger.dealing(["a", "b"])
-    #expect(same == ledger)
-    ledger = ledger.dealing(["b", "c"])
-    #expect(ledger.seqByID == ["b": 1, "c": 2])
-    // A reopened pane id is a new pane: the closed pane's number stays retired.
-    ledger = ledger.dealing(["b", "c", "a"])
-    #expect(ledger.seqByID["a"] == 3)
-    let colours = PaneColourLedger.empty.dealing(["a", "b"]).colours(.light)
-    #expect(colours["a"] == SwarmColor.pane(0, .light))
-    #expect(colours["b"] == SwarmColor.pane(1, .light))
-    #expect(colours["a"] != SwarmColor.project(0, .light))
-  }
 }
 
 @Suite struct FieldAssemblyTests {
@@ -232,15 +201,15 @@ private func row(
     #expect(again[0].color == SwarmColor.project(1, .dark))
   }
 
-  @Test func theOpenCardsSubjectIsThePaneAndWearsItsColour() {
+  @Test func theOpenCardsSubjectIsTheOnePane() {
     var assembly = FieldAssembly(tint: .light)
     let rows = assembly.fold([agent("a", project: "p"), agent("b", project: "q")], cardSubjectID: "b", nowMs: t0)
     #expect(rows[0].active == false)
-    #expect(rows[0].pane == nil)
+    #expect(rows[0].mounted == false)
     #expect(rows[1].active)
-    #expect(rows[1].pane == PaneLink(color: SwarmColor.pane(0, .light)))
+    #expect(rows[1].mounted)
     let closed = assembly.fold([agent("a", project: "p"), agent("b", project: "q")], cardSubjectID: nil, nowMs: t0 + 1)
-    #expect(closed[1].pane == nil)
+    #expect(closed[1].mounted == false)
     #expect(closed[1].active == false)
   }
 

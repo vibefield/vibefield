@@ -38,9 +38,6 @@ private let tintSkipWidth = 27.0
 /// The wheel less the band.
 private let tintSpan = 360.0 - tintSkipWidth
 private let golden = 0.6180339887498949
-/// The pane wheel starts half a golden turn on, so the first pane and the first
-/// project never share a hue.
-private let paneWheelOffset = 0.5
 
 /// `hue(seq) = (258 + seq · φ · 333) mod 333`, skipping the band.
 public func projectHue(_ seq: Double) -> Double {
@@ -50,10 +47,6 @@ public func projectHue(_ seq: Double) -> Double {
 }
 
 public func projectHue(_ seq: Int) -> Double { projectHue(Double(seq)) }
-
-/// The pane wheel: the same walk as the projects', a parallel sequence, offset
-/// so the two never start together.
-public func paneHue(_ seq: Int) -> Double { projectHue(Double(seq) + paneWheelOffset) }
 
 private func linearToSrgb(_ channel: Double) -> Double {
   channel <= 0.0031308 ? 12.92 * channel : 1.055 * pow(channel, 1 / 2.4) - 0.055
@@ -115,18 +108,9 @@ public func projectTint(_ seq: Int, _ tint: ProjectTint) -> String {
   oklchToHex(l: tint.l, c: tint.c, hueDegrees: projectHue(seq))
 }
 
-/// A pane's colour, dealt from its sequence on the pane wheel under the theme's tint.
-public func paneTint(_ seq: Int, _ tint: ProjectTint) -> String {
-  oklchToHex(l: tint.l, c: tint.c, hueDegrees: paneHue(seq))
-}
-
 extension SwarmColor {
   /// The same deal, as the value the model carries.
   public static func project(_ seq: Int, _ tint: ProjectTint) -> SwarmColor {
     SwarmColor(hex: projectTint(seq, tint)) ?? .black
-  }
-
-  public static func pane(_ seq: Int, _ tint: ProjectTint) -> SwarmColor {
-    SwarmColor(hex: paneTint(seq, tint)) ?? .black
   }
 }

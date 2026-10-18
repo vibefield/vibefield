@@ -19,9 +19,9 @@ fragment float4 fs(BodyVertex in [[stage_in]], constant Frame& frame [[buffer(0)
   float dist = length(p);
   float d = dist - r;
   float inside = cov(d, frame);
-  // A mounted body wears its colour as a band a thirtieth of the radius wide
-  // just outside the rim, the gutter; the light of the selected pane's body
-  // starts where the band stops.
+  // A mounted body wears a band a thirtieth of the radius wide just outside
+  // the rim, the gutter, in the colour the host packs (the theme's ink: the
+  // phone's one pane, D-i12); the open card's light starts where it stops.
   bool linked = has(flags, F_LINKED);
   float edge = select(0.0, r * LIGHT_GUTTER_RATIO, linked);
   float time = frame.viewport.w;
@@ -98,7 +98,7 @@ fragment float4 fs(BodyVertex in [[stage_in]], constant Frame& frame [[buffer(0)
   // weight ramps from the track's own to the title's — so a barely-used
   // context is barely there and a nearly-spent one is the strongest mark on
   // the body. That climb is the alarm; nothing here turns a colour
-  // (2026-09-18). On a mounted body the pane-colour gutter sits just outside
+  // (2026-09-18). On a mounted body the band's gutter sits just outside
   // it, before the light begins.
   if (has(flags, F_RING)) {
     float width = r * GAUGE_WIDTH_RATIO;
@@ -129,8 +129,8 @@ fragment float4 fs(BodyVertex in [[stage_in]], constant Frame& frame [[buffer(0)
     out = over(out, premul(float4(body.ink.rgb, weight * body.motion.w)) * gauge);
   }
 
-  // Mounted in a pane: the body's colour as the gutter band outside the rim;
-  // the outer light (the glow pass) joins it only for the selected pane's body.
+  // Mounted in the pane: the gutter band outside the rim, in the packed colour;
+  // the outer light (the glow pass) joins it only for the open card's body.
   if (linked) {
     out = over(out, premul(body.link) * cov(abs(d - edge * 0.5) - edge * 0.5, frame));
   }

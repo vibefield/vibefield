@@ -10,12 +10,12 @@ private let now = Date(timeIntervalSince1970: 1_788_688_800)
 
 private func bubble(
   id: String = "a", status: AgentVisualStatus = .idle, agent: AgentFacet? = AgentFacet(provider: .claude, modelName: "Fable 5.1"),
-  color: SwarmColor? = SwarmColor(hex: "#6366f1"), stale: Bool = false, active: Bool = false, pane: PaneLink? = nil,
+  color: SwarmColor? = SwarmColor(hex: "#6366f1"), stale: Bool = false, active: Bool = false, mounted: Bool = false,
   unread: Bool = false
 ) -> FieldBubble {
   FieldBubble(
     id: id, project: "puppeteer", detail: "detail", status: status, identityKey: id, createdAt: now, agent: agent,
-    remote: nil, color: color, stale: stale, active: active, pane: pane, unread: unread)
+    remote: nil, color: color, stale: stale, active: active, mounted: mounted, unread: unread)
 }
 
 private func model(_ bubble: FieldBubble, share: Double = 0) -> SwarmBodyModel {
@@ -24,7 +24,7 @@ private func model(_ bubble: FieldBubble, share: Double = 0) -> SwarmBodyModel {
 
 private func render(_ bubble: FieldBubble, focus: Bool = false) -> RenderBody {
   let body = model(bubble)
-  return RenderBody(model: body, x: 100, y: 100, radius: body.radius, focus: focus, accent: body.accent ?? .transparent, link: body.linked)
+  return RenderBody(model: body, x: 100, y: 100, radius: body.radius, focus: focus, accent: body.accent ?? .transparent, mounted: body.mounted)
 }
 
 private let lightTheme = SwarmTheme.resolve(.light)
@@ -203,15 +203,28 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
   }
 
   @Test func theLightJoinsTheBandOnlyWhileTheCardIsOpen() {
-    let pane = PaneLink(color: SwarmColor(hex: "#22cc88")!)
-    let mounted = render(bubble(pane: pane))
-    let open = render(bubble(active: true, pane: pane))
+    let mounted = render(bubble(mounted: true))
+    let open = render(bubble(active: true, mounted: true))
     let bandOnly = flags(packedBody(mounted, frameGlow: glow, theme: lightTheme))
     let lit = flags(packedBody(open, frameGlow: glow, theme: lightTheme))
     #expect(bandOnly & BodyFlags.linked != 0)
     #expect(bandOnly & BodyFlags.glow == 0)
     #expect(lit & BodyFlags.linked != 0)
     #expect(lit & BodyFlags.glow != 0)
+  }
+
+  @Test func theOnePanesBandAndLightAreTheThemesInkNeverAPaneColour() {
+    // James 2026-10-18: the phone has one pane, so its light is black by day
+    // and white by night (text main), whatever the project's colour.
+    for theme in [lightTheme, darkTheme] {
+      let lit = packedBody(render(bubble(active: true, mounted: true)), frameGlow: glow, theme: theme)
+      #expect(Array(lit[36...39]) == [Float(theme.ink.r), Float(theme.ink.g), Float(theme.ink.b), Float(theme.ink.a)])
+    }
+    #expect(lightTheme.ink.hex == "#111111")
+    #expect(darkTheme.ink.hex == "#ffffff")
+    let bare = packedBody(render(bubble()), frameGlow: glow, theme: darkTheme)
+    #expect(Array(bare[36...39]) == [0, 0, 0, 0])
+    #expect(flags(bare) & (BodyFlags.linked | BodyFlags.glow) == 0)
   }
 
   @Test func staleAndFocusPackTheirBits() {

@@ -176,7 +176,8 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   bubbles taste call (§10.6).
 - **D-i11…D-i17** — `thinking-ios-swarm.md` §3 (the swarm on Metal). **Adopted as leans, unruled;
   on main since 2026-09-13 (`09c526ab`).** D-i11 Metal, a transcription of the reference renderer ·
-  D-i12 the open card is the phone's one pane · D-i13 project colours dealt per device (the fieldd
+  D-i12 the open card is the phone's one pane (**RULED 2026-10-18**, James: its bubble's band and light are
+  text main, white by night and black by day, never a pane colour; DESIGN.md §2.7) · D-i13 project colours dealt per device (the fieldd
   door for the sequence is the named follow-up) · D-i14 shaders as resources compiled at first use ·
   D-i15 the lab is the pixel gate · D-i16 `agentIdentityHue` retires from the field (still the card
   header) · D-i17 no tooltip. **The base branch (§6) RULED 2026-09-13 (James): one merge, the keyboard

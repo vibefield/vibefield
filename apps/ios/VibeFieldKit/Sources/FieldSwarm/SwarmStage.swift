@@ -250,7 +250,7 @@ public final class SwarmStage {
         RenderBody(
           model: model, x: position.x, y: position.y, radius: visual.visualRadius,
           scale: landing.scale, opacity: landing.opacity, focus: focusedID == id, seed: visual.seed,
-          accent: model.accent ?? .transparent, link: model.linked))
+          accent: model.accent ?? .transparent, mounted: model.mounted))
     }
     bodies.sort { left, right in
       let rank = statusRank(left.model.appearance) - statusRank(right.model.appearance)

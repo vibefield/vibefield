@@ -342,7 +342,7 @@ private struct LabSurface: UIViewRepresentable {
           RenderBody(
             model: model, x: position.x, y: position.y, radius: model.radius, scale: 1, opacity: 1,
             focus: stage.focus, seed: Double(stage.id.count) * 0.7, accent: model.accent ?? theme.neutral,
-            link: model.linked, glow: stage.glow))
+            mounted: model.mounted, glow: stage.glow))
       }
       return (bodies, hold, [])
     }

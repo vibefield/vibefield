@@ -195,6 +195,12 @@ the general chrome palette.
 | terminal ground / divider | `#ECE8DC / #D2CEC3` | `#282C34 / #414650` |
 | deck sheet shadow (§8, the deck's edge) | `0 -20px 40px rgba(0,0,0,0.08)` | `0 -20px 40px rgba(0,0,0,0.4)` |
 
+**The phone's one pane** (D-i12, ruled 2026-10-18). The desktop lights a mounted body in its pane's
+colour, because its panes are told apart by colour. The phone has one pane, the open card, so a
+colour there tells nothing. The card's bubble draws its band and its light in **text main**:
+`#111111` by day, `#FFFFFF` by night, never a dealt pane colour. James: "on mobile there is only
+one pane, so color no longer make sense, so just keep the glow it generic white, black instead".
+
 The deck sheet's shadow is §5's *Sheet* recipe, keyed to Godview's OWN mode switch rather than
 the app's theme (Godview can be dark over a light field). Its geometry: top corners
 `--vf-godview-deck-radius` 12px; **the Lip** (GV-D7; built 2026-10-11) `--vf-godview-deck-lip` 30px

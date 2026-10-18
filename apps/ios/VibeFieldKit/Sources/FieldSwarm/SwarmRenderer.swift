@@ -26,13 +26,15 @@ public struct RenderBody {
   /// A stable per-body phase so breathing bodies do not breathe in unison.
   public var seed: Double
   public var accent: SwarmColor
-  public var link: SwarmColor?
+  /// Shown in the phone's one pane (D-i12): the band, and while active the
+  /// light, are drawn in the theme's ink.
+  public var mounted: Bool
   /// This body's light instead of the frame's; the lab weighs settings side by side.
   public var glow: SwarmGlow?
 
   public init(
     model: SwarmBodyModel, x: Double, y: Double, radius: Double, scale: Double = 1, opacity: Double = 1,
-    focus: Bool = false, seed: Double = 0, accent: SwarmColor, link: SwarmColor? = nil, glow: SwarmGlow? = nil
+    focus: Bool = false, seed: Double = 0, accent: SwarmColor, mounted: Bool = false, glow: SwarmGlow? = nil
   ) {
     self.model = model
     self.x = x
@@ -43,7 +45,7 @@ public struct RenderBody {
     self.focus = focus
     self.seed = seed
     self.accent = accent
-    self.link = link
+    self.mounted = mounted
     self.glow = glow
   }
 }
@@ -247,12 +249,12 @@ func packedBody(_ body: RenderBody, frameGlow: SwarmGlow, theme: SwarmTheme) -> 
   if model.light != nil { flags |= BodyFlags.core }
   // A body that needs the user glows in waves rather than breathing.
   if isStateLight(model.light) { flags |= BodyFlags.waves }
-  // The outer light: only on the body whose pane is the selected one. Every
-  // other mounted body wears its colour as the band alone.
-  if body.link != nil && model.active { flags |= BodyFlags.glow }
+  // The outer light: only on the body the open card shows, the phone's one
+  // pane (D-i12). A mounted body that is not the card's wears the band alone.
+  if body.mounted && model.active { flags |= BodyFlags.glow }
   if model.appearance == .working && !model.hollow { flags |= BodyFlags.rim | BodyFlags.shadow }
   if model.stale { flags |= BodyFlags.stale }
-  if body.link != nil { flags |= BodyFlags.linked }
+  if body.mounted { flags |= BodyFlags.linked }
   if body.focus { flags |= BodyFlags.focus }
   if model.ring != nil { flags |= BodyFlags.ring }
   if model.ring?.hot == true { flags |= BodyFlags.ringHot }
@@ -290,7 +292,9 @@ func packedBody(_ body: RenderBody, frameGlow: SwarmGlow, theme: SwarmTheme) -> 
   data[33] = Float(body.seed)
   data[34] = model.stale ? 1 : 0
   data[35] = Float(body.opacity)
-  rgba(36, body.link ?? .transparent, body.opacity)
+  // The band and the light are the theme's ink: with one pane, a pane colour
+  // would tell nothing (James, 2026-10-18).
+  rgba(36, body.mounted ? ink : .transparent, body.opacity)
   return data
 }
 

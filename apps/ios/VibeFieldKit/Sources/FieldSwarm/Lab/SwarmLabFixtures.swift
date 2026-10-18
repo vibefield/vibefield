@@ -105,7 +105,6 @@ public struct LabPalette: Sendable {
   public var tint: ProjectTint
   public init(tint: ProjectTint) { self.tint = tint }
   public func project(_ seq: Int) -> SwarmColor { .project(seq, tint) }
-  public func pane(_ seq: Int) -> SwarmColor { .pane(seq, tint) }
 }
 
 func labAgent(_ spec: LabAgentSpec, palette: LabPalette) -> FieldBubble {
@@ -142,7 +141,6 @@ func labAgent(_ spec: LabAgentSpec, palette: LabPalette) -> FieldBubble {
     usage: usage,
     statusSince: labNow.addingTimeInterval(-20),
     lastEvidenceAt: labNow.addingTimeInterval(spec.stale ? -120 : 0))
-  let paneColour = palette.pane(spec.accent - 1)
   return FieldBubble(
     id: spec.id,
     project: spec.project,
@@ -155,7 +153,7 @@ func labAgent(_ spec: LabAgentSpec, palette: LabPalette) -> FieldBubble {
     color: palette.project(spec.accent - 1),
     stale: spec.stale,
     active: spec.active,
-    pane: spec.mounted || spec.active ? PaneLink(color: paneColour) : nil,
+    mounted: spec.mounted || spec.active,
     unread: false)
 }
 

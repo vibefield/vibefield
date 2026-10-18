@@ -38,47 +38,6 @@ public struct ProjectLedger: Equatable, Sendable {
   }
 }
 
-/// Each pane owns a colour (record §02, revised 2026-09-12): dealt in the order
-/// panes are opened, on the pane wheel that runs parallel to the project wheel,
-/// and never dealt twice while the app lives. The phone has one pane — the card
-/// (D-i12) — so the ledger's whole job here is to deal it sequence 0 once and
-/// keep it; the fold is kept whole so the day the phone has two, nothing moves.
-public struct PaneColourLedger: Equatable, Sendable {
-  public var seqByID: [String: Int]
-  /// One past the highest sequence ever dealt.
-  public var next: Int
-
-  public init(seqByID: [String: Int] = [:], next: Int = 0) {
-    self.seqByID = seqByID
-    self.next = next
-  }
-
-  public static let empty = PaneColourLedger()
-
-  /// Deal the panes that are new, forget the ones that closed, keep everyone
-  /// else's number.
-  public func dealing(_ paneIDs: [String]) -> PaneColourLedger {
-    var seqByID: [String: Int] = [:]
-    var next = self.next
-    for paneID in paneIDs {
-      if let known = self.seqByID[paneID] {
-        seqByID[paneID] = known
-        continue
-      }
-      seqByID[paneID] = next
-      next += 1
-    }
-    // Nothing opened and nothing closed: the same ledger, so nothing downstream redraws.
-    if next == self.next && seqByID.count == self.seqByID.count { return self }
-    return PaneColourLedger(seqByID: seqByID, next: next)
-  }
-
-  /// Every dealt pane's colour under the theme's tint.
-  public func colours(_ tint: ProjectTint) -> [String: SwarmColor] {
-    seqByID.mapValues { SwarmColor.pane($0, tint) }
-  }
-}
-
 // MARK: - Persistence (cache, not state)
 
 /// Where the phone keeps the ledger between launches. A missing or unreadable

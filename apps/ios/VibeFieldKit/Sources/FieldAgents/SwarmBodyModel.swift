@@ -137,9 +137,9 @@ public struct SwarmBodyModel: Equatable, Sendable {
   public var unread: Bool
   public var stale: Bool
   public var active: Bool
-  /// A mounted body's band, in the colour of the pane it is worked in; the
-  /// outer light joins it only while `active`.
-  public var linked: SwarmColor?
+  /// Shown in the phone's one pane (D-i12): the band, drawn in the theme's
+  /// ink; the outer light joins it only while `active`.
+  public var mounted: Bool
   /// The provider mark, watermarked behind the copy.
   public var watermark: SwarmWatermark?
   public var blockerKind: AgentBlockerKind?
@@ -360,7 +360,7 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
       unread: false,
       stale: bubble.stale,
       active: bubble.active,
-      linked: bubble.pane?.color,
+      mounted: bubble.mounted,
       watermark: nil,
       blockerKind: nil,
       accessibilityLabel: remote.map {
@@ -433,7 +433,7 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
       unread: bubble.unread,
       stale: bubble.stale,
       active: bubble.active,
-      linked: bubble.pane?.color,
+      mounted: bubble.mounted,
       watermark: watermark,
       blockerKind: nil,
       // The flames are the glance; the exact rate is a word away, for a screen
@@ -497,7 +497,7 @@ public func bodyModel(_ input: BodyModelInput) -> SwarmBodyModel {
     unread: bubble.unread,
     stale: bubble.stale,
     active: bubble.active,
-    linked: bubble.pane?.color,
+    mounted: bubble.mounted,
     watermark: watermark,
     blockerKind: blocker?.kind,
     accessibilityLabel: state.map { "\(accessibilityLabel), \($0.spoken)" } ?? accessibilityLabel,

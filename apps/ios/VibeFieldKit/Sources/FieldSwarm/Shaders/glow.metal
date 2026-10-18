@@ -1,5 +1,5 @@
-// The outer light in the body's own colour: the mark of the body mounted in
-// the SELECTED pane. Every other mounted body wears the band alone. Drawn
+// The outer light: the mark of the body the open card shows, the phone's one
+// pane (D-i12). Every other mounted body wears the band alone. Drawn
 // after every body so it falls on neighbours the way light does. Two falloffs
 // of the distance outside the rim: a tight photographic rim and a designer
 // halo (power 2.65, the fit from the glow study), scaled by the tunable reach
@@ -17,7 +17,7 @@ fragment float4 fs(BodyVertex in [[stage_in]], constant Frame& frame [[buffer(0)
   float r = body.posRadius.z * body.posRadius.w;
   float d = length(in.local) - r;
   // The light starts a thirtieth of the radius off the rim (2px at 60), where
-  // the pane-colour gutter band stops.
+  // the gutter band stops.
   float gutter = r * LIGHT_GUTTER_RATIO;
   float outside = clamp((d - gutter) * frame.viewport.z + 0.5, 0.0, 1.0);
   float reach = max(body.glow.x, 1.0);
@@ -29,7 +29,7 @@ fragment float4 fs(BodyVertex in [[stage_in]], constant Frame& frame [[buffer(0)
   float rim = exp(-outer / 6.0);
   float halo = pow(clamp(1.0 - outer / reach, 0.0, 1.0), 2.65);
   float a = clamp(strength * (0.45 * rim + 0.6 * halo), 0.0, 1.0) * breathe * outside;
-  // The light beyond the band is the pane's, like the band: the colour of the
-  // pane the body is worked in, not the project's.
+  // The light beyond the band is the band's colour: the theme's ink, black by
+  // day and white by night, never a pane colour (James, 2026-10-18).
   return premul(float4(body.link.rgb, a));
 }

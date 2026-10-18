@@ -31,11 +31,11 @@ private func agent(
   color: SwarmColor? = SwarmColor(hex: "#6366f1"),
   stale: Bool = false,
   unread: Bool = false,
-  pane: PaneLink? = nil
+  mounted: Bool = false
 ) -> FieldBubble {
   FieldBubble(
     id: id, project: "puppeteer", detail: "Editing tokens.css", status: status, identityKey: id,
-    createdAt: now, agent: facet, remote: nil, color: color, stale: stale, pane: pane, unread: unread)
+    createdAt: now, agent: facet, remote: nil, color: color, stale: stale, mounted: mounted, unread: unread)
 }
 
 private func model(
@@ -303,20 +303,20 @@ private func model(
     #expect(bare.copy.first { $0.key == "state" }?.text == "blocked")
   }
 
-  @Test func carriesThePaneLinkTheStaleFlagAndTheAccessibleCopy() {
+  @Test func carriesTheMountTheStaleFlagAndTheAccessibleCopy() {
     let accent = SwarmColor(hex: "#ec4899")!
-    let pane = SwarmColor(hex: "#22cc88")!
-    let body = model(agent(color: accent, stale: true, pane: PaneLink(color: pane)))
+    let body = model(agent(color: accent, stale: true, mounted: true))
     #expect(body.stale)
-    // The band is the pane's colour; the project's colour reaches the body in
-    // one place only, the folder before its name.
-    #expect(body.linked == pane)
+    // Mounted is a fact, not a colour: the renderer draws the band in the
+    // theme's ink, and the project's colour reaches the body in one place only,
+    // the folder before its name.
+    #expect(body.mounted)
     #expect(body.accent == accent)
     let name = body.copy.first { $0.key == "name" }
     #expect(name?.lead?.kind == .icon("folder"))
     #expect(name?.lead?.tone == .accent)
     #expect(body.copy.filter { $0.lead?.tone == .accent }.map(\.key) == ["name"])
-    #expect(model(agent(color: accent)).linked == nil)
+    #expect(model(agent(color: accent)).mounted == false)
     #expect(body.accessibilityLabel == "puppeteer, Fable 5.1, idle: Editing tokens.css, CTX:--%")
     #expect(body.title == "puppeteer · Fable 5.1 · Editing tokens.css")
   }
