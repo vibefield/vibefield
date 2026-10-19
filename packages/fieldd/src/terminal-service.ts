@@ -859,7 +859,20 @@ export class TerminalService {
    * this says what they answer.
    */
   staleRefusal(sessionId: string, operation: string): RpcCallError | undefined {
-    const cells = this.staleCellsFor(sessionId);
+    return this.refusalOver(this.staleCellsFor(sessionId), operation);
+  }
+
+  /** IL-D5 (a) — `staleRefusal` for an act that weighs the whole floor (the
+   * update's stop compares a consent against every session the floor holds):
+   * every stale cell, in the same words. undefined while every cell is fresh,
+   * and for a floor that does not judge its inventory. */
+  floorStaleRefusal(operation: string): RpcCallError | undefined {
+    return this.refusalOver(this.staleCells(), operation);
+  }
+
+  /** The one refusal both ask for: WG-D4's held floor first, else the
+   * terminal's inventory_stale naming `cells`; undefined when there are none. */
+  private refusalOver(cells: ObservedStaleCell[], operation: string): RpcCallError | undefined {
     if (cells.length === 0) return undefined;
     const held = this.opts.supervision?.doorRefusal();
     if (held !== undefined)
@@ -2166,7 +2179,8 @@ export class TerminalService {
    * `reopenToBirths`, `create`/`spawn` refuse. `live` is the observed inventory plus every session this service
    * birthed and the floor has not listed yet; `births` counts births still in flight (any is a refusal for the
    * caller — a session is being born the consent never named). undefined = the inventory was never observed, which
-   * the caller refuses as `unobserved`: fieldd may not claim a floor holds nothing it has not seen. */
+   * the caller refuses as `unobserved`: fieldd may not claim a floor holds nothing it has not seen. IL-D5 (a) — nor
+   * from an inventory older than its bound: while any cell is stale the caller refuses with `floorStaleRefusal`. */
   closeToBirthsForStop(): { live: string[]; births: number } | undefined {
     this.closedForUpdate = true;
     if (this.lastObservation === undefined) return undefined;

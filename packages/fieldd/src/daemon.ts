@@ -1997,6 +1997,23 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           },
         );
       }
+      // IL-D5 (a) (`draft/thinking-inventory-latency.md` §5) — a stop never
+      // weighs a consent against an old list: while any cell's inventory is
+      // older than its bound the census may miss a session a stale cell holds,
+      // or name one that has gone, so the stop is refused retryably and births
+      // reopen, as for an unobserved floor (WG-D4's {native, unresponsive}
+      // while the floor is held). The way out of a cell that stays stale is the
+      // person's consented restart, whose census reads the cells themselves.
+      const stale = terminals.floorStaleRefusal("system.shutdown");
+      if (stale !== undefined) {
+        terminals.reopenToBirths();
+        logger.info(
+          "fieldd.lifecycle.native_stop_refused",
+          "A stop for an update was refused: the terminal inventory is older than its bound",
+          { staleCells: terminals.staleCells().length },
+        );
+        throw stale;
+      }
       const consented = new Set(asked.sessions);
       const exact =
         census.births === 0 &&

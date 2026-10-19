@@ -10,7 +10,8 @@
 // what an acting door answers, WG-D4's held floor first. The doors that need a
 // listed session (`terminal.get`, `openTicket`, `renewAttach`) refuse an
 // unlisted one with it while any cell is stale, and answer a listed one as
-// before.
+// before. The update's stop (`system.shutdown {native}`) weighs no consent
+// against a list while any cell is stale: it refuses, and births reopen.
 //
 // The unit rows drive TerminalService over a structural link and a scripted
 // supervision on a clock moved by hand, so every instant is exact; one row
@@ -24,6 +25,7 @@ import { join } from "node:path";
 import {
   type NativeLinkState,
   type NativeUnavailableDetails,
+  type Scope,
   SOCKETS,
   TerminalInventoryStaleDetails,
   TerminalListResult,
@@ -430,11 +432,13 @@ describe("fieldd's own half: the stream that stops reaching fieldd (IL-D4 §4.3)
 });
 
 /** A daemon over the mock floor, which answers `observedState` and, when
- * given, publishes `routes`; and a connection that holds `terminal.attach`. */
+ * given, publishes `routes`; and a connection that holds `scopes`
+ * (`terminal.attach` unless the row names others). */
 async function daemonOn(
   observedState: unknown,
   config: Pick<FielddConfig, "terminalInventoryTimings"> = {},
   routes?: TerminalRouteSnapshot,
+  scopes: Scope[] = ["terminal.attach"],
 ): Promise<{ mock: MockMgmtServer; daemon: FielddDaemon; rpc: WsRpc }> {
   const dataDir = mkdtempSync(join(tmpdir(), "vf-inventory-age-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
@@ -447,7 +451,7 @@ async function daemonOn(
   cleanup.push(() => mock.stop());
   const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0, ...config });
   cleanup.push(() => daemon.stop());
-  const grant = daemon.tokens.mint(["terminal.attach"], "inventory-age");
+  const grant = daemon.tokens.mint(scopes, "inventory-age");
   const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
   cleanup.push(() => ws.close());
   await new Promise<void>((resolve, reject) => {
@@ -617,5 +621,73 @@ describe("the doors that need a listed session (IL-D5 (a); the mock floor)", () 
     const gone = await rpc.callErr("terminal.get", { sessionId: "unlisted-session" });
     expect(gone.data?.kind).toBe("NOT_FOUND");
     expect(gone.data?.retryable).toBe(false);
+  });
+});
+
+describe("the update's stop at its point of effect (IL-D5 (a); the mock floor)", () => {
+  it("while a cell is stale the stop is refused retryably and births reopen; with every cell fresh the consent is weighed as before", async () => {
+    const { mock, daemon, rpc } = await daemonOn(
+      fixture("observed-state.stale-cell.json"),
+      {},
+      fixtureRoutes(),
+      ["native.admin", "terminal.attach"],
+    );
+    let ownerAsked = false;
+    daemon.onShutdownRequest(() => {
+      ownerAsked = true;
+    });
+    // exactly the sessions the inventory lists: a stop would take this
+    // consent, were the list current
+    const listed = { native: { stop: true, sessions: [CLAUDE, ZSH] } };
+    const err = await rpc.callErr("system.shutdown", listed);
+    expect(
+      { kind: err.data?.kind, retryable: err.data?.retryable, details: err.data?.details },
+      "every stale cell: the list it would weigh is old",
+    ).toEqual(fixture("error-data.terminal-inventory-stale.json"));
+    expect(ownerAsked, "nothing stopped").toBe(false);
+    expect(daemon.health().restartScheduled).toBeNull();
+    // births reopened: a create reaches its cell (paper, so unreachable) and
+    // is never refused as `restarting`
+    const create = await rpc.callErr("terminal.create", {});
+    expect(create.data?.details).toMatchObject({ service: "terminal", state: "unreachable" });
+
+    mock.pushObserved(freshFloor());
+    await until(() => daemon.terminals.staleCells().length === 0, 5_000, "fresh");
+    const inexact = await rpc.callErr("system.shutdown", {
+      native: { stop: true, sessions: [ZSH] },
+    });
+    expect(inexact.data, "weighed against a current list, as before").toMatchObject({
+      kind: "PRECONDITION_FAILED",
+      details: { live: [CLAUDE, ZSH], births: 0 },
+    });
+    expect(ownerAsked).toBe(false);
+  });
+
+  it("held unresponsive past the bound, the stop's refusal is WG-D4's {native, unresponsive}", async () => {
+    const { mock, daemon, rpc } = await daemonOn(
+      freshFloor(),
+      { terminalInventoryTimings: { staleMs: 300, sampleMs: 25 } },
+      fixtureRoutes(),
+      ["native.admin", "terminal.attach"],
+    );
+    let ownerAsked = false;
+    daemon.onShutdownRequest(() => {
+      ownerAsked = true;
+    });
+    mock.silentMethods.add("native.lifecycle.ping"); // the control path stops answering
+    await until(() => daemon.health().nativeLink.state === "unresponsive", 5_000, "held");
+    await until(() => daemon.terminals.staleCells().length === 2, 5_000, "past the bound");
+
+    const refused = await rpc.callErr("system.shutdown", {
+      native: { stop: true, sessions: [CLAUDE, ZSH] },
+    });
+    expect(refused.data?.kind).toBe("UNAVAILABLE");
+    expect(refused.data?.retryable).toBe(true);
+    expect(refused.data?.details, "the worse and truer story wins").toMatchObject({
+      service: "native",
+      state: "unresponsive",
+    });
+    expect(ownerAsked).toBe(false);
+    expect(daemon.health().restartScheduled).toBeNull();
   });
 });
