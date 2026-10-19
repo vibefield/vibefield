@@ -1,6 +1,7 @@
 import FieldAgents
 import FieldDesign
 import FieldMesh
+import FieldRoutedTerminal
 import FieldTerminal
 import SwiftUI
 
@@ -203,6 +204,189 @@ enum FieldHomeModel {
     return LiveCardReadout(
       model: named.lowercased(), effort: effort,
       effortIsIntent: effort != nil && agent.effort?.intent == .configured, context: context)
+  }
+
+  // MARK: - A live card another client is driving (item 42)
+
+  /// Item 42 (James, 2026-10-19 17:42Z: "studio is driving · touch to take it
+  /// back"; the look ruled 21:38Z, Phone A) — the READOUT a live card stands in
+  /// its empty rows while another client holds its session's geometry seat: a
+  /// window, a peer's window, another phone (DESIGN.md §8, "A live card another
+  /// client is driving"). It is the desktop's held-edge figure at the phone's
+  /// scale: the holder's name huge, the verb at 40%, one caption line. It names
+  /// no size and wears no mark: the phone can see what it is drawing.
+  struct SeatReadout: Equatable {
+    /// The holder's name as fieldd minted it into its grant, full and never
+    /// re-cased: `seatHolderFallback` when it minted none.
+    let name: String
+    /// The rows the holder's grid stands in on the card — the PTY's, from the
+    /// seat — which the words stand clear of.
+    let heldRows: Int
+    /// The renderer's line height, which those rows are measured in; nil
+    /// before the card's terminal view exists.
+    let lineHeight: CGFloat?
+
+    /// What the holder is doing, at 40%.
+    static let verb = "is driving"
+    /// The one caption line: what a touch does.
+    static let caption = "touch to take it back"
+  }
+
+  /// The name the readout says when fieldd minted the holder none — a grant
+  /// from before item 42, or a principal it could not name — as the desktop
+  /// says it (`pane-faces.ts`), never an id.
+  static let seatHolderFallback = "Another device"
+  /// The held veil: the terminal's ground at 62%, the desktop's held veil and
+  /// not the cooled terminal's 45%, so one state wears one veil on every device.
+  static let liveCardHeldVeil: Double = 0.62
+  /// The readout's entrance waits this long after the seat goes, so a glance at
+  /// another device never flashes it (the desktop's `SEAT_VEIL_DELAY_MS`). It
+  /// goes at once when the phone takes the seat.
+  static let seatVeilWait: Double = 0.4
+
+  /// Who drives, for the readout — only while ANOTHER client holds the seat.
+  /// This phone's own seat, an empty one and one the cell has not announced say
+  /// nothing: the terminal is the state then. An empty seat another client let
+  /// go is not said either: the card on the screen takes it (`takesEmptySeat`),
+  /// and a card off the screen takes it when it is presented again (DS-4b).
+  static func seatReadout(_ seat: RoutedSessionSeat?, lineHeight: CGFloat?) -> SeatReadout? {
+    guard let seat, case .another(let holder) = seat.driver else { return nil }
+    return SeatReadout(
+      name: holder.face?.name ?? seatHolderFallback, heldRows: seat.rows, lineHeight: lineHeight)
+  }
+
+  /// Whether the readout stands, and the held veil with it: only on a live
+  /// terminal with no words of its own. The attachment's words win, and a
+  /// cooled terminal keeps its own 45% veil, so a card never wears two veils and
+  /// the held veil never stands without the words that say why.
+  static func showsSeatReadout(live: Bool, cooled: Bool, hasWords: Bool) -> Bool {
+    live && !cooled && !hasWords
+  }
+
+  /// The words' figure (DESIGN.md §8, the desktop's at the phone's scale): 800
+  /// at 56pt with a line height of 1, −0.04em; the verb 4pt under the name, and
+  /// the caption, 12pt semibold, 18pt under the verb (the canvas's spacing).
+  static let seatWordsSize: CGFloat = 56
+  static let seatWordsTracking: CGFloat = -0.04
+  static let seatVerbGap: CGFloat = 4
+  static let seatCaptionSize: CGFloat = 12
+  static let seatCaptionGap: CGFloat = 18
+  /// The block the words take: the two lines, their gaps, and the caption's line
+  /// at 1.25 of its size.
+  static var seatWordsHeight: CGFloat {
+    seatWordsSize * 2 + seatVerbGap + seatCaptionGap + seatCaptionSize * 1.25
+  }
+  /// Where the text stands in the grid, which the rows are counted from: item
+  /// 41's padding (`presentationConfig`: 0 above, 6 below) and the renderer's own
+  /// 2pt origin on each — 2pt down from the grid's top, 8pt up from its foot.
+  static let liveCardTextTop: CGFloat = 2
+  static let liveCardTextFoot: CGFloat = 8
+
+  /// Where the readout's words stand: the distance of their middle from the
+  /// grid's top. They stand in the card's empty rows (DESIGN.md §8). While the
+  /// held screen stands top-left — the anchor at the foot rides ghosttea 0.10.2
+  /// — its rows fill the grid from the top and the empty rows are at the foot,
+  /// so the words stand in the middle of those. When the held rows reach the
+  /// card's own last row, or leave too few rows for the words, there are none
+  /// to stand in, and the words stand over the grid's middle; so they do while
+  /// the line height is not known yet. The empty rows end above the floating
+  /// input row (`footReserve`, `ClosedRow.footprint`), so the words never stand
+  /// under the keyboard key or the reply chips.
+  static func seatWordsCentre(
+    grid: CGFloat, heldRows: Int, lineHeight: CGFloat?, footReserve: CGFloat = 0
+  ) -> CGFloat {
+    guard grid.isFinite, grid > 0 else { return 0 }
+    let middle = grid / 2
+    guard let lineHeight, lineHeight.isFinite, lineHeight > 0, heldRows > 0 else { return middle }
+    let heldFoot = liveCardTextTop + CGFloat(heldRows) * lineHeight
+    let gridFoot = grid - max(liveCardTextFoot, footReserve)
+    guard gridFoot - heldFoot >= seatWordsHeight else { return middle }
+    return (heldFoot + gridFoot) / 2
+  }
+
+  /// One part of the readout's entrance: when it starts, after the wait, and
+  /// how long it takes.
+  struct EntrancePart: Equatable {
+    let delay: Double
+    let duration: Double
+
+    /// How far through it is `clock` seconds into the entrance: 0 until it
+    /// starts, 1 once it is done, a straight line between (the curve is the
+    /// part's own, laid on this).
+    func progress(at clock: Double) -> Double {
+      guard duration > 0 else { return clock >= delay ? 1 : 0 }
+      return min(max((clock - delay) / duration, 0), 1)
+    }
+  }
+
+  /// The readout's entrance (DESIGN.md §8), played once, as the desktop's plays,
+  /// after the 400ms wait: the veil in 200ms on plain `ease`; the glow in 600ms
+  /// on the island curve, and the bloom in 600ms on it from 140ms; the name's
+  /// letters on the pop in 280ms from 140ms, 26ms apart and never more than
+  /// 400ms in all (§6's stagger); the verb tracking in from .34em on the island
+  /// curve in 560ms from 340ms; and the caption in 240ms from 540ms. Then it
+  /// holds still — a held seat is a state, not a wait (§6) — so nothing loops.
+  /// Under reduced motion the whole of it fades in over 100ms.
+  enum SeatEntrance {
+    static let veil = EntrancePart(delay: 0, duration: 0.2)
+    static let glow = EntrancePart(delay: 0, duration: 0.6)
+    static let bloom = EntrancePart(delay: 0.14, duration: 0.6)
+    static let verb = EntrancePart(delay: 0.34, duration: 0.56)
+    static let caption = EntrancePart(delay: 0.54, duration: 0.24)
+    static let reduced = EntrancePart(delay: 0, duration: 0.1)
+    /// The verb's tracking as it starts, in ems; it ends on the words' −0.04em.
+    static let verbTrackingFrom: CGFloat = 0.34
+    /// The bloom's scale as it starts; it ends at 1.
+    static let bloomScaleFrom: CGFloat = 0.4
+    /// How far a letter rises, and the caption, as each comes in: half an em,
+    /// and 8pt (the canvas's).
+    static let letterRise: CGFloat = 0.5
+    static let captionRise: CGFloat = 8
+
+    static let letterStart = 0.14
+    static let letterStep = 0.026
+    static let letterCap = 0.4
+    static let letterDuration = 0.28
+
+    /// The name's letter at `index`: its own pop, 26ms after the one before,
+    /// the stagger capped at 400ms (§6's `26ms/item (cap 400ms)`, read as the
+    /// desktop's Me menu reads it: `min(i × 26, 400)`), so a long name's later
+    /// letters start together.
+    static func letter(_ index: Int) -> EntrancePart {
+      EntrancePart(
+        delay: letterStart + min(Double(max(index, 0)) * letterStep, letterCap),
+        duration: letterDuration)
+    }
+
+    /// The clock the letters and the verb are drawn on runs until the last of
+    /// them is still: the verb, which no letter outlasts.
+    static let length = max(verb.delay + verb.duration, letterStart + letterCap + letterDuration)
+  }
+
+  /// Whether the live card takes its session's EMPTY seat itself: the holder let
+  /// go while the card is on the screen. The card is the phone's one pane in
+  /// front, so this is Q1's ruling — a focused pane takes the empty seat —
+  /// applied to the phone (DESIGN.md §8). On the screen is the app in front
+  /// (`.active`; `.inactive` is a shade or the switcher, not a person at the
+  /// card) with this card the one presented. A card in the background or behind
+  /// another takes nothing while it is away; one presented again takes the seat
+  /// by DS-4b's own rule (`TerminalAttachment`'s attach and resume), never by
+  /// this one, so the readout shows only while another device holds the seat as
+  /// the card sits on the screen (DESIGN.md §8).
+  ///
+  /// ONCE, on the let-go itself: another client held the seat, and now nobody
+  /// does, with that client remembered as the one who let go. An empty seat keeps
+  /// that memory through its later resizes and empty states, and a take that does
+  /// not land leaves it standing, so neither is asked again — the client owns the
+  /// take's one retry, and the host never loops. A seat this phone let go, or
+  /// first heard empty (`letGo` nil), was never another's to let go of.
+  static func takesEmptySeat(
+    from old: RoutedSessionSeat.Driver?, to new: RoutedSessionSeat.Driver?,
+    phase: ScenePhase, presented: Bool
+  ) -> Bool {
+    guard phase == .active, presented else { return false }
+    guard case .another(_)? = old, case .nobody(let letGo)? = new else { return false }
+    return letGo != nil
   }
 
   /// fix8 — whether the card's run has EXITED, by its own face (PJ-7's second
