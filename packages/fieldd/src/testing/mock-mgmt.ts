@@ -186,6 +186,21 @@ export class MockMgmtServer {
   /** GT-2d — the build label the hello ack carries; null = a floor predating
    * GT-2d, which fieldd must surface as "it did not say", never as a guess. */
   helloNativeBuild: string | null = null;
+  /** WG-D6 — the pid the hello ack states (`HelloAck.pid`); null = a floor
+   * predating WG-D6, which states none. */
+  helloPid: number | null = null;
+  /** WG-D6 — every request this floor read, in order: its method, and its
+   * `deadlineAt` exactly as sent (the key is absent when the request carried
+   * none). Read before a silent method swallows it. */
+  readonly requestLog: Array<{ method: string; deadlineAt?: unknown }> = [];
+  /** The connections whose hello this floor answered (its paired clients, as
+   * far as `pushTick` and `supersedeOnHello` are concerned). */
+  readonly paired = new Set<Socket>();
+  /** The real floor's single-client rule (mgmt/mod.rs `handle_hello`): an
+   * answered hello sends `native.lifecycle.superseded` to every other paired
+   * connection and ends it. Off by default — older suites hold several
+   * connections at once. */
+  supersedeOnHello = false;
   /** WIN-10 — the secret this mock proves possession of. Every suite writes
    * "ab" x 32 as its pairing file, so that is the default; a test with a
    * different file must set this to match or the client will refuse it. */
@@ -251,6 +266,7 @@ export class MockMgmtServer {
     this.sockets.add(sock);
     sock.on("close", () => {
       this.sockets.delete(sock);
+      this.paired.delete(sock);
       this.issued = this.issued.filter((e) => e.sock !== sock);
       if (this.clearServesOnDisconnect) this.meshServes.clear();
     });
@@ -270,8 +286,12 @@ export class MockMgmtServer {
 
   private onLine(
     sock: Socket,
-    msg: { id: number; method: string; params?: Record<string, unknown> },
+    msg: { id: number; method: string; params?: Record<string, unknown>; deadlineAt?: unknown },
   ): void {
+    this.requestLog.push({
+      method: msg.method,
+      ...("deadlineAt" in msg ? { deadlineAt: msg.deadlineAt } : {}),
+    });
     // TC-D2 tests — a WEDGED floor: the request is read and never answered
     // (the socket stays open; only the reply is missing, exactly the wedge
     // shape the deadline/heartbeat machinery exists to catch).
@@ -318,6 +338,19 @@ export class MockMgmtServer {
       if (this.proveServerIdentity && typeof nonce === "string" && typeof bootId === "string") {
         serverMac = this.forgedServerMac ?? computeAckMac(this.pairingSecretHex, nonce, bootId);
       }
+      if (this.supersedeOnHello) {
+        const superseded = JSON.stringify({
+          jsonrpc: "2.0",
+          method: "native.lifecycle.superseded",
+          params: { reason: "new hello" },
+        });
+        for (const old of this.paired) {
+          if (old === sock) continue;
+          old.end(`${superseded}\n`);
+          this.paired.delete(old);
+        }
+      }
+      this.paired.add(sock);
       sock.write(
         JSON.stringify({
           jsonrpc: "2.0",
@@ -330,6 +363,7 @@ export class MockMgmtServer {
             ...(this.helloTerminalMesh !== null ? { terminalMesh: this.helloTerminalMesh } : {}),
             ...(this.helloTerminal !== null ? { terminal: this.helloTerminal } : {}),
             ...(this.terminalRoutes !== null ? { terminalRoutes: this.terminalRoutes } : {}),
+            ...(this.helloPid !== null ? { pid: this.helloPid } : {}),
             ...(serverMac !== undefined ? { serverMac } : {}),
           },
         }) + "\n",
@@ -928,6 +962,14 @@ export class MockMgmtServer {
         }) + "\n",
       );
     }
+  }
+
+  /** WG-D6 — the floor's own tick (`native.lifecycle.tick`), written to every
+   * paired connection as the real floor's tick task writes it: a notification
+   * with no id and no subId. */
+  pushTick(params: { bootId: string; ts: number; seq: number }): void {
+    const line = `${JSON.stringify({ jsonrpc: "2.0", method: "native.lifecycle.tick", params })}\n`;
+    for (const sock of this.paired) if (!sock.destroyed) sock.write(line);
   }
 
   /** DS-1b — push a fresh NativeHealth to every health subscription (a new

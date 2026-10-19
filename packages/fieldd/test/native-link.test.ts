@@ -10,6 +10,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   isPipeEndpoint,
+  NATIVE_SUPERVISION,
+  type NativeTickParams,
   SOCKETS,
   type TerminalRouteCell,
   type TerminalRouteSnapshot,
@@ -725,6 +727,205 @@ describe("NativeLink wedge evidence (WG-D0)", () => {
     expect(misses).toHaveLength(1);
     expect(misses[0]).toMatchObject({ method: "x.hang", deadlineMs: 20 });
     expect(misses[0]?.firedLateMs).toBeGreaterThanOrEqual(100);
+  });
+});
+
+/** Polls `cond` until it holds, or fails the row after `ms`. */
+async function waitFor(cond: () => boolean, ms = 3_000): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (!cond()) {
+    if (Date.now() > deadline) throw new Error("waitFor: the condition never held");
+    await sleep(10);
+  }
+}
+
+const TICK: NativeTickParams = { bootId: "mock-native-boot", ts: 1_792_376_701_000, seq: 7 };
+
+// WG-D6 and WG-E4 (draft/thinking-floor-wedge.md §4, §5.3): what the link
+// hands the supervisor's ladder — every request's deadline, the floor's pid and
+// tick, a "reply" for every response — and the redial, whose replaced
+// connection stays a witness while the new hello goes unanswered.
+describe("NativeLink — the ladder's witnesses and its redial (WG-D6, WG-E4)", () => {
+  it("every request but the heartbeat and the hello carries deadlineAt: when fieldd gives up on it, in unix ms", async () => {
+    const { mock, link } = await setup();
+    await link.connect();
+    const before = Date.now();
+    await link.request("x.normal", {}, { deadlineMs: 4_321 });
+    await link.subscribe("x.y.subscribe", {}, () => {});
+    await link.ping(1_000);
+    const after = Date.now();
+
+    const sent = (method: string) => mock.requestLog.find((r) => r.method === method);
+    const hello = sent("native.lifecycle.hello");
+    expect(hello, "the hello keeps its own dial deadline").not.toHaveProperty("deadlineAt");
+    const ping = sent("native.lifecycle.ping");
+    expect(ping, "a late pong is evidence").not.toHaveProperty("deadlineAt");
+    const normal = sent("x.normal")?.deadlineAt as number;
+    expect(normal).toBeGreaterThanOrEqual(before + 4_321);
+    expect(normal).toBeLessThanOrEqual(after + 4_321);
+    // a subscription rides the default deadline like any request
+    const subscribed = sent("x.y.subscribe")?.deadlineAt as number;
+    expect(subscribed).toBeGreaterThanOrEqual(before + NATIVE_SUPERVISION.REQUEST_DEADLINE_MS);
+    expect(subscribed).toBeLessThanOrEqual(after + NATIVE_SUPERVISION.REQUEST_DEADLINE_MS);
+  });
+
+  it("a TIMEOUT says how late fieldd's own timer fired, so the supervisor can discount its own stall (WG-E1)", async () => {
+    const { mock, link } = await setup();
+    await link.connect();
+    mock.silentMethods.add("x.hang");
+    const error = await link.request("x.hang", {}, { deadlineMs: 20 }).then(
+      () => undefined,
+      (e: RpcCallError) => e,
+    );
+    expect(error?.kind).toBe("TIMEOUT");
+    expect(error?.details).toMatchObject({ method: "x.hang", deadlineMs: 20 });
+    expect(typeof (error?.details as { firedLateMs?: unknown } | undefined)?.firedLateMs).toBe(
+      "number",
+    );
+  });
+
+  it("the hello ack's pid is the floor's own, for as long as a paired connection is open", async () => {
+    const { mock, link } = await setup();
+    mock.helloPid = 25_821;
+    await link.connect();
+    expect(link.floorPid).toBe(25_821);
+
+    // a floor predating WG-D6 states none, and the next pairing says so
+    mock.helloPid = null;
+    mock.killClients();
+    await sleep(50);
+    expect(link.floorPid, "no paired connection, no floor to name").toBeUndefined();
+    await waitFor(() => link.connected);
+    expect(link.floorPid).toBeUndefined();
+  });
+
+  it("a tick is the floor's news, never a reply: emitted with its numbers, settling nothing", async () => {
+    const { mock, link } = await setup();
+    await link.connect();
+    await sleep(50); // the routes arm's reply lands before the count starts
+    const ticks: NativeTickParams[] = [];
+    let replies = 0;
+    link.on("tick", (tick: NativeTickParams) => ticks.push(tick));
+    link.on("reply", () => {
+      replies += 1;
+    });
+
+    mock.pushTick(TICK);
+    // a malformed tick is a floor that did not say (tolerant reader)
+    const malformed = { jsonrpc: "2.0", method: "native.lifecycle.tick", params: { seq: "x" } };
+    for (const sock of mock.paired) sock.write(`${JSON.stringify(malformed)}\n`);
+    await sleep(50);
+
+    expect(ticks).toEqual([TICK]);
+    expect(replies, "a tick restarts no clock").toBe(0);
+  });
+
+  it("every response is a reply — on time, refused, and late", async () => {
+    const { mock, link } = await setup();
+    await link.connect();
+    await sleep(50);
+    let replies = 0;
+    link.on("reply", () => {
+      replies += 1;
+    });
+
+    await link.ping(1_000);
+    mock.rejectedSubscriptions.add("x.no.subscribe");
+    await link.subscribe("x.no.subscribe", {}, () => {}).catch(() => undefined);
+    const ids = watchRequestIds(mock);
+    mock.silentMethods.add("x.hang");
+    await link.request("x.hang", {}, { deadlineMs: 20 }).catch(() => undefined);
+    const hangId = ids.get("x.hang")?.[0];
+    if (hangId === undefined) throw new Error("the floor never read the request");
+    expect(replies, "a request that timed out has had no reply").toBe(2);
+
+    answerLate(mock, hangId, {});
+    await sleep(50);
+    expect(replies).toBe(3);
+  });
+
+  it("redial fails the calls in flight UNAVAILABLE and dials again at once, with no backoff", async () => {
+    const { mock, link } = await setup();
+    await link.connect();
+    let reconnecting = 0;
+    link.on("reconnecting", () => {
+      reconnecting += 1;
+    });
+    mock.silentMethods.add("x.hang");
+    const hung = link.request("x.hang", {}).then(
+      () => undefined,
+      (e: RpcCallError) => e,
+    );
+    await sleep(20);
+
+    link.redial();
+    expect(link.connected, "the paired connection is dropped at once").toBe(false);
+    expect(await hung).toMatchObject({
+      kind: "UNAVAILABLE",
+      retryable: true,
+      message: "the management link was redialled",
+    });
+    await waitFor(() => link.connected);
+    expect(mock.connections).toBe(2);
+    expect(reconnecting, "a redial that pairs never takes the backoff path").toBe(0);
+  });
+
+  it("a redial whose hello never answers keeps the replaced connection reading: its ticks, its late replies and its floor's pid", async () => {
+    const { mock, link } = await setup({ helloTimeoutMs: 300 });
+    mock.helloPid = 4_242;
+    await link.connect();
+    const ids = watchRequestIds(mock);
+    mock.silentMethods.add("x.hang");
+    void link.request("x.hang", {}).catch(() => undefined);
+    await sleep(20);
+    const [replaced] = [...mock.sockets];
+    if (replaced === undefined) throw new Error("no paired connection");
+    const ticks: NativeTickParams[] = [];
+    let replies = 0;
+    link.on("tick", (tick: NativeTickParams) => ticks.push(tick));
+    link.on("reply", () => {
+      replies += 1;
+    });
+
+    // the wedge sits where a fresh reader meets it too: the new hello goes unanswered
+    mock.silentMethods.add("native.lifecycle.hello");
+    link.redial();
+    await waitFor(() => mock.connections >= 2);
+    expect(link.connected).toBe(false);
+    expect(link.floorPid, "the replaced connection is still the floor's paired client").toBe(4_242);
+
+    mock.pushTick(TICK); // the floor ticks to its paired client: the replaced one
+    const hangId = ids.get("x.hang")?.[0];
+    if (hangId === undefined) throw new Error("the floor never read the request");
+    replaced.write(`${JSON.stringify({ jsonrpc: "2.0", id: hangId, result: {} })}\n`);
+    await sleep(50);
+    expect(ticks).toEqual([TICK]);
+    expect(replies, "the old reader moved: a reply like any other").toBe(1);
+
+    // the new hello times out and the link redials on its backoff; the witness stays
+    await sleep(900);
+    mock.pushTick({ ...TICK, seq: 8 });
+    await sleep(50);
+    expect(ticks.map((tick) => tick.seq)).toEqual([7, 8]);
+    expect(link.superseded).toBe(false);
+  });
+
+  it("the floor superseding the replaced connection is the redial landing, never a takeover", async () => {
+    const { mock, link } = await setup();
+    mock.supersedeOnHello = true;
+    await link.connect();
+    let superseded = 0;
+    link.on("superseded", () => {
+      superseded += 1;
+    });
+
+    link.redial();
+    await waitFor(() => link.connected && mock.connections === 2);
+    await sleep(50);
+    expect(link.superseded).toBe(false);
+    expect(superseded).toBe(0);
+    expect(link.connected).toBe(true);
+    expect(mock.sockets.size, "the replaced connection is gone").toBe(1);
   });
 });
 

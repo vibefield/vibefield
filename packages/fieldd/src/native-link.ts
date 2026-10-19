@@ -6,8 +6,10 @@ import {
   CONTRACTS_VERSION,
   isPipeEndpoint,
   MESH_CONTROL_LIMITS,
+  MGMT_NOTIFICATIONS,
   NATIVE_SUPERVISION,
   NativeLastExit,
+  NativeTickParams,
   PingAck,
   TerminalEndpoints,
   type TerminalRouteCell,
@@ -33,6 +35,22 @@ import { ackMacMatches, computeAckMac, computePairingMac, newPairingNonce } from
 // - "late-reply" (NativeLateReply): a reply came for a request that had
 //   already settled TIMEOUT — the floor's reader and dispatch were moving,
 //   only slowly. A late pong carries the floor's own clock.
+//
+// The wedge ladder's witnesses and lever (WG-D6, WG-E2, WG-E4;
+// `draft/thinking-floor-wedge.md` §4, §5.3), for the supervisor:
+// - "reply": a response to any request arrived — on time, late, or an error.
+//   Only a reply proves the floor's reader and dispatch move, so it is the one
+//   event that restarts the supervisor's kill clock;
+// - "tick" (NativeTickParams): the floor's own liveness notification, pushed
+//   from a task of its own. It proves the floor's runtime and writer alive and
+//   says nothing of its reader;
+// - every request but the heartbeat and the hello carries `deadlineAt` (unix
+//   ms), so the floor answers TIMEOUT rather than run one fieldd gave up on;
+// - `floorPid`: the pid the paired floor stated in its hello ack;
+// - `redial()`: drop the paired connection and dial again at once. The
+//   connection it replaces stays open, reading only, until a hello answers on
+//   the new one — a hello the floor cannot answer supersedes nothing there, so
+//   the old connection's ticks and late replies keep arriving.
 
 export class RpcCallError extends Error {
   constructor(
@@ -113,6 +131,15 @@ interface TimedOutRequest {
 const TIMED_OUT_RECORD_CAP = 256;
 
 const PING_METHOD = "native.lifecycle.ping";
+const HELLO_METHOD = "native.lifecycle.hello";
+
+/** WG-D6 — the two requests that carry no `deadlineAt` (`RpcRequest`): the
+ * heartbeat, whose late pong is evidence the ladder keeps (WG-E2), and the
+ * hello, which keeps its own dial deadline. */
+const DEADLINE_EXEMPT: ReadonlySet<string> = new Set([PING_METHOD, HELLO_METHOD]);
+
+/** What a call in flight answers when the supervisor redials the link (WG-E4). */
+const REDIALLED = "the management link was redialled";
 
 /** Large enough for the bounded 256-origin artifact snapshot, finite enough
  * that a compromised/native-buggy peer cannot grow fieldd without limit. */
@@ -122,6 +149,67 @@ const NATIVE_MGMT_RETAINED_FRAME_BYTES = 1024 * 1024;
  * against a loaded box (field-native answers a hello in microseconds once it is
  * listening) and finite against something that accepts and never speaks. */
 const HELLO_TIMEOUT_MS = 10_000;
+
+/** Newline framing for one mgmt socket, bounded at `limit` bytes per frame.
+ * The buffer grows to the largest frame seen and is dropped again after a
+ * frame past NATIVE_MGMT_RETAINED_FRAME_BYTES has been read. */
+class MgmtFramer {
+  private buffer = Buffer.alloc(0);
+  private bytes = 0;
+
+  constructor(private readonly limit: number) {}
+
+  /** Hands every complete, non-blank line in `chunk` to `onLine`, in order.
+   * false = a frame outgrew the limit: the buffer is dropped, and the caller
+   * closes the socket and reads nothing more from it. */
+  feed(chunk: Buffer, onLine: (line: string) => void): boolean {
+    let offset = 0;
+    for (;;) {
+      const newline = chunk.indexOf(0x0a, offset);
+      const end = newline === -1 ? chunk.length : newline;
+      if (!this.append(chunk.subarray(offset, end))) return false;
+      if (newline === -1) return true;
+
+      const text = this.buffer.toString("utf8", 0, this.bytes);
+      this.bytes = 0;
+      if (this.buffer.length > NATIVE_MGMT_RETAINED_FRAME_BYTES) this.buffer = Buffer.alloc(0);
+      if (text.trim()) onLine(text);
+      offset = newline + 1;
+      if (offset >= chunk.length) return true;
+    }
+  }
+
+  private append(segment: Buffer): boolean {
+    const required = this.bytes + segment.length;
+    if (required > this.limit) {
+      this.buffer = Buffer.alloc(0);
+      this.bytes = 0;
+      return false;
+    }
+    if (segment.length > 0) {
+      if (required > this.buffer.length) {
+        const capacity = Math.min(
+          this.limit,
+          Math.max(required, Math.max(4_096, this.buffer.length * 2)),
+        );
+        const next = Buffer.allocUnsafe(capacity);
+        this.buffer.copy(next, 0, 0, this.bytes);
+        this.buffer = next;
+      }
+      segment.copy(this.buffer, this.bytes);
+      this.bytes = required;
+    }
+    return true;
+  }
+}
+
+/** WG-E4 — the paired connection a redial replaced, kept open and read until a
+ * hello answers on the new one. Nothing is sent on it. */
+interface Witness {
+  sock: Socket;
+  /** the pid its floor stated in the hello that paired it */
+  pid: number | undefined;
+}
 
 /** Reject with `message` if `work` has not settled within `ms`. The timer is
  * always cleared, and a late rejection from `work` is swallowed rather than
@@ -168,8 +256,11 @@ export class NativeLink extends EventEmitter {
   private sock: Socket | null = null;
   private connectingSock: Socket | null = null;
   private dialPromise: Promise<void> | null = null;
-  private frameBuffer = Buffer.alloc(0);
-  private frameBytes = 0;
+  /** WG-E4 — the connection a redial replaced, while no hello has answered since */
+  private witness: Witness | null = null;
+  /** WG-D6 — the pid stated in the last hello ack (`HelloAck.pid`), which
+   * belongs to `sock`; `floorPid` reads it while that socket is paired */
+  private pairedPid: number | undefined;
   private nextId = 1;
   private pending = new Map<number, Pending>();
   /** WG-D0 — requests that settled TIMEOUT on the live socket, by id, in the
@@ -269,6 +360,22 @@ export class NativeLink extends EventEmitter {
     return this.connected && this.terminalMesh === true;
   }
 
+  /** WG-D6 — the pid the floor at the other end of a paired connection stated
+   * in its hello ack (`HelloAck.pid`): the paired link's, or, while a redial's
+   * hello has not answered, the replaced connection's (it is still the floor's
+   * paired client there). undefined when no paired connection is open, or the
+   * floor predates WG-D6 and stated none.
+   *
+   * It is the paired floor's word: it arrives on the connection whose answerer
+   * proved the pairing secret (WIN-10), and Node exposes no peer credential on
+   * a local socket to check it against. A target for the supervisor's stops,
+   * never an authority — what the stop may end is still the census's and the
+   * person's (WG-E6). */
+  get floorPid(): number | undefined {
+    if (this.connected) return this.pairedPid;
+    return this.witness?.pid;
+  }
+
   constructor(private readonly opts: NativeLinkOptions) {
     super();
     this.logger = opts.logger ?? createNoopLogger();
@@ -324,10 +431,11 @@ export class NativeLink extends EventEmitter {
       this.assertOpen();
     }
     this.sock = sock;
-    this.frameBuffer = Buffer.alloc(0);
-    this.frameBytes = 0;
+    const framer = new MgmtFramer(this.opts.maxFrameBytes ?? NATIVE_MGMT_MAX_FRAME_BYTES);
     sock.on("data", (d) => {
-      if (this.sock === sock) this.onData(d);
+      // a stale socket's data is dropped; a redial's replaced one is still read
+      if (sock !== this.sock && sock !== this.witness?.sock) return;
+      if (!framer.feed(d, (line) => this.routeLine(sock, line))) this.frameTooLarge(sock);
     });
     sock.on("close", () => this.onSockClose(sock));
     sock.on("error", () => {
@@ -339,6 +447,9 @@ export class NativeLink extends EventEmitter {
       this.assertOpen();
       this.connected = true;
       this.attempts = 0;
+      // WG-E4 — a hello answered here has superseded the replaced connection
+      // at the floor; it has nothing left to witness
+      this.dropWitness();
       this.emit("connected");
       // TC-D15 — armed AFTER the dial, at the same instant the daemon arms its
       // own observed subscription (`native.on("connected", …)`), and for the
@@ -416,7 +527,7 @@ export class NativeLink extends EventEmitter {
     // simply stall, and silence would otherwise be a better attack than a
     // wrong answer.
     const ack = await withTimeout(
-      this.request("native.lifecycle.hello", {
+      this.request(HELLO_METHOD, {
         contractsVersion: CONTRACTS_VERSION,
         minCompatible: CONTRACTS_VERSION,
         clientKind: "fieldd",
@@ -448,6 +559,7 @@ export class NativeLink extends EventEmitter {
       terminalRoutes?: unknown;
       nativeBuild?: unknown;
       lastExit?: unknown;
+      pid?: unknown;
       serverMac?: unknown;
     };
     const expected = computeAckMac(secretHex, nonce, this.opts.bootId);
@@ -492,6 +604,12 @@ export class NativeLink extends EventEmitter {
     // doors published", and the reverse. Anything but a boolean is a floor
     // that did not answer, which `terminalMeshPublished()` reads as no.
     this.terminalMesh = typeof record.terminalMesh === "boolean" ? record.terminalMesh : undefined;
+    // WG-D6 — on its own terms like the label: anything but a pid (an integer
+    // ≥ 1, `HelloAck.pid`) is a floor that did not state one.
+    this.pairedPid =
+      typeof record.pid === "number" && Number.isSafeInteger(record.pid) && record.pid >= 1
+        ? record.pid
+        : undefined;
     this.emit("terminal-endpoints");
   }
 
@@ -655,53 +773,20 @@ export class NativeLink extends EventEmitter {
     this.emit("terminal-endpoints");
   }
 
-  private onData(chunk: Buffer): void {
-    let offset = 0;
-    for (;;) {
-      const newline = chunk.indexOf(0x0a, offset);
-      const end = newline === -1 ? chunk.length : newline;
-      const segment = chunk.subarray(offset, end);
-      if (!this.appendFrameSegment(segment)) return;
-      if (newline === -1) return;
-
-      const text = this.frameBuffer.toString("utf8", 0, this.frameBytes);
-      this.frameBytes = 0;
-      if (this.frameBuffer.length > NATIVE_MGMT_RETAINED_FRAME_BYTES)
-        this.frameBuffer = Buffer.alloc(0);
-      if (text.trim()) this.onLine(text);
-      offset = newline + 1;
-      if (offset >= chunk.length) return;
-    }
+  /** One line from one of the link's sockets, read as that socket's role is
+   * NOW: the paired (or pairing) connection's, or the replaced one's. */
+  private routeLine(sock: Socket, line: string): void {
+    if (sock === this.sock) this.onLine(line);
+    else if (sock === this.witness?.sock) this.onWitnessLine(line);
   }
 
-  private appendFrameSegment(segment: Buffer): boolean {
-    const limit = this.opts.maxFrameBytes ?? NATIVE_MGMT_MAX_FRAME_BYTES;
-    const required = this.frameBytes + segment.length;
-    if (required > limit) {
-      this.logger.error(
-        "fieldd.native_link.frame_too_large",
-        "The native management connection sent an oversized frame",
-        { limit },
-      );
-      this.frameBuffer = Buffer.alloc(0);
-      this.frameBytes = 0;
-      this.sock?.destroy();
-      return false;
-    }
-    if (segment.length > 0) {
-      if (required > this.frameBuffer.length) {
-        const capacity = Math.min(
-          limit,
-          Math.max(required, Math.max(4_096, this.frameBuffer.length * 2)),
-        );
-        const next = Buffer.allocUnsafe(capacity);
-        this.frameBuffer.copy(next, 0, 0, this.frameBytes);
-        this.frameBuffer = next;
-      }
-      segment.copy(this.frameBuffer, this.frameBytes);
-      this.frameBytes = required;
-    }
-    return true;
+  private frameTooLarge(sock: Socket): void {
+    this.logger.error(
+      "fieldd.native_link.frame_too_large",
+      "The native management connection sent an oversized frame",
+      { limit: this.opts.maxFrameBytes ?? NATIVE_MGMT_MAX_FRAME_BYTES },
+    );
+    sock.destroy();
   }
 
   private onLine(line: string): void {
@@ -712,6 +797,9 @@ export class NativeLink extends EventEmitter {
       return; // tolerant: garbage lines never fatal
     }
     if (msg["id"] !== undefined && msg["id"] !== null) {
+      // WG-E2 — any response, on time or late, a result or an error, proves
+      // the floor's reader and dispatch moved: the supervisor's clock reads it
+      this.emit("reply");
       const p = this.pending.get(msg["id"] as number);
       if (!p) {
         this.noteLateReply(msg["id"] as number, msg["result"]);
@@ -767,6 +855,10 @@ export class NativeLink extends EventEmitter {
       this.sock?.destroy();
       return;
     }
+    if (method === MGMT_NOTIFICATIONS.TICK) {
+      this.noteTick(msg["params"]);
+      return;
+    }
     if (params?.subId && (method?.endsWith(".delta") || method?.endsWith(".snapshot"))) {
       const key = this.subRoutes.get(params.subId);
       const sub = key === undefined ? undefined : this.subs.get(key);
@@ -781,7 +873,54 @@ export class NativeLink extends EventEmitter {
     }
   }
 
+  /** WG-E4 — a line on the connection a redial replaced. A response there is a
+   * reply like any other (the old reader moved, late), and a tick is the
+   * floor's tick; nothing settles. Everything else is ignored: its deltas
+   * belong to subscriptions replayed on the new connection, and its
+   * `superseded` is the floor answering this link's own new hello — never a
+   * takeover. */
+  private onWitnessLine(line: string): void {
+    let msg: Record<string, unknown>;
+    try {
+      msg = JSON.parse(line);
+    } catch {
+      return;
+    }
+    if (msg["id"] !== undefined && msg["id"] !== null) {
+      this.emit("reply");
+      return;
+    }
+    if (msg["method"] === MGMT_NOTIFICATIONS.TICK) this.noteTick(msg["params"]);
+  }
+
+  /** WG-D6 — the floor's own tick, re-emitted as "tick". It settles nothing
+   * and is never a reply. A malformed one is a floor that did not say
+   * (tolerant reader, logged at debug). */
+  private noteTick(params: unknown): void {
+    const tick = NativeTickParams.safeParse(params);
+    if (!tick.success) {
+      this.logger.debug(
+        "fieldd.native_link.tick_unparsed",
+        "A floor tick was not a NativeTickParams; ignored",
+      );
+      return;
+    }
+    this.emit("tick", tick.data);
+  }
+
+  private dropWitness(): void {
+    const witness = this.witness;
+    if (witness === null) return;
+    this.witness = null;
+    witness.sock.destroy();
+  }
+
   private onSockClose(sock: Socket): void {
+    if (sock === this.witness?.sock) {
+      // the replaced connection ended: superseded by a later hello, or its floor is gone
+      this.witness = null;
+      return;
+    }
     if (sock !== this.sock) return; // stale socket — already replaced or detached
     this.sock = null;
     this.connected = false;
@@ -822,9 +961,51 @@ export class NativeLink extends EventEmitter {
     this.dial().catch(() => this.scheduleReconnect());
   }
 
-  private failPending(): void {
+  /** WG-E4 — the supervisor's reversible step: drop the paired connection and
+   * dial again now. It costs no session (a dead mgmt connection kills no PTY);
+   * the calls in flight fail UNAVAILABLE ("the management link was
+   * redialled"), as they would have at their own deadline. A fresh hello gets
+   * a fresh reader at the floor, so a wedge in one connection's reader is
+   * recovered outright.
+   *
+   * The replaced connection, when it was paired, is kept open and read until a
+   * hello answers on the new one (see `Witness`): a floor that cannot answer
+   * the new hello has not superseded it, so its ticks and late replies still
+   * arrive. If the new hello never answers, the link goes on redialling on its
+   * ordinary backoff and emits "reconnecting" for each failed dial, as for any
+   * dial that fails. A no-op once the link is closed or superseded. */
+  redial(): void {
+    if (this.closed || this.superseded) return;
+    const sock = this.sock;
+    if (sock !== null) {
+      const paired = this.connected;
+      // detached first, so its close event is not read as the link going down
+      this.sock = null;
+      this.connected = false;
+      this.clearTerminalEndpoints();
+      this.failPending(REDIALLED);
+      this.subRoutes.clear();
+      this.prepareSubscriptionsForReconnect();
+      if (paired && this.witness === null) this.witness = { sock, pid: this.pairedPid };
+      else sock.destroy();
+    }
+    this.connectingSock?.destroy();
+    const inFlight = this.dialPromise;
+    if (inFlight === null) {
+      this.dialNow();
+      return;
+    }
+    // a dial already under way fails with the socket it was using; the fresh
+    // one follows it
+    void inFlight.then(
+      () => this.dialNow(),
+      () => this.dialNow(),
+    );
+  }
+
+  private failPending(message = "mgmt connection closed"): void {
     for (const [, p] of this.pending) {
-      p.reject(new RpcCallError("UNAVAILABLE", "mgmt connection closed", true));
+      p.reject(new RpcCallError("UNAVAILABLE", message, true));
     }
     this.pending.clear();
     // A reply to a request sent on a dead socket can never arrive, so the
@@ -953,15 +1134,28 @@ export class NativeLink extends EventEmitter {
     const sock = this.sock;
     if (!sock) throw new RpcCallError("UNAVAILABLE", "not connected", true);
     const id = this.nextId++;
-    const line = `${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`;
     const limit =
       deadlineMs ?? this.opts.requestDeadlineMs ?? NATIVE_SUPERVISION.REQUEST_DEADLINE_MS;
+    // WG-D6 — the instant fieldd gives up on this request, on the wall clock
+    // the floor reads too (same host): past it the floor answers TIMEOUT and
+    // does not run it. The heartbeat and the hello carry none.
+    const deadlineAt = DEADLINE_EXEMPT.has(method) ? undefined : Date.now() + limit;
+    const line = `${JSON.stringify({
+      jsonrpc: "2.0",
+      id,
+      method,
+      params,
+      ...(deadlineAt !== undefined ? { deadlineAt } : {}),
+    })}\n`;
     return await new Promise((resolve, reject) => {
       // TC-D2 — a request that outlives its deadline settles TIMEOUT. A
       // deadline miss is wedge EVIDENCE, not a verdict — the supervisor's
-      // heartbeat owns the verdict. WG-D0 — the miss is remembered, so a reply
+      // ladder owns the verdict. WG-D0 — the miss is remembered, so a reply
       // that comes after it settles nothing and is still attributed
       // ("late-reply"), and the event says how late this timer itself fired.
+      // WG-E1 — so does the TIMEOUT's own `firedLateMs`: a timer that fired
+      // past its whole deadline was fieldd's loop stalling, and the supervisor
+      // does not count that miss against the floor.
       let timer: NodeJS.Timeout | null = null;
       const entry: Pending = {
         resolve: (v) => {
@@ -990,6 +1184,7 @@ export class NativeLink extends EventEmitter {
             {
               method,
               deadlineMs: limit,
+              firedLateMs,
             },
           ),
         );
@@ -1045,6 +1240,7 @@ export class NativeLink extends EventEmitter {
     // link and then reads the endpoints must not see the floor still there for
     // the length of one turn of the event loop.
     this.clearTerminalEndpoints();
+    this.dropWitness();
     this.sock?.destroy();
   }
 }
