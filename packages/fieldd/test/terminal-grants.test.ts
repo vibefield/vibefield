@@ -6,6 +6,8 @@
 import { createHmac } from "node:crypto";
 import {
   CellTransportGrant,
+  type DeviceInfo,
+  GeometryHolderFace,
   grantSigningInput,
   ProductSessionRosterItem,
   SessionAttachGrant,
@@ -17,6 +19,8 @@ import {
   type CellGrantKey,
   clientIdFor,
   connectionSetIdFor,
+  type HolderFaceRoster,
+  holderFaceFor,
   isSelfPeerDaemon,
   isSelfPrincipal,
   isSelfTailnetPrincipal,
@@ -655,6 +659,210 @@ describe("TP-R21 — a fieldd restart never meets its own old high-water", () =>
     }
     // the restarted fieldd's first grant, generation 1, on the SAME set
     expect(cell.admit(unscoped(1))).toBe(false);
+  });
+});
+
+// item 42 (DESIGN.md §8 "A session another device is driving") — the holder's
+// FACE: fieldd names the device a grant's holder is, from the principal it
+// already verified and the roster's name for that device, and the cell echoes
+// it in `GeometryState` while that grant's view holds the seat. Where no honest
+// name exists the face is omitted, and the pane says "Another device".
+describe("the holder's face — the principal, named by the roster (item 42)", () => {
+  /** This desktop, as DeviceService's roster row reads it. */
+  const STUDIO: DeviceInfo = {
+    deviceId: "dev-a",
+    name: "studio",
+    platform: "darwin",
+    capabilities: { terminalHost: true, docHost: true, push: false },
+    self: true,
+    online: true,
+    lastSeenAt: 1,
+  };
+  /** A peer desktop, the phone — a registry row: a phone publishes no device
+   * slice, so it says no platform — and a peer the registry listed without a
+   * name, whose row DeviceService names by its own id. */
+  const PEERS: readonly DeviceInfo[] = [
+    {
+      deviceId: "dev-b",
+      name: "mini",
+      platform: "linux",
+      capabilities: { terminalHost: true, docHost: true, push: false },
+      self: false,
+      online: true,
+      lastSeenAt: 1,
+      tailscaleId: "node-b",
+    },
+    {
+      deviceId: "dev-phone",
+      name: "James's iPhone",
+      self: false,
+      online: true,
+      lastSeenAt: 1,
+      tailscaleId: "node-phone",
+    },
+    {
+      deviceId: "dev-nameless",
+      name: "dev-nameless",
+      self: false,
+      online: true,
+      lastSeenAt: 1,
+      tailscaleId: "node-nameless",
+    },
+  ];
+  const ROWS: ReadonlyMap<string, DeviceInfo> = new Map(
+    [STUDIO, ...PEERS].map((row): [string, DeviceInfo] => [row.deviceId, row]),
+  );
+  const NODES: ReadonlyMap<string, string> = new Map([
+    ["node-b", "dev-b"],
+    ["node-phone", "dev-phone"],
+    ["node-nameless", "dev-nameless"],
+  ]);
+  const ROSTER: HolderFaceRoster = {
+    currentDeviceId: () => "dev-a",
+    get: (deviceId) => ROWS.get(deviceId),
+    deviceIdByNodeId: (nodeId) => NODES.get(nodeId),
+  };
+  const PHONE = { ...SELF, tailscaleId: "node-phone" };
+  const PEER_DAEMON = { kind: "peer-fieldd", deviceId: "dev-b" };
+  const FOR_MINIS_WINDOW = { clientKind: "renderer", deviceId: "dev-b", windowId: "p-77" };
+
+  it("names a window HERE by this desktop's own name and OS", () => {
+    expect(holderFaceFor(WINDOW, undefined, ROSTER)).toEqual({
+      kind: "window",
+      name: "studio",
+      os: "macos",
+    });
+  });
+
+  it("names the phone by the name its node announced, through its node id — `ios`, the principal's kind standing for the device", () => {
+    expect(holderFaceFor(PHONE, undefined, ROSTER)).toEqual({
+      kind: "phone",
+      name: "James's iPhone",
+      os: "ios",
+    });
+  });
+
+  it("names a window on another of this person's desktops by THAT desktop's name and OS", () => {
+    expect(holderFaceFor(PEER_DAEMON, FOR_MINIS_WINDOW, ROSTER)).toEqual({
+      kind: "peer-window",
+      name: "mini",
+      os: "linux",
+    });
+  });
+
+  it("omits the face wherever no honest name exists — never an invented one", () => {
+    // the phone with no node id (a pre-v3 sidecar), or a node the roster cannot
+    // correlate yet, or one the registry listed without a name
+    expect(holderFaceFor(SELF, undefined, ROSTER)).toBeUndefined();
+    expect(
+      holderFaceFor({ ...SELF, tailscaleId: "node-unknown" }, undefined, ROSTER),
+    ).toBeUndefined();
+    expect(
+      holderFaceFor({ ...SELF, tailscaleId: "node-nameless" }, undefined, ROSTER),
+    ).toBeUndefined();
+    // a self login whose node is a DESKTOP's (a demoted peer claim) is not the phone
+    expect(holderFaceFor({ ...SELF, tailscaleId: "node-b" }, undefined, ROSTER)).toBeUndefined();
+    // a forward for a window whose home the roster does not list
+    expect(
+      holderFaceFor(PEER_DAEMON, { ...FOR_MINIS_WINDOW, deviceId: "dev-gone" }, ROSTER),
+    ).toBeUndefined();
+    // the phone THROUGH one of its desktops: the provenance names the desktop,
+    // never the phone — so there is no name of the phone's to say
+    expect(
+      holderFaceFor(PEER_DAEMON, { clientKind: "ios", deviceId: "dev-b" }, ROSTER),
+    ).toBeUndefined();
+    // a daemon on its own account, a guest, a plugin and main hold no seat
+    expect(holderFaceFor(PEER_DAEMON, undefined, ROSTER)).toBeUndefined();
+    expect(holderFaceFor(GUEST, undefined, ROSTER)).toBeUndefined();
+    expect(holderFaceFor({ kind: "plugin", tokenId: "t" }, undefined, ROSTER)).toBeUndefined();
+    expect(holderFaceFor({ kind: "shell-main", tokenId: "t" }, undefined, ROSTER)).toBeUndefined();
+    // and with no roster yet (a mint before the DeviceService is bound), nobody has one
+    expect(holderFaceFor(WINDOW, undefined, null)).toBeUndefined();
+    expect(holderFaceFor(PHONE, undefined, undefined)).toBeUndefined();
+  });
+
+  it("says no OS a row does not: a platform outside the three is left out, the name kept", () => {
+    const roster: HolderFaceRoster = {
+      ...ROSTER,
+      get: (deviceId) =>
+        deviceId === STUDIO.deviceId ? { ...STUDIO, platform: "freebsd" } : undefined,
+    };
+    expect(holderFaceFor(WINDOW, undefined, roster)).toEqual({ kind: "window", name: "studio" });
+  });
+
+  it("mints the face into the attach claims under the MAC — every face it mints parses — and never into the transport grant", () => {
+    const minter = new TerminalGrantMinter(
+      () => 1_000_000,
+      "E1",
+      () => ROSTER,
+    );
+    for (const [principal, forwardedFor, kind] of [
+      [WINDOW, undefined, "window"],
+      [PHONE, undefined, "phone"],
+      [PEER_DAEMON, FOR_MINIS_WINDOW, "peer-window"],
+    ] as const) {
+      const ticket = minter.mintTicket({
+        key: KEY,
+        principal,
+        sessionId: "s1",
+        route: ROUTE,
+        doors: DOORS,
+        ...(forwardedFor === undefined ? {} : { forwardedFor }),
+      });
+      const face = ticket.attachGrant.claims.face;
+      expect(face?.kind, kind).toBe(kind);
+      expect(GeometryHolderFace.safeParse(face).success, kind).toBe(true);
+      expect(SessionAttachGrant.safeParse(ticket.attachGrant).success, kind).toBe(true);
+      // the face is a claim like any other: the cell's MAC check covers it
+      expect(verify(KEY, ticket.attachGrant), kind).toBe(true);
+      expect("face" in ticket.transportGrant.claims, kind).toBe(false);
+    }
+  });
+
+  it("renews with the face the roster gives NOW, and mints none for a principal it cannot name", () => {
+    let name = "studio";
+    const renamed: HolderFaceRoster = {
+      ...ROSTER,
+      get: (deviceId) => (deviceId === STUDIO.deviceId ? { ...STUDIO, name } : undefined),
+    };
+    const minter = new TerminalGrantMinter(
+      () => 10,
+      "E1",
+      () => renamed,
+    );
+    minter.mintTicket({ key: KEY, principal: WINDOW, sessionId: "s1", route: ROUTE, doors: DOORS });
+    name = "studio 2";
+    const renewed = minter.renewAttach({
+      key: KEY,
+      principal: WINDOW,
+      sessionId: "s1",
+      route: ROUTE,
+      expectGeneration: 1,
+      requestId: "r-1",
+    });
+    expect(renewed.claims.face).toEqual({ kind: "window", name: "studio 2", os: "macos" });
+    expect(verify(KEY, renewed)).toBe(true);
+    // a guest is minted read-only and faceless
+    const guest = minter.mintTicket({
+      key: KEY,
+      principal: GUEST,
+      sessionId: "s1",
+      route: ROUTE,
+      doors: DOORS,
+    });
+    expect("face" in guest.attachGrant.claims).toBe(false);
+  });
+
+  it("a minter with no roster mints exactly the claims it always did", () => {
+    const ticket = new TerminalGrantMinter(() => 10, "E1").mintTicket({
+      key: KEY,
+      principal: WINDOW,
+      sessionId: "s1",
+      route: ROUTE,
+      doors: DOORS,
+    });
+    expect("face" in ticket.attachGrant.claims).toBe(false);
+    expect(verify(KEY, ticket.attachGrant)).toBe(true);
   });
 });
 

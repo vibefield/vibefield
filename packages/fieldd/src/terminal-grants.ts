@@ -3,7 +3,9 @@ import {
   type CellTransportGrant,
   type CellTransportGrantClaims,
   DEFAULT_GRANT_VALIDITY_LIMITS,
+  type DeviceInfo,
   type ForwardedFor,
+  type GeometryHolderFace,
   GRANT_ALG,
   GRANT_ENVELOPE_VERSION,
   type GrantProtectedHeader,
@@ -237,6 +239,100 @@ export function rightsFor(
   return isSelfPrincipal(principal) ? ["geometry", "input", "read"] : ["read"];
 }
 
+/** item 42 — the roster a holder's face is read from: DeviceService's own
+ * methods, structurally (the `TerminalLink` pattern — no import coupling,
+ * trivially mockable). */
+export interface HolderFaceRoster {
+  /** this desktop's roster id */
+  currentDeviceId(): string;
+  /** one roster row: this desktop's, or a device the tailnet's own registry
+   * vouches for as this account's (a slice can describe a device, never add
+   * one — device-service.ts) */
+  get(deviceId: string): DeviceInfo | undefined;
+  /** T1 §1 — the roster id a sidecar-injected node id correlates to */
+  deviceIdByNodeId(nodeId: string): string | undefined;
+}
+
+/**
+ * item 42 (DESIGN.md §8 "A session another device is driving") — WHO a grant's
+ * holder is, as a pane on another screen says it: the cell echoes this face in
+ * its `GeometryState` for the activation whose view holds the seat. Derived
+ * like the clientId and the rights beside it — from the principal fieldd
+ * already holds, with the roster's NAME for the device — and OMITTED wherever
+ * no honest name exists: the pane then says "Another device", never an
+ * invented one.
+ *
+ *  · a renderer window HERE (`local-token` with its renderer participant):
+ *    this desktop's own roster row — its name, its platform as the OS;
+ *  · the phone (`tailnet` self — "the `tailnet` principal the phone gets",
+ *    product-api.ts:773-774): the roster row its sidecar-injected node id
+ *    correlates to, whose name is the one the phone's truffle node announced
+ *    in its hello identity (the kit starts its node with
+ *    `UIDevice.current.name`, MeshModel.swift); its OS, `ios`, is the
+ *    principal's KIND standing for the device until the grant carries the
+ *    hello's clientKind (the kit hellos `ios`, ProductTransport.swift) — a row
+ *    that hosts documents is a desktop's daemon whose peer claim was demoted
+ *    (product-api.ts), not the phone, and gets no face;
+ *  · a window on ANOTHER of this person's desktops (`peer-fieldd` forwarding
+ *    for a `renderer`): the roster row of the window's home — the forward's
+ *    `onBehalfOf.deviceId` — its name and platform.
+ *
+ * Nobody else gets one: a guest, a plugin, an agent or a daemon on its own
+ * account reads only and never holds the seat, and the phone reaching this
+ * desktop THROUGH one of its desktops is named by that desktop's provenance,
+ * which carries the forwarding desktop and no name of the phone's.
+ */
+export function holderFaceFor(
+  principal: GrantPrincipal,
+  forwardedFor: ForwardedFor | undefined,
+  roster: HolderFaceRoster | null | undefined,
+): GeometryHolderFace | undefined {
+  if (roster === null || roster === undefined) return undefined;
+  if (principal.kind === "local-token" && principal.rendererParticipant !== undefined)
+    return faceOf("window", roster.get(roster.currentDeviceId()));
+  if (isSelfTailnetPrincipal(principal)) {
+    const deviceId =
+      principal.tailscaleId === undefined
+        ? undefined
+        : roster.deviceIdByNodeId(principal.tailscaleId);
+    const row = deviceId === undefined ? undefined : roster.get(deviceId);
+    if (row?.capabilities?.docHost === true) return undefined;
+    return faceOf("phone", row, "ios");
+  }
+  if (isSelfPeerDaemon(principal) && forwardedFor?.clientKind === "renderer")
+    return faceOf("peer-window", roster.get(forwardedFor.deviceId));
+  return undefined;
+}
+
+/** One roster row as a face, or none when the row cannot honestly name the
+ * device: no row, or a row named only by its own id (DeviceService's stand-in
+ * for a peer the registry listed without a name). `os`, when given, is what
+ * the principal already says the device is; otherwise the row's platform. */
+function faceOf(
+  kind: GeometryHolderFace["kind"],
+  row: DeviceInfo | undefined,
+  os?: string,
+): GeometryHolderFace | undefined {
+  if (row === undefined || row.name.length === 0 || row.name === row.deviceId) return undefined;
+  const said = os ?? osOfPlatform(row.platform);
+  return { kind, name: row.name, ...(said === undefined ? {} : { os: said }) };
+}
+
+/** A roster `platform` — the publishing daemon's `process.platform` — as the
+ * face's OS word. Anything else is not said: a mark is never guessed. */
+function osOfPlatform(platform: string | undefined): string | undefined {
+  switch (platform) {
+    case "darwin":
+      return "macos";
+    case "win32":
+      return "windows";
+    case "linux":
+      return "linux";
+    default:
+      return undefined;
+  }
+}
+
 /** Provisional until the post-S0 numeric checkpoint (spec §16). The transport
  * grant is an ESTABLISHMENT deadline (a minute is generous for a loopback
  * dial); the attach grant is renewable and bounded by the lifetime the cell
@@ -347,6 +443,10 @@ export class TerminalGrantMinter {
     private readonly now: () => number = () => Date.now(),
     /** one per minter; a test passes a fixed one to pin exact claims */
     readonly epoch: string = freshMinterEpoch(),
+    /** item 42 — the roster each attach grant's holder face is read from, as a
+     * GETTER: the daemon's roster is built after its terminal service, and a
+     * mint before it (or a minter with none) carries no face */
+    private readonly faces: () => HolderFaceRoster | null | undefined = () => undefined,
   ) {}
 
   /** Every ticket carries a FRESH transport grant (spec §5.1 — fieldd cannot
@@ -457,6 +557,10 @@ export class TerminalGrantMinter {
     generation: number,
   ): SessionAttachGrant {
     const issuedAt = this.now();
+    // item 42 — read at every mint, a renewal's included: the roster's name
+    // for a device can change, and the cell echoes the face of the grant the
+    // holding activation carries now
+    const face = holderFaceFor(input.principal, input.forwardedFor, this.faces());
     const claims: SessionAttachGrantClaims = {
       audienceCellBootId: input.key.cellBootId,
       clientId,
@@ -465,6 +569,7 @@ export class TerminalGrantMinter {
       ...(input.route.leaseEpoch === undefined ? {} : { leaseEpoch: input.route.leaseEpoch }),
       grantGeneration: generation,
       rights: rightsFor(input.principal, input.forwardedFor),
+      ...(face === undefined ? {} : { face }),
       issuedAt,
       expiresAt: issuedAt + TP_ATTACH_GRANT_TTL_MS,
     };

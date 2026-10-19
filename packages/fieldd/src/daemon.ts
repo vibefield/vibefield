@@ -1691,6 +1691,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         file: join(config.dataDir, ...LAYOUT.TERMINAL_BINDINGS_FILE),
         logger: logger.child({ component: "terminal.bindings" }),
       }),
+      // item 42 — the roster each attach grant's holder face is named from
+      // (`holderFaceFor`), read at the mint: the DeviceService is bound further
+      // down, and a mint before it carries no face rather than a guessed one
+      holderFaces: () => devicesForAgents,
     });
     native.on("connected", () => void terminals.ensureStarted());
     await terminals.ensureStarted();

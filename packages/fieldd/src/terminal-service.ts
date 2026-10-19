@@ -68,6 +68,7 @@ import { TerminalBindingStore, type TerminalProfileBinding } from "./terminal-bi
 import {
   type CellGrantKey,
   type GrantPrincipal,
+  type HolderFaceRoster,
   isSelfPeerDaemon,
   isSelfPrincipal,
   isSelfTailnetPrincipal,
@@ -277,6 +278,12 @@ export interface TerminalServiceOptions {
    * the daemon's is on disk under the user root, so it outlives a restart;
    * absent = one kept in memory. */
   bindings?: TerminalBindingStore;
+  /** item 42 — the device roster each attach grant's holder face is read from
+   * (`holderFaceFor`), as a GETTER like `shell`: the daemon's DeviceService is
+   * built after this service. Absent, or answering null, a grant carries no
+   * face — and a pane another device's seat stands over says "Another
+   * device". */
+  holderFaces?: () => HolderFaceRoster | null;
 }
 
 export type { TerminalProfileBinding };
@@ -441,8 +448,10 @@ export class TerminalService {
    * "which cells vanished" is the question the receipt answers. */
   private cells: readonly TerminalRouteCell[] | undefined;
   /** TP-S1 — the TPv3 grant issuer: generation ledgers in memory, MACs over
-   * the route row's per-cell-boot key (terminal-grants.ts). */
-  private readonly minter = new TerminalGrantMinter();
+   * the route row's per-cell-boot key (terminal-grants.ts). item 42: it reads
+   * the holder's face off the roster this service is handed, so it is built
+   * in the constructor, where the options are. */
+  private readonly minter: TerminalGrantMinter;
   /** AR-3 — the floor's `session-exited` news, fanned out from every cell
    * control connection fieldd holds (the agent host turns it into puppeteer's
    * `handleProcessExit`; a login pane's end verifies its persona). Only cells
@@ -464,6 +473,7 @@ export class TerminalService {
   constructor(private readonly opts: TerminalServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
     this.bindings = opts.bindings ?? new TerminalBindingStore({ logger: this.logger });
+    this.minter = new TerminalGrantMinter(undefined, undefined, opts.holderFaces);
     // The link has usually paired BEFORE this service exists (the daemon builds
     // it after `native.connect()`), so the cells in hand at construction are the
     // baseline. Without seeding them, the first replacement after every boot

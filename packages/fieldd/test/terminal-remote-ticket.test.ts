@@ -78,7 +78,14 @@ const routes = (revision: number) => ({
   ],
 });
 
-async function boot(opts: { terminalMesh?: boolean; login?: string | null } = {}) {
+async function boot(
+  opts: {
+    terminalMesh?: boolean;
+    login?: string | null;
+    /** the tailnet's peer registry, as the floor answers `native.mesh.peers.list` */
+    peers?: unknown[];
+  } = {},
+) {
   const dataDir = mkdtempSync(join(tmpdir(), "vf-tm-ticket-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
@@ -95,6 +102,7 @@ async function boot(opts: { terminalMesh?: boolean; login?: string | null } = {}
   await mock.start();
   cleanup.push(() => mock.stop());
   mock.helloTerminalMesh = opts.terminalMesh ?? true;
+  if (opts.peers !== undefined) mock.meshPeers = opts.peers;
   mock.helloTerminal = {
     controlSocket: "/mock/native/run/termctl.1.sock",
     frameSocket: "/mock/native/run/termframe.1.sock",
@@ -139,9 +147,14 @@ async function dialAsTailnet(
   daemon: FielddDaemon,
   mock: MockMgmtServer,
   login: string,
+  /** the node id a v3+ sidecar injects beside the login (T1 §1) */
+  nodeId?: string,
 ): Promise<WsRpc> {
   const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}${productPath(daemon, mock)}`, {
-    headers: { "Tailscale-User-Login": login },
+    headers: {
+      "Tailscale-User-Login": login,
+      ...(nodeId === undefined ? {} : { "Tailscale-Node-Id": nodeId }),
+    },
   });
   cleanup.push(() => ws.close());
   await new Promise<void>((resolve, reject) => {
@@ -366,5 +379,97 @@ describe("TM-2 — doors_not_published is its own honest state", () => {
       await rpc.call("terminal.openTicket", { sessionId: "pane-1" }),
     );
     expect(ticket.endpoints.controlUrl).toBe(`ws://127.0.0.1:${CELL_DOOR}/control`);
+  });
+});
+
+// item 42 (DESIGN.md §8 "A session another device is driving") — the grant
+// names its holder: fieldd mints the face the cell echoes while that grant's
+// view holds the seat, from the principal and the roster, through the daemon's
+// real wiring (`holderFaces`). The rule itself is `terminal-grants.test.ts`'s.
+describe("item 42 — the attach grant names who holds it", () => {
+  /** The phone as the tailnet's registry lists it: its node, the durable id
+   * its truffle node published, the name its hello identity announced, and the
+   * login WhoIs gives it — this account's, so the roster has a row for it. */
+  const PHONE_PEER = {
+    id: "node-phone",
+    deviceId: "dev-phone",
+    name: "James's iPhone",
+    online: true,
+    whois: { login: LOGIN },
+  };
+
+  it("names the phone by the name its node announced, found through the node id its sidecar injected", async () => {
+    const { daemon, mock } = await boot({ peers: [PHONE_PEER] });
+    await serving(daemon);
+    await poll(() => daemon.devices.deviceIdByNodeId("node-phone"));
+    const rpc = await dialAsTailnet(daemon, mock, LOGIN, "node-phone");
+    const ticket = TerminalOpenTicketResult.parse(
+      await rpc.call("terminal.openTicket", { sessionId: "pane-1" }),
+    );
+    expect(ticket.attachGrant.claims.face).toEqual({
+      kind: "phone",
+      name: "James's iPhone",
+      os: "ios",
+    });
+    // a pre-v3 sidecar injects no node id: nothing names the device, so no face
+    const unnamed = TerminalOpenTicketResult.parse(
+      await (await dialAsTailnet(daemon, mock, LOGIN)).call("terminal.openTicket", {
+        sessionId: "pane-1",
+      }),
+    );
+    expect("face" in unnamed.attachGrant.claims).toBe(false);
+  });
+
+  it("names a renderer window by this desktop's own roster row; a token with no window behind it gets none", async () => {
+    const { daemon } = await boot();
+    const local = async (credential: string, clientKind: string): Promise<WsRpc> => {
+      const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+      cleanup.push(() => ws.close());
+      await new Promise<void>((resolve, reject) => {
+        ws.once("open", () => resolve());
+        ws.once("error", reject);
+      });
+      const rpc = new WsRpc(ws);
+      await rpc.call("system.hello", {
+        contractsVersion: CONTRACTS_VERSION,
+        minCompatible: CONTRACTS_VERSION,
+        clientKind,
+        credential,
+      });
+      return rpc;
+    };
+    // main mints the window's grant with its participant, as it does per webContents
+    const shell = await local(daemon.shellToken, "shell-main");
+    const minted = (await shell.call("system.mintWindowToken", {
+      scopes: ["terminal.attach"],
+      label: "item-42-window",
+      rendererParticipant: {
+        participantId: "renderer:i42:w1",
+        incarnation: "renderer:i42:w1:doc-1",
+      },
+    })) as { token: string };
+    const windowRpc = await local(minted.token, "renderer");
+    const ticket = TerminalOpenTicketResult.parse(
+      await windowRpc.call("terminal.openTicket", { sessionId: "pane-1" }),
+    );
+    const here = daemon.devices.get(daemon.devices.currentDeviceId());
+    const platformOs: Record<string, string> = {
+      darwin: "macos",
+      win32: "windows",
+      linux: "linux",
+    };
+    const os = platformOs[process.platform];
+    expect(ticket.attachGrant.claims.face).toEqual({
+      kind: "window",
+      name: here?.name,
+      ...(os === undefined ? {} : { os }),
+    });
+    // a bare token (a CLI, a harness) is no window of anybody's: no face
+    const bareToken = daemon.tokens.mint(["terminal.attach"], "item-42-bare").token;
+    const bare = await local(bareToken, "renderer");
+    const faceless = TerminalOpenTicketResult.parse(
+      await bare.call("terminal.openTicket", { sessionId: "pane-1" }),
+    );
+    expect("face" in faceless.attachGrant.claims).toBe(false);
   });
 });
