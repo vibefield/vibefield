@@ -417,17 +417,21 @@ enum Script {
 }
 
 /// A ticket for the scripted door: real grants (the vector's, so the claims are
-/// the contract's own) pointed at whatever endpoints a test wants.
+/// the contract's own) pointed at whatever endpoints a test wants. `clientId`
+/// renames the client BOTH grants name, as fieldd mints them after a restart
+/// (TP-R21) — the vector's `win-3c4d-incarnation-2` otherwise.
 enum TicketFactory {
   static func make(
     controlUrl: String = "ws://127.0.0.1:9/control", framesUrl: String = "ws://127.0.0.1:9/frames",
     cellBootId: String = "cb-7f3a9c1e-2026", sessionId: String? = nil,
-    rights: [String]? = nil, issuedAt: Int64? = nil, expiresAt: Int64? = nil
+    rights: [String]? = nil, issuedAt: Int64? = nil, expiresAt: Int64? = nil,
+    clientId: String? = nil
   ) throws -> RoutedTerminalTicket {
     let vector = try Vector.json("tp-grant-mac.vector")
     func grant(_ which: String) -> JSONValue {
       var claims = vector[which]?["claims"]?.objectValue ?? [:]
       claims["audienceCellBootId"] = .string(cellBootId)
+      if let clientId { claims["clientId"] = .string(clientId) }
       if let sessionId, which == "attach" { claims["sessionId"] = .string(sessionId) }
       if let rights, which == "attach" {
         claims["rights"] = .array(rights.sorted().map(JSONValue.string))

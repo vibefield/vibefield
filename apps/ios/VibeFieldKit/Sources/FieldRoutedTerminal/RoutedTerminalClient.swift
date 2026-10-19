@@ -66,6 +66,14 @@ public struct RoutedSessionState: Sendable {
   /// already in flight still land, so the last screen is the run's own — and
   /// ends when the cell removes the session or a leg goes.
   public internal(set) var exit: RoutedSessionExit?
+  /// item 42 — the session's geometry seat as the cell last ANNOUNCED it
+  /// (`RoutedGeometryState`, behind `geometry-events`), with whether its holder
+  /// is this client: what a face reads to say who drives the session. Nil until
+  /// the cell has said, which it does at once on an attach once a size was ever
+  /// committed. The SESSION's, not the activation's, as `exit` is: a fresh
+  /// activation carries it until that attach's announcement replaces it, and it
+  /// goes with the session (`forget`, a new cell boot, the cell's `removed`).
+  public internal(set) var seat: RoutedSessionSeat?
   /// This activation has been ended (`endActivation`) — once: a teardown ends
   /// what a revoke or a lost leg did not already, and the sink hears each end
   /// once. A fresh activation is a fresh state.
@@ -161,6 +169,12 @@ public struct RoutedSessionState: Sendable {
   /// verb must expect, and the holder (nil = empty, or never heard of). The
   /// cell pushes nothing to a displaced holder, so this is learned from
   /// `GeometryCommitted` and from refusals, never assumed.
+  ///
+  /// Corrected 2026-10-19 (item 42): with `geometry-events` negotiated the cell
+  /// DOES push the seat, to the control leg of every activation of the session
+  /// (`RoutedGeometryState`, kept on `seat`). These two are still the verbs'
+  /// own, learned from their answers alone, so a take built on a stale one
+  /// earns its one retry exactly as before; `seat` is what a face reads.
   public internal(set) var geometryRevision: Int64 = 0
   public internal(set) var geometryHolder: RoutedGeometryHolder?
   public internal(set) var demand: RoutedDemand = .live
@@ -313,6 +327,13 @@ public final class RoutedTerminalClient {
   private var framesAccepted: RoutedConnectionAccepted?
   private var ticket: RoutedTerminalTicket?
   private var grants: [String: RoutedGrant] = [:]
+  /// item 42 — every client this client's attach grants for a session named
+  /// (`keep`): a seat whose holder is one of them is THIS client's
+  /// (`RoutedSessionSeat.Driver.mine`). Every one, not the latest: a fieldd
+  /// restart mints this phone a new client (TP-R21) while the cell may still
+  /// hold the seat for the one before, within its grace — the desktop's
+  /// `ownClients`, the same rule. They go with the session, as its grant does.
+  private var ownClients: [String: Set<String>] = [:]
   private var limits = RoutedProtocolLimits.floor
   private var ledger = RoutedCreditLedger(creditEpoch: 0)
   private var pumps: [Task<Void, Never>] = []
@@ -462,7 +483,7 @@ public final class RoutedTerminalClient {
     if let current = self.ticket, current.route.cellBootId != ticket.route.cellBootId {
       teardown()
     }
-    grants[sessionId] = ticket.attachGrant
+    keep(ticket.attachGrant, for: sessionId)
     self.ticket = ticket
     needsTicket = false
 
@@ -492,7 +513,7 @@ public final class RoutedTerminalClient {
     guard let held = grants[sessionId], let next = grant.grantGeneration,
       let current = held.grantGeneration, next >= current
     else { return }
-    grants[sessionId] = grant
+    keep(grant, for: sessionId)
     session.inputRightDeadlineMs = Self.inputRightDeadline(for: grant)
     sessions[sessionId] = session
     control?.send(
@@ -502,6 +523,13 @@ public final class RoutedTerminalClient {
         "attachGrant": grant.raw,
         "initialDemand": .object(["mode": .string(session.demand.rawValue)]),
       ])
+  }
+
+  /// The attach grant `sessionId` attaches with from here, and its client as
+  /// one of this client's own for the seat (`ownClients`).
+  private func keep(_ grant: RoutedGrant, for sessionId: String) {
+    grants[sessionId] = grant
+    ownClients[sessionId, default: []].insert(grant.clientId)
   }
 
   public func close() {
@@ -524,6 +552,7 @@ public final class RoutedTerminalClient {
     renewals[sessionId] = nil
     sessions[sessionId] = nil
     grants[sessionId] = nil
+    ownClients[sessionId] = nil
     pendingTakes[sessionId] = nil
     wantedGrids[sessionId] = nil
     noteAttachment()
@@ -672,7 +701,9 @@ public final class RoutedTerminalClient {
   ///   announced holder to this view, at the announced revision.
   /// - The cell tells a displaced holder nothing, so this client's belief may
   ///   be stale; the refusal of a stale take IS the announcement, and earns
-  ///   exactly one retry against what it announced (`retryTake`).
+  ///   exactly one retry against what it announced (`retryTake`). (Item 42,
+  ///   2026-10-19: the cell does tell it now, onto `seat`, which no verb reads
+  ///   — see `RoutedSessionState.geometryHolder`.)
   /// - A session whose control leg has not attached holds the take until it
   ///   does (the newest grid wins); a grant without `geometry` sends no verb.
   public func takeGeometry(cols: Int, rows: Int, for sessionId: String) {
@@ -731,6 +762,9 @@ public final class RoutedTerminalClient {
   /// DS-4b — whether this view holds the seat, as last ANNOUNCED. The cell
   /// tells a displaced holder nothing, so a `true` here may be stale until the
   /// next verb's answer — which is exactly how the take learns otherwise.
+  /// (Item 42, 2026-10-19: the cell's push lands on the session's `seat`, whose
+  /// `mine` asks of this CLIENT what this asks of this VIEW, and moves with the
+  /// cell's word where this moves with the verbs' answers.)
   public func holdsGeometry(_ sessionId: String) -> Bool {
     guard let ticket, let holder = sessions[sessionId]?.geometryHolder else { return false }
     return holder.isClaimant(clientId: ticket.clientId, viewId: options.viewId)
@@ -1005,6 +1039,9 @@ public final class RoutedTerminalClient {
     // The run's exit is the SESSION's, not the activation's, and the cell says
     // it once: a fresh activation of an exited run is still one.
     session.exit = previous?.exit
+    // item 42 — so is the seat; the cell says it again on this attach, and the
+    // last one heard stands until it does.
+    session.seat = previous?.seat
     sessions[sessionId] = session
 
     var controlBody: [String: JSONValue] = [
@@ -1258,6 +1295,33 @@ public final class RoutedTerminalClient {
       }
       if let ask, ask.intent == .take, !ask.retried { retryTake(ask, after: refused) }
 
+    case .geometryState:
+      // item 42 — the seat as the cell now says it is, told to every leg with
+      // an activation of the session: kept on the session it names, with
+      // whether its holder is this client, under the receiver's rule
+      // (`RoutedSessionSeat.fold`). A state this build cannot read is dropped
+      // and SAID — the cell and this build disagreeing about a shape both name
+      // is news, as the desktop logs it — by its field, never a value, and the
+      // leg stays.
+      let announced: RoutedGeometryState
+      do {
+        announced = try RoutedGeometryState(json: body)
+      } catch {
+        options.log.error("seat: a GeometryState this build cannot read was dropped — \(error)")
+        return
+      }
+      let sessionId = announced.sessionId
+      guard var session = sessions[sessionId] else { return }
+      let mine =
+        announced.holder.map { ownClients[sessionId, default: []].contains($0.clientId) } ?? false
+      let seat = RoutedSessionSeat.fold(session.seat, announced, mine: mine)
+      // A stale state, and an identical repeat (the announcement on an attach
+      // of a seat already known), change nothing.
+      guard seat != session.seat else { return }
+      session.seat = seat
+      sessions[sessionId] = session
+      options.log("seat announced — \(seat) session=\(sessionId)")
+
     case .sessionEvent:
       // Each event lands on the session it names, as the cell's own fact, never
       // invented. They once went to a queue for "the caller" to drain, and no
@@ -1278,6 +1342,8 @@ public final class RoutedTerminalClient {
         guard var session = sessions[sessionId] else { return }
         session.control = .ended(reason: "removed")
         endActivation(&session, reason: "removed")
+        // item 42 — nothing drives a session that is gone.
+        session.seat = nil
         sessions[sessionId] = session
         noteAttachment()
       case .resync:
@@ -1975,7 +2041,7 @@ public final class RoutedTerminalClient {
       current.route.cellBootId == fresh.route.cellBootId,
       current.transportGrant.connectionSetId == fresh.transportGrant.connectionSetId
     else { return false }
-    grants[sessionId] = fresh.attachGrant
+    keep(fresh.attachGrant, for: sessionId)
     ticket = fresh
     needsTicket = false
     // The legs never left: whatever an attach refusal said about the set, it
@@ -2066,6 +2132,7 @@ public final class RoutedTerminalClient {
     teardownLegs()
     sessions = [:]
     grants = [:]
+    ownClients = [:]
     ticket = nil
     negotiatedCapabilities = []
     // fix8 — a mint still in flight belongs to the generation just retired

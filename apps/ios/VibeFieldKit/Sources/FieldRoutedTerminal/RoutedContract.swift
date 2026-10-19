@@ -65,14 +65,21 @@ public enum RoutedTerminalContract {
   ///   SILENT unless it is negotiated, because an un-negotiated client is
   ///   required to protocol-close on an unknown tag. This client reads
   ///   `SessionEvent` and surfaces it, so it advertises it.
+  /// - `geometry-events` (item 42, 2026-10-19) — load-bearing the same way: the
+  ///   cell announces a session's geometry seat (`GeometryState`) only to a
+  ///   control leg that negotiated it. This client reads the announcement and
+  ///   keeps it on the session (`RoutedSessionState.seat`), so it advertises it
+  ///   — on both hellos, as `session-events` is; the cell negotiates both on
+  ///   the control leg alone.
   /// - `snapshot-demand` — NOT advertised: the phone's demand is `none` or
   ///   `live`, the core profile's own pair.
   /// - `profiling-envelope` — NOT advertised: nothing on the phone consumes the
   ///   timestamps yet, and asking for bytes nobody reads is a cost, not a hedge.
-  public static let capabilities = ["resume", "session-events"]
+  public static let capabilities = ["resume", "session-events", "geometry-events"]
 
   public static let resumeCapability = "resume"
   public static let sessionEventsCapability = "session-events"
+  public static let geometryEventsCapability = "geometry-events"
 }
 
 /// What THIS phone can hold on the frames leg (`ConnectionHello.receiverCapacities`).

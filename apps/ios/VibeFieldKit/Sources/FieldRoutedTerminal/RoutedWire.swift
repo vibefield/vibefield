@@ -562,6 +562,13 @@ public struct RoutedGeometryCommitted: Sendable, Equatable {
 /// on `STALE_REVISION`, `NOT_HOLDER`, `SEAT_HELD`). A refusal that names a
 /// revision and no holder says the seat is EMPTY; one that names neither says
 /// nothing about the seat at all (`RIGHT_MISSING`, a malformed caller).
+///
+/// Corrected 2026-10-19 (item 42): the cell now tells a displaced holder too.
+/// Every change of the seat reaches each leg that negotiated `geometry-events`
+/// (`RoutedGeometryState`), which this client advertises, and a face reads that
+/// announcement (`RoutedSessionState.seat`). The refusal stays the announcement
+/// the TAKE learns from: the belief its verbs are built on is fed by their own
+/// answers alone.
 public struct RoutedGeometryRefused: Sendable, Equatable {
   public let code: String
   public let geometryRevision: Int64?
