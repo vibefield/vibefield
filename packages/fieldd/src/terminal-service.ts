@@ -235,6 +235,9 @@ export interface TerminalServiceOptions {
   /** TC-S2 test seam: the cell-birth wait budget. Production defaults to the
    * cell's own hello deadline (the genned CELL_SUPERVISION authority). */
   birthWaitMs?: number;
+  /** WG-E6 test seam: how long one cell may take to connect and to list its
+   * sessions for `floorCensus`. Production uses CENSUS_CELL_TIMEOUT_MS. */
+  censusTimeoutMs?: number;
   /**
    * TM-2 (TM-D2) — this cell's doors AS A TAILNET CLIENT DIALS THEM, or
    * `undefined` when they are not published.
@@ -386,6 +389,37 @@ interface CellClient {
  * that close its husk (see `bornIn`); the inventory places a husk long before. */
 const BORN_IN_EXIT_GRACE_MS = 30_000;
 
+/** WG-E6 — how long one cell may take to connect, and then to list its
+ * sessions, before the floor census counts it as holding sessions. A healthy
+ * cell answers in milliseconds; the bound only keeps a stalled one from
+ * holding the supervisor's decision open. fieldd's alone: no other plane reads
+ * it. */
+const CENSUS_CELL_TIMEOUT_MS = 2_000;
+
+/** WG-E6 (`draft/thinking-floor-wedge.md` §4, §5.3) — what a restart of the
+ * floor would end, read by `TerminalService.floorCensus`. The supervisor's
+ * `FloorCensus` is this shape. */
+export interface TerminalCensus {
+  /** the session ids the floor holds, sorted: every live session a cell
+   * listed, every session born here and not observed yet, and, for a cell that
+   * did not answer, the sessions last observed on it — the most this fieldd
+   * knows, which is what a person's consent is matched against */
+  live: string[];
+  /** every cell answered. false is "unknown": it counts as holding sessions,
+   * so no automatic step may take it for an empty floor */
+  complete: boolean;
+  /** `live` names every session this fieldd knows the floor may hold: every
+   * cell answered, or the inventory was observed, so a silent cell's last
+   * observed sessions stand in for it. false — a silent cell and no
+   * observation yet — grounds no consent: `[]` would name sessions nothing has
+   * seen, as `closeToBirthsForStop`'s `unobserved` refuses for an update */
+  grounded: boolean;
+  /** births still in flight as it was read: any is a refusal for a stop */
+  births: number;
+  /** reopens births if this census closed them; once, and idempotent after */
+  release(): void;
+}
+
 export class TerminalService {
   private readonly logger: Logger;
   private terminals: TerminalInfo[] = [];
@@ -413,9 +447,12 @@ export class TerminalService {
    * births still in flight, so a session the person never saw cannot end without their consent. */
   private readonly bornUnseen = new Set<string>();
   private birthsInFlight = 0;
-  /** Set while a consented stop is deciding or underway: `create`/`spawn` refuse instead of birthing a session the
-   * consent never named. */
-  private closedToBirths = false;
+  /** Set while a consented stop for an update is deciding or underway: `create`/`spawn` refuse instead of birthing
+   * a session the consent never named. */
+  private closedForUpdate = false;
+  /** WG-E6 — floor censuses taken for a restart and not released yet (the wedge ladder's, the person's): while any
+   * holds, `create`/`spawn` refuse, so nothing the census did not count is born before the floor stops. */
+  private restartHolds = 0;
   /** Which floor observation `terminals` came from — undefined until the first
    * one applies, which is exactly the state `list`/`get` refuse in. */
   private lastObservation: TerminalObservation | undefined;
@@ -1782,7 +1819,7 @@ export class TerminalService {
    * caller — a session is being born the consent never named). undefined = the inventory was never observed, which
    * the caller refuses as `unobserved`: fieldd may not claim a floor holds nothing it has not seen. */
   closeToBirthsForStop(): { live: string[]; births: number } | undefined {
-    this.closedToBirths = true;
+    this.closedForUpdate = true;
     if (this.lastObservation === undefined) return undefined;
     const live = new Set(this.terminals.map((terminal) => terminal.sessionId));
     for (const sessionId of this.bornUnseen) live.add(sessionId);
@@ -1791,17 +1828,108 @@ export class TerminalService {
 
   /** The stop was refused: births are welcome again. */
   reopenToBirths(): void {
-    this.closedToBirths = false;
+    this.closedForUpdate = false;
+  }
+
+  /** WG-E6 (`draft/thinking-floor-wedge.md` §4, §5.3) — the floor census: what a restart of the floor would end,
+   * read from the CELLS over their own control sockets at decision time. Never from the observed inventory: that
+   * reaches fieldd over the floor's mgmt path, which is the path that has stalled, so it is frozen for the window.
+   *
+   * The cells asked are the route rows fieldd last saw (`cells`, kept across a link outage on purpose), or the
+   * legacy mirror when the floor publishes no routes. Each is dialled with a client of its own, closed after:
+   * a redial clears the link's routes, and the cached clients are pruned against those. A cell that does not
+   * answer inside `censusTimeoutMs` makes the census incomplete, which counts as holding sessions; the sessions
+   * last observed on it stand in for it in `live`; before the inventory's first observation nothing can stand in,
+   * and the census is not `grounded`. Sessions this service birthed and the floor has not listed yet are added. A
+   * floor whose cells are unknown altogether (no rows, no mirror) is incomplete too, and every session last observed
+   * stands in.
+   *
+   * `forStop` closes the service to births first, as `closeToBirthsForStop` does for an update, and holds it
+   * closed until `release()`. Without it the read is a count, and births stay open. */
+  async floorCensus(forStop: boolean): Promise<TerminalCensus> {
+    if (forStop) this.restartHolds += 1;
+    let released = !forStop;
+    const release = (): void => {
+      if (released) return;
+      released = true;
+      this.restartHolds -= 1;
+    };
+    const targets: Array<{ key: string; endpoints: TerminalEndpoints }> =
+      this.cells?.map((row) => ({ key: row.cellBootId, endpoints: row.endpoints })) ??
+      (this.opts.link.terminalEndpoints === undefined
+        ? []
+        : [{ key: LEGACY_CELL_KEY, endpoints: this.opts.link.terminalEndpoints }]);
+    let complete = this.cells !== undefined || targets.length > 0;
+    const live = new Set<string>();
+    const listed = await Promise.all(
+      targets.map((target) => this.liveSessionsOf(target.endpoints)),
+    );
+    for (const [index, target] of targets.entries()) {
+      const sessions = listed[index];
+      if (sessions !== undefined) {
+        for (const sessionId of sessions) live.add(sessionId);
+        continue;
+      }
+      complete = false;
+      for (const terminal of this.terminals) {
+        const cell = terminal.cell?.cellBootId;
+        if (cell === undefined || cell === target.key) live.add(terminal.sessionId);
+      }
+    }
+    if (targets.length === 0 && !complete) {
+      // no cell to ask at all: every session last observed stands in
+      for (const terminal of this.terminals) live.add(terminal.sessionId);
+    }
+    for (const sessionId of this.bornUnseen) live.add(sessionId);
+    const grounded = complete || this.lastObservation !== undefined;
+    return { live: [...live].sort(), complete, grounded, births: this.birthsInFlight, release };
+  }
+
+  /** WG-E6 — the sessions one cell holds that have not exited (a husk ends nothing), read over a control
+   * connection of its own; undefined when the cell does not answer. */
+  private async liveSessionsOf(endpoints: TerminalEndpoints): Promise<string[] | undefined> {
+    const timeoutMs = this.opts.censusTimeoutMs ?? CENSUS_CELL_TIMEOUT_MS;
+    const client = new GhostteaAutomationClient(
+      {
+        controlSocket: endpoints.controlSocket,
+        frameSocket: endpoints.frameSocket,
+        authToken: endpoints.authToken,
+      },
+      { clientBuild: "vibefield-fieldd", connectTimeoutMs: timeoutMs, requestTimeoutMs: timeoutMs },
+    );
+    try {
+      await client.connect();
+      const sessions = await client.listSessions();
+      return sessions.filter((session) => !session.exited).map((session) => session.id);
+    } catch (error) {
+      this.logger.info(
+        "fieldd.terminal.census_cell_silent",
+        "A terminal cell did not answer the floor census; it counts as holding sessions",
+        { error: errorMessage(error) },
+      );
+      return undefined;
+    } finally {
+      client.dispose();
+    }
   }
 
   private refuseWhileStopping(): void {
-    if (!this.closedToBirths) return;
-    throw new RpcCallError(
-      "UNAVAILABLE",
-      "the terminal floor is stopping for an app update; no new session can start until it restarts",
-      true,
-      { service: "terminal", state: "restarting" },
-    );
+    if (this.closedForUpdate) {
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "the terminal floor is stopping for an app update; no new session can start until it restarts",
+        true,
+        { service: "terminal", state: "restarting" },
+      );
+    }
+    if (this.restartHolds > 0) {
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "the terminal floor is being restarted; no new session can start until it is back",
+        true,
+        { service: "terminal", state: "restarting" },
+      );
+    }
   }
 
   /** The refusal `list`/`get` owe a caller before the first snapshot applies. */

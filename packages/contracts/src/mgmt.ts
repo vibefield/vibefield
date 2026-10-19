@@ -278,8 +278,9 @@ export type NativeShutdownResult = z.infer<typeof NativeShutdownResult>;
  *    closed, plus every session born and not yet seen; a cell that does not
  *    answer counts as holding sessions. Empty ⇒ the automatic restart
  *    (unplanned, so never announced). Not empty ⇒ the link stays
- *    `unresponsive` with its numbers (`NativeLinkHealth`) and the person's
- *    consented restart is offered (`system.native.restart {sessions}`, WG-D5).
+ *    `unresponsive` with its numbers (`NativeLinkHealth`), the census is read
+ *    again every WEDGE_RECOUNT_MS, and the person's consented restart is
+ *    offered (`system.native.restart {sessions}`, WG-D5).
  *  - WEDGE_HEADLESS_MS — with live sessions and nobody to ask (no window, or
  *    the phone alone), fieldd waits while the floor's tick flows: that is a
  *    reader or dispatch wedge, and the cells run on. Once replies AND the tick
@@ -322,6 +323,11 @@ export const NATIVE_SUPERVISION = {
    * tick that stopped a moment ago is no floor stalled whole, however long the
    * replies have been silent */
   WEDGE_HEADLESS_MS: 600_000,
+  /** past the bound, while the floor is held, the census is read again this
+   * often (a count: it closes no births). Sessions that end on a held floor let
+   * the empty-floor restart run, and the health block's count stays current.
+   * Not one of WG-D2's ruled numbers: fieldd's cadence for a reading */
+  WEDGE_RECOUNT_MS: 10_000,
   /** WG-D1 — wedge restarts' own intensity bound: past WEDGE_RESTART_MAX in
    * WEDGE_RESTART_WINDOW_MS the link is `gone`, with the restart affordance,
    * so a floor that wedges on every boot is never killed once a minute forever */

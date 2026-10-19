@@ -1,6 +1,6 @@
 // WP12 L2b (`build-wp12-updater.md` §9 R2; the PM's ruling 2026-10-15 12:20Z) — `NativeSupervisor.stopForUpdate`,
 // against a scripted link: ONE function, in this order — suppress respawn → prepareRestart → shutdown → a bounded
-// wait for the management socket to close → the kill ladder only if this fieldd holds a pid and the wait passed.
+// wait for the management socket to close → the drain ladder only if this fieldd holds a pid and the wait passed.
 // The ADOPTED case (no pid) is the update path's by construction: no ladder, and the socket closing is the witness.
 // The real floor's half is the kill matrix's rows WP12-R2a/R2b.
 import { EventEmitter } from "node:events";
@@ -60,7 +60,9 @@ function rig(opts: { pid?: number; dieOn?: NodeJS.Signals } = {}) {
   return { link, sup, kills, spawns };
 }
 
-const FAST = { closeWaitMs: 60, rungMs: 40 };
+/** The rungs, scaled down. `drainWaitMs` is the drain ladder's wait between SIGTERM and SIGKILL
+ * (production: NATIVE_SUPERVISION.KILL_DRAIN_WAIT_MS). */
+const FAST = { closeWaitMs: 60, rungMs: 40, drainWaitMs: 40 };
 
 describe("NativeSupervisor.stopForUpdate (WP12 L2b)", () => {
   it("an ADOPTED floor (no pid): prepareRestart, then shutdown; the socket closing is the witness; no ladder", async () => {

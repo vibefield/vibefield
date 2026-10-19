@@ -217,7 +217,9 @@ const fakeRevision = (prefix: string, contents: string): string =>
  * those before the wire). Default 16 — the 0.10.0 floor.
  * `loader` (GT-7) is what this floor's loader says about a text;
  * `concurrentWrite` lands another writer's text just before the first
- * replace is answered — the race an early revision check cannot close. */
+ * replace is answered — the race an early revision check cannot close.
+ * `listed` (WG-E6) is what list-sessions answers; by default the one session
+ * this floor creates. */
 async function startFakeFloor(
   opts: {
     dieOnTerminate?: boolean;
@@ -232,6 +234,7 @@ async function startFakeFloor(
     protocolMinor?: number;
     loader?: FakeLoader;
     concurrentWrite?: string;
+    listed?: Array<Record<string, unknown>>;
   } = {},
 ): Promise<{
   endpoints: TerminalEndpoints;
@@ -348,7 +351,7 @@ async function startFakeFloor(
             reason: null,
           });
         } else if (msg.type === "list-sessions") {
-          reply({ type: "sessions", sessions: [fakeSession(createdSessionId)] });
+          reply({ type: "sessions", sessions: opts.listed ?? [fakeSession(createdSessionId)] });
         } else if (msg.type === "terminate" && opts.dieOnTerminate === true) {
           sock.destroy(); // the floor dies mid-call
         } else if (msg.type === "terminate") {
@@ -4227,5 +4230,151 @@ describe("SB-2 — fieldd's record of a bound shell: the answer, the roster, a r
     ).toEqual([[bound.sessionId, "work"]]);
     for (const secret of [...Object.keys(BINDING), ...Object.values(BINDING)])
       expect(text).not.toContain(secret);
+  });
+});
+
+/** WG-E6 — a link whose routes can drop out from under the service, as a
+ * redial's cleared hello does, over an inventory the row publishes once. */
+function censusLink(
+  routes: TerminalRouteSnapshot | undefined,
+  inventory: Array<Record<string, unknown>> = [],
+): { link: TerminalServiceOptions["link"]; drop: () => void } {
+  const listeners: Array<() => void> = [];
+  let current = routes;
+  return {
+    link: {
+      subscribe: async () => ({ snapshot: observed(inventory) }),
+      get terminalEndpoints() {
+        if (current === undefined) return undefined;
+        return terminalCreateTarget(current, "interactive")?.endpoints;
+      },
+      get terminalRoutes() {
+        return current;
+      },
+      on: (_event: "terminal-endpoints", fn: () => void) => listeners.push(fn),
+    },
+    drop: () => {
+      current = undefined;
+      for (const fn of listeners) fn();
+    },
+  };
+}
+
+function censusService(
+  link: TerminalServiceOptions["link"],
+  opts: Omit<TerminalServiceOptions, "link"> = {},
+): TerminalService {
+  const service = new TerminalService({ link, censusTimeoutMs: 300, ...opts });
+  cleanup.push(() => service.dispose());
+  return service;
+}
+
+// WG-E6 (draft/thinking-floor-wedge.md §4, §5.3) — the floor census the wedge
+// ladder and the person's restart decide on: read from the CELLS at decision
+// time, never from the observed inventory the stalled mgmt path froze.
+describe("TerminalService.floorCensus — what a restart of the floor would end (WG-E6)", () => {
+  it("reads the cells themselves: their live sessions, never a husk, plus births not yet observed", async () => {
+    const floor = await startFakeFloor({
+      listed: [fakeSession("live-1"), { ...fakeSession("husk-1"), exited: true }],
+    });
+    const { link } = censusLink(cellRoutes(1, "cell-a", floor.endpoints));
+    const service = censusService(link);
+    await service.ensureStarted();
+
+    const census = await service.floorCensus(false);
+    expect(census).toMatchObject({ live: ["live-1"], complete: true, births: 0 });
+    census.release();
+  });
+
+  it("a census for a stop closes births until it is released; a count leaves them open", async () => {
+    const floor = await startFakeFloor({ listed: [] });
+    const { cat } = programs();
+    const { link } = censusLink(cellRoutes(1, "cell-a", floor.endpoints));
+    const service = censusService(link);
+    await service.ensureStarted();
+
+    const count = await service.floorCensus(false);
+    await service.create({ shell: cat }); // a count closes nothing
+    count.release();
+
+    const forStop = await service.floorCensus(true);
+    const refused = await refusalOf(service.create({ shell: cat }));
+    expect(refused).toMatchObject({
+      kind: "UNAVAILABLE",
+      retryable: true,
+      details: { service: "terminal", state: "restarting" },
+    });
+    forStop.release();
+    forStop.release(); // once, and idempotent after
+    await expect(service.create({ shell: cat })).resolves.toMatchObject({
+      sessionId: floor.createdSessionId,
+    });
+    // a birth this service made and the floor has not listed yet counts
+    const after = await service.floorCensus(false);
+    expect(after.live).toEqual([floor.createdSessionId]);
+  });
+
+  it("a redial's cleared routes do not blind it: it asks the cells fieldd last saw", async () => {
+    const floor = await startFakeFloor({ listed: [fakeSession("live-1")] });
+    const { link, drop } = censusLink(cellRoutes(1, "cell-a", floor.endpoints));
+    const service = censusService(link);
+    await service.ensureStarted();
+    drop(); // the mgmt link was redialled and its hello has not answered
+
+    const census = await service.floorCensus(false);
+    expect(census).toMatchObject({ live: ["live-1"], complete: true });
+  });
+
+  it("a cell that does not answer makes it unknown, and the sessions last observed there stand in", async () => {
+    const floor = await startFakeFloor({ stall: ["list-sessions"] });
+    const { link } = censusLink(cellRoutes(1, "cell-a", floor.endpoints), [
+      { sessionId: "seen-1", pid: 42, cell: cellTag(1, "cell-a", "interactive") },
+      { sessionId: "elsewhere", pid: 43, cell: cellTag(2, "cell-b", "agent") },
+    ]);
+    const service = censusService(link);
+    await service.ensureStarted();
+
+    const census = await service.floorCensus(true);
+    expect(census.complete, "a silent cell counts as holding sessions").toBe(false);
+    expect(census.live).toEqual(["seen-1"]);
+    expect(census.grounded, "the last observation stands in: a reading grounds it").toBe(true);
+    census.release();
+  });
+
+  it("a silent cell before the inventory's first observation grounds nothing: no stand-in, no consent", async () => {
+    const floor = await startFakeFloor({ stall: ["list-sessions"] });
+    const { link } = censusLink(cellRoutes(1, "cell-a", floor.endpoints), [
+      { sessionId: "unseen-1", pid: 42, cell: cellTag(1, "cell-a", "interactive") },
+    ]);
+    const service = censusService(link); // never started: the inventory was never observed
+
+    const census = await service.floorCensus(true);
+    expect(census).toMatchObject({ live: [], complete: false, grounded: false });
+    census.release();
+  });
+
+  it("a floor whose cells are not known at all is unknown, and what was observed stands in; a floor with no engine holds nothing", async () => {
+    const unknown = censusService(censusLink(undefined).link);
+    expect(await unknown.floorCensus(false)).toMatchObject({
+      live: [],
+      complete: false,
+      grounded: false,
+    });
+
+    const seenOne = { sessionId: "seen-1", pid: 42, cell: cellTag(1, "cell-a", "interactive") };
+    const seen = censusService(censusLink(undefined, [seenOne]).link);
+    await seen.ensureStarted();
+    expect(await seen.floorCensus(false)).toMatchObject({
+      live: ["seen-1"],
+      complete: false,
+      grounded: true,
+    });
+
+    const engineless = censusService(censusLink({ revision: 3, cells: [] }).link);
+    expect(await engineless.floorCensus(false)).toMatchObject({
+      live: [],
+      complete: true,
+      grounded: true,
+    });
   });
 });

@@ -74,6 +74,13 @@ describe("NATIVE_SUPERVISION — the ladder's bounds (WG-D1; WG-D2's first value
     expect(t.KILL_DRAIN_WAIT_MS).toBeGreaterThan(2_000);
   });
 
+  it("counts a held floor again many times before its headless deadline", () => {
+    // the recount is what lets sessions that end on a held floor reach the
+    // empty-floor restart, and what keeps the health block's count current
+    expect(t.WEDGE_RECOUNT_MS).toBeGreaterThan(0);
+    expect(t.WEDGE_RECOUNT_MS).toBeLessThan(t.WEDGE_HEADLESS_MS - t.WEDGE_CONFIRM_MS);
+  });
+
   it("reads a tick three of the floor's intervals old as no tick", () => {
     expect(NATIVE_FLOOR_TICK.INTERVAL_MS).toBe(1_000);
     expect(t.TICK_STALE_MS).toBe(3 * NATIVE_FLOOR_TICK.INTERVAL_MS);

@@ -93,6 +93,7 @@ import {
   LOG_STREAMS,
   METHODS,
   type MeshSyncPosture,
+  NATIVE_SUPERVISION,
   type NativeHealth,
   type NativeLastExit,
   type NativeLinkState,
@@ -206,6 +207,7 @@ import { EgressRoutes, FloorEgress, resolveEgressPath } from "./egress";
 import { EgressCellRewriter } from "./egress-cell-rewriter";
 import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
+import { platformOsWaits } from "./floor-os-waits";
 import {
   FREEWAY_SERVE_ID,
   FreewayApprover,
@@ -235,7 +237,12 @@ import { MESH_BUS_CARRIES_CONTENT } from "./mesh-bus";
 import { MeshClient, meshNodeUp, type ServeSpec } from "./mesh-client";
 import { MeshLaneLink } from "./mesh-lane";
 import { NativeLink, RpcCallError } from "./native-link";
-import { NativeSupervisor } from "./native-supervisor";
+import {
+  type FloorCensus,
+  type NativeSupervisionTimings,
+  NativeSupervisor,
+  UNKNOWN_FLOOR_CENSUS,
+} from "./native-supervisor";
 import { PeerLink } from "./peer-link";
 import { RegistryInstallService } from "./plugin-install";
 import { PluginModuleAuthority } from "./plugin-modules";
@@ -354,6 +361,9 @@ export interface FielddConfig {
    * the supervisor can respawn a dead floor. Absent = adopted/external floor:
    * no respawn authority, and the supervisor says so instead of guessing. */
   nativeSpawner?: () => number | undefined;
+  /** WG-D1 test seam: the floor supervision's timings, over NATIVE_SUPERVISION
+   * (the kill matrix runs the wedge ladder's rows in seconds, not minutes). */
+  nativeSupervisionTimings?: Partial<NativeSupervisionTimings>;
   /** AR-0 — the rosettad binary to supervise for this user's agent index
    * (FIELDD_ROSETTAD_BIN). Absent or empty = no index daemon; health says so. */
   rosettadBin?: string;
@@ -770,6 +780,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   });
   // TC-D1/TC-D2 (terminal-custody TC-S1): fieldd owns floor respawn + wedge
   // detection. Constructed before connect() so no lifecycle event is missed.
+  // WG-D1 — the wedge ladder's two late-bound witnesses: the census reads the
+  // terminal service's cells, and presence the window tokens; both are built
+  // further down this boot, so the supervisor reads them through these refs
+  // (unknown, and nobody, until they exist).
+  let floorCensus: ((forStop: boolean) => Promise<FloorCensus>) | null = null;
+  let windowPresent: (() => boolean) | null = null;
   const supervisor = new NativeSupervisor({
     link: native,
     probeAlive: () => nativeAlive(nativeMgmtEndpoint(config.dataDir)),
@@ -781,7 +797,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         return false; // already gone — the ladder's job is done
       }
     },
+    // the drain ladder's exit witness: signal 0 asks the kernel and delivers nothing
+    pidAlive: (pid) => {
+      try {
+        return process.kill(pid, 0);
+      } catch (error) {
+        return (error as NodeJS.ErrnoException).code === "EPERM";
+      }
+    },
+    census: (forStop) => floorCensus?.(forStop) ?? Promise.resolve(UNKNOWN_FLOOR_CENSUS),
+    // WG-E5 — the floor's OS waits where the platform says them (Linux procfs, WG-D3)
+    osWaits: platformOsWaits(),
+    personPresent: () => windowPresent?.() ?? false,
     ...(config.nativePid !== undefined ? { nativePid: config.nativePid } : {}),
+    ...(config.nativeSupervisionTimings !== undefined
+      ? { timings: { ...NATIVE_SUPERVISION, ...config.nativeSupervisionTimings } }
+      : {}),
     logger: logger.child({ component: "native_supervisor" }),
   });
   // AR-0 — one rosettad per user root, fieldd-lifetime (AR-D6 v1). Constructed
@@ -1710,6 +1741,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     native.on("connected", () => void terminals.ensureStarted());
     await terminals.ensureStarted();
+    // WG-E6 — the wedge ladder's census reads the cells through this service
+    floorCensus = (forStop) => terminals.floorCensus(forStop);
     // AR-3 — lend the floor to the agent runtime, and feed the fold: the
     // floor's exit facts become puppeteer's `handleProcessExit` (or verify a
     // login pane's persona), every inventory joins the rows to their cells
@@ -3529,6 +3562,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       string,
       ReturnType<typeof RendererParticipantIdentity.parse>
     >();
+    // WG-D1 — a person is here to ask while a window holds a live token: the
+    // headless clause waits on nobody else, and the person's restart is
+    // offered only where one could press it
+    windowPresent = () => windowTokenIds.size > 0;
     const requireShellWindowTokenAuthority = (ctx: {
       transport: string;
       principal: { kind: string };
