@@ -12,12 +12,12 @@
  * Since round 3's W4 the deck's edge is a PLACE: on a stage whose edge moves the
  * sheet stands at `--vf-godview-deck-rest` (naming no head) plus the shift, and
  * the monitor's field ends 12 above the edge as last set
- * (`--vf-godview-field-foot`), never above its floor. The shift moves the
- * sheet, never the monitor's basis.
+ * (`--vf-godview-field-foot`), never above where it ends at rest (James,
+ * 2026-10-19). The shift moves the sheet, never the monitor's basis.
  *
  * Since N15 (a) (James 2026-10-11; built 2026-10-12) rest is no tuning: it is
  * the drawing's share of the stage — 300 of its 780, 5/13 — never above the
- * floor, 232 (the field's floor and its 12 gap), and the monitor's basis is
+ * floor, 232 (the field's least height, 220, and its 12 gap), and the monitor's basis is
  * rest less the head's height. The `Monitor height` slider and its 35% / 170px
  * rule are gone, and this file moved with the rule.
  *
@@ -162,7 +162,6 @@ const PLACES = {
   "--vf-godview-field-foot": declared(godview, "--vf-godview-field-foot"),
   "--vf-godview-deck-rest-share": declared(tokens, "--vf-godview-deck-rest-share"),
   "--vf-godview-deck-rest-floor": declared(tokens, "--vf-godview-deck-rest-floor"),
-  "--vf-godview-deck-field-floor": declared(tokens, "--vf-godview-deck-field-floor"),
   "--vf-godview-deck-field-gap": declared(tokens, "--vf-godview-deck-field-gap"),
 };
 
@@ -288,9 +287,9 @@ describe("the bar's 40px go to the monitor, and the deck's edge rests where it d
       // the shift moves the sheet, whatever the head
       expect(after.edge, `shift ${shift}`).toBeCloseTo(before.edge, 6);
       expect(after.edge, `shift ${shift}`).toBeCloseTo(300 + shift, 6);
-      // the field ends 12 above the edge as set, never above its floor (220)
+      // the field ends 12 above the edge as set, never above where it ends at rest (288)
       expect(after.fieldFoot, `shift ${shift}`).toBeCloseTo(before.fieldFoot, 6);
-      expect(after.fieldFoot, `shift ${shift}`).toBeCloseTo(Math.max(220, 300 + shift - 12), 6);
+      expect(after.fieldFoot, `shift ${shift}`).toBeCloseTo(300 + Math.max(0, shift) - 12, 6);
       // the shift is taken back out (`measureDeckEdge`'s idempotence), so a re-measure after
       // the edge moved still finds the rest
       expect(after.geometry.restTop, `shift ${shift}`).toBeCloseTo(300, 6);
@@ -300,6 +299,27 @@ describe("the bar's 40px go to the monitor, and the deck's edge rests where it d
     const held = column(UNDER_THE_HEAD, { shift: 200, set: 0 });
     expect(held.edge).toBeCloseTo(500, 6);
     expect(held.fieldFoot).toBeCloseTo(288, 6);
+  });
+
+  it("never squeezes the field past rest: an edge set above it slides the sheet over the field rest gave (James, 2026-10-19)", () => {
+    // "when at the default terminal pane height, the swarm area is at its min height, so when user
+    // move the terminal pane further up, no more squeezing the swarm bounds"
+    for (const window of [780, 1040, 520]) {
+      const rest = column(UNDER_THE_HEAD, { window });
+      // a step up, the fill line, and the window's top (a held edge let go there)
+      for (const set of [-1, DECK_FILL_LINE - rest.edge, -rest.edge]) {
+        const up = column(UNDER_THE_HEAD, { shift: set, window });
+        expect(up.fieldFoot, `${window}/${set}`).toBeCloseTo(rest.fieldFoot, 6);
+      }
+      // at the fill line the sheet stands over the field
+      const filled = column(UNDER_THE_HEAD, { shift: DECK_FILL_LINE - rest.edge, window });
+      expect(filled.edge, `${window}`).toBeLessThan(filled.fieldFoot);
+      // down from rest the field grows with the edge, 12 above it
+      const down = column(UNDER_THE_HEAD, { shift: 96, window });
+      expect(down.fieldFoot, `${window}`).toBeCloseTo(down.edge - 12, 6);
+    }
+    // the least field is rest's floor less its gap, 220: the shortest stage, with the edge up
+    expect(column(UNDER_THE_HEAD, { shift: -100, window: 400 }).fieldFoot).toBe(220);
   });
 
   it("leaves the edge's bounds where they were: the head's reserve above, 120 above the foot below", () => {

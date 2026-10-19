@@ -102,25 +102,23 @@
   --deck-frame: color-mix(in srgb, var(--deck-ink) var(--deck-frame-ink), var(--deck-ground));
   /* THE DECK'S PLACE (DESIGN.md §8 "Rest"; round 3, L8a, W4 and N15 (a)). Its
      top at rest, from the stage's top: the drawing's share of the stage — 300
-     of its 780 — never above the floor, 232 (the field's floor and its gap) —
-     a place in the stage that names no head, so it holds when the head's band
-     goes. And the monitor's field foot: 12 above the edge as last SET (the
-     edge writes `--vf-godview-field-shift` once per change, never per frame of
-     a drag), never above the field's floor, 220 from the window's top. Both
-     resolve the share's percent where they are used: a flex basis and a top,
-     each against the stage's height. (Until N15 rest was the head's 40 and a
-     tuned `Monitor height`, 35% above a 170 floor.) */
+     of its 780 — never above the floor, 232 (the field's least height, 220,
+     and its gap) — a place in the stage that names no head, so it holds when
+     the head's band goes. And the monitor's field foot: 12 above the edge as
+     last SET (the edge writes `--vf-godview-field-shift` once per change,
+     never per frame of a drag), never above where it stands at rest — an edge
+     set above rest is a shift below zero, and counts as none. Both resolve the
+     share's percent where they are used: a flex basis and a top, each against
+     the stage's height. (Until N15 rest was the head's 40 and a tuned
+     `Monitor height`, 35% above a 170 floor.) */
   --vf-godview-deck-rest: max(var(--vf-godview-deck-rest-share), var(--vf-godview-deck-rest-floor));
   /* What the well keeps clear under the panes: its 8, the covers' reserve
      inside the cover (88, FC-D15) — where the Maximize readout centres. */
   --vf-godview-panes-foot: 8px;
-  --vf-godview-field-foot: max(
-    var(--vf-godview-deck-field-floor),
-    calc(
-      var(--vf-godview-deck-rest) +
-      var(--vf-godview-field-shift, 0px) -
-      var(--vf-godview-deck-field-gap)
-    )
+  --vf-godview-field-foot: calc(
+    var(--vf-godview-deck-rest) +
+    max(0px, var(--vf-godview-field-shift, 0px)) -
+    var(--vf-godview-deck-field-gap)
   );
   background: color-mix(
     in srgb,
@@ -473,11 +471,11 @@
 }
 
 /* THE MONITOR MAKES ROOM (round 3, W4; DESIGN.md §8). On a stage whose edge
-   moves, the field ends 12 above the edge as it was last set and is never
-   shorter than its floor — measured once per change: a held edge moves the
-   sheet and its terminals, never the field. Up past the floor, the sheet
-   slides over the field, the bodies still moving beneath. The head's height
-   is the basis's to give back, as above. */
+   moves, the field ends 12 above the edge as it was last set and never above
+   where it ends at rest — measured once per change: a held edge moves the
+   sheet and its terminals, never the field. Up past rest, the sheet slides
+   over the field, the bodies still moving beneath, and the swarm keeps its
+   bounds. The head's height is the basis's to give back, as above. */
 .vf-godview[data-godview-deck-edge] .vf-godview-monitor-stage {
   flex-basis: calc(var(--vf-godview-field-foot) - var(--vf-godview-head-height, 40px));
 }

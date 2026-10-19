@@ -233,14 +233,13 @@
   --vf-godview-deck-control-width: 30px;
   --vf-godview-deck-control-height: 24px;
   --vf-godview-deck-control-radius: 8px;
-  /* the monitor's field ends this far above the deck's edge, and is never
-     shorter than the floor */
+  /* the monitor's field ends this far above the deck's edge, and never above
+     where it ends at rest */
   --vf-godview-deck-field-gap: 12px;
-  --vf-godview-deck-field-floor: 220px;
   /* §8 "Rest" (N15 (a)): the deck rests at the drawing's share of the stage —
-     300 of its 780 — never above the floor, the field's floor and its gap (so
-     at rest the field always ends the gap above the edge). The share's percent
-     resolves where it is used, against the stage's height. */
+     300 of its 780 — never above the floor, the field's least height, 220, and
+     its gap (so at rest the field always ends the gap above the edge). The
+     share's percent resolves where it is used, against the stage's height. */
   --vf-godview-deck-rest-share: calc(100% * 5 / 13);
   --vf-godview-deck-rest-floor: 232px;
   /* §8 "Godview's head — Stories" (GV-D1): the stage runs under the head, and a

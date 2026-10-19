@@ -15,8 +15,10 @@
 //       terminals resize with it, rows only).
 //   `--vf-godview-field-shift` — the edge as last SET (round 3, W4: "the
 //       monitor makes room"): the monitor's field ends 12 above it, never above
-//       220, measured once per change — a let-go, a key, a double-click, a
-//       window that moved the bounds — and never once per frame of a drag.
+//       where it ends at rest, measured once per change — a let-go, a key, a
+//       double-click, a window that moved the bounds — and never once per frame
+//       of a drag. The edge as set is written whole, above rest too: the
+//       stylesheet counts a shift below zero as none.
 //
 // The stylesheet owns the layout. What lives here is the bounds, the outcome of
 // a let-go, and the viewer's memory of where they left the edge.

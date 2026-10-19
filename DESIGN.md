@@ -236,9 +236,12 @@ half that, 11) with `--vf-godview-deck-grip-pill-pad` 12px at each side; the gri
 maximized title bar `--vf-godview-deck-grip-hit` 168px; the two controls
 `--vf-godview-deck-control-width` / `--vf-godview-deck-control-height` /
 `--vf-godview-deck-control-radius` 30px / 24px / 8px; the monitor's field
-`--vf-godview-deck-field-gap` 12px and `--vf-godview-deck-field-floor` 220px; the deck's rest
-(N15 (a), §8) `--vf-godview-deck-rest-share` 5/13 of the stage — 300 of the drawing's 780 — and
-`--vf-godview-deck-rest-floor` 232px, the field's floor and its gap.
+`--vf-godview-deck-field-gap` 12px; the deck's rest (N15 (a), §8)
+`--vf-godview-deck-rest-share` 5/13 of the stage — 300 of the drawing's 780 — and
+`--vf-godview-deck-rest-floor` 232px, the field's least height, 220, and its gap. *(2026-10-19:
+the field's own floor, `--vf-godview-deck-field-floor` 220px, stood here. The field no longer
+shrinks past rest (§8 "The monitor makes room"), so rest's floor is the field's, and the token
+went.)*
 
 **How the wrapper is drawn** (GV-D7 the Lip and GV-D12 the groove, ruled 2026-10-02 and locked as
 drawn; built 2026-10-11; §8, the deck). **The frame** is the sheet's ground: the terminal's
@@ -257,8 +260,8 @@ minimize** (built 2026-10-11 with the terminals away; §8) is a control of
 in the terminal's ink at 64%; under the pointer the full ink on a 10% fill of it, 120ms on `ease`;
 under the keyboard's focus the pill's outline, 1px in text main, 1 off. It stands above the lip's
 hit, so the edge never takes its press. **The monitor's field** (built 2026-10-11, §8 "The monitor
-makes room") ends `--vf-godview-deck-field-gap` above the deck's edge as last set and is never
-shorter than `--vf-godview-deck-field-floor`. **The well**
+makes room"; re-ruled 2026-10-19) ends `--vf-godview-deck-field-gap` above the deck's edge as last
+set, and never above where it ends at rest. **The well**
 the panes sit in stands 8 in from the sheet's sides and its foot (inside the cover its foot is
 the window's reserve, §10), corners `--vf-godview-deck-well-radius` (a selected pane's 8, the 1
 gap, the 1 edge), the panes 1 in from it and clipped at 9; drawn OVER the panes, the edge as a 1px
@@ -1795,8 +1798,9 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   from the stage's top in the drawing's 780-tall window** — where the sheet's top corners clear
   the edges' slivers (332–428), so the lip is 300–330 and the panes 330–692 — **and the same
   share, 5/13, on any other height, never above 232** (L21): 5/13 is the ruling's 38.5% made
-  exact, the drawing's 300 of 780; 232 is the field's floor and its 12, so at rest the
-  monitor's field always ends 12 above the edge. A height the old slider stored is read past,
+  exact, the drawing's 300 of 780; 232 is the field's least height, 220, and its 12, so at rest
+  the monitor's field always ends 12 above the edge and is never shorter than 220. A height the
+  old slider stored is read past,
   removed from storage on load, and never applies. The floor holds below a 603-tall stage.
   Rest names no head: the monitor's basis is rest less the head's height, whatever stands above
   it. A deck that is up rises to **the fill line, 104 from the
@@ -1806,14 +1810,19 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   bottom edge, 40. The reach is a place in the window, the same with the bar above the monitor
   and without it, and a lip at 104 is clear of the head, its foot at 48, and of the app's drag
   strip, the window's top 52, §10.)*
-  **The monitor makes room** (round 3, W4; built 2026-10-11 — *replaced* "Downward the monitor
-  grows and the swarm's field grows with it; upward the monitor does NOT shrink — its tuned
-  height … is its minimum"): its field **ends 12 above the deck's edge** as it was last set and
-  is **never shorter than 220** from the window's top, measured once per change — a let-go, a
-  key, a double-click, a window that moves the bounds — and never once per frame of a drag: a
-  held edge moves the sheet and its terminals, not the field. With the edge higher than the
-  floor allows, the sheet slides OVER the field, the bodies still moving beneath. At rest the
-  field ends 12 above the sheet.
+  **The monitor makes room** (round 3, W4; built 2026-10-11; re-ruled 2026-10-19): its field
+  **ends 12 above the deck's edge** as it was last set, and **never above where it ends at
+  rest** — so at rest the field is at its least, and it only grows. An edge set below rest grows
+  it; an edge set above rest leaves it as it is at rest, and the sheet slides OVER the field, the
+  bodies still moving beneath. Measured once per change — a let-go, a key, a double-click, a
+  window that moves the bounds — and never once per frame of a drag: a held edge moves the sheet
+  and its terminals, not the field. At rest the field ends 12 above the sheet. *(2026-10-19,
+  James: "for the swarm squeeze issue, let's tackle this way, when at the default terminal pane
+  height, the swarm area is at its min height, so when user move the terminal pane further up,
+  no more squeezing the swarm bounds". Until then an edge set above rest shrank the field to 12
+  above it, down to a floor of 220 from the window's top, and the swarm's fit shrank the crowd
+  with it. The rule W4 replaced — "upward the monitor does NOT shrink — its tuned height … is
+  its minimum" — is this one, with rest in place of the tuned height that N15 retired.)*
   **A let-go decides** (round 3, W4; built 2026-10-11 — *replaced* "The deck keeps at least
   120px — above the cover's reserve, inside the cover"). Held, the edge follows the pointer and
   the terminals resize with it (rows only, so no reflow of history), on down past the line to 24

@@ -117,7 +117,8 @@ let paintedScale = 1;
 
 // `godview.css`'s rules, in the one place happy-dom measures: the sheet stands
 // at its edge — rest and the shift — and the monitor's field ends 12 above the
-// edge as last set, never above 220; the body is the panes in the well.
+// edge as last set, never above where it ends at rest; the body is the panes in
+// the well.
 function layout(this: Element): DOMRect {
   if (this.classList.contains("vf-godview")) return rect(0, windowHeight);
   // the stage's probe at the sheet's rest (`.vf-godview-deck-rest`)
@@ -125,7 +126,7 @@ function layout(this: Element): DOMRect {
   if (this.classList.contains("vf-godview-monitor-stage")) {
     // away, the monitor alone has the window down to the covers' reserve
     if (awayMonitor) return rect(monitorTop, windowHeight - monitorTop - 88);
-    const foot = Math.max(220, DECK_REST + fieldShift(this) - 12);
+    const foot = DECK_REST + Math.max(0, fieldShift(this)) - 12;
     return rect(monitorTop, foot - monitorTop);
   }
   const deckTop = DECK_REST + appliedShift(this);
@@ -1086,17 +1087,19 @@ describe("the deck sheet's stylesheet", () => {
   };
   const placed = ".vf-godview[data-godview-deck-edge]";
 
-  it("the monitor makes room: its field ends 12 above the edge as last SET — never above 220 — and draws no edge of its own", () => {
+  it("the monitor makes room: its field ends 12 above the edge as last SET — never above where it ends at rest — and draws no edge of its own", () => {
     // DESIGN.md §8 "The monitor makes room": measured once per change, never
     // per frame — so the field follows the edge as it was let go (the field
-    // shift, set by the edge at each change), never the held one.
+    // shift, set by the edge at each change), never the held one; and an edge
+    // set above rest (a shift below zero) counts as none (James, 2026-10-19:
+    // "no more squeezing the swarm bounds").
     const root = rule(".vf-godview");
     // rest (N15 (a)): the drawing's share of the stage, never above its floor
     expect(root).toMatch(
       /--vf-godview-deck-rest: max\(\s*var\(--vf-godview-deck-rest-share\),\s*var\(--vf-godview-deck-rest-floor\)\s*\);/,
     );
     expect(root).toMatch(
-      /--vf-godview-field-foot: max\(\s*var\(--vf-godview-deck-field-floor\),\s*calc\(\s*var\(--vf-godview-deck-rest\) \+\s+var\(--vf-godview-field-shift, 0px\) -\s*var\(--vf-godview-deck-field-gap\)\s*\)\s*\);/,
+      /--vf-godview-field-foot: calc\(\s*var\(--vf-godview-deck-rest\) \+\s+max\(0px, var\(--vf-godview-field-shift, 0px\)\) -\s*var\(--vf-godview-deck-field-gap\)\s*\);/,
     );
     const monitor = rule(`${placed} .vf-godview-monitor-stage`);
     expect(monitor).toContain(
@@ -1299,16 +1302,16 @@ describe("the deck sheet's stylesheet", () => {
     // the arithmetic: the monitor ends at the field's foot whatever the head,
     // and the deck's top never names the head
     const monitorFoot = (head: number, foot: number): number => head + (foot - head);
-    const deckTop = (stage: number, shift: number): number =>
-      Math.max((stage * 5) / 13, 232) + shift;
+    const rest = (stage: number): number => Math.max((stage * 5) / 13, 232);
+    const deckTop = (stage: number, shift: number): number => rest(stage) + shift;
     for (const [stage, shift] of [
       [780, 0],
       [520, 0],
       [780, 96],
     ] as const) {
-      const foot = Math.max(220, deckTop(stage, shift) - 12);
+      const foot = rest(stage) + Math.max(0, shift) - 12;
       expect(monitorFoot(0, foot)).toBe(monitorFoot(40, foot));
-      // 12 above the edge — at rest always, the floor being the field's and its gap
+      // 12 above the edge — at rest always, rest's floor being the field's least and its gap
       expect(deckTop(stage, shift) - foot, `${stage}/${shift}`).toBeCloseTo(12, 6);
     }
   });
@@ -1358,7 +1361,6 @@ describe("the wrapper's tokens (round 3 — DESIGN.md first, then tokens.css)", 
     ["--vf-godview-deck-control-height", "24px"],
     ["--vf-godview-deck-control-radius", "8px"],
     ["--vf-godview-deck-field-gap", "12px"],
-    ["--vf-godview-deck-field-floor", "220px"],
   ];
 
   it("each stands in tokens.css once, at the ruled drawing's value", () => {
