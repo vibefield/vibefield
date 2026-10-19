@@ -22,7 +22,7 @@ import {
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
 import { readUsersFile, rootAboveUserRoot } from "@vibefield/users";
-import { RpcCallError } from "./native-link";
+import { isNativeUnresponsive, RpcCallError } from "./native-link";
 
 // UA-3 — the link lifecycle (spec §7.1/§7.2): fieldd owns link.json, captures
 // the S1 self-whois login once the node is Running (never during bring-up),
@@ -360,6 +360,12 @@ export class LinkService extends EventEmitter {
           : (this.opts.probeMs ?? PROBE_MS),
       );
     } catch (error) {
+      // WG-D4 — the floor held unresponsive refused the ask before sending it:
+      // that is no reading of its node, which keeps what it was last read as
+      if (isNativeUnresponsive(error)) {
+        this.schedule(this.opts.probeMs ?? PROBE_MS);
+        return;
+      }
       const details =
         error instanceof RpcCallError && typeof error.details === "object" && error.details !== null
           ? (error.details as { state?: unknown; authUrl?: unknown })

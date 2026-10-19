@@ -6,7 +6,7 @@
 // (a lower bound on a timer is the one exception: timers never fire early).
 import { EventEmitter } from "node:events";
 import { performance } from "node:perf_hooks";
-import { NATIVE_SUPERVISION, type PingAck } from "@vibefield/contracts";
+import { NATIVE_SUPERVISION, NativeUnavailableDetails, type PingAck } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
 import { describe, expect, it } from "vitest";
 import type { FloorOsWaits } from "../src/floor-os-waits";
@@ -964,6 +964,40 @@ describe("NativeSupervisor — the person's restart (WG-D5)", () => {
       "an empty count is no decision here",
     ).toBe(true);
     expect(kills).toEqual([]);
+    sup.stop();
+  });
+});
+
+// WG-D4 — what the doors that ride the floor's mgmt path answer while it is held.
+describe("NativeSupervisor — the doors' refusal (WG-D4)", () => {
+  it("refuses while held, opens once a redialled hello answers, and closes again at the next miss", async () => {
+    const census = new FakeCensus();
+    census.live = ["s-1"]; // a floor that is held, never restarted
+    const { link, sup } = rig({ census, personPresent: true });
+    let openAfterHello: boolean | undefined;
+    sup.on("transition", (_state: string, detail: string) => {
+      if (detail.includes("hello was answered")) openAfterHello = sup.doorRefusal() === undefined;
+    });
+    link.up();
+    expect(sup.doorRefusal(), "an answering floor refuses nothing").toBeUndefined();
+    link.wedged = true;
+    await until(() => sup.state === "unresponsive");
+    const refusal = sup.doorRefusal();
+    expect(NativeUnavailableDetails.safeParse(refusal).success).toBe(true);
+    expect(refusal).toMatchObject({ service: "native", state: "unresponsive" });
+    expect(refusal?.detail).toContain("control path");
+    expect(typeof refusal?.since).toBe("number");
+
+    // the redial's hello is answered: a fresh reader works, and the doors'
+    // own re-arms on "connected" must pass
+    link.helloAnswers = true;
+    await until(() => openAfterHello !== undefined);
+    expect(openAfterHello).toBe(true);
+    // the floor still does not answer pings: the next miss closes them again
+    await until(() => sup.doorRefusal() !== undefined);
+    link.wedged = false;
+    await until(() => sup.state === "up");
+    expect(sup.doorRefusal()).toBeUndefined();
     sup.stop();
   });
 });

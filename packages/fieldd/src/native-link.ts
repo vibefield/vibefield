@@ -10,6 +10,7 @@ import {
   NATIVE_SUPERVISION,
   NativeLastExit,
   NativeTickParams,
+  NativeUnavailableDetails,
   PingAck,
   TerminalEndpoints,
   type TerminalRouteCell,
@@ -51,6 +52,13 @@ import { ackMacMatches, computeAckMac, computePairingMac, newPairingNonce } from
 //   connection it replaces stays open, reading only, until a hello answers on
 //   the new one — a hello the floor cannot answer supersedes nothing there, so
 //   the old connection's ticks and late replies keep arriving.
+//
+// WG-D4 — the doors: while the supervisor holds the floor unresponsive, a
+// request or subscription a product door makes (every method outside
+// `native.lifecycle.*`, the supervision's own) is refused at once with
+// UNAVAILABLE {service: "native", state: "unresponsive"} rather than waiting
+// out its deadline on a floor that is not answering. The daemon sets the gate
+// from the supervisor (`setDoorGate`); this link does not know the supervisor.
 
 export class RpcCallError extends Error {
   constructor(
@@ -140,6 +148,26 @@ const DEADLINE_EXEMPT: ReadonlySet<string> = new Set([PING_METHOD, HELLO_METHOD]
 
 /** What a call in flight answers when the supervisor redials the link (WG-E4). */
 const REDIALLED = "the management link was redialled";
+
+/** The supervision's own verbs (the hello, the heartbeat, the update stop, the
+ * floor's own streams): the door gate never holds these back (WG-D4). */
+const LIFECYCLE_PREFIX = "native.lifecycle.";
+
+/** WG-D4 — what the doors that ride the floor's mgmt path answer while the
+ * floor is held unresponsive; undefined = the floor is answering. */
+export type NativeDoorGate = () => NativeUnavailableDetails | undefined;
+
+/** WG-D4 — is this the refusal a door answers while the floor is held
+ * unresponsive (`NativeUnavailableDetails`)? It is the floor's state, and says
+ * nothing of its units' — a reader of the mesh node's state must not take its
+ * `state` for the node's. */
+export function isNativeUnresponsive(error: unknown): boolean {
+  return (
+    error instanceof RpcCallError &&
+    error.kind === "UNAVAILABLE" &&
+    NativeUnavailableDetails.safeParse(error.details).success
+  );
+}
 
 /** Large enough for the bounded 256-origin artifact snapshot, finite enough
  * that a compromised/native-buggy peer cannot grow fieldd without limit. */
@@ -258,6 +286,8 @@ export class NativeLink extends EventEmitter {
   private dialPromise: Promise<void> | null = null;
   /** WG-E4 — the connection a redial replaced, while no hello has answered since */
   private witness: Witness | null = null;
+  /** WG-D4 — set by the daemon from the floor's supervisor */
+  private doorGate: NativeDoorGate | null = null;
   /** WG-D6 — the pid stated in the last hello ack (`HelloAck.pid`), which
    * belongs to `sock`; `floorPid` reads it while that socket is paired */
   private pairedPid: number | undefined;
@@ -1104,7 +1134,29 @@ export class NativeLink extends EventEmitter {
   }
 
   async request(method: string, params: unknown, opts?: { deadlineMs?: number }): Promise<unknown> {
+    this.refuseAtTheDoor(method);
     return await this.rawRequest(method, params, undefined, opts?.deadlineMs);
+  }
+
+  /** WG-D4 — the doors' gate: what a product door's request or subscription
+   * answers while the floor's supervisor holds it unresponsive. null = no gate
+   * (every door waits out its own deadline, as an embedded link does). */
+  setDoorGate(gate: NativeDoorGate | null): void {
+    this.doorGate = gate;
+  }
+
+  /** WG-D4 — a door's call while the floor is held unresponsive is refused at
+   * once, retryable, and never sent; the supervision's own verbs pass. */
+  private refuseAtTheDoor(method: string): void {
+    if (method.startsWith(LIFECYCLE_PREFIX)) return;
+    const refusal = this.doorGate?.();
+    if (refusal === undefined) return;
+    throw new RpcCallError(
+      "UNAVAILABLE",
+      `the native floor is not answering its control path; ${method} was not sent`,
+      true,
+      refusal,
+    );
   }
 
   /** TC-D2 — the heartbeat probe. Rides the SAME control path as every real
@@ -1201,6 +1253,7 @@ export class NativeLink extends EventEmitter {
     params: unknown,
     onEvent: (payload: unknown, kind: SubEventKind) => void,
   ): Promise<{ snapshot: unknown; dispose: () => void }> {
+    this.refuseAtTheDoor(method);
     const key = this.nextSubKey++;
     const entry: SubEntry = { method, params, onEvent, buffering: true, queued: [] };
     this.subs.set(key, entry);

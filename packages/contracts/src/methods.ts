@@ -303,11 +303,26 @@ export const METHODS: MethodDef[] = [
   // TC-D1 (terminal-custody TC-S1) — the escalation affordance: after the
   // floor's respawn intensity trips to the permanent honest "gone" state, a
   // human overrides ON PURPOSE. Resets the intensity window and runs one
-  // respawn cycle. Same trust posture as system.shutdown: local admin only.
+  // respawn cycle. WG-D5 (`draft/thinking-floor-wedge.md` §11): the same verb
+  // is the person's restart of a floor held `unresponsive` past the bound. ONE
+  // verb, consent-shaped like `system.shutdown {native}`: params
+  // `SystemNativeRestartParams {sessions}` (the set the person consents to
+  // end; any difference from the census refuses PRECONDITION_FAILED {live}),
+  // answer `SystemNativeRestartResult {state, detail}` (mgmt.ts).
+  // The scope is `agents.manage`, fix7's for `system.index.restart` below: the
+  // window holds it, it is local-only, and it is in no tailnet preset and no
+  // plugin eligibility table. NEVER `native.admin` in a window's token, which
+  // would hand the window `system.shutdown` too. No terminal scope fits:
+  // `terminal.attach` is in the phone's preset, and `terminal.link` is the
+  // door for a printed link alone.
+  // *Corrected 2026-10-19 (WG-D5):* this row said "Same trust posture as
+  // system.shutdown: local admin only", under `native.admin` with no params.
+  // No window's token holds native.admin, so no window could call it, and a
+  // call ended every session on the floor without naming one.
   defineMethod({
     surface: "product",
     method: "system.native.restart",
-    scope: "native.admin",
+    scope: "agents.manage",
     idempotent: false,
     locality: "local",
   }),

@@ -96,6 +96,7 @@ import {
   NATIVE_SUPERVISION,
   type NativeHealth,
   type NativeLastExit,
+  type NativeLinkHealth,
   type NativeLinkState,
   PluginsDisableParams,
   PluginsEnableParams,
@@ -135,6 +136,8 @@ import {
   type ShellOpenExternalResult,
   SOCKETS,
   STORES,
+  SystemNativeRestartParams,
+  type SystemNativeRestartResult,
   SystemShutdownParams,
   type TerminalConfigDocument,
   TerminalConfigExportRequest,
@@ -543,12 +546,17 @@ export interface FielddHealth {
   nativeConnected: boolean;
   /** TC-D2 — fieldd's EXTERNAL judgment of the floor: "crashed" (socket gone)
    * and "unresponsive" (alive, not answering the control path) are different
-   * facts and the product says which one it means. */
-  nativeLink: NativeLinkState;
-  nativeLinkDetail: string;
+   * facts and the product says which one it means. WG-D1 — the contract's
+   * block (`NativeLinkHealth`, `NativeSupervisor.health()`): the state and its
+   * detail with their numbers — since when, the last reply's and tick's age,
+   * fieldd's own loop lag, the sessions at risk, the requests timed out,
+   * whether the person's restart is offered, and when the headless clause
+   * would proceed. */
+  nativeLink: NativeLinkHealth;
   /** the floor pid this fieldd can vouch for (spawned this boot or by the
    * supervisor since); null for adopted floors. product.json's record goes
-   * stale after the first respawn — this is the live answer. */
+   * stale after the first respawn — this is the live answer. The pid an
+   * adopted floor stated in its hello is `nativeLink.pid`. */
   nativePid: number | null;
   /** GT-2d — the build label the paired field-native gave in its hello ack.
    * The native plane outlives fieldd and is ADOPTED, so the floor answering
@@ -815,6 +823,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       : {}),
     logger: logger.child({ component: "native_supervisor" }),
   });
+  // WG-D4 — the doors that ride the floor's mgmt path answer UNAVAILABLE
+  // {service: "native", state: "unresponsive"} at once while it is held there
+  native.setDoorGate(() => supervisor.doorRefusal());
   // AR-0 — one rosettad per user root, fieldd-lifetime (AR-D6 v1). Constructed
   // here so health can project it from the first snapshot; STARTED only once
   // boot has committed (a boot rollback must never leave an index daemon
@@ -1097,6 +1108,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     diagnostics = diagnosticsService;
     await diagnosticsService.start();
     const mesh = new MeshClient(native);
+    // WG-D4 — while the floor was held unresponsive its doors were refused, a
+    // reconcile's among them: when it answers again, what they would have
+    // placed is placed now
+    let floorHeld = false;
+    supervisor.on("transition", (state: NativeLinkState) => {
+      if (state === "up" && floorHeld) void mesh.reconcile();
+      floorHeld = state === "unresponsive";
+    });
     // UA-3 — the link lifecycle (spec §7.1/§7.2): capture the S1 self-whois
     // login once the node is Running; the stored login is UA-4's trust
     // comparison value. link.json lives under this user's root.
@@ -1571,8 +1590,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         fdSoftLimit,
       },
       nativeConnected: native.connected,
-      nativeLink: supervisor.state,
-      nativeLinkDetail: supervisor.stateDetail,
+      nativeLink: supervisor.health(),
       nativePid: supervisor.currentPid ?? null,
       nativeBuild: native.nativeBuild ?? null,
       nativeLastExit: native.lastExit ?? null,
@@ -2009,13 +2027,35 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       setImmediate(() => callback());
       return { stopping: true, ...(nativeStop === undefined ? {} : { native: nativeStop }) };
     });
-    // TC-D1 — the escalation affordance: after respawn intensity trips to the
-    // permanent honest "gone", a human (or the shell's restart button)
-    // overrides ON PURPOSE. Resets the window, runs one respawn cycle.
-    api.register("system.native.restart", async () => {
-      logger.info("fieldd.native_supervisor.manual_restart", "system.native.restart received");
-      await supervisor.requestRestart();
-      return { state: supervisor.state, detail: supervisor.stateDetail };
+    // TC-D1 and WG-D5 — the person's restart of the floor, under `agents.manage`
+    // (the window holds it; local only; never plugin-eligible). On a floor that
+    // is down it is the escalation after the respawn intensity trips to "gone":
+    // nothing is ended, the windows reset and one respawn cycle runs. On a live
+    // floor it ends every session there, so it is taken only for a floor held
+    // unresponsive past the bound (or "gone"; PRECONDITION_FAILED {state}
+    // otherwise) and carries the person's consent: `sessions` must be exactly
+    // what the census reads from the cells with births closed, or it refuses
+    // PRECONDITION_FAILED {live}, and only where this fieldd can act ("no kill
+    // authority over this floor — restart it outside VibeField" otherwise).
+    // `NativeSupervisor.requestRestart` decides.
+    api.register("system.native.restart", async (_ctx, params) => {
+      const parsed = SystemNativeRestartParams.safeParse(params ?? {});
+      if (!parsed.success) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { sessions: string[] } — the sessions this restart ends ([] when it ends none)",
+          false,
+        );
+      }
+      logger.info("fieldd.native_supervisor.manual_restart", "system.native.restart received", {
+        sessions: parsed.data.sessions.length,
+      });
+      await supervisor.requestRestart({ sessions: parsed.data.sessions });
+      const result: SystemNativeRestartResult = {
+        state: supervisor.state,
+        detail: supervisor.stateDetail,
+      };
+      return result;
     });
     // AR-0 — the index daemon's escalation affordance, the same shape: after
     // rosettad's restart intensity trips to the permanent honest "failed", a

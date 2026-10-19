@@ -1,11 +1,13 @@
 import { EventEmitter } from "node:events";
 import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import {
+  NATIVE_REFUSALS,
   NATIVE_SUPERVISION,
   type NativeLinkHealth,
   type NativeLinkState,
   type NativePrepareRestartParams,
   NativePrepareRestartResult,
+  type NativeUnavailableDetails,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { FloorOsWaits } from "./floor-os-waits";
@@ -30,7 +32,10 @@ import { RpcCallError } from "./native-link";
 //   (≤ ~250 ms at the default timings). A miss counts only if fieldd's own
 //   deadline timer fired on time (WG-E1): one that fired past its whole
 //   deadline was fieldd's loop stalling, with the pong perhaps unread in the
-//   socket. Two clean pongs in a row return the link to "up".
+//   socket. Two clean pongs in a row return the link to "up". From detection
+//   on, the doors that ride the floor's mgmt path answer UNAVAILABLE {service:
+//   "native", state: "unresponsive"} at once (`doorRefusal`, WG-D4), until the
+//   floor answers again.
 // - The kill clock is silence of REPLIES (WG-E2/E3): the time since the link
 //   last read a response to anything — a pong or any other answer, a late one
 //   included. Any reply restarts it. The floor's tick and its subscription
@@ -312,6 +317,9 @@ export class NativeSupervisor extends EventEmitter {
   private wedgeRestartStamps: number[] = [];
   /** a deliberate restart's drain ladder is running: the crash path does not respawn under it */
   private draining = false;
+  /** WG-D4 — the redialled link's hello was answered in this episode and no
+   * miss has counted since: the doors pass again while the pongs decide */
+  private answeringAgain = false;
 
   // ---- wedge episodes (WG-D0) ----
   private evidence: WedgeEvidence = freshEvidence();
@@ -375,6 +383,23 @@ export class NativeSupervisor extends EventEmitter {
         held && canRestart && !present
           ? Math.round(Date.now() - (now - this.wholeSilenceSince()) + this.t.WEDGE_HEADLESS_MS)
           : null,
+    };
+  }
+
+  /** WG-D4 — what a door that rides the floor's mgmt path answers while the
+   * floor is held "unresponsive" (`NativeUnavailableDetails`): at once,
+   * retryable, never after the request's own deadline. undefined while the
+   * floor is answering — including on a redialled link whose hello was
+   * answered, until a miss counts again (WG-E4: a fresh reader works, and the
+   * doors' own re-arms on "connected" must not be refused by a stale state).
+   * The daemon hands it to the link (`NativeLink.setDoorGate`). */
+  doorRefusal(): NativeUnavailableDetails | undefined {
+    if (this.state !== "unresponsive" || this.answeringAgain) return undefined;
+    return {
+      service: NATIVE_REFUSALS.SERVICE,
+      state: NATIVE_REFUSALS.STATE_UNRESPONSIVE,
+      since: this.stateSince,
+      detail: this.stateDetail,
     };
   }
 
@@ -629,6 +654,7 @@ export class NativeSupervisor extends EventEmitter {
     if (this.state === "unresponsive") {
       // WG-E4 — the redial's hello was answered: a fresh reader works. The
       // episode goes on until two clean pongs, as any return to "up" does.
+      this.answeringAgain = true;
       this.setState(
         "unresponsive",
         "the redialled link's hello was answered; waiting for two clean pongs",
@@ -696,6 +722,7 @@ export class NativeSupervisor extends EventEmitter {
     if (this.episodeSince !== undefined || this.stopped) return;
     this.episodeSince = performance.now();
     this.episodeId += 1;
+    this.answeringAgain = false;
     this.redialedAt = undefined;
     this.lastCountAt = undefined;
     this.atRisk = null;
@@ -864,6 +891,8 @@ export class NativeSupervisor extends EventEmitter {
     this.cleanPongs = 0;
     this.misses += 1;
     this.evidence.misses += 1;
+    // WG-D4 — the redialled link stopped answering too: the doors close again
+    this.answeringAgain = false;
     if (this.misses === 1) {
       // Stage 2: one immediate short-deadline probe, so a single scheduling
       // hiccup never reaches the threshold on its own.

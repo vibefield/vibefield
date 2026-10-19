@@ -17,7 +17,8 @@ import {
   SystemNativeRestartParams,
   SystemNativeRestartResult,
 } from "../src/mgmt";
-import { CELL_SUPERVISION, NATIVE_FLOOR_TICK } from "../src/registries";
+import { PLUGIN_CAPABILITY_ELIGIBILITY } from "../src/plugins";
+import { CELL_SUPERVISION, NATIVE_FLOOR_TICK, TAILNET_SCOPES } from "../src/registries";
 
 // WG-D0…WG-D6 (`draft/thinking-floor-wedge.md`, ruled 2026-10-19) — the wedge
 // ladder's contract. Detection stays a reversible state; the kill clock is
@@ -199,6 +200,21 @@ describe("NativeLinkHealth — the native link's numbers (WG-D1)", () => {
 });
 
 describe("system.native.restart — the person's consented restart (WG-D5)", () => {
+  const row = METHODS.find((m) => m.method === "system.native.restart");
+
+  it("rides the window-held, local-only agents.manage, never native.admin", () => {
+    expect(row).toMatchObject({
+      surface: "product",
+      scope: "agents.manage",
+      idempotent: false,
+      locality: "local",
+    });
+    expect(TAILNET_SCOPES).not.toContain("agents.manage");
+    expect(PLUGIN_CAPABILITY_ELIGIBILITY["agents.manage"]).toBeUndefined();
+    // the index's escalation rides the same scope (fix7): one posture for both
+    expect(METHODS.find((m) => m.method === "system.index.restart")?.scope).toBe(row?.scope);
+  });
+
   it("names the sessions it ends; an empty floor names none, and no list is no consent", () => {
     const named = SystemNativeRestartParams.parse(
       fixture("system-native-restart-params.valid.json"),

@@ -8,7 +8,8 @@
 // And the wedge ladder's rows (WG-D1, draft/thinking-floor-wedge.md §6), on
 // the supervision-timings seam so a SIGSTOP past the bound takes seconds:
 //   · an EMPTY floor stopped past the bound is restarted: a fresh pid;
-//   · a floor holding a session is held, never killed, and SIGCONT brings the
+//   · a floor holding a session is held, never killed — its doors answer
+//     UNAVAILABLE {native, unresponsive} meanwhile — and SIGCONT brings the
 //     same pid back with the session alive in its cell;
 //   · a fieldd booting against a floor that accepts and never answers the
 //     hello refuses its boot, and kills nothing.
@@ -125,12 +126,12 @@ async function bootSupervisedPair(
 describe("TC-S1 floor supervision matrix (real field-native)", () => {
   it("row: floor SIGKILL → auto-respawn with a fresh pid, link back up", async () => {
     const { daemon } = await bootSupervisedPair();
-    await until(() => daemon.health().nativeLink === "up", 10_000, "initial up");
+    await until(() => daemon.health().nativeLink.state === "up", 10_000, "initial up");
     const pid = daemon.health().nativePid;
     expect(pid).not.toBeNull();
     process.kill(pid as number, "SIGKILL");
     const ms = await until(
-      () => daemon.health().nativeLink === "up" && daemon.health().nativePid !== pid,
+      () => daemon.health().nativeLink.state === "up" && daemon.health().nativePid !== pid,
       20_000,
       "respawned up",
     );
@@ -140,13 +141,13 @@ describe("TC-S1 floor supervision matrix (real field-native)", () => {
 
   it("row: mgmt wedge (SIGSTOP) → unresponsive, distinct state; SIGCONT → same pid recovers", async () => {
     const { daemon } = await bootSupervisedPair();
-    await until(() => daemon.health().nativeLink === "up", 10_000, "initial up");
+    await until(() => daemon.health().nativeLink.state === "up", 10_000, "initial up");
     const pid = daemon.health().nativePid as number;
     process.kill(pid, "SIGSTOP");
     // detection-to-STATE: design budget 250ms; loaded-host slack ×6. The
     // measured number rides the failure message either way.
     const detectMs = await until(
-      () => daemon.health().nativeLink === "unresponsive",
+      () => daemon.health().nativeLink.state === "unresponsive",
       5_000,
       "wedge detected",
     );
@@ -155,14 +156,14 @@ describe("TC-S1 floor supervision matrix (real field-native)", () => {
     );
     // resume well inside the redial (10 s): the ladder takes no step at all
     process.kill(pid, "SIGCONT");
-    await until(() => daemon.health().nativeLink === "up", 5_000, "recovered");
+    await until(() => daemon.health().nativeLink.state === "up", 5_000, "recovered");
     // the same pid — detection was reversible state, not a kill
     expect(daemon.health().nativePid).toBe(pid);
   }, 40_000);
 
   it("row: respawn intensity trips to gone; the restart affordance brings it back", async () => {
     const { daemon } = await bootSupervisedPair();
-    await until(() => daemon.health().nativeLink === "up", 10_000, "initial up");
+    await until(() => daemon.health().nativeLink.state === "up", 10_000, "initial up");
     // kill every floor the instant it reports in: 3 respawns land inside the
     // window, the 4th death trips the bound — the machine stops ON PURPOSE
     let lastPid = daemon.health().nativePid as number;
@@ -171,19 +172,22 @@ describe("TC-S1 floor supervision matrix (real field-native)", () => {
       await until(
         () => {
           const h = daemon.health();
-          return h.nativeLink === "gone" || (h.nativeLink === "up" && h.nativePid !== lastPid);
+          return (
+            h.nativeLink.state === "gone" ||
+            (h.nativeLink.state === "up" && h.nativePid !== lastPid)
+          );
         },
         20_000,
         "respawn or gone",
       );
       const h = daemon.health();
-      if (h.nativeLink === "gone") break;
+      if (h.nativeLink.state === "gone") break;
       lastPid = h.nativePid as number;
     }
-    expect(daemon.health().nativeLinkDetail).toContain("intensity");
+    expect(daemon.health().nativeLink.detail).toContain("intensity");
     await daemon.nativeSupervisor.requestRestart();
     await until(
-      () => daemon.health().nativeLink === "up" && daemon.health().nativePid !== lastPid,
+      () => daemon.health().nativeLink.state === "up" && daemon.health().nativePid !== lastPid,
       20_000,
       "manual restart up",
     );
@@ -215,6 +219,12 @@ describe("TC-S1 floor supervision matrix (real field-native)", () => {
     process.kill(pid, "SIGSTOP");
     await until(() => sup.health().sessionsAtRisk === 1, 20_000, "held with its count");
     expect(sup.state).toBe("unresponsive");
+    expect(daemon.health().nativeLink).toMatchObject({ state: "unresponsive", sessionsAtRisk: 1 });
+    // WG-D4 — a door that rides the floor's mgmt path is refused at once, never sent
+    await expect(daemon.native.request("native.mesh.peers.list", {})).rejects.toMatchObject({
+      kind: "UNAVAILABLE",
+      details: { service: "native", state: "unresponsive" },
+    });
     // well past the bound, and the floor is still the one that was stopped
     await new Promise((r) => setTimeout(r, 3_000));
     expect(alive(pid)).toBe(true);

@@ -4,14 +4,16 @@
 // - exactly-one reconnect after connection loss (no duplicate timers);
 // - a rejected subscription cannot poison later reconnects;
 // - close is terminal, including before a connection attempt starts.
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  ErrorData,
   isPipeEndpoint,
   NATIVE_SUPERVISION,
   type NativeTickParams,
+  NativeUnavailableDetails,
   SOCKETS,
   type TerminalRouteCell,
   type TerminalRouteSnapshot,
@@ -19,6 +21,7 @@ import {
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  isNativeUnresponsive,
   type NativeDeadlineMiss,
   type NativeLateReply,
   NativeLink,
@@ -1009,5 +1012,75 @@ describe("WIN-10 — the native plane must prove itself", () => {
     mock.proveServerIdentity = false;
     await expect(link.connect()).rejects.toThrow(/did not prove possession/);
     expect(link.terminalEndpoints).toBeUndefined();
+  });
+});
+
+// WG-D4 (draft/thinking-floor-wedge.md §11): while the supervisor holds the
+// floor unresponsive, a product door's call is refused at once — never sent,
+// never left to wait out its deadline — and the supervision's own verbs pass.
+describe("NativeLink — the doors while the floor is held unresponsive (WG-D4)", () => {
+  const HELD: NativeUnavailableDetails = {
+    service: "native",
+    state: "unresponsive",
+    since: 1_792_376_632_000,
+    detail: "the control path stopped answering (process alive)",
+  };
+
+  it("a door's request or subscription is refused UNAVAILABLE {native, unresponsive} at once and never sent", async () => {
+    const { mock, link } = await setup();
+    await link.connect();
+    await sleep(50); // the routes arm's request lands before the count starts
+    let held: NativeUnavailableDetails | undefined = HELD;
+    link.setDoorGate(() => held);
+    const before = mock.requestLog.length;
+
+    const refused = await link.request("native.mesh.serve.list", {}).then(
+      () => undefined,
+      (e: RpcCallError) => e,
+    );
+    expect(refused).toMatchObject({ kind: "UNAVAILABLE", retryable: true, details: HELD });
+    expect(isNativeUnresponsive(refused)).toBe(true);
+    // the wire shape is the contract's, as error-data.native-unresponsive.json pins it
+    const wire = ErrorData.parse({
+      kind: refused?.kind,
+      retryable: refused?.retryable,
+      details: refused?.details,
+    });
+    expect(NativeUnavailableDetails.parse(wire.details)).toEqual(HELD);
+    const fixture = JSON.parse(
+      readFileSync(
+        join(import.meta.dirname, "../../contracts/fixtures/error-data.native-unresponsive.json"),
+        "utf8",
+      ),
+    ) as { details: Record<string, unknown> };
+    expect(Object.keys(wire.details as object).sort()).toEqual(Object.keys(fixture.details).sort());
+
+    const subscribed = await link
+      .subscribe("native.mesh.peers.subscribe", {}, () => {})
+      .then(
+        () => undefined,
+        (e: RpcCallError) => e,
+      );
+    expect(subscribed).toMatchObject({ kind: "UNAVAILABLE", details: { service: "native" } });
+
+    // the supervision's own verbs pass: the heartbeat, an update's stop
+    await expect(link.ping(1_000)).resolves.toMatchObject({ bootId: "mock-native-boot" });
+    await link.request("native.lifecycle.prepareRestart", { reason: "update" });
+    expect(mock.requestLog.slice(before).map((r) => r.method)).toEqual([
+      "native.lifecycle.ping",
+      "native.lifecycle.prepareRestart",
+    ]);
+
+    // the floor answers again: the doors pass
+    held = undefined;
+    await expect(link.request("native.mesh.serve.list", {})).resolves.toBeDefined();
+  });
+
+  it("with no gate set every door waits out its own deadline, as an embedded link does", async () => {
+    const { mock, link } = await setup();
+    await link.connect();
+    link.setDoorGate(null);
+    await expect(link.request("x.normal", {})).resolves.toEqual({});
+    expect(mock.requestLog.some((r) => r.method === "x.normal")).toBe(true);
   });
 });
