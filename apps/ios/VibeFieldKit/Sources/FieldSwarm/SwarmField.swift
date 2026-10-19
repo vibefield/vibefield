@@ -37,7 +37,7 @@ public struct SwarmField<Chrome: View>: View {
 
   public init(
     bubbles: [FieldBubble],
-    parameters: SwarmParameters = .default,
+    parameters: SwarmParameters = .phone,
     isActive: Bool = true,
     onSelect: @escaping (FieldBubble) -> Void,
     onCreate: ((SIMD2<Double>) -> String?)? = nil,
@@ -156,7 +156,7 @@ public struct SwarmField<Chrome: View>: View {
 extension SwarmField where Chrome == EmptyView {
   public init(
     bubbles: [FieldBubble],
-    parameters: SwarmParameters = .default,
+    parameters: SwarmParameters = .phone,
     isActive: Bool = true,
     onSelect: @escaping (FieldBubble) -> Void,
     onCreate: ((SIMD2<Double>) -> String?)? = nil

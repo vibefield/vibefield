@@ -301,7 +301,7 @@ public final class SwarmWorld {
     }
 
     integrate(deltaMS: deltaMS)
-    solveDrag()
+    solveDrag(deltaMS: deltaMS)
     for _ in 0..<6 { solveContacts() }
     confineToBounds()
 
@@ -330,12 +330,24 @@ public final class SwarmWorld {
   /// The soft positional spring toward the pointer (Matter constraint,
   /// stiffness 0.2). Moving `position` while leaving `previous` untouched
   /// imparts velocity, which is what makes released bubbles glide.
-  private func solveDrag() {
+  private func solveDrag(deltaMS: Double) {
+    let stiffness = Self.dragStiffness(deltaMS: deltaMS)
     for body in bodies {
       guard let anchor = body.dragAnchor else { continue }
       let grabWorld = body.position + body.dragLocalOffset
-      body.position += (anchor - grabWorld) * SwarmConstants.dragStiffness
+      body.position += (anchor - grabWorld) * stiffness
     }
+  }
+
+  /// The share of the gap one step of `deltaMS` closes: Matter's constraint
+  /// law, `stiffness × timeScale²` with `timeScale = min(1, Δ / 16.67 ms)`
+  /// (Constraint.js), which the port had left out (2026-10-18). A correction to
+  /// `position` becomes velocity, so the drag is a mass on a spring, and only
+  /// the square keeps its swing the same in time as the step rate rises. At
+  /// 60 Hz and below it is 0.2 a step, as before; at 120 Hz it is 0.05.
+  static func dragStiffness(deltaMS: Double) -> Double {
+    let timeScale = min(1, max(0, deltaMS / SwarmConstants.baseDeltaMS))
+    return SwarmConstants.dragStiffness * timeScale * timeScale
   }
 
   /// Circle–circle and circle–obstacle contacts. Restitution 0 resolves as

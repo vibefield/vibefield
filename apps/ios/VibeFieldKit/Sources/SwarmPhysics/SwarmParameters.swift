@@ -15,8 +15,11 @@ public struct SwarmParameters: Sendable, Equatable {
   /// `SwarmConstants.frictionAirCeiling` wherever it enters the physics.
   public var frictionAir: Double
   /// How often the physics steps, in Hz — decoupled from paint (GT-D15.2).
-  /// The render loop interpolates between the last two solved states, so this
-  /// is a cost knob and not a smoothness knob. Floored at
+  /// The render loop draws between the last two solved states, so what is
+  /// drawn is one step behind the newest: at 30 Hz a dragged body trails the
+  /// finger by a whole 33 ms step. *Corrected 2026-10-18:* this said "a cost
+  /// knob and not a smoothness knob", which held for a free body and never for
+  /// a held one. The phone steps at its display's rate (`phone`). Floored at
   /// `SwarmConstants.physicsHzFloor`.
   public var physicsHz: Double
   /// The body's fill alpha: the status bodies are composited at 72% so they
@@ -108,6 +111,17 @@ public struct SwarmParameters: Sendable, Equatable {
 
   public static let `default` = SwarmParameters()
 
+  /// The phone's: the reference's in every value but the step rate, which
+  /// keeps up with a ProMotion display (2026-10-18). A step is 8 ms rather than
+  /// 33, so the drawn field is 8 ms behind the newest and a held body follows
+  /// the finger that closely. The drag spring takes Matter's own time scaling
+  /// (`SwarmWorld.dragStiffness`), so the swing is July's at any rate.
+  public static let phone: SwarmParameters = {
+    var parameters = SwarmParameters.default
+    parameters.physicsHz = 120
+    return parameters
+  }()
+
   /// The physics rate the world actually runs at: the floor is a stability
   /// limit, not a preference (see `SwarmConstants.physicsHzFloor`).
   public var effectivePhysicsHz: Double {
@@ -130,7 +144,9 @@ public enum SwarmConstants {
   public static let physicalGap: Double = 4
   /// How far a chrome obstacle's body overhangs the element it stands for.
   public static let chromeObstaclePadding: Double = 7
-  /// Positional spring factor of the drag constraint.
+  /// Positional spring factor of the drag constraint, per step of the 16.67 ms
+  /// baseline; a shorter step takes it times its time scale squared, as
+  /// Matter's constraint does (`SwarmWorld.dragStiffness(deltaMS:)`).
   public static let dragStiffness: Double = 0.2
   /// Extra clearance the spawn search asks for around a candidate.
   public static let spawnClearance: Double = 12

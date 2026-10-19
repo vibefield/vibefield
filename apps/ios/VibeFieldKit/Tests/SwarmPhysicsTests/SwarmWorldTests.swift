@@ -297,6 +297,46 @@ private func position(_ world: SwarmWorld, _ id: String) -> SIMD2<Double> {
 }
 
 @Suite struct DragSpringTests {
+  @Test func takesMattersTimeScaleSquaredAboveTheBaselineStep() {
+    #expect(SwarmWorld.dragStiffness(deltaMS: 1000.0 / 60) == 0.2)
+    #expect(SwarmWorld.dragStiffness(deltaMS: 1000.0 / 30) == 0.2)  // clamped, as Matter clamps
+    #expect(abs(SwarmWorld.dragStiffness(deltaMS: 1000.0 / 120) - 0.05) < 1e-12)
+  }
+
+  /// 2026-10-18 — the phone steps at 120 Hz, and its drag must swing as July's
+  /// 60 Hz did. With 0.2 a step, 120 Hz swung through the finger 60 pt
+  /// apart from 60 Hz within 100 ms; with Matter's time scale it stays within
+  /// a few points (friction's own linear law is the rest).
+  @Test func swingsTheSameAt120HzAsAt60() {
+    func gaps(hz: Double) -> [Double] {
+      let world = arena(
+        physicsHz: hz, gravityPull: 0,
+        agents: [SwarmWorld.AgentSpec(id: SwarmBodyID("held"), visualRadius: 50)])
+      let start = position(world, "held")
+      world.beginDrag(id: SwarmBodyID("held"), at: start)
+      world.updateDrag(id: SwarmBodyID("held"), to: start + SIMD2(100, 0))
+      let steps = Int((hz / 60).rounded())
+      var gaps: [Double] = []
+      for _ in 0..<6 {
+        for _ in 0..<steps { world.step(deltaMS: 1000 / hz) }
+        gaps.append(start.x + 100 - position(world, "held").x)
+      }
+      return gaps
+    }
+    let sixty = gaps(hz: 60)
+    let oneTwenty = gaps(hz: 120)
+    for (at60, at120) in zip(sixty, oneTwenty) {
+      #expect(abs(at60 - at120) < 12, "60 Hz \(sixty) against 120 Hz \(oneTwenty)")
+    }
+  }
+
+  @Test func thePhoneStepsAtProMotionsRateAndIsOtherwiseTheReference() {
+    #expect(SwarmParameters.phone.physicsHz == 120)
+    var reference = SwarmParameters.phone
+    reference.physicsHz = SwarmParameters.default.physicsHz
+    #expect(reference == SwarmParameters.default)
+  }
+
   @Test func addsOnGrabFollowsThePointerAndReleasesOnDrop() {
     let world = arena(gravityPull: 0)
     world.seed(now: 0)
