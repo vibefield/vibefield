@@ -24,6 +24,7 @@ const CURRENT = "dev-111111111111111111111111";
 const STALE = "dev-222222222222222222222222";
 
 const nativeIn = (snapshot) => join(RUNTIME_ROOT, snapshot, "native", "field-native");
+const cellIn = (snapshot) => join(RUNTIME_ROOT, snapshot, "native", "field-terminal-host");
 const fielddIn = (snapshot) => join(RUNTIME_ROOT, snapshot, "fieldd", "bin.cjs");
 const mgmtSocket = join(DATA_ROOT, "native", "run", "mgmt.sock");
 // The packaged app: our binary's name on somebody else's tree entirely.
@@ -88,6 +89,31 @@ test("a current-snapshot native holding the socket survives being in nobody's pr
   });
 
   assert.deepEqual(orphans, []);
+});
+
+test("a current-snapshot cell holding its terminal sockets is kept with its floor (TC-S2)", () => {
+  // 2026-10-19: James's floor ran its cells from FIELD_NATIVE_CELL_BIN, the
+  // cargo target outside the snapshot, and this classifier (run read-only on
+  // the live table) convicted both cells as socket squatters while sparing
+  // their floor. Staged beside the floor, a cell is this session's own bytes,
+  // exactly as its floor is; one from anywhere else is still a squatter.
+  const orphans = classify({
+    processes: [
+      { pid: 502, exePath: nativeIn(CURRENT) },
+      { pid: 503, exePath: cellIn(CURRENT) },
+      { pid: 504, exePath: resolve("/ssd/rust/lane/debug/field-terminal-host") },
+    ],
+    socketOwners: [
+      { pid: 502, socketPath: mgmtSocket },
+      { pid: 503, socketPath: join(DATA_ROOT, "native", "run", "termctl.1.sock") },
+      { pid: 504, socketPath: join(DATA_ROOT, "native", "run", "termctl.2.sock") },
+    ],
+  });
+
+  assert.deepEqual(
+    orphans.map((o) => ({ pid: o.pid, reason: o.reason })),
+    [{ pid: 504, reason: "socket-squatter" }],
+  );
 });
 
 test("the runner never reaps itself", () => {

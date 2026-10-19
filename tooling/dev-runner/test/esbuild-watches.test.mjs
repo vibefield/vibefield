@@ -79,6 +79,7 @@ test("a rebuilt shim moves the daemon identity, so the pair restarts as for bin.
     filesHostOutput: join(root, "files-host.cjs"),
     milleNativeOutput: join(root, "mille.test-triple.node"),
     nativeOutput: join(root, "field-native"),
+    cellOutput: join(root, "field-terminal-host"),
   };
   const daemonIdentity = () => computeBuildId(root, daemonPlaneInputs(paths, []));
 
@@ -202,6 +203,7 @@ test("a rebuilt files worker moves the daemon identity, never the shell's", asyn
     filesHostOutput: join(root, "files-host.cjs"),
     milleNativeOutput: join(root, "mille.test-triple.node"),
     nativeOutput: join(root, "field-native"),
+    cellOutput: join(root, "field-terminal-host"),
   };
   const daemonIdentity = () => computeBuildId(root, daemonPlaneInputs(paths, []));
   await writeFile(paths.filesHostOutput, "worker-one");

@@ -12,7 +12,9 @@ import {
 } from "node:fs/promises";
 import { basename, join } from "node:path";
 
-const SNAPSHOT_VERSION = 5;
+// 6 — TC-S2: the floor's cell joins it, beside the floor. A version-5 snapshot has no cell, and
+// served again it would hand the floor nothing to spawn its terminals from.
+const SNAPSHOT_VERSION = 6;
 const BUILD_ID = /^dev-[a-f0-9]{24}$/;
 
 export class RuntimeSnapshotChangedError extends Error {
@@ -40,7 +42,13 @@ export async function stageRuntimeSnapshot({
   const temporary = await mkdtemp(join(paths.runtimeRoot, `.next-${buildId}-`));
   let published = false;
   try {
-    const layout = snapshotLayout(temporary, buildId, daemonBuildId, basename(paths.nativeOutput));
+    const layout = snapshotLayout(
+      temporary,
+      buildId,
+      daemonBuildId,
+      basename(paths.nativeOutput),
+      basename(paths.cellOutput),
+    );
     await Promise.all([
       mkdir(join(layout.appRoot, "main"), { recursive: true }),
       mkdir(join(layout.appRoot, "preload"), { recursive: true }),
@@ -62,6 +70,8 @@ export async function stageRuntimeSnapshot({
         join(temporary, "fieldd", basename(paths.milleNativeOutput)),
       ),
       copyFile(paths.nativeOutput, layout.nativeOutput),
+      // TC-S2 — the floor spawns its cell as its own SIBLING, so the cell rides beside it
+      copyFile(paths.cellOutput, layout.cellOutput),
       writeFile(
         join(layout.appRoot, "package.json"),
         `${JSON.stringify(
@@ -78,6 +88,8 @@ export async function stageRuntimeSnapshot({
     ]);
     const nativeMode = (await stat(paths.nativeOutput)).mode & 0o777;
     await chmod(layout.nativeOutput, nativeMode);
+    const cellMode = (await stat(paths.cellOutput)).mode & 0o777;
+    await chmod(layout.cellOutput, cellMode);
 
     if (!(await validate())) throw new RuntimeSnapshotChangedError();
     await writeFile(
@@ -88,6 +100,7 @@ export async function stageRuntimeSnapshot({
           buildId,
           daemonBuildId,
           nativeName: basename(paths.nativeOutput),
+          cellName: basename(paths.cellOutput),
         },
         null,
         2,
@@ -98,7 +111,13 @@ export async function stageRuntimeSnapshot({
     try {
       await rename(temporary, destination);
       published = true;
-      return snapshotLayout(destination, buildId, daemonBuildId, basename(paths.nativeOutput));
+      return snapshotLayout(
+        destination,
+        buildId,
+        daemonBuildId,
+        basename(paths.nativeOutput),
+        basename(paths.cellOutput),
+      );
     } catch (error) {
       if (!destinationAlreadyExists(error)) throw error;
       const concurrent = await readSnapshot(destination, buildId);
@@ -110,7 +129,13 @@ export async function stageRuntimeSnapshot({
       await rm(destination, { recursive: true, force: true });
       await rename(temporary, destination);
       published = true;
-      return snapshotLayout(destination, buildId, daemonBuildId, basename(paths.nativeOutput));
+      return snapshotLayout(
+        destination,
+        buildId,
+        daemonBuildId,
+        basename(paths.nativeOutput),
+        basename(paths.cellOutput),
+      );
     }
   } finally {
     if (!published) await rm(temporary, { recursive: true, force: true });
@@ -143,17 +168,25 @@ async function readSnapshot(root, expectedBuildId) {
       record.buildId !== expectedBuildId ||
       !BUILD_ID.test(record.daemonBuildId ?? "") ||
       typeof record.nativeName !== "string" ||
-      basename(record.nativeName) !== record.nativeName
+      basename(record.nativeName) !== record.nativeName ||
+      typeof record.cellName !== "string" ||
+      basename(record.cellName) !== record.cellName
     ) {
       return null;
     }
-    return snapshotLayout(root, record.buildId, record.daemonBuildId, record.nativeName);
+    return snapshotLayout(
+      root,
+      record.buildId,
+      record.daemonBuildId,
+      record.nativeName,
+      record.cellName,
+    );
   } catch {
     return null;
   }
 }
 
-function snapshotLayout(root, buildId, daemonBuildId, nativeName) {
+function snapshotLayout(root, buildId, daemonBuildId, nativeName, cellName) {
   return Object.freeze({
     buildId,
     daemonBuildId,
@@ -161,6 +194,7 @@ function snapshotLayout(root, buildId, daemonBuildId, nativeName) {
     appRoot: join(root, "app"),
     fielddOutput: join(root, "fieldd", "bin.cjs"),
     nativeOutput: join(root, "native", nativeName),
+    cellOutput: join(root, "native", cellName),
   });
 }
 

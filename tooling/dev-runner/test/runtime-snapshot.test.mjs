@@ -1,5 +1,15 @@
 import assert from "node:assert/strict";
-import { access, chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  chmod,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -28,6 +38,7 @@ async function fixture(t) {
     filesHostOutput: join(source, "files-host.cjs"),
     milleNativeOutput: join(source, "mille.test-triple.node"),
     nativeOutput: join(source, "field-native"),
+    cellOutput: join(source, "field-terminal-host"),
   };
   await Promise.all([
     writeFile(paths.mainOutput, "main-one"),
@@ -40,8 +51,10 @@ async function fixture(t) {
     writeFile(paths.filesHostOutput, "files-host-one"),
     writeFile(paths.milleNativeOutput, "mille-one"),
     writeFile(paths.nativeOutput, "native-one"),
+    writeFile(paths.cellOutput, "cell-one"),
   ]);
   await chmod(paths.nativeOutput, 0o751);
+  await chmod(paths.cellOutput, 0o750);
   return { root, paths };
 }
 
@@ -110,6 +123,51 @@ test("hands the daemon fieldd's six files, the agent shim and the files worker b
     "mille.test-triple.node",
     "service-harness.mjs",
   ]);
+});
+
+test("stages the floor's cell beside the floor, with the cell's own mode (TC-S2)", async (t) => {
+  // The floor finds `field-terminal-host` as a SIBLING of its own executable
+  // (field-native `config.rs` `cell_binary()`), as packaging stages it. A
+  // floor staged alone has no cell, and its terminals only came from
+  // FIELD_NATIVE_CELL_BIN pointing outside the snapshot.
+  const { paths } = await fixture(t);
+  const runtime = await stageRuntimeSnapshot({
+    paths,
+    buildId: "dev-eeeeeeeeeeeeeeeeeeeeeeee",
+    daemonBuildId: DAEMON_ID,
+  });
+
+  assert.equal(dirname(runtime.cellOutput), dirname(runtime.nativeOutput));
+  assert.deepEqual((await readdir(join(runtime.root, "native"))).sort(), [
+    "field-native",
+    "field-terminal-host",
+  ]);
+  assert.equal(await readFile(runtime.cellOutput, "utf8"), "cell-one");
+  if (process.platform !== "win32") {
+    assert.equal((await stat(runtime.cellOutput)).mode & 0o777, 0o750);
+  }
+
+  await writeFile(paths.cellOutput, "cell-two");
+  assert.equal(await readFile(runtime.cellOutput, "utf8"), "cell-one");
+});
+
+test("reclaims a snapshot staged before the cell joined it rather than reusing it", async (t) => {
+  // Version 5 is the layout with the floor alone: served again, it would hand
+  // the floor no cell to spawn its terminals from.
+  const { paths } = await fixture(t);
+  const buildId = "dev-ffffffffffffffffffffffff";
+  const destination = join(paths.runtimeRoot, buildId);
+  await mkdir(join(destination, "native"), { recursive: true });
+  await writeFile(join(destination, "native", "field-native"), "native-old");
+  await writeFile(
+    join(destination, "runtime.json"),
+    `${JSON.stringify({ version: 5, buildId, daemonBuildId: DAEMON_ID, nativeName: "field-native" })}\n`,
+  );
+
+  const runtime = await stageRuntimeSnapshot({ paths, buildId, daemonBuildId: DAEMON_ID });
+  assert.equal(runtime.root, destination);
+  assert.equal(await readFile(runtime.nativeOutput, "utf8"), "native-one");
+  assert.equal(await readFile(runtime.cellOutput, "utf8"), "cell-one");
 });
 
 test("reclaims a snapshot staged before the shim joined it rather than reusing it", async (t) => {

@@ -62,6 +62,22 @@ export function createElectronStack({
     if (child !== null) throw new Error("Electron is already running");
     const { buildId, daemonBuildId } = runtime;
     const rosettadBin = resolveRosettadBin();
+    // TC-S2 — the floor runs the cell staged beside it, the one this runner built and its daemon
+    // identity covers: the floor resolves its cell as its own sibling unless FIELD_NATIVE_CELL_BIN
+    // names another, which is a test seam. A developer's exported variable used to win here,
+    // putting a cell outside the snapshot under a snapshot's floor (the start-up reaper then
+    // convicts it as a socket squatter, and a cargo build swaps it under the live floor), so it
+    // is removed below and the cell launched is named once per daemon identity.
+    if (daemonBuildId !== currentDaemonBuildId) {
+      const inherited = process.env["FIELD_NATIVE_CELL_BIN"];
+      log.info(
+        `daemon plane ${daemonBuildId}: the floor's cell is ${runtime.cellOutput}${
+          inherited !== undefined && inherited !== ""
+            ? ` (FIELD_NATIVE_CELL_BIN=${inherited} from the environment is ignored)`
+            : ""
+        }`,
+      );
+    }
     const env = buildChildEnv(process.env, {
       set: {
         VITE_DEV_SERVER_URL: viteUrl,
@@ -95,7 +111,11 @@ export function createElectronStack({
       // an empty string the comment above forbids) and fieldd would point at a
       // binary the runner never chose. When the resolver names one it is set
       // above; when it does not, the inherited variable is removed.
-      unset: ["ELECTRON_RUN_AS_NODE", ...(rosettadBin === null ? ["FIELDD_ROSETTAD_BIN"] : [])],
+      unset: [
+        "ELECTRON_RUN_AS_NODE",
+        "FIELD_NATIVE_CELL_BIN",
+        ...(rosettadBin === null ? ["FIELDD_ROSETTAD_BIN"] : []),
+      ],
     });
 
     const next = spawnProcess(

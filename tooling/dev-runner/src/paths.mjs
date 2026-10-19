@@ -15,6 +15,7 @@ export function devRootFor(root, env = process.env) {
 const devRoot = devRootFor(repoRoot);
 const devBuildRoot = join(devRoot, "build");
 const nativeName = process.platform === "win32" ? "field-native.exe" : "field-native";
+const cellName = process.platform === "win32" ? "field-terminal-host.exe" : "field-terminal-host";
 
 export function commandEndpointFor(root, developmentRoot, platform = process.platform) {
   return platform === "win32"
@@ -75,6 +76,10 @@ export const workspacePaths = Object.freeze({
     `mille.${milleTriple(process.platform, process.arch)}.node`,
   ),
   nativeOutput: join(repoRoot, "target", "debug", nativeName),
+  // TC-S2 — the floor's terminal cell, built by the same `cargo build -p field-native`. The floor
+  // finds it as a SIBLING of its own executable (field-native `config.rs` `cell_binary()`), so the
+  // snapshot stages it beside the floor, as packaging does (`scripts/stage-package.mjs`).
+  cellOutput: join(repoRoot, "target", "debug", cellName),
   contractsSource: join(repoRoot, "packages", "contracts", "src"),
   nativeSource: join(repoRoot, "packages", "field-native", "src"),
 });

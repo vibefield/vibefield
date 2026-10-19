@@ -1209,8 +1209,13 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 - **No way back from a lineage break (D2/C6).** The phone's `requestReseed` edits local state only and the cell has no
   reseed door; a delta refused for any reason freezes the card until a demand cycle. One repair loop end to end: the
   contract's snapshot-demand (a seed with base null), sent with a deadline.
-- **The dev runner names the cell it launches** (path and build id): a wrong `field-terminal-host` is read, not found
-  by `nm` (James's `.env` pins `FIELD_NATIVE_CELL_BIN`).
+- ~~**The dev runner names the cell it launches** (path and build id): a wrong `field-terminal-host` is read, not found
+  by `nm` (James's `.env` pins `FIELD_NATIVE_CELL_BIN`).~~ — *paid 2026-10-19 (`focus/dev-cell-snapshot`): the snapshot
+  stages the cell beside the floor as packaging does, its daemon identity covers it, a snapshot a running pair executes
+  from is no longer pruned, and the runner names the cell at each daemon launch, ignoring an inherited
+  `FIELD_NATIVE_CELL_BIN` (RULED (i), James 2026-10-19 17:42Z: dev ignores the variable, and the line pinning it in
+  his `.env` is dead). Left open: after an unclean exit, a pair adopted across a shell-only change keeps its floor and
+  loses its cells to the start-up reaper (stale snapshot).*
 - **The dev runner's SIGTERM teardown** dies before `stopDaemons` under `pnpm dev` (three times 2026-10-17); the likely
   class of the 10-15 22:54:41Z orphaning. Read why, then fix at the cause.
 - **C1's desktop face** — a PROTOCOL close of the frames connection for every pane on the cell — witness owed on the
