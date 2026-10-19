@@ -335,9 +335,10 @@ public final class TerminalAttachment {
   /// (`RoutedSessionSeat`): who drives it — this phone, another device, or
   /// nobody, and then who let go — and the size the PTY was left at. What the
   /// live card says while another device drives the session; the person's
-  /// touch on the grid takes the seat back (`engage`, DS-D5). Nil before the
-  /// cell has said, and with the session. Read off the client like `readWrite`,
-  /// so a view that reads it tracks the client's own fields.
+  /// touch on the grid takes the seat back (`engage`, DS-D5), and when the
+  /// holder lets go the card on the screen takes it (`takeEmptySeat`). Nil
+  /// before the cell has said, and with the session. Read off the client like
+  /// `readWrite`, so a view that reads it tracks the client's own fields.
   public var seat: RoutedSessionSeat? {
     guard let client, let sessionID else { return nil }
     return client.sessions[sessionID]?.seat
@@ -794,6 +795,20 @@ public final class TerminalAttachment {
   public func engage() {
     guard client != nil, let sessionID else { return }
     log("engaged — taking the seat session=\(sessionID)")
+    takeSeat()
+  }
+
+  /// Item 42 — the holder let go, and this pane is the card on the screen: it
+  /// takes the empty seat itself (DESIGN.md §8, "A live card another client is
+  /// driving"; Q1's ruling — a focused pane takes the empty seat — applied to
+  /// the phone). The host decides WHEN (`FieldHomeModel.takesEmptySeat`: once,
+  /// on the let-go, while the card is on the screen); this is the take a focus
+  /// gain sends, with the grid the surface measured, said in its own line so
+  /// the console tells a let-go from a touch (`engage`). Once: the client owns
+  /// the one retry, and a take that does not land is not asked again.
+  public func takeEmptySeat() {
+    guard client != nil, let sessionID else { return }
+    log("the seat is empty — taking it session=\(sessionID)")
     takeSeat()
   }
 
