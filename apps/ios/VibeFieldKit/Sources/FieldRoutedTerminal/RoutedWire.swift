@@ -46,6 +46,7 @@ public enum RoutedMessageType: String, Sendable, Equatable, CaseIterable {
   case sessionEvent = "SessionEvent"
   case geometryCommitted = "GeometryCommitted"
   case geometryRefused = "GeometryRefused"
+  case geometryState = "GeometryState"
   case attachFramesLeg = "AttachFramesLeg"
   case framesLegAttached = "FramesLegAttached"
   case transportCredit = "TransportCredit"
@@ -59,7 +60,8 @@ public enum RoutedMessageType: String, Sendable, Equatable, CaseIterable {
 ///
 /// Reading a tag outside the inbound set is a PROTOCOL error this client
 /// surfaces and closes on — which is exactly why `session-events` has to be
-/// negotiated before the cell may speak `SessionEvent`.
+/// negotiated before the cell may speak `SessionEvent`, and `geometry-events`
+/// before it speaks `GeometryState` (item 42).
 public enum RoutedLegVocabulary {
   public static func inbound(_ channel: RoutedChannel) -> Set<RoutedMessageType> {
     switch channel {
@@ -67,7 +69,7 @@ public enum RoutedLegVocabulary {
       [
         .connectionAccepted, .connectionRefused, .legHeartbeatAck, .controlLegAttached,
         .attachRefused, .demandAccepted, .cellActivationStatus, .geometryCommitted,
-        .geometryRefused, .sessionEvent,
+        .geometryRefused, .sessionEvent, .geometryState,
       ]
     case .frames:
       [.connectionAccepted, .connectionRefused, .legHeartbeatAck, .framesLegAttached, .attachRefused]
@@ -572,5 +574,104 @@ public struct RoutedGeometryRefused: Sendable, Equatable {
     // Tolerant: a holder this build cannot read is no announcement, never a
     // refusal this client cannot read at all.
     currentHolder = fields.value("currentHolder").flatMap { try? RoutedGeometryHolder(json: $0) }
+  }
+}
+
+/// item 42 (2026-10-19) — who a seat's holder IS, as a person reads it: the
+/// device kind, its name, its OS. fieldd mints it into the attach grant's
+/// claims from the principal it verified; the cell never composes one, it
+/// ECHOES the face in the claims of the activation whose view holds the seat.
+/// Presentation only: no right, fence or CAS reads it.
+///
+/// `kind` and `os` are OPEN strings, kept as the wire spells them. The contract
+/// names `phone | window | peer-window` and `ios | macos | windows | linux`
+/// today, and a newer fieldd's word reaches this phone as text, never as a
+/// refusal; which mark an OS wears is a view's decision, not this reader's.
+/// `name` is never empty — a face that says who drives must have a name to say
+/// — so a nameless one is refused, as the contract refuses it.
+public struct RoutedGeometryHolderFace: Sendable, Equatable {
+  public let kind: String
+  public let name: String
+  public let os: String?
+
+  public init(kind: String, name: String, os: String? = nil) {
+    self.kind = kind
+    self.name = name
+    self.os = os
+  }
+
+  public init(json: JSONValue) throws {
+    var fields = try WireObject(shape: "GeometryHolderFace", value: json)
+    kind = try fields.requiredString("kind")
+    name = try fields.requiredString("name")
+    os = fields.string("os")
+  }
+}
+
+/// item 42 — the holder as `GeometryState` announces it: the cell-minted
+/// `GeometryHolder` and the face from its attach claims. A SIBLING of
+/// `RoutedGeometryHolder`, never a widening of it, exactly as the contract
+/// keeps `GeometryHolder` bare: the take's beliefs compare bare holders, and a
+/// commit or a refusal answers a caller about its own verb, with no face.
+public struct RoutedGeometryStateHolder: Sendable, Equatable {
+  public let holder: RoutedGeometryHolder
+  /// Absent when the grant carried none: a mint from before item 42, or a
+  /// principal fieldd could not name.
+  public let face: RoutedGeometryHolderFace?
+
+  public var clientId: String { holder.clientId }
+  public var viewId: String { holder.viewId }
+  public var holderGeneration: Int64 { holder.holderGeneration }
+
+  public init(holder: RoutedGeometryHolder, face: RoutedGeometryHolderFace? = nil) {
+    self.holder = holder
+    self.face = face
+  }
+
+  public init(json: JSONValue) throws {
+    holder = try RoutedGeometryHolder(json: json)
+    // Tolerant: a face this build cannot read is no face. The holder, the
+    // revision and the size stand without it, as a faceless grant's do — a
+    // presentation detail never costs the seat.
+    face = json["face"].flatMap { try? RoutedGeometryHolderFace(json: $0) }
+  }
+}
+
+/// item 42 (2026-10-19) — cell → client on the CONTROL leg, behind the
+/// negotiated `geometry-events` capability: a session's geometry seat as it
+/// now is. The cell sends it after every change of the seat's holder or of its
+/// committed size — to the control leg of every activation of the session, the
+/// caller's included and after the verb's own answer, so replies still match
+/// asks in send order — and once right after the `ControlLegAttached` of an
+/// attach, when a size was ever committed. A STATE, not a delta, under the
+/// receiver's rule the contract states: a strictly OLDER `geometryRevision` is
+/// ignored, an equal or newer one replaces. The session's END is not announced
+/// here: that is `SessionEvent`'s.
+public struct RoutedGeometryState: Sendable, Equatable {
+  public let sessionId: String
+  /// Nil while the seat is EMPTY: nobody drives.
+  public let holder: RoutedGeometryStateHolder?
+  public let geometryRevision: Int64
+  /// The PTY's COMMITTED size. A release does not resize the PTY back, so an
+  /// empty seat carries the last size committed — the size the pane is drawing.
+  public let cols: Int
+  public let rows: Int
+
+  public init(json: JSONValue) throws {
+    var fields = try WireObject(shape: "GeometryState", value: json)
+    sessionId = try fields.requiredString("sessionId")
+    // `holder` is NULLABLE, never optional — the contract's own spelling: `null`
+    // is an EMPTY seat, and a message without the key says nothing about the
+    // seat at all. `WireObject` reads null and absent alike, so the key is
+    // asked for first: a state that never named its holder is not taken to say
+    // that nobody drives.
+    guard json["holder"] != nil else {
+      throw WireDecodeError(
+        shape: "GeometryState", reason: "missing `holder` (an empty seat is null)")
+    }
+    holder = try fields.decodeObject("holder") { try RoutedGeometryStateHolder(json: $0) }
+    geometryRevision = try fields.requiredInt("geometryRevision")
+    cols = Int(try fields.requiredInt("cols"))
+    rows = Int(try fields.requiredInt("rows"))
   }
 }

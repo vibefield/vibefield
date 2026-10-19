@@ -1,0 +1,12 @@
+{
+  "sessionId": "sess-01J8Z3K9",
+  "holder": {
+    "clientId": "tailnet:owner@github#node-phone~e1",
+    "viewId": "view-p1",
+    "holderGeneration": 7,
+    "face": { "kind": "phone", "name": "iPhone 16 Pro", "os": "ios" }
+  },
+  "geometryRevision": 9,
+  "cols": 46,
+  "rows": 30
+}

@@ -61,7 +61,7 @@ import Testing
       RoutedLegVocabulary.inbound(.control) == [
         .connectionAccepted, .connectionRefused, .legHeartbeatAck, .controlLegAttached,
         .attachRefused, .demandAccepted, .cellActivationStatus, .geometryCommitted,
-        .geometryRefused, .sessionEvent,
+        .geometryRefused, .sessionEvent, .geometryState,
       ])
     #expect(
       RoutedLegVocabulary.inbound(.frames) == [
@@ -364,6 +364,118 @@ import Testing
     let refused = try RoutedGeometryRefused(json: tagged.body)
     #expect(refused.code == "SEAT_HELD")
     #expect(refused.geometryRevision == 5)
+  }
+}
+
+/// item 42 — the cell's announcement of a session's seat, read from the
+/// contracts' own three goldens (`tp-geometry-state.held`, `.empty` and the
+/// tagged one): the bytes the TypeScript suite parses and the cell's fixture
+/// parity re-serializes are the bytes this reader is held to.
+@Suite struct GeometryStateReaderTests {
+  /// `tp-geometry-state.held.json` — the phone holding: the holder the cell
+  /// minted, the face fieldd minted into its grant, the revision and the PTY's
+  /// committed size.
+  @Test func aHeldSeatCarriesItsHolderItsFaceAndTheCommittedSize() throws {
+    let state = try RoutedGeometryState(json: try Vector.json("tp-geometry-state.held"))
+    #expect(state.sessionId == "sess-01J8Z3K9")
+    let holder = try #require(state.holder)
+    #expect(holder.clientId == "tailnet:owner@github#node-phone~e1")
+    #expect(holder.viewId == "view-p1")
+    #expect(holder.holderGeneration == 7)
+    #expect(
+      holder.face == RoutedGeometryHolderFace(kind: "phone", name: "iPhone 16 Pro", os: "ios"))
+    #expect(state.geometryRevision == 9)
+    #expect(state.cols == 46)
+    #expect(state.rows == 30)
+  }
+
+  /// `tp-geometry-state.empty.json` — `holder: null` is an EMPTY seat, and the
+  /// size is still the one the phone left the PTY at: a release resizes nothing.
+  @Test func anEmptySeatIsANullHolderAtTheSizeLeft() throws {
+    let state = try RoutedGeometryState(json: try Vector.json("tp-geometry-state.empty"))
+    #expect(state.sessionId == "sess-01J8Z3K9")
+    #expect(state.holder == nil)
+    #expect(state.geometryRevision == 10)
+    #expect(state.cols == 46)
+    #expect(state.rows == 30)
+  }
+
+  /// `tp-tagged-message.geometry-state.json` — the whole inbound path: the
+  /// control leg's vocabulary admits the tag, `decode` strips it, and the reader
+  /// takes the rest. Its face names no OS (the key omitted), and is a face all
+  /// the same. The frames leg does not read the tag.
+  @Test func theStateArrivesTaggedOnTheControlLegOnly() throws {
+    let bytes = try Vector.json("tp-tagged-message.geometry-state").encoded()
+    let text = try #require(String(data: bytes, encoding: .utf8))
+    let tagged = try RoutedWire.decode(text, allowed: RoutedLegVocabulary.inbound(.control))
+    #expect(tagged.type == .geometryState)
+    let state = try RoutedGeometryState(json: tagged.body)
+    #expect(state.sessionId == "s1")
+    #expect(state.holder?.clientId == "client-02")
+    #expect(state.holder?.viewId == "view-02")
+    #expect(state.holder?.holderGeneration == 3)
+    #expect(state.holder?.face == RoutedGeometryHolderFace(kind: "peer-window", name: "Studio"))
+    #expect(state.geometryRevision == 6)
+    #expect(state.cols == 100)
+    #expect(state.rows == 28)
+    #expect(throws: RoutedWire.DecodeFailure.notAllowedHere(.geometryState)) {
+      try RoutedWire.decode(text, allowed: RoutedLegVocabulary.inbound(.frames))
+    }
+  }
+
+  /// `holder` is nullable, never optional: a state that does not name its
+  /// holder says nothing about the seat, and is refused rather than read as an
+  /// empty one — while an explicit null IS the empty seat. Mutations of the
+  /// golden, because a fixture is what a conforming cell sends.
+  @Test func aStateWithoutItsHolderKeyIsRefusedNotReadAsEmpty() throws {
+    var body = try #require(try Vector.json("tp-geometry-state.held").objectValue)
+    body["holder"] = nil
+    #expect(throws: WireDecodeError.self) { try RoutedGeometryState(json: .object(body)) }
+    body["holder"] = .null
+    let state = try RoutedGeometryState(json: .object(body))
+    #expect(state.holder == nil)
+    #expect(state.geometryRevision == 9)
+  }
+
+  /// The face's words are OPEN: a kind and an OS this build has not learned
+  /// reach a face as the text the cell sent, and a field nobody reads is no
+  /// error. A mutation, because the golden carries today's vocabulary and this
+  /// rule is about the next word fieldd learns.
+  @Test func anUnknownKindAndOsArriveAsText() throws {
+    var body = try #require(try Vector.json("tp-geometry-state.held").objectValue)
+    var holder = try #require(body["holder"]?.objectValue)
+    holder["face"] = .object([
+      "kind": .string("tablet"), "name": .string("James's iPad"), "os": .string("ipados"),
+      "aFieldThisBuildDoesNotRead": .bool(true),
+    ])
+    body["holder"] = .object(holder)
+    body["aFieldThisBuildDoesNotRead"] = .bool(true)
+    let state = try RoutedGeometryState(json: .object(body))
+    #expect(
+      state.holder?.face
+        == RoutedGeometryHolderFace(kind: "tablet", name: "James's iPad", os: "ipados"))
+  }
+
+  /// A face this build cannot read is no face, and NEVER the seat's loss: a
+  /// nameless one (the contract refuses it) leaves the holder, the revision and
+  /// the size standing, as a grant minted without a face does. A holder that
+  /// will not read is another matter — it is the state's one load-bearing fact,
+  /// and the whole state is refused.
+  @Test func aFaceThatWillNotReadCostsTheFaceAndNotTheSeat() throws {
+    var body = try #require(try Vector.json("tp-geometry-state.held").objectValue)
+    var holder = try #require(body["holder"]?.objectValue)
+    holder["face"] = .object(["kind": .string("phone"), "name": .string("")])
+    body["holder"] = .object(holder)
+    let state = try RoutedGeometryState(json: .object(body))
+    #expect(state.holder?.clientId == "tailnet:owner@github#node-phone~e1")
+    #expect(state.holder?.holderGeneration == 7)
+    #expect(state.holder?.face == nil)
+    #expect(state.geometryRevision == 9)
+    #expect(state.cols == 46)
+
+    holder["viewId"] = nil
+    body["holder"] = .object(holder)
+    #expect(throws: WireDecodeError.self) { try RoutedGeometryState(json: .object(body)) }
   }
 }
 
