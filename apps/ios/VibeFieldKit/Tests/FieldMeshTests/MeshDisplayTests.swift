@@ -45,33 +45,12 @@ import Truffle
   @Test func noLinkTokenLeavesTheChipAsItWas() {
     for state in [
       MeshModel.State.off, .starting, .needsLogin, .needsMachineAuth, .up, .stopping,
-      .failed("x"),
+      .failed("x"), .reconnecting("x"),
     ] {
       #expect(
         MeshDisplay.chipLabel(state: state, peerCount: 3, linkToken: nil)
           == MeshDisplay.chipLabel(state: state, peerCount: 3))
     }
-  }
-
-  @Test func statusLinesNeverOverstate() {
-    #expect(
-      MeshDisplay.statusLine(state: .off, peerCount: 0)
-        == "not connected — the mesh starts only when you ask")
-    #expect(MeshDisplay.statusLine(state: .up, peerCount: 1) == "online · 1 peer in reach")
-    #expect(MeshDisplay.statusLine(state: .up, peerCount: 4) == "online · 4 peers in reach")
-    #expect(
-      MeshDisplay.statusLine(state: .failed("timeout dialing control"), peerCount: 0)
-        == "failed — timeout dialing control")
-  }
-
-  @Test func primaryActionsMatchStates() {
-    #expect(MeshDisplay.primaryAction(state: .off) == .connect)
-    #expect(MeshDisplay.primaryAction(state: .failed("x")) == .connect)
-    #expect(MeshDisplay.primaryAction(state: .needsLogin) == .signIn)
-    #expect(MeshDisplay.primaryAction(state: .up) == .disconnect)
-    #expect(MeshDisplay.primaryAction(state: .needsMachineAuth) == .disconnect)
-    #expect(MeshDisplay.primaryAction(state: .starting) == nil)
-    #expect(MeshDisplay.primaryAction(state: .stopping) == nil)
   }
 
   @Test func onlySignInStatesDemandAttention() {
@@ -80,5 +59,6 @@ import Truffle
     #expect(!MeshDisplay.chipWantsAttention(state: .off))
     #expect(!MeshDisplay.chipWantsAttention(state: .up))
     #expect(!MeshDisplay.chipWantsAttention(state: .failed("x")))
+    #expect(!MeshDisplay.chipWantsAttention(state: .reconnecting("x")))
   }
 }

@@ -68,7 +68,7 @@ public enum AccountDisplay {
     case .needsLogin: return "Sign in to your tailnet to reach your desktops."
     case .needsMachineAuth: return "This device awaits machine authorization on the tailnet."
     case .failed(let reason): return "The mesh failed — \(reason)."
-    case .off, .starting, .up, .stopping: return nil
+    case .off, .starting, .up, .stopping, .reconnecting: return nil
     }
   }
 
@@ -82,6 +82,7 @@ public enum AccountDisplay {
     case .needsLogin: return "sign in again"
     case .needsMachineAuth: return "awaiting authorization"
     case .stopping: return "leaving the mesh"
+    case .reconnecting: return "reconnecting…"
     case .failed: return "mesh failed"
     case .up: return nil
     }

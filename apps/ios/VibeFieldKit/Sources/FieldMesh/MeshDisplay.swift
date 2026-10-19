@@ -22,7 +22,7 @@ public enum MeshDisplay {
     case .starting: "MESH · …"
     case .needsLogin, .needsMachineAuth: "MESH · SIGN IN"
     case .up: "MESH · \(peerCount)"
-    case .stopping: "MESH · …"
+    case .stopping, .reconnecting: "MESH · …"
     case .failed: "MESH · FAILED"
     }
   }
@@ -64,36 +64,6 @@ public enum MeshDisplay {
     case (let login?, nil): return login
     case (nil, let domain?): return "signed in to \(domain)"
     case (nil, nil): return nil
-    }
-  }
-
-  /// The sheet's status sentence — lowercase facts, reasons verbatim.
-  public static func statusLine(state: MeshModel.State, peerCount: Int) -> String {
-    switch state {
-    case .off: "not connected — the mesh starts only when you ask"
-    case .starting: "starting the tailscale runtime"
-    case .needsLogin: "sign in to your tailnet to come online"
-    case .needsMachineAuth: "this device awaits machine authorization"
-    case .up:
-      peerCount == 1 ? "online · 1 peer in reach" : "online · \(peerCount) peers in reach"
-    case .stopping: "leaving the mesh"
-    case .failed(let reason): "failed — \(reason)"
-    }
-  }
-
-  /// The primary act available in each state (nil = no action, just wait).
-  public enum Action: String, Equatable {
-    case connect = "CONNECT"
-    case signIn = "SIGN IN"
-    case disconnect = "DISCONNECT"
-  }
-
-  public static func primaryAction(state: MeshModel.State) -> Action? {
-    switch state {
-    case .off, .failed: .connect
-    case .needsLogin: .signIn
-    case .up, .needsMachineAuth: .disconnect
-    case .starting, .stopping: nil
     }
   }
 

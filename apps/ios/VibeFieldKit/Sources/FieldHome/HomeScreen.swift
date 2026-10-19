@@ -629,9 +629,9 @@ public struct HomeScreen: View {
         setAccountMenu(open: false)
         signOutPending = true
       },
-      onConnection: { act in
+      onSignIn: {
         setAccountMenu(open: false)
-        performConnection(act)
+        performSignIn()
       }
     )
   }
@@ -918,7 +918,7 @@ public struct HomeScreen: View {
         // Debug-only): drive flows a simulator run can't tap into.
         if ProcessInfo.processInfo.arguments.contains("-vf-auto-connect") {
           accountMenuOpen = true
-          mesh.connect()
+          mesh.signIn()
         }
         // IOS-9d — `-vf-mock`: the whole phone over invented facts and no
         // tailnet. The account is `MockAccount`'s (signed in, 🦊, studio up
@@ -932,7 +932,7 @@ public struct HomeScreen: View {
         if ProcessInfo.processInfo.arguments.contains(MockAccount.argument), mock == nil {
           let account = MockAccount()
           if ProcessInfo.processInfo.arguments.contains("-vf-mock-signed-out") { account.standing = .signedOut }
-          if ProcessInfo.processInfo.arguments.contains("-vf-mock-off") { account.standing = .off }
+          if ProcessInfo.processInfo.arguments.contains("-vf-mock-reconnecting") { account.standing = .reconnecting }
           mock = account
           mockActive = true
           feed.start()
@@ -1332,6 +1332,8 @@ public struct HomeScreen: View {
       // down, so a fixture on a phone with no tailnet survives it.
       link?.resume()
       syncDiscovery(meshIsUp: mesh.state == .up, phase: scenePhase)
+      // Signed in is connected (2026-10-18): the mesh keeps itself up.
+      if meshKeepsItselfUp { mesh.keepUp() }
       // TM-3 — a phone upgrading from a build that held mirror-write keys has
       // secrets in its Keychain that nothing can read, use or offer to remove.
       // This deletes them, once, without ever reading a value.
@@ -1363,6 +1365,11 @@ public struct HomeScreen: View {
       // environment's own value is the one thing we should not have to guess
       // about, and guessing wrong is what stranded the poll before.
       syncDiscovery(meshIsUp: mesh.state == .up, phase: phase)
+      // Coming to the front is the moment to look at the mesh again; the
+      // background pauses a waiting re-dial (the node itself stays).
+      if meshKeepsItselfUp {
+        if phase == .active { mesh.keepUp() } else if phase == .background { mesh.sceneDidEnterBackground() }
+      }
       // IOS-4b / §5 — the field's own background rule, and the one place it
       // lives. The door's subscription and the stores' streams go; the mesh
       // node and the WebSocket stay, because a hello per app switch is the
@@ -1476,7 +1483,7 @@ public struct HomeScreen: View {
       discoveryPolling = false
     case .closeDoor:
       // The runtime this field's directory belonged to is gone, and
-      // `MeshModel.connect()` builds a new one — so the source is void, not
+      // a new start builds a new one — so the source is void, not
       // merely idle. A door-less field says `.noDoor`, which is the honest
       // state: nobody has been asked, rather than a mesh that answered empty.
       remoteField.stop()
@@ -1573,7 +1580,7 @@ public struct HomeScreen: View {
 
   /// The runtime is gone, so the stores' streams and every door with it. A
   /// link with no node is not a paused link — it is one whose mesh no longer
-  /// exists, and `MeshModel.connect()` builds a different one.
+  /// exists, and a new start builds a different one.
   private func closeLink() {
     link?.stop()
     link = nil
@@ -1951,20 +1958,25 @@ public struct HomeScreen: View {
     identityEpoch += 1
   }
 
-  /// The connection's act, as the menu offers it — what the mesh sheet's one
-  /// button did, by the same three verbs on the same model.
-  private func performConnection(_ act: FieldHomeModel.AccountFace.ConnectionAct) {
+  /// SIGN IN, as the corner offers it: the first sign-in, or the tailnet
+  /// asking again. Everything else about the connection is the mesh's own.
+  private func performSignIn() {
     #if DEBUG
       if let mock {
-        mock.perform(act)
+        mock.signIn()
         return
       }
     #endif
-    switch act {
-    case .connect: mesh.connect()
-    case .signIn: mesh.requestLogin()
-    case .disconnect: mesh.disconnect()
-    }
+    mesh.signIn()
+  }
+
+  /// The real mesh keeps itself up, unless the mock or a stamped demo owns the
+  /// corner: no node may start under invented facts.
+  private var meshKeepsItselfUp: Bool {
+    #if DEBUG
+      if mockActive || demoAccount != nil { return false }
+    #endif
+    return true
   }
 
   // RETIRED 2026-09-14 (TM-3, TM-D3): `collectWriteGrants`,

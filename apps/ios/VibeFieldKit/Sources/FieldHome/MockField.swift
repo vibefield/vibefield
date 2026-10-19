@@ -8,8 +8,9 @@
   /// fleet on the field, the History records' corpus under the other tab, and
   /// search over it. Every act in the corner works and changes the mock's own
   /// standing: Sign out empties it, Sign in fills it again (no login page —
-  /// there is no tailnet to sign in to), Disconnect puts the desktops to sleep
-  /// and Connect wakes them.
+  /// there is no tailnet to sign in to). There is no Connect or Disconnect: the
+  /// phone stays on the mesh by itself while signed in (2026-10-18), so a lost
+  /// mesh is the `reconnecting` standing, stamped by `-vf-mock-reconnecting`.
   ///
   /// The PIXELS come from the shipping decisions over these inputs
   /// (`FieldHomeModel.accountFace`, the History views), never from a second
@@ -25,8 +26,8 @@
       case signedOut
       /// Signed in, the mesh up, studio answering and mini asleep.
       case up
-      /// Signed in, the mesh off: both desktops asleep, Connect on offer.
-      case off
+      /// Signed in, the mesh lost and re-dialling: both desktops asleep.
+      case reconnecting
     }
 
     var standing: Standing = .up
@@ -53,9 +54,9 @@
         return FieldHomeModel.accountFace(
           meshState: .up, rememberedLogin: Self.login, login: Self.login, domain: Self.domain, name: Self.name,
           face: Self.face, desktops: [Self.studio], asleep: [Self.mini], foreignDoors: 0, isHearing: true)
-      case .off:
+      case .reconnecting:
         return FieldHomeModel.accountFace(
-          meshState: .off, rememberedLogin: Self.login, login: nil, domain: nil, name: Self.name, face: Self.face,
+          meshState: .reconnecting("the network went away"), rememberedLogin: Self.login, login: nil, domain: nil, name: Self.name, face: Self.face,
           desktops: [], asleep: [Self.studioAsleep, Self.mini], foreignDoors: 0, isHearing: false)
       }
     }
@@ -66,12 +67,7 @@
 
     var login: String? { standing == .signedOut ? nil : Self.login }
 
-    func perform(_ act: FieldHomeModel.AccountFace.ConnectionAct) {
-      switch act {
-      case .connect, .signIn: standing = .up
-      case .disconnect: standing = .off
-      }
-    }
+    func signIn() { standing = .up }
 
     func signOut() { standing = .signedOut }
   }

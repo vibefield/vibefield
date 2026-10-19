@@ -1,4 +1,6 @@
+import FieldProduct
 import Foundation
+import Network
 import Observation
 import Truffle
 import UIKit
@@ -19,10 +21,17 @@ public struct MeshPeerView: Identifiable, Sendable, Equatable {
 /// The phone's mesh presence: an app-owned Truffle node with interactive
 /// Tailscale login, wrapped as honest UI state.
 ///
-/// Nothing here connects on its own — joining the tailnet is a user act
-/// (`connect()`), and every state renders as itself: off is off, sign-in is
-/// sign-in, failed carries its reason. The corpus law stands: the phone is a
-/// client on the mesh, never a device row (it runs no fieldd).
+/// It keeps itself up (2026-10-18, James: "the phone should automatically
+/// connect to desktop as long as the account is logged in … it is auto
+/// connected and maintained connection all the time"). While this phone
+/// remembers a login, `keepUp()` — at launch, on coming to the front and when
+/// the network returns — starts the node, replaces a dead one and re-dials a
+/// drop on the product client's backoff. Signing in and signing out are the
+/// person's acts; there is no connect and no disconnect. Every state still
+/// renders as itself: sign-in is sign-in, a drop is `reconnecting` with its
+/// reason, a first sign-in that failed carries its reason. The corpus law
+/// stands: the phone is a client on the mesh, never a device row (it runs no
+/// fieldd).
 ///
 /// The node is `FieldTruffleRuntime`'s and not ghosttea's, for one reason
 /// given in full at that declaration: the namespace a node joins is the app id
@@ -38,6 +47,9 @@ public final class MeshModel {
     case up
     case stopping
     case failed(String)
+    /// The node dropped, or a start failed, on a phone that is signed in:
+    /// another start waits on the backoff. The reason is the last failure's.
+    case reconnecting(String)
   }
 
   /// A login page pending presentation (Safari sheet).
@@ -92,6 +104,18 @@ public final class MeshModel {
   @ObservationIgnored private var runtime: FieldTruffleRuntime?
   @ObservationIgnored private var eventsTask: Task<Void, Never>?
   @ObservationIgnored private var lastLoginURL: URL?
+  /// Whether a login page the node asks for is put in front of the person. A
+  /// start the person made (`signIn()`) presents it; a start `keepUp()` made
+  /// only records it, and the corner offers Sign in — Safari never opens on
+  /// its own.
+  @ObservationIgnored private var presentsLogin = false
+  /// The next start after a drop, waiting on the backoff, and how many came
+  /// before it since the mesh was last up.
+  @ObservationIgnored private var retryTask: Task<Void, Never>?
+  @ObservationIgnored private var retryAttempt = 0
+  /// The network coming back is a reason to retry at once rather than at the
+  /// end of the backoff.
+  @ObservationIgnored private var pathMonitor: NWPathMonitor?
   /// UA-P-5's latch: one re-gate at a time. Set synchronously, because the
   /// account is re-read from several events and two restarts racing each
   /// other would leave a node nobody holds.
@@ -107,6 +131,10 @@ public final class MeshModel {
       ? FieldTruffleRuntime.defaultStateDirectory(appID: FieldTruffleRuntime.legacyGhostteaAppID) : nil
     rememberedLogin = self.stateDirectory.map(AccountLoginStore.init(stateDirectory:))?.read()
   }
+
+  /// The re-dial ladder's ceiling: the product client's 500 ms doubling, held
+  /// at a minute.
+  static let retryCeiling: Duration = .seconds(60)
 
   public var isRunning: Bool { runtime != nil && state != .stopping }
 
@@ -178,34 +206,131 @@ public final class MeshModel {
     }
   }
 
-  /// The user's deliberate act of joining the tailnet.
-  public func connect() {
+  /// What `keepUp()` does, pure (pinned by tests). A signed-in phone with no
+  /// node starts one, a dead node is replaced, a living one is asked again, and
+  /// one already moving — or mid re-gate — is left to move. Signed out, nothing:
+  /// the first sign-in is the person's.
+  enum KeepUpStep: Equatable, Sendable {
+    case start, restart, refresh, nothing
+  }
+
+  nonisolated static func keepUpStep(
+    signedIn: Bool, state: State, hasRuntime: Bool, regating: Bool
+  ) -> KeepUpStep {
+    guard signedIn, !regating else { return .nothing }
+    switch state {
+    case .starting, .stopping: return .nothing
+    case .off, .failed, .reconnecting: return hasRuntime ? .restart : .start
+    case .needsLogin, .needsMachineAuth, .up: return hasRuntime ? .refresh : .start
+    }
+  }
+
+  /// Keep this phone on the mesh while it is signed in. Idempotent; the home
+  /// screen calls it at launch and on coming to the front, and the network
+  /// returning calls it while a re-dial waits.
+  public func keepUp() {
+    watchNetwork()
+    let step = Self.keepUpStep(
+      signedIn: rememberedLogin != nil, state: state, hasRuntime: runtime != nil, regating: regating)
+    if step != .nothing {
+      retryTask?.cancel()
+      retryTask = nil
+    }
+    switch step {
+    case .start: start(presentingLogin: false)
+    case .restart: restart()
+    case .refresh:
+      guard let runtime else { return }
+      Task {
+        try? await runtime.refresh()
+        await applyCurrentPhase()
+      }
+    case .nothing: break
+    }
+  }
+
+  /// The person's SIGN IN: the first sign-in starts a node and puts its login
+  /// page in front of them; a node already standing re-surfaces the page.
+  public func signIn() {
     // `regating` as well as the runtime: UA-P-5's restart has a beat with no
     // runtime in hand, and a tap landing in it would start a second node.
-    guard runtime == nil, !regating else { return }
+    if runtime == nil, !regating {
+      retryTask?.cancel()
+      retryTask = nil
+      start(presentingLogin: true)
+    } else {
+      requestLogin()
+    }
+  }
+
+  /// The app went to the background. The node stays (a hello per app switch
+  /// is the opposite of a budget); a waiting re-dial does not, and coming back
+  /// to the front (`keepUp()`) dials at once.
+  public func sceneDidEnterBackground() {
+    retryTask?.cancel()
+    retryTask = nil
+  }
+
+  private func start(presentingLogin: Bool) {
+    presentsLogin = presentingLogin
     state = .starting
     Task { await startRuntime() }
   }
 
-  public func disconnect() {
-    guard let runtime else { return }
-    state = .stopping
+  /// A node that stopped or failed still holds its runtime: stop it for good,
+  /// then start another. `self.runtime` points at the old node through the
+  /// stop, so a `keepUp()` landing meanwhile sees `.starting` and waits.
+  private func restart() {
+    guard let old = runtime else {
+      start(presentingLogin: false)
+      return
+    }
     eventsTask?.cancel()
     eventsTask = nil
-    self.runtime = nil
     peers = []
-    loginPage = nil
-    tailnetDomain = nil
-    // The account facts are facts about a RUNNING node, so they go with it.
-    // The remembered login on disk does NOT — leaving the mesh is not signing
-    // out; `signOut()` is (IOS-8d, AP-D4).
-    loginName = nil
-    isGatedOnAccount = false
-    accountNote = nil
+    presentsLogin = false
+    state = .starting
     Task {
-      await runtime.stop()
-      if state == .stopping { state = .off }
+      await old.stop()
+      guard self.runtime === old, state == .starting else { return }
+      self.runtime = nil
+      await startRuntime()
     }
+  }
+
+  /// The node went away under a signed-in phone: say so, and dial again on
+  /// the backoff. A first sign-in that failed is not retried by itself; its
+  /// reason stands until the person signs in again.
+  private func dropped(_ reason: String) {
+    guard rememberedLogin != nil else {
+      state = .failed(reason)
+      return
+    }
+    let delay = FieldProductClient.backoff(attempt: retryAttempt, ceiling: Self.retryCeiling)
+    retryAttempt += 1
+    state = .reconnecting(reason)
+    retryTask?.cancel()
+    retryTask = Task { [weak self] in
+      try? await Task.sleep(for: delay)
+      guard let self, !Task.isCancelled else { return }
+      self.retryTask = nil
+      self.keepUp()
+    }
+  }
+
+  /// The network coming back while a re-dial waits: dial now.
+  private func watchNetwork() {
+    guard pathMonitor == nil else { return }
+    let monitor = NWPathMonitor()
+    monitor.pathUpdateHandler = { [weak self] path in
+      guard path.status == .satisfied else { return }
+      Task { @MainActor in
+        guard let self, case .reconnecting = self.state else { return }
+        self.keepUp()
+      }
+    }
+    monitor.start(queue: DispatchQueue(label: "vibefield.mesh.path"))
+    pathMonitor = monitor
   }
 
   /// IOS-8d (AP-D4) — sign out: leave the mesh, forget this account's login
@@ -214,9 +339,13 @@ public final class MeshModel {
   /// a running node is not a sign-out — and the observable account facts go
   /// at once, so the corner never draws a face it is about to forget.
   ///
-  /// The next CONNECT is a fresh node and a fresh Tailscale sign-in; there
+  /// The next SIGN IN is a fresh node and a fresh Tailscale sign-in; there
   /// is no switch, because a phone holds one account at a time.
   public func signOut() {
+    retryTask?.cancel()
+    retryTask = nil
+    retryAttempt = 0
+    presentsLogin = false
     let sweep = SignOutSweep(
       login: rememberedLogin ?? loginName, stateDirectory: stateDirectory,
       legacyStateDirectory: legacyStateDirectory)
@@ -257,6 +386,7 @@ public final class MeshModel {
   /// The SIGN IN act: re-surface the pending login page, or nudge the node
   /// to emit a fresh one.
   public func requestLogin() {
+    presentsLogin = true
     if let url = lastLoginURL {
       loginPage = LoginPage(url: url)
     } else if let runtime {
@@ -272,8 +402,9 @@ public final class MeshModel {
         deviceName: UIDevice.current.name,
         stateDirectory: stateDirectory,
         onAuthRequired: { [weak self] url in
-          self?.lastLoginURL = url
-          self?.loginPage = LoginPage(url: url)
+          guard let self else { return }
+          self.lastLoginURL = url
+          if self.presentsLogin { self.loginPage = LoginPage(url: url) }
         })
       self.runtime = runtime
       if let gated = runtime.gatedLogin { rememberedLogin = gated }
@@ -285,11 +416,11 @@ public final class MeshModel {
           guard let self, !Task.isCancelled else { return }
           switch event {
           case .phase(let phase):
-            self.state = Self.state(for: phase)
+            if await self.wentDown(Self.state(for: phase)) { return }
             await self.refreshAccount()
           case .authRequired(let url):
             self.lastLoginURL = url
-            self.loginPage = LoginPage(url: url)
+            if self.presentsLogin { self.loginPage = LoginPage(url: url) }
           case .peersChanged:
             await self.refreshPeers()
             // UA-P-5 — the login is re-read HERE as well as on a phase change.
@@ -310,16 +441,47 @@ public final class MeshModel {
             self.accountNote = message
           }
         }
+        // The stream ended without anyone cancelling it: the node is gone.
+        guard let self, !Task.isCancelled, self.runtime === runtime else { return }
+        await self.lost(runtime, reason: "the mesh runtime stopped")
       }
     } catch {
       runtime = nil
-      state = .failed(Self.shortReason(error))
+      dropped(Self.shortReason(error))
     }
+  }
+
+  /// A phase the node reports, applied; true when it says the node is down
+  /// (stopped or failed with no one having asked), which is a drop.
+  private func wentDown(_ next: State) async -> Bool {
+    switch next {
+    case .off, .failed:
+      guard let runtime else { return true }
+      let reason: String
+      if case .failed(let why) = next { reason = why } else { reason = "the mesh runtime stopped" }
+      await lost(runtime, reason: reason)
+      return true
+    default:
+      state = next
+      if next == .up { retryAttempt = 0 }
+      return false
+    }
+  }
+
+  /// Let a dead node go for good and dial again.
+  private func lost(_ dead: FieldTruffleRuntime, reason: String) async {
+    guard runtime === dead else { return }
+    eventsTask?.cancel()
+    eventsTask = nil
+    runtime = nil
+    peers = []
+    await dead.stop()
+    dropped(reason)
   }
 
   private func applyCurrentPhase() async {
     guard let runtime else { return }
-    state = Self.state(for: await runtime.phase)
+    if await wentDown(Self.state(for: await runtime.phase)) { return }
     await refreshAccount()
   }
 
@@ -376,9 +538,8 @@ public final class MeshModel {
     accountNote = nil
     state = .starting
     // `self.runtime` deliberately still points at the old node through the
-    // stop. Nulling it first opens a window in which `connect()` sees no
-    // runtime and starts a SECOND one, and `disconnect()` sees none and
-    // returns without honouring the tap. Holding it means the user's acts keep
+    // stop. Nulling it first opens a window in which `keepUp()` or `signIn()`
+    // sees no runtime and starts a SECOND one. Holding it means every act keeps
     // working on the thing that exists, and the identity check below is what
     // notices that one of them happened.
     await runtime.stop()

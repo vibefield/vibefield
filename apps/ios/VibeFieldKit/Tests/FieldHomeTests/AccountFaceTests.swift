@@ -39,7 +39,7 @@ struct AccountFaceTests {
     #expect(corner.control == .signIn)
     #expect(!corner.wantsAttention)
     #expect(corner.desktops.isEmpty)
-    #expect(corner.connectionAct == nil)
+    #expect(!corner.offersSignIn)
     #expect(!corner.canSignOut)
     #expect(corner.notice == nil)
   }
@@ -56,7 +56,7 @@ struct AccountFaceTests {
     #expect(corner.detailIsLogin)
     #expect(corner.desktops == [.init(id: "dev-1", name: "studio", word: nil, wantsTheUser: false)])
     #expect(corner.othersLine == nil)
-    #expect(corner.connectionAct == .disconnect)
+    #expect(!corner.offersSignIn)
     #expect(corner.canSignOut)
   }
 
@@ -69,7 +69,7 @@ struct AccountFaceTests {
     #expect(!corner.detailIsLogin)
   }
 
-  @Test("the mesh off with a remembered login: the face, the desktops asleep, Connect on offer")
+  @Test("the mesh off with a remembered login: the face, the desktops asleep, and no act — it re-dials by itself")
   func desktopsAsleep() {
     let corner = face(
       meshState: .off, remembered: login, face: fox,
@@ -79,7 +79,7 @@ struct AccountFaceTests {
     #expect(corner.detail == "not connected")
     #expect(corner.desktops.map(\.name) == ["mini", "studio"])
     #expect(corner.desktops.allSatisfy { $0.word == "asleep" && !$0.wantsTheUser })
-    #expect(corner.connectionAct == .connect)
+    #expect(!corner.offersSignIn)
     #expect(corner.canSignOut)
   }
 
@@ -103,7 +103,7 @@ struct AccountFaceTests {
     #expect(corner.notice == "Sign in to your tailnet to reach your desktops.")
     #expect(corner.detail == "sign in again")
     #expect(corner.detailWantsAttention)
-    #expect(corner.connectionAct == .signIn)
+    #expect(corner.offersSignIn)
   }
 
   @Test("a refused desktop is the other cause of the dot, and its row says so")
@@ -129,7 +129,21 @@ struct AccountFaceTests {
     let corner = face(meshState: .starting, remembered: login)
     #expect(corner.control == .blank)
     #expect(corner.detail == "connecting…")
-    #expect(corner.connectionAct == nil)
+    #expect(!corner.offersSignIn)
+  }
+
+  @Test("a drop while signed in: the face stays, no dot, the line says reconnecting…, and nothing to tap")
+  func reconnecting() {
+    // 2026-10-18 — the phone stays connected by itself: a lost mesh is the
+    // mesh's own news, re-dialled on its backoff, never a button for the person.
+    let corner = face(meshState: .reconnecting("the network went away"), remembered: login, face: fox)
+    #expect(corner.control == .face(fox))
+    #expect(!corner.wantsAttention)
+    #expect(corner.detail == "reconnecting…")
+    #expect(!corner.detailWantsAttention)
+    #expect(corner.notice == nil)
+    #expect(!corner.offersSignIn)
+    #expect(corner.canSignOut)
   }
 
   @Test("the pre-login window with no account remembered is not the sign-in pill")
@@ -139,7 +153,7 @@ struct AccountFaceTests {
     // phone with no node and no account at all.
     let corner = face(meshState: .needsLogin)
     #expect(corner.control == .blank)
-    #expect(corner.connectionAct == .signIn)
+    #expect(corner.offersSignIn)
     #expect(!corner.canSignOut)
   }
 }

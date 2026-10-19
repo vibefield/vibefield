@@ -20,7 +20,7 @@ enum FieldHomeModel {
   /// the bug. Backgrounding **parks** a field whose door is still good: the
   /// Truffle runtime did not go anywhere, so the rows stay on screen and the
   /// poll resumes on return. A mesh that left **closes the door**:
-  /// `MeshModel.connect()` builds a fresh runtime, so the directory the field
+  /// a start builds a fresh runtime, so the directory the field
   /// was holding names a node that no longer exists, and keeping its rows would
   /// be the stage claiming a mesh answered when none did.
   ///
@@ -223,14 +223,6 @@ enum FieldHomeModel {
       case face(UserFace)
     }
 
-    /// The connection's own act, as a row in the menu — what the mesh sheet's
-    /// one button used to be.
-    enum ConnectionAct: Equatable {
-      case connect
-      case signIn
-      case disconnect
-    }
-
     struct DesktopRow: Equatable, Identifiable {
       let id: String
       let name: String
@@ -251,7 +243,11 @@ enum FieldHomeModel {
     var notice: String?
     var desktops: [DesktopRow]
     var othersLine: String?
-    var connectionAct: ConnectionAct?
+    /// Sign in, as a row in the menu: the one act the connection still asks
+    /// of the person, and only while the tailnet asks for it. There is no
+    /// connect and no disconnect — the phone stays on the mesh by itself while
+    /// it is signed in (James, 2026-10-18).
+    var offersSignIn: Bool
     var canSignOut: Bool
   }
 
@@ -281,7 +277,7 @@ enum FieldHomeModel {
     let account = live ?? remembered
     let nodeStanding: Bool =
       switch meshState {
-      case .off, .failed: false
+      case .off, .failed, .reconnecting: false
       case .starting, .needsLogin, .needsMachineAuth, .up, .stopping: true
       }
 
@@ -316,7 +312,7 @@ enum FieldHomeModel {
       detailWantsAttention =
         switch meshState {
         case .needsLogin, .needsMachineAuth, .failed: true
-        case .off, .starting, .up, .stopping: false
+        case .off, .starting, .up, .stopping, .reconnecting: false
         }
     }
 
@@ -332,14 +328,6 @@ enum FieldHomeModel {
       .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
       .map { .init(id: $0.deviceId, name: $0.name, word: AccountDisplay.asleep, wantsTheUser: false) }
 
-    let act: AccountFace.ConnectionAct? =
-      switch meshState {
-      case .off, .failed: account != nil ? .connect : nil
-      case .needsLogin: .signIn
-      case .up, .needsMachineAuth: .disconnect
-      case .starting, .stopping: nil
-      }
-
     return AccountFace(
       control: control,
       wantsAttention: wantsAttention,
@@ -350,7 +338,7 @@ enum FieldHomeModel {
       notice: AccountDisplay.notice(state: meshState),
       desktops: rows,
       othersLine: AccountDisplay.othersLine(count: foreignDoors),
-      connectionAct: act,
+      offersSignIn: meshState == .needsLogin,
       canSignOut: account != nil)
   }
 }

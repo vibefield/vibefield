@@ -9,8 +9,9 @@ import SwiftUI
 /// the island's curve into a 276 pt panel of solid chrome, corners concentric
 /// with the circle. The face never moves, so the second tap lands on the same
 /// face and folds it away. It reads bottom-up, nearest first: you · your
-/// desktops · Settings… · the connection's act · Sign out farthest from the
-/// thumb.
+/// desktops · Settings… · Sign in (only while the tailnet asks for it) · Sign
+/// out farthest from the thumb. There is no connect or disconnect: the phone
+/// stays on the mesh by itself while it is signed in (2026-10-18).
 ///
 /// Every word is `FieldHomeModel.accountFace`'s; this draws what it is handed.
 ///
@@ -32,7 +33,7 @@ struct AccountCornerView: View {
   let onToggle: () -> Void
   let onSettings: () -> Void
   let onSignOut: () -> Void
-  let onConnection: (FieldHomeModel.AccountFace.ConnectionAct) -> Void
+  let onSignIn: () -> Void
 
   /// The circle's diameter — the bar's row, so the corner and the search
   /// circle are one size — and the menu's corner radius twice over.
@@ -61,7 +62,7 @@ struct AccountCornerView: View {
   /// and place whether or not anyone is signed in.
   private var signInCircle: some View {
     Button {
-      onConnection(.connect)
+      onSignIn()
     } label: {
       VStack(spacing: 2) {
         Image(systemName: "person.crop.circle")
@@ -216,8 +217,8 @@ struct AccountCornerView: View {
       if face.canSignOut {
         AccountMenuRow(glyph: "rectangle.portrait.and.arrow.right", label: "Sign out", action: onSignOut)
       }
-      if let act = face.connectionAct {
-        AccountMenuRow(glyph: act.glyph, label: act.label) { onConnection(act) }
+      if face.offersSignIn {
+        AccountMenuRow(glyph: "key", label: "Sign in", action: onSignIn)
       }
       AccountMenuRow(glyph: "gearshape", label: "Settings…", action: onSettings)
       separator
@@ -253,24 +254,6 @@ struct AccountCornerView: View {
       .frame(height: 1)
       .padding(.horizontal, 6)
       .padding(.vertical, 4)
-  }
-}
-
-extension FieldHomeModel.AccountFace.ConnectionAct {
-  var label: String {
-    switch self {
-    case .connect: "Connect"
-    case .signIn: "Sign in"
-    case .disconnect: "Disconnect"
-    }
-  }
-
-  var glyph: String {
-    switch self {
-    case .connect: "antenna.radiowaves.left.and.right"
-    case .signIn: "key"
-    case .disconnect: "antenna.radiowaves.left.and.right.slash"
-    }
   }
 }
 

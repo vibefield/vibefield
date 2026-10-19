@@ -25,7 +25,7 @@
       case "signedin":
         return make(.up, login: login, face: fox, desktops: [ready("studio")], asleep: [("dev-2", "mini")], hearing: true)
       case "asleep":
-        return make(.off, remembered: login, face: fox, asleep: [("dev-1", "studio"), ("dev-2", "mini")])
+        return make(.reconnecting("the network went away"), remembered: login, face: fox, asleep: [("dev-1", "studio"), ("dev-2", "mini")])
       case "attention":
         return make(.needsLogin, remembered: login, face: fox, asleep: [("dev-1", "studio"), ("dev-2", "mini")])
       case "noface":
