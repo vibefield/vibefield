@@ -11853,3 +11853,182 @@ passed, 0 failed, 0 restarts (07:42:56Z at 9.80).
 witness on the fixed writer; D2/C6 — no way back from ANY lineage break (the cell has no reseed door; the phone's
 `requestReseed` edits local state only) — stays open (ROADMAP "Open debts", TP-S3d's follow-ups). No DECISIONS row: a
 defect, no design.
+
+## GV-D4 re-ruled — a session opens in the focused pane: every pane is an observer, and a session another pane shows is mirrored there (2026-10-19; `43b048b70`, lane `focus/fix-pane-observe`, sha unchanged)
+
+**What James asked (2026-10-18 22:30Z):** "when i select a pane, and then click on any bubble, it should actually attach
+the clicked bubble to this terminal pane, because the meaning behind this action is that each pane is an window/observer,
+and it can monitor any of the sessions user want to observe".
+
+**The ruling (23:33Z, the focus session):** asked whether it applies to monitor clicks only or replaces GV-D4 everywhere,
+James answered "Everywhere". Asked about a session another pane already shows, he answered "Mirror it". This re-rules
+GV-D4's answer of 2026-10-02 ("Beside the focused pane, up to three", built at `06ad0ecf6` on 10-11). That build's "never
+mounted twice" came from the drawing's code, never from a ruling. The new rule returns to GT-D17 (08-05): "clicking a
+bubble attaches the CURRENT ACTIVE pane".
+
+**The change (one commit, built by an Opus builder in `/Volumes/SamsungRed/focus-tp`):**
+- `deckPlacement`: the focused pane already shows it → focus; any focused pane → replace, a mirror when another pane shows
+  it; no focused pane → none. The `beside` answer, `DECK_PLACEMENT_PANES` and the empty-pane field are removed. ⌘D is
+  the one deliberate way to more panes.
+- The deck only mounts; it never adds or splits. `mountLocalNow` skips the floor read only when the focused pane itself
+  shows the session. The zoom rule and the geometry seat are unchanged: in a mirror, the pane that holds the seat sets
+  the size.
+- Every door follows the rule: a body, a list row, a rain column, a timeline lane, a spend row, a search result, History's
+  Resume and Jump to, the Peek's Open, a peer's attach, ⌘T and the bloom. Their notes now say "… in the active pane".
+- Docs first, in the commit: DESIGN.md §8 "A session with no pane", DECISIONS GV-D4 RE-RULED, `docs/agent-plane/system.html`.
+- smoke:godview's 13a now clicks a local terminal row (its selector had clicked "＋ New terminal…"). It prefers a session
+  another pane shows and asserts the mirror. The jump rungs' steps 6 and 6b assert the mirror too.
+
+**Checks (the builder's, each armed at load < 10):**
+- vitest on the 16 touched field-app files: 451 passed. Control on `44f59b8da`: 451. With the source change alone, the 26
+  rows pinning the old rule went red.
+- Both typechecks: exit 0. biome clean.
+- Probe: the old "any pane shows it" check put back fails both new mirror rows.
+
+**Witness:** James's desktop ran the lane as his dev app from 01:38:37Z 10-19, on his own dev root. James, 01:47Z: "good,
+i think they all work pretty good". His running app already holds this exact commit, so it lands sha for sha.
+
+**Gate:** the train's, at its tip `afeaccb68`, in segments, all green: see **Validation** in this train's
+last entry ("IOS — the phone's swarm paints at 120 Hz").
+
+## D-i12 ruled — the phone's one pane lights its bubble in the theme's ink, black by day and white by night (2026-10-19; `654f330b7` → `d09eb65dd`)
+
+**What James asked (22:30Z 10-18):** "in monitor view, the color of the bubble is the color of the terminal pane which
+attach to it, and on mobile there is only one pane, so color no longer make sense, so just keep the glow it generic white,
+black instead".
+
+**The change:**
+- DESIGN.md §2.7 first: the phone's one pane draws its band and light in text main (`#111111` / `#FFFFFF`). No new token.
+- DECISIONS D-i12 RULED.
+- `mounted` replaces the pane-colour link through FieldBubble, SwarmBodyModel and RenderBody. `packedBody` packs
+  `theme.ink`.
+- Removed as dead code: PaneLink, PaneColourLedger and the pane wheel (with its parity goldens).
+- The desktop's panes keep their colours.
+
+**Checks:**
+- FieldAgentsTests 110 and FieldSwarmTests 32 passed.
+- The whole kit: one red, a FieldTerminal real-socket deadline row this change doesn't touch, green alone (11/11).
+- Probe: the band packed as the surface fails only the new row, in both themes.
+
+**Gate:** the train's, at its tip `afeaccb68`, in segments, all green: see **Validation** in this train's
+last entry ("IOS — the phone's swarm paints at 120 Hz").
+
+## IOS — signed in is connected: the phone keeps its mesh up by itself and re-dials a drop; the corner's Connect and Disconnect are gone (2026-10-19; `dd109bfd9` → `b844febfa`)
+
+**What James asked:** "on mobile, there should not be a connect button, the phone should automatically connect to desktop
+as long as the account is logged in, user should not need to manually tap connect or disconnect, it is auto connected and
+maintained connection all the time".
+
+**Before:** in a Release build nothing connected by itself, and a drop was never retried. Found on the way: a `.stopped`
+runtime made the next start refuse silently.
+
+**The change:**
+- `MeshModel.keepUp()` runs at launch, on coming to the front, and when the network returns. Its steps are a pure table
+  (`keepUpStep`).
+- A drop is `reconnecting(reason)` and re-dials on the product client's ladder (0.5 s doubling, held at 60 s).
+- `signIn()` is the person's act; an automatic start never opens Safari.
+- `connect()` and `disconnect()` are removed.
+- The corner offers Sign in only while the tailnet asks, and the open menu's line says "reconnecting…".
+
+**Checks:**
+- FieldMeshTests 264 and FieldHomeTests 44 passed.
+- Probe: a waiting re-dial never taken up fails the step table's two reconnecting rows.
+
+**James's small questions** (sent to VF-PM; built at the leans):
+- The closed corner is silent while it reconnects.
+- The node stays up in the background.
+- An expired key shows the dot without opening Safari.
+- Not built: should remembered desktops read "asleep" during an outage?
+
+**Gate:** the train's, at its tip `afeaccb68`, in segments, all green: see **Validation** in this train's
+last entry ("IOS — the phone's swarm paints at 120 Hz").
+
+## IOS — the phone's swarm paints at 120 Hz, blends by the clock, and steps its physics at the display's rate with Matter's constraint law: a held bubble follows the finger (2026-10-19; `e022459c4` `94a6d1408` `67c6f69ab` `6b3fb0b70` → `cfb002763` `dac958e3b` `bed8d0e72` `afeaccb68`)
+
+**What James asked:** "on phone, the physics feels not as smooth as long before, the interaction sometimes feels laggy, and
+lacks the buttery smooth feeling".
+
+**Cause** (the audit of 10-18; the regression is IOS-6b `2ac903281`, 09-13): the phone went from one step per vsync to 30
+Hz steps plus a blend drawn one step behind, all on the main thread, with the app capped at 60 Hz (no
+`CADisableMinimumFrameDurationOnPhone`). The blend took a frame's AGE, so draw jitter stalled a frame and jumped the next.
+The MV lead measured the same one-step cause on the desktop (probe-8, about 37 px behind a 1000 px/s pointer); the desktop
+fix is its own.
+
+**The four commits:**
+- **The DEBUG frame meter:** every 5 s, the rate, p50 / p95 / max of the frame interval, the long frames and the steps a
+  frame.
+- **The 120 Hz key.**
+- **`SwarmWorld.blend`:** accumulator ÷ step, in place of the frame-age blend.
+- **`SwarmParameters.phone` (120 Hz) and Matter's constraint law** (`stiffness × min(1, Δ/16.67)²`). In Verlet a drag is a
+  mass on a spring, and only the square keeps July's 60 Hz swing at 120 Hz.
+
+**Errata at source:** `physicsHz`'s "a cost knob and not a smoothness knob" is corrected, dated.
+
+**Checks:**
+- FieldSwarmTests 35 and SwarmPhysicsTests 29 passed.
+- Probes:
+  - the frame-age blend put back stalls 3 frames under jitter;
+  - the flat spring put back swings 24–60 pt apart from 60 Hz.
+
+**Witness on James's phone (01:39Z):** the meter over 71 windows read 67 at ≥ 110 Hz, p50 8.3 ms, ≈1.00 steps a frame.
+James, 01:47Z: "good, i think they all work pretty good". Some windows in use still show long frames. P4–P7 (text-layout
+cache, FieldLink publishing only on change, LivePulse off-page, pause under a card) are recorded and held until he asks.
+
+**Validation (the train, all four lanes):**
+- **The gate ran at the train's tip `afeaccb68`, in segments** (VF-PM's grant of 2026-10-19 01:52Z). It ran in
+  its own worktree `/Volumes/SamsungRed/focus-fix`, with its own puppeteer, mille-pin and ghosttea-0.11.2 worktrees
+  at the lock's revisions, its own `CARGO_TARGET_DIR`, `TMPDIR=/tmp` and `NX_DAEMON=false`. A wrapper outside the
+  tree drove it, `/Volumes/SamsungRed/focus-fix/scripts/gate-train.sh`; the repo's gate script was not edited.
+  Each segment armed inside the command: 1-min load < 10, the PM-WINDOW naming the focus session, and no other
+  gate, verify or perf lock. Each also started only with 10 GiB free on the internal disk, and the desk rows waited
+  for an unlocked screen too.
+- **Run 1 is not the gate of record:** `pnpm verify` armed 02:13:30Z at 1-min load 9.43 and ended EXIT 1 at 02:20:47Z,
+  red only in `packages/electron-shell/test/smoke-profile.test.ts` (3 rows, `ENOENT … electron/path.txt`). The cause was
+  the lane's setup: a fresh lane has no Electron 43 binary until first use (LANDED's RD-5a lane note), and another
+  file's `require('electron')` fetched it mid-suite. Log: `/Volumes/SamsungRed/focus-fix/logs/afeaccb68/verify.run1-electron-first-use.out`.
+  Run 2, below, is the gate of record.
+- **verify (run 2, the gate of record):** `pnpm verify` verbatim, armed 02:32:36Z at 1-min load 9.98, ended 02:40:13Z
+  EXIT 0 (load 35/85/66 at the end). The vitest suites summed to 8,867 passed, and cargo to 314 passed in 23 test
+  binaries with 0 failed. check:deps reported one copy each, gen:check was clean, and the tree stayed clean.
+- **The stages, once, each alone** (`gate-landing.mjs --only <the 14>`): armed 03:25:38Z at 1-min load 9.42, ended
+  03:31:53Z with all 14 ok. preflight, check:walls, check:deps, check:retired, check:ios-fixtures, icons:check, lint,
+  fmt, bundle:assert and gen:check each took 0–4 s. typecheck took 86 s, lint:rust 7 s, `test` 181 s (load 8→182) and
+  `test:rust` 83 s.
+- **The 13 desk rows: 13/13 ok.** Each ran ALONE (`gate-landing.mjs --only <row>`), SHOWN, armed at 1-min load < 10 with
+  the screen unlocked (ioreg `CGSSessionScreenIsLocked`). In run order, each row with its arm time, arm load and
+  duration:
+
+  | Row | Armed | Load at arm | Time |
+  |---|---|---|---|
+  | still | 03:35:56Z | 9.97 | 38 s |
+  | smoke | 03:37:34Z | 9.82 | 36 s |
+  | smoke:canvas | 03:39:51Z | 9.75 | 922 s |
+  | smoke:canvas:no-gpu | 03:55:34Z | 9.85 | 31 s |
+  | smoke:canvas:no-webgpu | 04:00:28Z | 9.86 | 30 s |
+  | smoke:kind-faults | 04:01:18Z | 9.45 | 80 s |
+  | smoke:plugin-restart | 04:07:01Z | 9.67 | 77 s |
+  | smoke:plugin | 04:10:20Z | 9.98 | 58 s |
+  | smoke:godview | 04:12:39Z | 8.26 | 152 s |
+  | smoke:terminal-door | 04:17:12Z | 9.81 | 35 s |
+  | smoke:terminal-direct | 04:18:48Z | 9.80 | 38 s |
+  | smoke:studio | 04:20:27Z | 9.98 | 42 s |
+  | smoke:bundled | 04:21:09Z | 8.01 | 97 s |
+
+- smoke:godview's re-ruled rows held:
+  - 13a's `localPlacement` read "mirrored into the focused pane (2 → 2 panes)", acknowledged "person mounted in the
+    active pane";
+  - the jump rungs' `jumpTo.jumped` read "Jumped to its pane", showing 2;
+  - the bloom said "terminal opened under Smoke Work in the active pane".
+- **The kit suite** was `xcodebuild test -scheme VibeFieldKit-Package` with derived data on the SSD. It ran on the
+  EXISTING iPhone 17 Pro simulator, F93EABF3-4281-4EB5-A5F6-A550FBE95CDC (iOS 26.5); none was created or deleted
+  (VF-PM accepted that over the grant's "created by UDID"). It armed at 04:22:47Z at 1-min load 9.78, with 12.2 GiB
+  free, and ended `** TEST SUCCEEDED **` at 04:24:32Z: 12 swift-testing runs, 1,133 tests in 215 suites, all passed,
+  no crash or restart.
+- **Teardown:** every smoke's `SMOKE_DAEMONS` left `[]` and reaped `[]`. `still` and smoke:plugin print no such
+  line. None of this gate's `/tmp/vf-smoke-*` dirs was left.
+
+**Owed:**
+- ghosttea v0.10.2, James's release, with a dist-tag guard first. Then the kit pin commit on F1 beside `d5aebf313`, and
+  the keyboard no longer rises on a scroll without the dev-only override.
+- James's ruled item 1 (A, the round pull, 02:02Z 10-19) is the MV lead's puppeteer commit and a pin bump.
+- P4–P7, held until James asks.
