@@ -112,6 +112,7 @@ import type {
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
 import { type DeckSession, describePane, type PaneFace } from "./pane-faces";
 import { RemotePaneState } from "./RemotePaneState";
+import { SeatPaneState } from "./SeatPaneState";
 import "@vibecook/ghosttea-react/styles.css";
 import "@vibecook/ghosttea-react/workspace.css";
 
@@ -1849,6 +1850,8 @@ export function GodviewDeck({
           <ChromeBoundary name="Pane frame" retryKey={retryKey}>
             <PaneFrame session={session} {...props} {...(remote !== undefined ? { remote } : {})} />
             <RemotePaneState pane={props.pane} sessionId={session.id} nameOf={nameOf} />
+            {/* item 42 — the pane says who drives its session from another device */}
+            <SeatPaneState pane={props.pane} sessionId={session.id} />
           </ChromeBoundary>
         );
       },

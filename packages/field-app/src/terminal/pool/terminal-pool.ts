@@ -16,6 +16,11 @@ import { terminalLinkOpener } from "../links";
 import { createRoutedTerminalHost, type RoutedTerminalHostBinding } from "../routed/host";
 import type { RemoteRefusal } from "../routed/remote-refusal";
 import {
+  foldSessionSeat,
+  type SessionSeat,
+  type SessionSeatAnnouncement,
+} from "../routed/session-seat";
+import {
   type CellBootId,
   type CellTransport,
   CellTransportTable,
@@ -151,6 +156,12 @@ export interface TerminalPoolSnapshot {
    * land (session id → the routed host's structured refusal): the pane's
    * honest state. Absent once a ticket lands. The same object until it changes. */
   readonly remoteRefusals: ReadonlyMap<string, RemoteRefusal>;
+  /** item 42 — each session's geometry seat as its cell last announced it
+   * (session id → its holder, whether that holder is this window, the revision
+   * and the PTY's committed size): what a pane says while another device
+   * drives it. Absent until the cell has announced one to this window. The same
+   * object until it changes, and each seat the same until IT does. */
+  readonly sessionSeats: ReadonlyMap<string, SessionSeat>;
 }
 
 /** The stations the pool can stamp on a cold-open trace. Structural on purpose:
@@ -269,6 +280,22 @@ function recordRemoteRefusal(sessionId: string, refusal: RemoteRefusal | undefin
   publish();
 }
 
+/** item 42 — the cells' announcements of each session's geometry seat, by
+ * session, folded newest-first (`foldSessionSeat`); replaced, never mutated. */
+const sessionSeats = new Map<string, SessionSeat>();
+let sessionSeatsView: ReadonlyMap<string, SessionSeat> = new Map();
+
+/** The routed host's `onSessionSeat`: one announcement, published only when
+ * it moved the seat — a stale or repeated one changes nothing a pane reads. */
+function recordSessionSeat(sessionId: string, announced: SessionSeatAnnouncement): void {
+  const stored = sessionSeats.get(sessionId);
+  const seat = foldSessionSeat(stored, announced);
+  if (seat === stored) return;
+  sessionSeats.set(sessionId, seat);
+  sessionSeatsView = new Map(sessionSeats);
+  publish();
+}
+
 /** Write one row of the record (undefined: the shell is under none). */
 function recordProfileSet(sessionId: string, profileSet: string | undefined): void {
   if (sessionProfileSets.get(sessionId) === profileSet) return;
@@ -332,6 +359,7 @@ function buildSnapshot(): TerminalPoolSnapshot {
     profileSets: profileSetsView,
     closingSessionIds: [...closingSessionIds],
     remoteRefusals: remoteRefusalsView,
+    sessionSeats: sessionSeatsView,
   };
 }
 
@@ -602,6 +630,7 @@ function ensureRuntime(): GhostteaTerminalRuntime {
     onTicket: recordRoutedTicket,
     onTerminated: forgetRoutedSession,
     onRemoteRefusal: recordRemoteRefusal,
+    onSessionSeat: recordSessionSeat,
   });
   // GT-8b: the same client carries ⌘-clicked links to fieldd's
   // `terminal.link.open` — one runtime per window, so one opener for every
@@ -661,6 +690,12 @@ function disposeRuntime(): void {
     remoteRefusals.clear();
     remoteRefusalsView = new Map();
   }
+  // item 42 — nor a seat its legs announced: the next runtime's legs are told
+  // the seat again as they attach (the cell's announcement on attach)
+  if (sessionSeats.size > 0) {
+    sessionSeats.clear();
+    sessionSeatsView = new Map();
+  }
 }
 
 /** G23's ticket callback: retain only transport-private route/grant state. */
@@ -688,6 +723,7 @@ function forgetRoutedSession(sessionId: string): void {
   createdSummaries.delete(sessionId);
   remoteSessions.delete(sessionId);
   if (remoteRefusals.delete(sessionId)) remoteRefusalsView = new Map(remoteRefusals);
+  if (sessionSeats.delete(sessionId)) sessionSeatsView = new Map(sessionSeats);
   recordProfileSet(sessionId, undefined);
   shellBirths.delete(sessionId);
   const cell = placements.cellFor(sessionId);
@@ -1373,6 +1409,8 @@ export function disposeTerminalPool(): void {
   remoteSessions.clear();
   remoteRefusals.clear();
   remoteRefusalsView = new Map();
+  sessionSeats.clear();
+  sessionSeatsView = new Map();
   sessionProfileSets.clear();
   profileSetsView = new Map();
   shellBirths.clear();

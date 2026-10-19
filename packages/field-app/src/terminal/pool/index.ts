@@ -3,6 +3,7 @@
 // factory are the pool's own business (TP-L-C).
 
 export type { RemoteRefusal, RemoteRefusalState } from "../routed/remote-refusal";
+export type { SessionSeat } from "../routed/session-seat";
 export type { CellBootId, TerminalShellPolicy } from "./cell-transport";
 export {
   LIVE_SOURCE_DEMAND,

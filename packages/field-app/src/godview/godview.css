@@ -1388,6 +1388,209 @@
   }
 }
 
+/* item 42 — A SESSION ANOTHER DEVICE IS DRIVING (`SeatPaneState.tsx`;
+   DESIGN.md §8). While the pane's session has its geometry seat held outside
+   this window, the pane goes on drawing it at the holder's size and says so in
+   the held-edge readout's figure (James, 2026-10-19 21:38Z): the holder's name
+   full and its verb at 40%, 800 at 64px/1, −0.04em, in Godview's text main,
+   haloed in the terminal's ground (40 and 18), centred over a VEIL of that
+   ground at 62% — the held-edge readout's veil, so Godview has one — the
+   content dimmed beneath it, never hidden and never blurred (James,
+   2026-10-19 17:42Z). Under the words ONE CAPTION LINE in the launch caption's
+   type, the size in mono. The PANE COLOUR lights it, two inset glows and a
+   bloom behind the words; the pane's line stays the frame's own 1px, never the
+   selection ring's 1.5 (§2.3): no key goes to this pane. With the remote
+   state, under the pane's frame (7), so the badge and its verbs stay lit over
+   it. It never takes a click: the pane's press takes the seat back. */
+.vf-godview-seat-state {
+  /* the pane colour as the frame reads it (`deck-frame.css`): the project
+     colour Ghosttea sets on the pane, else the terminal's ink at 70% */
+  --pane-color: var(
+    --ghostty-pane-color,
+    color-mix(in srgb, var(--vf-godview-terminal-ink, currentcolor) 70%, transparent)
+  );
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+  /* the pane's own corners (a selected pane's 8), so the glow never squares them */
+  border-radius: inherit;
+  font-family: var(--vf-font-sans);
+  text-align: center;
+  pointer-events: none;
+}
+
+.vf-godview-seat-state-veil {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--deck-ground) 62%, transparent);
+  transition: opacity 200ms ease;
+}
+
+/* behind the words, 600 × 380: the pane colour from 50% at its centre through
+   16% at 52% to clear */
+.vf-godview-seat-state-bloom {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 600px;
+  height: 380px;
+  margin: -190px 0 0 -300px;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--pane-color) 50%, transparent),
+    color-mix(in srgb, var(--pane-color) 16%, transparent) 52%,
+    transparent
+  );
+  transition:
+    opacity 600ms var(--vf-ease-island) 140ms,
+    transform 600ms var(--vf-ease-island) 140ms;
+}
+
+.vf-godview-seat-state-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 30px 2px color-mix(in srgb, var(--pane-color) 74%, transparent),
+    inset 0 0 130px 18px color-mix(in srgb, var(--pane-color) 30%, transparent);
+  transition: opacity 600ms var(--vf-ease-island);
+}
+
+/* the readout's figure (`.vf-godview-deck-readout b`), haloed in the ground
+   the words stand on: the terminal's, not the monitor's. A narrow pane cuts a
+   long name at its edges, as the figure never wraps. */
+.vf-godview-seat-state-words {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0;
+  color: var(--text-main);
+  font: 800 64px / 1 var(--vf-font-sans);
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+  text-shadow:
+    0 0 40px var(--deck-ground),
+    0 0 18px var(--deck-ground);
+}
+
+/* the name whole, for a screen reader: the letters on screen are its boxes */
+.vf-godview-seat-state-said {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* each letter on the pop, its delay inline (`SeatPaneState.tsx`) */
+.vf-godview-seat-state-name > span {
+  display: inline-block;
+  transition:
+    opacity 280ms var(--vf-ease-pop),
+    transform 280ms var(--vf-ease-pop);
+}
+
+/* the verb's 40% is its colour, so its halo stays whole and its opacity is
+   the entrance's */
+.vf-godview-seat-state-verb {
+  margin-top: 4px;
+  color: color-mix(in srgb, var(--text-main) 40%, transparent);
+  transition:
+    opacity 560ms var(--vf-ease-island) 340ms,
+    letter-spacing 560ms var(--vf-ease-island) 340ms;
+}
+
+/* the launch caption's type (11px 600, the terminal's ink at 72%) */
+.vf-godview-seat-state-caption {
+  position: relative;
+  margin: 20px 0 0;
+  color: color-mix(in srgb, var(--vf-godview-terminal-ink, currentcolor) 72%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  text-shadow:
+    0 0 12px var(--deck-ground),
+    0 0 6px var(--deck-ground);
+  transition:
+    opacity 240ms var(--vf-ease-island) 540ms,
+    transform 240ms var(--vf-ease-island) 540ms;
+}
+
+.vf-godview-seat-state-size {
+  color: var(--text-main);
+  font-family: var(--vf-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+/* THE ENTRANCE PLAYS ONCE, 400ms after the seat goes (the controller's wait),
+   from these starting styles: the veil in 200ms on plain `ease`, the glow on
+   the island curve in 600ms and the bloom, from 0.4, in 600ms from 140ms; the
+   letters on the pop, from half an em below, 140ms behind the veil and 26ms
+   apart, the whole stagger never more than 400ms (§6); the verb tracking in
+   from .34em on the island curve in 560ms from 340ms; the caption rising 8px
+   in 240ms from 540ms. Then it holds still. Transitions, never a keyframe:
+   GT-D15.1's audit admits none at rest, and a held seat is a state, not a
+   wait (§6). It goes at once — it unmounts — when this window takes the seat. */
+@starting-style {
+  .vf-godview-seat-state-veil,
+  .vf-godview-seat-state-glow {
+    opacity: 0;
+  }
+
+  .vf-godview-seat-state-bloom {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+
+  .vf-godview-seat-state-name > span {
+    opacity: 0;
+    transform: translateY(0.5em);
+  }
+
+  .vf-godview-seat-state-verb {
+    opacity: 0;
+    letter-spacing: 0.34em;
+  }
+
+  .vf-godview-seat-state-caption {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.vf-godview[data-godview-animations="off"] .vf-godview-seat-state,
+.vf-godview[data-godview-animations="off"] .vf-godview-seat-state * {
+  transition: none;
+}
+
+/* M6: the whole of it fades in over 100ms, with no travel and no stagger */
+@media (prefers-reduced-motion: reduce) {
+  .vf-godview-seat-state {
+    transition: opacity 100ms ease;
+  }
+
+  @starting-style {
+    .vf-godview-seat-state {
+      opacity: 0;
+    }
+  }
+
+  .vf-godview-seat-state-veil,
+  .vf-godview-seat-state-bloom,
+  .vf-godview-seat-state-glow,
+  .vf-godview-seat-state-name > span,
+  .vf-godview-seat-state-verb,
+  .vf-godview-seat-state-caption {
+    transition: none;
+  }
+}
+
 /* M49 — a deck piece behind its own boundary (the views package's
    ChromeBoundary) says "<name> unavailable" in a status span where the piece
    stood, and wears the deck's own unavailable face. The frames and launchers

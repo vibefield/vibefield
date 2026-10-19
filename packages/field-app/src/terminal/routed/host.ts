@@ -12,6 +12,7 @@ import type {
 } from "@vibecook/ghosttea-react";
 import {
   decodeTpMessage,
+  type GeometryState,
   type SessionEvent,
   TERMINAL_SESSION_CAP,
   TerminalOpenTicket,
@@ -19,17 +20,34 @@ import {
   TerminalRenewAttachResult,
   TerminalRuntimeSessionsResult,
   TerminalTerminateResult,
+  type TpMessageType,
 } from "@vibefield/contracts";
 import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
 import { requestResolvingOutcome } from "../../forwarded-call";
+import { getRendererLogger } from "../../logging";
 import { createRoutedInputEncoder } from "./encode-input";
 import { type RemoteRefusal, remoteRefusalOf } from "./remote-refusal";
+import type { SessionSeatAnnouncement } from "./session-seat";
 
 /** The hello advertisement for the window runtime (TP-D25): ghosttea's own
  * default `resume` plus `session-events` (TP-S3f/G24) — the load-bearing gate
  * that lets the cell emit the `SessionEvent` verb at this leg without killing
- * a client that could not decode it. */
-export const ROUTED_CLIENT_CAPABILITIES: readonly string[] = ["resume", "session-events"];
+ * a client that could not decode it — and `geometry-events` (item 42), the same
+ * gate for the `GeometryState` verb: the seat's holder and committed size, which
+ * the pane says when another device holds it. */
+export const ROUTED_CLIENT_CAPABILITIES: readonly string[] = [
+  "resume",
+  "session-events",
+  "geometry-events",
+];
+
+/** The host verbs a control leg carries to this adapter — the contract's own
+ * names for the two capabilities above; every other tag is not this seam's. */
+const HOST_VERBS: readonly TpMessageType[] = ["SessionEvent", "GeometryState"];
+
+function log() {
+  return getRendererLogger().child({ component: "terminal.routed" });
+}
 
 // The production G23 adapter. It is intentionally a product-control adapter,
 // not a second transport implementation: Ghosttea owns both WebSocket pools,
@@ -63,6 +81,11 @@ export interface RoutedTerminalHostOptions {
    * ticket (`remote-refusal.ts`), for the pane to say; `undefined` when a
    * ticket landed, or the ask was withdrawn — the honest state clears. */
   readonly onRemoteRefusal?: (sessionId: string, refusal: RemoteRefusal | undefined) => void;
+  /** item 42 — the cell's announcement of a session's geometry seat
+   * (`GeometryState`), as it arrived, with whether its holder is THIS window
+   * (`session-seat.ts`); the pool keeps the newest, so a stale one is its to
+   * drop. */
+  readonly onSessionSeat?: (sessionId: string, seat: SessionSeatAnnouncement) => void;
 }
 
 export interface RoutedTerminalHostBinding {
@@ -247,6 +270,17 @@ export function createRoutedTerminalHost(
   /** sessionId → the cellBootId its ticket named (TP-S3f): the custody fact a
    * `SessionEvent`'s authenticated context is checked against. */
   const custodians = new Map<string, string>();
+  /** item 42 — sessionId → every clientId this window's tickets for it named
+   * (the attach grant's, which is the client ghosttea claims the seat as): a
+   * seat whose holder is one of them is THIS window's. Every one, not the
+   * latest: a fieldd restart mints this window a new client while the cell may
+   * still hold the seat for the one before, within its grace. */
+  const ownClients = new Map<string, Set<string>>();
+  const ownClient = (sessionId: string, clientId: string): void => {
+    const clients = ownClients.get(sessionId) ?? new Set<string>();
+    clients.add(clientId);
+    ownClients.set(sessionId, clients);
+  };
   /** Sessions whose `exited` event this host has already applied. */
   const exitApplied = new Set<string>();
   /** `removed` events held awaiting their kill's `exited` (see the hold const). */
@@ -339,6 +373,7 @@ export function createRoutedTerminalHost(
     input.releaseSession(sessionId);
     boundRuntime?.applySessionEvent({ type: "removed", sessionId });
     custodians.delete(sessionId);
+    ownClients.delete(sessionId);
     exitApplied.delete(sessionId);
     remotes.delete(sessionId);
     withdrawAsks(sessionId);
@@ -433,21 +468,30 @@ export function createRoutedTerminalHost(
     }
   };
 
-  const applyWireSessionEvent = (
-    message: Readonly<Record<string, unknown>>,
+  /** item 42 — a session's geometry seat, as its cell announced it: handed to
+   * the pool with whether the holder is this window. Custody is checked as for a
+   * `SessionEvent`, and a session no ticket of this window's names is dropped
+   * outright: the cell announces a seat only to a leg with an activation of the
+   * session, so this window has no seat of it to say. */
+  const applyGeometryState = (
+    state: GeometryState,
     context: RoutedExtensionMessageContext,
   ): void => {
-    // Only the control leg carries host verbs today; the tag list is the
-    // contract's own outbound set for this seam.
-    const decoded = decodeTpMessage(message, ["SessionEvent"]);
-    if (!decoded.ok) {
-      // Tolerant reader: dropped, never a transport failure — `invalid`
-      // includes a future `kind` this build predates (the wire comment in
-      // terminal-pipeline.ts is the law). Silence over console noise is this
-      // layer's house style; the drop matrix is pinned by the host tests.
-      return;
-    }
-    const { event } = decoded.body as SessionEvent;
+    if (custodians.get(state.sessionId) !== context.cellBootId) return;
+    const holder = state.holder;
+    options.onSessionSeat?.(state.sessionId, {
+      holder,
+      mine: holder !== null && ownClients.get(state.sessionId)?.has(holder.clientId) === true,
+      revision: state.geometryRevision,
+      cols: state.cols,
+      rows: state.rows,
+    });
+  };
+
+  const applyWireSessionEvent = (
+    event: SessionEvent["event"],
+    context: RoutedExtensionMessageContext,
+  ): void => {
     if (event.kind === "resync") {
       void resyncCustody(context.cellBootId).catch(() => {
         // A failed authoritative read leaves current state standing; the next
@@ -496,6 +540,42 @@ export function createRoutedTerminalHost(
     );
   };
 
+  /** The host's door for the negotiated verbs ghosttea hands over from an
+   * authenticated control leg (`onExtensionMessage`). */
+  const applyWireMessage = (
+    message: Readonly<Record<string, unknown>>,
+    context: RoutedExtensionMessageContext,
+  ): void => {
+    // Only the control leg carries host verbs today; the tag list is the
+    // contract's own outbound set for this seam.
+    const decoded = decodeTpMessage(message, HOST_VERBS);
+    if (!decoded.ok) {
+      // Tolerant reader: dropped, never a transport failure — `invalid`
+      // includes a future `kind` this build predates (the wire comment in
+      // terminal-pipeline.ts is the law). Silence over console noise is this
+      // layer's house style; the drop matrix is pinned by the host tests.
+      // item 42 — the one exception: a GeometryState this build cannot read is
+      // the cell and this build disagreeing about a shape both name, so it is
+      // said (by its field paths, never its values), and dropped all the same.
+      if (message["type"] === "GeometryState") {
+        log().warn(
+          "renderer.terminal.geometry_state_dropped",
+          "A GeometryState this window cannot read was dropped; the control leg stays open",
+          {
+            reason: decoded.error,
+            fields: (decoded.issues ?? []).map((issue) => issue.path.join(".")),
+          },
+        );
+      }
+      return;
+    }
+    if (decoded.type === "GeometryState") {
+      applyGeometryState(decoded.body as GeometryState, context);
+      return;
+    }
+    applyWireSessionEvent((decoded.body as SessionEvent).event, context);
+  };
+
   const onActivationState: EventListener = (event) => {
     if (!(event instanceof CustomEvent)) return;
     const detail = event.detail as RoutedActivationEventDetail;
@@ -528,6 +608,7 @@ export function createRoutedTerminalHost(
       if (primed !== undefined) {
         primedTickets.delete(sessionId);
         custodians.set(sessionId, primed.route.cellBootId);
+        ownClient(sessionId, primed.attachGrant.claims.clientId);
         options.onTicket?.(sessionId, primed);
         return asRoutedTicket(primed);
       }
@@ -554,6 +635,7 @@ export function createRoutedTerminalHost(
             )
           : await askOwner(sessionId, device);
       custodians.set(sessionId, ticket.route.cellBootId);
+      ownClient(sessionId, ticket.attachGrant.claims.clientId);
       options.onTicket?.(sessionId, ticket);
       return asRoutedTicket(ticket);
     },
@@ -562,6 +644,7 @@ export function createRoutedTerminalHost(
       const renewed = TerminalRenewAttachResult.parse(
         await options.fieldd.request("terminal.renewAttach", routed(params)),
       );
+      ownClient(params.sessionId, renewed.attachGrant.claims.clientId);
       return { attachGrant: asAttachGrant(renewed.attachGrant) };
     },
     listSessions: async () => await listRuntimeSessions(options.fieldd),
@@ -572,7 +655,7 @@ export function createRoutedTerminalHost(
     // assert, not a refresh's). DS-4e: a remote pane refreshes from its OWNER.
     getSession: async (sessionId) =>
       (await readInventory(false, remotes.get(sessionId))).get(sessionId) ?? null,
-    onExtensionMessage: applyWireSessionEvent,
+    onExtensionMessage: applyWireMessage,
     ...(options.createSession === undefined ? {} : { createSession: options.createSession }),
     terminate: async (sessionId) => {
       try {
@@ -584,6 +667,7 @@ export function createRoutedTerminalHost(
         invalidateInventory();
         primedTickets.delete(sessionId);
         custodians.delete(sessionId);
+        ownClients.delete(sessionId);
         input.releaseSession(sessionId);
         activations.delete(sessionId);
         remotes.delete(sessionId);
@@ -615,6 +699,7 @@ export function createRoutedTerminalHost(
       invalidateInventory();
       primedTickets.set(sessionId, parsed);
       custodians.set(sessionId, parsed.route.cellBootId);
+      ownClient(sessionId, parsed.attachGrant.claims.clientId);
     },
     bind: (runtime) => {
       if (disposed) throw new Error("the routed terminal host is disposed");
@@ -633,6 +718,7 @@ export function createRoutedTerminalHost(
       activations.clear();
       primedTickets.clear();
       custodians.clear();
+      ownClients.clear();
       exitApplied.clear();
       withdrawAsks();
       remotes.clear();

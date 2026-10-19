@@ -3,6 +3,7 @@ import type { GhostteaTerminalRuntime, RoutedTerminalInputContext } from "@vibec
 import { SendInput, type TerminalOpenTicket } from "@vibefield/contracts";
 import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
 import { describe, expect, it, vi } from "vitest";
+import { getRendererLogger, type RendererLogger, setRendererLogger } from "../src/logging";
 import { createRoutedTerminalHost, ROUTED_CLIENT_CAPABILITIES } from "../src/terminal/routed/host";
 import { remoteRefusalOf } from "../src/terminal/routed/remote-refusal";
 
@@ -289,8 +290,8 @@ describe("createRoutedTerminalHost — TP-S3f routed session events (G24)", () =
     return { runtime: runtime as unknown as GhostteaTerminalRuntime, applySessionEvent };
   }
 
-  it("advertises resume plus the load-bearing session-events capability", () => {
-    expect(ROUTED_CLIENT_CAPABILITIES).toEqual(["resume", "session-events"]);
+  it("advertises resume plus the load-bearing session-events and geometry-events capabilities", () => {
+    expect(ROUTED_CLIENT_CAPABILITIES).toEqual(["resume", "session-events", "geometry-events"]);
   });
 
   it("coalesces concurrent getSession reads into one inventory snapshot", async () => {
@@ -605,6 +606,181 @@ describe("createRoutedTerminalHost — TP-S3f routed session events (G24)", () =
     });
     expect(requests).toHaveBeenCalledTimes(1);
     expect(applySessionEvent).toHaveBeenCalledTimes(2);
+  });
+});
+
+// item 42 (DESIGN.md §8 "A session another device is driving") — the cell
+// announces a session's geometry seat (`GeometryState`, behind `geometry-events`)
+// to every leg with an activation of it; the host reads it, says whether the
+// holder is THIS window, and hands it to the pool. A shape it cannot read is
+// dropped and said, never a leg close.
+describe("createRoutedTerminalHost — the geometry seat the cell announces (item 42)", () => {
+  const context = {
+    cellBootId: "cell-a-boot-1",
+    connectionSetId: "connection-1",
+    channel: "control" as const,
+  };
+  /** the phone holding the seat, named by the face fieldd minted into its grant */
+  const PHONE = {
+    clientId: "tailnet:me@example.com#node-phone~E1",
+    viewId: "phone-view-1",
+    holderGeneration: 3,
+    face: { kind: "phone", name: "James's iPhone", os: "ios" },
+  };
+  /** this window's own view, under the client its ticket names (`renderer-1`) */
+  const OWN = { clientId: "renderer-1", viewId: "view-1", holderGeneration: 4 };
+  const announced = (holder: unknown, geometryRevision: number, sessionId = "sess-1") => ({
+    type: "GeometryState",
+    sessionId,
+    holder,
+    geometryRevision,
+    cols: 45,
+    rows: 22,
+  });
+
+  function hostWithSeats() {
+    const onSessionSeat = vi.fn();
+    const binding = createRoutedTerminalHost({
+      fieldd: {
+        request: vi.fn(async (method: string) => {
+          if (method === "terminal.terminate") return { terminated: true };
+          throw new Error(`unexpected ${method}`);
+        }),
+      } as unknown as FielddClient,
+      onSessionSeat,
+    });
+    return { binding, onSessionSeat };
+  }
+
+  it("hands the pool every seat the cell announces, and whether its holder is THIS window", () => {
+    const { binding, onSessionSeat } = hostWithSeats();
+    binding.primeTicket("sess-1", ticket());
+
+    binding.host.onExtensionMessage?.(announced(PHONE, 4), context);
+    expect(onSessionSeat).toHaveBeenLastCalledWith("sess-1", {
+      holder: PHONE,
+      mine: false,
+      revision: 4,
+      cols: 45,
+      rows: 22,
+    });
+    binding.host.onExtensionMessage?.(announced(OWN, 5), context);
+    expect(onSessionSeat).toHaveBeenLastCalledWith("sess-1", {
+      holder: OWN,
+      mine: true,
+      revision: 5,
+      cols: 45,
+      rows: 22,
+    });
+    // an empty seat: nobody drives, the PTY at the last size committed
+    binding.host.onExtensionMessage?.(announced(null, 6), context);
+    expect(onSessionSeat).toHaveBeenLastCalledWith("sess-1", {
+      holder: null,
+      mine: false,
+      revision: 6,
+      cols: 45,
+      rows: 22,
+    });
+    // the order is the pool's to judge: an older revision is handed on as it came
+    binding.host.onExtensionMessage?.(announced(PHONE, 2), context);
+    expect(onSessionSeat).toHaveBeenCalledTimes(4);
+  });
+
+  it("counts every client this window's tickets named as its own — a fieldd restart mints a new one while the cell may hold the seat for the old", async () => {
+    const restarted = ticket();
+    restarted.transportGrant.claims.clientId = "renderer-2";
+    restarted.attachGrant.claims.clientId = "renderer-2";
+    const tickets = [ticket(), restarted];
+    const onSessionSeat = vi.fn();
+    const binding = createRoutedTerminalHost({
+      fieldd: {
+        request: vi.fn(async (method: string) => {
+          if (method === "terminal.openTicket") return tickets.shift();
+          throw new Error(`unexpected ${method}`);
+        }),
+      } as unknown as FielddClient,
+      onSessionSeat,
+    });
+    await binding.host.openTicket("sess-1");
+    await binding.host.openTicket("sess-1");
+    const mine = (): unknown => onSessionSeat.mock.lastCall?.[1]?.mine;
+
+    binding.host.onExtensionMessage?.(announced(OWN, 7), context);
+    expect(mine()).toBe(true);
+    binding.host.onExtensionMessage?.(
+      announced({ ...OWN, clientId: "renderer-2", holderGeneration: 5 }, 8),
+      context,
+    );
+    expect(mine()).toBe(true);
+    binding.host.onExtensionMessage?.(announced(PHONE, 9), context);
+    expect(mine()).toBe(false);
+    expect(onSessionSeat).toHaveBeenCalledTimes(3);
+  });
+
+  it("believes only the cell its ticket named, and says nothing of a session this window holds no ticket for", async () => {
+    const { binding, onSessionSeat } = hostWithSeats();
+    binding.primeTicket("sess-1", ticket());
+
+    // a foreign cell speaking for this session
+    binding.host.onExtensionMessage?.(announced(PHONE, 4), {
+      ...context,
+      cellBootId: "cell-b-boot-9",
+    });
+    // a session no ticket of this window's names
+    binding.host.onExtensionMessage?.(announced(PHONE, 4, "sess-foreign"), context);
+    expect(onSessionSeat).not.toHaveBeenCalled();
+
+    // and none once the session is gone
+    await binding.host.terminate?.("sess-1", "user");
+    binding.host.onExtensionMessage?.(announced(PHONE, 5), context);
+    expect(onSessionSeat).not.toHaveBeenCalled();
+  });
+
+  it("drops a GeometryState it cannot read — said by its field paths, never its values — and closes nothing", () => {
+    const warnings: Array<{ event: string; attrs: unknown }> = [];
+    const capture: RendererLogger = {
+      child: () => capture,
+      trace: () => undefined,
+      debug: () => undefined,
+      info: () => undefined,
+      warn: (event, _message, attrs) => {
+        warnings.push({ event, attrs });
+      },
+      error: () => undefined,
+      fatal: () => undefined,
+      isLevelEnabled: () => true,
+    };
+    const previous = getRendererLogger();
+    setRendererLogger(capture);
+    try {
+      const { binding, onSessionSeat } = hostWithSeats();
+      binding.primeTicket("sess-1", ticket());
+      // a zero-column PTY, and a holder with no client: neither is a seat
+      binding.host.onExtensionMessage?.({ ...announced(PHONE, 4), cols: 0 }, context);
+      binding.host.onExtensionMessage?.(
+        announced({ viewId: "phone-view-1", holderGeneration: 3 }, 4),
+        context,
+      );
+      expect(onSessionSeat).not.toHaveBeenCalled();
+      expect(warnings.map(({ event }) => event)).toEqual([
+        "renderer.terminal.geometry_state_dropped",
+        "renderer.terminal.geometry_state_dropped",
+      ]);
+      expect(warnings[0]?.attrs).toEqual({ reason: "invalid", fields: ["cols"] });
+      expect(warnings[1]?.attrs).toEqual({ reason: "invalid", fields: ["holder.clientId"] });
+      expect(JSON.stringify(warnings)).not.toContain("James's iPhone");
+      // the leg is untouched: the next good one lands
+      binding.host.onExtensionMessage?.(announced(PHONE, 5), context);
+      expect(onSessionSeat).toHaveBeenCalledTimes(1);
+      // and the other drops stay as silent as they were
+      binding.host.onExtensionMessage?.(
+        { type: "SessionEvent", event: { kind: "exited" } },
+        context,
+      );
+      expect(warnings).toHaveLength(2);
+    } finally {
+      setRendererLogger(previous);
+    }
   });
 });
 

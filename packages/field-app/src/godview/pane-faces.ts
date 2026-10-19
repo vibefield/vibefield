@@ -1,5 +1,5 @@
 import type { GhostteaWorkspaceProps } from "@vibecook/ghosttea-react/workspace";
-import type { RemoteRefusal, RemoteRefusalState } from "../terminal/pool";
+import type { RemoteRefusal, RemoteRefusalState, SessionSeat } from "../terminal/pool";
 
 /** Ghosttea's `SessionSummary`, taken from the prop that receives it rather
  * than imported: it lives in `@vibecook/ghosttea-protocol`, a transitive
@@ -94,4 +94,67 @@ export function describeRemoteRefusal(
     case "refused":
       return face(`cannot open on ${name}`);
   }
+}
+
+/**
+ * item 42 — THE FACE OF A PANE WHOSE SESSION ANOTHER DEVICE IS DRIVING
+ * (`SeatPaneState`; DESIGN.md §8 "A session another device is driving"). The
+ * pane goes on drawing the session at the holder's size, which without a word
+ * reads as a glitch (James, 2026-10-19), so it says so in the held-edge
+ * readout's figure (ruled 21:38Z): the holder by the NAME fieldd minted into
+ * its grant — "Another device" where it named none, never an id — and what it
+ * is doing, **James's iPhone** **is driving**, over one caption line, the size
+ * it holds and what to do: **45 × 22 · click the pane to take it back**.
+ *
+ * When the holder LETS GO the seat is empty and the PTY stays at the size it
+ * set, so the pane keeps saying so in the same figure: **James's iPhone** **let
+ * go**, over the size the session was left at and **· click the pane to take
+ * it.** A focused pane taking the empty seat itself is ruled (James,
+ * 2026-10-19 17:42Z) but arrives with item 20's ghosttea lane, the first key
+ * takes: the host holds no surface's viewId or grid and ghosttea's surface has
+ * no seat listener, so until that lane every pane on the session says this
+ * until a click (§8's dated status line).
+ *
+ * A seat this window holds, an empty seat nobody else let go, and a seat never
+ * announced say nothing: the terminal is the state then.
+ */
+export interface SeatPaneFace {
+  /** another client holds the seat, or another client let it go */
+  state: "held" | "let-go";
+  /** the readout's noun: the holder's name, full */
+  name: string;
+  /** the readout's verb, at 40% */
+  verb: "is driving" | "let go";
+  /** the caption's figure, in mono: cols × rows */
+  size: string;
+  /** the caption after the size: what a click does */
+  caption: string;
+}
+
+/** The name a pane says for a holder: the face's, else "Another device". */
+const ANOTHER_DEVICE = "Another device";
+
+/** What a pane says for its session's seat (undefined: the pool holds none). */
+export function describeSeat(seat: SessionSeat | undefined): SeatPaneFace | undefined {
+  if (seat === undefined) return undefined;
+  // cols × rows, the multiplication sign spaced as the passage writes it
+  const size = `${seat.cols} × ${seat.rows}`;
+  if (seat.holder !== null) {
+    if (seat.mine) return undefined;
+    return {
+      state: "held",
+      name: seat.holder.face?.name ?? ANOTHER_DEVICE,
+      verb: "is driving",
+      size,
+      caption: "· click the pane to take it back",
+    };
+  }
+  if (seat.released === undefined) return undefined;
+  return {
+    state: "let-go",
+    name: seat.released.face?.name ?? ANOTHER_DEVICE,
+    verb: "let go",
+    size,
+    caption: "· click the pane to take it.",
+  };
 }
