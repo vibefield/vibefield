@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { AgentProfileSetId } from "./agent-index";
 import { TerminalWorkloadClass } from "./envelope";
-import { ObservedTerminal } from "./mgmt";
+import { UnavailableDetails } from "./errors";
+import { ObservedStaleCell, ObservedTerminal } from "./mgmt";
 
 // The terminal floor's PRODUCT surface (native-floor spec §6, NF-D5). TS-only
 // DELIBERATELY: these shapes ride fieldd's product API (renderers, peers via
@@ -25,16 +26,74 @@ export type TerminalInfo = z.infer<typeof TerminalInfo>;
  * shape from a boot that no longer exists. The bootId names the boot the rows
  * belong to; a `list` whose bootId moved is a different floor's inventory, not
  * a changed one. Absent only alongside the `unobserved` refusal, which is the
- * other half of the same honesty: fieldd never answers rows it has not seen. */
+ * other half of the same honesty: fieldd never answers rows it has not seen.
+ *
+ * IL-D4 (`draft/thinking-inventory-latency.md` §4.3) — and how old the rows
+ * may be. A read answers with every row it holds and says which cells' rows
+ * are older than the bound; one stale cell never hides another cell's rows
+ * (IL-D5 (a)). `terminal.list` and `terminal.roster` both carry this shape. */
 export const TerminalObservation = z
   .object({
     /** the native boot these rows were observed from */
     bootId: z.string(),
     /** last applied desired generation (0 = none since that boot) */
     generation: z.number().int(),
+    /** the floor's inventory bound in ms (`ObservedState.inventoryBoundMs`).
+     * ABSENT: the age is unknown — a floor that predates the bound, or a
+     * fieldd that predates this field — and a reader says so. */
+    boundMs: z.number().int().nonnegative().optional(),
+    /** fieldd's composed view of the cells whose rows are older than
+     * `boundMs`, present only while one is. It is the floor's own
+     * `staleCells`, or, once the observed stream has not reached fieldd for
+     * `TERMINAL_INVENTORY.STALE_MS` (the native link not `up`, or no floor
+     * tick for `NATIVE_SUPERVISION.TICK_STALE_MS`), every cell fieldd knows,
+     * each with `since` = the last observation delivered. */
+    staleCells: z.array(ObservedStaleCell).optional(),
   })
   .passthrough();
 export type TerminalObservation = z.infer<typeof TerminalObservation>;
+
+/** IL-D2 (a) (`draft/thinking-inventory-latency.md` §4.4, ruled 2026-10-19) —
+ * the terminal inventory's honest states, as `UnavailableDetails` spells them:
+ * `service` on both, `unobserved` before fieldd's first observation of the
+ * floor (GT-5b), and `inventory_stale` while the cells a door would act in
+ * are older than the bound. The terminal vocabulary's snake_case
+ * (`cell_gone`, `session_cap`). TS-only: fieldd writes both, the floor
+ * neither. */
+export const TERMINAL_INVENTORY_REFUSALS = {
+  SERVICE: "terminal",
+  STATE_UNOBSERVED: "unobserved",
+  STATE_INVENTORY_STALE: "inventory_stale",
+} as const;
+
+/** IL-D2 (a), IL-D5 (a) — what a door that ACTS on the inventory answers
+ * while it is stale: UNAVAILABLE {service: "terminal", state:
+ * "inventory_stale", cells}, retryable. `cells` carries
+ * `TerminalObservation.staleCells`' entries: for a session listed in a stale
+ * cell, that cell; for an unlisted session, which no row ties to a cell (an
+ * agent record names none), every stale cell. The doors, each refusing rather
+ * than answering "does not exist" or guessing:
+ *  - `terminal.get`, `openTicket` and `renewAttach`, for an unlisted session
+ *    while any cell is stale;
+ *  - terminate, automate and the mints (`openTicket`, `renewAttach`), for an
+ *    untagged session no birth placed while any cell is stale (they would
+ *    guess the interactive cell);
+ *  - the agent runtime's resume and replace, for a session listed in a stale
+ *    cell or unlisted while any cell is stale, before anything is terminated;
+ *  - the update's point-of-effect census while any cell is stale, which
+ *    reopens births.
+ * Reads answer with the rows and their age instead. Where fieldd holds the
+ * floor `unresponsive`, WG-D4's {service: "native", state: "unresponsive"}
+ * answers instead (`NativeUnavailableDetails`), as {service: "terminal",
+ * state: "unresponsive"} does for a cell that did not answer fieldd: the
+ * worse and truer story wins. fieldd writes it; the floor never does
+ * (`error-data.terminal-inventory-stale.json`). */
+export const TerminalInventoryStaleDetails = UnavailableDetails.extend({
+  service: z.literal(TERMINAL_INVENTORY_REFUSALS.SERVICE),
+  state: z.literal(TERMINAL_INVENTORY_REFUSALS.STATE_INVENTORY_STALE),
+  cells: z.array(ObservedStaleCell).min(1),
+}).passthrough();
+export type TerminalInventoryStaleDetails = z.infer<typeof TerminalInventoryStaleDetails>;
 
 /** terminal.list result (the DeviceListResult precedent — result envelopes are
  * contracts shapes, never ad-hoc literals; EL6).

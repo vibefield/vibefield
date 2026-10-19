@@ -7683,6 +7683,116 @@ impl NativeTickParams {
         Default::default()
     }
 }
+#[doc = "`ObservedStaleCell`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"cellBootId\","]
+#[doc = "    \"cellInstanceId\","]
+#[doc = "    \"since\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"cellBootId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"cellInstanceId\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    },"]
+#[doc = "    \"since\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct ObservedStaleCell {
+    #[serde(rename = "cellBootId")]
+    pub cell_boot_id: ObservedStaleCellCellBootId,
+    #[serde(rename = "cellInstanceId")]
+    pub cell_instance_id: i64,
+    pub since: u64,
+}
+impl ObservedStaleCell {
+    pub fn builder() -> builder::ObservedStaleCell {
+        Default::default()
+    }
+}
+#[doc = "`ObservedStaleCellCellBootId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct ObservedStaleCellCellBootId(::std::string::String);
+impl ::std::ops::Deref for ObservedStaleCellCellBootId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<ObservedStaleCellCellBootId> for ::std::string::String {
+    fn from(value: ObservedStaleCellCellBootId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for ObservedStaleCellCellBootId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for ObservedStaleCellCellBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for ObservedStaleCellCellBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for ObservedStaleCellCellBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for ObservedStaleCellCellBootId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 #[doc = "`ObservedState`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -7702,6 +7812,16 @@ impl NativeTickParams {
 #[doc = "    },"]
 #[doc = "    \"generation\": {"]
 #[doc = "      \"type\": \"integer\""]
+#[doc = "    },"]
+#[doc = "    \"inventoryBoundMs\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"staleCells\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/ObservedStaleCell\""]
+#[doc = "      }"]
 #[doc = "    },"]
 #[doc = "    \"terminals\": {"]
 #[doc = "      \"type\": \"array\","]
@@ -7725,6 +7845,18 @@ pub struct ObservedState {
     #[serde(rename = "bootId")]
     pub boot_id: ::std::string::String,
     pub generation: i64,
+    #[serde(
+        rename = "inventoryBoundMs",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub inventory_bound_ms: ::std::option::Option<u64>,
+    #[serde(
+        rename = "staleCells",
+        default,
+        skip_serializing_if = "::std::vec::Vec::is_empty"
+    )]
+    pub stale_cells: ::std::vec::Vec<ObservedStaleCell>,
     pub terminals: ::std::vec::Vec<ObservedTerminal>,
     pub workers: ::std::vec::Vec<ObservedWorker>,
 }
@@ -15028,9 +15160,82 @@ pub mod builder {
         }
     }
     #[derive(Clone, Debug)]
+    pub struct ObservedStaleCell {
+        cell_boot_id:
+            ::std::result::Result<super::ObservedStaleCellCellBootId, ::std::string::String>,
+        cell_instance_id: ::std::result::Result<i64, ::std::string::String>,
+        since: ::std::result::Result<u64, ::std::string::String>,
+    }
+    impl ::std::default::Default for ObservedStaleCell {
+        fn default() -> Self {
+            Self {
+                cell_boot_id: Err("no value supplied for cell_boot_id".to_string()),
+                cell_instance_id: Err("no value supplied for cell_instance_id".to_string()),
+                since: Err("no value supplied for since".to_string()),
+            }
+        }
+    }
+    impl ObservedStaleCell {
+        pub fn cell_boot_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::ObservedStaleCellCellBootId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.cell_boot_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for cell_boot_id: {e}"));
+            self
+        }
+        pub fn cell_instance_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<i64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.cell_instance_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for cell_instance_id: {e}"));
+            self
+        }
+        pub fn since<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.since = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for since: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<ObservedStaleCell> for super::ObservedStaleCell {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: ObservedStaleCell,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                cell_boot_id: value.cell_boot_id?,
+                cell_instance_id: value.cell_instance_id?,
+                since: value.since?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::ObservedStaleCell> for ObservedStaleCell {
+        fn from(value: super::ObservedStaleCell) -> Self {
+            Self {
+                cell_boot_id: Ok(value.cell_boot_id),
+                cell_instance_id: Ok(value.cell_instance_id),
+                since: Ok(value.since),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
     pub struct ObservedState {
         boot_id: ::std::result::Result<::std::string::String, ::std::string::String>,
         generation: ::std::result::Result<i64, ::std::string::String>,
+        inventory_bound_ms:
+            ::std::result::Result<::std::option::Option<u64>, ::std::string::String>,
+        stale_cells:
+            ::std::result::Result<::std::vec::Vec<super::ObservedStaleCell>, ::std::string::String>,
         terminals:
             ::std::result::Result<::std::vec::Vec<super::ObservedTerminal>, ::std::string::String>,
         workers:
@@ -15041,6 +15246,8 @@ pub mod builder {
             Self {
                 boot_id: Err("no value supplied for boot_id".to_string()),
                 generation: Err("no value supplied for generation".to_string()),
+                inventory_bound_ms: Ok(Default::default()),
+                stale_cells: Ok(Default::default()),
                 terminals: Err("no value supplied for terminals".to_string()),
                 workers: Err("no value supplied for workers".to_string()),
             }
@@ -15065,6 +15272,26 @@ pub mod builder {
             self.generation = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for generation: {e}"));
+            self
+        }
+        pub fn inventory_bound_ms<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<u64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.inventory_bound_ms = value.try_into().map_err(|e| {
+                format!("error converting supplied value for inventory_bound_ms: {e}")
+            });
+            self
+        }
+        pub fn stale_cells<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::ObservedStaleCell>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.stale_cells = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for stale_cells: {e}"));
             self
         }
         pub fn terminals<T>(mut self, value: T) -> Self
@@ -15096,6 +15323,8 @@ pub mod builder {
             Ok(Self {
                 boot_id: value.boot_id?,
                 generation: value.generation?,
+                inventory_bound_ms: value.inventory_bound_ms?,
+                stale_cells: value.stale_cells?,
                 terminals: value.terminals?,
                 workers: value.workers?,
             })
@@ -15106,6 +15335,8 @@ pub mod builder {
             Self {
                 boot_id: Ok(value.boot_id),
                 generation: Ok(value.generation),
+                inventory_bound_ms: Ok(value.inventory_bound_ms),
+                stale_cells: Ok(value.stale_cells),
                 terminals: Ok(value.terminals),
                 workers: Ok(value.workers),
             }

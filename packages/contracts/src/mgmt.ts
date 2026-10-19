@@ -113,6 +113,26 @@ export type ObservedTerminal = z.infer<typeof ObservedTerminal>;
 export const ObservedWorker = z.object({ id: z.string(), state: UnitState }).passthrough();
 export type ObservedWorker = z.infer<typeof ObservedWorker>;
 
+/** IL-D4 (`draft/thinking-inventory-latency.md` §4.1) — one cell whose inventory is older than
+ * the floor's bound (`TERMINAL_INVENTORY.STALE_MS`): no reconcile that began after `since` has
+ * brought it back inside the bound. The cell is named as the inventory's own tag names it
+ * (`ObservedTerminalCell`; `cellBootId` is THE identity), so a reader joins the entry onto rows
+ * and routes. `since` is the wall-clock twin of the floor's monotonic stamp, read beside it when
+ * the cell's last applied reconcile began (its pump's spawn, for a cell whose first reconcile
+ * never landed), so a reader's age is `now − since`, which counts sleep. It is fixed when the
+ * cell goes stale: a reconcile that lands while the cell stays stale (one that itself began more
+ * than the bound ago) leaves the entry as it was, so a reader's age may run long by that
+ * reconcile, never short, and `staleCells` changes only on a transition. */
+export const ObservedStaleCell = z
+  .object({
+    cellInstanceId: z.number().int(),
+    cellBootId: z.string().min(1),
+    /** unix ms */
+    since: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type ObservedStaleCell = z.infer<typeof ObservedStaleCell>;
+
 export const ObservedState = z
   .object({
     /** last applied desired generation (0 = none since boot) */
@@ -120,6 +140,17 @@ export const ObservedState = z
     bootId: z.string(),
     terminals: z.array(ObservedTerminal),
     workers: z.array(ObservedWorker),
+    /** IL-D4 — the floor's inventory bound in ms (`TERMINAL_INVENTORY.STALE_MS`). Its PRESENCE
+     * says this floor judges its inventory's age: a floor that runs the sampler always sets it.
+     * ABSENT: an older floor that cannot say. A reader then reports the age as unknown, and its
+     * acting doors behave as they did before the bound. */
+    inventoryBoundMs: z.number().int().nonnegative().optional(),
+    /** IL-D4 — the cells whose inventory is older than `inventoryBoundMs`, present only while one
+     * is. Never an always-present `[]`: the generated Rust skips an empty list, so an empty one
+     * would serialize as an older floor's does. With `inventoryBoundMs` set, absence here means
+     * every cell is fresh. Neither field stamps a row or a reconcile, so the stream still
+     * publishes on a change (a row, or a cell going stale or fresh), never on every reconcile. */
+    staleCells: z.array(ObservedStaleCell).optional(),
   })
   .passthrough();
 export type ObservedState = z.infer<typeof ObservedState>;

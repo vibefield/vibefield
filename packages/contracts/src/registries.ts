@@ -800,6 +800,36 @@ export const NATIVE_FLOOR_TICK = {
   INTERVAL_MS: 1_000,
 } as const;
 
+/** IL-D1 (`draft/thinking-inventory-latency.md` §2, ruled 2026-10-19) — how old the floor's
+ * terminal inventory may be. Per cell, the inventory is as old as `now − as_of`, where `as_of` is
+ * the moment the cell's last APPLIED reconcile began, before the client's writer lock: a
+ * conservative age, since the cell answered after it. A cell whose first reconcile never lands
+ * counts from its pump's spawn. A sampler outside the pumps judges every cell each SAMPLE_MS and
+ * speaks only on a transition: past STALE_MS the cell is stale, on the observed stream
+ * (`ObservedState.staleCells`, with STALE_MS itself as `inventoryBoundMs`) and in the terminal
+ * unit's health. fieldd judges its own copy, which ages when the stream stops reaching it,
+ * against the same STALE_MS. ONE authority for the floor (Rust, by generation) and fieldd. The
+ * stamps, the backstop and the sampler read the monotonic clock, which on macOS does not count
+ * system sleep (an inference from Rust's `Instant`), so a wake is not a stale inventory. These
+ * are first values, as WG-D2's were: the slow and stale lines measure them, and a re-ruling is
+ * dated here.
+ *  - BACKSTOP_MS — a cell's pump reconciles at least this often, events or none. No cell event
+ *    fires on a shell's builtin `cd`, so a quiet cell's new cwd waits for it, and a healthy cell's
+ *    inventory peaks near BACKSTOP_MS plus one round trip.
+ *  - STALE_MS — past the healthy peak, one reconcile, or a failed one's reconnect and immediate
+ *    retry, has about 4.9 s to land. A hung `list-sessions` reads stale about 5 s into its 10 s
+ *    request timeout, some 26 s before three failures degrade the unit.
+ *  - SLOW_RECONCILE_MS — a reconcile slower than this is logged with its parts. A healthy
+ *    `list-sessions` is one local socket hop, milliseconds; the wedge census allows 2 s for a
+ *    cell that does not answer.
+ *  - SAMPLE_MS — the age's resolution: how often the sampler judges. */
+export const TERMINAL_INVENTORY = {
+  BACKSTOP_MS: 5_000,
+  STALE_MS: 10_000,
+  SLOW_RECONCILE_MS: 1_000,
+  SAMPLE_MS: 1_000,
+} as const;
+
 /** TPv3 — the terminal pipeline's numbers (terminal-pipeline-v3 §5.1, §8; §20
  * item 5 "numeric limits with owners"). ONE authority for the cell (Rust, by
  * generation), fieldd (the grant TTLs) and the renderer. Every value is

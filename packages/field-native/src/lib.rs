@@ -178,6 +178,8 @@ pub async fn bootstrap_with_logging(
         boot_id: boot_id.clone(),
         terminals: vec![],
         workers: vec![],
+        inventory_bound_ms: None,
+        stale_cells: vec![],
     };
 
     let state = state::DaemonState::new(

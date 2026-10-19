@@ -210,7 +210,7 @@ import {
   ScreenshotHelperCommand,
   ScreenshotHelperEvent,
 } from "../src/screenshot";
-import { TerminalBindingsFile, TerminalCreateParams } from "../src/terminal";
+import { TerminalBindingsFile, TerminalCreateParams, TerminalListResult } from "../src/terminal";
 import {
   AttachControlLeg,
   AttachFramesLeg,
@@ -324,6 +324,11 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "artifact-view": ArtifactView,
   "native-health": NativeHealth,
   "desired-state": DesiredState,
+  // IL-D4 (draft/thinking-inventory-latency.md §4.1) — three floors on purpose: a judging floor
+  // with every cell fresh (`observed-state.fresh`: `inventoryBoundMs` alone), one with a stale
+  // cell (`observed-state.stale-cell`: `staleCells` beside it), and an older floor that cannot
+  // say (`observed-state.valid`, neither field). Generated for field-native and parity-checked
+  // strict in fixture_parity.rs; their own rows: terminal-inventory.test.ts.
   "observed-state": ObservedState,
   "peer-info": PeerInfo,
   "store-snapshot": StoreSnapshot,
@@ -414,6 +419,12 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // reader's hello value alone).
   "terminal-routes-stream": TerminalRoutesStreamPayload,
   "terminal-create-params": TerminalCreateParams,
+  // IL-D4/IL-D5 (a) — `terminal.list` answering with every row and its age: the floor's own
+  // stale cell (`terminal-list.stale-cell`), and fieldd's own half once the observed stream has
+  // stopped reaching it (`terminal-list.link-silent`: every cell, `since` = the last delivery).
+  // The stale refusal for an acting door is `error-data.terminal-inventory-stale` (the ErrorData
+  // prefix). TS-only; their own rows: terminal-inventory.test.ts.
+  "terminal-list": TerminalListResult,
   // SB-2 — fieldd's record of which shells were born under an Agent Profile
   // (`users/<fuid>/fieldd/terminal-bindings.json`); fieldd's store writes this
   // shape and its test parses what it wrote with the same schema.

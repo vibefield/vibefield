@@ -103,6 +103,16 @@ pub mod native_refusals {
     pub const REASON_DEADLINE_PASSED: &str = "deadline-passed";
 }
 
+/// IL-D1 — how old the floor's terminal inventory may be: the pumps'
+/// backstop, the stale bound, the slow-reconcile line and the sampler's
+/// cadence. One authority with fieldd; see registries.ts for the reasons.
+pub mod terminal_inventory {
+    pub const BACKSTOP_MS: u64 = 5000;
+    pub const STALE_MS: u64 = 10000;
+    pub const SLOW_RECONCILE_MS: u64 = 1000;
+    pub const SAMPLE_MS: u64 = 1000;
+}
+
 /// TPv3 (terminal-pipeline-v3 §5.1/§8; §20 item 5) — the pipeline's numbers:
 /// protocol version, door hygiene, grant validity, the cell's receive caps and
 /// the announced ProtocolLimits. PROVISIONAL until the numeric checkpoint; one

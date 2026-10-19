@@ -25,6 +25,11 @@
 // half rides the bundle: `PingAck`, `NativeTickParams`, `HelloAck.pid` and
 // `RpcRequest.deadlineAt`; its TIMEOUT details are JSON the floor writes, pinned
 // by `error-data.native-deadline-passed.json` (the egress refusals' bargain).
+// The inventory bound (IL-D4) is split the same way: the floor's half rides the
+// bundle (`ObservedState.inventoryBoundMs` and `staleCells`, whose entry
+// `ObservedStaleCell` is named below), while fieldd's composed view
+// (`TerminalObservation.boundMs`/`staleCells`) and the stale refusal's details
+// (`TerminalInventoryStaleDetails`) are src/terminal.ts's, which is TS-only.
 // The freeway (FW-D4, src/freeway.ts) is HALF here: its floor seam — `native.freeway.declare`, the
 // state stream, the joins, revoke — which field-native reads and writes. Its LINK wire (frames, the
 // stream-0 messages, the open kinds) is the freeway host's, hand-written in Rust as the cell's TPv3
@@ -137,6 +142,7 @@ import {
   NativeShutdownParams,
   NativeShutdownResult,
   NativeTickParams,
+  ObservedStaleCell,
   ObservedState,
   ObservedTerminal,
   ObservedTerminalCell,
@@ -194,6 +200,9 @@ const BASE_SHARED = {
   DesiredState,
   ObservedTerminal,
   ObservedWorker,
+  // IL-D4 — the entry of `ObservedState.staleCells`, named so the floor reads
+  // a typed `ObservedStaleCell`, not an anonymous item type
+  ObservedStaleCell,
   ObservedState,
   WhoIsIdentity,
   PeerInfo,

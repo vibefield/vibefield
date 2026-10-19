@@ -1,0 +1,44 @@
+{
+  "terminals": [
+    {
+      "sessionId": "5e1a7c3d-9b2f-4e6a-8c0d-1f2e3a4b5c6d",
+      "pid": 51207,
+      "createdAt": 1792431845000,
+      "persistence": "keep-until-exit",
+      "title": "zsh",
+      "cwd": "/Users/james/Projects/vibe-field",
+      "cell": {
+        "cellInstanceId": 1,
+        "cellBootId": "01JCELLBOOT0000000000000001",
+        "workloadClass": "interactive",
+        "role": "class"
+      }
+    },
+    {
+      "sessionId": "0d9f1c2b-3a4e-5d6c-7b8a-9e0f1a2b3c4d",
+      "pid": 48213,
+      "createdAt": 1792431600000,
+      "persistence": "keep-until-exit",
+      "title": "claude — vibe-field",
+      "cwd": "/Users/james/Projects/vibe-field",
+      "cell": {
+        "cellInstanceId": 2,
+        "cellBootId": "01JCELLBOOT0000000000000002",
+        "workloadClass": "agent",
+        "role": "class"
+      }
+    }
+  ],
+  "observation": {
+    "bootId": "b1c2d3e4-5f60-7a8b-9c0d-e1f203a4b5c6",
+    "generation": 7,
+    "boundMs": 10000,
+    "staleCells": [
+      {
+        "cellInstanceId": 2,
+        "cellBootId": "01JCELLBOOT0000000000000002",
+        "since": 1792433071000
+      }
+    ]
+  }
+}

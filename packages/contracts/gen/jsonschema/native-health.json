@@ -460,6 +460,28 @@
       ],
       "additionalProperties": true
     },
+    "ObservedStaleCell": {
+      "type": "object",
+      "properties": {
+        "cellInstanceId": {
+          "type": "integer"
+        },
+        "cellBootId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "since": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "cellInstanceId",
+        "cellBootId",
+        "since"
+      ],
+      "additionalProperties": true
+    },
     "ObservedState": {
       "type": "object",
       "properties": {
@@ -479,6 +501,16 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/ObservedWorker"
+          }
+        },
+        "inventoryBoundMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "staleCells": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ObservedStaleCell"
           }
         }
       },

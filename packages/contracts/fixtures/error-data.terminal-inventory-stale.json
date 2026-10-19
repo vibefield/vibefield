@@ -1,0 +1,15 @@
+{
+  "kind": "UNAVAILABLE",
+  "retryable": true,
+  "details": {
+    "service": "terminal",
+    "state": "inventory_stale",
+    "cells": [
+      {
+        "cellInstanceId": 2,
+        "cellBootId": "01JCELLBOOT0000000000000002",
+        "since": 1792433071000
+      }
+    ]
+  }
+}

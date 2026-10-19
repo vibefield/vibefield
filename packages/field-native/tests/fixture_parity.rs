@@ -15,7 +15,7 @@ use field_native::contracts::{
     RpcRequest, RpcResponse, ServeConfig, ServeEntry, StoreSnapshot, TerminalRouteSnapshot,
     TerminalRoutesStreamPayload,
 };
-use field_native::registries::native_refusals;
+use field_native::registries::{native_refusals, terminal_inventory};
 use serde_json::Value;
 use std::{fs, path::PathBuf};
 
@@ -127,6 +127,9 @@ fn error_fixtures() {
     // ErrorData is the envelope both planes share, so its twin reads both.
     roundtrip::<ErrorData>("error-data.native-unresponsive.json", true);
     roundtrip::<ErrorData>("error-data.terminal-unresponsive.json", true);
+    // IL-D2 (a) — fieldd writes this one too: a door that acts on the
+    // inventory while the cells it would act in are stale.
+    roundtrip::<ErrorData>("error-data.terminal-inventory-stale.json", true);
 }
 
 /// WG-D6 (`draft/thinking-floor-wedge.md` §7) — the wedge ladder's floor half.
@@ -179,6 +182,39 @@ fn mgmt_lifecycle_fixtures() {
     roundtrip::<DesiredState>("desired-state.observed-boot.json", true);
     roundtrip::<ObservedState>("observed-state.valid.json", true);
     roundtrip::<ObservedState>("observed-state.unknown-field.json", false); // tolerant reader (P3)
+}
+
+/// IL-D4 (`draft/thinking-inventory-latency.md` §4.1) — the inventory's age on
+/// the observed stream. field-native EMITS both rows, so both are strict. The
+/// fresh row pins that an empty list stays absent: the generated `Vec` is
+/// skipped when empty, so the bound's presence is what says "this floor
+/// judges", and `observed-state.valid.json` above stands for an older floor
+/// that carries neither field.
+#[test]
+fn inventory_bound_fixtures() {
+    roundtrip::<ObservedState>("observed-state.fresh.json", true);
+    let fresh: ObservedState =
+        serde_json::from_value(load("observed-state.fresh.json")).expect("fresh");
+    assert_eq!(fresh.inventory_bound_ms, Some(terminal_inventory::STALE_MS));
+    assert!(fresh.stale_cells.is_empty());
+
+    roundtrip::<ObservedState>("observed-state.stale-cell.json", true);
+    let stale: ObservedState =
+        serde_json::from_value(load("observed-state.stale-cell.json")).expect("stale");
+    assert_eq!(stale.inventory_bound_ms, Some(terminal_inventory::STALE_MS));
+    assert_eq!(stale.stale_cells.len(), 1);
+    let cell = &stale.stale_cells[0];
+    assert_eq!(cell.cell_instance_id, 2);
+    assert_eq!(cell.cell_boot_id.as_str(), "01JCELLBOOT0000000000000002");
+    assert_eq!(cell.since, 1_792_433_071_000);
+
+    // an entry names a cell and a whole unix-ms instant, or it is refused
+    let mut unnamed = load("observed-state.stale-cell.json");
+    unnamed["staleCells"][0]["cellBootId"] = serde_json::json!("");
+    assert!(serde_json::from_value::<ObservedState>(unnamed).is_err());
+    let mut negative = load("observed-state.stale-cell.json");
+    negative["staleCells"][0]["since"] = serde_json::json!(-1);
+    assert!(serde_json::from_value::<ObservedState>(negative).is_err());
 }
 
 #[test]
