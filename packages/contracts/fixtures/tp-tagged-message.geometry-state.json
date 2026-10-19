@@ -1,0 +1,13 @@
+{
+  "type": "GeometryState",
+  "sessionId": "s1",
+  "holder": {
+    "clientId": "client-02",
+    "viewId": "view-02",
+    "holderGeneration": 3,
+    "face": { "kind": "peer-window", "name": "Studio" }
+  },
+  "geometryRevision": 6,
+  "cols": 100,
+  "rows": 28
+}

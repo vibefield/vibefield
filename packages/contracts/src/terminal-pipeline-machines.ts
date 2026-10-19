@@ -853,6 +853,22 @@ export const TRANSFER_MACHINE: MachineTable = {
 // ---------------------------------------------------------------------------
 // 5. Geometry seat — cell side, per session (§6)
 
+// item 42 (2026-10-19) — the seat's announcement, spelled once for every row
+// that moves the holder or the committed size. Until this date the routed cell
+// told only the CALLER of a verb (its own `GeometryCommitted`) and an emptied
+// seat to no one, while these rows promised `control-changed{revision}` —
+// ghosttea's LOCAL protocol's message, which cannot say "nobody holds it". The
+// wire verb is `GeometryState`, behind the `geometry-events` capability;
+// terminal-pipeline.ts owns its shape and WHEN it goes out, including the one
+// send these rows cannot show because it is no seat transition: the state, told
+// once to a negotiated leg that an attach puts an activation of the session on.
+const ANNOUNCE_HOLDER =
+  "announce GeometryState {holder + face, geometryRevision, cols, rows} to every geometry-events control leg of the session (the caller's after its own reply)";
+const ANNOUNCE_EMPTY =
+  "announce GeometryState {holder: null, the last committed cols, rows} to every geometry-events control leg of the session";
+const SESSION_END_NOTE =
+  "no GeometryState — SessionEvent {exited | removed} tells a session's end (session-events)";
+
 export const GEOMETRY_SEAT_MACHINE: MachineTable = {
   name: "geometry-seat",
   owner: "cell, per session: at most one GeometryHolder at any revision",
@@ -879,12 +895,8 @@ export const GEOMETRY_SEAT_MACHINE: MachineTable = {
       event: "claim",
       guard: "expectRevision == current revision ∧ the claimant's attach grant carries `geometry`",
       to: "held",
-      actions: [
-        "mint holderGeneration",
-        "commit ONE PTY resize",
-        "revision += 1",
-        "announce the holder (control-changed{revision})",
-      ],
+      actions: ["mint holderGeneration", "commit ONE PTY resize", "revision += 1", ANNOUNCE_HOLDER],
+      note: "item 42 (2026-10-19): until then the cell told only the caller (GeometryCommitted), and an emptied seat to no one",
     },
     {
       from: "empty",
@@ -899,7 +911,7 @@ export const GEOMETRY_SEAT_MACHINE: MachineTable = {
       guard:
         "the claimant is the current holder (same clientId, viewId) ∧ expectRevision == current",
       to: "held",
-      actions: ["commit ONE PTY resize", "revision += 1"],
+      actions: ["commit ONE PTY resize", "revision += 1", ANNOUNCE_HOLDER],
     },
     {
       from: "held",
@@ -913,7 +925,7 @@ export const GEOMETRY_SEAT_MACHINE: MachineTable = {
       event: "release",
       guard: "holder matches incl. holderGeneration",
       to: "empty",
-      actions: ["announce empty seat"],
+      actions: [ANNOUNCE_EMPTY],
     },
     {
       from: "held",
@@ -930,6 +942,7 @@ export const GEOMETRY_SEAT_MACHINE: MachineTable = {
       to: "held",
       actions: [
         "ONE transition: revoke `from`, grant `to` (new holderGeneration), commit ONE PTY resize, revision += 1",
+        ANNOUNCE_HOLDER,
       ],
     },
     {
@@ -965,7 +978,7 @@ export const GEOMETRY_SEAT_MACHINE: MachineTable = {
       from: "held-grace",
       event: "grace-expired",
       to: "empty",
-      actions: ["auto-release; announce empty seat"],
+      actions: ["auto-release", ANNOUNCE_EMPTY],
     },
     {
       from: "held-grace",
@@ -979,9 +992,15 @@ export const GEOMETRY_SEAT_MACHINE: MachineTable = {
       event: "claim",
       guard: "the holder itself reclaims",
       to: "held",
-      actions: ["cancel the grace; commit ONE PTY resize; revision += 1"],
+      actions: ["cancel the grace; commit ONE PTY resize; revision += 1", ANNOUNCE_HOLDER],
     },
-    { from: "held-grace", event: "release", guard: "holder matches", to: "empty" },
+    {
+      from: "held-grace",
+      event: "release",
+      guard: "holder matches",
+      to: "empty",
+      actions: [ANNOUNCE_EMPTY],
+    },
     {
       from: "held-grace",
       event: "release",
@@ -994,7 +1013,7 @@ export const GEOMETRY_SEAT_MACHINE: MachineTable = {
       event: "transfer",
       guard: "caller's grant carries geometryAdmin [S4] ∧ `to` eligible",
       to: "held",
-      actions: ["the seat moves; the grace is cancelled"],
+      actions: ["the seat moves; the grace is cancelled", ANNOUNCE_HOLDER],
     },
     {
       from: "held-grace",
@@ -1003,8 +1022,18 @@ export const GEOMETRY_SEAT_MACHINE: MachineTable = {
       to: "held-grace",
       actions: ["GeometryRefused {NOT_HOLDER}"],
     },
-    { from: "held", event: "holder-grant-expired", to: "empty", actions: ["auto-release"] },
-    { from: "held-grace", event: "holder-grant-expired", to: "empty", actions: ["auto-release"] },
+    {
+      from: "held",
+      event: "holder-grant-expired",
+      to: "empty",
+      actions: ["auto-release", ANNOUNCE_EMPTY],
+    },
+    {
+      from: "held-grace",
+      event: "holder-grant-expired",
+      to: "empty",
+      actions: ["auto-release", ANNOUNCE_EMPTY],
+    },
     {
       from: "held",
       event: "holder-grant-renewed",
@@ -1017,20 +1046,37 @@ export const GEOMETRY_SEAT_MACHINE: MachineTable = {
       event: "holder-grant-renewed",
       guard: "the renewal drops `geometry`",
       to: "empty",
-      actions: ["revoke at once"],
+      actions: ["revoke at once", ANNOUNCE_EMPTY],
     },
     { from: "held-grace", event: "holder-grant-renewed", guard: "retains", to: "held-grace" },
-    { from: "held-grace", event: "holder-grant-renewed", guard: "drops", to: "empty" },
-    { from: "held", event: "holder-view-detached", to: "empty", actions: ["auto-release"] },
-    { from: "held-grace", event: "holder-view-detached", to: "empty" },
+    {
+      from: "held-grace",
+      event: "holder-grant-renewed",
+      guard: "drops",
+      to: "empty",
+      actions: [ANNOUNCE_EMPTY],
+    },
+    {
+      from: "held",
+      event: "holder-view-detached",
+      to: "empty",
+      actions: ["auto-release", ANNOUNCE_EMPTY],
+    },
+    {
+      from: "held-grace",
+      event: "holder-view-detached",
+      to: "empty",
+      actions: [ANNOUNCE_EMPTY],
+    },
     { from: "empty", event: "session-ended", to: "empty" },
     {
       from: "held",
       event: "session-ended",
       to: "empty",
       actions: ["the seat ends with the session"],
+      note: SESSION_END_NOTE,
     },
-    { from: "held-grace", event: "session-ended", to: "empty" },
+    { from: "held-grace", event: "session-ended", to: "empty", note: SESSION_END_NOTE },
   ],
   ignored: [
     ["empty", "release"], // GeometryRefused {NOT_HOLDER} — a refusal answer, not a state change
@@ -1049,7 +1095,9 @@ export const GEOMETRY_SEAT_MACHINE: MachineTable = {
   ],
   refused: [],
   outputs: {
-    held: "exactly one GeometryHolder {clientId, viewId, holderGeneration} at `geometryRevision`; a handover is ONE committed resize",
+    empty:
+      "no GeometryHolder; once any size has been committed, GeometryState {holder: null, cols, rows} says so — on each change, and once to a geometry-events leg an attach puts an activation of the session on",
+    held: "exactly one GeometryHolder {clientId, viewId, holderGeneration} at `geometryRevision`; a handover is ONE committed resize; GeometryState names it with its face — on each change, and once to a geometry-events leg an attach puts an activation of the session on",
     "held-grace":
       "the holder is the same; no other claimant may take the seat until holderGraceMs elapses",
   },

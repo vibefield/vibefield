@@ -200,6 +200,7 @@ import {
   DeclareDemand,
   FramesLegAttached,
   GeometryCommitted,
+  GeometryState,
   PresentationEnvelopeHeader,
   PresentationStatus,
   ProductSessionRosterItem,
@@ -580,6 +581,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "tp-claim-geometry": ClaimGeometry,
   "tp-transfer-geometry": TransferGeometry,
   "tp-geometry-committed": GeometryCommitted,
+  // item 42 — the seat announced: a phone holding it (holder + face) and the
+  // empty seat it leaves (`holder: null`, the last committed size). The grant
+  // that carries the face rides `tp-attach-grant.with-face` above.
+  "tp-geometry-state": GeometryState,
   "tp-transport-credit": TransportCredit,
   "tp-roster-item": ProductSessionRosterItem,
   "tp-send-input": SendInput,

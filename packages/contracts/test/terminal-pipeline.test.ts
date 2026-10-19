@@ -26,7 +26,10 @@ import {
   encodePresentationEnvelope,
   FramesAttachOutcome,
   GeometryCommitted,
+  GeometryHolder,
+  GeometryHolderFace,
   GeometryRefused,
+  GeometryState,
   type GrantProtectedHeader,
   grantSigningInput,
   grantValidityAt,
@@ -532,6 +535,8 @@ describe("message tagging — one wire for both legs (TP-S3a)", () => {
       ["tp-tagged-message.claim-geometry.json", TP_LEG_INBOUND.control],
       ["tp-tagged-message.geometry-committed.json", TP_LEG_OUTBOUND.control],
       ["tp-tagged-message.geometry-refused.json", TP_LEG_OUTBOUND.control],
+      // item 42 — the seat's announcement is outbound on the same leg.
+      ["tp-tagged-message.geometry-state.json", TP_LEG_OUTBOUND.control],
       // TP-S3-input — the input verb is control-leg INBOUND (the input thread).
       ["tp-tagged-message.send-input.json", TP_LEG_INBOUND.control],
     ];
@@ -551,6 +556,11 @@ describe("message tagging — one wire for both legs (TP-S3a)", () => {
     expect(refused.code).toBe("SEAT_HELD");
     expect(refused.currentHolder?.clientId).toBe("client-01");
     expect(refused.geometryRevision).toBe(5);
+    // the announcement after client-02's claim at revision 5: a face with no OS
+    const state = GeometryState.parse(fixture("tp-tagged-message.geometry-state.json"));
+    expect(state.holder?.clientId).toBe("client-02");
+    expect(state.holder?.face).toEqual({ kind: "peer-window", name: "Studio" });
+    expect(state.geometryRevision).toBe(6);
     // …and the input body: scroll rows are SIGNED (negative scrolls up).
     const input = SendInput.parse(fixture("tp-tagged-message.send-input.json"));
     expect(input.inputSequence).toBe(12);
@@ -713,6 +723,88 @@ describe("the lifecycle verb — SessionEvent (spec §5.4, TP-S3f / G24)", () =>
     // Load-bearing: an un-negotiated 0.11.x client closes its control leg on
     // any unknown tag, so the cell must never emit without the negotiation.
     expect(KNOWN_CAPABILITIES).toContain("session-events");
+  });
+});
+
+describe("the seat announced — GeometryState (spec §6, item 42)", () => {
+  it("a held seat names its holder with its grant's face; an empty seat says null", () => {
+    const held = GeometryState.parse(fixture("tp-geometry-state.held.json"));
+    expect(held.holder?.holderGeneration).toBe(7);
+    expect(held.holder?.face).toEqual({ kind: "phone", name: "iPhone 16 Pro", os: "ios" });
+    const empty = GeometryState.parse(fixture("tp-geometry-state.empty.json"));
+    expect(empty.holder).toBeNull();
+    // the phone let go: the PTY stays at the size it committed (a release
+    // resizes nothing), which is the size every other pane is drawing
+    expect([empty.cols, empty.rows]).toEqual([held.cols, held.rows]);
+    expect(empty.geometryRevision).toBe(held.geometryRevision + 1);
+  });
+
+  it("the holder is nullable, never optional; the face and its OS are optional", () => {
+    const held = fixture("tp-geometry-state.held.json");
+    const { holder: _holder, ...unsaid } = held;
+    expect(GeometryState.safeParse(unsaid).success, "a seat that says nothing").toBe(false);
+    const { face: _face, ...faceless } = held.holder;
+    expect(GeometryState.safeParse({ ...held, holder: faceless }).success).toBe(true);
+    const { os: _os, ...osless } = held.holder.face;
+    expect(
+      GeometryState.safeParse({ ...held, holder: { ...held.holder, face: osless } }).success,
+    ).toBe(true);
+  });
+
+  it("a face reads tolerantly: unknown kinds and OSes pass, a nameless face refuses", () => {
+    const face = fixture("tp-geometry-state.held.json").holder.face;
+    expect(GeometryHolderFace.safeParse({ ...face, kind: "watch", os: "watchos" }).success).toBe(
+      true,
+    );
+    expect(GeometryHolderFace.safeParse({ ...face, name: "" }).success).toBe(false);
+    expect(GeometryHolderFace.safeParse({ kind: "phone" }).success).toBe(false);
+  });
+
+  it("the committed size is a whole, positive PTY size", () => {
+    const empty = fixture("tp-geometry-state.empty.json");
+    expect(GeometryState.safeParse({ ...empty, cols: 0 }).success).toBe(false);
+    expect(GeometryState.safeParse({ ...empty, rows: 1.5 }).success).toBe(false);
+  });
+
+  it("the verb is OUTBOUND on control only, behind a known TP-D25 capability", () => {
+    // Load-bearing like session-events: ghosttea-react and the kit close a
+    // leg on an unknown tag, so the cell sends it only where it was asked for.
+    expect(KNOWN_CAPABILITIES).toContain("geometry-events");
+    const tagged = fixture("tp-tagged-message.geometry-state.json");
+    expect(decodeTpMessage(tagged, TP_LEG_OUTBOUND.control).ok).toBe(true);
+    expect(decodeTpMessage(tagged, TP_LEG_INBOUND.control)).toMatchObject({
+      ok: false,
+      error: "not-allowed-here",
+    });
+    expect(decodeTpMessage(tagged, TP_LEG_OUTBOUND.frames)).toMatchObject({
+      ok: false,
+      error: "not-allowed-here",
+    });
+  });
+
+  it("the caller's own verdicts keep the bare holder", () => {
+    // GeometryCommitted and GeometryRefused answer a caller about its own verb;
+    // the face rides the announcement alone, so their pinned shapes stand.
+    expect(Object.keys(GeometryHolder.shape)).toEqual(["clientId", "viewId", "holderGeneration"]);
+  });
+
+  it("the face rides the attach grant UNDER the MAC; a faceless grant verifies as before", () => {
+    const v = fixture("tp-grant-mac.vector.json");
+    const withFace = fixture("tp-attach-grant.with-face.json");
+    expect(SessionAttachGrant.parse(withFace).claims.face).toEqual({
+      kind: "phone",
+      name: "iPhone 16 Pro",
+      os: "ios",
+    });
+    expect(macFor(v.keyHex, withFace.protected, withFace.claims)).toBe(withFace.mac);
+    // a face dressed up after the mint is a different signing input
+    const dressed = { ...withFace.claims, face: { ...withFace.claims.face, name: "Studio" } };
+    expect(macFor(v.keyHex, withFace.protected, dressed)).not.toBe(withFace.mac);
+    // …while a faceless grant reads as one, and signs as it always did
+    expect(SessionAttachGrant.parse(fixture("tp-attach-grant.valid.json")).claims.face).toBe(
+      undefined,
+    );
+    expect(grantSigningInput(v.attach.protected, v.attach.claims)).toBe(v.attach.signingInput);
   });
 });
 

@@ -873,8 +873,9 @@
             "mint holderGeneration",
             "commit ONE PTY resize",
             "revision += 1",
-            "announce the holder (control-changed{revision})"
-          ]
+            "announce GeometryState {holder + face, geometryRevision, cols, rows} to every geometry-events control leg of the session (the caller's after its own reply)"
+          ],
+          "note": "item 42 (2026-10-19): until then the cell told only the caller (GeometryCommitted), and an emptied seat to no one"
         },
         {
           "from": "empty",
@@ -888,7 +889,11 @@
           "event": "claim",
           "guard": "the claimant is the current holder (same clientId, viewId) ∧ expectRevision == current",
           "to": "held",
-          "actions": ["commit ONE PTY resize", "revision += 1"]
+          "actions": [
+            "commit ONE PTY resize",
+            "revision += 1",
+            "announce GeometryState {holder + face, geometryRevision, cols, rows} to every geometry-events control leg of the session (the caller's after its own reply)"
+          ]
         },
         {
           "from": "held",
@@ -902,7 +907,9 @@
           "event": "release",
           "guard": "holder matches incl. holderGeneration",
           "to": "empty",
-          "actions": ["announce empty seat"]
+          "actions": [
+            "announce GeometryState {holder: null, the last committed cols, rows} to every geometry-events control leg of the session"
+          ]
         },
         {
           "from": "held",
@@ -917,7 +924,8 @@
           "guard": "(caller is the holder ∨ caller's grant carries geometryAdmin [S4]) ∧ `to` holds a valid geometry-capable grant ∧ expectRevision == current",
           "to": "held",
           "actions": [
-            "ONE transition: revoke `from`, grant `to` (new holderGeneration), commit ONE PTY resize, revision += 1"
+            "ONE transition: revoke `from`, grant `to` (new holderGeneration), commit ONE PTY resize, revision += 1",
+            "announce GeometryState {holder + face, geometryRevision, cols, rows} to every geometry-events control leg of the session (the caller's after its own reply)"
           ]
         },
         {
@@ -953,7 +961,10 @@
           "from": "held-grace",
           "event": "grace-expired",
           "to": "empty",
-          "actions": ["auto-release; announce empty seat"]
+          "actions": [
+            "auto-release",
+            "announce GeometryState {holder: null, the last committed cols, rows} to every geometry-events control leg of the session"
+          ]
         },
         {
           "from": "held-grace",
@@ -967,13 +978,19 @@
           "event": "claim",
           "guard": "the holder itself reclaims",
           "to": "held",
-          "actions": ["cancel the grace; commit ONE PTY resize; revision += 1"]
+          "actions": [
+            "cancel the grace; commit ONE PTY resize; revision += 1",
+            "announce GeometryState {holder + face, geometryRevision, cols, rows} to every geometry-events control leg of the session (the caller's after its own reply)"
+          ]
         },
         {
           "from": "held-grace",
           "event": "release",
           "guard": "holder matches",
-          "to": "empty"
+          "to": "empty",
+          "actions": [
+            "announce GeometryState {holder: null, the last committed cols, rows} to every geometry-events control leg of the session"
+          ]
         },
         {
           "from": "held-grace",
@@ -987,7 +1004,10 @@
           "event": "transfer",
           "guard": "caller's grant carries geometryAdmin [S4] ∧ `to` eligible",
           "to": "held",
-          "actions": ["the seat moves; the grace is cancelled"]
+          "actions": [
+            "the seat moves; the grace is cancelled",
+            "announce GeometryState {holder + face, geometryRevision, cols, rows} to every geometry-events control leg of the session (the caller's after its own reply)"
+          ]
         },
         {
           "from": "held-grace",
@@ -1000,13 +1020,19 @@
           "from": "held",
           "event": "holder-grant-expired",
           "to": "empty",
-          "actions": ["auto-release"]
+          "actions": [
+            "auto-release",
+            "announce GeometryState {holder: null, the last committed cols, rows} to every geometry-events control leg of the session"
+          ]
         },
         {
           "from": "held-grace",
           "event": "holder-grant-expired",
           "to": "empty",
-          "actions": ["auto-release"]
+          "actions": [
+            "auto-release",
+            "announce GeometryState {holder: null, the last committed cols, rows} to every geometry-events control leg of the session"
+          ]
         },
         {
           "from": "held",
@@ -1020,7 +1046,10 @@
           "event": "holder-grant-renewed",
           "guard": "the renewal drops `geometry`",
           "to": "empty",
-          "actions": ["revoke at once"]
+          "actions": [
+            "revoke at once",
+            "announce GeometryState {holder: null, the last committed cols, rows} to every geometry-events control leg of the session"
+          ]
         },
         {
           "from": "held-grace",
@@ -1032,18 +1061,27 @@
           "from": "held-grace",
           "event": "holder-grant-renewed",
           "guard": "drops",
-          "to": "empty"
+          "to": "empty",
+          "actions": [
+            "announce GeometryState {holder: null, the last committed cols, rows} to every geometry-events control leg of the session"
+          ]
         },
         {
           "from": "held",
           "event": "holder-view-detached",
           "to": "empty",
-          "actions": ["auto-release"]
+          "actions": [
+            "auto-release",
+            "announce GeometryState {holder: null, the last committed cols, rows} to every geometry-events control leg of the session"
+          ]
         },
         {
           "from": "held-grace",
           "event": "holder-view-detached",
-          "to": "empty"
+          "to": "empty",
+          "actions": [
+            "announce GeometryState {holder: null, the last committed cols, rows} to every geometry-events control leg of the session"
+          ]
         },
         {
           "from": "empty",
@@ -1054,12 +1092,14 @@
           "from": "held",
           "event": "session-ended",
           "to": "empty",
-          "actions": ["the seat ends with the session"]
+          "actions": ["the seat ends with the session"],
+          "note": "no GeometryState — SessionEvent {exited | removed} tells a session's end (session-events)"
         },
         {
           "from": "held-grace",
           "event": "session-ended",
-          "to": "empty"
+          "to": "empty",
+          "note": "no GeometryState — SessionEvent {exited | removed} tells a session's end (session-events)"
         }
       ],
       "ignored": [
@@ -1079,7 +1119,8 @@
       ],
       "refused": [],
       "outputs": {
-        "held": "exactly one GeometryHolder {clientId, viewId, holderGeneration} at `geometryRevision`; a handover is ONE committed resize",
+        "empty": "no GeometryHolder; once any size has been committed, GeometryState {holder: null, cols, rows} says so — on each change, and once to a geometry-events leg an attach puts an activation of the session on",
+        "held": "exactly one GeometryHolder {clientId, viewId, holderGeneration} at `geometryRevision`; a handover is ONE committed resize; GeometryState names it with its face — on each change, and once to a geometry-events leg an attach puts an activation of the session on",
         "held-grace": "the holder is the same; no other claimant may take the seat until holderGraceMs elapses"
       }
     }

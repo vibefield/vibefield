@@ -231,6 +231,39 @@ export type CellTransportGrantClaims = z.infer<typeof CellTransportGrantClaims>;
 export const SessionAttachRight = z.enum(["geometry", "geometryAdmin", "input", "read"]);
 export type SessionAttachRight = z.infer<typeof SessionAttachRight>;
 
+/** The device kinds a holder's face names today (item 42, 2026-10-19): the
+ * phone, a window of THIS desktop, a window of a peer desktop. */
+export const GeometryHolderFaceKind = z.enum(["phone", "window", "peer-window"]);
+export type GeometryHolderFaceKind = z.infer<typeof GeometryHolderFaceKind>;
+
+/** The operating systems a face names today. */
+export const GeometryHolderOs = z.enum(["ios", "macos", "windows", "linux"]);
+export type GeometryHolderOs = z.infer<typeof GeometryHolderOs>;
+
+/** item 42 (2026-10-19) — who a geometry holder IS, as a person reads it: the
+ * device kind, its name, its OS. fieldd MINTS it into the attach grant's claims
+ * (`SessionAttachGrantClaims.face`, below) from the principal it already
+ * verified; the cell never composes a face — it ECHOES the one in the claims of
+ * the activation whose view holds the seat, in `GeometryState` (§6, the
+ * geometry lease, below). Presentation only: no right, fence or CAS reads it.
+ * Tolerant reader: `kind` and `os` accept any string beyond the named ones, so
+ * a newer fieldd's device kind reaches an older pane as text, never a refusal;
+ * `name` is never empty, because a pane that says who drives must have a name
+ * to say. Defined here, ahead of the geometry section it is read in, because
+ * the claims below embed it and a zod schema must exist before one that embeds
+ * it. The clients carry the grant as they received it — the kit's
+ * `RoutedGrant.raw`, field-app's `.passthrough()` parse — never as a typed
+ * re-serialization that could drop a claim, so the face reaches the cell under
+ * the MAC it was signed with. */
+export const GeometryHolderFace = z
+  .object({
+    kind: z.union([GeometryHolderFaceKind, z.string()]),
+    name: z.string().min(1),
+    os: z.union([GeometryHolderOs, z.string()]).optional(),
+  })
+  .passthrough();
+export type GeometryHolderFace = z.infer<typeof GeometryHolderFace>;
+
 /** Claims of a SessionAttachGrant — authority over ONE session for ONE client
  * at one placement. `rights` is sorted+unique; `read` is the floor of every
  * grant that can present at all. */
@@ -246,6 +279,14 @@ export const SessionAttachGrantClaims = z
     rights: sortedUniqueArray(SessionAttachRight),
     issuedAt: EpochMs,
     expiresAt: EpochMs,
+    /** item 42 (2026-10-19) — the face `GeometryState` shows while this
+     * activation's view holds the seat. Under the MAC like every claim, so a
+     * client cannot dress itself as another device. OPTIONAL: a grant minted
+     * before item 42, or for a principal fieldd cannot name, carries none, and
+     * the cell then announces that holder without a face. The MAC covers the
+     * claims AS RECEIVED, so a grant without the field verifies exactly as
+     * before (`grantSigningInput`). */
+    face: GeometryHolderFace.optional(),
   })
   .passthrough();
 export type SessionAttachGrantClaims = z.infer<typeof SessionAttachGrantClaims>;
@@ -566,12 +607,18 @@ export type ProtocolVersion = z.infer<typeof ProtocolVersion>;
  * echoes. Renderer-internal features are never capabilities.
  * `session-events` (TP-S3f, petition G24): the client can receive the
  * cell → client `SessionEvent` verb — load-bearing, because an un-negotiated
- * client closes its control leg on any unknown tag. */
+ * client closes its control leg on any unknown tag.
+ * `geometry-events` (item 42, 2026-10-19): the client can receive the
+ * cell → client `GeometryState` verb — the geometry seat's holder and committed
+ * size, pushed to the control leg of every activation of the session on each
+ * change of either. Load-bearing for the same reason: ghosttea-react and the
+ * kit close a leg on an unknown tag, so the cell never sends it unasked. */
 export const KNOWN_CAPABILITIES = [
   "resume",
   "snapshot-demand",
   "profiling-envelope",
   "session-events",
+  "geometry-events",
 ] as const;
 export type KnownCapability = (typeof KNOWN_CAPABILITIES)[number];
 
@@ -1094,6 +1141,61 @@ export const GeometryRefused = z
   .passthrough();
 export type GeometryRefused = z.infer<typeof GeometryRefused>;
 
+/** item 42 (2026-10-19) — the holder as `GeometryState` announces it: the
+ * cell-minted `GeometryHolder` plus the `face` from the attach claims of the
+ * activation whose view holds the seat. `GeometryCommitted` and
+ * `GeometryRefused` keep the bare `GeometryHolder`: they answer a CALLER about
+ * its own verb, and their shape is pinned by goldens on three sides. */
+export const GeometryStateHolder = GeometryHolder.extend({
+  face: GeometryHolderFace.optional(),
+}).passthrough();
+export type GeometryStateHolder = z.infer<typeof GeometryStateHolder>;
+
+/** cell → client, CONTROL leg, gated by the negotiated `geometry-events`
+ * capability (item 42, 2026-10-19; TPv3 §6: "the cell announces the holder").
+ * The seat as it now is, sent at two moments:
+ * - after every change of its holder or of its committed size — a claim, a
+ *   transfer (a take included), the holder's own resize, an explicit release,
+ *   every auto-release (view detach, leg or activation loss, grant expiry, a
+ *   renewal dropping `geometry`) and a finalize that empties the seat
+ *   (`DESTINATION_INELIGIBLE`) — to the control leg of EVERY activation of the
+ *   session whose hello negotiated the capability, the caller's included;
+ * - once, right after the `ControlLegAttached` of an attach that puts an
+ *   activation of the session on a negotiated leg (a new activation, a
+ *   replacement, or an activation moved onto a newer leg of its set), so a pane
+ *   that mounts while another device drives says so at once — when the seat
+ *   has a committed state at all (an empty seat with a committed size counts).
+ * Activation-scoped, unlike `SessionEvent`: a client with no activation of the
+ * session hears nothing of its seat. Not a reply: on the caller's leg it
+ * follows the verb's own `GeometryCommitted`/`GeometryRefused`, so a client's
+ * in-order reply matching is undisturbed. The session's END is not announced
+ * here: that is `SessionEvent`'s (`session-events`).
+ *
+ * TPv3 §6 names the announcement `control-changed{revision}` — ghosttea's LOCAL
+ * protocol's message, which cannot say that nobody holds control; its 1.12
+ * successor `control-state {controller | null, controlRevision, cols, rows}`
+ * is the precedent this follows. A STATE, not a delta. The receiver's rule: one
+ * whose `geometryRevision` is strictly OLDER than the state it holds is ignored
+ * (the cell sends outside its lock, so two announcements of one session can
+ * cross); an equal or newer one REPLACES the state, in arrival order. Equal
+ * matters: a finalize that refuses `DESTINATION_INELIGIBLE` on an already-empty
+ * seat leaves the revision where it was while the engine did resize the PTY,
+ * and that state arrives at the same revision with the new size (DS-4d's
+ * revision semantics, unchanged by item 42). `holder: null` is an EMPTY seat:
+ * nobody drives. `cols`/`rows` are the PTY's COMMITTED size, and a release does
+ * not resize the PTY back, so an empty seat carries the last size committed —
+ * the size the pane is drawing. */
+export const GeometryState = z
+  .object({
+    sessionId: z.string().min(1),
+    holder: GeometryStateHolder.nullable(),
+    geometryRevision: Counter,
+    cols: z.number().int().positive(),
+    rows: z.number().int().positive(),
+  })
+  .passthrough();
+export type GeometryState = z.infer<typeof GeometryState>;
+
 // ---------------------------------------------------------------------------
 // Session input (spec §5.4, TP-S3-input) — the terminal-input verb. RATIFIED
 // 2026-08-23 (§17 mark 22). ONE control-leg message carries a keystroke / paste /
@@ -1515,6 +1617,7 @@ export const TpMessageType = z.enum([
   "SessionEvent",
   "GeometryCommitted",
   "GeometryRefused",
+  "GeometryState",
   "AttachFramesLeg",
   "FramesLegAttached",
   "TransportCredit",
@@ -1543,6 +1646,7 @@ export const TP_MESSAGE_SCHEMAS: Readonly<Record<TpMessageType, ZodTypeAny>> = {
   SessionEvent,
   GeometryCommitted,
   GeometryRefused,
+  GeometryState,
   AttachFramesLeg,
   FramesLegAttached,
   TransportCredit,
@@ -1585,6 +1689,9 @@ export const TP_LEG_OUTBOUND: Readonly<Record<TransportChannel, readonly TpMessa
     "GeometryCommitted",
     "GeometryRefused",
     "SessionEvent",
+    // item 42 — only on a leg that negotiated `geometry-events`, like
+    // `SessionEvent` on `session-events`.
+    "GeometryState",
   ],
   frames: [
     "ConnectionAccepted",
