@@ -4378,3 +4378,206 @@ describe("TerminalService.floorCensus — what a restart of the floor would end 
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// IL-D5 (a) (`draft/thinking-inventory-latency.md` §5) — a per-session op never
+// guesses a cell while the inventory is stale. terminate, automate and the
+// mints route a session by its tag, else by its birth, else by a guess: the
+// interactive cell. While any cell's inventory is older than the bound, that
+// guess is refused UNAVAILABLE {terminal, inventory_stale}: the session may
+// live in the stale cell, and the guessed cell would answer "unknown session"
+// (GT-8's class: `terminated: false` for a PTY that runs on).
+
+/** the agent cell, as a judging floor names it stale */
+const AGENT_CELL_STALE = { cellInstanceId: 2, cellBootId: "cell-a", since: 1792433071000 };
+
+/** a pane on the interactive cell, an agent on the agent cell */
+const PLACED_ROWS = [
+  { sessionId: "pane-1", cell: cellTag(1, "cell-i", "interactive") },
+  { sessionId: "agent-1", cell: cellTag(2, "cell-a", "agent") },
+];
+
+/** the caller a unit-level mint is for: a local token, minted loopback doors */
+const MINT_PRINCIPAL = { kind: "local-token", tokenId: "il-d5" };
+
+/** A judging floor's observed state over PLACED_ROWS: its bound, and the cells
+ * it names stale. */
+function judgedFloor(staleCells: ReadonlyArray<typeof AGENT_CELL_STALE>): Record<string, unknown> {
+  return {
+    ...observed(PLACED_ROWS),
+    inventoryBoundMs: 10_000,
+    ...(staleCells.length === 0 ? {} : { staleCells: [...staleCells] }),
+  };
+}
+
+/** A TerminalService over two fake class cells, keyed and serving doors, whose
+ * observed stream a test drives: `first` is the snapshot, `deliver` a later
+ * delta. */
+async function judgedService(
+  first: unknown,
+  supervision?: TerminalServiceOptions["supervision"],
+): Promise<{
+  service: TerminalService;
+  interactive: Awaited<ReturnType<typeof startFakeFloor>>;
+  agent: Awaited<ReturnType<typeof startFakeFloor>>;
+  deliver: (state: unknown) => void;
+}> {
+  const interactive = await startFakeFloor();
+  const agent = await startFakeFloor();
+  const routes = keyedRoutes(1, [
+    {
+      cellInstanceId: 1,
+      cellBootId: "cell-i",
+      endpoints: interactive.endpoints,
+      workloadClass: "interactive",
+      role: "class",
+      grantKey: KEY_I,
+      doors: {
+        controlUrl: "ws://127.0.0.1:50021/control",
+        framesUrl: "ws://127.0.0.1:50021/frames",
+      },
+    },
+    {
+      cellInstanceId: 2,
+      cellBootId: "cell-a",
+      endpoints: agent.endpoints,
+      workloadClass: "agent",
+      role: "class",
+      grantKey: KEY_A,
+      doors: {
+        controlUrl: "ws://127.0.0.1:50022/control",
+        framesUrl: "ws://127.0.0.1:50022/frames",
+      },
+    },
+  ]);
+  let push: ((payload: unknown) => void) | undefined;
+  const service = new TerminalService({
+    link: {
+      subscribe: async (_method, _params, onEvent) => {
+        push = (payload) => onEvent(payload, "delta");
+        return { snapshot: first };
+      },
+      terminalEndpoints: terminalCreateTarget(routes, "interactive")?.endpoints,
+      terminalRoutes: routes,
+      on: () => undefined,
+    },
+    ...(supervision === undefined ? {} : { supervision }),
+  });
+  cleanup.push(() => service.dispose());
+  await service.ensureStarted();
+  return { service, interactive, agent, deliver: (state) => push?.(state) };
+}
+
+/** The refusal a synchronous call throws — a failed row if it answered instead. */
+function refusalThrownBy(call: () => unknown): RpcCallError {
+  let answered: unknown;
+  try {
+    answered = call();
+  } catch (error) {
+    expect(error).toBeInstanceOf(RpcCallError);
+    return error as RpcCallError;
+  }
+  throw new Error(`expected a refusal, got ${JSON.stringify(answered)}`);
+}
+
+describe("IL-D5 (a) — a per-session op never guesses a cell while the inventory is stale", () => {
+  it("terminate and automate refuse a session nothing places while a cell is stale, and dial no cell", async () => {
+    const { service, interactive, agent } = await judgedService(judgedFloor([AGENT_CELL_STALE]));
+    for (const [operation, call] of [
+      ["terminate", () => service.terminate("ghost-1")],
+      ["automate", () => service.automate("ghost-1", { kind: "text", text: "echo where" })],
+    ] as const) {
+      const refused = await refusalOf(call());
+      expect(refused.kind, operation).toBe("UNAVAILABLE");
+      expect(refused.retryable, operation).toBe(true);
+      expect(refused.details, `${operation}: every stale cell, where it may live`).toEqual({
+        service: "terminal",
+        state: "inventory_stale",
+        cells: [AGENT_CELL_STALE],
+      });
+      expect(refused.message.startsWith(`${operation} refused`), operation).toBe(true);
+    }
+    expect(interactive.connections(), "the guess was never dialled").toBe(0);
+    expect(agent.connections()).toBe(0);
+  });
+
+  it("a session its tag or its birth places is dialled at its own cell as before, the stale cell included", async () => {
+    const { service, interactive, agent } = await judgedService(judgedFloor([AGENT_CELL_STALE]));
+    // agent-1 is listed on the stale agent cell, so its tag routes it. The fake
+    // cell never created it and answers "unknown session": what this row reads
+    // is WHICH cell was asked.
+    await expect(service.terminate("agent-1")).resolves.toEqual({ terminated: false });
+    expect(agent.commands()).toContain("terminate");
+    await expect(
+      service.automate("pane-1", { kind: "text", text: "echo placed" }),
+    ).resolves.toMatchObject({ accepted: true });
+    expect(interactive.commands()).toContain("automation-input");
+
+    // a birth places its session before any inventory lists it
+    const born = await service.create({ workloadClass: "agent" });
+    expect(born.cellBootId).toBe("cell-a");
+    await expect(service.terminate(born.sessionId)).resolves.toEqual({ terminated: true });
+    expect(interactive.commands(), "nothing was guessed").not.toContain("terminate");
+  });
+
+  it("with every cell fresh, or on a floor that does not judge, the guess stands as before", async () => {
+    const fresh = await judgedService(judgedFloor([AGENT_CELL_STALE]));
+    fresh.deliver(judgedFloor([]));
+    expect(fresh.service.staleCells(), "the floor's next word: every cell fresh").toEqual([]);
+    const older = await judgedService(observed(PLACED_ROWS));
+    expect(older.service.inventoryBoundMs(), "a floor that cannot say").toBeUndefined();
+
+    for (const { service, interactive, agent } of [fresh, older]) {
+      await expect(service.terminate("ghost-1")).resolves.toEqual({ terminated: false });
+      expect(interactive.commands(), "the interactive cell is the guess").toContain("terminate");
+      expect(agent.connections()).toBe(0);
+    }
+  });
+
+  it("a mint for a session nothing places is refused the same way; a listed session mints from its own cell", async () => {
+    const { service } = await judgedService(judgedFloor([AGENT_CELL_STALE]));
+    const ghostRenewal = { sessionId: "ghost-1", expectGeneration: 0, requestId: "renew-ghost" };
+    for (const [operation, call] of [
+      ["openTicket", () => service.openTicket(MINT_PRINCIPAL, "ghost-1")],
+      ["renewAttach", () => service.renewAttach(MINT_PRINCIPAL, ghostRenewal)],
+    ] as const) {
+      const refused = refusalThrownBy(call);
+      expect(refused.kind, operation).toBe("UNAVAILABLE");
+      expect(refused.details, operation).toEqual({
+        service: "terminal",
+        state: "inventory_stale",
+        cells: [AGENT_CELL_STALE],
+      });
+    }
+
+    const ticket = service.openTicket(MINT_PRINCIPAL, "agent-1");
+    expect(ticket.route.cellBootId, "a stale cell's own session mints as before").toBe("cell-a");
+    expect(verifies(KEY_A, ticket.attachGrant)).toBe(true);
+    const renewed = service.renewAttach(MINT_PRINCIPAL, {
+      sessionId: "agent-1",
+      expectGeneration: 1,
+      requestId: "renew-agent",
+    });
+    expect(renewed.attachGrant.claims.grantGeneration).toBe(2);
+  });
+
+  it("while the floor is held unresponsive, the guess's refusal is WG-D4's {native, unresponsive}", async () => {
+    const held = {
+      service: "native",
+      state: "unresponsive",
+      since: 1792433070000,
+      detail: "the control path stopped answering (process alive)",
+    } as const;
+    const { service, interactive } = await judgedService(judgedFloor([AGENT_CELL_STALE]), {
+      health: () => ({ state: "unresponsive", lastTickAgeMs: null }),
+      doorRefusal: () => held,
+      on: () => undefined,
+      off: () => undefined,
+    });
+    const refused = await refusalOf(service.terminate("ghost-1"));
+    expect(refused.kind).toBe("UNAVAILABLE");
+    expect(refused.retryable).toBe(true);
+    expect(refused.details, "the worse and truer story wins").toEqual(held);
+    expect(interactive.connections()).toBe(0);
+  });
+});

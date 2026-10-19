@@ -922,7 +922,7 @@ export class TerminalService {
     sessionId: string,
     forwardedFor?: ForwardedFor,
   ): TerminalOpenTicketResponse {
-    const cell = this.sessionCell(sessionId);
+    const cell = this.sessionCell(sessionId, "openTicket");
     return this.ticketFor(cell, principal, sessionId, forwardedFor);
   }
 
@@ -966,7 +966,7 @@ export class TerminalService {
     params: TerminalRenewAttachParams,
     forwardedFor?: ForwardedFor,
   ): TerminalRenewAttachResult {
-    const cell = this.sessionCell(params.sessionId);
+    const cell = this.sessionCell(params.sessionId, "renewAttach");
     if (cell.grantKey === undefined)
       throw new RpcCallError(
         "UNAVAILABLE",
@@ -1556,12 +1556,14 @@ export class TerminalService {
   /** AR-3 — puppeteer's `automateTerminal` over the floor: one semantic input
    * operation, ordered by the service against accepted human input (the epoch
    * path; a conflict is `accepted: false` with the floor's reason, never a
-   * silent drop). Dialed at the session's OWN cell, like terminate. */
+   * silent drop). Dialed at the session's OWN cell, like terminate, and
+   * refused like it, while any cell is stale, for a session nothing places
+   * (IL-D5 (a), `sessionCell`). */
   async automate(
     sessionId: string,
     operation: AgentTerminalAutomation,
   ): Promise<{ accepted: boolean; reason?: string | undefined }> {
-    const client = await this.connectedClient(await this.sessionCellForOp(sessionId));
+    const client = await this.connectedClient(await this.sessionCellForOp(sessionId, "automate"));
     let result: AutomationInputResult;
     try {
       result =
@@ -1783,9 +1785,12 @@ export class TerminalService {
    *
    * TC-S3 — dialed at the session's OWN cell (the inventory's `cell` tag), not
    * at any class's create target: only the cell holding the PTY can fire its
-   * ladder, and a filled solo cell is never a target again. */
+   * ladder, and a filled solo cell is never a target again. IL-D5 (a) — a
+   * session neither its tag nor its birth places is refused UNAVAILABLE while
+   * any cell's inventory is older than the bound, never dialed at a guessed
+   * cell that would answer `terminated: false` (`sessionCell`). */
   async terminate(sessionId: string): Promise<TerminalTerminateResult> {
-    const client = await this.connectedClient(await this.sessionCellForOp(sessionId));
+    const client = await this.connectedClient(await this.sessionCellForOp(sessionId, "terminate"));
     try {
       await client.terminate(sessionId, "application");
       this.bornIn.delete(sessionId);
@@ -2387,14 +2392,28 @@ export class TerminalService {
   /** TC-S3 — the cell a KNOWN session lives on, from the observed inventory's
    * `cell` tag. Deliberately not the target rule: a cell stops being a target
    * long before it stops serving (every filled solo cell), so per-session ops
-   * follow the tag or they follow nothing. */
-  private sessionCell(sessionId: string): CellTarget {
+   * follow the tag or they follow nothing.
+   *
+   * IL-D5 (a) (`draft/thinking-inventory-latency.md` §5) — `operation` names
+   * the per-session op that will act in the cell answered (terminate,
+   * automate, a mint, a renewal). For a session neither a tag nor a birth
+   * places, the interactive cell is a guess, and while any cell's inventory is
+   * older than the bound the session may live in that cell, listed by an
+   * answer fieldd has not seen: the guessed cell would answer "unknown
+   * session", and a terminate would report `terminated: false` for a PTY that
+   * runs on (GT-8's class). So while any cell is stale the op is refused
+   * (`staleRefusal`: every stale cell, or WG-D4's held floor) and never
+   * guessed. Without an `operation` the guess stands: `runtimeSessions` reads
+   * the rows the inventory listed and acts on none of them. */
+  private sessionCell(sessionId: string, operation?: string): CellTarget {
     const tag = this.sessionCellTag(sessionId);
     if (tag !== undefined) return this.cellByBootId(tag.cellBootId);
     // A session this service birthed that no observation has placed yet: the
     // cell that answered its birth (see `bornIn`).
     const born = this.bornIn.get(sessionId);
     if (born !== undefined) return this.cellByBootId(born);
+    const refusal = operation === undefined ? undefined : this.staleRefusal(sessionId, operation);
+    if (refusal !== undefined) throw refusal;
     // Untagged, or a session this inventory has never named: the legacy
     // reading. On a pre-TC-S3 floor that IS the one cell; on a K=2 floor it is
     // the interactive target, which is the best fieldd can honestly do for a
@@ -2409,11 +2428,13 @@ export class TerminalService {
   /** The async half of `sessionCell`: a session whose cell is UNKNOWN may be
    * waiting on a cell that is still being born, and it gets the same budget
    * every other op gets. A TAGGED session needs no wait — its cell is either in
-   * the snapshot now or gone, and gone is an answer. */
-  private async sessionCellForOp(sessionId: string): Promise<CellTarget> {
+   * the snapshot now or gone, and gone is an answer. IL-D5 (a) — the stale
+   * inventory is judged after the wait, at the moment the guess would be
+   * made. */
+  private async sessionCellForOp(sessionId: string, operation: string): Promise<CellTarget> {
     if (this.sessionCellTag(sessionId) === undefined && !this.bornIn.has(sessionId))
       await this.awaitEndpoints("interactive");
-    return this.sessionCell(sessionId);
+    return this.sessionCell(sessionId, operation);
   }
 
   /** One named cell's coordinates, or the honest state of its absence. */
