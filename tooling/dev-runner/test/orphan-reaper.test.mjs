@@ -11,6 +11,7 @@ import {
   parseUnixSocketOwners,
   parseWindowsProcessList,
   reapDevOrphans,
+  snapshotsInUse,
 } from "../src/orphan-reaper.mjs";
 
 // Host-absolute by construction: the classifier `resolve`s every path handed
@@ -178,6 +179,27 @@ test("a runtime-root lookalike outside the namespace is not ours", () => {
   });
 
   assert.deepEqual(orphans, []);
+});
+
+test("the snapshots live processes execute from are named for the pruner to keep", () => {
+  // A shell-only restart adopts the pair, which keeps running out of the
+  // snapshot it was launched from: that directory is in use, not stale, and
+  // deleting it fails the floor's next exec. The evidence is the classifier's
+  // own string fact, so a ghost path still names its snapshot.
+  const OLDER = "dev-333333333333333333333333";
+  const inUse = snapshotsInUse(
+    [
+      { pid: 501, exePath: nativeIn(STALE) },
+      { pid: 502, exePath: `${nativeIn(OLDER)} (deleted)` },
+      { pid: 503, exePath: PACKAGED_NATIVE },
+      { pid: 504, exePath: join(`${RUNTIME_ROOT}-backup`, CURRENT, "native", "field-native") },
+      { pid: 505, exePath: RUNTIME_ROOT },
+      { pid: 506, exePath: null },
+    ],
+    RUNTIME_ROOT,
+  );
+
+  assert.deepEqual([...inUse].sort(), [STALE, OLDER]);
 });
 
 test("the ladder escalates to SIGKILL only for a process that outlives SIGTERM", async () => {

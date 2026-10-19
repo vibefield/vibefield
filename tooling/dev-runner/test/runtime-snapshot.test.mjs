@@ -3,6 +3,7 @@ import { access, chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
+import { snapshotsInUse } from "../src/orphan-reaper.mjs";
 import {
   pruneRuntimeSnapshots,
   RuntimeSnapshotChangedError,
@@ -190,4 +191,38 @@ test("prunes only completed build snapshots outside the keep set", async (t) => 
   await access(keep.root);
   await access(unrelated);
   await assert.rejects(access(remove.root), { code: "ENOENT" });
+});
+
+test("keeps the snapshot an adopted pair still executes from", async (t) => {
+  // A shell-only restart stages a new snapshot and adopts the running pair,
+  // which goes on executing out of the old one. Pruned by the current id
+  // alone, the directory went from under it: fieldd's workers and the floor's
+  // respawn are all spawned from there, long after the prune.
+  const { paths } = await fixture(t);
+  const adopted = await stageRuntimeSnapshot({
+    paths,
+    buildId: "dev-999999999999999999999999",
+    daemonBuildId: DAEMON_ID,
+  });
+  const current = await stageRuntimeSnapshot({
+    paths,
+    buildId: "dev-cccccccccccccccccccccccc",
+    daemonBuildId: DAEMON_ID,
+  });
+  const abandoned = await stageRuntimeSnapshot({
+    paths,
+    buildId: "dev-dddddddddddddddddddddddd",
+    daemonBuildId: DAEMON_ID,
+  });
+  const running = [{ pid: 4242, exePath: adopted.nativeOutput }];
+
+  await pruneRuntimeSnapshots(
+    paths.runtimeRoot,
+    new Set([current.buildId, ...snapshotsInUse(running, paths.runtimeRoot)]),
+  );
+
+  await access(adopted.nativeOutput);
+  await access(join(adopted.root, "fieldd", "agent-shim.cjs"));
+  await access(current.root);
+  await assert.rejects(access(abandoned.root), { code: "ENOENT" });
 });

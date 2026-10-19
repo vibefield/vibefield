@@ -10,7 +10,7 @@ import { createElectronStack } from "./electron-stack.mjs";
 import { startEsbuildWatches } from "./esbuild-watches.mjs";
 import { log } from "./log.mjs";
 import { startNxWatcher } from "./nx-watcher.mjs";
-import { reapDevOrphans } from "./orphan-reaper.mjs";
+import { listSystemProcesses, reapDevOrphans, snapshotsInUse } from "./orphan-reaper.mjs";
 import { workspacePaths as paths, repoRoot } from "./paths.mjs";
 import { cargoCommand, pnpmCommand, runCommand, terminateChild } from "./processes.mjs";
 import { readDevProduct } from "./product.mjs";
@@ -40,6 +40,10 @@ let typechecks = null;
 let pluginProjects = [];
 let currentBuildId = null;
 let currentRuntime = null;
+// The runtime the running daemon pair was launched from. A shell-only restart
+// adopts the pair, so this stays behind `currentRuntime` until a daemon-plane
+// change bounces it — and the pruner must keep it (`pruneSnapshots`).
+let daemonRuntime = null;
 let runtimeStarted = false;
 let shuttingDown = false;
 let shutdownPromise = null;
@@ -174,6 +178,7 @@ async function main() {
   const electronPid = await electron.start(initialRuntime);
   currentBuildId = initialRuntime.buildId;
   currentRuntime = initialRuntime;
+  daemonRuntime = initialRuntime;
   runtimeStarted = true;
   restartCoordinator.wake();
   await pruneSnapshots(initialRuntime.buildId);
@@ -403,6 +408,7 @@ async function restartDesktop(reasons) {
 
   currentBuildId = result.runtime.buildId;
   currentRuntime = result.runtime;
+  if (result.daemonsChanged) daemonRuntime = result.runtime;
   await pruneSnapshots(currentBuildId);
   log.info(
     `desktop restarted after ${reasons.join(", ")} (Electron pid ${result.pid}, build ${
@@ -491,8 +497,20 @@ async function waitForCurrentRuntime() {
   throw new Error("development runtime staging was interrupted by shutdown");
 }
 
+// Never the snapshot a running pair executes from. A shell-only restart adopts
+// the pair, which keeps running out of the directory it was launched from:
+// fieldd resolves its workers and the agent shim beside its own bundle, and
+// its supervisor respawns the floor from there, so deleting it fails the next
+// spawn, not anything running now. The runner knows the pair it launched; a
+// pair adopted from a previous runner session is known only by the processes
+// still executing from a snapshot.
 async function pruneSnapshots(current) {
-  await pruneRuntimeSnapshots(paths.runtimeRoot, new Set([current])).catch((error) => {
+  const keep = new Set([current]);
+  if (daemonRuntime !== null) keep.add(daemonRuntime.buildId);
+  for (const snapshot of snapshotsInUse(await listSystemProcesses({ log }), paths.runtimeRoot)) {
+    keep.add(snapshot);
+  }
+  await pruneRuntimeSnapshots(paths.runtimeRoot, keep).catch((error) => {
     log.warn(`could not prune old development runtime snapshots: ${messageOf(error)}`);
   });
 }

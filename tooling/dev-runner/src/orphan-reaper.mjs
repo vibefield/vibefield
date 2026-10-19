@@ -99,6 +99,28 @@ export function classifyOrphans({
 }
 
 /**
+ * The snapshot directories a live process still executes from — what the
+ * pruner must never delete. The same string evidence the classifier convicts
+ * on, read the other way: a pair adopted across a shell-only restart keeps
+ * running out of the snapshot it was launched from, and goes on exec'ing that
+ * directory long after (the floor's own respawn), so deleting it fails the next
+ * exec rather than anything that is running now.
+ *
+ * @param {Array<{pid: number, exePath?: string | null}>} processes
+ * @param {string} runtimeRoot `.vibefield/dev/runtime`
+ * @returns {Set<string>} snapshot dir names
+ */
+export function snapshotsInUse(processes, runtimeRoot) {
+  const runtime = resolve(runtimeRoot);
+  const inUse = new Set();
+  for (const record of processes) {
+    const snapshot = snapshotOwning(normalizeExePath(record?.exePath), runtime);
+    if (snapshot !== null) inUse.add(snapshot);
+  }
+  return inUse;
+}
+
+/**
  * Reap, then say what happened. Every effect is injectable so the suite can
  * prove the policy without owning a single real process.
  */
