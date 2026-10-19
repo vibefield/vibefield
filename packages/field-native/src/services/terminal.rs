@@ -134,7 +134,7 @@ use crate::supervised_child::{ChildSpec, StartFailure, StderrLabel, SupervisedCh
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::watch;
@@ -495,7 +495,9 @@ impl Shared {
 
     /// The admission ledger's verdict on the machine-wide PTY budget. Idempotent
     /// for the same reason the fault cell is — the pump asserts it on every
-    /// reconcile.
+    /// reconcile. *Corrected 2026-10-19 (IL-D6):* the ledger's own thread
+    /// asserts it, on every attempt that lands — a changed total or the
+    /// `LEDGER_INTERVAL` refresh — and no pump writes it.
     fn set_pty_pressure(&self, detail: Option<String>) {
         let mut held = self.pty_pressure.lock().unwrap();
         if *held == detail {
@@ -606,7 +608,9 @@ impl TerminalHandle {
             // The ledger owns this state and answers on every reconcile, so a
             // refusal carrying it needs no separate cell write — and inventing
             // one here would let a stale refusal outlive the budget that caused
-            // it.
+            // it. *Corrected 2026-10-19 (IL-D6):* it answers from its own
+            // thread, on a changed total and at least every `LEDGER_INTERVAL`,
+            // rather than inside each reconcile.
             PressureClass::PtyExhausted => {}
         }
     }
@@ -1778,7 +1782,7 @@ pub fn install_inventory(
         let merged = Arc::new(MergedInventory::new(
             state,
             handle.shared.clone(),
-            LedgerPump::new(ledger, handle.shared.clone()),
+            LedgerThread::spawn(ledger, handle.shared.clone()),
         ));
         let mut routes = handle.shared.routes.subscribe();
         let mut pumps: BTreeMap<u32, PumpEntry> = BTreeMap::new();
@@ -1893,6 +1897,14 @@ async fn pump_cell(
 /// per-cell occupancy watch the class supervisors rotate and reap on, and
 /// this floor's TOTAL governed count into the admission ledger — one meaning
 /// of "a session on this device" across all three (TC-L1f).
+///
+/// *Corrected 2026-10-19 (IL-D6):* the third is not written at once. The total
+/// is computed under this lock and handed to the ledger's own thread
+/// (`LedgerThread`), which does the file work; no file is opened and no flock
+/// is taken under this lock, so a ledger another pair holds stalls no pump.
+/// The hand-off happens under the lock, so the thread sees totals in the order
+/// they were computed: it publishes the newest it has been handed, and never
+/// an older one after a newer.
 struct MergedInventory {
     state: Arc<DaemonState>,
     shared: Arc<Shared>,
@@ -1902,11 +1914,12 @@ struct MergedInventory {
 struct MergedInner {
     rows: BTreeMap<u32, Vec<ObservedTerminal>>,
     governed: BTreeMap<u32, u32>,
-    ledger: LedgerPump,
+    /// Dropped with the inventory, which asks the ledger's thread to stop.
+    ledger: LedgerThread,
 }
 
 impl MergedInventory {
-    fn new(state: Arc<DaemonState>, shared: Arc<Shared>, ledger: LedgerPump) -> Self {
+    fn new(state: Arc<DaemonState>, shared: Arc<Shared>, ledger: LedgerThread) -> Self {
         Self {
             state,
             shared,
@@ -1950,7 +1963,7 @@ impl MergedInventory {
             inner.rows.remove(&instance);
             inner.governed.remove(&instance);
             let total: u32 = inner.governed.values().sum();
-            inner.ledger.observe(total);
+            inner.ledger.hand_off(total);
             (
                 compose_observed(&inner.rows),
                 compose_occupancy(&inner.rows),
@@ -1967,7 +1980,7 @@ impl MergedInventory {
         let mut inner = self.inner.lock().unwrap();
         inner.governed.insert(instance, governed);
         let total: u32 = inner.governed.values().sum();
-        inner.ledger.observe(total);
+        inner.ledger.hand_off(total);
     }
 
     /// The pump's per-cell change guard seed (what this cell last published).
@@ -2002,8 +2015,12 @@ fn compose_occupancy(rows: &BTreeMap<u32, Vec<ObservedTerminal>>) -> BTreeMap<u3
 /// unchanged. Another pair's sessions move the machine total without moving
 /// ours, so "publish on change" alone would let this floor report `up` while the
 /// machine had nothing left; a flock and a small JSON read at this cadence is
-/// far cheaper than that dishonesty.
+/// far cheaper than that dishonesty. The ledger's thread keeps it on its own
+/// clock, so the refresh comes due whether or not a reconcile hands it a total.
 const LEDGER_INTERVAL: Duration = Duration::from_secs(5);
+
+/// The ledger thread's name, as a sample, a crash report or a debugger shows it.
+const LEDGER_THREAD_NAME: &str = "terminal-ledger";
 
 /// TC-L1f's production seam: this floor's claim on the machine-wide budget, kept
 /// current from the inventory rather than from events.
@@ -2013,48 +2030,249 @@ const LEDGER_INTERVAL: Duration = Duration::from_secs(5);
 /// a missed event or a torn connection unable to leak budget: the next reconcile
 /// corrects the entry outright.
 ///
+/// The file work runs on ONE thread of its own (IL-D6). A publish takes the
+/// ledger's `flock` twice, with no timeout, against every VibeField pair on the
+/// machine, so it runs neither on a tokio worker nor under the inventory's
+/// lock: there, a pair holding that flock parked every pump that reached the
+/// lock and, with enough cells, every worker the floor has. The inventory hands
+/// this handle its newest total and moves on; the thread publishes it when the
+/// file lets it.
+///
+/// A dedicated `std::thread` rather than `spawn_blocking`, because a runtime's
+/// shutdown waits without bound for its blocking pool, and a flock held forever
+/// would hold the floor's exit with it. Nothing joins this thread: dropping the
+/// handle asks it to stop, and it stops at its next wait, or never, if its
+/// flock never returns — which costs the exiting process nothing.
+///
 /// A ledger failure is logged once per streak and never fatal. Admission is
 /// advisory (the module note on `crate::admission`), so a floor that cannot
 /// reach the file keeps serving with the kernel as its only authority — which is
 /// exactly the guarantee that was there before the ledger existed.
+struct LedgerThread {
+    /// `None` when there is no ledger to keep (win32, or a root the derivation
+    /// refused) or its thread could not be started: hand-offs then go nowhere.
+    slot: Option<Arc<LedgerSlot>>,
+}
+
+impl LedgerThread {
+    fn spawn(ledger: Option<AdmissionLedger>, shared: Arc<Shared>) -> Self {
+        Self::spawn_with_interval(ledger, shared, LEDGER_INTERVAL)
+    }
+
+    /// `spawn` with the refresh interval named. Production's is
+    /// `LEDGER_INTERVAL`; a test proves the refresh law in milliseconds.
+    fn spawn_with_interval(
+        ledger: Option<AdmissionLedger>,
+        shared: Arc<Shared>,
+        interval: Duration,
+    ) -> Self {
+        let Some(ledger) = ledger else {
+            return Self { slot: None };
+        };
+        let slot = Arc::new(LedgerSlot::default());
+        let path = ledger.path().display().to_string();
+        let pump = LedgerPump::new(ledger, shared, slot.clone(), interval);
+        // The join handle is dropped on purpose: nothing joins this thread.
+        match std::thread::Builder::new()
+            .name(LEDGER_THREAD_NAME.into())
+            .spawn(move || pump.run())
+        {
+            Ok(_) => Self { slot: Some(slot) },
+            Err(error) => {
+                tracing::warn!(
+                    event = "field_native.admission.unavailable",
+                    component = "terminal",
+                    ledger = %path,
+                    error = %error,
+                    "The admission ledger's thread could not be started; the kernel remains \
+                     the only admission authority"
+                );
+                Self { slot: None }
+            }
+        }
+    }
+
+    /// Hand the ledger this floor's newest total. It never waits on the file:
+    /// it replaces whatever total the thread has not taken yet, so a burst
+    /// coalesces to its newest, and a caller holding the inventory's lock holds
+    /// it no longer than the slot's own.
+    fn hand_off(&self, total: u32) {
+        if let Some(slot) = &self.slot {
+            slot.hand_off(total);
+        }
+    }
+}
+
+impl Drop for LedgerThread {
+    fn drop(&mut self) {
+        if let Some(slot) = &self.slot {
+            slot.stop();
+        }
+    }
+}
+
+/// What the inventory and the ledger's thread share: a one-total mailbox, the
+/// stop flag, and the ledger's `as_of`. No lock here is held across the file
+/// work, so a hand-off waits for nothing but the slot itself.
+#[derive(Default)]
+struct LedgerSlot {
+    handoff: Mutex<LedgerHandoff>,
+    wake: Condvar,
+    /// The moment the ledger's last landed attempt began: a publish and the
+    /// machine-total read after it. Seeded with the moment the thread took its
+    /// first total, so a ledger whose first attempt never returns ages from
+    /// that ask; `None` while nothing has been asked of it. On std's clock, the
+    /// one the thread's waits run on, so a reader measures it against
+    /// `std::time::Instant::now()`.
+    as_of: Mutex<Option<std::time::Instant>>,
+}
+
+#[derive(Default)]
+struct LedgerHandoff {
+    /// The newest total handed off and not yet taken. One slot, overwritten.
+    latest: Option<u32>,
+    stopping: bool,
+}
+
+/// Why the ledger's thread woke.
+enum LedgerWake {
+    /// A total was handed off, and it is the newest.
+    Total(u32),
+    /// The refresh interval has passed since the last attempt.
+    Due,
+    /// The inventory is gone.
+    Stop,
+}
+
+impl LedgerSlot {
+    fn hand_off(&self, total: u32) {
+        self.handoff.lock().unwrap().latest = Some(total);
+        self.wake.notify_one();
+    }
+
+    fn stop(&self) {
+        self.handoff.lock().unwrap().stopping = true;
+        self.wake.notify_one();
+    }
+
+    /// Park until a total arrives, the deadline passes, or the inventory goes.
+    /// A stop wins over a total not yet taken: a floor that is going publishes
+    /// nothing more.
+    fn wait(&self, deadline: Option<std::time::Instant>) -> LedgerWake {
+        let mut handoff = self.handoff.lock().unwrap();
+        loop {
+            if handoff.stopping {
+                return LedgerWake::Stop;
+            }
+            if let Some(total) = handoff.latest.take() {
+                return LedgerWake::Total(total);
+            }
+            handoff = match deadline {
+                None => self.wake.wait(handoff).unwrap(),
+                Some(deadline) => {
+                    let now = std::time::Instant::now();
+                    if now >= deadline {
+                        return LedgerWake::Due;
+                    }
+                    self.wake.wait_timeout(handoff, deadline - now).unwrap().0
+                }
+            };
+        }
+    }
+
+    fn as_of(&self) -> Option<std::time::Instant> {
+        *self.as_of.lock().unwrap()
+    }
+
+    /// The first ask seeds `as_of`; after it, only a landed attempt moves it.
+    fn seed(&self, at: std::time::Instant) {
+        self.as_of.lock().unwrap().get_or_insert(at);
+    }
+
+    fn stamp(&self, at: std::time::Instant) {
+        *self.as_of.lock().unwrap() = Some(at);
+    }
+}
+
+/// The ledger thread's own state: the file work and the bookkeeping that
+/// decides when to do it. Only the thread holds it; the inventory reaches it
+/// through the slot alone.
 struct LedgerPump {
-    ledger: Option<AdmissionLedger>,
+    ledger: AdmissionLedger,
     shared: Arc<Shared>,
+    slot: Arc<LedgerSlot>,
+    interval: Duration,
     published: Option<u32>,
-    last: Option<Instant>,
+    last: Option<std::time::Instant>,
     complained: bool,
 }
 
 impl LedgerPump {
-    fn new(ledger: Option<AdmissionLedger>, shared: Arc<Shared>) -> Self {
+    fn new(
+        ledger: AdmissionLedger,
+        shared: Arc<Shared>,
+        slot: Arc<LedgerSlot>,
+        interval: Duration,
+    ) -> Self {
         Self {
             ledger,
             shared,
+            slot,
+            interval,
             published: None,
             last: None,
             complained: false,
         }
     }
 
+    /// The thread's loop: publish each newest total as it comes, and refresh
+    /// the machine total on the interval while this floor's stands still.
+    fn run(mut self) {
+        let mut current: Option<u32> = None;
+        loop {
+            let deadline = current.and(self.last).map(|last| last + self.interval);
+            match self.slot.wait(deadline) {
+                LedgerWake::Stop => return,
+                LedgerWake::Total(total) => current = Some(total),
+                LedgerWake::Due => {}
+            }
+            if let Some(total) = current {
+                self.observe(total);
+            }
+        }
+    }
+
     /// Publish this floor's governed count and read back what the machine holds.
     fn observe(&mut self, governed: u32) {
-        let Some(ledger) = self.ledger.as_ref() else {
-            return;
-        };
-        let due = self
-            .last
-            .is_none_or(|last| last.elapsed() >= LEDGER_INTERVAL);
+        let due = self.last.is_none_or(|last| last.elapsed() >= self.interval);
         if self.published == Some(governed) && !due {
             return;
         }
-        self.last = Some(Instant::now());
+        let started = std::time::Instant::now();
+        self.last = Some(started);
+        self.slot.seed(started);
+        let ledger = &self.ledger;
         let outcome = ledger
             .publish(governed)
             .and_then(|_| ledger.machine_total());
         match outcome {
             Ok(machine_total) => {
                 self.published = Some(governed);
-                self.complained = false;
+                if std::mem::replace(&mut self.complained, false) {
+                    let unanswered = self
+                        .slot
+                        .as_of()
+                        .map(|as_of| started.saturating_duration_since(as_of))
+                        .unwrap_or_default();
+                    tracing::info!(
+                        event = "field_native.admission.available",
+                        component = "terminal",
+                        ledger = %ledger.path().display(),
+                        unanswered_ms = unanswered.as_millis() as u64,
+                        "The machine-wide admission ledger answered again"
+                    );
+                }
+                self.slot.stamp(started);
                 let budget = ledger.budget();
                 self.shared
                     .set_pty_pressure((machine_total >= budget).then(|| {
@@ -2255,7 +2473,9 @@ async fn pump_inventory_cell(
 /// `list-sessions` is truth (spec §10.5), scoped to one cell: rows are
 /// stamped with its tag, the per-cell governed count feeds the ledger total
 /// on EVERY reconcile (the LEDGER_INTERVAL refresh law), and rows publish
-/// only on a real change.
+/// only on a real change. *Corrected 2026-10-19 (IL-D6):* the count is handed
+/// to the ledger's thread on every reconcile, and that thread keeps the
+/// LEDGER_INTERVAL refresh on its own clock; no reconcile waits on the ledger.
 async fn reconcile_cell(
     client: &ControlClient,
     instance: u32,
@@ -2918,18 +3138,19 @@ mod tests {
     /// floor holding the whole machine budget says `pty_exhausted`, and says
     /// nothing once the sessions end. Unix-gated with the ledger itself — on
     /// win32 `resolve` answers `None` and no pump ever holds a ledger (the
-    /// absence is asserted in `admission::tests`).
+    /// absence is asserted in `admission::tests`). Driven synchronously: each
+    /// `observe` is the step the ledger's thread takes per wake.
     #[cfg(unix)]
     #[test]
     fn the_ledger_pump_puts_the_spent_budget_on_the_unit() {
         let dir = tempfile::tempdir().expect("tempdir");
         let shared = test_shared();
-        let ledger = crate::admission::AdmissionLedger::at(
-            dir.path().join(registries::files::CUSTODY_ADMISSION_LEDGER),
-            2,
-            "boot-under-test",
+        let mut pump = LedgerPump::new(
+            ledger_under_test(dir.path(), 2),
+            shared.clone(),
+            Arc::new(LedgerSlot::default()),
+            LEDGER_INTERVAL,
         );
-        let mut pump = LedgerPump::new(Some(ledger), shared.clone());
 
         pump.observe(1);
         assert_eq!(
@@ -2964,13 +3185,399 @@ mod tests {
     #[test]
     fn a_floor_without_a_ledger_reports_nothing_about_a_budget_it_cannot_see() {
         let shared = test_shared();
-        let mut pump = LedgerPump::new(None, shared.clone());
-        pump.observe(4_000);
+        let thread = LedgerThread::spawn(None, shared.clone());
+        assert!(thread.slot.is_none(), "no ledger, no thread to keep one");
+        thread.hand_off(4_000);
         assert_eq!(shared.health().state, UnitState::Up);
         assert_eq!(
             shared.health().detail.as_deref(),
             Some("serving; text engine Menlo"),
             "no ledger means no claim about a budget — never a made-up one"
+        );
+    }
+
+    // ---- IL-D6: the ledger on a thread of its own ----
+
+    /// How long these rows wait on real time. Generous for a loaded host: a
+    /// call that blocks on a held flock never returns at all, so the bound only
+    /// sets how long a red takes to say so.
+    #[cfg(unix)]
+    const LEDGER_TEST_BOUND: Duration = Duration::from_secs(5);
+
+    #[cfg(unix)]
+    fn ledger_under_test(dir: &std::path::Path, budget: u32) -> AdmissionLedger {
+        AdmissionLedger::at(
+            dir.join(registries::files::CUSTODY_ADMISSION_LEDGER),
+            budget,
+            "boot-under-test",
+        )
+    }
+
+    /// What the file says the machine holds, read the way any pair reads it.
+    #[cfg(unix)]
+    fn machine_total_at(path: &std::path::Path) -> u32 {
+        AdmissionLedger::at(path.to_path_buf(), u32::MAX, "an-observer")
+            .machine_total()
+            .expect("read the ledger")
+    }
+
+    /// Poll `done` on real time until it holds or `bound` passes.
+    #[cfg(unix)]
+    fn eventually(bound: Duration, mut done: impl FnMut() -> bool) -> bool {
+        let deadline = std::time::Instant::now() + bound;
+        loop {
+            if done() {
+                return true;
+            }
+            if std::time::Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// The ledger's flock, held from a descriptor of the test's own: the shape
+    /// of another pair stalled mid-publish. A `flock` belongs to the open file,
+    /// so the ledger's own `open` in this same process still has to wait.
+    /// Dropping the guard closes the descriptor, which releases the lock.
+    #[cfg(unix)]
+    struct HeldFlock {
+        _file: std::fs::File,
+    }
+
+    #[cfg(unix)]
+    impl HeldFlock {
+        fn take(path: &std::path::Path) -> Self {
+            use std::os::unix::io::AsRawFd;
+            let file = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(false)
+                .open(path)
+                .expect("open the ledger");
+            // SAFETY: the fd is owned by `file`, which this guard keeps open.
+            let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) };
+            assert_eq!(
+                result,
+                0,
+                "take the ledger's flock: {}",
+                std::io::Error::last_os_error()
+            );
+            Self { _file: file }
+        }
+    }
+
+    /// The `DaemonState` the inventory publishes through, with no unit
+    /// running behind it. Its health and observed state are built from wire
+    /// JSON, so an optional field the contract grows does not touch this row.
+    #[cfg(unix)]
+    fn test_state(dir: &std::path::Path) -> Arc<DaemonState> {
+        let config = NativeConfig::for_data_dir(dir.to_path_buf());
+        let (ping, _) = tokio::sync::mpsc::unbounded_channel();
+        let mesh = crate::services::mesh::MeshUnit::new(&config, ping.clone()).handle();
+        let bridge =
+            crate::services::mesh_bridge::MeshBridge::new(&config, [0; 32], ping.clone()).handle();
+        // F1's freeway seam, `DaemonState::new`'s ninth argument, built as freeway.rs's own
+        // tests build it: the unit binds a loopback listener on port 0 and never declares, so
+        // no host starts.
+        let terminal = TerminalUnit::new(&config, ping.clone());
+        let freeway = crate::services::freeway::FreewayUnit::new(
+            &config,
+            "boot-under-test",
+            ping,
+            terminal.handle(),
+        )
+        .handle();
+        DaemonState::new(
+            "boot-under-test".into(),
+            [0; 32],
+            serde_json::from_value(json!({
+                "bootId": "boot-under-test",
+                "state": "up",
+                "units": [],
+            }))
+            .expect("a health snapshot"),
+            serde_json::from_value(json!({
+                "bootId": "boot-under-test",
+                "generation": 0,
+                "terminals": [],
+                "workers": [],
+            }))
+            .expect("an observed state"),
+            mesh,
+            bridge,
+            watch::channel(TerminalRouteSnapshot {
+                revision: 0,
+                cells: Vec::new(),
+            })
+            .1,
+            crate::config::MeshPlan::resolve(&config),
+            freeway,
+            None,
+        )
+    }
+
+    #[cfg(unix)]
+    fn observed(session_id: &str) -> ObservedTerminal {
+        serde_json::from_value(json!({ "sessionId": session_id })).expect("an observed row")
+    }
+
+    /// Run one inventory call on a runtime worker: true when it returned
+    /// inside `bound`.
+    #[cfg(unix)]
+    async fn returns_within(
+        bound: Duration,
+        merged: &Arc<MergedInventory>,
+        call: fn(&MergedInventory),
+    ) -> bool {
+        let merged = merged.clone();
+        let task = tokio::spawn(async move { call(&merged) });
+        matches!(tokio::time::timeout(bound, task).await, Ok(Ok(())))
+    }
+
+    /// IL-D6 — a burst handed off while the ledger is held coalesces to its
+    /// newest. The thread finishes the publish it was in, then publishes the
+    /// last total it was handed: none of the totals between reach the file,
+    /// and no refresh after it ever writes an older one.
+    #[cfg(unix)]
+    #[test]
+    fn a_burst_of_totals_publishes_the_newest_and_never_an_older_one_after_it() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let ledger = ledger_under_test(dir.path(), 1_000);
+        let path = ledger.path().to_path_buf();
+        let thread = LedgerThread::spawn_with_interval(
+            Some(ledger),
+            test_shared(),
+            Duration::from_millis(20),
+        );
+        let slot = thread.slot.clone().expect("a ledger has a thread");
+
+        let held = HeldFlock::take(&path);
+        thread.hand_off(1);
+        assert!(
+            eventually(LEDGER_TEST_BOUND, || slot.as_of().is_some()),
+            "the thread took the first total, seeded its as_of and waits on the flock"
+        );
+        for total in 2..=50 {
+            thread.hand_off(total);
+        }
+        drop(held);
+
+        let mut seen = std::collections::BTreeSet::new();
+        let reached = eventually(LEDGER_TEST_BOUND, || {
+            let total = machine_total_at(&path);
+            seen.insert(total);
+            total == 50
+        });
+        assert!(reached, "the newest total reaches the file: saw {seen:?}");
+
+        // Several refreshes on the short interval, each read back.
+        let settle = std::time::Instant::now() + Duration::from_millis(200);
+        while std::time::Instant::now() < settle {
+            let total = machine_total_at(&path);
+            seen.insert(total);
+            assert_eq!(
+                total, 50,
+                "a refresh republishes the newest total, never an older one"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            seen.iter().all(|total| [0, 1, 50].contains(total)),
+            "only the empty file, the publish in flight and the newest total were ever on \
+             disk; the 48 between were coalesced: {seen:?}"
+        );
+    }
+
+    /// The LEDGER_INTERVAL refresh law, on the thread's own clock: another
+    /// pair spends the machine's budget while this floor's total stands still,
+    /// and the unit says so with no hand-off at all — then says the budget is
+    /// back once that pair lets go. Each refresh that lands moves `as_of`.
+    #[cfg(unix)]
+    #[test]
+    fn the_ledger_refreshes_the_machine_total_while_this_floors_total_stands_still() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let ledger = ledger_under_test(dir.path(), 2);
+        let path = ledger.path().to_path_buf();
+        // Another pair: a second boot id in this same live process, so the
+        // reaper keeps its entry.
+        let other = AdmissionLedger::at(path.clone(), 2, "another-pair");
+        let shared = test_shared();
+        let thread = LedgerThread::spawn_with_interval(
+            Some(ledger),
+            shared.clone(),
+            Duration::from_millis(20),
+        );
+        let slot = thread.slot.clone().expect("a ledger has a thread");
+
+        thread.hand_off(1);
+        assert!(
+            eventually(LEDGER_TEST_BOUND, || machine_total_at(&path) == 1),
+            "this floor's one session is published"
+        );
+        let first = slot.as_of().expect("the publish landed");
+        assert_eq!(
+            shared.health().state,
+            UnitState::Up,
+            "one session against a budget of two is a machine with room"
+        );
+
+        assert!(other
+            .try_reserve(1)
+            .expect("the other pair reserves")
+            .is_admitted());
+        let spent = eventually(LEDGER_TEST_BOUND, || {
+            shared
+                .health()
+                .detail
+                .as_deref()
+                .is_some_and(|detail| detail.contains(PressureClass::PtyExhausted.as_str()))
+        });
+        assert!(
+            spent,
+            "a refresh read the other pair's session, with no new total from this floor"
+        );
+        assert!(
+            slot.as_of().expect("refreshes landed") > first,
+            "and every refresh that lands is an answer: as_of moved"
+        );
+
+        other.release(1).expect("the other pair lets go");
+        assert!(
+            eventually(LEDGER_TEST_BOUND, || shared.health().state == UnitState::Up),
+            "the budget came back, and the next refresh says so"
+        );
+    }
+
+    /// IL-D6 — the inventory's lock never waits on the ledger. With the
+    /// ledger's flock held from another descriptor, every call a pump or the
+    /// manager makes under that lock returns, on a runtime worker, while the
+    /// flock is still held; the held flock stalls the ledger's thread and
+    /// nothing else.
+    /// Real time on a multi-thread runtime, because what is ruled out is a
+    /// worker parked in a syscall.
+    #[cfg(unix)]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_held_ledger_flock_never_blocks_the_inventory() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let ledger = ledger_under_test(dir.path(), 1_000);
+        let path = ledger.path().to_path_buf();
+        let shared = test_shared();
+        let state = test_state(dir.path());
+        let merged = Arc::new(MergedInventory::new(
+            state.clone(),
+            shared.clone(),
+            LedgerThread::spawn(Some(ledger), shared.clone()),
+        ));
+        let slot = merged
+            .inner
+            .lock()
+            .unwrap()
+            .ledger
+            .slot
+            .clone()
+            .expect("a ledger has a thread");
+
+        let held = HeldFlock::take(&path);
+        assert!(
+            returns_within(LEDGER_TEST_BOUND, &merged, |merged| merged
+                .observe_governed(1, 3))
+            .await,
+            "a reconcile's count is handed off, never written under the lock"
+        );
+        assert!(
+            eventually(LEDGER_TEST_BOUND, || slot.as_of().is_some()),
+            "the ledger's thread took the total and is now waiting on the flock"
+        );
+
+        assert!(
+            returns_within(LEDGER_TEST_BOUND, &merged, |merged| {
+                merged.set_rows(1, vec![observed("s1"), observed("s2"), observed("s3")])
+            })
+            .await,
+            "rows publish while the ledger is held"
+        );
+        assert_eq!(state.observed_tx.borrow().terminals.len(), 3);
+        assert_eq!(shared.occupancy.borrow().get(&1), Some(&3));
+        assert!(
+            returns_within(LEDGER_TEST_BOUND, &merged, |merged| merged
+                .observe_governed(2, 1))
+            .await,
+            "a second cell's reconcile does not queue behind the first's ledger write"
+        );
+        assert!(
+            returns_within(LEDGER_TEST_BOUND, &merged, |merged| merged.remove(1)).await,
+            "and the manager's remove does not either"
+        );
+        assert!(state.observed_tx.borrow().terminals.is_empty());
+        assert_eq!(shared.occupancy.borrow().get(&1), None);
+
+        drop(held);
+        assert!(
+            eventually(LEDGER_TEST_BOUND, || machine_total_at(&path) == 1),
+            "released, the ledger catches up to the newest total: cell 2's one session"
+        );
+    }
+
+    /// IL-D6 — the floor's exit never waits on the ledger. Dropping the
+    /// inventory while its thread is stuck in the flock returns at once, since
+    /// nothing joins the thread; once the flock is released the thread finishes
+    /// the publish it was in, writes nothing newer, and ends.
+    #[cfg(unix)]
+    #[test]
+    fn dropping_the_inventory_stops_the_ledger_thread_without_joining_it() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let ledger = ledger_under_test(dir.path(), 1_000);
+        let path = ledger.path().to_path_buf();
+        let shared = test_shared();
+        let merged = MergedInventory::new(
+            test_state(dir.path()),
+            shared.clone(),
+            LedgerThread::spawn(Some(ledger), shared),
+        );
+        let slot = Arc::downgrade(
+            merged
+                .inner
+                .lock()
+                .unwrap()
+                .ledger
+                .slot
+                .as_ref()
+                .expect("a ledger has a thread"),
+        );
+
+        let held = HeldFlock::take(&path);
+        merged.observe_governed(1, 5);
+        assert!(
+            eventually(LEDGER_TEST_BOUND, || slot
+                .upgrade()
+                .is_some_and(|slot| slot.as_of().is_some())),
+            "the thread took 5 and waits on the flock"
+        );
+        merged.observe_governed(1, 9);
+
+        let dropping = std::time::Instant::now();
+        drop(merged);
+        assert!(
+            dropping.elapsed() < LEDGER_TEST_BOUND,
+            "the drop asked the thread to stop and did not wait for it"
+        );
+        assert!(
+            slot.upgrade().is_some(),
+            "the thread is still inside the flock, and still alive"
+        );
+
+        drop(held);
+        assert!(
+            eventually(LEDGER_TEST_BOUND, || slot.upgrade().is_none()),
+            "released, it finished its publish and ended"
+        );
+        assert_eq!(
+            machine_total_at(&path),
+            5,
+            "it finished the publish it was in and published nothing it was handed after: \
+             a floor that is going writes no newer total"
         );
     }
 
