@@ -1,0 +1,13 @@
+{
+  "state": "respawning",
+  "detail": "no reply for 60 s and the floor holds no session; restarting it",
+  "pid": 25821,
+  "since": 1792376691760,
+  "lastReplyAgeMs": 60010,
+  "lastTickAgeMs": 59800,
+  "loopLagMs": null,
+  "sessionsAtRisk": 0,
+  "requestsTimedOut": 0,
+  "restartOffered": false,
+  "headlessAt": null
+}

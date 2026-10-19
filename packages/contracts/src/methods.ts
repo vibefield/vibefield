@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NativeTickParams } from "./mgmt";
 import {
   AGENT_FIELD,
   INDEX_MESH,
@@ -181,6 +182,33 @@ export const SystemTickNotification = z
   })
   .passthrough();
 export type SystemTickNotification = z.infer<typeof SystemTickNotification>;
+
+/**
+ * Notifications the FLOOR sends on the mgmt channel without being asked — the
+ * mgmt twin of `PRODUCT_NOTIFICATIONS`: no `id`, no `subId`, not METHODS rows
+ * (fieldd never calls them), and a subscription's own frames stay derived from
+ * its `.subscribe` row. A reader that does not know a name ignores the frame.
+ */
+export const MGMT_NOTIFICATIONS = {
+  /** WG-D6 — the floor's own liveness tick, pushed from a task of its own every
+   * `NATIVE_FLOOR_TICK.INTERVAL_MS`; params `NativeTickParams`. It proves the
+   * floor's runtime and writer alive and never restarts fieldd's kill clock,
+   * which only a reply does (WG-E2). */
+  TICK: "native.lifecycle.tick",
+} as const;
+export type MgmtNotification = (typeof MGMT_NOTIFICATIONS)[keyof typeof MGMT_NOTIFICATIONS];
+
+/** The whole `native.lifecycle.tick` frame as fieldd receives it: a JSON-RPC
+ * notification (no `id`) carrying `NativeTickParams`. TS-only as a whole; the
+ * floor's twin of the params is generated (`NativeTickParams`). */
+export const NativeTickNotification = z
+  .object({
+    jsonrpc: z.literal("2.0"),
+    method: z.literal(MGMT_NOTIFICATIONS.TICK),
+    params: NativeTickParams,
+  })
+  .passthrough();
+export type NativeTickNotification = z.infer<typeof NativeTickNotification>;
 
 /** The whole-value stream every tailnet-reachable roster or catalog door
  * answers (SP-1): the current value, then the whole value again at most once
@@ -388,6 +416,16 @@ export const METHODS: MethodDef[] = [
   defineMethod({
     surface: "mgmt",
     method: "native.lifecycle.hello",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  // TC-D2 — the heartbeat probe (`PingAck`). With the hello, the one mgmt
+  // request that carries no `deadlineAt` (WG-D6): a pong that comes back late
+  // is evidence the floor's reader and dispatch move (WG-E2).
+  defineMethod({
+    surface: "mgmt",
+    method: "native.lifecycle.ping",
     scope: null,
     idempotent: true,
     locality: "local",

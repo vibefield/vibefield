@@ -1,0 +1,13 @@
+{
+  "state": "up",
+  "detail": "mgmt link connected",
+  "pid": 79549,
+  "since": 1792376701576,
+  "lastReplyAgeMs": 42,
+  "lastTickAgeMs": 615,
+  "loopLagMs": null,
+  "sessionsAtRisk": null,
+  "requestsTimedOut": 0,
+  "restartOffered": false,
+  "headlessAt": null
+}

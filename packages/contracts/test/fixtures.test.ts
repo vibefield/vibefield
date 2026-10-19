@@ -150,7 +150,7 @@ import {
   FreewayWelcome,
 } from "../src/freeway";
 import { LoggingHealthV1, LogRecordV1 } from "../src/logging";
-import { SystemTickNotification } from "../src/methods";
+import { NativeTickNotification, SystemTickNotification } from "../src/methods";
 import {
   DesiredState,
   MeshEgressProxy,
@@ -164,16 +164,20 @@ import {
   MeshLanePeerOpened,
   MeshSelfIdentity,
   NativeHealth,
+  NativeLinkHealth,
   NativePrepareRestartParams,
   NativePrepareRestartResult,
   NativeShutdownParams,
   NativeShutdownResult,
   ObservedState,
   PeerInfo,
+  PingAck,
   ServeConfig,
   ServeEntry,
   ServeRoute,
   StoreSnapshot,
+  SystemNativeRestartParams,
+  SystemNativeRestartResult,
   TerminalRoutesStreamPayload,
 } from "../src/mgmt";
 import { BundledPluginIndex, RegistryIndexV2 } from "../src/plugin-distribution";
@@ -292,6 +296,19 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "system-shutdown-params": SystemShutdownParams,
   "system-shutdown-result": SystemShutdownResult,
   "restart-scheduled": RestartScheduled,
+  // WG-D1…D6 (draft/thinking-floor-wedge.md §7) — the wedge ladder. The floor's half is
+  // generated for field-native and parity-checked in fixture_parity.rs: the pong, the tick (the
+  // whole frame), the hello ack's pid (`hello-ack.pid`), a request's deadline
+  // (`rpc-request.deadline`) and the floor's TIMEOUT for one past it
+  // (`error-data.native-deadline-passed`). fieldd's half is TS-only: the native link's health,
+  // one fixture per state plus the headless clause armed; the person's consented restart; and the
+  // doors' UNAVAILABLE for an unresponsive floor (`error-data.native-unresponsive`), beside the
+  // cell's (`error-data.terminal-unresponsive`). Their own rows: native-supervision.test.ts.
+  "ping-ack": PingAck,
+  "native-tick": NativeTickNotification,
+  "native-link-health": NativeLinkHealth,
+  "system-native-restart-params": SystemNativeRestartParams,
+  "system-native-restart-result": SystemNativeRestartResult,
   // WP12 L3a (D5, D11) — a channel's committed policy source and the signed per-plane release manifest (TS-only)
   "update-policy-source": UpdatePolicySource,
   "release-manifest": ReleaseManifest,

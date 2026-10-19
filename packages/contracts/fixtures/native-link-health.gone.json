@@ -1,0 +1,13 @@
+{
+  "state": "gone",
+  "detail": "respawn intensity exceeded (3 in 60000ms) — something is wrong with the floor itself; use the restart affordance to try again",
+  "pid": null,
+  "since": 1792376900000,
+  "lastReplyAgeMs": 95200,
+  "lastTickAgeMs": 95150,
+  "loopLagMs": null,
+  "sessionsAtRisk": 0,
+  "requestsTimedOut": 0,
+  "restartOffered": true,
+  "headlessAt": null
+}

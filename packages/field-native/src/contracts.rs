@@ -3139,6 +3139,10 @@ impl Hello {
 #[doc = "    \"nativeBuild\": {"]
 #[doc = "      \"type\": \"string\""]
 #[doc = "    },"]
+#[doc = "    \"pid\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 1.0"]
+#[doc = "    },"]
 #[doc = "    \"serverKind\": {"]
 #[doc = "      \"$ref\": \"#/definitions/ServerKind\""]
 #[doc = "    },"]
@@ -3189,6 +3193,8 @@ pub struct HelloAck {
         skip_serializing_if = "::std::option::Option::is_none"
     )]
     pub native_build: ::std::option::Option<::std::string::String>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub pid: ::std::option::Option<::std::num::NonZeroU64>,
     #[serde(rename = "serverKind")]
     pub server_kind: ServerKind,
     #[serde(
@@ -7637,6 +7643,46 @@ impl NativeShutdownResult {
         Default::default()
     }
 }
+#[doc = "`NativeTickParams`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"bootId\","]
+#[doc = "    \"seq\","]
+#[doc = "    \"ts\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"bootId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"seq\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"ts\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeTickParams {
+    #[serde(rename = "bootId")]
+    pub boot_id: ::std::string::String,
+    pub seq: u64,
+    pub ts: i64,
+}
+impl NativeTickParams {
+    pub fn builder() -> builder::NativeTickParams {
+        Default::default()
+    }
+}
 #[doc = "`ObservedState`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -7933,6 +7979,40 @@ pub struct PeerInfo {
 }
 impl PeerInfo {
     pub fn builder() -> builder::PeerInfo {
+        Default::default()
+    }
+}
+#[doc = "`PingAck`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"bootId\","]
+#[doc = "    \"ts\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"bootId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"ts\": {"]
+#[doc = "      \"type\": \"integer\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct PingAck {
+    #[serde(rename = "bootId")]
+    pub boot_id: ::std::string::String,
+    pub ts: i64,
+}
+impl PingAck {
+    pub fn builder() -> builder::PingAck {
         Default::default()
     }
 }
@@ -8569,6 +8649,10 @@ impl RpcNotification {
 #[doc = "    \"method\""]
 #[doc = "  ],"]
 #[doc = "  \"properties\": {"]
+#[doc = "    \"deadlineAt\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
 #[doc = "    \"id\": {"]
 #[doc = "      \"$ref\": \"#/definitions/RpcId\""]
 #[doc = "    },"]
@@ -8587,6 +8671,12 @@ impl RpcNotification {
 #[doc = r" </details>"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 pub struct RpcRequest {
+    #[serde(
+        rename = "deadlineAt",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub deadline_at: ::std::option::Option<u64>,
     pub id: RpcId,
     pub jsonrpc: ::std::string::String,
     pub method: ::std::string::String,
@@ -12070,6 +12160,10 @@ pub mod builder {
             ::std::option::Option<::std::string::String>,
             ::std::string::String,
         >,
+        pid: ::std::result::Result<
+            ::std::option::Option<::std::num::NonZeroU64>,
+            ::std::string::String,
+        >,
         server_kind: ::std::result::Result<super::ServerKind, ::std::string::String>,
         server_mac: ::std::result::Result<
             ::std::option::Option<::std::string::String>,
@@ -12097,6 +12191,7 @@ pub mod builder {
                 granted_scopes: Err("no value supplied for granted_scopes".to_string()),
                 last_exit: Ok(Default::default()),
                 native_build: Ok(Default::default()),
+                pid: Ok(Default::default()),
                 server_kind: Err("no value supplied for server_kind".to_string()),
                 server_mac: Ok(Default::default()),
                 terminal: Ok(Default::default()),
@@ -12155,6 +12250,16 @@ pub mod builder {
             self.native_build = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for native_build: {e}"));
+            self
+        }
+        pub fn pid<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::num::NonZeroU64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.pid = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for pid: {e}"));
             self
         }
         pub fn server_kind<T>(mut self, value: T) -> Self
@@ -12227,6 +12332,7 @@ pub mod builder {
                 granted_scopes: value.granted_scopes?,
                 last_exit: value.last_exit?,
                 native_build: value.native_build?,
+                pid: value.pid?,
                 server_kind: value.server_kind?,
                 server_mac: value.server_mac?,
                 terminal: value.terminal?,
@@ -12244,6 +12350,7 @@ pub mod builder {
                 granted_scopes: Ok(value.granted_scopes),
                 last_exit: Ok(value.last_exit),
                 native_build: Ok(value.native_build),
+                pid: Ok(value.pid),
                 server_kind: Ok(value.server_kind),
                 server_mac: Ok(value.server_mac),
                 terminal: Ok(value.terminal),
@@ -14853,6 +14960,74 @@ pub mod builder {
         }
     }
     #[derive(Clone, Debug)]
+    pub struct NativeTickParams {
+        boot_id: ::std::result::Result<::std::string::String, ::std::string::String>,
+        seq: ::std::result::Result<u64, ::std::string::String>,
+        ts: ::std::result::Result<i64, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeTickParams {
+        fn default() -> Self {
+            Self {
+                boot_id: Err("no value supplied for boot_id".to_string()),
+                seq: Err("no value supplied for seq".to_string()),
+                ts: Err("no value supplied for ts".to_string()),
+            }
+        }
+    }
+    impl NativeTickParams {
+        pub fn boot_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.boot_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for boot_id: {e}"));
+            self
+        }
+        pub fn seq<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.seq = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for seq: {e}"));
+            self
+        }
+        pub fn ts<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<i64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.ts = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for ts: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeTickParams> for super::NativeTickParams {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeTickParams,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                boot_id: value.boot_id?,
+                seq: value.seq?,
+                ts: value.ts?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeTickParams> for NativeTickParams {
+        fn from(value: super::NativeTickParams) -> Self {
+            Self {
+                boot_id: Ok(value.boot_id),
+                seq: Ok(value.seq),
+                ts: Ok(value.ts),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
     pub struct ObservedState {
         boot_id: ::std::result::Result<::std::string::String, ::std::string::String>,
         generation: ::std::result::Result<i64, ::std::string::String>,
@@ -15418,6 +15593,58 @@ pub mod builder {
         }
     }
     #[derive(Clone, Debug)]
+    pub struct PingAck {
+        boot_id: ::std::result::Result<::std::string::String, ::std::string::String>,
+        ts: ::std::result::Result<i64, ::std::string::String>,
+    }
+    impl ::std::default::Default for PingAck {
+        fn default() -> Self {
+            Self {
+                boot_id: Err("no value supplied for boot_id".to_string()),
+                ts: Err("no value supplied for ts".to_string()),
+            }
+        }
+    }
+    impl PingAck {
+        pub fn boot_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.boot_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for boot_id: {e}"));
+            self
+        }
+        pub fn ts<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<i64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.ts = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for ts: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<PingAck> for super::PingAck {
+        type Error = super::error::ConversionError;
+        fn try_from(value: PingAck) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                boot_id: value.boot_id?,
+                ts: value.ts?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::PingAck> for PingAck {
+        fn from(value: super::PingAck) -> Self {
+            Self {
+                boot_id: Ok(value.boot_id),
+                ts: Ok(value.ts),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
     pub struct PluginLogProvenanceV1 {
         entry: ::std::result::Result<super::PluginLogProvenanceV1Entry, ::std::string::String>,
         id: ::std::result::Result<super::LogBoundedIdentityV1, ::std::string::String>,
@@ -15755,6 +15982,7 @@ pub mod builder {
     }
     #[derive(Clone, Debug)]
     pub struct RpcRequest {
+        deadline_at: ::std::result::Result<::std::option::Option<u64>, ::std::string::String>,
         id: ::std::result::Result<super::RpcId, ::std::string::String>,
         jsonrpc: ::std::result::Result<::std::string::String, ::std::string::String>,
         method: ::std::result::Result<::std::string::String, ::std::string::String>,
@@ -15766,6 +15994,7 @@ pub mod builder {
     impl ::std::default::Default for RpcRequest {
         fn default() -> Self {
             Self {
+                deadline_at: Ok(Default::default()),
                 id: Err("no value supplied for id".to_string()),
                 jsonrpc: Err("no value supplied for jsonrpc".to_string()),
                 method: Err("no value supplied for method".to_string()),
@@ -15774,6 +16003,16 @@ pub mod builder {
         }
     }
     impl RpcRequest {
+        pub fn deadline_at<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<u64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.deadline_at = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for deadline_at: {e}"));
+            self
+        }
         pub fn id<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<super::RpcId>,
@@ -15821,6 +16060,7 @@ pub mod builder {
             value: RpcRequest,
         ) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
+                deadline_at: value.deadline_at?,
                 id: value.id?,
                 jsonrpc: value.jsonrpc?,
                 method: value.method?,
@@ -15831,6 +16071,7 @@ pub mod builder {
     impl ::std::convert::From<super::RpcRequest> for RpcRequest {
         fn from(value: super::RpcRequest) -> Self {
             Self {
+                deadline_at: Ok(value.deadline_at),
                 id: Ok(value.id),
                 jsonrpc: Ok(value.jsonrpc),
                 method: Ok(value.method),

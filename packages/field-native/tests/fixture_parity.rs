@@ -11,9 +11,11 @@ use field_native::contracts::{
     MeshEgressRouteRef, MeshEgressRouteTable, MeshLaneCloseRequest, MeshLaneClosed,
     MeshLaneOpenRequest, MeshLanePeerOpened, MeshSelfIdentity, NativeHealth,
     NativePrepareRestartParams, NativePrepareRestartResult, NativeShutdownParams,
-    NativeShutdownResult, ObservedState, PeerInfo, RpcRequest, RpcResponse, ServeConfig,
-    ServeEntry, StoreSnapshot, TerminalRouteSnapshot, TerminalRoutesStreamPayload,
+    NativeShutdownResult, NativeTickParams, ObservedState, PeerInfo, PingAck, RpcNotification,
+    RpcRequest, RpcResponse, ServeConfig, ServeEntry, StoreSnapshot, TerminalRouteSnapshot,
+    TerminalRoutesStreamPayload,
 };
+use field_native::registries::native_refusals;
 use serde_json::Value;
 use std::{fs, path::PathBuf};
 
@@ -120,6 +122,52 @@ fn rpc_fixtures() {
 fn error_fixtures() {
     roundtrip::<ErrorData>("error-data.unavailable.json", true);
     roundtrip::<ErrorData>("error-data.forbidden.json", true);
+    // WG-D4 — fieldd writes these two: a door on the floor's mgmt path while
+    // fieldd holds the floor unresponsive, and a cell that did not answer.
+    // ErrorData is the envelope both planes share, so its twin reads both.
+    roundtrip::<ErrorData>("error-data.native-unresponsive.json", true);
+    roundtrip::<ErrorData>("error-data.terminal-unresponsive.json", true);
+}
+
+/// WG-D6 (`draft/thinking-floor-wedge.md` §7) — the wedge ladder's floor half.
+/// field-native EMITS the pong, the tick, the ack's pid and the TIMEOUT for a
+/// request past its deadline, and READS a request's `deadlineAt`, so every row
+/// is strict: what the floor writes is what fieldd's late-reply record, its
+/// tick clock and its health read.
+#[test]
+fn wedge_ladder_fixtures() {
+    // the pong's `ts` is the floor's clock a late reply is kept with (WG-E2)
+    roundtrip::<PingAck>("ping-ack.valid.json", true);
+
+    // the tick: the whole notification frame, then its params as the floor
+    // builds them
+    roundtrip::<RpcNotification>("native-tick.valid.json", true);
+    let tick = load("native-tick.valid.json");
+    assert_eq!(tick["method"], "native.lifecycle.tick");
+    let params: NativeTickParams =
+        serde_json::from_value(tick["params"].clone()).expect("native-tick params");
+    assert_eq!(serde_json::to_value(&params).unwrap(), tick["params"]);
+
+    // the floor's pid in its hello ack; 0 names no process and is refused
+    roundtrip::<HelloAck>("hello-ack.pid.json", true);
+    let mut zero = load("hello-ack.pid.json");
+    zero["pid"] = serde_json::json!(0);
+    assert!(serde_json::from_value::<HelloAck>(zero).is_err());
+
+    // a request's deadline survives the trip; the deadline-free fixture above
+    // (`rpc_fixtures`) is the shape a ping and a hello keep
+    roundtrip::<RpcRequest>("rpc-request.deadline.json", true);
+
+    // the floor's TIMEOUT for a request past its deadline: its details are JSON
+    // the floor writes, in the generated registry's words
+    roundtrip::<ErrorData>("error-data.native-deadline-passed.json", true);
+    let refusal = load("error-data.native-deadline-passed.json");
+    assert_eq!(refusal["kind"], "TIMEOUT");
+    assert_eq!(refusal["details"]["service"], native_refusals::SERVICE);
+    assert_eq!(
+        refusal["details"]["reason"],
+        native_refusals::REASON_DEADLINE_PASSED
+    );
 }
 
 #[test]

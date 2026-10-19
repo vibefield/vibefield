@@ -1,0 +1,10 @@
+{
+  "kind": "UNAVAILABLE",
+  "retryable": true,
+  "details": {
+    "service": "native",
+    "state": "unresponsive",
+    "since": 1792376632000,
+    "detail": "the control path stopped answering (process alive)"
+  }
+}

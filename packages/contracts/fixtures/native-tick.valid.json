@@ -1,0 +1,9 @@
+{
+  "jsonrpc": "2.0",
+  "method": "native.lifecycle.tick",
+  "params": {
+    "bootId": "b1c2d3e4-5f60-7a8b-9c0d-e1f203a4b5c6",
+    "ts": 1792376697001,
+    "seq": 11236
+  }
+}

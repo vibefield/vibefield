@@ -5,7 +5,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MESH_EGRESS } from "../src/mgmt";
+import { MESH_EGRESS, NATIVE_REFUSALS } from "../src/mgmt";
 import {
   APP_ID,
   CELL_ISOLATION,
@@ -18,6 +18,7 @@ import {
   FREEWAY_FRAME,
   LAYOUT,
   MESH_CONTROL_LIMITS,
+  NATIVE_FLOOR_TICK,
   PORTS,
   SOCKETS,
   STORES,
@@ -89,6 +90,19 @@ const lines: string[] = [
   "/// is the TC-D6(f) bound). See registries.ts for the rationale.",
   "pub mod cell_isolation {",
   ...Object.entries(CELL_ISOLATION).map(([k, v]) => `    pub const ${k}: u64 = ${v};`),
+  "}",
+  "",
+  "/// WG-D6 — the floor's own liveness tick (`native.lifecycle.tick`), pushed",
+  "/// from its own task. One authority with fieldd; see registries.ts.",
+  "pub mod native_floor_tick {",
+  ...Object.entries(NATIVE_FLOOR_TICK).map(([k, v]) => `    pub const ${k}: u64 = ${v};`),
+  "}",
+  "",
+  "/// WG-D4/WG-D6 — the native plane's refusal vocabulary (contracts mgmt.ts",
+  "/// `NATIVE_REFUSALS`): the floor's TIMEOUT for a request past its",
+  "/// `deadlineAt`, and fieldd's UNAVAILABLE for an unresponsive floor.",
+  "pub mod native_refusals {",
+  ...Object.entries(NATIVE_REFUSALS).map(([k, v]) => `    pub const ${k}: &str = "${v}";`),
   "}",
   "",
   "/// TPv3 (terminal-pipeline-v3 §5.1/§8; §20 item 5) — the pipeline's numbers:",

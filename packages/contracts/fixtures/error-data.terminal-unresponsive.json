@@ -1,0 +1,9 @@
+{
+  "kind": "UNAVAILABLE",
+  "retryable": true,
+  "details": {
+    "service": "terminal",
+    "state": "unresponsive",
+    "detail": "Ghosttea request timed out: create"
+  }
+}

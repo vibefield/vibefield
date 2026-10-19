@@ -1817,6 +1817,10 @@
         },
         "lastExit": {
           "$ref": "#/definitions/NativeLastExit"
+        },
+        "pid": {
+          "type": "integer",
+          "minimum": 1
         }
       },
       "required": [
@@ -1839,7 +1843,11 @@
         "method": {
           "type": "string"
         },
-        "params": {}
+        "params": {},
+        "deadlineAt": {
+          "type": "integer",
+          "minimum": 0
+        }
       },
       "required": [
         "jsonrpc",
@@ -2287,6 +2295,43 @@
     "FreewayJoinsAckResult": {
       "type": "object",
       "properties": {},
+      "additionalProperties": true
+    },
+    "PingAck": {
+      "type": "object",
+      "properties": {
+        "bootId": {
+          "type": "string"
+        },
+        "ts": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bootId",
+        "ts"
+      ],
+      "additionalProperties": true
+    },
+    "NativeTickParams": {
+      "type": "object",
+      "properties": {
+        "bootId": {
+          "type": "string"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "bootId",
+        "ts",
+        "seq"
+      ],
       "additionalProperties": true
     },
     "Hello": {

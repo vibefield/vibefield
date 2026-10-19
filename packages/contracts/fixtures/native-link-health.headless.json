@@ -1,0 +1,13 @@
+{
+  "state": "unresponsive",
+  "detail": "the floor has not answered for 2 min and its tick has stopped; nobody is here to ask about its 2 sessions",
+  "pid": 25821,
+  "since": 1792376632000,
+  "lastReplyAgeMs": 121400,
+  "lastTickAgeMs": 118650,
+  "loopLagMs": 0.9,
+  "sessionsAtRisk": 2,
+  "requestsTimedOut": 14,
+  "restartOffered": false,
+  "headlessAt": 1792377234500
+}

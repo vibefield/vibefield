@@ -88,6 +88,21 @@ pub mod cell_isolation {
     pub const MAX_SOLO_CELLS: u64 = 8;
 }
 
+/// WG-D6 — the floor's own liveness tick (`native.lifecycle.tick`), pushed
+/// from its own task. One authority with fieldd; see registries.ts.
+pub mod native_floor_tick {
+    pub const INTERVAL_MS: u64 = 1000;
+}
+
+/// WG-D4/WG-D6 — the native plane's refusal vocabulary (contracts mgmt.ts
+/// `NATIVE_REFUSALS`): the floor's TIMEOUT for a request past its
+/// `deadlineAt`, and fieldd's UNAVAILABLE for an unresponsive floor.
+pub mod native_refusals {
+    pub const SERVICE: &str = "native";
+    pub const STATE_UNRESPONSIVE: &str = "unresponsive";
+    pub const REASON_DEADLINE_PASSED: &str = "deadline-passed";
+}
+
 /// TPv3 (terminal-pipeline-v3 §5.1/§8; §20 item 5) — the pipeline's numbers:
 /// protocol version, door hygiene, grant validity, the cell's receive caps and
 /// the announced ProtocolLimits. PROVISIONAL until the numeric checkpoint; one

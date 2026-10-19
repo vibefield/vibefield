@@ -18,7 +18,13 @@
 // main and fieldd, and field-native signs and reads none of it. So is WP8's
 // packaged identity (plugin-distribution.ts's BundledPluginIndex,
 // src/release-identity.ts): the stager writes it, the kit, fieldd and the shell
-// read it, field-native never does.
+// read it, field-native never does. So are the wedge ladder's fieldd-side shapes
+// (WG-D1, src/mgmt.ts): `NativeLinkHealth` (fieldd's health, read by a window),
+// `SystemNativeRestartParams`/`Result` (a window's ask of fieldd), and the
+// UNAVAILABLE details fieldd writes (`NativeUnavailableDetails`). The floor's
+// half rides the bundle: `PingAck`, `NativeTickParams`, `HelloAck.pid` and
+// `RpcRequest.deadlineAt`; its TIMEOUT details are JSON the floor writes, pinned
+// by `error-data.native-deadline-passed.json` (the egress refusals' bargain).
 // The freeway (FW-D4, src/freeway.ts) is HALF here: its floor seam — `native.freeway.declare`, the
 // state stream, the joins, revoke — which field-native reads and writes. Its LINK wire (frames, the
 // stream-0 messages, the open kinds) is the freeway host's, hand-written in Rust as the cell's TPv3
@@ -130,11 +136,13 @@ import {
   NativeRestartReason,
   NativeShutdownParams,
   NativeShutdownResult,
+  NativeTickParams,
   ObservedState,
   ObservedTerminal,
   ObservedTerminalCell,
   ObservedWorker,
   PeerInfo,
+  PingAck,
   ServeConfig,
   ServeEntry,
   ServeRoute,
@@ -310,6 +318,10 @@ const ENTRIES: Record<string, ZodTypeAny> = {
   "freeway-joins-frame": FreewayJoinsFrame,
   "freeway-joins-ack-params": FreewayJoinsAckParams,
   "freeway-joins-ack-result": FreewayJoinsAckResult,
+  // WG-D6 (draft/thinking-floor-wedge.md §7) — the pong whose `ts` a late reply is kept
+  // with, and the floor's own tick
+  "ping-ack": PingAck,
+  "native-tick-params": NativeTickParams,
   "log-record-v1": LogRecordV1,
   "logging-health-v1": LoggingHealthV1,
   "diagnostic-log-snapshot-v1": DiagnosticLogSnapshotV1,
@@ -384,6 +396,10 @@ const bundle = tightenLoggingWireSchema(
       FreewayJoinsFrame,
       FreewayJoinsAckParams,
       FreewayJoinsAckResult,
+      // WG-D6 — the wedge ladder's floor half: the pong the floor builds and its
+      // tick's params. Bundle-only for the same reason: nothing else embeds them.
+      PingAck,
+      NativeTickParams,
     },
   }),
 );

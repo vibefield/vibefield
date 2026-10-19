@@ -1,0 +1,13 @@
+{
+  "state": "unresponsive",
+  "detail": "the floor has not answered for 64 s; its 3 sessions still run",
+  "pid": 25821,
+  "since": 1792376632000,
+  "lastReplyAgeMs": 64210,
+  "lastTickAgeMs": 380,
+  "loopLagMs": 1.4,
+  "sessionsAtRisk": 3,
+  "requestsTimedOut": 9,
+  "restartOffered": true,
+  "headlessAt": null
+}

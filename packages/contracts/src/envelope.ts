@@ -277,6 +277,16 @@ export const HelloAck = z
     /** WP12 L2b — mgmt surface only: how the previous floor ended (`NativeLastExit`). Absent on every product
      * ack and from a floor predating it; a tolerant reader treats absence as "this floor cannot say". */
     lastExit: NativeLastExit.optional(),
+    /** WG-D6 (`draft/thinking-floor-wedge.md` §5.3 item 6) — mgmt surface only: the floor's
+     * own pid, so the stops the wedge ladder allows have a lever on a floor this fieldd did not
+     * spawn (an ADOPTED floor — after every fieldd-only restart). fieldd takes it as the paired
+     * floor's word: it arrives on the connection whose answerer proved the pairing secret
+     * (`serverMac`, which does not cover it), and Node exposes no peer credential on a local
+     * socket to check it against. It is a target, never an authority, and the person's restart
+     * still names its sessions (`system.native.restart`). Absent on product acks and from a
+     * floor predating it: a fieldd holding no pid of its own then offers no restart and says
+     * "restart it outside VibeField". */
+    pid: z.number().int().min(1).optional(),
   })
   .passthrough();
 export type HelloAck = z.infer<typeof HelloAck>;
@@ -291,6 +301,14 @@ export const RpcRequest = z
     id: RpcId,
     method: z.string(),
     params: z.unknown().optional(),
+    /** WG-D6 — MGMT surface: the instant (unix ms, fieldd's clock; the floor reads the same host's)
+     * past which fieldd has given up on this request (`NATIVE_SUPERVISION.REQUEST_DEADLINE_MS`, or
+     * the call's own). fieldd sets it on every mgmt request except the heartbeat
+     * (`native.lifecycle.ping`: a late pong is evidence, WG-E2) and the hello. A floor that
+     * dispatches a request past it answers TIMEOUT (`NativeDeadlinePassedDetails`) and does not run
+     * it. Absent = no deadline travels (the product surface, a ping, a hello, or a fieldd predating
+     * it), and the request runs as it always has. */
+    deadlineAt: z.number().int().nonnegative().optional(),
   })
   .passthrough();
 export type RpcRequest = z.infer<typeof RpcRequest>;

@@ -1,0 +1,13 @@
+{
+  "state": "connecting",
+  "detail": "mgmt link down; redialing",
+  "pid": 79549,
+  "since": 1792376701071,
+  "lastReplyAgeMs": 1840,
+  "lastTickAgeMs": 1790,
+  "loopLagMs": null,
+  "sessionsAtRisk": null,
+  "requestsTimedOut": 0,
+  "restartOffered": false,
+  "headlessAt": null
+}

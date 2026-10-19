@@ -1,0 +1,11 @@
+{
+  "kind": "TIMEOUT",
+  "retryable": true,
+  "details": {
+    "service": "native",
+    "reason": "deadline-passed",
+    "method": "native.mesh.serve.list",
+    "deadlineAt": 1792376706980,
+    "at": 1792376707412
+  }
+}

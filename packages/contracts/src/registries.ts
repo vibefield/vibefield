@@ -787,6 +787,19 @@ export const CELL_ISOLATION = {
   MAX_SOLO_CELLS: 8,
 } as const;
 
+/** WG-D6 (`draft/thinking-floor-wedge.md` §4 WG-E2, §11) — the floor's own liveness tick. The
+ * floor pushes `native.lifecycle.tick` (`MGMT_NOTIFICATIONS.TICK`, params `NativeTickParams`) to
+ * its paired client every INTERVAL_MS from a task of its own, never from the reader: a tick that
+ * arrives proves the floor's runtime and its writer alive, and says nothing of its reader and
+ * dispatch, which only a REPLY proves. That split is what lets fieldd's headless clause tell a
+ * reader or dispatch wedge (the tick flows; the cells run on) from a floor stalled whole (no tick
+ * either; its cells' stderr pipes stop draining). ONE authority for the floor (Rust, by
+ * generation) and fieldd, which reads a tick older than `NATIVE_SUPERVISION.TICK_STALE_MS` as no
+ * tick at all. */
+export const NATIVE_FLOOR_TICK = {
+  INTERVAL_MS: 1_000,
+} as const;
+
 /** TPv3 — the terminal pipeline's numbers (terminal-pipeline-v3 §5.1, §8; §20
  * item 5 "numeric limits with owners"). ONE authority for the cell (Rust, by
  * generation), fieldd (the grant TTLs) and the renderer. Every value is

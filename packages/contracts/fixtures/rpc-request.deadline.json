@@ -1,0 +1,7 @@
+{
+  "jsonrpc": "2.0",
+  "id": 4207,
+  "method": "native.mesh.serve.list",
+  "params": {},
+  "deadlineAt": 1792376706980
+}

@@ -1238,6 +1238,10 @@
         },
         "lastExit": {
           "$ref": "#/definitions/NativeLastExit"
+        },
+        "pid": {
+          "type": "integer",
+          "minimum": 1
         }
       },
       "required": [

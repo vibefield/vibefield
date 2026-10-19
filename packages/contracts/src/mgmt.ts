@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TerminalCellRole, TerminalRouteCell, TerminalWorkloadClass } from "./envelope";
 import { UnavailableDetails } from "./errors";
-import { PORTS } from "./registries";
+import { CELL_SUPERVISION, NATIVE_FLOOR_TICK, PORTS } from "./registries";
 
 // Management channel (design-01 §5.2, M2 subset): native.lifecycle.* + the mesh
 // facade P0 subset (peers / store / serve). Laws honored here:
@@ -168,10 +168,17 @@ export const TerminalRoutesStreamPayload = z
   .passthrough();
 export type TerminalRoutesStreamPayload = z.infer<typeof TerminalRoutesStreamPayload>;
 
-// ---- TC-S1 supervision (specs/terminal-custody.md TC-D1/TC-D2) ----
+// ---- TC-S1 supervision (specs/terminal-custody.md TC-D1/TC-D2) and the wedge ladder ----
+// (WG-D0…WG-D6, `draft/thinking-floor-wedge.md` §5.3 and §11, ruled 2026-10-19)
 
-/** fieldd's EXTERNAL judgment of the floor + its link, surfaced in FielddHealth
- * and as UNAVAILABLE {service:"native", state} on doors that need the floor.
+/** fieldd's EXTERNAL judgment of the floor + its link, surfaced in fieldd's
+ * health (`NativeLinkHealth`) and, while it is `unresponsive`, as UNAVAILABLE
+ * {service: "native", state: "unresponsive"} (`NativeUnavailableDetails`) on
+ * the doors that ride the floor's mgmt path (WG-D4).
+ * *Corrected 2026-10-19 (WG-D4):* this said the doors that need the floor
+ * answered UNAVAILABLE {service: "native", state}, and nothing emitted it: a
+ * call to a held floor waited out its own deadline (`thinking-floor-wedge.md`
+ * §2.2). WG-D4's door gate is its emitter.
  * Deliberately NOT UnitState: a wedged floor cannot self-report — the whole
  * point (TC-D2) is distinguishing "crashed" (socket gone, kernel says so) from
  * "unresponsive" (alive, not answering the control path). */
@@ -182,9 +189,29 @@ export type NativeLinkState = z.infer<typeof NativeLinkState>;
  * path as every real request end-to-end (socket → framing → dispatch → reply),
  * so a wedge anywhere on that path is exactly what it measures. The ack echoes
  * the boot id so a supervisor also notices a floor that restarted underneath a
- * surviving socket. */
+ * surviving socket. `ts` is the floor's wall clock (unix ms) as it answered: a
+ * pong that comes back past its deadline is kept with it, never dropped, and
+ * proves the reader and dispatch move (WG-E2). Generated into Rust (WG-D6), so
+ * the floor writes the shape `ping-ack.valid.json` pins on both sides. */
 export const PingAck = z.object({ bootId: z.string(), ts: z.number().int() }).passthrough();
 export type PingAck = z.infer<typeof PingAck>;
+
+/** WG-D6 — `native.lifecycle.tick`'s params (`MGMT_NOTIFICATIONS.TICK`): a
+ * notification the floor pushes to its paired client every
+ * `NATIVE_FLOOR_TICK.INTERVAL_MS` from a task of its own — no `id` (it answers
+ * no call) and no `subId` (it belongs to no subscription). A tick proves the
+ * floor's runtime and its writer alive, and it NEVER restarts fieldd's kill
+ * clock: only a reply proves the reader and dispatch move (WG-E2). `ts` is the
+ * floor's wall clock (unix ms), the clock of `PingAck.ts`; `seq` counts up from
+ * 0 within one floor boot, so a reader can see a gap. */
+export const NativeTickParams = z
+  .object({
+    bootId: z.string(),
+    ts: z.number().int(),
+    seq: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type NativeTickParams = z.infer<typeof NativeTickParams>;
 
 /** WP12 L2b (`build-wp12-updater.md` §9 R2/R3) — why the floor is asked to restart. One reason today: an app update
  * that touches field-native, after the person's consent or at census zero (EDP-33/35). */
@@ -223,22 +250,92 @@ export type NativeShutdownParams = z.infer<typeof NativeShutdownParams>;
 export const NativeShutdownResult = z.object({ stopping: z.boolean() }).passthrough();
 export type NativeShutdownResult = z.infer<typeof NativeShutdownResult>;
 
-/** TC-D1/TC-D2 supervision timings (fieldd-side). Detection-to-STATE is ≤250ms
- * (two misses of interval+deadline 100/100); the DESTRUCTIVE step (kill +
- * respawn of a wedged floor) waits out WEDGE_CONFIRM_MS of continued misses,
- * because a loaded-host scheduling stall (measured: vault-free round trips p99
- * 24–37ms at load ~40, max 69ms — spike LOCK-1) must never kill a healthy
- * floor. State is reversible; SIGKILL is not. */
+/** TC-D1/TC-D2 supervision timings (fieldd-side), and the wedge ladder WG-D1
+ * ruled (`draft/thinking-floor-wedge.md` §5.3; the WEDGE_* numbers are WG-D2's
+ * first values, re-ruled on the evidence of WG-D0's episode lines with a dated
+ * note here).
+ *
+ * DETECTION is a state, reversible: a heartbeat every HEARTBEAT_INTERVAL_MS
+ * with a HEARTBEAT_DEADLINE_MS deadline; a miss fires one stage-2 probe; two
+ * misses make the link `unresponsive` (≤ 250 ms). A miss counts only when
+ * fieldd's own deadline timer fired on time (WG-E1). Sized against loaded-host
+ * scheduling stalls (vault-free round trips p99 24–37ms at load ~40, max 69ms —
+ * spike LOCK-1), which must never cost a session. Returning to `up` takes two
+ * clean pongs in a row.
+ *
+ * THE KILL CLOCK is silence of REPLIES: the time since the last response to
+ * any request, a pong or any other, a late one included. Any reply restarts it;
+ * notifications (the floor's tick, the health, observed and route deltas)
+ * never do, because they come from the floor's forwarder tasks, not its reader
+ * (WG-E2/E3). On that one clock:
+ *  - WEDGE_REDIAL_MS — once per episode, fieldd drops the mgmt link and dials
+ *    again (WG-E4). It costs no session (a dead mgmt connection kills no PTY),
+ *    and a fresh hello gets a fresh reader, so a per-connection reader wedge
+ *    recovers outright. The clock runs on across it: an unanswered hello is
+ *    more silence, never a `connecting` that lasts forever.
+ *  - WEDGE_CONFIRM_MS — the bound. With the redial failed, the census decides
+ *    (WG-E6): the cells' own session lists read at decision time with births
+ *    closed, plus every session born and not yet seen; a cell that does not
+ *    answer counts as holding sessions. Empty ⇒ the automatic restart
+ *    (unplanned, so never announced). Not empty ⇒ the link stays
+ *    `unresponsive` with its numbers (`NativeLinkHealth`) and the person's
+ *    consented restart is offered (`system.native.restart {sessions}`, WG-D5).
+ *  - WEDGE_HEADLESS_MS — with live sessions and nobody to ask (no window, or
+ *    the phone alone), fieldd waits while the floor's tick flows: that is a
+ *    reader or dispatch wedge, and the cells run on. Once replies AND the tick
+ *    have both been silent this long (a floor stalled whole, which stops
+ *    draining its cells' stderr), it proceeds, with loss receipts.
+ * fieldd takes an irreversible step only after one `setImmediate` yield finds
+ * no reply pending (WG-E1). Wedge restarts have their own intensity bound,
+ * WEDGE_RESTART_MAX per WEDGE_RESTART_WINDOW_MS, past which the link is `gone`;
+ * the crash path keeps RESPAWN_MAX per RESPAWN_WINDOW_MS, which a restart at
+ * most once per WEDGE_CONFIRM_MS could never trip. Every deliberate stop's
+ * SIGKILL rung waits KILL_DRAIN_WAIT_MS after SIGTERM, never less. */
 export const NATIVE_SUPERVISION = {
-  /** default deadline for ordinary mgmt requests (pre-TC-S1, rawRequest waited forever) */
+  /** default deadline for ordinary mgmt requests (pre-TC-S1, rawRequest waited
+   * forever). WG-D6: it rides each request as `RpcRequest.deadlineAt`, so the
+   * floor answers TIMEOUT rather than run a request fieldd has given up on */
   REQUEST_DEADLINE_MS: 10_000,
   HEARTBEAT_INTERVAL_MS: 100,
   HEARTBEAT_DEADLINE_MS: 100,
   /** stage 2 — fired immediately after a first miss */
   HEARTBEAT_PROBE_DEADLINE_MS: 50,
   HEARTBEAT_MISS_THRESHOLD: 2,
-  /** unresponsive → kill+respawn only after this much CONTINUED silence */
-  WEDGE_CONFIRM_MS: 3_000,
+  /** WG-E4 — the reversible step, once per episode: drop the mgmt link and
+   * dial again. Not below REQUEST_DEADLINE_MS: by then the oldest request in
+   * flight has timed out anyway, so the redial fails nothing that was alive */
+  WEDGE_REDIAL_MS: 10_000,
+  /** WG-D1 — the bound: past this much reply silence, with the redial failed,
+   * the census decides — empty ⇒ the automatic restart; not empty ⇒ the
+   * person's consented restart is offered.
+   * *Corrected 2026-10-19 (WG-D1):* this was `3_000`, "unresponsive →
+   * kill+respawn only after this much CONTINUED silence", and the supervisor
+   * did not measure continued silence: its clock started at the double miss and
+   * cleared only on two clean pongs in a row, so a lone pong left it running, a
+   * reply past its deadline was dropped unseen, and a floor this fieldd had
+   * spawned was killed with every session in it on the first miss 3 s after its
+   * first double miss (2026-10-19 02:24:56Z, `thinking-floor-wedge.md` §1,
+   * §2.2). LOCK-1's sizing covered CPU-scheduling stalls, never disk I/O. */
+  WEDGE_CONFIRM_MS: 60_000,
+  /** WG-D1's headless clause: with live sessions and nobody to ask, proceed
+   * after this much silence of replies and of the floor's tick together. A
+   * tick that stopped a moment ago is no floor stalled whole, however long the
+   * replies have been silent */
+  WEDGE_HEADLESS_MS: 600_000,
+  /** WG-D1 — wedge restarts' own intensity bound: past WEDGE_RESTART_MAX in
+   * WEDGE_RESTART_WINDOW_MS the link is `gone`, with the restart affordance,
+   * so a floor that wedges on every boot is never killed once a minute forever */
+  WEDGE_RESTART_MAX: 3,
+  WEDGE_RESTART_WINDOW_MS: 600_000,
+  /** every deliberate stop's SIGKILL rung, after SIGTERM: the floor collects
+   * its cells' drain reports for CELL_SUPERVISION's DRAIN_BUDGET_MS +
+   * EXIT_GRACE_MS + 1 s (field-native's terminal stop path) and then exits;
+   * one second more for that exit. A rung inside the drain ends sessions that
+   * were draining cleanly (`thinking-floor-wedge.md` §1: a 2 s rung) */
+  KILL_DRAIN_WAIT_MS: CELL_SUPERVISION.DRAIN_BUDGET_MS + CELL_SUPERVISION.EXIT_GRACE_MS + 2_000,
+  /** WG-D6 — a floor tick older than this is no tick: three intervals, so one
+   * late or lost tick never reads as a floor stalled whole */
+  TICK_STALE_MS: 3 * NATIVE_FLOOR_TICK.INTERVAL_MS,
   /** TC-D1 — respawn only after this many failed redials AND a fresh endpoint
    * probe confirming no listener (the double-spawn probe stays in force) */
   RESPAWN_AFTER_REDIALS: 3,
@@ -246,6 +343,144 @@ export const NATIVE_SUPERVISION = {
   RESPAWN_MAX: 3,
   RESPAWN_WINDOW_MS: 60_000,
 } as const;
+
+/** WG-D4/WG-D6 — the native plane's refusal vocabulary. Generated into Rust
+ * (`registries::native_refusals`), so the floor's TIMEOUT and fieldd's readers
+ * spell one word. */
+export const NATIVE_REFUSALS = {
+  /** `details.service` on both refusals below */
+  SERVICE: "native",
+  /** fieldd's word for a floor it holds `unresponsive` (`NativeLinkState`) */
+  STATE_UNRESPONSIVE: "unresponsive",
+  /** the floor's word for a request that reached dispatch past its `deadlineAt` */
+  REASON_DEADLINE_PASSED: "deadline-passed",
+} as const;
+
+/** WG-D4 — what a door that rides the floor's mgmt path (the mesh verbs, the
+ * device slice's publish, the cells' serve routes) answers while fieldd holds
+ * the floor `unresponsive`: UNAVAILABLE {service: "native", state:
+ * "unresponsive"}, retryable, at once, never after the request's own
+ * REQUEST_DEADLINE_MS. Distinct from UNAVAILABLE {service: "terminal", state:
+ * "unresponsive"}, which fieldd's terminal service answers for a CELL that did
+ * not answer inside its budget. fieldd writes it and a window reads it; the
+ * floor never does (`error-data.native-unresponsive.json`). */
+export const NativeUnavailableDetails = UnavailableDetails.extend({
+  service: z.literal(NATIVE_REFUSALS.SERVICE),
+  state: z.literal(NATIVE_REFUSALS.STATE_UNRESPONSIVE),
+  /** when the link went `unresponsive` (unix ms) */
+  since: z.number().int().nonnegative().optional(),
+  /** the supervisor's own sentence for the state */
+  detail: z.string().optional(),
+}).passthrough();
+export type NativeUnavailableDetails = z.infer<typeof NativeUnavailableDetails>;
+
+/** WG-D6 — the floor's answer to a request that reaches dispatch after its
+ * `RpcRequest.deadlineAt`: TIMEOUT, retryable, and the request is NOT run.
+ * fieldd gave up on it at that instant, and a mutation run late can land behind
+ * its own retry. The answer reaches fieldd as a late reply, which restarts the
+ * kill clock like any reply: it proves the reader and dispatch move (WG-E2).
+ * The floor writes these details as JSON; `error-data.native-deadline-passed`
+ * pins them on both sides. */
+export const NativeDeadlinePassedDetails = z
+  .object({
+    service: z.literal(NATIVE_REFUSALS.SERVICE),
+    reason: z.literal(NATIVE_REFUSALS.REASON_DEADLINE_PASSED),
+    /** the request's method, as fieldd's own TIMEOUT names it */
+    method: z.string(),
+    /** the deadline the request carried (unix ms, fieldd's clock on the same host) */
+    deadlineAt: z.number().int().nonnegative(),
+    /** when the floor refused it (unix ms, the floor's clock) */
+    at: z.number().int(),
+  })
+  .passthrough();
+export type NativeDeadlinePassedDetails = z.infer<typeof NativeDeadlinePassedDetails>;
+
+/** WG-D1 (`thinking-floor-wedge.md` §7, §8.1) — the native-link block of
+ * fieldd's `system.health`: the state with its numbers and its provenance
+ * (DESIGN.md §9), so a window can say "the terminal floor isn't answering ·
+ * 40 s — your 3 sessions still run" and, past the bound where this fieldd can
+ * act, offer the person's restart. fieldd writes it, a window reads it, and
+ * field-native never does, so it stays out of the Rust gen. Ages are fieldd's
+ * monotonic clock when the block is written; `since` and `headlessAt` are its
+ * wall clock (unix ms). */
+export const NativeLinkHealth = z
+  .object({
+    state: NativeLinkState,
+    /** the supervisor's own sentence for the state */
+    detail: z.string(),
+    /** the floor's pid as this fieldd knows it: the one it spawned, or the one
+     * the floor stated in its hello ack (`HelloAck.pid`, WG-D6); null when it
+     * knows neither */
+    pid: z.number().int().min(1).nullable(),
+    /** when `state` began (unix ms) */
+    since: z.number().int().nonnegative(),
+    /** ms since the last REPLY on the mgmt link, a late one included: the kill
+     * clock (WG-E2). It runs on across a redial. null = no reply since this
+     * fieldd first dialled */
+    lastReplyAgeMs: z.number().int().nonnegative().nullable(),
+    /** ms since the floor's last `native.lifecycle.tick`; past
+     * `NATIVE_SUPERVISION.TICK_STALE_MS` the tick has stopped. null = no tick
+     * seen (a floor predating WG-D6, or none yet) */
+    lastTickAgeMs: z.number().int().nonnegative().nullable(),
+    /** fieldd's own event-loop delay over the open wedge episode, p99 in ms
+     * (WG-E1). null outside an episode or before its first sample, never 0 for
+     * "no reading" */
+    loopLagMs: z.number().nonnegative().nullable(),
+    /** the sessions a restart of the floor would end, as fieldd last counted
+     * them (WG-E6's census). null = unknown: not counted yet, or a cell did not
+     * answer, which counts as holding sessions */
+    sessionsAtRisk: z.number().int().nonnegative().nullable(),
+    /** requests that settled TIMEOUT in the open episode, pings included; 0
+     * outside one */
+    requestsTimedOut: z.number().int().nonnegative(),
+    /** the window may offer the person's restart (`system.native.restart`,
+     * WG-D5): the link is `unresponsive` past the bound with sessions at risk,
+     * or `gone`, AND this fieldd can act — on a live floor, a pid to signal (the
+     * one it spawned, or the one the hello ack stated) and the authority to
+     * spawn the next; on a dead one, that authority — AND a window is open to
+     * offer it in. False past the bound with a window open means the words
+     * "restart it outside VibeField" and no button */
+    restartOffered: z.boolean(),
+    /** when WG-D1's headless clause would proceed (unix ms) while it is armed:
+     * sessions at risk past the bound and nobody to ask. It is
+     * WEDGE_HEADLESS_MS after replies and the tick had both gone silent, so
+     * while the tick flows it moves with every tick and the clause waits.
+     * null = not armed */
+    headlessAt: z.number().int().nonnegative().nullable(),
+  })
+  .passthrough();
+export type NativeLinkHealth = z.infer<typeof NativeLinkHealth>;
+
+/** `system.native.restart` (methods.ts, local only) — WG-D5: the person's
+ * restart of a floor held `unresponsive` past the bound (or `gone`), in the
+ * consent shape of `system.shutdown {native}` (design-00 EL1's consented
+ * exception). `sessions` is the set the person consents to end: `[]` when the
+ * floor holds none, as after the floor's own death on the `gone` escalation.
+ * fieldd closes the terminal service to births and re-reads the census at the
+ * point of effect (WG-E6); any difference from `sessions`, or a birth in
+ * flight, refuses PRECONDITION_FAILED {live} and reopens births, and so does a
+ * census no reading grounds (a silent cell fieldd never observed). A floor that
+ * is answering, or not yet held past the bound, is refused PRECONDITION_FAILED
+ * {state}. Only an exact match stops the floor, and its ladder waits out the
+ * drain (`KILL_DRAIN_WAIT_MS`). TS-only: a window asks it of fieldd; the floor
+ * never sees it. */
+export const SystemNativeRestartParams = z
+  .object({
+    sessions: z.array(z.string().min(1).max(256)).max(4096),
+  })
+  .passthrough();
+export type SystemNativeRestartParams = z.infer<typeof SystemNativeRestartParams>;
+
+/** `system.native.restart`'s answer: the link's state after the act, in the
+ * supervisor's words (`respawning` while the restart runs; `gone` when there
+ * was no floor this fieldd could start again). */
+export const SystemNativeRestartResult = z
+  .object({
+    state: NativeLinkState,
+    detail: z.string(),
+  })
+  .passthrough();
+export type SystemNativeRestartResult = z.infer<typeof SystemNativeRestartResult>;
 
 /** TC-D6(e) — resource-pressure state spellings shared by emitters and readers
  * (UnavailableDetails.state / UnitHealth.detail). */
