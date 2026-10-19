@@ -4,7 +4,7 @@
 
 import { readdir, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { SystemShutdownResult, TerminalListResult } from "@vibefield/contracts";
+import { SystemShutdownResult } from "@vibefield/contracts";
 import type { AuditAppendV1 } from "@vibefield/contracts/diagnostics";
 import type { FielddHandle } from "@vibefield/fieldd-supervisor";
 import { dialog, net, autoUpdater as squirrel } from "electron";
@@ -16,6 +16,7 @@ import {
   type BoxContent,
   CENSUS_BOUND_MS,
   type CensusSnapshot,
+  censusOf,
   NOTICE_AUTOCLOSE_MS,
   type StageOutcome,
   type StopOutcome,
@@ -158,18 +159,10 @@ export function createElectronApplyPort(deps: {
       const unknown: CensusSnapshot = { known: false };
       const read = (async (): Promise<CensusSnapshot> => {
         const handle = await deps.fieldd.ensure();
-        const listed = TerminalListResult.safeParse(
+        // IL-D5 (a) — a list that names a cell older than its bound is unknown too (`censusOf`)
+        return censusOf(
           await handle.client.request("terminal.list", {}, { timeoutMs: CENSUS_BOUND_MS }),
         );
-        if (!listed.success) return unknown;
-        return {
-          known: true,
-          sessions: listed.data.terminals.map((terminal) => ({
-            sessionId: terminal.sessionId,
-            ...(terminal.title !== undefined ? { title: terminal.title } : {}),
-            ...(terminal.cwd !== undefined ? { cwd: terminal.cwd } : {}),
-          })),
-        };
       })().catch(() => unknown);
       const answer = await Promise.race([
         read,

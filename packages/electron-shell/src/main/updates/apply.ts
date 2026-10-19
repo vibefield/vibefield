@@ -7,6 +7,7 @@
 // (`electron.d.ts:2103-2104`), so Squirrel is staged only AFTER the daemons have stopped — the one state where an
 // armed install is safe — and from that stop on, the flow always ends in exit and nothing may start a daemon.
 
+import { TerminalListResult } from "@vibefield/contracts";
 import type { UpdateQuitPlan } from "../quit-flow";
 
 /** One session the floor holds, as the census read it: the id is what the person consents to and what fieldd
@@ -22,6 +23,27 @@ export interface CensusSession {
 export type CensusSnapshot =
   | { readonly known: true; readonly sessions: readonly CensusSession[] }
   | { readonly known: false };
+
+/** `terminal.list`'s answer as ONE census snapshot (`ApplyPort.census`). Anything but a list is `known: false`, and so —
+ * IL-D5 (a) (`draft/thinking-inventory-latency.md` §5) — is a list whose observation names a cell older than its bound
+ * (`staleCells`, the floor's own or fieldd's when the stream stops reaching it): that cell's rows may miss a session it
+ * holds now, so a consent read from them could end one the person was never shown. The apply HOLDS as `census-unknown`
+ * until a list is current, as fieldd's own re-check at the stop refuses. A list with no `boundMs` — a fieldd or a floor
+ * that cannot say how old its rows are — is read as its rows. */
+export function censusOf(answer: unknown): CensusSnapshot {
+  const listed = TerminalListResult.safeParse(answer);
+  if (!listed.success) return { known: false };
+  const { terminals, observation } = listed.data;
+  if ((observation?.staleCells?.length ?? 0) > 0) return { known: false };
+  return {
+    known: true,
+    sessions: terminals.map((terminal) => ({
+      sessionId: terminal.sessionId,
+      ...(terminal.title !== undefined ? { title: terminal.title } : {}),
+      ...(terminal.cwd !== undefined ? { cwd: terminal.cwd } : {}),
+    })),
+  };
+}
 
 /** Squirrel's staging, after the daemon stop: `staged` (armed — the install is next), `refused` (its `error`: nothing
  * armed), `timeout` (no answer in the bound: it MAY still arm, so the app exits without relaunch). */
@@ -46,7 +68,8 @@ export interface BoxContent {
 export interface ApplyPort {
   /** The apply exists on this platform: macOS's Squirrel (§10 S5). Elsewhere a staged update stays `apply-unbuilt`. */
   readonly wired: boolean;
-  /** `terminal.list` over the live fieldd, bounded (2 s); anything but an answer is `known: false`. */
+  /** `terminal.list` over the live fieldd, bounded (2 s), read by `censusOf`: anything but a current list is
+   * `known: false`. */
   census(): Promise<CensusSnapshot>;
   /** The consent box (only when sessions live): true = "End N sessions and update". */
   confirm(content: BoxContent): Promise<boolean>;

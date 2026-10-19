@@ -3,6 +3,7 @@ import {
   type BoxContent,
   CONSENT_LISTED_MAX,
   censusNotice,
+  censusOf,
   consentBox,
   consentWords,
   policyNotice,
@@ -10,6 +11,7 @@ import {
   stagedTrayLabel,
 } from "../../src/main/updates/apply";
 import { type SafeWindowContext, safeWindow } from "../../src/main/updates/safe-window";
+import { currentList, FIXTURE_SESSIONS, terminalList, unjudgedList } from "./terminal-list-fixture";
 
 // WP12c (L2b-ii, build-wp12-updater.md §10 S2/S7; the PM's rulings 13:31Z, 13:37Z) — the apply's words, PINNED to
 // DESIGN.md §9 ("Voice"): sentence case · buttons say what they do · states tell the truth with numbers · errors say
@@ -147,6 +149,33 @@ describe("the policy notices (L3b-i, B1/B2; DESIGN.md §9: what happened, what h
     );
     expect(boxes[2]?.detail).toContain("the beta channel");
     expect(boxes[4]?.detail).toContain("needs macOS 15.0 or later");
+  });
+});
+
+describe("the census reads how old the list is (IL-D5 (a), `draft/thinking-inventory-latency.md` §5)", () => {
+  it("a current list is the census: every row, by the id fieldd re-checks at the stop", () => {
+    expect(censusOf(currentList())).toEqual({ known: true, sessions: FIXTURE_SESSIONS });
+    // an empty list of stale cells names none
+    const observation = currentList().observation as Record<string, unknown>;
+    const noneStale = { ...currentList(), observation: { ...observation, staleCells: [] } };
+    expect(censusOf(noneStale)).toEqual({ known: true, sessions: FIXTURE_SESSIONS });
+  });
+
+  it("a list naming a cell older than its bound is unknown — never its rows, which may miss a session", () => {
+    expect(censusOf(terminalList("terminal-list.stale-cell.json"))).toEqual({ known: false });
+  });
+
+  it("fieldd's own half: the stream silent past the bound names every cell, and the census is unknown", () => {
+    expect(censusOf(terminalList("terminal-list.link-silent.json"))).toEqual({ known: false });
+  });
+
+  it("a list that cannot say how old it is (no boundMs) is read as its rows", () => {
+    expect(censusOf(unjudgedList())).toEqual({ known: true, sessions: FIXTURE_SESSIONS });
+  });
+
+  it("anything but a list is unknown", () => {
+    expect(censusOf(undefined)).toEqual({ known: false });
+    expect(censusOf({ terminals: "none" })).toEqual({ known: false });
   });
 });
 

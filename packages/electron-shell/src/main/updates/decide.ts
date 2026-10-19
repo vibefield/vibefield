@@ -83,7 +83,8 @@ export type UpdateAction =
     };
 
 /** VibeField-hosted live sessions (EDP-33/35), read from the floor's own inventory; `"unknown"` when it cannot be read
- * (the inventory unobserved, the link down, no answer in its bound) — which HOLDS, never reads as zero (§10 S1). */
+ * (the inventory unobserved, the link down, no answer in its bound) or a cell's rows are older than the inventory's
+ * bound (IL-D5 (a), `censusOf`) — which HOLDS, never reads as zero (§10 S1). */
 export type CensusCount = number | "unknown";
 
 /** Dotted numeric versions (`15.1.0` against `14.0`): <0, 0 or >0, and NaN when either has a part that is not a

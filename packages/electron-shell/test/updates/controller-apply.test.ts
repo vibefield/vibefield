@@ -5,6 +5,8 @@ import {
   type ApplyPort,
   type BoxContent,
   type CensusSnapshot,
+  censusNotice,
+  censusOf,
   consentWords,
   type StageOutcome,
   type StopOutcome,
@@ -22,6 +24,7 @@ import { UpdateRefusal } from "../../src/main/updates/refusal";
 import { type StoreFs, UpdateStateStore } from "../../src/main/updates/state-store";
 import type { ChainResult, FetchBytes, VerifiedChain } from "../../src/main/updates/verify-chain";
 import { FixtureOrigin, NOW, ORIGIN } from "./fixture-release";
+import { currentList, terminalList } from "./terminal-list-fixture";
 
 // WP12c (L2b-ii, build-wp12-updater.md §10; the PM's rulings 2026-10-15 13:31–13:40Z) — `restartToInstall()` over a
 // fake ApplyPort. Every fieldd-touching call (the census, an audit row, the stop) lands on ONE timeline as `fieldd:…`,
@@ -313,6 +316,27 @@ describe("restartToInstall — WP12c's apply, order (A)", () => {
       sessions: "unknown",
     });
     await vi.waitFor(() => expect(audits.map((a) => a.reasonCode)).toContain("CENSUS_UNKNOWN"));
+  });
+
+  it("IL-D5 (a) — a list naming a cell older than its bound holds as census-unknown until a list is current", async () => {
+    const { controller, apply, audits } = await staged(
+      censusOf(terminalList("terminal-list.stale-cell.json")),
+    );
+    // the tray's count is unknown, never the stale cell's rows
+    expect(controller.state).toMatchObject({
+      kind: "staged",
+      blockedBy: "census-unknown",
+      sessions: "unknown",
+    });
+    // the click holds too, and says so: nothing quit, nothing ended
+    expect(await controller.restartToInstall()).toEqual({ ok: false, reason: "census-unknown" });
+    expect(apply.plan).toBeNull();
+    expect(apply.notices.map((notice) => notice.detail)).toEqual([censusNotice().detail]);
+    await vi.waitFor(() => expect(audits.map((a) => a.reasonCode)).toContain("CENSUS_UNKNOWN"));
+    // the cell's rows are current again: they are the census, and the update waits on its sessions
+    apply.snapshot = censusOf(currentList());
+    await controller.refreshCensus();
+    expect(controller.state).toMatchObject({ kind: "staged", blockedBy: "sessions", sessions: 2 });
   });
 
   it("the daemon's re-check refuses BEFORE the stop: abort — restored, the outcome said now, nothing staged", async () => {
