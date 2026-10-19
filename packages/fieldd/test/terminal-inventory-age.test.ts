@@ -7,7 +7,10 @@
 // floor's tick stopped), each `since` the last delivery; a delivery, or the
 // stream's return, ends it. A floor that does not judge (no
 // `inventoryBoundMs`) answers as it did before the bound. `staleRefusal` is
-// what an acting door answers, WG-D4's held floor first.
+// what an acting door answers, WG-D4's held floor first. The doors that need a
+// listed session (`terminal.get`, `openTicket`, `renewAttach`) refuse an
+// unlisted one with it while any cell is stale, and answer a listed one as
+// before.
 //
 // The unit rows drive TerminalService over a structural link and a scripted
 // supervision on a clock moved by hand, so every instant is exact; one row
@@ -24,6 +27,8 @@ import {
   SOCKETS,
   TerminalInventoryStaleDetails,
   TerminalListResult,
+  TerminalOpenTicketResult,
+  TerminalRenewAttachResult,
   TerminalRosterResult,
   type TerminalRouteSnapshot,
 } from "@vibefield/contracts";
@@ -435,33 +440,37 @@ describe("fieldd's own half: the stream that stops reaching fieldd (IL-D4 §4.3)
   });
 });
 
-describe("the reads through the daemon (IL-D4, IL-D5 (a); the mock floor)", () => {
-  async function daemonOn(
-    observedState: unknown,
-    config: Pick<FielddConfig, "terminalInventoryTimings"> = {},
-  ): Promise<{ mock: MockMgmtServer; daemon: FielddDaemon; rpc: WsRpc }> {
-    const dataDir = mkdtempSync(join(tmpdir(), "vf-inventory-age-"));
-    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
-    mkdirSync(join(dataDir, "native", "run"), { recursive: true });
-    writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
-    const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
-    mock.observedState = observedState;
-    await mock.start();
-    cleanup.push(() => mock.stop());
-    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0, ...config });
-    cleanup.push(() => daemon.stop());
-    const grant = daemon.tokens.mint(["terminal.attach"], "inventory-age");
-    const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
-    cleanup.push(() => ws.close());
-    await new Promise<void>((resolve, reject) => {
-      ws.once("open", () => resolve());
-      ws.once("error", reject);
-    });
-    const rpc = new WsRpc(ws);
-    await helloAs(rpc, grant.token);
-    return { mock, daemon, rpc };
-  }
+/** A daemon over the mock floor, which answers `observedState` and, when
+ * given, publishes `routes`; and a connection that holds `terminal.attach`. */
+async function daemonOn(
+  observedState: unknown,
+  config: Pick<FielddConfig, "terminalInventoryTimings"> = {},
+  routes?: TerminalRouteSnapshot,
+): Promise<{ mock: MockMgmtServer; daemon: FielddDaemon; rpc: WsRpc }> {
+  const dataDir = mkdtempSync(join(tmpdir(), "vf-inventory-age-"));
+  cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+  mkdirSync(join(dataDir, "native", "run"), { recursive: true });
+  writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
+  const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
+  mock.observedState = observedState;
+  if (routes !== undefined) mock.terminalRoutes = routes;
+  await mock.start();
+  cleanup.push(() => mock.stop());
+  const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0, ...config });
+  cleanup.push(() => daemon.stop());
+  const grant = daemon.tokens.mint(["terminal.attach"], "inventory-age");
+  const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+  cleanup.push(() => ws.close());
+  await new Promise<void>((resolve, reject) => {
+    ws.once("open", () => resolve());
+    ws.once("error", reject);
+  });
+  const rpc = new WsRpc(ws);
+  await helloAs(rpc, grant.token);
+  return { mock, daemon, rpc };
+}
 
+describe("the reads through the daemon (IL-D4, IL-D5 (a); the mock floor)", () => {
   it("terminal.list carries the floor's stale cell and terminal.roster says unknown for its rows", async () => {
     const { rpc } = await daemonOn(fixture("observed-state.stale-cell.json"));
     const list = TerminalListResult.parse(await rpc.call("terminal.list", {}));
@@ -524,5 +533,136 @@ describe("the reads through the daemon (IL-D4, IL-D5 (a); the mock floor)", () =
     expect(list.observation).toEqual({ bootId: BOOT, generation: 7 });
     expect(daemon.terminals.staleCells()).toEqual([]);
     expect(healthOf(await rpc.call("terminal.roster", {}))).toEqual([[CLAUDE, "live"]]);
+  });
+});
+
+/** The fixtures' two cells as the floor's routes name them: each keyed and
+ * serving its doors, so a door that mints for a listed session mints. A mint
+ * dials nothing, so the sockets are paper. */
+function fixtureRoutes(): TerminalRouteSnapshot {
+  const row = (
+    cell: typeof CELL_1,
+    workloadClass: "interactive" | "agent",
+    grantKey: string,
+    port: number,
+  ) => ({
+    ...cell,
+    pid: 4000 + cell.cellInstanceId,
+    endpoints: {
+      controlSocket: `/mock/native/run/termctl.${cell.cellInstanceId}.sock`,
+      frameSocket: `/mock/native/run/termframe.${cell.cellInstanceId}.sock`,
+      authToken: `cell-${cell.cellInstanceId}-token`,
+    },
+    tokenGeneration: 1,
+    workloadClass,
+    role: "class" as const,
+    grantKey,
+    grantKeyGeneration: 1,
+    doors: {
+      controlUrl: `ws://127.0.0.1:${port}/control`,
+      framesUrl: `ws://127.0.0.1:${port}/frames`,
+    },
+  });
+  return {
+    revision: 3,
+    cells: [
+      row(CELL_1, "interactive", "5e".repeat(32), 49171),
+      row(CELL_2, "agent", "a1".repeat(32), 49172),
+    ],
+  };
+}
+
+/** The three doors that need a listed session, each asked for `sessionId`. */
+function doorCalls(sessionId: string): Array<[string, Record<string, unknown>]> {
+  return [
+    ["terminal.get", { sessionId }],
+    ["terminal.openTicket", { sessionId }],
+    ["terminal.renewAttach", { sessionId, expectGeneration: 0, requestId: `renew-${sessionId}` }],
+  ];
+}
+
+describe("the doors that need a listed session (IL-D5 (a); the mock floor)", () => {
+  it("an unlisted session while a cell is stale is not known yet: get, openTicket and renewAttach refuse it retryably", async () => {
+    const { rpc } = await daemonOn(fixture("observed-state.stale-cell.json"), {}, fixtureRoutes());
+    for (const [method, params] of doorCalls("unlisted-session")) {
+      const err = await rpc.callErr(method, params);
+      expect(
+        { kind: err.data?.kind, retryable: err.data?.retryable, details: err.data?.details },
+        `${method}: every stale cell, in the EL9 fixture's words — never NOT_FOUND`,
+      ).toEqual(fixture("error-data.terminal-inventory-stale.json"));
+      expect(TerminalInventoryStaleDetails.safeParse(err.data?.details).success, method).toBe(true);
+    }
+  });
+
+  it("a listed session is answered and minted as before, its cell stale or not", async () => {
+    const { rpc } = await daemonOn(fixture("observed-state.stale-cell.json"), {}, fixtureRoutes());
+    const rows = fixture("observed-state.stale-cell.json")["terminals"] as unknown[];
+    expect(
+      await rpc.call("terminal.get", { sessionId: CLAUDE }),
+      "cell 2 is stale, and its row is still the row",
+    ).toEqual(rows[1]);
+    expect(await rpc.call("terminal.get", { sessionId: ZSH })).toEqual(rows[0]);
+
+    for (const [sessionId, cell] of [
+      [CLAUDE, CELL_2],
+      [ZSH, CELL_1],
+    ] as const) {
+      const ticket = TerminalOpenTicketResult.parse(
+        await rpc.call("terminal.openTicket", { sessionId }),
+      );
+      expect(ticket.route.cellBootId, "minted from the session's own cell").toBe(cell.cellBootId);
+      expect(ticket.attachGrant.claims.grantGeneration).toBe(1);
+      const renewed = TerminalRenewAttachResult.parse(
+        await rpc.call("terminal.renewAttach", {
+          sessionId,
+          expectGeneration: 1,
+          requestId: `renew-${sessionId}`,
+        }),
+      );
+      expect(renewed.attachGrant.claims.grantGeneration).toBe(2);
+    }
+  });
+
+  it("with every cell fresh, and on a floor that does not judge, an unlisted session is no such terminal, as before", async () => {
+    for (const floor of [freshFloor(), fixture("observed-state.valid.json")]) {
+      const { rpc } = await daemonOn(floor, {}, fixtureRoutes());
+      for (const [method, params] of doorCalls("unlisted-session")) {
+        const err = await rpc.callErr(method, params);
+        expect(err.data?.kind, method).toBe("NOT_FOUND");
+        expect(err.data?.retryable, method).toBe(false);
+      }
+    }
+  });
+
+  it("held unresponsive past the bound, the refusal is WG-D4's {native, unresponsive}; answering again, no such terminal", async () => {
+    const { mock, daemon, rpc } = await daemonOn(
+      freshFloor(),
+      { terminalInventoryTimings: { staleMs: 300, sampleMs: 25 } },
+      fixtureRoutes(),
+    );
+    mock.silentMethods.add("native.lifecycle.ping"); // the control path stops answering
+    await until(() => daemon.health().nativeLink.state === "unresponsive", 5_000, "held");
+    await until(() => daemon.terminals.staleCells().length === 2, 5_000, "past the bound");
+
+    for (const [method, params] of doorCalls("unlisted-session")) {
+      const err = await rpc.callErr(method, params);
+      expect(err.data?.kind, method).toBe("UNAVAILABLE");
+      expect(err.data?.retryable, method).toBe(true);
+      expect(err.data?.details, `${method}: the worse and truer story wins`).toMatchObject({
+        service: "native",
+        state: "unresponsive",
+      });
+    }
+    expect(
+      await rpc.call("terminal.get", { sessionId: ZSH }),
+      "a listed session still reads",
+    ).toMatchObject({ sessionId: ZSH });
+
+    mock.silentMethods.delete("native.lifecycle.ping");
+    await until(() => daemon.health().nativeLink.state === "up", 5_000, "answering again");
+    await until(() => daemon.terminals.staleCells().length === 0, 5_000, "the stream again");
+    const gone = await rpc.callErr("terminal.get", { sessionId: "unlisted-session" });
+    expect(gone.data?.kind).toBe("NOT_FOUND");
+    expect(gone.data?.retryable).toBe(false);
   });
 });

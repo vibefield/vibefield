@@ -4144,6 +4144,23 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         throw new RpcCallError("PRECONDITION_FAILED", "expected { sessionId: string }", false);
       return parsed.data.sessionId;
     };
+    // IL-D5 (a) (`draft/thinking-inventory-latency.md` §5) — the row a door
+    // that needs a LISTED session acts on. A session the inventory does not
+    // list, while any cell's inventory is older than the bound, is not known
+    // yet rather than gone: it may live in that cell, listed by an answer
+    // fieldd has not seen, and an agent record names no cell to rule one out.
+    // Such a door refuses it retryably (`staleRefusal`: every stale cell, or
+    // WG-D4's held floor) where it would say "no such terminal". A listed
+    // session is answered as before, stale cell or not: a ticket's cell refuses
+    // a session it no longer holds.
+    const requireListed = (sessionId: string, operation: string) => {
+      const info = terminals.get(sessionId);
+      if (info !== undefined) return info;
+      throw (
+        terminals.staleRefusal(sessionId, operation) ??
+        new RpcCallError("NOT_FOUND", `no such terminal: ${sessionId}`, false)
+      );
+    };
     // GT-5b: `list` REFUSES (UNAVAILABLE `unobserved`) until the first observed
     // snapshot applies rather than answering an empty floor it has not looked
     // at, and carries the observation it IS answering from — see the service.
@@ -4161,12 +4178,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       "terminal.sessions",
       async (): Promise<TerminalRuntimeSessionsResult> => await terminals.runtimeSessions(),
     );
-    api.register("terminal.get", (_ctx, params) => {
-      const sessionId = requireSessionId(params);
-      const info = terminals.get(sessionId);
-      if (!info) throw new RpcCallError("NOT_FOUND", `no such terminal: ${sessionId}`, false);
-      return info;
-    });
+    api.register("terminal.get", (_ctx, params) =>
+      requireListed(requireSessionId(params), "terminal.get"),
+    );
     // D6: every mint is an audited grant, even while the credential inside is
     // the shared native service token (per-client tokens are the named
     // ghosttea upgrade).
@@ -4183,8 +4197,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // the agent births.
     api.register("terminal.openTicket", async (ctx, params) => {
       const sessionId = requireSessionId(params);
-      if (terminals.get(sessionId) === undefined)
-        throw new RpcCallError("NOT_FOUND", `no such terminal: ${sessionId}`, false);
+      requireListed(sessionId, "terminal.openTicket");
       return await audit.required(
         ctx,
         { action: "terminal.ticket.mint", target: { kind: "terminal", id: sessionId } },
@@ -4207,8 +4220,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           "malformed terminal.renewAttach params",
           false,
         );
-      if (terminals.get(parsed.data.sessionId) === undefined)
-        throw new RpcCallError("NOT_FOUND", `no such terminal: ${parsed.data.sessionId}`, false);
+      requireListed(parsed.data.sessionId, "terminal.renewAttach");
       return await audit.required(
         ctx,
         {
