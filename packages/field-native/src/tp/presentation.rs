@@ -564,6 +564,7 @@ mod tests {
                         leg_generation: 1,
                         out: out.clone(),
                         bulk_credit: None,
+                        geometry_events: false,
                     },
                     session: session.clone(),
                     hub: hub.clone(),

@@ -524,6 +524,55 @@ pub struct GeometryRefused {
     pub geometry_revision: Option<u64>,
 }
 
+/// Contracts `GeometryHolderFace` (item 42, 2026-10-19) — who a holder IS, as a
+/// person reads it: the device kind, its name, its OS. fieldd mints it into the
+/// attach grant's claims; the cell never composes one — it reads it with the
+/// claims (`grant.rs`, which refuses a nameless face as the contract does) and
+/// ECHOES it in `GeometryState`. Tolerant reader: `kind` and `os` are open
+/// strings, so a device kind newer than this cell passes through as text.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GeometryHolderFace {
+    pub kind: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os: Option<String>,
+}
+
+/// Contracts `GeometryStateHolder` — `GeometryHolder` plus the face from the
+/// attach claims of the activation whose view holds the seat. A sibling of
+/// `GeometryHolder`, never a widening of it: `GeometryCommitted` and
+/// `GeometryRefused` keep their pinned shape. `face` is OMITTED when the grant
+/// carried none (a pre-item-42 mint), never `null`.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GeometryStateHolder {
+    pub client_id: String,
+    pub view_id: String,
+    pub holder_generation: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub face: Option<GeometryHolderFace>,
+}
+
+/// Contracts `GeometryState` (cell → client, CONTROL leg; item 42, 2026-10-19)
+/// — the seat as it now is, after every change of its holder or committed size,
+/// to the control leg of every activation of the session that negotiated
+/// `geometry-events`, and once to such a leg when an attach puts an activation
+/// of the session on it (`ActivationTable::seat_announcements`). EMIT-only, like
+/// `GeometryCommitted`. `holder: None` serializes as `null` — an EMPTY seat; the
+/// contract's field is nullable, not optional, so absence would be a different
+/// (malformed) message. `cols`/`rows` are the PTY's COMMITTED size, which a
+/// release does not undo.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GeometryState {
+    pub session_id: String,
+    pub holder: Option<GeometryStateHolder>,
+    pub geometry_revision: u64,
+    pub cols: u16,
+    pub rows: u16,
+}
+
 /// Contracts `SendInput` (client → cell, CONTROL leg; §5.4, TP-S3-input) — the
 /// terminal-input verb. The leading fields are the activation triple plus the
 /// monotonic `input_sequence` fence; `op` mirrors ghosttea's input serde so it
@@ -658,15 +707,20 @@ pub fn decode_envelope(bytes: &[u8]) -> Option<(Value, &[u8])> {
 }
 
 /// The wire capabilities this cell speaks. Of the TP-D25 profile it speaks
-/// `session-events` (TP-S3f/G24: the cell → client `SessionEvent` verb, gated
-/// on the negotiation because an un-negotiated client closes its leg on any
-/// unknown tag) and none of the other three (`resume`, `snapshot-demand`,
-/// `profiling-envelope`) yet. A client's unknown strings are ignored
-/// (tolerant reader); the echoed intersection is the negotiation.
-pub const CELL_CAPABILITIES: &[&str] = &["session-events"];
+/// `session-events` (TP-S3f/G24: the cell → client `SessionEvent` verb) and,
+/// since item 42 (2026-10-19), `geometry-events` (the cell → client
+/// `GeometryState` verb) — both gated on the negotiation because an
+/// un-negotiated client closes its leg on any unknown tag — and none of the
+/// other three (`resume`, `snapshot-demand`, `profiling-envelope`) yet. A
+/// client's unknown strings are ignored (tolerant reader); the echoed
+/// intersection is the negotiation.
+pub const CELL_CAPABILITIES: &[&str] = &[SESSION_EVENTS_CAPABILITY, GEOMETRY_EVENTS_CAPABILITY];
 
 /// The negotiated `session-events` capability string, spelled once.
 pub const SESSION_EVENTS_CAPABILITY: &str = "session-events";
+
+/// The negotiated `geometry-events` capability string, spelled once (item 42).
+pub const GEOMETRY_EVENTS_CAPABILITY: &str = "geometry-events";
 
 pub fn capability_intersection(client: &[String]) -> Vec<String> {
     client
@@ -870,14 +924,77 @@ mod tests {
     }
 
     #[test]
-    fn the_cell_negotiates_session_events_and_nothing_else() {
+    fn the_cell_negotiates_session_and_geometry_events_and_nothing_else() {
+        // the intersection keeps the CLIENT's order; unknown strings drop out
         let negotiated = capability_intersection(&[
             "resume".to_string(),
+            "geometry-events".to_string(),
             "session-events".to_string(),
             "made-up".to_string(),
         ]);
-        assert_eq!(negotiated, vec![SESSION_EVENTS_CAPABILITY.to_string()]);
+        assert_eq!(
+            negotiated,
+            vec![
+                GEOMETRY_EVENTS_CAPABILITY.to_string(),
+                SESSION_EVENTS_CAPABILITY.to_string()
+            ]
+        );
+        // item 42 — each is negotiated on its own: a pre-item-42 client that
+        // asks for session-events alone gets no GeometryState
+        assert_eq!(
+            capability_intersection(&["session-events".to_string()]),
+            vec![SESSION_EVENTS_CAPABILITY.to_string()]
+        );
         assert!(capability_intersection(&["resume".to_string()]).is_empty());
+    }
+
+    /// item 42 — the cell EMITS `GeometryState`, so the drift guard runs in the
+    /// emit direction (as `SessionEvent`'s does): the tagged form the control
+    /// leg carries is the contracts' golden; an empty seat is `holder: null`,
+    /// never an omitted key (the field is nullable, not optional); a holder
+    /// whose grant carried no face, and a face with no OS, OMIT those keys,
+    /// never null them. The held/empty goldens' parity is
+    /// `tests/fixture_parity.rs`'s.
+    #[test]
+    fn geometry_state_serializes_to_the_contracts_fixtures() {
+        let mut state = GeometryState {
+            session_id: "s1".into(),
+            holder: Some(GeometryStateHolder {
+                client_id: "client-02".into(),
+                view_id: "view-02".into(),
+                holder_generation: 3,
+                face: Some(GeometryHolderFace {
+                    kind: "peer-window".into(),
+                    name: "Studio".into(),
+                    os: None,
+                }),
+            }),
+            geometry_revision: 6,
+            cols: 100,
+            rows: 28,
+        };
+        let on_wire: Value = serde_json::from_str(&tagged("GeometryState", &state)).unwrap();
+        assert_eq!(on_wire, fixture("tp-tagged-message.geometry-state.json"));
+
+        // no face: the key is absent, not null
+        state.holder.as_mut().unwrap().face = None;
+        let faceless = serde_json::to_value(&state).unwrap();
+        assert!(faceless["holder"].get("face").is_none(), "{faceless}");
+
+        // an empty seat: `holder` is present AND null
+        state.holder = None;
+        let empty = serde_json::to_value(&state).unwrap();
+        assert!(empty.get("holder").is_some_and(Value::is_null), "{empty}");
+
+        // tolerant reader: a kind and an OS this cell never heard of pass as text
+        let newer: GeometryHolderFace = serde_json::from_value(serde_json::json!({
+            "kind": "watch", "name": "Wrist", "os": "watchos", "since": 2027,
+        }))
+        .unwrap();
+        assert_eq!(
+            (newer.kind.as_str(), newer.os.as_deref()),
+            ("watch", Some("watchos"))
+        );
     }
 
     #[test]

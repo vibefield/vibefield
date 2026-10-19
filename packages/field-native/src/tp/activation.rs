@@ -18,9 +18,10 @@ use super::grant::{AttachClaims, AttachRight};
 use super::wire::{
     tagged, AttachControlLeg, AttachFramesLeg, AttachRefused, CellActivationStatus, ClaimGeometry,
     ControlLegAttached, DeclareDemand, DemandAccepted, FramesAttachOutcome, FramesLegAttached,
-    GeometryCommitted, GeometryHolder, GeometryRefused, LeaseDimension, ReceiverCapacities,
-    ReleaseGeometry, SceneApplied, SceneContentStamp, SceneEpoch, SendInput, SourceDemandMode,
-    TransferGeometry, TransportCredit, TrfIdentity, JSON_MAX_SAFE_INTEGER,
+    GeometryCommitted, GeometryHolder, GeometryHolderFace, GeometryRefused, GeometryState,
+    GeometryStateHolder, LeaseDimension, ReceiverCapacities, ReleaseGeometry, SceneApplied,
+    SceneContentStamp, SceneEpoch, SendInput, SourceDemandMode, TransferGeometry, TransportCredit,
+    TrfIdentity, JSON_MAX_SAFE_INTEGER,
 };
 use crate::registries::terminal_pipeline as tp;
 use std::collections::HashMap;
@@ -68,12 +69,22 @@ pub enum UnitClass {
 /// worth before enqueuing it and the writer returns them as it writes. `None` on
 /// a control leg (it has no bulk lane). The semaphore is CLOSED when the writer
 /// exits, so a pump blocked acquiring permits on a dead socket ends promptly.
+///
+/// `geometry_events` (item 42, 2026-10-19): this leg's hello negotiated the
+/// `geometry-events` capability, so the cell may send it `GeometryState` — set
+/// once at acceptance, always false on a frames leg. It lives on the LEG, not
+/// on the activation, because it is a fact of one hello: an activation's
+/// control leg can be re-pointed at a newer leg of its set (the renewal path of
+/// `attach_control`), and that leg may have negotiated differently. Carried by
+/// the `LegRef` the announcement would actually ride, the flag can never
+/// describe a socket that is gone, and there is no second copy to keep in step.
 #[derive(Debug, Clone)]
 pub struct LegRef {
     pub connection_id: u64,
     pub leg_generation: u64,
     pub out: UnboundedSender<Outbound>,
     pub bulk_credit: Option<Arc<Semaphore>>,
+    pub geometry_events: bool,
 }
 
 impl LegRef {
@@ -117,6 +128,10 @@ pub struct Activation {
     pub grant_generation: u64,
     pub grant_expires_at_ms: u64,
     pub lease_epoch: u64,
+    /// item 42 — the `face` of the newest attach grant accepted (a renewal
+    /// re-reads it with the rights), echoed in `GeometryState` while this
+    /// activation's view holds the seat. None for a grant minted without one.
+    pub face: Option<GeometryHolderFace>,
     pub control: LegRef,
     pub frames: Option<LegRef>,
     pub created_at: Instant,
@@ -218,6 +233,13 @@ pub enum Effect {
 // and a standalone release live here; a released seat leaves ghosttea's
 // controller inert until the next claim overwrites it (the door is the only
 // path to a resize, and it gates every one on this lease).
+//
+// item 42 (2026-10-19) — the lease is also the seat's ANNOUNCER: every change
+// of its holder or of its committed size, and every attach that puts an
+// activation of the session on a `geometry-events` leg, yields a
+// `GeometryState` for those legs (`seat_announcements`, `seat_state_to`).
+// Before it the cell told only the caller of a verb, and an emptied seat no
+// one, so the pane another device was sizing could not say who drove it.
 
 /// The geometry seat for one session.
 #[derive(Debug, Default)]
@@ -225,8 +247,21 @@ pub struct GeometryLease {
     holder: Option<HolderRecord>,
     revision: u64,
     next_generation: u64,
+    /// item 42 — the PTY's last COMMITTED size, `(cols, rows)`: the size the
+    /// engine reported for the newest claim or resize that ran, which is the
+    /// size every pane of the session is drawing. It belongs to the SEAT, not
+    /// to a holder, because a release resizes nothing — an empty seat still
+    /// carries it. None until the first commit (a never-claimed session has
+    /// nothing to announce: its PTY is at its spawn size and no pane sized it).
+    committed: Option<(u16, u16)>,
 }
 
+/// The seat's holder. Its size is the lease's (`GeometryLease::committed`) and
+/// its face is its activation's (`Activation::face`, read when the seat is
+/// announced): a holder record never outlives its activation — `invalidate`
+/// releases the seat before the activation leaves the table — so the face is
+/// always the one the newest accepted grant carried, never a copy taken at the
+/// commit that a renewal could leave behind.
 #[derive(Debug, Clone)]
 struct HolderRecord {
     client_id: String,
@@ -241,8 +276,6 @@ struct HolderRecord {
     activation_id: String,
     control_epoch: u64,
     resize_sequence: u64,
-    cols: u16,
-    rows: u16,
 }
 
 impl HolderRecord {
@@ -251,6 +284,16 @@ impl HolderRecord {
             client_id: self.client_id.clone(),
             view_id: self.view_id.clone(),
             holder_generation: self.holder_generation,
+        }
+    }
+
+    /// The holder as `GeometryState` names it: the wire identity plus `face`.
+    fn announced(&self, face: Option<GeometryHolderFace>) -> GeometryStateHolder {
+        GeometryStateHolder {
+            client_id: self.client_id.clone(),
+            view_id: self.view_id.clone(),
+            holder_generation: self.holder_generation,
+            face,
         }
     }
 }
@@ -307,6 +350,17 @@ pub enum GeometryOutcome {
     Resized { cols: u16, rows: u16 },
     /// the engine refused (stale attachment epoch, view gone, read-only view).
     EngineRefused,
+}
+
+impl GeometryOutcome {
+    /// The size the engine COMMITTED on the PTY, if it committed one (item 42:
+    /// the seat's announced size is the engine's, whatever the lease decides).
+    fn committed_size(&self) -> Option<(u16, u16)> {
+        match *self {
+            Self::Claimed { cols, rows, .. } | Self::Resized { cols, rows } => Some((cols, rows)),
+            Self::EngineRefused => None,
+        }
+    }
 }
 
 // --- Session input (S3-input) ---------------------------------------------
@@ -837,12 +891,18 @@ impl ActivationTable {
     /// revision must match, and the destination must hold a presenting,
     /// geometry-capable view. So a take is exactly one CAS and one committed
     /// resize, and a stale one is refused with the holder and revision a runtime
-    /// needs to try once more (the cell announces a new holder to the CALLER
-    /// only — `geometry_finalize` — so a displaced holder learns it from a
-    /// refusal like these, never from a push). The CAS holds at the ENGINE too
-    /// (DS-4d): the door runs this precheck, the engine claim and the finalize
-    /// inside the session's gate, so of two takes at once the second prechecks
-    /// against the first's commit.
+    /// needs to try once more. The CAS holds at the ENGINE too (DS-4d): the door
+    /// runs this precheck, the engine claim and the finalize inside the
+    /// session's gate, so of two takes at once the second prechecks against the
+    /// first's commit.
+    ///
+    /// Corrected 2026-10-19 (item 42): this said the cell announces a new holder
+    /// to the CALLER only, so a displaced holder learns it from a refusal like
+    /// these, never from a push. That was true until item 42; now
+    /// `geometry_finalize` also sends `GeometryState` to the control leg of
+    /// every activation of the session that negotiated `geometry-events`, the
+    /// displaced holder's included, and only a client that did not negotiate
+    /// still learns the seat from a refusal.
     pub fn transfer_geometry(
         &mut self,
         leg: &LegRef,
@@ -974,6 +1034,22 @@ impl ActivationTable {
     /// already displaced whoever held the seat (and a resize's holder IS the
     /// destination), so the seat is emptied — claimable — and the caller is
     /// refused `DESTINATION_INELIGIBLE` with the revision and no holder.
+    ///
+    /// item 42 (2026-10-19) — and the seat is ANNOUNCED. An engine op that
+    /// returned a claim or a resize committed that size on the PTY whatever the
+    /// lease decides below, so the size is recorded first
+    /// (`GeometryLease::committed`); then, if the seat as `GeometryState`
+    /// carries it moved — its revision (every holder change and every commit
+    /// moves it) or its committed size — every `geometry-events` control leg of
+    /// the session hears it, AFTER the caller's own reply. Two paths move the
+    /// size at an UNCHANGED revision, and item 42 keeps DS-4d's revision
+    /// semantics there as they stand: `DESTINATION_INELIGIBLE` on a seat that
+    /// was already empty (no holder to take, so no revision step), and a
+    /// commit that landed after an auto-release emptied the seat under the
+    /// verb (refused `STALE_REVISION`). Their announcement carries the new size
+    /// at the revision a receiver already holds, which is why the receiver's
+    /// rule replaces its state on an EQUAL revision and ignores only an older
+    /// one.
     pub fn geometry_finalize(
         &mut self,
         leg: &LegRef,
@@ -982,7 +1058,30 @@ impl ActivationTable {
         now_ms: u64,
     ) -> Vec<Effect> {
         let destination_live = self.destination_live(&proceed, now_ms);
-        let lease = self.geometry.entry(proceed.session_id).or_default();
+        let session_id = proceed.session_id.clone();
+        let lease = self.geometry.entry(session_id.clone()).or_default();
+        let announced_before = (lease.revision, lease.committed);
+        if let Some(size) = outcome.committed_size() {
+            lease.committed = Some(size);
+        }
+        let mut effects = Self::commit_lease(lease, leg, proceed, outcome, destination_live);
+        // item 42 — the announcement follows the reply. An unchanged (revision,
+        // size) pair is no change: a refusal that moved nothing says nothing.
+        if (lease.revision, lease.committed) != announced_before {
+            effects.extend(self.seat_announcements(&session_id));
+        }
+        effects
+    }
+
+    /// The lease half of `geometry_finalize` — commit the holder, or refuse —
+    /// answering the CALLER on `leg`; every DS-4d rule above lives here.
+    fn commit_lease(
+        lease: &mut GeometryLease,
+        leg: &LegRef,
+        proceed: GeometryProceed,
+        outcome: GeometryOutcome,
+        destination_live: bool,
+    ) -> Vec<Effect> {
         if lease.revision != proceed.base_revision {
             return Self::geometry_refuse(
                 leg,
@@ -1019,8 +1118,6 @@ impl ActivationTable {
                     activation_id: proceed.ghosttea_view_id,
                     control_epoch,
                     resize_sequence: 0,
-                    cols,
-                    rows,
                 };
                 let wire = record.wire();
                 lease.holder = Some(record);
@@ -1048,8 +1145,6 @@ impl ActivationTable {
                     );
                 };
                 h.resize_sequence += 1;
-                h.cols = cols;
-                h.rows = rows;
                 let wire = h.wire();
                 lease.revision += 1;
                 vec![Effect::Send(
@@ -1088,6 +1183,9 @@ impl ActivationTable {
     /// `ReleaseGeometry` — the holder yields the seat. No engine call (ghosttea
     /// 0.10.1 has no clear-control-keep-view; its controller stays inert until
     /// the next claim overwrites it, and every resize is gated on this lease).
+    /// A release has no reply of its own; since item 42 (2026-10-19) the empty
+    /// seat is announced to every `geometry-events` leg of the session, the
+    /// releaser's included, at the size the PTY was left at.
     pub fn release_geometry(&mut self, leg: &LegRef, msg: ReleaseGeometry) -> Vec<Effect> {
         let ok_caller = self.by_id.get(&msg.activation_id).is_some_and(|a| {
             a.control.connection_id == leg.connection_id && a.session_id == msg.session_id
@@ -1113,25 +1211,91 @@ impl ActivationTable {
         }
         lease.holder = None;
         lease.revision += 1;
-        Vec::new()
+        self.seat_announcements(&msg.session_id)
     }
 
     /// Auto-release: if `activation_id` holds the seat for `session_id`, clear it
     /// (view detach, leg death, grant expiry, liveness lapse — the four triggers).
     /// The view detach itself clears ghosttea's controller.
-    fn release_geometry_if_held(&mut self, session_id: &str, activation_id: &str) -> bool {
-        if let Some(lease) = self.geometry.get_mut(session_id) {
-            if lease
-                .holder
-                .as_ref()
-                .is_some_and(|h| h.activation_id == activation_id)
-            {
-                lease.holder = None;
-                lease.revision += 1;
-                return true;
-            }
+    ///
+    /// Returns the empty seat's announcement (item 42, 2026-10-19) — nothing when
+    /// the activation held no seat — and every caller hands it to the door with
+    /// its own effects. An auto-release is a seat change like any other; until
+    /// item 42 it was the silent one, and the pane it left sized could not say
+    /// that nobody drove it any more.
+    fn release_geometry_if_held(&mut self, session_id: &str, activation_id: &str) -> Vec<Effect> {
+        let Some(lease) = self.geometry.get_mut(session_id) else {
+            return Vec::new();
+        };
+        if !lease
+            .holder
+            .as_ref()
+            .is_some_and(|h| h.activation_id == activation_id)
+        {
+            return Vec::new();
         }
-        false
+        lease.holder = None;
+        lease.revision += 1;
+        self.seat_announcements(session_id)
+    }
+
+    /// item 42 (2026-10-19) — the session's seat as `GeometryState` carries it,
+    /// tagged for the control leg; None while no size has ever been committed
+    /// (the PTY is at its spawn size and no pane sized it — nothing to say). The
+    /// holder's face is its activation's (`HolderRecord`'s note).
+    fn seat_state_text(&self, session_id: &str) -> Option<String> {
+        let lease = self.geometry.get(session_id)?;
+        let (cols, rows) = lease.committed?;
+        let holder = lease.holder.as_ref().map(|h| {
+            let face = self
+                .by_id
+                .get(&h.activation_id)
+                .and_then(|a| a.face.clone());
+            h.announced(face)
+        });
+        Some(tagged(
+            "GeometryState",
+            &GeometryState {
+                session_id: session_id.to_string(),
+                holder,
+                geometry_revision: lease.revision,
+                cols,
+                rows,
+            },
+        ))
+    }
+
+    /// item 42 — THE announcement: the session's `GeometryState` to the control
+    /// leg of every activation of the session whose hello negotiated
+    /// `geometry-events`, the caller's included. A caller's reply is already
+    /// ahead of it in the effects it returns, and the door performs effects in
+    /// order onto one writer channel per leg, so the reply arrives first.
+    /// Activation-scoped: a leg with no activation of the session hears nothing
+    /// of its seat, and an un-negotiated leg never hears it at all (ghosttea-react
+    /// and the kit close a leg on an unknown tag).
+    fn seat_announcements(&self, session_id: &str) -> Vec<Effect> {
+        let Some(text) = self.seat_state_text(session_id) else {
+            return Vec::new();
+        };
+        self.by_id
+            .values()
+            .filter(|a| a.session_id == session_id && a.control.geometry_events)
+            .map(|a| Effect::Send(a.control.clone(), text.clone()))
+            .collect()
+    }
+
+    /// item 42 — the seat told ONCE to a leg an attach just put an activation of
+    /// the session on (ruled with item 42, 2026-10-19: a pane that mounts while
+    /// another device drives says so at once, not at the next change — and a
+    /// refusal's `currentHolder` carries no face). The caller places it right
+    /// after the attach's `ControlLegAttached`. Nothing when the leg did not
+    /// negotiate `geometry-events`, or no size has been committed yet.
+    fn seat_state_to(&self, session_id: &str, leg: &LegRef) -> Option<Effect> {
+        if !leg.geometry_events {
+            return None;
+        }
+        self.seat_state_text(session_id)
+            .map(|text| Effect::Send(leg.clone(), text))
     }
 
     /// `SendInput` (§5.4, TP-S3-input) — the cell-side gate for one input op.
@@ -1181,6 +1345,13 @@ impl ActivationTable {
     /// `AttachControlLeg` after the grant VERIFIED and the attach high-water
     /// ADMITTED it (the door does both first — they need the verifier and the
     /// transport ledger). Returns the effects: one reply, maybe a view attach.
+    ///
+    /// item 42 (2026-10-19): an attach that puts an activation of the session
+    /// on a `geometry-events` leg — a new activation, a replacement, or an
+    /// activation moved onto a newer leg of its set — tells that leg the seat
+    /// right after the reply (`seat_state_to`). A retry or a renewal on the leg
+    /// the activation already rides tells it nothing new: that leg has heard
+    /// every change since the activation first rode it.
     pub fn attach_control(&mut self, input: AttachControlInput<'_>) -> Vec<Effect> {
         let AttachControlInput {
             now_ms,
@@ -1215,6 +1386,15 @@ impl ActivationTable {
         // An existing activation for {client, session}?
         if let Some(existing_id) = self.by_key.get(&key).cloned() {
             if existing_id == activation_id {
+                // item 42 — an attach that MOVES the activation onto a newer
+                // leg of its set puts it on a leg that has heard nothing of the
+                // seat. Read before the renewal below touches anything, so the
+                // leg is told the seat its reply answers.
+                let moved_to_leg = self
+                    .by_id
+                    .get(&existing_id)
+                    .filter(|a| a.control.connection_id != leg.connection_id)
+                    .and_then(|_| self.seat_state_to(&claims.session_id, leg));
                 // Idempotent retry — or a RENEWAL (a newer generation updates
                 // rights/expiry; a downgrade applies at once).
                 let a = self.by_id.get_mut(&existing_id).expect("indexed");
@@ -1234,6 +1414,9 @@ impl ActivationTable {
                     a.rights = claims.rights.clone();
                     a.grant_generation = claims.grant_generation;
                     a.grant_expires_at_ms = claims.expires_at;
+                    // item 42 — the face follows the newest grant, as the rights
+                    // do; the next announcement of a seat it holds carries it
+                    a.face = claims.face.clone();
                     if had_input && !a.has_right(AttachRight::Input) {
                         a.input = Input::Revoked("right-revoked");
                     } else if matches!(a.input, Input::Suspended("right-expired")) {
@@ -1261,12 +1444,13 @@ impl ActivationTable {
                         },
                     ),
                 ));
+                effects.extend(moved_to_leg);
                 if renewed {
                     Self::recompute_input(a, now_ms);
                     effects.push(Self::status_effect(a));
                 }
                 if dropped_geometry {
-                    self.release_geometry_if_held(&claims.session_id, &existing_id);
+                    effects.extend(self.release_geometry_if_held(&claims.session_id, &existing_id));
                 }
                 return effects;
             }
@@ -1304,6 +1488,7 @@ impl ActivationTable {
             grant_generation: claims.grant_generation,
             grant_expires_at_ms: claims.expires_at,
             lease_epoch: claims.lease_epoch.unwrap_or(0),
+            face: claims.face.clone(),
             control: leg.clone(),
             frames: None,
             created_at: Instant::now(),
@@ -1342,6 +1527,9 @@ impl ActivationTable {
         self.by_key.insert(key, activation_id.clone());
         self.by_id.insert(activation_id.clone(), activation);
         effects.push(Effect::Send(leg.clone(), reply));
+        // item 42 — the new activation's leg is told the seat as it stands (a
+        // replaced predecessor's hold was released above, and announced)
+        effects.extend(self.seat_state_to(&session_id, leg));
         if wants_view {
             effects.push(Effect::AttachView {
                 activation_id: activation_id.clone(),
@@ -1505,15 +1693,20 @@ impl ActivationTable {
         }]
     }
 
-    pub fn view_detached(&mut self, activation_id: &str) {
+    /// The door detached the ghosttea view for an activation. Returns the empty
+    /// seat's announcement when the view held the seat (item 42) — the door
+    /// performs it like any table effect; nothing when the activation held no
+    /// seat, or has already left the table (`invalidate` released it first).
+    pub fn view_detached(&mut self, activation_id: &str) -> Vec<Effect> {
         let session = self.by_id.get_mut(activation_id).map(|a| {
             a.view = None;
             a.session_id.clone()
         });
         // view detach ⇒ geometry revoke (one of the four auto-release triggers):
         // a demand-none that parked the view gives up the seat too.
-        if let Some(session_id) = session {
-            self.release_geometry_if_held(&session_id, activation_id);
+        match session {
+            Some(session_id) => self.release_geometry_if_held(&session_id, activation_id),
+            None => Vec::new(),
         }
     }
 
@@ -1716,8 +1909,10 @@ impl ActivationTable {
         // auto-release the geometry seat (connection death / grant expiry /
         // liveness lapse all funnel here); the DetachView below clears ghosttea's
         // controller. A replacement's new activation re-claims if it wants it.
-        self.release_geometry_if_held(&a.session_id, activation_id);
-        let mut effects = Vec::new();
+        // item 42: the empty seat is announced to the session's OTHER
+        // activations — this one has already left the table, and its own leg
+        // hears its revocation below instead.
+        let mut effects = self.release_geometry_if_held(&a.session_id, activation_id);
         a.presentation = Presentation::Revoked(reason);
         a.input = Input::Revoked(reason);
         a.status_sequence += 1;
@@ -1861,6 +2056,7 @@ mod tests {
                 leg_generation: 1,
                 out: tx,
                 bulk_credit: None,
+                geometry_events: false,
             },
             rx,
         )
@@ -1877,6 +2073,7 @@ mod tests {
             rights: rights.to_vec(),
             issued_at: 1_000,
             expires_at: 1_000 + 600_000,
+            face: None,
         }
     }
 
@@ -2507,6 +2704,7 @@ mod tests {
             rights: rights.to_vec(),
             issued_at: 1_000,
             expires_at: 1_000 + 600_000,
+            face: None,
         }
     }
 
@@ -3534,6 +3732,584 @@ mod tests {
             t.claim_geometry(&c, claim("win:3#1", "s1", "c1", "mc", 60, 20, 2), NOW),
             GeometryDecision::Proceed(_)
         ));
+    }
+
+    // --- item 42 — the seat announced --------------------------------------
+    // `GeometryState` to the control leg of every activation of the session that
+    // negotiated `geometry-events`: after every change of the holder or of the
+    // committed size, and once to a leg an attach puts an activation of the
+    // session on. These rows keep their legs' receivers (the rows above drop
+    // theirs), so a leg's silence is a verdict, not a closed channel.
+
+    const FULL: [AttachRight; 3] = [AttachRight::Read, AttachRight::Input, AttachRight::Geometry];
+
+    /// A control leg whose hello negotiated `geometry-events`.
+    fn negotiated(connection_id: u64) -> (LegRef, tokio::sync::mpsc::UnboundedReceiver<Outbound>) {
+        let (mut control, rx) = leg(connection_id);
+        control.geometry_events = true;
+        (control, rx)
+    }
+
+    fn face(kind: &str, name: &str) -> GeometryHolderFace {
+        GeometryHolderFace {
+            kind: kind.into(),
+            name: name.into(),
+            os: None,
+        }
+    }
+
+    /// Attach a live activation with every right on a leg the row KEEPS, its
+    /// grant carrying `face` and lapsing at `expires_at`; the door's view attach
+    /// is simulated. Returns the attach's own effects (its reply, and any seat
+    /// state the leg is told).
+    fn attach_on_until(
+        t: &mut ActivationTable,
+        control: &LegRef,
+        (client, session, activation_id): (&str, &str, &str),
+        face: Option<GeometryHolderFace>,
+        expires_at: u64,
+    ) -> Vec<Effect> {
+        let mut claims = claims_for(client, session, 1, &FULL);
+        claims.face = face;
+        claims.expires_at = expires_at;
+        let effects = t.attach_control(AttachControlInput {
+            now_ms: 1_000,
+            set: &set_for(client),
+            leg: control,
+            msg: control_msg(activation_id, None, true),
+            claims,
+            session_known: true,
+        });
+        t.view_attached(activation_id, activation_id, 7);
+        effects
+    }
+
+    /// `attach_on_until` with the fixture grant's ten-minute lifetime.
+    fn attach_on(
+        t: &mut ActivationTable,
+        control: &LegRef,
+        who: (&str, &str, &str),
+        face: Option<GeometryHolderFace>,
+    ) -> Vec<Effect> {
+        attach_on_until(t, control, who, face, 1_000 + 600_000)
+    }
+
+    /// Claim the EMPTY seat of s1 for an activation on its own leg and commit it
+    /// as the engine would, performing the reply and the announcements.
+    fn hold(
+        t: &mut ActivationTable,
+        control: &LegRef,
+        (client, activation_id, view): (&str, &str, &str),
+        (cols, rows): (u16, u16),
+        expect_revision: u64,
+    ) {
+        let p = proceed(t.claim_geometry(
+            control,
+            claim(
+                client,
+                "s1",
+                activation_id,
+                view,
+                cols,
+                rows,
+                expect_revision,
+            ),
+            NOW,
+        ));
+        assert!(
+            matches!(p.op, GeometryOp::Claim { .. }),
+            "hold claims an empty seat"
+        );
+        perform(t.geometry_finalize(
+            control,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 5,
+                cols,
+                rows,
+            },
+            NOW,
+        ));
+    }
+
+    /// The `GeometryState`s a leg heard, in order (every other text skipped).
+    fn seat_states(
+        rx: &mut tokio::sync::mpsc::UnboundedReceiver<Outbound>,
+    ) -> Vec<serde_json::Value> {
+        texts(rx)
+            .into_iter()
+            .filter(|m| m["type"] == "GeometryState")
+            .collect()
+    }
+
+    /// The empty seat of s1 as every negotiated leg must hear it.
+    fn empty_seat(revision: u64, (cols, rows): (u16, u16)) -> serde_json::Value {
+        serde_json::json!({
+            "type": "GeometryState",
+            "sessionId": "s1",
+            "holder": null,
+            "geometryRevision": revision,
+            "cols": cols,
+            "rows": rows,
+        })
+    }
+
+    /// A claim, and then a TAKE by another client, each announced to the control
+    /// leg of every activation of the session that negotiated `geometry-events`
+    /// — the caller's after its own reply, the displaced holder's included, with
+    /// the face from the attach claims of the activation now holding the seat —
+    /// and to no other: never an un-negotiated leg, never another session's.
+    #[test]
+    fn geometry_a_seat_change_is_announced_to_every_negotiated_leg_after_the_reply() {
+        let mut t = ActivationTable::new("cb");
+        let (a_leg, mut a_rx) = negotiated(1);
+        let (b_leg, mut b_rx) = negotiated(2);
+        let (c_leg, mut c_rx) = leg(3); // a pre-item-42 client: never negotiated
+        let (d_leg, mut d_rx) = negotiated(4); // negotiated, but attached to s2
+        let studio = Some(face("window", "Studio"));
+        let phone = Some(face("phone", "iPhone 16 Pro"));
+        perform(attach_on(&mut t, &a_leg, ("win:1#1", "s1", "a1"), studio));
+        perform(attach_on(
+            &mut t,
+            &b_leg,
+            ("tailnet:me#node-b", "s1", "b1"),
+            phone,
+        ));
+        perform(attach_on(&mut t, &c_leg, ("win:3#1", "s1", "c1"), None));
+        perform(attach_on(&mut t, &d_leg, ("win:4#1", "s2", "d1"), None));
+        // no pane ever sized s1: no attach was told a seat
+        for rx in [&mut a_rx, &mut b_rx, &mut c_rx, &mut d_rx] {
+            assert!(seat_states(rx).is_empty());
+        }
+
+        // the phone claims the empty seat at its own size
+        let p = proceed(t.claim_geometry(
+            &b_leg,
+            claim("tailnet:me#node-b", "s1", "b1", "mount-b", 46, 30, 0),
+            NOW,
+        ));
+        let effects = t.geometry_finalize(
+            &b_leg,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 5,
+                cols: 46,
+                rows: 30,
+            },
+            NOW,
+        );
+        // the reply leads; then exactly one state per negotiated leg of s1
+        let sent: Vec<(u64, serde_json::Value)> = effects
+            .iter()
+            .map(|e| match e {
+                Effect::Send(to, text) => (to.connection_id, serde_json::from_str(text).unwrap()),
+                other => panic!("a finalize only sends: {other:?}"),
+            })
+            .collect();
+        assert_eq!(sent[0].0, 2);
+        assert_eq!(sent[0].1["type"], "GeometryCommitted");
+        let mut told: Vec<u64> = sent[1..]
+            .iter()
+            .map(|(to, m)| {
+                assert_eq!(m["type"], "GeometryState", "{m}");
+                *to
+            })
+            .collect();
+        told.sort_unstable();
+        assert_eq!(
+            told,
+            vec![1, 2],
+            "A and B — never C (un-negotiated) or D (s2)"
+        );
+        perform(effects);
+        let b_heard = texts(&mut b_rx);
+        let kinds: Vec<&str> = b_heard
+            .iter()
+            .map(|m| m["type"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            kinds,
+            ["GeometryCommitted", "GeometryState"],
+            "the reply is never displaced"
+        );
+        let held = &b_heard[1];
+        assert_eq!(held["sessionId"], "s1");
+        assert_eq!(held["holder"]["clientId"], "tailnet:me#node-b");
+        assert_eq!(held["holder"]["viewId"], "mount-b");
+        assert_eq!(held["holder"]["holderGeneration"], 1);
+        assert_eq!(
+            held["holder"]["face"],
+            serde_json::json!({ "kind": "phone", "name": "iPhone 16 Pro" })
+        );
+        assert_eq!(held["geometryRevision"], 1);
+        assert_eq!(
+            (held["cols"].as_u64(), held["rows"].as_u64()),
+            (Some(46), Some(30))
+        );
+        assert_eq!(seat_states(&mut a_rx), vec![held.clone()]);
+        assert!(
+            texts(&mut c_rx).is_empty(),
+            "an un-negotiated leg never hears the verb"
+        );
+        assert!(
+            texts(&mut d_rx).is_empty(),
+            "another session's leg hears nothing of s1"
+        );
+
+        // A — focused — TAKES it: the displaced phone hears who took it, by face
+        let p = proceed(t.transfer_geometry(
+            &a_leg,
+            take(
+                "a1",
+                ("tailnet:me#node-b", "mount-b", 1),
+                ("win:1#1", "mount-a"),
+                1,
+                (120, 40),
+            ),
+            NOW,
+        ));
+        perform(t.geometry_finalize(
+            &a_leg,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 6,
+                cols: 120,
+                rows: 40,
+            },
+            NOW,
+        ));
+        let displaced = texts(&mut b_rx);
+        assert_eq!(displaced.len(), 1, "{displaced:?}");
+        let taken = &displaced[0];
+        assert_eq!(taken["type"], "GeometryState");
+        assert_eq!(taken["holder"]["clientId"], "win:1#1");
+        assert_eq!(taken["holder"]["holderGeneration"], 2);
+        assert_eq!(taken["holder"]["face"]["name"], "Studio");
+        assert_eq!(taken["geometryRevision"], 2);
+        assert_eq!(
+            (taken["cols"].as_u64(), taken["rows"].as_u64()),
+            (Some(120), Some(40))
+        );
+        let a_heard = texts(&mut a_rx);
+        assert_eq!(a_heard[0]["type"], "GeometryCommitted");
+        assert_eq!(&a_heard[1], taken);
+        assert!(texts(&mut c_rx).is_empty() && texts(&mut d_rx).is_empty());
+    }
+
+    /// The holder's own resize names the new size; then every way a seat EMPTIES
+    /// — an explicit release (which has no reply of its own), a view detach, a
+    /// control-leg loss — is announced as `holder: null` at the size the PTY was
+    /// left at (a release resizes nothing), one revision on.
+    #[test]
+    fn geometry_a_resize_and_every_release_are_announced_at_the_committed_size() {
+        let mut t = ActivationTable::new("cb");
+        let (a_leg, mut a_rx) = negotiated(1);
+        let (b_leg, mut b_rx) = negotiated(2);
+        perform(attach_on(&mut t, &a_leg, ("win:1#1", "s1", "a1"), None));
+        perform(attach_on(&mut t, &b_leg, ("win:2#1", "s1", "b1"), None));
+        hold(&mut t, &a_leg, ("win:1#1", "a1", "mount-a"), (100, 40), 0);
+        texts(&mut a_rx);
+        texts(&mut b_rx);
+
+        // the holder's own resize — a re-claim of its seat
+        let p = proceed(t.claim_geometry(
+            &a_leg,
+            claim("win:1#1", "s1", "a1", "mount-a", 132, 50, 1),
+            NOW,
+        ));
+        assert!(matches!(p.op, GeometryOp::Resize { .. }));
+        perform(t.geometry_finalize(
+            &a_leg,
+            p,
+            GeometryOutcome::Resized {
+                cols: 132,
+                rows: 50,
+            },
+            NOW,
+        ));
+        let resized = seat_states(&mut b_rx);
+        assert_eq!(resized.len(), 1);
+        assert_eq!(resized[0]["holder"]["clientId"], "win:1#1");
+        assert_eq!(
+            resized[0]["holder"]["holderGeneration"], 1,
+            "a resize keeps the holder"
+        );
+        assert!(
+            resized[0]["holder"].get("face").is_none(),
+            "a faceless grant: no face key"
+        );
+        assert_eq!(resized[0]["geometryRevision"], 2);
+        assert_eq!(
+            (resized[0]["cols"].as_u64(), resized[0]["rows"].as_u64()),
+            (Some(132), Some(50))
+        );
+        assert_eq!(seat_states(&mut a_rx), resized);
+
+        // (1) an explicit release: the releaser hears it too
+        perform(t.release_geometry(
+            &a_leg,
+            ReleaseGeometry {
+                session_id: "s1".into(),
+                activation_id: "a1".into(),
+                lease_epoch: 0,
+                holder: GeometryHolder {
+                    client_id: "win:1#1".into(),
+                    view_id: "mount-a".into(),
+                    holder_generation: 1,
+                },
+            },
+        ));
+        assert_eq!(seat_states(&mut a_rx), vec![empty_seat(3, (132, 50))]);
+        assert_eq!(seat_states(&mut b_rx), vec![empty_seat(3, (132, 50))]);
+
+        // (2) a view detach (a demand-none parked it): the parked activation's
+        // own leg hears it as well — the activation is still attached
+        hold(&mut t, &b_leg, ("win:2#1", "b1", "mount-b"), (80, 24), 3);
+        texts(&mut a_rx);
+        texts(&mut b_rx);
+        perform(t.view_detached("b1"));
+        assert_eq!(seat_states(&mut a_rx), vec![empty_seat(5, (80, 24))]);
+        assert_eq!(seat_states(&mut b_rx), vec![empty_seat(5, (80, 24))]);
+        // a view detach of an activation that holds nothing says nothing
+        assert!(t.view_detached("b1").is_empty());
+
+        // (3) the holder's control leg dies: the activation leaves the table and
+        // is told its revocation, never its seat; the others hear the empty seat
+        hold(&mut t, &a_leg, ("win:1#1", "a1", "mount-a"), (90, 30), 5);
+        texts(&mut a_rx);
+        texts(&mut b_rx);
+        perform(t.leg_closed(1));
+        assert!(seat_states(&mut a_rx).is_empty());
+        assert_eq!(seat_states(&mut b_rx), vec![empty_seat(7, (90, 30))]);
+    }
+
+    /// The two auto-releases a clock or a renewal drives: the expiry sweep (the
+    /// tick) on a holder whose grant lapsed, and a renewal that DROPS
+    /// `geometry`. A renewal on the leg the activation already rides is told no
+    /// seat of its own (it heard every change) — only the release it causes.
+    #[test]
+    fn geometry_a_lapsed_grant_and_a_renewal_dropping_geometry_announce_the_empty_seat() {
+        let mut t = ActivationTable::new("cb");
+        let (a_leg, mut a_rx) = negotiated(1);
+        let (b_leg, mut b_rx) = negotiated(2);
+        // A outlives the sweep below; B's grant lapses at 5_000
+        perform(attach_on_until(
+            &mut t,
+            &a_leg,
+            ("win:1#1", "s1", "a1"),
+            None,
+            900_000,
+        ));
+        perform(attach_on_until(
+            &mut t,
+            &b_leg,
+            ("win:2#1", "s1", "b1"),
+            None,
+            5_000,
+        ));
+        hold(&mut t, &b_leg, ("win:2#1", "b1", "mount-b"), (70, 20), 0);
+        texts(&mut a_rx);
+        texts(&mut b_rx);
+        perform(t.tick(5_000));
+        assert_eq!(seat_states(&mut a_rx), vec![empty_seat(2, (70, 20))]);
+        assert!(
+            seat_states(&mut b_rx).is_empty(),
+            "the lapsed activation left the table"
+        );
+
+        // A takes the empty seat; a renewal of A WITHOUT geometry revokes it
+        hold(&mut t, &a_leg, ("win:1#1", "a1", "mount-a"), (100, 40), 2);
+        texts(&mut a_rx);
+        let mut renewal = claims_for("win:1#1", "s1", 2, &[AttachRight::Read, AttachRight::Input]);
+        renewal.expires_at = 900_000;
+        perform(t.attach_control(AttachControlInput {
+            now_ms: 2_000,
+            set: &set_for("win:1#1"),
+            leg: &a_leg,
+            msg: control_msg("a1", None, true),
+            claims: renewal,
+            session_known: true,
+        }));
+        let heard = texts(&mut a_rx);
+        let kinds: Vec<&str> = heard.iter().map(|m| m["type"].as_str().unwrap()).collect();
+        assert_eq!(
+            kinds,
+            [
+                "ControlLegAttached",
+                "CellActivationStatus",
+                "GeometryState"
+            ]
+        );
+        assert_eq!(heard[2], empty_seat(4, (100, 40)));
+    }
+
+    /// A finalize that EMPTIES the seat is announced at the size the engine
+    /// committed: a take whose destination lapsed in flight (the holder is
+    /// displaced, nobody seated, one revision on), and the same on a seat that
+    /// was already empty — where DS-4d moves no revision (there is no holder to
+    /// take), so the new size arrives at the revision every leg already holds,
+    /// and the receiver's rule replaces on an EQUAL revision. A refusal that
+    /// moved nothing announces nothing.
+    #[test]
+    fn geometry_a_finalize_that_empties_the_seat_announces_the_engines_size() {
+        let mut t = ActivationTable::new("cb");
+        let (a_leg, mut a_rx) = negotiated(1);
+        let (b_leg, mut b_rx) = negotiated(2);
+        perform(attach_on(&mut t, &a_leg, ("win:1#1", "s1", "a1"), None));
+        perform(attach_on_until(
+            &mut t,
+            &b_leg,
+            ("tailnet:me#node-b", "s1", "b1"),
+            None,
+            5_000,
+        ));
+        hold(&mut t, &a_leg, ("win:1#1", "a1", "mount-a"), (100, 40), 0);
+        texts(&mut a_rx);
+        texts(&mut b_rx);
+
+        // (1) B's take — its grant lapses between the precheck and the finalize
+        let p = proceed(t.transfer_geometry(
+            &b_leg,
+            take(
+                "b1",
+                ("win:1#1", "mount-a", 1),
+                ("tailnet:me#node-b", "mount-b"),
+                1,
+                (46, 30),
+            ),
+            4_999,
+        ));
+        perform(t.geometry_finalize(
+            &b_leg,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 6,
+                cols: 46,
+                rows: 30,
+            },
+            5_000,
+        ));
+        let b_heard = texts(&mut b_rx);
+        assert_eq!(b_heard[0]["code"], "DESTINATION_INELIGIBLE");
+        assert_eq!(b_heard[1], empty_seat(2, (46, 30)));
+        assert_eq!(seat_states(&mut a_rx), vec![empty_seat(2, (46, 30))]);
+
+        // (2) A claims the EMPTY seat and its own grant lapses in flight: the
+        // engine resized the PTY, nothing was seated, and the revision stays 2
+        let p = proceed(t.claim_geometry(
+            &a_leg,
+            claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 2),
+            NOW,
+        ));
+        perform(t.geometry_finalize(
+            &a_leg,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 7,
+                cols: 100,
+                rows: 40,
+            },
+            1_000 + 600_000,
+        ));
+        let a_heard = texts(&mut a_rx);
+        assert_eq!(a_heard[0]["code"], "DESTINATION_INELIGIBLE");
+        assert_eq!(
+            a_heard[0]["geometryRevision"], 2,
+            "DS-4d: no holder taken, no step"
+        );
+        assert_eq!(
+            a_heard[1],
+            empty_seat(2, (100, 40)),
+            "the new size at the same revision"
+        );
+        assert_eq!(seat_states(&mut b_rx), vec![empty_seat(2, (100, 40))]);
+
+        // (3) a refusal that moved nothing — the engine refused — says nothing
+        let p = proceed(t.claim_geometry(
+            &a_leg,
+            claim("win:1#1", "s1", "a1", "mount-a", 90, 30, 2),
+            NOW,
+        ));
+        perform(t.geometry_finalize(&a_leg, p, GeometryOutcome::EngineRefused, NOW));
+        let kinds: Vec<serde_json::Value> = texts(&mut a_rx)
+            .into_iter()
+            .map(|m| m["type"].clone())
+            .collect();
+        assert_eq!(kinds, vec![serde_json::json!("GeometryRefused")]);
+        assert!(seat_states(&mut b_rx).is_empty());
+    }
+
+    /// The lead's on-attach ruling (item 42, 2026-10-19): a pane that mounts
+    /// while another device drives is told the seat at once — right after its
+    /// `ControlLegAttached`, the holder, its face, the committed size — while a
+    /// session no pane ever sized tells an attach nothing, an un-negotiated leg
+    /// hears nothing, a retry on the leg the activation already rides hears
+    /// nothing new, and an activation MOVED onto a newer leg of its set is told
+    /// the seat there.
+    #[test]
+    fn geometry_an_attach_onto_a_negotiated_leg_is_told_the_seat_once() {
+        let mut t = ActivationTable::new("cb");
+        let (p_leg, mut p_rx) = negotiated(1);
+        let phone = Some(face("phone", "iPhone 16 Pro"));
+        perform(attach_on(
+            &mut t,
+            &p_leg,
+            ("tailnet:me#node-p", "s1", "p1"),
+            phone,
+        ));
+        assert!(seat_states(&mut p_rx).is_empty(), "no pane ever sized s1");
+        hold(
+            &mut t,
+            &p_leg,
+            ("tailnet:me#node-p", "p1", "mount-p"),
+            (46, 30),
+            0,
+        );
+        texts(&mut p_rx);
+
+        // the desktop mounts while the phone drives
+        let (d_leg, mut d_rx) = negotiated(2);
+        perform(attach_on(&mut t, &d_leg, ("win:1#1", "s1", "d1"), None));
+        let heard = texts(&mut d_rx);
+        let kinds: Vec<&str> = heard.iter().map(|m| m["type"].as_str().unwrap()).collect();
+        assert_eq!(kinds, ["ControlLegAttached", "GeometryState"]);
+        assert_eq!(heard[1]["holder"]["clientId"], "tailnet:me#node-p");
+        assert_eq!(
+            heard[1]["holder"]["face"],
+            serde_json::json!({ "kind": "phone", "name": "iPhone 16 Pro" })
+        );
+        assert_eq!(heard[1]["geometryRevision"], 1);
+        assert_eq!(
+            (heard[1]["cols"].as_u64(), heard[1]["rows"].as_u64()),
+            (Some(46), Some(30))
+        );
+        assert!(
+            seat_states(&mut p_rx).is_empty(),
+            "an attach is no seat change"
+        );
+
+        // an un-negotiated leg mounting the same way is told nothing
+        let (e_leg, mut e_rx) = leg(3);
+        perform(attach_on(&mut t, &e_leg, ("win:2#1", "s1", "e1"), None));
+        assert!(seat_states(&mut e_rx).is_empty());
+
+        // a retry on the leg d1 already rides: nothing new
+        perform(attach_on(&mut t, &d_leg, ("win:1#1", "s1", "d1"), None));
+        assert!(seat_states(&mut d_rx).is_empty());
+        // d1 MOVED onto a newer leg of its set: told the seat there
+        let (d_newer, mut d_newer_rx) = negotiated(4);
+        perform(attach_on(&mut t, &d_newer, ("win:1#1", "s1", "d1"), None));
+        let heard = texts(&mut d_newer_rx);
+        let kinds: Vec<&str> = heard.iter().map(|m| m["type"].as_str().unwrap()).collect();
+        assert_eq!(kinds, ["ControlLegAttached", "GeometryState"]);
+        assert_eq!(heard[1]["holder"]["clientId"], "tailnet:me#node-p");
+        // …and from now on the announcements reach d1 THERE
+        perform(t.view_detached("p1"));
+        assert!(
+            seat_states(&mut d_rx).is_empty(),
+            "the leg d1 left hears no more of s1"
+        );
+        assert_eq!(seat_states(&mut d_newer_rx), vec![empty_seat(2, (46, 30))]);
     }
 
     /// TP-S3-input — every cell-side gate of `send_input`, walked in sequence:

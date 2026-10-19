@@ -233,7 +233,8 @@ fn geometry_fixtures() {
     // outbound shapes are proven by re-serializing to the fixture body (minus the
     // leg's `type` tag) — the same Value-equality EL9 uses for every echoed shape.
     use field_native::tp::wire::{
-        ClaimGeometry, GeometryCommitted, GeometryHolder, GeometryRefused,
+        ClaimGeometry, GeometryCommitted, GeometryHolder, GeometryHolderFace, GeometryRefused,
+        GeometryState, GeometryStateHolder,
     };
 
     let claim: ClaimGeometry =
@@ -271,6 +272,62 @@ fn geometry_fixtures() {
     assert_eq!(
         serde_json::to_value(&refused).unwrap(),
         without_type("tp-tagged-message.geometry-refused.json"),
+    );
+
+    // item 42 — the seat's announcement, EMITTED by the cell to every
+    // `geometry-events` control leg of the session: a phone holding the seat
+    // (the face its attach grant carried), the empty seat it leaves (`holder:
+    // null`, never omitted, at the size the PTY was left at), and the tagged
+    // body (a face without an OS — the key omitted, never null).
+    let phone = GeometryStateHolder {
+        client_id: "tailnet:owner@github#node-phone~e1".into(),
+        view_id: "view-p1".into(),
+        holder_generation: 7,
+        face: Some(GeometryHolderFace {
+            kind: "phone".into(),
+            name: "iPhone 16 Pro".into(),
+            os: Some("ios".into()),
+        }),
+    };
+    let held = GeometryState {
+        session_id: "sess-01J8Z3K9".into(),
+        holder: Some(phone),
+        geometry_revision: 9,
+        cols: 46,
+        rows: 30,
+    };
+    assert_eq!(
+        serde_json::to_value(&held).unwrap(),
+        load("tp-geometry-state.held.json"),
+    );
+    let empty = GeometryState {
+        holder: None,
+        geometry_revision: 10,
+        ..held
+    };
+    assert_eq!(
+        serde_json::to_value(&empty).unwrap(),
+        load("tp-geometry-state.empty.json"),
+    );
+    let announced = GeometryState {
+        session_id: "s1".into(),
+        holder: Some(GeometryStateHolder {
+            client_id: "client-02".into(),
+            view_id: "view-02".into(),
+            holder_generation: 3,
+            face: Some(GeometryHolderFace {
+                kind: "peer-window".into(),
+                name: "Studio".into(),
+                os: None,
+            }),
+        }),
+        geometry_revision: 6,
+        cols: 100,
+        rows: 28,
+    };
+    assert_eq!(
+        serde_json::to_value(&announced).unwrap(),
+        without_type("tp-tagged-message.geometry-state.json"),
     );
 }
 

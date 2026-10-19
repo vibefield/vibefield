@@ -1274,6 +1274,8 @@ async fn two_takes_at_once_leave_the_engine_with_the_lease_holder_and_the_winner
 
 /// One client's legs, attached live and PRESENTING (seed → applied → status),
 /// the deck's path for a client other than the harness's default `win:1#1`.
+/// The stock hello negotiates nothing, so the control leg hears only the lease
+/// while it attaches — held, as it always was, to exactly that.
 async fn present_as(
     h: &Harness,
     client: &str,
@@ -1282,6 +1284,46 @@ async fn present_as(
     activation_id: &str,
     rights: &[&str],
 ) -> (Ws, Ws) {
+    let presence = Presence {
+        client,
+        set,
+        activation_id,
+        rights,
+        capabilities: json!(["resume", "something-unknown"]),
+        face: None,
+    };
+    let (control, frames, heard) = present(h, session_id, presence).await;
+    assert!(
+        heard.iter().all(|m| m["type"] == "CellActivationStatus"),
+        "a stock leg hears only the lease while it attaches: {heard:?}"
+    );
+    (control, frames)
+}
+
+/// Who presents — `present_as`'s client, set, activation and rights, plus item
+/// 42's two knobs: the control hello's capability advertisement and the attach
+/// grant's `face` claim (signed with the rest, as fieldd mints it).
+struct Presence<'a> {
+    client: &'a str,
+    set: &'a str,
+    activation_id: &'a str,
+    rights: &'a [&'a str],
+    capabilities: Value,
+    face: Option<Value>,
+}
+
+/// `present_as` for any `Presence`. Returns the legs and every control-leg
+/// text heard after the attach's `ControlLegAttached`, in order, through the
+/// presenting status — an attach's own `GeometryState` (item 42) lands first.
+async fn present(h: &Harness, session_id: &str, who: Presence<'_>) -> (Ws, Ws, Vec<Value>) {
+    let Presence {
+        client,
+        set,
+        activation_id,
+        rights,
+        capabilities,
+        face,
+    } = who;
     let grant = h.minter.transport(TransportSpec {
         client_id: client,
         connection_set_id: set,
@@ -1295,7 +1337,13 @@ async fn present_as(
     let mut control = dial(&h.door.control_url()).await;
     send_json(
         &mut control,
-        serde_json::from_str(&hello("control", &grant, None)).unwrap(),
+        serde_json::from_str(&hello_with_capabilities(
+            "control",
+            &grant,
+            None,
+            capabilities,
+        ))
+        .unwrap(),
     )
     .await;
     expect_text(next_reply(&mut control).await, "ConnectionAccepted");
@@ -1308,7 +1356,7 @@ async fn present_as(
     expect_text(next_reply(&mut frames).await, "ConnectionAccepted");
 
     let now = field_native::tp::unix_ms();
-    let claims = json!({
+    let mut claims = json!({
         "audienceCellBootId": h.minter.cell_boot_id,
         "clientId": client,
         "sessionId": session_id,
@@ -1318,6 +1366,9 @@ async fn present_as(
         "issuedAt": now - 1_000,
         "expiresAt": now + 600_000 - 1_000,
     });
+    if let Some(face) = face {
+        claims["face"] = face;
+    }
     let protected = json!({
         "v": 1, "typ": "SessionAttachGrant", "iss": "fieldd", "alg": "HS256",
         "kid": { "cellBootId": h.minter.cell_boot_id, "keyGeneration": 1 },
@@ -1343,13 +1394,20 @@ async fn present_as(
     expect_text(next_reply(&mut frames).await, "FramesLegAttached");
     let (_kind, _base, result, _bytes, _hdrs) = receive_transfer(&mut frames).await;
     scene_applied(&mut frames, session_id, activation_id, &result).await;
+    let mut heard = Vec::new();
     loop {
-        let status = expect_text(next_reply(&mut control).await, "CellActivationStatus");
-        if status["presentation"]["state"] == "presenting" {
+        let message = match next_reply(&mut control).await {
+            Reply::Text(v) => v,
+            other => panic!("expected a control-leg text, got {other:?}"),
+        };
+        let presenting = message["type"] == "CellActivationStatus"
+            && message["presentation"]["state"] == "presenting";
+        heard.push(message);
+        if presenting {
             break;
         }
     }
-    (control, frames)
+    (control, frames, heard)
 }
 
 /// The next geometry verdict on a control leg, skipping the lease's own
@@ -1827,5 +1885,375 @@ async fn a_lagged_lifecycle_bus_tells_negotiated_clients_to_resync() {
         second["event"],
         json!({ "kind": "removed", "sessionId": "sess-lag-2" })
     );
+    h.door.shutdown().await;
+}
+
+// ---------------------------------------------------------------------------
+// item 42 (2026-10-19) — the seat announced, over the real door and a REAL
+// PTY. A control hello that negotiates `geometry-events` hears `GeometryState`
+// for every session it has an activation of: after every change of the
+// holder or of the committed size, and once right after an attach's
+// `ControlLegAttached`. (b), the stock hello's silence, is the TOLD-NOTHING
+// row in `the_take_moves_a_held_seat_to_the_focused_client_with_one_resize`,
+// unchanged; (a) below is its negotiated twin.
+
+/// A control hello's advertisement that negotiates `geometry-events`, beside
+/// the stock one (`resume` + an unknown string), which negotiates nothing.
+fn negotiating() -> Value {
+    json!(["resume", "geometry-events", "something-unknown"])
+}
+
+/// The face fieldd mints for the phone (contracts `GeometryHolderFace`).
+fn phone_face() -> Value {
+    json!({ "kind": "phone", "name": "iPhone 16 Pro", "os": "ios" })
+}
+
+/// A presence whose hello negotiates `geometry-events`, with every right.
+fn negotiated<'a>(
+    client: &'a str,
+    set: &'a str,
+    activation_id: &'a str,
+    face: Option<Value>,
+) -> Presence<'a> {
+    Presence {
+        client,
+        set,
+        activation_id,
+        rights: &["geometry", "input", "read"],
+        capabilities: negotiating(),
+        face,
+    }
+}
+
+/// A `ClaimGeometry` text for one activation's mount `view`.
+fn claim_msg(
+    session_id: &str,
+    activation_id: &str,
+    (client, view): (&str, &str),
+    (cols, rows): (u16, u16),
+    expect_revision: u64,
+) -> Value {
+    json!({
+        "type": "ClaimGeometry",
+        "sessionId": session_id, "activationId": activation_id, "leaseEpoch": 0,
+        "claimant": { "clientId": client, "viewId": view },
+        "cols": cols, "rows": rows, "expectRevision": expect_revision,
+    })
+}
+
+/// (a) — the TOLD-NOTHING row's twin: the same take, but both hellos negotiate
+/// `geometry-events`, so the displaced holder IS told — a `GeometryState`
+/// naming the taker with the face its grant carried — and the taker hears that
+/// state right after its own `GeometryCommitted`, never before it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_take_is_announced_to_the_displaced_holder_and_after_the_takers_commit() {
+    let h = harness().await;
+    let session = spawn_session(&h.source);
+    let session_id = session.id();
+    let studio = json!({ "kind": "window", "name": "Studio", "os": "macos" });
+    let (mut control_a, frames_a, _) = present(
+        &h,
+        &session_id,
+        negotiated("win:1#1", "set-ga", "act-a", Some(studio.clone())),
+    )
+    .await;
+    let (mut control_b, frames_b, _) = present(
+        &h,
+        &session_id,
+        negotiated("tailnet:me#node-b", "set-gb", "act-b", Some(phone_face())),
+    )
+    .await;
+
+    // A claims the empty seat: A's commit, then the state, which B hears too.
+    let claim = claim_msg(&session_id, "act-a", ("win:1#1", "mount-a"), (100, 40), 0);
+    send_json(&mut control_a, claim).await;
+    let held = next_geometry(&mut control_a, "GeometryCommitted").await;
+    let first = next_geometry(&mut control_a, "GeometryState").await;
+    assert_eq!(first["holder"]["clientId"], "win:1#1");
+    assert_eq!(first["holder"]["face"], studio);
+    assert_eq!(first["geometryRevision"], held["geometryRevision"]);
+    assert_eq!(next_geometry(&mut control_b, "GeometryState").await, first);
+
+    // B is focused: its host TAKES the seat.
+    send_json(
+        &mut control_b,
+        json!({
+            "type": "TransferGeometry",
+            "sessionId": session_id, "activationId": "act-b", "leaseEpoch": 0,
+            "from": held["holder"].clone(),
+            "to": { "clientId": "tailnet:me#node-b", "viewId": "mount-b" },
+            "expectRevision": held["geometryRevision"].clone(), "cols": 90, "rows": 30,
+        }),
+    )
+    .await;
+    let taken = next_geometry(&mut control_b, "GeometryCommitted").await;
+    let b_sees = next_geometry(&mut control_b, "GeometryState").await;
+    assert_eq!(
+        b_sees["holder"],
+        json!({
+            "clientId": "tailnet:me#node-b",
+            "viewId": "mount-b",
+            "holderGeneration": taken["holder"]["holderGeneration"].clone(),
+            "face": phone_face(),
+        })
+    );
+    assert_eq!(b_sees["geometryRevision"], taken["geometryRevision"]);
+    assert_eq!(
+        (b_sees["cols"].as_u64(), b_sees["rows"].as_u64()),
+        (Some(90), Some(30))
+    );
+    // THE DISPLACED HOLDER IS TOLD: who took the seat, by name, at what size…
+    let a_sees = next_geometry(&mut control_a, "GeometryState").await;
+    assert_eq!(a_sees, b_sees);
+    // …and is still never handed a verdict on a verb it did not send.
+    let heard = drain_texts(&mut control_a, Duration::from_millis(300)).await;
+    assert!(heard.iter().all(|m| !is_geometry_verdict(m)), "{heard:?}");
+    let (_controller, cols, rows, _layout) = session.control_state();
+    assert_eq!((cols, rows), (90, 30), "the engine committed B's size");
+
+    drop((frames_a, frames_b));
+    h.door.shutdown().await;
+}
+
+/// (e) and (c) — the holder's own resize names the new size to every
+/// negotiated leg; its release, which has no reply of its own, announces the
+/// empty seat at the size the PTY KEEPS (a release resizes nothing), to the
+/// releaser as well.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_holders_resize_and_release_are_announced_at_the_size_the_pty_keeps() {
+    let h = harness().await;
+    let session = spawn_session(&h.source);
+    let session_id = session.id();
+    let (mut control_a, frames_a, _) = present(
+        &h,
+        &session_id,
+        negotiated("win:1#1", "set-ea", "act-a", None),
+    )
+    .await;
+    let (mut control_b, frames_b, _) = present(
+        &h,
+        &session_id,
+        negotiated("win:2#1", "set-eb", "act-b", None),
+    )
+    .await;
+    let claim = claim_msg(&session_id, "act-a", ("win:1#1", "mount-a"), (100, 40), 0);
+    send_json(&mut control_a, claim).await;
+    let held = next_geometry(&mut control_a, "GeometryCommitted").await;
+    next_geometry(&mut control_a, "GeometryState").await;
+    next_geometry(&mut control_b, "GeometryState").await;
+
+    // (e) the holder's own resize — a re-claim of its seat
+    let resize = claim_msg(&session_id, "act-a", ("win:1#1", "mount-a"), (132, 50), 1);
+    send_json(&mut control_a, resize).await;
+    let resized = next_geometry(&mut control_a, "GeometryCommitted").await;
+    let state = next_geometry(&mut control_a, "GeometryState").await;
+    assert_eq!(
+        state["holder"]["holderGeneration"],
+        held["holder"]["holderGeneration"]
+    );
+    assert!(
+        state["holder"].get("face").is_none(),
+        "a faceless grant: no face key"
+    );
+    assert_eq!(state["geometryRevision"], resized["geometryRevision"]);
+    assert_eq!(
+        (state["cols"].as_u64(), state["rows"].as_u64()),
+        (Some(132), Some(50))
+    );
+    assert_eq!(next_geometry(&mut control_b, "GeometryState").await, state);
+
+    // (c) the holder releases: no reply — only the empty seat, to both legs
+    send_json(
+        &mut control_a,
+        json!({
+            "type": "ReleaseGeometry",
+            "sessionId": session_id, "activationId": "act-a", "leaseEpoch": 0,
+            "holder": resized["holder"].clone(),
+        }),
+    )
+    .await;
+    let empty = next_geometry(&mut control_a, "GeometryState").await;
+    assert!(empty["holder"].is_null(), "{empty}");
+    let revision = resized["geometryRevision"].as_u64().unwrap();
+    assert_eq!(empty["geometryRevision"], revision + 1);
+    assert_eq!(
+        (empty["cols"].as_u64(), empty["rows"].as_u64()),
+        (Some(132), Some(50))
+    );
+    assert_eq!(next_geometry(&mut control_b, "GeometryState").await, empty);
+    let (_controller, cols, rows, _layout) = session.control_state();
+    assert_eq!((cols, rows), (132, 50), "a release resizes nothing");
+
+    drop((frames_a, frames_b));
+    h.door.shutdown().await;
+}
+
+/// (d) — every AUTOMATIC release says the seat is empty, to every negotiated
+/// leg of the session still attached: a view detach (the holder's demand went
+/// `none`, so its own leg hears it too) and a control-leg loss (the holder's
+/// socket closed, so only the others can).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_automatic_release_tells_every_negotiated_leg_the_seat_is_empty() {
+    let h = harness().await;
+    let session = spawn_session(&h.source);
+    let session_id = session.id();
+    let (mut control_a, frames_a, _) = present(
+        &h,
+        &session_id,
+        negotiated("win:1#1", "set-da", "act-a", None),
+    )
+    .await;
+    let (mut control_b, frames_b, _) = present(
+        &h,
+        &session_id,
+        negotiated("win:2#1", "set-db", "act-b", None),
+    )
+    .await;
+
+    // (1) a view detach: A holds, then parks its view
+    let claim = claim_msg(&session_id, "act-a", ("win:1#1", "mount-a"), (100, 40), 0);
+    send_json(&mut control_a, claim).await;
+    next_geometry(&mut control_a, "GeometryCommitted").await;
+    next_geometry(&mut control_a, "GeometryState").await;
+    next_geometry(&mut control_b, "GeometryState").await;
+    send_json(
+        &mut control_a,
+        json!({"type":"DeclareDemand","sessionId":session_id,"activationId":"act-a","leaseEpoch":0,"demandSequence":1,"demand":{"mode":"none"}}),
+    )
+    .await;
+    next_geometry(&mut control_a, "DemandAccepted").await;
+    let detached = next_geometry(&mut control_a, "GeometryState").await;
+    assert!(detached["holder"].is_null(), "{detached}");
+    assert_eq!(detached["geometryRevision"], 2);
+    assert_eq!(
+        (detached["cols"].as_u64(), detached["rows"].as_u64()),
+        (Some(100), Some(40))
+    );
+    assert_eq!(
+        next_geometry(&mut control_b, "GeometryState").await,
+        detached
+    );
+
+    // (2) a control-leg loss: B holds, then B's control socket goes away
+    let claim = claim_msg(&session_id, "act-b", ("win:2#1", "mount-b"), (80, 24), 2);
+    send_json(&mut control_b, claim).await;
+    next_geometry(&mut control_b, "GeometryCommitted").await;
+    next_geometry(&mut control_b, "GeometryState").await;
+    let b_holds = next_geometry(&mut control_a, "GeometryState").await;
+    assert_eq!(b_holds["holder"]["clientId"], "win:2#1");
+    control_b.close(None).await.ok();
+    let lost = next_geometry(&mut control_a, "GeometryState").await;
+    assert!(lost["holder"].is_null(), "{lost}");
+    assert_eq!(lost["geometryRevision"], 4);
+    assert_eq!(
+        (lost["cols"].as_u64(), lost["rows"].as_u64()),
+        (Some(80), Some(24))
+    );
+
+    drop((frames_a, frames_b));
+    h.door.shutdown().await;
+}
+
+/// (f) — a negotiated leg whose activations are all of ANOTHER session hears
+/// nothing of this seat: the announcement is activation-scoped, never the
+/// connection-wide fan-out `SessionEvent` is.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_leg_attached_only_to_another_session_hears_nothing_of_the_seat() {
+    let h = harness().await;
+    let session = spawn_session(&h.source);
+    let elsewhere = spawn_session(&h.source);
+    let session_id = session.id();
+    let elsewhere_id = elsewhere.id();
+    let (mut control_a, frames_a, _) = present(
+        &h,
+        &session_id,
+        negotiated("win:1#1", "set-fa", "act-a", None),
+    )
+    .await;
+    let (mut control_z, frames_z, _) = present(
+        &h,
+        &elsewhere_id,
+        negotiated("win:9#1", "set-fz", "act-z", None),
+    )
+    .await;
+    let claim = claim_msg(&session_id, "act-a", ("win:1#1", "mount-a"), (100, 40), 0);
+    send_json(&mut control_a, claim).await;
+    next_geometry(&mut control_a, "GeometryCommitted").await;
+    next_geometry(&mut control_a, "GeometryState").await;
+    // One finalize enqueued every recipient's copy before A's arrived, so Z's
+    // silence is the verdict, not a race.
+    let heard = drain_texts(&mut control_z, Duration::from_millis(300)).await;
+    assert!(
+        heard.iter().all(|m| m["type"] != "GeometryState"),
+        "{heard:?}"
+    );
+
+    drop((frames_a, frames_z));
+    h.door.shutdown().await;
+}
+
+/// The on-attach rule (ruled with item 42, 2026-10-19): a desktop pane that
+/// attaches WHILE the phone holds the seat is told so at once — right after its
+/// `ControlLegAttached`, the phone as holder with the face its grant carried,
+/// at the size it committed — so the pane says who drives before anything
+/// changes. A stock desktop attaching the same way is told nothing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_desktop_that_attaches_while_the_phone_drives_hears_the_phone_at_once() {
+    let h = harness().await;
+    let session = spawn_session(&h.source);
+    let session_id = session.id();
+    let (mut phone, phone_frames, before) = present(
+        &h,
+        &session_id,
+        negotiated("tailnet:me#node-p", "set-op", "act-p", Some(phone_face())),
+    )
+    .await;
+    assert!(
+        before.iter().all(|m| m["type"] == "CellActivationStatus"),
+        "no pane ever sized it, so no seat to tell: {before:?}"
+    );
+    let claim = claim_msg(
+        &session_id,
+        "act-p",
+        ("tailnet:me#node-p", "mount-p"),
+        (46, 30),
+        0,
+    );
+    send_json(&mut phone, claim).await;
+    let held = next_geometry(&mut phone, "GeometryCommitted").await;
+    next_geometry(&mut phone, "GeometryState").await;
+
+    let (_desk, desk_frames, heard) = present(
+        &h,
+        &session_id,
+        negotiated("win:1#1", "set-od", "act-d", None),
+    )
+    .await;
+    let told = &heard[0];
+    assert_eq!(
+        told["type"], "GeometryState",
+        "first after ControlLegAttached: {heard:?}"
+    );
+    assert_eq!(told["sessionId"], session_id);
+    assert_eq!(
+        told["holder"],
+        json!({
+            "clientId": "tailnet:me#node-p",
+            "viewId": "mount-p",
+            "holderGeneration": held["holder"]["holderGeneration"].clone(),
+            "face": phone_face(),
+        })
+    );
+    assert_eq!(told["geometryRevision"], held["geometryRevision"]);
+    assert_eq!(
+        (told["cols"].as_u64(), told["rows"].as_u64()),
+        (Some(46), Some(30))
+    );
+    // a stock desktop: `present_as` holds its attach to the lease alone
+    let full = ["geometry", "input", "read"];
+    let (_stock, stock_frames) =
+        present_as(&h, "win:2#1", "set-os", &session_id, "act-s", &full).await;
+
+    drop((phone_frames, desk_frames, stock_frames));
     h.door.shutdown().await;
 }

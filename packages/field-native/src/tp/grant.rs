@@ -18,6 +18,7 @@
 //! grant can be perfectly valid and still not admissible right now.
 
 use super::jcs::canonical_json;
+use super::wire::GeometryHolderFace;
 use crate::registries::terminal_pipeline as tp;
 use data_encoding::BASE64URL_NOPAD;
 use hmac::{Hmac, KeyInit, Mac};
@@ -181,6 +182,13 @@ pub struct TransportClaims {
 /// `SessionAttachGrant.claims` (contracts `SessionAttachGrantClaims`).
 /// `lease_epoch` is OPTIONAL until the floor exposes custody's per-session
 /// epoch (spec §5.1 as built) — absent is "not exposed", never 0.
+///
+/// `face` (item 42, 2026-10-19) is the holder's face fieldd mints for
+/// `GeometryState`; absent on a grant minted without one. Adding it cannot
+/// change how any grant verifies: the MAC is checked over the claims AS
+/// RECEIVED (`verify_envelope`), before this type is ever parsed, so a grant
+/// without the field verifies exactly as it did, and one with it verifies only
+/// over the face it was signed with.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AttachClaims {
@@ -194,6 +202,8 @@ pub struct AttachClaims {
     pub rights: Vec<AttachRight>,
     pub issued_at: u64,
     pub expires_at: u64,
+    #[serde(default)]
+    pub face: Option<GeometryHolderFace>,
 }
 
 /// Verifies grants for ONE cell boot with ONE key (rotation = a new boot = a new
@@ -256,6 +266,16 @@ impl GrantVerifier {
             return Err(PreAuthFailure::new(
                 PreAuthFailureCode::HelloMalformed,
                 "rights is not a sorted unique array",
+            ));
+        }
+        // item 42 — the cell ECHOES a face, so it must be one the contract
+        // admits (`GeometryHolderFace.name` is non-empty): a nameless face is a
+        // malformed claim, as an unsorted `rights` is, and never reaches a pane
+        // that would have no name to say.
+        if typed.face.as_ref().is_some_and(|face| face.name.is_empty()) {
+            return Err(PreAuthFailure::new(
+                PreAuthFailureCode::HelloMalformed,
+                "face.name is empty",
             ));
         }
         Ok(typed)
@@ -542,6 +562,52 @@ mod tests {
             verifier.verify_transport(&no_mac, now).unwrap_err().code,
             C::HelloMalformed
         );
+    }
+
+    /// item 42 — the holder's face rides the attach grant UNDER the MAC. The
+    /// fixture (minted the way fieldd mints) verifies with the vector's key and
+    /// types its face; the faceless grant — every grant minted before item 42 —
+    /// still verifies, face None; a face changed after the mint breaks the MAC;
+    /// and a nameless face, re-signed so the MAC holds, is a malformed claim.
+    #[test]
+    fn a_face_rides_the_attach_grant_under_the_mac() {
+        use PreAuthFailureCode as C;
+        let v = fixture("tp-grant-mac.vector.json");
+        let verifier = verifier_for(&v);
+        let now = v["attach"]["claims"]["issuedAt"].as_u64().unwrap() + 1_000;
+        let with_face = fixture("tp-attach-grant.with-face.json");
+        let claims = verifier.verify_attach(&with_face, now).unwrap();
+        assert_eq!(claims.client_id, "tailnet:owner@github#node-phone~e1");
+        assert_eq!(
+            claims.face,
+            Some(GeometryHolderFace {
+                kind: "phone".into(),
+                name: "iPhone 16 Pro".into(),
+                os: Some("ios".into()),
+            })
+        );
+        let faceless = verifier.verify_attach(&grant(&v, "attach"), now).unwrap();
+        assert_eq!(faceless.face, None);
+
+        // a face dressed up after the mint is not the face the MAC covers
+        let mut dressed = with_face.clone();
+        dressed["claims"]["face"]["name"] = json!("Studio");
+        assert_eq!(
+            verifier.verify_attach(&dressed, now).unwrap_err().code,
+            C::GrantBadMac
+        );
+
+        // a nameless face under a MAC that holds: malformed, never echoed
+        let mut nameless = with_face.clone();
+        nameless["claims"]["face"]["name"] = json!("");
+        let signed = json!({"protected": nameless["protected"], "claims": nameless["claims"]});
+        let input = canonical_json(&signed).unwrap();
+        let mut mac = HmacSha256::new_from_slice(&verifier.key.key).unwrap();
+        mac.update(input.as_bytes());
+        nameless["mac"] = json!(BASE64URL_NOPAD.encode(&mac.finalize().into_bytes()));
+        let refused = verifier.verify_attach(&nameless, now).unwrap_err();
+        assert_eq!(refused.code, C::HelloMalformed);
+        assert_eq!(refused.detail, "face.name is empty");
     }
 
     #[test]

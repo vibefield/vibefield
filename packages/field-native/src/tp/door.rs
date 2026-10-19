@@ -22,7 +22,9 @@
 //! geometry verbs `ClaimGeometry`/`ReleaseGeometry`/`TransferGeometry` (S3c —
 //! the cell owns the seat, ghosttea commits the resize; see `handle_geometry`;
 //! a `TransferGeometry` to the caller itself is DS-4's TAKE, authorized in
-//! `ActivationTable::transfer_geometry` and carried here unchanged);
+//! `ActivationTable::transfer_geometry` and carried here unchanged; since item
+//! 42, every change of a seat — and an attach onto a `geometry-events` leg —
+//! sends `GeometryState`, which the table returns as ordinary effects);
 //! frames — `AttachFramesLeg`, `TransportCredit`, `SceneApplied`,
 //! `CalibrationPing` (echoed as a `calibration` unit; doubles as the frames
 //! heartbeat). Where the sessions come from is the `SessionSource` (source.rs):
@@ -59,7 +61,7 @@ use super::wire::{
     ConnectionAccepted, ConnectionHello, ConnectionRefused, DeclareDemand, InputOp, LegHeartbeat,
     LegHeartbeatAck, ProtocolLimits, ReceiverCapacities, ReleaseGeometry, SceneApplied, SendInput,
     SessionEvent, SessionEventKind, Tagged, TransferGeometry, TransportCredit, TrfIdentity,
-    SESSION_EVENTS_CAPABILITY,
+    GEOMETRY_EVENTS_CAPABILITY, SESSION_EVENTS_CAPABILITY,
 };
 use crate::registries::terminal_pipeline as tp;
 use crate::registries::terminal_pipeline_close_codes as close;
@@ -719,12 +721,16 @@ fn perform_on(state: &DoorState, mut effects: Vec<Effect>) {
                     if let Some(session) = state.config.source.session(&session_id) {
                         let _ = session.detach_view(&view_id, &client_id);
                     }
-                    state
+                    // item 42 — a detached view that held the geometry seat
+                    // released it; the empty seat's announcement rides the
+                    // next batch, like the view attach's own follow-ups
+                    let released = state
                         .registry
                         .lock()
                         .unwrap()
                         .activations
                         .view_detached(&activation_id);
+                    effects.extend(released);
                 }
                 Effect::StartPump { activation_id } => start_pump(state, &activation_id),
                 Effect::StopPump { activation_id } => {
@@ -1030,6 +1036,14 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
         && negotiated_capabilities
             .iter()
             .any(|c| c == SESSION_EVENTS_CAPABILITY);
+    // item 42 — the same negotiation for the seat's announcement. It rides the
+    // leg's `LegRef` rather than this registry entry: `GeometryState` is
+    // activation-scoped, addressed through the table's `Activation::control`,
+    // where `SessionEvent`'s connection-scoped fan-out walks the registry.
+    let geometry_events = channel == Channel::Control
+        && negotiated_capabilities
+            .iter()
+            .any(|c| c == GEOMETRY_EVENTS_CAPABILITY);
     let initial_windows = (channel == Channel::Frames).then(|| {
         hello
             .receiver_capacities
@@ -1130,6 +1144,7 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
         leg_generation,
         out: out_tx.clone(),
         bulk_credit,
+        geometry_events,
     };
     let set_identity = SetIdentity {
         client_id: claims.client_id.clone(),
