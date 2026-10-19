@@ -2839,6 +2839,31 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   under it: "at 13pt the grid gains about five rows, three or four of them under the header, so a
   full-screen program's first lines are hidden on the phone". James's pick of T1 and F1 retires both
   the fade and that cost: the band holds no rows.)*
+- **A live card another client is driving** (item 42's phone half; James, 2026-10-19 17:42Z: "studio
+  is driving · touch to take it back"; the look ruled 21:38Z, "good, design all go with the lean").
+  While the card's session has its geometry seat (DS-4) held by another client, the studio's window,
+  a peer's window or another phone, the card goes on drawing the session at the holder's size, where
+  the bullet above stands it, so some of the card's rows stand empty: the converse of the phone's
+  own seat, where the grid is the PTY's. The card says so in its empty rows, above the floating
+  input row, wherever they are (at the foot while the held screen stands top-left, at the top once
+  it anchors at the foot; as the spawn bloom's words take the field's widest empty space), in the
+  desktop's figure at the phone's scale: **studio**, the holder's name as fieldd minted it
+  (**Another device** when it minted none), full, and **is driving** at 40%, 800 at 56pt/1,
+  −0.04em, haloed in the terminal's ground (40 and 18), over a veil of that ground at 62%, the
+  content dimmed beneath it, never hidden and never blurred. Under them one caption line, **touch to
+  take it back**, 12pt semibold at 72%. It names no size: the phone can see what it is drawing. The
+  light is **text main** (D-i12), which follows the ground's ramp (the bullet above): white on Matte
+  Black, `#111111` on a light ground. The glow and the bloom are the desktop's recipe in that ink.
+  The entrance plays once, as the desktop's does, 400ms after the seat goes, and holds still; it
+  goes at once when the phone takes the seat, and under reduced motion it fades in over 100ms.
+  Neither the words nor the veil take a touch: a touch on the grid goes through and takes the seat
+  back (DS-D5). **When the holder lets go**, a live card on the screen takes the empty seat itself,
+  and the readout goes. It is the phone's one pane in front, so this is Q1's ruling (a focused pane
+  takes the empty seat) applied to the phone. The kit owns its claims, so it waits on no ghosttea
+  lane. A card that is not on the screen, with the app in the background or another card in front,
+  takes nothing while it is away. When it comes back it is presented again, and a presented card
+  takes the seat (DS-4b), so the readout shows only while another device holds the seat as the card
+  sits on the screen.
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
