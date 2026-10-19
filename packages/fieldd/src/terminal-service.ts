@@ -3,6 +3,7 @@ import { existsSync, constants as fsConstants } from "node:fs";
 import { type FileHandle, open, rm } from "node:fs/promises";
 import { homedir, userInfo } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { performance } from "node:perf_hooks";
 import {
   type AutomationInputResult,
   GhostteaAutomationClient,
@@ -15,6 +16,10 @@ import {
   type CellEndpointSet,
   ENV_PREFIXES,
   type ForwardedFor,
+  NATIVE_SUPERVISION,
+  type NativeLinkState,
+  type NativeUnavailableDetails,
+  type ObservedStaleCell,
   ObservedState,
   RemoteCellEndpointSet,
   type RouteBinding,
@@ -25,6 +30,8 @@ import {
   type ShellRevealPathParams,
   type ShellRevealPathResult,
   TERMINAL_CONFIG_MAX_BYTES,
+  TERMINAL_INVENTORY,
+  TERMINAL_INVENTORY_REFUSALS,
   TERMINAL_SCROLLBACK_CLASS_BYTES,
   TERMINAL_SESSION_CAP,
   type TerminalConfigConflict,
@@ -41,6 +48,7 @@ import {
   type TerminalCreateParams,
   type TerminalEndpoints,
   type TerminalInfo,
+  type TerminalInventoryStaleDetails,
   type TerminalObservation,
   TerminalOpenTicket,
   type TerminalOpenTicketResponse,
@@ -180,6 +188,39 @@ export interface TerminalLink {
   on(event: "terminal-endpoints", fn: () => void): unknown;
 }
 
+/** IL-D4, IL-D2 (`draft/thinking-inventory-latency.md` §4.3, §5) — the slice of
+ * the floor's supervision (`NativeSupervisor`) this service reads, structural
+ * like `TerminalLink`: whether the observed stream can reach fieldd, and
+ * whether the floor is held unresponsive. */
+export interface TerminalSupervision {
+  /** the native link's state, and the age of the floor's last tick (null: none
+   * seen — a floor predating WG-D6 — so the state decides alone);
+   * `NativeLinkHealth` carries both */
+  health(): { readonly state: NativeLinkState; readonly lastTickAgeMs: number | null };
+  /** WG-D4 — set while the floor is held unresponsive */
+  doorRefusal(): NativeUnavailableDetails | undefined;
+  /** every change of the link's state or its detail */
+  on(event: "transition", listener: () => void): unknown;
+  off(event: "transition", listener: () => void): unknown;
+}
+
+/** IL-D4 — the numbers and clocks fieldd's own half of the inventory bound
+ * runs on (`TerminalServiceOptions.inventoryTimings`). */
+export interface TerminalInventoryTimings {
+  /** a copy the stream has not reached for this long is stale
+   * (`TERMINAL_INVENTORY.STALE_MS`) */
+  staleMs: number;
+  /** how often the age is judged while a stopped tick under an "up" link is
+   * what holds it stale (`TERMINAL_INVENTORY.SAMPLE_MS`) */
+  sampleMs: number;
+  /** a floor tick older than this is no tick (`NATIVE_SUPERVISION.TICK_STALE_MS`) */
+  tickStaleMs: number;
+  /** the monotonic clock in ms, the one the supervision reads its tick age on */
+  now: () => number;
+  /** unix ms, which a `since` is written in */
+  wallNow: () => number;
+}
+
 /** AR-3 — what an agent's PTY is born with: puppeteer's `TerminalSpec`
  * (command, argv, cwd, geometry) and the COMPLETE environment the agent host
  * composed. Nothing here is a vendor's: the recipe is the adapter's, the
@@ -287,6 +328,21 @@ export interface TerminalServiceOptions {
    * face — and a pane another device's seat stands over says "Another
    * device". */
   holderFaces?: () => HolderFaceRoster | null;
+  /**
+   * IL-D4 (`draft/thinking-inventory-latency.md` §4.3) — the floor's
+   * supervision, for fieldd's own half of the inventory's age: the observed
+   * stream reaches fieldd only while the native link is "up" and the floor's
+   * tick is fresh, and the doors' refusal names WG-D4's held floor where there
+   * is one. The daemon passes its `NativeSupervisor`. Absent (a composition with
+   * no supervisor), fieldd's copy is as old as the floor says and never ages on
+   * its own, and a stale door's refusal is always the terminal's.
+   */
+  supervision?: TerminalSupervision;
+  /** IL-D4 test seam: the bound's numbers and fieldd's clocks. Production reads
+   * `TERMINAL_INVENTORY.STALE_MS` and `SAMPLE_MS`,
+   * `NATIVE_SUPERVISION.TICK_STALE_MS` (the daemon passes the supervision's own
+   * when a test shortens it), `performance.now()` and `Date.now()`. */
+  inventoryTimings?: Partial<TerminalInventoryTimings>;
 }
 
 export type { TerminalProfileBinding };
@@ -507,10 +563,44 @@ export class TerminalService {
    * the inventory that no longer lists the session. */
   private readonly bindings: TerminalBindingStore;
 
+  // ---- IL-D4: how old the inventory is (`draft/thinking-inventory-latency.md` §4) ----
+  private readonly timings: TerminalInventoryTimings;
+  /** the floor's bound from the last applied observation (`inventoryBoundMs`);
+   * undefined = a floor that cannot say, whose age is unknown and whose doors
+   * behave as they did before the bound */
+  private floorBoundMs: number | undefined;
+  /** the cells the floor itself named stale in the last applied observation */
+  private floorStale: readonly ObservedStaleCell[] = [];
+  /** when the last observation was applied, on the monotonic clock, and its
+   * unix twin — the `since` fieldd's own half writes */
+  private deliveredAt: number | undefined;
+  private deliveredAtUnix: number | undefined;
+  /** when this service first saw the native link out of "up" (monotonic);
+   * undefined while it is up */
+  private linkDownSince: number | undefined;
+  /** when fieldd's own half began to hold (monotonic); undefined while it does
+   * not */
+  private unheardSince: number | undefined;
+  /** the composed view every door reads (`staleCells`), as last judged, and
+   * the key a transition is told by */
+  private stale: readonly ObservedStaleCell[] = [];
+  private staleKey = "[]";
+  /** the one timer: the next instant time alone can change the view */
+  private ageTimer: NodeJS.Timeout | null = null;
+  private readonly onSupervision = (): void => this.judgeAge(true);
+
   constructor(private readonly opts: TerminalServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
     this.bindings = opts.bindings ?? new TerminalBindingStore({ logger: this.logger });
     this.minter = new TerminalGrantMinter(undefined, undefined, opts.holderFaces);
+    this.timings = {
+      staleMs: TERMINAL_INVENTORY.STALE_MS,
+      sampleMs: TERMINAL_INVENTORY.SAMPLE_MS,
+      tickStaleMs: NATIVE_SUPERVISION.TICK_STALE_MS,
+      now: () => performance.now(),
+      wallNow: () => Date.now(),
+      ...opts.inventoryTimings,
+    };
     // The link has usually paired BEFORE this service exists (the daemon builds
     // it after `native.connect()`), so the cells in hand at construction are the
     // baseline. Without seeding them, the first replacement after every boot
@@ -518,6 +608,10 @@ export class TerminalService {
     // case the receipt exists for.
     this.cells = opts.link.terminalRoutes?.cells;
     opts.link.on("terminal-endpoints", () => this.onRouteChange());
+    // IL-D4 — every move of the floor's link is a moment fieldd's own half may
+    // change; reading the supervision now also notes a link already down
+    opts.supervision?.on("transition", this.onSupervision);
+    this.judgeAge(false);
   }
 
   /** The floor's cells moved. Two things follow, in this order.
@@ -552,6 +646,9 @@ export class TerminalService {
     if (routes === undefined) return;
     const previous = this.cells;
     this.cells = routes.cells;
+    // IL-D4 — while fieldd's own half holds, the cells it names stale are the
+    // ones it knows, and these rows are among them
+    this.judgeAge(true);
     if (previous === undefined) return;
     const live = new Set(routes.cells.map((cell) => cell.cellBootId));
     // TC-S3 — an UNTAGGED session can be attributed to exactly one reading: a
@@ -618,17 +715,15 @@ export class TerminalService {
           // consumer tell an inventory apart from a LATER floor's, and their
           // presence is also the flag that `list`/`get` are answerable at all.
           this.lastObservation = { bootId: parsed.data.bootId, generation: parsed.data.generation };
-          for (const listener of [...this.inventoryListeners]) {
-            try {
-              listener(this.terminals);
-            } catch (error) {
-              this.logger.warn(
-                "fieldd.terminal.inventory_listener_failed",
-                "An inventory listener threw",
-                { error: errorMessage(error) },
-              );
-            }
-          }
+          // IL-D4 — the floor's own word on its inventory's age, field by
+          // field (absent bound: a floor that cannot say), and the moment it
+          // reached fieldd, which restarts fieldd's own half
+          this.floorBoundMs = parsed.data.inventoryBoundMs;
+          this.floorStale = (parsed.data.staleCells ?? []).map(staleEntry);
+          this.deliveredAt = this.timings.now();
+          this.deliveredAtUnix = this.timings.wallNow();
+          this.judgeAge(false);
+          this.notifyInventory();
         } else {
           this.logger.debug(
             "fieldd.terminal.observed_unparsed",
@@ -688,14 +783,113 @@ export class TerminalService {
   }
 
   /** Which floor observation `list` is answering from; undefined only when
-   * `list` would refuse. */
+   * `list` would refuse. IL-D4 — and how old its rows may be: `boundMs` from a
+   * floor that judges its inventory (absent: the age is unknown), and
+   * `staleCells`, the composed view (`staleCells()`), present only while a cell
+   * is older than the bound. */
   observation(): TerminalObservation | undefined {
-    return this.lastObservation;
+    const base = this.lastObservation;
+    if (base === undefined) return undefined;
+    return {
+      ...base,
+      ...(this.floorBoundMs === undefined ? {} : { boundMs: this.floorBoundMs }),
+      ...(this.stale.length === 0 ? {} : { staleCells: this.staleCells() }),
+    };
+  }
+
+  /** IL-D4 — the floor's inventory bound in ms, from the last observation;
+   * undefined before the first, and for a floor that does not judge its
+   * inventory (its age is unknown, and its doors behave as before the bound). */
+  inventoryBoundMs(): number | undefined {
+    return this.lastObservation === undefined ? undefined : this.floorBoundMs;
+  }
+
+  /**
+   * IL-D4 (`draft/thinking-inventory-latency.md` §4.3) — the ONE composed view
+   * of which cells' inventory is older than the bound, every door and read
+   * reads: empty while every cell is fresh, before the first observation, and
+   * for a floor that does not judge (age unknown).
+   *
+   * It is the floor's own `staleCells`, or, while fieldd's own half holds,
+   * every cell fieldd knows (the route rows it last saw and the cells its rows
+   * name). fieldd's half holds once the observed stream has not reached fieldd
+   * for `TERMINAL_INVENTORY.STALE_MS`: the native link is not "up" (connecting,
+   * respawning, gone, unresponsive), or the floor's tick is older than
+   * `NATIVE_SUPERVISION.TICK_STALE_MS`, and the bound has run since the later
+   * of that and the last observation delivered. A floor held unresponsive
+   * cannot publish its own list, so this half stands in for it. Each entry's
+   * `since` is the last delivery's; a cell the floor had already named keeps
+   * the floor's own, older `since`, so its age never moves back when the
+   * stream stops. The half ends when the stream reaches fieldd again — a
+   * delivery, or the link "up" with a fresh tick (the floor publishes any
+   * change it made meanwhile on its own).
+   *
+   * Judged at every observation, every move of the link, and by one timer set
+   * for the next instant time alone can change it; a change tells every
+   * inventory listener the rows again, so a consumer that acts on the age
+   * re-evaluates.
+   */
+  staleCells(): ObservedStaleCell[] {
+    return this.stale.map((entry) => ({ ...entry }));
+  }
+
+  /** IL-D5 (a) — the stale cells a door acting on `sessionId` would act in:
+   * for a session the inventory lists in a cell, that cell's entry if it is
+   * stale; for a session it does not list (no row ties it to a cell — an agent
+   * record names none) or one its row does not place, every stale cell. Empty:
+   * nothing it would act on is older than the bound. */
+  staleCellsFor(sessionId: string): ObservedStaleCell[] {
+    if (this.stale.length === 0) return [];
+    const cell = this.sessionCellTag(sessionId)?.cellBootId;
+    return this.stale
+      .filter((entry) => cell === undefined || entry.cellBootId === cell)
+      .map((entry) => ({ ...entry }));
+  }
+
+  /**
+   * IL-D2 (a), IL-D5 (a) — what a door that ACTS on the inventory answers for
+   * `sessionId` while the cells it would act in are older than the bound
+   * (`staleCellsFor`): UNAVAILABLE {service: "terminal", state:
+   * "inventory_stale", cells}, retryable (`TerminalInventoryStaleDetails`). While
+   * the floor's supervision holds it unresponsive, WG-D4's {service: "native",
+   * state: "unresponsive"} answers instead: the worse and truer story. undefined
+   * — nothing it would act in is stale, so the door acts, whatever the link's
+   * state (these doors are fieldd's own; WG-D4 gates only what rides the mgmt
+   * path). Which doors ask, and for which sessions, is each door's (IL-D5 (a));
+   * this says what they answer.
+   */
+  staleRefusal(sessionId: string, operation: string): RpcCallError | undefined {
+    const cells = this.staleCellsFor(sessionId);
+    if (cells.length === 0) return undefined;
+    const held = this.opts.supervision?.doorRefusal();
+    if (held !== undefined)
+      return new RpcCallError(
+        "UNAVAILABLE",
+        `${operation} refused: the terminal floor is not answering its control path, so its inventory is not current`,
+        true,
+        held,
+      );
+    return new RpcCallError(
+      "UNAVAILABLE",
+      `${operation} refused: the terminal inventory of ${spokenCells(cells)} is older than its bound; ask again once it is current`,
+      true,
+      {
+        service: TERMINAL_INVENTORY_REFUSALS.SERVICE,
+        state: TERMINAL_INVENTORY_REFUSALS.STATE_INVENTORY_STALE,
+        cells,
+      } satisfies TerminalInventoryStaleDetails,
+    );
   }
 
   /** D6: the ticket IS the endpoints — the single native service token, socket
    * paths stable across fieldd restarts. Fails honest when the floor is absent
    * (native down, terminal unit degraded, pre-NF-2 daemon).
+   *
+   * *Corrected 2026-10-19 (IL-D5):* "terminal unit degraded" never held.
+   * Nothing on the mint path reads the floor's terminal unit or its health, so
+   * a unit degraded by a fault streak, or by an inventory older than its bound,
+   * mints as a healthy one does. What a stale inventory means for a door is
+   * `staleRefusal`'s.
    *
    * That sentence was a comment asserting a protection that did not exist
    * until GT-5b: `terminalEndpoints` was assigned on the pairing hello and
@@ -940,12 +1134,19 @@ export class TerminalService {
 
   /** TP-D4 — the UI's roster projection (no placement). Refuses before the
    * first observation exactly like `list` (GT-5b's honesty). SB-2 — each
-   * bound shell's row names the set it was born under. */
+   * bound shell's row names the set it was born under. IL-D5 (a) — a row whose
+   * cell is older than the bound reads `unknown`, and the observation says how
+   * old (`observation()`). */
   roster(): TerminalRosterResult {
     this.requireObserved();
+    const observation = this.observation();
     return {
-      items: projectRoster(this.terminals, (sessionId) => this.bindings.profileSetOf(sessionId)),
-      ...(this.lastObservation === undefined ? {} : { observation: this.lastObservation }),
+      items: projectRoster(
+        this.terminals,
+        (sessionId) => this.bindings.profileSetOf(sessionId),
+        (row) => this.rowStale(row),
+      ),
+      ...(observation === undefined ? {} : { observation }),
     };
   }
 
@@ -1807,11 +2008,154 @@ export class TerminalService {
 
   dispose(): void {
     this.disposed = true;
+    this.opts.supervision?.off("transition", this.onSupervision);
+    this.armAgeTimer(undefined, 0);
     this.connecting.clear();
     for (const key of [...this.clients.keys()]) this.dropClient(key);
   }
 
   // ---- internals ----
+
+  /** Every inventory listener hears the rows, in order; one that throws is
+   * logged and the rest still hear them. */
+  private notifyInventory(): void {
+    for (const listener of [...this.inventoryListeners]) {
+      try {
+        listener(this.terminals);
+      } catch (error) {
+        this.logger.warn(
+          "fieldd.terminal.inventory_listener_failed",
+          "An inventory listener threw",
+          { error: errorMessage(error) },
+        );
+      }
+    }
+  }
+
+  /** IL-D4 — judge the inventory's age now: fieldd's own half, then the
+   * composed view (`staleCells`). A change of the view tells every inventory
+   * listener the rows again (`notify` false: the caller is about to). Arms the
+   * one timer for the next instant time alone can change the view; while only
+   * an event can (a delivery, a move of the link), none is armed. */
+  private judgeAge(notify: boolean): void {
+    if (this.disposed) return;
+    const now = this.timings.now();
+    const verdict = this.unheardVerdict(now);
+    this.noteUnheard(verdict, now);
+    this.armAgeTimer(verdict.nextAt, now);
+    const next = this.composeStale(verdict.holds);
+    const key = JSON.stringify(next);
+    if (key === this.staleKey) return;
+    this.stale = next;
+    this.staleKey = key;
+    if (notify) this.notifyInventory();
+  }
+
+  /** IL-D4 (§4.3) — does fieldd's own half hold now, and when could time alone
+   * change that. The stream reaches fieldd only while the link is "up" and the
+   * floor's tick, where it has ticked, is fresh; it stopped at the earlier of
+   * the link leaving "up" and the last tick of a tick gone stale. The half holds
+   * once STALE_MS has run since the later of that and the last delivery. Judged
+   * only for a floor that judges its own inventory: an older floor's age is
+   * unknown, and its doors behave as before the bound. */
+  private unheardVerdict(now: number): UnheardVerdict {
+    const supervision = this.opts.supervision;
+    if (supervision === undefined) return { holds: false, nextAt: undefined };
+    const { state, lastTickAgeMs } = supervision.health();
+    // noted whatever the floor: the link may leave "up" before an observation
+    if (state === "up") this.linkDownSince = undefined;
+    else this.linkDownSince ??= now;
+    // no observation yet, or one from a floor that does not judge: nothing to age
+    const deliveredAt = this.deliveredAt;
+    if (this.floorBoundMs === undefined || deliveredAt === undefined)
+      return { holds: false, nextAt: undefined };
+    const { staleMs, sampleMs, tickStaleMs } = this.timings;
+    const lastTickAt = lastTickAgeMs === null ? undefined : now - lastTickAgeMs;
+    let stoppedAt = this.linkDownSince;
+    if (lastTickAt !== undefined && now - lastTickAt > tickStaleMs)
+      stoppedAt = stoppedAt === undefined ? lastTickAt : Math.min(stoppedAt, lastTickAt);
+    if (stoppedAt === undefined) {
+      // flowing: a tick that stops is the one change time alone can make
+      return {
+        holds: false,
+        nextAt: lastTickAt === undefined ? undefined : Math.max(lastTickAt, deliveredAt) + staleMs,
+      };
+    }
+    const from = Math.max(stoppedAt, deliveredAt);
+    const facts = { state, lastTickAgeMs, unheardMs: Math.round(now - from) };
+    if (now - from < staleMs) return { holds: false, nextAt: from + staleMs, facts };
+    // the link's return and a delivery are events; a tick that resumes under
+    // an "up" link is not, so that one is looked for each SAMPLE_MS
+    return { holds: true, nextAt: state === "up" ? now + sampleMs : undefined, facts };
+  }
+
+  /** IL-D4 — fieldd's own half's two lines: one warn as it begins to hold,
+   * with what stopped the stream, and one info as it ends, with how long. */
+  private noteUnheard(verdict: UnheardVerdict, now: number): void {
+    if (verdict.holds && this.unheardSince === undefined) {
+      this.unheardSince = now;
+      this.logger.warn(
+        "fieldd.terminal.inventory_unheard",
+        "The observed inventory has not reached fieldd for its bound; every cell fieldd knows counts as stale",
+        {
+          transition: "entered",
+          boundMs: this.timings.staleMs,
+          ...(verdict.facts ?? {}),
+          ...(this.deliveredAtUnix === undefined ? {} : { lastDeliveryAt: this.deliveredAtUnix }),
+        },
+      );
+    } else if (!verdict.holds && this.unheardSince !== undefined) {
+      const heldMs = Math.round(now - this.unheardSince);
+      this.unheardSince = undefined;
+      this.logger.info(
+        "fieldd.terminal.inventory_unheard",
+        "The observed inventory reaches fieldd again",
+        { transition: "left", heldMs },
+      );
+    }
+  }
+
+  /** IL-D4 — the composed view (`staleCells`), sorted by cell. */
+  private composeStale(unheard: boolean): ObservedStaleCell[] {
+    if (this.lastObservation === undefined || this.floorBoundMs === undefined) return [];
+    const byCell = new Map<string, ObservedStaleCell>();
+    for (const entry of this.floorStale) byCell.set(entry.cellBootId, entry);
+    const since = this.deliveredAtUnix;
+    if (unheard && since !== undefined) {
+      const know = (cellInstanceId: number, cellBootId: string): void => {
+        if (cellBootId === "" || byCell.has(cellBootId)) return;
+        byCell.set(cellBootId, { cellInstanceId, cellBootId, since });
+      };
+      for (const row of this.cells ?? []) know(row.cellInstanceId, row.cellBootId);
+      for (const { cell } of this.terminals) {
+        if (cell !== undefined) know(cell.cellInstanceId, cell.cellBootId);
+      }
+    }
+    return [...byCell.values()].sort(cellOrder);
+  }
+
+  /** IL-D5 (a) — is this row's inventory older than the bound: its own cell's,
+   * for a row its tag places; any cell's, for a row no tag places. */
+  private rowStale(row: TerminalInfo): boolean {
+    if (this.stale.length === 0) return false;
+    const cell = row.cell?.cellBootId;
+    return cell === undefined || this.stale.some((entry) => entry.cellBootId === cell);
+  }
+
+  /** The age's one timer, replaced at each judgment; undefined clears it. */
+  private armAgeTimer(nextAt: number | undefined, now: number): void {
+    if (this.ageTimer !== null) {
+      clearTimeout(this.ageTimer);
+      this.ageTimer = null;
+    }
+    if (nextAt === undefined || this.disposed) return;
+    const delay = Math.max(1, Math.ceil(nextAt - now));
+    this.ageTimer = setTimeout(() => {
+      this.ageTimer = null;
+      this.judgeAge(true);
+    }, delay);
+    this.ageTimer.unref?.();
+  }
 
   /** WP12 L2b (§9 R2) — the consented stop's census, read with the service CLOSED to births: from here until
    * `reopenToBirths`, `create`/`spawn` refuse. `live` is the observed inventory plus every session this service
@@ -1936,8 +2280,8 @@ export class TerminalService {
   private requireObserved(): void {
     if (this.lastObservation !== undefined) return;
     throw new RpcCallError("UNAVAILABLE", "the terminal inventory has not been observed", true, {
-      service: "terminal",
-      state: "unobserved",
+      service: TERMINAL_INVENTORY_REFUSALS.SERVICE,
+      state: TERMINAL_INVENTORY_REFUSALS.STATE_UNOBSERVED,
     });
   }
 
@@ -2399,6 +2743,37 @@ export class TerminalService {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** IL-D4 — fieldd's own half of the inventory's age as judged at one instant
+ * (`TerminalService.unheardVerdict`). */
+interface UnheardVerdict {
+  holds: boolean;
+  /** the next instant time alone could change it (monotonic ms); undefined:
+   * only an event can */
+  nextAt: number | undefined;
+  /** what stopped the stream, for the line that says the half began */
+  facts?: { state: NativeLinkState; lastTickAgeMs: number | null; unheardMs: number };
+}
+
+/** IL-D4 — one stale cell as the floor named it, field by field: what a read
+ * and a refusal carry onward is the contract's three fields, never whatever
+ * else a newer floor adds (that stays on the floor's own stream). */
+function staleEntry(entry: ObservedStaleCell): ObservedStaleCell {
+  return { cellInstanceId: entry.cellInstanceId, cellBootId: entry.cellBootId, since: entry.since };
+}
+
+/** Stale entries in cell order: the instance, then the boot id. */
+function cellOrder(a: ObservedStaleCell, b: ObservedStaleCell): number {
+  return a.cellInstanceId - b.cellInstanceId || a.cellBootId.localeCompare(b.cellBootId);
+}
+
+/** The cells a stale refusal names, in its sentence. */
+function spokenCells(cells: readonly ObservedStaleCell[]): string {
+  const [only] = cells;
+  return cells.length === 1 && only !== undefined
+    ? `cell ${only.cellInstanceId}`
+    : `${cells.length} cells`;
 }
 
 /** The service's own "that session doesn't exist" refusal — the ONLY error

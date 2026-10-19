@@ -16,6 +16,7 @@ import {
   type SessionAttachGrant,
   type SessionAttachGrantClaims,
   type SessionAttachRight,
+  type SessionHealth,
   TERMINAL_PIPELINE,
   type TerminalInfo,
   type TerminalOpenTicket,
@@ -591,17 +592,22 @@ export function connectionSetIdFor(clientId: string, cellBootId: string): string
  * later slice. Provenance is unknown to fieldd until the AR track joins agent
  * sessions to their hosts, so it is omitted rather than guessed. SB-2 — the
  * Agent Profile a shell was born under, from fieldd's own record, where it
- * has one. */
+ * has one. IL-D5 (a) — a row whose cell's inventory is older than the bound
+ * (`staleRow`, from the terminal service's composed view) is `unknown`: it was
+ * live when its cell last answered, and nothing newer says it still is. The
+ * row stays, so one stale cell never hides a session. */
 export function projectRoster(
   terminals: readonly TerminalInfo[],
   profileSetOf: (sessionId: string) => string | undefined = () => undefined,
+  staleRow: (row: TerminalInfo) => boolean = () => false,
 ): ProductSessionRosterItem[] {
   return terminals.map((row) => {
     const profileSet = profileSetOf(row.sessionId);
+    const health: SessionHealth = staleRow(row) ? "unknown" : "live";
     return {
       sessionId: row.sessionId,
       workloadClass: row.cell?.workloadClass ?? "interactive",
-      health: "live" as const,
+      health,
       ...(row.title === undefined ? {} : { title: row.title }),
       ...(profileSet === undefined ? {} : { profileSet }),
     };

@@ -47,7 +47,9 @@ export const TerminalObservation = z
      * `staleCells`, or, once the observed stream has not reached fieldd for
      * `TERMINAL_INVENTORY.STALE_MS` (the native link not `up`, or no floor
      * tick for `NATIVE_SUPERVISION.TICK_STALE_MS`), every cell fieldd knows,
-     * each with `since` = the last observation delivered. */
+     * each with `since` = the last observation delivered — except a cell the
+     * floor had already named, which keeps the floor's own, older `since`, so
+     * its age never moves back when the stream stops. */
     staleCells: z.array(ObservedStaleCell).optional(),
   })
   .passthrough();

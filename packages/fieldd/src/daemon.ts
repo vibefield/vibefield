@@ -139,6 +139,7 @@ import {
   SystemNativeRestartParams,
   type SystemNativeRestartResult,
   SystemShutdownParams,
+  TERMINAL_INVENTORY_REFUSALS,
   type TerminalConfigDocument,
   TerminalConfigExportRequest,
   type TerminalConfigExportResult,
@@ -300,7 +301,11 @@ import {
   TERMINAL_SERVE_ID,
   TerminalServeDriver,
 } from "./terminal-serve";
-import { type TerminalProfileBinding, TerminalService } from "./terminal-service";
+import {
+  type TerminalInventoryTimings,
+  type TerminalProfileBinding,
+  TerminalService,
+} from "./terminal-service";
 import { TokenService } from "./token-service";
 import type { BrowseFacts } from "./workspace/browse-exports";
 import type { FilesHostLaunch } from "./workspace/launch";
@@ -343,6 +348,11 @@ export interface FielddConfig {
   /** TC-S2 test seam: the terminal cell-birth wait budget (production
    * defaults to the cell's genned hello deadline). */
   terminalBirthWaitMs?: number;
+  /** IL-D4 test seam: fieldd's own half of the inventory bound, over
+   * `TERMINAL_INVENTORY` (a row runs a 10 s bound in a fraction of a second).
+   * The tick bound it shares with the supervision is `nativeSupervisionTimings`'
+   * `TICK_STALE_MS`. */
+  terminalInventoryTimings?: Partial<Pick<TerminalInventoryTimings, "staleMs" | "sampleMs">>;
   /** DS-5d test seam: the bound on the holders ledger's last write at stop
    * (`DOC_HOLDERS_STOP_MS` by default). */
   docHoldersStopMs?: number;
@@ -1761,6 +1771,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // (`holderFaceFor`), read at the mint: the DeviceService is bound further
       // down, and a mint before it carries no face rather than a guessed one
       holderFaces: () => devicesForAgents,
+      // IL-D4 — fieldd's own half of the inventory's age reads the floor's
+      // supervision: the stream reaches fieldd only while the link is "up" and
+      // the floor ticks; and a stale door names WG-D4's held floor first
+      supervision: supervisor,
+      inventoryTimings: {
+        ...(config.nativeSupervisionTimings?.TICK_STALE_MS !== undefined
+          ? { tickStaleMs: config.nativeSupervisionTimings.TICK_STALE_MS }
+          : {}),
+        ...config.terminalInventoryTimings,
+      },
     });
     native.on("connected", () => void terminals.ensureStarted());
     await terminals.ensureStarted();
@@ -1971,7 +1991,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           "UNAVAILABLE",
           "the terminal inventory has not been observed, so the floor's sessions cannot be counted",
           true,
-          { service: "terminal", state: "unobserved" },
+          {
+            service: TERMINAL_INVENTORY_REFUSALS.SERVICE,
+            state: TERMINAL_INVENTORY_REFUSALS.STATE_UNOBSERVED,
+          },
         );
       }
       const consented = new Set(asked.sessions);
@@ -4124,6 +4147,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // GT-5b: `list` REFUSES (UNAVAILABLE `unobserved`) until the first observed
     // snapshot applies rather than answering an empty floor it has not looked
     // at, and carries the observation it IS answering from — see the service.
+    // IL-D4/IL-D5 (a): that observation says how old the rows may be — the
+    // floor's bound, and the cells older than it — and every row stays.
     api.register("terminal.list", (): TerminalListResult => {
       const rows = terminals.list();
       const observation = terminals.observation();

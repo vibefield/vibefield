@@ -894,4 +894,23 @@ describe("the roster projection carries no placement (TP-D4, TP-L-C)", () => {
     ]);
     for (const item of items) expect(ProductSessionRosterItem.safeParse(item).success).toBe(true);
   });
+
+  it("a row whose cell is older than the bound reads unknown, and stays (IL-D5 (a))", () => {
+    const rows: TerminalInfo[] = [
+      {
+        sessionId: "s1",
+        cell: { cellInstanceId: 1, cellBootId: "cell-boot-A", workloadClass: "interactive" },
+      },
+      {
+        sessionId: "s2",
+        cell: { cellInstanceId: 2, cellBootId: "cell-boot-B", workloadClass: "agent" },
+      },
+    ];
+    const items = projectRoster(rows, undefined, (row) => row.cell?.cellBootId === "cell-boot-B");
+    expect(items).toEqual([
+      { sessionId: "s1", workloadClass: "interactive", health: "live" },
+      { sessionId: "s2", workloadClass: "agent", health: "unknown" },
+    ]);
+    for (const item of items) expect(ProductSessionRosterItem.safeParse(item).success).toBe(true);
+  });
 });
