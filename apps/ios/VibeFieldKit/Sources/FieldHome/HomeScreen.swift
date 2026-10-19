@@ -1635,7 +1635,10 @@ public struct HomeScreen: View {
       // Item 41: the live card is its terminal, on the terminal's own ground.
       // Before the attachment exists the ground is the appearance it will be
       // seeded from, so the card never changes its layout as it rises.
-      liveGround: cardGround
+      liveGround: cardGround,
+      // Item 42: who drives the session from another device, while one does —
+      // the live card's readout, in its empty rows over its held veil.
+      seatReadout: cardSeatReadout
     ) {
       liveTerminal(title: bubble?.project)
     }
@@ -1668,6 +1671,19 @@ public struct HomeScreen: View {
       guard old == .none, new != .none else { return }
       attachment?.engage()
       attachment?.followBottom()
+    }
+    // Item 42 — the holder let go while this card is on the screen: the card
+    // takes the empty seat itself (Q1's ruling on the phone, DESIGN.md §8). On
+    // the screen is the scene active and this card the one presented — the
+    // attachment is only ever the presented card's, and a closed card's is
+    // parked in `keptAttachments`, where nothing takes. When, and the once, are
+    // `FieldHomeModel.takesEmptySeat`'s.
+    .onChange(of: attachment?.seat?.driver) { old, new in
+      guard
+        FieldHomeModel.takesEmptySeat(
+          from: old, to: new, phase: scenePhase, presented: selection != nil)
+      else { return }
+      attachment?.takeEmptySeat()
     }
     // --- IOS-5a: the card rides the bottom safe area, above the keyboard ---
     .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -1861,6 +1877,19 @@ public struct HomeScreen: View {
   private var cardGround: CardGround {
     let ground = TerminalGround(attachment?.presentation ?? presentationConfig(for: appearance))
     return CardGround(color: ground.color, solid: ground.solidColor, inkScheme: ground.inkScheme)
+  }
+
+  /// Item 42 — who drives the card's session from another device, for the live
+  /// card's readout and its held veil: a live terminal's, and only while the
+  /// attachment has no words of its own (`FieldHomeModel.showsSeatReadout`).
+  /// The held screen's rows are counted in the renderer's own line height.
+  private var cardSeatReadout: FieldHomeModel.SeatReadout? {
+    guard let attachment,
+      FieldHomeModel.showsSeatReadout(
+        live: attachment.phase == .live, cooled: attachment.banner?.coolsTerminal ?? false,
+        hasWords: attachmentNote != nil || !attachmentActions.isEmpty)
+    else { return nil }
+    return FieldHomeModel.seatReadout(attachment.seat, lineHeight: attachment.scene.lineHeight)
   }
 
   @ViewBuilder

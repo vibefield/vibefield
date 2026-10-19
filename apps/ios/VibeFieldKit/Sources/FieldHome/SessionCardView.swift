@@ -90,6 +90,12 @@ struct SessionCardView<Terminal: View>: View {
   /// Item 41 — the terminal's own ground. Given, a live card is its terminal,
   /// edge to edge (`liveCard`); nil keeps the stacked card on the glass.
   var liveGround: CardGround? = nil
+  /// Item 42 — who drives this card's session from another device, handed over
+  /// only while one does and the card has no words of its own
+  /// (`FieldHomeModel.seatReadout`, `showsSeatReadout`). Given, the live card
+  /// stands this readout in its empty rows, over the held veil; nil says
+  /// nothing.
+  var seatReadout: FieldHomeModel.SeatReadout? = nil
   /// The act that fixes "no write key for this host" (IOS-3c), when there is
   /// one to offer. `nil` means not offered and draws nothing — this card never
   /// renders a control it cannot honour (D-i6). It is a callback rather than a
@@ -149,6 +155,17 @@ struct SessionCardView<Terminal: View>: View {
         // there — never translated — so the grid it measures, less its safe
         // area, is the rows the person can read, and those are the PTY's.
         .padding(.top, FieldHomeModel.liveCardBand)
+
+      // Item 42 — another client drives the session: the card goes on drawing
+      // it at the holder's size, dimmed under the held veil, and says so in its
+      // empty rows, lit in the band's ink. Over the grid and under the frame and
+      // the band; it takes no touch, so one on the grid goes through and takes
+      // the seat back (DS-D5), and it leaves at once when the phone takes it.
+      if let seatReadout {
+        SeatReadoutView(readout: seatReadout, ground: ground)
+          .environment(\.colorScheme, ground.inkScheme)
+          .transition(.identity)
+      }
 
       // Godview's pane frame, over the grid and under the band's words.
       liveCardFrame

@@ -1,4 +1,5 @@
 import Foundation
+import GhostteaCore
 import GhostteaTerminal
 
 /// ONE terminal's retained scene on this phone, and the only door a frame enters
@@ -27,6 +28,13 @@ public final class TerminalScene {
   /// The view, once made. `nil` before the first frame or mount asked for one,
   /// after `clear()`, and on a scene that renders through `applying`.
   public private(set) var view: GhostteaTerminalMetalView?
+
+  /// The renderer's line height in points, which a held screen's rows are
+  /// counted in (item 42: the live card's readout stands in the rows it leaves
+  /// empty). `nil` while there is no view.
+  public var lineHeight: CGFloat? {
+    view.map { CGFloat($0.terminalTextMetrics.lineHeightPixels) }
+  }
 
   private let makeView: @MainActor () throws -> GhostteaTerminalMetalView
   private let applying: (@MainActor (Data) throws -> Bool)?
