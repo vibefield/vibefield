@@ -1,3 +1,4 @@
+import FieldAgents
 import FieldDesign
 import FieldMesh
 import FieldTerminal
@@ -150,6 +151,58 @@ enum FieldHomeModel {
   static func terminalSlot(attached: Bool, remote: Bool, agentAttachable: Bool) -> TerminalSlot {
     if attached || agentAttachable { return .live }
     return remote ? .peer : .absence
+  }
+
+  // MARK: - The live card is its terminal (item 41)
+
+  /// Item 41 (James, 2026-10-19; T1, ruled 21:38Z) — the live card wears
+  /// Godview's pane frame (DESIGN.md §8, "The phone's live card is its
+  /// terminal"): a band across its top, and a line and a glow that follow the
+  /// sheet's corners. The band is 44pt, and the grid starts under it, so no row
+  /// hides under chrome.
+  static let liveCardBand: CGFloat = 44
+  /// The sheet's outline, which the frame's line and glow follow: the sheet's
+  /// own 40pt corners on top (`.presentationCornerRadius(40)`) and, at its
+  /// foot, the screen's — 62 on the 6.3-inch phones, and never less, so the
+  /// glass never cuts the line; a screen rounded tighter shows it a hair inside.
+  static let liveCardOutline = UnevenRoundedRectangle(
+    topLeadingRadius: 40, bottomLeadingRadius: 62, bottomTrailingRadius: 62, topTrailingRadius: 40)
+  /// A cooled terminal dims toward its ground, under a veil of it at this opacity.
+  static let liveCardCooledVeil: Double = 0.45
+
+  /// What the band's readout says (T1): the agent's model · effort · context
+  /// share, lowercase, as a desktop pane's frame reads its agent. What the
+  /// agent has not said is left out, never a placeholder.
+  struct LiveCardReadout: Equatable {
+    /// The model, else the agent's own name.
+    let model: String
+    let effort: String?
+    /// The effort is the launch's intent, not the provider's evidence: drawn
+    /// italic, as the desktop's frame and the swarm's bodies draw it.
+    let effortIsIntent: Bool
+    /// The context share in whole percent: `46%`.
+    let context: String?
+
+    static let separator = " · "
+
+    /// The readout as one line.
+    var words: String { [model, effort, context].compactMap { $0 }.joined(separator: Self.separator) }
+  }
+
+  /// The band's readout for the card's subject; nil for a peer's bare terminal,
+  /// whose band wears the badge alone, as a desktop pane does before its agent
+  /// speaks.
+  static func liveCardReadout(_ bubble: FieldBubble) -> LiveCardReadout? {
+    guard let agent = bubble.agent else { return nil }
+    let named = agent.modelName.flatMap { $0.isEmpty ? nil : $0 } ?? agent.providerName
+    let effort = agent.effort.flatMap { $0.value.isEmpty ? nil : $0.value.lowercased() }
+    let context = agent.contextUsedPercent.flatMap { share -> String? in
+      guard share.isFinite else { return nil }
+      return "\(Int(min(max(share, 0), 100).rounded(.down)))%"
+    }
+    return LiveCardReadout(
+      model: named.lowercased(), effort: effort,
+      effortIsIntent: effort != nil && agent.effort?.intent == .configured, context: context)
   }
 
   /// fix8 — whether the card's run has EXITED, by its own face (PJ-7's second

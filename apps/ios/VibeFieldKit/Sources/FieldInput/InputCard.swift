@@ -73,9 +73,14 @@ public struct InputCard: View {
     // --- IOS-5c: three faces, not one. With the keyboard down the card is a
     // single row (the design's `MainClosed`); with it up, the contextual chips
     // row rides above the card whenever it has something to say.
+    // F1 (2026-10-19): the closed row floats over the terminal's last rows —
+    // `ClosedRow`, which the host lays over the session card — so with the
+    // keyboard down this view holds no room in the bottom safe area and the
+    // grid runs to its top. It still stands, empty, for the keypad's hidden
+    // responder below, which must never leave the hierarchy.
     Group {
       if model.keyboardOwner == .none {
-        ClosedRow(model: model, pasteboard: pasteboard)
+        Color.clear.frame(height: 0)
       } else {
         VStack(spacing: Self.stackGap) {
           if !ChipsRow.isEmpty(model: model, pasteboard: pasteboard) {
@@ -88,10 +93,10 @@ public struct InputCard: View {
           }
           card
         }
+        .padding(.horizontal, Self.inset)
+        .padding(.bottom, Self.rowGap)
       }
     }
-    .padding(.horizontal, Self.inset)
-    .padding(.bottom, Self.rowGap)
     // --- IOS-5e: the card's widest, centred. See `InputCardMetrics.maximumWidth`
     // — across an iPad's 1024 pt inset the nine keys would be 108 pt buttons
     // under the middle of the screen, where no thumb is.

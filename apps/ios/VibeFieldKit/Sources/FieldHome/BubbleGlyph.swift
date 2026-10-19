@@ -10,6 +10,8 @@ import UIKit
 /// said.
 struct BubbleGlyph: View {
   let bubble: FieldBubble
+  /// The size an undrawn mark's letter is set at (`AgentGlyph.letterSize`).
+  var letterSize: CGFloat = 44
 
   var body: some View {
     if bubble.remote != nil {
@@ -18,7 +20,7 @@ struct BubbleGlyph: View {
         .resizable()
         .scaledToFit()
     } else if let agent = bubble.agent {
-      AgentGlyph(mark: agent.markKey)
+      AgentGlyph(mark: agent.markKey, letterSize: letterSize)
     }
   }
 }
@@ -41,6 +43,10 @@ struct BubbleGlyph: View {
 /// an image that is not here and drawn them as nothing.
 struct AgentGlyph: View {
   let mark: String
+  /// The letter's size. A drawn mark fits whatever frame it is given; the
+  /// letter is type, so it is told: the card header's 44, the live card's
+  /// badge its 11 (T1, 2026-10-19).
+  var letterSize: CGFloat = 44
 
   /// The peer-terminal prompt. It lives in the same folder and is never an
   /// agent's mark, whatever an agent is called.
@@ -54,7 +60,7 @@ struct AgentGlyph: View {
         .scaledToFit()
     } else {
       Text(AgentProvider(rawValue: mark).markLetter)
-        .font(.system(size: 44, weight: .heavy, design: .monospaced))
+        .font(.system(size: letterSize, weight: .heavy, design: .monospaced))
     }
   }
 

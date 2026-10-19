@@ -2808,6 +2808,37 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   with RETRY, as are the product client's own final kinds (`INCOMPATIBLE`, `UNAUTHORIZED`,
   `PRECONDITION_FAILED`). Every other card on that desktop is asked for, and answered, on its
   own. A refusal the door marks retryable is asked again on the backoff, as before.
+- **The phone's live card is its terminal, edge to edge** (item 41; James, 2026-10-19: "instead of
+  containing the terminal content in the rounded rectangle right now, just make it fully fill the
+  entire tab area…", and at 20:48Z "i said fully fill the tab card"; the look ruled 21:38Z, "good,
+  design all go with the lean"). While the card is live the sheet IS the terminal. **Its ground** is
+  the terminal's own background at its own opacity (the theme's; Matte Black `#121212` by default,
+  never §2.7's paper), from the sheet's top edge to its foot, behind the home indicator. There is
+  no paper, no rounded inset, no divider and no header block. **The card wears Godview's pane
+  frame**: a 1px line and the inner glow in text main follow the sheet's corners, 40pt at the top
+  and the display's own at the foot (62pt on James's iPhone) so the display never cuts the line, and
+  a 44pt band across its top holds, at the left, **the readout** (model · effort · context,
+  lowercase, as a desktop pane's), and at the right **···** and **the badge** (OS mark · agent
+  mark · name, filled in text main), inset clear of the 40pt corner. The band's ink, the line's and
+  the glow's follow the ground's lightness, not the app's theme: a ground that white reads better on
+  takes §2.4's dark ramp by day too, and a light ground takes the light ramp. The band takes its
+  own touches, so a touch there never reaches the terminal under it (that touch would take the seat,
+  DS-D5). **The grid starts under the band and runs to the top of the home indicator's safe area**
+  (34pt), so no row hides under chrome; the text's margins are the renderer's own padding, 10pt each
+  side, 2pt above and 8pt below. **The closed input row is no longer a band**: its keyboard key and
+  its reply chips float over the last rows, each on a local clearing of the ground. The open input
+  card is as it was. The attachment's words ride over the grid 10pt below the band. A cooled
+  terminal dims toward its ground (a veil of the ground at 45%), not toward the glass. While another
+  device holds the seat, the held screen **anchors at the grid's foot** (a ghosttea renderer option,
+  riding its 0.10.2 pin: a translate in the kit would move the Metal view onto the safe area, and
+  ghosttea would measure a shorter grid), so its empty rows are at the top. *Status 2026-10-19:
+  until that option ships, the held screen stands top-left, as a desktop pane's does, and its empty
+  rows are at the foot.* The peer, absence and ended faces keep the stacked card on the glass. While
+  the phone holds the seat, that grid is the PTY's. *(2026-10-19: this said the header stood on a
+  fade of the ground, solid to 24pt above its foot and clear 8pt below, with the grid's top rows
+  under it: "at 13pt the grid gains about five rows, three or four of them under the header, so a
+  full-screen program's first lines are hidden on the phone". James's pick of T1 and F1 retires both
+  the fade and that cost: the band holds no rows.)*
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views

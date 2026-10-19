@@ -1629,9 +1629,28 @@ public struct HomeScreen: View {
       cooled: attachment?.banner?.coolsTerminal ?? false,
       onSettings: { cardSettingsOpen = true },
       terminalReason: cardTerminalFace.note,
-      agentAttachable: cardTerminalFace.offersAttach
+      agentAttachable: cardTerminalFace.offersAttach,
+      // Item 41: the live card's badge wears the OS of the desktop it runs on.
+      sessionOS: cardSessionOS,
+      // Item 41: the live card is its terminal, on the terminal's own ground.
+      // Before the attachment exists the ground is the appearance it will be
+      // seeded from, so the card never changes its layout as it rises.
+      liveGround: cardGround
     ) {
       liveTerminal(title: bubble?.project)
+    }
+    // F1 (item 41) — the closed input row is no longer a band: its keyboard key
+    // and its reply chips float over the grid's last rows, each on a clearing
+    // of the terminal's ground, and inset nothing, so the grid runs to the top
+    // of the home indicator's safe area. Standing on that ground, they wear its
+    // ramp, as the band does. The row draws only while the keyboard is down;
+    // the open card below rides the bottom safe area as it did.
+    .overlay(alignment: .bottom) {
+      if inputCardFace == .shown {
+        let ground = cardGround
+        ClosedRow(model: inputCard, pasteboard: pasteboard, clearing: ground.color)
+          .environment(\.colorScheme, ground.inkScheme)
+      }
     }
     // IOS-8g — the appearance sheet, from the card's `···`, on the card's own
     // presenter (the root is behind this sheet).
@@ -1829,6 +1848,20 @@ public struct HomeScreen: View {
     // --- end IOS-5b --------------------------------------------------------
   }
   // --- end IOS-5a ----------------------------------------------------------
+
+  /// Item 41 — the OS mark the live card's badge wears: the desktop the card's
+  /// session runs on, as the link lists it (§13), and a plain screen while its
+  /// platform is not said.
+  private var cardSessionOS: DeviceMark.OS {
+    let device = cardBubble?.agent?.join?.deviceID ?? cardBubble?.remote?.deviceID
+    return DeviceMark.OS(platform: link?.desktops.first { $0.deviceId == device }?.platform)
+  }
+
+  /// The terminal's own ground, for the live card (item 41).
+  private var cardGround: CardGround {
+    let ground = TerminalGround(attachment?.presentation ?? presentationConfig(for: appearance))
+    return CardGround(color: ground.color, solid: ground.solidColor, inkScheme: ground.inkScheme)
+  }
 
   @ViewBuilder
   private func liveTerminal(title: String?) -> some View {

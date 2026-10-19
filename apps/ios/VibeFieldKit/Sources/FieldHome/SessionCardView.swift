@@ -11,6 +11,19 @@ struct CardAction: Identifiable {
   let run: () -> Void
 }
 
+/// The terminal's own ground as the live card paints it (item 41), handed over
+/// by the host so the card never learns what a terminal's theme is.
+struct CardGround {
+  /// The ground, its opacity included.
+  let color: Color
+  /// The ground at full strength: the ink of what stands on text main over it
+  /// (the band's badge), which a translucent ground would wash out.
+  let solid: Color
+  /// The ramp chrome on this ground wears: the ground's lightness decides it,
+  /// not the app's theme.
+  let inkScheme: ColorScheme
+}
+
 /// The card that rises when a bubble is tapped: the session's identity and
 /// live status above the surface where its terminal renders.
 ///
@@ -71,6 +84,12 @@ struct SessionCardView<Terminal: View>: View {
   /// .offersAttach`): the host attaches as the card rises, and the slot is
   /// the terminal from the first frame (FW-D2)
   var agentAttachable: Bool = false
+  /// Item 41 — the OS mark the live card's badge wears: the desktop the
+  /// session runs on (§13), a plain screen while its platform is not said.
+  var sessionOS: DeviceMark.OS = .unknown
+  /// Item 41 — the terminal's own ground. Given, a live card is its terminal,
+  /// edge to edge (`liveCard`); nil keeps the stacked card on the glass.
+  var liveGround: CardGround? = nil
   /// The act that fixes "no write key for this host" (IOS-3c), when there is
   /// one to offer. `nil` means not offered and draws nothing — this card never
   /// renders a control it cannot honour (D-i6). It is a callback rather than a
@@ -83,17 +102,77 @@ struct SessionCardView<Terminal: View>: View {
   }
 
   var body: some View {
-    VStack(spacing: 0) {
-      if let bubble, face == .session {
-        header(bubble)
-        Divider().overlay(FieldPalette.panelBorder)
-        terminalSlot(bubble)
-      } else {
-        endedFace
+    if let bubble, face == .session, let liveGround, slot(bubble) == .live {
+      liveCard(bubble, ground: liveGround)
+    } else {
+      VStack(spacing: 0) {
+        if let bubble, face == .session {
+          header(bubble)
+          Divider().overlay(FieldPalette.panelBorder)
+          terminalSlot(bubble)
+        } else {
+          endedFace
+        }
       }
+      // No opaque background: the sheet's liquid glass carries the card, and
+      // the field stays visible behind it, blurred and dimmed.
     }
-    // No opaque background: the sheet's liquid glass carries the card, and
-    // the field stays visible behind it, blurred and dimmed.
+  }
+
+  private func slot(_ bubble: FieldBubble) -> FieldHomeModel.TerminalSlot {
+    FieldHomeModel.terminalSlot(
+      attached: isAttached, remote: bubble.remote != nil, agentAttachable: agentAttachable)
+  }
+
+  // MARK: - The live card (item 41)
+
+  /// The live card is its terminal, edge to edge (DESIGN.md §8, "The phone's
+  /// live card is its terminal"; James, 2026-10-19, T1 and F1). It wears
+  /// Godview's pane frame: a line and an inner glow that follow the sheet's
+  /// corners, and a 44pt band across its top. The grid starts under the band
+  /// and runs to the top of the home indicator's safe area, so no row hides
+  /// under chrome; the closed input row floats over its last rows (the host's
+  /// `ClosedRow`). The terminal's own ground runs on behind the home indicator.
+  /// There is no paper, rounded inset, divider or header block.
+  private func liveCard(_ bubble: FieldBubble, ground: CardGround) -> some View {
+    ZStack(alignment: .top) {
+      terminal()
+        // A cooled terminal dims toward its ground, never toward the glass.
+        .overlay {
+          ground.color
+            .opacity(cooled ? FieldHomeModel.liveCardCooledVeil : 0)
+            .allowsHitTesting(false)
+        }
+        .animation(FieldMotion.ease(0.24), value: cooled)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // The grid starts under the band. The Metal view itself is laid out
+        // there — never translated — so the grid it measures, less its safe
+        // area, is the rows the person can read, and those are the PTY's.
+        .padding(.top, FieldHomeModel.liveCardBand)
+
+      // Godview's pane frame, over the grid and under the band's words.
+      liveCardFrame
+        .environment(\.colorScheme, ground.inkScheme)
+        .ignoresSafeArea(edges: .bottom)
+
+      VStack(spacing: 0) {
+        band(bubble, ground: ground)
+        // The attachment's words ride over the grid, 10pt under the band's
+        // foot: the panel's own top margin.
+        statusPanel.animation(FieldMotion.ease(0.24), value: statusNote)
+      }
+      // Chrome on the terminal's ground wears the ground's ramp, not the app's.
+      .environment(\.colorScheme, ground.inkScheme)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    // The ground runs on under the input card and the home indicator. It is a
+    // strip at the card's foot that takes the bottom safe area, so it never
+    // lies under the grid: one surface, never a layer under a layer.
+    .background(alignment: .bottom) {
+      ground.color
+        .frame(height: 0)
+        .ignoresSafeArea(edges: .bottom)
+    }
   }
 
   // MARK: - Header
@@ -147,7 +226,15 @@ struct SessionCardView<Terminal: View>: View {
         }
       }
 
-      moreMenu
+      moreMenu {
+        Text("···")
+          .font(FieldType.mono(11, .heavy))
+          .foregroundStyle(FieldPalette.textMuted)
+          .frame(width: 30, height: 26)
+          .background(RoundedRectangle(cornerRadius: 6).fill(FieldPalette.panelBackground.opacity(0.8)))
+          .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
+          .contentShape(Rectangle())
+      }
     }
     .padding(.horizontal, 18)
     .padding(.top, 22)
@@ -156,22 +243,18 @@ struct SessionCardView<Terminal: View>: View {
 
   /// The card's `···` (IOS-8g): the acts about this card's terminal. One
   /// today — the appearance sheet the TERMINAL chip used to open — in the
-  /// godview voice the card speaks, on the system's own menu.
-  private var moreMenu: some View {
-    Menu {
+  /// godview voice the card speaks, on the system's own menu. The stacked
+  /// card's header boxes the glyph; the live card's band wears it bare (T1).
+  private func moreMenu<Glyph: View>(@ViewBuilder glyph: () -> Glyph) -> some View {
+    let face = glyph()
+    return Menu {
       Button {
         onSettings()
       } label: {
         Label("Terminal appearance…", systemImage: "paintpalette")
       }
     } label: {
-      Text("···")
-        .font(FieldType.mono(11, .heavy))
-        .foregroundStyle(FieldPalette.textMuted)
-        .frame(width: 30, height: 26)
-        .background(RoundedRectangle(cornerRadius: 6).fill(FieldPalette.panelBackground.opacity(0.8)))
-        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(FieldPalette.panelBorder, lineWidth: 1))
-        .contentShape(Rectangle())
+      face
     }
     .menuStyle(.button)
     .buttonStyle(.plain)
@@ -197,6 +280,98 @@ struct SessionCardView<Terminal: View>: View {
     guard bubble.agent != nil else { return nil }
     guard let percent = bubble.agent?.contextUsedPercent else { return "CTX:--%" }
     return String(format: "CTX:%02d%%", Int(percent.rounded(.down)))
+  }
+
+  // MARK: - The band and the frame (item 41)
+
+  /// The live card's band (T1; DESIGN.md §8): 44pt across the sheet's top, on
+  /// the terminal's ground. At the left the readout; at the right `···` and the
+  /// badge, inset clear of the sheet's 40pt corner (the badge's own corner
+  /// stands 12pt inside its arc). The row sits under the drag indicator, its
+  /// middle 26pt down. The band takes its own touches: one that reached the
+  /// terminal under it would take the seat (DS-D5) for a touch on the name.
+  private func band(_ bubble: FieldBubble, ground: CardGround) -> some View {
+    HStack(spacing: 12) {
+      if let readout = FieldHomeModel.liveCardReadout(bubble) {
+        bandReadout(readout)
+      }
+      Spacer(minLength: 0)
+      HStack(spacing: 14) {
+        moreMenu {
+          Text("···")
+            .font(FieldType.mono(14, .heavy))
+            .tracking(FieldType.tracking(0.04, of: 14))
+            .foregroundStyle(FieldPalette.textMain.opacity(0.62))
+            .frame(width: 30, height: 36)
+            .contentShape(Rectangle())
+        }
+        badge(bubble, ink: ground.solid)
+      }
+      // The readout gives way first: the badge is which session this is.
+      .layoutPriority(1)
+    }
+    .padding(.leading, 28)
+    .padding(.trailing, 24)
+    .padding(.top, 8)
+    .frame(maxWidth: .infinity)
+    .frame(height: FieldHomeModel.liveCardBand)
+    .background(ground.color)
+    .contentShape(Rectangle())
+  }
+
+  /// The band's readout (T1): model · effort · context, lowercase, mono 11
+  /// medium at half the band's ink, as a desktop pane's — the effort italic
+  /// while it is only the launch's intent.
+  private func bandReadout(_ readout: FieldHomeModel.LiveCardReadout) -> some View {
+    let separator = AttributedString(FieldHomeModel.LiveCardReadout.separator)
+    var line = AttributedString(readout.model)
+    if let effort = readout.effort {
+      var word = AttributedString(effort)
+      if readout.effortIsIntent { word.font = FieldType.mono(11, .medium).italic() }
+      line += separator + word
+    }
+    if let context = readout.context { line += separator + AttributedString(context) }
+    return Text(line)
+      .font(FieldType.mono(11, .medium))
+      .tracking(FieldType.tracking(0.01, of: 11))
+      .foregroundStyle(FieldPalette.textMain.opacity(0.5))
+      .lineLimit(1)
+      .truncationMode(.tail)
+  }
+
+  /// The badge (T1): the session's OS mark · its agent's mark · its name, in
+  /// the ground's own ink on a fill of text main — Godview's pane badge.
+  private func badge(_ bubble: FieldBubble, ink: Color) -> some View {
+    HStack(spacing: 6) {
+      DeviceMark(os: sessionOS, size: 11)
+      BubbleGlyph(bubble: bubble, letterSize: 11)
+        .frame(width: 11, height: 11)
+      Text(bubble.project)
+        .font(FieldType.mono(12, .semibold))
+        .lineLimit(1)
+    }
+    .foregroundStyle(ink)
+    .padding(.top, 4)
+    .padding(.bottom, 5)
+    .padding(.horizontal, 10)
+    .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(FieldPalette.textMain))
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("\(bubble.project), on \(sessionOS.label)")
+  }
+
+  /// Godview's pane frame on the phone (T1): its line, 1px at 30%, and its
+  /// inner glow — the bare shell frame's `inset 0 0 34px -8px` at 20% and
+  /// `inset 0 0 5px -1px` at 10% — in text main, following the sheet's corners.
+  /// It takes no touch.
+  private var liveCardFrame: some View {
+    let outline = FieldHomeModel.liveCardOutline
+    return ZStack {
+      outline.insetGlow(FieldPalette.textMain.opacity(0.2), blur: 34, spread: -8)
+      outline.insetGlow(FieldPalette.textMain.opacity(0.1), blur: 5, spread: -1)
+      outline.strokeBorder(FieldPalette.textMain.opacity(0.3), lineWidth: 1)
+    }
+    .allowsHitTesting(false)
+    .accessibilityHidden(true)
   }
 
   // MARK: - The terminal slot

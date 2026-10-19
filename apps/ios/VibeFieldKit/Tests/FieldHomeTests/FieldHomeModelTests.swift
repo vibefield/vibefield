@@ -1,5 +1,7 @@
+import FieldAgents
 import FieldMesh
 import FieldTerminal
+import Foundation
 import SwiftUI
 import Testing
 
@@ -124,6 +126,87 @@ struct TerminalSlotTests {
     #expect(FieldHomeModel.terminalSlot(attached: true, remote: false, agentAttachable: true) == .live)
     #expect(FieldHomeModel.terminalSlot(attached: true, remote: true, agentAttachable: false) == .live)
     #expect(FieldHomeModel.terminalSlot(attached: false, remote: false, agentAttachable: false) == .absence)
+  }
+}
+
+// MARK: - The live card is its terminal (item 41)
+
+/// T1 (James, 2026-10-19 21:38Z): the live card wears Godview's pane frame — a
+/// 44pt band whose readout says the agent's model · effort · context, and a
+/// line and a glow that follow the sheet's corners. The band holds no rows.
+@Suite("item 41 — the live card's band and frame")
+struct LiveCardBandTests {
+  static func agent(
+    model: String? = "Opus 5.5", effort: AgentEffort? = AgentEffort(value: "High"),
+    context: Double? = 46.7
+  ) -> FieldBubble {
+    FieldBubble(
+      id: "run-1", project: "vibe-field", detail: "working", status: .working,
+      identityKey: "run-1", createdAt: Date(timeIntervalSince1970: 0),
+      agent: AgentFacet(
+        provider: AgentProvider(rawValue: "claude"), modelName: model,
+        contextUsedPercent: context, effort: effort))
+  }
+
+  @Test("the readout is model · effort · context, lowercase, as a desktop pane's")
+  func theReadout() {
+    let readout = FieldHomeModel.liveCardReadout(Self.agent())
+    #expect(readout?.words == "opus 5.5 · high · 46%")
+    #expect(readout?.effortIsIntent == false)
+  }
+
+  @Test("what the agent has not said is left out, never a placeholder")
+  func whatItLacks() {
+    #expect(FieldHomeModel.liveCardReadout(Self.agent(effort: nil))?.words == "opus 5.5 · 46%")
+    #expect(FieldHomeModel.liveCardReadout(Self.agent(context: nil))?.words == "opus 5.5 · high")
+    #expect(
+      FieldHomeModel.liveCardReadout(Self.agent(effort: AgentEffort(value: ""), context: nil))?.words
+        == "opus 5.5")
+  }
+
+  @Test("with no model the readout names the agent itself")
+  func noModel() {
+    #expect(FieldHomeModel.liveCardReadout(Self.agent(model: nil))?.words == "claude · high · 46%")
+    #expect(FieldHomeModel.liveCardReadout(Self.agent(model: ""))?.model == "claude")
+  }
+
+  @Test("an effort that is only the launch's intent is marked so, to be drawn italic")
+  func theIntent() {
+    let intent = FieldHomeModel.liveCardReadout(
+      Self.agent(effort: AgentEffort(value: "Max", intent: .configured)))
+    #expect(intent?.effort == "max")
+    #expect(intent?.effortIsIntent == true)
+  }
+
+  @Test("the share is whole percent, floored and held to 0…100; one that is no number is left out")
+  func theShare() {
+    #expect(FieldHomeModel.liveCardReadout(Self.agent(context: 99.9))?.context == "99%")
+    #expect(FieldHomeModel.liveCardReadout(Self.agent(context: 0))?.context == "0%")
+    #expect(FieldHomeModel.liveCardReadout(Self.agent(context: 140))?.context == "100%")
+    #expect(FieldHomeModel.liveCardReadout(Self.agent(context: -3))?.context == "0%")
+    #expect(FieldHomeModel.liveCardReadout(Self.agent(context: .nan))?.context == nil)
+  }
+
+  @Test("a peer's bare terminal has no readout: its band wears the badge alone")
+  func aBareTerminal() {
+    let peer = FieldBubble(
+      id: "peer-1", project: "remote", detail: "mini", status: .idle, identityKey: "peer-1",
+      createdAt: Date(timeIntervalSince1970: 0),
+      remote: RemoteFacet(
+        deviceID: "dev-mini", deviceName: "mini", sessionID: "sess-1", attachable: true,
+        readWrite: true))
+    #expect(FieldHomeModel.liveCardReadout(peer) == nil)
+  }
+
+  @Test("the band is 44pt; the frame follows the sheet's 40pt corners and the screen's 62 at its foot")
+  func theFigures() {
+    #expect(FieldHomeModel.liveCardBand == 44)
+    let corners = FieldHomeModel.liveCardOutline.cornerRadii
+    #expect(corners.topLeading == 40)
+    #expect(corners.topTrailing == 40)
+    #expect(corners.bottomLeading == 62)
+    #expect(corners.bottomTrailing == 62)
+    #expect(FieldHomeModel.liveCardCooledVeil == 0.45)
   }
 }
 

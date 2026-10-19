@@ -84,8 +84,10 @@ import Testing
     let config = presentationConfig(for: .default)
     #expect(config.schemaVersion == 1)
     #expect(config.fontFamilies.isEmpty)
-    #expect(config.paddingX == [2, 2])
-    #expect(config.paddingY == [2, 2])
+    // The live card's text margin (item 41): the renderer's own 2pt origin on
+    // top, so 10pt in from each edge, 2pt down and 8pt up from the foot.
+    #expect(config.paddingX == [8, 8])
+    #expect(config.paddingY == [0, 6])
     #expect(config.postProcess == .none)
     #expect(config.customShaderCount == 0)
     #expect(config.backgroundOpacityCells == false)

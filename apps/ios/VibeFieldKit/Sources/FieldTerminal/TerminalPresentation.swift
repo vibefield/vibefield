@@ -29,7 +29,12 @@ private enum FallbackColors {
 ///   shader list in 0.9.x (upstream maps it into `shaderEffects` itself).
 /// - `fontFamilies` is empty: Apple shapes with bundled fonts; family values
 ///   are presentation metadata upstream does not load on this platform.
-/// - Padding is Ghostty's default 2,2 (`GhostteaTerminalLayout`'s constants).
+/// - Padding is the live card's text margin (DESIGN.md §8, "The phone's live
+///   card is its terminal", 2026-10-19): 8 each side, 0 above, 6 below. The
+///   renderer adds its own 2pt origin (`GhostteaTerminalLayout`'s constants),
+///   so the text sits 10pt in from each edge, 2pt down and 8pt up from the
+///   foot. The margin is the renderer's because the card's ground is the
+///   terminal's own: a margin outside the view would be a second ground.
 /// - `customShaderCount` is 0: no host-local shader paths exist on a phone.
 /// - `revision` is a digest of the renderer VALUES, so it changes exactly when
 ///   the device presentation changes — document identity that never drags an
@@ -63,10 +68,14 @@ public func presentationConfig(
     shaders.append(id)
   }
 
+  let paddingX: [Float] = [8, 8]
+  let paddingY: [Float] = [0, 6]
+
   let revision = presentationRevision(
     foreground: foreground, background: background, cursor: cursor, cursorText: cursorText,
     selectionBackground: selectionBackground, selectionForeground: selectionForeground,
     palette: palette, backgroundOpacity: opacity, fontSize: fontSize,
+    paddingX: paddingX, paddingY: paddingY,
     shaderEffects: shaders, shaderAnimation: appearance.shaderAnimation)
 
   return GhostteaTerminalPresentationConfig(
@@ -83,8 +92,8 @@ public func presentationConfig(
     backgroundOpacityCells: false,
     fontSize: fontSize,
     fontFamilies: [],
-    paddingX: [2, 2],
-    paddingY: [2, 2],
+    paddingX: paddingX,
+    paddingY: paddingY,
     postProcess: .none,
     shaderEffects: shaders,
     customShaderAnimation: appearance.shaderAnimation,
@@ -113,13 +122,14 @@ private func presentationRevision(
   foreground: [UInt8], background: [UInt8], cursor: [UInt8], cursorText: [UInt8],
   selectionBackground: [UInt8], selectionForeground: [UInt8],
   palette: [GhostteaPaletteConfigEntry], backgroundOpacity: Float, fontSize: Float,
+  paddingX: [Float], paddingY: [Float],
   shaderEffects: [String], shaderAnimation: Bool
 ) -> String {
   let canonical = [
     "fg:\(foreground)", "bg:\(background)", "cu:\(cursor)", "ct:\(cursorText)",
     "sb:\(selectionBackground)", "sf:\(selectionForeground)",
     "pa:" + palette.map { "\($0.index)=\($0.color)" }.joined(separator: ";"),
-    "op:\(backgroundOpacity)", "fs:\(fontSize)",
+    "op:\(backgroundOpacity)", "fs:\(fontSize)", "px:\(paddingX)", "py:\(paddingY)",
     "sh:" + shaderEffects.joined(separator: ";"), "an:\(shaderAnimation)",
   ].joined(separator: "|")
   var hash: UInt64 = 0xcbf2_9ce4_8422_2325
