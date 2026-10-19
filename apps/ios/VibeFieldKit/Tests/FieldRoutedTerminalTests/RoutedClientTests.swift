@@ -208,6 +208,167 @@ import Testing
     client.close()
   }
 
+  /// The door's two answers for a session it lost: its cell gone (retryable, the
+  /// beat before its inventory catches up), then no such terminal (final).
+  private nonisolated static let cellGone = FieldProductError(
+    kind: "UNAVAILABLE", message: "the terminal cell holding this session is gone", retryable: true,
+    details: .object([
+      "service": .string("terminal"), "state": .string("cell_gone"),
+      "cellBootId": .string("cb-7f3a9c1e-2026"),
+    ]))
+  private nonisolated static func noSuchTerminal(_ sessionId: String) -> FieldProductError {
+    FieldProductError(kind: "NOT_FOUND", message: "no such terminal: \(sessionId)", retryable: false)
+  }
+
+  /// A client whose re-mints are answered `refusals` in turn (the last one
+  /// again after that), attached and then cut off at the frames leg so that it
+  /// starts asking.
+  private func cutOff(refusingWith refusals: [FieldProductError], mints: TicketMints)
+    async throws -> (client: RoutedTerminalClient, transport: ScriptedTransport)
+  {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = RoutedTerminalClient(
+      transport: transport, sink: sink,
+      options: .init(
+        ticketProvider: { _ in
+          mints.calls += 1
+          throw refusals[min(mints.calls, refusals.count) - 1]
+        },
+        maxBackoff: .milliseconds(50), viewId: "view-1"))
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    await live.frames.hangUp(code: nil)
+    return (client, transport)
+  }
+
+  /// …but a refusal the DOOR marks final is not asked again (fix8: never waits
+  /// forever). On 2026-10-19 James's floor was respawned under a live card, and
+  /// the phone asked for the lost session's ticket 254 times over three hours.
+  /// The door had answered that it no longer had the session, and that asking
+  /// again would not change it.
+  @Test func aSessionTheDoorNoLongerHasEndsAndIsNotAskedForAgain() async throws {
+    let session = session
+    let mints = TicketMints()
+    let (client, transport) = try await cutOff(
+      refusingWith: [Self.noSuchTerminal(session)], mints: mints)
+    try await settle("the session to end") {
+      client.sessions[session]?.control == .ended(reason: RoutedTerminalClient.notFoundReason)
+    }
+    #expect(!client.needsTicket)
+    // Well past several backoffs, the one ask stands, and nothing was dialed.
+    try await Task.sleep(for: .milliseconds(400))
+    #expect(mints.calls == 1)
+    #expect(transport.dials.count == 2)
+    client.close()
+  }
+
+  /// `cell_gone` is retryable, as fieldd marks it: it is the beat before the
+  /// door's final answer. It is asked through, and the end that follows carries
+  /// why.
+  @Test func aGoneCellIsAskedThroughItsBeatAndTheEndSaysWhy() async throws {
+    let session = session
+    let mints = TicketMints()
+    let (client, _) = try await cutOff(
+      refusingWith: [Self.cellGone, Self.noSuchTerminal(session)], mints: mints)
+    try await settle("the session to end") {
+      client.sessions[session]?.control == .ended(reason: RoutedTerminalClient.cellGoneReason)
+    }
+    try await Task.sleep(for: .milliseconds(400))
+    #expect(mints.calls == 2)
+    client.close()
+  }
+
+  /// A session the door no longer has ends ALONE: the set is re-minted through
+  /// the next session it carries, at once, and that one is answered on its own.
+  @Test func aGoneSessionEndsAloneAndTheSetIsReMintedThroughTheNext() async throws {
+    let session = session
+    let second = "sess-second"
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let mints = TicketMints()
+    let client = RoutedTerminalClient(
+      transport: transport, sink: sink,
+      options: .init(
+        ticketProvider: { asked in
+          mints.calls += 1
+          guard asked == session else { throw Self.noSuchTerminal(asked) }
+          // A replacement set needs fresh sockets; the old ones have hung up.
+          _ = transport.rotate("/control")
+          _ = transport.rotate("/frames")
+          return try TicketFactory.make(sessionId: session)
+        },
+        maxBackoff: .milliseconds(50), viewId: "view-1"))
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+    // A second session on the same set. The last ticket names it, so the set is
+    // re-minted through it first.
+    client.open(try TicketFactory.make(sessionId: second))
+    try await settle("a second attach") {
+      await live.control.allSent("AttachControlLeg").count == 2
+    }
+
+    await live.frames.hangUp(code: nil)
+
+    try await settle("the gone session ends") {
+      client.sessions[second]?.control == .ended(reason: RoutedTerminalClient.notFoundReason)
+    }
+    try await settle("the set re-minted through the other") { transport.dials.count == 4 }
+    if case .ended = client.sessions[session]?.control {
+      Issue.record("a session the door still has must not end")
+    }
+    #expect(mints.calls == 2)
+    client.close()
+  }
+
+  /// The refusals the product client never retries stop the asking too, and
+  /// are said: with the legs gone, the set's own state is the news.
+  @Test func aRefusalTheProductClientNeverRetriesStopsTheAsking() async throws {
+    let mints = TicketMints()
+    let (client, transport) = try await cutOff(
+      refusingWith: [FieldProductError(kind: "UNAUTHORIZED", message: "the token is not valid")],
+      mints: mints)
+    try await settle("the refusal to be said") { client.state == .refused(code: "UNAUTHORIZED") }
+    try await Task.sleep(for: .milliseconds(400))
+    #expect(mints.calls == 1)
+    #expect(transport.dials.count == 2)
+    client.close()
+  }
+
+  /// Any other refusal the door marks final is said in its code, and asking
+  /// again is the person's act.
+  @Test func aRefusalTheDoorMarksFinalIsSaidAndNotAskedAgain() async throws {
+    let mints = TicketMints()
+    let (client, _) = try await cutOff(
+      refusingWith: [FieldProductError(kind: "FORBIDDEN_SCOPE", message: "not yours", retryable: false)],
+      mints: mints)
+    try await settle("the refusal to be said") { client.state == .refused(code: "FORBIDDEN_SCOPE") }
+    try await Task.sleep(for: .milliseconds(400))
+    #expect(mints.calls == 1)
+    client.close()
+  }
+
+  /// Every refusal the door marks retryable is still asked again on the backoff
+  /// (TM-r3): a floor that is still starting answers `UNAVAILABLE`, then a
+  /// ticket.
+  @Test func aRetryableRefusalIsAskedAgain() async throws {
+    let session = session
+    let mints = TicketMints()
+    let (client, _) = try await cutOff(
+      refusingWith: [
+        FieldProductError(
+          kind: "UNAVAILABLE", message: "the terminal floor is not available", retryable: true,
+          details: .object(["service": .string("terminal"), "state": .string("absent")]))
+      ],
+      mints: mints)
+    try await settle("asked again after a passing refusal") { mints.calls >= 3 }
+    #expect(client.state == .reconnecting)
+    if case .ended = client.sessions[session]?.control {
+      Issue.record("a retryable refusal must not end the session")
+    }
+    client.close()
+  }
+
   // MARK: Activation
 
   /// The CLIENT is the activation authority: it mints ONE id and both legs

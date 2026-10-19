@@ -274,6 +274,14 @@ public final class FieldProductClient {
     dial(reconnecting: false)
   }
 
+  /// What a call on, or pending in, a closed client is told. No door refused
+  /// it, and the caller's next door, a fresh client, may well answer, so it is
+  /// marked retryable. Three of the four sites said `false` by default, and the
+  /// terminal's re-mint now ends a session on a refusal marked final (DESIGN.md
+  /// §8, the phone's session card, 2026-10-19).
+  static let clientClosed = FieldProductError(
+    kind: "UNAVAILABLE", message: "client closed", retryable: true)
+
   /// Ends this client for good. A closed client never reopens — a fresh one is
   /// a fresh dial, and reusing a corpse would carry its subscriptions' ghosts.
   public func close() {
@@ -289,12 +297,12 @@ public final class FieldProductClient {
     receiveTask = nil
     retireConnection()
     generation &+= 1
-    failPending(FieldProductError(kind: "UNAVAILABLE", message: "client closed"))
+    failPending(Self.clientClosed)
     subs.removeAll()
     subRoutes.removeAll()
     cancelledBeforeRouted.removeAll()
     state = .closed
-    flushReadyWaiters(FieldProductError(kind: "UNAVAILABLE", message: "client closed"))
+    flushReadyWaiters(Self.clientClosed)
   }
 
   /// Resolves once hello has succeeded; throws if this client is dead.
@@ -302,7 +310,7 @@ public final class FieldProductClient {
     switch state {
     case .ready: return
     case .failed(let error): throw error
-    case .closed: throw FieldProductError(kind: "UNAVAILABLE", message: "client closed")
+    case .closed: throw Self.clientClosed
     default: break
     }
     connect()
@@ -356,7 +364,7 @@ public final class FieldProductClient {
     do {
       try await ready()
       guard let entry = subs[key] else {
-        throw FieldProductError(kind: "UNAVAILABLE", message: "client closed", retryable: true)
+        throw Self.clientClosed
       }
       let result = try await send(
         method: method, params: subscribeParams(for: entry, resuming: false), subKey: key,

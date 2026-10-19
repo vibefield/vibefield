@@ -441,6 +441,20 @@ public final class TerminalAttachment {
         + "session=\(sessionID ?? "-")")
   }
 
+  /// A session's end as the client names it, in the card's words (DESIGN.md
+  /// §8, the phone's session card, 2026-10-19). The door no longer having the
+  /// session is said by the desktop's name, and with why when the door said
+  /// that first (its cell was gone). Every other reason is the client's own
+  /// word, as it was.
+  nonisolated static func endedWords(_ reason: String, device: String?) -> String {
+    let who = device ?? "that desktop"
+    switch reason {
+    case RoutedTerminalClient.cellGoneReason: return "\(who)'s terminal engine restarted"
+    case RoutedTerminalClient.notFoundReason: return "\(who) no longer has it"
+    default: return reason
+    }
+  }
+
   /// A run that exited, in the desktop pane face's terms (`describePane`): a
   /// signal or a nonzero code is said, a clean exit is only "exited", and an
   /// exit whose code never came is "ended" — never an invented one. The field's
@@ -1174,7 +1188,9 @@ public final class TerminalAttachment {
     deadline: Duration = stepDeadline, device: String? = nil
   ) -> TerminalPhase {
     if let exit = session?.exit { return .ended(runEndedWords(device: device, exit: exit)) }
-    if let session, case .ended(let reason) = session.control { return .ended(reason) }
+    if let session, case .ended(let reason) = session.control {
+      return .ended(endedWords(reason, device: device))
+    }
     // An attach refusal is this SESSION's answer while its legs stand: the
     // set's state is every session's, and a refusal written there painted
     // every card on the lane (the audit's P5). Once the legs are gone the
@@ -1299,6 +1315,13 @@ public final class TerminalAttachment {
       return error.message.isEmpty ? error.kind : error.message
     }
     switch unavailable.state {
+    case "cell_gone":
+      // TC-S3: the cell that held the session is gone, and the session with it
+      // (2026-10-19, the respawned floor). fieldd marks it retryable, as the
+      // beat before its inventory drops the session, so the re-mint asks again
+      // through it until the door's final NOT_FOUND (`RoutedTerminalClient
+      // .verdict`).
+      return "\(who)'s terminal engine restarted, and this session went with it"
     case "doors_not_published":
       return "\(who) is not publishing its terminal doors on the tailnet"
     case "transport_not_landed":

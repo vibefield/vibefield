@@ -2796,7 +2796,18 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   acts RETRY (a fresh attach, never a longer wait) and BACK TO THE FIELD. A run whose row says
   it EXITED while the card is still attaching is said as ended — `this session ended — its run
   exited on studio` — with RESUME and BACK TO THE FIELD: nothing keeps dialing a terminal the
-  field says is gone. A live session is never stopped by these deadlines.
+  field says is gone. A live session is never stopped by these deadlines. **Nor is a refusal
+  asked forever** (2026-10-19). James's floor was respawned at 02:24:56Z, and the phone asked
+  for a lost session's ticket 254 times over three hours while its card said nothing. **A
+  refusal the door marks final (`retryable: false`) is not asked again; the kind says why.**
+  The door's `NOT_FOUND`, saying it no longer has the session, ends that card alone:
+  **`this session ended — studio no longer has it`**, with BACK TO THE FIELD. The door's
+  `cell_gone` comes before it and IS asked again: it is the beat before the desktop's
+  inventory drops the session. The end that follows says why: **`this session ended —
+  studio's terminal engine restarted`**. Any other final refusal is said in the door's words
+  with RETRY, as are the product client's own final kinds (`INCOMPATIBLE`, `UNAUTHORIZED`,
+  `PRECONDITION_FAILED`). Every other card on that desktop is asked for, and answered, on its
+  own. A refusal the door marks retryable is asked again on the backoff, as before.
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views

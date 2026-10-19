@@ -90,6 +90,30 @@ import Testing
         == "its run ended on studio")
   }
 
+  @Test func aSessionTheDoorNoLongerHasIsEndedByTheDesktopsName() {
+    // 2026-10-19: the floor was respawned under a live card, and the card said
+    // nothing for three hours. The client ends the session with its reason code;
+    // the card says it by the desktop's name, with no RETRY, since nothing is
+    // left to attach to. Why is said when the door said it first (its cell gone).
+    var session = RoutedSessionState(sessionId: "s", activationId: "a")
+    session.control = .ended(reason: RoutedTerminalClient.notFoundReason)
+    #expect(
+      TerminalAttachment.phase(for: .reconnecting, session: session, device: "studio")
+        == .ended("studio no longer has it"))
+    session.control = .ended(reason: RoutedTerminalClient.cellGoneReason)
+    let phase = TerminalAttachment.phase(for: .reconnecting, session: session, device: "studio")
+    #expect(phase == .ended("studio's terminal engine restarted"))
+    let banner = TerminalAttachment.banner(for: phase, device: "studio", doorRefusal: nil)
+    #expect(banner?.title == "this session ended — studio's terminal engine restarted")
+    #expect(banner?.actions == [.backToTheField])
+    // An unnamed desktop is "that desktop"; every other reason is the client's
+    // own word, as it was.
+    #expect(
+      TerminalAttachment.endedWords(RoutedTerminalClient.notFoundReason, device: nil)
+        == "that desktop no longer has it")
+    #expect(TerminalAttachment.endedWords("removed", device: "studio") == "removed")
+  }
+
   @Test func anAttachRefusalIsItsSessionsWhileTheLegsStand() {
     // P5 (2026-10-17): the refusal lives on the SESSION — the set's state is
     // every card's on the lane — and it is said while the legs stand. Once
@@ -223,6 +247,13 @@ import Testing
       details: .object([
         "service": .string("terminal"), "state": .string(state),
       ]))
+  }
+
+  @Test func aGoneCellIsTheSessionGoneAndSaysSo() {
+    // TC-S3: the cell that held the session is gone, and the session with it.
+    #expect(
+      TerminalAttachment.doorWords(unavailable("cell_gone"), device: "studio")
+        == "studio's terminal engine restarted, and this session went with it")
   }
 
   @Test func doorsNotPublishedIsASentenceAPersonCanActOn() {

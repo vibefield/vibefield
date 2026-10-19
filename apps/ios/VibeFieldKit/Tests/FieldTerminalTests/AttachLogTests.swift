@@ -53,6 +53,24 @@ import Testing
     try await AttachmentOverTheDoorTests.until(what, timeout: timeout, condition)
   }
 
+  /// 2026-10-19: a session whose cell was gone was refused 254 times, and every
+  /// line read "FieldProduct.FieldProductError 1". A refusal's code may ride a
+  /// line; its message may not.
+  @Test("a door's refusal is logged by its contract code, never its message")
+  func aRefusalIsLoggedByItsCode() {
+    let gone = FieldProductError(
+      kind: "UNAVAILABLE", message: "the terminal cell holding this session is gone",
+      retryable: true,
+      details: .object(["service": .string("terminal"), "state": .string("cell_gone")]))
+    #expect(TerminalAttachLog.reason(gone) == "UNAVAILABLE terminal/cell_gone")
+    let refused = FieldProductError(kind: "UNAUTHORIZED", message: "see https://door.example/?t=x")
+    #expect(TerminalAttachLog.reason(refused) == "UNAUTHORIZED")
+    #expect(!TerminalAttachLog.reason(refused).contains("https"))
+    // Anything else is still its domain and number.
+    #expect(TerminalAttachLog.reason(URLError(.timedOut)) == "NSURLErrorDomain -1001")
+    #expect(TerminalAttachLog.reason(CancellationError()) == "cancelled")
+  }
+
   @MainActor
   @Test(
     "fix8: a live attach writes each phase in order, and no grant, MAC, nonce, URL or login",

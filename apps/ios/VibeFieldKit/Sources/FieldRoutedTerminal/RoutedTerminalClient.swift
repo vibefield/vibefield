@@ -1708,14 +1708,20 @@ public final class RoutedTerminalClient {
     needsTicket = false
     let token = generation
     Task { [weak self] in
+      // The session the set is re-minted through: the one it lost, until the
+      // door says that one is gone (below).
+      var asking = sessionId
+      // Whether the door said the cell was gone during this asking: the words
+      // of the end that follows (`endReason`).
+      var cellGone = false
       var delay = Duration.milliseconds(100)
       while !Task.isCancelled {
         guard let self, token == self.generation, !self.closed else { return }
         do {
-          self.mint(began: true, for: sessionId)
-          let ticket = try await provider(sessionId)
+          self.mint(began: true, for: asking)
+          let ticket = try await provider(asking)
           guard token == self.generation else { return }
-          self.mint(began: false, for: sessionId)
+          self.mint(began: false, for: asking)
           self.open(ticket)
           // `open` can refuse the ticket it was just handed — a grant outside
           // its window, which a clock that is still wrong will produce again —
@@ -1727,7 +1733,27 @@ public final class RoutedTerminalClient {
         } catch {
           self.lastRefusal = String(describing: error)
           guard token == self.generation else { return }
-          self.mint(began: false, for: sessionId, refused: error)
+          self.mint(began: false, for: asking, refused: error)
+          cellGone = cellGone || Self.saysCellGone(error)
+          switch Self.verdict(on: error) {
+          case .askAgain:
+            break
+          case .sessionGone:
+            // That session is over, and only that one: the other sessions on
+            // the set are each asked for, and each answered. The set
+            // re-mints through the next one at once; with none left, the
+            // asking is over.
+            self.endSession(asking, reason: Self.endReason(cellGone: cellGone))
+            guard let next = self.liveSession(excluding: asking) else {
+              self.needsTicket = false
+              return
+            }
+            asking = next
+            continue
+          case .refused(let code):
+            self.say(refusal: code, for: asking)
+            return
+          }
         }
         try? await Task.sleep(for: delay)
         delay = min(delay * 2, self.options.maxBackoff)
@@ -1822,6 +1848,7 @@ public final class RoutedTerminalClient {
     needsTicket = false
     let token = generation
     Task { [weak self] in
+      var cellGone = false
       var delay = Duration.milliseconds(100)
       while !Task.isCancelled {
         guard let self, token == self.generation, !self.closed else { return }
@@ -1841,10 +1868,102 @@ public final class RoutedTerminalClient {
           self.lastRefusal = String(describing: error)
           guard token == self.generation else { return }
           self.mint(began: false, for: sessionId, refused: error)
+          cellGone = cellGone || Self.saysCellGone(error)
+          switch Self.verdict(on: error) {
+          case .askAgain:
+            break
+          case .sessionGone:
+            // One session's lapsed attach: the legs are up for the others.
+            self.endSession(sessionId, reason: Self.endReason(cellGone: cellGone))
+            return
+          case .refused(let code):
+            self.say(refusal: code, for: sessionId)
+            return
+          }
         }
         try? await Task.sleep(for: delay)
         delay = min(delay * 2, self.options.maxBackoff)
       }
+    }
+  }
+
+  /// What a ticket refusal means for the asking (fix8: never waits forever).
+  ///
+  /// Both re-mint loops asked again for EVERY refusal. On 2026-10-19 James's
+  /// floor was respawned under a live card, and the phone asked for the lost
+  /// session's ticket 254 times over three hours while the card said nothing:
+  /// the door had answered that it no longer had the session, and said that
+  /// asking again would not change it. The DOOR's flag decides now (contracts
+  /// `ErrorData.retryable`); the kind only says why.
+  enum Verdict: Equatable {
+    /// The door marked the refusal retryable, or it is not the door's word at
+    /// all (a deadline, a cancellation, a ticket that would not parse).
+    case askAgain
+    /// The door has no such terminal (`NOT_FOUND`, marked final): that session
+    /// is over.
+    case sessionGone
+    /// A refusal no asking can change, said in the door's code. Asking again is
+    /// the person's act (RETRY).
+    case refused(code: String)
+  }
+
+  nonisolated static func verdict(on error: any Error) -> Verdict {
+    guard let refusal = error as? FieldProductError else { return .askAgain }
+    // The product client's own final kinds stop whatever the flag says.
+    if refusal.isTerminal { return .refused(code: refusal.kind) }
+    if refusal.retryable { return .askAgain }
+    return refusal.kind == "NOT_FOUND" ? .sessionGone : .refused(code: refusal.kind)
+  }
+
+  /// fieldd's TC-S3 `cell_gone`: the cell that held the session is gone. It is
+  /// marked retryable for a reason, since it is the beat before the desktop's
+  /// inventory drops the session, and the door's definitive answer (NOT_FOUND)
+  /// follows it. So it is asked again, and only remembered for the words.
+  nonisolated static func saysCellGone(_ error: any Error) -> Bool {
+    guard let unavailable = (error as? FieldProductError)?.unavailable else { return false }
+    return unavailable.service == "terminal" && unavailable.state == "cell_gone"
+  }
+
+  /// The reasons a session's end carries when the door no longer has it. The
+  /// card says them in words, with the desktop's name (`TerminalAttachment`).
+  public nonisolated static let cellGoneReason = "cell_gone"
+  public nonisolated static let notFoundReason = "not_found"
+
+  nonisolated static func endReason(cellGone: Bool) -> String {
+    cellGone ? cellGoneReason : notFoundReason
+  }
+
+  /// One session is over for this client: it says why, and is not asked for
+  /// again.
+  private func endSession(_ sessionId: String, reason: String) {
+    guard var session = sessions[sessionId] else { return }
+    session.control = .ended(reason: reason)
+    endActivation(&session, reason: reason)
+    sessions[sessionId] = session
+    options.log("session ended — \(reason) session=\(sessionId)")
+    noteAttachment()
+  }
+
+  /// A session the set may still be re-minted through: one it carries that has
+  /// not ended.
+  private func liveSession(excluding sessionId: String) -> String? {
+    sessions.keys.sorted().first { id in
+      guard id != sessionId, let session = sessions[id] else { return false }
+      if case .ended = session.control { return false }
+      return true
+    }
+  }
+
+  /// A refusal no asking can change, said. While the set's legs stand it is the
+  /// session's answer, since the set's state is every card's (the audit's P5);
+  /// once they are gone, the set's own state is the news.
+  private func say(refusal code: String, for sessionId: String) {
+    if state == .attached || state == .ready, var session = sessions[sessionId] {
+      session.control = .refused(code: code, retryable: false)
+      sessions[sessionId] = session
+      noteAttachment()
+    } else {
+      state = .refused(code: code)
     }
   }
 

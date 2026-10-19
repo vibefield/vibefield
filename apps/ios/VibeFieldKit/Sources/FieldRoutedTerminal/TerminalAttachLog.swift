@@ -1,3 +1,4 @@
+import FieldProduct
 import Foundation
 import os
 
@@ -61,9 +62,17 @@ public struct TerminalAttachLog: Sendable {
   private static let memory = LineMemory()
 
   /// An error's domain and number, never its description: a URL error's
-  /// description carries the URL it failed on.
+  /// description carries the URL it failed on. A door's refusal is said by its
+  /// contract code instead: its `kind`, and an UNAVAILABLE's `service/state`.
+  /// Those are a refusal's code, which a line may carry; its message is not.
+  /// Bridged, every one read "FieldProduct.FieldProductError 1": on 2026-10-19
+  /// a session whose cell was gone was refused 254 times in identical lines.
   public static func reason(_ error: any Error) -> String {
     if error is CancellationError { return "cancelled" }
+    if let refusal = error as? FieldProductError {
+      guard let unavailable = refusal.unavailable else { return refusal.kind }
+      return "\(refusal.kind) \(unavailable.service)/\(unavailable.state)"
+    }
     let bridged = error as NSError
     return "\(bridged.domain) \(bridged.code)"
   }

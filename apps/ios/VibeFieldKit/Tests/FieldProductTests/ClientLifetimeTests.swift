@@ -212,6 +212,40 @@ private let liveAck = JSONValue.object([
     try await waitFor("a second dial") { await door.dials >= 2 }
     try await waitFor("the dead socket closed") { await door.closes() >= 1 }
   }
+
+  /// A closed client's calls were never refused by a door, so what they are
+  /// told is marked retryable: the caller's next door, a fresh client, may well
+  /// answer. Three of its four sites said `false`, and the terminal's re-mint
+  /// now ends a session on a refusal marked final (2026-10-19).
+  @Test func aClosedClientsCallsMayBeAskedAgain() async throws {
+    let door = FakeDoor { method, id, _ in
+      method == "system.hello" ? [Frame.result(id: id, liveAck)] : []
+    }
+    let client = FieldProductClient(
+      url: URL(string: "ws://door.test/t/x")!, transport: door,
+      options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(5)))
+    client.connect()
+    try await waitFor("ready") { if case .ready = client.state { true } else { false } }
+
+    // A call the door never answers, pending when the client closes.
+    let pending = Task { try await client.call("never.answered") }
+    try await Task.sleep(for: .milliseconds(50))
+    client.close()
+    do {
+      _ = try await pending.value
+      Issue.record("a call pending on a closed client must fail")
+    } catch let refusal as FieldProductError {
+      #expect(refusal.kind == "UNAVAILABLE")
+      #expect(refusal.retryable)
+    }
+    // …and one made after the close.
+    do {
+      try await client.ready()
+      Issue.record("a closed client is never ready")
+    } catch let refusal as FieldProductError {
+      #expect(refusal.retryable)
+    }
+  }
 }
 
 @MainActor
