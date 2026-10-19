@@ -1081,7 +1081,8 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     bodies to its field (puppeteer's, owed), the fade is what keeps the head clear". It sizes them
     now.)*
   - **The swarm's crowd fits its field** (2026-10-14, puppeteer `d3e82aa`; James: "Shrink
-    together", then "Pull takes the field's shape").
+    together", then "Pull takes the field's shape", which he reversed on 2026-10-19: "i'll go with
+    A", puppeteer `fa0d6cf`).
     - **One shared scale.** Every body's base size (idle 50, working 60–80, blocked 50) is
       multiplied by one scale, *k*, never above 1. *k* solves Σπ(k·rᵢ + 4)² = 0.45 × the free area:
       the field less its obstacles, each padded by 7. It moves on a 0.04 grid: it shrinks at once,
@@ -1090,14 +1091,20 @@ its hot-point glow and rim left with the card (above); its last two rows are the
       never per frame. The bodies ease to it on the swarm's radius spring.
     - **The floor is r 28** (*k* 0.56 at today's sizes). A crowd past it spills, as it did before,
       and under the head the fade takes it.
-    - **The pull takes the field's shape.** In puppeteer's words: "The swarm's pull toward the
-      field's centre is weakened along the free field's long side by the square of its
-      short-to-long ratio, so a crowd settles into the field's own shape; a square field pulls
-      exactly as before." The free height leaves out the head's band, so under the head the
-      crowd settles as a wide, low band, not a ball. A lone body far out in a wide field drifts in
-      slowly: from the far left it takes 13 s to reach one other body (0.5 s before). From eight
-      bodies up the crowd already spans the stage. A new body never spawns that far out (spawns
-      are searched within 28 % of the width from the centre); only a hold or a drag puts one there.
+    - **The pull is round** (James, 2026-10-19 02:02Z: "i'll go with A, why is A been dropped in
+      the first place?"). The swarm's pull toward the field's centre is the same along both sides,
+      whatever the field's shape, so a body let go far out comes home in about half a second, as
+      on the phone. The cost is the ball: in a short field the crowd's top row presses into the
+      head's band. On James's Mac at today's packing, twenty bodies with the deck up (1712 × 393)
+      tuck about 3 px under the head, 27 about 7 px and 40 about 14 px; with the deck away
+      (1712 × 912) the crowd is clear up to 27. **James ruled (a), 2026-10-19 17:42Z: full size,
+      the small tuck**: the packing stays 0.45 rather than give up size for clearance. A new body
+      never spawns far out (spawns are searched within 28 % of the width from the centre).
+      *(2026-10-19: this said "The pull takes the field's shape" — weakened along the free field's
+      long side by the square of its short-to-long ratio, so under the head the crowd settled as a
+      wide, low band, and a lone body from the far left took 13 s to reach another, 0.5 s round.
+      James felt it live beside the round pull and chose the round one. A round crowd is clear on
+      every measured field only at a packing of 0.08 (twenty bodies at the floor).)*
     - **The words step down, on three rungs by the drawn radius.** At r 50 and up a body draws
       everything, so a field with room changes nothing. From 50 down to 35 it draws its name and
       one line: its state when it has one ("Bash · …", "? Should …"), otherwise its model,

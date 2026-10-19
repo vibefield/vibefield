@@ -4,7 +4,7 @@
     "puppeteer": {
       "path": "../puppeteer",
       "repository": "https://github.com/vibefield/puppeteer.git",
-      "sha": "d3e82aa744e8ff82ba76b30242e986d7ab028340",
+      "sha": "fa0d6cf594f5d48d89110eff3112af1200489ca3",
       "packages": {
         "@vibecook/puppeteer-runtime": "packages/runtime",
         "@vibecook/puppeteer-builtin-providers": "packages/builtin-providers",
