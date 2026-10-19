@@ -73,10 +73,10 @@ import { createWindowViewReplica, type WindowViewReplica } from "./window-view";
  *   · THE VERBS — every one through the DOOR the deck built (`MonitorDoor`): a
  *     local row's select brings its PTY into the terminals, a peer's attaches
  *     its terminal there, create opens an empty terminal — each placed by the
- *     deck's one rule (GV-D4: its own pane focused, else beside the focused
- *     pane, else in its place) — and every outcome is said out loud, in
- *     fieldd's own words. Views receive SDK commands; the window handles the
- *     door's promises.
+ *     deck's one rule (GV-D4: in the focused pane, mirrored there when another
+ *     pane shows it) — and every outcome is said out loud, in fieldd's own
+ *     words. Views receive SDK commands; the window handles the door's
+ *     promises.
  *   · THE SCREEN — what the active pane shows, reported to the backend
  *     (`reportShown`, L5), which keeps the unread marks.
  *
@@ -605,13 +605,13 @@ export function useMonitorAgents({
   }, [door, feed, joins, paneSessionIds, announce]);
 
   /**
-   * THE DOOR, opened (GT-D17). A remote row's select is the reference app's
-   * `commands.select` means:
-   * "Mount this session in the active pane" — since GV-D4 (2026-10-11), placed
-   * as any session with no pane is: beside the focused pane, in its place with
-   * three showing, or its own pane focused. The mechanics are the deck's —
-   * `door.attach` is where the runtime and the workspace live — and the one
-   * thing that crosses back is an outcome, said out loud.
+   * THE DOOR, opened (GT-D17). A remote row's select is what the reference
+   * app's `commands.select` means: "Mount this session in the active pane" —
+   * the deck's one rule (GV-D4, re-ruled 2026-10-18; from 2026-10-11 it opened
+   * beside the focused pane): in the focused pane, mirrored there when another
+   * pane shows it. The mechanics are the deck's — `door.attach` is where the
+   * runtime and the workspace live — and the one thing that crosses back is an
+   * outcome, said out loud.
    */
   const attachRemote = useCallback(
     async (agent: MonitorAgent): Promise<void> => {
@@ -656,13 +656,13 @@ export function useMonitorAgents({
 
   /**
    * A LOCAL row's select (AR-3): a managed agent's PTY, or an unclaimed
-   * terminal, brought into the terminals by the deck's rule (GV-D4,
-   * `deck-placement.ts`): a session a pane already shows is focused where it
-   * is, never mounted twice; one with no pane opens beside the focused pane
-   * while fewer than three show, and takes its place after. The door answers
-   * which, and the words follow. A row already in the active pane is
-   * acknowledged without asking the door; a row whose PTY the board no longer
-   * names has nothing to mount and says so.
+   * terminal, brought into the terminals by the deck's rule (GV-D4, re-ruled
+   * 2026-10-18; `deck-placement.ts`): into the focused pane — the pane is an
+   * observer, and the person chose it — mirrored there when another pane
+   * shows it already. The door answers how, and the words follow. A row
+   * already in the active pane is acknowledged without asking the door (the
+   * rule would move nothing); a row whose PTY the board no longer names has
+   * nothing to mount and says so.
    */
   const mountLocal = useCallback(
     async (agent: MonitorAgent): Promise<void> => {
@@ -694,11 +694,9 @@ export function useMonitorAgents({
       setSelectedId(undefined);
       announce(
         outcome.placement === "focus"
-          ? // its own pane, focused: nothing was mounted
+          ? // the focused pane showed it already: nothing was mounted
             `${projectName(agent)} is in the active pane`
-          : outcome.placement === "beside"
-            ? `${projectName(agent)} opened in a new pane`
-            : `${projectName(agent)} mounted in the active pane`,
+          : `${projectName(agent)} mounted in the active pane`,
       );
     },
     [announce, door, panes.activeSessionId],
@@ -717,8 +715,8 @@ export function useMonitorAgents({
   );
 
   /**
-   * A new terminal (SB-3), placed by the deck's rule (GV-D4): beside the
-   * focused pane while fewer than three show, in its place after — under the
+   * A new terminal (SB-3), placed by the deck's rule (GV-D4, re-ruled
+   * 2026-10-18): in the focused pane, whose session runs on — under the
    * Agent Profile the spawn bloom or the list's menu chose, else unbound. The
    * views match the body they drew at the release point to the row by
    * `spawnHint`, so the position is kept as given. Every outcome is said, a
@@ -774,8 +772,7 @@ export function useMonitorAgents({
       // the door's answer names the session: its row keeps the position from
       // here on, whichever row claimed it first
       if (position) setSpawnHints((current) => new Map(current).set(outcome.sessionId, position));
-      // GV-D4: a new pane beside the one the person was in, or that pane itself
-      const where = outcome.placement === "beside" ? "in a new pane" : "in the active pane";
+      // GV-D4 (re-ruled 2026-10-18): it opened in the pane the person was in
       if (profileSet !== undefined && outcome.profileSet === undefined) {
         // asked with a profile, answered without one: a daemon older than the
         // binding (SB-2) births unbound — the shell is kept
@@ -783,10 +780,10 @@ export function useMonitorAgents({
           `terminal opened, but not under ${label ?? "that profile"} — this VibeField daemon cannot open terminals under a profile yet`,
         );
       } else if (outcome.profileSet !== undefined && profiles.length > 1) {
-        announce(`terminal opened${under} ${where}`);
+        announce(`terminal opened${under} in the active pane`);
       } else {
         // one profile is no choice, and the plain sentence says it all
-        announce(`terminal opened ${where}`);
+        announce("terminal opened in the active pane");
       }
     },
     [announce, door, profiles],

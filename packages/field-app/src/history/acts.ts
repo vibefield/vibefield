@@ -26,9 +26,8 @@ import { type ResumeReading, readResume, resumeNative } from "./resume";
 // pressed on ANY session or project the room draws. They are one set of acts,
 // here, over the window's fieldd client: what each asks of fieldd, and how its
 // outcome reads. Where the act shows what it did, the window moves to Godview
-// and its deck places the session as the swarm's open does (GV-D4: beside the
-// focused pane, or in its place with three showing), as the line's Resume
-// always has.
+// and its deck places the session as the swarm's open does (GV-D4: in the
+// focused pane), as the line's Resume always has.
 //
 // An act never ends in silence (2026-10-11; two `smoke:godview` reds where New
 // agent started a run, moved the window and said nothing for 60 s). Once fieldd

@@ -15,16 +15,21 @@ import type { StagedTypedAgent } from "./typed-agent";
 //     `terminal-alive`) — what a Resume on a live session met before P3;
 //   · a split makes another pane the active one; back in History the line's
 //     create says JUMP TO under `jump`, and pressed, the window moves to
-//     Godview with the agent's pane the ACTIVE one — the same pane, activated,
-//     never mounted again (the deck's pane count does not move);
+//     Godview with the agent's session in the FOCUSED pane — MIRRORED there,
+//     its own pane still showing it (GV-D4, re-ruled 2026-10-18: "Everywhere",
+//     "Mirror it"), the deck's pane count unchanged;
 //   · LIVE NOW IN HISTORY (P2, docket PK5): another pane active again, ⌘F in
 //     History and Live now list the running agent — the Peek's own feed, open
-//     only while the tab shows — and a pick reveals its pane in Godview,
-//     activated, never mounted again (Jump to's path);
+//     only while the tab shows — and a pick shows it in Godview's focused pane
+//     the same way (Jump to's path);
 //   · the run's PTY ended, History showing again says Resume once more.
 //
-// It leaves Godview's active pane showing that ENDED session, so the smoke runs
-// it after every row that types into a shell (after 11h, the line's keys).
+// *Corrected 2026-10-18:* until GV-D4's re-ruling, Jump to and the pick made
+// the agent's own pane the active one and never mounted it again.
+//
+// It leaves Godview's panes showing that ENDED session (the mirrors with it),
+// so the smoke runs it after every row that types into a shell (after 11h, the
+// line's keys).
 //
 // Test-only by construction: this module rides the smoke bundle
 // (dist/testing/smoke.cjs), which packaging omits.
@@ -45,6 +50,29 @@ interface JumpDeckWatch {
     what: string,
     timeoutMs: number,
   ): Promise<JumpDeckFacts>;
+}
+
+/** How many of the deck's panes show `sessionId` (one entry per pane). */
+const showingOf = (facts: JumpDeckFacts, sessionId: string): number =>
+  facts.sessionIds.filter((id) => id === sessionId).length;
+
+/** GV-D4, re-ruled 2026-10-18 ("Mirror it"): `act` showed `sessionId` in the
+ * FOCUSED pane while another pane showed it — one pane more on it, and no pane
+ * added. Throws the rung's own words when the deck did anything else. */
+function mirroredInto(
+  act: string,
+  before: JumpDeckFacts,
+  after: JumpDeckFacts,
+  sessionId: string,
+): void {
+  if (
+    after.panes !== before.panes ||
+    showingOf(after, sessionId) !== showingOf(before, sessionId) + 1
+  ) {
+    throw new Error(
+      `${act} did not mirror the session into the focused pane: before ${JSON.stringify(before)} after ${JSON.stringify(after)}`,
+    );
+  }
 }
 
 const VIEW_NOW = `(document.querySelector(".vf-views-line")?.getAttribute("data-view") ?? "absent")`;
@@ -282,8 +310,9 @@ async function jumpToSteps(
   );
   verdict["live"] = { name: jumpFace.name, glyph: jumpFace.glyph };
 
-  // 6. Jump to: Godview, the agent's pane the active one — activated, not
-  //    mounted again (the same panes, the same sessions).
+  // 6. Jump to: Godview, the agent's session in the FOCUSED pane (the split's)
+  //    — mirrored there, its own pane still showing it (GV-D4, re-ruled
+  //    2026-10-18: "Everywhere", "Mirror it"), the pane count unchanged.
   const note = await pressCreate("Jump to's note", [
     "Jumped to its pane",
     "Could not jump",
@@ -298,23 +327,22 @@ async function jumpToSteps(
   );
   const jumped = await opts.deck.until(
     (facts) => facts.active && facts.activeSessionId === floor,
-    "the agent's pane to be the active one after Jump to",
+    "the agent's session in the focused pane after Jump to",
     30_000,
   );
-  if (
-    jumped.panes !== split.panes ||
-    [...jumped.sessionIds].sort().join() !== [...split.sessionIds].sort().join()
-  ) {
-    throw new Error(
-      `Jump to mounted rather than activated: before ${JSON.stringify(split)} after ${JSON.stringify(jumped)}`,
-    );
-  }
-  verdict["jumped"] = { note, activeSessionId: jumped.activeSessionId, panes: jumped.panes };
+  mirroredInto("Jump to", split, jumped, floor);
+  verdict["jumped"] = {
+    note,
+    activeSessionId: jumped.activeSessionId,
+    panes: jumped.panes,
+    showing: showingOf(jumped, floor),
+  };
 
-  // 6b. Live now in History (P2, docket PK5): the agent's pane not the active
-  //     one again; ⌘F in History, Live now, the running agent listed by its
-  //     floor session; picked, the window moves to Godview and the deck
-  //     reveals the same pane — activated, the deck's panes unchanged.
+  // 6b. Live now in History (P2, docket PK5): the agent's session not in the
+  //     focused pane again (a split of the mirror); ⌘F in History, Live now,
+  //     the running agent listed by its floor session; picked, the window
+  //     moves to Godview and the deck shows it in the focused pane the same
+  //     way — one more mirror, the deck's pane count unchanged.
   await opts.split();
   const resplit = await opts.deck.until(
     (facts) => facts.activeSessionId !== undefined && facts.activeSessionId !== floor,
@@ -361,21 +389,15 @@ async function jumpToSteps(
   );
   const revealed = await opts.deck.until(
     (facts) => facts.active && facts.activeSessionId === floor,
-    "the agent's pane to be the active one after a Live now pick",
+    "the agent's session in the focused pane after a Live now pick",
     30_000,
   );
-  if (
-    revealed.panes !== resplit.panes ||
-    [...revealed.sessionIds].sort().join() !== [...resplit.sessionIds].sort().join()
-  ) {
-    throw new Error(
-      `a Live now pick mounted rather than activated: before ${JSON.stringify(resplit)} after ${JSON.stringify(revealed)}`,
-    );
-  }
+  mirroredInto("a Live now pick", resplit, revealed, floor);
   verdict["liveNow"] = {
     listed: JSON.parse(listed) as unknown,
     activeSessionId: revealed.activeSessionId,
     panes: revealed.panes,
+    showing: showingOf(revealed, floor),
   };
 
   // 7. The run's PTY ended: History showing again says Resume once more.

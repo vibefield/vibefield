@@ -247,11 +247,10 @@ async function settled(predicate: () => boolean, ms: number): Promise<boolean> {
 /** The deck as the placement rule reads it (GV-D4, `deck-placement.ts`): the
  * panes ghosttea lays out and the one it calls active — read at CALL time, off
  * the context the workspace last published. */
-function deckShape(context: GhostteaWorkspaceContext, emptyPaneId?: string): DeckShape {
+function deckShape(context: GhostteaWorkspaceContext): DeckShape {
   return {
     panes: context.panes.map((pane) => ({ id: pane.id, sessionId: pane.session.id })),
     focusedPaneId: context.activePaneId,
-    ...(emptyPaneId !== undefined ? { emptyPaneId } : {}),
   };
 }
 
@@ -380,9 +379,11 @@ export function GodviewDeck({
   const lastPaneClose = useRef(onLastPaneClose);
   lastPaneClose.current = onLastPaneClose;
   /** N16 (a) — the pane ⌘W on the last pane EMPTIED, and the fresh shell it
-   * holds: the next call takes its place (`deck-placement.ts`). Held in memory
-   * only, and read through `emptyPaneOf`, which forgets it once the pane shows
-   * anything else or the shell has been typed into. */
+   * holds: the next call takes its place, as it takes any focused pane's
+   * (`deck-placement.ts`), and a new terminal asked for there IS that fresh
+   * shell (`createTerminal`). Held in memory only, and read through
+   * `emptyPaneOf`, which forgets it once the pane shows anything else or the
+   * shell has been typed into. */
   const emptyPane = useRef<{ paneId: string; sessionId: string } | null>(null);
   const [terminalVisualIds, setTerminalVisualIds] = useState<ReadonlyMap<string, string>>(
     () => new Map(),
@@ -926,9 +927,9 @@ export function GodviewDeck({
    * `createSessionInActivePane` (:384) through it, so this single prop is every
    * interactive new-pane door the user has. Supplying it is what puts fieldd in
    * front of those births; omitting it is what used to send them down the
-   * control connection instead. Since GV-D4 the door's own new terminal rides
-   * both: the split while fewer than three panes show, the active pane after
-   * (`createTerminal`, below).
+   * control connection instead. The door's own new terminal rides the second:
+   * a birth in the focused pane (GV-D4, re-ruled 2026-10-18; `createTerminal`,
+   * below). The split is ⌘D's — the person's own way to more panes.
    *
    * A throw here is upstream's to handle (it logs and leaves the layout alone),
    * and that is the honest outcome: a pane that could not be born should not be
@@ -970,17 +971,15 @@ export function GodviewDeck({
 
   /**
    * A pane fullscreen over where a session is about to land is LEFT first
-   * (GV-D4): a session focused or mounted behind another pane's fullscreen
-   * would take the keyboard out of sight. A split under one makes no sense
-   * either, so `beside` always leaves it — what ⌘D does, by the controller's
-   * own validation. The pane's own fullscreen stays the pane's: landing IN the
-   * fullscreen pane leaves it up.
+   * (GV-D4): a session mounted behind another pane's fullscreen would take the
+   * keyboard out of sight. The pane's own fullscreen stays the pane's: landing
+   * IN the fullscreen pane leaves it up.
    */
   const leaveZoomFor = useCallback((placement: DeckPlacement): void => {
     if (placement.kind === "none") return;
     const zoomed = deckZoom.current.state.paneId;
     if (zoomed === null) return;
-    if (placement.kind === "beside" || zoomed !== placement.paneId) deckZoom.current.reset();
+    if (zoomed !== placement.paneId) deckZoom.current.reset();
   }, []);
 
   /** N16 (a) — the empty pane, while it still is one: still showing the fresh
@@ -1000,54 +999,46 @@ export function GodviewDeck({
   );
 
   /**
-   * A SESSION WITH NO PANE, PLACED (GV-D4, James 2026-10-02; DESIGN.md §8 "A
+   * A SESSION, PLACED (GV-D4, re-ruled by James 2026-10-18; DESIGN.md §8 "A
    * session with no pane"; the rule is `deck-placement.ts`). Every door that
    * brings a session into the terminals lands here — a body, a list row, a
    * rain column, a timeline lane, a spend row, a search result, History's
-   * Resume and Jump to, a peer's attach:
+   * Resume and Jump to, the Peek's Open, a peer's attach:
    *
-   *   · already in a pane — that pane is focused, and nothing is mounted twice;
-   *   · fewer than three panes — a new pane BESIDE the focused one: ghosttea's
-   *     own split of the active pane (`addSession`, what ⌘D lands through), so
-   *     the new pane stands to its right and the row is equalized;
-   *   · three or more — the focused pane's place (`mountSession`): the session
-   *     it showed is detached, never killed (GT-D5).
+   *   · the focused pane already shows it — nothing moves;
+   *   · else the FOCUSED pane shows it (`mountSession`, ghosttea's mount into
+   *     the active pane), whatever the pane count, and even while another
+   *     pane shows it — a mirror, two panes on one session. The session the
+   *     focused pane showed is detached, never killed (GT-D5).
    *
-   * Until 2026-10-11 every one of them took the ACTIVE pane (GT-D17). Read
-   * AFTER whatever round trip produced the summary: the panes and the focused
-   * one are whatever the user made them while the floor answered. `summary` is
-   * absent only for a session the caller already saw in a pane.
+   * From 2026-10-11 to 2026-10-18 a session opened beside the focused pane, up
+   * to three, and one already in a pane was only focused there. Read AFTER
+   * whatever round trip produced the summary: the panes and the focused one are
+   * whatever the user made them while the floor answered. `summary` is absent
+   * only for a session the caller saw in the focused pane.
    */
   const placeSessionNow = useCallback(
     async (sessionId: string, summary: SessionSummary | undefined): Promise<LocalMountOutcome> => {
       const context = workspaceRef.current;
       if (context === undefined || context.activePaneId === undefined) return { state: "no-pane" };
-      const empty = emptyPaneOf(context);
-      const placement = deckPlacement(deckShape(context, empty), sessionId);
+      const placement = deckPlacement(deckShape(context), sessionId);
       if (placement.kind === "none") return { state: "no-pane" };
-      // the empty pane is taken (or the session was already shown): it is empty no more
-      if (empty !== undefined && placement.kind !== "beside") emptyPane.current = null;
+      // N16 (a): the empty pane, taken (or its fresh shell asked for), is empty no more
+      if (emptyPaneOf(context) === placement.paneId) emptyPane.current = null;
       leaveZoomFor(placement);
-      if (placement.kind === "focus") {
-        if (context.activePaneId !== placement.paneId) {
-          context.activateSession(sessionId);
-          if (!(await settled(() => workspaceRef.current?.activePaneId === placement.paneId, 500)))
-            return {
-              state: "failed",
-              reason: "the pane showing it could not be made the active one",
-            };
-        }
-        return { state: "mounted", sessionId, placement: "focus" };
-      }
+      if (placement.kind === "focus") return { state: "mounted", sessionId, placement: "focus" };
       if (summary === undefined)
-        return { state: "failed", reason: "no pane shows this session any more" };
-      if (placement.kind === "beside") context.addSession(summary);
-      else context.mountSession(summary);
+        return { state: "failed", reason: "the focused pane no longer shows this session" };
+      context.mountSession(summary);
+      // the focused pane itself: in a mirror, another pane showed it all along
       return (await settled(
-        () => workspaceRef.current?.panes.some((pane) => pane.session.id === sessionId) === true,
+        () =>
+          workspaceRef.current?.panes.some(
+            (pane) => pane.id === placement.paneId && pane.session.id === sessionId,
+          ) === true,
         500,
       ))
-        ? { state: "mounted", sessionId, placement: placement.kind }
+        ? { state: "mounted", sessionId, placement: "replace" }
         : { state: "failed", reason: "the workspace did not take the mount" };
     },
     [leaveZoomFor, emptyPaneOf],
@@ -1210,8 +1201,8 @@ export function GodviewDeck({
       // mounted view asks for it (`monitor-history.ts`, PF6)
       pastLanes: recordedLanesPortOver(doorClient),
       // DS-4e (2026-10-01; `thinking-desktop-sync-plane.md` §6.3) — ANOTHER
-      // desktop's session, placed as any session with no pane is (GV-D4)
-      // through the SAME routed host a local pane rides: never ghosttea's
+      // desktop's session, placed as any session is (GV-D4: in the focused
+      // pane) through the SAME routed host a local pane rides: never ghosttea's
       // remote palette, which threw under the routed runtime (and whose replica
       // no longer exists). Serialized with the local mounts (AR-4b): they all
       // place by the one focused pane.
@@ -1235,7 +1226,7 @@ export function GodviewDeck({
         if (context?.activeSession === undefined) return { state: "no-pane" };
         // L20 (W7): the first call after a launch is this create, and the deck
         // it called up had nothing to bring back — the workspace's opening
-        // shell IS the terminal asked for: one pane, never a second beside it.
+        // shell IS the terminal asked for: one pane, and no second birth.
         // Asked under an Agent Profile, the ask is born in that shell's place
         // instead, and the opening shell, never used, is released as every
         // unused born shell is (a refused profile then faults nothing, SB-3).
@@ -1256,24 +1247,19 @@ export function GodviewDeck({
           emptyPane.current = null;
           return { state: "mounted", sessionId: fresh, placement: "replace" };
         }
-        // GV-D4: a new terminal is placed as a session with no pane is — it
-        // can be in no pane yet, so it opens beside the focused pane while
-        // fewer than three show and takes its place after.
-        const placement = opening === null ? deckPlacement(deckShape(context, empty)) : null;
-        if (placement !== null && placement.kind !== "beside" && placement.kind !== "replace")
-          return { state: "no-pane" };
+        // GV-D4 (re-ruled 2026-10-18): a new terminal is placed as any session
+        // is — in the focused pane, whose session runs on (a pane is a
+        // viewport). ⌘D is the one way to more panes.
+        const placement = opening === null ? deckPlacement(deckShape(context)) : null;
+        if (placement !== null && placement.kind !== "replace") return { state: "no-pane" };
         // SB-3: the ask rides the pending-birth ref into the override (above).
         const birth: PendingBirth = { profileSet: request?.profileSet };
         pendingBirth.current = birth;
         try {
-          // Ghosttea owns the two births and their concurrent-birth fencing:
-          // its split of the active pane (⌘D's own — the new pane to the
-          // right, the row equalized) or its birth in the active pane. Its
-          // createSplitSession override puts both through the product door.
-          const birthing =
-            placement?.kind === "beside"
-              ? context.splitActive()
-              : context.createSessionInActivePane();
+          // Ghosttea owns the birth and its concurrent-birth fencing: its birth
+          // in the active pane, which its createSplitSession override puts
+          // through the product door.
+          const birthing = context.createSessionInActivePane();
           // A birth ghosttea fenced (another one in flight) never reached the
           // override, and its ask must not wait there for the next ⌘D.
           if (pendingBirth.current === birth) pendingBirth.current = null;
@@ -1313,7 +1299,7 @@ export function GodviewDeck({
         // frame would otherwise race each other for the single active-pane
         // slot the workspace mounts into, and the second's activation would
         // capture the first's mount. A placement (GV-D4) reads the focused
-        // pane and the pane count, so it waits its turn in the same queue —
+        // pane and mounts into it, so it waits its turn in the same queue —
         // and a call waits there for the workspace it brings up (W7).
         const run = mountQueue.current
           .then(options?.replacing === undefined ? workspaceReady : undefined)
@@ -1335,11 +1321,11 @@ export function GodviewDeck({
      *   2. the session ADOPTED as the owner's — from here the routed host asks
      *      its ticket, renewal, kill and refresh by `device`, and the summary is
      *      registered so the owner's session events reach the pane;
-     *   3. the PLACEMENT, by the rule every session with no pane follows
-     *      (GV-D4, `placeSessionNow`; until 2026-10-11 GT-D17's "attach the
-     *      pane the user is in"): beside the focused pane, or in its place
-     *      with three showing — the session it showed is detached, never
-     *      killed (GT-D5) — or its own pane focused if one already shows it.
+     *   3. the PLACEMENT, by the rule every session follows (GV-D4,
+     *      `placeSessionNow`; re-ruled 2026-10-18 back to GT-D17's "attach the
+     *      pane the user is in"): in the focused pane — the session it showed
+     *      is detached, never killed (GT-D5) — mirrored there if another pane
+     *      already shows it, and nothing moved if the focused one does.
      *
      * The ticket is the runtime's to ask once the pane mounts: its answer is
      * the loopback pair this desktop's daemon re-homed, dialled as a local
@@ -1387,12 +1373,16 @@ export function GodviewDeck({
       const context = workspaceRef.current;
       if (context?.activePaneId === undefined) return { state: "no-pane" };
       try {
-        // GV-D4: a session a pane already shows is only focused, and nothing
-        // is read from the floor to do it (a hand-over is not this: it names
-        // the PTY it replaces).
+        // GV-D4: a session the FOCUSED pane already shows stays where it is,
+        // and nothing is read from the floor to keep it there (a hand-over is
+        // not this: it names the PTY it replaces). One another pane shows is
+        // read like any other and mounted in the focused pane too — a mirror
+        // (re-ruled 2026-10-18: "Mirror it").
         if (
           options?.replacing === undefined &&
-          context.panes.some((pane) => pane.session.id === sessionId)
+          context.panes.some(
+            (pane) => pane.id === context.activePaneId && pane.session.id === sessionId,
+          )
         )
           return await placeSessionNow(sessionId, undefined);
         // The floor is the one authority both halves read (the pool's own
@@ -1468,9 +1458,9 @@ export function GodviewDeck({
   // and the interim send pastes into a pane through the pane's own input. The
   // rows are the panes this deck shows, named as the swarm names their bodies.
   // History lands here too: its Resume places, its Jump to reveals (P3) — each
-  // by the one rule for a session with no pane (GV-D4), and each outcome says
-  // how it was placed. Published on change only; the deck going away takes the
-  // door with it.
+  // by the one rule (GV-D4: in the focused pane), and each outcome says how it
+  // was placed. Published on change only; the deck going away takes the door
+  // with it.
   const linePanesKey = JSON.stringify(
     linePanesOf(workspace?.panes ?? [], paneAgents.agents, workspace?.activePaneId, (id) =>
       bornCwd.current.get(id),
@@ -1506,11 +1496,11 @@ export function GodviewDeck({
         const born = adoptCreatedTerminal(terminal);
         return newTerminalOutcome(await door.mountLocal(born.sessionId));
       },
-      // P3 — History's Jump to: the pane already showing the running session
-      // becomes the active one (never a second mount of it); a session no pane
-      // shows is placed by the rule. Both are the door's serialized mount since
-      // GV-D4 — the rule's "already shown" is the reveal — so a mount in flight
-      // lands first, as it always had to (a replacement borrows the focus).
+      // P3 — History's Jump to: the running session shown in the focused pane
+      // by the one rule (GV-D4, re-ruled 2026-10-18, "Everywhere") — mirrored
+      // there when another pane shows it, nothing moved when the focused pane
+      // does. It is the door's serialized mount, so a mount in flight lands
+      // first, as it always had to (a replacement borrows the focus).
       reveal: async (sessionId) =>
         door === null
           ? { state: "refused", reason: "the deck has no connection yet" }
@@ -1585,8 +1575,9 @@ export function GodviewDeck({
    * `replaceSession`; the launcher shows over it. The closed session leaves the
    * layout and goes the way ⌘W sends any pane's: the unused-shell reaper
    * releases a shell never used, and a running one runs on. The pane is marked
-   * empty, so the next call takes its place (`deck-placement.ts`). One birth
-   * per last-pane ⌘W.
+   * empty: the next call takes its place as it takes any focused pane's
+   * (`deck-placement.ts`), and a new terminal asked for there is that fresh
+   * shell (`createTerminal`). One birth per last-pane ⌘W.
    *
    * Refused, the pane keeps its session, and the line says so in fieldd's words
    * and ours; the terminals go away regardless (the owner already minimized

@@ -1244,18 +1244,25 @@ interface ProbePane {
  * could not fail the way production did — a resumed agent landing in whichever
  * pane the user happened to be sitting in.
  *
- * GV-D4 — and ghosttea's own SPLIT of the active pane, as its `addSession`
- * and `splitActive` make one (Workspace.tsx at the pin): a session a pane
- * already shows is activated; any other gets a new pane to the RIGHT of the
- * active one, which becomes the active one. The two births (`splitActive`,
- * `createSessionInActivePane`) go through the deck's own `createSplitSession`
- * override, called first and synchronously, as upstream calls it.
+ * `mountSession` keeps a session in every pane that shows it, as ghosttea's
+ * does: two panes may MIRROR one (GV-D4, re-ruled 2026-10-18). Ghosttea's own
+ * SPLIT of the active pane stays here as its `addSession` and `splitActive`
+ * make one (Workspace.tsx at the pin) — a session a pane already shows is
+ * activated; any other gets a new pane to the RIGHT of the active one, which
+ * becomes the active one — so a door that split would be seen in the log
+ * (`add:`, `split:`); since the re-ruling no door does. The two births
+ * (`splitActive`, `createSessionInActivePane`) go through the deck's own
+ * `createSplitSession` override, called first and synchronously, as upstream
+ * calls it.
  */
 function workspaceProbe(initial: {
   panes: readonly ProbePane[];
   activePaneId: string;
   /** false = a pane that never takes focus, so the activation never commits */
   activatable?: boolean;
+  /** false = a workspace that never takes a mount: the call is logged, and no
+   * pane changes */
+  mountable?: boolean;
 }) {
   let panes: readonly ProbePane[] = [...initial.panes];
   let activePaneId: string | undefined = initial.activePaneId;
@@ -1331,6 +1338,7 @@ function workspaceProbe(initial: {
     },
     mountSession(session: { id: string }): void {
       log.push(`mount:${session.id}`);
+      if (initial.mountable === false) return;
       mountInActive(session);
     },
     addSession(session: { id: string }): void {
@@ -1640,26 +1648,31 @@ describe("the door's local mount, and the pane a replacement belongs in (AR-4 ·
         state: "failed",
         reason: "the floor did not answer in 10 s",
       });
-      // …and History's place, queued behind it, lands: beside the focused pane
+      // …and History's place, queued behind it, lands: in the focused pane
       expect(await Promise.race([placed, Promise.resolve(STILL_WAITING)])).toEqual({
         state: "opened",
-        placement: "beside",
+        placement: "replace",
       });
     } finally {
       vi.useRealTimers();
     }
-    // nothing of the stuck mount reached the workspace; the place's split did
-    expect(store.log).toEqual(["add:born-agent"]);
+    // nothing of the stuck mount reached the workspace; the place's mount did
+    expect(store.log).toEqual(["mount:born-agent"]);
+    expect(store.showing("pane-1")).toBe("born-agent");
 
     await dispose();
   });
 });
 
-// GV-D4 (James, 2026-10-02; DESIGN.md §8, the deck: "A session with no pane").
-// Until 2026-10-11 every one of these doors landed in the ACTIVE pane,
-// replacing what it showed. The rule itself is `godview-deck-placement.test.ts`;
-// these rows are the deck doing each answer with ghosttea's own verbs.
-describe("a session with no pane is placed by the rule (GV-D4)", () => {
+// GV-D4, RE-RULED by James 2026-10-18 23:33Z (DESIGN.md §8, the deck: "A
+// session with no pane"): every pane is an observer, so a session opens in the
+// FOCUSED pane — "Everywhere", and "Mirror it" when another pane shows it
+// already. From 2026-10-11 to the re-ruling these doors opened a session
+// beside the focused pane, up to three, and only focused one a pane showed.
+// The rule itself is `godview-deck-placement.test.ts`; these rows are the deck
+// doing each answer with ghosttea's own verb, its mount into the active pane —
+// and never its split (the probe would log an `add:` or a `split:`).
+describe("a session opens in the focused pane (GV-D4, re-ruled 2026-10-18)", () => {
   const TWO: readonly ProbePane[] = [
     { id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } },
     { id: "pane-2", session: { id: "other-pty", cols: 100, rows: 30 } },
@@ -1673,8 +1686,13 @@ describe("a session with no pane is placed by the rule (GV-D4)", () => {
     if (door === null) throw new Error("the deck published no line door");
     return door;
   };
+  /** The sessions the deck asked fieldd to end: a displaced one must not be. */
+  const terminated = (): string[] =>
+    calls
+      .filter(([method]) => method === "terminal.terminate")
+      .map(([, params]) => (params as { sessionId: string }).sessionId);
 
-  it("fewer than three panes: it opens BESIDE the focused pane, which keeps its session", async () => {
+  it("two panes: it takes the FOCUSED pane, no pane is added, and the session it showed runs on", async () => {
     const store = workspaceProbe({ panes: TWO, activePaneId: "pane-1" });
     floor = [...floor, { sessionId: "listed-pty" }];
     const { door, dispose } = await mountDeckWithDoor(store);
@@ -1682,17 +1700,17 @@ describe("a session with no pane is placed by the rule (GV-D4)", () => {
     expect(await act(async () => door.mountLocal("listed-pty"))).toEqual({
       state: "mounted",
       sessionId: "listed-pty",
-      placement: "beside",
+      placement: "replace",
     });
-    // ghosttea's own split of the focused pane: the new pane to its right
-    expect(store.log).toEqual(["add:listed-pty"]);
+    // ghosttea's mount into the active pane — never its split
+    expect(store.log).toEqual(["mount:listed-pty"]);
     expect(store.panes.map((pane) => [pane.id, pane.session.id])).toEqual([
-      ["pane-1", "user-pty"],
-      ["beside-1", "listed-pty"],
+      ["pane-1", "listed-pty"],
       ["pane-2", "other-pty"],
     ]);
-    // …and it is the focused one now
-    expect(store.activePaneId).toBe("beside-1");
+    expect(store.activePaneId).toBe("pane-1");
+    // a pane is a viewport: the session it showed is detached, never ended
+    expect(terminated()).not.toContain("user-pty");
 
     await dispose();
   });
@@ -1718,8 +1736,7 @@ describe("a session with no pane is placed by the rule (GV-D4)", () => {
     await dispose();
   });
 
-  it("four or more panes (made by ⌘D) still replace the focused: the cap is the rule's alone", async () => {
-    // ⌘D splits without limit (L4); past three the rule never adds a pane
+  it("four or more panes (made by ⌘D, the one way to more panes): the focused pane, the same", async () => {
     const store = workspaceProbe({
       panes: [...THREE, { id: "pane-4", session: { id: "fourth-pty", cols: 100, rows: 30 } }],
       activePaneId: "pane-4",
@@ -1744,11 +1761,39 @@ describe("a session with no pane is placed by the rule (GV-D4)", () => {
     await dispose();
   });
 
-  it("already in a pane: that pane is focused where it is, never mounted twice — and the floor is not asked", async () => {
-    // Until GV-D4 a body picked while its session sat in ANOTHER pane was
-    // mounted into the active one as well: one PTY in two panes.
+  it("shown in ANOTHER pane: the focused pane mirrors it — two panes on one session, the count unchanged", async () => {
+    // James, 2026-10-18: "Mirror it". Until then the pane showing it was
+    // focused instead, and nothing was ever mounted twice.
     const store = workspaceProbe({ panes: TWO, activePaneId: "pane-1" });
+    floor = [...floor, { sessionId: "other-pty" }];
     const { door, dispose } = await mountDeckWithDoor(store);
+
+    expect(await act(async () => door.mountLocal("other-pty"))).toEqual({
+      state: "mounted",
+      sessionId: "other-pty",
+      placement: "replace",
+    });
+    expect(store.log).toEqual(["mount:other-pty"]);
+    expect(store.panes.map((pane) => [pane.id, pane.session.id])).toEqual([
+      ["pane-1", "other-pty"],
+      ["pane-2", "other-pty"],
+    ]);
+    // the focused pane is the one that took it: the person stays where they were
+    expect(store.activePaneId).toBe("pane-1");
+    expect(terminated()).not.toContain("user-pty");
+
+    await dispose();
+  });
+
+  it("already in the FOCUSED pane: nothing moves, the workspace is not asked, and the floor is not read", async () => {
+    const store = workspaceProbe({ panes: TWO, activePaneId: "pane-2" });
+    const { door, dispose } = await mountDeckWithDoor(store);
+    let reads = 0;
+    const answer = listSessions;
+    listSessions = () => {
+      reads += 1;
+      return answer();
+    };
     const asked = requests.length;
 
     expect(await act(async () => door.mountLocal("other-pty"))).toEqual({
@@ -1756,27 +1801,36 @@ describe("a session with no pane is placed by the rule (GV-D4)", () => {
       sessionId: "other-pty",
       placement: "focus",
     });
-    expect(store.log, "the shown session was mounted again").toEqual(["activate:other-pty"]);
-    expect(store.activePaneId).toBe("pane-2");
+    expect(store.log).toEqual([]);
     expect(store.panes.map((pane) => [pane.id, pane.session.id])).toEqual([
       ["pane-1", "user-pty"],
       ["pane-2", "other-pty"],
     ]);
-    // a pane shows it, so nothing is read from the floor to place it
+    expect(store.activePaneId).toBe("pane-2");
+    // the focused pane shows it, so nothing is read from the floor to keep it there
+    expect(reads).toBe(0);
     expect(requests.slice(asked)).toEqual([]);
-
-    // …and one already in the FOCUSED pane asks nothing of the workspace either
-    expect(await act(async () => door.mountLocal("other-pty"))).toEqual({
-      state: "mounted",
-      sessionId: "other-pty",
-      placement: "focus",
-    });
-    expect(store.log).toEqual(["activate:other-pty"]);
 
     await dispose();
   });
 
-  it("a new terminal follows the same rule: beside while fewer than three show, the focused pane's place after", async () => {
+  it("a mirror the workspace never takes is refused in words — the pane already showing it is no witness", async () => {
+    // The settle reads the FOCUSED pane: in a mirror another pane shows the
+    // session all along, so "some pane shows it" would call any mount landed.
+    const store = workspaceProbe({ panes: TWO, activePaneId: "pane-1", mountable: false });
+    floor = [...floor, { sessionId: "other-pty" }];
+    const { door, dispose } = await mountDeckWithDoor(store);
+
+    expect(await act(async () => door.mountLocal("other-pty"))).toEqual({
+      state: "failed",
+      reason: "the workspace did not take the mount",
+    });
+    expect(store.showing("pane-1")).toBe("user-pty");
+
+    await dispose();
+  });
+
+  it("a new terminal is born in the focused pane at any count — never beside it", async () => {
     // The door the line's New terminal (⌘T) and the swarm's bloom both use.
     const store = workspaceProbe({
       panes: [{ id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } }],
@@ -1785,49 +1839,39 @@ describe("a session with no pane is placed by the rule (GV-D4)", () => {
     const { door, dispose } = await mountDeckWithDoor(store);
 
     const first = await act(async () => door.createTerminal());
-    expect(first).toMatchObject({ state: "mounted", placement: "beside" });
-    const second = await act(async () => door.createTerminal());
-    expect(second).toMatchObject({ state: "mounted", placement: "beside" });
+    expect(first).toMatchObject({ state: "mounted", placement: "replace" });
     const firstId = (first as { sessionId: string }).sessionId;
-    const secondId = (second as { sessionId: string }).sessionId;
-    // two births, each ghosttea's own split of the pane that was focused
-    expect(store.log).toEqual([`split:${firstId}`, `split:${secondId}`]);
-    expect(store.panes.map((pane) => [pane.id, pane.session.id])).toEqual([
-      ["pane-1", "user-pty"],
-      ["beside-1", firstId],
-      ["beside-2", secondId],
-    ]);
-    expect(store.activePaneId).toBe("beside-2");
+    expect(store.panes.map((pane) => [pane.id, pane.session.id])).toEqual([["pane-1", firstId]]);
+    // the session the birth displaced runs on
+    expect(terminated()).not.toContain("user-pty");
 
-    // three show: the third new terminal takes the focused pane's place
-    const third = await act(async () => door.createTerminal());
-    expect(third).toMatchObject({ state: "mounted", placement: "replace" });
-    const thirdId = (third as { sessionId: string }).sessionId;
-    expect(store.log.at(-1)).toBe(`create:${thirdId}`);
-    expect(store.panes.map((pane) => [pane.id, pane.session.id])).toEqual([
-      ["pane-1", "user-pty"],
-      ["beside-1", firstId],
-      ["beside-2", thirdId],
-    ]);
+    const second = await act(async () => door.createTerminal());
+    expect(second).toMatchObject({ state: "mounted", placement: "replace" });
+    const secondId = (second as { sessionId: string }).sessionId;
+    // each ghosttea's own birth in the active pane, and never its split
+    expect(store.log).toEqual([`create:${firstId}`, `create:${secondId}`]);
+    expect(store.panes.map((pane) => [pane.id, pane.session.id])).toEqual([["pane-1", secondId]]);
+    expect(store.activePaneId).toBe("pane-1");
     // every one of them was fieldd's birth
-    expect(requests.filter((method) => method === "terminal.create")).toHaveLength(3);
+    expect(requests.filter((method) => method === "terminal.create")).toHaveLength(2);
 
     await dispose();
   });
 
-  it("the line's New terminal and History's Resume say where they landed", async () => {
+  it("the line's New terminal and History's Resume say where they landed: the focused pane", async () => {
     const store = workspaceProbe({ panes: TWO, activePaneId: "pane-1" });
     const { dispose } = await mountDeckWithDoor(store);
 
-    // ⌘T with two panes: a third, beside the focused one
+    // ⌘T with two panes: born in the focused one, the count unchanged
     expect(await act(async () => lineDoor().newTerminal())).toEqual({
       state: "opened",
-      placement: "beside",
+      placement: "replace",
     });
-    expect(store.panes).toHaveLength(3);
-    expect(store.panes[1]?.id).toBe("beside-1");
+    expect(store.panes).toHaveLength(2);
+    expect(store.showing("pane-1")).not.toBe("user-pty");
+    expect(store.showing("pane-2")).toBe("other-pty");
 
-    // Resume with three: the resumed agent's terminal takes the focused pane's place
+    // Resume: the resumed agent's terminal takes the focused pane too
     const terminal = {
       sessionId: "resumed-pty",
       session: bornSummary("resumed-pty"),
@@ -1838,8 +1882,9 @@ describe("a session with no pane is placed by the rule (GV-D4)", () => {
       state: "opened",
       placement: "replace",
     });
-    expect(store.panes).toHaveLength(3);
-    expect(store.showing("beside-1")).toBe("resumed-pty");
+    expect(store.panes).toHaveLength(2);
+    expect(store.showing("pane-1")).toBe("resumed-pty");
+    expect(store.activePaneId).toBe("pane-1");
 
     await dispose();
   });
@@ -1848,8 +1893,9 @@ describe("a session with no pane is placed by the rule (GV-D4)", () => {
 // W7 — GV-D5 and N14 (a), James 2026-10-11 (DESIGN.md §8 "Godview opens on the
 // monitor alone at launch"): a launch shows the monitor alone, and the deck is
 // mounted — its door is the monitor's — but NOT CALLED: no restore question, no
-// workspace, no birth. The first call brings the last run's panes up WITH the
-// session it called, placed by GV-D4; ended ones ask to resume, as before.
+// workspace, no birth. The first call brings the last run's panes up, the
+// session it called placed by GV-D4 (in the focused pane); ended ones ask to
+// resume, as before.
 describe("the monitor alone at launch: the deck waits for its first call (W7 — GV-D5, N14 (a))", () => {
   const TWO: readonly ProbePane[] = [
     { id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } },
@@ -1912,7 +1958,7 @@ describe("the monitor alone at launch: the deck waits for its first call (W7 —
     expect(workspaceMounts.length).toBeGreaterThan(0);
   });
 
-  it("the first call brings the last run's panes WITH the called one — beside the focused pane", async () => {
+  it("the first call brings the last run's panes back, the called one in the focused pane", async () => {
     const store = workspaceProbe({ panes: TWO, activePaneId: "pane-1" });
     floor = [...floor, { sessionId: "listed-pty" }];
     const deck = await mountUncalled();
@@ -1937,12 +1983,13 @@ describe("the monitor alone at launch: the deck waits for its first call (W7 —
     await act(async () => {
       await placing;
     });
-    expect(outcome).toEqual({ state: "mounted", sessionId: "listed-pty", placement: "beside" });
-    expect(store.panes.map((pane) => pane.session.id)).toEqual([
-      "user-pty",
-      "listed-pty",
-      "other-pty",
+    expect(outcome).toEqual({ state: "mounted", sessionId: "listed-pty", placement: "replace" });
+    // last run's two panes, the focused one showing the session called
+    expect(store.panes.map((pane) => [pane.id, pane.session.id])).toEqual([
+      ["pane-1", "listed-pty"],
+      ["pane-2", "other-pty"],
     ]);
+    expect(store.activePaneId).toBe("pane-1");
     await act(async () => probeRoot.unmount());
     probe.remove();
   });
@@ -1980,9 +2027,10 @@ describe("the monitor alone at launch: the deck waits for its first call (W7 —
 
   // L20 (the lead's, 2026-10-12): the first call is a create — ⌘T, the
   // bloom's birth — and the deck it called up had nothing to bring back. The
-  // workspace's opening shell is the terminal asked for: one pane, never a
-  // second shell born beside it.
-  it("L20: a first call that creates is answered by the workspace's opening shell, and nothing is born beside it", async () => {
+  // workspace's opening shell is the terminal asked for: one pane, and never a
+  // second shell born for it (beside it, as GV-D4 placed one until 2026-10-18,
+  // or in its place, as the re-ruled GV-D4 would).
+  it("L20: a first call that creates is answered by the workspace's opening shell, and no second shell is born", async () => {
     const store = workspaceProbe({ panes: [OPENING], activePaneId: "pane-1" });
     const deck = await mountUncalled();
     const door = deck.door();
@@ -2000,7 +2048,7 @@ describe("the monitor alone at launch: the deck waits for its first call (W7 —
       await creating;
     });
     expect(outcome).toEqual({ state: "mounted", sessionId: "opening-pty" });
-    expect(store.log, "a second shell was born beside the opening one").toEqual([]);
+    expect(store.log, "a second shell was born for the opening one").toEqual([]);
     expect(store.panes.map((pane) => pane.session.id)).toEqual(["opening-pty"]);
     await dispose();
   });
@@ -2028,7 +2076,7 @@ describe("the monitor alone at launch: the deck waits for its first call (W7 —
     await dispose();
   });
 
-  it("L20 is the first call's alone, and only for a shell born here: last run's pane gets a new one beside it (GV-D4)", async () => {
+  it("L20 is the first call's alone, and only for a shell born here: last run's pane takes a new one in its place (GV-D4)", async () => {
     const store = workspaceProbe({
       panes: [{ id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } }],
       activePaneId: "pane-1",
@@ -2045,8 +2093,12 @@ describe("the monitor alone at launch: the deck waits for its first call (W7 —
     await act(async () => {
       await creating;
     });
-    expect(outcome).toMatchObject({ state: "mounted", placement: "beside" });
-    expect(store.panes).toHaveLength(2);
+    // a birth of its own, in the focused pane: last run's session runs on there
+    expect(outcome).toMatchObject({ state: "mounted", placement: "replace" });
+    const born = (outcome as { sessionId: string }).sessionId;
+    expect(born).not.toBe("user-pty");
+    expect(store.log).toEqual([`create:${born}`]);
+    expect(store.panes.map((pane) => [pane.id, pane.session.id])).toEqual([["pane-1", born]]);
     await dispose();
   });
 });
@@ -2199,7 +2251,8 @@ describe("⌘W on the last pane goes to the terminals' owner (N16 (a))", () => {
         placement: "replace",
       });
       await settle();
-      // one pane, the called session in it — never the closed one beside it
+      // one pane, the called session in it — as in any focused pane — and the
+      // fresh shell it displaced, never used, released
       expect(store.panes.map((pane) => pane.session.id)).toEqual(["listed-pty"]);
       expect(terminated()).toContain(fresh);
       await dispose();
@@ -2340,9 +2393,11 @@ describe("every caller brings the terminals up (GV-D5, GV-D6)", () => {
 });
 
 // P3 — History's Jump to reaches the deck through the line's door (the one verb
-// it adds there): `reveal` shows the pane a running session is already in, and
-// places the session only where no pane shows it (GV-D4's rule, since
-// 2026-10-11) — never a second mount.
+// it adds there): `reveal` shows a running session in the FOCUSED pane, by the
+// one rule (GV-D4, re-ruled 2026-10-18 — "Everywhere"): mirrored there when
+// another pane shows it, nothing moved when the focused pane does. From
+// 2026-10-08 to the re-ruling it activated the pane already showing it and
+// never mounted it twice.
 describe("the line door's reveal, History's Jump to (P3)", () => {
   const lineDoor = (): LineViewDoor => {
     const door = getGodviewLineDoor();
@@ -2350,9 +2405,9 @@ describe("the line door's reveal, History's Jump to (P3)", () => {
     return door;
   };
 
-  it("activates the pane already showing the session, and mounts nothing", async () => {
-    // The user is in pane-1; the running agent's PTY is in pane-2. Jump to is
-    // the pane coming forward — a mount would pull the same PTY into pane-1.
+  it("mirrors a session another pane shows into the focused pane: two panes on it, the count unchanged", async () => {
+    // The user is in pane-1; the running agent's PTY is in pane-2. Jump to
+    // puts it in front of the user, in the pane they are in ("Mirror it").
     const store = workspaceProbe({
       panes: [
         { id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } },
@@ -2365,10 +2420,13 @@ describe("the line door's reveal, History's Jump to (P3)", () => {
 
     const outcome = await act(async () => lineDoor().reveal("agent-pty"));
 
-    expect(outcome).toEqual({ state: "opened", placement: "focus" });
-    expect(store.activePaneId).toBe("pane-2");
-    expect(store.log, "the shown session was mounted again").toEqual(["activate:agent-pty"]);
-    expect(store.showing("pane-1"), "the user's pane was taken").toBe("user-pty");
+    expect(outcome).toEqual({ state: "opened", placement: "replace" });
+    expect(store.log).toEqual(["mount:agent-pty"]);
+    expect(store.panes.map((pane) => [pane.id, pane.session.id])).toEqual([
+      ["pane-1", "agent-pty"],
+      ["pane-2", "agent-pty"],
+    ]);
+    expect(store.activePaneId).toBe("pane-1");
 
     await dispose();
   });
@@ -2390,8 +2448,7 @@ describe("the line door's reveal, History's Jump to (P3)", () => {
     await dispose();
   });
 
-  it("places a session no pane shows by the rule, through the door's mount: beside the focused pane", async () => {
-    // GV-D4: until 2026-10-11 it took the ACTIVE pane, replacing what it showed.
+  it("places a session no pane shows by the rule, through the door's mount: in the focused pane", async () => {
     const store = workspaceProbe({
       panes: [
         { id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } },
@@ -2404,13 +2461,13 @@ describe("the line door's reveal, History's Jump to (P3)", () => {
 
     expect(await act(async () => lineDoor().reveal("agent-pty"))).toEqual({
       state: "opened",
-      placement: "beside",
+      placement: "replace",
     });
-    expect(store.showing("pane-1")).toBe("user-pty");
+    expect(store.showing("pane-1")).toBe("agent-pty");
     expect(store.showing("pane-2")).toBe("other-pty");
-    expect(store.paneOf("agent-pty")).toBe("beside-1");
-    expect(store.activePaneId).toBe("beside-1");
-    expect(store.log).toEqual(["add:agent-pty"]);
+    expect(store.panes).toHaveLength(2);
+    expect(store.activePaneId).toBe("pane-1");
+    expect(store.log).toEqual(["mount:agent-pty"]);
     // …and one the floor does not list is refused in the door's words
     expect(await act(async () => lineDoor().reveal("never-born"))).toEqual({
       state: "refused",
@@ -2420,24 +2477,24 @@ describe("the line door's reveal, History's Jump to (P3)", () => {
     await dispose();
   });
 
-  it("refuses when the pane showing the session never takes focus, and mounts nothing", async () => {
+  it("refuses in the door's words when the focused pane never takes it, though another pane shows it", async () => {
     const store = workspaceProbe({
       panes: [
         { id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } },
         { id: "pane-2", session: { id: "agent-pty", cols: 100, rows: 30 } },
       ],
       activePaneId: "pane-1",
-      activatable: false,
+      mountable: false,
     });
     floor = [...floor, { sessionId: "agent-pty" }];
     const { dispose } = await mountDeckWithDoor(store);
 
     expect(await act(async () => lineDoor().reveal("agent-pty"))).toEqual({
       state: "refused",
-      reason: "the pane showing it could not be made the active one",
+      reason: "the workspace did not take the mount",
     });
-    expect(store.log.filter((entry) => entry.startsWith("mount:"))).toEqual([]);
     expect(store.showing("pane-1")).toBe("user-pty");
+    expect(store.showing("pane-2")).toBe("agent-pty");
 
     await dispose();
   });
@@ -2547,9 +2604,10 @@ describe("the deck takes the geometry seat on focus (DS-4)", () => {
 // DS-4e (2026-10-01; thinking-desktop-sync-plane.md §6.3) — a terminal on
 // ANOTHER desktop, attached from Godview. The deck reads the OWNER's summary
 // (`terminal.sessions {device}` — the engine handle a pane mounts by is in no
-// other answer, the lead's ruling (B)), places it as any session with no pane
-// is (GV-D4: beside the focused pane; until 2026-10-11, in the active one), and from
-// there the window's ROUTED HOST asks every ticket of the owner by `device`: the
+// other answer, the lead's ruling (B)), places it as any session is (GV-D4,
+// re-ruled 2026-10-18: in the focused pane, mirrored there when another pane
+// shows it; from 2026-10-11 to then, beside the focused pane), and from there
+// the window's ROUTED HOST asks every ticket of the owner by `device`: the
 // answer's doors are the loopback pair this desktop's daemon re-homed, dialled
 // as a local cell's. ghosttea's remote palette is not asked at all.
 describe("the remote attach rides the routed host (DS-4e)", () => {
@@ -2619,10 +2677,10 @@ describe("the remote attach rides the routed host (DS-4e)", () => {
       door.attach({ deviceId: STUDIO, deviceName: "studio", remoteSessionId: "pane-r" }),
     );
     expect(outcome).toEqual({ state: "attached", sessionId: "pane-r", readWrite: true });
-    // GV-D4: one pane showing, so the peer's session opens beside it
-    expect(store.paneOf("pane-r")).toBe("beside-1");
-    expect(store.showing("pane-1")).toBe("user-pty");
-    expect(store.activePaneId).toBe("beside-1");
+    // GV-D4: the focused pane — the one the person is in — shows the peer's
+    // session, and no pane is added
+    expect(store.panes.map((pane) => [pane.id, pane.session.id])).toEqual([["pane-1", "pane-r"]]);
+    expect(store.activePaneId).toBe("pane-1");
     expect(calls).toContainEqual(["terminal.sessions", { device: STUDIO }]);
     expect(paletteOpens).toEqual([]);
 
@@ -2634,6 +2692,55 @@ describe("the remote attach rides the routed host (DS-4e)", () => {
     // a session on THIS desktop is asked exactly as it always was
     await routedHost().openTicket("user-pty", { reason: "mount" });
     expect(calls).toContainEqual(["terminal.openTicket", { sessionId: "user-pty" }]);
+    await dispose();
+  });
+
+  it("a peer's session another pane shows is MIRRORED into the focused pane — two panes on it, nothing ended (GV-D4, re-ruled 2026-10-18)", async () => {
+    // James: "Mirror it". Two panes on one session share one PTY size, set by
+    // the pane that holds the geometry seat — the one focused last (DS-4).
+    floor = [{ sessionId: "user-pty" }, { sessionId: "other-pty" }];
+    ownerFloors = { [STUDIO]: [bornSummary("pane-r", { handle: "41" })] };
+    ownerMint = (_device, sessionId) => Promise.resolve(ownersTicket(sessionId));
+    const store = workspaceProbe({
+      panes: [
+        { id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } },
+        { id: "pane-2", session: { id: "other-pty", cols: 100, rows: 30 } },
+      ],
+      activePaneId: "pane-2",
+    });
+    const { door, dispose } = await mountDeckWithDoor(store);
+    const attach = () =>
+      act(async () =>
+        door.attach({ deviceId: STUDIO, deviceName: "studio", remoteSessionId: "pane-r" }),
+      );
+    const shown = () => store.panes.map((pane) => [pane.id, pane.session.id]);
+
+    // the peer's session, in the pane the person is in
+    expect(await attach()).toEqual({ state: "attached", sessionId: "pane-r", readWrite: true });
+    expect(shown()).toEqual([
+      ["pane-1", "user-pty"],
+      ["pane-2", "pane-r"],
+    ]);
+
+    // the person selects pane-1 and clicks the same bubble: pane-1 shows it too
+    await act(async () => store.activateSession("user-pty"));
+    expect(await attach()).toEqual({ state: "attached", sessionId: "pane-r", readWrite: true });
+    expect(shown()).toEqual([
+      ["pane-1", "pane-r"],
+      ["pane-2", "pane-r"],
+    ]);
+    expect(store.activePaneId).toBe("pane-1");
+    // each attach read the owner's summary, the one a pane mounts by
+    const ownerReads = calls.filter(
+      ([method, params]) =>
+        method === "terminal.sessions" && (params as { device?: string }).device === STUDIO,
+    );
+    expect(ownerReads).toHaveLength(2);
+    // what the two attaches displaced was detached, never ended (GT-D5)
+    expect(calls.filter(([method]) => method === "terminal.terminate")).toEqual([]);
+    // the mirror's size is the seat's: every surface takes it on focus (DS-4)
+    expect(workspaceMounts.at(-1)?.["takeGeometryOnFocus"]).toBe(true);
+    expect(paletteOpens).toEqual([]);
     await dispose();
   });
 
@@ -2680,12 +2787,13 @@ describe("the remote attach rides the routed host (DS-4e)", () => {
       expect(await Promise.race([next, Promise.resolve(STILL_WAITING)])).toEqual({
         state: "mounted",
         sessionId: "listed-pty",
-        placement: "beside",
+        placement: "replace",
       });
     } finally {
       vi.useRealTimers();
     }
     expect(store.paneOf("pane-r")).toBeUndefined();
+    expect(store.showing("pane-1")).toBe("listed-pty");
     await dispose();
   });
 
@@ -2709,8 +2817,8 @@ describe("the remote attach rides the routed host (DS-4e)", () => {
     const unsubscribe = door.devices?.subscribe((devices) => seen.push(devices));
     await settle();
     expect(seen).toHaveLength(1);
-    // the pane the attach is about to open beside the focused one (GV-D4)
-    const pane = paneElement("beside-1");
+    // the focused pane, which the attach is about to give the peer's session (GV-D4)
+    const pane = paneElement("pane-1");
 
     await act(async () =>
       door.attach({ deviceId: STUDIO, deviceName: "studio", remoteSessionId: "pane-r" }),

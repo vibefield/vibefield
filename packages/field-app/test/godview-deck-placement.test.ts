@@ -1,41 +1,43 @@
 /**
- * Where a session with no pane opens (GV-D4, James 2026-10-02; DESIGN.md §8,
- * the deck: "A session with no pane").
+ * Where a session opens in the terminals (GV-D4, RE-RULED by James 2026-10-18
+ * 23:33Z; DESIGN.md §8, the deck: "A session with no pane").
  *
  * The rule alone, with no deck: the panes showing, the focused one, and the
- * session asked for. The ruled drawing's own code is the reference
- * (`draft/one-frame/src/kit/gv3.js` `placeSession`): a session not shown is
- * pushed while fewer than three panes show and takes the focused pane's index
- * after; one already shown is only focused. What the deck does with each
- * answer — ghosttea's own split, its mount, its activation — is
+ * session asked for. Every pane is an observer, and what the person opens goes
+ * into the one they selected — "Everywhere", and "Mirror it" when another pane
+ * shows it already. The reference is the original Godview's own select, "Show
+ * this agent in the active pane" (puppeteer `view-sdk/src/view.ts`). What the
+ * deck does with each answer — ghosttea's mount into the active pane — is
  * `godview-deck.test.tsx`'s.
  */
 import { describe, expect, it } from "vitest";
-import {
-  DECK_PLACEMENT_PANES,
-  type DeckPaneShown,
-  deckPlacement,
-} from "../src/godview/deck-placement";
+import { type DeckPaneShown, deckPlacement } from "../src/godview/deck-placement";
 
 const pane = (id: string, sessionId: string): DeckPaneShown => ({ id, sessionId });
 const ONE = [pane("p1", "a")];
 const TWO = [pane("p1", "a"), pane("p2", "b")];
 const THREE = [pane("p1", "a"), pane("p2", "b"), pane("p3", "c")];
-const FOUR = [...THREE, pane("p4", "d")];
+const SIX = [...THREE, pane("p4", "d"), pane("p5", "e"), pane("p6", "f")];
 
-describe("where a session with no pane opens (GV-D4)", () => {
-  it("fewer than three: beside; three: replaces the focused; already shown: focused, never mounted twice", () => {
-    // fewer than three panes showing: beside the focused one
+describe("where a session opens (GV-D4, re-ruled 2026-10-18)", () => {
+  it("the focused pane already shows it: nothing moves", () => {
+    expect(deckPlacement({ panes: ONE, focusedPaneId: "p1" }, "a")).toEqual({
+      kind: "focus",
+      paneId: "p1",
+    });
+    expect(deckPlacement({ panes: THREE, focusedPaneId: "p2" }, "b")).toEqual({
+      kind: "focus",
+      paneId: "p2",
+    });
+  });
+
+  it("one, two, three or more panes: it replaces the FOCUSED pane, and no pane is added", () => {
+    // until the re-ruling: beside the focused pane while fewer than three showed
     expect(deckPlacement({ panes: ONE, focusedPaneId: "p1" }, "x")).toEqual({
-      kind: "beside",
+      kind: "replace",
       paneId: "p1",
     });
     expect(deckPlacement({ panes: TWO, focusedPaneId: "p2" }, "x")).toEqual({
-      kind: "beside",
-      paneId: "p2",
-    });
-    // three showing: the focused pane's place, whichever pane that is
-    expect(deckPlacement({ panes: THREE, focusedPaneId: "p2" }, "x")).toEqual({
       kind: "replace",
       paneId: "p2",
     });
@@ -43,80 +45,50 @@ describe("where a session with no pane opens (GV-D4)", () => {
       kind: "replace",
       paneId: "p3",
     });
-    // already in a pane: that pane, at any count — never a second mount
-    expect(deckPlacement({ panes: ONE, focusedPaneId: "p1" }, "a")).toEqual({
-      kind: "focus",
-      paneId: "p1",
-    });
-    expect(deckPlacement({ panes: TWO, focusedPaneId: "p1" }, "b")).toEqual({
-      kind: "focus",
-      paneId: "p2",
-    });
-    expect(deckPlacement({ panes: THREE, focusedPaneId: "p1" }, "c")).toEqual({
-      kind: "focus",
-      paneId: "p3",
-    });
-  });
-
-  it("the cap is three, and it is this rule's alone", () => {
-    expect(DECK_PLACEMENT_PANES).toBe(3);
-  });
-
-  it("a new terminal follows the same rule", () => {
-    // no session to look for (it is not born yet): beside, then the focused pane's place
-    expect(deckPlacement({ panes: ONE, focusedPaneId: "p1" })).toEqual({
-      kind: "beside",
-      paneId: "p1",
-    });
-    expect(deckPlacement({ panes: TWO, focusedPaneId: "p1" })).toEqual({
-      kind: "beside",
-      paneId: "p1",
-    });
-    expect(deckPlacement({ panes: THREE, focusedPaneId: "p1" })).toEqual({
-      kind: "replace",
-      paneId: "p1",
-    });
-  });
-
-  it("four or more panes (made by ⌘D) still replace the focused", () => {
-    // ⌘D splits without limit (L4): past three, the rule never adds a pane
-    expect(deckPlacement({ panes: FOUR, focusedPaneId: "p4" }, "x")).toEqual({
+    // six, made by ⌘D (which splits without limit): still the focused pane
+    expect(deckPlacement({ panes: SIX, focusedPaneId: "p4" }, "x")).toEqual({
       kind: "replace",
       paneId: "p4",
     });
-    expect(deckPlacement({ panes: FOUR, focusedPaneId: "p2" })).toEqual({
-      kind: "replace",
-      paneId: "p2",
-    });
-    const SIX = [...FOUR, pane("p5", "e"), pane("p6", "f")];
-    expect(deckPlacement({ panes: SIX, focusedPaneId: "p1" }, "x")).toEqual({
+  });
+
+  it("shown in ANOTHER pane: the focused pane shows it too — a mirror, never a focus elsewhere", () => {
+    // James: "Mirror it". Until the re-ruling the pane already showing it was
+    // focused instead, and nothing was mounted twice.
+    expect(deckPlacement({ panes: TWO, focusedPaneId: "p1" }, "b")).toEqual({
       kind: "replace",
       paneId: "p1",
     });
-    // …and one of them already showing the session is still only focused
     expect(deckPlacement({ panes: SIX, focusedPaneId: "p1" }, "f")).toEqual({
-      kind: "focus",
-      paneId: "p6",
+      kind: "replace",
+      paneId: "p1",
     });
-  });
-
-  it("a session mirrored in two panes is focused where the person is, else in its first pane", () => {
+    // already mirrored, and the focused pane is one of the mirrors: nothing moves
     const mirrored = [pane("p1", "a"), pane("p2", "b"), pane("p3", "a")];
     expect(deckPlacement({ panes: mirrored, focusedPaneId: "p3" }, "a")).toEqual({
       kind: "focus",
       paneId: "p3",
     });
+    // …and when it is not, the focused pane becomes a third view of it
     expect(deckPlacement({ panes: mirrored, focusedPaneId: "p2" }, "a")).toEqual({
-      kind: "focus",
-      paneId: "p1",
+      kind: "replace",
+      paneId: "p2",
     });
   });
 
-  it("counts panes, not sessions: two panes mirroring one session are two", () => {
-    const mirrors = [pane("p1", "a"), pane("p2", "a"), pane("p3", "a")];
-    expect(deckPlacement({ panes: mirrors, focusedPaneId: "p1" }, "x")).toEqual({
+  it("a new terminal replaces the focused pane, at any count", () => {
+    // no session to look for (it is not born yet)
+    expect(deckPlacement({ panes: ONE, focusedPaneId: "p1" })).toEqual({
       kind: "replace",
       paneId: "p1",
+    });
+    expect(deckPlacement({ panes: TWO, focusedPaneId: "p1" })).toEqual({
+      kind: "replace",
+      paneId: "p1",
+    });
+    expect(deckPlacement({ panes: SIX, focusedPaneId: "p6" })).toEqual({
+      kind: "replace",
+      paneId: "p6",
     });
   });
 
@@ -124,37 +96,24 @@ describe("where a session with no pane opens (GV-D4)", () => {
     expect(deckPlacement({ panes: [], focusedPaneId: undefined }, "x")).toEqual({ kind: "none" });
     expect(deckPlacement({ panes: TWO, focusedPaneId: undefined }, "x")).toEqual({ kind: "none" });
     expect(deckPlacement({ panes: TWO, focusedPaneId: "gone" })).toEqual({ kind: "none" });
-    // …but a session already shown needs no focused pane to be found
-    expect(deckPlacement({ panes: TWO, focusedPaneId: undefined }, "b")).toEqual({
-      kind: "focus",
-      paneId: "p2",
-    });
+    // a session a pane shows is no exception: the rule places by the focused pane alone
+    expect(deckPlacement({ panes: TWO, focusedPaneId: undefined }, "b")).toEqual({ kind: "none" });
   });
 });
 
 // N16 (a), the lead's rule (2026-10-12): ⌘W on the last pane empties it — a
-// fresh shell with the launcher over it — and the next call takes that pane.
-describe("an empty pane ⌘W left takes the next session in its place (N16 (a))", () => {
-  it("replaces the empty focused pane instead of opening beside it", () => {
-    expect(deckPlacement({ panes: ONE, focusedPaneId: "p1", emptyPaneId: "p1" }, "x")).toEqual({
+// fresh shell with the launcher over it. Under the re-ruled GV-D4 that pane is
+// a pane like any other: focused, the next session takes its place.
+describe("the empty pane ⌘W left is a pane the rule replaces (N16 (a))", () => {
+  it("the next session, or a new terminal, replaces the empty focused pane", () => {
+    const emptied = [pane("p1", "fresh-shell")];
+    expect(deckPlacement({ panes: emptied, focusedPaneId: "p1" }, "x")).toEqual({
       kind: "replace",
       paneId: "p1",
     });
-    // a new terminal too
-    expect(deckPlacement({ panes: ONE, focusedPaneId: "p1", emptyPaneId: "p1" })).toEqual({
+    expect(deckPlacement({ panes: emptied, focusedPaneId: "p1" })).toEqual({
       kind: "replace",
       paneId: "p1",
-    });
-  });
-
-  it("only while the empty pane is the focused one, and never over a pane already showing it", () => {
-    expect(deckPlacement({ panes: TWO, focusedPaneId: "p2", emptyPaneId: "p1" }, "x")).toEqual({
-      kind: "beside",
-      paneId: "p2",
-    });
-    expect(deckPlacement({ panes: TWO, focusedPaneId: "p1", emptyPaneId: "p1" }, "b")).toEqual({
-      kind: "focus",
-      paneId: "p2",
     });
   });
 });

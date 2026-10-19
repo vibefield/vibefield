@@ -1353,13 +1353,15 @@ describe("the monitor stage", () => {
     stop();
   });
 
-  it("says how the deck's rule placed it: a new pane, its own pane focused, or the active one (GV-D4)", async () => {
+  it("says how the deck's rule placed it: mounted in the active pane, or there already (GV-D4, re-ruled 2026-10-18)", async () => {
     // The door answers how the session was placed (`deck-placement.ts`), and
-    // the stage's words follow — never "mounted" for a session that was only
-    // focused where it already was.
+    // the stage's words follow — never "mounted" for a session the focused
+    // pane already showed. The click put it in the focused pane, the observer
+    // the person chose (a mirror when another pane shows it: still "mounted");
+    // "… opened in a new pane" is never said since the re-ruling.
     const door = fakeDoor();
     const host = await mountMonitor("list", door);
-    const pick = async (placement: "beside" | "focus" | "replace"): Promise<string> => {
+    const pick = async (placement: "focus" | "replace"): Promise<string> => {
       door.mountLocal.mockResolvedValueOnce({
         state: "mounted",
         sessionId: "run-claude-pty",
@@ -1371,22 +1373,13 @@ describe("the monitor stage", () => {
       await act(async () => row?.click());
       return ackText(host);
     };
-    // fewer than three panes: beside the focused one
-    expect(await pick("beside")).toBe("vibe-field opened in a new pane");
-    // already in a pane: focused where it is, nothing mounted
-    expect(await pick("focus")).toBe("vibe-field is in the active pane");
-    // three or more: the focused pane's place
+    // the focused pane takes it, whatever the count, and beside a pane showing it
     expect(await pick("replace")).toBe("vibe-field mounted in the active pane");
-    expect(door.mountLocal).toHaveBeenCalledTimes(3);
+    // the focused pane showed it already: nothing mounted
+    expect(await pick("focus")).toBe("vibe-field is in the active pane");
+    expect(door.mountLocal).toHaveBeenCalledTimes(2);
 
-    // …and a new terminal says the same two places
-    door.createTerminal.mockResolvedValueOnce({
-      state: "mounted",
-      sessionId: "born-2",
-      placement: "beside",
-    });
-    await act(async () => host.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
-    expect(ackText(host)).toBe("terminal opened in a new pane");
+    // …and a new terminal says the same place
     door.createTerminal.mockResolvedValueOnce({
       state: "mounted",
       sessionId: "born-3",

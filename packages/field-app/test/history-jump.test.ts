@@ -115,20 +115,16 @@ describe("the line's words around Jump to (P3)", () => {
 
   it("PJ-6 (Q4): a resume at the agent's own model, its launch model not taken, says so in fieldd's words", () => {
     const own = "at OpenCode's own model — it can't start a resumed session at a chosen one";
-    expect(resumeNote({ state: "resumed", placement: "beside", own })).toBe(
-      `Resumed in a new pane, ${own}`,
+    expect(resumeNote({ state: "resumed", placement: "replace", own })).toBe(
+      `Resumed in the active pane, ${own}`,
     );
     expect(resumeNote({ state: "resumed", own })).toBe(`Resumed in the active pane, ${own}`);
   });
 
-  it("says where the deck's rule placed a resume and a new terminal (GV-D4)", () => {
-    // beside the focused pane while fewer than three panes show
-    expect(resumeNote({ state: "resumed", placement: "beside" })).toBe("Resumed in a new pane");
-    expect(newTerminalNote({ state: "opened", placement: "beside" })).toBe(
-      "Terminal opened in a new pane",
-    );
-    // with three or more it takes the focused pane's place — and a door that
-    // does not say keeps the sentence it always had
+  it("says where the deck's rule placed a resume and a new terminal: the active pane (GV-D4, re-ruled 2026-10-18)", () => {
+    // the focused pane takes it, whatever the count — "… in a new pane" is
+    // never said since the re-ruling — and a door that does not say keeps the
+    // sentence it always had
     expect(resumeNote({ state: "resumed", placement: "replace" })).toBe(
       "Resumed in the active pane",
     );
@@ -136,6 +132,7 @@ describe("the line's words around Jump to (P3)", () => {
       "Terminal opened in the active pane",
     );
     expect(newTerminalNote({ state: "opened" })).toBe("Terminal opened in the active pane");
+    expect(resumeNote({ state: "resumed" })).toBe("Resumed in the active pane");
   });
 
   it("never makes Jump to wait on the launcher's reading — only on a choice", () => {

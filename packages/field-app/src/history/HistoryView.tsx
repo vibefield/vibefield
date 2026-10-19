@@ -264,8 +264,8 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
     return outcome;
   }, [deps, noteRun, failed]);
 
-  // P3 — Jump to: the run asked for again at the press, the pane showing its
-  // floor session revealed in Godview
+  // P3 — Jump to: the run asked for again at the press, its floor session
+  // revealed in Godview's focused pane (GV-D4)
   const jump = useCallback(async (): Promise<JumpOutcome> => {
     const chosen = selectionRef.current;
     if (chosen === null) return { state: "refused", reason: "choose a session first" };

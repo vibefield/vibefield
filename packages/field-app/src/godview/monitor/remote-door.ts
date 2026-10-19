@@ -20,8 +20,9 @@ export interface MonitorUsagePort extends AccountUsagePort {
  * GT-D13 says a view is a pure function of `{agents, parameters, actions}` and
  * never touches the runtime, the workspace, fieldd, or a terminal. GT-D17 then
  * asked the monitor to do two things that live entirely on the other side of
- * that line: list the mesh's sessions, and mount one in the active pane (since
- * GV-D4, 2026-10-11: place one by the deck's rule, `deck-placement.ts`). AR-3
+ * that line: list the mesh's sessions, and mount one in the active pane (by
+ * the deck's rule since GV-D4, `deck-placement.ts` — re-ruled 2026-10-18 back
+ * to the active pane, the focused one). AR-3
  * adds fieldd's fold, empty-terminal creation and local-session attachment.
  * This interface is how all of it happens without moving the line — it is
  * BUILT in `GodviewDeck`, where the runtime, the workspace and the fieldd
@@ -44,24 +45,22 @@ export interface MonitorDoor {
    * can say which desktop it lives on. Optional, and deliberately: a door
    * without it names each desktop by its id and draws no OS. */
   devices?: DevicesPort;
-  /** Open the peer's session and place it as a session with no pane is
-   * (GV-D4: beside the focused pane, in its place with three showing, or its
-   * own pane focused). Unreachable
+  /** Open the peer's session and place it as any session is (GV-D4: in the
+   * focused pane, mirrored there when another pane shows it). Unreachable
    * from the mesh board's rows until DS-4 lands the terminal path across
    * desktops (every remote row says `attachable: false` until then); the
    * verb stays for that slice to rewire. */
   attach(request: RemoteAttachRequest): Promise<RemoteAttachOutcome>;
   /** Create an empty shell through the workspace's normal birth path — under
    * an Agent Profile when the request names one (SB-3) — placed by the same
-   * rule (GV-D4): beside the focused pane while fewer than three show, in its
-   * place after. A refusal is an outcome (`failed`, in fieldd's own words),
-   * never a throw. */
+   * rule (GV-D4): in the focused pane, whose session runs on. A refusal is an
+   * outcome (`failed`, in fieldd's own words), never a throw. */
   createTerminal(request?: TerminalBirthRequest): Promise<LocalMountOutcome>;
   /** AR-3 — bring a LOCAL floor session (a managed agent's PTY, an unclaimed
-   * terminal) into the terminals, by the rule (GV-D4): its own pane focused if
-   * one shows it, else beside the focused pane, else in its place. AR-4 —
-   * with `replacing`, in the pane that is showing the PTY the session took the
-   * place of, whatever the rule would say. */
+   * terminal) into the terminals, by the rule (GV-D4): in the focused pane,
+   * mirrored there when another pane shows it, nothing moved when the focused
+   * pane does. AR-4 — with `replacing`, in the pane that is showing the PTY
+   * the session took the place of, whatever the rule would say. */
   mountLocal(sessionId: string, options?: LocalMountOptions): Promise<LocalMountOutcome>;
   /** AR-5 — rosetta's words, as Find asks them (`index.status` /
    * `index.sessions` / `index.search`), adapted to the views' port. The views
@@ -167,9 +166,10 @@ export type LocalMountOutcome =
        * when the shell was born bound. Asked for and absent: the daemon could
        * not bind it (older than SB-2), and the shell is unbound. */
       profileSet?: string;
-      /** GV-D4 — how the rule placed it: `beside` the focused pane, in its
-       * place (`replace`), or its own pane focused (`focus`: nothing was
-       * mounted). Absent from a hand-over (`replacing`), which no rule placed. */
+      /** GV-D4 — how the rule placed it: in the focused pane (`replace`, a
+       * mirror when another pane showed it), or there already (`focus`:
+       * nothing was mounted). Absent from a hand-over (`replacing`), which no
+       * rule placed. */
       placement?: DeckPlaced;
     }
   | { state: "no-pane" }

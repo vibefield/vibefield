@@ -29,8 +29,8 @@ export interface LinePane {
 }
 
 /** What a new terminal came to — the door's own outcomes (SB-3's words).
- * `placement` (GV-D4): how the deck's rule placed it — beside the focused
- * pane, in its place, or its own pane focused — when the deck says. */
+ * `placement` (GV-D4): how the deck's rule placed it — in the focused pane
+ * (`replace`), or there already (`focus`) — when the deck says. */
 export type NewTerminalOutcome =
   | { readonly state: "opened"; readonly placement?: DeckPlaced }
   | { readonly state: "refused"; readonly reason: string };
@@ -41,8 +41,8 @@ export interface LineViewDoor {
   /** Whether the deck is on screen — a paste lands only where it can be seen. */
   readonly onScreen: boolean;
   /** A fresh shell, which shows its launcher: what the swarm's hold does
-   * without a spot to land on — beside the focused pane while fewer than three
-   * panes show, in its place after (GV-D4). */
+   * without a spot to land on — in the focused pane, whose session runs on
+   * (GV-D4, re-ruled 2026-10-18). */
   newTerminal(): Promise<NewTerminalOutcome>;
   /** Paste `text` into the input of the pane showing `sessionId` — the road ⌘V
    * takes, so the pane brackets it and nothing presses Return. True when the
@@ -53,13 +53,13 @@ export interface LineViewDoor {
   readonly canPlace: boolean;
   /** AR-8c — History's Resume lands here: the create ticket `agent.resume`
    * answered with (plain data, the same ticket a shell birth carries), adopted
-   * by the deck and placed as the swarm's open places a session with no pane
-   * (GV-D4: beside the focused pane, or in its place with three showing — the
-   * session it showed is detached, never killed). */
+   * by the deck and placed as the swarm's open places a session (GV-D4: in
+   * the focused pane — the session it showed is detached, never killed). */
   place(terminal: unknown): Promise<NewTerminalOutcome>;
-  /** P3 — History's Jump to lands here: the pane showing floor session
-   * `sessionId` becomes the active one, or, when no pane shows it, it is
-   * placed by the same rule through the door's serialized mount (AR-4b). */
+  /** P3 — History's Jump to lands here: floor session `sessionId` shown in
+   * the focused pane by the same rule, through the door's serialized mount
+   * (AR-4b) — mirrored there when another pane shows it (GV-D4, re-ruled
+   * 2026-10-18), nothing moved when the focused pane does. */
   reveal(sessionId: string): Promise<NewTerminalOutcome>;
   /** W7 (GV-D5) — the deck is asking the person something before it can
    * place anything: the restore question a launch's first call can bring up
@@ -95,14 +95,13 @@ export function useGodviewLineDoor(): LineViewDoor | null {
 }
 
 /** The words a new terminal's outcome is said in — the swarm's own sentences
- * (useMonitorAgents' createAt), so the two doors to one act speak alike. Where
- * it opened follows the deck's rule (GV-D4): a new pane beside the one the
- * person was in, or — with three showing — the active pane itself. */
+ * (useMonitorAgents' createAt), so the two doors to one act speak alike. It
+ * opened where the deck's rule puts every session (GV-D4, re-ruled
+ * 2026-10-18): the active pane — the one the person was in. */
 export function newTerminalNote(outcome: NewTerminalOutcome): string {
-  if (outcome.state !== "opened") return `Terminal could not be opened — ${outcome.reason}`;
-  return outcome.placement === "beside"
-    ? "Terminal opened in a new pane"
-    : "Terminal opened in the active pane";
+  return outcome.state === "opened"
+    ? "Terminal opened in the active pane"
+    : `Terminal could not be opened — ${outcome.reason}`;
 }
 
 /** Test seam. */
@@ -237,11 +236,11 @@ export interface HistoryLineDoor {
    * answer (kept while a new one is on its way): the create is Jump to. */
   readonly live: boolean;
   /** Resume the chosen session in its own agent, placed as the swarm's open
-   * places a session with no pane (GV-D4), and show it (the frame moves to
-   * Godview). */
+   * places a session (GV-D4: in the focused pane), and show it (the frame
+   * moves to Godview). */
   resume(): Promise<ResumeOutcome>;
-  /** P3 — show the pane the chosen session runs in (the frame moves to
-   * Godview, whose deck reveals it). */
+  /** P3 — show the chosen session where it runs (the frame moves to Godview,
+   * whose deck shows it in the focused pane). */
   jump(): Promise<JumpOutcome>;
 }
 
@@ -275,9 +274,8 @@ export function useHistoryLineDoor(): HistoryLineDoor | null {
 export function resumeNote(outcome: ResumeOutcome): string {
   switch (outcome.state) {
     case "resumed": {
-      // GV-D4: a new pane beside the focused one, or the active pane itself
-      const where =
-        outcome.placement === "beside" ? "Resumed in a new pane" : "Resumed in the active pane";
+      // GV-D4 (re-ruled 2026-10-18): the focused pane — the active one
+      const where = "Resumed in the active pane";
       // PJ-6 (Q4): a launch model the agent's resume could not take is said
       return outcome.own === undefined ? where : `${where}, ${outcome.own}`;
     }
