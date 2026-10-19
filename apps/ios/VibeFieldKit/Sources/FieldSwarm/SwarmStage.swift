@@ -112,6 +112,10 @@ public final class SwarmStage {
   private var states: [String: SwarmPhysics.SwarmBodyState] = [:]
   /// When the newest solved step landed, in the stage's clock (seconds).
   private var frameAt: Double?
+  #if DEBUG
+    /// The paint's own measure, said every few seconds (`SwarmFrameMeter`).
+    private var meter = SwarmFrameMeter()
+  #endif
   private var previousTime: Double?
   private var arrivalCounter = 0
   private var pendingSpawns: [String: SIMD2<Double>] = [:]
@@ -205,10 +209,14 @@ public final class SwarmStage {
   /// Advance the physics to `time` (seconds) and fire a hold that has run
   /// its course. Called once per frame by the view.
   public func pump(time: Double) {
-    if world.advance(now: time) > 0 {
+    let steps = world.advance(now: time)
+    if steps > 0 {
       frameAt = time
       for state in world.states { states[state.id.rawValue] = state }
     }
+    #if DEBUG
+      if let line = meter.record(time: time, steps: steps) { print(line) }
+    #endif
     if var pending = hold, !pending.fired, time - pending.startedAt >= longPressDuration {
       pending.fired = true
       hold = pending
