@@ -12238,3 +12238,118 @@ stopped since, so this rule has not run on his Mac.
 - `b3b16d0` itself stays on `swf/port-0.2.2` for RD-5's 0.2.2 cut.
 - The pin carries DESIGN.md §8's dated pull correction and the DECISIONS SWF row REVERSED. Puppeteer main moving to it
   is James's word.
+
+## SWF's pull reversed — the centre's pull is round again: puppeteer `d3e82aa` → `fa0d6cf`, one commit on main's line (2026-10-19; `85efa16be`, lane `mv/puppeteer-pin-a`)
+
+**What James asked (2026-10-19 02:02Z, after a dev-only live A/B on his own desktop):** "i'll go with A, why is A been
+dropped in the first place?" It REVERSES his 2026-10-14 "Pull takes the field's shape" (the SWF entry above).
+- On his deck-up field (1712 × 393), the shaped pull left a body far out 1/e of the way home sideways after 14.7 s. The
+  round pull takes 0.57 s, and the plain ratio he felt took 2.85 s.
+- The pull is now the same along both sides, whatever the field's shape. The phone's swarm (`SwarmWorld.swift`) always
+  pulled round, so the desktop and the phone agree again.
+- **The fit: James ruled (a), 17:42Z, full size and the small tuck.** The packing stays ρ 0.45. Measured headless on
+  the port line's tree (the fit and the physics are the same files here) at ρ 0.45 over 8 seeds, with the deck up, twenty bodies tuck 2.8 px under the head, 27 tuck 7.4 and 40 tuck 13.7.
+  With the deck away (1712 × 912), the crowd is clear up to 27. A round crowd is clear on every measured field only at
+  ρ ≤ 0.08.
+
+**The two puppeteer lines, and which one is pinned:**
+- The lock pinned `d3e82aa`, puppeteer main, the SWF landing of 2026-10-14. Main has not moved since.
+- **`fa0d6cf` is pinned:** `vf/swarm-pull-main`, ONE commit on `d3e82aa`, so the pin moves by a fast-forward of main's
+  line. It carries the port line's `b3b16d0` cherry-picked, the same patch to `world.ts` and `world.test.ts`, whose
+  copies on main were byte for byte the port's at `ce127f4`. Nothing else rides along.
+- It was cut code-only as `42035fa`, the sha the squeeze's entry above names as the one to come. `fa0d6cf` is that
+  commit amended with its goldens and nothing else: `git diff 42035fa fa0d6cf` is the 13 golden files.
+- `b3b16d0` is NOT pinned. It stays on `swf/port-0.2.2` (off main at `1def18f`, with the `@vibefield/puppeteer-*`
+  rename that the lock, the link rows and every import here do not name yet) for RD-5's 0.2.2 cut.
+
+**The change:**
+- puppeteer `fa0d6cf` (15 files): `world.ts` and its test; the six n20 swarm PNGs and their manifest rows; the three
+  `apps/godview/goldens/swarm` frame files and the three `packages/views/test/goldens/swarm` ones.
+- VibeField `85efa16be` (3 files, no code): `siblings.lock.json`'s puppeteer revision; DESIGN.md §8 "The swarm's crowd
+  fits its field", whose pull bullet is now "The pull is round", with James's words, the cost and a dated note on what
+  it said before; the DECISIONS SWF row, its status REVERSED with his words, why it was dropped and why it came back,
+  the cost, his ruling (a) and the two shas.
+- No VibeField code changed: the swarm is puppeteer's view, mounted as it was.
+
+**Validation (VF-PM's grant of 2026-10-19 20:51Z, the window naming the MV lead; James away from 22:00Z, his word
+through VF-PM):**
+- **Where it ran:** its own worktrees under `/Volumes/SamsungRed/lanes/pinbump`: puppeteer at `vf/swarm-pull-main` and
+  VibeField at `mv/puppeteer-pin-a`, rebased onto main `ca0e56ee9` (range-diff `=`), with its own mille-pin and
+  ghosttea-0.11.2 worktrees at the lock's revisions. `CARGO_TARGET_DIR` was `/Volumes/SamsungRed/rust/pinbump`, with
+  `TMPDIR=/tmp` and `NX_DAEMON=false`. The wrappers ran outside both trees (`run-pin.sh`, and `gate-pin*.sh`, the
+  squeeze lane's for this lane); the repo's gate script was not edited.
+- **Two arming classes (VF-PM's ruling, 21:24Z):** a step that proves nothing by timing or pixels (an install, a
+  typecheck, prettier, the pin) ran NOW under `nice -n 19` with no load read. Every suite, golden, verify, stage and
+  row was ARMED inside its command at a 1-min load under 10, with the window's owner line and no other gate, verify or
+  perf lock running, and 10 GiB free on the internal disk. The rows also waited for an unlocked screen. The ruling came
+  after the first chain, every step of it armed, was not armed in 30 min at a 1-min load of 63.
+- **puppeteer, at `42035fa`, its goldens re-recorded in its tree by these steps (the tree `fa0d6cf` committed):**
+  - NOW, 21:25Z, at a 1-min load of 183 → 161: the frozen install; Electron 43.1.0's binary by `node install.js`;
+    the views' typecheck; prettier on the two files. All EXIT 0.
+  - ARMED 21:41:39Z at 9.49, the two in one arm: `swarm-frames -u` 3/3 (3 snapshots updated), then the views suite 886/886 in 70 files.
+  - ARMED 21:46:55Z at 9.15, alone: the goldens compared first against main's, 6 of 12 pass. The six n20 PNGs had
+    moved against main's (recorded under the shaped pull) by the shares of their pixels in the second table below;
+    every n1 moved 0 px. Then the frames and the capture `--update`, and `--compare` 12/12 at 21:47:48Z. Both reports are kept at
+    `/Volumes/SamsungRed/lanes/pinbump/logs/A3-*.report.md`.
+- **VibeField, at `85efa16be`:**
+  - NOW from 21:25:46Z: the host's frozen install first, then mille's and ghosttea's install-js and build-js, then
+    Electron 43.1.1's binary. All EXIT 0.
+  - NOW 21:50:42Z: `pnpm siblings:pin puppeteer` with its consumer typecheck, EXIT 0 (R23: ten providers composed
+    through fieldd's edge). It rewrote the lock's formatting: the lock parsed identical, so the committed bytes were
+    restored with `git checkout`. That nit is the script owner's.
+  - **verify, the gate of record:** `pnpm verify` verbatim, armed 21:54:13Z at 9.57 with 25.6 GiB free, ended
+    22:04:03Z EXIT 0. The vitest suites summed to 8,868 passed and 17 skipped, the squeeze's 8,868 (no VibeField test
+    changed); node:test 180 passed; cargo 314 passed in 23 binaries, 0 failed. The tree stayed clean.
+  - **The stages, once, each alone:** armed 22:08:55Z at 9.34. Thirteen of 14 ok: typecheck 85 s, lint:rust 9 s,
+    test:rust 92 s, the rest 0–4 s.
+    - `test` was RED in 239 s on one test, fieldd's `cross-daemon.test.ts` "SUPERSEDED stops the whole product plane —
+      no zombie API (review P1)": "Test timed out in 20000ms". The 1-min load ran 16 → 101 over the stage.
+    - Run 2, alone (the rule: a red that is not a pointer's or a focus signature's reruns alone once), armed 22:18:27Z
+      at 9.52: ok in 189 s.
+    - This is the test's first sighting in this ledger. It is fieldd's owner's: a cause reading of the supersede path
+      under load, never a wider timeout.
+  - **The desk rows, 13 of 13 green, each alone and each on its first run** (the first table below),
+    22:28:50–23:07:37Z, all in James's away slot with QUIET up. Each armed at a 1-min load under 10 with the screen unlocked.
+    - `still` passed against its goldens, with no re-bless.
+    - smoke:godview passed the two rungs that were red in the squeeze's gate: the held edge's readout said "true", and the cd landed in
+      …/work. The pointer reached the timeline's row and rested.
+
+| row | armed (Z) | 1-min load | took |
+|---|---|---|---|
+| still | 22:28:50 | 9.48 | 42 s |
+| smoke | 22:31:33 | 9.39 | 35 s |
+| smoke:canvas | 22:36:10 | 8.84 | 924 s |
+| smoke:canvas:no-gpu | 22:51:35 | 6.01 | 31 s |
+| smoke:canvas:no-webgpu | 22:52:06 | 6.93 | 29 s |
+| smoke:kind-faults | 22:52:35 | 8.14 | 80 s |
+| smoke:plugin-restart | 22:55:57 | 9.79 | 76 s |
+| smoke:plugin | 22:58:13 | 9.01 | 58 s |
+| smoke:godview | 22:59:12 | 8.61 | 148 s |
+| smoke:terminal-door | 23:01:40 | 9.03 | 33 s |
+| smoke:terminal-direct | 23:03:14 | 9.98 | 40 s |
+| smoke:studio | 23:05:15 | 9.30 | 28 s |
+| smoke:bundled | 23:06:04 | 9.59 | 93 s |
+
+| n20 swarm golden | dark | light |
+|---|---|---|
+| compact | 62.404 % | 61.710 % |
+| default | 38.552 % | 37.940 % |
+| wide | 36.222 % | 35.470 % |
+
+- **No kit suite:** `git diff --name-only ca0e56ee9..85efa16be` changes no file under `apps/ios` (DESIGN.md, DECISIONS
+  and the lock alone), and these records change only `docs/`.
+- **Teardown:** every row that prints one said `SMOKE_DAEMONS {"left":[],"reaped":[]}` with helpers settled at 0 ms.
+  The squeeze's two homes kept as evidence (`/private/tmp/vf-smoke-KPihFH`, `/tmp/vf-studio-oGGCq6`) are released
+  with these records: their removal is the usual leak sweep.
+
+**At the landing:** puppeteer main moving to `fa0d6cf` is James's word, as "Fast-forward both now" was for SWF. James
+fast-forwards his own `../puppeteer` main to it.
+
+**Next (MV):**
+- The next puppeteer pin, on the line after `fa0d6cf`:
+  - the fit's accepted tuck as a regression row (ruling (a)), its ceilings at the measured numbers;
+  - item 50's seam, puppeteer's half (`createBuiltinProviders({ env })`) with fieldd's `c0581e952`;
+  - item 39, the swarm's physics at the display's rate (James ruled (i), 17:42Z), with the worker's CPU measured at
+    60 Hz and at the display's rate; DECISIONS' GT row flips in that pin's lane.
+- The squeeze gate's owed test fixes (items 45, 47 and 48, and the cd row's harness note), and `docs/desk-gates.md`'s
+  arming rule (an unattended Mac), its own docs commit.
