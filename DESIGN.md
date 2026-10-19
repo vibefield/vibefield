@@ -2034,6 +2034,34 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     **"the floor did not answer in 10 s"**, or by the desktop's name, **"studio did not answer in
     10 s"**, and the next door's turn comes; until then a read that never answered held every
     placement behind it, History's New agent among them.
+  - **A session another device is driving** (item 42; James, 2026-10-19 03:00Z: in a desktop pane,
+    the phone-sized content read as a glitch; the look ruled 21:38Z, "good, design all go with the
+    lean"). While a pane's session has its geometry seat (DS-4) held outside this window, by a phone
+    or another desktop, the pane goes on drawing the session at the holder's size, top-left on its
+    ground, and says so in **the held-edge readout's figure** (above; James, 29 Sep: a readout is
+    huge bold words in open space). **The words**: the holder's name as fieldd minted it, full, and
+    **is driving** at 40%, 800 at 64px/1, −0.04em, in Godview's text main, haloed in the
+    terminal's ground (40 and 18), centred in the pane over **a veil** of that ground at 62%, the
+    content dimmed beneath it, never hidden and never blurred. Under them **one caption line** (11px
+    600, ink 72%): the size held in mono, **45 × 22**, then **· click the pane to take it back**.
+    **The pane colour lights it**: two inset glows, `inset 0 0 30px 2px` at 74% and `inset 0 0 130px
+    18px` at 30%, and a radial bloom behind the words, 600 × 380, from 50% at its centre through
+    16% at 52% to clear. The pane's line stays the frame's own 1px, never the selection ring's 1.5
+    (§2.3): no key goes to this pane. **The entrance plays once**, 400ms after the seat goes, so a
+    glance at the phone never flashes it: the veil in 200ms on plain `ease`, the glow on the island
+    curve in 600ms and the bloom in 600ms from 140ms, the letters on the pop (280ms) from 140ms,
+    26ms apart and capped at 400ms (§6's cap: a letter past it starts with the one at it), the verb
+    tracking in from .34em on the island curve in 560ms from 340ms, and the caption in 240ms from
+    540ms. Then it holds still, with no loop (§6: a held seat is a state, not a wait), and it goes
+    at once when this window takes the seat. Reduced motion: the whole of it fades in over 100ms. It
+    takes no pointer: a click goes through to the pane, and the pane's press takes the seat back
+    (ghosttea's press take, at the pin). **When the holder lets go**, a focused pane on the session
+    takes the empty seat itself, and the readout goes (James, 2026-10-19 17:42Z; it arrives with
+    item 20's ghosttea lane, the first key takes). While no pane on it is focused, the readout stays
+    and says the seat is free, in the same figure: **James's iPhone let go**, the verb at 40%, over
+    **45 × 22 · click the pane to take it.**, the size the session was left at. *Status
+    2026-10-19: until item 20's lane lands, no pane takes the empty seat by itself, so every pane on
+    the session, focused or not, says this until a click.*
 - **A launch in an empty pane is one element from the click to the first frame** (QL-2, 2026-09-29 —
   James picked look C · Cells from the Minimal Pane Frame's pass 4). The click (or ⌥n, or ↵ on a
   past session) answers in its own frame: the launcher shrinks to 0.94 toward the clicked mark
@@ -3181,7 +3209,9 @@ stills — and, on the desk, two named exceptions: the bar's ONE path renderer f
 (R2; one component, allow-listed) and the peers' pointer arrow (R17; §8, peers on the mat).
 **Kept exact, outside this set:** the tray and app masters, the three vendor marks (AR-L1),
 the OS marks the device chip wears (Simple Icons, drawn inline in `os-marks.tsx` — the test's one
-other allowed file), the Face Club and AFTER HOURS art (§11), the file-tree family (§8). On the
+other allowed file; a phone, wherever a surface marks one, wears the mark macOS wears, Apple's,
+since iOS's own is a word — James, DS-3: "do not use texts, use OS icons instead" — and no surface
+marks one today), the Face Club and AFTER HOURS art (§11), the file-tree family (§8). On the
 phone (PJ-7) the OS marks are template SVGs in FieldDesign's `OSMarks.xcassets` (`DeviceMark`),
 copies of `os-marks.tsx`'s paths that `pnpm check:ios-fixtures` holds to them; and `start`,
 `resume` and `jump` join the phone's picks, so History's New agent, Resume and Jump to draw the
