@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { existsSync, readFileSync } from "node:fs";
 import { createConnection, type Socket } from "node:net";
+import { performance } from "node:perf_hooks";
 import {
   CONTRACTS_VERSION,
   isPipeEndpoint,
@@ -25,6 +26,13 @@ import { ackMacMatches, computeAckMac, computePairingMac, newPairingNonce } from
 //   response line, so a delta in the same socket chunk can never be dropped;
 // - reconnect scheduling is idempotent (single timer), and close events from
 //   stale sockets are ignored — there is never more than one live dial.
+//
+// Wedge evidence (WG-D0), emitted for the supervisor and settling nothing:
+// - "deadline-miss" (NativeDeadlineMiss): a request settled TIMEOUT, with how
+//   late its deadline timer itself fired — fieldd's own loop, not the floor;
+// - "late-reply" (NativeLateReply): a reply came for a request that had
+//   already settled TIMEOUT — the floor's reader and dispatch were moving,
+//   only slowly. A late pong carries the floor's own clock.
 
 export class RpcCallError extends Error {
   constructor(
@@ -58,8 +66,53 @@ export interface NativeLinkOptions {
   /** Test seam; production uses HELLO_TIMEOUT_MS. How long an endpoint that has
    * ACCEPTED the connection may stay silent before the dial is abandoned. */
   helloTimeoutMs?: number;
+  /** Test seam; production uses TIMED_OUT_RECORD_CAP. How many timed-out
+   * requests are remembered so a late reply can still be attributed. */
+  timedOutRecordCap?: number;
   logger?: Logger;
 }
+
+/** WG-D0 — the "deadline-miss" event: a request settled TIMEOUT. `firedLateMs`
+ * is how far past its deadline the timer itself fired, read on a monotonic
+ * clock. Node runs expired timers before it reads sockets, so a timer that
+ * fired late is fieldd's own loop stalling — and a reply may have been sitting
+ * unread in the socket the whole time. */
+export interface NativeDeadlineMiss {
+  method: string;
+  deadlineMs: number;
+  firedLateMs: number;
+}
+
+/** WG-D0 — the "late-reply" event: a reply to a request that had already
+ * settled TIMEOUT. It settles nothing; its caller had its one answer. `lateByMs`
+ * is how far past the deadline it arrived, `roundTripMs` how long after the
+ * request was sent (both monotonic). `floorTs` is the `ts` of a late pong's
+ * PingAck — the floor's own wall clock (unix ms) as it answered — and is
+ * present for a pong only. */
+export interface NativeLateReply {
+  method: string;
+  lateByMs: number;
+  roundTripMs: number;
+  floorTs?: number;
+}
+
+/** A request that settled TIMEOUT, remembered until its reply comes, its
+ * connection goes, or newer ones push it past the cap. */
+interface TimedOutRequest {
+  method: string;
+  /** `performance.now()` when its deadline timer was armed */
+  sentAt: number;
+  deadlineMs: number;
+}
+
+/** WG-D0 — the most timed-out requests remembered at once, oldest forgotten
+ * first. A silent floor times out several heartbeat pings a second, so a long
+ * silence outruns any cap: the record keeps the most recent, and a reply later
+ * than the cap reaches back is dropped unattributed. The bound keeps a floor
+ * that never answers from growing fieldd. */
+const TIMED_OUT_RECORD_CAP = 256;
+
+const PING_METHOD = "native.lifecycle.ping";
 
 /** Large enough for the bounded 256-origin artifact snapshot, finite enough
  * that a compromised/native-buggy peer cannot grow fieldd without limit. */
@@ -119,6 +172,9 @@ export class NativeLink extends EventEmitter {
   private frameBytes = 0;
   private nextId = 1;
   private pending = new Map<number, Pending>();
+  /** WG-D0 — requests that settled TIMEOUT on the live socket, by id, in the
+   * order they timed out (bounded by TIMED_OUT_RECORD_CAP). */
+  private timedOut = new Map<number, TimedOutRequest>();
   private subs = new Map<number, SubEntry>();
   private subRoutes = new Map<string, number>(); // subId -> local sub key
   private nextSubKey = 1;
@@ -657,7 +713,10 @@ export class NativeLink extends EventEmitter {
     }
     if (msg["id"] !== undefined && msg["id"] !== null) {
       const p = this.pending.get(msg["id"] as number);
-      if (!p) return;
+      if (!p) {
+        this.noteLateReply(msg["id"] as number, msg["result"]);
+        return;
+      }
       this.pending.delete(msg["id"] as number);
       const err = msg["error"] as
         | {
@@ -768,6 +827,45 @@ export class NativeLink extends EventEmitter {
       p.reject(new RpcCallError("UNAVAILABLE", "mgmt connection closed", true));
     }
     this.pending.clear();
+    // A reply to a request sent on a dead socket can never arrive, so the
+    // timed-out records go with the connection they were sent on.
+    this.timedOut.clear();
+  }
+
+  /** WG-D0 — remember a request that just settled TIMEOUT, forgetting the
+   * oldest past the cap (a Map iterates in insertion order). */
+  private rememberTimedOut(id: number, record: TimedOutRequest): void {
+    this.timedOut.set(id, record);
+    const cap = this.opts.timedOutRecordCap ?? TIMED_OUT_RECORD_CAP;
+    while (this.timedOut.size > cap) {
+      const oldest = this.timedOut.keys().next();
+      if (oldest.done) return;
+      this.timedOut.delete(oldest.value);
+    }
+  }
+
+  /** WG-D0 — a reply whose id is not pending. If its request settled TIMEOUT,
+   * the reply is attributed ("late-reply") and its record dropped, so a repeat
+   * says nothing; it never resolves or rejects anything. Any other unmatched id
+   * (never sent, already attributed, or forgotten past the cap) is dropped
+   * unremarked. */
+  private noteLateReply(id: number, result: unknown): void {
+    const sent = this.timedOut.get(id);
+    if (sent === undefined) return;
+    this.timedOut.delete(id);
+    const roundTripMs = performance.now() - sent.sentAt;
+    let floorTs: number | undefined;
+    if (sent.method === PING_METHOD) {
+      const ack = PingAck.safeParse(result);
+      if (ack.success) floorTs = ack.data.ts;
+    }
+    const late: NativeLateReply = {
+      method: sent.method,
+      lateByMs: Math.max(0, roundTripMs - sent.deadlineMs),
+      roundTripMs,
+      ...(floorTs !== undefined ? { floorTs } : {}),
+    };
+    this.emit("late-reply", late);
   }
 
   private async replaySubscriptions(): Promise<void> {
@@ -832,7 +930,7 @@ export class NativeLink extends EventEmitter {
    * request end-to-end (socket → framing → dispatch → reply) with a tight
    * deadline, so a wedge anywhere on that path is exactly what it measures. */
   async ping(deadlineMs: number): Promise<PingAck> {
-    const ack = await this.rawRequest("native.lifecycle.ping", {}, undefined, deadlineMs);
+    const ack = await this.rawRequest(PING_METHOD, {}, undefined, deadlineMs);
     const parsed = PingAck.safeParse(ack);
     if (!parsed.success)
       throw new RpcCallError("INTERNAL", "the ping ack was not a PingAck", false);
@@ -859,10 +957,11 @@ export class NativeLink extends EventEmitter {
     const limit =
       deadlineMs ?? this.opts.requestDeadlineMs ?? NATIVE_SUPERVISION.REQUEST_DEADLINE_MS;
     return await new Promise((resolve, reject) => {
-      // TC-D2 — a request that outlives its deadline settles TIMEOUT; a late
-      // reply, if one ever comes, misses the pending map and is dropped. A
+      // TC-D2 — a request that outlives its deadline settles TIMEOUT. A
       // deadline miss is wedge EVIDENCE, not a verdict — the supervisor's
-      // heartbeat owns the verdict.
+      // heartbeat owns the verdict. WG-D0 — the miss is remembered, so a reply
+      // that comes after it settles nothing and is still attributed
+      // ("late-reply"), and the event says how late this timer itself fired.
       let timer: NodeJS.Timeout | null = null;
       const entry: Pending = {
         resolve: (v) => {
@@ -875,10 +974,14 @@ export class NativeLink extends EventEmitter {
         },
       };
       if (subKey !== undefined) entry.subKey = subKey;
+      const sentAt = performance.now();
       timer = setTimeout(() => {
         if (this.pending.get(id) !== entry) return;
         this.pending.delete(id);
-        this.emit("deadline-miss", { method, deadlineMs: limit });
+        const firedLateMs = Math.max(0, performance.now() - sentAt - limit);
+        this.rememberTimedOut(id, { method, sentAt, deadlineMs: limit });
+        const miss: NativeDeadlineMiss = { method, deadlineMs: limit, firedLateMs };
+        this.emit("deadline-miss", miss);
         reject(
           new RpcCallError(
             "TIMEOUT",

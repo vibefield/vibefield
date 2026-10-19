@@ -16,7 +16,13 @@ import {
   type TerminalWorkloadClass,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
-import { NativeLink, type NativeLinkOptions } from "../src/native-link";
+import {
+  type NativeDeadlineMiss,
+  type NativeLateReply,
+  NativeLink,
+  type NativeLinkOptions,
+  type RpcCallError,
+} from "../src/native-link";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { nativeEndpoint } from "./native-harness";
 
@@ -37,7 +43,10 @@ function mockEndpoint(dir: string): string {
 }
 
 async function setup(
-  options: Pick<NativeLinkOptions, "maxFrameBytes" | "reconnect" | "helloTimeoutMs"> = {},
+  options: Pick<
+    NativeLinkOptions,
+    "maxFrameBytes" | "reconnect" | "helloTimeoutMs" | "timedOutRecordCap"
+  > = {},
 ): Promise<{ mock: MockMgmtServer; link: NativeLink }> {
   const dir = mkdtempSync(join(tmpdir(), "vf-mock-"));
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
@@ -586,6 +595,136 @@ describe("NativeLink deadlines + ping (TC-D2)", () => {
     await expect(link.ping(60)).rejects.toMatchObject({ kind: "TIMEOUT" });
     // the deadline is the probe's own, not the 10s request default
     expect(Date.now() - t0).toBeLessThan(2_000);
+  });
+});
+
+/** WG-D0 — every request id the floor side reads, by method, so a row can
+ * answer one after its deadline: the late reply the link must attribute.
+ * Listens beside the mock's own reader on the sockets it accepted. */
+function watchRequestIds(mock: MockMgmtServer): Map<string, number[]> {
+  const ids = new Map<string, number[]>();
+  for (const socket of mock.sockets) {
+    let buffered = "";
+    socket.on("data", (chunk: Buffer) => {
+      buffered += chunk.toString("utf8");
+      let newline = buffered.indexOf("\n");
+      while (newline !== -1) {
+        const line = buffered.slice(0, newline);
+        buffered = buffered.slice(newline + 1);
+        newline = buffered.indexOf("\n");
+        if (!line.trim()) continue;
+        const msg = JSON.parse(line) as { id?: unknown; method?: unknown };
+        if (typeof msg.id === "number" && typeof msg.method === "string") {
+          ids.set(msg.method, [...(ids.get(msg.method) ?? []), msg.id]);
+        }
+      }
+    });
+  }
+  return ids;
+}
+
+/** The floor's side of a late reply: an answer written for an id whose request
+ * has already settled on fieldd's side. */
+function answerLate(mock: MockMgmtServer, id: number, result: unknown): void {
+  const line = `${JSON.stringify({ jsonrpc: "2.0", id, result })}\n`;
+  for (const socket of mock.sockets) socket.write(line);
+}
+
+/** fieldd's own loop stalling: nothing on this thread runs — no timer, no
+ * socket read, and not the in-process mock either — until it returns. */
+function stallLoop(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+describe("NativeLink wedge evidence (WG-D0)", () => {
+  it("a late pong settles nothing: its caller saw one TIMEOUT, and late-reply carries the floor's ts", async () => {
+    const { mock, link } = await setup();
+    await link.connect();
+    const ids = watchRequestIds(mock);
+    const lates: NativeLateReply[] = [];
+    link.on("late-reply", (late: NativeLateReply) => lates.push(late));
+    mock.silentMethods.add("native.lifecycle.ping");
+
+    const outcomes: string[] = [];
+    await link.ping(40).then(
+      () => outcomes.push("resolved"),
+      (error: RpcCallError) => outcomes.push(error.kind),
+    );
+    expect(outcomes).toEqual(["TIMEOUT"]);
+    const pingId = ids.get("native.lifecycle.ping")?.[0];
+    if (pingId === undefined) throw new Error("the floor never read the ping");
+
+    await sleep(30);
+    const pong = { bootId: "mock-native-boot", ts: 1_760_000_000_123 };
+    answerLate(mock, pingId, pong);
+    answerLate(mock, pingId, pong); // the same answer again is attributed once
+    await sleep(50);
+
+    expect(outcomes, "the late reply resolved and rejected nothing").toEqual(["TIMEOUT"]);
+    expect(lates).toHaveLength(1);
+    const [late] = lates;
+    expect(late).toMatchObject({ method: "native.lifecycle.ping", floorTs: 1_760_000_000_123 });
+    expect(late?.lateByMs).toBeGreaterThanOrEqual(25);
+    // one clock, one origin: the round trip is the deadline plus the lateness
+    expect((late?.roundTripMs ?? 0) - (late?.lateByMs ?? 0)).toBeCloseTo(40, 6);
+
+    // and the link is no worse for it
+    mock.silentMethods.delete("native.lifecycle.ping");
+    await expect(link.ping(1_000)).resolves.toMatchObject({ bootId: "mock-native-boot" });
+  });
+
+  it("the timed-out record is bounded: past the cap the oldest is forgotten first", async () => {
+    const { mock, link } = await setup({ timedOutRecordCap: 2 });
+    await link.connect();
+    const ids = watchRequestIds(mock);
+    const lates: NativeLateReply[] = [];
+    link.on("late-reply", (late: NativeLateReply) => lates.push(late));
+    const methods = ["x.hang.first", "x.hang.second", "x.hang.third"];
+    for (const method of methods) mock.silentMethods.add(method);
+
+    // equal deadlines armed in order time out in that order
+    const settled = await Promise.all(
+      methods.map((method) =>
+        link.request(method, {}, { deadlineMs: 20 }).then(
+          () => "resolved",
+          (error: RpcCallError) => error.kind,
+        ),
+      ),
+    );
+    expect(settled).toEqual(["TIMEOUT", "TIMEOUT", "TIMEOUT"]);
+    const [first, second, third] = methods.map((method) => ids.get(method)?.[0]);
+    if (first === undefined || second === undefined || third === undefined)
+      throw new Error("the floor never read all three requests");
+
+    answerLate(mock, first, {}); // forgotten when the third timed out
+    answerLate(mock, third, {});
+    answerLate(mock, second, {});
+    await sleep(50);
+
+    expect(lates.map((late) => late.method)).toEqual(["x.hang.third", "x.hang.second"]);
+    expect(
+      lates.every((late) => late.floorTs === undefined),
+      "only a pong carries the floor's clock",
+    ).toBe(true);
+  });
+
+  it("deadline-miss says how late fieldd's own timer fired — its loop stalled, not the floor", async () => {
+    const { mock, link } = await setup();
+    await link.connect();
+    const misses: NativeDeadlineMiss[] = [];
+    link.on("deadline-miss", (miss: NativeDeadlineMiss) => misses.push(miss));
+    mock.silentMethods.add("x.hang");
+
+    const settled = link.request("x.hang", {}, { deadlineMs: 20 }).then(
+      () => "resolved",
+      (error: RpcCallError) => error.kind,
+    );
+    stallLoop(150); // the deadline passes while this thread cannot run its timer
+    await expect(settled).resolves.toBe("TIMEOUT");
+
+    expect(misses).toHaveLength(1);
+    expect(misses[0]).toMatchObject({ method: "x.hang", deadlineMs: 20 });
+    expect(misses[0]?.firedLateMs).toBeGreaterThanOrEqual(100);
   });
 });
 

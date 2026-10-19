@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import {
   NATIVE_SUPERVISION,
   type NativeLinkState,
@@ -6,7 +7,7 @@ import {
   NativePrepareRestartResult,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
-import type { NativeLink } from "./native-link";
+import type { NativeDeadlineMiss, NativeLateReply, NativeLink } from "./native-link";
 import { RpcCallError } from "./native-link";
 
 // NativeSupervisor (terminal-custody spec TC-D1/TC-D2, slice TC-S1): fieldd
@@ -35,6 +36,16 @@ import { RpcCallError } from "./native-link";
 // honest degraded state "gone" with a user-visible restart affordance
 // (requestRestart) — never a spin. Sessions do not survive a floor death at
 // TC-S1 and the respawn log says so plainly (the TC-S1 honesty string).
+//
+// Wedge EPISODES (WG-D0) are observability only: they move no state, timing or
+// kill. An episode runs from entering "unresponsive" until something ends it —
+// back to "up" (recovered), a kill (restarted), the link dropping or redialing
+// (link-closed), or stop() (stopped) — and closes with ONE line,
+// `fieldd.native_supervisor.wedge_episode`: the misses, the requests that timed
+// out and how late fieldd's own deadline timers fired, the late replies with
+// the floor's last `ts`, and fieldd's event-loop lag over the window. That line
+// is what tells a floor's stall from fieldd's own (draft/thinking-floor-wedge.md
+// §4, WG-E1/WG-E2). The miss streak that opened the episode is counted in it.
 
 export interface NativeSupervisorOptions {
   link: NativeLink;
@@ -52,12 +63,75 @@ export interface NativeSupervisorOptions {
   nativePid?: number | undefined;
   /** Test seam; production uses NATIVE_SUPERVISION. */
   timings?: NativeSupervisionTimings;
+  /** Test seam; production samples fieldd's own event loop with perf_hooks'
+   * `monitorEventLoopDelay`, enabled only while a wedge episode is open. */
+  loopDelay?: LoopDelayMonitor;
   logger?: Logger;
 }
 
 /** The contract constant's shape with the literal values widened — a test
  * injects faster numbers without fighting `as const`. */
 export type NativeSupervisionTimings = { [K in keyof typeof NATIVE_SUPERVISION]: number };
+
+/** WG-D0 — the slice of perf_hooks' `IntervalHistogram` a wedge episode reads.
+ * Its values are nanoseconds. */
+export interface LoopDelayMonitor {
+  enable(): void;
+  disable(): void;
+  reset(): void;
+  percentile(percentile: number): number;
+  readonly count: number;
+  readonly max: number;
+}
+
+/** perf_hooks' own default sampling interval. A stall that fails a 100 ms
+ * heartbeat spans many samples at this rate. */
+const LOOP_DELAY_RESOLUTION_MS = 10;
+
+/** WG-D0 — what a wedge episode saw. Outside an episode it holds the current
+ * miss streak and is reset at every pong, so the episode a streak opens keeps
+ * its own detection: the misses that opened it, and how late fieldd's timers
+ * fired for them, are the first evidence of whose stall it was. */
+interface WedgeEvidence {
+  /** heartbeat misses, beat and stage-2 probe alike */
+  misses: number;
+  /** every request that settled TIMEOUT ("deadline-miss"), pings included */
+  requestsTimedOut: number;
+  lateReplies: number;
+  maxLateMs: number;
+  /** the floor's `ts` from the last late pong */
+  lastFloorTs: number | undefined;
+  /** the latest any deadline timer fired past its deadline — fieldd's own loop */
+  timerLateMaxMs: number;
+}
+
+type WedgeEpisodeOutcome = "recovered" | "restarted" | "link-closed" | "stopped";
+
+/** How leaving "unresponsive" for each state ends the episode. `gone` is
+ * reached from it only when the restart affordance finds no listener and
+ * cannot respawn one. */
+const EPISODE_END: Record<Exclude<NativeLinkState, "unresponsive">, WedgeEpisodeOutcome> = {
+  up: "recovered",
+  respawning: "restarted",
+  connecting: "link-closed",
+  gone: "link-closed",
+};
+
+function freshEvidence(): WedgeEvidence {
+  return {
+    misses: 0,
+    requestsTimedOut: 0,
+    lateReplies: 0,
+    maxLateMs: 0,
+    lastFloorTs: undefined,
+    timerLateMaxMs: 0,
+  };
+}
+
+/** Milliseconds to one decimal place: the episode line's precision. */
+function roundMs(ms: number): number {
+  return Math.round(ms * 10) / 10;
+}
 
 /** Emits `"transition"` `(state: NativeLinkState, detail: string)` on every
  * state change — the daemon's health stream listens (it is constructed after
@@ -83,6 +157,13 @@ export class NativeSupervisor extends EventEmitter {
   private respawnStamps: number[] = [];
   private stopped = false;
 
+  // ---- wedge episodes (WG-D0): observability only ----
+  private evidence: WedgeEvidence = freshEvidence();
+  /** `performance.now()` when the open episode began; undefined between episodes */
+  private episodeSince: number | undefined;
+  /** created at the first episode, enabled only while one is open */
+  private loopDelay: LoopDelayMonitor | undefined;
+
   constructor(private readonly opts: NativeSupervisorOptions) {
     super();
     this.t = opts.timings ?? NATIVE_SUPERVISION;
@@ -91,6 +172,9 @@ export class NativeSupervisor extends EventEmitter {
     opts.link.on("connected", this.onConnected);
     opts.link.on("reconnecting", this.onReconnecting);
     opts.link.on("superseded", this.onSuperseded);
+    opts.link.on("closed", this.onLinkClosed);
+    opts.link.on("deadline-miss", this.onDeadlineMiss);
+    opts.link.on("late-reply", this.onLateReply);
   }
 
   /** The floor pid this supervisor can vouch for (the one it spawned or was
@@ -234,9 +318,17 @@ export class NativeSupervisor extends EventEmitter {
     this.opts.link.off("connected", this.onConnected);
     this.opts.link.off("reconnecting", this.onReconnecting);
     this.opts.link.off("superseded", this.onSuperseded);
+    this.opts.link.off("closed", this.onLinkClosed);
+    this.opts.link.off("deadline-miss", this.onDeadlineMiss);
+    this.opts.link.off("late-reply", this.onLateReply);
+    this.endEpisode("stopped");
   }
 
   private readonly onConnected = (): void => {
+    // A fresh connection is a fresh witness: whatever was counted belonged to
+    // the connection that went.
+    this.endEpisode("link-closed");
+    this.evidence = freshEvidence();
     this.redials = 0;
     this.misses = 0;
     this.cleanPongs = 0;
@@ -261,6 +353,77 @@ export class NativeSupervisor extends EventEmitter {
     // fight, not a recovery. The daemon's SUPERSEDED path shuts us down.
     this.stop();
   };
+
+  /** The link will not redial (closed, superseded, or reconnect off): an open
+   * episode ends with it. */
+  private readonly onLinkClosed = (): void => {
+    this.endEpisode("link-closed");
+  };
+
+  // ---- wedge evidence (WG-D0) ----
+
+  private readonly onDeadlineMiss = (miss: NativeDeadlineMiss): void => {
+    this.evidence.requestsTimedOut += 1;
+    this.evidence.timerLateMaxMs = Math.max(this.evidence.timerLateMaxMs, miss.firedLateMs);
+  };
+
+  private readonly onLateReply = (late: NativeLateReply): void => {
+    this.evidence.lateReplies += 1;
+    this.evidence.maxLateMs = Math.max(this.evidence.maxLateMs, late.lateByMs);
+    // only a pong carries the floor's clock
+    if (late.floorTs !== undefined) this.evidence.lastFloorTs = late.floorTs;
+  };
+
+  private beginEpisode(): void {
+    if (this.episodeSince !== undefined || this.stopped) return;
+    this.episodeSince = performance.now();
+    if (this.loopDelay === undefined) {
+      this.loopDelay =
+        this.opts.loopDelay ?? monitorEventLoopDelay({ resolution: LOOP_DELAY_RESOLUTION_MS });
+    }
+    this.loopDelay.enable();
+  }
+
+  /** Close the open episode, if any, with its one line; the evidence starts
+   * over. Info when the floor recovered, warn for every other ending. */
+  private endEpisode(outcome: WedgeEpisodeOutcome): void {
+    const since = this.episodeSince;
+    if (since === undefined) return;
+    this.episodeSince = undefined;
+    let loopLagP99Ms: number | null = null;
+    let loopLagMaxMs: number | null = null;
+    const loop = this.loopDelay;
+    if (loop !== undefined) {
+      // an episode shorter than one sample has no reading, which is not 0 ms
+      if (loop.count > 0) {
+        loopLagP99Ms = roundMs(loop.percentile(99) / 1e6);
+        loopLagMaxMs = roundMs(loop.max / 1e6);
+      }
+      loop.disable();
+      loop.reset();
+    }
+    const e = this.evidence;
+    this.evidence = freshEvidence();
+    const attrs = {
+      outcome,
+      ms: Math.round(performance.now() - since),
+      misses: e.misses,
+      requestsTimedOut: e.requestsTimedOut,
+      lateReplies: e.lateReplies,
+      maxLateMs: roundMs(e.maxLateMs),
+      lastFloorTs: e.lastFloorTs ?? null,
+      timerLateMaxMs: roundMs(e.timerLateMaxMs),
+      loopLagP99Ms,
+      loopLagMaxMs,
+      pid: this.pid ?? null,
+    };
+    const event = "fieldd.native_supervisor.wedge_episode";
+    if (outcome === "recovered") {
+      this.logger.info(event, "The floor answered again; its unresponsive episode closed", attrs);
+    } else {
+      this.logger.warn(event, "The floor's unresponsive episode closed without recovering", attrs);
+    }
+  }
 
   // ---- crash path (TC-D1) ----
 
@@ -353,6 +516,9 @@ export class NativeSupervisor extends EventEmitter {
   private onPong(): void {
     this.misses = 0;
     this.cleanPongs += 1;
+    // WG-D0 — outside an episode the evidence is the current miss streak, and
+    // a pong ends the streak. Inside one, a lone pong ends nothing.
+    if (this.episodeSince === undefined) this.evidence = freshEvidence();
     // Hysteresis: one lucky pong through a struggling path is not recovery.
     if (this.state === "unresponsive" && this.cleanPongs >= 2) {
       this.wedgeSince = undefined;
@@ -363,6 +529,7 @@ export class NativeSupervisor extends EventEmitter {
   private async onMiss(): Promise<void> {
     this.cleanPongs = 0;
     this.misses += 1;
+    this.evidence.misses += 1;
     if (this.misses === 1) {
       // Stage 2: one immediate short-deadline probe, so a single scheduling
       // hiccup never reaches the threshold on its own.
@@ -373,6 +540,7 @@ export class NativeSupervisor extends EventEmitter {
       } catch (e) {
         if (!this.isMiss(e)) return;
         this.misses += 1;
+        this.evidence.misses += 1;
       }
     }
     if (this.misses < this.t.HEARTBEAT_MISS_THRESHOLD) return;
@@ -413,6 +581,10 @@ export class NativeSupervisor extends EventEmitter {
     if (this.pid === undefined || !this.opts.killNative || this.killing) return;
     this.killing = true;
     const pid = this.pid;
+    // WG-D0 — a kill ends an open episode as a restart, whoever asked for it.
+    // The wedge path has already closed it on entering "respawning"; the
+    // restart affordance kills from "unresponsive" itself.
+    this.endEpisode("restarted");
     this.opts.killNative(pid, "SIGTERM");
     this.ladderTimer = setTimeout(() => {
       this.ladderTimer = null;
@@ -439,6 +611,10 @@ export class NativeSupervisor extends EventEmitter {
       state,
       detail,
     });
+    // WG-D0 — an episode is the time spent "unresponsive": it opens on entry
+    // and closes, with its one line, on whatever state ends it.
+    if (state === "unresponsive") this.beginEpisode();
+    else this.endEpisode(EPISODE_END[state]);
     this.emit("transition", state, detail);
   }
 }
