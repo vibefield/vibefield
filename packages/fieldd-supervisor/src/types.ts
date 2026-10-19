@@ -134,8 +134,9 @@ export interface FielddSupervisorOptions {
    * fieldd receives it as FIELDD_USER_ID. */
   userId?: string;
   /** production: leave-running (daemon lifetime > shell lifetime, design-00);
-   * dev/smoke: stop-owned tears down what THIS supervisor spawned — never an
-   * adopted process. */
+   * dev/smoke: stop-owned tears down the fieldd THIS supervisor spawned and
+   * the field-native its record names, a floor that fieldd adopted included —
+   * never an adopted fieldd. */
   shutdownPolicy: "leave-running" | "stop-owned";
   readinessDeadlineMs?: number;
   /** TERM grace before a spawned fieldd is force-killed. Dev/smoke callers
@@ -153,8 +154,9 @@ export interface FielddHandle {
   readonly info: ProductInfo;
   readonly client: FielddClient;
   readonly childPid?: number;
-  /** SIGTERM the spawned fieldd (+ its recorded field-native) and wait bounded;
-   * a NO-OP for adopted daemons — the shell never kills what it didn't start. */
+  /** SIGTERM the spawned fieldd (+ the field-native its record names, a floor
+   * it adopted included) and wait bounded; a NO-OP for an adopted fieldd — the
+   * shell never stops a fieldd it didn't start. */
   stopOwned(): Promise<void>;
 }
 
@@ -163,6 +165,7 @@ export interface FielddSupervisor {
    * live handle is returned as-is until its client closes or fails. */
   ensure(options?: { signal?: AbortSignal }): Promise<FielddHandle>;
   /** Idempotent: cancels outstanding probes, closes the client, and applies
-   * the shutdown policy (stop-owned stops only a SPAWNED daemon). */
+   * the shutdown policy (stop-owned stops only a SPAWNED fieldd, and the floor
+   * its record names). */
   dispose(): Promise<void>;
 }

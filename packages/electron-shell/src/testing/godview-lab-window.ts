@@ -519,9 +519,10 @@ export async function untilEnded(
 
 /**
  * Stop what this launch started and leave: the pair through its supervisor
- * (stop-owned — an adopted daemon survives, the ownership law), then the
- * evidence, then the root this run created (an injected `FIELDD_DATA_DIR` is
- * someone else's). The smoke's own teardown; mv0-vf's lab skipped the first
+ * (stop-owned — an adopted fieldd survives, the ownership law; a spawned
+ * one's stop ends the floor its record names, one it adopted included), then
+ * the evidence, then the root this run created (an injected `FIELDD_DATA_DIR`
+ * is someone else's). The smoke's own teardown; mv0-vf's lab skipped the first
  * and the last, and each launch left a fieldd, a field-native and two
  * terminal hosts running over a root nobody removed.
  */

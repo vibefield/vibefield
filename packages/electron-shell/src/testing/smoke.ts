@@ -266,14 +266,14 @@ export function waitForConsole(
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Stop-owned via the supervisor (adopted daemons survive — ownership law),
+/** Stop-owned via the supervisor (an adopted fieldd survives — ownership law),
  * then — DK-18 (39) — the run's OWN daemons stopped and WAITED for
  * (testing/smoke-daemons.ts: the supervisor never waits for the field-native it
- * signals, and never signals one a restarted fieldd adopted, so the pair outlived
- * every smoke), then remove the root ONLY if this run created it (an injected
- * FIELDD_DATA_DIR is someone else's data) — and, the run green, its whole HOME
- * (the `vf-smoke-*` root above the user root: its logs; a red run keeps them,
- * named by `SMOKE_HOME`). */
+ * signals, and signals none its fieldd's record does not name, so the pair
+ * outlived every smoke), then remove the root ONLY if this run created it (an
+ * injected FIELDD_DATA_DIR is someone else's data) — and, the run green, its
+ * whole HOME (the `vf-smoke-*` root above the user root: its logs; a red run
+ * keeps them, named by `SMOKE_HOME`). */
 async function teardown(
   supervisor: FielddSupervisor,
   root: string,

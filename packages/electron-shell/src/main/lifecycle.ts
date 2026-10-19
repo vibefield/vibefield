@@ -11,7 +11,7 @@ import type { WindowRegistry } from "./window-policy";
 // escalation the moment Electron exited). Hooked on will-quit, not
 // before-quit, so windows close first and installDurableClose gets its flush
 // before daemons are told to stop. Smoke runners exit via app.exit() directly
-// and never enter this flow. Adopted daemons are never killed — that law
+// and never enter this flow. An adopted fieldd is never killed — that law
 // lives in the supervisor itself.
 
 /** The quit flow plus WP12c's undo for an update quit that ABORTED after `before-quit` had durable-closed the windows

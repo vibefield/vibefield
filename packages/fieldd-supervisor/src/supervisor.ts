@@ -1,4 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
+import type { ProductInfo } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { assertDataRootUsable } from "./paths";
 import { type ProbeResult, readRecordedProduct, type StaleDaemon, tryAdopt } from "./probe";
@@ -17,7 +18,8 @@ import {
 // The adopt-or-spawn state machine (spec §5.3). Ownership is explicit and
 // determined by evidence: the handle is "spawned" only when product.json's pid
 // IS our child's pid — anything else that became ready in the root is adopted,
-// and adopted daemons are never killed by any path here.
+// and an adopted fieldd is never killed by any path here. A spawned one's stop
+// also ends the floor its record names, one that fieldd adopted included.
 
 const READINESS_DEADLINE_MS = 20_000;
 const ADOPT_PROBE_MS = 1_500;
@@ -317,7 +319,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       ...(ownedChild?.pid !== undefined ? { childPid: ownedChild.pid } : {}),
       stopOwned(): Promise<void> {
         if (ownership !== "spawned" || !ownedChild) return Promise.resolve(); // never kill adopted
-        stopping ??= stopChild(ownedChild, probe.info.nativePid, probe.client);
+        stopping ??= stopChild(ownedChild, probe.info, probe.client);
         return stopping;
       },
     };
@@ -386,14 +388,29 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     }
   }
 
+  /** The floor a stop ends beside its fieldd: product.json's `nativePid` read
+   * NOW, before the stop verb (fieldd's stop removes the file). fieldd
+   * rewrites it whenever its floor changes — a respawn, a hello stating
+   * another pid — so the probe's copy can name a floor that has gone. The
+   * record is believed only while it is still this fieldd's (its pid is the
+   * child's, its bootId the probe's); otherwise the probe's value stands. */
+  async function nativePidAtStop(proc: ChildProcess, probed: ProductInfo): Promise<number | null> {
+    const current = await readRecordedProduct(opts.dataRoot);
+    if (current !== null && current.pid === proc.pid && current.bootId === probed.bootId) {
+      return current.nativePid;
+    }
+    return probed.nativePid;
+  }
+
   async function stopChild(
     proc: ChildProcess,
-    nativePid: number | null,
+    probed: ProductInfo | null,
     client?: FielddClient,
   ): Promise<void> {
     // stop-owned is FULL dev/smoke teardown: the spawned fieldd and the
-    // field-native it recorded. (In production nothing calls this — the
+    // field-native its record names. (In production nothing calls this — the
     // two-plane law keeps daemons alive past the shell.)
+    const nativePid = probed === null ? null : await nativePidAtStop(proc, probed);
     lifecycle("fieldd.supervisor.stop_requested", "Requested fieldd shutdown", {
       ...(proc.pid !== undefined ? { pid: proc.pid } : {}),
       nativePid,

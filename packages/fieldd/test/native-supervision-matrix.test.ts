@@ -17,10 +17,11 @@
 // host slack (state correctness is the gate — this Mac runs at load 20–200)
 // and the measured number rides the assertion message.
 import { type ChildProcess, spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { LAYOUT, ProductInfo } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import type { NativeSupervisionTimings } from "../src/native-supervisor";
@@ -98,6 +99,13 @@ const alive = (pid: number): boolean => {
   }
 };
 
+/** product.json's `nativePid` — the floor of record — read from the data dir
+ * as a shell reads it. */
+function recordedNativePid(dir: string): number | null {
+  const raw = readFileSync(join(dir, ...LAYOUT.PRODUCT_JSON), "utf8");
+  return ProductInfo.parse(JSON.parse(raw)).nativePid;
+}
+
 /** Boots a supervised pair: the spawner is the SAME shape bin.ts hands the
  * daemon, and every child it makes lands in the teardown list. */
 async function bootSupervisedPair(
@@ -125,10 +133,11 @@ async function bootSupervisedPair(
 
 describe("TC-S1 floor supervision matrix (real field-native)", () => {
   it("row: floor SIGKILL → auto-respawn with a fresh pid, link back up", async () => {
-    const { daemon } = await bootSupervisedPair();
+    const { daemon, dir } = await bootSupervisedPair();
     await until(() => daemon.health().nativeLink.state === "up", 10_000, "initial up");
     const pid = daemon.health().nativePid;
     expect(pid).not.toBeNull();
+    expect(recordedNativePid(dir), "the boot's record names the spawned floor").toBe(pid);
     process.kill(pid as number, "SIGKILL");
     const ms = await until(
       () => daemon.health().nativeLink.state === "up" && daemon.health().nativePid !== pid,
@@ -137,6 +146,8 @@ describe("TC-S1 floor supervision matrix (real field-native)", () => {
     );
     expect(daemon.health().nativePid, `respawn took ${ms}ms`).not.toBe(pid);
     expect(daemon.health().nativeConnected).toBe(true);
+    // the record follows the respawn: the floor that replaced the killed one
+    expect(recordedNativePid(dir)).toBe(daemon.health().nativePid);
   }, 40_000);
 
   it("row: mgmt wedge (SIGSTOP) → unresponsive, distinct state; SIGCONT → same pid recovers", async () => {
@@ -162,7 +173,7 @@ describe("TC-S1 floor supervision matrix (real field-native)", () => {
   }, 40_000);
 
   it("row: respawn intensity trips to gone; the restart affordance brings it back", async () => {
-    const { daemon } = await bootSupervisedPair();
+    const { daemon, dir } = await bootSupervisedPair();
     await until(() => daemon.health().nativeLink.state === "up", 10_000, "initial up");
     // kill every floor the instant it reports in: 3 respawns land inside the
     // window, the 4th death trips the bound — the machine stops ON PURPOSE
@@ -182,6 +193,7 @@ describe("TC-S1 floor supervision matrix (real field-native)", () => {
       );
       const h = daemon.health();
       if (h.nativeLink.state === "gone") break;
+      expect(recordedNativePid(dir), "the record follows each respawn").toBe(h.nativePid);
       lastPid = h.nativePid as number;
     }
     expect(daemon.health().nativeLink.detail).toContain("intensity");
@@ -191,10 +203,11 @@ describe("TC-S1 floor supervision matrix (real field-native)", () => {
       20_000,
       "manual restart up",
     );
+    expect(recordedNativePid(dir)).toBe(daemon.health().nativePid);
   }, 120_000);
 
   it("row WG-1: an EMPTY floor stopped past the bound is restarted through the drain ladder — a fresh pid", async () => {
-    const { daemon } = await bootSupervisedPair(WEDGE);
+    const { daemon, dir } = await bootSupervisedPair(WEDGE);
     const sup = daemon.nativeSupervisor;
     await until(() => sup.state === "up", 10_000, "initial up");
     const pid = sup.currentPid as number;
@@ -208,6 +221,8 @@ describe("TC-S1 floor supervision matrix (real field-native)", () => {
     );
     expect(sup.currentPid, `restarted in ${ms}ms`).not.toBe(pid);
     expect(alive(pid), "the stopped floor was ended").toBe(false);
+    // the record names the restarted floor, never the one the ladder ended
+    expect(recordedNativePid(dir)).toBe(daemon.health().nativePid);
   }, 60_000);
 
   it("row WG-2: a floor holding a session is held past the bound, never killed; SIGCONT recovers the same pid with the session alive", async () => {

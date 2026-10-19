@@ -74,8 +74,9 @@ export function classifyOrphans({
     if (keptSnapshots.has(snapshot)) {
       // Running the very bytes this session is about to run: not a leftover
       // generation but THIS one, so holding our socket is its job. Load-bearing
-      // because fieldd records `nativePid` only when it SPAWNED the native — a
-      // native it adopted is in nobody's product.json, and without this it would
+      // because a live native can be in nobody's product.json: the floor
+      // outlives the fieldd whose stop removed the file, and an adopted floor
+      // that stated no pid in its hello is never named — without this it would
       // read as a squatter and die with every session on it.
       spared.add(pid);
       continue;

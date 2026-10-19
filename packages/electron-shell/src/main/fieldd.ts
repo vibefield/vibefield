@@ -16,9 +16,12 @@ import { type DesktopResources, readBundledTrust } from "./resources";
 // The supervisor owns adopt/spawn/probe/readiness (ESR §5.3); this builder
 // owns only what a supervisor must never know: Electron paths, the runner
 // (our own binary in Node mode), and the mode-derived policy. Smoke isolates
-// BOTH daemon ports (slice-0 finding 2) and stops what it spawned — never an
-// adopted process. Dev leaves daemons running (the dev-runner owns teardown);
-// successive dev shells adopt the pair through the buildId-gated probe.
+// BOTH daemon ports (slice-0 finding 2) and stops the fieldd it spawned with
+// the floor that fieldd's record names — a floor it adopted included, so a
+// stop-owned mode on an injected FIELDD_DATA_DIR ends a live floor it found
+// there — never an adopted fieldd. Dev leaves daemons running (the dev-runner
+// owns teardown); successive dev shells adopt the pair through the
+// buildId-gated probe.
 
 export function dataRoot(mode: ShellMode): string {
   const injected = process.env["FIELDD_DATA_DIR"];

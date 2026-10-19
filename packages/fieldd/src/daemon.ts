@@ -166,6 +166,7 @@ import {
   createNodeLogging,
   createNoopLogger,
   createPrivateDir,
+  durableRenameSync,
   type NodeLogging,
   PluginLogRouter,
   pluginLogProvenance,
@@ -242,6 +243,7 @@ import { MeshLaneLink } from "./mesh-lane";
 import { NativeLink, RpcCallError } from "./native-link";
 import {
   type FloorCensus,
+  type FloorOfRecord,
   type NativeSupervisionTimings,
   NativeSupervisor,
   UNKNOWN_FLOOR_CENSUS,
@@ -316,7 +318,8 @@ import { workspaceError } from "./workspace/tickets";
 // Track A adds the shell bootstrap contract: after listen, fieldd writes
 // <dataDir>/fieldd/run/shell.token (0600, all scopes — the shell is the trusted
 // root that mints narrower per-window tokens via system.mintWindowToken) and
-// product.json (port/pid/bootId discovery metadata for adopt-or-spawn).
+// product.json (port/pid/bootId discovery metadata for adopt-or-spawn, and the
+// floor this fieldd is linked to, rewritten whenever that floor changes).
 
 /** DS-5d — how long a stopping fieldd waits for the holders ledger's last
  * write before it goes on without it (M176 item 7): the supervisor's default
@@ -358,7 +361,9 @@ export interface FielddConfig {
    * (`TerminalServiceOptions.profileBinding`). Production answers from the
    * agent runtime (`runtimeProfileBinding`, terminal-bindings.ts). */
   terminalProfileBinding?: (profileSet: string) => Promise<TerminalProfileBinding>;
-  /** pid of a field-native the caller spawned (recorded in product.json for cleanup tooling) */
+  /** pid of a field-native the caller spawned: the supervisor's first floor of
+   * record, which product.json names until a respawn or the floor's hello ack
+   * names another (`NativeSupervisor.recordedFloorPid`) */
   nativePid?: number;
   /** TC-D1 — re-runs the caller's spawn (bin.ts's exact env composition) so
    * the supervisor can respawn a dead floor. Absent = adopted/external floor:
@@ -554,9 +559,9 @@ export interface FielddHealth {
    * would proceed. */
   nativeLink: NativeLinkHealth;
   /** the floor pid this fieldd can vouch for (spawned this boot or by the
-   * supervisor since); null for adopted floors. product.json's record goes
-   * stale after the first respawn — this is the live answer. The pid an
-   * adopted floor stated in its hello is `nativeLink.pid`. */
+   * supervisor since); null for adopted floors. The pid an adopted floor
+   * stated in its hello is `nativeLink.pid`; product.json's `nativePid` names
+   * the floor of record, either kind (`NativeSupervisor.recordedFloorPid`). */
   nativePid: number | null;
   /** GT-2d — the build label the paired field-native gave in its hello ack.
    * The native plane outlives fieldd and is ADOPTED, so the floor answering
@@ -6370,23 +6375,66 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // product.json rides the same inherited ACL and asks for nothing more: it
     // is the discovery contract, not a secret — port, pid, bootId — and the
     // control port answers nothing without a scoped bearer token anyway (EL7).
-    writeFileSync(
-      productPath,
-      `${JSON.stringify(
-        {
-          port: controlPort,
-          pid: process.pid,
-          bootId,
-          contractsVersion: CONTRACTS_VERSION,
-          startedAt,
-          nativePid: config.nativePid ?? null,
-          buildId: config.buildId ?? null,
-          userId: config.userId ?? null,
-        } satisfies ProductInfo, // the shell/supervisor adoption contract (shell.ts)
-        null,
-        2,
-      )}\n`,
-    );
+    // Its temp file is born in the same directory, so it inherits the same.
+    //
+    // ONE writer, for the boot's write and every rewrite after it. From the
+    // boot's write on, the file existing is the adoption contract; its
+    // `nativePid` is the supervisor's floor of record, rewritten whenever that
+    // floor changes (a respawn, a hello stating another pid) and only then.
+    // Never once stop has begun (stop removes the file), and never once another
+    // fieldd has superseded this one (the file is the successor's then).
+    let productNativePid: number | null = null;
+    let productClosed = false;
+    const writeProductRecord = (nativePid: number | null): void => {
+      // the successor's file, the boot's write included: a takeover can land
+      // while the boot awaits above, after its last supersession check
+      if (native.superseded) return;
+      const record = {
+        port: controlPort,
+        pid: process.pid,
+        bootId,
+        contractsVersion: CONTRACTS_VERSION,
+        startedAt,
+        nativePid,
+        buildId: config.buildId ?? null,
+        userId: config.userId ?? null,
+      } satisfies ProductInfo; // the shell/supervisor adoption contract (shell.ts)
+      // atomic: a reader finds the record before or after, never a torn one
+      const tmp = `${productPath}.${process.pid}.tmp`;
+      try {
+        writeFileSync(tmp, `${JSON.stringify(record, null, 2)}\n`);
+        durableRenameSync(tmp, productPath);
+      } catch (error) {
+        try {
+          rmSync(tmp, { force: true });
+        } catch {
+          // the write's own error is the one to report
+        }
+        throw error;
+      }
+      productNativePid = nativePid;
+    };
+    writeProductRecord(supervisor.recordedFloorPid);
+    const onFloorOfRecord = ({ pid }: FloorOfRecord): void => {
+      if (productClosed || native.superseded || pid === productNativePid) return;
+      try {
+        writeProductRecord(pid);
+        logger.info(
+          "fieldd.lifecycle.product_rewritten",
+          "product.json names the floor this fieldd is linked to now",
+          { nativePid: pid },
+        );
+      } catch (error) {
+        // never fatal: the record still names the floor it named before
+        logger.error(
+          "fieldd.lifecycle.product_rewrite_failed",
+          "product.json could not be rewritten for the floor this fieldd is linked to",
+          error,
+          { nativePid: pid },
+        );
+      }
+    };
+    supervisor.on("floor-of-record", onFloorOfRecord);
 
     logger.info("fieldd.lifecycle.ready", "fieldd is ready", { controlPort, dataPort });
     // AR-5d — boot has committed: account usage may be read from here. The
@@ -6449,6 +6497,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       stopPromise ??= (async () => {
         logger.info("fieldd.lifecycle.stopping", "fieldd is stopping");
         try {
+          // the record is this stop's to remove below, never to rewrite again
+          productClosed = true;
+          supervisor.off("floor-of-record", onFloorOfRecord);
           supervisor.stop(); // stop watching FIRST: a teardown is not a wedge
           await updateManager.dispose();
           await serviceHost?.stopAll(); // §18.6 — service deactivation before the API falls

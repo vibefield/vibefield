@@ -79,9 +79,10 @@ test("the adoptable pair is spared even though its snapshot is no longer current
 });
 
 test("a current-snapshot native holding the socket survives being in nobody's product.json", () => {
-  // fieldd records `nativePid` only when it SPAWNED the native, so a native it
-  // ADOPTED is named by no product.json and reaches us with an empty keepPids.
-  // It is running this session's exact bytes and holding the socket is its job;
+  // A live native can be named by no product.json — the floor outlived the
+  // fieldd whose stop removed the file, or it is an adopted floor that stated no
+  // pid in its hello — and then it reaches us with an empty keepPids. It is
+  // running this session's exact bytes and holding the socket is its job;
   // reaping it would kill every live session for no reason at all.
   const orphans = classify({
     processes: [{ pid: 502, exePath: nativeIn(CURRENT) }],

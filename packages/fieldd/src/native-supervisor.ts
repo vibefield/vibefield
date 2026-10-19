@@ -71,6 +71,16 @@ import { RpcCallError } from "./native-link";
 // to start the next. Without both, a held floor says "restart it outside
 // VibeField", and no restart is offered.
 //
+// THE FLOOR OF RECORD (`recordedFloorPid`, announced by "floor-of-record"): the
+// pid of the floor this fieldd is linked to, as last identified. A spawn names
+// it (bin.ts's, then every respawn's), and the pid the floor states in its
+// hello ack (WG-D6) wins over a spawn's and names an adopted floor. A floor
+// that cannot be reached is still the floor: a link drop, a redial or a wedge
+// moves nothing. A spawn that produced no process leaves none on record, and so
+// does a floor the kernel says has exited (`pidAlive`) with none spawned or
+// paired after it: after a drain ladder, or where the crash path goes "gone".
+// product.json records it, rewritten at each change (daemon.ts).
+//
 // THE DRAIN LADDER, every deliberate stop's signals: SIGTERM starts the floor's
 // own drain; the SIGKILL rung waits out the drain ladder before it fires
 // (KILL_DRAIN_WAIT_MS, past every cell's drain budget and grace), and fires
@@ -158,6 +168,12 @@ export interface FloorCensus {
   readonly births: number;
   /** reopens births if the census closed them */
   release(): void;
+}
+
+/** The `"floor-of-record"` event's payload: the floor of record as it stands
+ * now (`NativeSupervisor.recordedFloorPid`). */
+export interface FloorOfRecord {
+  readonly pid: number | null;
 }
 
 /** WG-D0 — the slice of perf_hooks' `IntervalHistogram` a wedge episode reads.
@@ -272,7 +288,9 @@ function holding(atRisk: number | null, births: number): string {
 
 /** Emits `"transition"` `(state: NativeLinkState, detail: string)` on every
  * state or detail change — the daemon's health stream listens (it is
- * constructed after this supervisor must already be watching the link). */
+ * constructed after this supervisor must already be watching the link) — and
+ * `"floor-of-record"` (`FloorOfRecord`) when, and only when, the floor of
+ * record changes — the daemon's product.json writer listens. */
 export class NativeSupervisor extends EventEmitter {
   state: NativeLinkState = "connecting";
   stateDetail = "boot";
@@ -282,6 +300,8 @@ export class NativeSupervisor extends EventEmitter {
   /** the floor this fieldd spawned (or respawned); cleared when the paired
    * floor states another pid in its hello */
   private pid: number | undefined;
+  /** the floor of record (`recordedFloorPid`) */
+  private recordedPid: number | null;
   private readonly t: NativeSupervisionTimings;
   private readonly logger: Logger;
 
@@ -333,6 +353,7 @@ export class NativeSupervisor extends EventEmitter {
     this.t = opts.timings ?? NATIVE_SUPERVISION;
     this.logger = opts.logger ?? createNoopLogger();
     this.pid = opts.nativePid;
+    this.recordedPid = opts.nativePid ?? null;
     opts.link.on("connected", this.onConnected);
     opts.link.on("reconnecting", this.onReconnecting);
     opts.link.on("superseded", this.onSuperseded);
@@ -344,11 +365,26 @@ export class NativeSupervisor extends EventEmitter {
   }
 
   /** The floor pid this supervisor spawned and still holds; undefined for a
-   * floor it adopted. Health reads it — the product.json record from boot goes
-   * stale after the first respawn, and this is the live answer. The pid an
-   * adopted floor stated in its hello is `health().pid`. */
+   * floor it adopted, or once the paired floor stated another pid. Health
+   * reads it: the pid this fieldd can vouch for. The pid an adopted floor
+   * stated in its hello is `health().pid`; the floor of record, which names
+   * either kind, is `recordedFloorPid`. */
   get currentPid(): number | undefined {
     return this.pid;
+  }
+
+  /** THE FLOOR OF RECORD: the pid of the floor this fieldd is linked to, as
+   * last identified — what product.json names (daemon.ts). The spawn's pid
+   * (bin.ts's, then each respawn's), or the pid the paired floor stated in its
+   * hello ack (WG-D6), which wins over a spawn's and names an adopted floor. A
+   * link drop, a redial, "unresponsive" or a reconnect to the same floor leave
+   * it as it is: an unreachable floor is still the floor. null when native is
+   * disabled or no floor is identified: an adopted floor that stated none, a
+   * spawn that produced no process, or a floor the kernel says has exited with
+   * no floor after it (after a drain ladder, or at the crash path's "gone").
+   * `"floor-of-record"` announces each change. */
+  get recordedFloorPid(): number | null {
+    return this.recordedPid;
   }
 
   /** WG-D1 (`NativeLinkHealth`, contracts mgmt.ts) — the state with its numbers
@@ -582,6 +618,7 @@ export class NativeSupervisor extends EventEmitter {
       { ...fields, closeWaitMs },
     );
     await this.drainLadder(pid, bounds.drainWaitMs ?? this.t.KILL_DRAIN_WAIT_MS, rungMs);
+    this.forgetExitedFloor(pid);
     return this.stoppedForUpdate("forced", fields);
   }
 
@@ -647,6 +684,10 @@ export class NativeSupervisor extends EventEmitter {
       );
       this.pid = undefined;
     }
+    // the floor of record is the floor's own word wherever it gives one — a
+    // spawn's pid confirmed or replaced, an adopted floor named; a floor that
+    // states none leaves the record as it was
+    if (stated !== undefined) this.recordFloor(stated);
     this.redials = 0;
     this.misses = 0;
     this.cleanPongs = 0;
@@ -802,6 +843,9 @@ export class NativeSupervisor extends EventEmitter {
           "gone",
           "the floor is down and this fieldd has no spawn authority (adopted floor) — restart it externally",
         );
+        // nothing is spawned: a floor of record the kernel says has exited is no
+        // floor now (the probe alone proves less: a floor still binding is alive)
+        if (this.recordedPid !== null) this.forgetExitedFloor(this.recordedPid);
         return;
       }
       const now = Date.now();
@@ -811,6 +855,8 @@ export class NativeSupervisor extends EventEmitter {
           "gone",
           `respawn intensity exceeded (${this.t.RESPAWN_MAX} in ${this.t.RESPAWN_WINDOW_MS}ms) — something is wrong with the floor itself; use the restart affordance to try again`,
         );
+        // nothing is spawned: the floor of record goes only on the kernel's word
+        if (this.recordedPid !== null) this.forgetExitedFloor(this.recordedPid);
         return;
       }
       this.respawnStamps.push(now);
@@ -823,6 +869,9 @@ export class NativeSupervisor extends EventEmitter {
         { reason, attempt: this.respawnStamps.length, previousPid: this.pid ?? null },
       );
       this.pid = this.opts.spawnNative();
+      // the spawn is the floor of record now: its pid, or none when it produced
+      // no process (the floor it replaces is gone — the probe found no listener)
+      this.recordFloor(this.pid ?? null);
       // don't serve the fresh floor the backoff its predecessor's corpse earned
       this.opts.link.dialNow();
       if (this.pid === undefined) {
@@ -1206,7 +1255,9 @@ export class NativeSupervisor extends EventEmitter {
 
   /** A deliberate restart of the live floor once it is decided: the drain
    * ladder, births reopened, then the next floor. The crash path does not
-   * respawn while the ladder runs; this does, once the floor has gone. */
+   * respawn while the ladder runs; this does, once the floor has gone. A floor
+   * the ladder saw exit, with none spawned or paired after it, leaves no floor
+   * on record. */
   private async restartFloor(pid: number, census: FloorCensus, reason: string): Promise<void> {
     this.draining = true;
     try {
@@ -1222,6 +1273,7 @@ export class NativeSupervisor extends EventEmitter {
       census.release();
     }
     if (!this.stopped) await this.considerRespawn(reason);
+    this.forgetExitedFloor(pid);
   }
 
   /** THE DRAIN LADDER (WG-D1), every deliberate stop's signals. SIGTERM starts
@@ -1283,6 +1335,25 @@ export class NativeSupervisor extends EventEmitter {
    * one the paired floor stated in its hello (WG-D6). */
   private killTarget(): number | undefined {
     return this.pid ?? this.opts.link.floorPid;
+  }
+
+  /** Moves the floor of record, and announces it only when the value changes. */
+  private recordFloor(pid: number | null): void {
+    if (pid === this.recordedPid) return;
+    this.recordedPid = pid;
+    const event: FloorOfRecord = { pid };
+    this.emit("floor-of-record", event);
+  }
+
+  /** After a drain ladder, or where the crash path goes "gone" and spawns
+   * nothing: the kernel says the floor of record's pid is no process now
+   * (`pidAlive`, read here), and nothing has named another floor since — no
+   * floor is identified. Without a pid witness the record stands: the socket
+   * closing, or a probe finding no listener, proves less than an exit. */
+  private forgetExitedFloor(pid: number): void {
+    const alive = this.opts.pidAlive;
+    if (alive === undefined || this.recordedPid !== pid || alive(pid)) return;
+    this.recordFloor(null);
   }
 
   /** May this fieldd restart the live floor: a pid to signal, and the

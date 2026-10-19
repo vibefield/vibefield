@@ -190,14 +190,18 @@ export async function waitDead(pid: number, ms = 2000): Promise<boolean> {
  * PID_OVERRIDE forces a product.json pid other than our own (the lost-race →
  * "adopted" branch). SPAWN_MARKER, if set, gets one appended line per process
  * start (proves single-spawn under concurrent ensure). PRINT_SECRET, if set,
- * is written to stdout before the files (redaction-through-spawn). */
+ * is written to stdout before the files (redaction-through-spawn). NATIVE_PID,
+ * if set, is the floor the record names (`nativePid`; null otherwise).
+ * REMOVE_RECORD_ON_TERM, if set, removes product.json at SIGTERM and exits, as
+ * fieldd's stop does: a read after the stop finds no record. */
 export const FIXTURE_READY = `
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 const root = process.env.FIELDD_DATA_DIR;
 const port = Number(process.env.TEST_PRODUCT_PORT);
 const token = process.env.SHELL_TOKEN ?? "shell-token";
 const pid = process.env.PID_OVERRIDE ? Number(process.env.PID_OVERRIDE) : process.pid;
+const nativePid = process.env.NATIVE_PID ? Number(process.env.NATIVE_PID) : null;
 if (process.env.SPAWN_MARKER) appendFileSync(process.env.SPAWN_MARKER, process.pid + "\\n");
 if (process.env.PRINT_SECRET) process.stdout.write(process.env.PRINT_SECRET + "\\n");
 const dir = join(root, "fieldd", "run");
@@ -205,9 +209,13 @@ mkdirSync(dir, { recursive: true });
 writeFileSync(join(dir, "shell.token"), token);
 writeFileSync(join(dir, "product.json"), JSON.stringify({
   port, pid, bootId: "boot-fixture",
-  contractsVersion: process.env.CV, startedAt: Date.now(), nativePid: null,
+  contractsVersion: process.env.CV, startedAt: Date.now(), nativePid,
   buildId: process.env.FIELDD_BUILD_ID ?? null,
 }));
+if (process.env.REMOVE_RECORD_ON_TERM) process.on("SIGTERM", () => {
+  rmSync(join(dir, "product.json"), { force: true });
+  process.exit(0);
+});
 process.stdout.write(JSON.stringify({ ready: true, port, bootId: "boot-fixture" }) + "\\n");
 setInterval(() => {}, 1e6);
 `;

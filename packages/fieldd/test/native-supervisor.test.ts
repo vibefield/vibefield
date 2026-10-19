@@ -14,6 +14,7 @@ import type { NativeDeadlineMiss, NativeLateReply, NativeLink } from "../src/nat
 import { RpcCallError } from "../src/native-link";
 import {
   type FloorCensus,
+  type FloorOfRecord,
   type LoopDelayMonitor,
   type NativeSupervisionTimings,
   NativeSupervisor,
@@ -180,6 +181,8 @@ function rig(opts?: {
   drainMs?: number;
   /** a respawned floor pairs on its own, and comes up wedged when the link is */
   respawnPairs?: boolean;
+  /** every respawn produces no process (the spawn itself failed) */
+  spawnFails?: boolean;
   yieldToIo?: () => Promise<void>;
   /** WG-E5 — what the OS says the floor waits on; absent, the platform says nothing */
   osWaits?: (pid: number) => FloorOsWaits | undefined;
@@ -202,6 +205,7 @@ function rig(opts?: {
       ? {}
       : {
           spawnNative: () => {
+            if (opts?.spawnFails === true) return undefined;
             nextPid += 1;
             spawns.push(nextPid);
             procs.add(nextPid);
@@ -1109,5 +1113,186 @@ describe("NativeSupervisor wedge episodes (WG-D0)", () => {
 
     expect(episodes(said).map((s) => s.attrs?.outcome)).toEqual(["stopped"]);
     expect(loopDelay).toMatchObject({ enables: 1, disables: 1 });
+  });
+});
+
+/** Every "floor-of-record" the supervisor announces from here on, in order. */
+function announced(sup: NativeSupervisor): Array<number | null> {
+  const pids: Array<number | null> = [];
+  sup.on("floor-of-record", (event: FloorOfRecord) => pids.push(event.pid));
+  return pids;
+}
+
+// The floor of record (`recordedFloorPid`, "floor-of-record"): the pid of the
+// floor this fieldd is linked to as last identified — what product.json names.
+describe("NativeSupervisor — the floor of record", () => {
+  it("starts at the floor bin.ts spawned; a respawn names the next floor, announced once", async () => {
+    const { link, sup, spawns } = rig();
+    const pids = announced(sup);
+    expect(sup.recordedFloorPid, "bin.ts's spawn").toBe(999);
+    link.floorPid = 999; // the spawned floor states its own pid
+    link.up();
+    expect(pids, "the hello named the floor already on record").toEqual([]);
+    link.floorPid = undefined; // no paired connection: nothing is stated
+    link.down();
+    link.emit("reconnecting", 0); // the second failed redial: the probe finds no listener
+    await until(() => spawns.length === 1);
+    expect(sup.recordedFloorPid).toBe(spawns[0]);
+    link.floorPid = spawns[0]; // the respawned floor pairs and states its own pid
+    link.up();
+    expect(sup.recordedFloorPid).toBe(spawns[0]);
+    expect(pids).toEqual([spawns[0]]);
+    sup.stop();
+  });
+
+  it("a respawn that produced no process leaves no floor on record", async () => {
+    const { said, logger } = recorder();
+    const { link, sup } = rig({ logger, spawnFails: true });
+    const pids = announced(sup);
+    link.up();
+    link.down();
+    link.emit("reconnecting", 0);
+    await until(() => said.some((s) => s.event === "fieldd.native_supervisor.spawn_failed"));
+    expect(sup.recordedFloorPid).toBeNull();
+    expect(sup.currentPid).toBeUndefined();
+    expect(pids).toEqual([null]);
+    sup.stop();
+  });
+
+  it("a hello stating another pid than the spawn's names the floor that answered (WG-D6)", () => {
+    const { link, sup } = rig();
+    const pids = announced(sup);
+    link.floorPid = 4_242;
+    link.up();
+    expect(sup.recordedFloorPid).toBe(4_242);
+    expect(sup.currentPid, "the spawn's pid is no target now").toBeUndefined();
+    expect(pids).toEqual([4_242]);
+    sup.stop();
+  });
+
+  it("an adopted floor is on record from the hello that states its pid", () => {
+    const { link, sup } = rig({ nativePid: null });
+    const pids = announced(sup);
+    expect(sup.recordedFloorPid, "nothing is identified before the hello").toBeNull();
+    link.floorPid = 5_151;
+    link.up();
+    expect(sup.recordedFloorPid).toBe(5_151);
+    expect(sup.currentPid, "health vouches only for a floor this fieldd spawned").toBeUndefined();
+    expect(pids).toEqual([5_151]);
+    sup.stop();
+  });
+
+  it("a hello that states no pid leaves the record as it was", () => {
+    // a spawned floor that predates WG-D6
+    const spawned = rig();
+    const spawnedPids = announced(spawned.sup);
+    spawned.link.up();
+    expect(spawned.sup.recordedFloorPid).toBe(999);
+    expect(spawnedPids).toEqual([]);
+    spawned.sup.stop();
+
+    // an adopted floor named by one hello, and a later connection's hello stating none
+    const adopted = rig({ nativePid: null, floorPid: 5_151 });
+    const adoptedPids = announced(adopted.sup);
+    adopted.link.up();
+    adopted.link.down();
+    adopted.link.floorPid = undefined;
+    adopted.link.up();
+    expect(adopted.sup.recordedFloorPid).toBe(5_151);
+    expect(adoptedPids).toEqual([5_151]);
+    adopted.sup.stop();
+  });
+
+  it("a link drop, the wedge ladder's redial and a reconnect to the same floor never move it", async () => {
+    const census = new FakeCensus();
+    census.live = ["s-1"]; // a floor that is held, never restarted
+    const { link, sup, kills } = rig({
+      census,
+      personPresent: true,
+      nativePid: null,
+      floorPid: 6_060,
+    });
+    const pids = announced(sup);
+    link.up();
+    link.down(); // the link drops: an unreachable floor is still the floor
+    expect(sup.recordedFloorPid).toBe(6_060);
+    link.up(); // the same floor answers the reconnect
+    link.wedged = true;
+    await until(() => link.redials === 1); // the redial's hello goes unanswered
+    await until(() => census.reads.length > 0); // held past the bound
+    expect(sup.state).toBe("unresponsive");
+    expect(sup.recordedFloorPid).toBe(6_060);
+    expect(pids, "announced once, by the hello that named it").toEqual([6_060]);
+    expect(kills).toEqual([]);
+    sup.stop();
+  });
+
+  it("a wedge restart names the floor that replaced the ended one, with no gap announced between", async () => {
+    const { link, sup, spawns, kills } = rig({ census: new FakeCensus(), drainMs: 10 });
+    const pids = announced(sup);
+    link.up();
+    link.wedged = true;
+    await until(() => spawns.length === 1);
+    expect(signals(kills)).toEqual(["SIGTERM"]);
+    expect(sup.recordedFloorPid).toBe(spawns[0]);
+    expect(pids).toEqual([spawns[0]]);
+    sup.stop();
+  });
+
+  it("a floor the drain ladder saw exit, with no floor after it, leaves none on record", async () => {
+    // the respawn bound is already spent: the wedge restart ends the floor and spawns none
+    const { link, sup, spawns, kills } = rig({
+      census: new FakeCensus(),
+      drainMs: 10,
+      timings: { ...T, RESPAWN_MAX: 0 },
+    });
+    const pids = announced(sup);
+    link.up();
+    link.wedged = true;
+    await until(() => sup.recordedFloorPid === null);
+    expect(signals(kills)).toEqual(["SIGTERM"]);
+    expect(spawns).toEqual([]);
+    expect(sup.state).toBe("gone");
+    expect(pids).toEqual([null]);
+    sup.stop();
+  });
+
+  it("no spawn authority, the floor exited: gone, and none on record", async () => {
+    const { link, sup, procs } = rig({ spawner: false, nativePid: null, floorPid: 5_151 });
+    const pids = announced(sup);
+    link.up();
+    procs.delete(5_151); // the adopted floor has exited
+    link.down();
+    link.emit("reconnecting", 0); // the second failed redial: the probe finds no listener
+    await until(() => sup.state === "gone");
+    expect(sup.recordedFloorPid, "the kernel's word: no such process").toBeNull();
+    expect(pids).toEqual([5_151, null]);
+    sup.stop();
+  });
+
+  it("no spawn authority, the floor still a process: gone, and the record stands", async () => {
+    const { link, sup } = rig({ spawner: false, nativePid: null, floorPid: 5_151 });
+    const pids = announced(sup);
+    link.up();
+    link.down(); // the socket went, no listener answers; the process lives (still binding)
+    link.emit("reconnecting", 0);
+    await until(() => sup.state === "gone");
+    expect(sup.recordedFloorPid, "a probe finding no listener is not an exit").toBe(5_151);
+    expect(pids).toEqual([5_151]);
+    sup.stop();
+  });
+
+  it("the respawn bound spent, the floor exited: gone, none spawned, none on record", async () => {
+    const { link, sup, procs, spawns } = rig({ timings: { ...T, RESPAWN_MAX: 0 } });
+    const pids = announced(sup);
+    link.up();
+    procs.delete(999); // bin.ts's floor has exited
+    link.down();
+    link.emit("reconnecting", 0);
+    await until(() => sup.state === "gone");
+    expect(spawns).toEqual([]);
+    expect(sup.recordedFloorPid).toBeNull();
+    expect(pids).toEqual([null]);
+    sup.stop();
   });
 });

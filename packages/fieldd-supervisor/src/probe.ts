@@ -20,7 +20,8 @@ export type ProbeResult =
   | { ok: true; client: FielddClient; info: ProductInfo }
   | { ok: false; failure: ProbeFailure; stale?: StaleDaemon };
 
-/** The run file's recorded daemon, or null when absent or unreadable (the replace path's "is it gone yet"). */
+/** The run file's recorded daemon, or null when absent or unreadable (the replace path's "is it gone yet", and the
+ * floor a stop reads fresh). */
 export async function readRecordedProduct(dataRoot: string): Promise<ProductInfo | null> {
   try {
     return ProductInfo.parse(JSON.parse(await readFile(productPath(dataRoot), "utf8")));

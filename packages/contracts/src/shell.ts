@@ -24,9 +24,11 @@ import { UpdateView } from "./update-policy";
 // registries.IPC_CHANNELS. Contracts describe the wire that ships today; future
 // controlUrl work remains additive to this envelope.
 
-/** `<dataRoot>/fieldd/run/product.json` — written by fieldd on boot, read by the
- * shell/supervisor for adopt-or-spawn (design-02 §3.6/D10). Tolerant: future
- * daemons may add fields; readers must survive them. */
+/** `<dataRoot>/fieldd/run/product.json` — written by fieldd on boot (and
+ * rewritten, atomically, whenever the floor it is linked to changes:
+ * `nativePid`), read by the shell/supervisor for adopt-or-spawn (design-02
+ * §3.6/D10). Tolerant: future daemons may add fields; readers must survive
+ * them. */
 export const ProductInfo = z
   .object({
     /** actual bound control port (ephemeral in tests — never inferred, always read) */
@@ -35,7 +37,9 @@ export const ProductInfo = z
     bootId: z.string().min(1),
     contractsVersion: SemverString,
     startedAt: z.number(),
-    /** pid of the field-native the daemon ensured; null when native is disabled */
+    /** The floor this fieldd is linked to: the pid it spawned, or the one the
+     * paired floor stated in its hello ack (WG-D6) — rewritten whenever that
+     * floor changes. null when native is disabled or no floor is identified. */
     nativePid: z.number().int().positive().nullable(),
     /** Development build identity. Production writes null; optional keeps
      * adoption compatible with product files written by older daemons. */

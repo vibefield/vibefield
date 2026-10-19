@@ -1,14 +1,15 @@
 // DK-18 (plan (39)) — A SMOKE STOPS ITS OWN DAEMONS, AND WAITS FOR THEM. Every smoke left a `field-native` and a
 // `field-terminal-host` alive after it exited — an orchestrator's sweep reaped one pair after each of five smokes. Why: the
-// native plane outlives fieldd by design (the two-plane law), so a smoke's `supervisor.dispose()` (stop-owned) asks fieldd to
-// stop, waits for IT, then SIGTERMs the field-native fieldd recorded at its boot and returns — it never waits for that
-// field-native, whose graceful stop drains its terminal cells' sessions (DK-18 measured smoke:canvas's: 4.1 s for one drained
-// session, the pair alive 4.3 s after Electron had exited). And a fieldd the restart smoke brought back ADOPTED the running
-// field-native — no pid in its product.json — so nothing signalled that one at all: an orphan. The supervisor is product code
-// and right for the product (stop-owned is the test modes' policy; production leaves the pair running); the smoke's own
-// teardown is where a smoke's exit is decided (it leaves by `app.exit()`, never through the shell's quit flow), so the fix is
-// HERE: after the supervisor's stop, the run's own processes are found, the ones nothing asked are asked, and the teardown
-// WAITS for every one to be gone before the smoke may leave.
+// native plane outlives fieldd by design (the two-plane law), so a smoke's `supervisor.dispose()` (stop-owned) reads the
+// field-native its product.json names as the stop begins, asks fieldd to stop, waits for IT, then SIGTERMs that field-native
+// and returns — it never waits for that field-native, whose graceful stop drains its terminal cells' sessions (DK-18
+// measured smoke:canvas's: 4.1 s for one drained session, the pair alive 4.3 s after Electron had exited). And a floor that
+// read does not name — one that stated no pid in its hello ack to the fieldd that ADOPTED it, or one respawned after the
+// read — is signalled by nothing at all: an orphan. The supervisor is product code and right for the product (stop-owned is
+// the test modes' policy; production leaves the pair running); the smoke's own teardown is where a smoke's exit is decided
+// (it leaves by `app.exit()`, never through the shell's quit flow), so the fix is HERE: after the supervisor's stop, the
+// run's own processes are found, the ones nothing asked are asked, and the teardown WAITS for every one to be gone before
+// the smoke may leave.
 //
 // WHICH processes are the run's: `apps/desktop/packaging/run-smoke.mjs` hands Electron one variable, `VF_SMOKE_RUN`, its
 // profile's name; every process the smoke starts inherits it — fieldd (its supervisor spreads the shell's environment),
