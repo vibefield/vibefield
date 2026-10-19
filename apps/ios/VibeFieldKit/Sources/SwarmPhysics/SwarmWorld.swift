@@ -112,6 +112,17 @@ public final class SwarmWorld {
     }
   }
 
+  /// How far the clock has run into the next step, as a share of one: what
+  /// the renderer blends the last two solved states by. Drawing
+  /// previous + (newest − previous) × `blend` is the fixed step's own
+  /// interpolation, exact here because the step is solved in the same pump
+  /// that draws. The phone used to blend by the AGE of the frame that stepped
+  /// (the reference's way, for a worker whose frames arrive late); with 60 Hz
+  /// paint over 30 Hz physics a millisecond of draw-time jitter then decided
+  /// which frame stepped, and the field stalled one frame and jumped the next
+  /// (2026-10-18).
+  public var blend: Double { min(1, max(0, accumulator / parameters.stepMs)) }
+
   public func state(of id: SwarmBodyID) -> SwarmBodyState? {
     guard let index = indexByID[id] else { return nil }
     let body = bodies[index]

@@ -255,6 +255,32 @@ private func position(_ world: SwarmWorld, _ id: String) -> SIMD2<Double> {
     #expect(first.states.map(\.position) != before)
   }
 
+  @Test func blendsByTheShareOfTheNextStepTheClockHasRun() {
+    let world = arena(physicsHz: 30)  // a 33.3 ms step
+    world.seed(now: 0)
+    #expect(world.blend == 0)
+    #expect(world.advance(now: 0.010) == 0)  // 10 ms into the first step
+    #expect(abs(world.blend - 0.3) < 1e-9)
+    #expect(world.advance(now: 0.040) == 1)  // one solved, 6.7 ms into the next
+    #expect(abs(world.blend - 0.2) < 1e-6)
+  }
+
+  /// 2026-10-18 — the drawn clock is the wall clock, one step behind, at every
+  /// frame: the blend never stalls a frame and jumps the next, whatever the
+  /// paint's jitter (the frame-age blend it replaced did both at 60 over 30).
+  @Test func theDrawnClockRunsWithTheWallClockWhateverThePaintsJitter() {
+    let world = arena(physicsHz: 30)
+    world.seed(now: 0)
+    let jitter: [Double] = [0, 1.5, -1.2, 0.8, -0.4, 1.9, -1.7, 0.3]
+    var solved = 0
+    for frame in 1...120 {
+      let nowMs = Double(frame) * 1000 / 60 + jitter[frame % jitter.count]
+      solved += world.advance(now: nowMs / 1000)
+      let drawnMs = (Double(solved) + world.blend) * world.parameters.stepMs
+      #expect(abs(drawnMs - nowMs) < 1e-5, "frame \(frame)")
+    }
+  }
+
   @Test func carriesTheLastTwoSolvedPositionsForTheBlend() {
     let world = arena()
     // A new body has no history: its first blend is a no-op.

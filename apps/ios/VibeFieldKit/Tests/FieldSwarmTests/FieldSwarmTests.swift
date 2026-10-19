@@ -334,6 +334,34 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
     #expect(stage.hitTest(SIMD2(-100, -100)) == nil)
   }
 
+  /// 2026-10-18 — the field never stalls one frame and catches up the next.
+  /// With 60 Hz paint over 30 Hz physics and a jittery draw clock, the
+  /// frame-age blend this replaced drew some frames with no movement at all.
+  @Test func aDriftingBodyMovesEveryFrameWhateverThePaintsJitter() {
+    let stage = stage()
+    stage.parameters.physicsHz = 30
+    stage.update(bubbles: [bubble(id: "a"), bubble(id: "b")], time: 0)
+    let jitter: [Double] = [0, 1.5, -1.2, 0.8, -0.4, 1.9, -1.7, 0.3]
+    var points: [SIMD2<Double>] = []
+    for frame in 0...30 {
+      let time = (Double(frame) * 1000 / 60 + jitter[frame % jitter.count]) / 1000
+      stage.pump(time: time)
+      let body = stage.frame(time: time, motion: false).bodies.first { $0.model.id == "b" }!
+      points.append(SIMD2(body.x, body.y))
+    }
+    let moves = zip(points.dropFirst(), points).map { pair -> Double in
+      let delta = pair.0 - pair.1
+      return (delta.x * delta.x + delta.y * delta.y).squareRoot()
+    }
+    // The first frames start from rest; judge the drift once it is under way.
+    let drifting = Array(moves.dropFirst(4))
+    let median = drifting.sorted()[drifting.count / 2]
+    #expect(median > 0.05, "the body should drift: a median of \(median) pt a frame")
+    for (index, move) in drifting.enumerated() {
+      #expect(move > median * 0.3, "frame \(index + 5) stalled: \(move) pt against a median of \(median)")
+    }
+  }
+
   @Test func aTapSelectsAndADragDoesNot() {
     let stage = stage()
     var selected: [String] = []

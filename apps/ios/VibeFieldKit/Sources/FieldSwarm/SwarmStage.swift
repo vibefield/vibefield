@@ -110,8 +110,6 @@ public final class SwarmStage {
   /// When this terminal's foreground job was first seen, per row.
   private var runningSince: [String: Date] = [:]
   private var states: [String: SwarmPhysics.SwarmBodyState] = [:]
-  /// When the newest solved step landed, in the stage's clock (seconds).
-  private var frameAt: Double?
   #if DEBUG
     /// The paint's own measure, said every few seconds (`SwarmFrameMeter`).
     private var meter = SwarmFrameMeter()
@@ -211,7 +209,6 @@ public final class SwarmStage {
   public func pump(time: Double) {
     let steps = world.advance(now: time)
     if steps > 0 {
-      frameAt = time
       for state in world.states { states[state.id.rawValue] = state }
     }
     #if DEBUG
@@ -231,11 +228,10 @@ public final class SwarmStage {
     previousTime = time
     let delta = min(1.0 / 30, max(1.0 / 120, time - previous))
     if time - modelsAt >= modelRefreshSeconds { refreshModels(time: time) }
-    // Age of the newest frame as a fraction of a step: the blend runs 0 → 1
-    // across the interval before the next one is due and holds at 1 if it
-    // is late, rather than extrapolating.
-    let stepSeconds = parameters.stepMs / 1000
-    let alpha = frameAt.map { min(1, max(0, (time - $0) / stepSeconds)) } ?? 1
+    // The fixed step's own blend (`SwarmWorld.blend`): how far the clock has
+    // run into the next step. Every frame draws the state for its own time,
+    // one step behind the newest, whatever the paint's jitter.
+    let alpha = world.blend
     var bodies: [RenderBody] = []
     for (id, state) in states {
       guard let model = models[id] else { continue }
