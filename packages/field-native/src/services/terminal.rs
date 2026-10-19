@@ -14,7 +14,9 @@
 //!               surface or bounce the pair).
 //!   degraded  — a class plane reached a dead end (no cell binary, an
 //!               unspellable run dir, or the restart intensity), or the
-//!               inventory pump stopped being able to see
+//!               inventory pump stopped being able to see, or a cell's
+//!               inventory or the machine-wide ledger's answer is older
+//!               than its bound (IL-D4)
 //!
 //! **No mesh coupling at all (TM-1, 2026-09-14).** GT-4a made this unit the
 //! floor's one named mesh exception: with `FIELD_NATIVE_TERMINAL_MESH` set it
@@ -114,17 +116,33 @@
 //! clears it. Health is COMPOSED rather than overwritten (`Shared::health`), so
 //! the serve task and the pump each state what they know and neither clobbers
 //! the other's news.
+//!
+//! ## How old the inventory is (IL-D1, IL-D3, IL-D4)
+//!
+//! A failure is not the only way the published rows go old: a `list-sessions`
+//! that answers slowly, or a pump held in a wait, fails nothing and publishes
+//! nothing. So every cell's inventory has an age. `InventoryStamps` keeps, per
+//! cell, the moment its last APPLIED reconcile began (before the writer lock,
+//! so the age is conservative), seeded when the cell's pump is spawned.
+//! `InventorySampler`, outside every pump, judges each stamp every
+//! `TERMINAL_INVENTORY.SAMPLE_MS` against `STALE_MS`, and the ledger's own
+//! `as_of` the same way, and speaks only on a transition: on the observed
+//! stream (`staleCells`, beside the `inventoryBoundMs` whose presence says this
+//! floor judges) and in the unit's health, which names the fixed instant rather
+//! than a running age. A reconcile slower than `SLOW_RECONCILE_MS` is logged
+//! once per slow episode, with the part its time went to.
 
 use crate::admission::AdmissionLedger;
 use crate::cell::{CellCrumb, CellExitReport, CellHello};
 use crate::config::NativeConfig;
 use crate::contracts::ObservedTerminalCell;
 use crate::contracts::{
-    ObservedTerminal, TerminalCellRole, TerminalEndpoints, TerminalRouteCell,
+    ObservedStaleCell, ObservedTerminal, TerminalCellRole, TerminalEndpoints, TerminalRouteCell,
     TerminalRouteSnapshot, TerminalWorkloadClass, UnitHealth, UnitState,
 };
 use crate::manager::NativeService;
 use crate::registries;
+use crate::registries::terminal_inventory;
 use crate::resource_pressure::{
     self, CreateRefusal, FdPressureGauge, PressureClass, HIGH_WATER_PERCENT,
 };
@@ -156,7 +174,38 @@ const RECONCILE_FLOOR: Duration = Duration::from_millis(100);
 /// `MissedTickBehavior::Skip`, a reconcile slower than the floor eats ticks, so
 /// several of them could stretch well past the interval and the bound would
 /// quietly stop being one.
-const BACKSTOP_INTERVAL: Duration = Duration::from_secs(5);
+///
+/// The number is `TERMINAL_INVENTORY.BACKSTOP_MS` (IL-D1), one authority with
+/// fieldd: a healthy cell's inventory peaks near it, which is what the stale
+/// bound beside it is set against.
+const BACKSTOP_INTERVAL: Duration = Duration::from_millis(terminal_inventory::BACKSTOP_MS);
+
+/// IL-D1 — the numbers the inventory's age is kept by: the pumps' backstop,
+/// the stale bound, the slow-reconcile line and the sampler's cadence.
+/// Production's are the registry's (`InventoryBounds::REGISTRY`); a test names
+/// its own, in milliseconds, as `LedgerThread::spawn_with_interval` does its
+/// interval.
+#[derive(Clone, Copy, Debug)]
+struct InventoryBounds {
+    /// A cell's pump reconciles at least this often, events or none.
+    backstop: Duration,
+    /// Past this age, counted from when the last applied reconcile began, a
+    /// cell's inventory is stale. The ledger's answer is held to it too.
+    stale: Duration,
+    /// A reconcile slower than this is a slow one (IL-D3).
+    slow: Duration,
+    /// How often the sampler judges: the age's resolution.
+    sample: Duration,
+}
+
+impl InventoryBounds {
+    const REGISTRY: Self = Self {
+        backstop: BACKSTOP_INTERVAL,
+        stale: Duration::from_millis(terminal_inventory::STALE_MS),
+        slow: Duration::from_millis(terminal_inventory::SLOW_RECONCILE_MS),
+        sample: Duration::from_millis(terminal_inventory::SAMPLE_MS),
+    };
+}
 
 /// A torn control connection is reconciled by reconnecting, never by guessing
 /// (spec §10.5: `list-sessions` is truth).
@@ -180,6 +229,12 @@ const FD_SAMPLE_INTERVAL: Duration = Duration::from_secs(2);
 /// on a plane that is fine. Three failures is ~1.5s of a floor that will not
 /// answer `list-sessions`, which is well past any honest hiccup and still far
 /// inside the human timescale of the health surface that reads it.
+///
+/// *Corrected 2026-10-19 (IL-D1):* ~1.5 s only when each attempt fails at
+/// once, as a refused dial does. An attempt that waits out the client's 10 s
+/// `REQUEST_TIMEOUT` (a cell that accepts and never answers) takes 10.5 s with
+/// its reconnect, so three take about 31 s. The inventory's age covers that
+/// case first: the sampler reads the cell stale at `STALE_MS`.
 const INVENTORY_FAULT_STREAK: u32 = 3;
 
 /// What `GhostteaWorkspace` hardcodes into every one of its own create doors —
@@ -292,6 +347,18 @@ struct Shared {
     /// — the two writers are independent, and either overwriting the other's
     /// state would lose exactly the news the reader needs.
     inventory_fault: Mutex<Option<String>>,
+    /// IL-D4 — every cell whose inventory is older than its bound, instance →
+    /// "no reconcile applied since …", empty while every cell is fresh. Its
+    /// own slot beside `inventory_faults`, for the same reason that is a cell
+    /// of its own: the fault is `InventoryWatch`'s verdict on failures, this is
+    /// the sampler's on age, and a cell can be both at once. Only the sampler
+    /// writes it.
+    inventory_stale: Mutex<BTreeMap<u32, String>>,
+    /// IL-D6 — the machine-wide ledger has not answered for longer than the
+    /// bound: "the machine-wide ledger has not answered since …", or `None`.
+    /// Only the sampler writes it; the ledger's thread cannot, since a thread
+    /// stuck in a flock says nothing.
+    ledger_late: Mutex<Option<String>>,
     /// TC-D6(e) — resource pressure, ONE CELL PER CLASS, for the same reason
     /// there is a second health cell at all: these writers are independent of
     /// the serve task, of the pump, and of each other. Descriptor pressure is
@@ -332,6 +399,30 @@ impl Shared {
             return;
         }
         *held = fault;
+        drop(held);
+        let _ = self.ping.send(());
+    }
+
+    /// IL-D4 — the sampler's verdict on every cell's age. Idempotent, as the
+    /// fault cell is: the sampler writes only on a transition, and an
+    /// unchanged map pings nobody.
+    fn set_inventory_stale(&self, stale: BTreeMap<u32, String>) {
+        let mut held = self.inventory_stale.lock().unwrap();
+        if *held == stale {
+            return;
+        }
+        *held = stale;
+        drop(held);
+        let _ = self.ping.send(());
+    }
+
+    /// IL-D6 — the sampler's verdict on the ledger's answer.
+    fn set_ledger_late(&self, detail: Option<String>) {
+        let mut held = self.ledger_late.lock().unwrap();
+        if *held == detail {
+            return;
+        }
+        *held = detail;
         drop(held);
         let _ = self.ping.send(());
     }
@@ -520,15 +611,23 @@ impl Shared {
     /// — a floor can be out of descriptors AND unable to list its sessions — and
     /// dropping either to keep the string short would hide the one the reader
     /// needed.
+    ///
+    /// The inventory's age (IL-D4) and the ledger's lateness (IL-D6) are two
+    /// more such facts, composed by the same rule: the age beside the pump's
+    /// fault (a cell's pump can be failing and its rows old at once), the
+    /// ledger's lateness beside the budget it keeps.
     fn health(&self) -> UnitHealth {
         let base = self.served.lock().unwrap().clone();
         if base.state != UnitState::Up {
             return base;
         }
         let fault = self.inventory_fault.lock().unwrap().clone();
+        let stale = self.inventory_stale.lock().unwrap().clone();
         let fd = self.fd_pressure.lock().unwrap().clone();
         let pty = self.pty_pressure.lock().unwrap().clone();
-        if fault.is_none() && fd.is_none() && pty.is_none() {
+        let ledger = self.ledger_late.lock().unwrap().clone();
+        if fault.is_none() && stale.is_empty() && fd.is_none() && pty.is_none() && ledger.is_none()
+        {
             return base;
         }
         let mut parts: Vec<String> = base.detail.iter().cloned().collect();
@@ -537,8 +636,19 @@ impl Shared {
                 "the observed inventory is no longer current: {fault}"
             ));
         }
+        if !stale.is_empty() {
+            parts.push(format!(
+                "the observed inventory is older than its bound: {}",
+                stale
+                    .iter()
+                    .map(|(instance, detail)| format!("cell {instance}: {detail}"))
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            ));
+        }
         parts.extend(fd);
         parts.extend(pty);
+        parts.extend(ledger);
         UnitHealth {
             state: UnitState::Degraded,
             detail: Some(parts.join("; ")),
@@ -667,6 +777,8 @@ impl TerminalUnit {
                 next_instance: std::sync::atomic::AtomicU32::new(0),
                 inventory_faults: Mutex::new(BTreeMap::new()),
                 inventory_fault: Mutex::new(None),
+                inventory_stale: Mutex::new(BTreeMap::new()),
+                ledger_late: Mutex::new(None),
                 fd_pressure: Mutex::new(None),
                 pty_pressure: Mutex::new(None),
                 fd_gauge: Mutex::new(FdPressureGauge::new()),
@@ -1772,18 +1884,42 @@ pub fn install_inventory(
     state: Arc<DaemonState>,
     ledger: Option<AdmissionLedger>,
 ) -> tokio::task::JoinHandle<()> {
+    let ledger = LedgerThread::spawn(ledger, handle.shared.clone());
+    install_inventory_with(handle, state, ledger, InventoryBounds::REGISTRY)
+}
+
+/// `install_inventory` with its parts named: the ledger's thread and the
+/// bounds. Production's are `LedgerThread::spawn` and the registry's; a test
+/// names its own.
+///
+/// IL-D1 — the sampler is made here, beside the merged inventory, and states
+/// the bound on the observed state before this returns, so no subscriber ever
+/// reads this floor without it. It runs as a task the manager's task owns:
+/// aborting the inventory aborts the judge with it.
+fn install_inventory_with(
+    handle: TerminalHandle,
+    state: Arc<DaemonState>,
+    ledger: LedgerThread,
+    bounds: InventoryBounds,
+) -> tokio::task::JoinHandle<()> {
+    let stamps = Arc::new(InventoryStamps::default());
+    let sampler = InventorySampler::new(
+        stamps.clone(),
+        state.clone(),
+        handle.shared.clone(),
+        ledger.slot.clone(),
+        bounds,
+    );
+    sampler.state_the_bound();
+    let merged = Arc::new(MergedInventory::new(state, handle.shared.clone(), ledger));
     tokio::spawn(async move {
+        let _sampler = TaskGuard(tokio::spawn(sampler.run()));
         // TC-S3 — ONE PUMP PER ROUTE ROW: each cell's sessions are observed on
         // that cell's own control socket and merged under its `cell` tag; the
         // pump manager follows the snapshot (TC-D15's re-read law, floor-side).
         // A floor with no cell yet has an empty desired set and simply waits on
         // the watch — TM-1 removed the second shape (a fixed legacy pair dialled
         // by the in-process serve), so there is no branch left to take.
-        let merged = Arc::new(MergedInventory::new(
-            state,
-            handle.shared.clone(),
-            LedgerThread::spawn(ledger, handle.shared.clone()),
-        ));
         let mut routes = handle.shared.routes.subscribe();
         let mut pumps: BTreeMap<u32, PumpEntry> = BTreeMap::new();
         loop {
@@ -1824,16 +1960,41 @@ pub fn install_inventory(
                 .map(|(instance, _)| *instance)
                 .collect();
             for instance in stale {
-                pumps.remove(&instance);
+                let Some(PumpEntry {
+                    cell_boot_id,
+                    _task: task,
+                }) = pumps.remove(&instance)
+                else {
+                    continue;
+                };
+                // The pump is aborted before its rows go: a pump that is not
+                // mid-poll is never polled again, so it cannot put them back.
+                drop(task);
                 merged.remove(instance);
+                // IL-D1: the cell's stamp goes in the step its rows go, and
+                // only here. Never by the aborted pump's drop: that pump may
+                // still be finishing a poll, and it only advances a stamp that
+                // is still there.
+                stamps.remove(&(instance, cell_boot_id));
             }
             for (instance, (boot, endpoints, cell)) in &desired {
                 if !pumps.contains_key(instance) {
+                    // IL-D1: seeded at the spawn, so a cell whose first
+                    // reconcile never lands ages from here and goes stale at
+                    // the same bound as one that stopped answering.
+                    let key: CellKey = (*instance, boot.clone());
+                    stamps.seed(&key);
                     let task = TaskGuard(tokio::spawn(pump_cell(
                         endpoints.clone(),
-                        cell.clone(),
-                        *instance,
-                        merged.clone(),
+                        CellPump::new(
+                            cell.clone(),
+                            merged.clone(),
+                            CellStamp {
+                                stamps: stamps.clone(),
+                                key,
+                            },
+                            bounds,
+                        ),
                     )));
                     pumps.insert(
                         *instance,
@@ -1861,33 +2022,626 @@ struct PumpEntry {
 /// reconcile — the S2 loop bound to one cell, publishing under its tag. The
 /// manager aborts this task when the row leaves the snapshot, so a dead
 /// cell's socket is never redialed forever.
-async fn pump_cell(
-    endpoints: TerminalEndpoints,
-    cell: ObservedTerminalCell,
-    instance: u32,
-    merged: Arc<MergedInventory>,
-) {
-    let mut watch = InventoryWatch::for_cell(instance, merged.shared());
+async fn pump_cell(endpoints: TerminalEndpoints, mut pump: CellPump) {
     loop {
         match ControlClient::connect(&endpoints.control_socket, &endpoints.auth_token).await {
             Ok((client, events)) => {
-                match pump_inventory_cell(
-                    Arc::new(client),
-                    events,
-                    instance,
-                    &cell,
-                    &merged,
-                    &mut watch,
-                )
-                .await
-                {
-                    Ok(()) => watch.disconnected(),
-                    Err(error) => watch.failed(&error),
+                pump.stamp.doing(PumpActivity::Idle);
+                match pump_inventory_cell(Arc::new(client), events, &mut pump).await {
+                    Ok(()) => pump.watch.disconnected(),
+                    Err(error) => pump.watch.failed(&error),
                 }
             }
-            Err(error) => watch.failed(&error),
+            Err(error) => pump.watch.failed(&error),
         }
+        // Waiting out the delay, then dialing again: no reconcile is in flight.
+        pump.stamp.doing(PumpActivity::Dialing);
         tokio::time::sleep(RECONNECT_DELAY).await;
+    }
+}
+
+/// One cell's pump, as it is carried across its connections: the cell it
+/// publishes for, its stamp (IL-D1), its bounds, the fault streak and the slow
+/// episode (IL-D3), both of which outlive a reconnect.
+struct CellPump {
+    instance: u32,
+    cell: ObservedTerminalCell,
+    merged: Arc<MergedInventory>,
+    stamp: CellStamp,
+    bounds: InventoryBounds,
+    watch: InventoryWatch,
+    slow: SlowEpisode,
+}
+
+impl CellPump {
+    fn new(
+        cell: ObservedTerminalCell,
+        merged: Arc<MergedInventory>,
+        stamp: CellStamp,
+        bounds: InventoryBounds,
+    ) -> Self {
+        let instance = stamp.key.0;
+        Self {
+            instance,
+            watch: InventoryWatch::for_cell(instance, merged.shared()),
+            cell,
+            merged,
+            stamp,
+            bounds,
+            slow: SlowEpisode::default(),
+        }
+    }
+
+    /// A `list-sessions` answered and was applied: the fault streak ends, and
+    /// a slow one is said, once per episode (IL-D3 (a)).
+    fn reconciled(&mut self, reconciled: &Reconciled) {
+        self.watch.reconciled();
+        let timing = &reconciled.timing;
+        let sessions = reconciled.sessions.len();
+        match self.slow.observe(timing.took, self.bounds.slow) {
+            SlowStep::Fast => {}
+            SlowStep::Opened => tracing::warn!(
+                event = "field_native.terminal.inventory_slow",
+                component = "terminal",
+                episode = "opened",
+                cell = self.instance,
+                cell_boot_id = %self.stamp.key.1,
+                ms = ms(timing.took),
+                bound_ms = ms(self.bounds.slow),
+                sessions,
+                writer_wait_ms = ms(timing.writer_wait),
+                round_trip_ms = ms(timing.round_trip),
+                merged_lock_wait_ms = ms(timing.merged_lock_wait),
+                publish_ms = ms(timing.publish),
+                "A reconcile of the terminal inventory was slow; the parts say where its time \
+                 went"
+            ),
+            SlowStep::Continued { count } => tracing::debug!(
+                event = "field_native.terminal.inventory_slow",
+                component = "terminal",
+                episode = "continues",
+                cell = self.instance,
+                cell_boot_id = %self.stamp.key.1,
+                count,
+                ms = ms(timing.took),
+                sessions,
+                writer_wait_ms = ms(timing.writer_wait),
+                round_trip_ms = ms(timing.round_trip),
+                merged_lock_wait_ms = ms(timing.merged_lock_wait),
+                publish_ms = ms(timing.publish),
+                "The terminal inventory's reconciles are still slow"
+            ),
+            SlowStep::Closed { count, max, total } => tracing::info!(
+                event = "field_native.terminal.inventory_slow",
+                component = "terminal",
+                episode = "closed",
+                cell = self.instance,
+                cell_boot_id = %self.stamp.key.1,
+                count,
+                max_ms = ms(max),
+                total_ms = ms(total),
+                "The terminal inventory's reconciles are prompt again"
+            ),
+        }
+    }
+}
+
+/// IL-D3 — where one applied reconcile's time went. The four parts add up to
+/// `took`, give or take the clock reads between them.
+#[derive(Clone, Copy, Debug)]
+struct ReconcileTiming {
+    /// When the reconcile began, before the writer lock: the cell's new
+    /// `as_of` once its answer is applied.
+    began: tokio::time::Instant,
+    /// From `began` until applied.
+    took: Duration,
+    /// Waiting for the connection's writer: this floor's own lock, which every
+    /// request on the connection shares (the births governor's among them).
+    writer_wait: Duration,
+    /// The write and the cell's answer.
+    round_trip: Duration,
+    /// Waiting for the merged inventory's lock, which every cell's pump and the
+    /// manager's `remove` share.
+    merged_lock_wait: Duration,
+    /// The rest after the answer: composing the rows and publishing them and
+    /// the occupancy. The ledger's file work is not here: its thread does it.
+    publish: Duration,
+}
+
+/// IL-D3 (a) — one line per slow EPISODE rather than one per slow reconcile. A
+/// busy cell just over the bound would write a line a second, ~86 000 a day,
+/// the volume `InventoryWatch` damps for failures. The first slow one is the
+/// news (a warn, with its parts); later ones are debug, carrying the count;
+/// the first prompt one closes the episode with one info line: its count, its
+/// slowest and its total — WG-D0's one-line-per-episode shape.
+#[derive(Debug, Default)]
+struct SlowEpisode {
+    count: u32,
+    max: Duration,
+    total: Duration,
+}
+
+/// What one observation asks of the log.
+#[derive(Debug, PartialEq, Eq)]
+enum SlowStep {
+    /// Within the bound, and no episode open.
+    Fast,
+    /// The first slow one: said at once, with its parts.
+    Opened,
+    /// A later slow one of the same episode, the `count`th.
+    Continued { count: u32 },
+    /// The first prompt one after an episode, which closes it.
+    Closed {
+        count: u32,
+        max: Duration,
+        total: Duration,
+    },
+}
+
+impl SlowEpisode {
+    /// Slow is slower than `bound`; one exactly at it is not.
+    fn observe(&mut self, took: Duration, bound: Duration) -> SlowStep {
+        if took > bound {
+            self.count += 1;
+            self.max = self.max.max(took);
+            self.total += took;
+            if self.count == 1 {
+                SlowStep::Opened
+            } else {
+                SlowStep::Continued { count: self.count }
+            }
+        } else if self.count > 0 {
+            let closed = SlowStep::Closed {
+                count: self.count,
+                max: self.max,
+                total: self.total,
+            };
+            *self = Self::default();
+            closed
+        } else {
+            SlowStep::Fast
+        }
+    }
+}
+
+/// A cell, as the stamps key it: its instance and its boot id. A re-used
+/// ordinal with a new boot id is a different cell, with an age of its own.
+type CellKey = (u32, String);
+
+/// IL-D1 — how old each cell's inventory is: per cell, the moment its last
+/// applied reconcile began.
+///
+/// A small map of its own under its own lock, beside the merged inventory and
+/// never under that inventory's lock, so the sampler that reads it can never be
+/// held behind a pump, the manager or the ledger's hand-off.
+///
+/// The manager seeds a stamp when it spawns the cell's pump and removes it in
+/// the step that removes the cell's rows. A pump only ever changes a stamp that
+/// is there: a pump the manager has just aborted may still be finishing its
+/// poll, and its late write must not bring a gone cell's stamp back.
+#[derive(Default)]
+struct InventoryStamps {
+    cells: Mutex<BTreeMap<CellKey, InventoryStamp>>,
+    /// Wakes the sampler when a cell is removed, so a gone cell leaves
+    /// `staleCells` and the unit's health at once rather than at the next
+    /// sample.
+    removed: tokio::sync::Notify,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct InventoryStamp {
+    /// When the cell's last applied reconcile began, before the writer lock;
+    /// the pump's spawn until one has.
+    as_of: tokio::time::Instant,
+    /// `as_of`'s wall-clock twin in unix ms, read beside it: the `since` a
+    /// reader is told, whose age counts a sleep the monotonic clock does not.
+    since: u64,
+    /// What the pump is doing now, which the stale line reports.
+    activity: PumpActivity,
+}
+
+/// What a cell's pump is doing, as the stale line says it (IL-D3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PumpActivity {
+    /// Dialing the cell, or waiting out the delay before the next dial.
+    Dialing,
+    /// Connected, between reconciles.
+    Idle,
+    /// A reconcile in flight: the part it is in, and when it began.
+    Reconciling {
+        part: ReconcilePart,
+        began: tokio::time::Instant,
+    },
+}
+
+impl PumpActivity {
+    fn label(self) -> &'static str {
+        match self {
+            PumpActivity::Dialing => "dial",
+            PumpActivity::Idle => "none",
+            PumpActivity::Reconciling { part, .. } => part.label(),
+        }
+    }
+}
+
+/// The parts of a reconcile, in order (IL-D3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ReconcilePart {
+    /// Waiting for the connection's writer.
+    WriterWait,
+    /// The request written; the cell's answer awaited.
+    RoundTrip,
+    /// The answer in; waiting for the merged inventory's lock, or holding it.
+    MergedLock,
+    /// Publishing the cell's changed rows and the occupancy.
+    Publish,
+}
+
+impl ReconcilePart {
+    fn label(self) -> &'static str {
+        match self {
+            ReconcilePart::WriterWait => "writer_wait",
+            ReconcilePart::RoundTrip => "round_trip",
+            ReconcilePart::MergedLock => "merged_lock",
+            ReconcilePart::Publish => "publish",
+        }
+    }
+}
+
+impl InventoryStamps {
+    /// A new cell's stamp: its age counts from now.
+    fn seed(&self, key: &CellKey) {
+        let stamp = InventoryStamp {
+            as_of: tokio::time::Instant::now(),
+            since: unix_ms_now(),
+            activity: PumpActivity::Dialing,
+        };
+        self.cells.lock().unwrap().insert(key.clone(), stamp);
+    }
+
+    fn remove(&self, key: &CellKey) {
+        if self.cells.lock().unwrap().remove(key).is_some() {
+            self.removed.notify_one();
+        }
+    }
+
+    /// Change a stamp that is there; a key with none is a cell already gone.
+    fn update(&self, key: &CellKey, change: impl FnOnce(&mut InventoryStamp)) {
+        if let Some(stamp) = self.cells.lock().unwrap().get_mut(key) {
+            change(stamp);
+        }
+    }
+
+    fn snapshot(&self) -> BTreeMap<CellKey, InventoryStamp> {
+        self.cells.lock().unwrap().clone()
+    }
+}
+
+/// One pump's handle on its own cell's stamp.
+struct CellStamp {
+    stamps: Arc<InventoryStamps>,
+    key: CellKey,
+}
+
+impl CellStamp {
+    fn doing(&self, activity: PumpActivity) {
+        self.stamps
+            .update(&self.key, |stamp| stamp.activity = activity);
+    }
+
+    /// The reconcile in flight moved on to `part`.
+    fn in_part(&self, part: ReconcilePart) {
+        self.stamps.update(&self.key, |stamp| {
+            if let PumpActivity::Reconciling { part: current, .. } = &mut stamp.activity {
+                *current = part;
+            }
+        });
+    }
+
+    /// A reconcile that began at `began` (wall clock `since`) was applied: the
+    /// cell's inventory is as old as that moment.
+    fn applied(&self, began: tokio::time::Instant, since: u64) {
+        self.stamps.update(&self.key, |stamp| {
+            stamp.as_of = began;
+            stamp.since = since;
+            stamp.activity = PumpActivity::Idle;
+        });
+    }
+}
+
+/// IL-D1 — the judge. Every `bounds.sample` it reads every cell's stamp and
+/// the ledger's `as_of`, and speaks only on a transition, so a floor that stays
+/// fresh, or stays stale, publishes nothing more.
+///
+/// It runs outside every pump, so a pump stuck in a wait cannot stop it — as
+/// long as a runtime worker is free, which is why the ledger's file work left
+/// the inventory's lock first (IL-D6). A runtime stalled whole stops it too;
+/// that half is fieldd's, which ages its own copy when the stream stops.
+///
+/// It never takes the merged inventory's lock: the stamps are its only input
+/// from the pumps.
+struct InventorySampler {
+    stamps: Arc<InventoryStamps>,
+    state: Arc<DaemonState>,
+    shared: Arc<Shared>,
+    /// The ledger's slot, read for its `as_of`; `None` with no ledger.
+    ledger: Option<Arc<LedgerSlot>>,
+    bounds: InventoryBounds,
+    /// The cells judged stale at the last sample.
+    stale: BTreeMap<CellKey, StaleEntry>,
+    /// The ledger's `as_of` while it is judged late.
+    ledger_late: Option<LedgerAsOf>,
+}
+
+/// One stale cell, as the sampler published it.
+#[derive(Clone, Copy, Debug)]
+struct StaleEntry {
+    /// The stamp's `as_of` when the cell went stale. A reconcile that lands
+    /// while the cell is still past the bound does not move it: the entry,
+    /// its `since` and the unit's instant change only on a transition, so a
+    /// reader's age may run long by that reconcile, never short.
+    as_of: tokio::time::Instant,
+    /// Its wall-clock twin: the `since` published in `staleCells`.
+    since: u64,
+}
+
+impl InventorySampler {
+    fn new(
+        stamps: Arc<InventoryStamps>,
+        state: Arc<DaemonState>,
+        shared: Arc<Shared>,
+        ledger: Option<Arc<LedgerSlot>>,
+        bounds: InventoryBounds,
+    ) -> Self {
+        Self {
+            stamps,
+            state,
+            shared,
+            ledger,
+            bounds,
+            stale: BTreeMap::new(),
+            ledger_late: None,
+        }
+    }
+
+    /// IL-D4 — state the bound this floor judges by on the observed state.
+    /// Its presence is how a reader knows this floor judges at all: an older
+    /// floor's state has none. Called before the judge starts, so the bound is
+    /// on every state this floor publishes, and every later write keeps it.
+    fn state_the_bound(&self) {
+        let bound = Some(ms(self.bounds.stale));
+        self.state.observed_tx.send_if_modified(|observed| {
+            let changed = observed.inventory_bound_ms != bound;
+            observed.inventory_bound_ms = bound;
+            changed
+        });
+    }
+
+    async fn run(mut self) {
+        let stamps = self.stamps.clone();
+        let mut ticker = tokio::time::interval(self.bounds.sample);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                _ = ticker.tick() => {}
+                _ = stamps.removed.notified() => {}
+            }
+            self.judge_cells(tokio::time::Instant::now());
+            self.judge_ledger(std::time::Instant::now());
+        }
+    }
+
+    /// Every cell's age against the bound. A cell that crossed it enters, with
+    /// one warn; a cell whose age is back inside the bound, or that is gone,
+    /// leaves, with one info. Only then is anything published.
+    ///
+    /// A reconcile that lands while its cell is still past the bound (one that
+    /// itself began more than the bound ago) is no transition: the cell stays
+    /// stale with the `since` and the instant it went stale with, and nothing
+    /// is said or published until a reconcile that began inside the bound
+    /// lands. The pump's next one is due at once, since its backstop counts
+    /// from when the late one began.
+    fn judge_cells(&mut self, now: tokio::time::Instant) {
+        let stamps = self.stamps.snapshot();
+        let bound = self.bounds.stale;
+        let mut moved = false;
+
+        let leaving: Vec<CellKey> = self
+            .stale
+            .keys()
+            .filter(|key| match stamps.get(*key) {
+                Some(stamp) => now.saturating_duration_since(stamp.as_of) < bound,
+                None => true,
+            })
+            .cloned()
+            .collect();
+        for key in leaving {
+            let Some(entry) = self.stale.remove(&key) else {
+                continue;
+            };
+            moved = true;
+            let lasted = ms(now.saturating_duration_since(entry.as_of + bound));
+            if stamps.contains_key(&key) {
+                tracing::info!(
+                    event = "field_native.terminal.inventory_stale",
+                    component = "terminal",
+                    transition = "left",
+                    cell = key.0,
+                    cell_boot_id = %key.1,
+                    stale_ms = lasted,
+                    "A cell's terminal inventory is within its bound again"
+                );
+            } else {
+                tracing::info!(
+                    event = "field_native.terminal.inventory_stale",
+                    component = "terminal",
+                    transition = "removed",
+                    cell = key.0,
+                    cell_boot_id = %key.1,
+                    stale_ms = lasted,
+                    "A stale cell's inventory went with its cell"
+                );
+            }
+        }
+
+        for (key, stamp) in &stamps {
+            if self.stale.contains_key(key) {
+                continue;
+            }
+            let age = now.saturating_duration_since(stamp.as_of);
+            if age < bound {
+                continue;
+            }
+            moved = true;
+            let in_flight_ms = match stamp.activity {
+                PumpActivity::Reconciling { began, .. } => ms(now.saturating_duration_since(began)),
+                PumpActivity::Dialing | PumpActivity::Idle => 0,
+            };
+            tracing::warn!(
+                event = "field_native.terminal.inventory_stale",
+                component = "terminal",
+                transition = "entered",
+                cell = key.0,
+                cell_boot_id = %key.1,
+                age_ms = ms(age),
+                bound_ms = ms(bound),
+                since_ms = stamp.since,
+                in_flight = stamp.activity.label(),
+                in_flight_ms,
+                "A cell's terminal inventory is older than its bound: no reconcile has been \
+                 applied since"
+            );
+            self.stale.insert(
+                key.clone(),
+                StaleEntry {
+                    as_of: stamp.as_of,
+                    since: stamp.since,
+                },
+            );
+        }
+
+        if moved {
+            self.publish_cells();
+        }
+    }
+
+    /// The stale set, published on its two surfaces: `staleCells` on the
+    /// observed stream (and the bound beside it), and the unit's stale slot,
+    /// which names the fixed instant and never a running age, so a cell that
+    /// stays stale does not republish health every second.
+    fn publish_cells(&self) {
+        let bound = self.bounds.stale;
+        // A cell whose hello carried an empty boot id cannot be named in the
+        // contract; the unit's health still names it by instance.
+        let cells: Vec<ObservedStaleCell> = self
+            .stale
+            .iter()
+            .filter_map(|((instance, cell_boot_id), entry)| {
+                Some(ObservedStaleCell {
+                    cell_boot_id: cell_boot_id.parse().ok()?,
+                    cell_instance_id: i64::from(*instance),
+                    since: entry.since,
+                })
+            })
+            .collect();
+        let bound_ms = Some(ms(bound));
+        self.state.observed_tx.send_modify(|observed| {
+            observed.inventory_bound_ms = bound_ms;
+            observed.stale_cells = cells;
+        });
+        self.shared.set_inventory_stale(
+            self.stale
+                .iter()
+                .map(|((instance, _), entry)| {
+                    (
+                        *instance,
+                        format!(
+                            "no reconcile applied since {} (bound {})",
+                            utc_clock(entry.since),
+                            spell_bound(bound)
+                        ),
+                    )
+                })
+                .collect(),
+        );
+    }
+
+    /// IL-D6 — the ledger's answer against the same bound. Its thread cannot
+    /// say it is stuck, since a thread inside a flock says nothing, so the
+    /// judge reads its `as_of`. On std's clock, the one the thread stamps.
+    fn judge_ledger(&mut self, now: std::time::Instant) {
+        let Some(slot) = &self.ledger else {
+            return;
+        };
+        let bound = self.bounds.stale;
+        let late = slot
+            .as_of_stamp()
+            .filter(|as_of| now.saturating_duration_since(as_of.at) >= bound);
+        match (late, self.ledger_late) {
+            (Some(as_of), held) if held != Some(as_of) => {
+                if held.is_none() {
+                    tracing::warn!(
+                        event = "field_native.admission.late",
+                        component = "terminal",
+                        transition = "entered",
+                        unanswered_ms = ms(now.saturating_duration_since(as_of.at)),
+                        bound_ms = ms(bound),
+                        since_ms = as_of.since,
+                        "The machine-wide admission ledger has not answered within its bound; \
+                         the PTY budget this floor reports may be old"
+                    );
+                }
+                self.ledger_late = Some(as_of);
+                self.shared.set_ledger_late(Some(format!(
+                    "the machine-wide ledger has not answered since {} (bound {})",
+                    utc_clock(as_of.since),
+                    spell_bound(bound)
+                )));
+            }
+            (None, Some(held)) => {
+                tracing::info!(
+                    event = "field_native.admission.late",
+                    component = "terminal",
+                    transition = "left",
+                    late_ms = ms(now.saturating_duration_since(held.at + bound)),
+                    "The machine-wide admission ledger answers within its bound again"
+                );
+                self.ledger_late = None;
+                self.shared.set_ledger_late(None);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// The floor's wall clock in unix ms: the clock of every `since`.
+fn unix_ms_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(ms)
+        .unwrap_or(0)
+}
+
+/// A duration in whole milliseconds, as the log lines and the contract carry it.
+fn ms(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+}
+
+/// A unix-ms instant as the unit's health names it: `HH:MM:SSZ`, UTC.
+fn utc_clock(unix_ms: u64) -> String {
+    let seconds = i64::try_from(unix_ms / 1_000).unwrap_or(i64::MAX);
+    let at = time::OffsetDateTime::from_unix_timestamp(seconds)
+        .unwrap_or(time::OffsetDateTime::UNIX_EPOCH);
+    format!("{:02}:{:02}:{:02}Z", at.hour(), at.minute(), at.second())
+}
+
+/// A bound as the unit's health spells it: whole seconds as `10 s`, anything
+/// finer in milliseconds.
+fn spell_bound(bound: Duration) -> String {
+    if bound.subsec_millis() == 0 {
+        format!("{} s", bound.as_secs())
+    } else {
+        format!("{} ms", ms(bound))
     }
 }
 
@@ -1905,6 +2659,10 @@ async fn pump_cell(
 /// The hand-off happens under the lock, so the thread sees totals in the order
 /// they were computed: it publishes the newest it has been handed, and never
 /// an older one after a newer.
+///
+/// How old each cell's rows are is not kept here: `InventoryStamps` keeps it
+/// beside this inventory, under a lock of its own, so the sampler that judges
+/// it never waits on this one (IL-D1).
 struct MergedInventory {
     state: Arc<DaemonState>,
     shared: Arc<Shared>,
@@ -1935,15 +2693,33 @@ impl MergedInventory {
         self.shared.clone()
     }
 
-    fn set_rows(&self, instance: u32, rows: Vec<ObservedTerminal>) {
-        let (composed, occupancy) = {
-            let mut inner = self.inner.lock().unwrap();
+    /// The lock, and how long this caller waited for it: a reconcile's
+    /// `merged_lock_wait` (IL-D3).
+    fn lock(&self) -> (std::sync::MutexGuard<'_, MergedInner>, Duration) {
+        let asked = tokio::time::Instant::now();
+        let inner = self.inner.lock().unwrap();
+        (inner, asked.elapsed())
+    }
+
+    /// One cell's rows, applied and published. `publishing` runs once the
+    /// lock is released, before the publish: where a reconcile marks its
+    /// in-flight part (IL-D3). Answers how long it waited for the lock.
+    fn set_rows(
+        &self,
+        instance: u32,
+        rows: Vec<ObservedTerminal>,
+        publishing: impl FnOnce(),
+    ) -> Duration {
+        let (composed, occupancy, waited) = {
+            let (mut inner, waited) = self.lock();
             inner.rows.insert(instance, rows);
             (
                 compose_observed(&inner.rows),
                 compose_occupancy(&inner.rows),
+                waited,
             )
         };
+        publishing();
         let count = composed.len();
         self.state
             .observed_tx
@@ -1955,6 +2731,7 @@ impl MergedInventory {
             terminals = count,
             "The terminal inventory changed"
         );
+        waited
     }
 
     fn remove(&self, instance: u32) {
@@ -1976,11 +2753,14 @@ impl MergedInventory {
         self.shared.set_cell_inventory_fault(instance, None);
     }
 
-    fn observe_governed(&self, instance: u32, governed: u32) {
-        let mut inner = self.inner.lock().unwrap();
+    /// One cell's governed count, and the total handed to the ledger's thread.
+    /// Answers how long it waited for the lock.
+    fn observe_governed(&self, instance: u32, governed: u32) -> Duration {
+        let (mut inner, waited) = self.lock();
         inner.governed.insert(instance, governed);
         let total: u32 = inner.governed.values().sum();
         inner.ledger.hand_off(total);
+        waited
     }
 
     /// The pump's per-cell change guard seed (what this cell last published).
@@ -2118,14 +2898,39 @@ impl Drop for LedgerThread {
 struct LedgerSlot {
     handoff: Mutex<LedgerHandoff>,
     wake: Condvar,
-    /// The moment the ledger's last landed attempt began: a publish and the
-    /// machine-total read after it. Seeded with the moment the thread took its
-    /// first total, so a ledger whose first attempt never returns ages from
-    /// that ask; `None` while nothing has been asked of it. On std's clock, the
-    /// one the thread's waits run on, so a reader measures it against
-    /// `std::time::Instant::now()`.
-    as_of: Mutex<Option<std::time::Instant>>,
+    /// The moment the ledger's last returned attempt began: a publish and the
+    /// machine-total read after it, whether they succeeded or failed. An error
+    /// is an answer, and has its own once-per-streak line; what this measures
+    /// is a stall, an attempt that has not returned. Seeded with the moment
+    /// the thread took its first total, so a ledger whose first attempt never
+    /// returns ages from that ask; `None` while nothing has been asked of it.
+    /// On std's clock, the one the thread's waits run on, so a reader measures
+    /// it against `std::time::Instant::now()`. With its wall-clock twin, which
+    /// the sampler's late detail names (IL-D6).
+    as_of: Mutex<Option<LedgerAsOf>>,
 }
+
+/// The ledger's `as_of`: the moment an attempt began, on std's clock, and that
+/// moment's wall-clock twin in unix ms, read beside it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct LedgerAsOf {
+    at: std::time::Instant,
+    since: u64,
+}
+
+impl LedgerAsOf {
+    fn now() -> Self {
+        Self {
+            at: std::time::Instant::now(),
+            since: unix_ms_now(),
+        }
+    }
+}
+
+/// A ledger attempt slower than this is a slow one, which gets its own line,
+/// episode by episode (IL-D3 (a), IL-D6 (a)). The reconcile's bound: both are
+/// local work that takes milliseconds when healthy.
+const LEDGER_SLOW: Duration = Duration::from_millis(terminal_inventory::SLOW_RECONCILE_MS);
 
 #[derive(Default)]
 struct LedgerHandoff {
@@ -2180,16 +2985,23 @@ impl LedgerSlot {
         }
     }
 
+    /// `as_of` on std's clock alone, as the ledger's tests read it.
+    #[cfg(test)]
     fn as_of(&self) -> Option<std::time::Instant> {
+        self.as_of_stamp().map(|as_of| as_of.at)
+    }
+
+    fn as_of_stamp(&self) -> Option<LedgerAsOf> {
         *self.as_of.lock().unwrap()
     }
 
-    /// The first ask seeds `as_of`; after it, only a landed attempt moves it.
-    fn seed(&self, at: std::time::Instant) {
+    /// The first ask seeds `as_of`; after it, only an attempt that returned
+    /// moves it.
+    fn seed(&self, at: LedgerAsOf) {
         self.as_of.lock().unwrap().get_or_insert(at);
     }
 
-    fn stamp(&self, at: std::time::Instant) {
+    fn stamp(&self, at: LedgerAsOf) {
         *self.as_of.lock().unwrap() = Some(at);
     }
 }
@@ -2204,7 +3016,10 @@ struct LedgerPump {
     interval: Duration,
     published: Option<u32>,
     last: Option<std::time::Instant>,
-    complained: bool,
+    /// When the running streak of failed attempts began, while one runs: its
+    /// first failure was said, and its end owes one line.
+    failing_since: Option<std::time::Instant>,
+    slow: SlowEpisode,
 }
 
 impl LedgerPump {
@@ -2221,7 +3036,8 @@ impl LedgerPump {
             interval,
             published: None,
             last: None,
-            complained: false,
+            failing_since: None,
+            slow: SlowEpisode::default(),
         }
     }
 
@@ -2248,31 +3064,29 @@ impl LedgerPump {
         if self.published == Some(governed) && !due {
             return;
         }
-        let started = std::time::Instant::now();
+        let begun = LedgerAsOf::now();
+        let started = begun.at;
         self.last = Some(started);
-        self.slot.seed(started);
+        self.slot.seed(begun);
         let ledger = &self.ledger;
         let outcome = ledger
             .publish(governed)
             .and_then(|_| ledger.machine_total());
+        // The attempt returned, an error included: the sampler's late line is
+        // for a ledger that does not return, and a failure has its own.
+        self.slot.stamp(begun);
         match outcome {
             Ok(machine_total) => {
                 self.published = Some(governed);
-                if std::mem::replace(&mut self.complained, false) {
-                    let unanswered = self
-                        .slot
-                        .as_of()
-                        .map(|as_of| started.saturating_duration_since(as_of))
-                        .unwrap_or_default();
+                if let Some(failing_since) = self.failing_since.take() {
                     tracing::info!(
                         event = "field_native.admission.available",
                         component = "terminal",
                         ledger = %ledger.path().display(),
-                        unanswered_ms = unanswered.as_millis() as u64,
+                        unanswered_ms = ms(started.saturating_duration_since(failing_since)),
                         "The machine-wide admission ledger answered again"
                     );
                 }
-                self.slot.stamp(started);
                 let budget = ledger.budget();
                 self.shared
                     .set_pty_pressure((machine_total >= budget).then(|| {
@@ -2288,7 +3102,8 @@ impl LedgerPump {
                 // The count is NOT remembered as published on a failure, so the
                 // next reconcile retries rather than believing a write that did
                 // not happen.
-                if !std::mem::replace(&mut self.complained, true) {
+                if self.failing_since.is_none() {
+                    self.failing_since = Some(started);
                     tracing::warn!(
                         event = "field_native.admission.unavailable",
                         component = "terminal",
@@ -2299,6 +3114,45 @@ impl LedgerPump {
                     );
                 }
             }
+        }
+        self.note_pace(started.elapsed());
+    }
+
+    /// The ledger's own slow line, one per slow episode (IL-D3 (a)): it left
+    /// the reconcile under IL-D6 (a), so a slow flock is said here and never in
+    /// a reconcile's parts. An attempt that never returns says nothing here;
+    /// the sampler's late line is that case.
+    fn note_pace(&mut self, took: Duration) {
+        match self.slow.observe(took, LEDGER_SLOW) {
+            SlowStep::Fast => {}
+            SlowStep::Opened => tracing::warn!(
+                event = "field_native.admission.slow",
+                component = "terminal",
+                episode = "opened",
+                ledger = %self.ledger.path().display(),
+                ms = ms(took),
+                bound_ms = ms(LEDGER_SLOW),
+                "The machine-wide admission ledger was slow to answer"
+            ),
+            SlowStep::Continued { count } => tracing::debug!(
+                event = "field_native.admission.slow",
+                component = "terminal",
+                episode = "continues",
+                ledger = %self.ledger.path().display(),
+                count,
+                ms = ms(took),
+                "The machine-wide admission ledger is still slow to answer"
+            ),
+            SlowStep::Closed { count, max, total } => tracing::info!(
+                event = "field_native.admission.slow",
+                component = "terminal",
+                episode = "closed",
+                ledger = %self.ledger.path().display(),
+                count,
+                max_ms = ms(max),
+                total_ms = ms(total),
+                "The machine-wide admission ledger answers promptly again"
+            ),
         }
     }
 }
@@ -2409,13 +3263,10 @@ const EVENTS_LOST: &str = "events-lost";
 async fn pump_inventory_cell(
     client: Arc<ControlClient>,
     mut events: tokio::sync::mpsc::UnboundedReceiver<Value>,
-    instance: u32,
-    cell: &ObservedTerminalCell,
-    merged: &Arc<MergedInventory>,
-    watch: &mut InventoryWatch,
+    pump: &mut CellPump,
 ) -> anyhow::Result<()> {
-    let mut published = merged.rows_value(instance);
-    let mut last_reconcile = Instant::now();
+    let instance = pump.instance;
+    let mut published = pump.merged.rows_value(instance);
 
     let (births_tx, births_rx) = tokio::sync::mpsc::unbounded_channel();
     let (governed_tx, mut governed_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -2427,9 +3278,12 @@ async fn pump_inventory_cell(
 
     // A connection that has only just opened was not watching a moment ago, so
     // its first reconcile closes an observation gap by definition.
-    let known = merged.session_ids(instance);
-    let reconciled = reconcile_cell(&client, instance, cell, merged, published).await?;
-    watch.reconciled();
+    let known = pump.merged.session_ids(instance);
+    let reconciled = reconcile_cell(&client, pump, published).await?;
+    pump.reconciled(&reconciled);
+    // The backstop runs from when the last reconcile BEGAN, on tokio's clock
+    // like the stamps and the sampler (IL-D1).
+    let mut last_reconcile = reconciled.timing.began;
     published = reconciled.published;
     regovern_unseen(&births_tx, &known, &reconciled.sessions);
 
@@ -2453,17 +3307,17 @@ async fn pump_inventory_cell(
             },
             Some(()) = governed_rx.recv() => dirty = true,
             _ = ticker.tick() => {
-                if dirty || last_reconcile.elapsed() >= BACKSTOP_INTERVAL {
+                if dirty || last_reconcile.elapsed() >= pump.bounds.backstop {
                     dirty = false;
-                    let known = std::mem::take(&mut gap).then(|| merged.session_ids(instance));
-                    let started = Instant::now();
-                    let reconciled = reconcile_cell(&client, instance, cell, merged, published).await?;
-                    watch.reconciled();
+                    let known =
+                        std::mem::take(&mut gap).then(|| pump.merged.session_ids(instance));
+                    let reconciled = reconcile_cell(&client, pump, published).await?;
+                    pump.reconciled(&reconciled);
+                    last_reconcile = reconciled.timing.began;
                     published = reconciled.published;
                     if let Some(known) = known {
                         regovern_unseen(&births_tx, &known, &reconciled.sessions);
                     }
-                    last_reconcile = started;
                 }
             },
         }
@@ -2476,28 +3330,58 @@ async fn pump_inventory_cell(
 /// only on a real change. *Corrected 2026-10-19 (IL-D6):* the count is handed
 /// to the ledger's thread on every reconcile, and that thread keeps the
 /// LEDGER_INTERVAL refresh on its own clock; no reconcile waits on the ledger.
+///
+/// IL-D1, IL-D3: the moment it began, before the writer lock, becomes the
+/// cell's `as_of` once the answer is applied, never before; a reconcile that
+/// fails moves nothing. On the way it marks which part it is in, which the
+/// stale line reports, and it answers with where its time went.
 async fn reconcile_cell(
     client: &ControlClient,
-    instance: u32,
-    cell: &ObservedTerminalCell,
-    merged: &Arc<MergedInventory>,
+    pump: &CellPump,
     published: Value,
 ) -> anyhow::Result<Reconciled> {
-    let mut sessions = client.list_sessions().await?;
+    let stamp = &pump.stamp;
+    let began = tokio::time::Instant::now();
+    let since = unix_ms_now();
+    stamp.doing(PumpActivity::Reconciling {
+        part: ReconcilePart::WriterWait,
+        began,
+    });
+    let (mut sessions, writer_held) = client
+        .list_sessions_timed(|| stamp.in_part(ReconcilePart::RoundTrip))
+        .await?;
+    let answered = tokio::time::Instant::now();
+    stamp.in_part(ReconcilePart::MergedLock);
     sessions.sort_by(|a, b| a.id.cmp(&b.id));
     let terminals: Vec<ObservedTerminal> = sessions
         .iter()
         .filter(|session| is_governed_here(session))
-        .map(|session| observed_row_for_cell(session, cell))
+        .map(|session| observed_row_for_cell(session, &pump.cell))
         .collect();
     let snapshot = inventory_value(&terminals);
-    merged.observe_governed(instance, terminals.len() as u32);
+    let mut merged_lock_wait = pump
+        .merged
+        .observe_governed(pump.instance, terminals.len() as u32);
     if snapshot != published {
-        merged.set_rows(instance, terminals);
+        merged_lock_wait += pump.merged.set_rows(pump.instance, terminals, || {
+            stamp.in_part(ReconcilePart::Publish)
+        });
     }
+    stamp.applied(began, since);
+    let applied = tokio::time::Instant::now();
     Ok(Reconciled {
         published: snapshot,
         sessions,
+        timing: ReconcileTiming {
+            began,
+            took: applied.saturating_duration_since(began),
+            writer_wait: writer_held.saturating_duration_since(began),
+            round_trip: answered.saturating_duration_since(writer_held),
+            merged_lock_wait,
+            publish: applied
+                .saturating_duration_since(answered)
+                .saturating_sub(merged_lock_wait),
+        },
     })
 }
 
@@ -2662,9 +3546,12 @@ async fn govern_births(
 /// ledger from the return value; the per-cell reconcile publishes that straight
 /// into the merged inventory instead (`observe_governed`), and TM-1 deleted the
 /// caller that read it from here.
+///
+/// And where the reconcile's time went (IL-D3), which the slow line reads.
 struct Reconciled {
     published: Value,
     sessions: Vec<SessionSummary>,
+    timing: ReconcileTiming,
 }
 
 /// Is this row a session THIS device runs, or a replica of another device's?
@@ -2941,6 +3828,8 @@ mod tests {
             next_instance: std::sync::atomic::AtomicU32::new(0),
             inventory_faults: Mutex::new(BTreeMap::new()),
             inventory_fault: Mutex::new(None),
+            inventory_stale: Mutex::new(BTreeMap::new()),
+            ledger_late: Mutex::new(None),
             fd_pressure: Mutex::new(None),
             pty_pressure: Mutex::new(None),
             fd_gauge: Mutex::new(FdPressureGauge::new()),
@@ -3001,6 +3890,13 @@ mod tests {
             let shared = test_shared();
             shared.set(state, Some("the terminal service failed: boom".into()));
             shared.set_inventory_fault(Some("connection refused".into()));
+            shared.set_inventory_stale(BTreeMap::from([(
+                1,
+                "no reconcile applied since 18:04:31Z (bound 10 s)".to_string(),
+            )]));
+            shared.set_ledger_late(Some(
+                "the machine-wide ledger has not answered since 18:04:31Z (bound 10 s)".into(),
+            ));
             shared.observe_fd_pressure(900, 1000);
             let health = shared.health();
             assert_eq!(health.state, state, "{name} is not a serving floor");
@@ -3271,7 +4167,6 @@ mod tests {
     /// The `DaemonState` the inventory publishes through, with no unit
     /// running behind it. Its health and observed state are built from wire
     /// JSON, so an optional field the contract grows does not touch this row.
-    #[cfg(unix)]
     fn test_state(dir: &std::path::Path) -> Arc<DaemonState> {
         let config = NativeConfig::for_data_dir(dir.to_path_buf());
         let (ping, _) = tokio::sync::mpsc::unbounded_channel();
@@ -3481,8 +4376,9 @@ mod tests {
 
         let held = HeldFlock::take(&path);
         assert!(
-            returns_within(LEDGER_TEST_BOUND, &merged, |merged| merged
-                .observe_governed(1, 3))
+            returns_within(LEDGER_TEST_BOUND, &merged, |merged| {
+                merged.observe_governed(1, 3);
+            })
             .await,
             "a reconcile's count is handed off, never written under the lock"
         );
@@ -3493,7 +4389,11 @@ mod tests {
 
         assert!(
             returns_within(LEDGER_TEST_BOUND, &merged, |merged| {
-                merged.set_rows(1, vec![observed("s1"), observed("s2"), observed("s3")])
+                merged.set_rows(
+                    1,
+                    vec![observed("s1"), observed("s2"), observed("s3")],
+                    || {},
+                );
             })
             .await,
             "rows publish while the ledger is held"
@@ -3501,8 +4401,9 @@ mod tests {
         assert_eq!(state.observed_tx.borrow().terminals.len(), 3);
         assert_eq!(shared.occupancy.borrow().get(&1), Some(&3));
         assert!(
-            returns_within(LEDGER_TEST_BOUND, &merged, |merged| merged
-                .observe_governed(2, 1))
+            returns_within(LEDGER_TEST_BOUND, &merged, |merged| {
+                merged.observe_governed(2, 1);
+            })
             .await,
             "a second cell's reconcile does not queue behind the first's ledger write"
         );
@@ -3579,6 +4480,1043 @@ mod tests {
             "it finished the publish it was in and published nothing it was handed after: \
              a floor that is going writes no newer total"
         );
+    }
+
+    // ---- IL-D1, IL-D3, IL-D4: how old the inventory is ----
+
+    /// How long the real-time rows below wait for what they expect. Generous
+    /// for a loaded host: it only sets how long a red takes to say so.
+    #[cfg(unix)]
+    const REAL_TIME_BOUND: Duration = Duration::from_secs(5);
+
+    fn key(instance: u32) -> CellKey {
+        (instance, format!("boot-{instance}"))
+    }
+
+    #[cfg(unix)]
+    fn observed_cell(instance: u32) -> ObservedTerminalCell {
+        ObservedTerminalCell {
+            cell_instance_id: i64::from(instance),
+            cell_boot_id: format!("boot-{instance}"),
+            workload_class: Some(TerminalWorkloadClass::Interactive),
+            role: Some(TerminalCellRole::Class),
+        }
+    }
+
+    /// A route row for cell `instance` whose control socket is `control_socket`.
+    #[cfg(unix)]
+    fn fake_route(instance: u32, control_socket: &str) -> TerminalRouteCell {
+        TerminalRouteCell {
+            cell_boot_id: format!("boot-{instance}"),
+            cell_instance_id: i64::from(instance),
+            pid: 1,
+            endpoints: TerminalEndpoints {
+                control_socket: control_socket.to_string(),
+                frame_socket: format!("{control_socket}.frames"),
+                auth_token: "a-token".into(),
+            },
+            token_generation: i64::from(instance),
+            grant_key: None,
+            grant_key_generation: None,
+            doors: None,
+            workload_class: Some(TerminalWorkloadClass::Interactive),
+            role: Some(TerminalCellRole::Class),
+        }
+    }
+
+    /// Poll `done` on the runtime's clock until it holds or `bound` passes,
+    /// yielding between polls: the async twin of `eventually`, for a row whose
+    /// runtime must go on running the pumps it watches.
+    #[cfg(unix)]
+    async fn settles(bound: Duration, mut done: impl FnMut() -> bool) -> bool {
+        let deadline = tokio::time::Instant::now() + bound;
+        loop {
+            if done() {
+                return true;
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return false;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    }
+
+    /// One event as `Heard` keeps it: its level, and each field's value as its
+    /// `Debug` spelling (a `&str` field's without quotes).
+    #[cfg(unix)]
+    type HeardEvent = (tracing::Level, BTreeMap<String, String>);
+
+    /// A subscriber layer that keeps every event it hears, for a row that
+    /// asserts on the floor's own lines.
+    #[cfg(unix)]
+    #[derive(Clone, Default)]
+    struct Heard(Arc<Mutex<Vec<HeardEvent>>>);
+
+    #[cfg(unix)]
+    impl Heard {
+        /// Run `act` on this thread with a `Heard` as its subscriber, and
+        /// answer the events named `event` it heard. `act` must not leave the
+        /// thread. tracing caches each callsite's interest process-wide, and
+        /// another row's thread can register a callsite while this scoped
+        /// subscriber is the only one alive, caching it as unwanted; so the
+        /// cache is rebuilt here, on this thread under this subscriber, right
+        /// before `act` runs.
+        fn during(event: &str, act: impl FnOnce()) -> Vec<HeardEvent> {
+            use tracing_subscriber::layer::SubscriberExt;
+            let heard = Self::default();
+            tracing::subscriber::with_default(
+                tracing_subscriber::registry().with(heard.clone()),
+                || {
+                    tracing::callsite::rebuild_interest_cache();
+                    act();
+                },
+            );
+            let all = heard.0.lock().unwrap().clone();
+            all.into_iter()
+                .filter(|(_, fields)| fields.get("event").map(String::as_str) == Some(event))
+                .collect()
+        }
+    }
+
+    #[cfg(unix)]
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Heard {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            _context: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            struct Fields<'a>(&'a mut BTreeMap<String, String>);
+            impl tracing::field::Visit for Fields<'_> {
+                fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+                    self.0.insert(field.name().to_owned(), value.to_owned());
+                }
+                fn record_debug(
+                    &mut self,
+                    field: &tracing::field::Field,
+                    value: &dyn std::fmt::Debug,
+                ) {
+                    self.0.insert(field.name().to_owned(), format!("{value:?}"));
+                }
+            }
+            let mut fields = BTreeMap::new();
+            event.record(&mut Fields(&mut fields));
+            self.0
+                .lock()
+                .unwrap()
+                .push((*event.metadata().level(), fields));
+        }
+    }
+
+    /// A cell's control service, as much of it as a pump reads: the bare token
+    /// and `ok`, `hello` at the floor's protocol, and `list-sessions` answered
+    /// with one governed session after a delay the test moves while the pump
+    /// runs. Every connection is served, since a pump redials. A SERVICE the
+    /// real client dials, over a real socket, as `terminal_client`'s own fake is.
+    #[cfg(unix)]
+    struct FakeCell {
+        endpoint: String,
+        delay_ms: Arc<std::sync::atomic::AtomicU64>,
+        _accepting: TaskGuard,
+        _dir: tempfile::TempDir,
+    }
+
+    #[cfg(unix)]
+    impl FakeCell {
+        /// Bound under /tmp: macOS caps a socket path at ~104 bytes.
+        fn serve() -> Self {
+            let dir = tempfile::Builder::new()
+                .prefix("vfinv")
+                .tempdir_in("/tmp")
+                .expect("tempdir under /tmp");
+            let endpoint = dir
+                .path()
+                .join("termctl.sock")
+                .to_string_lossy()
+                .into_owned();
+            let mut listener = crate::local_ipc::bind(&endpoint).expect("bind the fake cell");
+            let delay_ms = Arc::new(std::sync::atomic::AtomicU64::new(0));
+            let delay = delay_ms.clone();
+            let accepting = TaskGuard(tokio::spawn(async move {
+                while let Ok(stream) = listener.accept().await {
+                    tokio::spawn(serve_fake_cell(stream, delay.clone()));
+                }
+            }));
+            Self {
+                endpoint,
+                delay_ms,
+                _accepting: accepting,
+                _dir: dir,
+            }
+        }
+
+        /// Every `list-sessions` from now on is answered after `delay`.
+        fn answer_after(&self, delay: Duration) {
+            self.delay_ms
+                .store(ms(delay), std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    #[cfg(unix)]
+    async fn serve_fake_cell(
+        mut stream: crate::local_ipc::Stream,
+        delay_ms: Arc<std::sync::atomic::AtomicU64>,
+    ) {
+        // The bare token, then `ok`: never inspected, this is not the
+        // authentication under test.
+        if fake_read(&mut stream).await.is_none() || !fake_write(&mut stream, b"ok").await {
+            return;
+        }
+        while let Some(packet) = fake_read(&mut stream).await {
+            let Ok(request) = serde_json::from_slice::<Value>(&packet) else {
+                return;
+            };
+            let id = request["requestId"].clone();
+            let response = match request["type"].as_str() {
+                Some("hello") => json!({
+                    "requestId": id,
+                    "type": "hello",
+                    "protocolMajor": crate::services::terminal_client::PROTOCOL_MAJOR,
+                    "protocolMinor": crate::services::terminal_client::PROTOCOL_MINOR,
+                    "serverBuild": "fake-cell",
+                }),
+                Some("list-sessions") => {
+                    let delay = delay_ms.load(std::sync::atomic::Ordering::SeqCst);
+                    tokio::time::sleep(Duration::from_millis(delay)).await;
+                    json!({
+                        "requestId": id,
+                        "type": "session-list",
+                        "sessions": [{
+                            "id": "s1",
+                            "persistence": FLOOR_LIFETIME,
+                            "ownerId": "vibefield.fieldd",
+                        }],
+                    })
+                }
+                _ => json!({"requestId": id, "type": "ok"}),
+            };
+            let bytes = serde_json::to_vec(&response).expect("a response serializes");
+            if !fake_write(&mut stream, &bytes).await {
+                return;
+            }
+        }
+    }
+
+    /// One frame of the control protocol: a little-endian u32 length, then the
+    /// payload.
+    #[cfg(unix)]
+    async fn fake_read(stream: &mut crate::local_ipc::Stream) -> Option<Vec<u8>> {
+        use tokio::io::AsyncReadExt;
+        let length = stream.read_u32_le().await.ok()? as usize;
+        let mut bytes = vec![0; length];
+        stream.read_exact(&mut bytes).await.ok()?;
+        Some(bytes)
+    }
+
+    #[cfg(unix)]
+    async fn fake_write(stream: &mut crate::local_ipc::Stream, bytes: &[u8]) -> bool {
+        use tokio::io::AsyncWriteExt;
+        stream.write_u32_le(bytes.len() as u32).await.is_ok()
+            && stream.write_all(bytes).await.is_ok()
+            && stream.flush().await.is_ok()
+    }
+
+    /// IL-D3 (a) — one line per slow episode: the first slow reconcile opens
+    /// it, later ones only count, and the first prompt one closes it with its
+    /// count, its slowest and its total. One exactly at the bound is not slower
+    /// than it.
+    #[test]
+    fn a_slow_episode_opens_once_counts_its_reconciles_and_closes_with_its_numbers() {
+        let bound = InventoryBounds::REGISTRY.slow;
+        let prompt = Duration::from_millis(5);
+        let mut episode = SlowEpisode::default();
+
+        assert_eq!(episode.observe(prompt, bound), SlowStep::Fast);
+        assert_eq!(
+            episode.observe(bound, bound),
+            SlowStep::Fast,
+            "at the bound is not slower than it"
+        );
+        assert_eq!(episode.observe(bound * 2, bound), SlowStep::Opened);
+        assert_eq!(
+            episode.observe(bound * 4, bound),
+            SlowStep::Continued { count: 2 }
+        );
+        assert_eq!(
+            episode.observe(bound * 3, bound),
+            SlowStep::Continued { count: 3 }
+        );
+        assert_eq!(
+            episode.observe(prompt, bound),
+            SlowStep::Closed {
+                count: 3,
+                max: bound * 4,
+                total: bound * 9,
+            },
+            "one line closes the episode, with its numbers"
+        );
+        assert_eq!(
+            episode.observe(prompt, bound),
+            SlowStep::Fast,
+            "and nothing is owed after it"
+        );
+        assert_eq!(
+            episode.observe(bound * 2, bound),
+            SlowStep::Opened,
+            "the next slow one opens an episode of its own"
+        );
+    }
+
+    /// IL-D1 — a stamp's lifecycle. Only an existing stamp moves: the write
+    /// of a pump the manager has just aborted, finishing its poll, brings no
+    /// gone cell back, and never touches the new cell on a re-used ordinal. A
+    /// reconcile in flight moves nothing; an applied one moves the age to the
+    /// moment it began.
+    #[tokio::test(start_paused = true)]
+    async fn a_stamp_moves_only_while_its_cell_is_listed() {
+        let stamps = Arc::new(InventoryStamps::default());
+        let gone = CellStamp {
+            stamps: stamps.clone(),
+            key: (1, "boot-a".to_string()),
+        };
+        stamps.seed(&gone.key);
+        stamps.remove(&gone.key);
+        gone.doing(PumpActivity::Idle);
+        gone.applied(tokio::time::Instant::now(), unix_ms_now());
+        assert!(
+            stamps.snapshot().is_empty(),
+            "a removed cell leaves no stamp, and an aborted pump's late write brings none back"
+        );
+
+        let reborn: CellKey = (1, "boot-b".to_string());
+        stamps.seed(&reborn);
+        let seeded = stamps.snapshot()[&reborn];
+        assert_eq!(
+            seeded.activity,
+            PumpActivity::Dialing,
+            "a seeded cell's pump has yet to dial"
+        );
+        tokio::time::advance(Duration::from_secs(1)).await;
+        gone.applied(tokio::time::Instant::now(), unix_ms_now());
+        assert_eq!(
+            stamps.snapshot()[&reborn].as_of,
+            seeded.as_of,
+            "a re-used ordinal with a new boot id is another cell, with an age of its own"
+        );
+
+        let pump = CellStamp {
+            stamps: stamps.clone(),
+            key: reborn.clone(),
+        };
+        let began = tokio::time::Instant::now();
+        pump.doing(PumpActivity::Reconciling {
+            part: ReconcilePart::WriterWait,
+            began,
+        });
+        pump.in_part(ReconcilePart::RoundTrip);
+        let in_flight = stamps.snapshot()[&reborn];
+        assert_eq!(
+            in_flight.activity,
+            PumpActivity::Reconciling {
+                part: ReconcilePart::RoundTrip,
+                began,
+            }
+        );
+        assert_eq!(
+            in_flight.as_of, seeded.as_of,
+            "a reconcile in flight moves nothing: only an applied one does"
+        );
+
+        tokio::time::advance(Duration::from_secs(1)).await;
+        pump.applied(began, 1_792_433_071_000);
+        let applied = stamps.snapshot()[&reborn];
+        assert_eq!(
+            applied.as_of, began,
+            "the age counts from when the applied reconcile began, not from its answer"
+        );
+        assert_eq!(applied.since, 1_792_433_071_000);
+        assert_eq!(applied.activity, PumpActivity::Idle);
+    }
+
+    /// IL-D1, IL-D4 — the sampler's transitions, on paused time. A cell that
+    /// never answers is stale a bound after its seed; one that answered half
+    /// way is stale a bound after that answer. Between transitions nothing is
+    /// published, and the unit's detail names a fixed instant, so health does
+    /// not move each second. A reconcile that lands still past the bound moves
+    /// nothing; one that began inside it clears the cell at the next sample,
+    /// and a removal wakes the sampler at once.
+    #[tokio::test(start_paused = true)]
+    async fn the_sampler_speaks_only_on_a_transition_and_names_a_fixed_instant() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let shared = test_shared();
+        let state = test_state(dir.path());
+        let stamps = Arc::new(InventoryStamps::default());
+        let bound = InventoryBounds::REGISTRY.stale;
+        let stale_ids = |observed: &crate::contracts::ObservedState| -> Vec<i64> {
+            observed
+                .stale_cells
+                .iter()
+                .map(|cell| cell.cell_instance_id)
+                .collect()
+        };
+
+        stamps.seed(&key(1));
+        stamps.seed(&key(2));
+        let sampler = InventorySampler::new(
+            stamps.clone(),
+            state.clone(),
+            shared.clone(),
+            None,
+            InventoryBounds::REGISTRY,
+        );
+        sampler.state_the_bound();
+        assert_eq!(
+            state.observed_tx.borrow().inventory_bound_ms,
+            Some(terminal_inventory::STALE_MS),
+            "the bound is stated before anything is judged"
+        );
+        // A new receiver has seen the value it was made at: only the
+        // sampler's publishes count as changes from here.
+        let mut observed = state.observed_tx.subscribe();
+        let _sampler = TaskGuard(tokio::spawn(sampler.run()));
+
+        // Cell 2 answers half way through the bound; cell 1 never does.
+        tokio::time::sleep(bound / 2).await;
+        CellStamp {
+            stamps: stamps.clone(),
+            key: key(2),
+        }
+        .applied(tokio::time::Instant::now(), unix_ms_now());
+
+        tokio::time::sleep(bound / 2 - Duration::from_millis(500)).await;
+        assert!(
+            !observed.has_changed().expect("the state lives"),
+            "inside the bound, nothing is said"
+        );
+        assert_eq!(shared.health().state, UnitState::Up);
+
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        assert!(
+            observed.has_changed().expect("the state lives"),
+            "past the bound, the cell that never answered is stale"
+        );
+        let stale = observed.borrow_and_update().stale_cells.clone();
+        assert_eq!(stale.len(), 1, "{stale:?}");
+        assert_eq!(stale[0].cell_instance_id, 1);
+        assert_eq!(stale[0].cell_boot_id.as_str(), "boot-1");
+        assert_eq!(
+            stale[0].since,
+            stamps.snapshot()[&key(1)].since,
+            "since is the stamp's own wall-clock twin"
+        );
+        let first = shared.health().detail.expect("a degraded unit states why");
+        assert!(
+            first.contains(&format!(
+                "the observed inventory is older than its bound: cell 1: no reconcile applied \
+                 since {} (bound 10 s)",
+                utc_clock(stale[0].since)
+            )),
+            "{first}"
+        );
+        assert!(
+            !first.contains("cell 2"),
+            "cell 2 answered half way through: {first}"
+        );
+
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        assert!(
+            !observed.has_changed().expect("the state lives"),
+            "a cell that stays stale publishes nothing more"
+        );
+        assert_eq!(
+            shared.health().detail.as_deref(),
+            Some(first.as_str()),
+            "the detail names a fixed instant, never a running age"
+        );
+
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        assert_eq!(
+            stale_ids(&observed.borrow_and_update()),
+            vec![1, 2],
+            "cell 2 is stale a bound after its last answer"
+        );
+
+        // A reconcile that lands while cell 1 is still past the bound, one
+        // that itself began long ago, is no transition: the episode, its
+        // `since` and the unit's instant stay as they were.
+        let both = shared.health().detail;
+        let long_ago = stamps.snapshot()[&key(1)].as_of + Duration::from_secs(1);
+        CellStamp {
+            stamps: stamps.clone(),
+            key: key(1),
+        }
+        .applied(long_ago, unix_ms_now());
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        assert!(
+            !observed.has_changed().expect("the state lives"),
+            "a reconcile that began more than the bound ago leaves the cell stale and says nothing"
+        );
+        assert_eq!(
+            shared.health().detail,
+            both,
+            "the unit still names the instant the cell went stale at"
+        );
+
+        CellStamp {
+            stamps: stamps.clone(),
+            key: key(1),
+        }
+        .applied(tokio::time::Instant::now(), unix_ms_now());
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        assert_eq!(
+            stale_ids(&observed.borrow_and_update()),
+            vec![2],
+            "an applied reconcile makes cell 1 fresh at the next sample"
+        );
+
+        stamps.remove(&key(2));
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert!(
+            observed.borrow_and_update().stale_cells.is_empty(),
+            "a removal wakes the sampler: the cell leaves at once, not at the next sample"
+        );
+        assert_eq!(shared.health().state, UnitState::Up);
+        assert_eq!(
+            state.observed_tx.borrow().inventory_bound_ms,
+            Some(terminal_inventory::STALE_MS),
+            "every write kept the bound"
+        );
+    }
+
+    /// IL-D1, IL-D4 — through the real manager, on paused time: a cell whose
+    /// socket is not there never lands a reconcile. Three refused dials degrade
+    /// the unit with the pump's fault long before the bound; at the bound,
+    /// counted from the pump's spawn, the cell is stale too, and both are
+    /// reported. Its row leaving the snapshot takes its stamp, its age and its
+    /// fault with it, at once.
+    #[cfg(unix)]
+    #[tokio::test(start_paused = true)]
+    async fn a_cell_whose_first_reconcile_never_lands_is_stale_from_its_spawn_beside_its_fault() {
+        let dir = tempfile::Builder::new()
+            .prefix("vfinv")
+            .tempdir_in("/tmp")
+            .expect("tempdir under /tmp");
+        let nowhere = dir
+            .path()
+            .join("nobody.sock")
+            .to_string_lossy()
+            .into_owned();
+        let shared = test_shared();
+        let state = test_state(dir.path());
+        shared.route_upsert(1, fake_route(1, &nowhere));
+        let _inventory = TaskGuard(install_inventory(
+            TerminalHandle {
+                shared: shared.clone(),
+            },
+            state.clone(),
+            None,
+        ));
+        assert_eq!(
+            state.observed_tx.borrow().inventory_bound_ms,
+            Some(terminal_inventory::STALE_MS),
+            "the bound is on the state before install returns"
+        );
+
+        let bound = InventoryBounds::REGISTRY.stale;
+        tokio::time::sleep(bound - Duration::from_millis(500)).await;
+        assert!(
+            state.observed_tx.borrow().stale_cells.is_empty(),
+            "inside the bound, a cell that has never answered is not yet stale"
+        );
+        let detail = shared.health().detail.unwrap_or_default();
+        assert!(
+            detail.contains("the observed inventory is no longer current: cell 1:"),
+            "three refused dials degrade the unit long before the bound: {detail}"
+        );
+
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let stale = state.observed_tx.borrow().stale_cells.clone();
+        assert_eq!(stale.len(), 1, "stale a bound after its spawn: {stale:?}");
+        assert_eq!(stale[0].cell_instance_id, 1);
+        let detail = shared.health().detail.expect("a degraded unit states why");
+        assert!(
+            detail.contains("the observed inventory is no longer current: cell 1:")
+                && detail.contains(
+                    "the observed inventory is older than its bound: cell 1: no reconcile \
+                     applied since"
+                ),
+            "the fault and the age are both reported: {detail}"
+        );
+
+        shared.route_remove(1);
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert!(
+            state.observed_tx.borrow().stale_cells.is_empty(),
+            "a removed cell leaves no stamp, so nothing is stale"
+        );
+        assert_eq!(
+            shared.health().state,
+            UnitState::Up,
+            "and neither its age nor its fault stays on the unit"
+        );
+    }
+
+    /// IL-D3 — a reconcile against a cell that answers slowly: half way through
+    /// the answer it is in its round trip; when it lands, the time is the round
+    /// trip's and no other part's; the cell's age counts from when the
+    /// reconcile began, before the writer lock, not from the answer; and the
+    /// pump says so once, a warn with its parts that opens the slow episode,
+    /// which the next prompt reconcile closes with one info line.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_slow_answer_is_the_round_trip_and_the_age_counts_from_when_the_reconcile_began() {
+        let cell = FakeCell::serve();
+        let answer = Duration::from_millis(400);
+        cell.answer_after(answer);
+        let dir = tempfile::tempdir().expect("tempdir");
+        let shared = test_shared();
+        let state = test_state(dir.path());
+        let stamps = Arc::new(InventoryStamps::default());
+        stamps.seed(&key(1));
+        let mut pump = CellPump::new(
+            observed_cell(1),
+            Arc::new(MergedInventory::new(
+                state.clone(),
+                shared.clone(),
+                LedgerThread::spawn(None, shared.clone()),
+            )),
+            CellStamp {
+                stamps: stamps.clone(),
+                key: key(1),
+            },
+            // Slow under the answer, with room above a prompt local hop.
+            InventoryBounds {
+                slow: answer * 3 / 4,
+                ..InventoryBounds::REGISTRY
+            },
+        );
+        let (client, _events) = ControlClient::connect(&cell.endpoint, "a-token")
+            .await
+            .expect("dial the fake cell");
+
+        let before = tokio::time::Instant::now();
+        let (reconciled, mid_flight) =
+            tokio::join!(reconcile_cell(&client, &pump, Value::Null), async {
+                tokio::time::sleep(answer / 2).await;
+                stamps.snapshot().get(&key(1)).map(|stamp| stamp.activity)
+            });
+        let reconciled = reconciled.expect("the fake cell answers");
+        let timing = reconciled.timing;
+        assert!(
+            matches!(
+                mid_flight,
+                Some(PumpActivity::Reconciling {
+                    part: ReconcilePart::RoundTrip,
+                    ..
+                })
+            ),
+            "half way through the answer, the reconcile is in its round trip: {mid_flight:?}"
+        );
+        assert!(
+            timing.round_trip >= answer,
+            "the cell's slow answer is the round trip: {timing:?}"
+        );
+        for (part, took) in [
+            ("writer_wait", timing.writer_wait),
+            ("merged_lock_wait", timing.merged_lock_wait),
+            ("publish", timing.publish),
+        ] {
+            assert!(
+                took < answer / 2,
+                "{part} took none of the cell's time: {timing:?}"
+            );
+        }
+        assert!(timing.took >= timing.round_trip, "{timing:?}");
+        assert!(timing.began >= before, "{timing:?}");
+
+        let stamp = stamps.snapshot()[&key(1)];
+        assert_eq!(
+            stamp.as_of, timing.began,
+            "the age counts from when the reconcile began, not from its answer"
+        );
+        assert_eq!(
+            stamp.activity,
+            PumpActivity::Idle,
+            "nothing is in flight once it is applied"
+        );
+        assert_eq!(
+            state.observed_tx.borrow().terminals.len(),
+            1,
+            "the answer was applied: the cell's session is published"
+        );
+
+        let opened = Heard::during("field_native.terminal.inventory_slow", || {
+            pump.reconciled(&reconciled)
+        });
+        assert_eq!(opened.len(), 1, "one line opens the episode: {opened:#?}");
+        let (level, line) = &opened[0];
+        assert_eq!(*level, tracing::Level::WARN, "{opened:#?}");
+        assert_eq!(line.get("episode").map(String::as_str), Some("opened"));
+        let round_trip_ms: u64 = line
+            .get("round_trip_ms")
+            .and_then(|value| value.parse().ok())
+            .expect("the round trip is one of the parts");
+        assert!(round_trip_ms >= ms(answer), "{opened:#?}");
+        for part in ["writer_wait_ms", "merged_lock_wait_ms", "publish_ms"] {
+            assert!(line.contains_key(part), "{part} is missing: {opened:#?}");
+        }
+
+        cell.answer_after(Duration::ZERO);
+        let prompt = reconcile_cell(&client, &pump, reconciled.published)
+            .await
+            .expect("the fake cell answers at once");
+        let closed = Heard::during("field_native.terminal.inventory_slow", || {
+            pump.reconciled(&prompt)
+        });
+        assert_eq!(closed.len(), 1, "one line closes the episode: {closed:#?}");
+        let (level, line) = &closed[0];
+        assert_eq!(*level, tracing::Level::INFO, "{closed:#?}");
+        assert_eq!(line.get("episode").map(String::as_str), Some("closed"));
+        assert_eq!(line.get("count").map(String::as_str), Some("1"));
+    }
+
+    /// IL-D1, IL-D4 — a pump and the sampler against a cell that starts to
+    /// answer late, on real time with short bounds. The cell goes stale at the
+    /// bound while the answer is still on its way, with its rows still listed
+    /// and no fault; once answers are prompt again, the late one lands, the
+    /// next reconcile applies, and the cell is fresh.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_cell_that_answers_late_goes_stale_at_the_bound_and_fresh_once_it_answers() {
+        let cell = FakeCell::serve();
+        let bounds = InventoryBounds {
+            backstop: Duration::from_millis(100),
+            stale: Duration::from_millis(800),
+            slow: Duration::from_millis(200),
+            sample: Duration::from_millis(20),
+        };
+        let dir = tempfile::tempdir().expect("tempdir");
+        let shared = test_shared();
+        let state = test_state(dir.path());
+        shared.route_upsert(1, fake_route(1, &cell.endpoint));
+        let _inventory = TaskGuard(install_inventory_with(
+            TerminalHandle {
+                shared: shared.clone(),
+            },
+            state.clone(),
+            LedgerThread::spawn(None, shared.clone()),
+            bounds,
+        ));
+        assert!(
+            settles(REAL_TIME_BOUND, || state
+                .observed_tx
+                .borrow()
+                .terminals
+                .len()
+                == 1)
+            .await,
+            "the pump dialed the cell and applied its answer"
+        );
+        assert_eq!(
+            state.observed_tx.borrow().inventory_bound_ms,
+            Some(800),
+            "a judging floor states its bound"
+        );
+        assert!(state.observed_tx.borrow().stale_cells.is_empty());
+
+        let late = Duration::from_millis(2_500);
+        cell.answer_after(late);
+        let slowed = tokio::time::Instant::now();
+        assert!(
+            settles(REAL_TIME_BOUND, || !state
+                .observed_tx
+                .borrow()
+                .stale_cells
+                .is_empty())
+            .await,
+            "an answer that does not come leaves the cell stale"
+        );
+        assert!(
+            slowed.elapsed() < late,
+            "stale at the bound, while the answer is on its way, not once it lands"
+        );
+        let stale = state.observed_tx.borrow().stale_cells.clone();
+        assert_eq!(stale.len(), 1, "{stale:?}");
+        assert_eq!(stale[0].cell_instance_id, 1);
+        assert_eq!(stale[0].cell_boot_id.as_str(), "boot-1");
+        assert!(stale[0].since <= unix_ms_now(), "{stale:?}");
+        let health = shared.health();
+        assert_eq!(health.state, UnitState::Degraded);
+        let detail = health.detail.expect("a degraded unit states why");
+        assert!(
+            detail.contains(
+                "the observed inventory is older than its bound: cell 1: no reconcile applied \
+                 since"
+            ) && detail.contains("(bound 800 ms)"),
+            "{detail}"
+        );
+        assert!(
+            !detail.contains("no longer current"),
+            "a slow answer is no failure: the fault streak never ran: {detail}"
+        );
+        assert_eq!(
+            state.observed_tx.borrow().terminals.len(),
+            1,
+            "a stale cell's rows stay listed: they are old, not gone"
+        );
+
+        cell.answer_after(Duration::ZERO);
+        assert!(
+            settles(REAL_TIME_BOUND, || state
+                .observed_tx
+                .borrow()
+                .stale_cells
+                .is_empty())
+            .await,
+            "the late answer lands, the next reconcile applies, and the cell is fresh"
+        );
+        assert_eq!(shared.health().state, UnitState::Up);
+    }
+
+    /// IL-D6 (a), the bound's precondition, end to end: with the ledger's
+    /// flock held from another descriptor, the cell's pump goes on reconciling
+    /// and no cell is ever stale, while the unit says the ledger is late. Once
+    /// the flock is released the ledger answers and the unit is up again. Real
+    /// time on a multi-thread runtime, because what is ruled out is a worker
+    /// parked in a syscall.
+    #[cfg(unix)]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_held_ledger_leaves_every_cell_fresh_and_says_the_ledger_is_late() {
+        let cell = FakeCell::serve();
+        let dir = tempfile::tempdir().expect("tempdir");
+        let ledger = ledger_under_test(dir.path(), 1_000);
+        let path = ledger.path().to_path_buf();
+        let shared = test_shared();
+        let state = test_state(dir.path());
+        let bounds = InventoryBounds {
+            backstop: Duration::from_millis(100),
+            stale: Duration::from_millis(600),
+            slow: Duration::from_millis(200),
+            sample: Duration::from_millis(20),
+        };
+        shared.route_upsert(1, fake_route(1, &cell.endpoint));
+        let held = HeldFlock::take(&path);
+        let _inventory = TaskGuard(install_inventory_with(
+            TerminalHandle {
+                shared: shared.clone(),
+            },
+            state.clone(),
+            LedgerThread::spawn_with_interval(
+                Some(ledger),
+                shared.clone(),
+                Duration::from_millis(50),
+            ),
+            bounds,
+        ));
+
+        assert!(
+            settles(REAL_TIME_BOUND, || shared
+                .health()
+                .detail
+                .as_deref()
+                .is_some_and(
+                    |detail| detail.contains("the machine-wide ledger has not answered since")
+                ))
+            .await,
+            "the ledger's thread took a total and sits in the flock past the bound"
+        );
+        let watched = tokio::time::Instant::now();
+        while watched.elapsed() < bounds.stale * 2 {
+            assert!(
+                state.observed_tx.borrow().stale_cells.is_empty(),
+                "the held flock stalls the ledger's thread and no cell's pump"
+            );
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert_eq!(state.observed_tx.borrow().terminals.len(), 1);
+        let detail = shared.health().detail.unwrap_or_default();
+        assert!(
+            !detail.contains("older than its bound"),
+            "the ledger is late; the inventory is not: {detail}"
+        );
+
+        drop(held);
+        assert!(
+            settles(REAL_TIME_BOUND, || shared.health().state == UnitState::Up).await,
+            "released, the ledger answers and the unit is up again"
+        );
+    }
+
+    /// IL-D6 — the ledger's lateness, judged at chosen instants: never while
+    /// nothing has been asked of it, not inside the bound, late at it with the
+    /// instant it was asked, unchanged while it stays late, and on time again
+    /// once an attempt returns.
+    #[test]
+    fn the_ledger_is_late_past_the_bound_and_on_time_once_an_attempt_lands() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let shared = test_shared();
+        let slot = Arc::new(LedgerSlot::default());
+        let bound = InventoryBounds::REGISTRY.stale;
+        let mut sampler = InventorySampler::new(
+            Arc::new(InventoryStamps::default()),
+            test_state(dir.path()),
+            shared.clone(),
+            Some(slot.clone()),
+            InventoryBounds::REGISTRY,
+        );
+        let asked = LedgerAsOf {
+            at: std::time::Instant::now(),
+            since: 1_792_433_071_000,
+        };
+
+        sampler.judge_ledger(asked.at + bound * 2);
+        assert_eq!(
+            shared.health().state,
+            UnitState::Up,
+            "a ledger nothing has been asked of is never late"
+        );
+
+        slot.seed(asked);
+        sampler.judge_ledger(asked.at + bound - Duration::from_millis(1));
+        assert_eq!(shared.health().state, UnitState::Up, "inside the bound");
+
+        sampler.judge_ledger(asked.at + bound);
+        let detail = shared.health().detail.expect("a late ledger is stated");
+        assert!(
+            detail
+                .contains("the machine-wide ledger has not answered since 18:04:31Z (bound 10 s)"),
+            "{detail}"
+        );
+        sampler.judge_ledger(asked.at + bound * 3);
+        assert_eq!(
+            shared.health().detail.as_deref(),
+            Some(detail.as_str()),
+            "a ledger that stays late moves nothing: the instant is fixed"
+        );
+
+        let landed = LedgerAsOf {
+            at: asked.at + bound * 3,
+            since: 1_792_433_101_000,
+        };
+        slot.stamp(landed);
+        sampler.judge_ledger(landed.at + Duration::from_millis(1));
+        assert_eq!(
+            shared.health().state,
+            UnitState::Up,
+            "an attempt that returned is an answer"
+        );
+    }
+
+    /// IL-D6 — a ledger that answers every attempt with an error is failing,
+    /// not late: each attempt that returns moves its `as_of`, so the sampler
+    /// never says it has not answered, and the unit stays up (the failure has
+    /// its own once-per-streak warn). Real attempts against a ledger whose
+    /// directory does not exist; the judge at an instant a bound past the
+    /// first attempt and inside the bound of the second.
+    #[cfg(unix)]
+    #[test]
+    fn a_ledger_that_fails_at_once_is_never_late() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let shared = test_shared();
+        let slot = Arc::new(LedgerSlot::default());
+        let bound = InventoryBounds::REGISTRY.stale;
+        let mut pump = LedgerPump::new(
+            ledger_under_test(&dir.path().join("no-such-dir"), 2),
+            shared.clone(),
+            slot.clone(),
+            LEDGER_INTERVAL,
+        );
+        let mut sampler = InventorySampler::new(
+            Arc::new(InventoryStamps::default()),
+            test_state(dir.path()),
+            shared.clone(),
+            Some(slot.clone()),
+            InventoryBounds::REGISTRY,
+        );
+
+        pump.observe(1);
+        let first = slot.as_of().expect("an attempt that failed returned");
+        std::thread::sleep(Duration::from_millis(20));
+        pump.observe(1);
+        let second = slot.as_of().expect("so did the next");
+        assert!(
+            second >= first + Duration::from_millis(20),
+            "a failed attempt moves as_of, as a published one does"
+        );
+
+        sampler.judge_ledger(first + bound + Duration::from_millis(10));
+        assert_eq!(
+            shared.health().state,
+            UnitState::Up,
+            "a ledger that answers with an error has answered: {:?}",
+            shared.health().detail
+        );
+    }
+
+    /// IL-D4 — the inventory's age and the ledger's lateness are facts of
+    /// their own, reported beside the pump's fault and the pressure gauges and
+    /// cleared by nothing but their own writer.
+    #[test]
+    fn an_old_inventory_and_a_late_ledger_are_reported_beside_every_other_reason() {
+        let shared = test_shared();
+        shared.set_inventory_fault(Some("cell 2: connection refused".into()));
+        shared.set_inventory_stale(BTreeMap::from([(
+            2,
+            "no reconcile applied since 18:04:31Z (bound 10 s)".to_string(),
+        )]));
+        shared.set_ledger_late(Some(
+            "the machine-wide ledger has not answered since 18:04:30Z (bound 10 s)".into(),
+        ));
+        shared.observe_fd_pressure(900, 1000);
+
+        let detail = shared
+            .health()
+            .detail
+            .expect("a degraded unit states every reason it has");
+        for expected in [
+            "text engine Menlo",
+            "the observed inventory is no longer current: cell 2: connection refused",
+            "the observed inventory is older than its bound: cell 2: no reconcile applied since \
+             18:04:31Z (bound 10 s)",
+            "the machine-wide ledger has not answered since 18:04:30Z (bound 10 s)",
+            PressureClass::FdPressure.as_str(),
+        ] {
+            assert!(
+                detail.contains(expected),
+                "{expected} is missing from: {detail}"
+            );
+        }
+
+        shared.set_inventory_fault(None);
+        let detail = shared.health().detail.expect("still degraded");
+        assert!(
+            detail.contains("older than its bound"),
+            "the age is its own fact: the fault clearing does not clear it: {detail}"
+        );
+
+        shared.set_inventory_stale(BTreeMap::new());
+        shared.set_ledger_late(None);
+        shared.observe_fd_pressure(10, 1000);
+        assert_eq!(shared.health().state, UnitState::Up);
+    }
+
+    /// The unit's words for the instant and the bound, and the registry's
+    /// numbers in the order the bound depends on: a healthy cell's backstop
+    /// plus a slow reconcile still lands inside the stale bound, and the sample
+    /// is finer than it.
+    #[test]
+    fn the_unit_names_the_instant_and_the_bound_as_a_reader_reads_them() {
+        assert_eq!(utc_clock(1_792_433_071_000), "18:04:31Z");
+        assert_eq!(
+            utc_clock(1_792_433_071_999),
+            "18:04:31Z",
+            "to the second, never rounded up"
+        );
+        assert_eq!(spell_bound(InventoryBounds::REGISTRY.stale), "10 s");
+        assert_eq!(spell_bound(Duration::from_millis(800)), "800 ms");
+
+        let bounds = InventoryBounds::REGISTRY;
+        assert!(bounds.backstop + bounds.slow < bounds.stale, "{bounds:?}");
+        assert!(bounds.sample < bounds.stale, "{bounds:?}");
     }
 
     // ---- TC-S3: the class-cell machinery's pure halves ----

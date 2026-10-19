@@ -477,6 +477,17 @@ async fn live_pty_enters_and_leaves_the_observed_inventory() {
         "a fresh boot owns no terminals: {snapshot}"
     );
     assert_eq!(snapshot["bootId"], daemon.boot_id);
+    // IL-D4: this floor judges its inventory's age, and says so on the first
+    // snapshot fieldd reads; a fresh floor has no stale cell to name.
+    assert_eq!(
+        snapshot["inventoryBoundMs"],
+        json!(field_native::registries::terminal_inventory::STALE_MS),
+        "a judging floor states its bound: {snapshot}"
+    );
+    assert!(
+        snapshot.get("staleCells").is_none(),
+        "staleCells is present only while a cell is stale: {snapshot}"
+    );
 
     let (client, _events) = control(&ack).await;
     let session = client

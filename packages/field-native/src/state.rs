@@ -226,6 +226,10 @@ impl DaemonState {
         freeway: crate::services::freeway::FreewayHandle,
         logging: Option<NativeLogging>,
     ) -> Arc<Self> {
+        // The first receivers are dropped here, so neither channel keeps one
+        // of its own. Every write therefore stores whether or not anyone
+        // listens: `send_modify` for the observed state, `publish_health` for
+        // health.
         let (health_tx, _) = watch::channel(health);
         let (observed_tx, _) = watch::channel(observed);
         Arc::new(Self {
@@ -246,6 +250,15 @@ impl DaemonState {
             next_sub_id: AtomicU64::new(1),
             next_tick_seq: AtomicU64::new(0),
         })
+    }
+
+    /// The floor's composed health, published (IL-D4). `send_replace`, never
+    /// `send`: tokio's `send` stores nothing while no receiver lives, and this
+    /// channel keeps none of its own, so a transition made while no fieldd is
+    /// subscribed has to be stored all the same — it is the value the next
+    /// subscribe's snapshot reads (`native.lifecycle.health.subscribe`).
+    pub fn publish_health(&self, health: NativeHealth) {
+        self.health_tx.send_replace(health);
     }
 
     /// The CURRENT terminal dial coordinates: the route snapshot's FIRST cell,
@@ -392,5 +405,88 @@ mod tests {
         drain(&mut rx);
         let _ = outbox.send(OutMsg::Close);
         assert_eq!(outbox.offer("tick".into()), Err(MgmtOutboxClosed));
+    }
+
+    /// A floor's state with no unit behind it. Its health and observed state
+    /// are built from wire JSON, so a field the contract grows does not touch
+    /// this row.
+    fn state_with_health(dir: &std::path::Path, health: &str) -> Arc<DaemonState> {
+        let config = crate::config::NativeConfig::for_data_dir(dir.to_path_buf());
+        let (ping, _) = mpsc::unbounded_channel();
+        let mesh = crate::services::mesh::MeshUnit::new(&config, ping.clone()).handle();
+        let bridge =
+            crate::services::mesh_bridge::MeshBridge::new(&config, [0; 32], ping.clone()).handle();
+        // F1's freeway seam, `DaemonState::new`'s ninth argument, built as freeway.rs's own
+        // tests build it: the unit binds a loopback listener on port 0 and never declares, so
+        // no host starts.
+        let terminal = crate::services::terminal::TerminalUnit::new(&config, ping.clone());
+        let freeway = crate::services::freeway::FreewayUnit::new(
+            &config,
+            "boot-under-test",
+            ping,
+            terminal.handle(),
+        )
+        .handle();
+        DaemonState::new(
+            "boot-under-test".into(),
+            [0; 32],
+            serde_json::from_value(serde_json::json!({
+                "bootId": "boot-under-test",
+                "state": health,
+                "units": [],
+            }))
+            .expect("a health snapshot"),
+            serde_json::from_value(serde_json::json!({
+                "bootId": "boot-under-test",
+                "generation": 0,
+                "terminals": [],
+                "workers": [],
+            }))
+            .expect("an observed state"),
+            mesh,
+            bridge,
+            watch::channel(TerminalRouteSnapshot {
+                revision: 0,
+                cells: Vec::new(),
+            })
+            .1,
+            MeshPlan::resolve(&config),
+            freeway,
+            None,
+        )
+    }
+
+    /// IL-D4 — health's lost transition, closed. With no fieldd subscribed the
+    /// channel has no receiver at all, and a transition made then is exactly
+    /// what the next `native.lifecycle.health.subscribe` must hand back as its
+    /// snapshot (it reads `health_tx.borrow()`), not the value before it.
+    #[test]
+    fn a_health_transition_with_no_subscriber_is_what_the_next_subscribe_reads() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state = state_with_health(dir.path(), "starting");
+        assert_eq!(
+            state.health_tx.receiver_count(),
+            0,
+            "the channel keeps no receiver of its own"
+        );
+
+        let up: NativeHealth = serde_json::from_value(serde_json::json!({
+            "bootId": "boot-under-test",
+            "state": "up",
+            "units": [],
+        }))
+        .expect("a health snapshot");
+        state.publish_health(up);
+
+        assert_eq!(
+            state.health_tx.borrow().state.to_string(),
+            "up",
+            "the snapshot a subscribe sends is the transition made while nobody listened"
+        );
+        assert_eq!(
+            state.health_tx.subscribe().borrow().state.to_string(),
+            "up",
+            "and a receiver made after it starts from it"
+        );
     }
 }

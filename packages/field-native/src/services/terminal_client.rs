@@ -58,6 +58,13 @@ const MAX_CONTROL_BYTES: usize = 1024 * 1024;
 /// A control round trip is a Unix-socket hop into the same process. Anything
 /// slower than this is a wedged service, and waiting longer only delays an
 /// honest degraded state.
+///
+/// *Corrected 2026-10-19 (IL-D1):* not the same process. Since TC-S2 the
+/// service is a cell, a process of its own, and the hop is a local socket (a
+/// named pipe on win32) into it. The bound stands as written: a healthy answer
+/// takes milliseconds, and the inventory reads stale
+/// (`TERMINAL_INVENTORY.STALE_MS`) about 5 s into a hung `list-sessions`,
+/// before this fires.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The subset of ghosttea's `SessionSummary` (session.rs:296-321) this floor
@@ -216,12 +223,30 @@ impl ControlClient {
     }
 
     pub async fn list_sessions(&self) -> Result<Vec<SessionSummary>> {
-        let response = self.call(json!({"type": "list-sessions"})).await?;
+        self.list_sessions_timed(|| {})
+            .await
+            .map(|(sessions, _)| sessions)
+    }
+
+    /// `list_sessions`, for a caller that measures where its time went
+    /// (IL-D3). `writer_held` runs the moment the request holds this
+    /// connection's writer, and the answer comes back with that moment. Before
+    /// it, the request waited on this floor's own lock, which every request on
+    /// the connection shares (the births governor's `set-persistence` among
+    /// them); after it, on the write and the cell's answer.
+    pub async fn list_sessions_timed(
+        &self,
+        writer_held: impl FnOnce() + Send,
+    ) -> Result<(Vec<SessionSummary>, tokio::time::Instant)> {
+        let (response, held) = self
+            .call_timed(json!({"type": "list-sessions"}), writer_held)
+            .await?;
         let sessions = response
             .get("sessions")
             .cloned()
             .context("list-sessions answered without sessions")?;
-        serde_json::from_value(sessions).context("parse session summaries")
+        let sessions = serde_json::from_value(sessions).context("parse session summaries")?;
+        Ok((sessions, held))
     }
 
     /// Create a session. At NF this is the tests' door and the shape
@@ -304,10 +329,21 @@ impl ControlClient {
         .map(|_| ())
     }
 
-    /// One request, one correlated response. `type: "error"` is upstream's
+    async fn call(&self, body: Value) -> Result<Value> {
+        self.call_timed(body, || {})
+            .await
+            .map(|(response, _)| response)
+    }
+
+    /// One request, one correlated response, and the moment the request held
+    /// the writer (`writer_held` runs then). `type: "error"` is upstream's
     /// failure shape (service.rs:2962-2964), so it becomes an `Err` here rather
     /// than a success carrying a message no caller would read.
-    async fn call(&self, body: Value) -> Result<Value> {
+    async fn call_timed(
+        &self,
+        body: Value,
+        writer_held: impl FnOnce() + Send,
+    ) -> Result<(Value, tokio::time::Instant)> {
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
         let mut request = body;
         request["requestId"] = json!(request_id);
@@ -316,9 +352,11 @@ impl ControlClient {
         self.pending.lock().unwrap().insert(request_id, tx);
 
         let bytes = serde_json::to_vec(&request)?;
-        let write = {
+        let (write, held) = {
             let mut writer = self.writer.lock().await;
-            write_packet(&mut *writer, &bytes).await
+            let held = tokio::time::Instant::now();
+            writer_held();
+            (write_packet(&mut *writer, &bytes).await, held)
         };
         if let Err(error) = write {
             self.pending.lock().unwrap().remove(&request_id);
@@ -342,7 +380,7 @@ impl ControlClient {
                 .unwrap_or("unspecified");
             bail!("terminal control error: {message}");
         }
-        Ok(response)
+        Ok((response, held))
     }
 }
 
@@ -406,10 +444,11 @@ async fn write_packet<W: AsyncWrite + Unpin>(stream: &mut W, bytes: &[u8]) -> Re
 mod tests {
     use super::*;
 
-    /// A control service that accepts any token and answers `hello` with the
-    /// version it was told to claim. Exactly as much of the protocol as the
-    /// handshake reads and not a line more — the point is to be a SERVICE the
-    /// real client dials, not a stub of the client's own expectations.
+    /// A control service that accepts any token, answers `hello` with the
+    /// version it was told to claim and `list-sessions` with no sessions.
+    /// Exactly as much of the protocol as these tests read and not a line more
+    /// — the point is to be a SERVICE the real client dials, not a stub of the
+    /// client's own expectations.
     fn fake_service(
         endpoint: &str,
         protocol_major: u16,
@@ -433,13 +472,21 @@ mod tests {
                 let Ok(request) = serde_json::from_slice::<Value>(&packet) else {
                     return;
                 };
-                let response = json!({
-                    "requestId": request["requestId"],
-                    "type": "hello",
-                    "protocolMajor": protocol_major,
-                    "protocolMinor": protocol_minor,
-                    "serverBuild": "fake-service",
-                });
+                let response = if request["type"] == "list-sessions" {
+                    json!({
+                        "requestId": request["requestId"],
+                        "type": "session-list",
+                        "sessions": [],
+                    })
+                } else {
+                    json!({
+                        "requestId": request["requestId"],
+                        "type": "hello",
+                        "protocolMajor": protocol_major,
+                        "protocolMinor": protocol_minor,
+                        "serverBuild": "fake-service",
+                    })
+                };
                 if write_packet(&mut stream, &serde_json::to_vec(&response).unwrap())
                     .await
                     .is_err()
@@ -513,5 +560,47 @@ mod tests {
         handshake_with(PROTOCOL_MAJOR + 1, PROTOCOL_MINOR)
             .await
             .expect_err("and the major check it sits beside still stands");
+    }
+
+    /// IL-D3 — the split between a reconcile's writer wait and its round trip
+    /// is the moment the request holds the writer. While another request's
+    /// write holds it (the births governor's `set-persistence`, on the pump's
+    /// own connection), this one is still waiting on the floor's lock, not on
+    /// the cell, and it is not marked; once it holds the writer it is, and the
+    /// moment it answers with is no earlier than the release.
+    #[tokio::test]
+    async fn a_request_is_marked_only_once_it_holds_the_writer() {
+        let (endpoint, _dir) = unique_endpoint();
+        let _service = fake_service(&endpoint, PROTOCOL_MAJOR, PROTOCOL_MINOR);
+        let (client, _events) = ControlClient::connect(&endpoint, "a-token")
+            .await
+            .expect("the handshake lands");
+        let marked = std::sync::atomic::AtomicBool::new(false);
+
+        let writer = client.writer.lock().await;
+        let listing = client.list_sessions_timed(|| marked.store(true, Ordering::SeqCst));
+        tokio::pin!(listing);
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), &mut listing)
+                .await
+                .is_err(),
+            "another request's write holds the writer, so this one waits"
+        );
+        assert!(
+            !marked.load(Ordering::SeqCst),
+            "a request still waiting for the writer is not yet in its round trip"
+        );
+
+        let released = tokio::time::Instant::now();
+        drop(writer);
+        let (sessions, held) = listing
+            .await
+            .expect("the request is answered once the writer is free");
+        assert!(marked.load(Ordering::SeqCst), "holding the writer marks it");
+        assert!(
+            held >= released,
+            "the round trip is dated from the moment the writer was held, never before"
+        );
+        assert!(sessions.is_empty(), "the fake service holds no sessions");
     }
 }

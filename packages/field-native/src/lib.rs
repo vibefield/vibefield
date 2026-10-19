@@ -178,6 +178,9 @@ pub async fn bootstrap_with_logging(
         boot_id: boot_id.clone(),
         terminals: vec![],
         workers: vec![],
+        // IL-D4: `install_inventory` below states the bound beside the sampler
+        // that judges by it, before the mgmt listener binds. Its presence says
+        // "this floor judges", so it is set where the judge is.
         inventory_bound_ms: None,
         stale_cells: vec![],
     };
@@ -230,10 +233,12 @@ pub async fn bootstrap_with_logging(
         let mgr = mgr.clone();
         let state = state.clone();
         let boot_id = boot_id.clone();
+        // IL-D4: `publish_health` stores each transition whether or not fieldd
+        // is subscribed, so the next subscribe's snapshot is never behind.
         async move {
             while ping_rx.recv().await.is_some() {
                 while ping_rx.try_recv().is_ok() {} // coalesce bursts
-                let _ = state.health_tx.send(mgr.health(&boot_id));
+                state.publish_health(mgr.health(&boot_id));
             }
         }
     });
