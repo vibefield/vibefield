@@ -4037,8 +4037,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       }),
       floorUp: () => native.connected,
       settled: () => agents.reattachSettled(),
+      // IL-D5 (a) — an inventory older than its bound is read as an unobserved
+      // one: a stale cell may hold a session it has not listed yet, and
+      // `goneOf` would offer that live run as left
       liveSessions: () =>
-        terminals.observation() !== undefined
+        terminals.observation() !== undefined && terminals.staleCells().length === 0
           ? new Set(terminals.list().map((row) => row.sessionId))
           : undefined,
       liveRuns: () => new Set(agents.list().sessions.map((row) => row.runtimeRunId)),

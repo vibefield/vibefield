@@ -7,7 +7,8 @@
 // `terminal-alive` from a row that may have gone, never a successor born
 // beside a conversation that may still run. The boot sweep stamps no "exited
 // unknown" while any cell is stale, and sweeps again on the observation that
-// clears it.
+// clears it. What the last run left (`agent.lastRun`) is not judged from a
+// stale list either: a session a stale cell has not listed yet is not gone.
 //
 // The daemon runs over the mock floor (no cargo) with the contracts' two-cell
 // fixtures; the records are staged through the product's own store, so they
@@ -17,10 +18,11 @@
 // service), never what a cell would have answered.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { AgentAdapterBinding } from "@vibecook/puppeteer-core";
 import type { AgentProvider, AgentProviderSessionOptions } from "@vibecook/puppeteer-runtime";
 import {
+  AgentLastRunResult,
   type AgentSessionRecord,
   LAYOUT,
   SOCKETS,
@@ -28,6 +30,7 @@ import {
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
+import { LAST_RUN_SETTLE_MS } from "../src/agent-last-run";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import type { SecretStore } from "../src/plugin-settings";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
@@ -133,11 +136,13 @@ interface AgentFloor {
 
 /** A daemon over the mock floor answering `observedState` on the fixtures'
  * routes, its agent runtime composing the scripted agent, `staged(dataDir)`
- * written as signed records before it boots; and a connection that may
- * resume (`agent.spawn`) and read the fold. */
+ * written as signed records before it boots, and `lastBoard`, when given, as
+ * the last run's picture of the board; and a connection that may resume
+ * (`agent.spawn`) and read the fold. */
 async function agentDaemonOn(
   observedState: unknown,
   staged: (dataDir: string) => AgentSessionRecord[],
+  lastBoard?: Array<Record<string, unknown>>,
 ): Promise<AgentFloor> {
   const dataDir = mkdtempSync(join(tmpdir(), "vf-agent-age-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
@@ -149,6 +154,16 @@ async function agentDaemonOn(
     now: () => new Date(),
   });
   for (const record of staged(dataDir)) records.write(record);
+  if (lastBoard !== undefined) {
+    const path = join(dataDir, ...LAYOUT.AGENT_LAST_BOARD_FILE);
+    mkdirSync(dirname(path), { recursive: true });
+    const picture = {
+      v: 1,
+      asOf: "2026-10-19T18:00:00.000Z",
+      board: { revision: 7, rows: lastBoard },
+    };
+    writeFileSync(path, `${JSON.stringify(picture)}\n`);
+  }
   const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
   mock.observedState = observedState;
   mock.terminalRoutes = fixtureRoutes();
@@ -161,7 +176,8 @@ async function agentDaemonOn(
     dataPort: 0,
     secretStore: keychainInMemory(),
     agentCatalog: SCRIPTED_CATALOG,
-    agentProviders: (builtin) => [...builtin, countingAgent(births)],
+    // the scripted agent alone: no built-in agent's readers run on this machine
+    agentProviders: () => [countingAgent(births)],
     agentGateway: { enabled: false },
     // a pending run's idle poll never fires inside a row: the door is the subject
     agentResumeWhenIdle: { afterMs: 600_000, pollMs: 600_000 },
@@ -309,5 +325,58 @@ describe("an agent's run over an old inventory (IL-D5 (a); the mock floor)", () 
     expect((asked.data?.details as { state?: unknown } | undefined)?.state).not.toBe(
       "inventory_stale",
     );
+  });
+});
+
+/** The last run's picture of a bare shell (agent-last-run.left.json's terminal
+ * row), as the pane of `sessionId`. */
+function shellRow(sessionId: string): Record<string, unknown> {
+  const board = fixture("agent-last-run.left.json")["board"] as {
+    rows: Array<Record<string, unknown>>;
+  };
+  const shell = board.rows.find((row) => row["kind"] === "terminal") ?? {};
+  return {
+    ...shell,
+    runtimeRunId: sessionId,
+    terminal: { ...(shell["terminal"] as Record<string, unknown>), runtimeSessionId: sessionId },
+    monitorRow: { ...(shell["monitorRow"] as Record<string, unknown>), id: sessionId },
+  };
+}
+
+describe("what the last run left, over an old inventory (IL-D5 (a); the mock floor)", () => {
+  it("agent.lastRun waits while a cell is stale — a session it has not listed yet is not gone — and once fresh names only what is", async () => {
+    const late = "pty-born-before-the-cell-last-reconciled";
+    const gone = "pty-that-did-not-survive";
+    const { mock, daemon, rpc } = await agentDaemonOn(
+      fixture("observed-state.stale-cell.json"),
+      () => [],
+      [shellRow(late), shellRow(gone)],
+    );
+    await until(() => daemon.agents.reattachSettled(), 5_000, "the re-attach ran");
+    // past the picture's settle, so only the inventory's age can hold the answer
+    await new Promise((resolve) => setTimeout(resolve, LAST_RUN_SETTLE_MS + 500));
+
+    const waiting = await rpc.callErr("agent.lastRun", {});
+    expect(answerOf(waiting), "an old list is an unobserved one").toEqual({
+      kind: "UNAVAILABLE",
+      retryable: true,
+      details: { service: "agent-last-run", state: "starting" },
+    });
+
+    // the cell answers again, and its list holds the session born late
+    const fresh = freshFloor();
+    const rows = fresh["terminals"] as Array<Record<string, unknown>>;
+    const agentCellRow = rows.find((row) => row["sessionId"] === CLAUDE);
+    mock.pushObserved({
+      ...fresh,
+      terminals: [...rows, { ...agentCellRow, sessionId: late, pid: 50_001 }],
+    });
+    await until(() => daemon.terminals.staleCells().length === 0, 5_000, "fresh");
+    const read = AgentLastRunResult.parse(await rpc.call("agent.lastRun", {}));
+    expect(read.state).toBe("left");
+    if (read.state === "left")
+      expect(read.gone, "the late session lives; only the one that did not is left").toEqual([
+        { id: gone, kind: "terminal", sessionId: gone },
+      ]);
   });
 });

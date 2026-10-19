@@ -93,7 +93,9 @@ export interface LastRunKeeperOptions {
   floorUp: () => boolean;
   /** this boot's re-attach has run and decided every record it held */
   settled: () => boolean;
-  /** the floor sessions alive now; undefined while the floor's inventory is unknown */
+  /** the floor sessions alive now; undefined while the floor's inventory is
+   * unknown — not observed yet, or (IL-D5 (a)) older than its bound, when a
+   * session a stale cell holds may not be listed yet and must not read as gone */
   liveSessions: () => ReadonlySet<string> | undefined;
   /** the runs the fold holds now */
   liveRuns: () => ReadonlySet<string>;

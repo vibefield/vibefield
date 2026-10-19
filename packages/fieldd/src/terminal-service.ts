@@ -1744,10 +1744,21 @@ export class TerminalService {
    * session handle.  Resolve every observed cell independently, list each once,
    * and filter back to the observed ids so a control-plane race cannot leak a
    * session the product inventory has not admitted yet.
+   *
+   * IL-D5 (a) (`draft/thinking-inventory-latency.md` §5) — a cell whose
+   * inventory is older than its bound (`staleCells`) answers newer than the
+   * inventory does, so its answer is not filtered back to the old ids: every
+   * session that cell governs is kept (its `persistence` present, the floor's
+   * own `is_governed_here`, which keeps another host's replica out), and a
+   * stale cell no observed row names is dialled too, at its route row.
+   * Otherwise the routed workspace never sees a session born since that cell's
+   * last applied reconcile, and restore gives its saved pane a new shell. A
+   * fresh cell's answer is filtered as before.
    */
   async runtimeSessions(): Promise<TerminalRuntimeSessionsResult> {
     const observed = this.list();
-    if (observed.length === 0) return { sessions: [] };
+    const stale = new Set(this.stale.map((entry) => entry.cellBootId));
+    if (observed.length === 0 && stale.size === 0) return { sessions: [] };
 
     const wanted = new Set(observed.map((terminal) => terminal.sessionId));
     const cells = new Map<string, CellTarget>();
@@ -1755,12 +1766,20 @@ export class TerminalService {
       const cell = this.sessionCell(terminal.sessionId);
       cells.set(cell.key, cell);
     }
+    for (const row of this.opts.link.terminalRoutes?.cells ?? []) {
+      if (!stale.has(row.cellBootId) || cells.has(row.cellBootId)) continue;
+      cells.set(row.cellBootId, {
+        key: row.cellBootId,
+        endpoints: row.endpoints,
+        ...rowExtrasOf(row),
+      });
+    }
 
     const batches = await Promise.all(
       [...cells.values()].map(async (cell) => {
         const client = await this.connectedClient(cell);
         try {
-          return await client.listSessions();
+          return { cell, sessions: await client.listSessions() };
         } catch (error) {
           if (!client.connected)
             throw this.unavailable("the terminal floor died while listing runtime sessions", error);
@@ -1775,10 +1794,13 @@ export class TerminalService {
     );
 
     const byId = new Map<string, TerminalRuntimeSession>();
-    for (const summary of batches.flat()) {
-      if (!wanted.has(summary.id)) continue;
-      const parsed = TerminalRuntimeSession.parse(summary);
-      byId.set(parsed.id, parsed);
+    for (const { cell, sessions } of batches) {
+      const ownAnswer = stale.has(cell.key);
+      for (const summary of sessions) {
+        if (ownAnswer ? !governedHere(summary) : !wanted.has(summary.id)) continue;
+        const parsed = TerminalRuntimeSession.parse(summary);
+        byId.set(parsed.id, parsed);
+      }
     }
     return TerminalRuntimeSessionsResult.parse({
       sessions: [...byId.values()].sort((left, right) => left.id.localeCompare(right.id)),
@@ -2796,6 +2818,14 @@ interface UnheardVerdict {
  * else a newer floor adds (that stays on the floor's own stream). */
 function staleEntry(entry: ObservedStaleCell): ObservedStaleCell {
   return { cellInstanceId: entry.cellInstanceId, cellBootId: entry.cellBootId, since: entry.since };
+}
+
+/** IL-D5 (a) — a session this device's floor governs, as the floor itself
+ * decides it (`is_governed_here`, field-native terminal.rs): it carries a
+ * persistence policy. A replica of a session another host governs carries
+ * none, and the pinned client reads a floor too old to say as `null` too. */
+function governedHere(summary: { readonly persistence?: unknown }): boolean {
+  return summary.persistence !== null && summary.persistence !== undefined;
 }
 
 /** Stale entries in cell order: the instance, then the boot id. */

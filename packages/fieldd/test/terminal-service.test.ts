@@ -4412,18 +4412,25 @@ function judgedFloor(staleCells: ReadonlyArray<typeof AGENT_CELL_STALE>): Record
 
 /** A TerminalService over two fake class cells, keyed and serving doors, whose
  * observed stream a test drives: `first` is the snapshot, `deliver` a later
- * delta. */
+ * delta. `listed` is what each cell answers to list-sessions (by default, the
+ * one session it would create). */
 async function judgedService(
   first: unknown,
   supervision?: TerminalServiceOptions["supervision"],
+  listed: {
+    interactive?: Array<Record<string, unknown>>;
+    agent?: Array<Record<string, unknown>>;
+  } = {},
 ): Promise<{
   service: TerminalService;
   interactive: Awaited<ReturnType<typeof startFakeFloor>>;
   agent: Awaited<ReturnType<typeof startFakeFloor>>;
   deliver: (state: unknown) => void;
 }> {
-  const interactive = await startFakeFloor();
-  const agent = await startFakeFloor();
+  const interactive = await startFakeFloor(
+    listed.interactive === undefined ? {} : { listed: listed.interactive },
+  );
+  const agent = await startFakeFloor(listed.agent === undefined ? {} : { listed: listed.agent });
   const routes = keyedRoutes(1, [
     {
       cellInstanceId: 1,
@@ -4579,5 +4586,68 @@ describe("IL-D5 (a) — a per-session op never guesses a cell while the inventor
     expect(refused.retryable).toBe(true);
     expect(refused.details, "the worse and truer story wins").toEqual(held);
     expect(interactive.connections()).toBe(0);
+  });
+});
+
+// IL-D5 (a) — `terminal.sessions` (the deck's pane metadata) reads a stale
+// cell's own answer: it is newer than the inventory, so it is not filtered
+// back to the old ids. Every session that cell governs is kept (persistence
+// present, the floor's `is_governed_here`), and a stale cell no observed row
+// names is dialled too. A fresh cell's answer is filtered as before.
+
+/** A session as a cell lists one this device governs: its persistence set. A
+ * bare `fakeSession` carries none, which the client reads as a replica's
+ * `null`. */
+const governedSession = (id: string): Record<string, unknown> => ({
+  ...fakeSession(id),
+  persistence: "keep-until-exit",
+});
+
+/** What each fake cell lists: the observed rows, one session the inventory has
+ * not admitted on each cell, and a replica on the agent cell. */
+const LISTED = {
+  interactive: [governedSession("pane-1"), governedSession("pane-unadmitted")],
+  agent: [
+    governedSession("agent-1"),
+    governedSession("agent-born-since"),
+    fakeSession("replica-of-elsewhere"),
+  ],
+};
+
+/** The session ids `terminal.sessions` answers, in its order. */
+async function runtimeIds(service: TerminalService): Promise<string[]> {
+  return (await service.runtimeSessions()).sessions.map((session) => session.id);
+}
+
+describe("IL-D5 (a) — terminal.sessions reads a stale cell's own answer", () => {
+  it("keeps a stale cell's governed sessions, the one born since its last reconcile included; never a replica, never a fresh cell's unadmitted one", async () => {
+    const { service } = await judgedService(judgedFloor([AGENT_CELL_STALE]), undefined, LISTED);
+    expect(await runtimeIds(service)).toEqual(["agent-1", "agent-born-since", "pane-1"]);
+  });
+
+  it("with every cell fresh, every answer is filtered back to the observed ids, as before", async () => {
+    const { service, deliver } = await judgedService(
+      judgedFloor([AGENT_CELL_STALE]),
+      undefined,
+      LISTED,
+    );
+    deliver(judgedFloor([]));
+    expect(service.staleCells()).toEqual([]);
+    expect(await runtimeIds(service)).toEqual(["agent-1", "pane-1"]);
+  });
+
+  it("dials a stale cell no observed row names, at its route row; a fresh one with no rows is not dialled", async () => {
+    const paneOnly = { ...observed(PLACED_ROWS.slice(0, 1)), inventoryBoundMs: 10_000 };
+    const stale = await judgedService(
+      { ...paneOnly, staleCells: [AGENT_CELL_STALE] },
+      undefined,
+      LISTED,
+    );
+    expect(await runtimeIds(stale.service)).toEqual(["agent-1", "agent-born-since", "pane-1"]);
+    expect(stale.agent.commands(), "asked at its route row").toContain("list-sessions");
+
+    const fresh = await judgedService(paneOnly, undefined, LISTED);
+    expect(await runtimeIds(fresh.service)).toEqual(["pane-1"]);
+    expect(fresh.agent.connections(), "nothing observed there, nothing stale").toBe(0);
   });
 });
