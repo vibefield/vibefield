@@ -896,8 +896,23 @@ mod tests {
         writer.write_all(line.as_bytes()).await.unwrap();
     }
 
+    /// The next line that is not the floor's liveness tick (WG-D6: pushed to
+    /// an authenticated connection every second, and no part of these rows).
+    async fn mgmt_next_line(reader: &mut MgmtReader) -> std::io::Result<Option<String>> {
+        loop {
+            let Some(line) = reader.next_line().await? else {
+                return Ok(None);
+            };
+            let tick = serde_json::from_str::<Value>(&line)
+                .is_ok_and(|value| value["method"] == "native.lifecycle.tick");
+            if !tick {
+                return Ok(Some(line));
+            }
+        }
+    }
+
     async fn mgmt_recv(reader: &mut MgmtReader) -> Value {
-        let line = tokio::time::timeout(std::time::Duration::from_secs(5), reader.next_line())
+        let line = tokio::time::timeout(std::time::Duration::from_secs(5), mgmt_next_line(reader))
             .await
             .expect("management reply deadline")
             .unwrap()
@@ -954,8 +969,11 @@ mod tests {
             .unwrap();
         mgmt_send(&mut writer, 3, "native.lifecycle.ping", json!({})).await;
         mgmt_send(&mut writer, 4, "native.mesh.stop", json!({})).await;
-        let first =
-            tokio::time::timeout(std::time::Duration::from_secs(2), reader.next_line()).await;
+        let first = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            mgmt_next_line(&mut reader),
+        )
+        .await;
         drop(held);
         if first.is_err() {
             drop(writer);

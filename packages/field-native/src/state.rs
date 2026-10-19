@@ -16,7 +16,9 @@ const MGMT_OUTBOX_MESSAGES: usize = mesh_control_limits::MGMT_OUTBOX_MESSAGES;
 
 /** A byte- and message-bounded management outbox. Saturation closes the
  * connection so fieldd reconnects and receives P5 snapshots instead of
- * silently continuing on a stream whose deltas were dropped. */
+ * silently continuing on a stream whose deltas were dropped. A line that
+ * carries no state (WG-D6's tick) goes through `offer`, which drops it rather
+ * than close anything. */
 #[derive(Clone)]
 pub struct MgmtOutbox {
     tx: mpsc::Sender<OutMsg>,
@@ -27,6 +29,15 @@ pub struct MgmtOutbox {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MgmtOutboxClosed;
+
+/// What `MgmtOutbox::offer` did with a line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Offered {
+    Queued,
+    /// Lines were already waiting in the outbox, or it was at its byte bound:
+    /// the line was dropped and the connection kept.
+    Skipped,
+}
 
 impl MgmtOutbox {
     pub fn channel() -> (Self, mpsc::Receiver<OutMsg>, watch::Receiver<bool>) {
@@ -78,6 +89,51 @@ impl MgmtOutbox {
             return Err(MgmtOutboxClosed);
         }
         Ok(())
+    }
+
+    /// WG-D6 — `send` for a line that carries no state, the floor's tick. It
+    /// is queued only when nothing waits in the outbox, and otherwise dropped
+    /// with the connection kept, so it holds at most one slot.
+    ///
+    /// `send` closes on saturation because a dropped delta leaves the reader on
+    /// a stream it can no longer trust, so it forces snapshot-on-reconnect. A
+    /// dropped tick leaves nothing to rebuild: the next one carries the same
+    /// facts, and the gap shows in its `seq`. And a tick queued behind lines
+    /// the writer has not drained would arrive stale, while taking a slot a
+    /// delta may need: with a reader that has stopped reading, ticks would
+    /// otherwise fill the outbox, and the next delta would close the
+    /// connection. Refused only when the connection is closing.
+    pub fn offer(&self, line: String) -> Result<Offered, MgmtOutboxClosed> {
+        if self.is_closed() {
+            return Err(MgmtOutboxClosed);
+        }
+        if self.tx.capacity() < self.tx.max_capacity() {
+            return Ok(Offered::Skipped);
+        }
+        let bytes = line.len() + 1;
+        if line.len() > MGMT_MAX_FRAME_BYTES
+            || self
+                .queued_bytes
+                .try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                    current
+                        .checked_add(bytes)
+                        .filter(|next| *next <= MGMT_MAX_QUEUED_BYTES)
+                })
+                .is_err()
+        {
+            return Ok(Offered::Skipped);
+        }
+        match self.tx.try_send(OutMsg::Line(line)) {
+            Ok(()) => Ok(Offered::Queued),
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                self.queued_bytes.fetch_sub(bytes, Ordering::AcqRel);
+                Ok(Offered::Skipped)
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                self.queued_bytes.fetch_sub(bytes, Ordering::AcqRel);
+                Err(MgmtOutboxClosed)
+            }
+        }
     }
 
     pub fn release(&self, msg: &OutMsg) {
@@ -151,6 +207,7 @@ pub struct DaemonState {
     pub restart: crate::restart::RestartControl,
     next_conn_id: AtomicU64,
     next_sub_id: AtomicU64,
+    next_tick_seq: AtomicU64,
 }
 
 impl DaemonState {
@@ -187,6 +244,7 @@ impl DaemonState {
             restart: crate::restart::RestartControl::default(),
             next_conn_id: AtomicU64::new(1),
             next_sub_id: AtomicU64::new(1),
+            next_tick_seq: AtomicU64::new(0),
         })
     }
 
@@ -260,6 +318,14 @@ impl DaemonState {
     pub fn sub_id(&self) -> String {
         format!("s{}", self.next_sub_id.fetch_add(1, Ordering::Relaxed))
     }
+
+    /// WG-D6 — the next `native.lifecycle.tick`'s `seq`: from 0, one per tick
+    /// this floor produces in this boot, whichever connection it goes to. A
+    /// tick dropped for a full outbox keeps its number, so the reader sees the
+    /// gap.
+    pub fn tick_seq(&self) -> u64 {
+        self.next_tick_seq.fetch_add(1, Ordering::Relaxed)
+    }
 }
 
 #[cfg(test)]
@@ -276,5 +342,55 @@ mod tests {
         }
         assert!(outbox.send(OutMsg::Line("overflow".into())).is_err());
         assert!(*close.borrow(), "overflow must force snapshot-on-reconnect");
+    }
+
+    /// WG-D6 — the tick's path. An idle outbox queues the offered line; one
+    /// with anything waiting drops it and keeps the connection, a full one
+    /// included, and spends none of the byte budget on it. Once the writer has
+    /// drained, the next offer is queued. Only a closing connection refuses it.
+    #[test]
+    fn an_offered_line_waits_behind_nothing_and_never_closes_the_connection() {
+        let (outbox, mut rx, close) = MgmtOutbox::channel();
+        let drain = |rx: &mut mpsc::Receiver<OutMsg>| {
+            while let Ok(msg) = rx.try_recv() {
+                outbox.release(&msg);
+            }
+        };
+
+        assert_eq!(outbox.offer("tick".into()), Ok(Offered::Queued));
+        assert_eq!(
+            outbox.offer("tick".into()),
+            Ok(Offered::Skipped),
+            "a tick never queues behind another line, a tick included"
+        );
+        drain(&mut rx);
+
+        let mut queued = 0;
+        for index in 0..MGMT_OUTBOX_MESSAGES {
+            let line = format!("message-{index}");
+            queued += line.len() + 1;
+            outbox
+                .send(OutMsg::Line(line))
+                .expect("within the fixed queue");
+        }
+        assert_eq!(outbox.offer("tick".into()), Ok(Offered::Skipped));
+        assert!(
+            !*close.borrow(),
+            "a dropped tick must not close the connection"
+        );
+        assert!(!outbox.is_closed());
+        assert_eq!(
+            outbox.queued_bytes.load(Ordering::Acquire),
+            queued,
+            "a skipped line spends none of the byte budget"
+        );
+
+        drain(&mut rx);
+        assert_eq!(outbox.queued_bytes.load(Ordering::Acquire), 0);
+        assert_eq!(outbox.offer("tick".into()), Ok(Offered::Queued));
+
+        drain(&mut rx);
+        let _ = outbox.send(OutMsg::Close);
+        assert_eq!(outbox.offer("tick".into()), Err(MgmtOutboxClosed));
     }
 }

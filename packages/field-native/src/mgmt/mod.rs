@@ -14,6 +14,14 @@
 //! than at hello: a superseded connection's reader survives its supersession, and
 //! none of the three laws above can fence it — a stale client may hold a HIGHER
 //! generation than the fieldd that replaced it, and prove the same bootId.
+//!
+//! WG-D6 (`draft/thinking-floor-wedge.md` §5.3, §11) — three things the wedge
+//! ladder in fieldd reads from this side. The authenticated client's connection
+//! gets a `native.lifecycle.tick` every second from a task of its own, never
+//! from the reader, so a tick proves the runtime and the writer alive and says
+//! nothing of the reader. The hello ack states this process's pid. A request
+//! that carries `deadlineAt` and reaches dispatch past it is answered TIMEOUT
+//! and not run.
 
 mod diagnostics;
 /// T-M4 — PUBLIC so an integration test can build a serve config through the
@@ -27,20 +35,24 @@ mod mesh_egress;
 use crate::config::MeshPlan;
 use crate::contracts::{
     DesiredState, Hello, NativePrepareRestartParams, NativePrepareRestartResult,
-    NativeShutdownParams, NativeShutdownResult, TerminalRouteSnapshot, TerminalRoutesStreamPayload,
+    NativeShutdownParams, NativeShutdownResult, NativeTickParams, TerminalRouteSnapshot,
+    TerminalRoutesStreamPayload,
 };
 #[cfg(test)]
 use crate::contracts::{TerminalEndpoints, TerminalRouteCell};
 use crate::local_ipc;
 use crate::pairing;
-use crate::registries::mesh_control_limits;
+use crate::registries::{mesh_control_limits, native_floor_tick, native_refusals};
 use crate::services::mesh::NodePresence;
 use crate::services::terminal;
 use crate::services::terminal_client::ControlClient;
-use crate::state::{ClientHandle, DaemonState, MgmtOutbox, OutMsg, MGMT_MAX_FRAME_BYTES};
+use crate::state::{
+    ClientHandle, DaemonState, MgmtOutbox, MgmtOutboxClosed, Offered, OutMsg, MGMT_MAX_FRAME_BYTES,
+};
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinSet;
@@ -53,12 +65,25 @@ const CONTRACTS_VERSION: &str = "0.1.0";
 // limit (design-02 §2.7, Phase 0 correction).
 const MESH_PENDING_REQUESTS: usize = mesh_control_limits::MGMT_PENDING_MESH_REQUESTS;
 
+/// WG-D6 — the floor's own liveness notification (`MGMT_NOTIFICATIONS.TICK` in
+/// contracts methods.ts). Method names are spelled here as everywhere in this
+/// module; `native-tick.valid.json` pins this one on both sides.
+const TICK_METHOD: &str = "native.lifecycle.tick";
+
+/// WG-D6 — the two places a request's deadline is checked, in the words its
+/// TIMEOUT carries.
+const DEADLINE_PASSED_AT_READ: &str = "the request's deadline passed before the floor read it";
+const DEADLINE_PASSED_IN_QUEUE: &str =
+    "the request's deadline passed while it waited for the mesh worker";
+
 struct MeshRequest {
     conn_id: u64,
     tx: MgmtOutbox,
     method: String,
     params: Value,
     id: Option<Value>,
+    /// WG-D6 — `RpcRequest.deadlineAt`, checked again when the worker dequeues
+    deadline_at: Option<u64>,
     _bytes: OwnedSemaphorePermit,
 }
 
@@ -69,6 +94,9 @@ struct MeshQueue {
 }
 
 impl MeshQueue {
+    // One request's fields plus the connection it answers on; a struct would
+    // only rename MeshRequest.
+    #[allow(clippy::too_many_arguments)]
     fn enqueue(
         &self,
         conn_id: u64,
@@ -76,6 +104,7 @@ impl MeshQueue {
         method: String,
         params: Value,
         id: Option<Value>,
+        deadline_at: Option<u64>,
         frame_bytes: usize,
     ) {
         // Frames are bounded before parsing, so this fits u32. Retain the
@@ -94,6 +123,7 @@ impl MeshQueue {
             method,
             params,
             id,
+            deadline_at,
             _bytes: bytes,
         };
         match self.tx.try_send(request) {
@@ -195,6 +225,18 @@ pub async fn serve(mut listener: local_ipc::Listener, state: Arc<DaemonState>) {
     mesh_worker.spawn(async move {
         while let Some(request) = mesh_rx.recv().await {
             if request.tx.is_closed() || !mesh_state.is_current_client(request.conn_id).await {
+                continue;
+            }
+            // WG-D6 — the reader checked the deadline before it queued this
+            // request; the queue's wait behind a slow mesh call is time too.
+            if let Some(refusal) = refuse_past_deadline(
+                &request.id,
+                &request.method,
+                request.deadline_at,
+                unix_ms_now(),
+                DEADLINE_PASSED_IN_QUEUE,
+            ) {
+                send(&request.tx, refusal);
                 continue;
             }
             mesh::handle(
@@ -338,11 +380,41 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
             break;
         }
 
+        // WG-D6 — a request fieldd has given up on is answered, never run: a
+        // mutation run late can land behind its own retry. The answer is a
+        // reply all the same, and proves to fieldd that this reader and
+        // dispatch move. Read only once the connection is authenticated, so an
+        // unpaired caller still meets UNAUTHORIZED and learns nothing of this
+        // floor's clock; the hello is how a connection authenticates, and runs
+        // whatever it carries.
+        let deadline_at = if authed {
+            request_deadline(&req, &method)
+        } else {
+            None
+        };
+        if method != "native.lifecycle.hello" {
+            if let Some(refusal) = refuse_past_deadline(
+                &id,
+                &method,
+                deadline_at,
+                unix_ms_now(),
+                DEADLINE_PASSED_AT_READ,
+            ) {
+                send(&tx, refusal);
+                continue;
+            }
+        }
+
         match method.as_str() {
             "native.lifecycle.hello" => {
                 let (resp, ok) = handle_hello(&state, conn_id, &tx, &params, id).await;
                 send(&tx, resp);
                 if ok {
+                    // WG-D6 — once per connection, after the ack is queued so
+                    // the ack is the first line the client reads.
+                    if !authed {
+                        spawn_tick(tx.clone(), state.clone());
+                    }
                     authed = true;
                 } else {
                     send_raw(&tx, OutMsg::Close);
@@ -381,10 +453,7 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
                 // surviving socket.
                 // Phase 0 correction: external mesh waits belong to the FIFO
                 // worker; they must not stall this shared reader/dispatch path.
-                let ts = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_millis() as i64)
-                    .unwrap_or(0);
+                let ts = unix_ms_now();
                 send(&tx, ok(id, json!({"bootId": state.boot_id, "ts": ts})));
             }
             // WP12 L2b (`build-wp12-updater.md` §9 R2/R3) — an update that touches this floor. Both verbs are
@@ -611,7 +680,15 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
                 send(&tx, reply);
             }
             m if m.starts_with("native.mesh.") => {
-                mesh_queue.enqueue(conn_id, &tx, method, params, id, line.len() + 1);
+                mesh_queue.enqueue(
+                    conn_id,
+                    &tx,
+                    method,
+                    params,
+                    id,
+                    deadline_at,
+                    line.len() + 1,
+                );
             }
             m if m.starts_with("native.process.") || m.starts_with("native.sidecar.") => {
                 send(
@@ -803,6 +880,16 @@ async fn handle_hello(
     if let Some(last_exit) = state.restart.last_exit() {
         ack["lastExit"] = json!(last_exit);
     }
+    // WG-D6 — this process's pid (`HelloAck.pid`), so a fieldd that ADOPTED
+    // this floor, as every fieldd-only restart does, has a target for the stops
+    // the wedge ladder allows. A target, never an authority: fieldd takes it
+    // as this connection's word (Node exposes no peer credential on a local
+    // socket to check it against), and the person's restart still names its
+    // sessions. `serverMac` does not cover it, and covers no field of this
+    // ack: it proves that the peer of THIS connection holds the pairing
+    // secret, and every field here, the terminal routes' bearer tokens among
+    // them, rides that one connection from that one peer.
+    ack["pid"] = json!(std::process::id());
     (ok(id, ack), true)
 }
 
@@ -1504,6 +1591,146 @@ fn spawn_joins_forwarder(
     });
 }
 
+/// WG-D6 — the floor's own liveness tick to its authenticated client:
+/// `native.lifecycle.tick {bootId, ts, seq}` every
+/// `native_floor_tick::INTERVAL_MS`, the first one interval after the hello.
+///
+/// Its own task, beside the forwarders and never the reader, and it takes no
+/// shared lock: a tick that arrives proves this runtime and this connection's
+/// writer alive and nothing more. That is the split fieldd's headless clause
+/// reads (`thinking-floor-wedge.md` §4 WG-E2): replies silent while ticks flow
+/// is a reader or dispatch wedge, and the cells run on; both silent is a floor
+/// stalled whole. For the same reason a tick never restarts fieldd's kill
+/// clock; only a reply proves the reader.
+///
+/// A tick missed while this task could not run is not sent late: the next one
+/// goes as soon as the task runs again, and the cadence counts from there
+/// (`MissedTickBehavior::Delay`), so a burst never dresses a stall up as life.
+/// A tick is queued only when nothing waits in the outbox
+/// (`MgmtOutbox::offer`): one that would wait behind lines the writer has not
+/// drained is dropped, never closing the connection, and its `seq` stays
+/// spent, so the gap shows. The task stops with the connection: once the
+/// outbox is closing (the reader ended, a newer hello superseded it, or the
+/// writer failed) it ends before it spends another `seq`.
+fn spawn_tick(tx: MgmtOutbox, state: Arc<DaemonState>) {
+    tokio::spawn(async move {
+        let period = Duration::from_millis(native_floor_tick::INTERVAL_MS);
+        let mut ticker = tokio::time::interval_at(tokio::time::Instant::now() + period, period);
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            ticker.tick().await;
+            if tx.is_closed() {
+                break;
+            }
+            let seq = state.tick_seq();
+            let params = NativeTickParams {
+                boot_id: state.boot_id.clone(),
+                seq,
+                ts: unix_ms_now(),
+            };
+            let note = json!({"jsonrpc": "2.0", "method": TICK_METHOD, "params": params});
+            match tx.offer(note.to_string()) {
+                Ok(Offered::Queued) => {}
+                Ok(Offered::Skipped) => tracing::debug!(
+                    event = "field_native.mgmt.tick_skipped",
+                    component = "mgmt",
+                    seq,
+                    "Lines were waiting in the management outbox; this liveness tick was dropped"
+                ),
+                Err(MgmtOutboxClosed) => break,
+            }
+        }
+    });
+}
+
+/// The floor's wall clock in unix ms: the clock of `PingAck.ts`, the tick's
+/// `ts`, and the `at` of a deadline's TIMEOUT. fieldd stamps `deadlineAt` from
+/// the same host's wall clock.
+fn unix_ms_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// WG-D6 — a request's `deadlineAt` (unix ms), when it carries one this floor
+/// can read: a non-negative integer, as `RpcRequest.deadlineAt` states it.
+/// Absence, `null` and anything unreadable are no deadline, and the request
+/// runs as one without (the tolerant reader; an unreadable one is logged).
+fn request_deadline(req: &Value, method: &str) -> Option<u64> {
+    match req.get("deadlineAt") {
+        None | Some(Value::Null) => None,
+        Some(raw) => {
+            let deadline = raw.as_u64();
+            if deadline.is_none() {
+                // The method only, never the value: a frame may be large.
+                tracing::debug!(
+                    event = "field_native.mgmt.deadline_unreadable",
+                    component = "mgmt",
+                    method = %method,
+                    "A request carried a deadlineAt that is not a non-negative integer; it runs without one"
+                );
+            }
+            deadline
+        }
+    }
+}
+
+/// WG-D6 — the deadline gate, shared by the reader (at dispatch) and the mesh
+/// worker (at dequeue): `Some(TIMEOUT)` when `now` is strictly past the
+/// request's deadline, so a request read in its deadline's own millisecond
+/// still runs. A deadline too large for the clock's type is never past.
+fn refuse_past_deadline(
+    id: &Option<Value>,
+    method: &str,
+    deadline_at: Option<u64>,
+    now: i64,
+    message: &str,
+) -> Option<Value> {
+    let deadline = deadline_at?;
+    let past = i64::try_from(deadline).is_ok_and(|deadline| now > deadline);
+    if !past {
+        return None;
+    }
+    tracing::info!(
+        event = "field_native.mgmt.deadline_passed",
+        component = "mgmt",
+        method = %method,
+        deadline_at = deadline,
+        late_by_ms = now - deadline as i64,
+        detail = %message,
+        "A request past its deadline was answered TIMEOUT and not run"
+    );
+    Some(deadline_passed(id.clone(), method, deadline, now, message))
+}
+
+/// WG-D6 — TIMEOUT for a request this floor did not run because its deadline
+/// had passed: retryable, with `NativeDeadlinePassedDetails` in the generated
+/// registry's words (`error-data.native-deadline-passed.json` pins them on
+/// both sides).
+fn deadline_passed(
+    id: Option<Value>,
+    method: &str,
+    deadline_at: u64,
+    at: i64,
+    message: &str,
+) -> Value {
+    err(
+        id,
+        "TIMEOUT",
+        -32008,
+        message,
+        true,
+        Some(json!({
+            "service": native_refusals::SERVICE,
+            "reason": native_refusals::REASON_DEADLINE_PASSED,
+            "method": method,
+            "deadlineAt": deadline_at,
+            "at": at,
+        })),
+    )
+}
+
 /// What a superseded connection's requests get. The `superseded` notification
 /// already told that client why its plane ended; this is the honest answer to
 /// anything it asks afterwards, and refusing rather than serving is what keeps a
@@ -1568,6 +1795,84 @@ mod tests {
         assert!(
             !text.contains("\"server\""),
             "the refusal carries server details: {text}"
+        );
+    }
+
+    /// WG-D6 (EL9) — the TIMEOUT this floor writes for a request past its
+    /// deadline is the JSON `error-data.native-deadline-passed.json` pins, and
+    /// fieldd's parser reads that fixture too. Built here from the fixture's
+    /// own method, deadline and instant, so any drift in a key, a word or the
+    /// kind fails this row.
+    #[test]
+    fn a_deadline_refusal_is_the_fixture_both_planes_parse() {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../contracts/fixtures/error-data.native-deadline-passed.json");
+        let fixture: Value =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("the fixture"))
+                .expect("fixture json");
+        let details = &fixture["details"];
+        let method = details["method"].as_str().expect("a method");
+        let deadline_at = details["deadlineAt"].as_u64().expect("a deadline");
+        let at = details["at"].as_i64().expect("an instant");
+
+        let refusal = refuse_past_deadline(
+            &Some(json!(7)),
+            method,
+            Some(deadline_at),
+            at,
+            DEADLINE_PASSED_AT_READ,
+        )
+        .expect("the fixture's instant is past its deadline");
+        assert_eq!(refusal["id"], 7);
+        assert_eq!(
+            refusal["error"]["code"], -32008,
+            "TIMEOUT's code: {refusal}"
+        );
+        assert_eq!(
+            refusal["error"]["data"], fixture,
+            "the floor's TIMEOUT drifted from the fixture both planes parse"
+        );
+    }
+
+    /// WG-D6 — the gate's edges: no deadline, an unreadable one, and one not
+    /// yet passed all run; only a deadline strictly in the past refuses.
+    #[test]
+    fn only_a_deadline_strictly_past_refuses() {
+        let id = Some(json!(1));
+        let method = "native.mesh.serve.list";
+        let gate = |deadline: Option<u64>, now: i64| {
+            refuse_past_deadline(&id, method, deadline, now, DEADLINE_PASSED_AT_READ)
+        };
+        assert!(gate(None, 5_000).is_none(), "no deadline runs as always");
+        assert!(gate(Some(5_000), 4_999).is_none(), "not yet");
+        assert!(
+            gate(Some(5_000), 5_000).is_none(),
+            "its own millisecond still runs"
+        );
+        assert!(gate(Some(5_000), 5_001).is_some(), "past it refuses");
+        assert!(
+            gate(Some(u64::MAX), i64::MAX).is_none(),
+            "a deadline beyond the clock is never past"
+        );
+
+        let read = |deadline: Value| {
+            request_deadline(
+                &json!({"jsonrpc":"2.0","id":1,"method":method,"deadlineAt":deadline}),
+                method,
+            )
+        };
+        assert_eq!(read(json!(1_792_376_706_980_u64)), Some(1_792_376_706_980));
+        assert_eq!(read(Value::Null), None);
+        for unreadable in [json!(-1), json!(1.5), json!("1792376706980"), json!({})] {
+            assert_eq!(
+                read(unreadable.clone()),
+                None,
+                "{unreadable} is no deadline"
+            );
+        }
+        assert_eq!(
+            request_deadline(&json!({"jsonrpc":"2.0","id":1,"method":method}), method),
+            None
         );
     }
 

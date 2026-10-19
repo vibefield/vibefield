@@ -14,7 +14,7 @@ use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
-use tokio::time::timeout;
+use tokio::time::timeout_at;
 
 struct NativeProcess {
     child: Option<Child>,
@@ -111,13 +111,22 @@ impl TestClient {
             .expect("write mgmt");
     }
 
+    /// The next line that is not the floor's liveness tick (WG-D6: pushed to
+    /// an authenticated connection every second). One budget for the whole
+    /// wait, so a steady tick cannot keep a missing reply waiting forever.
     async fn receive(&mut self) -> Value {
-        let line = timeout(Duration::from_secs(5), self.reader.next_line())
-            .await
-            .expect("mgmt response timeout")
-            .expect("mgmt response read")
-            .expect("mgmt connection closed");
-        serde_json::from_str(&line).expect("mgmt response json")
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let line = timeout_at(deadline, self.reader.next_line())
+                .await
+                .expect("mgmt response timeout")
+                .expect("mgmt response read")
+                .expect("mgmt connection closed");
+            let value: Value = serde_json::from_str(&line).expect("mgmt response json");
+            if value["method"] != "native.lifecycle.tick" {
+                return value;
+            }
+        }
     }
 
     async fn hello(&mut self, data_dir: &Path, id: u64) {

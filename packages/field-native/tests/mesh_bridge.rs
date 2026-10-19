@@ -560,12 +560,24 @@ impl MgmtClient {
         let mut line = json!({"jsonrpc":"2.0","id":1,"method":method,"params":params}).to_string();
         line.push('\n');
         self.writer.write_all(line.as_bytes()).await.expect("write");
-        let out = timeout(Duration::from_secs(5), self.reader.next_line())
-            .await
-            .expect("timeout")
-            .expect("read")
-            .expect("closed");
-        serde_json::from_str(&out).expect("json")
+        self.next_line("timeout").await
+    }
+    /// The next line that is not the floor's liveness tick (WG-D6: pushed to
+    /// an authenticated connection every second, and no part of a lane's
+    /// story). One budget for the whole wait.
+    async fn next_line(&mut self, waiting_for: &str) -> serde_json::Value {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let out = tokio::time::timeout_at(deadline, self.reader.next_line())
+                .await
+                .expect(waiting_for)
+                .expect("read")
+                .expect("closed");
+            let value: serde_json::Value = serde_json::from_str(&out).expect("json");
+            if value["method"] != "native.lifecycle.tick" {
+                return value;
+            }
+        }
     }
     async fn hello(&mut self, daemon: &RunningDaemon) {
         let secret = read_secret(daemon);
@@ -582,12 +594,7 @@ impl MgmtClient {
     /// The next server-pushed notification (subscriptions are one-way after
     /// their response line).
     async fn next_note(&mut self) -> serde_json::Value {
-        let out = timeout(Duration::from_secs(5), self.reader.next_line())
-            .await
-            .expect("timed out waiting for a notification")
-            .expect("read")
-            .expect("closed");
-        serde_json::from_str(&out).expect("json")
+        self.next_line("timed out waiting for a notification").await
     }
 }
 

@@ -5,7 +5,23 @@ use field_native::{bootstrap, config::NativeConfig, pairing, RunningDaemon};
 use serde_json::{json, Value};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::time::timeout;
+use tokio::time::{timeout, timeout_at, Instant};
+
+/// WG-D6 — the floor's own liveness notification, pushed to an authenticated
+/// connection every second. `recv` and `recv_eof` step over it, because every
+/// row but the tick's own reads replies and stream deltas; `recv_tick` reads it.
+const TICK: &str = "native.lifecycle.tick";
+
+/// The tick's interval as the contract states it (`NATIVE_FLOOR_TICK`).
+const TICK_INTERVAL: Duration =
+    Duration::from_millis(field_native::registries::native_floor_tick::INTERVAL_MS);
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64
+}
 
 // WIN-D1: the client dials through local_ipc (socket path or pipe name — the
 // endpoint string decides) and splits generically, because a named pipe has no
@@ -31,19 +47,53 @@ impl TestClient {
         line.push('\n');
         self.writer.write_all(line.as_bytes()).await.expect("write");
     }
+    /// The next line that is not a tick. One budget for the whole wait, so a
+    /// steady tick cannot keep a missing reply waiting forever.
     async fn recv(&mut self) -> Value {
-        let line = timeout(Duration::from_secs(5), self.reader.next_line())
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let line = timeout_at(deadline, self.reader.next_line())
+                .await
+                .expect("recv timeout")
+                .expect("read error")
+                .expect("connection closed");
+            let value: Value = serde_json::from_str(&line).expect("json line");
+            if value["method"] != TICK {
+                return value;
+            }
+        }
+    }
+    /// The connection ends, ticks aside, within the budget.
+    async fn recv_eof(&mut self) -> bool {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            match timeout_at(deadline, self.reader.next_line()).await {
+                Ok(Ok(None)) | Ok(Err(_)) => return true,
+                Ok(Ok(Some(line))) => {
+                    let value: Value = serde_json::from_str(&line).expect("json line");
+                    if value["method"] != TICK {
+                        return false;
+                    }
+                }
+                Err(_) => return false,
+            }
+        }
+    }
+    /// The next tick's params. Only the tick's own rows call it, on a
+    /// connection that subscribed to nothing, so any other line is a failure.
+    async fn recv_tick(&mut self, budget: Duration) -> Value {
+        let line = timeout(budget, self.reader.next_line())
             .await
-            .expect("recv timeout")
+            .expect("no tick within the budget")
             .expect("read error")
             .expect("connection closed");
-        serde_json::from_str(&line).expect("json line")
-    }
-    async fn recv_eof(&mut self) -> bool {
-        matches!(
-            timeout(Duration::from_secs(5), self.reader.next_line()).await,
-            Ok(Ok(None)) | Ok(Err(_))
-        )
+        let note: Value = serde_json::from_str(&line).expect("json line");
+        assert_eq!(
+            note["method"], TICK,
+            "only ticks ride this connection: {note}"
+        );
+        assert!(note.get("id").is_none(), "a tick answers no call: {note}");
+        note["params"].clone()
     }
     async fn hello(&mut self, daemon: &RunningDaemon, id: u64) -> Value {
         let secret = read_secret(daemon);
@@ -1040,5 +1090,211 @@ async fn the_freeway_arms_answer_on_the_paired_channel() {
         refused["error"]["data"]["kind"], "PRECONDITION_FAILED",
         "{refused}"
     );
+    daemon.shutdown().await;
+}
+
+// ---- WG-D6 (`draft/thinking-floor-wedge.md` §5.3, §11): what fieldd's wedge ladder reads from the floor -----------
+
+/// The tick: about one a second from the hello on, from the floor's own task.
+/// It answers no call, carries this boot's id (the ping's), and its `seq`
+/// counts up by one from 0, the first tick of this boot. The reader is
+/// untouched by it: a ping with no deadline still answers on the same line.
+#[tokio::test]
+async fn the_floor_ticks_on_its_own_about_once_a_second_after_the_hello() {
+    let (_dir, daemon) = boot().await;
+    let mut c = TestClient::connect(&daemon).await;
+    assert!(c.hello(&daemon, 1).await["result"].is_object());
+    let paired = Instant::now();
+
+    let budget = TICK_INTERVAL * 3 + Duration::from_secs(5);
+    let mut ticks = Vec::new();
+    for _ in 0..3 {
+        ticks.push(c.recv_tick(budget).await);
+    }
+    // The third tick cannot fire before three intervals from the hello; two
+    // is the floor of this assertion, so a slow read of the ack cannot fail it.
+    let elapsed = paired.elapsed();
+    assert!(
+        elapsed >= TICK_INTERVAL * 2,
+        "three ticks within {elapsed:?} of the hello: a burst, not a cadence"
+    );
+
+    for tick in &ticks {
+        assert_eq!(tick["bootId"], daemon.state.boot_id.as_str(), "{tick}");
+        let ts = tick["ts"].as_i64().expect("the floor's clock");
+        assert!(
+            (ts - now_ms()).abs() < 60_000,
+            "ts is the floor's wall clock, unix ms: {tick}"
+        );
+    }
+    let seqs: Vec<u64> = ticks
+        .iter()
+        .map(|tick| tick["seq"].as_u64().expect("a seq"))
+        .collect();
+    assert_eq!(seqs[0], 0, "the first tick of this boot");
+    assert!(
+        seqs.windows(2).all(|pair| pair[1] == pair[0] + 1),
+        "seq counts up by one per tick while the client keeps up: {seqs:?}"
+    );
+
+    c.send(json!({"jsonrpc":"2.0","id":2,"method":"native.lifecycle.ping","params":{}}))
+        .await;
+    let pong = c.recv().await;
+    assert_eq!(pong["id"], 2, "{pong}");
+    assert_eq!(pong["result"]["bootId"], daemon.state.boot_id.as_str());
+    assert!(pong["result"]["ts"].is_i64(), "{pong}");
+
+    daemon.shutdown().await;
+}
+
+/// The tick stops with its connection. Witnessed through `seq`, which counts
+/// every tick this floor produced in this boot, whichever connection it went
+/// to: a task that outlived its client would spend a number a second, and the
+/// next client's first tick would land several past the gone one's last. One
+/// tick may race the floor's reading of the close, so `last + 2` is allowed.
+#[tokio::test]
+async fn the_tick_stops_when_its_client_goes() {
+    let (_dir, daemon) = boot().await;
+    let budget = TICK_INTERVAL + Duration::from_secs(5);
+
+    let mut gone = TestClient::connect(&daemon).await;
+    assert!(gone.hello(&daemon, 1).await["result"].is_object());
+    let last = gone.recv_tick(budget).await["seq"].as_u64().expect("a seq");
+    drop(gone);
+
+    // three intervals with nobody on the line
+    tokio::time::sleep(TICK_INTERVAL * 3).await;
+
+    let mut next = TestClient::connect(&daemon).await;
+    assert!(next.hello(&daemon, 1).await["result"].is_object());
+    let first = next.recv_tick(budget).await["seq"].as_u64().expect("a seq");
+    assert!(
+        first > last,
+        "seq only moves forward within one boot ({last} then {first})"
+    );
+    assert!(
+        first <= last + 2,
+        "ticks were produced for a client that had gone ({last} then {first})"
+    );
+
+    daemon.shutdown().await;
+}
+
+/// The floor states its own pid in the hello ack: the target a fieldd that
+/// adopted it needs. This harness runs the floor inside the test process. A
+/// refused hello still says nothing of the floor (EL7).
+#[tokio::test]
+async fn the_hello_ack_carries_the_floors_pid() {
+    let (_dir, daemon) = boot().await;
+    let mut c = TestClient::connect(&daemon).await;
+    let ack = c.hello(&daemon, 1).await;
+    assert_eq!(ack["result"]["pid"], std::process::id(), "{ack}");
+
+    let mut stranger = TestClient::connect(&daemon).await;
+    stranger
+        .send(
+            json!({"jsonrpc":"2.0","id":1,"method":"native.lifecycle.hello","params":{
+                "contractsVersion":"0.1.0","minCompatible":"0.1.0","clientKind":"fieldd",
+                "credential":{"bootId":"x","ts": pairing::now_epoch_secs(),"mac":"deadbeef"}
+            }}),
+        )
+        .await;
+    let refused = stranger.recv().await;
+    assert_eq!(
+        refused["error"]["data"]["kind"], "UNAUTHORIZED",
+        "{refused}"
+    );
+    assert!(refused.get("result").is_none(), "{refused}");
+    assert!(
+        refused["error"]["data"].get("details").is_none(),
+        "a refused hello carries no server details: {refused}"
+    );
+
+    daemon.shutdown().await;
+}
+
+/// A request whose `deadlineAt` has already passed is answered TIMEOUT and not
+/// run, on the reader's own verbs and on the mesh queue's alike. One whose
+/// deadline is still ahead, and one with none, run as they always have. Each
+/// effect is read where it lands: the restart intent on disk, main's third arm,
+/// the mesh posture.
+#[tokio::test]
+async fn a_request_past_its_deadline_is_answered_timeout_and_never_run() {
+    let dir = tempfile::tempdir().unwrap();
+    let daemon = boot_in(&dir).await;
+    let mut c = TestClient::connect(&daemon).await;
+    assert!(c.hello(&daemon, 1).await["result"].is_object());
+
+    let past = now_ms() - 1_000;
+    for (id, method, params) in [
+        (
+            2,
+            "native.lifecycle.prepareRestart",
+            json!({"reason":"update"}),
+        ),
+        (3, "native.lifecycle.shutdown", json!({"reason":"update"})),
+        (4, "native.mesh.start", json!({"mode":"capture"})),
+    ] {
+        c.send(json!({"jsonrpc":"2.0","id":id,"method":method,"params":params,"deadlineAt":past}))
+            .await;
+        let refused = c.recv().await;
+        assert_eq!(refused["id"], id, "{refused}");
+        assert_eq!(refused["error"]["code"], -32008, "{method}: {refused}");
+        let data = &refused["error"]["data"];
+        assert_eq!(data["kind"], "TIMEOUT", "{method}: {refused}");
+        assert_eq!(data["retryable"], true, "{refused}");
+        let details = &data["details"];
+        assert_eq!(details["service"], "native", "{refused}");
+        assert_eq!(details["reason"], "deadline-passed", "{refused}");
+        assert_eq!(details["method"], method, "{refused}");
+        assert_eq!(details["deadlineAt"], past, "{refused}");
+        assert!(
+            details["at"].as_i64().is_some_and(|at| at > past),
+            "the floor refused it after the deadline, by its own clock: {refused}"
+        );
+    }
+    assert!(
+        !intent_file(&dir).exists(),
+        "a prepareRestart past its deadline recorded an intent"
+    );
+    assert!(
+        timeout(
+            Duration::from_millis(300),
+            daemon.state.restart.shutdown_requested()
+        )
+        .await
+        .is_err(),
+        "a shutdown past its deadline stopped the floor"
+    );
+    assert!(
+        daemon.state.mesh.mode().is_none(),
+        "a mesh.start past its deadline recorded a posture"
+    );
+
+    // a deadline still ahead runs
+    c.send(
+        json!({"jsonrpc":"2.0","id":5,"method":"native.lifecycle.prepareRestart",
+        "params":{"reason":"update"},"deadlineAt": now_ms() + 10_000}),
+    )
+    .await;
+    let prepared = c.recv().await;
+    assert_eq!(prepared["result"]["recorded"], true, "{prepared}");
+    assert!(intent_file(&dir).exists(), "the intent is on disk");
+
+    // and no deadline runs as it always has, through the mesh queue too
+    c.send(
+        json!({"jsonrpc":"2.0","id":6,"method":"native.mesh.start","params":{"mode":"capture"}}),
+    )
+    .await;
+    let started = c.recv().await;
+    assert_eq!(started["result"]["mode"], "capture", "{started}");
+    assert!(
+        daemon.state.mesh.mode().is_some(),
+        "the posture is recorded"
+    );
+    c.send(json!({"jsonrpc":"2.0","id":7,"method":"native.mesh.stop","params":{}}))
+        .await;
+    assert_eq!(c.recv().await["id"], 7);
+
     daemon.shutdown().await;
 }
