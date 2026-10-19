@@ -591,6 +591,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   /** records whose PTY the first inventory lacked, within their grace */
   private readonly awaitingBoot = new Map<string, AwaitingBoot>();
   private awaitingSweep: NodeJS.Timeout | null = null;
+  /** IL-D5 (a) — the last sweep left records past their grace unstamped,
+   * because the terminal inventory was older than its bound (`sweepAwaiting`) */
+  private sweepDeferred = false;
   /** replacements in flight (an old PTY terminated, its successor not yet born) */
   private readonly replacements = new Set<Promise<unknown>>();
   private readonly idleAfterMs: number;
@@ -1539,6 +1542,18 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       };
     }
     const live = this.managed.get(record.runtimeRunId);
+    // IL-D5 (a) — a run the fold does not hold and no exit has ended may still
+    // be running, and only the inventory can say whether its PTY is: while
+    // that inventory is older than its bound for the PTY (listed in a stale
+    // cell, or listed nowhere while any cell is stale), the resume is refused
+    // retryably before anything is born — never `terminal-alive` from a row
+    // that may have gone, never a successor beside a conversation that may
+    // still run. A live, attached run is refused below whatever the inventory
+    // says: the fold holds it.
+    if ((live === undefined || live.exiting) && record.exited === undefined) {
+      const stale = this.staleRefusalFor(terminals, record, "agent.resume");
+      if (stale !== undefined) throw stale;
+    }
     // MF-1f — a STAMPED record means the process is over, so its PTY still
     // being listed is a dead pane, not a running session. Before this, that
     // husk made `resume` refuse `terminal-alive` and the exited row's own verb
@@ -1922,12 +1937,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   /** Sessions still running under any of these personas — anything that
    * could still write into their roots: attached, pending, held for the
-   * boot's grace, recorded mid-attach (AR-4b — in neither map, its record
-   * naming a PTY the floor still lists), a login pane open on one, and a
-   * creation in flight that named one or named none (the default set decides
-   * those). Before the floor has answered and the boot's re-attach has run,
-   * every un-exited record under them counts: it may be a live PTY no map
-   * holds yet. An exited run is not one, whatever pane it left behind. */
+   * boot's grace (or past it while the terminal inventory is older than its
+   * bound — IL-D5 (a), `sweepAwaiting`), recorded mid-attach (AR-4b — in
+   * neither map, its record naming a PTY the floor still lists), a login pane
+   * open on one, and a creation in flight that named one or named none (the
+   * default set decides those). Before the floor has answered and the boot's
+   * re-attach has run, every un-exited record under them counts: it may be a
+   * live PTY no map holds yet. An exited run is not one, whatever pane it left
+   * behind. */
   liveUnder(profileIds: ReadonlySet<string>): number {
     const under = (id: string | null | undefined): boolean =>
       id !== undefined && id !== null && profileIds.has(id);
@@ -2736,8 +2753,20 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
   }
 
+  /** Attach a held record whose PTY is listed now, and stamp one whose grace
+   * has run as an unknown exit.
+   *
+   * IL-D5 (a) (`draft/thinking-inventory-latency.md` §5) — "did not survive"
+   * is believed only from a current inventory. While any cell's inventory is
+   * older than its bound, a PTY no row lists may be running in that cell, so
+   * every stamp waits: the record stays held, counts under its persona
+   * (`liveUnder`) and keeps the re-attach unsettled (`reattachSettled`). The
+   * observation that clears it re-tells the rows (`TerminalService.onInventory`),
+   * and `handleInventory` sweeps again then. */
   private sweepAwaiting(rows: ReadonlyMap<string, TerminalInfo>): void {
     const now = Date.now();
+    const staleCells = this.opts.terminals?.()?.staleCells().length ?? 0;
+    let deferred = 0;
     for (const [runtimeRunId, waiting] of [...this.awaitingBoot]) {
       const { record } = waiting;
       const terminalId = record.terminalSessionId;
@@ -2754,6 +2783,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         continue;
       }
       if (now < waiting.deadline) continue;
+      if (staleCells > 0) {
+        deferred += 1;
+        continue;
+      }
       this.awaitingBoot.delete(runtimeRunId);
       // the PTY did not outlive the gap (the floor restarted too, or the
       // process ended while no fieldd was there to see it): an unknown exit —
@@ -2771,6 +2804,15 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       );
       if (record.profileId !== undefined) void this.profiles.sweep();
     }
+    // one line as the sweep begins to wait, none while it goes on waiting
+    if (deferred > 0 && !this.sweepDeferred) {
+      this.logger.info(
+        "fieldd.agents.session_gone_deferred",
+        "Managed sessions' PTYs are not listed, and the terminal inventory is older than its bound; their records are stamped once it is current",
+        { records: deferred, staleCells },
+      );
+    }
+    this.sweepDeferred = deferred > 0;
   }
 
   /** One record, one live PTY: puppeteer's `attach` at the claim's epoch, or a
@@ -3110,6 +3152,23 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       }
       return;
     }
+    // IL-D5 (a) — the replacement ends this PTY first, which it does only from
+    // a current inventory (`replacePendingClaimed` refuses otherwise): while
+    // the inventory is older than its bound for this PTY the idle resume waits
+    // for the next poll, rather than being refused into the log at every one
+    const terminals = this.opts.terminals?.() ?? null;
+    if (
+      terminals !== null &&
+      this.staleRefusalFor(terminals, entry.record, "resume-when-idle") !== undefined
+    ) {
+      this.logger.debug(
+        "fieldd.agents.resume_when_idle_waits",
+        "A pending managed session is idle, and its terminal inventory is older than its bound; asked again at the next poll",
+        { runtimeRunId },
+      );
+      this.armPending(entry);
+      return;
+    }
     try {
       await this.track(this.replacePending(entry, undefined, "idle"));
     } catch (error) {
@@ -3232,6 +3291,16 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // ── before the point of no return: every throw restores the entry ──
       try {
         const terminals = this.requireTerminals();
+        // IL-D5 (a) — judged before anything is ended: an inventory older than
+        // its bound may still list a PTY that has gone, or not yet list one
+        // that runs, and the replacement would end, or be born beside, what it
+        // cannot see
+        const stale = this.staleRefusalFor(
+          terminals,
+          record,
+          how === "manual" ? "agent.resume" : "resume-when-idle",
+        );
+        if (stale !== undefined) throw stale;
         if (oldId !== undefined) {
           const row = this.listed(terminals, oldId) ? terminals.get(oldId) : undefined;
           if (row !== undefined) {
@@ -3375,6 +3444,27 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * first observation (an unobserved floor lists nothing). */
   private listed(terminals: TerminalService, sessionId: string): boolean {
     return terminals.observation() !== undefined && terminals.get(sessionId) !== undefined;
+  }
+
+  /** IL-D5 (a) (`draft/thinking-inventory-latency.md` §5) — what a resume or a
+   * replacement answers, before it ends or births anything, while the floor's
+   * inventory is too old to say whether the record's PTY still runs: the PTY
+   * listed in a cell whose inventory is older than its bound, or listed
+   * nowhere while any cell's is (a stale cell may hold it, listed by an answer
+   * fieldd has not seen). The terminal service's own refusal
+   * (`TerminalService.staleRefusal`): UNAVAILABLE, retryable, {terminal,
+   * inventory_stale} or WG-D4's held floor, with no run in its details — it
+   * started nothing, and a caller may ask again. undefined: the inventory is
+   * current for this PTY, or the floor does not judge its own, and the act
+   * goes on as before. A record that names no PTY has nothing the inventory
+   * could show, fresh or stale, and is judged as before too. */
+  private staleRefusalFor(
+    terminals: TerminalService,
+    record: AgentSessionRecord,
+    operation: string,
+  ): RpcCallError | undefined {
+    const sessionId = record.terminalSessionId;
+    return sessionId === undefined ? undefined : terminals.staleRefusal(sessionId, operation);
   }
 
   /** True once the session has left the inventory; false when it is still

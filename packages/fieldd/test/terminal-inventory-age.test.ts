@@ -18,7 +18,7 @@
 // through the mock mgmt server (no cargo), the floor held unresponsive by
 // silent pings.
 import { EventEmitter } from "node:events";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -43,6 +43,17 @@ import {
   type TerminalSupervision,
 } from "../src/terminal-service";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import {
+  BOOT,
+  CELL_1,
+  CELL_2,
+  CELL_2_SINCE,
+  CLAUDE,
+  fixture,
+  fixtureRoutes,
+  freshFloor,
+  ZSH,
+} from "./inventory-age-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
@@ -59,28 +70,6 @@ afterEach(async () => {
   }
 });
 
-const FIXTURES = join(import.meta.dirname, "../../contracts/fixtures");
-
-/** A contracts fixture, parsed fresh at every read. */
-function fixture(name: string): Record<string, unknown> {
-  return JSON.parse(readFileSync(join(FIXTURES, name), "utf8")) as Record<string, unknown>;
-}
-
-/** observed-state.stale-cell.json's two rows from a judging floor with every
- * cell fresh: the floor's bound, and no `staleCells`. */
-function freshFloor(): Record<string, unknown> {
-  const state = fixture("observed-state.stale-cell.json");
-  return Object.fromEntries(Object.entries(state).filter(([key]) => key !== "staleCells"));
-}
-
-const BOOT = "b1c2d3e4-5f60-7a8b-9c0d-e1f203a4b5c6";
-const CELL_1 = { cellInstanceId: 1, cellBootId: "01JCELLBOOT0000000000000001" };
-const CELL_2 = { cellInstanceId: 2, cellBootId: "01JCELLBOOT0000000000000002" };
-/** the fixtures' rows: one in each cell */
-const ZSH = "5e1a7c3d-9b2f-4e6a-8c0d-1f2e3a4b5c6d";
-const CLAUDE = "0d9f1c2b-3a4e-5d6c-7b8a-9e0f1a2b3c4d";
-/** observed-state.stale-cell.json's `since` for cell 2 */
-const CELL_2_SINCE = 1792433071000;
 /** terminal-list.link-silent.json's `since`: the last delivery before the stream stopped */
 const DELIVERED_AT = 1792433065000;
 const HELD: NativeUnavailableDetails = {
@@ -535,42 +524,6 @@ describe("the reads through the daemon (IL-D4, IL-D5 (a); the mock floor)", () =
     expect(healthOf(await rpc.call("terminal.roster", {}))).toEqual([[CLAUDE, "live"]]);
   });
 });
-
-/** The fixtures' two cells as the floor's routes name them: each keyed and
- * serving its doors, so a door that mints for a listed session mints. A mint
- * dials nothing, so the sockets are paper. */
-function fixtureRoutes(): TerminalRouteSnapshot {
-  const row = (
-    cell: typeof CELL_1,
-    workloadClass: "interactive" | "agent",
-    grantKey: string,
-    port: number,
-  ) => ({
-    ...cell,
-    pid: 4000 + cell.cellInstanceId,
-    endpoints: {
-      controlSocket: `/mock/native/run/termctl.${cell.cellInstanceId}.sock`,
-      frameSocket: `/mock/native/run/termframe.${cell.cellInstanceId}.sock`,
-      authToken: `cell-${cell.cellInstanceId}-token`,
-    },
-    tokenGeneration: 1,
-    workloadClass,
-    role: "class" as const,
-    grantKey,
-    grantKeyGeneration: 1,
-    doors: {
-      controlUrl: `ws://127.0.0.1:${port}/control`,
-      framesUrl: `ws://127.0.0.1:${port}/frames`,
-    },
-  });
-  return {
-    revision: 3,
-    cells: [
-      row(CELL_1, "interactive", "5e".repeat(32), 49171),
-      row(CELL_2, "agent", "a1".repeat(32), 49172),
-    ],
-  };
-}
 
 /** The three doors that need a listed session, each asked for `sessionId`. */
 function doorCalls(sessionId: string): Array<[string, Record<string, unknown>]> {
