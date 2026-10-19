@@ -331,6 +331,18 @@ public final class TerminalAttachment {
     return !session.inputRightLive
   }
 
+  /// item 42 — this session's geometry seat as its cell last announced it
+  /// (`RoutedSessionSeat`): who drives it — this phone, another device, or
+  /// nobody, and then who let go — and the size the PTY was left at. What the
+  /// live card says while another device drives the session; the person's
+  /// touch on the grid takes the seat back (`engage`, DS-D5). Nil before the
+  /// cell has said, and with the session. Read off the client like `readWrite`,
+  /// so a view that reads it tracks the client's own fields.
+  public var seat: RoutedSessionSeat? {
+    guard let client, let sessionID else { return nil }
+    return client.sessions[sessionID]?.seat
+  }
+
   // MARK: - Attach / detach
 
   /// Attach to one session by the id the join already named.
