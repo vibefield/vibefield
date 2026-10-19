@@ -12032,3 +12032,209 @@ cache, FieldLink publishing only on change, LivePulse off-page, pause under a ca
   the keyboard no longer rises on a scroll without the dev-only override.
 - James's ruled item 1 (A, the round pull, 02:02Z 10-19) is the MV lead's puppeteer commit and a pin bump.
 - P4–P7, held until James asks.
+
+## W4 re-ruled — the monitor's field never shrinks past rest: a deck set above rest slides over the swarm, which keeps its bounds (2026-10-19; `d658b5d4b` → `40bb598d0`, lane `mv/swarm-squeeze`)
+
+**What James asked (2026-10-19 02:10Z, through the focus session):** "for the swarm squeeze issue, let's tackle this
+way, when at the default terminal pane height, the swarm area is at its min height, so when user move the terminal pane
+further up, no more squeezing the swarm bounds".
+
+**The rule:** the monitor's field ends at rest + max(0, the edge's shift as last set) − the gap (12).
+- It replaces round 3's W4, "the monitor makes room", under which the field ended 12 above the edge as last set, down to
+  a floor of 220. Up past rest, the sheet now slides over the field: the bodies go on moving beneath it, and the swarm
+  keeps the bounds rest gave it. Down past rest, the field still grows with the edge.
+- The field's own floor (220, `--vf-godview-deck-field-floor`) is subsumed and removed. Rest is the larger of 5/13 of the
+  stage and 232, which is 220 plus the gap, so the field is still never shorter than 220.
+- At rest nothing moves: the deck-up field on James's Mac stays 1712 × 393, so the swarm's numbers measured there stand.
+- The SWF entry above ("The swarm's crowd fits its field", 2026-10-14) said his min-height ruling stands. This entry
+  re-rules it.
+
+**The change (one commit, code-only, docs first in it):**
+- `godview.css`: `--vf-godview-field-foot: calc(var(--vf-godview-deck-rest) + max(0px, var(--vf-godview-field-shift,
+  0px)) - var(--vf-godview-deck-field-gap))`.
+- No JS change. `deck-edge.ts` still writes the edge as set, above rest too, and the stylesheet counts a shift below
+  zero as none. Its doc comment now says so.
+- `tokens.css`: `--vf-godview-deck-field-floor` is removed.
+- Docs:
+  - DESIGN.md §8 "The monitor makes room" is rewritten with James's words and a dated note (until 2026-10-19 the edge
+    shrank the field to a 220 floor). §8's Rest is updated, and §2.7's token lines carry a dated note on the floor
+    token.
+  - DECISIONS: the One Frame row's status (round 3's W4 RE-RULED), and the SWF row's min-height clause points to it.
+- Tests:
+  - `godview-stage-rule.test.ts` gains a new row. For windows 780, 1040 and 520, with the edge set 1 px up, at the fill
+    line and at the window's top, the field's foot stays at rest's. At the fill line the edge stands above the foot,
+    so the sheet is over the field. 96 px down, the foot follows the edge less 12. A 400 px window keeps 220.
+  - The same file's shift row now expects `300 + max(0, shift) − 12`, and the floor token's entry is gone.
+  - `godview-deck-edge.test.tsx`: the layout model and the CSS pin read the new calc, and the floor token's row is gone.
+
+**Checks (VF-PM's grant of 2026-10-19 04:27Z, armed 04:49:31Z at 1-min load 9.21, at `d658b5d4b`):**
+- field-app's two files: 64/64.
+- The field-app suite: 2,569 passed and 3 skipped (214 files, 1 skipped).
+- biome on the five files: clean, no fixes. field-app's tsc: clean.
+
+**Not yet felt by James:** his dev app ran another lane (focus-tp at `43b048b70`) until 2026-10-19 16:31Z and has been
+stopped since, so this rule has not run on his Mac.
+
+**Validation (VF-PM's landing grant, 2026-10-19 04:55Z):**
+- **Where it ran:** rebased onto main `7b69f7eaa` (range-diff `d658b5d4b = 40bb598d0`) and gated at `40bb598d0` in
+  segments, in its own worktree `/Volumes/SamsungRed/lanes/squeeze`. It had its own puppeteer, mille-pin and
+  ghosttea-0.11.2 worktrees at the lock's revisions, with rosetta-pin and truffle-rfc025 linked. `CARGO_TARGET_DIR`
+  was `/Volumes/SamsungRed/rust/squeeze`, with `TMPDIR=/tmp` and `NX_DAEMON=false`.
+- **The wrapper:** it ran outside the tree, `/Volumes/SamsungRed/lanes/squeeze/gate-squeeze.sh`, the train's
+  `gate-train.sh` for this lane without its kit segment. The repo's gate script was not edited.
+- **Arming:** each segment armed inside the command at a 1-min load under 10, with the PM-WINDOW naming the MV lead and
+  no other gate, verify or perf lock running. Each started only with 10 GiB free on the internal disk, and the desk
+  rows also waited for an unlocked screen.
+- **The lane's setup:**
+  - Its Electron 43 binary was fetched first with `node install.js`, since `path.txt` was missing.
+  - S1's first run (04:45Z) stopped at `install-js mille` (`ENOENT … packages/field-app/node_modules`). That step links
+    mille's React peers from the host's install, so the host's `pnpm install` now runs first. The rerun armed at
+    04:47:22Z at 7.60 and gave EXIT 0 on all six steps.
+- **verify run 1 is not the gate of record:**
+  - It armed 04:56:20Z at 1-min load 3.88 and ended EXIT 1 at 05:01:34Z, red only in `@vibefield/fieldd:test`'s global
+    setup: "cargo build -p field-native succeeded but …/target/debug/field-native does not exist".
+  - The cause was the lane's setup. It had no `target` link to its cargo dir, and fieldd's setup reads
+    `<repo>/target/debug`. The link was added (`target` is gitignored).
+  - Log: `/Volumes/SamsungRed/lanes/squeeze/logs/40bb598d0/verify.run1-no-target-link.out`.
+- **verify run 2, the gate of record:**
+  - `pnpm verify` verbatim, armed 05:35:19Z at 1-min load 9.58 with 31.3 GiB free; ended 05:43:26Z EXIT 0.
+  - The vitest suites summed to 8,868 passed: the train's 8,867 and this lane's one new row.
+  - cargo: 314 passed in 23 test binaries, 0 failed.
+  - check:deps: one copy each. gen:check: clean. The tree stayed clean.
+- **The stages, once, each alone** (`gate-landing.mjs --only <the 14>`): armed 05:47:11Z at 1-min load 8.89, ended
+  05:53:50Z with all 14 ok. preflight, check:walls, check:deps, check:retired, check:ios-fixtures, icons:check, lint,
+  fmt, bundle:assert and gen:check each took 0–4 s. typecheck took 104 s, lint:rust 6 s, `test` 184 s (load 18→322)
+  and `test:rust` 83 s.
+- **The 13 desk rows: 13/13 ok, the last four in James's unattended slot.** Each ran ALONE
+  (`gate-landing.mjs --only <row>`), SHOWN, armed inside the command at 1-min load < 10 with the screen unlocked
+  (ioreg `CGSSessionScreenIsLocked`), and each attempt had 30 minutes to arm, or it was NOT RUN. No red was rerun
+  before it was read, and VF-PM ruled on each one. In run order, every attempt:
+
+  | Row | Run | Armed | Load at arm | Time | Verdict |
+  |---|---|---|---|---|---|
+  | still | 1 | 05:57:48Z | 9.42 | 42 s | ok |
+  | smoke | 1 | 06:05:14Z | 8.92 | 37 s | ok |
+  | smoke:canvas | 1 | 06:21:22Z | 9.64 | 935 s | RED: HAND_CALENDAR, load 10→61 (below) |
+  | smoke:canvas:no-gpu | 1 | — | — | — | NOT RUN: the load at 29.57 |
+  | smoke:canvas:no-webgpu | 1 | — | — | — | NOT RUN: the screen locked |
+  | smoke:canvas | 2 | 15:52:35Z | 8.60 | 924 s | RED: PEERS ARRIVE (below) |
+  | smoke:canvas:no-gpu | 2 | 16:13:07Z | 7.43 | 32 s | ok |
+  | smoke:canvas:no-webgpu | 2 | 16:14:20Z | 9.20 | 31 s | ok |
+  | smoke:kind-faults | 1 | 16:17:33Z | 9.70 | 82 s | ok |
+  | smoke:plugin-restart | 1 | 16:19:56Z | 8.72 | 75 s | ok |
+  | smoke:plugin | 1 | 16:21:11Z | 8.27 | 56 s | ok |
+  | smoke:godview | 1 | 16:22:08Z | 5.54 | 123 s | RED: the held edge's readout (below) |
+  | smoke:godview | 2 | 16:26:58Z | 5.05 | 67 s | RED: the cd row (below) |
+  | smoke:terminal-door | 1 | 16:31:55Z | 7.81 | 39 s | ok |
+  | smoke:terminal-direct | 1 | 16:34:55Z | 9.78 | 38 s | ok |
+  | smoke:studio | 1 | 16:36:13Z | 8.61 | 48 s | RED: the snapshot not acknowledged (below) |
+  | smoke:bundled | 1 | — | — | — | NOT RUN: the load at 15.37 |
+  | smoke:godview | 3 | 19:50:32Z | 4.20 | 150 s | ok (the slot) |
+  | smoke:canvas | 3 | 19:53:02Z | 6.27 | 917 s | ok (the slot) |
+  | smoke:studio | 2 | 20:08:20Z | 4.19 | 27 s | ok (the slot) |
+  | smoke:bundled | 2 | 20:08:47Z | 5.69 | 93 s | ok (the slot) |
+
+  A canvas attempt the night's runner made while the screen was locked (07:38–08:08Z) is set aside, not counted: a
+  locked screen is not an arm failure (its log is under `rows/locked/`). The runner that followed waited for the unlock
+  before each 30-minute clock.
+
+- **The reds, by rung and cause, none of them in the lane's reach.** The lane's diff is `godview.css`'s field foot, a
+  `tokens.css` token no code names (`git grep deck-field-floor` finds only DESIGN.md's dated note), a `deck-edge.ts`
+  comment, docs and two tests. Its field foot equals the old one for every edge set at rest or lower, so it differs
+  from main only for an edge set above rest.
+  - **smoke:canvas run 1, HAND_CALENDAR:** "the bar came back 242 ms after the landing, not 200". The rung's
+    `judgeReturn` (smoke-tools-in-hand.ts:250) judges SelectionBarView's 200 ms `setTimeout` by the wall clock with
+    40 ms of slack, and the host's load went 10 → 61 during the run. Run 2's four returns, at load ≈ 9–10, were
+    233.9, 225.0, 224.8 and 216.7 ms against the 240 limit: only 6 to 23 ms of margin with the load under 10. Run
+    3's, in the slot at load ≈ 6, were 225.9, 225.2, 225.8 and 217.2. Owed: item 45.
+  - **smoke:canvas run 2, PEERS ARRIVE:** "0 peers drawn, not 1 … the chip reads null". B's published cursor was
+    `{649.09765625, 192.234375, away: true}` under B's camera at zoom 1. The smoke moves B only to integer points, and
+    B's first point out was its own (519, 340), so I45 held. The fractional point, then a pointerleave, is DK-17b's
+    signature of a person's pointer: the rung ran eight minutes after James unlocked the Mac, and he was working at
+    it. DK-18 (36) made the smoke windows click-through on the claim that Chromium then sends the page nothing for a
+    real pointer; here the page heard one. Run 3, with the Mac unattended, passed it. Owed: item 47.
+  - **smoke:godview run 1, the held edge's readout** (deckEdgeRung's AWAY step, deck-away-rungs.ts:427): "held past
+    the line, the stage said nothing (readout false)".
+    - REST (top 288, monitor foot 276) and STAYS (60 down: top 348, field 60px, foot 336) were judged right, and that
+      foot is the squeeze rule's. The let-go then put the terminals away correctly.
+    - By the code's own arithmetic the edge WAS past the line: bounds.max = 660 − 120 − 288 = 252, the hold reached
+      ≈ 292, and the let-go was no fling (≈ 0.37 px/ms against DECK_FLING 1.4). So `say("minimize")` ran from the
+      seventh move, ≥ 160 ms before the rung's single read of the readout, which still saw data-on "false".
+    - Candidate cause, unproven: the one-shot read against a React commit not yet made. Nothing in the log dates the
+      commit. Owed: item 48.
+  - **smoke:godview run 2, the cd row** (TP-S3f, smoke.ts:8190): "the floor never report a deck pane sitting in
+    …/work … within 20000ms". It reached no deck rung, so it neither confirms nor clears run 1.
+    - The typed line's marker FILE landed, so a person shell ran `cd …/work; echo … > cd.txt`.
+    - The floor's three cwds were all `file://` URLs, so each shell's OSC 7 was parsed at its prompts, and none was at
+      …/work.
+    - No typed agent held a pane: the stub's call log holds only fieldd's two startup catalog calls, and the cd row
+      runs before the typed-agent rows.
+    - No line of any kind came from either terminal cell, or from field-native, between 16:27:19 and the teardown at
+      16:27:40Z. The cells' drains at teardown were clean.
+    - The floor's cwd is native-only: no renderer, frame commit or visible window is on its road. A builtin `cd` is
+      seen only at field-native's 5 s backstop `list-sessions`, which bounds a healthy road at ≈ 5.1 s.
+    - Two suspects stand, unseparated on this evidence: a slow-but-answered `list-sessions` (two slow rounds ≈ 20 s
+      with no line), or the cell's frame thread parked after the cd. They are questions for terminal custody's owner,
+      item 52.
+    - The harness half is owed (the MV lead's harness note): untilFloor's `terminal.list` call carries no
+      `timeoutMs` and its 20 s deadline is checked only between calls; and the failure dump should hold the active
+      pane's last rows, which would separate the two suspects.
+  - **smoke:godview run 3**, in the slot, passed both rungs: the held edge's readout said "true", and the cd landed
+    in …/work on the floor.
+  - **smoke:studio run 1:** "the product to apply Studio's canvas ground timed out after 20000ms".
+    - Studio was live and connected, waiting for the app to acknowledge the complete snapshot.
+    - The product's bridge had received ONE command, `product.connect`: 0 dispatches, 0 completions, nothing pending.
+      No snapshot reached it.
+    - It is the second sighting of the string TD-0's landing recorded as a first (above, "went red once … green
+      alone"), on a different lane. Two sightings end the "green alone" habit. Item 51, Studio's owner: a cause
+      reading of the bridge, never a wider timeout. Run 2, in the slot, was green in 27 s.
+
+- **The host's other load, named:**
+  - 06:21–07:07Z: flux's cargo build and Console.app. They raised canvas run 1's load to 61 and left
+    no-gpu run 1 NOT RUN at 29.57.
+  - The screen was locked at no-webgpu run 1's deadline (07:37Z) and stayed locked, as far as the runners saw, until
+    15:48:52Z. no-webgpu run 1 was NOT RUN; the locked-screen canvas attempt is set aside.
+  - The unlock (15:48:52Z, stamped `logs/40bb598d0/UNLOCKED.at`): the load read 72.6 at 15:49:20Z.
+    - flux had started a read-only review workflow at that moment, whose setup made five APFS clones of a 13 GB build
+      cache on the SSD (fseventsd at 99–127 %). The clones were done by 15:49:35Z.
+    - With them came macOS's own unlock housekeeping (siriactionsd, lsd, duetexpertd).
+    - flux was told "quiet" at 15:49:29Z (`/Volumes/SamsungRed/flux-work/QUIET`). canvas run 2 armed at 8.60 at
+      15:52:35Z.
+  - 16:39–17:09Z: James's own session, driving the Mac over Screen Sharing (WindowServer 90 %, Console.app 37 %,
+    ghostty 35 %, corespotlightd 28 %, Codex Computer Use 22 %, Screen Sharing 15 %), with flux idle at nice 19.
+    bundled run 1 was NOT RUN at 15.37.
+  - A person at the Mac is a hazard the arming rule (load < 10, screen unlocked) does not cover. The four rows owed
+    after 17:09Z ran in a slot James named, away from the Mac with the screen unlocked and QUIET up: he stepped away
+    at 19:49Z, and the four ran 19:50:32–20:10:20Z, each alone, all ok.
+
+- **No kit suite:** `git diff --name-only 7b69f7eaa..40bb598d0` changes no file under `apps/ios`.
+- **Teardown:** every row that prints one said `SMOKE_DAEMONS {"left":[],"reaped":[]}` with helpers settled at 0 ms.
+  smoke:plugin runs through the kit's `plugin try` and prints none; still prints none. Two homes are KEPT as evidence
+  until these records: `/private/tmp/vf-smoke-KPihFH` (godview run 2) and `/tmp/vf-studio-oGGCq6` (studio run 1).
+  Their removal is the usual leak sweep.
+
+- **Owed, from this gate** (the MV lead's, test-only at the cause, each its own lane under its own grant):
+  - item 45, canvas's bar judge: judge what the product promises (the timer's scheduled return, or the return in
+    frames), never a wider slack;
+  - item 47, the smoke windows hear a real pointer: designed at the cause (where the windows sit, or what the harness
+    asserts);
+  - item 48, the held-edge readout: wait for the readout within the hold, bounded by it, never a single sample and
+    never a longer hold;
+  - the harness note on the cd row: a bounded `terminal.list` call and the active pane's last rows in the failure
+    dump.
+  - a docs change AT ITS SOURCE, its own small commit (not these records): `docs/desk-gates.md`'s arming rule says the
+    desk rows arm on a 1-min load < 10, an unlocked screen AND an unattended Mac, with item 46's signal work. The four
+    reds after the unlock are its evidence.
+  - Item 51, Studio's snapshot, is Studio's owner's.
+- **Found beyond the lane** (not this lane's, each to its owner on James's word):
+  - **item 50 (EL7):** a question on the environment fieldd gives the agent catalog's probe of an agent binary, seen
+    in godview run 2's stub log (key names only). It is with fieldd's owner on James's word; the detail is held
+    outside the repo, with VF-PM's record, until James rules.
+  - **item 52:** the terminal custody owner's questions on the floor's cwd road (above).
+
+**Next (MV):** the puppeteer pin, James's round pull of 2026-10-19 02:02Z ("i'll go with A"), as its own EL8 lane.
+- puppeteer `42035fa` is `vf/swarm-pull-main`, ONE commit on main's `d3e82aa`: the port line's `b3b16d0` cherry-picked,
+  with its goldens re-recorded on main's Electron 43.1.0 at the pin's window. The final sha is named there.
+- `b3b16d0` itself stays on `swf/port-0.2.2` for RD-5's 0.2.2 cut.
+- The pin carries DESIGN.md §8's dated pull correction and the DECISIONS SWF row REVERSED. Puppeteer main moving to it
+  is James's word.
