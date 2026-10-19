@@ -2972,6 +2972,14 @@ affordance — which probes liveness before killing, because after an intensity 
 held pid is a corpse. The 100ms two-stage heartbeat makes wedge a first-class state:
 "unresponsive", distinct from "crashed", detection-to-state at the ≤250ms design budget,
 the destructive rung held behind 3s of confirmed silence, recovery behind two clean pongs.
+*Corrected 2026-10-19 (WG-D1): the code never measured confirmed silence. Its clock started at
+the double miss that made the floor "unresponsive" and cleared only on two clean pongs in a row
+(or a reconnect), and the first miss once 3 s had passed killed a floor this fieldd had spawned:
+a lone pong between misses never reset the 3 s clock, and a reply past its 100 ms or 50 ms
+deadline was dropped unseen. So a path that answered some pings and missed others was killed.
+The ruled ladder replaces it: the clock is silence of replies and any reply restarts it, a
+redial comes first, and the irreversible step needs an empty census, the person's consent, or a
+floor stalled whole past the headless deadline (`draft/thinking-floor-wedge.md` §5.3).*
 NativeLink gained request deadlines (it waited forever before), ping, and dialNow so a
 fresh floor is not served its predecessor's backoff.
 
