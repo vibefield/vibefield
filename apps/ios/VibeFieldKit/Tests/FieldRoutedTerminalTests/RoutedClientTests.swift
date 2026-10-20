@@ -1514,6 +1514,46 @@ import Testing
     client.close()
   }
 
+  /// C8 — `exited` is the LEASE's to say. The event's facts land on the
+  /// session (`exit`, P8 — the face says them), but the event alone is not the
+  /// lease's word and moves no attach step; `stopped{exited}` /
+  /// `revoked{exited}`, which the cell sends right after it on the same leg,
+  /// is `exited` — and nothing waits on an exited session's first frame, which
+  /// will never come.
+  @Test func anExitIsTheLeasesToSayAndTheEventOnlyNamesIt() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let client = client(transport, sink: sink)
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    try await live.control.deliver(
+      .sessionEvent,
+      [
+        "event": .object([
+          "kind": .string("exited"), "sessionId": .string(session), "exitCode": .int(2),
+          "exitSignal": .null, "requestedTermination": .null, "exitOutcome": .string("crashed"),
+        ])
+      ])
+    try await settle("the exit's facts") { client.sessions[session]?.exit != nil }
+    #expect(client.sessions[session]?.exited == false)
+    #expect(client.step == .firstFrame)
+
+    try await live.control.deliver(
+      .cellActivationStatus,
+      Script.status(
+        session: session, activation: live.activation, sequence: 1, presentation: "stopped",
+        input: "revoked", reason: "exited"))
+    try await settle("the lease's exit") { client.sessions[session]?.exited == true }
+    #expect(client.sessions[session]?.presentationReady == false)
+    #expect(client.sessions[session]?.inputAllowed == false)
+    #expect(client.step == nil)
+    #expect(
+      client.sessions[session]?.exit
+        == RoutedSessionExit(code: 2, signal: nil, requestedTermination: nil, outcome: "crashed"))
+    client.close()
+  }
+
   // MARK: Refused input (C5)
 
   /// `InputRefused` rides the control leg behind the negotiated capability:

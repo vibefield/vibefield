@@ -367,3 +367,62 @@ import Testing
         + "the desktop paused input for this viewer (some-future-fence)")
   }
 }
+
+/// C8 — an exited session's ended face: the facts the cell's `SessionEvent`
+/// named, said as what is known (`runEndedWords`), and the field's words when
+/// only the LEASE said it — an attach to a session that had already exited
+/// hears no event.
+@Suite struct ExitWordsTests {
+  static func exitedLease() throws -> RoutedActivationStatus {
+    try RoutedActivationStatus(
+      json: .object([
+        "sessionId": .string("s"), "activationId": .string("a"),
+        "cellStatusSequence": .int(1), "leaseTtlMs": .int(6_000),
+        "presentation": .object(["state": .string("stopped"), "reason": .string("exited")]),
+        "input": .object(["state": .string("revoked"), "reason": .string("exited")]),
+      ]))
+  }
+
+  @Test func theLeasesWordEndsTheCardWhenNoEventCame() throws {
+    var session = RoutedSessionState(sessionId: "s", activationId: "a")
+    session.control = .attached
+    session.status = try Self.exitedLease()
+    #expect(session.exited)
+    // ended, never the stopped face and its RETRY — presented or not
+    for presented in [true, false] {
+      #expect(
+        TerminalAttachment.phase(
+          for: .attached, session: session, presented: presented, device: "studio")
+          == .ended("its run exited on studio"))
+    }
+    // when the event came, its facts are what the card says
+    session.exit = RoutedSessionExit(
+      code: 2, signal: nil, requestedTermination: nil, outcome: "crashed")
+    #expect(
+      TerminalAttachment.phase(for: .attached, session: session, presented: true, device: "studio")
+        == .ended("its run exited on studio with code 2"))
+  }
+
+  @Test func whoEndedItIsSaidWhenTheCellNamedThem() {
+    let words = { (outcome: String, signal: String?) in
+      TerminalAttachment.runEndedWords(
+        device: "studio",
+        exit: RoutedSessionExit(
+          code: nil, signal: signal, requestedTermination: nil, outcome: outcome))
+    }
+    #expect(words("user-terminated", "SIGHUP") == "its run on studio was closed")
+    #expect(words("application-terminated", nil) == "VibeField closed its run on studio")
+    #expect(words("service-terminated", nil) == "the terminal service on studio shut down")
+    // a signal nobody asked for is said as the signal it is
+    #expect(words("signaled", "SIGTERM") == "its run on studio was ended by SIGTERM")
+  }
+
+  @Test func theEndedFaceOffersNoRetry() {
+    let banner = TerminalAttachment.banner(
+      for: .ended(TerminalAttachment.runEndedWords(device: "studio")), device: "studio",
+      doorRefusal: nil)
+    #expect(banner?.title == "this session ended — its run exited on studio")
+    #expect(banner?.actions == [.backToTheField])
+    #expect(banner?.coolsTerminal == true)
+  }
+}

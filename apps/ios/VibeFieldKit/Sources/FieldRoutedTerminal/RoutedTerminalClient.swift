@@ -79,6 +79,20 @@ public struct RoutedSessionState: Sendable {
   /// once. A fresh activation is a fresh state.
   var activationEnded = false
 
+  /// C8 — the LEASE says this session's run exited: `stopped{exited}` with
+  /// input `revoked{exited}`, the cell's own word beside `exit`'s facts (the
+  /// `SessionEvent` before it, on a leg that negotiated one — an attach to a
+  /// session that had already exited hears no event at all). Final — the cell
+  /// never moves it back — so a face ENDS here; the activation stays attached
+  /// only so the run's last frames still land. Not presenting, and never
+  /// again, so no attach step waits on it either.
+  public var exited: Bool {
+    guard let status else { return false }
+    if case .stopped(reason: "exited") = status.presentation { return true }
+    if case .revoked(reason: "exited") = status.input { return true }
+    return false
+  }
+
   /// BOTH legs are attached for this activation.
   ///
   /// Attached is not the same as presenting: the frames leg is attached the
@@ -2195,10 +2209,15 @@ public final class RoutedTerminalClient {
   }
 
   /// What one carried session's attach waits on, nil when nothing: it has
-  /// presented, it is parked (demand `none` — the cell owes it no frame), or
-  /// it was refused, ended or failed, each of which is said, not waited out.
+  /// presented, it is parked (demand `none` — the cell owes it no frame), its
+  /// run exited (C8), or it was refused, ended or failed, each of which is
+  /// said, not waited out.
   private func pendingStep(of session: RoutedSessionState) -> AttachStep? {
     if presented.contains(session.activationId) || session.demand == .none { return nil }
+    // C8 — an exited session never presents: its face is ended, and a
+    // first-frame deadline over it would say "sent no screen" about a seed
+    // the cell sent and this client applied
+    if session.exited { return nil }
     switch session.control {
     case .attaching: return .control
     case .refused, .ended: return nil

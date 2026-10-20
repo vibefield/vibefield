@@ -386,6 +386,148 @@ import Testing
     try await Task.sleep(for: Self.deadline * 2.5)
     #expect(attachment.phase == .ended("its run exited on studio"))
   }
+
+  /// C8 — the cell attaches a session that had ALREADY exited stopped: the
+  /// dead program's last screen as the seed, the lease `stopped{exited}` /
+  /// `revoked{exited}`. The card reads ended — never "connecting over the
+  /// mesh…", and no deadline says "the session attached but sent no screen"
+  /// over a seed sent and applied.
+  @MainActor
+  @Test(
+    "C8: an attach to a session that had exited reads ended, and no deadline paints over it",
+    .timeLimit(.minutes(1)))
+  func anAttachToAnExitedSessionReadsEnded() async throws {
+    let door = CellDoorHarness()
+    let port = try await door.start()
+    defer { Task { await door.stop() } }
+    let frames = try LaneFrames.load()
+    let identity = try decodeTRF1Frame(frames.seed)
+    let attachment = TerminalAttachment(
+      transport: URLSessionRoutedTransport(),
+      appearance: .default,
+      door: { _ in try AttachmentOverTheDoorTests.ticketJSON(port: port, sessionId: Self.session) },
+      deadline: Self.deadline)
+    attachment.attach(sessionID: Self.session, cols: 80, rows: 24, deviceName: "studio")
+
+    let control = try await AttachmentOverTheDoorTests.value("the control attach") {
+      await door.controlAttach
+    }
+    let activation = control.activationId
+    await door.send(
+      .controlLegAttached,
+      Script.controlAttached(
+        session: Self.session, activation: activation, rights: ["input", "read"]),
+      on: .control)
+    _ = try await AttachmentOverTheDoorTests.value("the frames attach") {
+      await door.framesAttach
+    }
+    await door.send(
+      .framesLegAttached,
+      Script.framesAttached(
+        session: Self.session, activation: activation,
+        sessionHandle: String(identity.sessionHandle), viewHandle: String(identity.viewHandle)),
+      on: .frames)
+    let seedStamp = Script.stamp(1)
+    await door.sendUnit(
+      try Script.frame(
+        session: Self.session, activation: activation, sequence: 1, creditEpoch: 1,
+        base: nil, result: seedStamp, payload: frames.seed))
+    await door.send(
+      .cellActivationStatus,
+      Script.status(
+        session: Self.session, activation: activation, sequence: 1, presentation: "stopped",
+        input: "revoked", reason: "exited", accepted: seedStamp, leaseTtlMs: 60_000),
+      on: .control)
+    try await Self.until("the card to read ended") {
+      await MainActor.run { attachment.phase == .ended("its run exited on studio") }
+    }
+    let banner = try #require(attachment.banner)
+    #expect(banner.title == "this session ended — its run exited on studio")
+    #expect(banner.actions == [.backToTheField])
+    #expect(banner.coolsTerminal)
+    #expect(!attachment.acceptsInput)
+    // the first-frame deadline never fires over it
+    try await Task.sleep(for: Self.deadline * 2.5)
+    #expect(attachment.phase == .ended("its run exited on studio"))
+    await attachment.detach()
+  }
+
+  /// C8 — a LIVE session whose program exits: the cell's `SessionEvent` names
+  /// the outcome, then the lease stops; the card ends in the event's words.
+  @MainActor
+  @Test(
+    "C8: a live session whose program exits ends in the exit's words",
+    .timeLimit(.minutes(1)))
+  func aLiveSessionWhoseProgramExitsEndsInItsWords() async throws {
+    let door = CellDoorHarness()
+    let port = try await door.start()
+    defer { Task { await door.stop() } }
+    let frames = try LaneFrames.load()
+    let identity = try decodeTRF1Frame(frames.seed)
+    let attachment = TerminalAttachment(
+      transport: URLSessionRoutedTransport(),
+      appearance: .default,
+      door: { _ in try AttachmentOverTheDoorTests.ticketJSON(port: port, sessionId: Self.session) },
+      deadline: Self.deadline)
+    attachment.attach(sessionID: Self.session, cols: 80, rows: 24, deviceName: "studio")
+
+    let control = try await AttachmentOverTheDoorTests.value("the control attach") {
+      await door.controlAttach
+    }
+    let activation = control.activationId
+    await door.send(
+      .controlLegAttached,
+      Script.controlAttached(
+        session: Self.session, activation: activation, rights: ["input", "read"]),
+      on: .control)
+    _ = try await AttachmentOverTheDoorTests.value("the frames attach") {
+      await door.framesAttach
+    }
+    await door.send(
+      .framesLegAttached,
+      Script.framesAttached(
+        session: Self.session, activation: activation,
+        sessionHandle: String(identity.sessionHandle), viewHandle: String(identity.viewHandle)),
+      on: .frames)
+    let seedStamp = Script.stamp(1)
+    await door.sendUnit(
+      try Script.frame(
+        session: Self.session, activation: activation, sequence: 1, creditEpoch: 1,
+        base: nil, result: seedStamp, payload: frames.seed))
+    await door.send(
+      .cellActivationStatus,
+      Script.status(
+        session: Self.session, activation: activation, sequence: 1, accepted: seedStamp,
+        leaseTtlMs: 60_000),
+      on: .control)
+    try await Self.until("the card to go live") {
+      await MainActor.run { attachment.phase == .live }
+    }
+
+    // the cell's order on the one control leg: the event, then the lease
+    await door.send(
+      .sessionEvent,
+      [
+        "event": .object([
+          "kind": .string("exited"), "sessionId": .string(Self.session), "exitCode": .int(2),
+          "exitSignal": .null, "requestedTermination": .null, "exitOutcome": .string("crashed"),
+        ])
+      ],
+      on: .control)
+    await door.send(
+      .cellActivationStatus,
+      Script.status(
+        session: Self.session, activation: activation, sequence: 2, presentation: "stopped",
+        input: "revoked", reason: "exited", accepted: seedStamp, leaseTtlMs: 60_000),
+      on: .control)
+    try await Self.until("the card to end in the exit's words") {
+      await MainActor.run { attachment.phase == .ended("its run exited on studio with code 2") }
+    }
+    #expect(
+      attachment.banner?.title == "this session ended — its run exited on studio with code 2")
+    #expect(attachment.banner?.actions == [.backToTheField])
+    await attachment.detach()
+  }
 }
 
 // MARK: - Harness

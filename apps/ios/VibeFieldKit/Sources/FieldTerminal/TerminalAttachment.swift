@@ -471,10 +471,19 @@ public final class TerminalAttachment {
   /// A run that exited, in the desktop pane face's terms (`describePane`): a
   /// signal or a nonzero code is said, a clean exit is only "exited", and an
   /// exit whose code never came is "ended" — never an invented one. The field's
-  /// word (fix8) carries no facts and reads as the clean exit it reports.
+  /// word (fix8) carries no facts and reads as the clean exit it reports, as
+  /// does the lease's `exited` with no event behind it (C8). C8 — who ended it
+  /// is said when the cell named a requested termination: the person's or
+  /// VibeField's own act, never the signal that carried it.
   nonisolated static func runEndedWords(device: String?, exit: RoutedSessionExit? = nil) -> String {
     let who = device ?? "that desktop"
     guard let exit else { return "its run exited on \(who)" }
+    switch exit.outcome {
+    case "user-terminated": return "its run on \(who) was closed"
+    case "application-terminated": return "VibeField closed its run on \(who)"
+    case "service-terminated": return "the terminal service on \(who) shut down"
+    default: break
+    }
     if let signal = exit.signal { return "its run on \(who) was ended by \(signal)" }
     guard let code = exit.code else { return "its run ended on \(who)" }
     return code == 0 ? "its run exited on \(who)" : "its run exited on \(who) with code \(code)"
@@ -1156,6 +1165,12 @@ public final class TerminalAttachment {
     guard let client, let sessionID, let session = client.sessions[sessionID] else {
       return "not attached — nothing to type into yet"
     }
+    if session.exited || session.exit != nil {
+      // C8 — a run that will never take a key again, by the lease's word or
+      // the event's: nothing to wait for, so never "waiting for the terminal
+      // to catch up"
+      return "the session has ended — there is nothing to type into"
+    }
     if !session.rights.contains(.input) {
       return "view only — this desktop granted read without input"
     }
@@ -1192,9 +1207,10 @@ public final class TerminalAttachment {
   /// Where a person reads it: the note is said in the `.live` and `.connecting`
   /// phases (an overload refusal arrives after the lease that made the card
   /// `.connecting`). Every reason the cell can give is worded, so none is ever
-  /// said as its token — though two this client cannot earn: `pending` and
-  /// `not-granted` (its gate sends nothing before the first presenting lease,
-  /// nor without the input right the cell accepted).
+  /// said as its token — but three reach a person another way first: `exited`
+  /// under the ended banner, and `pending` and `not-granted`, which this client
+  /// cannot earn (its gate sends nothing before the first presenting lease, nor
+  /// without the input right the cell accepted).
   nonisolated static func cellRefusalWords(_ reason: String) -> String {
     let lead = "the terminal didn't take that input"
     switch reason {
@@ -1274,12 +1290,18 @@ public final class TerminalAttachment {
   /// set's state: the connection may be perfectly healthy and the thing the
   /// card is about gone. A run the cell said EXITED is ended with its facts
   /// first — before its removal ends the activation too, and after it, so the
-  /// card keeps the run's words rather than the removal's.
+  /// card keeps the run's words rather than the removal's — and a run whose
+  /// LEASE says it exited, with no facts, in the field's words (C8).
   nonisolated static func phase(
     for state: RoutedTerminalClient.State, session: RoutedSessionState?, presented: Bool = false,
     deadline: Duration = stepDeadline, device: String? = nil
   ) -> TerminalPhase {
     if let exit = session?.exit { return .ended(runEndedWords(device: device, exit: exit)) }
+    // C8 — the LEASE says the run exited (`stopped{exited}` / `revoked{exited}`)
+    // and no event named its facts — an attach to a session that had already
+    // exited hears none: ended in the field's words, with no RETRY (a fresh
+    // mint would attach to the same dead run), never the stopped face below.
+    if session?.exited == true { return .ended(runEndedWords(device: device)) }
     if let session, case .ended(let reason) = session.control {
       return .ended(endedWords(reason, device: device))
     }
