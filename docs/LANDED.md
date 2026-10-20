@@ -12453,3 +12453,206 @@ taking over the session.
   landing, with the kit suite.
 - ghosttea 0.10.2 (James's release), then the kit's pin with `gridAlignment = .bottom` while another device holds the
   seat.
+
+## FW (F1) + items 41 and 42 on the phone — one link from the phone to its desktop, built end to end and opt-in on the phone until James's device round; the live card is its terminal, edge to edge, and says who is driving (2026-10-20; `5798a6548` → `d38f14865`, the one train `focus/train-f1`)
+
+**What James asked and ruled:**
+- **The freeway.** Run 3 (2026-10-16) measured a phone's attach: a ticket round trip (115–176 ms), two new sockets
+  (245–302 ms before their hellos) and three round trips in a row, where `tailscale ping` to the phone is direct at
+  11 ms. James ruled every lean of `draft/thinking-freeway.md`: FW-D1–D3 at 21:21Z and FW-D4–D5 at 22:16Z that day,
+  FW-D6–D7 at 23:31Z, and FW-D9 (a) and FW-D10 (a) on 2026-10-18 at 20:08Z. FW-D8 is withdrawn.
+- **The phone's terminal, 2026-10-17:** "cant restore back no matter what" (03:36Z), "settled size only" (item 24),
+  "any touch takes", "scrolling does nothing" (05:25Z), his two keyboards, and his rule of no sleeps.
+- **Item 41, 2026-10-19 03:00Z:** "instead of containing the terminal content in the rounded rectangle right now, just
+  make it fully fill the entire tab area…". At 20:48Z: "i said fully fill the tab card, but currently there are still
+  big empty gap at the bottom of the card, thats not what i meant".
+- **Item 42 on the phone:** at 17:42Z (Q3) the phone says "studio is driving · touch to take it back". The first build
+  went down with the desktop's at 20:48Z: "this deign is awful, you are not following any estabilshed design
+  conventions in our godview … redesign the overlay of desktop and mobile, redesign the terminal pane on mobile". At
+  20:52Z: "try inner glow and more obvious kinetic text and bloom, it needs to be way more obvious than what it is
+  right now". From the *Seat & Card Redesign* canvas he ruled at 21:38Z, "good, design all go with the lean": Phone A
+  (the readout), T1 (Godview's frame) and F1 (the card filled to its foot).
+- **The dead-session loop, found 2026-10-19:** fieldd's wedge rule respawned James's dev floor at 02:24:56Z and its
+  sessions were lost. One phone card then asked for its ticket 254 times in 2 h 49 min, about every 40 s, and said
+  nothing.
+
+**The 69 commits, on main `baeca5e1d`:**
+- **The phone's terminal on today's transport (24, on by default):**
+  - `5798a6548` the kit's lanes: one connection set per desktop cell, shared by every card; frames applied in order
+    and acknowledged only once the renderer took them (the audit's D1 and B2); a closed card's session kept live.
+  - `a7b526dd1` the card opens on its live terminal with no ATTACH (FW-D2), and the pane no longer resizes itself in
+    a loop through the desktop.
+  - The geometry seat: `695050983` a closed card gives the seat back, `e4d89b63c` the keyboard coming up takes it,
+    `7152612d0` a card being dismissed is not a terminal size, `72c1e87e9` `7adeadd24` the settled size only,
+    `fe5260c90` any touch takes it.
+  - Input: `c38506d70` a tap raises the card's own input, `b65cffaf8` the keyboard puts the view back on the bottom,
+    `633761f6f` a declined Send keeps the draft, `ee7a34769` the + menu's door opens on its own signal (no sleep),
+    `d1c037947` a card key waits for the IME's composition, `c25c9c0c2` a keyboard hand-off is one call,
+    `9e36724bf` a paste too large for one message is refused and said.
+  - Sessions: `72aa3c836` a reopened card paints again, `3e745b8c1` only a suspended attachment resumes,
+    `1d1033ae0` an EXITED run ends its card with the cell's facts (P8), `7cf5d8ac1` a leg blip is not the session's
+    end (B3/P4), `20741ed71` a refusal stays on its session and RETRY dials (P5), `63e1f5df5` forgetting a session
+    stalls nothing (P6).
+  - What the phone says in its log: `c299eb8fa` the seat, `c502cbb81` each scroll, `f98fdda5a` why input is held.
+- **The freeway, F1 (34):**
+  - Contracts: `ae657d259` the link's wire v1 and the floor seam (`PORTS.FREEWAY_SERVE` 9425, `FREEWAY`,
+    `FREEWAY_CODES`; the seam generated into Rust, every shape pinned by fixtures on both sides), `b091eddbe`
+    Restarting is RestartScheduled extended (one plane set), `e1d07ccdf` the declaration names this desktop,
+    `46906f7cb` `ServeConfig.secretDoor`, `48af2096b` `approvalSigningInput`.
+  - The link: `20df5d224` the frame codec (`freeway-frames.vector` on every side), `3418140fc` the writer (P0 first,
+    P1–P3 by deficit round-robin 8:2:1, the in-flight cap counted by Ack, a stream's frames never reordered),
+    `fa9a8b7bf` the streams, `3a00d02c1` the writer paced to its path.
+  - The host, `field-freeway-host`, the floor's supervised child (FW-D4): `b53e12d35` it mints a phone's cell grants,
+    and the cell takes exactly two issuers (FW-D1), `4926f215b` it verifies the phone's approval at the hello,
+    `bca2ae3c3` its door and hello, `533604cca` the keyring and `036281100` it is the host boot's, not one link's,
+    `bdb60985b` the link run, `bd521d9c1` a revoked keyring mints nothing, `1031c2e00` the process.
+  - The floor: `9ec3023c0` its one supervised child, extracted from the cells' generation with its behavior unchanged,
+    `6bb8748f0` a child can inherit a descriptor, `8853c9fc8` a line relayed to every running cell, `15dc1d3d4` the
+    freeway unit, `27693fbaf` a join row leaves the floor only once fieldd wrote it (FW-L3).
+  - The cell: `fd784d077` `RevokeClient` floors a client's grants and ends its activations.
+  - fieldd: `e634bf6dd` the declaration from the roster and the host behind one static route (a fieldd restart drops
+    no phone link, FW-L10), `f79eda154` `freeway.approve`, audited like a ticket, `503d4a79e` joins are audit rows and
+    an unlink revokes.
+  - The kit: `ba07b77f2` `FieldFreeway` (the codec on the shared vector, and VibeField's own RFC 6455 client),
+    `e0926c247` `FreewayLink`, `1deaff261` the routed client's terminals on the link, `66c997fca` a desktop's link
+    kept, `d930cf09c` the mesh leg dials the freeway, `badf48258` a tap holds its grant before it happens,
+    `73ab07a77` the focused cell's frames ride `live` and the others' `sync`.
+  - Tooling: `d706f6611` fieldd's test setup builds field-native into the checkout's own target.
+- **The dead-session loop's end (1):** `bdaf2d090`. A refusal the door marks final (`retryable: false`) is not asked
+  again, for any kind. A session the desktop no longer has is said as ended, alone: "studio no longer has it", or
+  "studio's terminal engine restarted" after a `cell_gone` beat. Its ticket is never asked for again. fieldd is
+  unchanged: its `cell_gone` beat stays retryable.
+- **Item 41 (1):** `813bc0769`. The live card is its terminal, edge to edge, in Godview's pane frame (DESIGN.md §8,
+  the MV lead's text for T1 + F1, verbatim).
+  - A 44pt band holds the readout (model · effort · context), `···` and the badge.
+  - The grid runs from under the band to the home indicator's safe area.
+  - The frame's 1px line at 30% and its inner glow follow the sheet's corners (40pt at the top, 62 at the foot), in
+    text main.
+  - The closed input row's key and chips float over the grid's last rows, each on a clearing of the ground.
+- **Item 42 on the phone (7):** `81d763e09` DESIGN.md §8 "A live card another client is driving" (the MV lead's text,
+  verbatim), `fe668ec9d` the phone reads the cell's `GeometryState` (the contracts' three goldens mirrored),
+  `8cb478567` `geometry-events` advertised and folded per session, `6571d5dd3` `TerminalAttachment.seat`,
+  `fb4187ac0` the readout decided before it is drawn, `269b254b3` `takeEmptySeat()`, `e65c64ec7` the readout drawn:
+  - the holder's name as fieldd minted it, full, and "is driving" at 40%, 800 at 56pt/1 and −0.04em, with one caption
+    line, "touch to take it back", over the held veil (62%);
+  - lit in the band's ink: the inner glow on the sheet's outline and a bloom behind the words;
+  - played once after 400ms (the letters 26ms apart from 140ms, capped at 400ms), then still. It leaves at once when
+    the phone takes the seat, and a touch on the grid takes it;
+  - the card on the screen takes an empty seat when its holder lets go (Q1, on the phone).
+- **The train's own (2):** `472b5cb40` contracts: `FreewayOpened` is written out and annotated (TS7056). F1's open
+  answer and item 42's holder face are together longer than tsc will serialize, and neither reds alone. The runtime
+  schema, the JSON Schema and the Rust do not move. `d38f14865` item 54, test-only: the support bundle's doctor tests
+  close the logging their fixture opens (below).
+
+**Not in this landing, and what is opt-in:**
+- **The phone's link is opt-in.** The kit dials the freeway only behind `-vf-freeway` (DEBUG) until James's device
+  round witnesses F1's exit (a warm tap within 2 RTT + 10 ms). Without the flag the phone's lanes are today's, with
+  the 24 fixes above. The desktop's half runs: the floor starts the host on fieldd's first declaration.
+- **Where the host is installed.** A floor with no `field-freeway-host` beside it says so as the unit's disabled
+  state, "the freeway host is not installed beside this floor", never as a crash loop. Neither `pnpm dev`'s runtime
+  snapshot nor the package carries the host yet.
+  - Dev: the host is staged beside the cell in B's snapshot lane (`focus/dev-cell-snapshot`) as its own commit,
+    code-only, after this landing. James's `-vf-freeway` device round needs it.
+  - The package: prod-builder's fw-pack lane (`846398b1`, on the old F1), rebased after this landing.
+- **The held screen's anchor at the phone's foot** is ghosttea 0.10.2's `gridAlignment`, James's release, written
+  code-only on `feat/apple-grid-alignment` `269df88`. Until it ships the held screen stands top-left, and the words
+  stand in the empty rows at the foot: §8's dated interim.
+- **The freeway's other slices:** F1b (DS-D15), FD1–FD2 for FW-D6/D7 after truffle 0.7.19, FW-D10's slice with its
+  own row, FW-D9's petition when F4 opens, and FW-D3's scrollback in ghosttea.
+- **A focused desktop pane taking the empty seat** (Q1) arrives with item 20's ghosttea lane.
+- **Owed to the next `pnpm commit-draft` turn** (draft snapshots queue while James's dev app is up): the errata at
+  source that F1's records owe (`thinking-freeway.md` §17).
+  - TM-D8's three sources, `thinking-terminal-mesh-cells.md` :274-275 and :395 and `specs/native-floor.md`
+    :304-305: FW-D1 mints with the approval's own rights, not view-only.
+  - NF-L3, `specs/native-floor.md` :42-44: an approved phone link is a client of the host's mint.
+  - `thinking-freeway.md`'s Status line, with F1's shas re-cited.
+- **DECISIONS rides here.** The lanes owed the freeway's index entry, so this records commit carries it. The FW row
+  flips to F1 landed and adds D6, D7, D8 (withdrawn), D9 (a) and D10 (a) as ruled. The definitions stay in
+  `thinking-freeway.md`.
+
+**Validation:** VF-PM's grant of 2026-10-20 00:49Z for the one train, with the PM-WINDOW naming focus-session from
+the grant to the last row.
+- **Rebase:** onto main `baeca5e1d`, in the grant's order.
+  - F1's 58: all `=`. `apps/ios` at F1's own tip `d706f6611` is byte-identical to `witness/phone-2026-10-18`
+    `264eea084` (the grant's acceptance).
+  - cell-gone `=`. Lane 41 `!` in DESIGN.md's context only: its §8 paragraph meets cell-gone's beside it, and both
+    stand. Seat-kit's 7 `=`. Then the TS7056 commit.
+  - `pnpm format`, biome at error level and `pnpm gen` before every verify: the tip is format-clean and gen-current
+    (the lint, fmt and gen:check stages hold at it).
+  - The worktree `/Volumes/SamsungRed/focus-seat` on the fresh-lane checklist: its puppeteer worktree at `fa0d6cf`,
+    `pnpm siblings` with every pin met and clean, 20.4 GiB free on the internal disk.
+- **verify at `9d6b42cfa`, run 1**, armed 00:59:20Z at 9.55: RED on item 54. electron-shell's tests all passed, and
+  vitest failed the package on 24 unhandled `ERR_INVALID_STATE` errors ("A FileHandle object was closed during
+  garbage collection"), with the 1-min load at 121. Not a pointer's or a focus signature's red, so it ran again.
+- **verify at `9d6b42cfa`, run 2**, armed 01:11:40Z at 9.96: EXIT 0. **The stages**, armed 01:21:09Z at 9.49: 14 of 14
+  ok.
+- **The rows held.** James's screen had taken its idle lock while he was away. The gate stopped before any row armed,
+  so nothing was counted: a locked screen is not an arm failure (VF-PM, 01:57Z). Nobody woke or unlocked it.
+- **The kit suite at `9d6b42cfa`**, armed 01:56:44Z at 4.47: RED on four expectations in the lane's new
+  `LiveCardSeatTests`, each printing equal values (`149.0 == 149`, `575.0 == 575`). Swift Testing's `#expect` types
+  each side apart, so a sum of integer literals is an `Int` and never equals the `CGFloat`. The code was right; the
+  slip was the lane's own, and test-only.
+  - `2f099d2dc` wrote the sums as `CGFloat(…)`. The kit, armed 02:01:11Z at 9.13, was RED at compile: the type
+    checker gave up on `CGFloat(56 * 2 + 4 + 18 + 15)` inside the macro.
+  - `472b5cb40` wrote each expected value as a typed `let`. The kit, armed 02:03:43Z at 6.85: GREEN, 1,295 tests in
+    236 suites and 13 bundles, on the existing iPhone 17 Pro by its UDID (none created or deleted), with TMPDIR=/tmp
+    and derived data on the SSD.
+- **verify at `472b5cb40`**, armed 02:07:25Z at 9.07: RED on item 54 again, the same 24 errors, with the load at 160.
+  A second red on the same class under load stops the gate, as ruled, and the teardown was read.
+  - The cause: WP12d's `doctorOf()` (`d9d2d40f6`, support-bundle.test.ts) built a fixture and never closed its
+    logging, which holds eight file handles. The two doctor tests call it three times, so 24 handles were left to the
+    collector, and Node 26 turns each one collected into an uncaught error. It reds only when the collector runs
+    inside the file's run, under verify's fan-out: 0 errors in 42-core's two runs.
+  - The fix at its cause, `d38f14865`, test-only (VF-PM's ruling (b), 02:12Z): `doctorOf` closes its logging in a
+    `finally`, as every other test in the file does. The file alone, armed 02:15:22Z at 9.28: 8 of 8. For WP12d's
+    owner (prod-builder) to review.
+- **verify at `d38f14865`, the gate of record**, armed 02:16:18Z at 9.04, EXIT 0 at 02:21:35Z:
+  - vitest 9,008 passed (fieldd 2,340 and 11 skipped; field-app 2,595; electron-shell 1,899 and 3 skipped; contracts
+    1,082), with 0 unhandled errors;
+  - cargo 405 passed, 0 failed, 9 ignored;
+  - gen:check held.
+- **The stages at `d38f14865`**, once, each alone, armed 02:23:57Z at 9.92: 14 of 14 ok (typecheck 76 s, test 140 s,
+  test:rust 87 s).
+- **The kit suite at `d38f14865`, run 1**, armed 02:31:34Z at 9.49: RED on one F1 test's bound.
+  - The test: `LanesOverTheDoorTests.theCellASessionOpensOrComesBackOnIsSaidFocused()` threw
+    `TimedOut("the demand to come back")` from the suite's own 5 s bound, after a park and a re-attach on one
+    attachment.
+  - The load rose to 86 inside the run, from the suite's own fan-out. Everything else passed. `apps/ios` is
+    byte-identical to `472b5cb40`, whose run was green.
+  - A 5 s wait swamped by load is a known class on this Mac. It is read alone, and the bound is not touched.
+  - The file alone (`-only-testing:FieldTerminalTests/LanesOverTheDoorTests`), armed 02:35:59Z at 9.98: 6 of 6, the
+    test itself in 0.086 s.
+- **The kit suite at `d38f14865`, run 2, the gate of record**, armed 02:37:40Z at 9.96: GREEN, 1,295 tests in 236
+  suites and 13 bundles, EXIT 0 at 02:38:26Z (the load at 94 inside the run). `apps/ios` is byte-identical to
+  `472b5cb40`'s, and the suite ran again regardless, as VF-PM ruled.
+- **The desk rows: 13 of 13 green, each alone and each on its first run**, each armed at a 1-min load under 10 with
+  the screen unlocked.
+  - The eight non-interaction rows ran from James's unlock (03:40:34Z), with him at the Mac and flux QUIET.
+  - The five interaction rows ran in his away slot (his word at 15:21Z, relayed by VF-PM), with his Blender render
+    running.
+  - The eleven rows that print a teardown each said `SMOKE_DAEMONS {"left":[],"reaped":[]}`. still starts no
+    daemons, and smoke:plugin runs through `pnpm plugin try`, which prints none.
+
+| row | armed (Z) | 1-min load | took |
+|---|---|---|---|
+| still | 03:42:56 | 8.58 | 38 s |
+| smoke | 03:43:34 | 6.72 | 33 s |
+| smoke:canvas:no-gpu | 03:44:07 | 5.79 | 31 s |
+| smoke:canvas:no-webgpu | 03:44:38 | 4.70 | 29 s |
+| smoke:kind-faults | 03:45:07 | 5.06 | 79 s |
+| smoke:plugin-restart | 03:46:26 | 3.69 | 74 s |
+| smoke:plugin | 03:47:41 | 9.91 | 56 s |
+| smoke:bundled | 03:48:37 | 8.17 | 93 s |
+| smoke:canvas | 15:23:49 | 9.26 | 939 s |
+| smoke:godview | 15:40:49 | 9.03 | 151 s |
+| smoke:terminal-door | 15:43:20 | 6.64 | 35 s |
+| smoke:terminal-direct | 15:43:56 | 5.62 | 37 s |
+| smoke:studio | 15:44:33 | 5.85 | 30 s |
+
+**Next:**
+- James's dev app moves from the try branch (`focus/try-41-42`, which never lands) to main's tip, at his word.
+- The host beside the dev floor (B's snapshot lane), then James's device round of the freeway: `-vf-freeway` on his
+  phone and F1's exit rows. The flag comes off in its own commit.
+- ghosttea 0.10.2 (James's release), then the kit's pin with `gridAlignment = .bottom` while another device holds the
+  seat. §8's dated interim retires with it.
+- Item 50's fieldd half (`c0581e952`) with the MV lead's puppeteer seam, at the pin event after A's.
