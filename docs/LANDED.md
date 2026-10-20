@@ -12353,3 +12353,103 @@ fast-forwards his own `../puppeteer` main to it.
     60 Hz and at the display's rate; DECISIONS' GT row flips in that pin's lane.
 - The squeeze gate's owed test fixes (items 45, 47 and 48, and the cd row's harness note), and `docs/desk-gates.md`'s
   arming rule (an unattended Mac), its own docs commit.
+
+## GV (item 42) — a pane another device is driving says so in the held-edge readout's figure, and the cell says who holds the seat (2026-10-19; `6a9110b5d` → `a2312686b`, lane `focus/seat-announce`)
+
+**What James asked (2026-10-19 03:00Z):** with the phone driving a session, the desktop pane drew phone-sized content
+"which might strike user as something glitched if there is no ui trying to explain"; the pane should say a phone is
+taking over the session.
+- The first build was a chip on the line's glass, 11px, over a 62% veil. James turned it down before it landed (20:48Z):
+  "this deign is awful, you are not following any estabilshed design conventions in our godview … at least propose 3
+  design options and present them in a live design artifact". Then, at 20:52Z: "try inner glow and more obvious kinetic
+  text and bloom, it needs to be way more obvious than what it is right now".
+- Three options for each of four surfaces went to him on the *Seat & Card Redesign* canvas, after the MV lead's
+  convention read. That read retired every loop (§6: a held seat is a state, not a wait), the 1.5px selection-weight
+  ring, a caps ticker and a band over the meter. **James ruled at 21:38Z: "good, design all go with the lean"**, which
+  for the desktop is A · Readout.
+- The mechanics were kept as built: the contract, the cell's announcement and fieldd's face. Only the presentation
+  was rebuilt to the ruling.
+
+**The five commits:**
+- `6a9110b5d` docs. DESIGN.md §8 "A session another device is driving" is the MV lead's text, verbatim:
+  - **The figure** is the held-edge readout's: the holder's name full and **is driving** at 40%, 800 at 64px/1,
+    haloed in the ground, over the 62% veil. One caption line gives the size in mono, "45 × 22", then "· click the
+    pane to take it back".
+  - **The light:** the pane colour's two inset glows and a bloom behind the words. The pane's line keeps the frame's
+    own 1px.
+  - **The motion:** the entrance plays once, from 400ms after the seat goes, and then holds still. It goes at once
+    when this window takes the seat.
+  - **Let go:** a seat let go reads "James's iPhone let go" (the verb at 40%), dated until item 20 lands.
+  - §13 gains a standing rule: a phone, wherever a surface marks one, wears Apple's mark.
+- `7954ddbe8` contracts. `GeometryState` sits behind the negotiated `geometry-events` capability, and every attach
+  grant may carry its holder's face.
+- `270c75155` cell. Every seat change, and every attach onto a `geometry-events` leg, sends `GeometryState`, with the
+  holder's face echoed from its grant. That is GEOMETRY_SEAT_MACHINE's "announce", met at the cell.
+- `50e75b2af` fieldd. The holder's face (kind, the roster's name, the OS) is minted into the attach grant, or none
+  where no honest name exists.
+- `a2312686b` field-app.
+  - The host advertises `geometry-events` and folds each session's `GeometryState`: a strictly older one is ignored,
+    an equal one replaces.
+  - The pane draws the readout by `@starting-style` transitions, never a keyframe. Its letters come in 26ms apart from
+    140ms, capped at 400ms: §6's cap read as the Me menu reads it (`MeMenu.tsx`), so a long name's last letters start
+    together.
+  - os-marks.tsx is main's again: only the retired chip mapped iOS.
+
+**Not in this landing:**
+- The phone's half rides F1's train: lane 41's T1 frame and F1 fill, and seat-kit's phone readout.
+- The held screen's anchor at the phone's foot is ghosttea 0.10.2's `gridAlignment`, James's release. It is written
+  code-only on `feat/apple-grid-alignment` `269df88`.
+- A focused pane taking the empty seat itself (Q1) arrives with item 20's ghosttea lane. Until then §8's dated status
+  line stands.
+
+**Validation:** VF-PM's grant of 2026-10-19 23:12Z, the PM-WINDOW naming focus-session, James away and flux QUIET up.
+- **Rebase:** onto main `3a4a26d25`, range-diff all `=` against `a324eb2f1`. `pnpm format`, biome at error level and
+  `pnpm gen` moved nothing.
+- **The lane:**
+  - its own puppeteer worktree moved to `fa0d6cf`;
+  - `setup-lane.sh` re-ran: the host install before mille's, then Electron 43.1.1's binary;
+  - `pnpm siblings`: every pin met and clean, with 24 GiB free on the internal disk.
+- **verify run 1**, armed 23:16:06Z at 4.89, was RED on one test.
+  - The test: fieldd's `agent-gateway.test.ts` "a name typed in a pane — the REAL floor (AR-7b) > row 3 — the shell
+    exits under it". At :3056, `isAlive(pid)` was false, and the 1-min load ran to 216 over the run.
+  - That is not a pointer's or a focus signature's red, so the file ran alone, armed 23:29:20Z at 9.28: 92/92 green.
+  - 42-core touches neither the gateway nor its test. The row's race class is main's DEBTS row `c2860c5d2`.
+- **verify run 2, the gate of record**, armed 23:33:19Z at 9.74, EXIT 0 at 23:42:08Z.
+  - vitest: 8,912 passed (fieldd 2,310 and 11 skipped; field-app 2,595; electron-shell 1,899 and 3 skipped;
+    contracts 1,016).
+  - cargo: 326 passed, 0 failed, 9 ignored.
+  - gen:check held.
+- **The stages**, once, each alone, armed 23:44:50Z at 9.17: 14 of 14 ok. The longest were typecheck 88 s, test
+  239 s and test:rust 83 s.
+- **The desk rows: 13 of 13 green, each alone and each on its first run.** Each was armed at a 1-min load under 10
+  with the screen unlocked. The five interaction rows ran in James's away slot. Every row's teardown said
+  `SMOKE_DAEMONS {"left":[],"reaped":[]}`.
+
+| row | armed (Z) | 1-min load | took |
+|---|---|---|---|
+| still | 23:59:32 | 9.46 | 40 s |
+| smoke | 00:02:14 | 9.59 | 38 s |
+| smoke:canvas:no-gpu | 00:04:13 | 9.42 | 31 s |
+| smoke:canvas:no-webgpu | 00:05:25 | 9.72 | 29 s |
+| smoke:kind-faults | 00:05:53 | 9.69 | 79 s |
+| smoke:plugin-restart | 00:07:33 | 8.74 | 80 s |
+| smoke:plugin | 00:13:16 | 9.75 | 57 s |
+| smoke:bundled | 00:14:13 | 9.06 | 92 s |
+| smoke:canvas | 00:15:59 | 8.33 | 923 s |
+| smoke:godview | 00:34:44 | 9.61 | 152 s |
+| smoke:terminal-door | 00:39:38 | 9.08 | 36 s |
+| smoke:terminal-direct | 00:42:15 | 9.53 | 38 s |
+| smoke:studio | 00:44:14 | 8.62 | 33 s |
+
+- **No kit suite:** no file under `apps/ios` changes against `3a4a26d25`.
+- **Before the redesign:** the first build's tip `a7a8386ea` was verified twice and then held at James's rejection.
+  - Run 1 was red at lint: my own skipped `pnpm format`. Run `pnpm format` before arming any verify on a code-only
+    lane.
+  - Run 2 was red on two timing rows under load, logging's `sanitize.test.ts` fuzz and dev-runner's
+    `dev-lock.test.mjs`. Both were green alone at 9.82.
+
+**Next:**
+- The one train, under a fresh grant: F1 → cell-gone → lane 41 → seat-kit → the TS7056 commit, rebased onto this
+  landing, with the kit suite.
+- ghosttea 0.10.2 (James's release), then the kit's pin with `gridAlignment = .bottom` while another device holds the
+  seat.
