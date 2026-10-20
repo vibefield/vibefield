@@ -12656,3 +12656,68 @@ the grant to the last row.
 - ghosttea 0.10.2 (James's release), then the kit's pin with `gridAlignment = .bottom` while another device holds the
   seat. §8's dated interim retires with it.
 - Item 50's fieldd half (`c0581e952`) with the MV lead's puppeteer seam, at the pin event after A's.
+
+## TC-S2 + GT-2d — the dev floor runs the cell and the freeway host the runner built: the snapshot stages both beside the floor, the pruner keeps the snapshot a running pair executes from, and an inherited FIELD_NATIVE_CELL_BIN is named and ignored (2026-10-20; `72bbfd482` `520e2f25b` `ae7ecc421`, lane `focus/dev-cell-snapshot`)
+
+**What happened (2026-10-19):**
+- At 16:31Z James's dev window closed, a clean exit. The runner's teardown stopped fieldd, and floor 79549 with its
+  cells 79550/79551 kept running, unsupervised. They held one idle `zsh -l`, so nothing was lost.
+- **Defect A is fieldd's record, and its fix rides the wedge lane.** product.json is written once, at boot, and its
+  `nativePid` goes stale after the first respawn (fieldd's own note in `daemon.ts`). The 02:24:58Z wedge respawn left
+  it naming the killed floor, so the teardown's `stopPid` skipped a dead pid. The fix at the cause, fieldd rewriting
+  `nativePid` whenever its linked floor changes, is the product.json rider on the History lead's `hl/floor-wedge`,
+  not this lane.
+- **Defect B is this lane's.** The dev snapshot staged `field-native` alone. `cargo build -p field-native` also builds
+  `field-terminal-host`, but the snapshot never staged it, so the dev floor's cells came only from
+  FIELD_NATIVE_CELL_BIN, pointing into the cargo target outside the snapshot.
+  - Run read-only on the live process table, the runner's own start-up reaper (`classifyOrphans`) convicted both
+    cells as socket squatters with the build unchanged, and the floor too after any rebuild.
+  - A cargo build swapped the cell under a live floor, so the next terminal ran bytes its floor was never built with.
+- **The `nm` finding (LANDED §TP-S3d, "Found"):** a lane's dev app on James's dev root ran main's cells until the
+  launching env set the variable, because Node's `--env-file` lets the environment win. Only `nm` on the running cell
+  showed it. Staged beside the floor and named by the runner, the cell is read, not found.
+- **James ruled (i) at 17:42Z** (relayed by VF-PM): dev ignores an inherited FIELD_NATIVE_CELL_BIN, with one log
+  line. The line pinning it in his `.env` is dead once this lands, and removing it is his.
+
+**The three commits:**
+- `72bbfd482` GT-2d: the pruner keeps the snapshot a running pair executes from. A shell-only restart adopts the pair,
+  which keeps running out of the snapshot it was launched from: fieldd's workers and shim, the floor's respawn, every
+  new terminal's cell. Deleting that directory failed the next spawn. TC-S2 depends on it.
+- `520e2f25b` TC-S2: the snapshot (version 6) stages `field-terminal-host` beside the floor, as packaging does.
+  - `daemonPlaneInputs` covers it, so a rebuilt cell bounces the pair.
+  - electron-stack removes an inherited FIELD_NATIVE_CELL_BIN and names the cell once per daemon identity.
+  - The reaper keeps a current-snapshot cell with its floor; a cell from anywhere else is still a squatter.
+  - The ROADMAP's TP-S3d row is struck as paid.
+- `ae7ecc421` F1 (dev): the snapshot (version 7) stages `field-freeway-host` beside them, and the identity covers it.
+  This is the dev home the train's landing owed (LANDED "FW (F1) + items 41 and 42 on the phone").
+  - The runner's line names both: "daemon plane <id>: the floor's cell is <path> and its freeway host is <path>".
+  - An inherited FIELD_NATIVE_FREEWAY_BIN is named and ignored: James's (i) applied to the host, not a new rule.
+  - Before it, a dev floor said "the freeway host is not installed beside this floor" and ran no freeway. James's
+    `-vf-freeway` device round needs the host beside his dev floor.
+
+**Left open, said:**
+- After an UNCLEAN runner exit, a pair adopted across a shell-only change keeps its floor (`keepPids`). Its cells and
+  its host, now in an old snapshot, fall to the stale-snapshot class, where the cells fell before as socket squatters.
+  The floor starts its host again from its own directory. The ppid rule closes it.
+- James's `.env` line naming FIELD_NATIVE_CELL_BIN is dead, and his to remove.
+- The package's freeway host is prod-builder's fw-pack lane (`846398b1`). Defect A is the wedge lane's rider.
+
+**Validation:** VF-PM's grant of 2026-10-20 15:48Z, with the PM-WINDOW naming focus-session.
+- **Rebase:** onto main `fb5959af3`, code-only, range-diff all `=` (`26c844abb` → `72bbfd482`, `2ed16e385` →
+  `520e2f25b`). Then the freeway-host commit, gated as `7de68bece` and reworded after the gate, tree-identical, as
+  `ae7ecc421`: its message now says (i) is applied to the host, not a new rule (VF-PM).
+- **Scope:** `git diff --name-only fb5959af3..7de68bece` is `docs/ROADMAP.md` and `tooling/dev-runner` only, so no
+  desk rows and no kit suite, as VF-PM ruled.
+- **The worktree** on the fresh-lane checklist: `git sparse-checkout disable`; its own puppeteer, mille-pin and
+  ghosttea worktrees at the lock's pins; the `target` link on the SSD; Electron 43.1.1; `pnpm siblings` with every
+  pin met and clean. `pnpm format`, biome at error level and `pnpm gen` moved nothing.
+- **The dev-runner suite alone**, armed 15:56:55Z at 6.02: 193 of 193. **`node --test test/orphan-reaper.test.mjs`
+  alone**, armed 15:57:02Z at 9.14: 22 of 22.
+- **verify:** `pnpm verify` verbatim at `7de68bece`, armed 15:57:02Z at 9.14, EXIT 0 at 16:05:02Z: vitest 9,008
+  passed (17 skipped) with 0 unhandled errors; cargo 405 passed, 0 failed, 9 ignored; gen:check held.
+- **The stages:** once, each alone, armed 16:07:23Z at 9.62: 14 of 14 ok (typecheck 85 s, test 165 s, test:rust
+  87 s).
+
+**Next:**
+- When James moves his dev app to main, it runs the cell and the freeway host it built, and the runner names both.
+- His `-vf-freeway` device round of the freeway.
