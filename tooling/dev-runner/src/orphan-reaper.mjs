@@ -103,8 +103,9 @@ export function classifyOrphans({
  * pruner must never delete. The same string evidence the classifier convicts
  * on, read the other way: a pair adopted across a shell-only restart keeps
  * running out of the snapshot it was launched from, and goes on exec'ing that
- * directory long after (every new terminal's cell, the floor's own respawn), so
- * deleting it fails the next exec rather than anything that is running now.
+ * directory long after (every new terminal's cell, the freeway host's restart,
+ * the floor's own respawn), so deleting it fails the next exec rather than
+ * anything that is running now.
  *
  * @param {Array<{pid: number, exePath?: string | null}>} processes
  * @param {string} runtimeRoot `.vibefield/dev/runtime`

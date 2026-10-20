@@ -35,6 +35,12 @@ export function createRosettadBinResolver({ env = process.env, lookup = lockRose
 
 const defaultResolveRosettadBin = createRosettadBinResolver();
 
+/** The floor's two test seams for the executables it spawns beside itself (field-native
+ * `config.rs`): the cell (TC-S2) and the freeway host (F1). The runner launches the ones it staged,
+ * so a developer's exported value is removed from the child and named as ignored (James's (i),
+ * 2026-10-19). */
+const FLOOR_CHILD_OVERRIDES = ["FIELD_NATIVE_CELL_BIN", "FIELD_NATIVE_FREEWAY_BIN"];
+
 export function createElectronStack({
   paths,
   viteUrl,
@@ -67,16 +73,17 @@ export function createElectronStack({
     // names another, which is a test seam. A developer's exported variable used to win here,
     // putting a cell outside the snapshot under a snapshot's floor (the start-up reaper then
     // convicts it as a socket squatter, and a cargo build swaps it under the live floor), so it
-    // is removed below and the cell launched is named once per daemon identity.
+    // is removed below and the cell launched is named once per daemon identity. F1's freeway host
+    // is found the same way, behind its own seam, and is treated the same.
     if (daemonBuildId !== currentDaemonBuildId) {
-      const inherited = process.env["FIELD_NATIVE_CELL_BIN"];
-      log.info(
-        `daemon plane ${daemonBuildId}: the floor's cell is ${runtime.cellOutput}${
-          inherited !== undefined && inherited !== ""
-            ? ` (FIELD_NATIVE_CELL_BIN=${inherited} from the environment is ignored)`
-            : ""
-        }`,
+      const ignored = FLOOR_CHILD_OVERRIDES.filter((name) => (process.env[name] ?? "") !== "").map(
+        (name) => `${name}=${process.env[name]}`,
       );
+      const cell = `the floor's cell is ${runtime.cellOutput}`;
+      const host = `its freeway host is ${runtime.freewayOutput}`;
+      const unheeded =
+        ignored.length > 0 ? ` (${ignored.join(", ")} from the environment ignored)` : "";
+      log.info(`daemon plane ${daemonBuildId}: ${cell} and ${host}${unheeded}`);
     }
     const env = buildChildEnv(process.env, {
       set: {
@@ -113,7 +120,7 @@ export function createElectronStack({
       // above; when it does not, the inherited variable is removed.
       unset: [
         "ELECTRON_RUN_AS_NODE",
-        "FIELD_NATIVE_CELL_BIN",
+        ...FLOOR_CHILD_OVERRIDES,
         ...(rosettadBin === null ? ["FIELDD_ROSETTAD_BIN"] : []),
       ],
     });

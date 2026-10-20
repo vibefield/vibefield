@@ -501,10 +501,10 @@ async function waitForCurrentRuntime() {
 // the pair, which keeps running out of the directory it was launched from:
 // fieldd resolves its workers and the agent shim beside its own bundle, its
 // supervisor respawns the floor from there, and the floor spawns every new
-// terminal's cell beside itself, so deleting it fails the next spawn, not
-// anything running now. The runner knows the pair it launched; a
-// pair adopted from a previous runner session is known only by the processes
-// still executing from a snapshot.
+// terminal's cell and restarts its freeway host beside itself, so deleting it
+// fails the next spawn, not anything running now. The runner knows the pair it
+// launched; a pair adopted from a previous runner session is known only by the
+// processes still executing from a snapshot.
 async function pruneSnapshots(current) {
   const keep = new Set([current]);
   if (daemonRuntime !== null) keep.add(daemonRuntime.buildId);

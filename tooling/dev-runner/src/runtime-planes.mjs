@@ -23,6 +23,8 @@ export function daemonPlaneInputs(paths, pluginProjects) {
     paths.nativeOutput,
     // TC-S2 — the cell the floor spawns beside itself: a rebuilt cell bounces the pair
     paths.cellOutput,
+    // F1 — and its freeway host, the same way
+    paths.freewayOutput,
     ...pluginProjects.flatMap((project) => [
       join(paths.repoRoot, project.manifestFile),
       ...rendererArtifactsOf(project).map((artifact) => join(paths.repoRoot, artifact)),

@@ -99,6 +99,7 @@ const runtime = {
   fielddOutput: "/repo/.vibefield/dev/runtime/dev-current/fieldd/bin.cjs",
   nativeOutput: "/repo/.vibefield/dev/runtime/dev-current/native/field-native",
   cellOutput: "/repo/.vibefield/dev/runtime/dev-current/native/field-terminal-host",
+  freewayOutput: "/repo/.vibefield/dev/runtime/dev-current/native/field-freeway-host",
 };
 
 test("hands fieldd the built rosettad when the sibling lock resolves one (AR-0)", async () => {
@@ -198,42 +199,64 @@ test("the floor runs the cell beside it: an exported FIELD_NATIVE_CELL_BIN never
   // the start-up reaper then convicted the floor's live cells as socket
   // squatters, and a cargo build swapped the cell under a running floor. The
   // runner's own cell is staged beside the floor, which finds it as its sibling.
-  await withVariable(
-    "FIELD_NATIVE_CELL_BIN",
-    "/ssd/rust/lane/debug/field-terminal-host",
-    async () => {
+  await withVariable("FIELD_NATIVE_FREEWAY_BIN", undefined, () =>
+    withVariable("FIELD_NATIVE_CELL_BIN", "/ssd/rust/lane/debug/field-terminal-host", async () => {
       const fixture = setup();
       await fixture.stack.start(runtime);
       const [, , options] = fixture.getSpawnArgs();
       assert.equal("FIELD_NATIVE_CELL_BIN" in options.env, false);
       assert.equal(options.env.FIELDD_NATIVE_BIN, runtime.nativeOutput);
       assert.deepEqual(fixture.said, [
-        "daemon plane dev-daemon-current: the floor's cell is /repo/.vibefield/dev/runtime/dev-current/native/field-terminal-host (FIELD_NATIVE_CELL_BIN=/ssd/rust/lane/debug/field-terminal-host from the environment is ignored)",
+        "daemon plane dev-daemon-current: the floor's cell is /repo/.vibefield/dev/runtime/dev-current/native/field-terminal-host and its freeway host is /repo/.vibefield/dev/runtime/dev-current/native/field-freeway-host (FIELD_NATIVE_CELL_BIN=/ssd/rust/lane/debug/field-terminal-host from the environment ignored)",
       ]);
-    },
+    }),
   );
 });
 
-test("the cell is named once per daemon identity, never at a shell-only restart", async () => {
-  await withVariable("FIELD_NATIVE_CELL_BIN", undefined, async () => {
-    const fixture = setup();
-    await fixture.stack.start(runtime);
-    await fixture.stack.stop({ stopDaemons: false });
-    // A shell-only edit: the new shell adopts the pair, whose cell is unchanged.
-    await fixture.stack.start({ ...runtime, buildId: "dev-shell-edit" });
-    await fixture.stack.stop({ stopDaemons: true });
-    await fixture.stack.start({
-      ...runtime,
-      buildId: "dev-next",
-      daemonBuildId: "dev-daemon-next",
-      cellOutput: "/repo/.vibefield/dev/runtime/dev-next/native/field-terminal-host",
-    });
+test("the floor runs the freeway host beside it: an exported FIELD_NATIVE_FREEWAY_BIN never reaches fieldd either (F1)", async () => {
+  // The freeway host is the floor's other child found as its sibling, behind
+  // the same kind of seam: the variable is dropped and named, as the cell's is.
+  await withVariable("FIELD_NATIVE_CELL_BIN", "/ssd/rust/lane/debug/field-terminal-host", () =>
+    withVariable(
+      "FIELD_NATIVE_FREEWAY_BIN",
+      "/ssd/rust/lane/debug/field-freeway-host",
+      async () => {
+        const fixture = setup();
+        await fixture.stack.start(runtime);
+        const [, , options] = fixture.getSpawnArgs();
+        assert.equal("FIELD_NATIVE_CELL_BIN" in options.env, false);
+        assert.equal("FIELD_NATIVE_FREEWAY_BIN" in options.env, false);
+        assert.deepEqual(fixture.said, [
+          "daemon plane dev-daemon-current: the floor's cell is /repo/.vibefield/dev/runtime/dev-current/native/field-terminal-host and its freeway host is /repo/.vibefield/dev/runtime/dev-current/native/field-freeway-host (FIELD_NATIVE_CELL_BIN=/ssd/rust/lane/debug/field-terminal-host, FIELD_NATIVE_FREEWAY_BIN=/ssd/rust/lane/debug/field-freeway-host from the environment ignored)",
+        ]);
+      },
+    ),
+  );
+});
 
-    assert.deepEqual(fixture.said, [
-      "daemon plane dev-daemon-current: the floor's cell is /repo/.vibefield/dev/runtime/dev-current/native/field-terminal-host",
-      "daemon plane dev-daemon-next: the floor's cell is /repo/.vibefield/dev/runtime/dev-next/native/field-terminal-host",
-    ]);
-  });
+test("the cell and the freeway host are named once per daemon identity, never at a shell-only restart", async () => {
+  await withVariable("FIELD_NATIVE_FREEWAY_BIN", undefined, () =>
+    withVariable("FIELD_NATIVE_CELL_BIN", undefined, async () => {
+      const fixture = setup();
+      await fixture.stack.start(runtime);
+      await fixture.stack.stop({ stopDaemons: false });
+      // A shell-only edit: the new shell adopts the pair, whose cell and host are unchanged.
+      await fixture.stack.start({ ...runtime, buildId: "dev-shell-edit" });
+      await fixture.stack.stop({ stopDaemons: true });
+      await fixture.stack.start({
+        ...runtime,
+        buildId: "dev-next",
+        daemonBuildId: "dev-daemon-next",
+        cellOutput: "/repo/.vibefield/dev/runtime/dev-next/native/field-terminal-host",
+        freewayOutput: "/repo/.vibefield/dev/runtime/dev-next/native/field-freeway-host",
+      });
+
+      assert.deepEqual(fixture.said, [
+        "daemon plane dev-daemon-current: the floor's cell is /repo/.vibefield/dev/runtime/dev-current/native/field-terminal-host and its freeway host is /repo/.vibefield/dev/runtime/dev-current/native/field-freeway-host",
+        "daemon plane dev-daemon-next: the floor's cell is /repo/.vibefield/dev/runtime/dev-next/native/field-terminal-host and its freeway host is /repo/.vibefield/dev/runtime/dev-next/native/field-freeway-host",
+      ]);
+    }),
+  );
 });
 
 test("starts Electron directly with isolated state and the daemon build identity", async () => {

@@ -39,6 +39,7 @@ async function fixture(t) {
     milleNativeOutput: join(source, "mille.test-triple.node"),
     nativeOutput: join(source, "field-native"),
     cellOutput: join(source, "field-terminal-host"),
+    freewayOutput: join(source, "field-freeway-host"),
   };
   await Promise.all([
     writeFile(paths.mainOutput, "main-one"),
@@ -52,9 +53,11 @@ async function fixture(t) {
     writeFile(paths.milleNativeOutput, "mille-one"),
     writeFile(paths.nativeOutput, "native-one"),
     writeFile(paths.cellOutput, "cell-one"),
+    writeFile(paths.freewayOutput, "freeway-one"),
   ]);
   await chmod(paths.nativeOutput, 0o751);
   await chmod(paths.cellOutput, 0o750);
+  await chmod(paths.freewayOutput, 0o710);
   return { root, paths };
 }
 
@@ -139,6 +142,7 @@ test("stages the floor's cell beside the floor, with the cell's own mode (TC-S2)
 
   assert.equal(dirname(runtime.cellOutput), dirname(runtime.nativeOutput));
   assert.deepEqual((await readdir(join(runtime.root, "native"))).sort(), [
+    "field-freeway-host",
     "field-native",
     "field-terminal-host",
   ]);
@@ -149,6 +153,56 @@ test("stages the floor's cell beside the floor, with the cell's own mode (TC-S2)
 
   await writeFile(paths.cellOutput, "cell-two");
   assert.equal(await readFile(runtime.cellOutput, "utf8"), "cell-one");
+});
+
+test("stages the floor's freeway host beside the floor, with the host's own mode (F1)", async (t) => {
+  // The floor finds `field-freeway-host` as a SIBLING of its own executable
+  // (field-native `config.rs` `freeway_binary()`), as it finds its cell. A
+  // floor staged without it says "the freeway host is not installed beside this
+  // floor" and runs no freeway.
+  const { paths } = await fixture(t);
+  const runtime = await stageRuntimeSnapshot({
+    paths,
+    buildId: "dev-cccccccccccccccccccccccc",
+    daemonBuildId: DAEMON_ID,
+  });
+
+  assert.equal(dirname(runtime.freewayOutput), dirname(runtime.nativeOutput));
+  assert.equal(await readFile(runtime.freewayOutput, "utf8"), "freeway-one");
+  if (process.platform !== "win32") {
+    assert.equal((await stat(runtime.freewayOutput)).mode & 0o777, 0o710);
+  }
+  const record = JSON.parse(await readFile(join(runtime.root, "runtime.json"), "utf8"));
+  assert.equal(record.freewayName, "field-freeway-host");
+
+  await writeFile(paths.freewayOutput, "freeway-two");
+  assert.equal(await readFile(runtime.freewayOutput, "utf8"), "freeway-one");
+});
+
+test("reclaims a snapshot staged before the freeway host joined it rather than reusing it", async (t) => {
+  // Version 6 is the layout with the floor and its cell: served again, its
+  // floor would have no freeway host to start.
+  const { paths } = await fixture(t);
+  const buildId = "dev-dddddddddddddddddddddddd";
+  const destination = join(paths.runtimeRoot, buildId);
+  await mkdir(join(destination, "native"), { recursive: true });
+  await writeFile(join(destination, "native", "field-native"), "native-old");
+  await writeFile(join(destination, "native", "field-terminal-host"), "cell-old");
+  await writeFile(
+    join(destination, "runtime.json"),
+    `${JSON.stringify({
+      version: 6,
+      buildId,
+      daemonBuildId: DAEMON_ID,
+      nativeName: "field-native",
+      cellName: "field-terminal-host",
+    })}\n`,
+  );
+
+  const runtime = await stageRuntimeSnapshot({ paths, buildId, daemonBuildId: DAEMON_ID });
+  assert.equal(runtime.root, destination);
+  assert.equal(await readFile(runtime.cellOutput, "utf8"), "cell-one");
+  assert.equal(await readFile(runtime.freewayOutput, "utf8"), "freeway-one");
 });
 
 test("reclaims a snapshot staged before the cell joined it rather than reusing it", async (t) => {

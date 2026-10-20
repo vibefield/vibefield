@@ -14,7 +14,9 @@ import { basename, join } from "node:path";
 
 // 6 — TC-S2: the floor's cell joins it, beside the floor. A version-5 snapshot has no cell, and
 // served again it would hand the floor nothing to spawn its terminals from.
-const SNAPSHOT_VERSION = 6;
+// 7 — F1: the floor's freeway host joins them. A version-6 snapshot has no host, and its floor
+// would say "the freeway host is not installed beside this floor" for as long as it ran.
+const SNAPSHOT_VERSION = 7;
 const BUILD_ID = /^dev-[a-f0-9]{24}$/;
 
 export class RuntimeSnapshotChangedError extends Error {
@@ -40,15 +42,10 @@ export async function stageRuntimeSnapshot({
   if (existing !== null) return existing;
 
   const temporary = await mkdtemp(join(paths.runtimeRoot, `.next-${buildId}-`));
+  const names = nativeNames(paths);
   let published = false;
   try {
-    const layout = snapshotLayout(
-      temporary,
-      buildId,
-      daemonBuildId,
-      basename(paths.nativeOutput),
-      basename(paths.cellOutput),
-    );
+    const layout = snapshotLayout(temporary, buildId, daemonBuildId, names);
     await Promise.all([
       mkdir(join(layout.appRoot, "main"), { recursive: true }),
       mkdir(join(layout.appRoot, "preload"), { recursive: true }),
@@ -72,6 +69,8 @@ export async function stageRuntimeSnapshot({
       copyFile(paths.nativeOutput, layout.nativeOutput),
       // TC-S2 — the floor spawns its cell as its own SIBLING, so the cell rides beside it
       copyFile(paths.cellOutput, layout.cellOutput),
+      // F1 — and its freeway host the same way (field-native `config.rs` `freeway_binary()`)
+      copyFile(paths.freewayOutput, layout.freewayOutput),
       writeFile(
         join(layout.appRoot, "package.json"),
         `${JSON.stringify(
@@ -86,38 +85,25 @@ export async function stageRuntimeSnapshot({
         )}\n`,
       ),
     ]);
-    const nativeMode = (await stat(paths.nativeOutput)).mode & 0o777;
-    await chmod(layout.nativeOutput, nativeMode);
-    const cellMode = (await stat(paths.cellOutput)).mode & 0o777;
-    await chmod(layout.cellOutput, cellMode);
+    // Each executable keeps its own mode: copyFile does not carry it.
+    for (const [source, staged] of [
+      [paths.nativeOutput, layout.nativeOutput],
+      [paths.cellOutput, layout.cellOutput],
+      [paths.freewayOutput, layout.freewayOutput],
+    ]) {
+      await chmod(staged, (await stat(source)).mode & 0o777);
+    }
 
     if (!(await validate())) throw new RuntimeSnapshotChangedError();
-    await writeFile(
-      join(temporary, "runtime.json"),
-      `${JSON.stringify(
-        {
-          version: SNAPSHOT_VERSION,
-          buildId,
-          daemonBuildId,
-          nativeName: basename(paths.nativeOutput),
-          cellName: basename(paths.cellOutput),
-        },
-        null,
-        2,
-      )}\n`,
-      { mode: 0o600 },
-    );
+    const record = { version: SNAPSHOT_VERSION, buildId, daemonBuildId, ...names };
+    await writeFile(join(temporary, "runtime.json"), `${JSON.stringify(record, null, 2)}\n`, {
+      mode: 0o600,
+    });
 
     try {
       await rename(temporary, destination);
       published = true;
-      return snapshotLayout(
-        destination,
-        buildId,
-        daemonBuildId,
-        basename(paths.nativeOutput),
-        basename(paths.cellOutput),
-      );
+      return snapshotLayout(destination, buildId, daemonBuildId, names);
     } catch (error) {
       if (!destinationAlreadyExists(error)) throw error;
       const concurrent = await readSnapshot(destination, buildId);
@@ -129,13 +115,7 @@ export async function stageRuntimeSnapshot({
       await rm(destination, { recursive: true, force: true });
       await rename(temporary, destination);
       published = true;
-      return snapshotLayout(
-        destination,
-        buildId,
-        daemonBuildId,
-        basename(paths.nativeOutput),
-        basename(paths.cellOutput),
-      );
+      return snapshotLayout(destination, buildId, daemonBuildId, names);
     }
   } finally {
     if (!published) await rm(temporary, { recursive: true, force: true });
@@ -163,30 +143,41 @@ export async function pruneRuntimeSnapshots(runtimeRoot, keepBuildIds) {
 async function readSnapshot(root, expectedBuildId) {
   try {
     const record = JSON.parse(await readFile(join(root, "runtime.json"), "utf8"));
+    const names = {
+      nativeName: record?.nativeName,
+      cellName: record?.cellName,
+      freewayName: record?.freewayName,
+    };
     if (
       record?.version !== SNAPSHOT_VERSION ||
       record.buildId !== expectedBuildId ||
       !BUILD_ID.test(record.daemonBuildId ?? "") ||
-      typeof record.nativeName !== "string" ||
-      basename(record.nativeName) !== record.nativeName ||
-      typeof record.cellName !== "string" ||
-      basename(record.cellName) !== record.cellName
+      !Object.values(names).every(isBareName)
     ) {
       return null;
     }
-    return snapshotLayout(
-      root,
-      record.buildId,
-      record.daemonBuildId,
-      record.nativeName,
-      record.cellName,
-    );
+    return snapshotLayout(root, record.buildId, record.daemonBuildId, names);
   } catch {
     return null;
   }
 }
 
-function snapshotLayout(root, buildId, daemonBuildId, nativeName, cellName) {
+/** The floor's executables, staged side by side in `native/`: the floor finds its cell and
+ * its freeway host as its own siblings (field-native `config.rs`: `cell_binary()`,
+ * `freeway_binary()`). */
+function nativeNames(paths) {
+  return {
+    nativeName: basename(paths.nativeOutput),
+    cellName: basename(paths.cellOutput),
+    freewayName: basename(paths.freewayOutput),
+  };
+}
+
+function isBareName(name) {
+  return typeof name === "string" && basename(name) === name;
+}
+
+function snapshotLayout(root, buildId, daemonBuildId, { nativeName, cellName, freewayName }) {
   return Object.freeze({
     buildId,
     daemonBuildId,
@@ -195,6 +186,7 @@ function snapshotLayout(root, buildId, daemonBuildId, nativeName, cellName) {
     fielddOutput: join(root, "fieldd", "bin.cjs"),
     nativeOutput: join(root, "native", nativeName),
     cellOutput: join(root, "native", cellName),
+    freewayOutput: join(root, "native", freewayName),
   });
 }
 

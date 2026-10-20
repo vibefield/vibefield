@@ -16,6 +16,7 @@ const devRoot = devRootFor(repoRoot);
 const devBuildRoot = join(devRoot, "build");
 const nativeName = process.platform === "win32" ? "field-native.exe" : "field-native";
 const cellName = process.platform === "win32" ? "field-terminal-host.exe" : "field-terminal-host";
+const freewayName = process.platform === "win32" ? "field-freeway-host.exe" : "field-freeway-host";
 
 export function commandEndpointFor(root, developmentRoot, platform = process.platform) {
   return platform === "win32"
@@ -80,6 +81,9 @@ export const workspacePaths = Object.freeze({
   // finds it as a SIBLING of its own executable (field-native `config.rs` `cell_binary()`), so the
   // snapshot stages it beside the floor, as packaging does (`scripts/stage-package.mjs`).
   cellOutput: join(repoRoot, "target", "debug", cellName),
+  // F1 — the floor's freeway host, from the same build, found the same way (`config.rs`
+  // `freeway_binary()`): without it beside the floor, the floor's freeway unit is disabled.
+  freewayOutput: join(repoRoot, "target", "debug", freewayName),
   contractsSource: join(repoRoot, "packages", "contracts", "src"),
   nativeSource: join(repoRoot, "packages", "field-native", "src"),
 });

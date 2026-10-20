@@ -25,6 +25,7 @@ const STALE = "dev-222222222222222222222222";
 
 const nativeIn = (snapshot) => join(RUNTIME_ROOT, snapshot, "native", "field-native");
 const cellIn = (snapshot) => join(RUNTIME_ROOT, snapshot, "native", "field-terminal-host");
+const freewayIn = (snapshot) => join(RUNTIME_ROOT, snapshot, "native", "field-freeway-host");
 const fielddIn = (snapshot) => join(RUNTIME_ROOT, snapshot, "fieldd", "bin.cjs");
 const mgmtSocket = join(DATA_ROOT, "native", "run", "mgmt.sock");
 // The packaged app: our binary's name on somebody else's tree entirely.
@@ -113,6 +114,27 @@ test("a current-snapshot cell holding its terminal sockets is kept with its floo
   assert.deepEqual(
     orphans.map((o) => ({ pid: o.pid, reason: o.reason })),
     [{ pid: 504, reason: "socket-squatter" }],
+  );
+});
+
+test("the floor's freeway host is judged by the snapshot it runs from, as its cell is (F1)", () => {
+  // The host holds no dev socket (its listener is the floor's loopback TCP
+  // one, inherited), so only its snapshot places it: this session's host is
+  // kept, a stale generation's goes with that generation. A floor kept across
+  // a shell-only change starts its host again from its own directory, which the
+  // pruner keeps while the floor runs from it.
+  const orphans = classify({
+    processes: [
+      { pid: 702, exePath: nativeIn(CURRENT) },
+      { pid: 703, exePath: freewayIn(CURRENT) },
+      { pid: 704, exePath: freewayIn(STALE) },
+    ],
+    socketOwners: [{ pid: 702, socketPath: mgmtSocket }],
+  });
+
+  assert.deepEqual(
+    orphans.map((o) => ({ pid: o.pid, reason: o.reason })),
+    [{ pid: 704, reason: "stale-snapshot" }],
   );
 });
 
