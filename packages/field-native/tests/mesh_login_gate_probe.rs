@@ -250,27 +250,87 @@ impl std::fmt::Display for Verdict {
 /// limiter and let a reader call it a gate. This waits the window out. Every
 /// error that is not a close code is retried, so the only things that end it
 /// early are an admission and a refusal the remote actually sent.
+///
+/// *Corrected 2026-10-20 (the 0.7.19 probe run):* waiting the window out at a
+/// fixed 250 ms poll was not enough, and the row read Inconclusive on "reconnect
+/// backoff" for its whole limit. The eager identity loop re-dials the instant
+/// each window opens (truffle-core 0.7.19 `session/mod.rs`: after a failed dial
+/// it sleeps exactly the backoff's `retry_after`), and a refused hello between
+/// two nodes on one machine is over in milliseconds, so every poll landed inside
+/// a window. The refusal is not hidden from the dialer: a call that starts the
+/// dial, or joins the one in flight (`ensure_ws_connected` answers from an
+/// in-flight dial before it consults the backoff), gets that dial's own outcome,
+/// the transport's "close code 4004" prose. So on a backoff this sleeps to
+/// [`WINDOW_EDGE`] before the window opens and then calls without pausing
+/// across the opening, which either starts the dial or joins the eager loop's.
 async fn dial_verdict(from: &Node<TailscaleProvider>, peer_id: &str, limit: Duration) -> Verdict {
     let started = Instant::now();
-    // Deliberately uninitialised: the only path past the match that does not
-    // return assigns it, so a reader never sees a placeholder reason.
-    let mut last;
     loop {
-        match from.send_bytes(peer_id, DIAL_NS, b"vf-foreign-probe").await {
-            Ok(()) => return Verdict::Admitted,
-            Err(e) => {
-                let text = e.to_string();
-                if let Some((code, reason)) = close_code(&text) {
-                    return Verdict::Refused { code, reason };
-                }
-                last = text;
-            }
-        }
+        let last = match attempt(from, peer_id).await {
+            Ok(verdict) => return verdict,
+            Err(text) => text,
+        };
         if started.elapsed() > limit {
             return Verdict::Inconclusive(last);
         }
-        tokio::time::sleep(Duration::from_millis(250)).await;
+        let Some(left) = backoff_left(&last) else {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            continue;
+        };
+        tokio::time::sleep(left.saturating_sub(WINDOW_EDGE)).await;
+        let across = Instant::now() + 2 * WINDOW_EDGE;
+        while Instant::now() < across {
+            match attempt(from, peer_id).await {
+                Ok(verdict) => return verdict,
+                Err(text) if backoff_left(&text).is_some() => tokio::task::yield_now().await,
+                // a dial ran and failed some other way: back to the loop's pace
+                Err(_) => break,
+            }
+        }
     }
+}
+
+/// How far before a backoff window opens [`dial_verdict`] wakes, and half how
+/// long it keeps calling across the opening.
+const WINDOW_EDGE: Duration = Duration::from_millis(50);
+
+/// One dial: `Ok` with a verdict about the hello (an admission, or a close code
+/// the remote sent), `Err` with the error's text when it was about neither.
+async fn attempt(from: &Node<TailscaleProvider>, peer_id: &str) -> Result<Verdict, String> {
+    match from.send_bytes(peer_id, DIAL_NS, b"vf-foreign-probe").await {
+        Ok(()) => Ok(Verdict::Admitted),
+        Err(e) => {
+            let text = e.to_string();
+            match close_code(&text) {
+                Some((code, reason)) => Ok(Verdict::Refused { code, reason }),
+                None => Err(text),
+            }
+        }
+    }
+}
+
+/// The time left in truffle's per-peer reconnect backoff, read back from
+/// `SessionError::ReconnectBackoff`'s text ("reconnect backoff: retry after
+/// 20.751368625s", a `Duration` in its Debug form), or `None` when the text is
+/// not a backoff. Like `close_code` it fails CLOSED: a form it cannot read is
+/// `None`, and the caller keeps its plain pace.
+fn backoff_left(text: &str) -> Option<Duration> {
+    let token = text
+        .split("reconnect backoff: retry after ")
+        .nth(1)?
+        .split_whitespace()
+        .next()?;
+    let split = token.find(|c: char| !(c.is_ascii_digit() || c == '.'))?;
+    let (number, unit) = token.split_at(split);
+    let value: f64 = number.parse().ok()?;
+    let seconds = match unit {
+        "s" => value,
+        "ms" => value / 1e3,
+        "µs" | "us" => value / 1e6,
+        "ns" => value / 1e9,
+        _ => return None,
+    };
+    Duration::try_from_secs_f64(seconds).ok()
 }
 
 /// Pull the close code out of the error text, or `None` when there is none.
@@ -299,6 +359,35 @@ fn close_code(text: &str) -> Option<(u16, String)> {
         .map(|(r, _)| r.to_string())
         .unwrap_or_default();
     Some((code, reason))
+}
+
+/// The two readers of truffle's error prose, on the forms 0.7.19 prints: no
+/// network, so this row runs with the suite.
+#[test]
+fn the_error_prose_readers_take_truffles_own_forms_and_fail_closed() {
+    let backoff = "session error: reconnect backoff: retry after 20.751368625s";
+    let left = backoff_left(backoff).expect("a backoff");
+    assert!(left.as_nanos().abs_diff(20_751_368_625) <= 1, "{left:?}");
+    assert_eq!(
+        backoff_left("reconnect backoff: retry after 250ms"),
+        Some(Duration::from_millis(250))
+    );
+    let left = backoff_left("reconnect backoff: retry after 999.5µs").expect("a backoff");
+    assert!(left.as_nanos().abs_diff(999_500) <= 1, "{left:?}");
+    assert_eq!(
+        backoff_left("connect failed: WS dial timed out after 45s"),
+        None
+    );
+    assert_eq!(backoff_left("reconnect backoff: retry after soon"), None);
+    assert_eq!(close_code(backoff), None);
+
+    let refused =
+        "session error: connect failed: hello refused by remote: close code 4004 (login refused)";
+    assert_eq!(
+        close_code(refused),
+        Some((4004, "login refused".to_string()))
+    );
+    assert_eq!(backoff_left(refused), None);
 }
 
 #[tokio::test(flavor = "multi_thread")]
