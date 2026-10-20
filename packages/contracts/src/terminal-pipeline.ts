@@ -1030,8 +1030,13 @@ export const InputDimension = z
   .passthrough();
 export type InputDimension = z.infer<typeof InputDimension>;
 
-/** Known reasons per dimension (spec §5.4); unknown strings are tolerated. */
-export const PRESENTATION_STOPPED_REASONS = ["overload", "stale-route"] as const;
+/** Known reasons per dimension (spec §5.4); unknown strings are tolerated.
+ * `exited` / `removed` (audit C8): the lease follows the session's
+ * life — its program exiting stops presentation and revokes input
+ * (`stopped{exited}`, `revoked{exited}`), its removal revokes the activation
+ * (`revoked{removed}`). An overload stop recovers (`presenting` again once a
+ * unit sent after it applies); an `exited` one never does. */
+export const PRESENTATION_STOPPED_REASONS = ["overload", "stale-route", "exited"] as const;
 export const INPUT_SUSPENDED_REASONS = ["lagging", "overload", "right-expired"] as const;
 export const ACTIVATION_REVOKED_REASONS = [
   "leg-dead",
@@ -1039,6 +1044,8 @@ export const ACTIVATION_REVOKED_REASONS = [
   "right-revoked",
   "stale-route",
   "detached",
+  "exited",
+  "removed",
 ] as const;
 
 /** Cell → main (control leg): the revocable LEASE with TWO independent

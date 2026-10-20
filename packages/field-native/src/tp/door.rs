@@ -335,6 +335,50 @@ fn fan_out_session_event(state: &DoorState, event: SessionEventKind) {
     }
 }
 
+/// C8 — the LEASE follows the session's life, for every activation of it
+/// whatever its capabilities: an exit stops presentation and revokes input
+/// (`stopped{exited}`, `revoked{exited}`), a removal revokes the activation
+/// (`revoked{removed}` — view detached, pump stopped). `SessionEvent` reaches
+/// only negotiated legs; the lease is what every leg reads.
+fn lease_follows_lifecycle(state: &DoorState, event: &SessionLifecycleEvent) {
+    let effects = {
+        let mut reg = state.registry.lock().unwrap();
+        match event {
+            SessionLifecycleEvent::Created { .. } => return,
+            SessionLifecycleEvent::Exited { session_id, .. } => {
+                reg.activations.session_exited(session_id)
+            }
+            SessionLifecycleEvent::Removed { session_id } => {
+                reg.activations.session_removed(session_id)
+            }
+        }
+    };
+    perform_on(state, effects);
+}
+
+/// C8 — a lagged lifecycle receiver dropped facts, so the lease reads them
+/// from the source: an activation whose session is gone is revoked `removed`,
+/// one whose session reports it exited is stopped `exited`. Under the registry
+/// lock (registry → ghosttea, the documented order — the tick prunes the same
+/// way).
+fn reconcile_lifecycle(state: &DoorState) {
+    let effects = {
+        let mut reg = state.registry.lock().unwrap();
+        let mut effects = Vec::new();
+        for session_id in reg.activations.session_ids() {
+            match state.config.source.session(&session_id) {
+                None => effects.extend(reg.activations.session_removed(&session_id)),
+                Some(session) if session.summary().exited => {
+                    effects.extend(reg.activations.session_exited(&session_id))
+                }
+                Some(_) => {}
+            }
+        }
+        effects
+    };
+    perform_on(state, effects);
+}
+
 impl Door {
     /// Bind `127.0.0.1:0` and start accepting. The URLs are the cell's
     /// `CellEndpointSet` for the route row.
@@ -415,6 +459,7 @@ impl Door {
                             if let Some(wire) = session_event_of(&event) {
                                 fan_out_session_event(&lifecycle_state, wire);
                             }
+                            lease_follows_lifecycle(&lifecycle_state, &event);
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Lagged(dropped)) => {
                             tracing::warn!(
@@ -424,6 +469,8 @@ impl Door {
                                 "the lifecycle receiver lagged; clients told to resync"
                             );
                             fan_out_session_event(&lifecycle_state, SessionEventKind::Resync);
+                            // the deaths it dropped are read from the source itself
+                            reconcile_lifecycle(&lifecycle_state);
                         }
                         Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                     }
@@ -1668,7 +1715,9 @@ fn attach_control(state: &Arc<DoorState>, leg: &LegRef, set: &SetIdentity, msg: 
             return;
         }
     };
-    let session_known = state.config.source.session(&claims.session_id).is_some();
+    let session = state.config.source.session(&claims.session_id);
+    let session_known = session.is_some();
+    let session_id = claims.session_id.clone();
     let effects = {
         let mut reg = state.registry.lock().unwrap();
         if !reg.ledger.accept_attach_generation(
@@ -1689,14 +1738,23 @@ fn attach_control(state: &Arc<DoorState>, leg: &LegRef, set: &SetIdentity, msg: 
                 ),
             )]
         } else {
-            reg.activations.attach_control(AttachControlInput {
+            let mut effects = reg.activations.attach_control(AttachControlInput {
                 now_ms: now,
                 set,
                 leg,
                 msg,
                 claims,
                 session_known,
-            })
+            });
+            // C8 — a session whose program had ALREADY exited is stopped from
+            // the start: its lifecycle event came before there was an
+            // activation to tell. Read under the registry lock, so an exit
+            // racing this attach is seen either here or by the lifecycle task
+            // after it, never by neither.
+            if session.as_ref().is_some_and(|s| s.summary().exited) {
+                effects.extend(reg.activations.session_exited(&session_id));
+            }
+            effects
         }
     };
     perform(state, effects);

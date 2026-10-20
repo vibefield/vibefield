@@ -400,7 +400,7 @@ export const ACTIVATION_MACHINE: MachineTable = {
       event: "cell-status",
       guard: "presentation = stopped",
       to: "stalled",
-      actions: ["close input", "face: behind/overload per reason"],
+      actions: ["close input", "face per reason: behind/overload, or the session exited"],
     },
     {
       from: "stalled",
@@ -426,7 +426,7 @@ export const ACTIVATION_MACHINE: MachineTable = {
     {
       from: ANY,
       event: "cell-status",
-      guard: "presentation = revoked ∧ reason ∈ {replaced, right-revoked, detached}",
+      guard: "presentation = revoked ∧ reason ∈ {replaced, right-revoked, detached, removed}",
       to: "ended",
       actions: ["close input", "release demand/staging/cursor; account → draining"],
     },

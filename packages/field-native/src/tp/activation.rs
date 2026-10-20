@@ -1913,6 +1913,11 @@ impl ActivationTable {
         let Some(a) = self.by_id.get_mut(activation_id) else {
             return Vec::new();
         };
+        // a session that EXITED (C8 — final: the pump starving on a dead
+        // session's last frames never replaces it)
+        if a.presentation == Presentation::Stopped("exited") {
+            return Vec::new();
+        }
         // The same stop said again: nothing new for the wire — but a report IS
         // the pump starved now, parked in a wait with no bound that will never
         // report again. A recovery unit sent BEFORE this report does not end
@@ -1927,6 +1932,58 @@ impl ActivationTable {
         a.resume_revision = None;
         Self::recompute_input(a, now_ms);
         vec![Self::status_effect(a)]
+    }
+
+    /// C8 — the session's program EXITED (the lifecycle bus, or
+    /// the source's own summary): every activation of it is told at once —
+    /// presentation `stopped{exited}` (the scene stops advancing; its last
+    /// frame stays the viewer's) and input `revoked{exited}` (there is no PTY to
+    /// write to; a revoked input never comes back on its own). Final: neither
+    /// an overload stop nor a seed applied after it moves the lease. Idempotent.
+    pub fn session_exited(&mut self, session_id: &str) -> Vec<Effect> {
+        let mut effects = Vec::new();
+        for a in self
+            .by_id
+            .values_mut()
+            .filter(|a| a.session_id == session_id)
+        {
+            if a.presentation == Presentation::Stopped("exited") {
+                continue;
+            }
+            a.presentation = Presentation::Stopped("exited");
+            a.input = Input::Revoked("exited");
+            a.resume_revision = None;
+            effects.push(Self::status_effect(a));
+        }
+        effects
+    }
+
+    /// C8 — the session left the engine's registry: every activation of it is
+    /// revoked `removed` — the invalidation a dead leg gets (the lease said on
+    /// the control leg, the view detached, the pump stopped, the credit account
+    /// draining, the geometry seat released). Both clients end the activation
+    /// on it: the PTY is gone, and nothing re-attaches to it.
+    pub fn session_removed(&mut self, session_id: &str) -> Vec<Effect> {
+        let ids: Vec<String> = self
+            .by_id
+            .values()
+            .filter(|a| a.session_id == session_id)
+            .map(|a| a.activation_id.clone())
+            .collect();
+        let mut effects = Vec::new();
+        for id in ids {
+            effects.extend(self.invalidate(&id, "removed", false));
+        }
+        effects
+    }
+
+    /// The sessions the table holds activations for, once each — what the door
+    /// reconciles against the source when its lifecycle receiver lagged (C8).
+    pub fn session_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self.by_id.values().map(|a| a.session_id.clone()).collect();
+        ids.sort();
+        ids.dedup();
+        ids
     }
 
     /// Credit returned on a frames connection: wake the pumps whose windows moved.
@@ -4943,5 +5000,84 @@ mod tests {
             answer(&t, &control, &msg("a1", "s1", 0), 3_400),
             Some("overload")
         );
+    }
+
+    /// C8 — the lease follows the session's life. An EXIT stops
+    /// every activation of that session (`stopped{exited}`, input
+    /// `revoked{exited}`) and is final: an overload stop, an applied frame, a
+    /// tick and a seed that lands after it never move it, and the input gate
+    /// answers with the lease's word. Another session's lease is untouched. A
+    /// REMOVAL revokes (`revoked{removed}`): the view detached, the pump
+    /// stopped, the activation gone.
+    #[test]
+    fn an_exit_stops_the_lease_for_good_and_a_removal_revokes_it() {
+        let mut t = ActivationTable::new("cb");
+        let (c1, mut crx1, frames1, _f1) = presenting_activation(&mut t, "a1", "s1", 10);
+        let (_c2, mut crx2, _frames2, _f2) = presenting_activation(&mut t, "b1", "s2", 5);
+
+        perform(t.session_exited("s1"));
+        let s = texts(&mut crx1);
+        assert_eq!(s.len(), 1);
+        assert_eq!(s[0]["presentation"]["state"], "stopped");
+        assert_eq!(s[0]["presentation"]["reason"], "exited");
+        assert_eq!(s[0]["input"]["state"], "revoked");
+        assert_eq!(s[0]["input"]["reason"], "exited");
+        assert!(
+            texts(&mut crx2).is_empty(),
+            "another session's lease is untouched"
+        );
+        assert!(t.session_exited("s1").is_empty(), "said once");
+
+        // final: the pump's overload, a frame applied, a tick
+        assert!(t.presentation_stopped("a1", "overload", 3_100).is_empty());
+        t.unit_sent("a1", 11, false);
+        perform(applied(&mut t, &frames1, "a1", "s1", 11, 3_200));
+        perform(t.tick(3_300));
+        let a = t.get("a1").unwrap();
+        assert_eq!(a.presentation, Presentation::Stopped("exited"));
+        assert_eq!(a.input, Input::Revoked("exited"));
+        let input = SendInput {
+            session_id: "s1".into(),
+            activation_id: "a1".into(),
+            lease_epoch: 0,
+            input_sequence: 1,
+            op: InputOp::Text { text: "x".into() },
+        };
+        match t.send_input(&c1, &input, 3_300) {
+            InputDecision::Drop(dropped) => {
+                assert_eq!(t.input_refusal(&c1, &input, dropped), Some("exited"))
+            }
+            InputDecision::Proceed(_) => panic!("an exited session never takes input"),
+        }
+
+        // an exit while the seed was still in flight: the seed applied after
+        // it does not make it presenting
+        let (_c3, mut crx3, frames3, _f3) = attached_activation(&mut t, "c1", "s3");
+        perform(t.session_exited("s3"));
+        t.unit_sent("c1", 4, true);
+        perform(applied(&mut t, &frames3, "c1", "s3", 4, 3_400));
+        assert_eq!(
+            t.get("c1").unwrap().presentation,
+            Presentation::Stopped("exited")
+        );
+        assert!(texts(&mut crx3)
+            .iter()
+            .all(|s| s["presentation"]["state"] != "presenting"));
+
+        // the REMOVAL: revoked, the view detached, the pump stopped, gone
+        let effects = t.session_removed("s1");
+        assert!(effects
+            .iter()
+            .any(|e| matches!(e, Effect::DetachView { .. })));
+        assert!(effects.iter().any(|e| matches!(e, Effect::StopPump { .. })));
+        perform(effects);
+        let s = texts(&mut crx1);
+        let last = s.last().expect("the removal is said");
+        assert_eq!(last["presentation"]["state"], "revoked");
+        assert_eq!(last["presentation"]["reason"], "removed");
+        assert_eq!(last["input"]["reason"], "removed");
+        assert!(t.get("a1").is_none());
+        assert!(t.get("b1").is_some());
+        assert_eq!(t.session_ids(), vec!["s2".to_string(), "s3".to_string()]);
     }
 }

@@ -145,10 +145,21 @@ async fn harness_with_door_source(
 
 impl Harness {
     fn attach_grant(&self, session_id: &str, generation: u64, rights: &[&str]) -> Value {
+        self.attach_grant_as("win:1#1", session_id, generation, rights)
+    }
+
+    /// `attach_grant` for another client (a second window, the phone).
+    fn attach_grant_as(
+        &self,
+        client_id: &str,
+        session_id: &str,
+        generation: u64,
+        rights: &[&str],
+    ) -> Value {
         let now = field_native::tp::unix_ms();
         let claims = json!({
             "audienceCellBootId": self.minter.cell_boot_id,
-            "clientId": "win:1#1",
+            "clientId": client_id,
             "sessionId": session_id,
             "routeRevision": 3,
             "grantGeneration": generation,
@@ -2507,5 +2518,156 @@ async fn a_desktop_that_attaches_while_the_phone_drives_hears_the_phone_at_once(
         present_as(&h, "win:2#1", "set-os", &session_id, "act-s", &full).await;
 
     drop((phone_frames, desk_frames, stock_frames));
+    h.door.shutdown().await;
+}
+
+// ---------------------------------------------------------------------------
+// C8 — the lease follows the session's life.
+
+/// The real door: the lifecycle bus's `Exited` reaches every activation of
+/// the session as `stopped{exited}` + input `revoked{exited}` — whatever its
+/// leg negotiated — and an attach to a session that had ALREADY exited starts
+/// stopped; `Removed` revokes them all (`removed`) and empties the table.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_exit_stops_the_lease_and_a_removal_revokes_it() {
+    let h = harness().await;
+    let session = spawn_session(&h.source);
+    let session_id = session.id();
+    let (mut control, mut frames, _epoch) =
+        connect(&h, "set-x", 1, caps(4_000_000, 2_000_000)).await;
+    attach_both(
+        &h,
+        &mut control,
+        &mut frames,
+        &session_id,
+        "act-x",
+        &["input", "read"],
+        true,
+    )
+    .await;
+    let (_kind, _base, result, _bytes, _headers) = receive_transfer(&mut frames).await;
+    scene_applied(&mut frames, &session_id, "act-x", &result).await;
+    status_until(&mut control, "presenting", |s| {
+        s["presentation"]["state"] == "presenting"
+    })
+    .await;
+
+    // The program exits for real; the harness, as the service does, publishes
+    // the fact once the engine's summary says so.
+    type_into(&session, "exit\n");
+    for _ in 0..250 {
+        if session.summary().exited {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(session.summary().exited, "the shell exited");
+    h.source.publish_lifecycle(SessionLifecycleEvent::Exited {
+        session_id: session_id.clone(),
+        exit: SessionExit {
+            exit_code: Some(0),
+            exit_signal: None,
+            requested_termination: None,
+            exit_outcome: ExitOutcome::Completed,
+        },
+    });
+    let exited = status_until(&mut control, "the exit", |s| {
+        s["presentation"]["state"] == "stopped"
+    })
+    .await;
+    assert_eq!(exited["presentation"]["reason"], "exited");
+    assert_eq!(exited["input"]["state"], "revoked");
+    assert_eq!(exited["input"]["reason"], "exited");
+
+    // A second client attaching AFTER the exit starts stopped: the event came
+    // before there was an activation of its to tell.
+    let grant = h.minter.transport(TransportSpec {
+        client_id: "win:2#1",
+        connection_set_id: "set-x-late",
+        channels: &["control"],
+        generation: 1,
+        nonce: "set-x-late",
+        issued_at: None,
+        expires_at: None,
+        audience: None,
+    });
+    let mut late = dial(&h.door.control_url()).await;
+    send_json(
+        &mut late,
+        serde_json::from_str(&hello("control", &grant, None)).unwrap(),
+    )
+    .await;
+    expect_text(next_reply(&mut late).await, "ConnectionAccepted");
+    send_json(
+        &mut late,
+        json!({
+            "type": "AttachControlLeg",
+            "activationId": "act-x-late",
+            "attachGrant": h.attach_grant_as("win:2#1", &session_id, 1, &["input", "read"]),
+            "initialDemand": { "mode": "live" },
+        }),
+    )
+    .await;
+    expect_text(next_reply(&mut late).await, "ControlLegAttached");
+    let late_lease = status_until(&mut late, "the late attach's lease", |_| true).await;
+    assert_eq!(late_lease["presentation"]["state"], "stopped");
+    assert_eq!(late_lease["presentation"]["reason"], "exited");
+    assert_eq!(late_lease["input"]["state"], "revoked");
+
+    // The REMOVAL: revoked{removed} on both, and the table is empty.
+    h.source.remove(&session_id);
+    h.source.publish_lifecycle(SessionLifecycleEvent::Removed {
+        session_id: session_id.clone(),
+    });
+    let removed = status_until(&mut control, "the removal", |s| {
+        s["presentation"]["state"] == "revoked"
+    })
+    .await;
+    assert_eq!(removed["presentation"]["reason"], "removed");
+    let removed_late = status_until(&mut late, "the late removal", |s| {
+        s["presentation"]["state"] == "revoked"
+    })
+    .await;
+    assert_eq!(removed_late["presentation"]["reason"], "removed");
+    assert!(h.door.snapshot().activations.is_empty());
+    h.door.shutdown().await;
+}
+
+/// A LAGGED lifecycle bus dropped the facts, so the lease reads them from the
+/// source: a session that is gone revokes its activations `removed`, though
+/// the event that said so was among the dropped. (Capacity 1 and a burst on
+/// the current-thread runtime, `a_lagged_lifecycle_bus_tells…`'s recipe.)
+#[tokio::test]
+async fn a_lagged_bus_reconciles_the_lease_against_the_source() {
+    let h = harness_with_source(Arc::new(DirectSessions::with_lifecycle_capacity(1)), |_| {}).await;
+    let session = spawn_session(&h.source);
+    let session_id = session.id();
+    let (mut control, _) = connect_control(&h, "set-lag-x", json!([])).await;
+    send_json(
+        &mut control,
+        json!({
+            "type": "AttachControlLeg",
+            "activationId": "act-lag",
+            "attachGrant": h.attach_grant(&session_id, 1, &["read"]),
+            "initialDemand": { "mode": "none" },
+        }),
+    )
+    .await;
+    expect_text(next_reply(&mut control).await, "ControlLegAttached");
+
+    // The session leaves the source, and the burst that follows drops its fact.
+    h.source.remove(&session_id);
+    for i in 0..3 {
+        h.source.publish_lifecycle(SessionLifecycleEvent::Removed {
+            session_id: format!("sess-other-{i}"),
+        });
+    }
+    let revoked = status_until(&mut control, "the reconciled removal", |s| {
+        s["presentation"]["state"] == "revoked"
+    })
+    .await;
+    assert_eq!(revoked["activationId"], "act-lag");
+    assert_eq!(revoked["presentation"]["reason"], "removed");
+    let _ = session.terminate(TerminationSource::User);
     h.door.shutdown().await;
 }
