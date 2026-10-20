@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { resolveConfig } from "vite";
+import { createServer, resolveConfig } from "vite";
 import { linkedPackages } from "../../../scripts/siblings.mjs";
 import { workspacePaths } from "../src/paths.mjs";
-import { rendererDevelopmentDefines } from "../src/vite-server.mjs";
+import { rendererDevelopmentDefines, withoutProcessExits } from "../src/vite-server.mjs";
 
 test("the ordinary renderer keeps forced onboarding disabled", () => {
   assert.deepEqual(rendererDevelopmentDefines(), {
@@ -119,4 +122,68 @@ test("the production renderer and browser catalog have disjoint build outputs", 
     design.build.outDir,
     join(workspacePaths.repoRoot, ".vibefield/studio/catalog-renderer"),
   );
+});
+
+/** A stand-in for `process`: its SIGTERM listeners and its stdin's. */
+function fakeHost() {
+  const host = new EventEmitter();
+  host.stdin = new EventEmitter();
+  return host;
+}
+
+test("the renderer server takes back the process exits Vite installs, and only those", async () => {
+  // Vite's server mode adds a SIGTERM listener that ends in `process.exit()`, and the same on
+  // stdin's end. The runner owns this process: its own listeners stay, the created ones go.
+  const host = fakeHost();
+  const runners = () => {};
+  host.on("SIGTERM", runners);
+  host.stdin.on("end", runners);
+
+  const created = await withoutProcessExits(async () => {
+    host.once("SIGTERM", () => {});
+    host.stdin.on("end", () => {});
+    return "server";
+  }, host);
+
+  assert.equal(created, "server");
+  assert.deepEqual(host.listeners("SIGTERM"), [runners]);
+  assert.deepEqual(host.stdin.listeners("end"), [runners]);
+});
+
+test("a server that fails to start leaves no process exit behind", async () => {
+  const host = fakeHost();
+  await assert.rejects(
+    withoutProcessExits(async () => {
+      host.once("SIGTERM", () => {});
+      throw new Error("no config");
+    }, host),
+    /no config/,
+  );
+  assert.equal(host.listenerCount("SIGTERM"), 0);
+});
+
+test("Vite's own server installs a SIGTERM exit, and the renderer server's start removes it", async (t) => {
+  // The cause, pinned against the installed Vite (2026-10-20: a SIGTERM to the runner exited 143
+  // before Electron and the daemon pair were stopped). If the first count stops moving, Vite has
+  // stopped taking the process and `withoutProcessExits` has nothing left to do.
+  const root = await mkdtemp(join(tmpdir(), "vf-vite-sigterm-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const config = {
+    root,
+    configFile: false,
+    logLevel: "silent",
+    clearScreen: false,
+    server: { host: "127.0.0.1", port: 0 },
+  };
+  const before = process.listenerCount("SIGTERM");
+
+  const bare = await createServer(config);
+  assert.equal(process.listenerCount("SIGTERM"), before + 1);
+  await bare.close();
+  assert.equal(process.listenerCount("SIGTERM"), before);
+
+  const owned = await withoutProcessExits(() => createServer(config));
+  assert.equal(process.listenerCount("SIGTERM"), before);
+  await owned.close();
+  assert.equal(process.listenerCount("SIGTERM"), before);
 });
