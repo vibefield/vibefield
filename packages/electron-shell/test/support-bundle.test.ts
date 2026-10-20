@@ -354,20 +354,27 @@ describe("previewed support bundles", () => {
 describe("the doctor surface in a support bundle", () => {
   async function doctorOf(extra: { doctor?: () => Record<string, unknown> }) {
     const { root, logging, service } = await fixture(extra);
-    const now = Date.now();
-    logging.logger.info("desktop.support.doctor", "a record so the bundle has a log");
-    await logging.desktop.flush();
-    const preview = await service.preview({
-      range: { from: now - 60_000, to: now + 1_000 },
-      sources: [LOG_STREAMS.SYSTEM_DESKTOP],
-      pluginIds: [],
-      includeAudit: false,
-      crashArtifactIds: [],
-    });
-    const destination = join(root, "support-doctor.tar.gz");
-    await service.export(preview.previewId, destination);
-    const files = unpackTarGz(await readFile(destination));
-    return JSON.parse(files.get("doctor/status.json")!.toString("utf8")) as Record<string, unknown>;
+    try {
+      const now = Date.now();
+      logging.logger.info("desktop.support.doctor", "a record so the bundle has a log");
+      await logging.desktop.flush();
+      const preview = await service.preview({
+        range: { from: now - 60_000, to: now + 1_000 },
+        sources: [LOG_STREAMS.SYSTEM_DESKTOP],
+        pluginIds: [],
+        includeAudit: false,
+        crashArtifactIds: [],
+      });
+      const destination = join(root, "support-doctor.tar.gz");
+      await service.export(preview.previewId, destination);
+      const files = unpackTarGz(await readFile(destination));
+      const status = files.get("doctor/status.json")!.toString("utf8");
+      return JSON.parse(status) as Record<string, unknown>;
+    } finally {
+      // the fixture's logging holds eight file handles (each stream's ndjson and its lock): closed here, as
+      // every other test in this file closes its own, never left to the garbage collector (item 54)
+      await logging.close();
+    }
   }
 
   it("carries the updater's lines when a doctor surface is registered", async () => {
