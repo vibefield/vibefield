@@ -138,7 +138,7 @@ import Testing
     #expect(framesHello?["receiverCapacities"]?["perActivationCreditBytes"]?.intValue == 524_288)
     // Only capabilities this client can actually honour.
     let advertised = controlHello?["capabilities"]?.arrayValue?.compactMap(\.stringValue)
-    #expect(advertised == ["resume", "session-events", "geometry-events"])
+    #expect(advertised == ["resume", "session-events", "geometry-events", "input-refusals"])
     client.close()
   }
 
@@ -1514,6 +1514,37 @@ import Testing
     client.close()
   }
 
+  // MARK: Refused input (C5)
+
+  /// `InputRefused` rides the control leg behind the negotiated capability:
+  /// the client hands it to whoever asked (the attachment says it on the card),
+  /// and drops one naming an activation this client does not hold for that
+  /// session. Delivered in order on one leg, so the first one heard being the
+  /// second one sent is the drop.
+  @Test func aRefusedInputIsHandedOnAndAStrangersIsDropped() async throws {
+    let transport = ScriptedTransport()
+    let sink = RoutedFrameRecorder()
+    let heard = RefusalsHeard()
+    let client = RoutedTerminalClient(
+      transport: transport, sink: sink,
+      options: .init(viewId: "view-1", onInputRefused: { heard.refusals.append($0) }))
+    client.open(try ticket())
+    let live = try await attached(transport: transport, sink: sink, client: client)
+
+    let refusal = { (activation: String, sequence: Int64) -> [String: JSONValue] in
+      [
+        "sessionId": .string(self.session), "activationId": .string(activation),
+        "leaseEpoch": .int(0), "inputSequence": .int(sequence), "reason": .string("lagging"),
+      ]
+    }
+    try await live.control.deliver(.inputRefused, refusal("act-somebody-else", 6))
+    try await live.control.deliver(.inputRefused, refusal(live.activation, 7))
+    try await settle("the refusal") { !heard.refusals.isEmpty }
+    #expect(heard.refusals.map(\.inputSequence) == [7])
+    #expect(heard.refusals.first?.reason == "lagging")
+    client.close()
+  }
+
   // MARK: Renewal and the lapsed attach (P0-C)
   //
   // The 2026-09-24 terminal audit: `renew(_:)` had no caller, so every phone
@@ -1745,4 +1776,10 @@ final class TicketMints {
   /// While false, every ticket handed out is one the client will refuse before
   /// it spends a socket.
   var handOutLive = false
+}
+
+/// C5 — what an `onInputRefused` hook heard, in order.
+@MainActor
+final class RefusalsHeard {
+  var refusals: [RoutedInputRefused] = []
 }

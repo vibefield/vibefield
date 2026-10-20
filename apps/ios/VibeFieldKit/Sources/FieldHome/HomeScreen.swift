@@ -2156,7 +2156,11 @@ public struct HomeScreen: View {
   private func phaseNote(_ attachment: TerminalAttachment) -> String? {
     switch attachment.phase {
     case .idle: return nil
-    case .connecting: return "connecting over the mesh…"
+    // C5 — a transient note outranks "connecting" as it outranks the live line:
+    // the cell's refusal for an overload stop lands AFTER the lease that took
+    // the card out of live (one ordered leg), so a note said only in `.live`
+    // would never be seen.
+    case .connecting: return attachment.notice ?? "connecting over the mesh…"
     case .live:
       // A transient note (a keystroke this device declined to send) outranks
       // the standing one, and the standing one is the GRANT's answer: since

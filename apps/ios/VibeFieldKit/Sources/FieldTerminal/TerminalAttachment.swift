@@ -566,7 +566,9 @@ public final class TerminalAttachment {
     guard client.hasLiveActivation(sessionID) else { return false }
     let binding = bind()
     let sink = makeSink(binding: binding)
-    lanes.adopt(sessionID, sink: sink, reticket: reticket(binding: binding))
+    lanes.adopt(
+      sessionID, sink: sink, reticket: reticket(binding: binding),
+      refused: inputRefused(binding: binding))
     self.sink = sink
     self.client = client
     localPhase = nil
@@ -639,6 +641,17 @@ public final class TerminalAttachment {
     }
   }
 
+  /// C5 — an input the cell turned away (`InputRefused`) is said on this
+  /// attachment's card, never lost: the lane hands each refusal to the session
+  /// it names, and this binding's handler takes it while the binding is the
+  /// attachment's.
+  private func inputRefused(binding: UInt64) -> TerminalLanes.Refused {
+    { [weak self] refused in
+      guard let self, binding == self.binding else { return }
+      self.cellRefusedInput(refused)
+    }
+  }
+
   /// Let one session go: lanes made for this attachment close with it (the
   /// per-tap client's old end); a shared lane forgets the session and keeps
   /// its legs for the others.
@@ -670,9 +683,11 @@ public final class TerminalAttachment {
     let sink = makeSink(binding: binding)
     // The cell's lane — opened by its first ticket, carrying every session the
     // phone shows on that cell — with this session's frames routed to `sink`.
-    // P0-C's renewal, the leg budget and fix8's step deadline are the lane's.
+    // P0-C's renewal, the leg budget and fix8's step deadline are the lane's;
+    // so is C5's refusal hook, which hands this session's to `inputRefused`.
     let client = lanes.lane(
-      for: ticket, sessionId: sessionID, sink: sink, reticket: reticket(binding: binding))
+      for: ticket, sessionId: sessionID, sink: sink, reticket: reticket(binding: binding),
+      refused: inputRefused(binding: binding))
     self.sink = sink
     self.client = client
     self.sessionID = sessionID
@@ -883,10 +898,11 @@ public final class TerminalAttachment {
   // --- end IOS-5b -----------------------------------------------------------
 
   /// A hardware key. Not gated on `acceptsInput` here: the client holds the
-  /// same gate one layer down (the cell DROPS input it does not allow, with an
-  /// audit line and no reply, so a client that sent anyway would be typing into
-  /// a silence), and this is where the user learns their keystroke went
-  /// nowhere.
+  /// same gate one layer down (the cell DROPS input it does not allow, and its
+  /// answer — `InputRefused`, only on a leg that negotiated `input-refusals` —
+  /// comes a round trip after the keystroke, so a client that sent anyway would
+  /// learn of it late or not at all), and this is where the user learns their
+  /// keystroke went nowhere.
   @discardableResult
   public func handleHardwareKey(_ event: GhostteaHardwareKeyEvent) -> Bool {
     guard client != nil else { return false }
@@ -1156,6 +1172,55 @@ public final class TerminalAttachment {
       return "waiting for the terminal to catch up"
     }
     return "the desktop has paused input for this viewer"
+  }
+
+  /// C5 — the CELL turned one of this card's inputs away at its own gate
+  /// (`InputRefused`). `forward` already declines what this device knows is
+  /// closed; this is the input that raced the lease closing — typed in the
+  /// moment before the lag, a stop or the renewal margin reached the phone —
+  /// and the card says so.
+  private func cellRefusedInput(_ refused: RoutedInputRefused) {
+    guard refused.sessionId == sessionID else { return }
+    note(Self.cellRefusalWords(refused.reason))
+  }
+
+  /// The cell's reason for refusing an input, as the card's note: what
+  /// happened, then what to do (DESIGN.md §9). The reason is the lease's own
+  /// word, or the fence that refused; one this build predates is said plainly
+  /// with the word itself rather than guessed at.
+  ///
+  /// Where a person reads it: the note is said in the `.live` and `.connecting`
+  /// phases (an overload refusal arrives after the lease that made the card
+  /// `.connecting`). Every reason the cell can give is worded, so none is ever
+  /// said as its token — though two this client cannot earn: `pending` and
+  /// `not-granted` (its gate sends nothing before the first presenting lease,
+  /// nor without the input right the cell accepted).
+  nonisolated static func cellRefusalWords(_ reason: String) -> String {
+    let lead = "the terminal didn't take that input"
+    switch reason {
+    case "lagging":
+      return "\(lead) — this screen is behind; type again once it catches up"
+    case "pending":
+      return "\(lead) — the screen is still arriving; type again once it shows"
+    case "overload":
+      return "\(lead) — the connection can't carry this screen now; type again once it moves"
+    case "right-expired":
+      return "\(lead) — the write grant has run out; reattach to type again"
+    case "right-revoked":
+      // a RENEWAL took input away (the cell's downgrade): a reattach mints the
+      // same grant back, so it is not the act to offer
+      return "\(lead) — this desktop has taken input away; this viewer is view only now"
+    case "not-granted":
+      return "\(lead) — view only: this desktop granted read without input"
+    case "exited":
+      return "\(lead) — the session has ended"
+    case "stale-lease-epoch":
+      return "\(lead) — this session moved; reattach to type again"
+    case "no-view":
+      return "\(lead) — this screen is parked; open it to type"
+    default:
+      return "\(lead) — the desktop paused input for this viewer (\(reason))"
+    }
   }
 
   /// A note that expires: a stale line about a keystroke would sit on top of a

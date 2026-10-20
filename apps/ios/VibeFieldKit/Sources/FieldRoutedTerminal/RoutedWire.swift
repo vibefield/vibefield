@@ -44,6 +44,7 @@ public enum RoutedMessageType: String, Sendable, Equatable, CaseIterable {
   case transferGeometry = "TransferGeometry"
   case sendInput = "SendInput"
   case sessionEvent = "SessionEvent"
+  case inputRefused = "InputRefused"
   case geometryCommitted = "GeometryCommitted"
   case geometryRefused = "GeometryRefused"
   case geometryState = "GeometryState"
@@ -60,8 +61,9 @@ public enum RoutedMessageType: String, Sendable, Equatable, CaseIterable {
 ///
 /// Reading a tag outside the inbound set is a PROTOCOL error this client
 /// surfaces and closes on — which is exactly why `session-events` has to be
-/// negotiated before the cell may speak `SessionEvent`, and `geometry-events`
-/// before it speaks `GeometryState` (item 42).
+/// negotiated before the cell may speak `SessionEvent`, `geometry-events`
+/// before it speaks `GeometryState` (item 42), and `input-refusals` before it
+/// may speak `InputRefused`.
 public enum RoutedLegVocabulary {
   public static func inbound(_ channel: RoutedChannel) -> Set<RoutedMessageType> {
     switch channel {
@@ -69,7 +71,7 @@ public enum RoutedLegVocabulary {
       [
         .connectionAccepted, .connectionRefused, .legHeartbeatAck, .controlLegAttached,
         .attachRefused, .demandAccepted, .cellActivationStatus, .geometryCommitted,
-        .geometryRefused, .sessionEvent, .geometryState,
+        .geometryRefused, .sessionEvent, .geometryState, .inputRefused,
       ]
     case .frames:
       [.connectionAccepted, .connectionRefused, .legHeartbeatAck, .framesLegAttached, .attachRefused]
@@ -495,6 +497,34 @@ public struct RoutedSessionExit: Sendable, Equatable {
     self.signal = signal
     self.requestedTermination = requestedTermination
     self.outcome = outcome
+  }
+}
+
+/// cell → client on the control leg, behind the negotiated `input-refusals`
+/// capability (audit C5): the cell's answer to ONE `SendInput` it
+/// turned away at its own gate — the op by its `inputSequence`, and why, in the
+/// lease's own words (`lagging`, `overload`, `pending`, `right-expired`,
+/// `not-granted`, …) or the fence's (`stale-lease-epoch`, `no-view`). Not an
+/// acknowledgement: accepted input answers only with its echo frame. An unknown
+/// reason is READ, never refused — the card words it generically.
+///
+/// Not `RoutedInputRefusal` above: that is THIS client declining text too big
+/// for one control message before anything is sent; this is the CELL turning
+/// away input that reached it.
+public struct RoutedInputRefused: Sendable, Equatable {
+  public let sessionId: String
+  public let activationId: String
+  public let leaseEpoch: Int64
+  public let inputSequence: Int64
+  public let reason: String
+
+  public init(json: JSONValue) throws {
+    var fields = try WireObject(shape: "InputRefused", value: json)
+    sessionId = try fields.requiredString("sessionId")
+    activationId = try fields.requiredString("activationId")
+    leaseEpoch = try fields.requiredInt("leaseEpoch")
+    inputSequence = try fields.requiredInt("inputSequence")
+    reason = try fields.requiredString("reason")
   }
 }
 

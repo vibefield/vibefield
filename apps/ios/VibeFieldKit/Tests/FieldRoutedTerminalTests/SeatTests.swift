@@ -236,8 +236,8 @@ private final class Lines: @unchecked Sendable {
   }
 
   /// `geometry-events` is advertised on the CONTROL hello — the leg the cell
-  /// announces a seat on — beside `resume` and `session-events`, and nothing
-  /// else new.
+  /// announces a seat on — beside `resume`, `session-events` and C5's
+  /// `input-refusals`, and nothing else new.
   @Test func theControlHelloAdvertisesGeometryEvents() async throws {
     let transport = ScriptedTransport()
     let client = makeClient(transport)
@@ -250,7 +250,10 @@ private final class Lines: @unchecked Sendable {
     #expect(hello["channel"]?.stringValue == "control")
     #expect(
       hello["capabilities"]?.arrayValue?.compactMap(\.stringValue)
-        == ["resume", "session-events", RoutedTerminalContract.geometryEventsCapability])
+        == [
+          "resume", "session-events", RoutedTerminalContract.geometryEventsCapability,
+          RoutedTerminalContract.inputRefusalsCapability,
+        ])
   }
 
   /// The cell's announcement lands on the session it names. A holder whose

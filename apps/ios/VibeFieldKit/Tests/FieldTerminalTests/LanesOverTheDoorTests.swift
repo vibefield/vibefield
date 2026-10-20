@@ -15,9 +15,16 @@ import Testing
 @Suite(.serialized) struct LanesOverTheDoorTests {
   /// Attach `session` on `attachment` and walk the door through both legs'
   /// acknowledgements and a seed, the way the door test's first row does.
+  ///
+  /// `sessionHandle`/`viewHandle` are the TRF1 identity the frames leg declares
+  /// for this session, the seed frame's by default. A second session on the same
+  /// lane needs its OWN: the client refuses two live activations claiming one
+  /// session handle and fails the lane (RoutedTerminalClient's identity rule), so
+  /// a row that attaches two must give the second distinct handles.
   @MainActor
   private func attachToLive(
-    _ attachment: TerminalAttachment, session: String, door: CellDoorHarness, attaches: Int
+    _ attachment: TerminalAttachment, session: String, door: CellDoorHarness, attaches: Int,
+    sessionHandle: String? = nil, viewHandle: String? = nil
   ) async throws {
     let frames = try LaneFrames.load()
     let identity = try decodeTRF1Frame(frames.seed)
@@ -37,7 +44,8 @@ import Testing
       .framesLegAttached,
       Script.framesAttached(
         session: session, activation: activation,
-        sessionHandle: String(identity.sessionHandle), viewHandle: String(identity.viewHandle)),
+        sessionHandle: sessionHandle ?? String(identity.sessionHandle),
+        viewHandle: viewHandle ?? String(identity.viewHandle)),
       on: .frames)
   }
 
@@ -231,6 +239,46 @@ import Testing
       await door.demands.last?["demand"]?["mode"]?.stringValue == "live"
     }
     #expect(cells.said == [cell, cell])
+    lanes.closeAll()
+  }
+
+  /// C5 — the cell's refusal of one session's input is said on THAT session's
+  /// card: one lane's client carries both sessions, and the refusal names the
+  /// session and activation it turned away.
+  @MainActor
+  @Test func aCellRefusalIsSaidOnTheCardOfTheSessionItNames() async throws {
+    let door = CellDoorHarness()
+    let port = try await door.start()
+    defer { Task { await door.stop() } }
+    let lanes = TerminalLanes(
+      transport: URLSessionRoutedTransport(),
+      door: { asked in try AttachmentOverTheDoorTests.ticketJSON(port: port, sessionId: asked) })
+    let first = TerminalAttachment(
+      lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
+    try await attachToLive(first, session: "sess-a", door: door, attaches: 1)
+    let second = TerminalAttachment(
+      lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
+    // sess-b's own TRF1 identity: on one lane the client fails the whole lane
+    // when two activations claim one session handle, and the refusal below
+    // would then reach closed legs.
+    let seed = try decodeTRF1Frame(LaneFrames.load().seed)
+    try await attachToLive(
+      second, session: "sess-b", door: door, attaches: 2,
+      sessionHandle: String(seed.sessionHandle &+ 1), viewHandle: String(seed.viewHandle &+ 1))
+    let activation = try #require(await door.controlAttach).activationId
+
+    await door.send(
+      .inputRefused,
+      [
+        "sessionId": .string("sess-b"), "activationId": .string(activation),
+        "leaseEpoch": .int(0), "inputSequence": .int(1), "reason": .string("lagging"),
+      ],
+      on: .control)
+    try await AttachmentOverTheDoorTests.until("the refusal on sess-b's card") {
+      await MainActor.run { second.notice != nil }
+    }
+    #expect(second.notice == TerminalAttachment.cellRefusalWords("lagging"))
+    #expect(first.notice == nil)
     lanes.closeAll()
   }
 }

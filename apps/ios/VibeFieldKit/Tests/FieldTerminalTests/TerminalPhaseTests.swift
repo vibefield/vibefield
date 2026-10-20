@@ -328,3 +328,42 @@ import Testing
         == "INTERNAL")
   }
 }
+
+/// C5 — the card's note for an input the CELL turned away
+/// (`InputRefused`): what happened, then what to do, in the lease's own word.
+@Suite struct CellRefusalWordsTests {
+  @Test func everyKnownReasonSaysWhatHappenedAndWhatToDo() {
+    #expect(
+      TerminalAttachment.cellRefusalWords("lagging")
+        == "the terminal didn't take that input — "
+        + "this screen is behind; type again once it catches up")
+    // The margin closing is an expiry a reattach answers; a RENEWAL that took
+    // input away is not — a reattach mints the same grant back.
+    #expect(
+      TerminalAttachment.cellRefusalWords("right-expired")
+        == "the terminal didn't take that input — "
+        + "the write grant has run out; reattach to type again")
+    #expect(
+      TerminalAttachment.cellRefusalWords("right-revoked")
+        == "the terminal didn't take that input — "
+        + "this desktop has taken input away; this viewer is view only now")
+    #expect(!TerminalAttachment.cellRefusalWords("right-revoked").contains("reattach"))
+    for reason in [
+      "pending", "overload", "right-expired", "right-revoked", "not-granted", "exited",
+      "stale-lease-epoch", "no-view",
+    ] {
+      let words = TerminalAttachment.cellRefusalWords(reason)
+      #expect(words.hasPrefix("the terminal didn't take that input — "), "\(reason)")
+      // a known reason is said in words, never as the wire's token
+      #expect(!words.contains(reason), "\(reason)")
+    }
+  }
+
+  /// A reason this build predates is said plainly WITH the word, never guessed.
+  @Test func anUnknownReasonIsSaidWithItsOwnWord() {
+    #expect(
+      TerminalAttachment.cellRefusalWords("some-future-fence")
+        == "the terminal didn't take that input — "
+        + "the desktop paused input for this viewer (some-future-fence)")
+  }
+}

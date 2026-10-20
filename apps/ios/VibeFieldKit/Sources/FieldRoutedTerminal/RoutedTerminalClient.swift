@@ -283,6 +283,12 @@ public final class RoutedTerminalClient {
     public var stepDeadline: Duration
     /// fix8 — where the attach's phases are written.
     public var log: TerminalAttachLog
+    /// C5 — who is told when the cell turns one of this client's
+    /// inputs away (`InputRefused`, behind the negotiated `input-refusals`
+    /// capability), for whichever session the refusal names: one client
+    /// carries every session its lane shows (`TerminalLanes`). Absent = the
+    /// refusal is logged and nobody else hears it.
+    public var onInputRefused: (@MainActor @Sendable (RoutedInputRefused) -> Void)?
 
     public init(
       ticketProvider: (@MainActor @Sendable (String) async throws -> RoutedTerminalTicket)? = nil,
@@ -292,7 +298,8 @@ public final class RoutedTerminalClient {
       capacities: RoutedReceiverCapacities = .phone,
       legBudget: PhoneConnectionBudget? = nil,
       stepDeadline: Duration = .seconds(20),
-      log: TerminalAttachLog = .silent
+      log: TerminalAttachLog = .silent,
+      onInputRefused: (@MainActor @Sendable (RoutedInputRefused) -> Void)? = nil
     ) {
       self.ticketProvider = ticketProvider
       self.renewalProvider = renewalProvider
@@ -302,6 +309,7 @@ public final class RoutedTerminalClient {
       self.legBudget = legBudget
       self.stepDeadline = stepDeadline
       self.log = log
+      self.onInputRefused = onInputRefused
     }
   }
 
@@ -1355,6 +1363,20 @@ public final class RoutedTerminalClient {
         options.log("session events: unknown kind \(kind) dropped")
       }
 
+    case .inputRefused:
+      // C5 — the cell turned one of this client's inputs away at its own gate:
+      // the local gate refuses what this device KNOWS is closed, and this is
+      // the input that raced the lease closing. Handed on, never swallowed —
+      // but only for the activation this client holds for that session.
+      guard let refused = try? RoutedInputRefused(json: body) else { return }
+      guard let session = sessions[refused.sessionId],
+        session.activationId == refused.activationId
+      else { return }
+      options.log(
+        "input #\(refused.inputSequence) refused by the cell (\(refused.reason)) "
+          + "session=\(refused.sessionId)")
+      options.onInputRefused?(refused)
+
     default:
       break
     }
@@ -2254,10 +2276,11 @@ public final class RoutedTerminalClient {
     guard var session = sessions[sessionId] else { return }
     session.nowMs = Self.nowMs()
     sessions[sessionId] = session
-    // The cell ALWAYS rejects input while its own `input` is not allowed, and a
-    // refusal is a DROP with an audit line and no reply — so a client that sent
-    // anyway would be typing into a silence it could not distinguish from a
-    // working terminal. The gate is here as well as there.
+    // The cell ALWAYS rejects input while its own `input` is not allowed: a
+    // refusal is a DROP with an audit line, answered (`InputRefused`) only on a
+    // leg that negotiated `input-refusals` and a round trip after the keystroke
+    // — so a client that sent anyway would hear of it late, or, from a cell
+    // without the capability, never. The gate is here as well as there.
     guard session.inputAllowed else { return }
     session.inputSequence += 1
     sessions[sessionId] = session

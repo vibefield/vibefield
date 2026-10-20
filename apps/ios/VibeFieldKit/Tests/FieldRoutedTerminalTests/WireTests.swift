@@ -61,7 +61,7 @@ import Testing
       RoutedLegVocabulary.inbound(.control) == [
         .connectionAccepted, .connectionRefused, .legHeartbeatAck, .controlLegAttached,
         .attachRefused, .demandAccepted, .cellActivationStatus, .geometryCommitted,
-        .geometryRefused, .sessionEvent, .geometryState,
+        .geometryRefused, .sessionEvent, .geometryState, .inputRefused,
       ])
     #expect(
       RoutedLegVocabulary.inbound(.frames) == [
@@ -333,6 +333,45 @@ import Testing
     var body = try #require(try Vector.json("tp-session-event.resync").objectValue)
     body["event"] = .object(["kind": .string("someFutureKind")])
     #expect(try RoutedSessionEvent(json: .object(body)) == .unknown(kind: "someFutureKind"))
+  }
+}
+
+@Suite struct InputRefusedReaderTests {
+  /// `tp-input-refused.lagging.json` — the cell's answer to ONE refused input
+  /// (audit C5): the op by its sequence, and the lease's word.
+  @Test func aRefusalNamesTheInputAndTheLeasesWord() throws {
+    let refused = try RoutedInputRefused(json: try Vector.json("tp-input-refused.lagging"))
+    #expect(refused.sessionId == "sess-01J8Z3K9")
+    #expect(refused.activationId == "act-01")
+    #expect(refused.leaseEpoch == 4)
+    #expect(refused.inputSequence == 7)
+    #expect(refused.reason == "lagging")
+  }
+
+  /// A reason this build predates is READ, never refused — the card words it
+  /// with the word itself. A mutation of the golden, for tomorrow's vocabulary.
+  @Test func anUnknownReasonIsReadNotRefused() throws {
+    var body = try #require(try Vector.json("tp-input-refused.lagging").objectValue)
+    body["reason"] = .string("some-future-fence")
+    #expect(try RoutedInputRefused(json: .object(body)).reason == "some-future-fence")
+    body["inputSequence"] = nil
+    #expect(throws: (any Error).self) { try RoutedInputRefused(json: .object(body)) }
+  }
+
+  /// Control leg only, as `SessionEvent`: on the frames leg it is a violation.
+  @Test func theVerbIsReadOnTheControlLegOnly() throws {
+    let text = try RoutedWire.encode(
+      .inputRefused,
+      [
+        "sessionId": .string("s1"), "activationId": .string("act-1"), "leaseEpoch": .int(3),
+        "inputSequence": .int(12), "reason": .string("stale-lease-epoch"),
+      ])
+    #expect(throws: RoutedWire.DecodeFailure.notAllowedHere(.inputRefused)) {
+      try RoutedWire.decode(text, allowed: RoutedLegVocabulary.inbound(.frames))
+    }
+    #expect(
+      try RoutedWire.decode(text, allowed: RoutedLegVocabulary.inbound(.control)).type
+        == .inputRefused)
   }
 }
 

@@ -27,6 +27,10 @@ public final class TerminalLanes {
   /// the attachment's own mint, so the door's refusal reaches its card.
   typealias Reticket = @MainActor @Sendable (String) async throws -> RoutedTerminalTicket
 
+  /// C5 — where the cell's refusal of one session's input is said: that
+  /// session's attachment, so the note reaches its card (`InputRefused`).
+  typealias Refused = @MainActor @Sendable (RoutedInputRefused) -> Void
+
   final class Lane {
     let client: RoutedTerminalClient
     let sink: LaneSink
@@ -63,9 +67,11 @@ public final class TerminalLanes {
   private let deadline: Duration
   private let log: TerminalAttachLog
   private var lanes: [String: Lane] = [:]
-  /// Which cell each registered session rides, and how to re-mint for it.
+  /// Which cell each registered session rides, how to re-mint for it, and
+  /// who hears the cell refuse its input.
   private var cellOf: [String: String] = [:]
   private var retickets: [String: Reticket] = [:]
+  private var refusals: [String: Refused] = [:]
 
   public convenience init(
     session: @escaping TerminalAttachment.SessionProvider,
@@ -118,10 +124,11 @@ public final class TerminalLanes {
   }
 
   /// The lane a ticket names — opened at its cell's first ticket — with this
-  /// session's frames routed to `sink` and its re-mints to `reticket`.
+  /// session's frames routed to `sink`, its re-mints to `reticket` and the
+  /// cell's refusals of its input to `refused`.
   func lane(
     for ticket: RoutedTerminalTicket, sessionId: String, sink: RoutedTerminalFrameSink,
-    reticket: @escaping Reticket
+    reticket: @escaping Reticket, refused: @escaping Refused
   ) -> RoutedTerminalClient {
     let cell = ticket.route.cellBootId
     let lane = lanes[cell] ?? openLane(cell)
@@ -129,6 +136,7 @@ public final class TerminalLanes {
     lane.sink.register(sink, for: sessionId)
     cellOf[sessionId] = cell
     retickets[sessionId] = reticket
+    refusals[sessionId] = refused
     return lane.client
   }
 
@@ -150,10 +158,14 @@ public final class TerminalLanes {
   /// Point a session the lane still carries at a NEW attachment's sink: the
   /// binding the cell declared is replayed to it, so the frames that follow are
   /// admitted (`LaneSink.register`).
-  func adopt(_ sessionId: String, sink: RoutedTerminalFrameSink, reticket: @escaping Reticket) {
+  func adopt(
+    _ sessionId: String, sink: RoutedTerminalFrameSink, reticket: @escaping Reticket,
+    refused: @escaping Refused
+  ) {
     guard let cell = cellOf[sessionId], let lane = lanes[cell] else { return }
     lane.sink.register(sink, for: sessionId)
     retickets[sessionId] = reticket
+    refusals[sessionId] = refused
   }
 
   /// A session's attachment let it go: its frames have nowhere to go now. A
@@ -165,11 +177,13 @@ public final class TerminalLanes {
     keyring?.release(sessionId)
     guard let cell = cellOf[sessionId] else {
       retickets[sessionId] = nil
+      refusals[sessionId] = nil
       return
     }
     lanes[cell]?.sink.forget(sessionId)
     cellOf[sessionId] = nil
     retickets[sessionId] = nil
+    refusals[sessionId] = nil
     if !cellOf.values.contains(cell), let lane = lanes.removeValue(forKey: cell) {
       lane.client.close()
     }
@@ -183,6 +197,7 @@ public final class TerminalLanes {
     lanes = [:]
     cellOf = [:]
     retickets = [:]
+    refusals = [:]
   }
 
   /// How many lanes are open — one per cell the phone shows a session of.
@@ -205,7 +220,12 @@ public final class TerminalLanes {
         viewId: "phone-\(UUID().uuidString.lowercased())",
         legBudget: budget,
         stepDeadline: deadline,
-        log: log))
+        log: log,
+        // C5 — and a refusal of a session's input reaches that session's card,
+        // as its re-mint does.
+        onInputRefused: { [weak self] refused in
+          self?.refusals[refused.sessionId]?(refused)
+        }))
     let lane = Lane(client: client, sink: sink)
     lanes[cell] = lane
     log("lane opened cell=\(cell) — \(lanes.count) open")

@@ -71,15 +71,20 @@ public enum RoutedTerminalContract {
   ///   keeps it on the session (`RoutedSessionState.seat`), so it advertises it
   ///   — on both hellos, as `session-events` is; the cell negotiates both on
   ///   the control leg alone.
+  /// - `input-refusals` — load-bearing the same way (audit C5): the
+  ///   cell answers a `SendInput` it turned away with `InputRefused` only when
+  ///   asked. This client reads it and the card says the input went nowhere,
+  ///   so it advertises it.
   /// - `snapshot-demand` — NOT advertised: the phone's demand is `none` or
   ///   `live`, the core profile's own pair.
   /// - `profiling-envelope` — NOT advertised: nothing on the phone consumes the
   ///   timestamps yet, and asking for bytes nobody reads is a cost, not a hedge.
-  public static let capabilities = ["resume", "session-events", "geometry-events"]
+  public static let capabilities = ["resume", "session-events", "geometry-events", "input-refusals"]
 
   public static let resumeCapability = "resume"
   public static let sessionEventsCapability = "session-events"
   public static let geometryEventsCapability = "geometry-events"
+  public static let inputRefusalsCapability = "input-refusals"
 }
 
 /// What THIS phone can hold on the frames leg (`ConnectionHello.receiverCapacities`).

@@ -53,7 +53,10 @@ import Testing
     let capacities = await door.advertisedCapacities
     #expect(capacities?["connectionCreditBytes"]?.intValue == 2_097_152)
     #expect(capacities?["perActivationCreditBytes"]?.intValue == 524_288)
-    #expect(await door.advertisedCapabilities == ["resume", "session-events", "geometry-events"])
+    #expect(
+      await door.advertisedCapabilities == [
+        "resume", "session-events", "geometry-events", "input-refusals",
+      ])
 
     try await settle("control attach") { await door.controlAttach != nil }
     let activation = try #require(await door.controlAttach?.activationId)
