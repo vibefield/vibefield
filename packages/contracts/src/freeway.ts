@@ -371,14 +371,20 @@ export type FreewayTicketRow = z.infer<typeof FreewayTicketRow>;
 
 /** An open's answer: a `terminal-tickets` row set, a `terminal-renew` grant — or that renewal's
  * refusal (its CAS lost: `CONFLICT`; or no such session), the tickets rows' own refusal shape — or
- * `{}` for a leg that is up. */
-export const FreewayOpened = z.union([
+ * `{}` for a leg that is up. Written out, as `AgentModelMeshOpen` is: since an attach grant may
+ * carry its holder's face (item 42), the union's inferred type is longer than the compiler will
+ * serialize into a declaration (TS7056), so the schema is typed by this. */
+export type FreewayOpened =
+  | { tickets: FreewayTicketRow[]; [key: string]: unknown }
+  | { attachGrant: FreewaySessionAttachGrant; [key: string]: unknown }
+  | { refusal: FreewayTicketRefusal; [key: string]: unknown }
+  | { [key: string]: unknown };
+export const FreewayOpened: z.ZodType<FreewayOpened, z.ZodTypeDef, unknown> = z.union([
   z.object({ tickets: z.array(FreewayTicketRow) }).passthrough(),
   z.object({ attachGrant: FreewaySessionAttachGrant }).passthrough(),
   z.object({ refusal: FreewayTicketRefusal }).passthrough(),
   z.object({}).passthrough(),
 ]);
-export type FreewayOpened = z.infer<typeof FreewayOpened>;
 
 /** The HOST's refusal of one open (`KIND_NOT_SERVED`, `APPROVAL` on a desktop link or once a
  * phone's approval lapses, `DOOR_DOWN` for a held open that timed out or a terminal leg whose cell
