@@ -83,7 +83,7 @@ jobs:
       # No rust-toolchain / cargo-typify / rust-cache steps here, by design: nothing in this
       # lane compiles Rust, and installing a toolchain to not use it is pure minutes.
       # WHEN field-native staging lands (WP4 stages a `cargo build --release` binary into
-      # resources/bin/), this job needs dtolnay/rust-toolchain@stable and
+      # resources/bin/), this job needs verify.yml's rust-toolchain.toml step and
       # Swatinem/rust-cache@v2 restored — copy them from verify.yml. cargo-typify stays
       # verify.yml's business: it drives contracts codegen freshness, which is not a
       # packaging concern.

@@ -582,6 +582,36 @@ describe("release.yml's shape — the permissions table, as a test", () => {
       }
     }
   });
+
+  // EL8 (2026-10-21): a `stable`-branch action installed the day's stable, and rustc 1.99.1's clippy reddened main while
+  // the Mac held 1.97.1. rust-toolchain.toml is the ONE declaration (rustup reads it on both planes); a workflow's Rust
+  // step is the bare install of the file it stands in, and names no toolchain of its own.
+  it("declares the Rust toolchain once: rust-toolchain.toml at an exact release, every Rust step a bare install", () => {
+    expect(readFileSync(join(REPO, "rust-toolchain.toml"), "utf8")).toMatch(
+      /^channel = "\d+\.\d+\.\d+"$/m,
+    );
+    const files = [
+      ...readdirSync(WORKFLOWS).map((name) => join(WORKFLOWS, name)),
+      ...readdirSync(join(REPO, ".github", "actions")).map((dir) =>
+        join(REPO, ".github", "actions", dir, "action.yml"),
+      ),
+    ];
+    let steps = 0;
+    for (const file of files) {
+      // the lines a runner executes or reads as keys; comments may name the step in prose
+      const lines = readFileSync(file, "utf8")
+        .split("\n")
+        .filter((line) => !line.trimStart().startsWith("#"));
+      for (const line of lines) {
+        expect(line, file).not.toMatch(/rust-toolchain@|toolchain:\s|RUSTUP_TOOLCHAIN|cargo \+/);
+        const rustup = /rustup (?:toolchain install|default|override set)\b.*/.exec(line);
+        if (rustup === null) continue;
+        expect(rustup[0], file).toBe("rustup toolchain install --no-self-update");
+        steps += 1;
+      }
+    }
+    expect(steps).toBe(4); // verify, release, audit, prepare-mille
+  });
 });
 
 // WP12 L3b-ii (B8; W8 as corrected 2026-10-15) — the packaged app's update config, asserted on the release build's app:

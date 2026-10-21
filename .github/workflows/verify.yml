@@ -86,9 +86,15 @@ jobs:
         with:
           build: "false"
 
-      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable branch, 2026-10-15
-        with:
-          components: clippy, rustfmt
+      # EL8: the compiler is rust-toolchain.toml's. A bare `rustup toolchain install` installs the active toolchain — the
+      # file's channel, components and profile — so CI and the Mac read ONE declaration (2026-10-21: a `stable`-branch
+      # action installed the day's stable, and rustc 1.99.1's clippy reddened main while the Mac held 1.97.1).
+      - name: Rust toolchain (rust-toolchain.toml)
+        run: |
+          rustup toolchain install --no-self-update
+          [ -n "${CARGO_INCREMENTAL+set}" ] || echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
+          [ -n "${CARGO_TERM_COLOR+set}" ] || echo "CARGO_TERM_COLOR=always" >> "$GITHUB_ENV"
+          rustc --version --verbose
 
       # cargo-typify drives the contracts codegen; gen:check diffs are version-sensitive,
       # so the version is EXACT (0.7.0, per preflight). Cache the compiled binary — it's

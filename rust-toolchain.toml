@@ -1,0 +1,14 @@
+# EL8 — the compiler is pinned like any dependency (2026-10-21). This file is the ONE declaration of it: rustup reads it
+# for every cargo, rustc, clippy and rustfmt run in this tree, on the Mac and in CI, where each workflow's toolchain
+# step is a bare `rustup toolchain install` (it installs the active toolchain: this channel, these components). Before
+# it, CI took the day's stable while this Mac lagged, and rustc 1.99.1's clippy reddened main (CI run 39649340093).
+# `pnpm preflight` holds rustc, clippy and rustfmt to this channel; it never downloads one (RUSTUP_AUTO_INSTALL=0).
+#
+# A move is a dated EL8 event, ONE commit: edit the channel, `rustup toolchain install`, clippy and `pnpm verify` under
+# it, then the landing gate (a compiler reaches every row). Siblings keep their own files (rosetta, mille: rustup reads
+# theirs where they build). A cross-target check — the Windows helper's `cargo check --target x86_64-pc-windows-msvc`,
+# from any host — adds its target to this toolchain first: `rustup target add x86_64-pc-windows-msvc`.
+[toolchain]
+channel = "1.99.1"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

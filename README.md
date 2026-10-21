@@ -34,7 +34,7 @@ a private mesh across machines, and an iPhone companion.
 
 ## Getting started
 
-Prereqs: node per `.nvmrc` (`corepack enable` for pnpm) · Rust stable · `cargo install cargo-typify` ·
+Prereqs: node per `.nvmrc` (`corepack enable` for pnpm) · Rust per `rust-toolchain.toml` (rustup reads it; `rustup toolchain install`) · `cargo install cargo-typify` ·
 four SIBLING CHECKOUTS beside this one: `../puppeteer` and `../rosetta-pin` (AR-0; the rosetta
 checkout is dedicated to its pin since 2026-10-03 — `node scripts/siblings.mjs fetch rosetta` creates it),
 `../truffle-rfc025`, and `../ghosttea-0.11.2` (the terminal performance source window).

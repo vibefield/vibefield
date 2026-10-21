@@ -6,7 +6,17 @@ runs:
     - name: Fetch mille at its locked revision
       shell: bash
       run: node scripts/siblings.mjs fetch mille
-    - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable branch, 2026-10-15
+    # EL8: mille's native build runs in its own checkout, so the compiler is ITS rust-toolchain.toml's (VibeField's
+    # own is installed by the workflow's toolchain step). A bare `rustup toolchain install` there installs exactly that.
+    # NOT the root's file, on purpose: a sibling's toolchain is the sibling's (scripts/siblings.mjs builds by the same rule).
+    - name: Rust toolchain (mille's rust-toolchain.toml)
+      shell: bash
+      working-directory: ../mille-pin
+      run: |
+        rustup toolchain install --no-self-update
+        [ -n "${CARGO_INCREMENTAL+set}" ] || echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
+        [ -n "${CARGO_TERM_COLOR+set}" ] || echo "CARGO_TERM_COLOR=always" >> "$GITHUB_ENV"
+        rustc --version --verbose
     - name: Install mille and bind the host peers
       shell: bash
       run: node scripts/siblings.mjs install-js mille

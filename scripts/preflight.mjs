@@ -68,6 +68,59 @@ try {
   );
 }
 
+// --- rustc, clippy, rustfmt (EL8: the compiler is pinned like any dependency) --------------------------------------
+// rust-toolchain.toml is the ONE declaration; this row reads its channel — never a second copy of the number — and
+// holds the three tools to it (2026-10-21: CI's floating stable reached 1.99.1 and its clippy found 16 errors this Mac's
+// 1.97.1 did not). RUSTUP_AUTO_INSTALL=0: a missing toolchain or component is NAMED here, never downloaded behind the
+// check. clippy and rustfmt print a longer hash of the same commit, so they are matched by rustc's as a prefix.
+const RUST_CHANNEL = readFileSync(join(root, "rust-toolchain.toml"), "utf8").match(
+  /^\s*channel\s*=\s*"([^"]+)"/m,
+)?.[1];
+if (!RUST_CHANNEL || !/^\d+\.\d+\.\d+$/.test(RUST_CHANNEL)) {
+  problems.push(
+    `rust-toolchain.toml must name an exact Rust release as its channel (EL8), not ${RUST_CHANNEL ?? "nothing"}`,
+  );
+} else {
+  const rustTool = (command) => {
+    try {
+      return execSync(command, {
+        cwd: root,
+        env: { ...process.env, RUSTUP_AUTO_INSTALL: "0" },
+        stdio: ["ignore", "pipe", "ignore"],
+      })
+        .toString()
+        .trim();
+    } catch {
+      return null;
+    }
+  };
+  const rustc = rustTool("rustc --version");
+  const build = rustc?.match(/^rustc (\S+) \(([0-9a-f]+) /);
+  if (!build) {
+    problems.push(
+      `rustc ${RUST_CHANNEL} (rust-toolchain.toml) is not installed: rustup toolchain install (in this checkout)`,
+    );
+  } else if (build[1] !== RUST_CHANNEL) {
+    problems.push(
+      `${rustc} answers here but rust-toolchain.toml pins ${RUST_CHANNEL} — a rustc that is not rustup's, or RUSTUP_TOOLCHAIN set`,
+    );
+  } else {
+    for (const [tool, command] of [
+      ["clippy", "cargo clippy --version"],
+      ["rustfmt", "rustfmt --version"],
+    ]) {
+      const version = rustTool(command);
+      if (!version) {
+        problems.push(
+          `${tool} is missing from rustc ${RUST_CHANNEL}: rustup toolchain install (rust-toolchain.toml lists it)`,
+        );
+      } else if (!version.match(/\(([0-9a-f]+) /)?.[1].startsWith(build[2])) {
+        problems.push(`${version} is not from rustc ${RUST_CHANNEL}'s build (${build[2]})`);
+      }
+    }
+  }
+}
+
 // --- EL8 registry pins (the native-floor NF-0 pin event) ---------------------
 // Pins are deliberate upgrade events (EL8); drift or deletion fails HERE, not as
 // an Arc<Node> type split or a resolver surprise three slices later. Bumping a
