@@ -136,7 +136,7 @@ jobs:
       - name: Fetch sibling checkouts at the pinned revisions (EL8, siblings.lock.json)
         run: |
           set -euo pipefail
-          for name in puppeteer rosetta; do
+          for name in rosetta; do  # puppeteer: its own composite, after the install (prepare-puppeteer)
             node scripts/siblings.mjs fetch "$name"
           done
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
@@ -158,13 +158,7 @@ jobs:
       - name: Install (frozen)
         run: pnpm install --frozen-lockfile
       - uses: ./.github/actions/prepare-mille
-      - name: Install the puppeteer sibling's packages (filtered, frozen)
-        run: |
-          pnpm --dir ../puppeteer install --frozen-lockfile \
-            --filter "@vibecook/puppeteer-builtin-providers..." \
-            --filter "@vibecook/puppeteer-record" \
-            --filter "@vibecook/puppeteer-monitor" \
-            --filter "@vibecook/puppeteer-views..."
+      - uses: ./.github/actions/prepare-puppeteer
       - name: Build rosettad and the Ghosttea renderer from their pinned siblings
         run: pnpm siblings:build
       # The stage COPIES field-native and its terminal cell from target/release (stage-package.mjs names the command and

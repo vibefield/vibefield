@@ -80,17 +80,22 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      # No rust-toolchain / cargo-typify / rust-cache steps here, by design: nothing in this
-      # lane compiles Rust, and installing a toolchain to not use it is pure minutes.
+      # This job compiles none of VibeField's own Rust (`pnpm build` is fieldd + electron-shell;
+      # field-native has no Nx target), so it has no toolchain step for this tree, no
+      # cargo-typify and no rust-cache. Its one Rust build is mille's native addon, inside
+      # prepare-mille, which installs mille's OWN toolchain from mille's rust-toolchain.toml.
       # WHEN field-native staging lands (WP4 stages a `cargo build --release` binary into
       # resources/bin/), this job needs verify.yml's rust-toolchain.toml step and
-      # Swatinem/rust-cache@v2 restored — copy them from verify.yml. cargo-typify stays
+      # Swatinem/rust-cache restored — copy them from verify.yml. cargo-typify stays
       # verify.yml's business: it drives contracts codegen freshness, which is not a
       # packaging concern.
 
       - uses: ./.github/actions/prepare-ghosttea
       - run: pnpm install --frozen-lockfile
       - uses: ./.github/actions/prepare-mille
+      # fieldd's bundle and the renderer import puppeteer's linked packages; without this the
+      # links dangle and `pnpm build` fails at the bundler (PR #1, 2026-10-21 — latent since AR-2).
+      - uses: ./.github/actions/prepare-puppeteer
 
       # Root `build` is the Nx desktop build graph: fieldd, Electron main/preload/testing,
       # and the renderer are explicit dependency tasks and each executes at most once.

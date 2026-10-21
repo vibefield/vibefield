@@ -63,13 +63,13 @@ jobs:
       # `repository` (2026-10-17): its checkout is the SwiftPM path package's (../truffle-rfc025, the
       # tag truffle-v0.7.19), which preflight requires — see the RFC 025 note in this file's header.
       #
-      # puppeteer's own install happens below, AFTER this tree's (it needs pnpm from the
-      # packageManager field): since AR-2 fieldd imports puppeteer, so the linked packages'
-      # own dependencies must exist under ../puppeteer/node_modules.
+      # puppeteer is NOT in this loop: its fetch and its own install are one composite,
+      # `.github/actions/prepare-puppeteer`, run below AFTER this tree's install (it needs pnpm
+      # from the packageManager field) — the same one package-preview and release run.
       - name: Fetch sibling checkouts at the pinned revisions (EL8, siblings.lock.json)
         run: |
           set -euo pipefail
-          for name in puppeteer rosetta truffle; do
+          for name in rosetta truffle; do
             node scripts/siblings.mjs fetch "$name"
           done
 
@@ -121,20 +121,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - uses: ./.github/actions/prepare-mille
 
-      # AR-2 — the puppeteer sibling's OWN dependencies (zod 4, the ACP SDK, node-pty for the
-      # adapters), for exactly the packages fieldd's graph reaches: a FILTERED, frozen install.
-      # The godview app — the only consumer of puppeteer's temporary ghosttea
-      # `link:../electron-ghostty` override block (thinking-ar-agent-plane.md, ask PU-6) — is
-      # never selected, so a clean room without ../electron-ghostty installs. Witnessed
-      # 2026-09-12 in a fresh clone at the pin with no sibling beside it: 19 of 24 projects,
-      # exit 0. PU-6 upstream would let a plain install work too; it is no longer a gate.
-      - name: Install the puppeteer sibling's packages (filtered, frozen)
-        run: |
-          pnpm --dir ../puppeteer install --frozen-lockfile \
-            --filter "@vibecook/puppeteer-builtin-providers..." \
-            --filter "@vibecook/puppeteer-record" \
-            --filter "@vibecook/puppeteer-monitor" \
-            --filter "@vibecook/puppeteer-views..."
+      # AR-2 — the puppeteer sibling: fetched at its pin and its OWN dependencies installed for
+      # exactly the packages fieldd's graph reaches (the composite says why it is filtered).
+      # PU-6 upstream would let a plain install work too; it is no longer a gate.
+      - uses: ./.github/actions/prepare-puppeteer
 
       # rosettad from the pinned sibling (rustup picks its rust-toolchain.toml). The fieldd
       # supervisor's kill matrix runs against a scripted daemon in every gate; the one row

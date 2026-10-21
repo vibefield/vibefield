@@ -1,0 +1,29 @@
+name: Prepare the pinned puppeteer sibling
+description: Fetch puppeteer at its locked revision and install the packages fieldd's and the renderer's graphs reach.
+# puppeteer's packages enter this tree as `link:../puppeteer/...` rows (pnpm-workspace.yaml), and pnpm accepts a
+# dangling link without a word: a job that never prepared ../puppeteer fails ten minutes later in its bundler
+# (package-preview, PR #1, 2026-10-21). So every job that builds or tests this tree prepares it HERE, one place, like
+# prepare-ghosttea and prepare-mille. Run it after the root `pnpm install` (it needs pnpm, set up from the
+# packageManager field); none of the linked packages has a bin or an install hook, so the root install does not
+# depend on it.
+runs:
+  using: composite
+  steps:
+    # The loud half: `fetch` clones the lock's pin when the checkout is missing and REFUSES one that exists at another
+    # revision, so a missing or moved sibling fails at this step, never in a bundler.
+    - name: Fetch puppeteer at its locked revision
+      shell: bash
+      run: node scripts/siblings.mjs fetch puppeteer
+    # AR-2 — the puppeteer sibling's OWN dependencies (zod 4, the ACP SDK, node-pty for the adapters), for exactly the
+    # packages fieldd's graph and the renderer reach: a FILTERED, frozen install. The godview app — the only consumer of
+    # puppeteer's temporary ghosttea `link:../electron-ghostty` override block (thinking-ar-agent-plane.md, ask PU-6) —
+    # is never selected, so a clean room without ../electron-ghostty installs. Witnessed 2026-09-12 in a fresh clone at
+    # the pin with no sibling beside it: 19 of 24 projects, exit 0.
+    - name: Install the puppeteer sibling's packages (filtered, frozen)
+      shell: bash
+      run: |
+        pnpm --dir ../puppeteer install --frozen-lockfile \
+          --filter "@vibecook/puppeteer-builtin-providers..." \
+          --filter "@vibecook/puppeteer-record" \
+          --filter "@vibecook/puppeteer-monitor" \
+          --filter "@vibecook/puppeteer-views..."
