@@ -170,13 +170,13 @@ impl NodePresence {
         self.node.borrow().is_some() || *self.forced.borrow()
     }
 
-    /// Park until either half moves. `Err(())` = the mesh unit is gone and this
-    /// fact will never move again, so a forwarder should stop selecting on it
-    /// rather than spin.
-    pub async fn changed(&mut self) -> Result<(), ()> {
+    /// Park until either half moves. `Err` is the watch's own `RecvError`: a
+    /// half's sender is gone, so the mesh unit is gone and this fact will never
+    /// move again — a forwarder should stop selecting on it rather than spin.
+    pub async fn changed(&mut self) -> Result<(), watch::error::RecvError> {
         tokio::select! {
-            r = self.node.changed() => r.map_err(|_| ()),
-            r = self.forced.changed() => r.map_err(|_| ()),
+            r = self.node.changed() => r,
+            r = self.forced.changed() => r,
         }
     }
 }

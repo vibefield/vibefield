@@ -60,7 +60,7 @@ impl MgmtOutbox {
         if line.len() > MGMT_MAX_FRAME_BYTES
             || self
                 .queued_bytes
-                .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                .try_update(Ordering::AcqRel, Ordering::Acquire, |current| {
                     current
                         .checked_add(bytes)
                         .filter(|next| *next <= MGMT_MAX_QUEUED_BYTES)
