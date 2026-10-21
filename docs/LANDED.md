@@ -12721,3 +12721,171 @@ the grant to the last row.
 **Next:**
 - When James moves his dev app to main, it runs the cell and the freeway host it built, and the runner names both.
 - His `-vf-freeway` device round of the freeway.
+
+## The truffle bump — truffle 0.7.19 on the cargo, npm and Swift-checkout planes in one EL8 event: egress production, the terminal doors on for a linked desktop, `pnpm dev` on the pinned sidecar, T6's override retired (2026-10-21; `849fa49f6` → `533c5a208`, lane `hl/truffle-0719`)
+
+**What happened:**
+- **James ruled B on 2026-10-15 20:52Z** (relayed by VF-PM 20:56Z): one EL8 event after his T6 cut, and the T6
+  override retires. He re-ruled the version to 0.7.18 at 2026-10-16 23:31Z.
+- **0.7.18 was burned.** Its tag (`04b3e33`) never published, because cargo-deny went red on RUSTSEC-2026-0367, -0368
+  and -0369 (zip, through truffle-cli and the bench, never this graph). 0.7.19 is 0.7.18's content plus the zip fix,
+  published 2026-10-17 08:13Z, and the pin moved to it (the PM, 2026-10-17 00:02Z; DECISIONS TB).
+- **Built 2026-10-17** as seven commits on `003cec643`. Rebased onto `fb5959af3` and then onto `fbb29c0d6`. The second
+  rebase made the DEV commit a union with the dev-runner lane's `FLOOR_CHILD_OVERRIDES`: the unset list is
+  `ELECTRON_RUN_AS_NODE`, the floor child overrides, `rosettad` and the sidecar empties.
+- **The probes** took three runs, in James's terminal on the lane (Path A, `draft/handover/2026-10-17-bump-lane-for-james.md`):
+  1. **10-20, at `fe082dc94`: every row red, on the key.** Each sidecar line named the vendored 0.7.19 binary. Each
+     probe stopped at `LocalBackend state is NeedsLogin` → "timed out waiting for authentication (5 min)": the key in
+     his `.env` was expired. Not a code red.
+  2. **10-20 21:14:46–21:21:59Z, a new key: six green.**
+     - `mesh_self_probe` 5.7 s, `mesh_egress_probe` 13.0 s, `quic_lane_probe` 4.2 s, `quic_lane_transport` 35.7 s,
+       `terminal_cell_route_probe` 13.6 s and `mesh_mixed_version_probe` Row 2 15.4 s.
+     - `mesh_login_gate_probe`'s first row was ok. Its foreign-login row failed at :580 because the guest key was the
+       old, expired one.
+     - James reran it at 22:04:37–22:07:52Z with a new guest key. Both controls passed, and the row ended
+       **Inconclusive** at its 150 s limit on "reconnect backoff: retry after 20.751s": no hello with the gated node,
+       so no leak, and no 4004 read.
+     - **The cause was the test, and `fa59dfed0` is the fix.** 0.7.19's eager-identity loop sleeps exactly the
+       backoff's `retry_after` and dials again the instant each window opens (`session/mod.rs`). The probe's 250 ms
+       poll therefore always landed inside a window, where `ensure_ws_connected` answers `ReconnectBackoff` without
+       dialling. The refusal is not hidden: a call that joins the dial in flight gets that dial's own outcome, "hello
+       refused by remote: close code 4004 (login refused)".
+  3. **10-21 01:49:17–01:50:39Z, at `533c5a208`: the foreign row green.** "[foreign] THE ROW: the gated node refused
+     the guest — 4004 (login refused)", 38.3 s. The probe set is complete: six probes, both login-gate rows and
+     mixed Row 2, every sidecar line the vendored one.
+- **Mixed Row 1, 10-21 03:54:41–04:05:18Z** (James's two shells, app id `vfmixede8bd988f`):
+  - The old side ran at `44f59b8da` (truffle-core 0.7.14) on a protocol-5 sidecar copy and its own target dir. The
+    new side ran on the lane at 0.7.19 and the vendored sidecar. Each side's version is read from its own lock and
+    published in its slice.
+  - **Step 1 green:** both directions converged, and the roster held ONE online row.
+  - **Step 2 green:** the 0.7.14 side restarted (8.25 s down and up). The 0.7.19 side held its new slice ≈ 310 ms
+    beyond the restart (ceiling 90 s), with ONE row. This is 9eb8ddc's own claim, across versions.
+  - **Step 3 red,** and it is 0.7.14's behaviour, not 0.7.19's. The 0.7.19 side restarted, and the 0.7.14 side never
+    received its new slice within 300 s. The old observer's code explains "never" (truffle-core 0.7.14, read), and
+    none of the three causes depends on the restarted peer's version:
+    1. `install_connection` (`session/mod.rs:1294-1336`) refuses a re-dial while any connection to that peer
+       stands, unless the re-dial is the preferred tie-break direction and the standing one is not ("rejected
+       duplicate incoming WS connection", :767);
+    2. its dialer skips a peer it still holds as connected (:853-855);
+    3. nothing retires an idle dead socket:
+       - the heartbeat's pong timeout closes only the write half (`transport/websocket.rs:927-937`);
+       - the connection task stays blocked in `recv()`, which checks the closed flag only on entry
+         (`websocket.rs:966-1005`; `session/mod.rs:1393`);
+       - only a send from the session, or a Layer 3 Left (:541-556), frees the slot;
+       - the store sends nothing on a timer, and an 8 s restart on persisted state brought no Left.
+
+    9eb8ddc's first bullet is the fix for (1): "a re-dialled connection from a restarted peer is no longer refused
+    while the dead one lingers". Its "up to ~10 s" was measured under constant sends, which trip (3)'s flag. An idle
+    observer has nothing that does. No rerun: a longer limit would measure the same "never". A 0.7.14 observer facing
+    a restarted 0.7.14 peer takes the same path; that is a reading, not a run.
+
+    James ruled "land" on this reading (2026-10-21 07:09Z, relayed by VF-PM).
+- **The lock, 10-20:** RUSTSEC-2026-0381, -0382 and -0383, published that day, cover rustls-webpki below 0.103.16 and
+  webpki-roots and webpki-root-certs below 1.0.10. The lane held 0.103.15 and 1.0.9, and main held 0.103.13 and 1.0.9.
+  `533c5a208` moves the three crates (Cargo.lock only, six lines). It rides this lane so its gate covers it, because
+  an ungated main commit is refused. It is its own commit, not the EL8 one.
+
+**The ten commits:**
+- `849fa49f6` EL8: truffle 0.7.14 → 0.7.19, the crate and the five npm sidecars in one event: egress, T6 and sidecar
+  protocol 8 (ruling B).
+  - Pin-only: Cargo.toml `=0.7.19`, preflight's `PIN_EXPECTATIONS`, the five `@vibecook/truffle-sidecar-*` rows, the
+    two regenerated locks, and `siblings.lock.json` at the tag `1218b64` with truffle's public `repository`.
+  - The five @0.7.14 release-age rows went, with the two comments that spoke of them.
+  - `truffleRelease` stays nil: ghosttea's newest Swift tag still declares truffle exact 0.7.12.
+- `599958d13` FN: the egress arm is production. `truffle-egress` joins field-native's default features (TB-E). With
+  no node, a dial is refused `mesh-down` and fails closed. A sidecar below protocol 7 answers `egress-unsupported` per
+  call.
+- `758755022` FN: the terminal doors default ON for a linked desktop (TB-T). `FIELD_NATIVE_TERMINAL_MESH` unset reads
+  on, and `0`/`false`/`off`/`no` turn it off.
+- `3299f7198` DEV: `pnpm dev` hands the floor the PINNED sidecar (`devSidecar`, through the one lock reader). The T6
+  override can retire without dev falling to a stray binary in the shared target dir. An explicit
+  `FIELD_NATIVE_SIDECAR_PATH` still wins, and the runner warns when it is not the pin.
+- `2ba78c056` docs/FN: corrections at source for the 0.7.19 pin. Egress is protocol 7 (6 was the branch's number), T6
+  shipped, there is no 0.0.0.0 fallback, the vendored sidecar is 8, and the override is retired.
+- `9820bacb6` FN: `tests/mesh_mixed_version_probe.rs`, the roster and the store across a 0.7.19 node and an older
+  peer through both restarts (Row 1), and the same restart on one build (Row 2).
+- `8cc394453` docs: DECISIONS TB beside TB-E and TB-T, and ROADMAP's rows for the bump.
+- `fe082dc94` docs: CLAUDE.md's Machine setup says truffle 0.7.19 (James's yes, 2026-10-18).
+- `fa59dfed0` FN: the login-gate probe calls across the backoff window's opening, with a no-network unit row for its
+  two error readers (the probe alone).
+- `533c5a208` FN: the lock takes the webpki advisories' fixed versions (the lock alone).
+
+**Left open, said:**
+- **The phone runs the old session code until James rebuilds it from this main.** The lock moves the Swift plane's
+  checkout to `1218b64`, so a build from here carries 9eb8ddc. Until then, step 3's shape applies with the phone as
+  the old observer:
+  - a restarted desktop can stay dead to the phone while the phone sends it nothing, and the phone's roster shows
+    `ws_connected=true` meanwhile;
+  - it recovers on a relaunch, or when a send after its 30 s pong timeout fails and frees the slot for the next dial.
+
+  That is a code reading, not measured on the phone. A 0.7.19 desktop recovers a restarted phone promptly (step 2).
+- **James's witnesses:** the two-desktop run with the Tailscale app QUIT; the signed-in phone reaching a packaged build
+  by itself, and a terminal tap; a phone run on the new TailscaleKit.
+- **The landing's chores:**
+  - main's `../truffle-rfc025` is still at `9f0d628` (truffle-v0.7.14), so it takes
+    `git checkout --detach truffle-v0.7.19`, or main's preflight goes red;
+  - main runs `pnpm install`;
+  - James deletes `.vibefield/sidecar/` and his `.env` `FIELD_NATIVE_SIDECAR_PATH` line. The dev runner warns while
+    the line stays;
+  - `draft/petitions/README.md`: T6 and T7 consumed, at a commit-draft turn.
+- **The SwiftPM plane** is still the path package. Its exit is a ghosttea Swift release whose `truffleVersion` is the
+  crate's.
+- **truffle 0.7.20** (flux's) is a later EL8 event: James ruled that 0.7.19 lands as built.
+- **Found: no gate step runs `cargo audit`.** These advisories were found by hand, against a freshly fetched advisory
+  db.
+
+**Validation:** VF-PM's grant of 2026-10-20 16:40Z; PM-WINDOW `owner: history-lead` (James's ruling (a), 16:59Z).
+- **Rebase:** onto `fbb29c0d6`, code-only. The range-diff against the built lane: 5 `=`, 3 context-only `!`.
+  `node scripts/siblings.mjs render --prod --check` at `533c5a208`: "the committed rows are the lock's (12 npm, 6
+  cargo, 1 swift)".
+- **The worktree,** on the fresh-lane checklist:
+  - its own puppeteer worktree at `fa0d6cf`, reinstalled ("Already up to date");
+  - ghosttea `218e11f`, mille `c8160d5`, rosetta through the shared link, truffle `1218b64`;
+  - its own `CARGO_TARGET_DIR`;
+  - `pnpm siblings` clean at every pin.
+- **The probes:** as above, James's, on the vendored 0.7.19 sidecar.
+- **verify:**
+  - Run 4 (10-21 04:15:00–04:20:01Z, armed at load 9.12) went EXIT 1 when a render took the 1-minute load to 778.
+    It had one red, fieldd `agent-session.test.ts` PJ-6 Q4 at its setup's 30 s wait for the real floor's terminal
+    endpoints, beside 2,340 passed.
+  - The file alone at load 9.31 passed: 45 of 47, 2 skipped (05:22:09–05:23:10Z).
+  - Run 5, verbatim, went EXIT 0 (05:23:10–05:29:57Z, armed at 8.89; a render took the load to 262 before it ended).
+- **The revert build** (the egress arm off): `cargo test -p field-native --no-default-features --lib --test
+  mesh_egress` EXIT 0 (lib 252 passed and 1 ignored, `mesh_egress` 7 passed), and `cargo clippy -p field-native
+  --no-default-features --all-targets -- -D warnings` EXIT 0 (05:29:58Z).
+- **The kit** (TMPDIR=/tmp, the lane's own DerivedData and simulator, the PJ-7 fixture):
+  - The suite whole: `** TEST SUCCEEDED **`, 1,295 tests in 13 runs (05:40:10–05:42:10Z, armed at 9.70).
+  - Its PJ-7 witness SKIPPED ("Start lane pj7d's PJ-7 phone fixture") although the fixture was up. The lane's kit
+    script handed `TEST_RUNNER_PJ7_PHONE_HANDSHAKE` to xcodebuild as an argument. That is a build setting, which the
+    test runner never receives. The earlier landings' full-kit runs skipped it the same way (`land3`'s three
+    `kit-landing.log`s); their witnesses ran alone with the variable in the environment, as their entries say.
+  - **The witness alone,** the variable in xcodebuild's environment: "passed after 0.617 seconds" (05:47:41–05:48:10Z,
+    armed at 9.71).
+  - Item 55 carries the harness's half: the witness reads red, not skipped, when its fixture is up, and
+    `PlaceLaunchLoopbackTests.swift:19`'s "on the xcodebuild line" gets its correction.
+- **The stages,** once, each alone (`gate:landing --with-stages`, armed at 9.20, 05:57:56Z):
+  - 13 of 14 green: preflight, check:walls, check:deps, check:retired, check:ios-fixtures, icons:check, typecheck,
+    lint, fmt, lint:rust, bundle:assert, test:rust and gen:check.
+  - `test` red on fieldd alone, by Nx's failed-tasks list, while a render took the load from 10 to 154. Its failing
+    row is not in the log. Nx printed exactly 64 KiB of fieldd's section, the case `gate-landing.mjs` names ("NO
+    COUNT in the log"), and the run kept no cache to recover it from. Every other project's count was green.
+  - `test` alone: green (06:15:32–06:17:55Z, armed at 7.54; fieldd's verdict again Nx's exit, its section cut at the
+    same 64 KiB). fieldd's whole count at this tree is verify run 5's: 187 files passed and 3 skipped, 2,341 tests
+    passed and 11 skipped.
+- **The desk rows,** each alone, armed at load < 10 with the screen unlocked; the five interaction rows only after
+  James said "away" (2026-10-21 08:23Z, relayed by VF-PM):
+  - still, smoke, smoke:canvas:no-gpu, smoke:canvas:no-webgpu, smoke:plugin-restart, smoke:plugin and smoke:bundled:
+    green, each on its first arm (06:34–06:51Z).
+  - smoke:kind-faults: red on the occluded row alone, "the occluder did not cover the window". It is the harness's known
+    red under the offscreen preload (fix7's Found), accepted as at fix8's landing. Every other row in it passed, and
+    its teardown was clean.
+  - smoke:canvas: red, 925 s, its usual length (08:29:28–08:44:53Z, armed at 5.76). Two
+    rungs, the offscreen preload's known class as fix8's, TM/DS's and TP-S3d's entries record it: the occluded row,
+    and HAND_WHITEBOARD, "the bar came back 251 ms after the landing, not 200" (the offscreen frame clock's 250 ms
+    quantum). Every other rung passed, DK-14's AIMED rung and the COVER rows among them. VF-PM recorded it as that
+    class, with no rerun, as kind-faults was. Caveat: input reached the Mac mid-row (the HID idle timer: about
+    08:32:51Z and 08:36:35Z, and 0 s at the row's end).
+  - smoke:godview, smoke:terminal-door, smoke:terminal-direct and smoke:studio: green, each on its first arm, and each
+    started only once the HID idle timer read 120 s (08:52–09:01Z; 149, 36, 37 and 34 s). Caveat: input reached the
+    Mac during godview (0 s idle at its end); none reached it during the other three.
+  - Every row's teardown was clean: `SMOKE_DAEMONS` left `[]`, and its profile or root was removed.
