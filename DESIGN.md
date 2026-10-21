@@ -2822,6 +2822,37 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   with RETRY, as are the product client's own final kinds (`INCOMPATIBLE`, `UNAUTHORIZED`,
   `PRECONDITION_FAILED`). Every other card on that desktop is asked for, and answered, on its
   own. A refusal the door marks retryable is asked again on the backoff, as before.
+  **What the cell turns away is said in its own word** (C5, the focus audit; built 2026-10-17
+  and 2026-10-20). A key the cell refused at its own gate (`InputRefused`, on a leg that asked
+  for `input-refusals`) is the card's note: **`the terminal didn't take that input`**, then why
+  and what to do:
+  - `this screen is behind; type again once it catches up` (lagging);
+  - `the screen is still arriving; type again once it shows` (pending);
+  - `the connection can't carry this screen now; type again once it moves` (overload);
+  - `the write grant has run out; reattach to type again` (right-expired);
+  - `this desktop has taken input away; this viewer is view only now` (right-revoked: a
+    renewal took it, so a reattach, which mints the same grant, is not the act);
+  - `view only: this desktop granted read without input` (not-granted);
+  - `the session has ended` (exited);
+  - `this session moved; reattach to type again` (stale-lease-epoch);
+  - `this screen is parked; open it to type` (no-view).
+
+  A reason this build predates is said as `the desktop paused input for this viewer`, with
+  the word itself in parentheses, never guessed at. The note is said while the card is
+  connecting as while it is live, and it outranks `connecting over the mesh…` while it shows,
+  because an overload's refusal lands after the lease that took the card out of live.
+  **A run's end says who ended it** (C8, 2026-10-20). After `this session ended — `, a run whose
+  end the cell named as requested says whose act it was, never the signal that carried it:
+  `its run on studio was closed` (the person's), `VibeField closed its run on studio`, or `the
+  terminal service on studio shut down`. Any other end is said as the desktop's pane face says
+  it:
+  - a signal: `its run on studio was ended by SIGHUP`;
+  - a nonzero code: `its run exited on studio with code 2`;
+  - a clean exit: only `its run exited on studio`;
+  - no code at all: `its run ended on studio`, never an invented one.
+
+  A key pressed into an ended session is declined as `the session has ended — there is
+  nothing to type into`, never `waiting for the terminal to catch up`.
 - **The phone's live card is its terminal, edge to edge** (item 41; James, 2026-10-19: "instead of
   containing the terminal content in the rounded rectangle right now, just make it fully fill the
   entire tab area…", and at 20:48Z "i said fully fill the tab card"; the look ruled 21:38Z, "good,
