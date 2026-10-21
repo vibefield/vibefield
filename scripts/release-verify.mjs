@@ -61,8 +61,8 @@ export class ReleaseVerifyError extends Error {}
 /** Verify `dir` as the newest release `tag` on `channel`. Resolves to the verified feeds; throws on any refusal. */
 export async function verifyReleaseDir({ dir, tag, channel, rootKeys, now = Date.now() }) {
   const feeds = readdirSync(dir).filter(isFeed);
-  // an UNSIGNED release (D8: no secret, no metadata) has nothing to verify, so it needs no anchor — before TD-1 freezes
-  // the ledger's root keys, that is every release, and it must not fail here
+  // an UNSIGNED release (D8: no secret, no metadata) has nothing to verify, so it needs no anchor and must not fail
+  // here; a signed one is verified by `--root-keys`, else the ledger's frozen trustRootKeys (frozen at TD-1, 2026-10-21)
   if (feeds.length === 0) return { unsigned: true, verified: [] };
   rootKeys ??= frozenRootKeys();
   const base = `${VERIFY_ORIGIN}/download/${encodeURIComponent(tag)}/`;

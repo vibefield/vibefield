@@ -628,13 +628,24 @@ function selfTest() {
       ),
     );
 
-    // embed into a scratch repository carrying a copy of the ledger with the field still a blocker
+    // embed into a scratch repository carrying a copy of the ledger with the field set back to the TD-1 blocker it
+    // was before the embedding: the real ledger is frozen since TD-1 (2026-10-21), so the self-test makes its own
     const repo = join(dir, "repo");
     mkdirSync(join(repo, "apps/desktop/packaging"), { recursive: true });
-    copyFileSync(join(REPO_ROOT, LEDGER), join(repo, LEDGER));
+    const real = JSON.parse(readFileSync(join(REPO_ROOT, LEDGER), "utf8"));
+    const blocker = {
+      status: "blocker",
+      value: null,
+      format: "ed25519-spki-base64[]",
+      blocker: "TD-1",
+    };
+    writeFileSync(
+      join(repo, LEDGER),
+      `${JSON.stringify({ ...real, fields: { ...real.fields, trustRootKeys: blocker } }, null, 2)}\n`,
+    );
     const before = JSON.parse(readFileSync(join(repo, LEDGER), "utf8"));
     check(
-      "the ledger's trustRootKeys starts as a TD-1 blocker",
+      "the scratch ledger's trustRootKeys starts as a TD-1 blocker",
       () =>
         before.fields.trustRootKeys?.status === "blocker" &&
         before.fields.trustRootKeys.value === null,
@@ -657,6 +668,16 @@ function selfTest() {
       "a rotation embeds against the embedded document",
       () => embedTrustRoot(repo, bytes2, sig2, { trustedDoc: doc1, now }).version === 2,
     );
+    // the real ledger as TD-1 left it: frozen, so any plain second embedding is a rotation and refused
+    if (real.fields.trustRootKeys?.status === "frozen") {
+      const frozen = join(dir, "frozen");
+      mkdirSync(join(frozen, "apps/desktop/packaging"), { recursive: true });
+      copyFileSync(join(REPO_ROOT, LEDGER), join(frozen, LEDGER));
+      check(
+        "the real, frozen ledger refuses an embedding without the embedded document as its trust",
+        () => refuses(() => embedTrustRoot(frozen, bytes1, sig1, { now }), "rotation"),
+      );
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

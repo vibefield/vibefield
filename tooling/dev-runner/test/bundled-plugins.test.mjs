@@ -142,7 +142,10 @@ test("a stage older than its sources is stale, though its own index still verifi
   }
 });
 
-test("a RELEASE stage refuses while the ledger's trustRootKeys is still a TD-1 blocker", () => {
+// TD-1 (2026-10-21): the ledger's trustRootKeys is frozen and James's trust-root is embedded, so a release stage now
+// passes the blocker refusal and verifies the embedded document; its remaining guard is the key. (The "not frozen"
+// refusal stays in the producer but is unreachable against this ledger: check-release-identity forbids thawing it.)
+test("a RELEASE stage refuses a secret that is not the embedded trust-root's bundled key (TD-1)", () => {
   const secret = generateKeyPairSync("ed25519")
     .privateKey.export({ type: "pkcs8", format: "der" })
     .toString("base64");
@@ -151,7 +154,10 @@ test("a RELEASE stage refuses while the ledger's trustRootKeys is still a TD-1 b
     { VIBEFIELD_BUNDLED_INDEX_SECRET: secret },
   );
   assert.equal(staged.status, 1);
-  assert.match(staged.verdict.problems.join("\n"), /trustRootKeys is not frozen/);
+  assert.match(
+    staged.verdict.problems.join("\n"),
+    /VIBEFIELD_BUNDLED_INDEX_SECRET's public half is not the trust-root's bundled key/,
+  );
 });
 
 // WP12 L4 (R1; build-wp12-updater.md §14, the PM's ruling 2026-10-15 21:41Z) — `smoke:update`'s trust-root for a DEV

@@ -1,0 +1,32 @@
+{
+  "expires": "2027-04-19T20:52:49Z",
+  "roles": {
+    "bundled": {
+      "keys": [
+        "MCowBQYDK2VwAyEAKa4k2sXMYgV1ufp7J+Zns0x011Tpze/jKQ5gm3Anf40="
+      ],
+      "threshold": 1
+    },
+    "registry": {
+      "keys": [
+        "MCowBQYDK2VwAyEA0mJUc5MOtnw+c4pstuUq09Qfjpwwsnqe+ugLtLuBHd4="
+      ],
+      "threshold": 1
+    },
+    "release": {
+      "keys": [
+        "MCowBQYDK2VwAyEA0ES7B72fxzqoK9jOy9SMXJ2plCUk9404zVAUVtQF48Y="
+      ],
+      "threshold": 1
+    }
+  },
+  "root": {
+    "keys": [
+      "MCowBQYDK2VwAyEAe1IYQlUHtgkREsgS/ftTYwH5hVLOd5kzHGh6dg9+hrc=",
+      "MCowBQYDK2VwAyEAO3vpH1a7crZcNuZN0umvurWeHgeFrQiAAbf4bGRoQxc="
+    ],
+    "threshold": 1
+  },
+  "schemaVersion": 1,
+  "version": 1
+}
