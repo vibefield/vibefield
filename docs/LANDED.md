@@ -11666,14 +11666,16 @@ godview-deck.test.tsx 72/72.
 
 **Validation:** the stack's one gate, in the entry above — 24/27; `test` the Nx output cap, read alone green; the two
 desk smokes red under the LOCKED screen on main's own words, their second samples OWED before the freeway branch lands.
-The pin's own witnesses are green: `smoke:godview`, `smoke:terminal-door`, `smoke:terminal-direct`. **The pin is on an
+The pin's own witnesses are green: `smoke:godview`, `smoke:terminal-door`, `smoke:terminal-direct`. ~~**The pin is on an
 UNPUSHED branch** — ghosttea `feat/geometry-take-on-pin` at `218e11f` is local to this Mac — so CI's sibling fetch is
-red until James pushes it.
+red until James pushes it.~~ *Corrected 2026-10-21: `218e11f` is on ghosttea's `origin/feat/geometry-take-on-pin`
+(VF-PM's check, 20:32Z, `git branch -r --contains`). CI's `verify` on main `984e9ea15` reached clippy, so its preflight
+passed with all five siblings at their pins.*
 
 **Owed:**
-- James pushes ghosttea: `feat/geometry-take-on-pin` is local, so CI's sibling fetch of `218e11f` is red until it is on
-  the remote. His `../ghosttea-0.11.2` has the new branch checked out at `218e11f` (its `ci/npm-publish-waits` stands as
-  it was).
+- ~~James pushes ghosttea: `feat/geometry-take-on-pin` is local, so CI's sibling fetch of `218e11f` is red until it is on
+  the remote.~~ *Paid by 2026-10-21 (the check above).* His `../ghosttea-0.11.2` has the new branch checked out at
+  `218e11f` (its `ci/npm-publish-waits` stands as it was).
 - The desktop witness on his machine: the phone takes the seat; a press of the deck's pane takes it back (the PTY is the
   desktop's size again); the wheel scrolls codex.
 - The cell's seat announcement (TPv3 §6, the audit's §1a) stays the design: with it a pane takes only when another view
@@ -12889,3 +12891,147 @@ the grant to the last row.
     started only once the HID idle timer read 120 s (08:52–09:01Z; 149, 36, 37 and 34 s). Caveat: input reached the
     Mac during godview (0 s idle at its end); none reached it during the other three.
   - Every row's teardown was clean: `SMOKE_DAEMONS` left `[]`, and its profile or root was removed.
+
+## TM (D6) — a paste too large for a terminal is said, never dropped: `paste-part` behind `paste-parts` on the wire, the encoder's refusal in the person's own measure, and the line's note in DESIGN.md's words (2026-10-21; `18d91aac0` → `30cc96713`, lane `hl/desk-input`)
+
+**What happened:**
+- **The focus audit's D6** (`draft/handover/2026-10-17-focus-audit.md` §4): a paste over ~256 KiB of JSON vanished.
+  `encodeInput` returned null for a SendInput past `MAX_CONTROL_MESSAGE_BYTES`, nothing was dispatched, and the
+  encoder's comment, which said the refusal surfaced as `routed-input-suppressed`, was false (read in the pin,
+  ghosttea `218e11f`: that event fires only before the encoder is asked). The audit's fix: a chunked paste op and an
+  honest refusal.
+- **Built 2026-10-17** off `003cec643` by the History lead, reviewed and folded the same day.
+  - **James ruled DESIGN.md §9, "Sizes are said as Finder counts them", on 2026-10-18** ("go with your lean"), so
+    DESIGN.md came first as its own commit, then the words.
+  - DESIGN.md owns that ruling and records it in its own text with the date, so DECISIONS gets no row (VF-PM,
+    2026-10-21).
+  - The MV lead said yes to §8's sentence (10-19).
+- Rebased onto `7b69f7eaa` (10-19), `fbb29c0d6` (10-20) and `984e9ea15` (10-21: 7 of 7 `=`; backup
+  `hl/desk-input-pre-984e` = `ba946f692`).
+  - At the grant, `pnpm gen` was folded into the contracts commit (`registries.rs` gains `MAX_PASTE_BYTES`).
+  - The DESIGN commit's message names `9e36724bf` as the commit that builds the phone's card sentence.
+- **After the gate, the messages' "not run" lines were reworded** (VF-PM 09:16Z and 22:30Z): they say where each part
+  of the gate ran. The rewrite is tree-identical, and the original authors and dates are kept. The gated tip,
+  `2c60ffdfe`, stays as the backup branch `hl/desk-input-gated`.
+- **main was pushed on 2026-10-21 at about 18:03Z** by James (`984e9ea15`, with puppeteer's `vf/swarm-pull-main` at
+  `fa0d6cf`). VF-PM's check at 20:32Z found every pin the lock names on a remote. The "unpushed" lines this left false
+  are corrected at their source: §DS/GT here, and ROADMAP's.
+
+**The seven commits:**
+- `18d91aac0` TM: a paste larger than one control message has a wire shape.
+  - `SendInputOp` `paste-part {index, last, text}`, behind the client capability `paste-parts`, at most
+    `TERMINAL_PIPELINE.MAX_PASTE_BYTES` (4 MiB, PROVISIONAL).
+  - The doc states the cell's reassembly and discard rules.
+  - Fixtures `tp-send-input.paste-part{,-last}.json` (contracts only).
+- `f61ac6e89` TM: a lone surrogate in typed or pasted text is sent as U+FFFD. It is never sent as the `\udXXX` escape,
+  on which serde_json refuses the SendInput and the cell closes the whole control leg.
+- `9e1e76c73` TM: the encoder refuses a too-large paste and REPORTS it (`onRefused {sessionId, kind, bytes,
+  limitBytes}`), in the person's measure.
+  - `bytes` is the text's own UTF-8, and `limitBytes` is the most of this text one message carries.
+  - The text is weighed before anything is built.
+  - `encodeInputs` plans `paste-part`s where the leg took them.
+  - The false comment is corrected at its source.
+- `0eaef7b14` DESIGN: §9 "Sizes are said as Finder counts them" (James, 2026-10-18).
+  - §8 "The line" says a refused paste in those words on every device.
+  - Its note's placement is restated as current truth, with a dated correction.
+- `ed359bf92` TM: the line says the refusal over send, through its own note: "Not pasted into vibe-field — 300 KB, and
+  one paste carries 261 KB of it" (`onInputRefusal` → the pool's hearers → the Composer).
+- `39e6b7b36` TM: when the line's own send aims a draft too large for the pane, it copies the draft and says why
+  (`copied-too-large`). It never says "Pasted into" over the refusal.
+- `30cc96713` TM: the catalog shows the line's refusal. A `refused` plate of the shipping `ComposerLineView` sits over a
+  fixture refusal, in the product's own words.
+
+**Left open, said:**
+- **Until the cell half and the upstream seam land, a paste over one control message is refused in words, never sent
+  in parts.**
+  - The cell half (Rust, its own lane):
+    - wire.rs `InputOp::PastePart`;
+    - the per-activation reassembly and discard rules;
+    - the audit lines;
+    - `CELL_CAPABILITIES += "paste-parts"`;
+    - a cell-wide bound on open pastes;
+    - a wire.rs row deserializing both fixtures.
+  - Upstream ghosttea-react (rides the ONE ghosttea release, audit §5):
+    - `encodeInput` returns an ordered list, sent all-or-none;
+    - the host is handed the accepted capabilities of the activation's control leg.
+    - Nothing calls `encodeInputs` in production until then.
+- terminal-pipeline-v3 §5.4's SendInput row (draft/, a commit-draft turn).
+- The one §9 deviation found: the desk readout's GPU memory says MB for a count in 1024s
+  (`packages/field-app/src/panels/DeskReadout.tsx`, its `mb`).
+- James's open question: should a note held longer than 2.4 s carry the advice again?
+- `KNOWN_CAPABILITIES` takes the union at the second landing (`input-refusals` from `hl/tp-pump`, `paste-parts` here).
+- If ghosttea's paste path ever becomes asynchronous, the refusal arrives after the send and is said on its own over
+  "Pasted into": later, never silent.
+- **CI's `verify` on main `984e9ea15` is red** (run 39649340093) on `cargo clippy --workspace --all-targets -- -D
+  warnings`: 16 errors in field-native under the runner's rustc 1.99.1.
+  - 14 are async-trait 0.1.91's generated `#[must_use]`; 0.1.92 fixes them.
+  - One is the deprecated `fetch_update` → `try_update` (`state.rs:63`).
+  - One is `result_unit_err` (`services/mesh.rs:176`).
+  - This Mac's rustc 1.97.1 is green, and this lane's gate ran on it, as the bump's did. The lints are not on this
+    lane's lines.
+  - The answer is its own lane, `el8/rust-1.99.1`: `rust-toolchain.toml`, a preflight rustc row, the lock's
+    async-trait and the two fixes. It is verified and queued behind this landing.
+- **On the mini, James's to clear:** `/tmp/vf-smoke-klnMuI` is the canvas row's daemon root, which its smoke left
+  behind (the `/tmp/vf-*` class). `~/vf-lanes` holds the row host's tree. Neither was deleted; `~/vf-lanes` stays until
+  he says.
+
+**Validation:** VF-PM's grant of 2026-10-21 09:07Z; PM-WINDOW `owner: history-lead`.
+- **The worktree** (`/Volumes/SamsungRed/lanes/hl-desk`):
+  - puppeteer, ghosttea and truffle are linked to the landed bump lane's checkouts at the lock's pins (`fa0d6cf`,
+    `218e11f`, `1218b64`), and rosetta to the machine's;
+  - it has its own `mille-pin` worktree at `c8160d5` and its own `CARGO_TARGET_DIR`;
+  - `pnpm preflight` OK.
+- **verify,** verbatim on `2c60ffdfe` (the tree that lands): EXIT 0 (09:21:25–09:30:06Z, armed at 9.64).
+  - contracts 1,087; field-app 2,615; electron-shell 1,899 and 3 skipped; fieldd 2,341 and 11 skipped;
+  - field-native lib 253 and 1 ignored.
+- **The kit is not owed:** nothing under `apps/ios` changed, and the kit copies no `tp-send-input.*` fixture
+  (`WireTests.swift:544`).
+- **The stages,** once, each alone (`gate:landing --with-stages`, armed at 8.20, 09:32:35–09:38:04Z): 14 of 14 green.
+  The screen was locked from 09:22:03Z; the stages draw nothing (VF-PM: the deterministic class).
+- **The desk rows,** each alone, armed at load < 10 with the screen unlocked, and with ≥ 10 GiB free read inside each
+  arm.
+- **List A,** on this Mac (Apple M1 Max, macOS 26.5.2, node v26.5.0, rustc 1.97.1):
+  - The first arm (09:38Z) waited 30 min under the auto-lock and recorded `still` NOT-RUN (10:08:07Z).
+  - List A re-armed at James's unlock (14:01:06Z, VF-PM's word), with James at the Mac.
+  - still, smoke, smoke:canvas:no-gpu, smoke:canvas:no-webgpu, smoke:plugin-restart, smoke:plugin and smoke:bundled:
+    green, each on its first arm (14:03:57–14:10:00Z; 37, 35, 31, 29, 78, 56 and 93 s).
+  - smoke:kind-faults: red on the occluded row alone, "the occluder did not cover the window" (14:11:30–14:12:51Z,
+    armed at 8.00). It is the offscreen preload's known class, recorded with no rerun as at the bump's landing. Every
+    other rung passed.
+- **List B, the five interaction rows,** only at James's "away" (21:33:59Z, relayed by VF-PM), with the HID idle timer
+  at 120 s or more before each.
+  - **They never armed on this Mac.** List B launched at 21:35:01Z and waited: another project's CI run had taken the
+    1-minute load to 82.5, and the idle timer stayed low.
+  - James came back at 21:43Z and ruled: "tell history lead to do his work using my mac mini instead" (relayed by
+    VF-PM 21:45Z). The local runner stopped at 21:45:59Z with nothing armed.
+- **The gate-host deviation, James's call (2026-10-21 21:43Z):** `docs/desk-gates.md` names this Mac's GPU. The five
+  interaction rows ran on his Mac mini instead. verify, the stages and list A ran here.
+  - The host:
+    - `jaspers-Mac-mini.local`: Apple M4 (10-core GPU, Metal 4), 16 GiB RAM, macOS 26.3 (25D125);
+    - one 1920×1080 @ 60 Hz main display, online and kept awake by `caffeinate -d` for the run;
+    - the screen unlocked by James (21:56Z), and unlocked at every arm and every row's end;
+    - node v26.5.0, pnpm 11.13.1 and rustc 1.97.1 (`8bab26f4f`), the same as this Mac's.
+    - pnpm is an npm global there too: node 26 ships no corepack.
+  - The tree, in one directory (`~/vf-lanes`), with nothing outside it:
+    - a blobless clone of main `984e9ea15` from GitHub (the rows test the tree, not its history);
+    - the lane's seven commits from a bundle, as `2c60ffdfe`, clean;
+    - the five siblings by `siblings.mjs fetch` at the lock's pins;
+    - CI's install order: the host install, the siblings' JS, `siblings:build`, the re-install, Electron's binary,
+      cargo-typify 0.7.0 and `cargo build -p field-native`.
+    - Also puppeteer's own filtered install. That is CI's step, and the first preflight was red without it (R23, "is
+      ../puppeteer at the pin and installed?"). With it, `pnpm preflight` OK.
+  - The run: the same offscreen preload as list A, `TMPDIR` inside that directory (VF-PM: short enough for socket
+    paths), and no `VF_PERF_LOCKS`.
+- **List B's results:**
+  - smoke:canvas: red, 921 s, its usual length (22:07:20–22:22:42Z, armed at 8.94).
+    - It is the offscreen preload's known class on a second host: the occluded row, plus HAND_NOTEBOOK,
+      HAND_WHITEBOARD and HAND_CALENDAR, "the bar came back 256 / 241 / 255 ms after the landing, not 200". That is
+      the frame clock's 250 ms quantum; HAND_CLOCK passed at 217 ms.
+    - Recorded with no rerun, as at the bump's landing.
+    - No pointer or focus rung: `SMOKE_CANVAS_IDLE` reads focused, still focused, no input outside.
+    - Caveat: input reached the mini mid-row, at about 22:17:48Z (294 s idle at the row's end).
+  - smoke:godview, smoke:terminal-door, smoke:terminal-direct and smoke:studio: green, each on its first arm
+    (22:23:31–22:27:13Z; 142, 29, 32 and 18 s). The idle timer climbed through each, so no input reached the mini.
+  - No lock at any arm or end. No path-length red.
+  - Every row's teardown was clean: `SMOKE_DAEMONS` left `[]`, and its profile or root was removed.
+  - The mini's logs are copied to `/Volumes/SamsungRed/lanes/hl-desk/logs/mini/`.
