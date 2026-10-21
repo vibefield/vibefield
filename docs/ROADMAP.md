@@ -3,10 +3,11 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-10-21 — TRUFFLE 0.7.19 IS ON EVERY PLANE IN ONE EL8 EVENT, A PASTE TOO LARGE FOR A TERMINAL IS SAID AND NEVER DROPPED, AND MAIN IS ON ITS REMOTE (`849fa49f6` → `533c5a208` · `18d91aac0` → `30cc96713`).**
-> Thirty landings since the 10-14 rewrite, this one among them, each gated on the tree that landed. James pushed main at `984e9ea15` on 2026-10-21 (about 18:03Z), with puppeteer's `vf/swarm-pull-main` at the pin `fa0d6cf`. VF-PM's check (20:32Z) found every pin the lock names on a remote. With this landing main is 8 commits ahead of origin; the next push is James's. CI's `verify` on `984e9ea15` is RED on clippy alone (run 39649340093, under the runner's rustc 1.99.1; this Mac's 1.97.1 is green): see Found today, below.
+> stays in the design docs + specs. Last rewritten: **2026-10-21 — TRUFFLE 0.7.19 IS ON EVERY PLANE IN ONE EL8 EVENT, A PASTE TOO LARGE FOR A TERMINAL IS SAID AND NEVER DROPPED, RUSTC IS PINNED, AND MAIN IS ON ITS REMOTE (`849fa49f6` → `533c5a208` · `18d91aac0` → `30cc96713` · `8fae0a9de` → `bf98e6c18`).**
+> Thirty-one landings since the 10-14 rewrite, this one among them, each gated on the tree that landed. James pushed main at `984e9ea15` on 2026-10-21 (about 18:03Z), with puppeteer's `vf/swarm-pull-main` at the pin `fa0d6cf`. VF-PM's check (20:32Z) found every pin the lock names on a remote. He pushed main again at `d0012766b` (the D6 landing) at 23:13Z, with SKIP_VERIFY=1 after the hook's verify had passed (the first attempt died 141 on the SSH idle window). With this landing main is 5 commits ahead of origin (the toolchain landing's four and its records); the next push is James's. CI's `verify` on `984e9ea15` (run 39649340093) and on `d0012766b` (run 39691956217) is RED on clippy alone, under the runner's rustc 1.99.1: this landing pins rustc to 1.99.1 (Found today, below), and `verify` on its push is the witness.
 > - **The truffle bump** (`849fa49f6` → `533c5a208`, 10-21; LANDED "The truffle bump"; DECISIONS TB · TB-E · TB-T): truffle 0.7.19 on the cargo, npm and Swift-checkout planes in one EL8 event. The egress arm is in production, the terminal doors are on for a linked desktop, `pnpm dev` runs on the pinned sidecar, and T6's override is retired. The SwiftPM plane stays the path package until a ghosttea Swift release declares the crate's version. The phone runs the old session code until James rebuilds it from this main.
 > - **D6 — a paste too large for a terminal is said, never dropped** (`18d91aac0` → `30cc96713`, 10-21; LANDED "TM (D6)"): `paste-part` behind `paste-parts` on the wire. The encoder refuses in the person's own measure and reports it, and the line says "Not pasted into vibe-field — 300 KB, and one paste carries 261 KB of it" in DESIGN.md §9's words (James, 2026-10-18). Sending in parts waits on the cell half and ghosttea's seam. Its five interaction rows ran on James's Mac mini, his call: the first desk rows gated off this Mac.
+> - **The Rust toolchain is pinned** (`8fae0a9de` → `bf98e6c18`, 10-21; LANDED "The Rust toolchain is pinned"; DECISIONS RT): `rust-toolchain.toml` declares rustc 1.99.1, rustup reads it on the Mac and in CI (a bare `rustup toolchain install`; the floating `stable`-branch action is gone), and preflight holds rustc, clippy and rustfmt to it. async-trait 0.1.92 and two field-native fixes clear CI's 16 clippy errors. The preview job prepares the puppeteer sibling at last (PR #1's red). Its whole gate ran on James's Mac mini, his call; `pnpm still` is not reached by a compiler move.
 > - **F1, the freeway's first slice, with items 41 and 42 on the phone** (`5798a6548` → `d38f14865`, 10-20; LANDED "FW (F1) + items 41 and 42 on the phone"): one link from the phone to its desktop, opt-in behind `-vf-freeway` until James's device round, and the live card edge to edge in Godview's pane frame, saying who is driving. **TC-S2 + GT-2d** (`72bbfd482` `520e2f25b` `ae7ecc421`, 10-20): the dev floor runs the cell and the freeway host the runner built.
 > - **James's phone round of 10-18** (10-19; LANDED "GV-D4 re-ruled", "D-i12 ruled", "IOS — signed in is connected", "IOS — the phone's swarm paints at 120 Hz"; `43b048b70` · `d09eb65dd` · `b844febfa` · `cfb002763` … `afeaccb68`). With it: **W4 re-ruled** (`40bb598d0`: the monitor's field never shrinks past rest), **SWF's pull reversed** (`85efa16be`, puppeteer `fa0d6cf`) and **item 42** (`a2312686b`: a pane another device is driving says so).
 > - **The focus session's first landings** (10-16/17):
@@ -24,13 +25,14 @@
 > **Ruled today:**
 > - James said "land" on the bump (07:09Z), reading mixed Row 1's step 3 as 0.7.14's own behaviour.
 > - He moved this landing's five interaction rows to his Mac mini (21:43Z). That is a gate-host deviation, recorded with the host in its LANDED entry.
+> - He moved the toolchain landing's whole gate to the mini too (22:40Z), recorded the same way.
 > - DESIGN.md §9's sizes rule (James, 2026-10-18) takes no DECISIONS row: DESIGN.md owns it (VF-PM).
 >
 > **Found today:**
-> - **CI's Rust toolchain floats.** The runner installs the day's stable (1.99.1), whose clippy is red on 16 lints in field-native, while this Mac's 1.97.1 is green.
+> - **CI's Rust toolchain floated.** The runner installed the day's stable (1.99.1), whose clippy was red on 16 lints in field-native, while this Mac's 1.97.1 was green.
 >   - 14 are async-trait 0.1.91's generated `#[must_use]`.
 >   - One is the deprecated `fetch_update` (`state.rs:63`); one is `result_unit_err` (`services/mesh.rs:176`).
->   - The answer pins the toolchain in its own lane, `el8/rust-1.99.1`: `rust-toolchain.toml`, a preflight rustc row, async-trait 0.1.92 and the two fixes.
+>   - The answer LANDED (LANDED "The Rust toolchain is pinned"; DECISIONS RT): `rust-toolchain.toml` (1.99.1), read by rustup on the Mac and in CI and held by preflight's rustc row, with async-trait 0.1.92 and the two fixes.
 > - **The Mac locks about 25 minutes after James's last input.** A desk row needs the screen unlocked, so it fits inside an absence or waits for the next. The stages draw nothing and run locked.
 > - **A fresh gate host needs CI's own puppeteer step** (`pnpm --dir ../puppeteer install --frozen-lockfile`, filtered), or preflight's R23 goes red.
 > - **No gate step runs `cargo audit`:** the bump's advisories were found by hand.
@@ -41,14 +43,14 @@
 >   - The same pass carries the corrections at source in TPv3 and the audit's rows, DESIGN.md §8 first for its card sentences, and an EL9 golden for the new lease words.
 >   - Then its gate, with the kit suite.
 > - **After it:** the floor-wedge lane (`hl/floor-wedge` `9bd2df361`) and inventory latency (`hl/inventory-latency` `cdc618625`, item 52 (a)), each built on its ruling.
-> - **The toolchain lane** `el8/rust-1.99.1`, verified, behind this landing.
+> - **The TD-1 embed lane** (`td/1-embed` `d01ba153f`: James's trust-root v1 embedded and the ledger's `trustRootKeys` frozen; verified on `984e9ea15` under 1.97.1). It rebases onto this landing's tip and gates under 1.99.1.
 > - **F1's device round** (James), before the freeway leaves `-vf-freeway`.
 > - **James's items:**
 >   - rebuild the phone from this main;
 >   - the bump's landing chores (LANDED §The truffle bump: main's `../truffle-rfc025` at the tag, `.vibefield/sidecar/`, the `.env` override line);
->   - the TD-1 keys and the `release-signing` environment;
+>   - J2's two tag rulesets and J3's first `release-signing` run (TD-1's keys and J1's environment are done, 2026-10-21);
 >   - the puppeteer 0.2.2 cut;
->   - the mini's leftovers from this landing (`/tmp/vf-smoke-klnMuI`, and `~/vf-lanes`, kept until he says).
+>   - the mini's leftovers from the D6 and toolchain landings (`/tmp/vf-smoke-klnMuI`, and the toolchain run's `/tmp` entries its run log lists; `~/vf-lanes` with `~/vf-lanes/pb`, kept until he says).
 >
 > Debts: "Open debts" below carries this day's and the earlier waves'.
 > Previous rewrite, kept for continuity — **2026-10-14 — THE BROWSER PANE LANDS, THE HISTORY IS CLEAN FOR ITS FIRST PUSH, AND THE TRUST MODEL HAS ITS FIRST SHAPES (`fb9efdb3` · `5062139e` · `562ea33a` · `87ce111a`).**
@@ -1281,6 +1283,14 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 - **ESR follow-on** bundle slice.
 
 ## Open debts (dated, sourced)
+
+**The toolchain landing's witnesses (2026-10-21; LANDED "The Rust toolchain is pinned", its Owed):**
+- **CI's `verify` green on main** after James's push of the landing, its toolchain step naming rustc 1.99.1. It is red
+  on `984e9ea15` (run 39649340093) and on `d0012766b` (run 39691956217).
+- **`package-preview` green** on a `workflow_dispatch` at the landed sha, or on PR #1's rerun.
+- **`release.yml`'s toolchain step and prepare-puppeteer**, which first run at J3's first `release-signing` run.
+- **A guard that every `link:` row resolves before `pnpm build`** (new script code).
+- **CLAUDE.md's Tools line** still says "Rust stable"; its new text waits for James's word.
 
 **D6's follow-ups (2026-10-21; LANDED §TM (D6) "a paste too large for a terminal is said"; `draft/handover/2026-10-17-focus-audit.md` §4):**
 - **The cell half** (Rust, its own lane). Until it and the seam below land, a paste over one control message is refused

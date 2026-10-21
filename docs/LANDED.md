@@ -13035,3 +13035,147 @@ the grant to the last row.
   - No lock at any arm or end. No path-length red.
   - Every row's teardown was clean: `SMOKE_DAEMONS` left `[]`, and its profile or root was removed.
   - The mini's logs are copied to `/Volumes/SamsungRed/lanes/hl-desk/logs/mini/`.
+
+## The Rust toolchain is pinned — `rust-toolchain.toml` declares rustc 1.99.1, rustup reads it on the Mac and in CI, and field-native is clean under its clippy; the preview job prepares puppeteer at last (2026-10-21; `8fae0a9de` → `bf98e6c18`, lane `el8/rust-1.99.1`)
+
+**What happened:**
+- James's agent pushed main `984e9ea15` at about 18:03Z, the first main push since 08-25.
+  - CI's `audit` was green; `verify` was RED (run 39649340093).
+  - The red was `cargo clippy --workspace --all-targets -- -D warnings`: 16 errors in field-native under the runner's
+    rustc 1.99.1. This Mac's 1.97.1 passed the same gate.
+  - Preflight passed in that run, so every sibling fetched at its pin; the red was clippy's alone.
+- **The class, not the symptom: nothing pinned rustc.**
+  - `dtolnay/rust-toolchain` was SHA-pinned to a commit of its `stable` BRANCH. dependabot.yml said that commit was
+    "moved by hand, deliberately, with the toolchain", but the action installs whatever `stable` is on the day.
+  - Preflight pinned cargo-typify and nothing for rustc.
+- James said "go" at 20:37Z on the PM's lean. The prod-builder built it in one lane, `rust-pin`, off `984e9ea15`.
+  - The shape was ruled by the PM at 20:45Z, and the preview job's fix was folded in at 20:47Z.
+  - The lane was rebased onto the D6 landing `d0012766b` at 22:41Z, with no conflict and 4 of 4 `=`. The backup
+    branch is `el8/rust-1.99.1-pre-rebase` = `af09d25f4`.
+- **James pushed main again at `d0012766b`, at 23:13Z.**
+  - It went with SKIP_VERIFY=1, after the hook's verify had passed; the first attempt died 141 on the SSH idle
+    window.
+  - CI's `verify` on it (run 39691956217) finished RED on the same clippy class: the second CI witness of what this
+    landing answers.
+
+**The four commits:**
+1. `8fae0a9de` FN: Cargo.lock takes async-trait 0.1.92 (two lines). Its release note reads "Resolve double_must_use
+   clippy lint in generated code (#303)", and that is 14 of the 16 errors.
+2. `eb5c0d11b` FN: the other two, which are field-native's own code.
+   - `state.rs:63` `fetch_update` → `try_update` (deprecated in 1.99).
+   - `NodePresence::changed` returns the watch's own `RecvError` instead of `()` (clippy::result_unit_err).
+   - Checked under 1.97.1 first: `cargo +1.97.1 check -p field-native` exit 0, so every commit is green under its own
+     tree's toolchain.
+3. `99be46477` EL8: the pin.
+   - `rust-toolchain.toml` declares 1.99.1, with clippy and rustfmt, profile minimal.
+   - The action is dropped at all four sites for a bare `rustup toolchain install --no-self-update`. The dtolnay
+     action takes no toolchain file in any form: its master marks `toolchain` required.
+   - The hosted images' rustup reads the file: ubuntu-24.04 has 1.29.1, macOS 26 and macos-15 have 1.29.0.
+   - The action's checksum-retry loop is dropped.
+   - CARGO_INCREMENTAL=0 and CARGO_TERM_COLOR=always stay, written only if unset. The step prints
+     `rustc --version --verbose`.
+   - prepare-mille installs MILLE's own file in `../mille-pin`: a sibling's toolchain is the sibling's.
+   - Preflight's rustc row holds rustc, clippy and rustfmt to the channel, with RUSTUP_AUTO_INSTALL=0 so it downloads
+     nothing. It was proven both ways.
+   - A test row in `release-scripts.test.ts` holds the declaration to one file.
+4. `bf98e6c18` CI: the preview job never prepared the puppeteer sibling, latent since AR-2.
+   - Dependabot's PR #1 failed package-preview on "Can't resolve '@vibecook/puppeteer-views/styles/views.css'".
+   - The fix is `.github/actions/prepare-puppeteer`: `siblings.mjs fetch puppeteer`, then the filtered frozen install.
+   - verify, release and package-preview all run it. `siblings.mjs fetch` refuses a moved checkout, so the class now
+     fails at the sibling step.
+
+**Validation:**
+- **On this Mac, before the rebase:** the chain at `af09d25f4` (the same four patches on `984e9ea15`) was EXIT 0.
+  - Steps: build-js ghosttea, build-js mille, preflight, `pnpm verify`.
+  - Each step was armed alone at load < 10 and nice 19, with df ≥ 10 GiB read inside the command.
+  - Started 21:10:38Z at load 8.64; ran 7 m 31 s.
+  - clippy clean under 1.99.1. vitest 8,989 / 0 / 38 skipped; node --test 201 / 0; cargo 410 / 0 / 13 ignored.
+- **The gate ran on James's Mac mini, by his call at 22:40Z.** It is a gate-host deviation, as the D6 landing's
+  list B was. Every row of it ran there.
+  - **The host:**
+    - `jaspers-Mac-mini.local`: Apple M4 (10 cores), 16 GiB, macOS 26.3 (25D125), one 1920×1080 display.
+    - node v26.5.0, pnpm 11.13.1, cargo-typify 0.7.0.
+    - rustc 1.99.1 (`58cf8f9c35b355199727627d07ae34a4e2846d67`, 2026-10-13), with clippy 0.1.99 and rustfmt 1.10.0
+      from the same build. rustup 1.29.2 installed it from the toml. The mini's `rustup default` stays 1.97.1, and the
+      History lead's tree there still reads it.
+  - **The tree:** everything under `~/vf-lanes/pb/`.
+    - A blobless clone of github main `984e9ea15`, plus a bundle carrying the D6 landing's 8 commits and this lane's
+      4 (HEAD `bf98e6c18`, clean).
+    - The five siblings at the lock's pins, made by `siblings.mjs fetch`.
+    - The host install before the siblings' JS installs, then siblings:build, the re-install, CI's puppeteer step,
+      Electron's binary, and an in-repo `target/`.
+    - TMPDIR inside that directory, and FIELDD_ROSETTAD_BIN set as CI sets it. Preflight OK.
+  - **The guard, for every step:**
+    - Load < 10, df ≥ 10 GiB read at the arm, and nice 19.
+    - The lock flag and HID idle were written at every arm and end.
+    - `pnpm verify` and the stages armed locked (VF-PM 22:44Z: they draw nothing).
+    - Every smoke armed unlocked, with HID idle ≥ 120 s, under `caffeinate -d -i`.
+  - **`pnpm verify`,** verbatim at `bf98e6c18`: EXIT 0 (22:50:54–22:56:34Z).
+    - clippy `-D warnings` clean under 1.99.1.
+    - vitest 9,035 passed / 0 failed / 17 skipped across 26 projects; node --test 201 / 0.
+    - cargo 410 passed / 0 failed / 13 ignored, in 28 suites.
+  - **The stages,** each alone (`gate:landing --with-stages --only <stage>`): 14 of 14 green (22:56:34–23:02:44Z).
+  - **List A,** each alone, under the D6 landing's offscreen preload: six green.
+    - smoke 31 s; smoke:plugin-restart 69 s; smoke:plugin 52 s; smoke:bundled 87 s; smoke:canvas:no-gpu 30 s;
+      smoke:canvas:no-webgpu 28 s.
+    - **smoke:kind-faults was red on the occluded row ALONE** ("the occluder did not cover the window", visible:
+      false; 76 s). Every other probe line was green. This is the offscreen preload's known class, recorded with no
+      rerun, as the D6 landing recorded the same row.
+    - The two canvas modes ran last in list A (VF-PM 23:05Z). They have no build of their own ("REUSE smoke:canvas's
+      build (run it first, or `pnpm build:all`)"), so they ran on the `pnpm build:all` that the rows before them made
+      of this same tree.
+  - **List B, the five interaction rows,** each alone: four green.
+    - smoke:godview 142 s; smoke:terminal-door 29 s; smoke:terminal-direct 32 s; smoke:studio 16 s.
+    - **smoke:canvas, sample 1** (23:13:47–23:29:23Z, 936 s): red on five rungs.
+      - The occluded row.
+      - The bar back: HAND_NOTEBOOK 256 ms and HAND_CALENDAR 250 ms.
+      - COVER HISTORY: "the cover's first frame showed {canvas: hidden, still: still}, not the live desk".
+      - TRAVEL (notebook): "the cross-fade began 487 ms in, not 440", and the glass's width likewise. The other three
+        specimens passed at 445–470 ms.
+      - TRAVEL was in no record, so it was an other red, and the row reran alone once.
+    - **smoke:canvas, sample 2** (23:36:06–23:51:41Z, 934 s): red only on the occluded row and the bar back
+      (HAND_NOTEBOOK 255, HAND_WHITEBOARD 272, HAND_CALENDAR 255 ms).
+      - TRAVEL was green: the notebook at 459 ms; whiteboard 462, calendar 463, clock 450.
+      - COVER HISTORY was green.
+      - So sample 1's TRAVEL is the offscreen frame clock's lottery (VF-PM 23:31Z), with both samples named.
+    - **The bar-back class's observed spread is now 241–272 ms**, across this Mac and the mini.
+      - The judge passes 200 ± 40 (`smoke-tools-in-hand.ts`'s `SLACK_MS`).
+      - The records' reds are 241, 242, 250, 251, 252, 255 and 256; tonight's 272 (HAND_WHITEBOARD, sample 2) is the
+        highest yet.
+      - It is the same rung and the same judge, and off the compiler's path. It is named here so the next reader sees
+        the drift.
+  - **Input reached the mini only between rows** (James's unlock at about 23:02Z, and a touch at about 23:30:09Z).
+    The idle timer climbed through every row, and no arm or end found the screen locked.
+  - **`pnpm still` was NOT REACHED and not run.**
+    - The stills are the playground's Dawn render against its goldens: TypeScript and WebGPU, with no Rust on their
+      path, so a compiler move does not reach them.
+    - They are host-bound to this Mac's Metal.
+  - Every smoke's `SMOKE_DAEMONS` left `[]`.
+  - **James's to clear on the mini** (the run log lists each by name and time):
+    - three `/tmp/vf-smoke-*` daemon roots (kind-faults and both canvas samples; the known `/tmp/vf-*` class);
+    - a long-named `/tmp` entry from the test stage;
+    - `fr2igk1jnkw.txt` and `puppeteer-claude-ONdiDa` from godview's row;
+    - `~/vf-lanes/pb` (7.7 GB), kept until he says.
+  - The mini's logs are copied to `/Volumes/SamsungRed/lanes/rust-pin/logs/mini/`, with both canvas samples'
+    `01-smoke_canvas.sample{1,2}.log`.
+
+**Owed — the three CI witnesses, none of which can run on a Mac:**
+- `verify` on main after James's push of this landing.
+  - It is red on `984e9ea15` (run 39649340093) and on `d0012766b` (run 39691956217), and green is expected here.
+  - The toolchain step's `rustc --version --verbose` must name 1.99.1.
+- `package-preview`, green on a `workflow_dispatch` at the landed sha or on PR #1's rerun. The 8 fieldd errors that
+  log hid ("6 of 14 shown") and the census are unverified until then.
+- `release.yml`, untested until the next release: its build job's toolchain step and prepare-puppeteer run first
+  there (J3's first `release-signing` run).
+
+**Owed, otherwise:**
+- A guard that every `link:` row in `pnpm-workspace.yaml` resolves before `pnpm build` (new script code).
+- CLAUDE.md's Tools line still says "Rust stable". Its new text waits for James's word.
+
+**Consequence:**
+- Every checkout and lane compiles with 1.99.1 once this is on main: a one-time full rebuild per CARGO_TARGET_DIR,
+  James's first `pnpm dev` after the ff included.
+- The lanes queued behind it (the terminal pump, the floor wedge, inventory latency, fw/pack-host and the TD-1 embed)
+  rebuild once each on rebase; that cost is theirs. The TD-1 embed lane rebases onto this landed tip and gates under
+  1.99.1.
+- 1.99.1 was already on this Mac (installed 2026-10-16, with clippy and rustfmt), so James's install step was void.
