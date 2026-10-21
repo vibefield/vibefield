@@ -479,9 +479,9 @@ public final class TerminalAttachment {
     let who = device ?? "that desktop"
     guard let exit else { return "its run exited on \(who)" }
     switch exit.outcome {
-    case "user-terminated": return "its run on \(who) was closed"
-    case "application-terminated": return "VibeField closed its run on \(who)"
-    case "service-terminated": return "the terminal service on \(who) shut down"
+    case RoutedTerminalContract.ExitOutcome.userTerminated: return "its run on \(who) was closed"
+    case RoutedTerminalContract.ExitOutcome.applicationTerminated: return "VibeField closed its run on \(who)"
+    case RoutedTerminalContract.ExitOutcome.serviceTerminated: return "the terminal service on \(who) shut down"
     default: break
     }
     if let signal = exit.signal { return "its run on \(who) was ended by \(signal)" }
@@ -1214,25 +1214,25 @@ public final class TerminalAttachment {
   nonisolated static func cellRefusalWords(_ reason: String) -> String {
     let lead = "the terminal didn't take that input"
     switch reason {
-    case "lagging":
+    case RoutedTerminalContract.InputRefusedReason.lagging:
       return "\(lead) — this screen is behind; type again once it catches up"
-    case "pending":
+    case RoutedTerminalContract.InputRefusedReason.pending:
       return "\(lead) — the screen is still arriving; type again once it shows"
-    case "overload":
+    case RoutedTerminalContract.InputRefusedReason.overload:
       return "\(lead) — the connection can't carry this screen now; type again once it moves"
-    case "right-expired":
+    case RoutedTerminalContract.InputRefusedReason.rightExpired:
       return "\(lead) — the write grant has run out; reattach to type again"
-    case "right-revoked":
+    case RoutedTerminalContract.InputRefusedReason.rightRevoked:
       // a RENEWAL took input away (the cell's downgrade): a reattach mints the
       // same grant back, so it is not the act to offer
       return "\(lead) — this desktop has taken input away; this viewer is view only now"
-    case "not-granted":
+    case RoutedTerminalContract.InputRefusedReason.notGranted:
       return "\(lead) — view only: this desktop granted read without input"
-    case "exited":
+    case RoutedTerminalContract.InputRefusedReason.exited:
       return "\(lead) — the session has ended"
-    case "stale-lease-epoch":
+    case RoutedTerminalContract.InputRefusedReason.staleLeaseEpoch:
       return "\(lead) — this session moved; reattach to type again"
-    case "no-view":
+    case RoutedTerminalContract.InputRefusedReason.noView:
       return "\(lead) — this screen is parked; open it to type"
     default:
       return "\(lead) — the desktop paused input for this viewer (\(reason))"

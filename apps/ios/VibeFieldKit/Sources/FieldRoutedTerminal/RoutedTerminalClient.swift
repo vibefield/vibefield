@@ -88,8 +88,9 @@ public struct RoutedSessionState: Sendable {
   /// again, so no attach step waits on it either.
   public var exited: Bool {
     guard let status else { return false }
-    if case .stopped(reason: "exited") = status.presentation { return true }
-    if case .revoked(reason: "exited") = status.input { return true }
+    let exited = RoutedTerminalContract.LeaseReason.exited
+    if case .stopped(let reason) = status.presentation, reason == exited { return true }
+    if case .revoked(let reason) = status.input, reason == exited { return true }
     return false
   }
 

@@ -390,6 +390,69 @@ const pins = [
 ];
 
 /**
+ * C5/C8 (the fixer's review of 2026-10-21, finding 8) — a lease or exit WORD the
+ * phone's routed client branches on. It is named once in a nested enum of
+ * `RoutedTerminalContract`, and read here from the contracts list that owns it.
+ *
+ * The origin pattern finds the word inside that list's brackets and nowhere
+ * else, so a word the list drops reads as unreadable — red — never as
+ * agreement. The copy's pattern stays inside its own nested enum, because
+ * `exited` is a word of two of them.
+ */
+const TERMINAL_PIPELINE = "packages/contracts/src/terminal-pipeline.ts";
+const TERMINAL = "packages/contracts/src/terminal.ts";
+function routedWordPin(file, list, word, swiftEnum, swiftName) {
+  return {
+    name: `${list}.${word}`,
+    origin: {
+      file,
+      pattern: new RegExp(`export const ${list} = (?:z\\.enum\\()?\\[[^\\]]*?"(${word})"`),
+      label: `${list} "${word}"`,
+    },
+    copy: {
+      file: ROUTED_CONTRACT,
+      pattern: new RegExp(
+        `public enum ${swiftEnum} \\{(?:(?!\\n {2}\\})[\\s\\S])*?\\n {4}public static let ${swiftName} = "([^"]*)"\\n`,
+      ),
+      label: `RoutedTerminalContract.${swiftEnum}.${swiftName}`,
+    },
+  };
+}
+pins.push(
+  // The lease says the run EXITED in both of its dimensions (C8).
+  routedWordPin(
+    TERMINAL_PIPELINE,
+    "PRESENTATION_STOPPED_REASONS",
+    "exited",
+    "LeaseReason",
+    "exited",
+  ),
+  routedWordPin(TERMINAL_PIPELINE, "ACTIVATION_REVOKED_REASONS", "exited", "LeaseReason", "exited"),
+  // The card's note for a refused input: one sentence per word (C5).
+  ...[
+    ["lagging", "lagging"],
+    ["overload", "overload"],
+    ["right-expired", "rightExpired"],
+    ["pending", "pending"],
+    ["not-granted", "notGranted"],
+    ["right-revoked", "rightRevoked"],
+    ["exited", "exited"],
+    ["stale-lease-epoch", "staleLeaseEpoch"],
+    ["no-view", "noView"],
+  ].map(([word, swift]) =>
+    routedWordPin(TERMINAL_PIPELINE, "INPUT_REFUSED_REASONS", word, "InputRefusedReason", swift),
+  ),
+  // Who ended a run the cell named as requested (C8).
+  ...[
+    ["user-terminated", "userTerminated"],
+    ["application-terminated", "applicationTerminated"],
+    ["service-terminated", "serviceTerminated"],
+  ].map(([word, swift]) =>
+    routedWordPin(TERMINAL, "TerminalExitOutcome", word, "ExitOutcome", swift),
+  ),
+);
+
+/**
  * F1 — a freeway value the phone's link BRANCHES on, read from ITS OWN block of registries.ts.
  * The block matters: `FREEWAY_CODES.PROTOCOL` is 4400 and `TERMINAL_PIPELINE_CLOSE_CODES.PROTOCOL`
  * is 4003, and a whole-file pattern would read the first. The match may not leave the block.
@@ -528,13 +591,15 @@ if (problems.length > 0 || pinProblems.length > 0) {
     for (const problem of problems) console.error(`  ${problem}\n`);
   }
   if (pinProblems.length > 0) {
-    console.error(`ios pins: ${pinProblems.length} of ${pins.length} registry values drifted\n`);
+    console.error(`ios pins: ${pinProblems.length} of ${pins.length} contract values drifted\n`);
     for (const problem of pinProblems) console.error(`  ${problem}\n`);
   }
   process.exit(1);
 }
 
-const values = pins.length === 1 ? "registry value" : "registry values";
+const values = pins.length === 1 ? "contract value" : "contract values";
 console.log(`ios fixtures: ${checked} copies identical to packages/contracts/fixtures`);
-console.log(`ios pins: ${pins.length} ${values} identical to packages/contracts/src/registries.ts`);
+console.log(
+  `ios pins: ${pins.length} ${values} identical to packages/contracts/src (registries.ts and the terminal word lists)`,
+);
 for (const notice of notices) console.log(`ios pins: NOTICE — ${notice}`);

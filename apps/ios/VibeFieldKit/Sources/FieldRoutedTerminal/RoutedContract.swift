@@ -10,7 +10,9 @@ import Foundation
 /// a hand-written copy can drift. `scripts/check-ios-fixtures.mjs` pins the ones
 /// this client BRANCHES on, value for value, against `registries.ts` — which is
 /// why the literals carry the same `_` grouping the TypeScript does: the gate
-/// compares the captured text, not a parsed number.
+/// compares the captured text, not a parsed number. The WORDS this client
+/// branches on (`LeaseReason`, `InputRefusedReason`, `ExitOutcome`) belong to
+/// the contracts' word lists instead, and are pinned the same way.
 ///
 /// Numbers this client does NOT branch on (credit windows, chunk caps, the
 /// refresh cadences) are never copied: they arrive at run time in
@@ -85,6 +87,40 @@ public enum RoutedTerminalContract {
   public static let sessionEventsCapability = "session-events"
   public static let geometryEventsCapability = "geometry-events"
   public static let inputRefusalsCapability = "input-refusals"
+
+  /// The lease's and the exit's WORDS this client branches on (audit C5, C8;
+  /// the fixer's review, finding 8). Their lists are the contracts':
+  /// `PRESENTATION_STOPPED_REASONS`, `ACTIVATION_REVOKED_REASONS` and
+  /// `INPUT_REFUSED_REASONS` in `terminal-pipeline.ts`, `TerminalExitOutcome` in
+  /// `terminal.ts`. `scripts/check-ios-fixtures.mjs` pins each word here to its
+  /// list, so a word renamed on one side is red, never a branch that quietly
+  /// stops matching.
+  public enum LeaseReason {
+    /// `stopped{exited}` / `revoked{exited}` — the session's run exited (C8).
+    public static let exited = "exited"
+  }
+
+  /// `InputRefused.reason` — the lease's own input word, or the fence that
+  /// refused (C5).
+  public enum InputRefusedReason {
+    public static let lagging = "lagging"
+    public static let overload = "overload"
+    public static let rightExpired = "right-expired"
+    public static let pending = "pending"
+    public static let notGranted = "not-granted"
+    public static let rightRevoked = "right-revoked"
+    public static let exited = "exited"
+    public static let staleLeaseEpoch = "stale-lease-epoch"
+    public static let noView = "no-view"
+  }
+
+  /// `SessionEvent.exitOutcome` — who ended a run the cell named as requested
+  /// (C8).
+  public enum ExitOutcome {
+    public static let userTerminated = "user-terminated"
+    public static let applicationTerminated = "application-terminated"
+    public static let serviceTerminated = "service-terminated"
+  }
 }
 
 /// What THIS phone can hold on the frames leg (`ConnectionHello.receiverCapacities`).
