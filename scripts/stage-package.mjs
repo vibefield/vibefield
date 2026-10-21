@@ -39,7 +39,7 @@ import { BUNDLED_PLUGINS } from "../apps/desktop/packaging/bundled-list.mjs";
 // Not a dependency — a repo script. scripts/siblings.mjs is the ONE reader of
 // siblings.lock.json (CLAUDE.md §Machine setup), and staging is its fourth
 // consumer after preflight, the Nx cache stamp and the dev runner.
-import { newestSourceMtime, rosettadBinary, sidecarStagingSource } from "./siblings.mjs";
+import { cargoBuildFreshness, rosettadBinary, sidecarStagingSource } from "./siblings.mjs";
 
 const args = process.argv.slice(2);
 const argValue = (flag) => {
@@ -125,17 +125,25 @@ if (sidecarStaging.source === "refuse") {
 // carries an ABSOLUTE `from` (resolvePlan resolves against the repo root, which
 // leaves an absolute path as it is). Optional like the screenshot helper: a
 // package without it boots, and fieldd says in a person's words that this copy
-// has no agent history. A Rust source newer than the binary is preflight's WARN,
-// said again here where the binary ships; it stays a warning because cargo,
-// not an mtime, is the judge of freshness (a no-op rebuild relinks nothing).
+// has no agent history. A binary older than a source cargo RECORDED it was
+// built from (its dep-info — `cargoBuildFreshness`, item 56) is preflight's
+// WARN, said again here where the binary ships; a warning, because the package
+// still boots, and the build that clears it is `pnpm siblings:build`.
 const rosettadName = process.platform === "win32" ? "rosettad.exe" : "rosettad";
 const rosettadBuilt = rosettadBinary(repoRoot);
 if (rosettadBuilt?.path && existsSync(rosettadBuilt.path)) {
-  const newest = newestSourceMtime(rosettadBuilt.dir);
-  if (newest !== null && statSync(rosettadBuilt.path).mtimeMs < newest) {
+  const built = cargoBuildFreshness(rosettadBuilt.path, rosettadBuilt.dir);
+  if (built.state === "stale") {
+    const why = built.gone
+      ? `${built.source}, a source cargo built it from, is gone`
+      : `${built.source} is newer than it`;
     console.warn(
-      `stage WARN: a Rust source in ${rosettadBuilt.dir} is newer than ${rosettadBuilt.path} — ` +
-        "run `pnpm siblings:build` before packaging (a no-op when cargo agrees it is fresh)",
+      `stage WARN: ${rosettadBuilt.path} — ${why}; run \`pnpm siblings:build\` before packaging`,
+    );
+  } else if (built.state === "unrecorded") {
+    console.warn(
+      `stage WARN: cargo left no record of what ${rosettadBuilt.path} was built from — ` +
+        "run `pnpm siblings:build` before packaging, which writes it",
     );
   }
 }

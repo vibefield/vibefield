@@ -13,12 +13,14 @@
 // module — the decision it calls is what is testable, so the decision is what
 // lives in siblings.mjs.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  cargoBuildFreshness,
+  cargoBuiltFrom,
   cargoPatchRows,
   devSidecar,
   goSidecar,
@@ -287,4 +289,110 @@ test("stage-package.mjs stages the lock's own rosettad, optionally (AR-8, L3)", 
   assert.match(script, /import \{[^}]*\brosettadBinary\b[^}]*\} from "\.\/siblings\.mjs"/);
   assert.match(script, /rosettadBinary\(repoRoot\)/);
   assert.match(script, /stage: `bin\/\$\{rosettadName\}`,[^}]*\boptional:/);
+});
+
+// Item 56 (2026-10-21) — rosettad's freshness is cargo's record, never a walk.
+// Preflight warned "a Rust source is newer than the built rosettad" on every
+// run since the RD-5a pin move, while `cargo build --release -p rosettad`
+// called the binary fresh: the walk it asked counted every file under
+// `crates/`, and the one newer file was a `#[cfg(test)]` module
+// (rosetta-pin's `crates/pipeline/src/capture/tests/tolerance.rs`) that a
+// release build never reads. Cargo writes what it compiled into the dep-info
+// file beside the binary; that list is the question's only honest source.
+
+/** A rosetta-shaped checkout and a cargo target holding a built rosettad and
+ * the dep-info cargo wrote for it. Every recorded source is ten minutes older
+ * than the binary unless a row moves one; `depInfo(binary)` overrides the
+ * record — a function, because the record names the binary the fixture made. */
+function cargoFixture({ depInfo } = {}) {
+  const checkout = mkdtempSync(join(tmpdir(), "vf-rosetta-"));
+  const sources = {
+    lib: join(checkout, "crates/pipeline/src/lib.rs"),
+    capture: join(checkout, "crates/pipeline/src/capture/mod.rs"),
+    test: join(checkout, "crates/pipeline/src/capture/tests/tolerance.rs"),
+    main: join(checkout, "crates/rosettad/src/main.rs"),
+  };
+  for (const file of Object.values(sources)) {
+    mkdirSync(join(file, ".."), { recursive: true });
+    writeFileSync(file, "// source\n");
+  }
+  const release = join(checkout, "target/release");
+  mkdirSync(release, { recursive: true });
+  const binary = join(release, "rosettad");
+  writeFileSync(binary, "binary");
+  // cargo's record: what rustc read for the binary and its local crates — the
+  // test module is not in it, because a release build never compiles it
+  const recorded = [sources.lib, sources.capture, sources.main];
+  writeFileSync(`${binary}.d`, depInfo?.(binary) ?? `${binary}: ${recorded.join(" ")}\n`);
+  const now = Date.now() / 1000;
+  utimesSync(binary, now - 600, now - 600);
+  for (const file of Object.values(sources)) utimesSync(file, now - 1200, now - 1200);
+  return { checkout, binary, sources, now };
+}
+
+test("item 56: a test-only file newer than rosettad is no source of it — the build is fresh", () => {
+  const { checkout, binary, sources, now } = cargoFixture();
+  // the RD-5a shape: the pin move touched only the `#[cfg(test)]` module
+  utimesSync(sources.test, now, now);
+  assert.deepEqual(cargoBuildFreshness(binary, checkout), { state: "fresh" });
+  assert.ok(!cargoBuiltFrom(binary, checkout).includes(sources.test));
+});
+
+test("a source cargo recorded, newer than rosettad, is stale and named", () => {
+  const { checkout, binary, sources, now } = cargoFixture();
+  utimesSync(sources.capture, now, now);
+  assert.deepEqual(cargoBuildFreshness(binary, checkout), {
+    state: "stale",
+    source: sources.capture,
+  });
+});
+
+test("a source cargo recorded that is gone is stale — cargo rebuilds for a missing file", () => {
+  const { checkout, binary, sources } = cargoFixture();
+  rmSync(sources.lib);
+  assert.deepEqual(cargoBuildFreshness(binary, checkout), {
+    state: "stale",
+    source: sources.lib,
+    gone: true,
+  });
+});
+
+test("a binary with no dep-info beside it is unrecorded, never called fresh", () => {
+  const { checkout, binary } = cargoFixture();
+  rmSync(`${binary}.d`);
+  assert.equal(cargoBuiltFrom(binary, checkout), null);
+  assert.deepEqual(cargoBuildFreshness(binary, checkout), { state: "unrecorded" });
+});
+
+test("the dep-info reader: continuations, escaped spaces, relative paths, comments, empty rules, .exe", () => {
+  const { checkout, binary } = cargoFixture({
+    depInfo: (built) =>
+      [
+        "# a comment line is no rule",
+        `${built}: crates/a\\ b/src/lib.rs \\`,
+        `  /abs/one.rs`,
+        "crates/a\\ b/src/lib.rs:",
+        "",
+      ].join("\n"),
+  });
+  assert.deepEqual(cargoBuiltFrom(binary, checkout), [
+    join(checkout, "crates/a b/src/lib.rs"),
+    "/abs/one.rs",
+  ]);
+  // Windows: the record of `rosettad.exe` is `rosettad.d`, beside it
+  assert.deepEqual(cargoBuiltFrom(`${binary}.exe`, checkout), cargoBuiltFrom(binary, checkout));
+});
+
+test("every rosettad freshness reader asks cargo's record, and the checkout walk is gone", async () => {
+  // The walk is not kept beside the record: two freshness rules are a rule
+  // that disagrees with itself (as `goSidecarState`'s doc says of three).
+  const exported = await import("../../../scripts/siblings.mjs");
+  assert.equal(exported.newestSourceMtime, undefined);
+  const read = (file) => readFileSync(join(REPO_ROOT, file), "utf8");
+  assert.match(read("scripts/preflight.mjs"), /rosettadState\(root\)/);
+  assert.match(read("scripts/stage-package.mjs"), /cargoBuildFreshness\(rosettadBuilt\.path/);
+  assert.match(
+    read("scripts/check-agent-catalog.mjs"),
+    /freshness: cargoBuildFreshness\(bin\.path/,
+  );
 });

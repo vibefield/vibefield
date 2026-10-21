@@ -144,7 +144,7 @@ import { createRequire } from "node:module";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { newestSourceMtime, readLock, rosettadBinary, siblingDir } from "./siblings.mjs";
+import { cargoBuildFreshness, readLock, rosettadBinary, siblingDir } from "./siblings.mjs";
 
 const SCRIPT = fileURLToPath(import.meta.url);
 const REPO_ROOT = resolve(dirname(SCRIPT), "..");
@@ -929,18 +929,31 @@ function chooseRosettad({ explicit, lock, requireRosetta, identify = fileIdentit
   };
 }
 
-/** The pin-time staleness warning (pure): the rosettad asked is older than a
- * source in its checkout, so it may predate the revision just pinned. mtimes
- * are all a binary without a version flag offers, so it stays a WARN — cargo
- * may decline to rebuild for a file it does not compile, and a FAIL no build
- * can clear would be a trap. */
-function staleNote({ bin, binMtimeMs, newestSourceMs, sibling }) {
-  if (newestSourceMs === null || binMtimeMs >= newestSourceMs) return null;
-  return warn(
-    "stale",
-    "rosettad",
-    `rosettad (${bin}) is older than a source in ${sibling} — this run read THAT build's registry; if the pin moved rosetta, run \`pnpm siblings:build\` and re-run`,
-  );
+/** The pin-time staleness warning (pure), from `cargoBuildFreshness`: the
+ * rosettad asked is older than a source cargo RECORDED it was built from, or
+ * cargo left no record to ask, so it may predate the revision just pinned.
+ * Cargo's record (its dep-info) names only what the build compiled, so a
+ * `#[cfg(test)]` file no build reads never warns (item 56: the checkout walk
+ * this replaced did, on a binary cargo called fresh). It stays a WARN: a binary
+ * with no version flag can only be dated, and the rosetta half reads it
+ * whether or not it predates the pin. */
+function staleNote({ bin, freshness }) {
+  const rerun =
+    "this run read THAT build's registry; if the pin moved rosetta, run `pnpm siblings:build` and re-run";
+  if (freshness.state === "stale") {
+    const why = freshness.gone
+      ? `${freshness.source}, a source cargo built it from, is gone`
+      : `it is older than ${freshness.source}, a source cargo built it from`;
+    return warn("stale", "rosettad", `rosettad (${bin}): ${why} — ${rerun}`);
+  }
+  if (freshness.state === "unrecorded") {
+    return warn(
+      "stale",
+      "rosettad",
+      `rosettad (${bin}): cargo left no record of what it was built from — ${rerun}`,
+    );
+  }
+  return null;
 }
 
 /** `rosettad discover --json` output → Map<kind, dataRoot>. Tolerant of other
@@ -999,9 +1012,7 @@ function readRosettaFacts({
     if (entry !== undefined) {
       const note = staleNote({
         bin: bin.path,
-        binMtimeMs: statSync(bin.path).mtimeMs,
-        newestSourceMs: newestSourceMtime(siblingDir(REPO_ROOT, entry[1])),
-        sibling: entry[0],
+        freshness: cargoBuildFreshness(bin.path, siblingDir(REPO_ROOT, entry[1])),
       });
       if (note !== null) notes.push(note);
     }
@@ -2141,16 +2152,21 @@ async function selfTestReaders(check) {
   }
 
   const stale = [
-    staleNote({ bin: "/b", binMtimeMs: 1, newestSourceMs: 2, sibling: "s" }),
-    staleNote({ bin: "/b", binMtimeMs: 2, newestSourceMs: 2, sibling: "s" }),
-    staleNote({ bin: "/b", binMtimeMs: 2, newestSourceMs: null, sibling: "s" }),
+    staleNote({ bin: "/b", freshness: { state: "stale", source: "/s/lib.rs" } }),
+    staleNote({ bin: "/b", freshness: { state: "stale", source: "/s/gone.rs", gone: true } }),
+    staleNote({ bin: "/b", freshness: { state: "unrecorded" } }),
+    staleNote({ bin: "/b", freshness: { state: "fresh" } }),
   ];
   check(
-    "the staleness note: a build older than a source in its checkout WARNs; a fresh one, or no sources, says nothing",
+    "the staleness note: a build older than a source cargo recorded it from, a recorded source gone, or no record WARNs; a fresh build says nothing",
     stale[0]?.level === "WARN" &&
       stale[0]?.cls === "stale" &&
-      stale[1] === null &&
-      stale[2] === null,
+      stale[0].message.includes("older than /s/lib.rs") &&
+      stale[1]?.cls === "stale" &&
+      stale[1].message.includes("/s/gone.rs, a source cargo built it from, is gone") &&
+      stale[2]?.cls === "stale" &&
+      stale[2].message.includes("no record") &&
+      stale[3] === null,
     JSON.stringify(stale),
   );
 

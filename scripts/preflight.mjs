@@ -15,7 +15,7 @@
 // and the Go sidecar built beside field-native (missing or stale WARNs; the
 // floor reports a missing sidecar as Degraded honestly, so it is not a gate).
 import { execSync, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import {
   applySwiftRelease,
@@ -30,7 +30,6 @@ import {
   linkedPackages,
   lockHidden,
   needsCheckout,
-  newestSourceMtime,
   npmPlane,
   OVERLAY_CARGO,
   OVERLAY_PNPMFILE,
@@ -41,6 +40,7 @@ import {
   readLock,
   readOverlay,
   rosettadBinary,
+  rosettadState,
   siblingDir,
   siblingDirty,
   siblingHead,
@@ -679,32 +679,39 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
         );
       }
     }
-    const bin = rosettadBinary(root);
-    if (bin !== null) {
-      if (bin.path === null) {
-        warnings.push(
-          `${bin.name}: cargo cannot resolve its target directory — rosettad path unknown`,
-        );
-      } else if (!existsSync(bin.path)) {
-        warnings.push(
-          `${bin.name}: rosettad is not built (${bin.path}) — run \`pnpm siblings:build\`; fieldd reports the agent index UNAVAILABLE until then`,
-        );
-      } else {
-        const newest = newestSourceMtime(bin.dir);
-        if (newest !== null && statSync(bin.path).mtimeMs < newest) {
-          warnings.push(
-            `${bin.name}: a Rust source is newer than the built rosettad — run \`pnpm siblings:build\` (a no-op when cargo agrees it is fresh)`,
-          );
-        }
-      }
+    // rosettad against cargo's own record of what it was built from (its
+    // dep-info) — item 56: a walk of the checkout counted `#[cfg(test)]` files
+    // a release build never reads, and warned on a binary cargo called fresh.
+    const rosettad = rosettadState(root);
+    const { bin } = rosettad;
+    if (rosettad.state === "unresolved") {
+      warnings.push(
+        `${bin.name}: cargo cannot resolve its target directory — rosettad path unknown`,
+      );
+    } else if (rosettad.state === "missing") {
+      warnings.push(
+        `${bin.name}: rosettad is not built (${bin.path}) — run \`pnpm siblings:build\`; fieldd reports the agent index UNAVAILABLE until then`,
+      );
+    } else if (rosettad.state === "stale") {
+      const source = relative(bin.dir, rosettad.source);
+      warnings.push(
+        rosettad.gone
+          ? `${bin.name}: ${source}, a source cargo built rosettad from, is gone — run \`pnpm siblings:build\``
+          : `${bin.name}: ${source} is newer than the built rosettad — run \`pnpm siblings:build\``,
+      );
+    } else if (rosettad.state === "unrecorded") {
+      warnings.push(
+        `${bin.name}: cargo left no record of what rosettad was built from (no dep-info beside ${bin.path}) — run \`pnpm siblings:build\`, which writes it`,
+      );
     }
     // The go sibling's binary: the truffle mesh sidecar, built beside
     // field-native because that is where the floor's resolve_sidecar looks
     // first. WARN, never FAIL: a floor with no sidecar reports the mesh
     // UNAVAILABLE/Degraded honestly (the tolerant-reader law), so a missing one
     // is a degraded dev stack, not a broken tree — and every TS gate runs
-    // without it. `go build` keeps no fingerprint of its own, so the source
-    // mtimes are the freshness question, as they are for cargo above.
+    // without it. `go build` keeps no record of what it compiled, so the
+    // module's own source mtimes are the freshness question — where cargo's
+    // record, above, names rosettad's.
     const { sidecar, state: sidecarState } = goSidecarState(root);
     if (sidecarState === "missing") {
       warnings.push(

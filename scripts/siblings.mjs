@@ -1282,51 +1282,100 @@ export function siblingDirty(dir) {
   }
 }
 
-/** The newest mtime (ms) among the checkout's Rust sources — `crates/**`,
- * `Cargo.toml`, `Cargo.lock` — or null when nothing is there. This is cargo's
- * own freshness question (source mtimes against the fingerprint), which is why
- * preflight asks it and not "is the binary older than HEAD's commit time": a
- * binary built after the last edit but before the commit is FRESH, and cargo
- * agrees (`Finished … in 0.31s`), so a commit-time check would nag forever. */
-export function newestSourceMtime(dir) {
-  let newest = null;
-  const consider = (file) => {
+/** The files cargo RECORDED a built binary was compiled from, or null when it
+ * left no record. The record is the dep-info file cargo writes beside every
+ * artifact it builds (`<target>/<profile>/<crate>.d`, the Cargo book's "Build
+ * cache"): every file rustc read for the binary and for each LOCAL crate it
+ * depends on, and every build script's `rerun-if-changed` path. Its paths are
+ * absolute unless `build.dep-info-basedir` strips a prefix; a relative one is
+ * read against `baseDir` (the checkout the binary was built from).
+ *
+ * Why the record and not a walk of the checkout (item 56, 2026-10-21): what a
+ * release build never compiles is not in it — a `#[cfg(test)] mod tests;`
+ * above all. The walk this replaced counted every file under `crates/`, so
+ * rosetta-pin's `crates/pipeline/src/capture/tests/tolerance.rs` (touched by
+ * the RD-5a pin move, 2026-10-14) read as a source newer than a rosettad that
+ * cargo itself called fresh, and preflight warned on every run with nothing a
+ * build could clear. */
+export function cargoBuiltFrom(binaryPath, baseDir) {
+  let text;
+  try {
+    text = readFileSync(`${binaryPath.replace(/\.exe$/i, "")}.d`, "utf8");
+  } catch {
+    return null;
+  }
+  const files = [];
+  // Makefile syntax: `target: dep dep …`, a line continued by a trailing
+  // backslash, a space inside a path escaped as `\ `. A token is split on
+  // whitespace no backslash escapes, so a Windows target (`C:\…\rosettad.exe:`)
+  // is still one token, the one that ends the rule's head.
+  for (const line of text.replace(/\\\r?\n/g, " ").split(/\r?\n/)) {
+    if (line.trimStart().startsWith("#")) continue;
+    const tokens = line
+      .trim()
+      .split(/(?<!\\)\s+/)
+      .filter(Boolean);
+    const head = tokens.findIndex((token) => token.endsWith(":"));
+    if (head === -1) continue;
+    for (const token of tokens.slice(head + 1)) {
+      files.push(resolve(baseDir, token.replace(/\\ /g, " ")));
+    }
+  }
+  return files;
+}
+
+/** A cargo-built binary against cargo's record of what it was built from:
+ * `fresh`, `stale` — a recorded source is newer than the binary, or gone, and
+ * `{ source }` names it — or `unrecorded` (no dep-info beside the binary, so
+ * nothing here can vouch for it; a build writes one, a no-op build included).
+ *
+ * This is the source half of cargo's own rule, on cargo's own list: cargo
+ * rebuilds a unit when a file its dep-info names is newer than the build or
+ * missing, and relinks the binary after, so `stale` is exactly what
+ * `pnpm siblings:build` clears. The other halves — the toolchain, the resolved
+ * dependency versions, features, the profile — are fingerprinted by CONTENT,
+ * which no mtime can stand in for (a manifest or a Cargo.lock touched by a
+ * dev-dependency bump would warn forever, the defect this replaced); cargo
+ * judges those at every build, and `pnpm siblings:pin` builds rosettad before
+ * anything reads it. */
+export function cargoBuildFreshness(binaryPath, baseDir) {
+  const sources = cargoBuiltFrom(binaryPath, baseDir);
+  if (sources === null) return { state: "unrecorded" };
+  const builtAt = statSync(binaryPath).mtimeMs;
+  for (const source of sources) {
+    let modified;
     try {
-      const t = statSync(file).mtimeMs;
-      if (newest === null || t > newest) newest = t;
+      modified = statSync(source).mtimeMs;
     } catch {
-      // vanished mid-walk: not a source we could build from anyway
+      return { state: "stale", source, gone: true };
     }
-  };
-  const walk = (d) => {
-    let entries;
-    try {
-      entries = readdirSync(d, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (entry.name === "target" || entry.name === "node_modules" || entry.name.startsWith(".")) {
-        continue;
-      }
-      const full = join(d, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (entry.isFile()) consider(full);
-    }
-  };
-  walk(join(dir, "crates"));
-  consider(join(dir, "Cargo.toml"));
-  consider(join(dir, "Cargo.lock"));
-  return newest;
+    if (modified > builtAt) return { state: "stale", source };
+  }
+  return { state: "fresh" };
+}
+
+/** The lock's rosettad against what cargo recorded it was built from: `none`
+ * (the lock names no cargo sibling), `unresolved` (cargo cannot say where its
+ * target directory is), `missing`, or `cargoBuildFreshness`'s `unrecorded`,
+ * `stale` or `fresh`. ONE rule for the readers that ask it — preflight WARNs,
+ * the stage WARNs again where the binary ships, and wall R23 notes it under
+ * `--require-rosetta` — as `goSidecarState` is for the go sidecar. */
+export function rosettadState(root = REPO_ROOT, platform = process.platform) {
+  const bin = rosettadBinary(root, platform);
+  if (bin === null) return { bin: null, state: "none" };
+  if (bin.path === null) return { bin, state: "unresolved" };
+  if (!existsSync(bin.path)) return { bin, state: "missing" };
+  return { bin, ...cargoBuildFreshness(bin.path, bin.dir) };
 }
 
 /** The newest mtime (ms) among a Go module's own sources — `*.go` plus
- * `go.mod`/`go.sum` — or null when the directory holds none. Same question as
- * `newestSourceMtime` asks of cargo, for the same reason: "is the built binary
- * older than a source it was built from" is answerable and stable, where "is it
- * older than HEAD's commit time" nags forever after a build that preceded its
- * own commit. Unlike cargo, `go build` has no fingerprint of its own to ask, so
- * this IS the freshness check rather than a hint before one. */
+ * `go.mod`/`go.sum` — or null when the directory holds none. The question is
+ * the one `cargoBuildFreshness` asks of rosettad, for the same reason: "is the
+ * built binary older than a source it was built from" is answerable and
+ * stable, where "is it older than HEAD's commit time" nags forever after a
+ * build that preceded its own commit. Unlike cargo, `go build` keeps no record
+ * of what it compiled, so the module's own files are the list — this IS the
+ * freshness check, not cargo's question asked of cargo's record. */
 export function newestGoSourceMtime(moduleDir) {
   let newest = null;
   const walk = (d) => {
