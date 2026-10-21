@@ -384,12 +384,64 @@ impl GeometryOutcome {
 #[derive(Debug)]
 pub enum InputDecision {
     /// Refuse and audit (§5.4: the cell ALWAYS rejects input while it is not
-    /// allowed; the echo of accepted input is a frame). The reason is the audit
-    /// tag. The CALLER is told only on a leg that negotiated `input-refusals`,
-    /// in the words `input_refusal` allows (C5) — silent otherwise.
-    Drop(&'static str),
+    /// allowed; the echo of accepted input is a frame). The CALLER is told only
+    /// on a leg that negotiated `input-refusals`, in the words
+    /// `InputDrop::answer` gives (C5) — silent otherwise.
+    Drop(InputDrop),
     /// Authorized — the door runs the engine input op on the resolved view.
     Proceed(InputProceed),
+}
+
+/// Which gate dropped one `SendInput` (C5). Every drop has its audit tag; the
+/// answer a caller may hear is a separate question, and the type answers it:
+/// a message naming no activation of the caller's own control leg is never
+/// answered, so a refusal cannot confirm an id the caller does not own (EL7).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputDrop {
+    /// No activation by that id.
+    NoActivation,
+    /// An activation, but not one of the caller's own control leg, or of
+    /// another session than the message names.
+    WrongLeg,
+    /// The wire's `leaseEpoch` is not the route binding's (the placement fence).
+    StaleLeaseEpoch,
+    /// The lease's input dimension is not `allowed`; its own word says why
+    /// (`lagging`, `overload`, `pending`, `not-granted`, `exited`, …).
+    Lease(&'static str),
+    /// The synchronous renewal-margin backstop: the lease WOULD recompute to
+    /// `right-expired`.
+    RightExpired,
+    /// No presenting view to type into (demand none).
+    NoView,
+}
+
+impl InputDrop {
+    /// The audit tag, which every drop has (the door's `reason`).
+    pub fn tag(self) -> &'static str {
+        match self {
+            Self::NoActivation => "no-activation",
+            Self::WrongLeg => "wrong-leg",
+            Self::StaleLeaseEpoch => "stale-lease-epoch",
+            Self::Lease(_) => "input-not-allowed",
+            Self::RightExpired => "right-expired",
+            Self::NoView => "no-view",
+        }
+    }
+
+    /// The `InputRefused` reason the caller may hear, or None. When the lease
+    /// refused it is the lease's own input reason, the word the client already
+    /// reads in `CellActivationStatus`; when another fence did, that fence's
+    /// name. Never an answer for a drop that names no activation of the
+    /// caller's own control leg.
+    pub fn answer(self) -> Option<&'static str> {
+        match self {
+            Self::NoActivation | Self::WrongLeg => None,
+            Self::StaleLeaseEpoch => Some("stale-lease-epoch"),
+            Self::Lease(reason) => Some(reason),
+            Self::RightExpired => Some("right-expired"),
+            Self::NoView => Some("no-view"),
+        }
+    }
 }
 
 /// The cell-owned fence context for an authorized input op.
@@ -1311,32 +1363,32 @@ impl ActivationTable {
     /// past the margin.
     pub fn send_input(&self, leg: &LegRef, msg: &SendInput, now_ms: u64) -> InputDecision {
         let Some(a) = self.by_id.get(&msg.activation_id) else {
-            return InputDecision::Drop("no-activation");
+            return InputDecision::Drop(InputDrop::NoActivation);
         };
         // The input thread is the CALLER's own control leg (a frames-leg or
         // foreign-connection SendInput is not this activation's).
         if a.control.connection_id != leg.connection_id || a.session_id != msg.session_id {
-            return InputDecision::Drop("wrong-leg");
+            return InputDecision::Drop(InputDrop::WrongLeg);
         }
         // Placement fence: the wire's leaseEpoch must match the route binding
         // (a stale-route input is refused before it reaches the engine).
         if msg.lease_epoch != a.lease_epoch {
-            return InputDecision::Drop("stale-lease-epoch");
+            return InputDecision::Drop(InputDrop::StaleLeaseEpoch);
         }
         // The input lease dimension — the single source of truth for "may write"
         // (already encodes the input right, presentation, lag and expiry margin).
-        if !matches!(a.input, Input::Allowed) {
-            return InputDecision::Drop("input-not-allowed");
+        if let Input::Suspended(reason) | Input::Revoked(reason) = a.input {
+            return InputDecision::Drop(InputDrop::Lease(reason));
         }
         // Synchronous backstop: drop the moment the lease WOULD recompute to
         // `right-expired`, even if it has not been recomputed since.
         if now_ms + tp::ATTACH_RENEWAL_MARGIN_MS >= a.grant_expires_at_ms {
-            return InputDecision::Drop("right-expired");
+            return InputDecision::Drop(InputDrop::RightExpired);
         }
         // The fence coordinates the cell owns (never the wire): the presenting
         // view and its attachment epoch. Demand-none = no view = nothing to type.
         let Some((ghosttea_view_id, attachment_epoch)) = a.view.clone() else {
-            return InputDecision::Drop("no-view");
+            return InputDecision::Drop(InputDrop::NoView);
         };
         InputDecision::Proceed(InputProceed {
             session_id: a.session_id.clone(),
@@ -1347,33 +1399,22 @@ impl ActivationTable {
         })
     }
 
-    /// C5 — what the CALLER of a refused `SendInput` may be told:
-    /// the `InputRefused` reason, or None. When the lease refused it is the
-    /// lease's own input reason (`lagging`, `overload`, `pending`,
-    /// `not-granted`, …) — the word the client already reads in
-    /// `CellActivationStatus`; when another fence did, that fence's name
-    /// (`stale-lease-epoch`, `right-expired`, `no-view`). NEVER an answer for a
-    /// message naming no activation of the caller's own control leg
-    /// (`no-activation`, `wrong-leg`): a refusal must not confirm an id the
-    /// caller does not own (EL7).
+    /// C5 — what the CALLER of a refused `SendInput` may be told: the
+    /// `InputRefused` reason, or None (`InputDrop::answer`, where the stranger
+    /// rule is a type). The message's activation is checked again against the
+    /// caller's own control leg, so a drop handed in for another message can
+    /// never confirm an id the caller does not own (EL7).
     pub fn input_refusal(
         &self,
         leg: &LegRef,
         msg: &SendInput,
-        dropped: &'static str,
+        dropped: InputDrop,
     ) -> Option<&'static str> {
         let a = self.by_id.get(&msg.activation_id)?;
         if a.control.connection_id != leg.connection_id || a.session_id != msg.session_id {
             return None;
         }
-        match dropped {
-            "no-activation" | "wrong-leg" => None,
-            "input-not-allowed" => Some(match a.input {
-                Input::Suspended(reason) | Input::Revoked(reason) => reason,
-                Input::Allowed => dropped,
-            }),
-            fence => Some(fence),
-        }
+        dropped.answer()
     }
 
     /// `AttachControlLeg` after the grant VERIFIED and the attach high-water
@@ -4813,32 +4854,32 @@ mod tests {
                 assert_eq!(p.attachment_epoch, 7);
                 assert_eq!(p.input_sequence, 1);
             }
-            InputDecision::Drop(r) => panic!("expected Proceed, dropped: {r}"),
+            InputDecision::Drop(r) => panic!("expected Proceed, dropped: {r:?}"),
         }
         // an unknown activation, a foreign leg, a session mismatch
         assert!(matches!(
             t.send_input(&control, &msg("zz", "s1", 0, 2), 3_000),
-            InputDecision::Drop("no-activation")
+            InputDecision::Drop(InputDrop::NoActivation)
         ));
         let (foreign, _fr2) = leg(99);
         assert!(matches!(
             t.send_input(&foreign, &msg("a1", "s1", 0, 2), 3_000),
-            InputDecision::Drop("wrong-leg")
+            InputDecision::Drop(InputDrop::WrongLeg)
         ));
         assert!(matches!(
             t.send_input(&control, &msg("a1", "s9", 0, 2), 3_000),
-            InputDecision::Drop("wrong-leg")
+            InputDecision::Drop(InputDrop::WrongLeg)
         ));
         // the placement fence: a stale-route leaseEpoch never reaches the engine
         assert!(matches!(
             t.send_input(&control, &msg("a1", "s1", 5, 3), 3_000),
-            InputDecision::Drop("stale-lease-epoch")
+            InputDecision::Drop(InputDrop::StaleLeaseEpoch)
         ));
         // the renewal-margin backstop fires even though the lease STILL READS
         // Allowed (nothing recomputed it since 3_000): expiry 601_000, margin 60s
         assert!(matches!(
             t.send_input(&control, &msg("a1", "s1", 0, 4), 600_000),
-            InputDecision::Drop("right-expired")
+            InputDecision::Drop(InputDrop::RightExpired)
         ));
         // demand none parks the view; the lease is untouched, but there is
         // nothing to type into — reachable, not defensive
@@ -4859,7 +4900,7 @@ mod tests {
         t.view_detached("a1");
         assert!(matches!(
             t.send_input(&control, &msg("a1", "s1", 0, 5), 3_000),
-            InputDecision::Drop("no-view")
+            InputDecision::Drop(InputDrop::NoView)
         ));
 
         // a read-only viewer: presenting, but input = revoked{not-granted}
@@ -4911,8 +4952,29 @@ mod tests {
         assert_eq!(status["input"]["state"], "revoked");
         assert!(matches!(
             t.send_input(&control2, &msg("a2", "s2", 0, 1), 3_000),
-            InputDecision::Drop("input-not-allowed")
+            InputDecision::Drop(InputDrop::Lease("not-granted"))
         ));
+    }
+
+    /// C5 (the fixer's review, finding 7) — the stranger rule is the type's:
+    /// the two drops that name no activation of the caller's own leg have no
+    /// answer, every other drop answers in its own word, and a lease refusal
+    /// keeps its audit tag, `input-not-allowed`.
+    #[test]
+    fn an_input_drop_answers_only_for_the_callers_own_activation() {
+        assert_eq!(InputDrop::NoActivation.answer(), None);
+        assert_eq!(InputDrop::WrongLeg.answer(), None);
+        assert_eq!(
+            InputDrop::StaleLeaseEpoch.answer(),
+            Some("stale-lease-epoch")
+        );
+        assert_eq!(InputDrop::Lease("lagging").answer(), Some("lagging"));
+        assert_eq!(InputDrop::Lease("exited").answer(), Some("exited"));
+        assert_eq!(InputDrop::RightExpired.answer(), Some("right-expired"));
+        assert_eq!(InputDrop::NoView.answer(), Some("no-view"));
+        assert_eq!(InputDrop::Lease("lagging").tag(), "input-not-allowed");
+        assert_eq!(InputDrop::NoActivation.tag(), "no-activation");
+        assert_eq!(InputDrop::WrongLeg.tag(), "wrong-leg");
     }
 
     /// C5 — what the caller of a refused `SendInput` may be TOLD

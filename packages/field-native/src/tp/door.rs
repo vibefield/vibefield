@@ -47,8 +47,8 @@
 
 use super::activation::{
     ActivationTable, AttachControlInput, AttachFramesInput, Effect, GeometryDecision, GeometryOp,
-    GeometryOutcome, GeometryProceed, InputDecision, InputProceed, LegRef, Outbound, SetIdentity,
-    UnitClass,
+    GeometryOutcome, GeometryProceed, InputDecision, InputDrop, InputProceed, LegRef, Outbound,
+    SetIdentity, UnitClass,
 };
 use super::grant::{Channel, GrantVerifier, PreAuthFailure, PreAuthFailureCode};
 use super::ledger::{CurrentLeg, TransportLedger, TransportRefusal};
@@ -1937,13 +1937,14 @@ fn handle_input(
     answer: Option<&'static str>,
 ) {
     let proceed = match decision {
-        InputDecision::Drop(reason) => {
+        InputDecision::Drop(dropped) => {
             // §5.4's drop-and-AUDIT: the structural refusals are rare and must
-            // be visible at the default (INFO) filter. `input-not-allowed`
-            // alone stays at debug — it repeats per keystroke while a viewer
-            // types into a suspended lease, and the CellActivationStatus line
-            // already audits that transition once.
-            if reason == "input-not-allowed" {
+            // be visible at the default (INFO) filter. The lease's own refusal
+            // (`input-not-allowed`) alone stays at debug — it repeats per
+            // keystroke while a viewer types into a suspended lease, and the
+            // CellActivationStatus line already audits that transition once.
+            let reason = dropped.tag();
+            if matches!(dropped, InputDrop::Lease(_)) {
                 tracing::debug!(
                     event = "field_native.tp.input.dropped",
                     component = "terminal",
