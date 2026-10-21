@@ -265,6 +265,34 @@ import Testing
     #expect(status.acceptedContent == nil)
   }
 
+  /// `tp-cell-activation-status.exited.json` — the session's run EXITED (C8):
+  /// presentation stopped and input revoked, both in the lease's own word, and
+  /// a session holding it reads as exited: the card's ended face, never
+  /// "connecting". The bytes are the ones the cell's C8 row and the contracts
+  /// test hold to (EL9).
+  @Test func anExitedLeaseStopsPresentationAndRevokesInput() throws {
+    let status = try RoutedActivationStatus(
+      json: try Vector.json("tp-cell-activation-status.exited"))
+    #expect(status.presentation == .stopped(reason: RoutedTerminalContract.LeaseReason.exited))
+    #expect(status.input == .revoked(reason: RoutedTerminalContract.LeaseReason.exited))
+    var session = RoutedSessionState(sessionId: status.sessionId, activationId: status.activationId)
+    session.status = status
+    #expect(session.exited)
+  }
+
+  /// `tp-cell-activation-status.removed.json` — the session LEFT the engine
+  /// (C8): both dimensions revoked `removed`. That is not an exit, so the
+  /// session does not read as exited.
+  @Test func aRemovedLeaseRevokesBothDimensionsAndIsNotAnExit() throws {
+    let status = try RoutedActivationStatus(
+      json: try Vector.json("tp-cell-activation-status.removed"))
+    #expect(status.presentation == .revoked(reason: "removed"))
+    #expect(status.input == .revoked(reason: "removed"))
+    var session = RoutedSessionState(sessionId: status.sessionId, activationId: status.activationId)
+    session.status = status
+    #expect(!session.exited)
+  }
+
   /// A reason word this build has not learned is KEPT, not replaced by a state
   /// this client invented. A mutation of the golden, because a fixture carries
   /// the vocabulary of the day it was written and this rule is about the next

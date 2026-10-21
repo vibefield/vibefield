@@ -12,6 +12,7 @@ import {
   TerminalRuntimeSessionsResult,
 } from "../src/terminal";
 import {
+  ACTIVATION_REVOKED_REASONS,
   AttachControlLeg,
   CellActivationStatus,
   CellTransportGrant,
@@ -38,6 +39,7 @@ import {
   InputRefused,
   KNOWN_CAPABILITIES,
   PRESENTATION_ENVELOPE_MAX_HEADER_BYTES,
+  PRESENTATION_STOPPED_REASONS,
   PresentationEnvelopeHeader,
   ProductSessionRosterItem,
   REMOTE_CELL_PATH_PREFIX,
@@ -373,6 +375,19 @@ describe("activation — no claim repeated outside the grant; the two-dimensiona
     // unknown reasons are tolerated (logged, never refused)
     const future = { ...ok, input: { state: "suspended", reason: "x-future-reason" } };
     expect(CellActivationStatus.safeParse(future).success).toBe(true);
+  });
+  it("an exit stops the lease and a removal revokes it, in the goldens' words (audit C8)", () => {
+    // EL9: the cell's own emission is held to these dimensions (activation.rs,
+    // the C8 row) and the kit reads them (WireTests), from these same bytes.
+    const exited = CellActivationStatus.parse(fixture("tp-cell-activation-status.exited.json"));
+    expect(exited.presentation).toEqual({ state: "stopped", reason: "exited" });
+    expect(exited.input).toEqual({ state: "revoked", reason: "exited" });
+    expect(PRESENTATION_STOPPED_REASONS).toContain(exited.presentation.reason);
+    expect(ACTIVATION_REVOKED_REASONS).toContain(exited.input.reason);
+    const removed = CellActivationStatus.parse(fixture("tp-cell-activation-status.removed.json"));
+    expect(removed.presentation).toEqual({ state: "revoked", reason: "removed" });
+    expect(removed.input).toEqual({ state: "revoked", reason: "removed" });
+    expect(ACTIVATION_REVOKED_REASONS).toContain(removed.presentation.reason);
   });
   it("resume-accepted carries from + newestAvailable", () => {
     expect(FramesAttachOutcome.safeParse({ kind: "resume-accepted" }).success).toBe(false);

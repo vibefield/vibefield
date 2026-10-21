@@ -135,8 +135,16 @@ const freewayFixtures = [
   "freeway-opened.attach-grant.json",
   "freeway-opened.renew-refused.json",
 ];
+// C5/C8 (the fixer's review of 2026-10-21, finding 9) — the cell's refusal and its ended
+// lease, which the routed client's own reader tests parse.
+const tpFixtures = [
+  "tp-input-refused.lagging.json",
+  "tp-cell-activation-status.exited.json",
+  "tp-cell-activation-status.removed.json",
+];
 const requiredMirrors = [
   ["freeway", freewayFixtures, ["Tests/FieldFreewayTests"]],
+  ["tp", tpFixtures, ["Tests/FieldRoutedTerminalTests"]],
   // the routed reader's own bundle reads the freeway ticket's endpoints
   ["freeway", ["freeway-opened.tickets.json"], ["Tests/FieldRoutedTerminalTests"]],
   ["workspace", workspaceFixtures, ["Tests/FieldWorkspaceTests", "Sources/FieldWorkspace"]],

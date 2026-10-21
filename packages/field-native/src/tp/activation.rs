@@ -2301,6 +2301,14 @@ mod tests {
         }
     }
 
+    /// A contracts golden (EL9): the bytes the TS schema and the kit parse.
+    fn fixture(name: &str) -> serde_json::Value {
+        let p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../contracts/fixtures")
+            .join(name);
+        serde_json::from_str(&std::fs::read_to_string(&p).expect("fixture read")).expect("json")
+    }
+
     fn texts(rx: &mut tokio::sync::mpsc::UnboundedReceiver<Outbound>) -> Vec<serde_json::Value> {
         let mut out = Vec::new();
         while let Ok(m) = rx.try_recv() {
@@ -5084,6 +5092,11 @@ mod tests {
         assert_eq!(s[0]["presentation"]["reason"], "exited");
         assert_eq!(s[0]["input"]["state"], "revoked");
         assert_eq!(s[0]["input"]["reason"], "exited");
+        // EL9 — the lease's words on the wire are the golden's, which the TS
+        // schema and the kit parse (the fixer's review, finding 6)
+        let golden = fixture("tp-cell-activation-status.exited.json");
+        assert_eq!(s[0]["presentation"], golden["presentation"]);
+        assert_eq!(s[0]["input"], golden["input"]);
         assert!(
             texts(&mut crx2).is_empty(),
             "another session's lease is untouched"
@@ -5138,6 +5151,9 @@ mod tests {
         assert_eq!(last["presentation"]["state"], "revoked");
         assert_eq!(last["presentation"]["reason"], "removed");
         assert_eq!(last["input"]["reason"], "removed");
+        let golden = fixture("tp-cell-activation-status.removed.json");
+        assert_eq!(last["presentation"], golden["presentation"]);
+        assert_eq!(last["input"], golden["input"]);
         assert!(t.get("a1").is_none());
         assert!(t.get("b1").is_some());
         assert_eq!(t.session_ids(), vec!["s2".to_string(), "s3".to_string()]);
