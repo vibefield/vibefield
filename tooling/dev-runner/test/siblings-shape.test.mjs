@@ -26,16 +26,22 @@ import {
   applySwiftRelease,
   cargoLockHidden,
   cargoPlane,
+  cargoRelease,
+  cargoRequirements,
   committedCargoRow,
   committedNpmRow,
+  crateVersion,
   ensureElectronBinary,
   linkedPackages,
   lockHidden,
+  NO_CARGO_ROW,
+  needsCheckout,
   npmPlane,
   OVERLAY_CARGO,
   OVERLAY_PNPMFILE,
   OVERLAY_STATE,
   overlayable,
+  overlayCargoDrift,
   readOverlay,
   renderProd,
   seedDevLock,
@@ -100,6 +106,9 @@ function fixture(t, { lock = LOCK, yaml = YAML, cargo = CARGO } = {}) {
   writeFileSync(join(root, "Cargo.toml"), cargo);
   writeFileSync(join(root, ".gitignore"), ".vibefield/\n/.pnpmfile.cjs\n");
   writeFileSync(join(root, "package.json"), `${JSON.stringify({ name: "fixture-root" })}\n`);
+  // every sibling the lock names has a checkout directory: `use` refuses to link an absent one (F1)
+  for (const entry of Object.values(lock.siblings))
+    mkdirSync(join(root, entry.path), { recursive: true });
   for (const sub of ["runtime/packages/core", "runtime/packages/views", "history/clients/ts"]) {
     mkdirSync(join(dir, sub), { recursive: true });
     writeFileSync(join(dir, sub, "package.json"), "{}\n");
@@ -599,4 +608,256 @@ test("THIS tree: the committed sibling rows are exactly what its lock renders, a
   assert.equal(checked.result, 0, checked.err);
   const hook = readFileSync(join(REPO_ROOT, "scripts", "git-hooks", "pre-commit"), "utf8");
   assert.match(hook, /node scripts\/siblings\.mjs render --prod --check --staged/);
+});
+
+// 2026-10-22 — the REGISTRY cargo coordinate (VF-PM's ruling on Q1 of the ghosttea 0.13.0 EL8): a sibling whose crates
+// are published is committed as the manifest's exact dependency row with NO [patch.crates-io] row, and the overlay links
+// its checkout back through the generated config. And a sibling whose every plane is released needs no checkout.
+const LOCK4 = {
+  siblings: {
+    terminal: {
+      path: "../terminal",
+      sha: REV,
+      patch: { "term-core": "native/core" },
+      release: { cargo: "1.2.0" },
+    },
+  },
+};
+const CARGO4 = `[workspace]
+members = []
+
+[workspace.dependencies]
+term-core = "=1.2.0"
+`;
+
+function fixture4(t, cargo = CARGO4) {
+  const { dir, root, git } = fixture(t, { lock: LOCK4, cargo, yaml: "overrides:\n  loro: ^1\n" });
+  writeFileSync(join(root, "Cargo.lock"), "# committed lock: term-core 1.2.0 from crates.io\n");
+  writeFileSync(join(root, ".gitignore"), ".vibefield/\n/.pnpmfile.cjs\n/.cargo/config.toml\n");
+  git("add", "-A");
+  git(
+    "-c",
+    "user.name=T",
+    "-c",
+    "user.email=t@example.invalid",
+    "commit",
+    "--quiet",
+    "-m",
+    "rd fixture 4",
+  );
+  return { dir, root, git };
+}
+
+test("REGISTRY: a cargo plane released as a version is prod, commits NO patch row, and names its version in the shape", () => {
+  const terminal = LOCK4.siblings.terminal;
+  assert.equal(cargoPlane(terminal), "prod");
+  assert.deepEqual(cargoRelease(terminal), { registry: "1.2.0" });
+  assert.deepEqual(cargoRelease(LOCK3.siblings.terminal), {
+    git: "https://example.invalid/terminal.git",
+    rev: REV,
+  });
+  assert.equal(cargoRelease(LOCK.siblings.terminal), null);
+  assert.equal(committedCargoRow(terminal, "term-core"), null);
+  assert.ok(overlayable(terminal));
+  assert.equal(
+    siblingShape("/nowhere", LOCK4, []).line,
+    "shape: prod — terminal cargo exact 1.2.0 ×1 @ ddddddd",
+  );
+  assert.equal(
+    siblingShape("/nowhere", LOCK4, ["terminal"]).line,
+    "shape: dev — terminal cargo patch ×1 (overlay over 1.2.0) @ ddddddd",
+  );
+});
+
+test("REGISTRY: render --prod removes a committed patch row for a released crate, --check refuses it in words, and the tree without it is the lock's", (t) => {
+  const { root } = fixture4(
+    t,
+    `${CARGO4}\n[patch.crates-io]\nterm-core = { path = "../terminal/native/core" }\nother = { path = "../other" }\n`,
+  );
+  const checked = quiet(() => renderProd(root, { check: true }));
+  assert.equal(checked.result, 1);
+  assert.match(
+    checked.err,
+    /Cargo\.toml: term-core reads \{ path = "\.\.\/terminal\/native\/core" \} but siblings\.lock\.json renders no row \(its crates are released on the registry\)/,
+  );
+  const rendered = quiet(() => renderProd(root));
+  assert.equal(rendered.result, 0);
+  const text = readFileSync(join(root, "Cargo.toml"), "utf8");
+  assert.doesNotMatch(text, /^term-core = \{/m);
+  // only the released crate's line goes: the rest of the section, and the manifest's own pin, stand
+  assert.match(text, /^other = \{ path = "\.\.\/other" \}$/m);
+  assert.match(text, /^term-core = "=1\.2\.0"$/m);
+  const again = quiet(() => renderProd(root, { check: true }));
+  assert.equal(again.result, 0, again.err);
+  assert.match(again.out, /0 cargo \+ 1 released on the registry/);
+  assert.deepEqual(applyCargoRows("[patch.crates-io]\n", new Map([["term-core", null]])), {
+    text: "[patch.crates-io]\n",
+    changed: [],
+    missing: [],
+  });
+  assert.equal(NO_CARGO_ROW, "no row (its crates are released on the registry)");
+});
+
+test("REGISTRY: use links the published crates back through the generated config, hides the lock, and use --none restores it", (t) => {
+  const { dir, root, git } = fixture4(t);
+  assert.equal(quiet(() => renderProd(root, { check: true })).result, 0);
+  const used = quiet(() => useSiblings(root, ["terminal", "--no-install"]));
+  assert.equal(used.result, 0);
+  assert.match(used.out, /terminal cargo patch ×1 \(overlay over 1\.2\.0\) @ ddddddd/);
+  const config = readFileSync(join(root, OVERLAY_CARGO), "utf8");
+  assert.match(config, /path patches over the committed release/);
+  assert.ok(
+    config.includes(
+      `term-core = { path = ${JSON.stringify(join(dir, "terminal", "native", "core"))} }`,
+    ),
+  );
+  assert.equal(cargoLockHidden(root), true);
+  assert.equal(git("status", "--porcelain"), "");
+  assert.equal(quiet(() => useSiblings(root, ["--none", "--no-install"])).result, 0);
+  assert.ok(!existsSync(join(root, ".cargo")));
+  assert.equal(cargoLockHidden(root), false);
+  assert.equal(git("status", "--porcelain"), "");
+});
+
+test("a sibling needs its checkout while any plane is dev, something builds from it, or the overlay links it — never once every plane is released", () => {
+  const released = {
+    path: "../t",
+    sha: REV,
+    packages: { "@x/t": "packages/t" },
+    patch: { "t-core": "native/core" },
+    swift: { manifest: "Package.swift", link: ".window/t" },
+    javascript: { workspaces: ["@x/t"] },
+    release: { npm: "1.2.0", cargo: "1.2.0", swift: "1.2.0" },
+  };
+  assert.equal(needsCheckout(released), false);
+  assert.equal(needsCheckout(released, true), true, "the overlay reads the checkout");
+  assert.equal(
+    needsCheckout({ ...released, release: { cargo: "1.2.0", swift: "1.2.0" } }),
+    true,
+    "npm still links",
+  );
+  assert.equal(
+    needsCheckout({ ...released, release: { npm: "1.2.0", swift: "1.2.0" } }),
+    true,
+    "cargo still patches",
+  );
+  assert.equal(
+    needsCheckout({ ...released, release: { npm: "1.2.0", cargo: "1.2.0" } }),
+    true,
+    "swift still a path package",
+  );
+  assert.equal(
+    needsCheckout({ ...released, cargo: { crate: "td" } }),
+    true,
+    "a binary is built from it",
+  );
+  // a Swift-only sibling released (truffle after G28) needs none; a bare pin keeps its checkout
+  assert.equal(needsCheckout(LOCK3.siblings.mesh), false);
+  assert.equal(needsCheckout({ path: "../bare", sha: REV }), true);
+  // and the shape is prod with every plane named
+  assert.equal(
+    siblingShape("/nowhere", { siblings: { t: released } }, []).line,
+    "shape: prod — t npm exact 1.2.0 ×1 + cargo exact 1.2.0 ×1 + swift exact 1.2.0 @ ddddddd",
+  );
+});
+
+test("REGISTRY: one version, stated once — render writes the [workspace.dependencies] requirement from release.cargo, --check compares it, and a release no row names is said", (t) => {
+  // thinking-release-deps.md §13: the lock's release.cargo and Cargo.toml's exact row are ONE version; the row is rendered
+  const drifted = CARGO4.replace(
+    'term-core = "=1.2.0"',
+    'term-core = { version = "=1.1.0", features = ["x"] }',
+  );
+  const { root } = fixture4(t, drifted);
+  const checked = quiet(() => renderProd(root, { check: true }));
+  assert.equal(checked.result, 1);
+  assert.match(
+    checked.err,
+    /Cargo\.toml: term-core \(requirement\) reads "=1\.1\.0" but siblings\.lock\.json renders "=1\.2\.0"/,
+  );
+  assert.equal(quiet(() => renderProd(root)).result, 0);
+  const text = readFileSync(join(root, "Cargo.toml"), "utf8");
+  assert.match(text, /^term-core = \{ version = "=1\.2\.0", features = \["x"\] \}$/m);
+  assert.deepEqual([...cargoRequirements(text, ["term-core", "other"])], [["term-core", "=1.2.0"]]);
+  assert.equal(quiet(() => renderProd(root, { check: true })).result, 0);
+  // a dependency outside [workspace.dependencies] is not the pin and is left alone; a release no row names is said
+  writeFileSync(
+    join(root, "Cargo.toml"),
+    '[workspace]\nmembers = []\n\n[dependencies]\nterm-core = "=0.9.0"\n',
+  );
+  const none = quiet(() => renderProd(root, { check: true }));
+  assert.equal(none.result, 1);
+  assert.match(
+    none.err,
+    /Cargo\.toml declares none of terminal's crates in \[workspace\.dependencies\] — siblings\.lock\.json releases them on the registry and renders the exact requirement "=1\.2\.0"/,
+  );
+});
+
+test("REGISTRY: the overlay's version guard — a linked crate whose checkout version is not the required one is named (cargo would leave the patch unused)", (t) => {
+  // measured 2026-10-22 on the Mac mini (cargo 1.99.1): a patch at 0.12.0 under `=0.13.0` "was not used in the crate
+  // graph", and cargo built the registry's 0.13.0
+  const { dir, root } = fixture4(t);
+  const crateDir = join(dir, "terminal", "native", "core");
+  mkdirSync(crateDir, { recursive: true });
+  writeFileSync(
+    join(crateDir, "Cargo.toml"),
+    '[package]\nname = "term-core"\nversion.workspace = true\n',
+  );
+  const workspace = (version) =>
+    writeFileSync(
+      join(dir, "terminal", "Cargo.toml"),
+      `[workspace]\nmembers = ["native/core"]\n\n[workspace.package]\nversion = "${version}"\n`,
+    );
+  workspace("1.2.0");
+  assert.equal(crateVersion(crateDir, join(dir, "terminal")), "1.2.0");
+  assert.deepEqual(overlayCargoDrift(root, LOCK4, ["terminal"]), []);
+  workspace("1.3.0");
+  assert.deepEqual(overlayCargoDrift(root, LOCK4, ["terminal"]), [
+    { sibling: "terminal", crate: "term-core", version: "1.3.0", expected: "1.2.0" },
+  ]);
+  // only while the overlay links it: the committed shape builds the registry's crate, as it says
+  assert.deepEqual(overlayCargoDrift(root, LOCK4, []), []);
+  // a literal [package] version is read as written
+  writeFileSync(join(crateDir, "Cargo.toml"), '[package]\nname = "term-core"\nversion = "1.2.0"\n');
+  assert.deepEqual(overlayCargoDrift(root, LOCK4, ["terminal"]), []);
+});
+
+test("use refuses a released sibling whose checkout is absent, in words, before anything is written", (t) => {
+  // the prod-builder's C1 review, F1: once a released sibling's checkout may be absent, `use` must ask for it first —
+  // a Swift line rendered nil over a dangling link, or a cargo config over a missing path, is an overlay that lies
+  const { dir, root, git } = fixture3(t);
+  rmSync(join(dir, "mesh"), { recursive: true });
+  const manifest = readFileSync(join(root, "apps", "ios", "Kit", "Package.swift"), "utf8");
+  const refused = quiet(() => useSiblings(root, ["terminal", "mesh", "--no-install"]));
+  assert.equal(refused.result, 1);
+  assert.match(
+    refused.err,
+    /siblings:use FAIL: no checkout of mesh at .*\/mesh — `node scripts\/siblings\.mjs fetch mesh` creates it at the pin; nothing was written/,
+  );
+  assert.doesNotMatch(refused.err, /no checkout of terminal/);
+  // nothing: no overlay state, no cargo config, no hidden lock, the manifest's line untouched
+  assert.deepEqual(readOverlay(root), []);
+  assert.ok(!existsSync(join(root, OVERLAY_CARGO)));
+  assert.equal(cargoLockHidden(root), false);
+  assert.equal(readFileSync(join(root, "apps", "ios", "Kit", "Package.swift"), "utf8"), manifest);
+  assert.equal(git("status", "--porcelain"), "");
+});
+
+test("render's missing-row message names what the lock renders: a Swift line's release, an npm row's version", (t) => {
+  // RD-3's message read `rows.get(pkg)`, but a Swift row is keyed by its sibling while the missing line is
+  // `<name>Release`, so it said "nil" even when the lock renders a version (found at the ghosttea 0.13.0 EL8, 2026-10-22)
+  const { root } = fixture3(t);
+  writeFileSync(join(root, "apps", "ios", "Kit", "Package.swift"), "// swift-tools-version: 6.0\n");
+  const swift = quiet(() => renderProd(root, { check: true }));
+  assert.equal(swift.result, 1);
+  assert.match(
+    swift.err,
+    /apps\/ios\/Kit\/Package\.swift has no row for meshRelease — siblings\.lock\.json renders "0\.7\.17"/,
+  );
+  const npm = fixture(t, { yaml: YAML.replace('  "@x/history-protocol": 0.1.1\n', "") });
+  const missing = quiet(() => renderProd(npm.root, { check: true }));
+  assert.equal(missing.result, 1);
+  assert.match(
+    missing.err,
+    /pnpm-workspace\.yaml has no row for @x\/history-protocol — siblings\.lock\.json renders "0\.1\.1"/,
+  );
 });

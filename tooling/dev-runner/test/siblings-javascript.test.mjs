@@ -168,3 +168,32 @@ writeFileSync("dist/index.js", "export const rendered = " + protocol + ";");
   write("renderer/build.mjs", "throw new Error('must not run')");
   assert.equal(buildJavaScript(root), 23);
 });
+
+test("the sweep leaves a RELEASED npm plane's checkout alone (it may be absent); naming the sibling still installs it", (t) => {
+  const { root, writeLock } = fixture(t);
+  // 2026-10-22 (the ghosttea 0.13.0 EL8): ghosttea's renderer comes from npm, so `siblings:build` and CI's sweep have
+  // nothing to build from its checkout — and a machine without the checkout must not fail on it
+  writeLock({
+    path: "../renderer-not-here",
+    sha: "a".repeat(40),
+    packages: { "fixture-renderer": "renderer" },
+    javascript: { workspaces: ["fixture-renderer"] },
+    release: { npm: "1.0.0" },
+  });
+  const said = [];
+  const { log } = console;
+  console.log = (...a) => said.push(a.join(" "));
+  try {
+    assert.equal(installJavaScript(root), 0);
+    assert.equal(buildJavaScript(root), null);
+  } finally {
+    console.log = log;
+  }
+  assert.match(
+    said[0],
+    /example's npm plane is released \(1\.0\.0\) and not linked — its checkout's JavaScript is not installed/,
+  );
+  assert.match(said[1], /its checkout's JavaScript is not built \(`build-js example` names it\)/);
+  // named, the verb does what it is told — and a missing checkout is then an error, said by the spawn
+  assert.throws(() => installJavaScript(root, ["example"]), /ENOENT/);
+});

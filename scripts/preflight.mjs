@@ -22,17 +22,21 @@ import {
   cargoLockHidden,
   cargoPatchRows,
   cargoPlane,
+  cargoRelease,
+  cargoRequirements,
   committedNpmRow,
   goSidecarState,
   LOCK_FILE,
   linkedPackages,
   lockHidden,
+  needsCheckout,
   newestSourceMtime,
   npmPlane,
   OVERLAY_CARGO,
   OVERLAY_PNPMFILE,
   OVERLAY_STATE,
   overlayable,
+  overlayCargoDrift,
   patchPath,
   readLock,
   readOverlay,
@@ -311,12 +315,25 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
     }
   } else {
     const lockPackages = new Map();
+    const linkedNow = readOverlay(root);
     for (const [name, entry] of Object.entries(lock.siblings)) {
       const dir = siblingDir(root, entry);
       // RD-1: the committed row is what the lock RENDERS — the release version on a released npm plane, the
       // link: row into the pinned checkout on a dev one (`render --prod` writes exactly this).
       for (const pkg of Object.keys(entry.packages ?? {})) {
         lockPackages.set(pkg, committedNpmRow(entry, pkg));
+      }
+      // 2026-10-22 (the ghosttea 0.13.0 EL8): a sibling whose every plane is released builds nothing from its
+      // checkout — the checkout is only the overlay's coordinate — so it may be absent, and one standing at another
+      // revision is said, never failed: nothing here reads it until `use NAME` links it.
+      if (!needsCheckout(entry, linkedNow.includes(name))) {
+        const head = existsSync(dir) ? siblingHead(dir) : null;
+        if (head !== null && head !== entry.sha) {
+          warnings.push(
+            `${name}: every plane is released, so nothing builds from ${dir} — but it is at ${head.slice(0, 12)}, not the release's revision ${entry.sha.slice(0, 12)}; \`pnpm siblings use ${name}\` would link it as it stands`,
+          );
+        }
+        continue;
       }
       if (!existsSync(dir)) {
         problems.push(
@@ -406,7 +423,7 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
       );
     } else if (cargoHidden === true) {
       warnings.push(
-        "Cargo.lock is skip-worktree while the cargo overlay is active (its path patches rewrite the lock's git sources) — commits are refused until `pnpm siblings use --none`",
+        "Cargo.lock is skip-worktree while the cargo overlay is active (its path patches rewrite the lock's registry sources) — commits are refused until `pnpm siblings use --none`",
       );
     }
     const cargoLinked = overlay.filter(
@@ -420,6 +437,9 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
     // RD-3: the Swift half is the manifest's own `let <name>Release` line (SwiftPM caches a manifest by its contents plus
     // its environment, never a file it reads): the lock's version in the committed shape, nil while the overlay links the
     // sibling — the manifest then shows modified, and its Package.resolved is hidden by the lock rule.
+    // Package.resolved is the MANIFEST's, so its state is said once per manifest, however many siblings render into it
+    // (two since the EL8 to ghosttea 0.13.0, 2026-10-22: ghosttea and truffle share the kit's).
+    const resolvedSaid = new Set();
     for (const [name, entry] of Object.entries(lock.siblings)) {
       if (!entry.swift) continue;
       const linked = overlay.includes(name) && swiftPlane(entry) === "prod";
@@ -454,7 +474,8 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
         ([other, e]) =>
           e.swift?.manifest === manifestRel && overlay.includes(other) && swiftPlane(e) === "prod",
       );
-      if (lockHidden(root, resolvedRel) === true) {
+      if (!resolvedSaid.has(resolvedRel) && lockHidden(root, resolvedRel) === true) {
+        resolvedSaid.add(resolvedRel);
         if (anyLinked) {
           warnings.push(
             `${resolvedRel} is skip-worktree while the Swift overlay stands (the path package drops its URL row) — commits are refused until \`pnpm siblings use --none\``,
@@ -510,7 +531,17 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
     }
     const lockPatches = new Map();
     const releasedCrates = new Set();
+    const registryCrates = new Map();
     for (const [name, entry] of Object.entries(lock.siblings)) {
+      // 2026-10-22 (the ghosttea 0.13.0 EL8): a cargo plane released on the REGISTRY is committed with no patch row at
+      // all — the manifest's exact dependency row is the whole pin — so a row for one of its crates is a leak (a dev
+      // patch committed, or a hand-edit); the overlay's patches live in the generated .cargo/config.toml instead.
+      if (cargoPlane(entry) === "prod" && cargoRelease(entry).registry) {
+        for (const crate of Object.keys(entry.patch ?? {})) {
+          registryCrates.set(crate, { sibling: name, version: cargoRelease(entry).registry });
+        }
+        continue;
+      }
       // RD-3: a RELEASED cargo plane is committed as `git` + `rev` rows, which `render --prod --check` verifies exactly;
       // the path expectation below is the unreleased plane's (and a released one's rows are still lock-backed).
       if (cargoPlane(entry) === "prod") {
@@ -542,9 +573,49 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
       }
     }
     for (const [crate, path] of patchRows) {
+      const released = registryCrates.get(crate);
+      if (released !== undefined) {
+        problems.push(
+          `sibling mode: Cargo.toml patches ${crate}${path === null ? "" : ` with path "${path}"`} but ${LOCK_FILE} releases ${released.sibling}'s crates on the registry (${released.version}) — the committed shape carries no patch row (\`node scripts/siblings.mjs render --prod\` removes it); the overlay's patches live in ${OVERLAY_CARGO}`,
+        );
+        continue;
+      }
       if (lockPatches.has(crate) || releasedCrates.has(crate)) continue;
       problems.push(
         `sibling family rule: Cargo.toml patches ${crate}${path === null ? "" : ` with path "${path}"`} but no ${LOCK_FILE} entry declares it — a path patch needs a revision pin (\`pnpm siblings:pin\`), never a bare working tree`,
+      );
+    }
+    // thinking-release-deps.md §13 (2026-10-22): one version, stated once — a registry release's [workspace.dependencies]
+    // rows are what the lock renders (`=<release.cargo>`), as the npm rows above are.
+    let cargoManifest = "";
+    try {
+      cargoManifest = readFileSync(resolve(root, "Cargo.toml"), "utf8");
+    } catch {
+      cargoManifest = "";
+    }
+    for (const [name, entry] of Object.entries(lock.siblings)) {
+      const release = cargoPlane(entry) === "prod" ? cargoRelease(entry) : null;
+      if (!release?.registry) continue;
+      const required = cargoRequirements(cargoManifest, Object.keys(entry.patch));
+      if (required.size === 0) {
+        problems.push(
+          `sibling mode: Cargo.toml declares none of ${name}'s crates in [workspace.dependencies] — ${LOCK_FILE} releases them on the registry at ${release.registry} (\`node scripts/siblings.mjs render --prod\` writes the row once it exists)`,
+        );
+      }
+      for (const [crate, req] of required) {
+        if (req !== `=${release.registry}`) {
+          problems.push(
+            `sibling mode: Cargo.toml requires ${crate} "${req}" but ${LOCK_FILE} releases ${name}'s crates at ${release.registry} — the row is rendered as "=${release.registry}" (\`node scripts/siblings.mjs render --prod\`; a pin moves in the lock, EL8)`,
+          );
+        }
+      }
+    }
+    // §13's hazard, MEASURED 2026-10-22 (cargo 1.99.1): a [patch] whose version does not satisfy the requirement "was not
+    // used in the crate graph", and cargo builds the registry's crate — while the overlay links a cargo plane, every
+    // linked crate's checkout must be at the version the tree requires, or the build is silently not the checkout.
+    for (const { sibling, crate, version, expected } of overlayCargoDrift(root, lock, linkedNow)) {
+      problems.push(
+        `the dev overlay links ${sibling}'s ${crate} from its checkout at ${version ?? "an unreadable version"}, but this tree requires =${expected} — cargo uses a [patch] only when its version satisfies the requirement ("patch \`${crate} v${version ?? "?"} (…)\` was not used in the crate graph"), so the build would be the registry's ${expected}, not the checkout; move the checkout to the release's revision, or move the pin (EL8)`,
       );
     }
     // The SWIFT half of the window. SwiftPM has no [patch.crates-io] and no
@@ -556,17 +627,24 @@ for (const { file, re, label, package: packageName } of PIN_EXPECTATIONS) {
     // would be the one plane with no pin at all: a path package writes no
     // revision into Package.resolved, which is why that row's ABSENCE is the
     // window's shape and this entry is where its pin lives.
+    // 2026-10-22 (the ghosttea 0.13.0 EL8, G28's exit): once a Swift plane is RELEASED the committed coordinate is the
+    // exact URL row, and the identity link is only the overlay's — so it is resolved only while `use NAME` links it.
+    // That is what makes `../truffle-rfc025` unnecessary for the iOS plane. The manifest must still name the path
+    // package (the overlay's nil line selects it), so that half is checked in both shapes.
     for (const [name, entry] of Object.entries(lock.siblings)) {
       if (!entry.swift) continue;
       const dir = siblingDir(root, entry);
       const link = resolve(root, entry.swift.link);
+      const linkRead = swiftPlane(entry) === "dev" || linkedNow.includes(name);
       let target = null;
       try {
         target = realpathSync(link);
       } catch {
         target = null;
       }
-      if (target === null) {
+      if (!linkRead) {
+        // released and not linked: nothing resolves the link
+      } else if (target === null) {
         problems.push(
           `sibling mode: ${name}'s SwiftPM identity link is missing or dangling (${entry.swift.link}) — it is what gives the checkout the package identity the manifest names; recreate it pointing at ${dir}`,
         );

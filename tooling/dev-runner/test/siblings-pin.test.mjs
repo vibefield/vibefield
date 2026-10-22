@@ -114,6 +114,30 @@ test("named pin refuses a missing unselected checkout without running the catalo
   assert.equal(readLock(root).siblings.rosetta.sha, other.sha);
 });
 
+test("named pin passes over an unselected sibling whose every plane is released and that has no checkout here", (t) => {
+  // 2026-10-22 (the ghosttea 0.13.0 EL8): truffle after G28 is released on its one plane, so a machine without
+  // ../truffle-rfc025 still pins the others; a bare pin (the case above) still refuses
+  const { root, rendererHead, other, run, gateMarker } = fixture(t);
+  const lockFile = join(root, "siblings.lock.json");
+  const lock = JSON.parse(readFileSync(lockFile, "utf8"));
+  lock.siblings.rosetta = {
+    ...lock.siblings.rosetta,
+    swift: { manifest: "Package.swift", link: ".window/rosetta" },
+    release: { swift: "1.0.0" },
+  };
+  writeFileSync(lockFile, JSON.stringify(lock));
+  rmSync(other.cwd, { recursive: true });
+  const result = run("renderer");
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /rosetta has no checkout here and needs none — every plane is released/,
+  );
+  assert.equal(readLock(root).siblings.renderer.sha, rendererHead);
+  assert.equal(readLock(root).siblings.rosetta.sha, other.sha);
+  assert.equal(existsSync(gateMarker), true);
+});
+
 test("named pin checks the catalog with enforcement once all checkouts match their pins", (t) => {
   const { root, rendererHead, other, run, gateMarker, typecheckCall } = fixture(t);
   const result = run("renderer");
