@@ -13162,6 +13162,7 @@ the grant to the last row.
 **Owed — the three CI witnesses, none of which can run on a Mac:**
 - `verify` on main after James's push of this landing.
   - It is red on `984e9ea15` (run 39649340093) and on `d0012766b` (run 39691956217), and green is expected here.
+    *(Dated 2026-10-22: run 39697311842 on `3140d0297`: clippy green under 1.99.1, so the class is paid; the job is red on two fieldd tests first seen on CI (terminal-service AR-7d, workspace-places dubious-ownership), not this landing's (item 58; LANDED "TD-1").)*
   - The toolchain step's `rustc --version --verbose` must name 1.99.1.
 - `package-preview`, green on a `workflow_dispatch` at the landed sha or on PR #1's rerun. The 8 fieldd errors that
   log hid ("6 of 14 shown") and the census are unverified until then.
@@ -13179,3 +13180,110 @@ the grant to the last row.
   rebuild once each on rebase; that cost is theirs. The TD-1 embed lane rebases onto this landed tip and gates under
   1.99.1.
 - 1.99.1 was already on this Mac (installed 2026-10-16, with clippy and rustfmt), so James's install step was void.
+
+## TD-1 — James's trust-root v1 is embedded: the document and its root signature ship beside the packaging config, the ledger's `trustRootKeys` is frozen to its two root keys, identityRevision 6 (2026-10-22; `bc9f7294a`, lane `td/1-embed`)
+
+**What happened:**
+- **James minted the keys in his own terminal on 2026-10-21, his agent running the hand-off**
+  (`draft/handover/2026-10-14-td1-james-keygen.md`).
+  - Five keys: root-a and root-b (threshold 1), and release-1, bundled-1 and registry-1 (one key each, threshold 1).
+  - trust-root v1 is assembled and signed by one root key: "trust-root v1 verifies — 1 root signature(s), expires
+    2027-04-19T20:52:49Z".
+- **Custody, read by VF-PM (names only):**
+  - The two root secrets are in James's keychain.
+  - VIBEFIELD_RELEASE_SECRET and VIBEFIELD_BUNDLED_INDEX_SECRET are in vibefield/vibefield's `release-signing`
+    environment (J1).
+  - VIBEFIELD_REGISTRY_SECRET is in the `publish` environment of the new PUBLIC repository vibefield/registry
+    (created 2026-10-21 20:58Z, TD-D15).
+  - Each environment has 1 required reviewer, with admin bypass off.
+- **The embed** is the hand-off's one step, `node scripts/trust-keygen.mjs embed --doc ~/vibefield-trust/trust-root.json`,
+  run in the prod-builder's lane (VF-PM's grant, 2026-10-21 21:07Z: code only, never anything but the two public
+  files).
+  - `apps/desktop/packaging/trust-root.json` (715 B) and `.sig` are byte-identical to James's files: public keys and
+    one root signature.
+  - `release-identity.json`: `trustRootKeys` goes from blocker to frozen (the two root keys), and identityRevision
+    from 5 to 6.
+  - Nothing secret entered the repository: the staged diff carries no PKCS#8 prefix, and `~/vibefield-trust` holds
+    only the public files.
+- **Found:** two rules assumed the pre-TD-1 ledger, and both are fixed in the same commit.
+  - trust-keygen's self-test copied the real ledger and asserted it was still a blocker, so it went red at the embed,
+    and preflight runs it. It now builds its own pre-TD-1 ledger, and one new row proves the real, frozen ledger
+    refuses an embedding without the embedded document as its trust.
+  - A bundled-plugins row expected "trustRootKeys is not frozen". It now proves the guard after TD-1: a secret that
+    is not the embedded root's bundled key is refused.
+- **Built on `984e9ea15`** as `d01ba153f`, and verified there under that tree's rustc 1.97.1.
+  - It was rebased onto the toolchain landing's tip, `3140d0297`, on 2026-10-22 00:04Z. That is the landing order
+    VF-PM set at 21:29Z: the landed tip only.
+  - 1 of 1 `=`, and the tree equals the merge-tree rehearsal. The backup branch is `td/1-embed-pre-rebase`.
+
+- **CI's `verify` on the toolchain landing's push** (`3140d0297`, run 39697311842) is split.
+  - The clippy class is green under 1.99.1, as are preflight, the rustup step, prepare-puppeteer, typecheck and lint.
+  - It is red on two fieldd tests first seen on CI: `test/terminal-service.test.ts` "AR-7d — a free shell is born
+    integrated … the create's audit outcome says `integrated`", and `test/workspace-places.test.ts` "placeFacts on real
+    repositories > says a dubious-ownership refusal as a fact, and never overrides it".
+  - Both pass on the mini and on this Mac. These are runner-environment reds on main CI's first run since 08-25, not
+    the toolchain landing's: item 58. This landing's CI run will show the same two.
+
+**What it reaches:**
+- Every stage on a machine without VIBEFIELD_BUNDLED_INDEX_SECRET stays DEV-keyed on a root it mints. That is every
+  stage on a Mac; the secret lives only in `release-signing`.
+- smoke:update keeps its fixture root, so no landing-gate row verifies by the embedded root. The two staging rows
+  (29, 30) carry identityRevision 6, which only the contracts schema reads.
+- The embedded root is first exercised by CI's first release-keyed run, which is TD-3's gate and W10:
+  - release-sign's default `--trust-root`;
+  - release-verify's frozen-ledger anchor;
+  - `package:verify:plugins --require-release-key`.
+
+**Validation:**
+- check-release-identity `--enforce`: "OK (revision 6; 1 blocker(s) outstanding)" (windowsPublisher, as before).
+  `--self-test` OK. trust-keygen `--self-test` OK.
+- **Before the rebase, on this Mac:** `pnpm verify` at `d01ba153f` (rustc 1.97.1, its tree's) was EXIT 0.
+  - Armed 2026-10-21 21:22:46Z at load 8.83, nice 19, df ≥ 10 GiB read inside the command; 4 m 31 s.
+  - clippy clean; vitest 8,988 / 0 / 38 skipped; node --test 201 / 0, with the new TD-1 row; cargo 410 / 0 / 13.
+- **The gate ran on James's Mac mini, under his 2026-10-21 22:40Z ruling,** the same host and the same deviation
+  class as the toolchain landing (LANDED "The Rust toolchain is pinned", which has the host's facts).
+  - The same `~/vf-lanes/pb/` clone, warm under rustc 1.99.1 (`58cf8f9c35b3`). A 2-commit bundle brought
+    `3140d0297`'s records and the embed. No manifest, lock or toolchain file changed, so the installs stood.
+  - field-native was already built, and preflight was OK.
+  - **`pnpm verify`,** verbatim at `bc9f7294a`: EXIT 0 (00:05:43–00:09:52Z, locked).
+    - clippy clean under 1.99.1.
+    - vitest 9,035 / 0 / 17 skipped. cargo 410 / 0 / 13, in 28 suites.
+    - node --test 201 / 0, with "a RELEASE stage refuses a secret that is not the embedded trust-root's bundled key
+      (TD-1)".
+    - This pays the 1.99.1 reading that the 1.97.1 verify owed.
+  - **The stages,** each alone: 14 of 14 green (00:10:53–00:17:03Z, locked).
+  - **List A,** each alone, under the offscreen preload, unlocked (James's unlock 00:26:23Z), HID idle ≥ 120 s, `caffeinate -d -i`:
+    six green.
+    - smoke 29 s; smoke:plugin-restart 68 s; smoke:plugin 52 s; smoke:bundled 87 s; smoke:canvas:no-gpu 29 s;
+      smoke:canvas:no-webgpu 28 s (the two modes last, on the earlier rows' `build:all`).
+    - smoke:bundled is the row nearest the embed: it stages the app's plugins under a DEV-keyed index and launches
+      three times against that root, and it stays green with the frozen ledger and identityRevision 6.
+    - **smoke:kind-faults was red on the occluded row ALONE** (visible:false; 75 s). Every other probe line was green
+      (PRESENCE_REST 6,202 ms). This is the offscreen class, recorded with no rerun.
+  - **List B,** each alone: four green.
+    - smoke:godview 143 s; smoke:terminal-door 29 s; smoke:terminal-direct 32 s; smoke:studio 13 s.
+    - **smoke:canvas (919 s) was red only on recorded classes**, so it was not rerun.
+      - The occluded row.
+      - The bar back: HAND_NOTEBOOK 258, HAND_WHITEBOARD 252 and HAND_CALENDAR 253 ms, inside the class's 241–272 ms.
+      - COVER HISTORY, the frame clock's lottery.
+      - TRAVEL was green (450–469 ms).
+  - No input reached the mini during any row: the idle timer climbed from 120 s to 1,677 s, and no arm or end found
+    the screen locked.
+  - Every smoke's `SMOKE_DAEMONS` left `[]`.
+  - The run log lists James's leftovers on the mini by name and time: two `/tmp/vf-smoke-*` daemon roots and two
+    entries from godview's row.
+  - The logs are in `/Volumes/SamsungRed/lanes/rust-pin/logs/mini/bc9f7294a/`.
+  - **`pnpm still` was NOT REACHED and not run.** The embed changes the packaging JSON and its .sig, the identity
+    ledger, trust-keygen, one dev-runner test and a comment. None of these is on the Dawn stills' render path
+    (playground TypeScript and WebGPU against goldens), and the stills are host-bound to this Mac's Metal.
+
+**Owed:**
+- **TD-3's gate, W10:** a real nightly whose feed and policy verify by the embedded `release` key, and a tampered copy
+  refused (`feed-unverified`). It needs J2 (the two tag rulesets) and J3 (the first `release-signing` run).
+  - **J3's first `release-signing` run is the embedded root's FIRST REAL EXERCISE.** No local row uses it, because
+    every local stage is DEV-keyed.
+- **W11 / WP10:** the Developer ID and notarization credentials (J4). Until then a release build is unsigned for macOS.
+- **The 180-day expiry:** trust-root v1 expires 2027-04-19T20:52:49Z. Re-sign it, and roll the version, before then.
+  It is ROADMAP's new Open debts row.
+- **The registry (TD-4):** vibefield/registry exists with its `publish` environment. Its workflow and first index are
+  TD-4's lane.
