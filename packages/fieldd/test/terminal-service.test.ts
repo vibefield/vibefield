@@ -3798,13 +3798,16 @@ describe("AR-7d — a free shell is born integrated (the fake floor)", () => {
   });
 
   it("the daemon's seam reaches the floor, and the create's audit outcome says `integrated` — a fact, never the variables", async () => {
-    const { cat } = programs();
+    const { zsh, cat } = programs();
     const asked: string[] = [];
     const { dataDir, floor, rpc, createOutcomes } = await daemonOverFakeFloor((shell) => {
       asked.push(shell);
       return INTEGRATION;
     });
-    const shell = TerminalCreateOpenResult.parse(await rpc.call("terminal.create", {}));
+    // zsh BY NAME: the daemon's default is the host's login shell, and AR7-D3
+    // integrates a zsh only — a default birth would test the host (GitHub's
+    // macOS runner logs in with bash), not the seam
+    const shell = TerminalCreateOpenResult.parse(await rpc.call("terminal.create", { shell: zsh }));
     expect(floor.createOptions()?.["environment"]).toStrictEqual({
       mode: "inherit",
       overrides: INTEGRATION,
@@ -3813,8 +3816,8 @@ describe("AR-7d — a free shell is born integrated (the fake floor)", () => {
       await rpc.call("terminal.create", { shell: cat }),
     );
     expect(floor.createOptions()?.["environment"]).toStrictEqual({ mode: "inherit" });
-    // asked for the default login shell's birth only
-    expect(asked).toHaveLength(1);
+    // asked for the zsh's birth only, with the executable being born
+    expect(asked).toEqual([zsh]);
     expect(await createOutcomes()).toEqual([
       { sessionId: shell.sessionId, integrated: true, bound: false },
       { sessionId: program.sessionId, integrated: false, bound: false },
@@ -3826,8 +3829,11 @@ describe("AR-7d — a free shell is born integrated (the fake floor)", () => {
   });
 
   it("a daemon with nothing to answer the seam — the gateway not yet up — births a shell exactly as before", async () => {
+    // a zsh by name, as above: a default birth on a bash host is bare by
+    // AR7-D3, and this row would pass without the seam's absence being why
+    const { zsh } = programs();
     const { floor, rpc, createOutcomes } = await daemonOverFakeFloor();
-    const shell = TerminalCreateOpenResult.parse(await rpc.call("terminal.create", {}));
+    const shell = TerminalCreateOpenResult.parse(await rpc.call("terminal.create", { shell: zsh }));
     expect(JSON.stringify(floor.createOptions()?.["environment"])).toBe('{"mode":"inherit"}');
     expect(await createOutcomes()).toEqual([
       { sessionId: shell.sessionId, integrated: false, bound: false },
