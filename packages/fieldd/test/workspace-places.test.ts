@@ -431,10 +431,14 @@ describe("placeFacts on real repositories", { timeout: 30_000 }, () => {
       const realGit = execFileSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
       const bin = join(base, "bin");
       mkdirSync(bin);
-      // git's own test switch: this repository reads as someone else's
+      // git's own test switch: this repository reads as someone else's — and no
+      // config of this host's admits it as safe (GitHub's macOS runner sets a
+      // global `safe.directory = *`). The read's own `-c` flags still reach git:
+      // a `-c safe.directory` there would override, and this row would see it.
+      const noHostConfig = "GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1";
       writeFileSync(
         join(bin, "git"),
-        `#!/bin/sh\nGIT_TEST_ASSUME_DIFFERENT_OWNER=1 exec "${realGit}" "$@"\n`,
+        `#!/bin/sh\n${noHostConfig} GIT_TEST_ASSUME_DIFFERENT_OWNER=1 exec "${realGit}" "$@"\n`,
       );
       chmodSync(join(bin, "git"), 0o755);
       withEnv({ PATH: `${bin}:${process.env["PATH"] ?? ""}` });
