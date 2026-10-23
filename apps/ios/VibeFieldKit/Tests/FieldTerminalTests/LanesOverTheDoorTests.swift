@@ -49,6 +49,33 @@ import Testing
       on: .frames)
   }
 
+  /// A second session's own TRF1 identity on the lane: the seed frame's
+  /// handles, plus one.
+  private func secondHandles() throws -> (session: String, view: String) {
+    let seed = try decodeTRF1Frame(LaneFrames.load().seed)
+    return (String(seed.sessionHandle &+ 1), String(seed.viewHandle &+ 1))
+  }
+
+  /// The lane is still up once a second session's attach has settled: a seed
+  /// for the FIRST session, sent on the frames leg after the second's
+  /// acknowledgement, paints. The leg is one ordered stream, so the client has
+  /// read the second's acknowledgement before this frame; had the identity rule
+  /// failed the lane there, it would never paint.
+  @MainActor
+  private func laneOutlivesTheSecondAttach(
+    _ rendered: AttachmentOverTheDoorTests.RenderedFrames, firstActivation: String,
+    door: CellDoorHarness
+  ) async throws {
+    let painted = rendered.frames.count
+    await door.sendUnit(
+      try Script.frame(
+        session: "sess-a", activation: firstActivation, sequence: 1, creditEpoch: 1, base: nil,
+        result: Script.stamp(1), payload: try LaneFrames.load().seed))
+    try await AttachmentOverTheDoorTests.until("sess-a's seed to paint after sess-b's attach") {
+      await MainActor.run { rendered.frames.count == painted + 1 }
+    }
+  }
+
   @MainActor
   @Test func aSecondSessionOnTheSameCellRidesTheLegsAlreadyUp() async throws {
     let door = CellDoorHarness()
@@ -62,10 +89,16 @@ import Testing
         return try AttachmentOverTheDoorTests.ticketJSON(port: port, sessionId: asked)
       })
 
-    let first = TerminalAttachment(lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
+    let rendered = AttachmentOverTheDoorTests.RenderedFrames()
+    let first = TerminalAttachment(lanes: lanes, appearance: .default, scene: rendered.scene)
     try await attachToLive(first, session: "sess-a", door: door, attaches: 1)
+    let firstActivation = try #require(await door.controlAttach).activationId
     let second = TerminalAttachment(lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
-    try await attachToLive(second, session: "sess-b", door: door, attaches: 2)
+    let own = try secondHandles()
+    try await attachToLive(
+      second, session: "sess-b", door: door, attaches: 2,
+      sessionHandle: own.session, viewHandle: own.view)
+    try await laneOutlivesTheSecondAttach(rendered, firstActivation: firstActivation, door: door)
 
     // ONE connection set for both: a ticket per session (its attach grant),
     // but no second dial and no second hello.
@@ -120,12 +153,17 @@ import Testing
     let lanes = TerminalLanes(
       transport: URLSessionRoutedTransport(),
       door: { asked in try AttachmentOverTheDoorTests.ticketJSON(port: port, sessionId: asked) })
-    let first = TerminalAttachment(
-      lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
+    let rendered = AttachmentOverTheDoorTests.RenderedFrames()
+    let first = TerminalAttachment(lanes: lanes, appearance: .default, scene: rendered.scene)
     try await attachToLive(first, session: "sess-a", door: door, attaches: 1)
+    let firstActivation = try #require(await door.controlAttach).activationId
     let second = TerminalAttachment(
       lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
-    try await attachToLive(second, session: "sess-b", door: door, attaches: 2)
+    let own = try secondHandles()
+    try await attachToLive(
+      second, session: "sess-b", door: door, attaches: 2,
+      sessionHandle: own.session, viewHandle: own.view)
+    try await laneOutlivesTheSecondAttach(rendered, firstActivation: firstActivation, door: door)
 
     first.release()
     #expect(lanes.openLanes == 1)
@@ -203,7 +241,10 @@ import Testing
     // The legs are up: sess-b attaches on its held ticket — no mint, no second hello.
     let second = TerminalAttachment(
       lanes: lanes, appearance: .default, scene: .init(applying: { _ in true }))
-    try await attachToLive(second, session: "sess-b", door: door, attaches: 2)
+    let own = try secondHandles()
+    try await attachToLive(
+      second, session: "sess-b", door: door, attaches: 2,
+      sessionHandle: own.session, viewHandle: own.view)
     #expect(mints.count == 1)
     #expect(await door.helloCount[.control] == 1)
     #expect(await door.helloCount[.frames] == 1)
@@ -261,10 +302,10 @@ import Testing
     // sess-b's own TRF1 identity: on one lane the client fails the whole lane
     // when two activations claim one session handle, and the refusal below
     // would then reach closed legs.
-    let seed = try decodeTRF1Frame(LaneFrames.load().seed)
+    let own = try secondHandles()
     try await attachToLive(
       second, session: "sess-b", door: door, attaches: 2,
-      sessionHandle: String(seed.sessionHandle &+ 1), viewHandle: String(seed.viewHandle &+ 1))
+      sessionHandle: own.session, viewHandle: own.view)
     let activation = try #require(await door.controlAttach).activationId
 
     await door.send(
