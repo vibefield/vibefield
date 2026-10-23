@@ -3,8 +3,13 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-10-21 — TRUFFLE 0.7.19 IS ON EVERY PLANE IN ONE EL8 EVENT, A PASTE TOO LARGE FOR A TERMINAL IS SAID AND NEVER DROPPED, RUSTC IS PINNED, AND MAIN IS ON ITS REMOTE (`849fa49f6` → `533c5a208` · `18d91aac0` → `30cc96713` · `8fae0a9de` → `bf98e6c18`); 2026-10-22 — TD-1'S TRUST ROOT IS EMBEDDED (`bc9f7294a`).**
-> Thirty-two landings since the 10-14 rewrite, this one among them, each gated on the tree that landed. James pushed main at `984e9ea15` on 2026-10-21 (about 18:03Z), with puppeteer's `vf/swarm-pull-main` at the pin `fa0d6cf`. VF-PM's check (20:32Z) found every pin the lock names on a remote. He pushed main again at `d0012766b` (the D6 landing) at 23:13Z, with SKIP_VERIFY=1 after the hook's verify had passed (the first attempt died 141 on the SSH idle window), and at `3140d0297` (the toolchain landing) at about 00:04Z on 10-22. With this landing main is 2 commits ahead of origin (the TD-1 embed and its records); the next push is James's. CI's `verify` was RED on clippy alone on `984e9ea15` (run 39649340093) and `d0012766b` (run 39691956217), under the runner's rustc 1.99.1. On `3140d0297` (run 39697311842) the toml's 1.99.1 clippy is green, and the job is red on two fieldd tests first seen on CI (item 58; Open debts).
+> stays in the design docs + specs. Last rewritten: **2026-10-21 — TRUFFLE 0.7.19 IS ON EVERY PLANE IN ONE EL8 EVENT, A PASTE TOO LARGE FOR A TERMINAL IS SAID AND NEVER DROPPED, RUSTC IS PINNED, AND MAIN IS ON ITS REMOTE (`849fa49f6` → `533c5a208` · `18d91aac0` → `30cc96713` · `8fae0a9de` → `bf98e6c18`); 2026-10-22 — TD-1'S TRUST ROOT IS EMBEDDED (`bc9f7294a`); 2026-10-23 — THE TERMINAL PUMP LANE LANDS: AN OVERLOAD STOP RECOVERS, REFUSED INPUT IS ANSWERED AND SAID, AN EXITED SESSION ENDS IN ITS WORDS (`1dd1b49b9` → `f3fc2da60`).**
+> Thirty-three landings since the 10-14 rewrite, the pump lane's the latest, each gated on the tree that landed. James pushed main at `984e9ea15` on 2026-10-21 (about 18:03Z), with puppeteer's `vf/swarm-pull-main` at the pin `fa0d6cf`. VF-PM's check (20:32Z) found every pin the lock names on a remote. He pushed main again at `d0012766b` (the D6 landing) at 23:13Z, with SKIP_VERIFY=1 after the hook's verify had passed (the first attempt died 141 on the SSH idle window), and at `3140d0297` (the toolchain landing) at about 00:04Z on 10-22. He pushed main at `b8a31d139` (the TD-1 landing) at about 08:23Z on 10-23. With this landing main is 14 commits ahead of origin (the pump lane's 13 and its records); the next push is James's. CI's `verify` was RED on clippy alone on `984e9ea15` (run 39649340093) and `d0012766b` (run 39691956217), under the runner's rustc 1.99.1. On `3140d0297` (run 39697311842) the toml's 1.99.1 clippy is green, and the job is red on two fieldd tests first seen on CI (item 58; Open debts). On `b8a31d139` the same two are red and nothing else (VF-PM, 2026-10-23); test:rust and gen:check are still unreached there.
+> - **The terminal pump lane** (`1dd1b49b9` → `f3fc2da60`, 10-23; LANDED "TP — the terminal pump lane"): the focus audit's C3, C5, C8 and D5.
+>   - An overload stop recovers when the credit returns, and lag is the age of the oldest unacknowledged unit.
+>   - Refused input is answered with `InputRefused` on a leg that negotiates `input-refusals` (mark 22's refusal half, James 2026-10-18), and the phone says it on the card of the session it names.
+>   - An exit stops the lease for good and a removal revokes it; the card ends in the exit's words.
+>   - Its compile, verify, stages and rows ran on James's Mac mini, and its kit on this Mac (1,046 tests, green). C5's desktop half and D5's fix wait on ghosttea-react.
 > - **The truffle bump** (`849fa49f6` → `533c5a208`, 10-21; LANDED "The truffle bump"; DECISIONS TB · TB-E · TB-T): truffle 0.7.19 on the cargo, npm and Swift-checkout planes in one EL8 event. The egress arm is in production, the terminal doors are on for a linked desktop, `pnpm dev` runs on the pinned sidecar, and T6's override is retired. The SwiftPM plane stays the path package until a ghosttea Swift release declares the crate's version. The phone runs the old session code until James rebuilds it from this main.
 > - **D6 — a paste too large for a terminal is said, never dropped** (`18d91aac0` → `30cc96713`, 10-21; LANDED "TM (D6)"): `paste-part` behind `paste-parts` on the wire. The encoder refuses in the person's own measure and reports it, and the line says "Not pasted into vibe-field — 300 KB, and one paste carries 261 KB of it" in DESIGN.md §9's words (James, 2026-10-18). Sending in parts waits on the cell half and ghosttea's seam. Its five interaction rows ran on James's Mac mini, his call: the first desk rows gated off this Mac.
 > - **The Rust toolchain is pinned** (`8fae0a9de` → `bf98e6c18`, 10-21; LANDED "The Rust toolchain is pinned"; DECISIONS RT): `rust-toolchain.toml` declares rustc 1.99.1, rustup reads it on the Mac and in CI (a bare `rustup toolchain install`; the floating `stable`-branch action is gone), and preflight holds rustc, clippy and rustfmt to it. async-trait 0.1.92 and two field-native fixes clear CI's 16 clippy errors. The preview job prepares the puppeteer sibling at last (PR #1's red). Its whole gate ran on James's Mac mini, his call; `pnpm still` is not reached by a compiler move.
@@ -28,6 +33,8 @@
 > - He moved this landing's five interaction rows to his Mac mini (21:43Z). That is a gate-host deviation, recorded with the host in its LANDED entry.
 > - He moved the toolchain landing's whole gate to the mini too (22:40Z), recorded the same way.
 > - DESIGN.md §9's sizes rule (James, 2026-10-18) takes no DECISIONS row: DESIGN.md owns it (VF-PM).
+> - **10-23, the pump lane (VF-PM):** smoke:canvas's two reds and smoke:kind-faults' one on the mini are the recorded offscreen class (08:44Z); F1's three rows' errata are in the lane's scope (09:11Z); `pnpm still` is not reached by it (09:34Z).
+> - **10-23, ghosttea 0.13.2 is coming** (James, relayed by VF-PM 09:06Z): the ctutils lock fix (PR #69, `d19a9689`) and the soak metric fix. The EL8 retargets to it if it is published when the EL8 resumes, and lands at 0.13.1 otherwise.
 >
 > **Found today:**
 > - **CI's Rust toolchain floated.** The runner installed the day's stable (1.99.1), whose clippy was red on 16 lints in field-native, while this Mac's 1.97.1 was green.
@@ -37,20 +44,22 @@
 > - **The Mac locks about 25 minutes after James's last input.** A desk row needs the screen unlocked, so it fits inside an absence or waits for the next. The stages draw nothing and run locked.
 > - **A fresh gate host needs CI's own puppeteer step** (`pnpm --dir ../puppeteer install --frozen-lockfile`, filtered), or preflight's R23 goes red.
 > - **No gate step runs `cargo audit`:** the bump's advisories were found by hand.
+> - **10-23: a test helper on main gave every phone session one TRF1 identity** (F1's `attachToLive`, `5798a6548`). Three of F1's rows were green over a lane the client's identity rule was failing, because they asserted before the fail landed. The errata and a paint witness are in the pump lane's tip (LANDED "TP — the terminal pump lane").
+> - **10-23: a gate host's sibling links must cover every sibling the lock names.** The pump lane's PJ-7 fixture died on a missing `../mille-pin` before its first row, and its install predated fieldd's `ws` row.
 >
 > **In flight:**
-> - **The terminal pump lane** (`hl/tp-pump` `ac3d9a308`: the focus audit's C3, C5, C8 and D5, and mark 22's input refusal). The fixer's read-only review (2026-10-21) says NEEDS CHANGES before its rebase and gate.
->   - Its contracts commit renames a constant whose generated Rust was never regenerated, so field-native does not compile from that commit on.
->   - The same pass carries the corrections at source in TPv3 and the audit's rows, DESIGN.md §8 first for its card sentences, and an EL9 golden for the new lease words.
->   - Then its gate, with the kit suite.
-> - **After it:** the floor-wedge lane (`hl/floor-wedge` `9bd2df361`) and inventory latency (`hl/inventory-latency` `cdc618625`, item 52 (a)), each built on its ruling.
+> - **The EL8 to ghosttea** (`hl/el8-ghosttea-0.13.1`): C1 `1cb9af2d8`, the RD tooling it stands on, and C2' `570cc8f15`, ghosttea 0.13.1 on every plane, with its mini proofs green.
+>   - It was put down until the pump lane landed. If v0.13.2 is tagged and published, C2' moves to it once more; otherwise it lands at 0.13.1, and 0.13.2 is a version edit.
+>   - Then C3–C5 replay on top (truffle's Swift plane closes, the d86e285 class row, the docs), and the lane gates with the kit.
+> - **The fixer's proofs** on the mini: items 56 and 58, and the ctutils lock fix (RUSTSEC-2026-0385).
+> - **After them:** the floor-wedge lane (`hl/floor-wedge` `9bd2df361`) and inventory latency (`hl/inventory-latency` `cdc618625`, item 52 (a)), each built on its ruling.
 > - **F1's device round** (James), before the freeway leaves `-vf-freeway`.
 > - **James's items:**
 >   - rebuild the phone from this main;
 >   - the bump's landing chores (LANDED §The truffle bump: main's `../truffle-rfc025` at the tag, `.vibefield/sidecar/`, the `.env` override line);
 >   - J2's two tag rulesets and J3's first `release-signing` run, the embedded root's first real exercise (TD-1 is embedded and J1's environment holds both secrets);
 >   - the puppeteer 0.2.2 cut;
->   - the mini's leftovers from the D6, toolchain and TD-1 landings (`/tmp/vf-smoke-klnMuI`, and the toolchain and TD-1 runs' `/tmp` entries their run log lists; `~/vf-lanes` with `~/vf-lanes/pb`, kept until he says).
+>   - the mini's leftovers from the D6, toolchain and TD-1 landings (`/tmp/vf-smoke-klnMuI`, and the toolchain and TD-1 runs' `/tmp` entries their run log lists; `~/vf-lanes` with `~/vf-lanes/pb`, kept until he says), and the pump lane's `~/vf-lanes/tp`, with the EL8's `~/vf-lanes/el8gt*` kept until the EL8 lands.
 >
 > Debts: "Open debts" below carries this day's and the earlier waves'.
 > Previous rewrite, kept for continuity — **2026-10-14 — THE BROWSER PANE LANDS, THE HISTORY IS CLEAN FOR ITS FIRST PUSH, AND THE TRUST MODEL HAS ITS FIRST SHAPES (`fb9efdb3` · `5062139e` · `562ea33a` · `87ce111a`).**
@@ -1320,8 +1329,18 @@ the 180-day `expires`):
 - **The desk readout's GPU memory says MB for a count in 1024s** (`packages/field-app/src/panels/DeskReadout.tsx`, its
   `mb`). It is the one DESIGN.md §9 deviation found.
 - **James's question:** should a note held longer than 2.4 s carry the advice again?
-- **`KNOWN_CAPABILITIES` takes the union at the second landing** (`input-refusals` from `hl/tp-pump`, `paste-parts`
-  from D6).
+- ~~**`KNOWN_CAPABILITIES` takes the union at the second landing** (`input-refusals` from `hl/tp-pump`, `paste-parts`
+  from D6).~~ — *paid 2026-10-23 (LANDED "TP — the terminal pump lane"): the pump lane's rebase onto D6 lists both.*
+
+**The pump lane's follow-ups (2026-10-23; LANDED "TP — the terminal pump lane"; `draft/handover/2026-10-17-focus-audit.md` C3, C5, C8, D5):**
+- **C5's desktop half** (upstream, ghosttea-react): its `onExtensionMessage` drops everything but SessionEvent, so
+  field-app must not advertise `input-refusals` (ROUTED_CLIENT_CAPABILITIES) until it surfaces `InputRefused`.
+- **D5's fix** (ghosttea-react): ask for the renewal before the margin, as the kit does, and close input locally only
+  at it. The cell's half is pinned.
+- **The draft a refused send cleared** (the kit, audit §2 C-input): the refusal names the op by its `inputSequence`.
+- **The phone's witness of an overload refusal**, said in the connecting face (no unit row reaches `phaseNote`).
+- **The audit's four rows** have read BUILT on dev-local since `cca55506e`; they flip to LANDED at the next
+  commit-draft turn.
 
 **TP-S3d's follow-ups (2026-10-17; LANDED §TP-S3d "an activation's own catch-up"; `draft/handover/2026-10-17-focus-audit.md` §3):**
 - **No way back from a lineage break (D2/C6).** The phone's `requestReseed` edits local state only and the cell has no
