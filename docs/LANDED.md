@@ -13437,3 +13437,180 @@ refusal half as James reversed it on 2026-10-18. Thirteen commits.
 - **The phone's witness of an overload refusal** said in the connecting face. No unit row reaches `phaseNote`.
 - **The audit's C3, C5, C8 and D5 rows** have read BUILT on `hl/tp-pump` since `cca55506e`. They flip to LANDED at
   the next commit-draft turn.
+
+## WG — the floor wedge rule: a stall says whose it was, the floor ticks on its own, the ladder redials at 10 s, restarts at 60 s only an empty floor, and asks the person before ending a live one (2026-10-23; `088b01949` → `475137a15`, lane `hl/floor-wedge`, gated as one train with IL at its tip `5fb2ca5ff`)
+
+**What happened:** the rule ruled 2026-10-19 06:50Z (James, every WG mark at its lean;
+`draft/thinking-floor-wedge.md`). The rule it replaces killed a floor this fieldd had spawned 3 s after a double
+heartbeat miss, with a 2 s SIGKILL rung: at 02:24:56Z that day it ended James's live dev floor, three agent sessions with
+it. Eight commits.
+- **WG-D0 alone** (`088b01949`): a wedge episode says whose stall it was. Late replies are kept with the floor's `ts`,
+  fieldd's own lag sits beside them, and there is one line per episode. The ladder is unchanged by this commit.
+- **The docs** (`451dac5ef`): DECISIONS' WG row, and LANDED's TC-S1 "3 s of confirmed silence" corrected at its source.
+- **The contract** (`a28974596`): the ladder's bounds (NATIVE_SUPERVISION: `WEDGE_REDIAL_MS` 10 s, `WEDGE_CONFIRM_MS`
+  60 s, `WEDGE_HEADLESS_MS` 10 min, `WEDGE_RESTART_MAX` 3 per 10 min), the floor's tick (NATIVE_FLOOR_TICK, 1 s), the
+  pid in the hello ack, a request's `deadlineAt`, the native link's health and the person's consented restart, with the
+  generated schemas and Rust.
+- **The floor** (`20a4701da`): a tick from its own task each second, never the reader's; its pid in the hello ack; and
+  a request past its deadline answered TIMEOUT, never run.
+- **The link** (`58917e421`): it carries the tick, the pid and every request's deadline, and can redial on purpose.
+- **The ladder** (`ea058dc17`, native-supervisor.ts):
+  - a miss counts only when fieldd's own deadline timer fired on time (WG-E1);
+  - the kill clock is the silence of REPLIES, and any reply restarts it; ticks and deltas never do;
+  - a redial at 10 s;
+  - at 60 s the census is read from the cells, and only a complete, empty one restarts the floor automatically;
+  - a floor with live sessions is held "unresponsive" for the person's consented restart;
+  - with no person present, it proceeds only after the replies AND the floor's own tick have both been silent 10 min,
+    counted from the later of the two, so a reader wedged with its tick flowing is never ended; a floor that never
+    ticked gives the clause no witness and waits;
+  - the SIGKILL waits out the cells' drain.
+- **The doors** (`87a858dd8`): a door that needs the floor says it is unresponsive, the health block is the contract's,
+  and the person's restart is a window's consented act (WG-D4, WG-D5).
+- **The floor of record** (`475137a15`, the 10-19 rider): product.json names the floor fieldd is linked to. It is
+  rewritten on spawn, respawn and adoption, from the hello ack's pid, and the shell's stop reads it fresh. Decision 11
+  (James, 2026-10-19 17:42Z): an owned stop ends the floor of record, an adopted one included.
+- Built 10-19 on `7b69f7eaa` (the review's 16 items folded before any gate); its rider the same day.
+
+**Found, at the train's rebase onto `a57c18ac9` (2026-10-23):**
+- **A rebase-semantic red that no merge can see** (the day's second class of it; the first compile caught it).
+  - `20a4701da`'s new `MgmtOutbox::offer` called `AtomicUsize::fetch_update`. rustc 1.99.1, pinned by the toolchain
+    landing, deprecates it, and clippy's `-D warnings` makes that an error.
+  - The commit was written under 1.97.1. It is folded at its source to `try_update`, the rewrite eb5c0d11b made at
+    main's own call.
+- **The lane's own lint debt.** It was built code-only and biome never ran on its test files until the gate.
+  - `58917e421`: native-link.test.ts, an unsafe optional chain (`noUnsafeOptionalChaining`, an error).
+  - `ea058dc17` and `87a858dd8`: three `expect(…)`/subscribe calls past biome's width.
+  - Each is folded into the commit that wrote it.
+- The rebase's textual conflicts were all additions on both sides: F1's freeway code beside the wedge's tick, deadlines
+  and imports.
+  - In mgmt/mod.rs and tests/mgmt_server.rs both sides stopped mid-item. The resolution closes F1's function and test
+    with the shared tail, then the wedge's.
+  - Each resolved diff equals the commit's own, line for line.
+- The generated contract files were regenerated at `a28974596`. The two new per-entry schemas now carry main's shared
+  freeway definition.
+
+**Validation:** the one gate of the train, at `5fb2ca5ff` (LANDED "IL", Validation). Per-commit compile was NOT re-proven
+after the rebase: the first compile is the train's tip.
+
+## IL — the floor's inventory says how old it is: stale past 10 s, never a blank, and nothing acts on an old list (2026-10-23; `779fe75aa` → `5fb2ca5ff`, lane `hl/inventory-latency`, the train's tip on WG)
+
+**What happened:** item 52 (a), ruled 2026-10-19 18:32Z (James, every IL mark at its lean;
+`draft/thinking-inventory-latency.md`). Its cause was smoke:godview run 2's silent stale cwd: a slow but answering cell
+said nothing, and the pump faulted only on three failures. Eleven commits, on WG.
+- **The contract** (`779fe75aa`): the bound's numbers (TERMINAL_INVENTORY: `STALE_MS` 10 s, `SLOW_RECONCILE_MS` 1 s,
+  `SAMPLE_MS` 1 s), the floor's `staleCells` and `inventoryBoundMs`, fieldd's observation and the terminal's
+  `inventory_stale` refusal, with the generated schemas and Rust.
+- **The ledger thread** (`f601f7ff0`, IL-D6): the ledger leaves the inventory's lock. One thread of its own publishes
+  the newest total, so a held flock never stalls a cell's pump.
+- **The floor's bound** (`9179b98d3`): each cell's inventory is stamped at every applied reconcile and judged each
+  second outside the pump. It is stale past 10 s, on the observed stream and in the unit's health, and a slow reconcile
+  says which part was slow.
+- **fieldd's half** (`f7266f778`): the floor's `staleCells`, fieldd's own age when the stream stops, and every read
+  carries the age (IL-D4, IL-D5).
+- **Nothing acts on an old list** (IL-D5):
+  - an unlisted session while a cell is stale is "not known yet", never "no such terminal": get, openTicket and
+    renewAttach refuse retryably (`10cf2ef77`);
+  - a per-session op never guesses a cell (`323714443`);
+  - an agent's run is never resumed, replaced or written off over an old inventory, and the boot sweep waits for a
+    current list (`4395ac41f`);
+  - the update's stop re-checks at the point of effect (`bb1ad95a4`);
+  - terminal.sessions keeps a stale cell's own rows, and last-run waits (`5bbe17e69`);
+  - the WP12 census is unknown while the inventory is stale (`4758b9837`, install.ts; WP12's code, for its owner's
+    review).
+- **The docs** (`5fb2ca5ff`): DECISIONS' IL row.
+- Built 10-19 on WG's `9bd2df361` (the review's 6 items folded before any gate).
+
+**Found, at the train's rebase:**
+- **The day's second rebase-semantic class, twice here.**
+  - `f601f7ff0`'s `test_state` (services/terminal.rs) and `9179b98d3`'s `state_with_health` (state.rs) were written
+    against the 9-argument `DaemonState::new`.
+  - F1's `15dc1d3d4` (FW-D1) added `freeway: FreewayHandle` after them: E0061 at the first compile.
+  - No test on main builds a `DaemonState`. Each helper, folded at its source, builds a real `FreewayUnit` as freeway.rs's
+    own tests do: it binds a loopback listener on port 0 and never declares, so no host starts.
+- **The lane's own lint debt:** `f7266f778`'s terminal-inventory-age.test.ts had one `expect(…)` past biome's width.
+  Built code-only, biome never ran on it. Folded at its source.
+- The textual conflicts were additions on both sides: item 42's `holderFaces` beside inventory's `supervision` and
+  timings, and F1's freeway paragraph beside the bound's comment. Each resolved diff equals the commit's own.
+- The generated contract files were regenerated at `779fe75aa`. Inventory's shared definitions now reach F1's eight
+  freeway schemas, and gen changes nothing at any later contracts-touching commit.
+
+**Validation — the train's one gate, at `5fb2ca5ff`** (VF-PM ruled one train, 2026-10-23 09:51Z):
+- **The host:** James's Mac mini (VF-PM's grant, 2026-10-23 09:51Z), in the tp clone (tp-pump landed). No lock,
+  workspace file or sibling pin moved since `b8a31d139`, so a frozen install was "Already up to date", and the five
+  siblings were at the lock's pins. The clone's in-repo target/ is the train's own.
+- **Run 1** (`40a43e205`, before the folds): the first compile red, the three rebase-semantic errors above. They were
+  classified, then folded on VF-PM's word.
+- **Run 2** (`3f775f688`): the compile green; verify red at biome, and the stages red on `lint` (the four lint errors
+  above) and `test`.
+  - The `test` red was a fieldd row hidden by Nx's 64 KiB cut (an unnamed row under load, 5 → 31).
+  - It did not recur alone (fieldd 2,431 / 29 skipped), nor under the stage's own no-cache concurrency at a heavier load
+    (39; all 27 tasks ran, output to a file). It is recorded as that class, not as a finding.
+- **Run 3** (`5fb2ca5ff`):
+  - the first compile: `cargo build --workspace --all-targets` (6.7 s) and
+    `cargo clippy --workspace --all-targets -D warnings` (2.6 s), both exit 0;
+  - **`pnpm verify`**, verbatim: EXIT 0 (10:19:52–10:24:03Z). vitest 9,197 / 0 / 38 skipped across 26 projects, fieldd
+    2,431 / 29 skipped; cargo 450 / 0 / 13 in 28 suites; node --test 201 / 0;
+  - **the stages,** each alone: 14 of 14 green (10:24:03–10:28:24Z). `test` was green at a load of up to 46, the third
+    witness for run 2's unnamed row.
+- **The rows,** each alone on the mini (`pnpm gate:landing --only <row>`, nice 19, under `caffeinate -d -i` and the
+  offscreen preload). Before every row the guard read the lock, the HID idle (≥ 120 s), the load (< 10) and the free
+  disk. They ran in two of James's unlocks (VF-PM's word, 17:44Z and 21:42Z). Every row ended unlocked, at a HID idle of
+  163–1,105 s, and every launcher that reports it found none of its processes left (`SMOKE_DAEMONS` left []; smoke:plugin's
+  `pnpm plugin try` prints no such line).
+  - **Ten green:** smoke 29 s, smoke:canvas:no-gpu 29 s, smoke:canvas:no-webgpu 28 s, smoke:plugin-restart 69 s,
+    smoke:plugin 52 s, smoke:godview 143 s, smoke:terminal-door 29 s, smoke:terminal-direct 33 s, smoke:studio 15 s,
+    smoke:bundled 88 s.
+  - **Two red, of the recorded offscreen class, and not rerun** (VF-PM's classes):
+    - smoke:canvas (935 s): the occluded row (the occluder at 1228×828 never covered the 1180×780 window); HAND_WHITEBOARD
+      255 ms and HAND_CALENDAR 253 ms, at the 250 ms quantum; and the USE set's IDLE, 3 submits with no frame and no
+      arrival (LANDED:10279). That IDLE is the train's first; a third would have stopped it.
+    - smoke:kind-faults (75 s): the occluded row alone, tp-pump's class.
+    - Neither reached a stop-class rung: the window stayed focused, and no input came from outside it.
+  - **The lock:** the first chain stopped at smoke:canvas (18:03Z), and its caffeinate ended with it. The mini read
+    LOCKED at the next arm (18:05:38Z), so the other eleven rows were recorded as not armed until James's next unlock.
+    Since then a stopped chain holds the display 600 s (`caffeinate -d -i -t 600`, ruled by VF-PM 18:07Z), and
+    kind-faults' stop was classified and resumed inside that hold.
+  - **smoke:update** (row 30, beside the gate, without the preload): GREEN on James's Mac, after a red on the mini at
+    its host prerequisite.
+    - On the mini, electron-builder refused before building: `run-electron-builder.mjs` needs full Xcode 26 (`actool`
+      and Icon Composer's `ictool`), and the mini has the Command Line Tools alone. The train's code was never reached.
+    - On VF-PM's grant at James's word (22:12Z) it ran on James's Mac (Xcode 26.6, found by the script's own lookup).
+      The host was tp-pump's landed lane worktree, detached at `5fb2ca5ff` and returned to `hl/tp-pump` after.
+    - **EXIT 0** (22:16:44–22:23:15Z, 390 s): field-native's release build 73.5 s, the DEV-keyed stage 41.5 s, the zip
+      53.4 s, and W8's three audits green.
+    - The five runs green: staged (`0.1.1-beta.1`, the zip asked for once, 12 requests, no updater error);
+      forged (`feed-unverified`); rollback (`policy-rollback`); killed (`killed`); unresolved (`channel-unresolved`).
+      Runs 2–5 asked for no payload. Every run's processes were reaped, nothing landed outside the root, and the root
+      was removed.
+    - The staged field-native and field-terminal-host are byte-identical to the ones the row's cargo built (see Found,
+      below).
+    - The internal disk's free space fell from 13 GiB to 10 GiB at its lowest: a dip of up to 3 GiB, read at 1 GiB
+      resolution.
+    - Logs: `logs/mac-update/`.
+  - The run file and every row's log: `logs/mini-train3/rows/`.
+- **`pnpm still` NOT REACHED** and not run. The train changes contracts, fieldd, field-native, electron-shell main and
+  its update code, the dev runner's reaper comment and docs. None of these is on the Dawn stills' render path, and the
+  stills are host-bound to this Mac's Metal.
+- **The kit NOT reached:** no apps/ios file is changed, and no mirrored fixture moved (check:ios-fixtures green).
+  `unknown` was already a `SessionHealth` value, and the kit reads no roster health.
+- **Per-commit compile was NOT re-proven after the rebase;** the first compile is the train's tip.
+- Logs: `/Volumes/SamsungRed/lanes/hl-inventory/logs/` (mini-train = run 2, mini-train3 = run 3, mini-train3/rows =
+  the rows, mac-update = row 30), and on the mini `~/vf-lanes/tp/logs-train-r1`.
+
+**Found, at row 30** (both on the fixer's queue, VF-PM 2026-10-23; neither is the train's):
+- **The stage reads field-native from a path literal.** `scripts/stage-package.mjs` takes `target/release/field-native`
+  and `field-terminal-host` against the repo root, while cargo writes to `CARGO_TARGET_DIR`. Both entries are optional,
+  so a stage whose binary is elsewhere ships a package with no native plane and only warns.
+  - This run was safe because the worktree's `target` is a link to the directory it exported. The run script held
+    that before the row and compared the staged copies after.
+  - The fix: the stage asks cargo for its target directory, and a release stage with no native binary fails.
+- **With a person at the Mac, each run raises a "keychain not found" dialog.** Chromium's os_crypt looks for the login
+  keychain under the run's own HOME (R5). Cancel dismisses it, and no verdict depends on it; the 10-17 run most likely
+  raised the same on an unattended screen.
+  - The fix is the smoke's: the launches pass Chromium's `--use-mock-keychain`, or the run's HOME gets a keychain the
+    app can open.
+
+**Owed:**
+- WP12's owner's review of `4758b9837` (install.ts's census).
+- The two thinking notes' Status flip and native-floor.md §4.3's correction: a commit-draft turn.
+- Item 52 (b), the cwd event, waits for the next ghosttea pin event (James, 2026-10-19).
