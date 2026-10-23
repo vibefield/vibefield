@@ -41,7 +41,6 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - uses: ./.github/actions/prepare-ghosttea
       - run: pnpm install --frozen-lockfile
 
       # No Electron, no GPU, no daemons: the corpus is committed and the bench

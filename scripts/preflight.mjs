@@ -162,31 +162,41 @@ const PIN_EXPECTATIONS = [
     re: /"@vibecook\/ice":\s*0\.16\.0\s*$/m,
     label: '"@vibecook/ice": 0.16.0',
   },
-  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.12\.0"/m, label: 'ghosttea = "=0.12.0"' },
+  // The EL8 to ghosttea 0.13.1 (2026-10-22/23): the five ghosttea rows move together, and since this event each is
+  // anchored to the line's end like ice's, so a later `0.13.1-…` never passes for the release. The cargo row and the
+  // react row are also RENDERED from siblings.lock.json's `release` (thinking-release-deps.md §13; preflight checks
+  // them against the lock below); this table holds the manifests to the event in one more place, as for ice.
+  { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.13\.1"\s*$/m, label: 'ghosttea = "=0.13.1"' },
   // TM-1 (2026-09-14): the ghosttea-truffle row is GONE with the crate — the TSP1
   // adapter left the floor (`thinking-terminal-mesh-cells.md`, TM-D1 ruled T), so
   // there is no second ghosttea consumer to keep in lockstep; the ghosttea row
   // alone carries truffle-core's version agreement now.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-client":\s*0\.12\.0/,
-    label: '"@vibecook/ghosttea-client": 0.12.0',
+    re: /"@vibecook\/ghosttea-client":\s*0\.13\.1\s*$/m,
+    label: '"@vibecook/ghosttea-client": 0.13.1',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-electron":\s*0\.12\.0/,
-    label: '"@vibecook/ghosttea-electron": 0.12.0',
+    re: /"@vibecook\/ghosttea-electron":\s*0\.13\.1\s*$/m,
+    label: '"@vibecook/ghosttea-electron": 0.13.1',
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-react":\s*0\.12\.0/,
-    label: '"@vibecook/ghosttea-react": 0.12.0',
+    re: /"@vibecook\/ghosttea-react":\s*0\.13\.1\s*$/m,
+    label: '"@vibecook/ghosttea-react": 0.13.1',
     package: "@vibecook/ghosttea-react",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ghosttea-protocol":\s*0\.12\.0/,
-    label: '"@vibecook/ghosttea-protocol": 0.12.0',
+    re: /"@vibecook\/ghosttea-protocol":\s*0\.13\.1\s*$/m,
+    label: '"@vibecook/ghosttea-protocol": 0.13.1',
+  },
+  // The EL8 to 0.13.1 (2026-10-22/23): terminal-perf's frame reader joins the event (it had no row; the lock held 0.10.1).
+  {
+    file: "pnpm-workspace.yaml",
+    re: /"@vibecook\/ghosttea-frame":\s*0\.13\.1\s*$/m,
+    label: '"@vibecook/ghosttea-frame": 0.13.1',
   },
   // RD-5a (2026-10-14): rosetta's TypeScript packages are exact registry pins,
   // published from the revision the lock still pins for rosettad's build. Anchored

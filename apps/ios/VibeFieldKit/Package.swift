@@ -23,6 +23,18 @@ let truffleDependency: Package.Dependency =
     .package(path: ".window/truffle")
   }
 
+// The EL8 to ghosttea 0.13.1 (2026-10-22/23) — ghosttea's Swift coordinate as the same kind of rendered line, written from
+// siblings.lock.json's ghosttea `release.swift`, never by hand: the exact tag in the committed shape, and the checkout
+// (`../ghosttea-0.11.2`, reached through `.window/ghosttea` so the path package keeps the package's own identity, as
+// `.window/truffle` does) while `pnpm siblings use ghosttea` renders it nil.
+let ghostteaRelease: Version? = "0.13.1"
+let ghostteaDependency: Package.Dependency =
+  if let release = ghostteaRelease {
+    .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: release)
+  } else {
+    .package(path: ".window/ghosttea")
+  }
+
 let package = Package(
   name: "VibeFieldKit",
   platforms: [
@@ -46,36 +58,23 @@ let package = Package(
     .library(name: "FieldWorkspace", targets: ["FieldWorkspace"]),
   ],
   dependencies: [
-    // The Ghosttea Apple stack (terminal + Truffle mesh). Exact pin — EL8:
-    // bumping it is a deliberate upgrade event, moved in lockstep with
-    // field-native's ghosttea and truffle-core pins (both planes ride truffle
-    // 0.7.12 — this line read 0.7.11 until 2026-08-09, contradicting the very
-    // next sentence; the manifests were always the authority).
-    // 0.10.0 is THE meeting point: the TC petition bump (2026-08-18) moved
-    // every desktop plane to it (cargo ghosttea + ghosttea-truffle "=0.10.0",
-    // npm overrides) when the terminal-custody petition set G15–G21 landed
-    // upstream in one release. Its Swift manifest still pins truffle 0.7.12 —
-    // one wire, one Arc<Node> type, both planes. This plane consumes none of
-    // the new surface yet (the G16/G17 consumers are fieldd's npm client; the
-    // read-surface set waits on TC-S6): the pin moves to keep the one-version
-    // law true, and the resolved revision 43361e53 is the same commit every
-    // published 0.10.0 artifact was built from (npm gitHead + crate vcs-info,
-    // checked — the later v0.10.0-retry.1 tag shipped in none of them). It
-    // still carries 0.9.0's appearance parity and 0.7.0's reconnect layer.
+    // The Ghosttea Apple stack — the terminal RENDERER (FieldTerminal's three products). Exact pin, EL8: a bump is
+    // a deliberate upgrade event, moved with field-native's ghosttea and the npm rows, and rendered from the lock
+    // (`ghostteaDependency`, above).
     //
-    // **ERRATUM (2026-09-14, TM-5).** The sentence that stood here — "and
-    // remains the version whose TruffleTerminalMesh the desktop floor publishes
-    // terminal hosts with (IOS-3's server)" — is FALSE and was false from
-    // TM-1: that slice deleted `terminal_mesh.rs`, `with_terminal_mesh` and
-    // the `ghosttea-truffle` dependency from the floor, so no version of it
-    // publishes anything for this phone to read. It is doubly moot now — this
-    // kit takes no `GhostteaTruffle` product at all, and the pin's whole job is
-    // the RENDERER. The manifests are the authority for every number here, as
-    // the errata rule says and this line failed to be.
-    // 0.10.1 (2026-08-18, revision ad97fdb): the G13 Windows env-strip
-    // case-fold + process_tree hardening — no Apple-plane delta; the pin
-    // moves for the one-version law, same as every row above.
-    .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: "0.10.1"),
+    // **RETIRED 2026-10-22 (the EL8 to 0.13.1): the rationale for `exact: "0.10.1"` that stood here.** It read:
+    // 0.10.0 was THE meeting point — the TC petition bump (2026-08-18) moved every desktop plane to it when G15–G21
+    // landed upstream in one release, its resolved revision 43361e53 the commit every published 0.10.0 artifact was
+    // built from — and 0.10.1 (ad97fdb, 2026-08-18) carried G13's Windows env-strip fix with no Apple-plane delta,
+    // moving "for the one-version law". Its TM-5 erratum (2026-09-14) stays true: this kit takes no
+    // `GhostteaTruffle`, and the pin's whole job is the renderer. The row then stayed at 0.10.1 while the desktop
+    // planes moved through 0.11.0, 0.11.1 and 0.12.0; the comment recorded no reason for that, so this note states
+    // none. At 0.13.1 the one-version law holds on this plane again: v0.13.0's manifest first declared truffle
+    // exact 0.7.19, the version VibeField's truffle-core pins (G28), and v0.13.1's still does. The Swift API delta from 0.10.1 is additive
+    // with defaults (light adaptation, minimum contrast, the TRF1 style palette), and this kit's sources name none of
+    // the changed symbols. 0.13.1 also CARRIES 0.10.2's two Swift-only APIs (`focusesInputOnScroll`,
+    // `gridAlignment`, forward-ported from the 0.10 line), which this kit does not use yet.
+    ghostteaDependency,
     // Truffle, DIRECTLY since TM-5 — declared here instead of arriving
     // transitively through `GhostteaTruffle`.
     //

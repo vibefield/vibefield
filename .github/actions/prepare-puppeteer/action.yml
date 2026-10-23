@@ -3,9 +3,9 @@ description: Fetch puppeteer at its locked revision and install the packages fie
 # puppeteer's packages enter this tree as `link:../puppeteer/...` rows (pnpm-workspace.yaml), and pnpm accepts a
 # dangling link without a word: a job that never prepared ../puppeteer fails ten minutes later in its bundler
 # (package-preview, PR #1, 2026-10-21). So every job that builds or tests this tree prepares it HERE, one place, like
-# prepare-ghosttea and prepare-mille. Run it after the root `pnpm install` (it needs pnpm, set up from the
-# packageManager field); none of the linked packages has a bin or an install hook, so the root install does not
-# depend on it.
+# prepare-mille (prepare-ghosttea retired 2026-10-22, the EL8 to ghosttea 0.13.1). Run it after the root
+# `pnpm install` (it needs pnpm, set up from the packageManager field); none of the linked packages has a bin or an
+# install hook, so the root install does not depend on it.
 runs:
   using: composite
   steps:

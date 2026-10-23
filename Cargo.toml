@@ -219,7 +219,20 @@ truffle-core = "=0.7.19"
 # cwd from creation. A 0.x minor because `TextSnapshot.links` and
 # `RendererConfig.link_url` are new public fields; field-native builds neither
 # struct literally. The npm rows move in the SAME event (one-version law).
-ghosttea = "=0.12.0"
+# EL8 (2026-10-22/23, lane hl/el8-ghosttea-0.13.1) bumps 0.12.0 → 0.13.1 on EVERY
+# plane in one event — and closes the Godview performance window below. 0.13.1 is tag
+# v0.13.1 = ee3b721e (the merge of PR #68 onto v0.13.0, bfc59642 — ghosttea main's merge
+# of PR #67), and the window's pin 218e11f is an ancestor of both, so nothing the window
+# built is lost. 0.13.1 changed no Rust source: two Swift APIs and the version. What
+# 0.13.0 added on this plane: the CPR fix (c5c9365 — termination stops reply producers WAITING, never the
+# delivery; the d86e285 class that leaked a terminal per quickly-closed tab on
+# Windows) and the input actor (af7e38c — a paste the program never reads no longer
+# keeps its session alive); public additions only (`LightAdaptation`,
+# `minimum_contrast`/`light_adaptation` on the presentation configs, TRF1 section
+# 13 `STYLE_PALETTE`), none of which field-native builds literally; truffle 0.7.19
+# on ghosttea's own planes. This row is RENDERED from siblings.lock.json's
+# `release.cargo` (thinking-release-deps.md §13: one version, stated once).
+ghosttea = "=0.13.1"
 # RETIRED 2026-09-14 (TM-1): `ghosttea-truffle = "=0.11.1"`, GT-4's mesh half of
 # the terminal floor. It served TSP1 against an IN-PROCESS session registry
 # (`TruffleTerminalMesh::serve` takes ghosttea's `Registry` by value), which is
@@ -246,13 +259,17 @@ ghosttea = "=0.12.0"
 # attempt to add a crate pinned at =0.7.11 was refused outright.
 
 # Godview performance co-development window (2026-09-27): native row reuse,
-# fallback caching and nonblocking model access during PTY input. The React
-# worker comes from the same revision in siblings.lock.json. Close this window
-# by publishing these changes, advancing the exact pins and removing the paths.
-[patch.crates-io]
-ghosttea = { path = "../ghosttea-0.11.2/native/ghosttea" }
-ghosttea-config = { path = "../ghosttea-0.11.2/native/ghosttea/crates/ghosttea-config" }
-ghosttea-core = { path = "../ghosttea-0.11.2/native/ghosttea/crates/ghosttea-core" }
-ghosttea-text = { path = "../ghosttea-0.11.2/native/ghosttea/crates/ghosttea-text" }
-ghosttea-vt = { path = "../ghosttea-0.11.2/native/ghosttea/crates/ghosttea-vt" }
-ghosttea-vt-sys = { path = "../ghosttea-0.11.2/native/ghosttea/crates/ghosttea-vt-sys" }
+# fallback caching and nonblocking model access during PTY input, as six
+# `[patch.crates-io]` path rows into `../ghosttea-0.11.2`. CLOSED 2026-10-22 by its
+# own instruction ("close this window by publishing these changes, advancing the
+# exact pins and removing the paths"): ghosttea 0.13.0 published them, the pin above
+# advanced, and the rows are gone. siblings.lock.json records the cargo plane as
+# released on the registry, so the committed shape has NO patch row for these
+# crates (`render --prod --check` refuses one). `pnpm siblings use ghosttea` links the
+# checkout back through a generated, gitignored `.cargo/config.toml`, and preflight
+# refuses that overlay while the checkout's crate version is not the one required
+# above: cargo leaves a non-matching [patch] unused and builds the registry's crate
+# ("patch `ghosttea v0.12.0 (…)` was not used in the crate graph", measured
+# 2026-10-22, cargo 1.99.1). Building from crates.io, `ghosttea-vt-sys` fetches the
+# Ghostty VT tarball as before the window (G12, above); only a checkout build takes
+# `Prefix::Repository`.

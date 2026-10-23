@@ -51,6 +51,9 @@
 //           2026-10-04; `--skip-typecheck` for the deliberate case, said when
 //           used). Every checkout must match its resulting pin before the
 //           build/gate; any red after the pin is recorded KEEPS it and exits 1.
+//           It does NOT regenerate the generated places a pin feeds (2026-10-23, the EL8 to ghosttea 0.13.1: the
+//           key catalog from the pinned ghosttea-config went stale, and only verify's test and gen:check saw it):
+//           run `pnpm gen:check` after a pin, and commit what it regenerates with the pin. Owed: pin runs it.
 //   stamp   one line naming each sibling's HEAD + a hash of its working-tree
 //           state — the Nx `sharedGlobals` runtime input
 //   fetch   clone a named sibling at its pin; never reset an existing checkout

@@ -238,17 +238,36 @@ overrides:
   # it), `terminalLinkUrl`, and the loader APPLIES Ghostty's `link-url`. A 0.x
   # minor, not 0.11.2: the release adds public fields to two published Rust
   # structs. Cargo rows move in the same event.
-  "@vibecook/ghosttea-client": 0.12.0
+  # EL8 (2026-10-22/23, lane hl/el8-ghosttea-0.13.1) bumps 0.12.0 → 0.13.1 on every
+  # plane in one event: tag v0.13.1 = ee3b721e (the merge of PR #68 onto v0.13.0,
+  # bfc59642), the gitHead of all six packages this tree resolves (client, electron,
+  # protocol, react, frame, ghosttea). The lane was built at 0.13.0 and retargeted when
+  # 0.13.1 shipped, which changed no TypeScript source. The npm plane is
+  # RELEASED in siblings.lock.json (`release.npm`), so `ghosttea-react` left the
+  # sibling block below for an exact row here, and `render --prod` writes it. On this
+  # plane 0.13.0 added light adaptation and minimum contrast for dark-painted
+  # panes, palette provenance (TRF1 section 13), and the color-scheme report
+  # (CSI ? 996 n); see Cargo.toml for the cargo half and the window it closes.
+  "@vibecook/ghosttea-client": 0.13.1
   # GT-0 (2026-08-01): the Godview terminal planes join at the same exact version
   # (one-version law) — electron-shell consumes ghosttea-electron, field-app
   # consumes ghosttea-react; packages ask for "*".
-  "@vibecook/ghosttea-electron": 0.12.0
+  "@vibecook/ghosttea-electron": 0.13.1
+  # ghosttea-react: a link: row into the Godview performance window's checkout
+  # (2026-09-27) until ghosttea 0.13.0 published the window's renderer fixes.
+  "@vibecook/ghosttea-react": 0.13.1
   # GT-3m (2026-08-04): field-app declares the wire vocabulary directly — the
   # monitor's rows ARE floor sessions, so `SessionSummary` is the honest type for
   # them. Types-and-constants only (zero dependencies), already resolved at this
   # version transitively; declaring it puts it under the one-version law rather
   # than leaving a hoisted transitive to drift.
-  "@vibecook/ghosttea-protocol": 0.12.0
+  "@vibecook/ghosttea-protocol": 0.13.1
+  # The EL8 to 0.13.1 found this row MISSING: tooling/terminal-perf asks
+  # `@vibecook/ghosttea-frame: "*"`, and with no row the lock had held it at
+  # 0.10.1 while the renderer's own frame moved on — two copies. It joins the
+  # one-version law here. FRAME_PROTOCOL_VERSION is 1 in both, so the committed
+  # TRF1 corpus (captured at 0.10.1) stays readable; the bench is the proof.
+  "@vibecook/ghosttea-frame": 0.13.1
   # rosetta — EXACT registry pins since RD-5a (2026-10-14; W-D8's exit shape under
   # RL5's `@vibefield` scope; packages ask for "*"). `@vibefield/rosetta-protocol`
   # is the TypeScript client (types + the REST/WS client); `@vibefield/rosetta-room`
@@ -304,10 +323,9 @@ overrides:
   # rows exact — the lock entry STAYS as the dev overlay's coordinate
   # (`pnpm siblings use NAME`); the walls and preflight's family rule stay. The
   # pre-commit hook refuses a staged row the lock does not render.
-  # Godview performance window (2026-09-27), revision in siblings.lock.json.
-  # Rebuild with `npm run build --workspace @vibecook/ghosttea-react` in that
-  # checkout after edits. Exit: a published release carrying these fixes.
-  "@vibecook/ghosttea-react": link:../ghosttea-0.11.2/packages/ghosttea-react
+  # ghosttea-react LEFT this block at the EL8 to 0.13.1 (2026-10-22/23): the Godview
+  # performance window's exit, a published release carrying its fixes, came — its
+  # exact row is above; `pnpm siblings use ghosttea` links the checkout back.
   "@vibecook/puppeteer-runtime": link:../puppeteer/packages/runtime
   "@vibecook/puppeteer-builtin-providers": link:../puppeteer/packages/builtin-providers
   "@vibecook/puppeteer-core": link:../puppeteer/packages/core
@@ -337,12 +355,14 @@ catalog:
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
   - '@vibecook/ice@0.16.0'
-  - '@vibecook/ghosttea-client@0.12.0'
-  - '@vibecook/ghosttea-protocol@0.12.0'
-  - '@vibecook/ghosttea-electron@0.12.0'
-  - '@vibecook/ghosttea-react@0.12.0'
-  - '@vibecook/ghosttea-frame@0.12.0'
-  - '@vibecook/ghosttea@0.12.0'
+  # The EL8 to ghosttea 0.13.1: published 2026-10-23 08:11–08:16Z, inside the
+  # release-age window; our own packages, reviewed as an EL8 pin.
+  - '@vibecook/ghosttea-client@0.13.1'
+  - '@vibecook/ghosttea-protocol@0.13.1'
+  - '@vibecook/ghosttea-electron@0.13.1'
+  - '@vibecook/ghosttea-react@0.13.1'
+  - '@vibecook/ghosttea-frame@0.13.1'
+  - '@vibecook/ghosttea@0.13.1'
   # RD-5a (2026-10-14): rosetta's first `@vibefield` release, published
   # 2026-10-13T23:36Z — inside the release-age window on the day the pin went
   # exact; our own packages, reviewed as an EL8 pin.

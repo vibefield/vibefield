@@ -776,13 +776,15 @@ async function auditAct(
  * the DIFFERENCE — every key the PTY was born with, minus the ones some
  * policy actually grants, must be empty.
  *
- * Three sources, each read from the code that owns it, and copied here on
+ * Four sources, each read from the code that owns it, and copied here on
  * purpose: importing the constant would only assert that the policy equals
  * itself, while a copy makes a widened allow-list a diff someone reviews.
  *   · `AGENT_ENV_PASSTHROUGH` — packages/fieldd/src/agent-host.ts
  *   · `buildAgentEnvironment` — puppeteer packages/runtime/src/host/environment.ts
  *   · the scripted adapter's own `spec.env`, and what /bin/sh adds for the
  *     `env` it runs (PWD, SHLVL, _ — and OLDPWD if anything ever cd's)
+ *   · ghosttea's own spawn, since 0.13.0 — `SpawnOptions::hint_color_scheme`
+ *     (native/ghosttea/src/session.rs): COLORFGBG
  * The win32 halves of the first two are left out: this suite spawns /bin/sh. */
 const AGENT_ENV_ALLOWED = new Set([
   // fieldd's passthrough (agent-host.ts AGENT_ENV_PASSTHROUGH)
@@ -820,6 +822,14 @@ const AGENT_ENV_ALLOWED = new Set([
   "SHLVL",
   "_",
   "OLDPWD",
+  // ghosttea's own spawn (0.13.0 dfe0add, "report the color scheme to programs that ask"): the rxvt
+  // `fg;bg` palette-index hint ("0;15" light, "15;0" dark) from the presentation's background, written
+  // into every session's environment, a Clean one included, unless the caller set it. A terminal
+  // capability hint of TERM/COLORTERM/TERM_PROGRAM's class: no secret and no FIELD_* name. ACCEPTED
+  // under EL7 (VF-PM, 2026-10-23, the EL8 to ghosttea 0.13.1). Whether an agent's theme hint should be
+  // VibeField's OWN value, so the agent env keeps one policy authority, is the agent plane owner's
+  // open question.
+  "COLORFGBG",
 ]);
 
 /** how many `/api/sessions` requests the fake rosettad has answered so far */

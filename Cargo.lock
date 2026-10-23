@@ -707,7 +707,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea"
-version = "0.12.0"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a02b75dc96033fc84f11dad0d7ee9d239978fe801d096c9831f51b49fe4efeeb"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -728,7 +730,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-config"
-version = "0.12.0"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d836e0851ed5f56dbcdd2010ce3cc79d66c9bad6d0866226fcd991072ec6a5a2"
 dependencies = [
  "libc",
  "serde",
@@ -739,7 +743,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-core"
-version = "0.12.0"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48d51d6f216fe17b5c3116179f56f1ae0a4f9f31fa8c0eb985ee4e5b664a2cab"
 dependencies = [
  "anyhow",
  "ghosttea-text",
@@ -750,7 +756,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-text"
-version = "0.12.0"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05ccda0e5e4a2aa61e8eb503327fc6a6d42ac2975eb40d44e2891261d71ad83f"
 dependencies = [
  "anyhow",
  "fontdb",
@@ -762,14 +770,18 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-vt"
-version = "0.12.0"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ef78ad1f779d9e3f07476da2d1e38655a9a29dac511bb390d28498b769f6be3"
 dependencies = [
  "ghosttea-vt-sys",
 ]
 
 [[package]]
 name = "ghosttea-vt-sys"
-version = "0.12.0"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d740321d6ce200e07a83d19bea29e8023f169a5e952094950c01e74c084352dd"
 dependencies = [
  "cc",
  "serde",
@@ -1850,7 +1862,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",

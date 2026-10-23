@@ -143,9 +143,6 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
-      - uses: ./.github/actions/prepare-ghosttea
-        with:
-          build: "false"
       # EL8: the compiler is rust-toolchain.toml's. A bare `rustup toolchain install` installs the active toolchain — the
       # file's channel, components and profile — so CI and the Mac read ONE declaration (2026-10-21: a `stable`-branch
       # action installed the day's stable, and rustc 1.99.1's clippy reddened main while the Mac held 1.97.1).
