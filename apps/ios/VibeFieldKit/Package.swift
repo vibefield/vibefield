@@ -10,12 +10,12 @@ import PackageDescription
 // `truffleRelease` is written by `node scripts/siblings.mjs` from siblings.lock.json's truffle `release.swift`, never
 // by hand. While it is nil the dependency is the RFC 025 window's path package (`.window/truffle`), exactly as before;
 // once a ghosttea Swift release pins the same truffle (G28) the lock records the version, `render --prod` writes it
-// here and the committed shape is that exact version. The dev overlay (`pnpm siblings use truffle`) renders this line
+// here and the committed shape is that exact version (recorded 2026-10-23 at ghosttea 0.13.1: "0.7.19"). The dev overlay (`pnpm siblings use truffle`) renders this line
 // nil again — the file then shows modified, the one-line diff being the overlay's own evidence — and `use --none`
 // renders the lock's value back. The line itself, not a file this manifest reads and not the environment: SwiftPM
 // caches a manifest's evaluation keyed on its contents plus its environment, never a file it reads, so a file flips
 // nothing until the cache misses, and Xcode's GUI evaluates with a fixed environment (§3, measured 2026-10-15).
-let truffleRelease: Version? = nil
+let truffleRelease: Version? = "0.7.19"
 let truffleDependency: Package.Dependency =
   if let release = truffleRelease {
     .package(url: "https://github.com/vibecook-dev/truffle.git", exact: release)
@@ -94,6 +94,15 @@ let package = Package(
     // path package records no revision, so `Package.resolved` carried no truffle
     // row at all. The rule the sentence stated was intact throughout; its
     // numbers were not.
+    //
+    // **THIS PLANE CLOSED ON 2026-10-23 (the EL8 to ghosttea 0.13.1 — G28's exit).** ghosttea v0.13.1 (ee3b721e)
+    // declares `let truffleVersion: Version = "0.7.19"`, the crate's pin, so the forward jaw of the vice recorded below
+    // opened. siblings.lock.json records truffle's `release.swift` = "0.7.19", `render --prod` writes `truffleRelease`
+    // above, and this row is the exact URL package at 0.7.19, which ghosttea's own exact declaration now agrees with.
+    // `Package.resolved` carries a truffle row (0.7.19, 1218b64) for the first time since 2026-09-16. `.window/truffle`
+    // stays, as the dev overlay's link (`pnpm siblings use truffle`, thinking-release-deps.md §12/§13): with
+    // `../truffle-rfc025` absent it dangles, and it is read only while that overlay stands, so this plane needs no
+    // truffle checkout to build. What follows is the vice as it stood, kept for its measurements.
     //
     // **THE WINDOW CLOSED ON 2026-09-16 (UA-P-X) — BUT NOT ON THIS PLANE.**
     // truffle 0.7.14 published RFC 025's login-scoped nodes (tag `v0.7.14`,

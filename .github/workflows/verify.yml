@@ -26,6 +26,11 @@
 # could not be green with or without truffle. Stated rather than patched around: teaching the
 # loop to skip a sibling would make CI verify a DIFFERENT TREE than the one the gate ran on,
 # which is the whole thing this step exists to prevent.
+# CLOSED 2026-10-23 (the EL8 to ghosttea 0.13.1, G28's exit): ghosttea v0.13.1 declares truffle
+# exact 0.7.19, so the kit's truffle row is that exact version, and the lock records the release.
+# No job fetches ../truffle-rfc025 any more: nothing builds from it, and preflight reads it only
+# while `pnpm siblings use truffle` stands. The same lane released ghosttea on every plane, so
+# ../ghosttea-0.11.2 is not fetched either.
 name: verify
 
 on:
@@ -59,9 +64,8 @@ jobs:
       # is on no remote FAILS this step loudly — a verify that ran without the siblings would
       # be a verify of a different tree. Fresh detached checkouts are clean and at the pin, so
       # preflight's revision + dirty checks both pass. No shallow clone: a pin may sit behind
-      # the branch tip. truffle is fetched too since the 0.7.19 bump recorded its public
-      # `repository` (2026-10-17): its checkout is the SwiftPM path package's (../truffle-rfc025, the
-      # tag truffle-v0.7.19), which preflight requires — see the RFC 025 note in this file's header.
+      # the branch tip. truffle was fetched too from the 0.7.19 bump (2026-10-17) until its Swift
+      # plane closed (2026-10-23, the header's RFC 025 note): its checkout is no longer read.
       #
       # puppeteer is NOT in this loop: its fetch and its own install are one composite,
       # `.github/actions/prepare-puppeteer`, run below AFTER this tree's install (it needs pnpm
@@ -69,7 +73,7 @@ jobs:
       - name: Fetch sibling checkouts at the pinned revisions (EL8, siblings.lock.json)
         run: |
           set -euo pipefail
-          for name in rosetta truffle; do
+          for name in rosetta; do
             node scripts/siblings.mjs fetch "$name"
           done
 

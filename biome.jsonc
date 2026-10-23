@@ -36,7 +36,9 @@
     // either. Both were tried. The cargo and npm halves of that window closed on
     // 2026-09-16 (UA-P-X) and this line stayed, because the SwiftPM half could
     // not: ghosttea pins truffle exactly at 0.7.12, so the kit can move neither
-    // forward to the crate's 0.7.19 nor back. Goes when the link does.
+    // forward to the crate's 0.7.19 nor back. Goes when the link does. (2026-10-23:
+    // the SwiftPM half closed at ghosttea 0.13.1, and the link stayed as the
+    // overlay's, so the line stays.)
     // `ghosttea-0.11.2` (2026-10-22, the EL8 to ghosttea 0.13.1): the same, for
     // apps/ios/VibeFieldKit/.window/ghosttea — the link the dev overlay renders
     // ghosttea's Swift plane to (`pnpm siblings use ghosttea`). Released planes keep

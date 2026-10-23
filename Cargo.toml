@@ -147,6 +147,13 @@ opt-level = 3
 # unsatisfiable as forward to 0.7.14 was. The path package stays, and only the
 # checkout behind it moves (siblings.lock.json → 1218b64; Package.swift's
 # truffleRelease stays nil).
+# CLOSED 2026-10-23 (the EL8 to ghosttea 0.13.1 — G28's exit): ghosttea v0.13.1
+# (ee3b721e) declares truffle exact 0.7.19, this pin, so the vice opened on its
+# forward jaw. siblings.lock.json records truffle's `release.swift` = "0.7.19",
+# the kit's `truffleRelease` renders it, and Package.resolved carries truffle
+# 0.7.19 (1218b64). `.window/truffle` stays as the dev overlay's link, and a build
+# no longer needs `../truffle-rfc025`. Every plane names 0.7.19 by version now;
+# the exit list this note kept is empty.
 truffle-core = "=0.7.19"
 # NF-0 (native-floor spec NF-D1): ghosttea graduated to crates.io the same way,
 # 2026-07-29 — exact pin, upgrades are deliberate events. NF-7 (2026-08-01) bumped
