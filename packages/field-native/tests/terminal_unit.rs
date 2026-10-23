@@ -1781,3 +1781,82 @@ async fn the_mesh_flag_costs_the_floor_nothing_and_cells_still_serve() {
 
     daemon.shutdown().await;
 }
+
+/// The EL8 to ghosttea 0.13.0 (2026-10-22): the d86e285 class, closed on THIS side and witnessed through the floor's
+/// own terminate path (the control socket fieldd drives, the cell's service, ghosttea's ladder).
+///
+/// ghosttea's d86e285 (the reply queue, TP) CLOSED a session's reply queue the moment termination began, so a reply
+/// the terminal owed its program — the cursor-position answer to `ESC[6n` — was dropped, and a program that waits for
+/// it never ended on its own. On Windows conhost asks exactly that at startup (PSEUDOCONSOLE_INHERIT_CURSOR), so every
+/// quickly-closed tab leaked a session (ghosttea's Windows CI, 2026-10-22, run 39699570791). c5c9365, in 0.13.0,
+/// makes termination stop reply producers WAITING, never the delivery. VibeField's pin carried d86e285 from 218e11f
+/// until this EL8.
+///
+/// The unix shape of the same class: the program answers the ladder's first rung (^C → SIGINT) by asking for the
+/// cursor, and exits 7 once the answer arrives. Its own wait (`stty time 200`, 20 s) outlasts the whole ladder
+/// (interrupt 2 s, terminate 2 s, force-EOF 1 s), so when the answer is dropped the ladder's kill is the ONLY way
+/// out, never the fixture's own timeout (VF-PM's condition). Exit 7 with no signal is therefore proof that the answer
+/// was delivered after termination began. (`time 255` is not a wait: macOS's stty refuses it — "value of 255 would
+/// disable the option", 255 being _POSIX_VDISABLE — and a refused stty leaves the PTY canonical with echo on, where
+/// the answer is echoed and never read. The first draft of this row did exactly that and went red on both pins; a
+/// failed stty now exits 3.) Measured on James's Mac mini: RED on the old pin 218e11f (the ladder's
+/// kill), GREEN on 0.13.0 — the lane's logs/mini/c4-*.log. ConPTY itself stays ghosttea's Windows CI's witness.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_terminated_session_still_answers_a_program_that_asks_for_the_cursor() {
+    let dir = short_tempdir();
+    let daemon = boot(dir.path()).await;
+    let mut mgmt = MgmtClient::connect(&daemon).await;
+    let ack = mgmt.hello(&daemon).await;
+    let (client, mut events) = control(&ack).await;
+
+    // `-icanon min 0 time 200`: a read returns what has arrived, or nothing after 20 s. ISIG stays on, so the
+    // ladder's ^C still raises SIGINT. The marker says the trap is armed, so the interrupt cannot race it.
+    let armed = dir.path().join("armed");
+    let script = r#"stty -echo -icanon min 0 time 200 || exit 3
+trap 'printf "\033[6n"; answer=$(dd bs=1 count=1 2>/dev/null); if [ -n "$answer" ]; then exit 7; fi; exit 9' INT
+: > "$ARMED"
+while :; do sleep 1; done"#;
+    let session = client
+        .create_session(json!({
+            "executable": "/bin/sh",
+            "args": ["-c", script],
+            "cols": 80,
+            "rows": 24,
+            "persistence": "keep-until-exit",
+            "environment": {
+                "mode": "clean",
+                "variables": {"PATH": "/usr/bin:/bin", "ARMED": armed.to_str().expect("utf-8 path")},
+            },
+        }))
+        .await
+        .expect("create the session that asks for the cursor");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !armed.exists() {
+        assert!(
+            Instant::now() < deadline,
+            "the fixture never armed its trap"
+        );
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+
+    let started = Instant::now();
+    client
+        .terminate(&session.id, "user")
+        .await
+        .expect("terminate");
+    let exit = await_exit(&mut events, &session.id, Duration::from_secs(30)).await;
+    let elapsed = started.elapsed();
+    assert_eq!(
+        exit["exitCode"], 7,
+        "the program asked for the cursor after termination began and must have been answered — a dropped answer \
+         leaves the ladder's kill as its only exit ({elapsed:?}): {exit}"
+    );
+    assert!(
+        exit["exitSignal"].is_null(),
+        "no rung of the ladder may have been needed: {exit}"
+    );
+    assert_eq!(exit["exitOutcome"], "user-terminated", "{exit}");
+
+    daemon.shutdown().await;
+}
