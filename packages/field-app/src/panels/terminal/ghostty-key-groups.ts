@@ -401,7 +401,12 @@ for (const group of KEY_GROUPS) for (const key of group.keys) GROUP_OF.set(key, 
 
 /** Every generated key, with its group and note, in the groups' order. Keys a
  * future pin adds and nobody grouped yet land in a last "Other" group rather
- * than vanishing (the test still fails, which is the point). */
+ * than vanishing (the test still fails, which is the point).
+ *
+ * Ghostty's keys only. ghosttea's OWN keys (`GHOSTTEA_EXTENSION_KEYS`,
+ * `ghosttea-light-adaptation` at 0.13.1) are generated beside them and are not in
+ * this reference: whether and how Settings → Terminal shows them is a UI turn
+ * owed, with DESIGN.md and James's eyes (2026-10-23, the EL8 to ghosttea 0.13.1). */
 export const KEY_ENTRIES: readonly KeyEntry[] = (() => {
   const other: KeyGroup = { id: "other", label: "Other", keys: [] };
   const entries = GHOSTTY_KEYS.map((entry) => ({

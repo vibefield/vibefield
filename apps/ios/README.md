@@ -211,7 +211,10 @@ snapshot shape and classifier the daemon feed will drive; since IOS-2 the mesh l
 2026-10-17: lockstep no longer holds by version. field-native is at truffle 0.7.19,
 and the kit reaches that same code through the path package `.window/truffle`,
 because ghosttea's Swift tags still declare truffle exact 0.7.12; see
-`VibeFieldKit/Package.swift`*), the in-process
+`VibeFieldKit/Package.swift`* — *corrected again 2026-10-23, the EL8 to ghosttea 0.13.1:
+lockstep holds by version once more. The kit pins ghosttea exact 0.13.1 and truffle exact
+0.7.19, the same versions field-native and the npm rows name, and `.window/truffle` is
+only the dev overlay's link now*), the in-process
 Tailscale runtime, kept up by itself while signed in (2026-10-18; a deliberate CONNECT act until then) — since IOS-4i in VibeField's
 own truffle namespace, the only one a desktop is visible in — in-app login
 (Safari sheet), the online-peer roster, and the mesh chip the bubbles

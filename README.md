@@ -35,9 +35,15 @@ a private mesh across machines, and an iPhone companion.
 ## Getting started
 
 Prereqs: node per `.nvmrc` (`corepack enable` for pnpm) · Rust per `rust-toolchain.toml` (rustup reads it; `rustup toolchain install`) · `cargo install cargo-typify` ·
-four SIBLING CHECKOUTS beside this one: `../puppeteer` and `../rosetta-pin` (AR-0; the rosetta
-checkout is dedicated to its pin since 2026-10-03 — `node scripts/siblings.mjs fetch rosetta` creates it),
-`../truffle-rfc025`, and `../ghosttea-0.11.2` (the terminal performance source window).
+three SIBLING CHECKOUTS beside this one: `../puppeteer` (AR-0; its packages are `link:` rows),
+`../rosetta-pin` (rosettad is built from it; dedicated to its pin since 2026-10-03) and `../mille-pin`
+(FS-1b, the files service window) — `node scripts/siblings.mjs fetch NAME` creates each at its pin.
+*(Corrected 2026-10-23, the EL8 to ghosttea 0.13.1: this said FOUR — `../puppeteer`, `../rosetta-pin`,
+`../truffle-rfc025` and `../ghosttea-0.11.2` — and left out `../mille-pin`, required since 2026-10-05.
+ghosttea 0.13.1 is released on every plane and declares truffle exact 0.7.19, so no build reads
+`../ghosttea-0.11.2` or `../truffle-rfc025` any more. Preflight on a fresh tree with no checkout
+beside it names exactly the three above (measured on James's Mac mini). Both stay in
+`siblings.lock.json` as the dev overlay's coordinates: `pnpm siblings use ghosttea` / `use truffle`.)*
 **The RFC 025 petition window (2026-09-16) closed on two planes of three:** truffle 0.7.14
 shipped, so `truffle-core` is an exact registry pin again, the `[patch.crates-io]` row is gone,
 and the mesh sidecar comes from npm rather than being built from source (Go is no longer a
@@ -47,7 +53,11 @@ need RFC 025's login API) — the unblock is a ghosttea Swift release, and `Carg
 note carries it. *(2026-10-17, the truffle bump: the cargo and npm planes moved to 0.7.19
 together, and `../truffle-rfc025` is pinned at the tag `truffle-v0.7.19`; the vice is unchanged,
 so the ghosttea release the kit now waits for is one at truffle 0.7.19. `Cargo.toml` is the
-authority for the number.)* So the repo does not build standalone. Every revision is pinned in
+authority for the number.)* *(2026-10-22: that release came, v0.13.0. The kit lands at
+0.13.1, which declares truffle exact 0.7.19 too, so the third plane closed on 2026-10-23: the
+kit's truffle row is that exact version, and `Package.resolved` carries it.)* The repo still
+does not build standalone: puppeteer, rosetta and mille are checkouts until their releases are
+recorded (RD-5). Every revision is pinned in
 `siblings.lock.json`:
 `pnpm siblings` prints the state, `pnpm preflight` fails on drift, `pnpm siblings:pin` is the
 deliberate upgrade — it records the new SHAs, builds rosettad at them, proves the agent catalog
