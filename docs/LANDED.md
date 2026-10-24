@@ -13614,3 +13614,103 @@ said nothing, and the pump faulted only on three failures. Eleven commits, on WG
 - WP12's owner's review of `4758b9837` (install.ts's census).
 - The two thinking notes' Status flip and native-floor.md §4.3's correction: a commit-draft turn.
 - Item 52 (b), the cwd event, waits for the next ghosttea pin event (James, 2026-10-19).
+
+## EL8 — ghosttea 0.13.1 on every plane in one event: the lock records its release on npm, cargo and Swift, truffle's Swift plane closes with it, a session terminated through the floor still answers its program's cursor question, and no build needs a ghosttea or truffle checkout (2026-10-24; `4bf3ed786` → `f03b0c102`, lane `hl/el8-ghosttea-0.13.1`)
+
+**What happened:** the EL8 to ghosttea, five commits on main `7011674dd`. It was built at 0.13.0 on 2026-10-22
+(`hl/el8-ghosttea-0.13.0`, `d3201d3db`) and retargeted to 0.13.1 when it shipped (VF-PM, 2026-10-23 08:19Z). It was put
+down until the pump lane landed, then rebased onto it and onto the wedge and inventory train, git only and rehearsed
+with merge-tree first. 0.13.2 was unpublished when the gate started, so the lane lands at 0.13.1 and 0.13.2 is a later
+version edit (VF-PM's rule, 2026-10-23 22:30Z).
+- **The tooling** (`4bf3ed786`, RD, thinking-release-deps.md §13): a released cargo plane can be a registry version,
+  committed as the absence of `[patch.crates-io]` rows, with `[workspace.dependencies]` rendered `=<version>`; and a
+  sibling whose every plane is released needs no checkout (`needsCheckout`). Preflight, `pin`, `install-js`,
+  `build-js`, `siblings:build`, `status` and `use` all read that state. A no-op on main's lock.
+- **The pin** (`9df0b7edf`): ghosttea's `sha` 218e11f → ee3b721e (v0.13.1), written by `pnpm siblings:pin ghosttea`;
+  its `release` is `{ npm, cargo, swift: "0.13.1" }`, cargo in the registry form.
+  - npm: client, electron and protocol at 0.13.1; `ghosttea-react` an exact row; the window's link row gone.
+  - cargo: `ghosttea = "=0.13.1"`, the six `[patch.crates-io]` path rows gone with their section; Cargo.lock moves the
+    six crates and one tempfile edge (`getrandom 0.4.3`).
+  - Swift: `ghostteaRelease = "0.13.1"`; Package.resolved written by SwiftPM's own resolve.
+  - The Godview performance window closes by its own instruction.
+- **truffle's Swift plane closes** (`4e52353e4`, G28's exit): ghosttea v0.13.1 declares truffle exact 0.7.19, the
+  version the cargo plane pins, so the lock records truffle's `release.swift` and the kit's row is that exact URL
+  package. Package.resolved carries truffle 0.7.19 (`1218b64`) for the first time since 2026-09-16. `.window/truffle`
+  stays as the overlay's link; `../truffle-rfc025` is no longer needed to build the iOS plane.
+- **The d86e285 class, closed on VibeField's side** (`d48844eab`, TM): a session terminated through the floor still
+  answers its program's cursor question (RED on 218e11f, GREEN on 0.13.0 and 0.13.1), and one whose program never
+  reads a 1 MiB paste still concludes and is let go.
+- **The docs at their sources** (`f03b0c102`): README's prerequisites name the three checkouts a build reads (it said
+  four and left out `../mille-pin`); the iOS docs' Swift dependency lines read ghosttea 0.13.1 and truffle 0.7.19,
+  exact.
+
+**Found:**
+- **A pin event has generated places nobody's recipe names.** The key catalog Settings → Terminal browses
+  (`ghostty-keys.generated.ts`) is generated from the pinned ghosttea-config, and the pin had not regenerated it. Only
+  the lane's first `pnpm verify`, at its gate, saw it (the key-catalog test; gen:check would have too).
+  - 0.13 classifies `minimum-contrast` as Applied, and adds a key of ghosttea's OWN, `ghosttea-light-adaptation`,
+    declared in `GHOSTTEA_EXTENSION_KEYS`. The generator refused it by design.
+  - The generator now reads that list and emits it beside `GHOSTTY_KEYS`: two authorities, two lists, and a key in
+    neither (or both) still refuses. Its first test holds the rule. Folded into the pin commit.
+  - `siblings:pin` does not regenerate: its usage says so, dated, and making it run `pnpm gen:check` is the fixer's.
+- **ghosttea 0.13.0 writes COLORFGBG into every session's environment** (dfe0add), a Clean one included. fieldd's EL7
+  row caught it in an agent's PTY. ACCEPTED under EL7 (VF-PM): a terminal capability hint of TERM/COLORTERM's class,
+  no secret. The row's allow-list names it as a fourth source. Whether an agent's theme hint should be VibeField's own
+  value is the agent plane owner's open question.
+- **The frame package had two copies on main**: `tooling/terminal-perf` asked `@vibecook/ghosttea-frame: "*"` with no
+  overrides row, so the lock held 0.10.1 beside the renderer's own. It now has an exact 0.13.1 row and a preflight
+  row. FRAME_PROTOCOL_VERSION is 1 in both, so the committed TRF1 corpus stays readable (`perf:terminal:bench` 2/2).
+- **The 0.13.0 build's "No other line moved" in Cargo.lock was false**: tempfile's getrandom edge moved, because
+  leaving the path rows unlocked ghosttea-config's edges. Said at its source in the pin commit.
+- **Two path literals beside a `CARGO_TARGET_DIR` that builds honour**: the stage reads `target/release/field-native`
+  (`scripts/stage-package.mjs`, optional entries that only warn), and the fieldd test harness reads
+  `<root>/target/debug/field-native` (`native-harness.ts nativeBinPath`). Each run here held the checkout's `target`
+  link equal to the exported directory. One lookup that asks cargo is the fixer's.
+- 0.13.0 lacked 0.10.2's two Swift APIs (`focusesInputOnScroll`, `gridAlignment`); 0.13.1 carries them. The kit does
+  not use them yet.
+
+**Validation** (James's Mac mini, the lane's `~/vf-lanes/el8gt`, each step alone, nice 19):
+- **Run 1** (`6e4e498f4`): the first compile green; `pnpm verify` RED at its tests, three tasks:
+  - field-app's key catalog and fieldd's COLORFGBG row, the two findings above, folded into the pin on VF-PM's word;
+  - electron-shell's smoke-profile rows: the clone's Electron had no binary at verify's start (setup; pnpm does not
+    run Electron's install script). Alone with the binary present: 8/8. The gate gained the install step.
+- **Run 2** (`f03b0c102`, 22:52–23:03Z): the first compile (`cargo build --workspace --all-targets`, clippy
+  `--all-targets -D warnings`) green;
+  - **`pnpm verify`**, verbatim: EXIT 0. vitest 9,197 / 0 / 38 skipped across 26 projects; cargo 452 / 0 / 13 in 29
+    suites; node --test 215 / 0; gen:check without a diff;
+  - **the 14 stages**, each alone: 14/14 green;
+  - **C4's rows**: the class row 5/5 (0.78–0.85 s), the bound green (2.36 s);
+  - **the RD overlay witness** at the release revision: `use ghosttea` builds field-native through the overlay and
+    preflight is OK; `use --none` leaves Cargo.lock byte for byte, no `.cargo/`, and a clean tree;
+  - **a bare preflight** on a fresh tree with nothing beside it names exactly puppeteer, rosetta and mille.
+- **The rows,** each alone on the mini in one unlock (VF-PM's word, James 23:46Z), under the train's script and
+  guard (`el8-rows.sh`; the offscreen preload, `caffeinate -d -i`, the lock, HID idle, load and disk read before every
+  row). Every row ended unlocked, and every launcher that reports it found none of its processes left.
+  - **Ten green:** smoke 34 s, smoke:canvas:no-gpu 30 s, smoke:canvas:no-webgpu 28 s, smoke:plugin-restart 69 s,
+    smoke:plugin 52 s, smoke:godview 143 s, smoke:terminal-door 29 s, smoke:terminal-direct 32 s, smoke:studio 15 s,
+    smoke:bundled 88 s.
+  - **Two red, of the recorded offscreen class, and not rerun:** smoke:canvas (912 s: the occluded row, and
+    HAND_NOTEBOOK 254 ms and HAND_CALENDAR 253 ms at the 250 ms quantum) and smoke:kind-faults (75 s: the occluded row
+    alone). No IDLE red, and no stop-class rung. Each stop was classified and resumed inside its 600 s hold.
+- **The kit,** on this Mac at James's word (relayed by VF-PM, 23:46Z), simulator iPhone 17 Pro, derived data and
+  SwiftPM's packages on the SSD:
+  - the setup: the lane's three sibling links, a frozen install, and field-native for the PJ-7 fixture in the lane's
+    own target (its `target` link held equal to it);
+  - the compile: `** TEST BUILD SUCCEEDED **`, SwiftPM resolving ghosttea 0.13.1 and truffle 0.7.19 by URL;
+  - FieldTerminalTests 176 in 33 suites, FieldRoutedTerminalTests 170 in 26, FieldHomeTests 79 in 15, all passed;
+  - the whole kit with the PJ-7 fixture: 1,046 tests in 182 suites passed, PJ-7's loopback row among them; one
+    opt-in row skipped (the workspace fixture's), as in the pump lane's kit.
+- **`pnpm still` NOT REACHED:** no still mounts the terminal renderer or the key catalog the pin moves, and the stills'
+  inputs (playground, plugins, ice, Dawn) are unchanged.
+- **smoke:update not run:** the EL8 touches no WP12 path, and desk-gates runs row 30 once per WP12 landing.
+- Logs: `/Volumes/SamsungRed/lanes/hl-el8gt/logs/` (mini/gate-r1, mini/gate-r2, mini/c2r, mini/rows, kit).
+
+**Owed:**
+- CLAUDE.md's Machine setup still says the SwiftPM plane is open and `../truffle-rfc025` is required. Its seven edits
+  remain a draft in the lane's records (`records/claude-md/apply-claude-md.py`, awaiting James's own word); a
+  docs-only commit follows when he gives it.
+- The UI turn for ghosttea's own keys in Settings → Terminal (DESIGN.md, James's eyes).
+- The fixer: `siblings:pin` runs `pnpm gen:check`; one cargo-asked target directory for the stage and the harness.
+- ghosttea 0.13.2: a version edit when it is published.
+- Item 52 (b), the cwd event, is its own lane after this landing: the pin event it waited for is on main (James, via
+  VF-PM, 2026-10-23 23:48Z: "own lane for 52").
