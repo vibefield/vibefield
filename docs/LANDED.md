@@ -13714,3 +13714,68 @@ version edit (VF-PM's rule, 2026-10-23 22:30Z).
 - ghosttea 0.13.2: a version edit when it is published.
 - Item 52 (b), the cwd event, is its own lane after this landing: the pin event it waited for is on main (James, via
   VF-PM, 2026-10-23 23:48Z: "own lane for 52").
+
+## AR — item 59: a run whose termination fieldd itself asked for waits out the floor's ladder for its exit, and the record keeps the terminal's word (2026-10-24; `eebb518b0`, lane `fix/59-typed-run-close-race`)
+
+**What happened:** CI's verify on main `88c325698` (run 40047228992, 2026-10-24 01:24Z) went red on fieldd's
+agent-gateway "the REAL floor (AR-7b) > row 3 — the shell exits under it", at `expect(stamped.exited?.reason).not.toBe
+("unknown")`. The same row was green on the mini's verify of that tree and on CI at `7011674dd`, single samples both.
+It was a race in fieldd's typed-run closer: not a host fact (item 58's family) and not the pin. VF-PM made it item 59,
+the History lead's fix lane. One commit.
+- **ghosttea's order, in its own words** (service.rs, the test comment `c5c9365` added): "a natural exit reports
+  `exited` then `removed`; this terminate path removes the entry at once and reports `exited` when the session
+  concludes. Consumers end a session on `removed` and depend on neither order."
+  - The terminate path is identical at the old pin `218e11f` and at v0.13.1 (`terminate_tracked` → `remove_with_cause`
+    → `Removed`). service.rs moved only in `create_local_session` and a Windows test between them, so 0.13.1 did not
+    move the order.
+- **What depended on it:** agent-runtime's `handleInventory` arms a backstop when a run's terminal leaves the floor's
+  list, and closed it `reason: "unknown"` after EXIT_GRACE_MS (1.5 s). `exiting` was set only inside closeRun, so a
+  terminate fieldd asked for did not hold it off, and the later `exited` was dropped.
+  - An interactive sh ignores SIGTERM, so a terminated pane concludes at the ladder's SIGKILL rung, some 4 s in. Row 3's
+    pane is `/bin/sh` by name, on every host.
+  - Whether the record kept the terminal's word depended on when the floor's pump next reconciled.
+- **The fix, at the cause, one authority:**
+  - `TerminalService.terminate` is the ONE method every ask goes through: the `terminal.terminate` door, and the
+    runtime's `reapHusk`, `terminateLive` and the resume's end of the old PTY.
+  - It marks the ask BEFORE the cell is dialed and unmarks it when the ask ends `{terminated: false}` or throws. The
+    session's `session-exited` clears it, a 60 s hygiene TTL frees one whose exit never came, and
+    `terminationAskedAt` is the one read.
+  - agent-runtime.ts beside EXIT_GRACE_MS: `TERMINATION_LADDER_MS` (5 s, the floor's ladder, native-floor §4.4) and
+    `ASKED_EXIT_GRACE_MS = TERMINATION_LADDER_MS + EXIT_GRACE_MS`, the ladder plus the same one turn any exit gets (one
+    margin, not two).
+  - Both backstop arms (pending and managed) wait for the asked deadline, counted from the ask, before closing
+    "unknown". A terminal that left without our ask keeps EXIT_GRACE_MS. closeRun is unchanged.
+- **Tests:** terminal-service.test.ts's fake floor, four rows (marked until the session's exit; no mark on
+  `terminated: false`; marked from the ask and gone when it fails; let go past the TTL). agent-inventory-age.test.ts's
+  mock floor, three rows on the pending arm (asked with the exit 3 s late; unasked; asked with no exit), each printing
+  its measured gaps as `ITEM59_GAP`. agent-gateway's row 3 is unchanged, as the managed arm's witness on the real floor.
+
+**Found:**
+- gate-landing's `onlyAr7b` (DK-18, 2026-10-08) reads a red of "fieldd's agent-gateway AR-7b row alone" as main's own.
+  This race is the kind it can hide: a row the reading excuses can still be a product defect.
+- The lane's mini script reused a loop variable inside its load guard, so run 2's per-run log files were overwritten
+  by run 3's. Each run's summary and gap lines printed as it finished, so the tally below is whole. The scripts now use
+  `local`.
+
+**Validation** (James's Mac mini, in the EL8's clone at `eebb518b0`, whose locks are main's; nice 19):
+- **The first compile:** `cargo build --workspace --all-targets` and clippy `--all-targets -D warnings`, exit 0 and
+  fresh (the diff has no Rust).
+- **`pnpm verify` #1: RED** (02:25:37–02:28:27Z; load 2.3 at the arm, 47.2 at the end), one row: agent-session
+  "MF-1f/MF-1g … a restart finds the dead pane and re-lists the row from the record alone", its helper's 15 s wait for
+  the run's exit after `agent.interrupt`.
+  - That row ends its run through automation input, never `terminate`, and its pane outlives the run, so no backstop
+    arms. Its two siblings through the same helper passed in the same verify.
+  - Alone ×3 at the load guard (armed at 8.4, 7.0, 6.3), the describe passed 3 of 3 each time: the load class, as the
+    train's run 2 recorded.
+- **`pnpm verify` #2: EXIT 0** at a quiet arm (02:32:34–02:37:12Z; 1-min load 6.16 at the arm, peaking at 62.9 under
+  the TS tests, 12.6 at the end; 19 samples every 15 s). vitest 9,204 / 0 / 38 skipped (fieldd 2,438 / 29 skipped);
+  cargo 452 / 0 / 13; node --test 215 / 0; gen:check without a diff.
+- **The three files alone ×3** (armed at 8.3, 7.0, 6.0), all green, with the measured gaps against EXIT_GRACE_MS 1,500
+  and ASKED_EXIT_GRACE_MS 6,500:
+  - asked, the exit 3 s after the ask (3,002–3,004 ms): stamped with the exit's word 3–4 ms after it arrived;
+  - unasked: stamped "unknown" 1,504–1,519 ms after the drop;
+  - asked, no exit: stamped "unknown" 6,505–6,507 ms after the ask;
+  - agent-gateway's row 3 on the real floor, 3 of 3.
+- **CI is the second witness**, on the next push.
+- No desk rows and no kit: the diff is fieldd's alone.
+- Logs: `/Volumes/SamsungRed/lanes/fix59/logs/mini/`.
