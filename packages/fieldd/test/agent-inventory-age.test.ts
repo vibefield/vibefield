@@ -19,6 +19,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import type { SessionExitedEvent } from "@vibecook/ghosttea-client";
 import type { AgentAdapterBinding } from "@vibecook/puppeteer-core";
 import type { AgentProvider, AgentProviderSessionOptions } from "@vibecook/puppeteer-runtime";
 import {
@@ -379,4 +380,119 @@ describe("what the last run left, over an old inventory (IL-D5 (a); the mock flo
         { id: gone, kind: "terminal", sessionId: gone },
       ]);
   });
+});
+
+// Item 59 — a run's exit after a termination fieldd asked for. ghosttea's
+// terminate path "removes the entry at once and reports `exited` when the
+// session concludes" (its service.rs), so the floor's inventory can drop a
+// terminated PTY a whole ladder before its `session-exited`: an interactive sh
+// ignores SIGTERM and concludes at the ladder's SIGKILL, some 4 s in. The
+// runtime's backstop waits that out for a termination fieldd asked for
+// (`TerminalService.terminationAskedAt`, whose own rows are terminal-service's)
+// and keeps its ordinary grace for a PTY that left on its own. These rows hold
+// the PENDING arm on the mock floor (a run re-attached at boot that its adapter
+// cannot attach is held pending); agent-gateway's row 3 holds the managed arm on
+// the real floor. The mock floor has no cell to take a real terminate, so the
+// ask is the terminal service's answer (spied), and the exit is the floor's
+// own event handed to the runtime as daemon.ts wires it. Real time: the daemon's
+// sockets ride the same clock, and each gap below is generous against the
+// constants (EXIT_GRACE_MS 1.5 s, ASKED_EXIT_GRACE_MS 6.5 s), never equal.
+describe("item 59 — a run's exit after a termination fieldd asked for (the mock floor)", () => {
+  const RUN = "run-terminated";
+  /** freshFloor() without CLAUDE's row: the floor has stopped listing the PTY */
+  const withoutClaude = (): Record<string, unknown> => {
+    const floor = freshFloor();
+    const terminals = (floor["terminals"] as Array<{ sessionId: string }>).filter(
+      (row) => row.sessionId !== CLAUDE,
+    );
+    return { ...floor, generation: Number(floor["generation"]) + 1, terminals };
+  };
+  /** the run re-attached at boot over a fresh floor that lists its PTY, held pending */
+  const heldRun = async () => {
+    const box = await agentDaemonOn(freshFloor(), (dataDir) => [runRecord(RUN, CLAUDE, dataDir)]);
+    await until(
+      () => box.records.read(RUN)?.reattach !== undefined,
+      10_000,
+      "the run held pending at boot",
+    );
+    expect(box.records.read(RUN)?.exited, "held, not stamped").toBeUndefined();
+    return box;
+  };
+  /** the floor's own `session-exited` for the PTY, as a terminate fieldd asked for ends it */
+  const exited = (): SessionExitedEvent => ({
+    requestId: 0,
+    type: "session-exited",
+    sessionId: CLAUDE,
+    exitCode: null,
+    exitSignal: "SIGKILL",
+    requestedTermination: "application",
+    exitOutcome: "application-terminated",
+  });
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  it("asked: the floor drops the PTY first and its exit comes 3 s later — the record carries the terminal's word", async () => {
+    const { mock, daemon, records } = await heldRun();
+    const askedAt = Date.now();
+    vi.spyOn(daemon.terminals, "terminationAskedAt").mockImplementation((id) =>
+      id === CLAUDE ? askedAt : undefined,
+    );
+    mock.pushObserved(withoutClaude());
+    // twice the ordinary grace: the old backstop would have stamped "unknown" by now
+    await sleep(3_000);
+    expect(
+      records.read(RUN)?.exited,
+      "nothing stamped while the asked exit is owed",
+    ).toBeUndefined();
+    const exitAt = Date.now();
+    await daemon.agents.handleTerminalExit(exited());
+    await until(() => records.read(RUN)?.exited !== undefined, 5_000, "the exit stamping the run");
+    // the measured gaps, against EXIT_GRACE_MS 1.5 s and ASKED_EXIT_GRACE_MS 6.5 s
+    console.log(
+      `ITEM59_GAP ${JSON.stringify({ row: "asked", askToExitMs: exitAt - askedAt, askToStampMs: Date.now() - askedAt })}`,
+    );
+    expect(records.read(RUN)?.exited?.reason).toBe("application-terminated");
+    // and the backstop's later turn changes nothing
+    await sleep(4_500);
+    expect(records.read(RUN)?.exited?.reason).toBe("application-terminated");
+  }, 30_000);
+
+  it("unasked: a PTY that left on its own is closed unknown after the ordinary grace, as before, and a late exit changes nothing", async () => {
+    const { mock, daemon, records } = await heldRun();
+    const droppedAt = Date.now();
+    mock.pushObserved(withoutClaude());
+    await until(
+      () => records.read(RUN)?.exited !== undefined,
+      10_000,
+      "the backstop stamping the run",
+    );
+    console.log(
+      `ITEM59_GAP ${JSON.stringify({ row: "unasked", dropToStampMs: Date.now() - droppedAt })}`,
+    );
+    expect(Date.now() - droppedAt, "never before the ordinary grace").toBeGreaterThanOrEqual(1_400);
+    expect(Date.now() - droppedAt, "and not held for an ask nobody made").toBeLessThan(6_000);
+    expect(records.read(RUN)?.exited?.reason).toBe("unknown");
+    await daemon.agents.handleTerminalExit(exited());
+    expect(records.read(RUN)?.exited?.reason).toBe("unknown");
+  }, 30_000);
+
+  it("asked, and the exit never comes: closed unknown only past the asked bound, counted from the ask", async () => {
+    const { mock, daemon, records } = await heldRun();
+    const askedAt = Date.now();
+    vi.spyOn(daemon.terminals, "terminationAskedAt").mockImplementation((id) =>
+      id === CLAUDE ? askedAt : undefined,
+    );
+    mock.pushObserved(withoutClaude());
+    await sleep(4_500);
+    expect(records.read(RUN)?.exited, "still owed well past the ordinary grace").toBeUndefined();
+    await until(
+      () => records.read(RUN)?.exited !== undefined,
+      15_000,
+      "the asked bound stamping the run",
+    );
+    console.log(
+      `ITEM59_GAP ${JSON.stringify({ row: "asked-no-exit", askToStampMs: Date.now() - askedAt })}`,
+    );
+    expect(Date.now() - askedAt, "never before the asked bound").toBeGreaterThanOrEqual(6_000);
+    expect(records.read(RUN)?.exited?.reason).toBe("unknown");
+  }, 30_000);
 });

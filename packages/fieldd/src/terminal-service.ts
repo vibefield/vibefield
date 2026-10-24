@@ -445,6 +445,12 @@ interface CellClient {
  * that close its husk (see `bornIn`); the inventory places a husk long before. */
 const BORN_IN_EXIT_GRACE_MS = 30_000;
 
+/** Item 59 — how long a termination fieldd asked for is remembered while its
+ * session's `session-exited` is owed. Hygiene only, far past any ladder: it
+ * frees the mark of an exit that never came. The deadline a reader keeps is its
+ * own (agent-runtime's ASKED_EXIT_GRACE_MS, counted from `terminationAskedAt`). */
+const TERMINATION_ASK_TTL_MS = 60_000;
+
 /** WG-E6 — how long one cell may take to connect, and then to list its
  * sessions, before the floor census counts it as holding sessions. A healthy
  * cell answers in milliseconds; the bound only keeps a stalled one from
@@ -550,6 +556,15 @@ export class TerminalService {
    * `handleProcessExit`; a login pane's end verifies its persona). Only cells
    * fieldd has dialed report here — the inventory diff is the backstop. */
   private readonly exitListeners = new Set<(event: SessionExitedEvent) => void>();
+  /** Item 59 — the terminations fieldd itself asked for, by session, at the
+   * moment each ask was issued (`terminate`, the ONE method every ask goes
+   * through: the `terminal.terminate` door and the agent runtime's own ends).
+   * ghosttea's terminate path removes the session from its list at once and
+   * reports `exited` only when the session concludes, so a reader of the
+   * inventory can see the removal seconds before the exit; this says that the
+   * removal was ours to wait out. Gone once the session's `session-exited`
+   * arrives, the ask fails, or TERMINATION_ASK_TTL_MS passes. */
+  private readonly terminationAsks = new Map<string, number>();
   /** AR-3 — every applied inventory, for consumers that diff it (the managed-
    * session backstop: a PTY that left the inventory has exited). */
   private readonly inventoryListeners = new Set<(terminals: readonly TerminalInfo[]) => void>();
@@ -1823,8 +1838,36 @@ export class TerminalService {
    * ladder, and a filled solo cell is never a target again. IL-D5 (a) — a
    * session neither its tag nor its birth places is refused UNAVAILABLE while
    * any cell's inventory is older than the bound, never dialed at a guessed
-   * cell that would answer `terminated: false` (`sessionCell`). */
+   * cell that would answer `terminated: false` (`sessionCell`).
+   *
+   * Item 59 — the ask is marked BEFORE the cell is dialed, when its ladder can
+   * start, and unmarked when it ends `terminated: false` or throws: nothing was
+   * asked of a cell that took it (`terminationAskedAt`). */
   async terminate(sessionId: string): Promise<TerminalTerminateResult> {
+    this.terminationAsks.set(sessionId, Date.now());
+    try {
+      const result = await this.terminateAsked(sessionId);
+      if (!result.terminated) this.terminationAsks.delete(sessionId);
+      return result;
+    } catch (error) {
+      this.terminationAsks.delete(sessionId);
+      throw error;
+    }
+  }
+
+  /** Item 59 — when fieldd asked the floor to end this session, while its exit
+   * is still owed; undefined when no ask stands. */
+  terminationAskedAt(sessionId: string, now = Date.now()): number | undefined {
+    const at = this.terminationAsks.get(sessionId);
+    if (at === undefined) return undefined;
+    if (now - at > TERMINATION_ASK_TTL_MS) {
+      this.terminationAsks.delete(sessionId);
+      return undefined;
+    }
+    return at;
+  }
+
+  private async terminateAsked(sessionId: string): Promise<TerminalTerminateResult> {
     const client = await this.connectedClient(await this.sessionCellForOp(sessionId, "terminate"));
     try {
       await client.terminate(sessionId, "application");
@@ -2586,6 +2629,8 @@ export class TerminalService {
       setTimeout(() => this.bornIn.delete(sessionId), BORN_IN_EXIT_GRACE_MS).unref?.();
       // WP12 L2b — a birth that ended before any inventory listed it is no longer live
       this.bornUnseen.delete(sessionId);
+      // item 59 — the exit an ask was waiting for has come
+      this.terminationAsks.delete(sessionId);
       // SB-2 — a bound birth that ended before any inventory listed it waits
       // no longer: the next inventory without it ends its record
       this.bindings.exited(sessionId);

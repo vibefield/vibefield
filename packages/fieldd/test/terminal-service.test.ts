@@ -4651,3 +4651,74 @@ describe("IL-D5 (a) — terminal.sessions reads a stale cell's own answer", () =
     expect(fresh.agent.connections(), "nothing observed there, nothing stale").toBe(0);
   });
 });
+
+describe("item 59 — a termination fieldd asked for is marked until its exit (the fake floor)", () => {
+  // `TerminalService.terminate` is the ONE method every ask goes through (the
+  // `terminal.terminate` door and the agent runtime's own ends). The mark is
+  // what lets the runtime's inventory backstop wait out ghosttea's terminate
+  // order — the entry removed at once, `exited` only when the session
+  // concludes — instead of closing the run "unknown" (agent-exit-order.test.ts).
+  const serviceOn = (endpoints: TerminalEndpoints, requestTimeoutMs?: number) => {
+    const service = new TerminalService({
+      link: {
+        subscribe: async () => ({ snapshot: {} }),
+        terminalEndpoints: endpoints,
+        on: () => undefined,
+      },
+      ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
+    });
+    cleanup.push(() => service.dispose());
+    return service;
+  };
+
+  it("a terminate the cell takes is marked from the ask until the session's own `session-exited` clears it", async () => {
+    const floor = await startFakeFloor();
+    const service = serviceOn(floor.endpoints);
+    const born = await service.create({});
+    const before = Date.now();
+    await expect(service.terminate(born.sessionId)).resolves.toEqual({ terminated: true });
+    const askedAt = service.terminationAskedAt(born.sessionId);
+    expect(askedAt, "the ask is marked").toBeTypeOf("number");
+    expect(askedAt).toBeGreaterThanOrEqual(before);
+    expect(askedAt).toBeLessThanOrEqual(Date.now());
+    floor.exit(born.sessionId);
+    await until(
+      () => service.terminationAskedAt(born.sessionId) === undefined,
+      4000,
+      "the session's exit clearing the mark",
+    );
+  });
+
+  it("a terminate the cell does not take — a session it never held — leaves no mark", async () => {
+    const floor = await startFakeFloor();
+    const service = serviceOn(floor.endpoints);
+    await expect(service.terminate("never-born")).resolves.toEqual({ terminated: false });
+    expect(service.terminationAskedAt("never-born")).toBeUndefined();
+  });
+
+  it("the mark stands from the moment the ask is issued, and is gone when the ask fails (a cell that never answers)", async () => {
+    const floor = await startFakeFloor({ stall: ["terminate"] });
+    const service = serviceOn(floor.endpoints, 300);
+    const asking = service.terminate("s1").then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+    expect(service.terminationAskedAt("s1"), "marked before the cell is dialed").toBeTypeOf(
+      "number",
+    );
+    const error = await asking;
+    expect(error).toBeInstanceOf(RpcCallError);
+    expect((error as RpcCallError).kind).toBe("UNAVAILABLE");
+    expect(service.terminationAskedAt("s1"), "a failed ask is no ask").toBeUndefined();
+  }, 20_000);
+
+  it("a mark whose exit never came is let go after its hygiene bound, and stays gone", async () => {
+    const floor = await startFakeFloor();
+    const service = serviceOn(floor.endpoints);
+    const born = await service.create({});
+    await expect(service.terminate(born.sessionId)).resolves.toEqual({ terminated: true });
+    expect(service.terminationAskedAt(born.sessionId)).toBeTypeOf("number");
+    expect(service.terminationAskedAt(born.sessionId, Date.now() + 61_000)).toBeUndefined();
+    expect(service.terminationAskedAt(born.sessionId)).toBeUndefined();
+  });
+});

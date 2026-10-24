@@ -254,6 +254,19 @@ const PUBLISH_TICK_MS = AGENT_FIELD.FULL_TICK_MS;
  * carries the real outcome and code — has had one bounded turn to arrive
  * (puppeteer's Godview keeps the same grace for its PID poller). */
 const EXIT_GRACE_MS = 1_500;
+/** Item 59 — the floor's termination ladder, upstream's own (native-floor
+ * §4.4; `TerminalService.terminate`): an interrupt, 2 s, SIGTERM to the process
+ * group, 2 s, SIGKILL, and the reap. A shell that ignores SIGTERM, as an
+ * interactive sh does, concludes only at its end. */
+const TERMINATION_LADDER_MS = 5_000;
+/** Item 59 — the backstop's grace for a terminal whose termination fieldd
+ * itself asked for, counted from the ask. ghosttea's terminate path "removes
+ * the entry at once and reports `exited` when the session concludes"
+ * (service.rs, unchanged from 218e11f to v0.13.1), so the inventory can drop
+ * such a terminal a whole ladder before its exit arrives. It is the ladder plus
+ * EXIT_GRACE_MS, the same one turn any exit gets: one margin, not two. A
+ * terminal that left without our ask keeps EXIT_GRACE_MS alone. */
+const ASKED_EXIT_GRACE_MS = TERMINATION_LADDER_MS + EXIT_GRACE_MS;
 /** A login pane left open indefinitely still gets one verification. */
 const LOGIN_TIMEOUT_MS = 10 * 60_000;
 /** AR-S2 — how long a stop waits for a just-born session to be placed on its
@@ -1842,6 +1855,17 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     await this.closeRun(runtimeRunId, exit);
   }
 
+  /** Item 59 — how long the backstop waits for the floor's `session-exited`
+   * once a terminal has left the inventory: the asked deadline when fieldd
+   * itself asked for its termination (counted from the ask, never shorter
+   * than the ordinary grace), EXIT_GRACE_MS otherwise. */
+  private exitGraceMs(sessionId: string | undefined): number {
+    const askedAt =
+      sessionId === undefined ? undefined : this.opts.terminals?.()?.terminationAskedAt(sessionId);
+    if (askedAt === undefined) return EXIT_GRACE_MS;
+    return Math.max(EXIT_GRACE_MS, askedAt + ASKED_EXIT_GRACE_MS - Date.now());
+  }
+
   /** The floor's inventory (TerminalService `onInventory`): the join for the
    * row's cell, and the exit backstop — a terminal the inventory carried and
    * no longer does is gone, whether or not its cell's connection said so. */
@@ -1874,7 +1898,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         entry.backstop = setTimeout(() => {
           entry.backstop = undefined;
           this.closePending(runtimeRunId, { exitCode: null, signal: null, reason: "unknown" });
-        }, EXIT_GRACE_MS);
+        }, this.exitGraceMs(id));
         entry.backstop.unref();
       }
     }
@@ -1894,7 +1918,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         entry.backstop = setTimeout(() => {
           entry.backstop = undefined;
           void this.closeRun(runtimeRunId, { exitCode: null, signal: null, reason: "unknown" });
-        }, EXIT_GRACE_MS);
+        }, this.exitGraceMs(entry.info.terminalSessionId));
         entry.backstop.unref();
       }
     }
