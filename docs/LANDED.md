@@ -15283,3 +15283,57 @@ ghosttea's next release, then this EL8.
   arise). A re-verify on the Windows box is still the honest check, and it is the Windows port's.
 - **ghosttea's own open item:** the renderer draws one more frame (11 → 12, +15% worker CPU on its mini A/B). It is
   ghosttea's docket item, not this pin's.
+
+## AR — item 72: a run joins the inventory it was born into; `enter()` seeds a run's cell join from the latest inventory, so a row registered after the last push is joined, not never (2026-10-26; `c775c3380`, `b6abc462c`)
+
+**What happened:** CI's verify on the pushed head `34c2f543e` was red TWICE on the same row (run 40374881821, attempts
+1 and 2): agent-session MF-1f/MF-1g "resume hands the pane over".
+- Item 68's evidence: "the row's condition did not hold within 15000 ms; the row reported nothing it saw", and a
+  48-event log with nothing from the resume.
+- The stack was `poll ← joinedRow ← endedRun`. The run's row never got its `cellBootId`, and the resume was never
+  reached.
+- fieldd's log: `agents.terminal_spawned` at +484 ms, `agents.session_started` (the registration) at +674 ms, then
+  nothing from the run.
+- Green locally. VF-PM routed it, product fix included; the lead read the AR-S2 seam.
+
+**Cause, the product's:**
+- `AgentRuntimeService.enter()` registered a fresh run with `terminal: undefined, seenInInventory: false`. Only
+  `handleInventory`, on the NEXT inventory, joined it to its cell.
+- puppeteer births the PTY before its spawn returns, so a push listing the new pane can land in that window and find no
+  run.
+- The floor pushes again only on an event, and an idle pane raises none, so the row was never joined.
+- **What the fix closes beyond the test:** AR-6-0's rule that steering an untagged session routes its automation to the
+  WRONG cell ("unknown or remote session"). Every steer of an unjoined row (interrupt, prompt, paste) was exposed to
+  this, not only the fold's join.
+
+**The fix** (`c775c3380`, agent-runtime.ts, one hunk, in the lead's shape from his AR-S2 seam read):
+- `enter()` seeds `entry.terminal` and `seenInInventory` from the terminal service's rows when they list the run's
+  terminal.
+- It uses the same read `adopt()` makes: `this.listed(terminals, id)`, then `terminals.get(id)`. The runtime keeps ONE
+  reader of what the floor lists.
+- A first build kept a copy of the rows in `handleInventory`. That was a second authority beside TerminalService's own,
+  which writes its rows in one place and notifies straight after, so it was dropped.
+- A later inventory joins, follows the cell, or backstops exactly as before.
+- It covers every caller that births a fresh PTY (spawn, resume, native resume).
+
+**Tests:**
+- **The regression row** (`c775c3380`, "item 72 — … joined to its cell at registration") is deterministic, with no probe.
+  - The scripted provider's new `afterBirth` seam holds its return until the daemon's inventory lists the new pane,
+    plus 500 ms for the birth's own pushes. So every inventory of the birth reaches the runtime BEFORE the
+    registration, and `agent.list`, read at once, must show the join.
+  - Main's runtime: red 3/3 ("expected undefined to be defined"). The fix: green 3/3.
+- **`joinedRow` carries what it saw** (`b6abc462c`, test-only): absent, or listed with its terminal join. Its wait is named
+  "the run's row joined to its cell by the floor's inventory".
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item72`, guard v2, nice 19, on the EL8 `368f468d8`):
+- **Red-first on the CI row** (records/probe72-apply.py, a src probe never committed: agent.spawn holds 3 s between
+  puppeteer's return and `enter()`):
+  - On 43159bcd1, CI's shape exactly: joinedRow red at 15 s, nothing from the run after `session_started`.
+  - At the tip: green.
+  - The tip's tests over main's runtime: red with the new evidence, "the run's row joined to its cell by the floor's
+    inventory did not hold within 15000 ms; the row last saw: {terminal: {hosted: local, runtimeSessionId: …}}". The
+    row was listed with no `cellBootId`, which is the diagnosis.
+- **Alone ×3:** agent-session 46 / 2 skipped each, agent-inventory-age 7/7 each (on the one-hunk shape).
+- **`pnpm verify`:** EXIT 0 at 19:55:39Z on its first run (test for 27 projects, cargo test 30 ok), with the incremental cache off
+  because of the SSD's floor.
+- Logs: `/Volumes/SamsungRed/lanes/item72/logs/` (`redfirst/`, `regression/`, `proofs/`).
