@@ -14569,3 +14569,52 @@ operator error.
   - #3 **EXIT 0** at 07:10:37Z, both launch_check rows ok.
 - **CI is the exact-tree witness** on the pushed head.
 - Logs: `/Volumes/SamsungRed/lanes/item64/logs/`; the scripts are under `records/`.
+
+## AR — item 65: the index daemon's exit is composed when its stderr has ended; rosettad's last words are read before the detail is written and the retry scheduled, and a pipe held past 1 s says so (2026-10-26; `cc5b9d675`, lane `fix/65-rosettad-exit-detail`)
+
+**What happened:** item 64's verify #1 (load 215) went red on rosettad-daemon AR-1: "expected 'rosettad exited (2)'
+to contain 'refusing to start'". The cause was in fieldd, not in the row. rosettad-supervisor.ts composed a
+generation's exit on `proc.on("exit")`, and Node fires 'exit' before the child's stdio drains. So on a loaded host
+rosettad's last stderr lines could land after the exit had already written the detail and decided the generation's
+fate. Those lines feed three readings: the restarting detail's stderr tail, the wrong-binary reading
+(`unknown flag --token-file`, terminal), and the schema-mismatch reading (rebuild, not retry). The readers'
+after-exit branches repaired the latter two only while no new generation had started, so with a backoff shorter
+than the delay a wrong binary was retried as a crash. VF-PM made it item 65.
+
+**The fix, at the cause:**
+- 'exit' arms a drain bound; 'close' (the process gone AND its streams closed) composes the exit.
+- `ROSETTAD_SUPERVISION.STDERR_DRAIN_MS` = 1,000, beside its siblings, with its reason. Short on purpose: the end
+  follows the exit within milliseconds.
+- If something else still holds the pipe (a grandchild) past the bound, the exit is composed then, and the detail
+  says "rosettad exited (N); its stderr still open after <n> ms": an honest state, never a fake completeness.
+  Lines after the bound still reach the readers' after-exit branches, which are unchanged.
+- **The fake:** `FAKE_ROSETTAD_LATE_STDERR_MS` makes the late order deterministic. Its three sites go through one
+  `sayThenExit`, and a grandchild holding the inherited stderr writes the words after the fake has exited.
+- **Four rows** (rosettad-supervisor.test.ts):
+  - the detail carries words that trailed the exit;
+  - an older binary whose words trail its exit is TERMINAL at once (one generation, never a "restarting");
+  - a mismatch whose words trail the exit is REBUILT, with no retry first;
+  - a stderr held past the bound (200 ms in the row) composes the exit AT the bound, with exactly that detail.
+  The two existing rows' "the exit may overtake the line" comments now say a retry slips out only past the bound.
+
+**Found:**
+- **artifact-service:1110** asserted `not.toMatch(/source|scheme|allow|3000/)` over JSON holding epoch-ms clocks.
+  It was red on EVERY run 07:33:20Z–07:50:00Z today; that is item 66.
+- **agent-gateway-panes row 12** (verify #2's red): on a restart, `floor()`'s gateway wait is satisfied by the
+  FIRST boot's files (launcher, gateway.json, terminals.json), while the new gateway's `listening` (agent-gateway.ts
+  :862, `this.gateway !== undefined`) turns true before its `writeRendezvous` (~:1072). So the row can read the old
+  rendezvous. It is a harness race, for the agent gateway's owner.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item65`, guard v2, nice 19, at `11aff7bfa` on
+`ab18b804e`, reworded tree-identically to `cc5b9d675`):
+- **Red-first.** Against main's supervisor all four rows FAILED, each the predicted way: the detail 'rosettad exited
+  (2)' alone; the wrong binary ending as "restart intensity exceeded (3 in 5000…)", retried three times as a crash;
+  the mismatch with a "restarting" before any rebuild; no "stderr still open". At the fix: 4/4.
+- **rosettad-supervisor ×3:** 32/32. **rosettad-daemon ×3:** 18/18. **fieldd's suite fresh:** 2,474 / 11 skipped.
+- **`pnpm verify`:**
+  - #1 RED on artifact-service:1110 alone, the clock window. That file alone ×3 after 07:50Z: 43/43.
+  - #2 RED on agent-gateway-panes row 12 alone, at load 355. No rosettad runs in that row. The file alone ×3:
+    11/11.
+  - The gate on that rule is VF-PM's (item 64's): red only outside the lane's path, each file green alone ×3.
+- **CI is the exact-tree witness** on the pushed head.
+- Logs: `/Volumes/SamsungRed/lanes/item65/logs/proofs/`; the scripts are under `records/`.
