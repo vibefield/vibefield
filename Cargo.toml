@@ -277,7 +277,14 @@ truffle-core = "=0.7.22"
 # built literally here. Tag v0.13.4 = 139014b4; the lane was built at ghosttea main
 # cc62ff3b (the same source, version 0.13.3) through the RD-2 overlay and retargeted when
 # 0.13.4 shipped, because registry 0.13.3 still pins truffle-core =0.7.19.
-ghosttea = "=0.13.4"
+# EL8 (2026-10-26, lane hl/el8-ghosttea-0.13.5) bumps 0.13.4 → 0.13.5 on every plane in
+# one event; truffle-core stays =0.7.22 (0.13.5 declares it too). 0.13.5 is ghosttea #89:
+# ghosttea-text shapes with harfrust 0.15.0 instead of harfbuzz_rs 2 → harfbuzz-sys 0.5
+# (HarfBuzz 2.6.8, CVE-2023-25193), so no C shaper — host or bundled — is in this graph
+# and field-native links no Homebrew harfbuzz; glyph ids and bitmaps unchanged, positions
+# follow modern HarfBuzz (advances move ≤ 0.015 px). No API change and no protocol minor
+# (17 stands). Tag v0.13.5 = 60c5a228.
+ghosttea = "=0.13.5"
 # RETIRED 2026-09-14 (TM-1): `ghosttea-truffle = "=0.11.1"`, GT-4's mesh half of
 # the terminal floor. It served TSP1 against an IN-PROCESS session registry
 # (`TruffleTerminalMesh::serve` takes ghosttea's `Registry` by value), which is

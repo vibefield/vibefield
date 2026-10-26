@@ -212,7 +212,7 @@ jobs:
       - name: Build rosettad and the Ghosttea renderer from their pinned siblings
         run: pnpm siblings:build
       # field-native's release build is NOT a step here: `package:stage` runs THE one entry, `build:native-release`
-      # (apps/desktop/packaging/build-native-release.mjs: --locked, embedded harfbuzz), on the signed path and the unsigned
+      # (apps/desktop/packaging/build-native-release.mjs: --locked; no C harfbuzz since ghosttea 0.13.5), on the signed path and the unsigned
       # path alike (BP-1b, 2026-10-26; a second site is the drift the host-links gate would catch).
       - name: Stamp the nightly's version (D6 — this checkout only, never committed)
         if: needs.plan.outputs.channel == 'nightly'

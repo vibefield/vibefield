@@ -7,33 +7,26 @@
 //
 // `--locked`: a release never resolves a new lock.
 //
-// `HARFBUZZ_SYS_NO_PKG_CONFIG=1`, in this invocation's own environment: ghosttea-text 0.13.1 → harfbuzz_rs 2.0.1 →
-// harfbuzz-sys 0.5.0. That crate's build.rs links the HOST's harfbuzz through pkg-config whenever it finds one (Homebrew
-// on a developer's Mac), and compiles its embedded copy only when it finds none or when this variable is set. 0.5.0 has no
-// `bundled` feature to ask for instead. A package built with the host's harfbuzz started nowhere else: on the Mac mini,
-// fieldd never got ready, because dyld could not load `/opt/homebrew/opt/harfbuzz/lib/libharfbuzz.0.dylib`. A static
-// choice in ghosttea-text is upstream's (a ghosttea docket item). Dev builds stay as they are: they never ship.
+// It carried `HARFBUZZ_SYS_NO_PKG_CONFIG=1` in its own environment from BP-1b until the EL8 to ghosttea 0.13.5
+// (2026-10-26): ghosttea-text 0.13.1–0.13.4 shaped through harfbuzz_rs 2.0.1 → harfbuzz-sys 0.5.0, whose build.rs links the
+// HOST's harfbuzz through pkg-config whenever it finds one (Homebrew on a developer's Mac) — a package built that way
+// started nowhere else (on the Mac mini, dyld could not load `/opt/homebrew/opt/harfbuzz/lib/libharfbuzz.0.dylib`). 0.13.5
+// shapes with harfrust (pure Rust; ghosttea #89), so no harfbuzz-sys is in the graph and the switch is dead. The
+// host-links gate (scripts/host-links.mjs) stays as the defense: a release links nothing outside /usr/lib, /System and the
+// bundle, whatever a future dependency's build script prefers.
 import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
-/** The release build's environment: the caller's, plus the one switch a shipped harfbuzz needs. */
-export function releaseBuildEnv(base) {
-  return { ...base, HARFBUZZ_SYS_NO_PKG_CONFIG: "1" };
-}
-
 /** The release build's arguments. */
 export const RELEASE_BUILD_ARGS = ["build", "--release", "--locked", "-p", "field-native"];
 
 if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
-  console.log(
-    `build-native-release: cargo ${RELEASE_BUILD_ARGS.join(" ")} (HARFBUZZ_SYS_NO_PKG_CONFIG=1)`,
-  );
+  console.log(`build-native-release: cargo ${RELEASE_BUILD_ARGS.join(" ")}`);
   const run = spawnSync("cargo", RELEASE_BUILD_ARGS, {
     cwd: repoRoot,
-    env: releaseBuildEnv(process.env),
     stdio: "inherit",
   });
   if (run.error !== undefined) {

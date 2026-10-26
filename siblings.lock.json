@@ -49,7 +49,7 @@
     "ghosttea": {
       "path": "../ghosttea-0.11.2",
       "repository": "https://github.com/vibecook-dev/ghosttea.git",
-      "sha": "139014b4bd1877b318015ab03078c9015823fee1",
+      "sha": "60c5a228252f8ca33ecd212a731f559e157861ed",
       "javascript": {
         "workspaces": [
           "@vibecook/ghosttea-protocol",
@@ -74,9 +74,9 @@
         "link": "apps/ios/VibeFieldKit/.window/ghosttea"
       },
       "release": {
-        "npm": "0.13.4",
-        "cargo": "0.13.4",
-        "swift": "0.13.4"
+        "npm": "0.13.5",
+        "cargo": "0.13.5",
+        "swift": "0.13.5"
       }
     },
     "mille": {

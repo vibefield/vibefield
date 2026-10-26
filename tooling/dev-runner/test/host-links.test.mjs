@@ -1,17 +1,14 @@
 // BP-1b's gate (scripts/host-links.mjs) and its one release-build entry (apps/desktop/packaging/build-native-release.mjs):
 // a packaged Mach-O's dependency load commands are read from `otool -l` — never a dylib's own install name — and any path
 // outside /usr/lib, /System or the bundle is refused; the launch check runs each native binary's `--version`; the release
-// build carries HARFBUZZ_SYS_NO_PKG_CONFIG=1 and --locked.
+// build is --locked (its HARFBUZZ_SYS_NO_PKG_CONFIG=1 retired with harfbuzz-sys at the EL8 to ghosttea 0.13.5).
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { chmodSync, copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import {
-  RELEASE_BUILD_ARGS,
-  releaseBuildEnv,
-} from "../../../apps/desktop/packaging/build-native-release.mjs";
+import { RELEASE_BUILD_ARGS } from "../../../apps/desktop/packaging/build-native-release.mjs";
 import {
   auditHostLinks,
   dependencyCommandsOf,
@@ -173,10 +170,6 @@ test("the launch check runs each native binary's --version: a name said and exit
   }
 });
 
-test("THE release build of field-native is --locked with the embedded harfbuzz, and keeps the caller's environment", () => {
+test("THE release build of field-native is --locked", () => {
   assert.deepEqual(RELEASE_BUILD_ARGS, ["build", "--release", "--locked", "-p", "field-native"]);
-  const env = releaseBuildEnv({ PATH: "/usr/bin", CARGO_TARGET_DIR: "/t" });
-  assert.equal(env.HARFBUZZ_SYS_NO_PKG_CONFIG, "1");
-  assert.equal(env.PATH, "/usr/bin");
-  assert.equal(env.CARGO_TARGET_DIR, "/t");
 });

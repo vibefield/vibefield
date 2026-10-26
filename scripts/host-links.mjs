@@ -4,7 +4,8 @@
 // anywhere else, such as Homebrew's `/opt/homebrew` or `/usr/local`, or a build machine's own path, loads on the build
 // host alone. Under a signed build's hardened runtime (no library-validation exception) it loads nowhere. The package's
 // field-native once linked Homebrew's harfbuzz this way: harfbuzz-sys 0.5.0's build.rs prefers a pkg-config host
-// library. No release step noticed, because none loads field-native.
+// library. No release step noticed, because none loads field-native. (Since the EL8 to ghosttea 0.13.5, 2026-10-26, the
+// shaper is harfrust and no harfbuzz-sys is in the graph; this gate stays the defense against the next such build script.)
 //
 // The load commands are read from the file's own headers: LC_LOAD_DYLIB, LC_LOAD_WEAK_DYLIB, LC_REEXPORT_DYLIB,
 // LC_LAZY_LOAD_DYLIB and LC_LOAD_UPWARD_DYLIB, in every architecture of a fat file. Never LC_ID_DYLIB, a dylib's OWN

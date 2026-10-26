@@ -28,7 +28,7 @@ let truffleDependency: Package.Dependency =
 // siblings.lock.json's ghosttea `release.swift`, never by hand: the exact tag in the committed shape, and the checkout
 // (`../ghosttea-0.11.2`, reached through `.window/ghosttea` so the path package keeps the package's own identity, as
 // `.window/truffle` does) while `pnpm siblings use ghosttea` renders it nil.
-let ghostteaRelease: Version? = "0.13.4"
+let ghostteaRelease: Version? = "0.13.5"
 let ghostteaDependency: Package.Dependency =
   if let release = ghostteaRelease {
     .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: release)
