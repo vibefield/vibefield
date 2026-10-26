@@ -61,7 +61,9 @@ authority for the number.)* *(2026-10-22: that release came, v0.13.0. The kit la
 kit's truffle row is that exact version, and `Package.resolved` carries it.)* *(2026-10-26: the
 two moved together again in one EL8 event, ghosttea 0.13.4 with truffle 0.7.22 on every plane;
 `Cargo.toml` stays the authority for the numbers.)* *(2026-10-26, later: ghosttea 0.13.5 on every
-plane, the harfrust shaper; truffle stays 0.7.22, which 0.13.5 declares too.)* The repo still
+plane, the harfrust shaper; truffle stays 0.7.22, which 0.13.5 declares too.)* *(Later still: ghosttea
+0.13.6 on every plane, the render worker's and the claim's fixes; truffle stays 0.7.22, which 0.13.6
+declares too.)* The repo still
 does not build standalone: rosetta (rosettad) and mille are checkouts until their releases are
 recorded (RD-5); puppeteer's was recorded on 2026-10-26. Every revision is pinned in
 `siblings.lock.json`:

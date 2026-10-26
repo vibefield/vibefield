@@ -284,7 +284,13 @@ truffle-core = "=0.7.22"
 # and field-native links no Homebrew harfbuzz; glyph ids and bitmaps unchanged, positions
 # follow modern HarfBuzz (advances move ≤ 0.015 px). No API change and no protocol minor
 # (17 stands). Tag v0.13.5 = 60c5a228.
-ghosttea = "=0.13.5"
+# EL8 (2026-10-26, lane hl/el8-ghosttea-0.13.6) bumps 0.13.5 → 0.13.6 on every plane in
+# one event; truffle-core stays =0.7.22 (0.13.6 declares it too; 0.7.23 waits for a ghosttea
+# that declares it, VF-PM 21:42Z). On this plane the six crates move by version alone: the
+# one crate whose code changed between the tags, ghosttea-truffle (#92, a claim waits for
+# the session's opening control frame), is retired from this graph (TM-1, below); it
+# reaches the phone inside the Apple native artifact. Tag v0.13.6 = 9c114391.
+ghosttea = "=0.13.6"
 # RETIRED 2026-09-14 (TM-1): `ghosttea-truffle = "=0.11.1"`, GT-4's mesh half of
 # the terminal floor. It served TSP1 against an IN-PROCESS session registry
 # (`TruffleTerminalMesh::serve` takes ghosttea's `Registry` by value), which is

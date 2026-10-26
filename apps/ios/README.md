@@ -218,7 +218,8 @@ only the dev overlay's link now* — *and again 2026-10-26, the EL8 to ghosttea 
 pins ghosttea exact 0.13.4 and truffle exact 0.7.22, which ghosttea 0.13.4 declares too; lockstep
 by version still holds* — *and once more 2026-10-26, the EL8 to ghosttea 0.13.5 (the harfrust
 shaper): the kit pins ghosttea exact 0.13.5, truffle stays exact 0.7.22, which 0.13.5 declares
-too*), the in-process
+too* — *and that evening, the EL8 to ghosttea 0.13.6: the kit pins ghosttea exact 0.13.6, truffle
+stays exact 0.7.22, which 0.13.6 declares too*), the in-process
 Tailscale runtime, kept up by itself while signed in (2026-10-18; a deliberate CONNECT act until then) — since IOS-4i in VibeField's
 own truffle namespace, the only one a desktop is visible in — in-app login
 (Safari sheet), the online-peer roster, and the mesh chip the bubbles
