@@ -14810,3 +14810,65 @@ DK-5's "hands Electron a fresh profile…". The same rows were green on CI at `2
   `staged-serving-seam.test.ts` reach Electron's index.js through their imports. On CI the step makes that a no-op; in a
   fresh tree it fetches about 100 MB from a unit test. A docket line for electron-shell's owner (VF-PM 14:27Z); ROADMAP's
   Open debts.
+
+## AR/NF — item 68: every real-floor wait in fieldd's suites carries its evidence at its deadline; one helper reads the floor's AND fieldd's own logs, and fieldd now logs in those suites (2026-10-26; `c45205c40` → `d7402c4c8`, lane `fix/68-real-floor-evidence`)
+
+**What happened:** four different real-floor rows each cost a CI run on 2026-10-26. Each said only that it timed
+out, and the logs that would have said why were deleted with the row's temp root:
+- item 62's refresh row;
+- item 63's AR-6-0 setup;
+- the persona login pane: nightly 40342606623, agent-session.test.ts:1545, "poll timed out after 15000ms" waiting
+  for `identity.loggedIn` after `agents.profiles.login`;
+- field-native's sidecar.stderr row (Rust, a read of its own).
+
+VF-PM made it item 68: the row, and the systemic shape.
+
+**Measured** (the persona row; a lane probe gave fieldd a logRoot, which no suite did — fieldd logged NOWHERE in
+these suites): from `agents.profiles.login` returning to the persona's `identity.loggedIn`, 314–901 ms at loads
+0–278.
+- At load 0: 314 and 419 ms. At 40 busy loops: 688 and 536 ms. At 80 (load 170–278): 454 and 901 ms.
+- fieldd's own events, against the moment `login` returned: `login_started` at −6/−10 ms; `husk_reaped` at
+  +242–542 ms (the reap's terminate RPC, which `finishLogin` awaits BEFORE the re-read); `login_finished … outcome
+  logged-in` at +384–828 ms.
+- The scripted claude is a `#!/bin/sh` script, so item 63's code-signature cost does not apply.
+- So CI's 15 s was a stalled step, not a slow chain.
+- **The hypotheses the evidence will now confirm or exclude:**
+  1. the reap's terminate stalls up to its 10 s mgmt deadline before the re-read starts;
+  2. the pane's `session-exited` never reaches `handleTerminalExit`;
+  3. the re-read itself fails (`login_finished`'s `outcome` names it).
+  Re-reading first and reaping after is a product ruling, for its own lane with that evidence.
+
+**The fix, test-only, no budget changed:**
+- **The helper** (`c45205c40`, native-harness.ts), replacing item 63's `floorBootEvidence`:
+  - `FloorScene {dataDir, spawnedAt, link}`.
+  - `floorEvidence(scene)` merges `<dataDir>/logs/system/field-native.ndjson` and `fieldd.ndjson` by time, each line
+    tagged `floor`/`fieldd`, with whitelisted attrs only (the floor's, plus fieldd's sessionId, profileId, how,
+    outcome, terminated), the link view, and which log is missing.
+  - `waitWithEvidence(what, fn(seen), ms, scene)` says at its deadline what was awaited, what the row last `seen`
+    (≤ 800 chars, never a credential), and that evidence.
+- **One commit per suite:** each setup gives fieldd `logRoot: <dataDir>/logs` and records its scene, and each
+  suite's own wait delegates.
+  - agent-session (`3841388cf`; the persona row names its wait and `seen`s the persona);
+  - the gateway harness, which carries agent-gateway-panes (`8fad83f45`);
+  - the kill matrix, through a `boot` wrapper over its seventeen `bootstrap` calls (`4e5af4fc0`);
+  - the seam and shell integration, the latter a NativeLink with no daemon (`6421ef041`);
+  - the supervision matrix, cross-daemon and the phone world (`d7402c4c8`).
+  - agent-gateway.test.ts's real-floor waits ride the harness's `poll`. Its own `poll` serves four rows that never
+    boot a floor, and ws-rpc's shared `until` (suites with no floor) is untouched.
+- **The fourth row** is field-native's Rust native_logging.rs. It stays a queued read, for Rust-side evidence.
+
+**Validation** (this Mac's SSD lane `/Volumes/SamsungRed/lanes/item68`, guard v2, nice 19, at `0d75e4403` on
+`2a867d65d`; commits 5 and 6 then reworded tree-identically: `8b27d9ffe` → `6421ef041`, tree `55b58494862`, and
+`0d75e4403` → `d7402c4c8`, tree `23156c45873`; the pre-reword tip is the branch `backup/item68-0d75e4403`):
+- **Red-first:** the persona row's wait forced to 1 ms.
+  - main's suite says only `Error: poll timed out after 1ms`.
+  - The tip says "the persona's identity re-read after its login pane ends did not hold within 1 ms", then the
+    persona last seen (`signingIn` with its session), "fieldd's link: connected; routes heard at revision 3, 2
+    cell(s)", and the merged timeline (`floor …` and `fieldd …` lines, the boot through `cell_serving`).
+- **Each migrated suite alone ×3:** native-harness 13/13, agent-session 45 / 2 skipped, agent-gateway-panes 11/11,
+  agent-gateway 92/92, terminal-kill-matrix 13 / 1 skipped, terminal-seam 6/6, terminal-shell-integration 18/18,
+  native-supervision-matrix 6/6, cross-daemon 8/8, project-doors-phone 14/14.
+- **`pnpm verify`:** EXIT 0 at 16:06:52Z on its first run (test for 27 projects, cargo test 30 ok).
+- **CI is the exact-tree witness** on the pushed head, and the next red names its step.
+- Logs: `/Volumes/SamsungRed/lanes/item68/logs/` (`measure/`, `redfirst/`, `proofs/`); the scripts and the probe are
+  under `records/`.
