@@ -13,11 +13,25 @@ import { createConnection } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
+import { cargoBinaries } from "../../../scripts/cargo-target.mjs";
 
-/** The cargo artifact for `-p field-native`. The PACKAGE name never carries a
- * suffix — only the built file does, and only on win32. */
-export function nativeBinPath(root: string, platform: NodeJS.Platform = process.platform): string {
-  return join(root, "target", "debug", platform === "win32" ? "field-native.exe" : "field-native");
+/** The cargo artifact for `-p field-native`: where the suites' build under
+ * `nativeBuildEnv` lands, ASKED of cargo (`scripts/cargo-target.mjs`, tooling
+ * (a) — the stage asks the same way). It was the literal
+ * `<root>/target/debug/field-native`, which a CARGO_TARGET_DIR with no `target`
+ * link beside it made a binary the build never wrote. The PACKAGE name never
+ * carries a suffix — only the built file does, and only on win32. */
+export function nativeBinPath(
+  root: string,
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const [floor] = cargoBinaries(root, "debug", ["field-native"], {
+    env: nativeBuildEnv(root, env),
+    platform,
+  });
+  if (floor === undefined) throw new Error("cargoBinaries answered no field-native");
+  return floor.path;
 }
 
 /** Where the suites' `cargo build -p field-native` lands: where `nativeBinPath`

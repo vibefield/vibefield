@@ -36,6 +36,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 // WP8-D6: the bundled list's one home, shared with smoke:bundled's stager.
 import { BUNDLED_PLUGINS } from "../apps/desktop/packaging/bundled-list.mjs";
+// Tooling (a) — field-native's binaries are read where cargo builds them, never `<repo>/target` by guess.
+import { cargoBinaries } from "./cargo-target.mjs";
 // Not a dependency — a repo script. scripts/siblings.mjs is the ONE reader of
 // siblings.lock.json (CLAUDE.md §Machine setup), and staging is its fourth
 // consumer after preflight, the Nx cache stamp and the dev runner.
@@ -70,9 +72,40 @@ const MODES_ENFORCEABLE = process.platform !== "win32";
 // ---- the allowlist ---------------------------------------------------------
 // Sidecars are architecture-specific and flat under `bin/` (EDP-22/23) — per-arch subdirectories
 // arrive with the universal-build amendment, not before.
-const nativeName = process.platform === "win32" ? "field-native.exe" : "field-native";
-// TC-S2 — field-native's second binary, the terminal cell. Same crate, same `cargo build`.
-const cellName = process.platform === "win32" ? "field-terminal-host.exe" : "field-terminal-host";
+//
+// Tooling (a), 2026-10-26 — field-native's binaries, LIST-shaped. One `cargo build --release -p field-native` makes
+// them all; each name stages as `bin/<file>`, read from where cargo builds it (`cargoBinaries`: cargo's own target
+// directory — CARGO_TARGET_DIR, the other spelling, a config's `build.target-dir`). They were path literals,
+// `target/release/<name>` against the repo root, which a lane's CARGO_TARGET_DIR or the shared target-dir made a
+// stale file or none, staged as a mere warning. They ship as a SET or not at all (verify's SET check), and a missing
+// one is a declared optional gap: warned about loudly, FATAL under --require-complete, the release stage. A third
+// binary is one more row.
+//   - field-native: the floor.
+//   - field-terminal-host (TC-S2): the floor's terminal cell. Flat under `bin/` is the resolution law, not a
+//     convenience: the floor finds it as a SIBLING of its own executable (field-native `config.rs::cell_binary()`,
+//     with FIELD_NATIVE_CELL_BIN as a test-only override packaging never sets).
+const NATIVE_BINARIES = [
+  {
+    name: "field-native",
+    gap: "the field-native sidecar is absent — the packaged app will have no native plane",
+  },
+  {
+    name: "field-terminal-host",
+    gap: "the terminal cell binary is absent — the native plane will have no terminal",
+  },
+];
+const nativeFile = (name) => (process.platform === "win32" ? `${name}.exe` : name);
+let nativeBuilt = null;
+let nativeUnknown = null;
+try {
+  nativeBuilt = cargoBinaries(
+    repoRoot,
+    "release",
+    NATIVE_BINARIES.map((binary) => binary.name),
+  );
+} catch (error) {
+  nativeUnknown = error instanceof Error ? error.message : String(error);
+}
 const fielddName = process.platform === "win32" ? "fieldd.exe" : "fieldd";
 // FS-1a — mille's napi triple (fieldd workspace/launch.ts `milleTriple`)
 const milleNativeName = (() => {
@@ -224,29 +257,22 @@ const PLAN = [
     mode: DATA_MODE,
     produce: "pnpm --filter @vibefield/fieldd build",
   },
-  {
-    stage: `bin/${nativeName}`,
-    from: `target/release/${nativeName}`,
-    kind: "file",
-    mode: EXEC_MODE,
-    optional: "the field-native sidecar is absent — the packaged app will have no native plane",
-    produce: "cargo build --release -p field-native",
-  },
-  {
-    // TC-S2: the floor's terminal cell, produced by the SAME `cargo build -p field-native`.
-    // Flat under `bin/` is not a convenience here, it is the resolution law — the floor finds
-    // this binary as a SIBLING of its own executable (field-native `config.rs::cell_binary()`,
-    // with FIELD_NATIVE_CELL_BIN as a test-only override that packaging never sets). Staging
-    // the floor without it ships a native plane whose terminal unit can only ever report "the
-    // field-terminal-host binary cannot be located beside this executable", so the two are
-    // checked as a PAIR in verify() rather than only entry-by-entry here.
-    stage: `bin/${cellName}`,
-    from: `target/release/${cellName}`,
-    kind: "file",
-    mode: EXEC_MODE,
-    optional: "the terminal cell binary is absent — the native plane will have no terminal",
-    produce: "cargo build --release -p field-native",
-  },
+  // tooling (a) — field-native's binaries (NATIVE_BINARIES): each from where cargo builds it, the
+  // place looked said in the gap
+  ...NATIVE_BINARIES.map((binary, i) => {
+    const built = nativeBuilt?.[i];
+    return {
+      stage: `bin/${nativeFile(binary.name)}`,
+      from: built?.path ?? null,
+      kind: "file",
+      mode: EXEC_MODE,
+      optional:
+        built === undefined
+          ? `${binary.gap} (${nativeUnknown})`
+          : `${binary.gap} (cargo builds it to ${built.path})`,
+      produce: "cargo build --release -p field-native",
+    };
+  }),
   ...(process.platform === "darwin"
     ? [
         {
@@ -702,23 +728,22 @@ const verify = ({ files, manifest }, produced) => {
     }
   }
 
-  // TC-S2 — the floor and its cell ship as a PAIR or not at all. Either being absent is a
-  // declared optional gap above (a preview package with no native plane, warned about loudly and
-  // fatal under --require-complete). A floor staged WITHOUT its cell is not a gap: the floor
-  // resolves the cell beside itself, so that package boots a native plane whose terminal unit is
-  // permanently Degraded. The half-state is reachable from a `target/release` predating TC-S2 —
-  // one that still holds field-native and has never built field-terminal-host — which is exactly
-  // the case that must fail here rather than pack silently. Asserted against the STAGE, so
-  // --verify catches it on a stage this process did not build.
-  const floorStaged = present.has(`bin/${nativeName}`);
-  const cellStaged = present.has(`bin/${cellName}`);
-  if (floorStaged !== cellStaged) {
+  // TC-S2, tooling (a) — field-native's binaries (NATIVE_BINARIES) ship as a SET or not at all.
+  // All absent is a declared optional gap above (a preview package with no native plane, warned
+  // about loudly and fatal under --require-complete). Some staged without the rest is not a gap:
+  // the floor resolves its other binaries beside itself, so a floor without its cell boots a native
+  // plane whose terminal unit is permanently Degraded. The half-state is reachable from a target
+  // predating a binary — one that still holds field-native and has never built the newer one —
+  // which is exactly the case that must fail here rather than pack silently. Asserted against the
+  // STAGE, so --verify catches it on a stage this process did not build.
+  const nativeStages = NATIVE_BINARIES.map((binary) => `bin/${nativeFile(binary.name)}`);
+  const nativeStaged = nativeStages.filter((stage) => present.has(stage));
+  if (nativeStaged.length > 0 && nativeStaged.length < nativeStages.length) {
+    const absent = nativeStages.filter((stage) => !present.has(stage));
     problems.push(
-      floorStaged
-        ? `PAIR  bin/${nativeName} is staged without bin/${cellName} — the floor resolves its ` +
-            `terminal cell as a sibling and would find none (TC-S2); rebuild both with ` +
-            `\`cargo build --release -p field-native\``
-        : `PAIR  bin/${cellName} is staged without bin/${nativeName} — a cell with no floor`,
+      `SET  ${nativeStaged.join(", ")} staged without ${absent.join(", ")} — field-native's ` +
+        `binaries resolve one another as siblings, and these would find none (TC-S2); rebuild ` +
+        `them all with \`cargo build --release -p field-native\``,
     );
   }
 

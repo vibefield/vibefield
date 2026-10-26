@@ -49,12 +49,30 @@ describe("the suites' field-native build lands where they look for it", () => {
 });
 
 describe("the native harness is platform-shaped (WIN-4)", () => {
+  // tooling (a): `nativeBinPath` asks cargo where the suites' build lands, so
+  // these rows name the target directory rather than assume `<repo>/target`
+  const REPO = join(import.meta.dirname, "..", "..", "..");
+  // the run's own overrides out (a lane exports CARGO_TARGET_DIR), so each row's is the one cargo reads
+  const plain = { ...process.env };
+  delete plain["CARGO_TARGET_DIR"];
+  delete plain["CARGO_BUILD_TARGET_DIR"];
+  const named = { ...plain, CARGO_TARGET_DIR: "/elsewhere" };
+
   it("appends .exe to the cargo artifact on win32 only", () => {
-    expect(nativeBinPath("/repo", "darwin")).toBe(join("/repo", "target", "debug", "field-native"));
-    expect(nativeBinPath("/repo", "linux")).toBe(join("/repo", "target", "debug", "field-native"));
-    expect(nativeBinPath("/repo", "win32")).toBe(
-      join("/repo", "target", "debug", "field-native.exe"),
+    expect(nativeBinPath(REPO, "darwin", named)).toBe(join("/elsewhere", "debug", "field-native"));
+    expect(nativeBinPath(REPO, "linux", named)).toBe(join("/elsewhere", "debug", "field-native"));
+    expect(nativeBinPath(REPO, "win32", named)).toBe(
+      join("/elsewhere", "debug", "field-native.exe"),
     );
+  });
+
+  it("reads where the suites' build lands, as cargo says it: the named target, else the checkout's own", () => {
+    // tooling (a) — it was the literal <root>/target/debug, which a target the
+    // caller named without a `target` link beside it made a file never written
+    const spelled = { ...plain, CARGO_BUILD_TARGET_DIR: "/other" };
+    expect(nativeBinPath(REPO, "darwin", spelled)).toBe(join("/other", "debug", "field-native"));
+    const own = nativeBuildEnv(REPO, plain)["CARGO_TARGET_DIR"] as string;
+    expect(nativeBinPath(REPO, "darwin", plain)).toBe(join(own, "debug", "field-native"));
   });
 
   it("resolves a LAYOUT path on unix and a named pipe on win32 (WIN-D1)", () => {
