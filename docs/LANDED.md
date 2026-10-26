@@ -14456,3 +14456,59 @@ VF-PM made it item 63.
 - **CI is the second witness**, on the next push; a stalled boot there now names its step.
 - Logs: `/Volumes/SamsungRed/lanes/item63/logs/` (`measure/`, `redfirst/`, `proofs/`); the scripts and probes are
   under `records/`.
+
+## LSF-4 — the release gate reads what a signed build carries: entitlements as codesign's XML, and each live-surface helper's identity from its own binary (2026-10-26; `85d528a8a`, `26601295e`, lane `lsf/signed-identity`)
+
+**Why — the gate doing its job on the first real signed build.** Nightly run 40272843651 (attempt 2, on `2ae90170a`)
+went further than any before.
+- The Xcode 26.3 pin took "Package, signed" past the resolver.
+- electron-builder signed with the Developer ID and logged "notarization successful": **J4 proven in practice.**
+- The stage's verify ran BP-1b's host-links gate and launch check on CI's own field-native, TWICE, green. That is the
+  harfbuzz-on-CI answer: no host library in CI's build either.
+- The files, history and plugins package checks passed (WP8-plugins-package `ok`, key class `release`).
+- Then the LSF-4 release gate refused the signed app, the first time it ever met one:
+  `signature policy failed: app: V8 JIT entitlement is absent; capture-helper: identifier is live-surface-capture-helper,
+  expected com.jamesyong.vibefield.live-surface-capture-helper; iosurface-adapter: identifier is live-surface-adapter,
+  expected com.jamesyong.vibefield.live-surface-adapter`.
+- No artifact was uploaded.
+
+**What happened:**
+- **`85d528a8a` — the entitlement reader.**
+  - The cause was the GATE's parser. It matched `<key>` in `codesign --display --entitlements -`, which a modern codesign
+    prints in its own text form (`[Dict] [Key] … [Bool] true`, measured on macOS 26.5.2), so it read zero keys from any
+    signed binary. The release config signs with `packaging/entitlements.mac.plist`, which carries allow-jit.
+  - `apps/desktop/packaging/codesign-entitlements.mjs` asks for `--xml` and reads the plist's keys, and REFUSES the text
+    form in words rather than reading it as "none".
+  - The policy is unchanged.
+- **`26601295e` — the helpers' own identity.**
+  - electron-builder's signer re-signs nested code with `--force` and no `--identifier`, and a Mach-O with no
+    Info.plist signs as its file name. The build's ad-hoc `--identifier` did not survive it, and its comment claiming
+    it would carries a dated correction at its source.
+  - Each artifact (the capture helper, the IOSurface adapter, the pixel fixture) now links its own `__TEXT,__info_plist`
+    whose CFBundleIdentifier codesign takes under any signer.
+  - The build proves it on every run: a copy re-signed with no identifier must take the reverse-DNS id.
+
+**Validation:**
+- **Probes first** (scratch copies, ad-hoc):
+  - the text form vs `--xml`;
+  - a forced re-sign replacing an explicit identifier, which `--preserve-metadata` does not save;
+  - an embedded `__info_plist` giving the reverse-DNS id to an executable and a `-bundle` alike.
+- **Red first:** f6313f026's helpers, re-signed with no identifier, take their file names; this build's take
+  `com.jamesyong.vibefield.live-surface-capture-helper` and `com.jamesyong.vibefield.live-surface-adapter`.
+- **The gate itself on this lane's local package:** zero identifier refusals. It still refuses what only a Developer ID
+  build can carry (TeamIdentifier, Developer ID authority, hardened runtime, secure timestamp, and the JIT entitlement,
+  which the unsigned local package is not given).
+- **The row:** `codesign-entitlements.test.mjs` 3/3, including the real codesign witness: a copy signed with
+  entitlements.mac.plist reads allow-jit with `--xml`, and the old reading is refused.
+- **`pnpm verify`** EXIT 0 on `26601295e` (06:56–07:05Z, nice 19), 26 of 27 projects fresh: vitest 9,252/0/37, node --test
+  246/0, cargo 456/0/13 in 30 suites. `package:stage` green, with the build's own identity check and
+  `stage verify OK — 104 files … complete`.
+
+**What only CI can prove:** that the SHIPPED app carries allow-jit, and the helpers' TeamIdentifier and Developer ID
+chain. The gate reads all of them on the next signed nightly, whose build job is this lane's witness.
+
+**Owed:**
+- The next nightly: the LSF-4 gate green on a signed app, then BP-1b's host-links step (16) and D11's planes hash (19),
+  never reached so far; then sign, converge, publish. W10, and W11's N, follow it.
+- `build-native-release.mjs`'s comment says ghosttea-text 0.13.1, and main is 0.13.4 (VF-PM's errata, for the next lane
+  that touches it).
