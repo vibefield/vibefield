@@ -1006,6 +1006,19 @@ describe("PT-5a — a page's failures are said (ruling 3)", () => {
     handle.set({ browser: { ...NAV, refused: { what: "download", serial: 2 } } as never });
     expect(arrived).toHaveBeenCalledTimes(2);
     expect(face.info().extra?.refused).toEqual({ what: "download", serial: 2 });
+    // BP-D1: a denied PERMISSION rides the same words, with the permission it was
+    handle.set({
+      browser: {
+        ...NAV,
+        refused: { what: "permission", permission: "camera", serial: 3 },
+      } as never,
+    });
+    expect(arrived).toHaveBeenCalledTimes(3);
+    expect(face.info().extra?.refused).toEqual({
+      what: "permission",
+      permission: "camera",
+      serial: 3,
+    });
   });
 
   it("PT-5d (M7 H10): the page's DOCUMENT, as its producer counts it, rides the face's words (`extra.document`) — the pane's wait for a page the document sent elsewhere ends by it moving; a producer that counts none says none", () => {

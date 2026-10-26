@@ -44,7 +44,7 @@ import {
   headKey,
   pageDocument,
   pageFavicon,
-  REFUSAL_WORDS,
+  refusalWords,
 } from "./head";
 import { BROWSER_PANE_KIND, SAMPLE_URL } from "./ids";
 import {
@@ -319,8 +319,8 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
       return plan;
     },
     saying(e) {
-      const what = live.saying(e);
-      return what === undefined ? undefined : REFUSAL_WORDS[what];
+      const refusal = live.saying(e);
+      return refusal === undefined ? undefined : refusalWords(refusal);
     },
     get notices() {
       return notices;

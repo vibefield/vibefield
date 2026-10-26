@@ -3306,6 +3306,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       download: 0,
       "file-picker": 0,
       auth: 0,
+      permission: 0,
     });
     // before its first frame the page is not live: a pop-up is counted and goes nowhere
     window.refuse("popup", "https://example.test/early");
@@ -3350,6 +3351,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
       download: 2,
       "file-picker": 1,
       auth: 1,
+      permission: 0,
     };
     expect(result.runtime.stats.refused).toEqual(counted);
     // …and the diagnostics carry the same count (the support snapshot)
@@ -3358,6 +3360,57 @@ describe("BrowserLiveSurfaceRuntime", () => {
     // a window that is no longer the runtime's says nothing
     window.refuse("download");
     expect(result.runtime.stats.refused.download).toBe(2);
+  });
+
+  it("BP-D1: a PERMISSION a page requests is denied by its session and SAID in the page's state — once a document for each permission, its serial moving, its word carried; another document is told again", async () => {
+    const result = setup();
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await flush();
+    const window = result.native.windows[0];
+    if (window === undefined) throw new Error("no window");
+    window.paint(sharedPaint(640, 360).paint);
+    window.emitNavigationState(NAV);
+    expect(result.runtime.summary.browser).not.toHaveProperty("refused");
+    window.refuse("permission", "geolocation");
+    expect(result.runtime.summary.browser?.refused).toEqual({
+      what: "permission",
+      permission: "geolocation",
+      serial: 1,
+    });
+    expect(renderer.summaries.at(-1)?.browser?.refused).toEqual({
+      what: "permission",
+      permission: "geolocation",
+      serial: 1,
+    });
+    // asked again in the same document: counted, never said twice
+    const published = renderer.summaries.length;
+    window.refuse("permission", "geolocation");
+    expect(renderer.summaries).toHaveLength(published);
+    expect(result.runtime.summary.browser?.refused).toMatchObject({ serial: 1 });
+    // another permission: said, the serial moved; a download after it moves the same serial
+    window.refuse("permission", "camera");
+    expect(result.runtime.summary.browser?.refused).toEqual({
+      what: "permission",
+      permission: "camera",
+      serial: 2,
+    });
+    window.refuse("download");
+    expect(result.runtime.summary.browser?.refused).toEqual({ what: "download", serial: 3 });
+    // a refusal without its word says nothing (the guard always names one)
+    window.refuse("permission");
+    expect(result.runtime.summary.browser?.refused).toEqual({ what: "download", serial: 3 });
+    // ANOTHER document asks again and is told again
+    window.emitNavigationState({ ...NAV, url: "https://example.test/next" });
+    window.refuse("permission", "geolocation");
+    expect(result.runtime.summary.browser?.refused).toEqual({
+      what: "permission",
+      permission: "geolocation",
+      serial: 4,
+    });
+    expect(result.runtime.stats.refused.permission).toBe(5);
+    expect(result.runtime.supportSnapshot().refused?.permission).toBe(5);
+    result.runtime.dispose();
   });
 
   it("PT-5b3 (ruling 7 c): a LIVE page sent by its link or a script to an ATTACHMENT is not loading for good — the engine begins a load, refuses the download, and stops it at once (the probe): the page's state reads `loading: false`, at its own address, in its own document, the refusal said", async () => {
@@ -3726,6 +3779,11 @@ describe("BrowserLiveSurfaceRuntime", () => {
     };
     const first = await born({ source: desk, profilesRoot: root });
     expect(first?.profilePath).toBe(join(root, browserSurfaceProfileName(desk)));
+    // BP-D6: a PACKAGED shell's page lives in ANOTHER directory of the same root — never the one an unpackaged shell opens
+    const packaged = await born({ source: desk, profilesRoot: root, profilesPackaged: true });
+    expect(packaged?.profilePath).toBe(join(root, browserSurfaceProfileName(desk, true)));
+    expect(packaged?.profilePath).toMatch(/\/browser\/profiles\/[a-f0-9]{40}$/u);
+    expect(packaged?.profilePath).not.toBe(first?.profilePath);
     expect(first?.profilePath).toMatch(/\/browser\/profiles\/[a-f0-9]{40}$/u);
     expect(first?.profilePath).not.toContain("desk");
     expect(first?.persistent).toBe(true);

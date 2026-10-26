@@ -22,9 +22,11 @@ import {
   noticeScale,
   PAGE_TEXELS_MAX,
   PANE_SIZE,
+  PERMISSION_WORDS,
   pageRefusal,
   REFUSAL_WORDS,
   RETRY_LABEL,
+  refusalWords,
   retryAt,
   shapeOf,
   wrapTwo,
@@ -345,6 +347,39 @@ describe("PT-5a — the head says a refusal for a moment", () => {
     expect(pageRefusal(undefined)).toBeUndefined();
     expect(pageRefusal({})).toBeUndefined();
     expect(REFUSAL_WORDS.download).toBe("Download blocked");
+  });
+
+  it("BP-D1: a denied PERMISSION is read with its word and said by it — the camera's, the location's — or the general words for one the pane has no word for", () => {
+    expect(
+      pageRefusal({ extra: { refused: { what: "permission", permission: "camera", serial: 2 } } }),
+    ).toEqual({ what: "permission", permission: "camera", serial: 2 });
+    for (const refused of [
+      { what: "permission", serial: 1 },
+      { what: "permission", permission: "", serial: 1 },
+      { what: "permission", permission: "Camera", serial: 1 },
+      { what: "permission", permission: 7, serial: 1 },
+      { what: "permission", permission: "camera", serial: 0 },
+    ])
+      expect(pageRefusal({ extra: { refused } }), JSON.stringify(refused)).toBeUndefined();
+    expect(refusalWords({ what: "download", serial: 1 })).toBe("Download blocked");
+    expect(refusalWords({ what: "permission", permission: "camera", serial: 1 })).toBe(
+      "Camera blocked",
+    );
+    expect(refusalWords({ what: "permission", permission: "geolocation", serial: 1 })).toBe(
+      "Location blocked",
+    );
+    expect(refusalWords({ what: "permission", permission: "notifications", serial: 1 })).toBe(
+      "Notifications blocked",
+    );
+    // a word the pane does not know, and one shaped like an Object property: the general words, never undefined
+    for (const permission of ["unknown", "speakerSelection2", "toString", "constructor"])
+      expect(refusalWords({ what: "permission", permission, serial: 1 }), permission).toBe(
+        REFUSAL_WORDS.permission,
+      );
+    expect(REFUSAL_WORDS.permission).toBe("Permission blocked");
+    // every word is the head's short form: "<what> blocked"
+    for (const words of Object.values(PERMISSION_WORDS))
+      expect(words).toMatch(/^[A-Z][^.]* blocked$/);
   });
 
   it("a head that SAYS something is another raster than the one that says its address — and one that says nothing keeps its key as it was cut", () => {

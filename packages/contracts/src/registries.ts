@@ -1728,4 +1728,9 @@ export const IPC_CHANNELS = {
    * reloads the page FROM MAIN: a page's own reload is a navigation the contents
    * policy refuses outside dev. The answer races the reload, as the users doors' do. */
   rendererReplace: "vibefield:shell:renderer-replace",
+  /** renderer → main invoke: {} → BrowserDataClearResult — Settings › General's
+   * "Clear browsing data" (BP-D4, thinking-browser-profile.md §3·3): main clears
+   * the desk's browser profile and reloads the open pages on it. No path, no
+   * site, no size crosses; a registered window alone may ask. */
+  browserDataClear: "vibefield:browser:clear-data",
 } as const;

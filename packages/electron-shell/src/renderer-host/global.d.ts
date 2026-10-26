@@ -1,4 +1,5 @@
 import type {
+  BrowserDataClearResult,
   DesktopShellState,
   FrameView,
   FrameViewState,
@@ -120,6 +121,10 @@ declare global {
         prepareRestart(): Promise<UpdatePrepareResult>;
         confirmRestart(token: string): Promise<UpdateConfirmResult>;
         doctor(): Promise<UpdateDoctorResult>;
+      };
+      /** BP-D4 — Settings' Clear browsing data (counts only; main owns the profiles). */
+      browserData: {
+        clear(): Promise<BrowserDataClearResult>;
       };
       /** Godview round 3 — the deck's state said by name; main owns the
        * window's lights (GV-D11) and lends ⌘W by the same word. */

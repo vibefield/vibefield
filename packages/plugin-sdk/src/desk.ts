@@ -354,13 +354,14 @@ export function liveBrowserFailure(reason: string): LiveBrowserFailure {
 
 /**
  * WHAT A PAGE ASKED FOR AND MAY NOT HAVE (PT-5a) — `LiveInfo.extra.refused` on a browser face: the last such thing the host
- * answered for the page and wants SAID (a download: cancelled — a desk keeps no files for a page), with a serial that moves
- * each time. A kind says it for a moment when the serial moves under an open face. Absent: nothing was.
+ * answered for the page and wants SAID, with a serial that moves each time — a download (cancelled: a desk keeps no files
+ * for a page), or a PERMISSION the page requested (denied: a desk's pages get none — `permission` names it, Chromium's
+ * word such as `geolocation` or `notifications`, `camera` and `microphone` for a media request). A kind says it for a
+ * moment when the serial moves under an open face. Absent: nothing was.
  */
-export interface LiveBrowserRefusal {
-  readonly what: "download";
-  readonly serial: number;
-}
+export type LiveBrowserRefusal =
+  | { readonly what: "download"; readonly serial: number }
+  | { readonly what: "permission"; readonly permission: string; readonly serial: number };
 
 /**
  * THE TEXTURE IS A STILL (PT-5b) — `LiveInfo.extra.still` on a browser face: what its texture holds is a PHOTOGRAPH of the

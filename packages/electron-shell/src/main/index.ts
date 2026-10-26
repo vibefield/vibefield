@@ -65,6 +65,7 @@ import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot } from "./fieldd";
 import { FielddDaemonBootFence, FielddHandleCoordinator } from "./fieldd-handle-coordinator";
 import {
+  registerBrowserDataClear,
   registerDeckSet,
   registerRendererReplace,
   registerScreenshotCapture,
@@ -960,8 +961,18 @@ async function main(
       capture: resources.macosLiveSurfaceCapture,
       // PT-4: a browser page's persistent profile is its USER's — under the user's root, never Electron's own userData
       browserProfilesRoot: join(userRoot, ...LAYOUT.BROWSER_PROFILES_DIR),
+      // BP-D6: a packaged shell's profiles (its cookie store encrypted — ESP-11's fuse) carry their own name, so an
+      // unpackaged shell never opens one, whatever data root it was started on
+      browserProfilesPackaged: app.isPackaged,
       logger: logger.child({ component: "live-surfaces.capture" }),
     });
+    if (!app.isPackaged && process.env["FIELDD_DATA_DIR"] === undefined && !isSmokeLike(MODE)) {
+      // BP-D6: an unpackaged shell started by hand on the packaged app's data root — said once, here
+      logger.info(
+        "desktop.live_surfaces.browser_profiles_unpackaged",
+        "an unpackaged shell on the packaged app's data root keeps its own browser profiles; the packaged app's are never opened",
+      );
+    }
     liveSurfaceAuthority = new LiveSurfaceAuthority({
       resolveWindow: (identity) => windowRendererBoundary?.resolveCurrent(identity) ?? null,
       hostFor: (webContentsId) => {
@@ -1276,6 +1287,12 @@ async function main(
   registerDeckSet(registry, windowLights, logger.child({ component: "ipc.deck" }));
   // DK-9: a window replaces its renderer at its own asking (a plugin's kinds changed)
   registerRendererReplace(registry, logger.child({ component: "ipc.renderer" }));
+  // BP-D4: Settings' Clear browsing data — the live-surface support clears this shell's profiles (none before it exists)
+  registerBrowserDataClear(
+    registry,
+    async () => liveSurfaceSupport?.clearBrowsingData() ?? { profiles: 0, pages: 0 },
+    logger.child({ component: "ipc.browser-data" }),
+  );
 
   // FR-4: main owns the app's one theme (FC-D5) — Light · Dark · Auto, kept in
   // the shell's own profile, Auto following the OS through `nativeTheme`, and

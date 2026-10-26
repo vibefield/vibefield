@@ -5,6 +5,7 @@ import {
   APP_PREFERENCE_KEYS,
   AppPreferenceSetParams,
   AppPreferences,
+  BrowserDataClearResult,
   CloseReason,
   CloseRequest,
   CloseResult,
@@ -220,7 +221,7 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the twenty-nine channel keys, in order", () => {
+  it("exposes exactly the thirty channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -254,6 +255,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "screenshotResult", // SNAP-3 — main → renderer: the View menu's capture, told to the page
       "screenshotPreview",
       "rendererReplace", // DK-9 — the window's renderer replaced at its own asking (a plugin's kinds)
+      "browserDataClear", // BP-D4 — Settings' Clear browsing data: the desk's profile cleared, its pages reloaded
     ]);
   });
 
@@ -288,6 +290,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       screenshotResult: "vibefield:screenshot:result",
       screenshotPreview: "vibefield:screenshot:preview",
       rendererReplace: "vibefield:shell:renderer-replace",
+      browserDataClear: "vibefield:browser:clear-data",
     });
   });
 
@@ -299,6 +302,25 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
     expect(() => RendererReplaceRequest.parse({ reason: "because" })).toThrow();
     expect(RendererReplaceResult.parse({ replacing: true })).toEqual({ replacing: true });
     expect(() => RendererReplaceResult.parse({ replacing: false })).toThrow();
+  });
+
+  it("Clear browsing data (BP-D4) answers counts only — no path, no site, no size", () => {
+    expect(BrowserDataClearResult.parse({ profiles: 1, pages: 3 })).toEqual({
+      profiles: 1,
+      pages: 3,
+    });
+    expect(BrowserDataClearResult.parse({ profiles: 0, pages: 0 })).toEqual({
+      profiles: 0,
+      pages: 0,
+    });
+    for (const bad of [
+      {},
+      { profiles: 1 },
+      { profiles: -1, pages: 0 },
+      { profiles: 1.5, pages: 0 },
+      { profiles: 65, pages: 0 },
+    ])
+      expect(BrowserDataClearResult.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
   });
 });
 

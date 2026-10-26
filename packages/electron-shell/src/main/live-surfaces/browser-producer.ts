@@ -172,9 +172,9 @@ export interface BrowserSurfaceNativeWindow {
    * A window born without the bound says nothing.
    */
   onInputHung(listener: (frame?: string) => void): () => void;
-  /** PT-5a: the page asked for something it MAY NOT have, and was answered at once (`BrowserSurfaceRefusal`); a pop-up
-   * comes with the address it asked for. */
-  onRefused(listener: (what: BrowserSurfaceRefusal, url?: string) => void): () => void;
+  /** PT-5a: the page asked for something it MAY NOT have, and was answered at once (`BrowserSurfaceRefusal`); `detail` is
+   * a pop-up's address, or a refused permission's word (BP-D1). */
+  onRefused(listener: (what: BrowserSurfaceRefusal, detail?: string) => void): () => void;
   onPaint(listener: (paint: BrowserSurfacePaint) => void): () => void;
   onRenderProcessGone(listener: (reason: string) => void): () => void;
   onDestroyed(listener: () => void): () => void;
@@ -185,9 +185,11 @@ export interface BrowserSurfaceNativeWindow {
  *  - `alert` — dismissed; `confirm` — cancelled (`prompt` is cancelled before it reaches the engine: uncounted);
  *  - `beforeunload` — the page leaves; `popup` (`window.open`, `target=_blank`) — no window: the SAME pane goes there;
  *  - `download` — cancelled, and said in the page's state (`refused`) for the head to say for a moment;
- *  - `file-picker` — cancelled (the input hears `cancel`); `auth` — HTTP auth cancelled (the page's own 401).
- * Permission requests are denied by the session's handlers and `window.close()` is replaced before the page's scripts run:
- * neither is counted here.
+ *  - `file-picker` — cancelled (the input hears `cancel`); `auth` — HTTP auth cancelled (the page's own 401);
+ *  - `permission` — a Chromium permission the page REQUESTED, denied by the session's handlers (ESP §7.4), and said in
+ *    the page's state once a document for each permission (BP-D1, thinking-browser-profile.md, 2026-10-26).
+ * A permission CHECK is denied silently, and `window.close()` is replaced before the page's scripts run: neither is
+ * counted here.
  */
 export const BROWSER_SURFACE_REFUSALS = [
   "alert",
@@ -197,6 +199,7 @@ export const BROWSER_SURFACE_REFUSALS = [
   "download",
   "file-picker",
   "auth",
+  "permission",
 ] as const;
 export type BrowserSurfaceRefusal = (typeof BROWSER_SURFACE_REFUSALS)[number];
 
@@ -470,6 +473,9 @@ export interface BrowserLiveSurfaceRuntimeOptions {
   /** PT-4: where this user's persistent browser profiles live (`<user root>/browser/profiles` — LAYOUT's); a persistent
    * source's session is the directory under it named by its profile's digest. Absent: Electron's own partitions. */
   readonly profilesRoot?: string;
+  /** BP-D6: this shell is PACKAGED (its fuses flipped — an encrypted cookie store), so its profile directories carry the
+   * packaged name (`browserSurfaceProfileName`) and an unpackaged shell never opens them. Absent: unpackaged. */
+  readonly profilesPackaged?: boolean;
   /** Optional main-private instrumentation; observer faults never affect frames. */
   readonly onPaintCallbackDurationUs?: (durationUs: bigint) => void;
 }
@@ -993,6 +999,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   readonly #restartLimit: number;
   readonly #detachedHibernateMs: number;
   readonly #profilesRoot: string | undefined;
+  readonly #profilesPackaged: boolean;
   readonly #onPaintCallbackDurationUs: ((durationUs: bigint) => void) | undefined;
   readonly #lifecycle = new LiveSurfaceLifecycle();
   readonly #attachments = new Map<string, BrowserRuntimeAttachmentRecord>();
@@ -1163,8 +1170,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     download: 0,
     "file-picker": 0,
     auth: 0,
+    permission: 0,
   };
   #refused: LiveSurfaceBrowserStateV1["refused"];
+  /** BP-D1: the permissions already SAID for the page's document — each is said once a document, however often asked. */
+  readonly #permissionsSaid = new Set<string>();
   /** PT-5a: the page's last WEB address — where a producer started again loads it (never back at its first address). */
   #resumeUrl: string | undefined;
   /** PT-5a: the page was SAID to have stopped (`whenStopped: "say"`): no demand starts it again — its reload does. */
@@ -1191,6 +1201,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#viewport = roundedViewport(this.source.logicalViewport);
     this.#emulation = this.source.emulation;
     this.#profilesRoot = options.profilesRoot;
+    this.#profilesPackaged = options.profilesPackaged === true;
     this.#native = options.native;
     this.#controlTargets = options.controlTargets;
     this.#requestSharedTexture = options.requestSharedTexture ?? true;
@@ -1403,6 +1414,20 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         runtime.letGo(context.attachmentId);
       },
     };
+  }
+
+  /** PT-4 / BP-D6: the directory this source's PERSISTENT profile lives in — under its user's profiles' root, named by
+   * its profile's digest (packaged or not) — or undefined: a memory profile, or no root was given (Electron's own
+   * partition). Settings' "Clear browsing data" (BP-D4) clears the profile at this path. */
+  persistentProfilePath(): string | undefined {
+    if (this.source.profile.mode !== "persistent" || this.#profilesRoot === undefined)
+      return undefined;
+    return join(this.#profilesRoot, browserSurfaceProfileName(this.source, this.#profilesPackaged));
+  }
+
+  /** The source owner tore this surface down (`dispose`): it opens no page again. */
+  isClosed(): boolean {
+    return this.#closed;
   }
 
   /** Explicit source-owner teardown; renderer detach alone only pauses the source, and hibernates it once the grace lapses. */
@@ -2144,12 +2169,11 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     initialRaster: LiveSurfacePixelSizeV1,
   ): BrowserSurfaceNativeWindowOptions {
     const persistent = this.source.profile.mode === "persistent";
+    const profilePath = this.persistentProfilePath();
     return {
       partition: browserSurfacePartition(this.source),
       persistent,
-      ...(persistent && this.#profilesRoot !== undefined
-        ? { profilePath: join(this.#profilesRoot, browserSurfaceProfileName(this.source)) }
-        : {}),
+      ...(profilePath === undefined ? {} : { profilePath }),
       logicalViewport: viewport,
       initialBackingRaster: initialRaster,
       deviceScaleFactor: this.density(),
@@ -2521,10 +2545,23 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     window: BrowserSurfaceNativeWindow,
     epoch: number,
     what: BrowserSurfaceRefusal,
-    url: string | undefined,
+    detail: string | undefined,
   ): void {
     if (!this.ownsProducer(window, epoch)) return;
     this.#refusals[what] += 1;
+    if (what === "permission") {
+      // BP-D1: denied already (ESP §7.4) — said in the page's state once a document for each permission, its serial moved
+      if (detail === undefined || this.#permissionsSaid.has(detail)) return;
+      this.#permissionsSaid.add(detail);
+      this.#refused = {
+        what: "permission",
+        permission: detail,
+        serial: (this.#refused?.serial ?? 0) + 1,
+      };
+      if (this.#browserState !== undefined) this.publishSummary();
+      return;
+    }
+    const url = detail;
     if (what === "popup") {
       if (
         url !== undefined &&
@@ -2561,6 +2598,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     const document = this.#documentBase + state.document;
     const another = document !== this.#document;
     this.#document = document;
+    // BP-D1: another document may ask again, and is told again
+    if (another) this.#permissionsSaid.clear();
     // PT-5b — WHILE A WINDOW'S FIRST LOAD IS PENDING the engine's committed address is still its bootstrap's (`about:blank`):
     // plumbing, never where the page is. The page is headed where it was sent — it says THAT, loading, with no title yet.
     // (Before: a page slow to answer said it was at `about:blank` — on its head, and to the desk, which took its still for
@@ -2716,8 +2755,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       );
       const removeCursor = window.onCursor((cursor) => this.acceptCursor(window, epoch, cursor));
       const removeFavicon = window.onFavicon((urls) => this.acceptFavicon(window, epoch, urls));
-      const removeRefused = window.onRefused((what, url) =>
-        this.acceptRefusal(window, epoch, what, url),
+      const removeRefused = window.onRefused((what, detail) =>
+        this.acceptRefusal(window, epoch, what, detail),
       );
       const removeUnresponsive = window.onUnresponsive((unresponsive) =>
         this.acceptUnresponsive(window, epoch, unresponsive),
@@ -3193,8 +3232,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         ),
         removeCursor: window.onCursor((cursor) => this.acceptCursor(window, epoch, cursor)),
         removeFavicon: window.onFavicon((urls) => this.acceptFavicon(window, epoch, urls)),
-        removeRefused: window.onRefused((what, url) =>
-          this.acceptRefusal(window, epoch, what, url),
+        removeRefused: window.onRefused((what, detail) =>
+          this.acceptRefusal(window, epoch, what, detail),
         ),
         removeUnresponsive: window.onUnresponsive((unresponsive) =>
           this.acceptUnresponsive(window, epoch, unresponsive),

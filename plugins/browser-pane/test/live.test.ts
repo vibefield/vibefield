@@ -904,6 +904,19 @@ describe("PT-5a — a failed page's face (ruling 3)", () => {
     face.say({ info: info(2) });
     local.tick?.(9_000);
     expect(local.saying(1 as Entity)).toBe("Download blocked");
+    // BP-D1: a denied PERMISSION moves the same serial and is said by its own words
+    face.say({
+      info: {
+        address: PAGE,
+        extra: {
+          favicon: null,
+          refused: { what: "permission", permission: "geolocation", serial: 3 },
+        },
+      },
+    });
+    local.tick?.(9_500);
+    expect(local.saying(1 as Entity)).toBe("Location blocked");
+    expect(record().head.key).toContain("say:Location blocked");
   });
 
   it("a face opened on a page whose words ALREADY carry a refusal says nothing of it — only one that arrives after", () => {

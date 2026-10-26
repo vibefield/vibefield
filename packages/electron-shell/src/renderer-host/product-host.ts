@@ -137,6 +137,10 @@ export function mountProductHost(
       deck: {
         set: (deck) => window.vibefield.deck.set(deck),
       },
+      // BP-D4 — Settings' Clear browsing data, straight onto the preload's one door
+      browserData: {
+        clear: () => window.vibefield.browserData.clear(),
+      },
       // DT-2a: the claimed transport reaches the product instead of only being
       // parked here. The promise is handed over as-is — the pool behind the seam
       // awaits it — while the LIFETIME stays this adapter's: pagehide above

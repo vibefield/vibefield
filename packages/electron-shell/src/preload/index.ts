@@ -1,4 +1,6 @@
 import {
+  type BrowserDataClearResult,
+  BrowserDataClearResult as BrowserDataClearResultSchema,
   CloseRequest,
   CloseResult,
   type DesktopShellState,
@@ -337,6 +339,12 @@ contextBridge.exposeInMainWorld("vibefield", {
         RendererReplaceRequest.parse({ reason }),
       ),
     ),
+  /** BP-D4 — Settings' Clear browsing data: main clears this shell's browser profiles and reloads their open pages; the
+   * answer is counts only (no path, no site, no size), parsed here before it crosses. */
+  browserData: {
+    clear: async (): Promise<BrowserDataClearResult> =>
+      BrowserDataClearResultSchema.parse(await ipcRenderer.invoke(IPC_CHANNELS.browserDataClear)),
+  },
   onPrepareClose: (handler: (requestId: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, raw: unknown) => {
       const request = CloseRequest.safeParse(raw);

@@ -1,5 +1,8 @@
+import { existsSync } from "node:fs";
+import type { BrowserDataClearResult } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
 import type { LiveSurfaceEnumerationSources, LiveSurfaceRuntimeFactories } from "./authority";
+import { clearBrowsingData } from "./browser-data";
 import { ElectronBrowserSurfaceNative } from "./browser-electron-native";
 import { BrowserLiveSurfaceRuntime } from "./browser-producer";
 import {
@@ -26,6 +29,9 @@ export interface LiveSurfaceCapturePaths {
 export interface ProductionLiveSurfaceSupport {
   readonly factories: LiveSurfaceRuntimeFactories;
   readonly enumeration: LiveSurfaceEnumerationSources;
+  /** BP-D4 — Settings' "Clear browsing data": this shell's persistent profiles cleared, their open pages reloaded
+   * (`browser-data.ts`). */
+  clearBrowsingData(): Promise<BrowserDataClearResult>;
   dispose(): Promise<void>;
 }
 
@@ -40,9 +46,13 @@ export function createProductionLiveSurfaceSupport(opts: {
   /** PT-4: where the attached user's persistent browser profiles live (`<user root>/browser/profiles` — LAYOUT's): a
    * persistent browser source's session is a directory under it. Absent: Electron's own partitions. */
   browserProfilesRoot?: string;
+  /** BP-D6: this shell is packaged — its profiles carry the packaged name, apart from an unpackaged shell's. */
+  browserProfilesPackaged?: boolean;
   logger?: Logger;
 }): ProductionLiveSurfaceSupport {
   let browserNative: ElectronBrowserSurfaceNative | null = null;
+  /** BP-D4: the browser surfaces this support made — what "Clear browsing data" reloads (closed ones are let go there) */
+  const browserSurfaces = new Set<BrowserLiveSurfaceRuntime>();
   let captureStack: CaptureStack | null = null;
   let disposed = false;
 
@@ -78,15 +88,22 @@ export function createProductionLiveSurfaceSupport(opts: {
 
   return {
     factories: {
-      browser: (surfaceId, source) =>
-        new BrowserLiveSurfaceRuntime({
+      browser: (surfaceId, source) => {
+        const runtime = new BrowserLiveSurfaceRuntime({
           surfaceId,
           source,
           native: ensureBrowserNative(),
           ...(opts.browserProfilesRoot === undefined
             ? {}
             : { profilesRoot: opts.browserProfilesRoot }),
-        }),
+          ...(opts.browserProfilesPackaged === true ? { profilesPackaged: true } : {}),
+        });
+        // a closed surface is let go as the next is made, so the set holds the open ones (and a few just closed)
+        for (const surface of browserSurfaces)
+          if (surface.isClosed()) browserSurfaces.delete(surface);
+        browserSurfaces.add(runtime);
+        return runtime;
+      },
       sckWindow: (surfaceId, source) =>
         new SckLiveSurfaceRuntime({ surfaceId, source, client: ensureCapture().supervisor }),
       iosSimulator: (surfaceId, source) => {
@@ -120,6 +137,23 @@ export function createProductionLiveSurfaceSupport(opts: {
           appName: device.runtimeName,
         }));
       },
+    },
+    clearBrowsingData: async () => {
+      for (const surface of browserSurfaces)
+        if (surface.isClosed()) browserSurfaces.delete(surface);
+      const result = await clearBrowsingData({
+        profilesRoot: opts.browserProfilesRoot,
+        packaged: opts.browserProfilesPackaged === true,
+        surfaces: browserSurfaces,
+        exists: existsSync,
+        clearProfile: (path) => ensureBrowserNative().clearProfile(path),
+      });
+      opts.logger?.info(
+        "desktop.live_surfaces.browser_data_cleared",
+        "the browser profiles were cleared and their open pages reloaded",
+        { ...result },
+      );
+      return result;
     },
     dispose: async () => {
       disposed = true;

@@ -8,6 +8,7 @@
 // browser harnesses may omit it because they have no shell lifecycle witness.
 
 import type {
+  BrowserDataClearResult,
   DesktopShellState,
   FrameView,
   FrameViewState,
@@ -71,6 +72,13 @@ export interface FieldUpdatesHost {
   confirmRestart(token: string): Promise<UpdateConfirmResult>;
   /** C4 — the doctor's lines */
   doctor(): Promise<UpdateDoctorResult>;
+}
+
+/** BP-D4 (thinking-browser-profile.md §3·3) — Settings › General's "Clear browsing data": main clears this shell's browser
+ * profiles (the desk's — every desk page's sites) and reloads their open pages; counts only come back. Absent in browser
+ * harnesses, where main owns no profile. */
+export interface FieldBrowserDataHost {
+  clear(): Promise<BrowserDataClearResult>;
 }
 
 export interface FieldDiagnosticsHost {
@@ -199,6 +207,8 @@ export interface FieldHost {
   readonly diagnostics?: FieldDiagnosticsHost;
   /** WP12d (L3c-i) — the desktop updater (`FieldUpdatesHost`); absent where no updater runs. */
   readonly updates?: FieldUpdatesHost;
+  /** BP-D4 — the desk browser's data (`FieldBrowserDataHost`); absent where main owns no browser profile. */
+  readonly browserData?: FieldBrowserDataHost;
   readonly platform?: ShellPlatform;
   readonly view?: FieldViewHost;
   /** Optional like `view`: a browser harness has no main to own the theme, and

@@ -1,7 +1,10 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import {
   type BrowserSurfaceSession,
   browserSurfacePartition,
+  browserSurfacePermissionWord,
+  browserSurfaceProfileName,
   installGuardedBrowserSurfaceContents,
   installGuardedBrowserSurfaceSession,
   isAllowedBrowserRequest,
@@ -210,5 +213,88 @@ describe("Browser Live Surface security", () => {
     download.guard?.(orphan);
     expect(orphan.preventDefault).toHaveBeenCalledOnce();
     expect(told).toHaveLength(4);
+  });
+
+  it("BP-D1 (R1): a permission REQUEST is denied by both handlers AND told to the contents that asked, by its word; a CHECK is denied and told to no one", () => {
+    const handlers: {
+      request:
+        | ((c: unknown, p: string, cb: (granted: boolean) => void, d?: unknown) => void)
+        | null;
+      check: ((c: unknown, p: string) => boolean) | null;
+    } = { request: null, check: null };
+    const target: BrowserSurfaceSession = {
+      webRequest: { onBeforeRequest: () => undefined },
+      setPermissionRequestHandler: (handler) => {
+        handlers.request = handler;
+      },
+      setPermissionCheckHandler: (handler) => {
+        handlers.check = handler;
+      },
+      on: () => target,
+    };
+    installGuardedBrowserSurfaceSession(target);
+    const page = { on: () => page, setWindowOpenHandler: () => undefined };
+    const other = { on: () => other, setWindowOpenHandler: () => undefined };
+    const told: [string, string | undefined][] = [];
+    const elsewhere: string[] = [];
+    installGuardedBrowserSurfaceContents(page as never, (what, detail) =>
+      told.push([what, detail]),
+    );
+    installGuardedBrowserSurfaceContents(other as never, (what) => elsewhere.push(what));
+    const granted: boolean[] = [];
+    handlers.request?.(page, "geolocation", (g) => granted.push(g));
+    handlers.request?.(page, "media", (g) => granted.push(g), { mediaTypes: ["video", "audio"] });
+    handlers.request?.(page, "media", (g) => granted.push(g), { mediaTypes: ["audio"] });
+    handlers.request?.(page, "notifications", (g) => granted.push(g), {});
+    // a request nobody of ours made (no contents): denied all the same, told to no one
+    handlers.request?.(undefined, "geolocation", (g) => granted.push(g));
+    expect(granted).toEqual([false, false, false, false, false]);
+    expect(told).toEqual([
+      ["permission", "geolocation"],
+      ["permission", "camera"],
+      ["permission", "microphone"],
+      ["permission", "notifications"],
+    ]);
+    expect(elsewhere).toEqual([]);
+    // a CHECK: denied, said to nobody (Chromium asks them constantly; nothing was asked of a person)
+    expect(handlers.check?.(page, "geolocation")).toBe(false);
+    expect(told).toHaveLength(4);
+  });
+
+  it("BP-D1: a permission's word is Chromium's own, a media request's the camera or the microphone, and anything outside the contract's shape `unknown`", () => {
+    expect(browserSurfacePermissionWord("geolocation")).toBe("geolocation");
+    expect(browserSurfacePermissionWord("clipboard-sanitized-write")).toBe(
+      "clipboard-sanitized-write",
+    );
+    expect(browserSurfacePermissionWord("midiSysex")).toBe("midiSysex");
+    expect(browserSurfacePermissionWord("media", { mediaTypes: ["video"] })).toBe("camera");
+    expect(browserSurfacePermissionWord("media", { mediaTypes: ["audio", "video"] })).toBe(
+      "camera",
+    );
+    expect(browserSurfacePermissionWord("media", { mediaTypes: ["audio"] })).toBe("microphone");
+    expect(browserSurfacePermissionWord("media", { mediaTypes: "video" })).toBe("media");
+    expect(browserSurfacePermissionWord("media")).toBe("media");
+    for (const odd of ["", "Geo", "a/b", "x".repeat(49), "9lives"])
+      expect(browserSurfacePermissionWord(odd), odd).toBe("unknown");
+  });
+
+  it("BP-D6 (R2): a PACKAGED shell's profile has another opaque name than an unpackaged shell's — and the unpackaged one is the name every profile had before", () => {
+    const desk = { profile: { mode: "persistent" as const, ref: "desk" } };
+    const plain = browserSurfaceProfileName(desk);
+    const packaged = browserSurfaceProfileName(desk, true);
+    expect(plain).toMatch(/^[a-f0-9]{40}$/);
+    expect(packaged).toMatch(/^[a-f0-9]{40}$/);
+    expect(packaged).not.toBe(plain);
+    expect(browserSurfaceProfileName(desk, false)).toBe(plain);
+    // the digest the PT-4 directories were named by — so a development desk keeps its sites across this change
+    expect(plain).toBe(
+      createHash("sha256")
+        .update("persistent")
+        .update("\0")
+        .update("desk")
+        .digest("hex")
+        .slice(0, 40),
+    );
+    expect(packaged).not.toContain("desk");
   });
 });

@@ -92,7 +92,7 @@ interface FaceEntry {
   /** PT-5a — the serial of the last refusal the page's words carried, and until when (the frame clock, ms) the head says it. */
   refusal: number;
   sayUntil: number;
-  said: LiveBrowserRefusal["what"] | undefined;
+  said: LiveBrowserRefusal | undefined;
   /** PT-5b — the bytes charged to the desk's budget for its texture (0: none charged), and the texture they were for. */
   charged: number;
   chargedFor: unknown;
@@ -137,7 +137,7 @@ export interface PaneFaces {
    * nobody sees). */
   send(e: Entity, input: LiveInput): boolean;
   /** PT-5a — what `e`'s head says for a moment: something its page asked for and was refused, while the moment lasts. */
-  saying(e: Entity): LiveBrowserRefusal["what"] | undefined;
+  saying(e: Entity): LiveBrowserRefusal | undefined;
   /** PT-5b — the pane a durable key's face is open for, and whether it is seen or held now (what `keeps` answers by). */
   entityOf(key: string): Entity | undefined;
   shown(e: Entity): boolean;
@@ -243,13 +243,13 @@ export function createPaneFaces(
     counts.landed += 1;
     const t = f.face.texture();
     const words = wordsOf(f.face);
-    // PT-5a — the page asked for something it may not have (a download): a serial that MOVED under the open face is said
+    // PT-5a — the page asked for something it may not have (a download, a permission — BP-D1): a serial that MOVED under the open face is said
     // on the head for a moment (one already there at the open is an old one's)
     const refusal = pageRefusal(f.face.info());
     const refused = refusal !== undefined && refusal.serial > f.refusal;
     if (refusal !== undefined) f.refusal = Math.max(f.refusal, refusal.serial);
     if (refused) {
-      f.said = refusal.what;
+      f.said = refusal;
       f.sayUntil = clock + REFUSAL_SAY_MS;
       speaking.add(e);
     }

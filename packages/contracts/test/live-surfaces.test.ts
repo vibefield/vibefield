@@ -289,6 +289,41 @@ describe("LSF-1 Live Surfaces contracts", () => {
       ).toBe(false);
   });
 
+  it("BP-D1: a denied PERMISSION is said too — the refusal names it, and only a permission names one", () => {
+    const state = {
+      url: "https://example.test/",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+    };
+    for (const permission of [
+      "camera",
+      "microphone",
+      "geolocation",
+      "clipboard-sanitized-write",
+      "midiSysex",
+    ]) {
+      expect(
+        LiveSurfaceBrowserStateV1.parse({
+          ...state,
+          refused: { what: "permission", permission, serial: 2 },
+        }),
+      ).toMatchObject({ refused: { what: "permission", permission, serial: 2 } });
+    }
+    for (const refused of [
+      { what: "permission", serial: 1 },
+      { what: "permission", permission: "", serial: 1 },
+      { what: "permission", permission: "Camera", serial: 1 },
+      { what: "permission", permission: "a/b", serial: 1 },
+      { what: "permission", permission: "x".repeat(49), serial: 1 },
+      { what: "permission", permission: "camera", serial: 0 },
+    ])
+      expect(
+        LiveSurfaceBrowserStateV1.safeParse({ ...state, refused }).success,
+        JSON.stringify(refused),
+      ).toBe(false);
+  });
+
   it("PT-5a: a favicon may be named WITHOUT its bytes — a summary after the first that names its key — but never without its key or its type", () => {
     const state = {
       url: "https://example.test/",

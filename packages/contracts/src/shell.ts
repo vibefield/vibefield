@@ -262,6 +262,19 @@ export type RendererReplaceRequest = z.infer<typeof RendererReplaceRequest>;
 export const RendererReplaceResult = z.object({ replacing: z.literal(true) }).passthrough();
 export type RendererReplaceResult = z.infer<typeof RendererReplaceResult>;
 
+/** main → renderer: Settings › General's "Clear browsing data" (`IPC_CHANNELS.browserDataClear`; BP-D4,
+ * thinking-browser-profile.md §3·3, 2026-10-26). Main cleared the desk's browser profile — its cookies, every site
+ * storage, the HTTP and auth caches — and any other persistent profile this shell opened, then reloaded the open pages
+ * on them, so none keeps a session it no longer has. Counts only: no path, no site, no size crosses. The request
+ * carries nothing. */
+export const BrowserDataClearResult = z
+  .object({
+    profiles: z.number().int().min(0).max(64),
+    pages: z.number().int().min(0).max(4096),
+  })
+  .passthrough();
+export type BrowserDataClearResult = z.infer<typeof BrowserDataClearResult>;
+
 /** Small host fact used only to describe platform-specific desktop behavior in
  * Settings. Unknown Electron platforms collapse to `other` at the preload
  * boundary rather than leaking Node's process object into the renderer. */

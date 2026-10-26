@@ -1,4 +1,5 @@
 import {
+  BrowserDataClearResult,
   FrameViewSetRequest,
   FrameViewState as FrameViewStateSchema,
   GodviewDeckSetRequest,
@@ -244,6 +245,27 @@ export function registerRendererReplace(
     );
     reload(event.sender);
     return RendererReplaceResult.parse({ replacing: true });
+  });
+}
+
+/** BP-D4 (thinking-browser-profile.md §3·3, 2026-10-26) — Settings › General's "Clear browsing data". Main clears this
+ * shell's browser profiles (the desk's, and any other a page opened) and reloads their open pages; the answer is counts
+ * only. Same registered-sender gate as every door here: a window this shell did not make clears nobody's sessions. */
+export function registerBrowserDataClear(
+  registry: WindowRegistry,
+  clear: () => Promise<BrowserDataClearResult>,
+  logger?: Logger,
+): void {
+  ipcMain.handle(IPC_CHANNELS.browserDataClear, async (event) => {
+    if (!registry.owns(event.sender)) {
+      logger?.warn(
+        "desktop.ipc.browser_data_clear_refused",
+        "Electron refused a browsing-data clear from an unregistered sender",
+        { webContentsId: event.sender.id },
+      );
+      throw new Error("browser data clear refused: unregistered sender");
+    }
+    return BrowserDataClearResult.parse(await clear());
   });
 }
 

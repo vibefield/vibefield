@@ -69,26 +69,69 @@ export function headStateOf(
   };
 }
 
-/** What the head says, for a moment, of something the page asked for and may not have (the SDK's `LiveBrowserRefusal`). */
+/** What the head says, for a moment, of something the page asked for and may not have (the SDK's `LiveBrowserRefusal`) —
+ * a permission's own words are `PERMISSION_WORDS`'; this is a permission the pane has no word for. */
 export const REFUSAL_WORDS: Readonly<Record<LiveBrowserRefusal["what"], string>> = {
   download: "Download blocked",
+  permission: "Permission blocked",
 };
+
+/** BP-D1 (thinking-browser-profile.md, 2026-10-26) — a refused PERMISSION, said by what the page asked for (the host's
+ * word: Chromium's own, `camera` and `microphone` for a media request). A desk's pages get none; the head says which. */
+export const PERMISSION_WORDS: Readonly<Record<string, string>> = {
+  camera: "Camera blocked",
+  microphone: "Microphone blocked",
+  geolocation: "Location blocked",
+  notifications: "Notifications blocked",
+  "clipboard-read": "Clipboard blocked",
+  "clipboard-sanitized-write": "Clipboard blocked",
+  "display-capture": "Screen sharing blocked",
+  midi: "MIDI blocked",
+  midiSysex: "MIDI blocked",
+  pointerLock: "Pointer lock blocked",
+  keyboardLock: "Keyboard lock blocked",
+  fullscreen: "Full screen blocked",
+  "window-management": "Window placement blocked",
+  "idle-detection": "Idle detection blocked",
+  "storage-access": "Cookie access blocked",
+  "top-level-storage-access": "Cookie access blocked",
+  "speaker-selection": "Speaker choice blocked",
+  fileSystem: "File access blocked",
+  hid: "Device access blocked",
+  serial: "Device access blocked",
+  usb: "Device access blocked",
+  openExternal: "Opening an app blocked",
+};
+
+/** The words the head says for a refusal: a download's, or a permission's own (`PERMISSION_WORDS`, else the general). */
+export function refusalWords(refusal: LiveBrowserRefusal): string {
+  if (refusal.what === "download") return REFUSAL_WORDS.download;
+  return Object.hasOwn(PERMISSION_WORDS, refusal.permission)
+    ? (PERMISSION_WORDS[refusal.permission] ?? REFUSAL_WORDS.permission)
+    : REFUSAL_WORDS.permission;
+}
+
 /** How long the head says it (ms). */
 export const REFUSAL_SAY_MS = 2600;
+
+/** A permission's word as the host carries it (`LiveSurfaceBrowserStateV1.refused.permission`'s shape). */
+const PERMISSION_WORD = /^[a-z][A-Za-z-]{0,47}$/;
 
 /** What the host's face says the page asked for and may not have (`info.extra.refused`), or undefined: nothing, or a word
  * this pane does not know. */
 export function pageRefusal(info: LiveInfo | undefined): LiveBrowserRefusal | undefined {
   const said = info?.extra?.refused;
   if (typeof said !== "object" || said === null) return undefined;
-  const { what, serial } = said as Partial<LiveBrowserRefusal>;
-  return typeof what === "string" &&
-    Object.hasOwn(REFUSAL_WORDS, what) &&
-    typeof serial === "number" &&
-    Number.isSafeInteger(serial) &&
-    serial > 0
-    ? { what, serial }
-    : undefined;
+  const { what, serial, permission } = said as {
+    readonly what?: unknown;
+    readonly serial?: unknown;
+    readonly permission?: unknown;
+  };
+  if (typeof serial !== "number" || !Number.isSafeInteger(serial) || serial <= 0) return undefined;
+  if (what === "download") return { what, serial };
+  if (what === "permission" && typeof permission === "string" && PERMISSION_WORD.test(permission))
+    return { what, permission, serial };
+  return undefined;
 }
 
 /** PT-5d (M7 H10) — the page's DOCUMENT as the host's face says it (`info.extra.document`: its producer's count of the

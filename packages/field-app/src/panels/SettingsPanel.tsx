@@ -25,6 +25,7 @@ import { AgentsSection } from "./agents/AgentsSection";
 import { type ProfilesRoute, ProfilesSection } from "./agents/ProfilesSection";
 import { ProfileMark } from "./agents/ProfilesView";
 import { profileNavItems } from "./agents/profiles-model";
+import { BrowserDataSection } from "./BrowserDataSection";
 import { DeskReadout } from "./DeskReadout";
 import { DesktopSection } from "./DesktopSection";
 import { MeshSection } from "./MeshSection";
@@ -435,6 +436,8 @@ export function SettingsPanel({
         />
         {/* WP12d (L3c-ii, §13 C3) — the update card, after Desktop for now */}
         <UpdatesSection desktopState={desktopState} />
+        {/* BP-D4 — the desk browser's data: Clear browsing data */}
+        <BrowserDataSection />
         <SettingsSection
           title="Settings history"
           description="User preferences are stored in the synced Loro settings document."

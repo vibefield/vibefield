@@ -6,6 +6,8 @@ const guardedBrowserSurfaceSessions = new WeakSet<object>();
 const configuredBrowserSurfaceSessions = new WeakSet<object>();
 /** PT-5a: who is told when a page's download is cancelled — by the WebContents that asked (a session is many pages'). */
 const downloadRefusals = new WeakMap<object, () => void>();
+/** BP-D1: who is told when a page's permission REQUEST is denied — by the WebContents that asked, as for a download. */
+const permissionRefusals = new WeakMap<object, (permission: string) => void>();
 
 export interface BrowserSurfaceWebRequest {
   onBeforeRequest(
@@ -20,7 +22,13 @@ export interface BrowserSurfaceWebRequest {
 export interface BrowserSurfaceSession {
   readonly webRequest: BrowserSurfaceWebRequest;
   setPermissionRequestHandler(
-    handler: (contents: unknown, permission: string, callback: (granted: boolean) => void) => void,
+    handler: (
+      contents: unknown,
+      permission: string,
+      callback: (granted: boolean) => void,
+      /** Electron's request details: a media request's carry `mediaTypes` (read defensively) */
+      details?: unknown,
+    ) => void,
   ): void;
   setPermissionCheckHandler(handler: (contents: unknown, permission: string) => boolean): void;
   on(
@@ -63,18 +71,51 @@ export interface GuardedBrowserSurfaceWebContents {
 /**
  * PT-5a — what a page asked for and was REFUSED, as its guards say it (ruling 7: answered at once, never by a native
  * window): a pop-up (its address: the pane itself goes there), a page that asked to stay on its unload, HTTP auth, a
- * download. The dialogs and the file picker are the native adapter's to say (CDP).
+ * download — and (BP-D1, thinking-browser-profile.md, 2026-10-26) a Chromium permission it REQUESTED, denied (its word:
+ * `browserSurfacePermissionWord`). The dialogs and the file picker are the native adapter's to say (CDP).
  */
-export type BrowserSurfaceGuardRefusal = "popup" | "beforeunload" | "auth" | "download";
+export type BrowserSurfaceGuardRefusal =
+  | "popup"
+  | "beforeunload"
+  | "auth"
+  | "download"
+  | "permission";
 
-/** A profile's stable opaque name — a digest of its mode and ref: profile refs never appear in a path. */
-export function browserSurfaceProfileName(source: LiveSurfaceBrowserSourceV1): string {
-  return createHash("sha256")
+/** What a refused permission request is CALLED when the pane says it (BP-D1): Chromium's own word, except a media request,
+ * which is the camera when it asks for video and the microphone when it asks for audio alone. A word outside the
+ * contract's shape (`LiveSurfaceBrowserStateV1.refused.permission`) is `unknown`, never passed through. */
+export function browserSurfacePermissionWord(permission: string, details?: unknown): string {
+  if (permission === "media") {
+    const said =
+      typeof details === "object" && details !== null
+        ? (details as { readonly mediaTypes?: unknown }).mediaTypes
+        : undefined;
+    const types = Array.isArray(said) ? said : [];
+    if (types.includes("video")) return "camera";
+    if (types.includes("audio")) return "microphone";
+  }
+  return /^[a-z][A-Za-z-]{0,47}$/.test(permission) ? permission : "unknown";
+}
+
+/**
+ * A profile's stable opaque name — a digest of its mode and ref: profile refs never appear in a path.
+ *
+ * BP-D6 (thinking-browser-profile.md §3·2, 2026-10-26): a PACKAGED shell's profile has its own name. Fuses are flipped
+ * only on the packaged copy (ESP-1), so a packaged shell's cookie store is encrypted (ESP-11) and an unpackaged one's is
+ * not, and the fuse's transition is one-way: an unpackaged shell started on the packaged data root would otherwise
+ * open — and spoil — the signed build's store. The unpackaged name is the one every profile had before, so a
+ * development desk keeps its sites.
+ */
+export function browserSurfaceProfileName(
+  source: Pick<LiveSurfaceBrowserSourceV1, "profile">,
+  packaged = false,
+): string {
+  const hash = createHash("sha256")
     .update(source.profile.mode)
     .update("\0")
-    .update(source.profile.ref)
-    .digest("hex")
-    .slice(0, 40);
+    .update(source.profile.ref);
+  if (packaged) hash.update("\0packaged");
+  return hash.digest("hex").slice(0, 40);
 }
 
 /** Stable opaque session name: profile refs never appear in Chromium partition paths. */
@@ -120,7 +161,14 @@ export function installGuardedBrowserSurfaceSession(target: BrowserSurfaceSessio
   if (configuredBrowserSurfaceSessions.has(target)) return;
   guardedBrowserSurfaceSessions.add(target);
   try {
-    target.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+    // ESP §7.4: both handlers deny. BP-D1: a REQUEST is also told to the page that asked, for the pane to say once; a
+    // CHECK stays silent — Chromium asks checks constantly, and nothing was asked of a person.
+    target.setPermissionRequestHandler((contents, permission, callback, details) => {
+      callback(false);
+      if (typeof contents === "object" && contents !== null) {
+        permissionRefusals.get(contents)?.(browserSurfacePermissionWord(permission, details));
+      }
+    });
     target.setPermissionCheckHandler(() => false);
     target.webRequest.onBeforeRequest(ALL_URLS, (details, callback) => {
       callback({ cancel: !isAllowedBrowserRequest(details.url, details.resourceType) });
@@ -137,17 +185,19 @@ export function installGuardedBrowserSurfaceSession(target: BrowserSurfaceSessio
 }
 
 /**
- * Per-source gates, installed before the first remote load. PT-5a — each answers AT ONCE and tells `refused`:
+ * Per-source gates, installed before the first remote load. PT-5a — each answers AT ONCE and tells `refused` (its
+ * `detail`: a pop-up's address, or a refused permission's word):
  *  - a pop-up (`window.open`, `target=_blank`) opens no window — its address is told (the pane itself goes there);
  *  - a page that asks to stay on its unload (`beforeunload`) LEAVES — no page blocks behind a dialog nobody sees;
  *  - HTTP auth is cancelled — the page gets its own 401;
  *  - a download the page starts is cancelled by its session's guard, and told here by the contents that asked;
+ *  - a permission the page REQUESTS is denied by its session's guard, and told here the same way (BP-D1);
  *  - a certificate the engine does not trust is REFUSED, in a line of code and never by its default alone: no page is
  *    shown over a certificate nobody vouched for (the load fails, and its face says so).
  */
 export function installGuardedBrowserSurfaceContents(
   contents: GuardedBrowserSurfaceWebContents,
-  refused: (what: BrowserSurfaceGuardRefusal, url?: string) => void = () => undefined,
+  refused: (what: BrowserSurfaceGuardRefusal, detail?: string) => void = () => undefined,
 ): void {
   contents.setWindowOpenHandler((details) => {
     refused("popup", details?.url);
@@ -174,6 +224,7 @@ export function installGuardedBrowserSurfaceContents(
     callback(false);
   });
   downloadRefusals.set(contents, () => refused("download"));
+  permissionRefusals.set(contents, (permission) => refused("permission", permission));
 }
 
 export function isGuardedBrowserSurfaceSession(value: object): boolean {

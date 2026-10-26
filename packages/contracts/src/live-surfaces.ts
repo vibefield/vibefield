@@ -202,6 +202,11 @@ export const LiveSurfaceBrowserEmulationV1 = z
   .passthrough();
 export type LiveSurfaceBrowserEmulationV1 = z.infer<typeof LiveSurfaceBrowserEmulationV1>;
 
+/** THE DESK'S BROWSER PROFILE (PT-4 ruling 3): every desk page's `profile.ref` — one persistent session, as the tabs of one
+ * browser share theirs. One declaration for both planes: the renderer mints every desk page with it, and main names the
+ * profile Settings' "Clear browsing data" clears by it (thinking-browser-profile.md BP-D4, 2026-10-26). */
+export const BROWSER_DESK_PROFILE_REF = "desk";
+
 export const LiveSurfaceBrowserSourceV1 = z
   .object({
     kind: z.literal("browser"),
@@ -508,14 +513,26 @@ export const LiveSurfaceBrowserStateV1 = z
     /** PT-5a: the page's last LOAD FAILED. `url` is still the address that was ASKED for — never the engine's error page —
      * and there is no `title`; a `reload` asks for it again. Absent once a page commits. */
     failure: z.object({ reason: LiveSurfaceLoadFailureV1 }).passthrough().optional(),
-    /** PT-5a: the last thing the page asked for that it MAY NOT have and a person should be told of — today a download,
-     * cancelled. `serial` counts the page's refusals: a holder says it (for a moment) when the serial moves, never twice. */
+    /** PT-5a: the last thing the page asked for that it MAY NOT have and a person should be told of — a download,
+     * cancelled, or (BP-D1, thinking-browser-profile.md, 2026-10-26) a Chromium PERMISSION, denied: `permission` names it
+     * (Chromium's word — `geolocation`, `notifications`, …; `camera` and `microphone` for a media request), and only a
+     * permission names one. `serial` counts the page's refusals: a holder says it (for a moment) when the serial moves, never twice. */
     refused: z
-      .object({
-        what: z.enum(["download"]),
-        serial: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
-      })
-      .passthrough()
+      .discriminatedUnion("what", [
+        z
+          .object({
+            what: z.literal("download"),
+            serial: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
+          })
+          .passthrough(),
+        z
+          .object({
+            what: z.literal("permission"),
+            permission: z.string().regex(/^[a-z][A-Za-z-]{0,47}$/),
+            serial: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
+          })
+          .passthrough(),
+      ])
       .optional(),
   })
   .passthrough();

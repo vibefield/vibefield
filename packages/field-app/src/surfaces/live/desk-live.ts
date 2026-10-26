@@ -65,6 +65,7 @@ import type {
   LiveTexture,
 } from "@vibecook/ice/desk/kit";
 import {
+  BROWSER_DESK_PROFILE_REF,
   LIVE_SURFACE_FPS_BUCKETS_V1,
   type LiveSurfaceBrowserEmulationV1,
   type LiveSurfaceBrowserStateV1,
@@ -519,8 +520,10 @@ const POOL_PREFIX = "desk:";
 const poolKey = (key: string): string => `${POOL_PREFIX}${key}`;
 
 /** THE DESK'S BROWSER PROFILE (PT-4 ruling 3): every desk page's — one persistent session, as the tabs of one browser share
- * theirs. Main keeps it under the user's data by an opaque name (`LAYOUT.BROWSER_PROFILES_DIR`), apart from the shell's. */
-export const DESK_PROFILE = "desk";
+ * theirs. Main keeps it under the user's data by an opaque name (`LAYOUT.BROWSER_PROFILES_DIR`), apart from the shell's.
+ * Declared once, in contracts (`BROWSER_DESK_PROFILE_REF`): main names the profile Settings' Clear browsing data clears by
+ * it (BP-D4). */
+export const DESK_PROFILE = BROWSER_DESK_PROFILE_REF;
 
 /**
  * THE PAGE AS A DEVICE SEES IT (PT-4 rulings 1–2): the spec's device and scheme in LSF's words — its density, a phone's or a
@@ -567,10 +570,14 @@ function browserSource(page: LiveBrowserSpec) {
   };
 }
 
-/** PT-5a: what the page asked for and may not have, as the face's words carry it (`LiveBrowserRefusal`). */
+/** PT-5a: what the page asked for and may not have, as the face's words carry it (`LiveBrowserRefusal`) — a refused
+ * permission with its word (BP-D1). */
 const refusalOf = (
   refused: NonNullable<LiveSurfaceBrowserStateV1["refused"]>,
-): LiveBrowserRefusal => ({ what: refused.what, serial: refused.serial });
+): LiveBrowserRefusal =>
+  refused.what === "permission"
+    ? { what: "permission", permission: refused.permission, serial: refused.serial }
+    : { what: "download", serial: refused.serial };
 
 /** A favicon's bytes out of the state's base64 (PT-5a: the pool's summary is whole — a favicon it names has its bytes; one
  * that came without them, which the attachment never lets through, is none). */

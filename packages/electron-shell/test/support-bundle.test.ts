@@ -1,9 +1,9 @@
-import { access, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { AuditLedgerWriter } from "@vibefield/audit";
-import { LOG_STREAMS, PORTS } from "@vibefield/contracts";
+import { LAYOUT, LOG_STREAMS, PORTS } from "@vibefield/contracts";
 import { createNoopLogger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import { CrashArtifactManager } from "../src/main/crash-artifacts";
@@ -84,6 +84,35 @@ async function fixture(extra: { doctor?: () => Record<string, unknown> } = {}) {
 }
 
 describe("previewed support bundles", () => {
+  it("BP (R6): a bundle never carries a browser profile — no file under browser/profiles, no byte of its cookies — however the profile sits in the data root", async () => {
+    const { root, logging, service } = await fixture();
+    const now = Date.now();
+    const profile = join(root, "users", "u-1", ...LAYOUT.BROWSER_PROFILES_DIR, "a".repeat(40));
+    await mkdir(profile, { recursive: true });
+    await writeFile(join(profile, "Cookies"), "VF_BROWSER_COOKIE_CANARY session=abc");
+    await writeFile(join(profile, "Local Storage"), "VF_BROWSER_COOKIE_CANARY token=xyz");
+    logging.logger.info("desktop.support.normal", "a record that names the profile's place", {
+      location: profile,
+    });
+    await logging.desktop.flush();
+    const preview = await service.preview({
+      range: { from: now - 60_000, to: now + 1_000 },
+      sources: [LOG_STREAMS.SYSTEM_DESKTOP],
+      pluginIds: [],
+      includeAudit: false,
+      crashArtifactIds: [],
+    });
+    const destination = join(root, "support-profile.tar.gz");
+    await service.export(preview.previewId, destination);
+    const files = unpackTarGz(await readFile(destination));
+    expect(files.size).toBeGreaterThan(0);
+    for (const [name, bytes] of files) {
+      expect(name).not.toMatch(/browser\/profiles|Cookies|Local Storage/);
+      expect(bytes.includes("VF_BROWSER_COOKIE_CANARY"), name).toBe(false);
+    }
+    await logging.close();
+  });
+
   it("exports a second-scrubbed default bundle with no plugin, audit, crash, or canary data", async () => {
     const { root, logging, crashes, service } = await fixture();
     const now = Date.now();

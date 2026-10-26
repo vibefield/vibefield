@@ -298,7 +298,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   /** PT-5a: the main frame's last load failed with this net error (cleared when a page commits). */
   #loadFailure: number | undefined;
   /** PT-5a: who hears what the page asked for and may not have. */
-  readonly #refusedListeners = new Set<(what: BrowserSurfaceRefusal, url?: string) => void>();
+  readonly #refusedListeners = new Set<(what: BrowserSurfaceRefusal, detail?: string) => void>();
   /**
    * PT-5b: a document of the PAGE's stands in the window — its first load committed (or failed: the engine's error page
    * stands in the asked address's place). Until then the window shows its bootstrap `about:blank`, for as long as the
@@ -429,12 +429,13 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     );
   }
 
-  /** PT-5a: the page asked for what it may not have — told to the producer (the guards have already answered the page). */
-  refused(what: BrowserSurfaceRefusal, url?: string): void {
-    for (const listener of [...this.#refusedListeners]) listener(what, url);
+  /** PT-5a: the page asked for what it may not have — told to the producer (the guards have already answered the page).
+   * `detail`: a pop-up's address, or a refused permission's word (BP-D1). */
+  refused(what: BrowserSurfaceRefusal, detail?: string): void {
+    for (const listener of [...this.#refusedListeners]) listener(what, detail);
   }
 
-  onRefused(listener: (what: BrowserSurfaceRefusal, url?: string) => void): () => void {
+  onRefused(listener: (what: BrowserSurfaceRefusal, detail?: string) => void): () => void {
     this.#refusedListeners.add(listener);
     return () => this.#refusedListeners.delete(listener);
   }
@@ -1824,18 +1825,32 @@ export class ElectronBrowserSurfaceNative implements BrowserSurfaceNative {
       },
     });
     // the guards are installed BEFORE the bootstrap document; what they refuse is told to the window made just below
-    const told: { refused?: (what: BrowserSurfaceRefusal, url?: string) => void } = {};
-    installGuardedBrowserSurfaceContents(window.webContents, (what, url) =>
-      told.refused?.(what, url),
+    const told: { refused?: (what: BrowserSurfaceRefusal, detail?: string) => void } = {};
+    installGuardedBrowserSurfaceContents(window.webContents, (what, detail) =>
+      told.refused?.(what, detail),
     );
     const bootstrapReady = window.loadURL("about:blank");
     const surface = new ElectronBrowserSurfaceWindow(window, options, bootstrapReady, this.#focus);
-    told.refused = (what, url) => surface.refused(what, url);
+    told.refused = (what, detail) => surface.refused(what, detail);
     return surface;
   }
 
   monotonicNowUs(): bigint {
     return process.hrtime.bigint() / 1_000n;
+  }
+
+  /**
+   * BP-D4 (thinking-browser-profile.md §3·3, 2026-10-26) — Settings' "Clear browsing data", for ONE persistent profile:
+   * its cookies, every site storage (local, IndexedDB, service workers, cache storage, …), the HTTP cache and the auth
+   * cache, through the SAME session the profile's pages hold (`session.fromPath` answers the one already made for the
+   * path), its cookie store flushed to disk after. The caller reloads the pages; the guards stay as they were.
+   */
+  async clearProfile(profilePath: string): Promise<void> {
+    const target = session.fromPath(profilePath, { cache: true });
+    await target.clearStorageData();
+    await target.clearCache();
+    await target.clearAuthCache();
+    await target.cookies.flushStore();
   }
 
   engineAgent(): BrowserSurfaceAgent {
