@@ -90,6 +90,7 @@ import { RootsRegistry } from "../src/workspace/roots";
 import { born } from "./agent-birth";
 import { catalogWith, SCRIPTED_CATALOG, SCRIPTED_ROW } from "./agent-catalog-fixture";
 import {
+  floorBootEvidence,
   killDaemonTree,
   nativeBinPath,
   nativeEndpoint,
@@ -497,6 +498,8 @@ async function setup(config: SetupConfig): Promise<Box> {
     mkdirSync(envOut);
     mkdirSync(home, { recursive: true });
   }
+  // when this setup spawned the floor (a restart's floor was spawned earlier): the evidence's clock (item 63)
+  let spawnedAt: number | undefined;
   if (restart !== undefined) {
     // the floor is the one already running; only fieldd is reborn
   } else if (config.floor === "mock") {
@@ -505,6 +508,7 @@ async function setup(config: SetupConfig): Promise<Box> {
     await mock.start();
     cleanup.push(() => mock.stop());
   } else {
+    spawnedAt = Date.now();
     const child = spawn(BIN, [], {
       env: {
         ...process.env,
@@ -599,12 +603,24 @@ async function setup(config: SetupConfig): Promise<Box> {
   // site this is. The race was sighted here first at QL-D10's row (the MV landing, 8a851973) and again at PJ-7's
   // (2026-10-15 12:45Z, WP12 L2b-i's verify-2). A real floor only — a restart's floor is real too; the mock serves none.
   // 30 s, inside the rows' own 60 s budgets: a floor that never sends them fails HERE, as this wait timing out, not
-  // as a refused birth deep inside a row.
-  if (config.floor === "real")
-    await poll(
-      async () => (daemon.native.terminalEndpoints !== undefined ? true : undefined),
-      30_000,
-    );
+  // as a refused birth deep inside a row. Item 63 (2026-10-26): the timeout's error carries the floor's own log and
+  // fieldd's view of the link, because the root that holds that log is removed after the row. Measured on a Mac
+  // with 10 cores: a boot takes ~55 ms warm and ~2 s on a run's first (cold) exec, and it stays flat under CPU load
+  // (2.6 s cold at load 290). So 30 s is ~11× the worst boot measured: a miss is a stalled boot, not a slow one, and
+  // the error says which step stalled.
+  if (config.floor === "real") {
+    try {
+      await poll(
+        async () => (daemon.native.terminalEndpoints !== undefined ? true : undefined),
+        30_000,
+      );
+    } catch (error) {
+      throw new Error(
+        `the floor's terminal endpoints did not reach the daemon within 30 s\n${floorBootEvidence(dataDir, spawnedAt, daemon.native)}`,
+        { cause: error },
+      );
+    }
+  }
   const records =
     restart?.records ??
     new SessionRecordStore({

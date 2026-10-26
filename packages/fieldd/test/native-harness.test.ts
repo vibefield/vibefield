@@ -4,12 +4,18 @@
 // and as nothing at all here. An explicit `platform` argument is the whole point
 // of the signatures; this is what exercises it. And where the suites' own build
 // lands: in the checkout's own target, the one `nativeBinPath` reads.
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
+import { pipeEndpointFor, SOCKETS, TerminalRouteSnapshot } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
-import { nativeBinPath, nativeBuildEnv, nativeEndpoint, shortTmpRoot } from "./native-harness";
+import {
+  floorBootEvidence,
+  nativeBinPath,
+  nativeBuildEnv,
+  nativeEndpoint,
+  shortTmpRoot,
+} from "./native-harness";
 
 describe("the suites' field-native build lands where they look for it", () => {
   const made: string[] = [];
@@ -108,5 +114,111 @@ describe("the native harness is platform-shaped (WIN-4)", () => {
         rmSync(unix, { recursive: true, force: true });
       }
     }
+  });
+});
+
+// Item 63 — a wait for the floor's terminal endpoints that times out names what the floor did, from its own log,
+// and what fieldd heard of the link. Before, it said only "poll timed out", and the log was deleted with the root.
+describe("a stalled floor boot says which step stalled", () => {
+  const made: string[] = [];
+  afterEach(() => {
+    for (const root of made.splice(0)) rmSync(root, { recursive: true, force: true });
+  });
+  const T0 = 1_792_990_000_000;
+  /** A data dir whose floor log holds `records` (and one line that is not JSON), as the suites lay it out. */
+  const dataDirWith = (records: object[]): string => {
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-evidence-"));
+    made.push(dataDir);
+    mkdirSync(join(dataDir, "logs", "system"), { recursive: true });
+    const lines = [...records.map((r) => JSON.stringify(r)), "not json"];
+    writeFileSync(join(dataDir, "logs", "system", "field-native.ndjson"), `${lines.join("\n")}\n`);
+    return dataDir;
+  };
+  const STALLED = [
+    { time: T0 + 1150, event: "field_native.lifecycle.boot_started", level: 30, attrs: {} },
+    {
+      time: T0 + 1158,
+      event: "field_native.lifecycle.ready",
+      level: 30,
+      attrs: { endpoint: "/tmp/vf-x/users/1/native/run/mgmt.sock" },
+    },
+    {
+      time: T0 + 16_204,
+      event: "field_native.terminal.cell_ended",
+      level: 40,
+      attrs: {
+        class: "agent",
+        role: "class",
+        instance: 1,
+        detail: "no hello within 15s — killed",
+        attribution: "unknown",
+        control_socket: "/tmp/vf-x/users/1/native/run/termctl.1.sock",
+      },
+    },
+    {
+      time: T0 + 16_210,
+      event: "field_native.terminal.cell_stderr",
+      level: 30,
+      attrs: { instance: 2, line: "door http://127.0.0.1:5555/?token=never-printed" },
+    },
+  ];
+
+  it("names a cell killed at its hello deadline, in ms since the spawn, and carries no socket, endpoint or line", () => {
+    const evidence = floorBootEvidence(dataDirWith(STALLED), T0, {
+      connected: false,
+      terminalRoutes: undefined,
+    });
+    expect(evidence).toContain(
+      "fieldd's link: NOT connected; no route snapshot heard (neither the hello nor a routes stream carried one)",
+    );
+    expect(evidence).toContain("the floor's log (4 event(s); ms since the spawn):");
+    expect(evidence).toContain("  +1150 field_native.lifecycle.boot_started");
+    expect(evidence).toContain(
+      '  +16204 field_native.terminal.cell_ended [level 40] class="agent" role="class" instance=1 detail="no hello within 15s — killed" attribution="unknown"',
+    );
+    expect(evidence).toContain("  +16210 field_native.terminal.cell_stderr instance=2");
+    for (const secret of ["mgmt.sock", "termctl", "token", "never-printed", "5555"])
+      expect(evidence).not.toContain(secret);
+  });
+
+  it("says what fieldd heard of the routes, and that a floor wrote no log when it wrote none", () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-evidence-"));
+    made.push(dataDir);
+    const routes = TerminalRouteSnapshot.parse({
+      revision: 3,
+      cells: [
+        {
+          cellInstanceId: 1,
+          cellBootId: "boot-1",
+          pid: 4242,
+          endpoints: {
+            controlSocket: "/tmp/vf-x/termctl.1.sock",
+            frameSocket: "/tmp/vf-x/termframe.1.sock",
+            authToken: "never-printed",
+          },
+          tokenGeneration: 1,
+          workloadClass: "agent",
+          role: "class",
+        },
+      ],
+    });
+    const evidence = floorBootEvidence(dataDir, T0, { connected: true, terminalRoutes: routes });
+    expect(evidence).toBe(
+      `fieldd's link: connected; routes heard at revision 3, 1 cell(s) (1 agent/class)\nthe floor wrote no log at ${join(dataDir, "logs", "system", "field-native.ndjson")}`,
+    );
+  });
+
+  it("a floor spawned earlier (a restart's) counts from its log's first event, and the last `limit` are shown", () => {
+    const evidence = floorBootEvidence(
+      dataDirWith(STALLED),
+      undefined,
+      { connected: true, terminalRoutes: undefined },
+      2,
+    );
+    expect(evidence).toContain(
+      "the floor's log (4 event(s), the last 2; ms since its first event):",
+    );
+    expect(evidence).toContain("  +15054 field_native.terminal.cell_ended");
+    expect(evidence).not.toContain("boot_started");
   });
 });

@@ -8,12 +8,13 @@
 // win32 branch is reachable from a unit test on a mac rather than only from a
 // Windows box.
 import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { createConnection } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
 import { cargoBinaries } from "../../../scripts/cargo-target.mjs";
+import type { NativeLink } from "../src/native-link";
 
 /** The cargo artifact for `-p field-native`: where the suites' build under
  * `nativeBuildEnv` lands, ASKED of cargo (`scripts/cargo-target.mjs`, tooling
@@ -213,4 +214,86 @@ function dialOnce(endpoint: string): Promise<string | null> {
     );
     socket.once("connect", () => settle(null));
   });
+}
+
+/** The attributes of a floor log event that a boot's evidence carries. Nothing else: the events beside them hold
+ * socket paths, endpoints, boot ids and session ids, and a cell's stderr `line` can carry its door URLs. */
+const FLOOR_EVIDENCE_ATTRS = [
+  "class",
+  "role",
+  "instance",
+  "detail",
+  "attribution",
+  "evidence",
+  "state",
+  "reason",
+  "error",
+] as const;
+
+/** Item 63 (2026-10-26) — what a real floor's boot left, for the error a wait that gave up on it throws.
+ *
+ * A suite's wait for the floor's terminal endpoints that timed out used to say only that it had timed out
+ * ("poll timed out after 30000ms"), and the floor's own log was deleted with the suite's temp root. That made one
+ * stalled boot on CI (the nightly of 2026-10-26, agent-session AR-6-0) a lottery: nobody could tell which step
+ * stalled. This reads the floor's log (`<FIELD_LOG_DIR>/system/field-native.ndjson`; the suites set FIELD_LOG_DIR
+ * to `<dataDir>/logs`) and fieldd's view of the link, so the error names it. The shapes it is built to tell apart:
+ * a cell killed at its 15 s hello deadline and respawned (`terminal.cell_ended`), a cell that crashed, and a route
+ * snapshot fieldd never heard. Times are ms since the spawn (since the log's first event when the floor was
+ * spawned earlier, as on a restart). The last `limit` events are shown. */
+export function floorBootEvidence(
+  dataDir: string,
+  spawnedAt: number | undefined,
+  link: Pick<NativeLink, "connected" | "terminalRoutes">,
+  limit = 40,
+): string {
+  const routes = link.terminalRoutes;
+  const linkLine = `fieldd's link: ${link.connected ? "connected" : "NOT connected"}; ${
+    routes === undefined
+      ? "no route snapshot heard (neither the hello nor a routes stream carried one)"
+      : `routes heard at revision ${routes.revision}, ${routes.cells.length} cell(s)${
+          routes.cells.length === 0
+            ? ""
+            : ` (${routes.cells
+                .map(
+                  (cell) =>
+                    `${cell.cellInstanceId} ${cell.workloadClass ?? "?"}/${cell.role ?? "?"}`,
+                )
+                .join(", ")})`
+        }`
+  }`;
+  const file = join(dataDir, "logs", "system", "field-native.ndjson");
+  if (!existsSync(file)) return `${linkLine}\nthe floor wrote no log at ${file}`;
+  const events: Array<{ time: number; text: string }> = [];
+  for (const line of readFileSync(file, "utf8").split("\n")) {
+    if (line.trim() === "") continue;
+    let record: {
+      time?: unknown;
+      event?: unknown;
+      level?: unknown;
+      attrs?: Record<string, unknown>;
+    };
+    try {
+      record = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (typeof record.time !== "number" || typeof record.event !== "string") continue;
+    const attrs = FLOOR_EVIDENCE_ATTRS.flatMap((key) =>
+      record.attrs?.[key] === undefined ? [] : [`${key}=${JSON.stringify(record.attrs[key])}`],
+    );
+    const level =
+      typeof record.level === "number" && record.level >= 40 ? ` [level ${record.level}]` : "";
+    events.push({
+      time: record.time,
+      text: `${record.event}${level}${attrs.length ? ` ${attrs.join(" ")}` : ""}`,
+    });
+  }
+  if (events.length === 0) return `${linkLine}\nthe floor's log at ${file} holds no event`;
+  const base = spawnedAt ?? events[0]?.time ?? 0;
+  const shown = events.slice(-limit);
+  return [
+    linkLine,
+    `the floor's log (${events.length} event(s)${shown.length < events.length ? `, the last ${shown.length}` : ""}; ms since ${spawnedAt === undefined ? "its first event" : "the spawn"}):`,
+    ...shown.map((event) => `  +${event.time - base} ${event.text}`),
+  ].join("\n");
 }

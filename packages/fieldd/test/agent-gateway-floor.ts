@@ -55,6 +55,7 @@ import {
   typedScript,
 } from "./agent-gateway-fixture";
 import {
+  floorBootEvidence,
   killDaemonTree,
   nativeBinPath,
   removeTempRoot,
@@ -259,9 +260,12 @@ export async function floor(config: FloorConfig): Promise<Floor> {
       if (zdotdir !== undefined) process.env["ZDOTDIR"] = zdotdir;
     });
   }
+  // when this floor() spawned the floor (a restart's floor was spawned earlier): the evidence's clock (item 63)
+  let spawnedAt: number | undefined;
   if (restart === undefined) {
     mkdirSync(join(dataDir, "native", "run"), { recursive: true });
     mkdirSync(join(root, "work"));
+    spawnedAt = Date.now();
     const child = spawn(FLOOR_BIN, [], {
       env: {
         ...(personHome === undefined ? process.env : personEnvironment(personHome)),
@@ -334,12 +338,21 @@ export async function floor(config: FloorConfig): Promise<Floor> {
   // The floor's terminal endpoints reach the daemon over the management link after
   // `bootstrap` resolves; a row that births a pane before they land is refused
   // UNAVAILABLE "the terminal floor is not available" (2026-10-08: red under load in
-  // 3 of 9 gates, a different AR-7 row each time). Wait for them, as a window would.
-  await poll(
-    () => (daemon.native.terminalEndpoints !== undefined ? true : undefined),
-    FLOOR_WAIT_MS,
-    "the floor's terminal endpoints reaching the daemon",
-  );
+  // 3 of 9 gates, a different AR-7 row each time). Wait for them, as a window would. Item 63 (2026-10-26): a wait
+  // that gives up says what the floor did, from its own log, and what fieldd heard of the link (the log goes with
+  // the root, which is removed after the row).
+  try {
+    await poll(
+      () => (daemon.native.terminalEndpoints !== undefined ? true : undefined),
+      FLOOR_WAIT_MS,
+      "the floor's terminal endpoints reaching the daemon",
+    );
+  } catch (error) {
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}\n${floorBootEvidence(dataDir, spawnedAt, daemon.native)}`,
+      { cause: error },
+    );
+  }
   return {
     root,
     dataDir,
