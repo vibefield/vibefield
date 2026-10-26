@@ -5,6 +5,14 @@ use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // BP-1b (2026-10-26) — the release's launch check (the stage's verify, the build job): `--version` says the name
+    // and version and exits before anything else. dyld resolves every load command before `main`, so a binary whose
+    // libraries cannot load fails here, loudly, instead of at its first boot on someone else's Mac (the package's
+    // field-native once linked Homebrew's harfbuzz; LANDED "BP-1b").
+    if std::env::args().nth(1).as_deref() == Some("--version") {
+        println!("field-native {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
     let config = NativeConfig::from_env()?;
     let boot_id = new_boot_id();
     let logging = NativeLogging::install(&config, &boot_id)?;

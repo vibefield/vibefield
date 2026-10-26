@@ -43,6 +43,12 @@ fn parse_args() -> Result<CellArgs, String> {
 }
 
 fn main() -> ExitCode {
+    // BP-1b — the release's launch check (field-native's `main` says why): the name and version, then exit, before the
+    // protocol owns stdout.
+    if std::env::args().nth(1).as_deref() == Some("--version") {
+        println!("field-terminal-host {}", env!("CARGO_PKG_VERSION"));
+        return ExitCode::SUCCESS;
+    }
     // Diagnostics belong to stderr — stdout is the two-line protocol
     // (hello, then the exit report) and nothing else may write to it. Plain
     // fmt at INFO (no env-filter feature in this crate's subscriber build;

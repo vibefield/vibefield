@@ -158,10 +158,9 @@ jobs:
       - uses: ./.github/actions/prepare-puppeteer
       - name: Build rosettad and the Ghosttea renderer from their pinned siblings
         run: pnpm siblings:build
-      # The stage COPIES field-native and its terminal cell from target/release (stage-package.mjs names the command and
-      # does not run it; field-native has no Nx target) — so the release builds them here, locked, never from a cache.
-      - name: Build field-native, the floor and its terminal cell (--locked)
-        run: cargo build --release --locked -p field-native
+      # field-native's release build is NOT a step here: `package:stage` runs THE one entry, `build:native-release`
+      # (apps/desktop/packaging/build-native-release.mjs: --locked, embedded harfbuzz), on the signed path and the unsigned
+      # path alike (BP-1b, 2026-10-26; a second site is the drift the host-links gate would catch).
       - name: Stamp the nightly's version (D6 — this checkout only, never committed)
         if: needs.plan.outputs.channel == 'nightly'
         env:
@@ -213,6 +212,14 @@ jobs:
           node packaging/verify-history-package.mjs --native-root "$app/Contents/Resources/bin"
           node packaging/verify-plugins-package.mjs --app "$app" --require-release-key
           node packaging/verify-live-surface-release.mjs --app "$app" --enumerate-only
+      # BP-1b's gate on the packaged app, signed or not (the stage's verify ran it on the stage): every Mach-O — field-native,
+      # its cell, the sidecar, Electron's helpers, every .node and .dylib — loads only /usr/lib, /System or the bundle's own
+      # paths, and the native binaries START (`--version`, under the hardened runtime once signed). Nothing else in this job
+      # loads field-native; a native plane that cannot start never publishes green.
+      - name: No host libraries, and the native plane starts (BP-1b)
+        env:
+          OUT: ${{ matrix.out }}
+        run: node scripts/host-links.mjs --app "apps/desktop/release/$OUT/VibeField.app"
       # electron-builder writes app-update.yml only for a dmg or zip target (PublishManager.js:77-80): asserted here, on the
       # release build's app — never on package:dir's (W8, corrected 2026-10-15)
       - name: The update config (B8 — app-update.yml present, provider github, no token)

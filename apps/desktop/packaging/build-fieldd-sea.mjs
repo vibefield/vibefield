@@ -558,7 +558,7 @@ async function verify({ exe, manifest }) {
         "build-fieldd-sea FAIL: --verify needs a field-native binary — fieldd's bootstrap",
         "waits for the native plane's pairing file and exits without one.",
         "",
-        "Produce it first:  cargo build --release -p field-native   (or pass --native-bin <path>)",
+        "Produce it first:  pnpm --filter @vibefield/desktop build:native-release   (or pass --native-bin <path>)",
       ].join("\n"),
     );
     process.exit(1);
@@ -586,7 +586,7 @@ async function verify({ exe, manifest }) {
     cellPresent
       ? `terminal cell staged beside the floor — ${rel(cellSource)}`
       : `no ${CELL_NAME} beside ${rel(nativeSource)}; that floor's terminal unit can only ` +
-          `report the cell missing. Build the pair: cargo build --release -p field-native`,
+          `report the cell missing. Build the pair: pnpm --filter @vibefield/desktop build:native-release`,
   );
   try {
     const ancestors = ancestorsWithNodeModules(sandbox);

@@ -38,6 +38,7 @@ import { fileURLToPath } from "node:url";
 import { BUNDLED_PLUGINS } from "../apps/desktop/packaging/bundled-list.mjs";
 // Tooling (a) — field-native's binaries are read where cargo builds them, never `<repo>/target` by guess.
 import { cargoBinaries } from "./cargo-target.mjs";
+import { auditHostLinks, launchCheck } from "./host-links.mjs";
 // Not a dependency — a repo script. scripts/siblings.mjs is the ONE reader of
 // siblings.lock.json (CLAUDE.md §Machine setup), and staging is its fourth
 // consumer after preflight, the Nx cache stamp and the dev runner.
@@ -73,7 +74,7 @@ const MODES_ENFORCEABLE = process.platform !== "win32";
 // Sidecars are architecture-specific and flat under `bin/` (EDP-22/23) — per-arch subdirectories
 // arrive with the universal-build amendment, not before.
 //
-// Tooling (a), 2026-10-26 — field-native's binaries, LIST-shaped. One `cargo build --release -p field-native` makes
+// Tooling (a), 2026-10-26 — field-native's binaries, LIST-shaped. One release build makes
 // them all; each name stages as `bin/<file>`, read from where cargo builds it (`cargoBinaries`: cargo's own target
 // directory — CARGO_TARGET_DIR, the other spelling, a config's `build.target-dir`). They were path literals,
 // `target/release/<name>` against the repo root, which a lane's CARGO_TARGET_DIR or the shared target-dir made a
@@ -270,7 +271,7 @@ const PLAN = [
         built === undefined
           ? `${binary.gap} (${nativeUnknown})`
           : `${binary.gap} (cargo builds it to ${built.path})`,
-      produce: "cargo build --release -p field-native",
+      produce: "pnpm --filter @vibefield/desktop build:native-release",
     };
   }),
   ...(process.platform === "darwin"
@@ -743,8 +744,18 @@ const verify = ({ files, manifest }, produced) => {
     problems.push(
       `SET  ${nativeStaged.join(", ")} staged without ${absent.join(", ")} — field-native's ` +
         `binaries resolve one another as siblings, and these would find none (TC-S2); rebuild ` +
-        `them all with \`cargo build --release -p field-native\``,
+        `them all with \`pnpm --filter @vibefield/desktop build:native-release\``,
     );
+  }
+
+  // BP-1b's gate (scripts/host-links.mjs; LANDED "BP-1b"): every staged Mach-O loads only `/usr/lib`, `/System` or the
+  // bundle's own paths, and the native binaries start (`--version`), so a package built against a host library refuses
+  // here, on every host, rather than at its first boot on a Mac without that library. macOS only: otool reads the load
+  // commands. The build job runs the same gate on the packaged app (Electron's helpers included).
+  if (process.platform === "darwin") {
+    problems.push(...auditHostLinks(outAbs));
+    if (nativeStaged.length === nativeStages.length)
+      for (const p of launchCheck(join(outAbs, "bin"))) problems.push(`LAUNCH  ${p}`);
   }
 
   // The manifest is generated, so its contents are an assertion rather than a copy check.
