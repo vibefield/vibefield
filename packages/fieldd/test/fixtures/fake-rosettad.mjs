@@ -124,6 +124,12 @@
 // TurnSpan[]}, withheld?: string[], truncated?: boolean, status?: number}` —
 // `status` answers every ask with it, e.g. 404 for a daemon without the
 // route). A window that holds no time is the route's own 400.
+//
+// Item 65 — FAKE_ROSETTAD_LATE_STDERR_MS: the last words reach stderr AFTER this process has exited. A refusal
+// (crash-on-start), the old binary's flag error and the schema mismatch are then written by a grandchild that holds
+// the inherited stderr pipe that many milliseconds, while this process exits at once: the order a loaded host can
+// give any child, made deterministic. Unset, they are written before the exit, as before.
+import { spawn } from "node:child_process";
 import {
   appendFileSync,
   existsSync,
@@ -152,11 +158,23 @@ const protocol = Number(process.env.FAKE_ROSETTAD_PROTOCOL ?? PROTOCOL_VERSION);
 // roll call) is empty and its ingest phase `discovering` until the walk ends.
 // This knob reproduces that window for as many milliseconds as it says.
 const censusDelayMs = Number(process.env.FAKE_ROSETTAD_CENSUS_DELAY_MS ?? "0");
+const lateStderrMs = Number(process.env.FAKE_ROSETTAD_LATE_STDERR_MS ?? "0");
 
-if (mode === "crash-on-start") {
-  process.stderr.write("fake rosettad: refusing to start (scripted)\n");
-  process.exit(2);
-}
+/** Last words, then the exit — or, under FAKE_ROSETTAD_LATE_STDERR_MS, the exit first and the words after it. */
+const sayThenExit = (words, code) => {
+  if (lateStderrMs > 0) {
+    spawn(
+      process.execPath,
+      ["-e", `setTimeout(() => process.stderr.write(${JSON.stringify(words)}), ${lateStderrMs})`],
+      { stdio: ["ignore", "ignore", "inherit"] },
+    ).unref();
+  } else {
+    process.stderr.write(words);
+  }
+  process.exit(code);
+};
+
+if (mode === "crash-on-start") sayThenExit("fake rosettad: refusing to start (scripted)\n", 2);
 
 // DEBTS (fix7) — rosetta's schema stamp (store/src/schema.rs at the pin): `serve`
 // opens the projection and FAILS CLOSED on another schema version, in rosettad's
@@ -200,10 +218,10 @@ if (args[0] === "rebuild") {
   await new Promise(() => {});
 }
 if (schemaFound() !== SCHEMA_EXPECTED) {
-  process.stderr.write(
+  sayThenExit(
     `rosettad: opening progressive ${db}: SchemaVersionMismatch { found: ${schemaFound()}, expected: ${SCHEMA_EXPECTED} }\n`,
+    1,
   );
-  process.exit(1);
 }
 
 // AR-8b — the access flags, read once before binding (AUTH.md §4)
@@ -214,8 +232,7 @@ const allowOrigins = args.flatMap((arg, at) =>
 );
 if (mode === "old-binary" && tokenPath !== undefined) {
   // an older daemon's own words for a flag it does not know (main.rs)
-  process.stderr.write("rosettad: unknown flag --token-file\n");
-  process.exit(2);
+  sayThenExit("rosettad: unknown flag --token-file\n", 2);
 }
 /** rosetta's file rule: a regular file, at most 4 KiB, owner-only on Unix */
 const readSecretFile = (path, what) => {

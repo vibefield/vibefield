@@ -317,6 +317,12 @@ export const ROSETTAD_SUPERVISION = {
   GREETING_LIMIT_BYTES: 64 * 1024,
   /** the orphan pass: how long an announced origin gets to answer `/api/status` */
   ORPHAN_PROBE_TIMEOUT_MS: 2_000,
+  /** Item 65 — after the child's exit, how long its stderr gets to END before the exit is composed. Node fires
+   * 'exit' before the child's stdio drains, and the last stderr lines are what the detail, the wrong-binary
+   * reading and the schema-mismatch reading are made of. A pipe still open past this (something else holds it,
+   * a grandchild) does not hold the supervisor: the exit is composed then, and its detail says the stream was
+   * still open. Short on purpose: the end normally follows the exit within milliseconds. */
+  STDERR_DRAIN_MS: 1_000,
 } as const;
 
 export type RosettadTimings = { [K in keyof typeof ROSETTAD_SUPERVISION]: number };
@@ -401,6 +407,8 @@ interface Generation {
   startupTimer: NodeJS.Timeout | null;
   stableTimer: NodeJS.Timeout | null;
   killTimer: NodeJS.Timeout | null;
+  /** item 65 — armed at 'exit', cleared at 'close': the bound on stderr's drain */
+  drainTimer: NodeJS.Timeout | null;
   ready: Promise<string | null>;
   exit: Promise<void>;
   settle: (origin: string | null) => void;
@@ -1143,6 +1151,7 @@ export class RosettadSupervisor extends EventEmitter {
       startupTimer: null,
       stableTimer: null,
       killTimer: null,
+      drainTimer: null,
       ready: new Promise<string | null>((resolve) => {
         settle = resolve;
       }),
@@ -1224,6 +1233,7 @@ export class RosettadSupervisor extends EventEmitter {
       if (generation.startupTimer) clearTimeout(generation.startupTimer);
       if (generation.stableTimer) clearTimeout(generation.stableTimer);
       if (generation.killTimer) clearTimeout(generation.killTimer);
+      if (generation.drainTimer) clearTimeout(generation.drainTimer);
       const last = generation.stderrLine.trim();
       if (last.length > 0) {
         generation.stderrTail.push(last.slice(0, 256));
@@ -1409,7 +1419,21 @@ export class RosettadSupervisor extends EventEmitter {
         generation.stderrLine = generation.stderrLine.slice(-2_048);
       }
     });
-    proc.on("exit", (code, sig) => exited(`rosettad exited (${sig ?? code})`));
+    // Item 65 (2026-10-26) — the exit is composed when stderr has ENDED, never at 'exit' itself: Node fires 'exit'
+    // before the child's stdio drains, so a refusal, the wrong binary's own words or rosetta's schema mismatch could
+    // land after the detail was written and after the retry was scheduled (a wrong binary was retried as a crash
+    // when its line trailed the exit). 'close' is the process gone AND its streams closed. A pipe something else
+    // still holds (a grandchild) is waited for STDERR_DRAIN_MS at most, and that detail says so; any line after
+    // it still reaches the readers' after-exit branches above.
+    proc.on("exit", (code, sig) => {
+      const how = `rosettad exited (${sig ?? code})`;
+      generation.drainTimer = setTimeout(
+        () => exited(`${how}; its stderr still open after ${this.t.STDERR_DRAIN_MS} ms`),
+        this.t.STDERR_DRAIN_MS,
+      );
+      generation.drainTimer.unref?.();
+    });
+    proc.on("close", (code, sig) => exited(`rosettad exited (${sig ?? code})`));
     proc.on("error", (error: NodeJS.ErrnoException) => {
       if (proc.pid === undefined) {
         // Failed spawns have no process and emit no exit event. A missing or

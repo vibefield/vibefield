@@ -310,6 +310,55 @@ describe("RosettadSupervisor — the index daemon's kill matrix (AR-0 S2)", () =
     expect(sup.state().phase).toBe("stopped"); // the pending retry was cancelled
   });
 
+  // Item 65 — the exit is composed when stderr has ENDED. Node fires 'exit' before the child's stdio drains, so on a
+  // loaded host the last words (a refusal, the wrong binary's flag error, rosetta's schema mismatch) could land after
+  // the detail was written and the retry scheduled. FAKE_ROSETTAD_LATE_STDERR_MS makes that order deterministic: a
+  // grandchild holding the inherited stderr writes them after the fake has exited.
+  const LATE = { FAKE_ROSETTAD_LATE_STDERR_MS: "300" };
+
+  it("item 65 — a crash whose last words reach stderr AFTER its exit still carries them in the detail", async () => {
+    const { sup, transitions } = rig("crash-on-start", {
+      spawnProcess: fakeSpawner("crash-on-start", LATE),
+    });
+    expect(await sup.start()).toBeNull();
+    await until(() => sup.state().phase === "restarting", 4_000);
+    expect(transitions.find((t) => t.phase === "restarting")?.detail).toMatch(
+      /exited \(2\) — fake rosettad: refusing to start/,
+    );
+    await sup.stop();
+  });
+
+  it("item 65 — an older binary whose words trail its exit is TERMINAL at once: never retried as a crash", async () => {
+    const handed: Handed[] = [];
+    const { sup, phases } = rig("old-binary", {
+      spawnProcess: handingSpawner("old-binary", handed, LATE),
+    });
+    expect(await sup.start()).toBeNull();
+    await until(() => sup.state().phase === "failed", 4_000, "failed");
+    expect(sup.state().detail).toMatch(/does not know --token-file.*wrong binary/);
+    // and stays there: one generation, no retry scheduled for it
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(sup.state().phase).toBe("failed");
+    expect(handed).toHaveLength(1);
+    expect(phases()).not.toContain("restarting");
+  });
+
+  it("item 65 — a stderr something else holds open past the drain bound: the exit is composed AT the bound, and the detail says the stream was still open", async () => {
+    const { sup, transitions } = rig("crash-on-start", {
+      spawnProcess: fakeSpawner("crash-on-start", { FAKE_ROSETTAD_LATE_STDERR_MS: "3000" }),
+      timings: { ...T, STDERR_DRAIN_MS: 200 },
+    });
+    const started = Date.now();
+    expect(await sup.start()).toBeNull();
+    await until(() => sup.state().phase === "restarting", 2_000);
+    // composed at the bound, never when the grandchild lets go of the pipe (3 s)
+    expect(Date.now() - started).toBeLessThan(2_500);
+    expect(transitions.find((t) => t.phase === "restarting")?.detail).toBe(
+      "rosettad exited (2); its stderr still open after 200 ms",
+    );
+    await sup.stop();
+  });
+
   it("requestRestart on a LIVE daemon bounces it — a new pid, ready again — without charging the intensity window", async () => {
     // RESTART_MAX 1: a single charged stamp inside the window means the NEXT
     // crash trips to "failed". A requested exit must not be that stamp.
@@ -439,7 +488,11 @@ interface Handed {
   dirMode: number;
 }
 
-function handingSpawner(mode: string, handed: Handed[]): typeof spawn {
+function handingSpawner(
+  mode: string,
+  handed: Handed[],
+  extraEnv: Record<string, string> = {},
+): typeof spawn {
   return ((_bin: string, args: readonly string[], options: object) => {
     const value = (flag: string): string => args[args.indexOf(flag) + 1] as string;
     const tokenFile = value("--token-file");
@@ -456,7 +509,7 @@ function handingSpawner(mode: string, handed: Handed[]): typeof spawn {
     });
     return spawn(process.execPath, [FAKE, ...args], {
       ...options,
-      env: { ...process.env, FAKE_ROSETTAD_MODE: mode },
+      env: { ...process.env, FAKE_ROSETTAD_MODE: mode, ...extraEnv },
     });
   }) as unknown as typeof spawn;
 }
@@ -597,8 +650,10 @@ describe("RosettadSupervisor — every generation behind a credential (AR-8b)", 
       4_000,
       "failed, naming the flag",
     );
-    // the exit may overtake the line that says why (one retry can slip out);
-    // the answer settles on the honest terminal one and stays there
+    // the exit is composed once stderr has ended (item 65), so the line that
+    // says why is read first; a retry can slip out only when the stream stays
+    // open past STDERR_DRAIN_MS, and the answer still settles on the honest
+    // terminal one and stays there
     await new Promise((resolve) => setTimeout(resolve, 400));
     expect(sup.state().phase).toBe("failed");
     expect(sup.state().detail).toMatch(/wrong binary/);
@@ -716,9 +771,23 @@ describe("RosettadSupervisor — a projection of another schema is rebuilt, not 
     expect(rebuilding?.pid).toBeNull();
     expect(rebuilding?.origin).toBeNull();
     expect(phases()).not.toContain("failed");
-    // (a "restarting" may precede it when the exit overtakes the line that
-    // says why; the retry it scheduled is taken back — the intensity row)
+    // (a "restarting" can precede it only when stderr stays open past
+    // STDERR_DRAIN_MS, item 65; the retry it scheduled is taken back — the
+    // intensity row)
     expect(phases().indexOf("rebuilding")).toBeLessThan(phases().lastIndexOf("ready"));
+    await sup.stop();
+  });
+
+  it("item 65 — a mismatch whose words trail the exit is REBUILT, never retried as a crash first", async () => {
+    const { sup, phases, rebuilds } = upgradeRig("ok", {
+      env: { FAKE_ROSETTAD_LATE_STDERR_MS: "300" },
+    });
+    expect(await sup.start()).toBeNull();
+    await until(() => sup.state().phase === "ready", 6_000, "served after the rebuild");
+    expect(rebuilds()).toHaveLength(1);
+    // the mismatch was read before the exit was composed: rebuilding, then ready, no retry in between
+    expect(phases().slice(0, phases().indexOf("rebuilding"))).not.toContain("restarting");
+    expect(phases()).not.toContain("failed");
     await sup.stop();
   });
 
