@@ -287,6 +287,8 @@ function service(
      * it off. The `Artifact Hub over a real daemon` block, further down, boots a
      * real daemon and therefore gets the product's answer. */
     meshBus?: boolean;
+    /** the service's clock (default `Date.now`) */
+    now?: () => number;
   } = {},
 ): ArtifactService {
   const instance = new ArtifactService({
@@ -298,6 +300,7 @@ function service(
     probe: options.probe ?? (async () => true),
     ...(options.catalog !== undefined ? { catalog: options.catalog } : {}),
     ...(options.writeIntent !== undefined ? { writeIntent: options.writeIntent } : {}),
+    ...(options.now !== undefined ? { now: options.now } : {}),
     ...(options.writeCatalogCache !== undefined
       ? { writeCatalogCache: options.writeCatalogCache }
       : {}),
@@ -315,6 +318,24 @@ function service(
   // Drain asynchronous catalog checkpoints before the fixture directory is removed.
   cleanup.push(() => instance.dispose());
   return instance;
+}
+
+/** Every key, and every primitive value, at any depth of a published value: what a "nothing private leaks"
+ * assertion reads, field by field (item 66 — never a substring over the serialization, whose numbers are clocks). */
+function keysAndValues(value: unknown): { keys: string[]; values: unknown[] } {
+  const keys: string[] = [];
+  const values: unknown[] = [];
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) node.forEach(visit);
+    else if (node !== null && typeof node === "object") {
+      for (const [key, child] of Object.entries(node)) {
+        keys.push(key);
+        visit(child);
+      }
+    } else values.push(node);
+  };
+  visit(value);
+  return { keys, values };
 }
 
 const proxy = (
@@ -1093,7 +1114,9 @@ describe("ArtifactService (AH-2 catalog)", () => {
     const dataDir = makeDataDir();
     const bridge = new FakeBridge();
     const catalog = new FakeCatalog();
-    const svc = service(dataDir, bridge, { catalog });
+    // Item 66 — at a clock whose digits spell 3000: the very ms this row once went red at (2026-10-26 07:39:51Z,
+    // `availabilityAt`), when every run on every machine failed it. The slice is judged by its own fields below.
+    const svc = service(dataDir, bridge, { catalog, now: () => 1_793_000_391_609 });
     await svc.start();
     const initialWrites = catalog.publishes.length;
 
@@ -1107,7 +1130,13 @@ describe("ArtifactService (AH-2 catalog)", () => {
       advertisedAvailability: "active",
       url: `https://unit.ts.net:${artifactPortCandidate(A)}`,
     });
-    expect(JSON.stringify(slice)).not.toMatch(/source|scheme|allow|3000/);
+    // Nothing of the private source rides the slice, at any depth: none of its keys, neither its port nor its allow
+    // list as a value, and the published URL is the artifact's own port, never the source's.
+    const { keys, values } = keysAndValues(slice);
+    for (const key of ["source", "scheme", "allow"]) expect(keys).not.toContain(key);
+    expect(values).not.toContain(3_000);
+    expect(values).not.toContain("*@example.com");
+    expect(new URL(slice.artifacts[0]?.url ?? "http://invalid").port).not.toBe("3000");
     expect(svc.artifacts()[0]).toMatchObject({
       artifactKey: `dev-self:${A}`,
       availability: "active",
