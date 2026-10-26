@@ -15155,3 +15155,131 @@ no arrival over 1.2 s.
 - **`pnpm verify` EXIT 0:** all 27 test targets fresh. field-app 2,624 / 3, electron-shell 1,927 / 2, fieldd 2,460 / 29,
   test:rust 460 / 0 / 13; gen:check clean.
 - No desk row: the change is the smoke's evidence. The EL8's smoke:canvas on the mini runs on the tree that carries it.
+
+## EL8 — ghosttea 0.13.5, the harfrust shaper: HarfBuzz 2.6.8 (CVE-2023-25193) and every C shaper leave the graph, no shipped binary defines a HarfBuzz symbol, and the release build's HARFBUZZ_SYS_NO_PKG_CONFIG retires with the host-links gate kept (2026-10-26; `4d7e324e5`, lane `hl/el8-ghosttea-0.13.5`)
+
+**What happened:** TD's landing (`454c399f2`) knowingly shipped HarfBuzz 2.6.8, the copy harfbuzz-sys 0.5.0 embeds, which is
+inside CVE-2023-25193's range: time quadratic in a run of combining marks, reachable from any terminal text. Its exit was
+ghosttea's next release, then this EL8.
+- ghosttea took the exit as harfrust 0.15.0 (#89, the HarfBuzz project's own Rust port; #88's harfbuzz_rs 3.0.1 closed as
+  the superseded baseline) and released 0.13.5: tag v0.13.5 = `60c5a228`, annotated and SSH-signed; npm 10/10 and crates
+  7/7 at 0.13.5, published 2026-10-26 14:00–14:01Z. focus-session's brief arrived 14:08Z, VF-PM's GRANT 14:10Z, and the
+  plan was approved 14:12Z.
+- **The pin, one commit:**
+  - the lock's ghosttea `release` `{npm, cargo, swift}: "0.13.5"` and sha `60c5a228` (`pnpm siblings:pin ghosttea`);
+  - Cargo.toml's `ghosttea = "=0.13.5"` and Package.swift's `ghostteaRelease`, written by `render --prod`;
+  - the five npm rows and preflight's six;
+  - the 0.13.5 release-age rows, with 0.13.4's dropped after the one install.
+  - truffle stays at 0.7.22, which 0.13.5 declares too.
+- **The locks, written by the tools:**
+  - Cargo.lock: `cargo update -p ghosttea --precise 0.13.5`.
+    - REMOVED: harfbuzz-sys 0.5.0, harfbuzz_rs 2.0.1, freetype(-sys), core-text, core-graphics(-types), core-foundation 0.9
+      and foreign-types(-shared), with **pkg-config**.
+    - ADDED: harfrust 0.15.0, read-fonts 0.46.0, and harfrust's helpers.
+    - font-types moved 0.12.2 → 0.12.7. read-fonts 0.41.0 stays through swash/skrifa.
+  - pnpm-lock: ghosttea's rows only.
+  - Package.resolved: SwiftPM's `resolve`, which fetched the Apple artifact ghosttea-apple-native-d68c21713d81 that ghosttea's
+    own manifest pins and accepted its checksum.
+- **The release build's `HARFBUZZ_SYS_NO_PKG_CONFIG=1` (BP-1b) retires,** dead because nothing in the graph reads it. The
+  entry runs cargo in the caller's environment, and the host-links test row asserts `--locked` alone. The host-links gate
+  stays as the defense.
+- **The 0.13 pin's hidden places, re-read:** the key catalog moved only its version line, and COLORFGBG did not move.
+  Between the tags only ghosttea-text/src/lib.rs, the manifests, the Apple artifact and fixtures changed. No contract and
+  no protocol minor moved (17 stands).
+
+**Found:**
+- **The switch's removal is witnessed where it mattered.** This Mac has Homebrew's harfbuzz 14.5.1, which pkg-config finds:
+  the condition BP-1b's switch existed for. The entry's release build with no switch:
+  - compiled no harfbuzz, pkg-config or freetype crate;
+  - field-native and field-terminal-host define **0 `_hb_` symbols** and link only Security, CoreFoundation, libiconv and
+    libSystem (no libc++, CoreText or CoreGraphics);
+  - `host-links --dir --launch` on the two: exit 0, "no host link", both launched.
+- **The shipped daemon is the same.** The published ghosttead-darwin-arm64 0.13.5 defines 0 `_hb_` symbols and links only
+  those four.
+- **Rendering moves sub-pixel, by ghosttea's account:** glyph ids and bitmaps are unchanged, advances move ≤ 0.015 px in its
+  locked fixture, and stacked combining marks sit where HarfBuzz 14.6 puts them. No VibeField golden shapes terminal text
+  (`pnpm still` draws the Dawn stills).
+- **The brief's read-fonts that stays is 0.41.0,** not 0.39.
+
+**Validation** (this Mac, nice 19, each step alone behind the dev-app guard, ≥ 10 GiB on both disks):
+- `pnpm siblings:pin ghosttea` EXIT 0:
+  - R23 passed, 10 rows honoured by both pins;
+  - the consumers' typecheck ran 27 projects fresh, 0 errors;
+  - gen:check was clean.
+- **The first compile:** `cargo clippy --workspace --all-targets -- -D warnings` green.
+- **`pnpm verify` on the lane's tree `0d4764964`:** EXIT 0, with all 27 test targets fresh.
+  - field-app 2,620 passed / 3 skipped; fieldd 2,456 / 29; electron-shell 1,923 / 2. Its release-binary row ran because the
+    witness built one.
+  - `test:rust` 458 / 0 / 13 in 30 suites; gen:check clean.
+- **The desk rows on the Mac mini** (James's unlock, VF-PM 16:26Z; each row alone under el8-0135-rows.sh's guard: unlocked,
+  HID idle ≥ 120 s, load < 10, df ≥ 10 GiB before every row; never `-u`). The twelve ran on the lane's tree `0d4764964`.
+  - **Ten green:** smoke 31 s, smoke:canvas:no-gpu 30 s, smoke:canvas:no-webgpu 28 s, smoke:plugin-restart 69 s,
+    smoke:plugin 52 s, smoke:godview 139 s, smoke:terminal-door 29 s, smoke:terminal-direct 33 s, smoke:studio 23 s,
+    smoke:bundled 87 s. All three terminal rows ran on the harfrust shaper, and every launcher reported `left: []`.
+  - **smoke:kind-faults red, the recorded offscreen class** (76 s): the occluded row alone, its rects identical to the
+    0.13.1 and 0.13.4 EL8s'. Not re-run.
+  - **smoke:canvas red in every run on BOTH trees.** The occluded row and the 250 ms HAND quantum appear each time, which is
+    the recorded class. What else appeared, run by run:
+
+    | tree | run | untouched (idle arithmetic) | IDLE | COVER HISTORY |
+    |---|---|---|---|---|
+    | the EL8, `fa551358d` | 1 | no: a touch ~16:42:48Z | — | red |
+    | the EL8 | 2 | no: a touch ~16:57:19Z | red, 3 submits | — |
+    | the EL8 | 3 (James away) | yes: 146 + 918 = 1,064 s | **red, 3 submits** | — |
+    | 0.13.4 control, `65fb91bbe` | 1 | yes (its one input was during the build) | — | red |
+    | the EL8 + a one-off probe | 1 | yes | — | red |
+    | the EL8 + the probe | 2 | yes | — | — |
+    | 0.13.4 control | 2 | yes: 3,280 + 937 = 4,217 s | — | red |
+
+  - **IDLE** ("the desk submitted 3 times for a still page in hand", with frames 0 and arrivals 0) is **an intermittent
+    harness/host row of unknown source** (VF-PM 18:39Z). It was 2 of 5 on the EL8's tree (1 of 3 untouched; never under
+    the probe) and 0 of 2 on 0.13.4.
+    - No mechanism is in the EL8's files. No terminal is on that desk, and the desk device's submit paths (the
+      still-taker, comment-pad, ICE) are the same code in both arms. ghosttea-react renders on its own device in its own
+      worker, out of the desk's count.
+    - The row now names its submits: PT-3 (smoke), `5b4dc7203`, landed first. The next occurrence says who, on any tree.
+  - **COVER HISTORY is a host flake on both trees** (3 of 5 and 2 of 2, untouched in both).
+  - **After the rebase**, ONE smoke:canvas on the rebased tree `f66393610`, which carries the naming. It ran untouched:
+    4,269 + 918 = 5,187 s. Its failure line holds the occluded row, HAND_NOTEBOOK 254, HAND_CALENDAR 252 and COVER HISTORY,
+    and **IDLE NAMED itself**: "the desk submitted 3 times for a still page in hand — +17 ms, +18 ms, +18 ms unlabelled
+    (ICE's or the desk's); uploads mat ×2 (1760 B), hold ×6 (192 B)".
+    - That is one burst just after the still mark. The uploads are ICE 0.16.0's `HoldPass` (the Kawase blur behind a
+      held pane: `hold/desk`, `hold/blurred`, `hold/hand`, `hold/level-N`, six 32-byte `hold/knobs-N` uniforms) and the
+      desk mat's uniforms. No still-taker or comment-pad submit was among them.
+    - So IDLE's submits are ICE re-running the held pane's blur and the mat, a desk draw outside what `perf().frames`
+      counts. The row's settle waits on frames alone, so this burst can land inside the watch.
+    - That code is identical in both trees and is not the shaper. It is the harness and ICE owners' question (Owed).
+- **The kit** on this Mac, on James's "kit ok" (VF-PM 16:26Z). Simulator iPhone 17 Pro (iOS 26.5), Xcode 26.6, derived
+  data on the SSD, nice 19, the dev-app guard and ≥ 10 GiB on both disks read before each step.
+  - The compile: `** TEST BUILD SUCCEEDED **`, SwiftPM resolving ghosttea 0.13.5 and truffle 0.7.22 by URL.
+  - FieldHomeTests 79 in 15 suites passed.
+  - **The whole kit with the PJ-7 fixture: 1,046 tests passed**, the 0.13.1 and 0.13.4 kits' own count. FieldTerminalTests'
+    176 and FieldRoutedTerminalTests' 170 passed inside it, and PJ-7's suite with them. Fixture exit 0; the tree was untouched.
+  - **FieldTerminalTests and FieldRoutedTerminalTests, each alone, were red first** at load 224–362, with the fixer's item-67
+    typecheck running: 16 and 2 issues, every one a timeout. They are the 0.13.4 kit's recorded contention class: the
+    AttachDeadline "control attach" waits, the door's refusal wait, and FakeCellDoor's stale route.
+  - **Re-run alone once each in VF-PM's window** (the fixer holding): FieldTerminalTests passed 176 / 33 in 52.9 s, armed at
+    load 18.17; FieldRoutedTerminalTests passed 170 / 26 in 9.4 s, armed at load 91. The < 10 quiet-window witness the
+    0.13.4 lane owes stays owed: the arm read 18.
+- **The rebase:** onto `43159bcd1`, which carries the release's tag at plan time, items 64's errata, 67, 69 and 70, and
+  the IDLE naming. merge-tree was rehearsed, giving tree `f66393610`. release.yml and README are touched by both sides, in
+  different hunks. range-diff `=`. **`pnpm verify` on the rebased tip:** EXIT 0 (18:54–18:59Z). 10 of 27 test targets ran fresh: those main's moves
+  and the EL8 reach, field-app 2,624 / 3, electron-shell 1,927 / 2, fieldd 2,460 / 29 and plugin-comment-pad 37. The rest
+  replayed fresh passes on identical inputs. test:rust 460 / 0 / 13 in 30 suites; gen:check clean.
+- **The push after this landing is the nightly's head** (VF-PM 17:32Z). GITHUB_TOKEN cannot create a release whose target
+  commit differs from main in `.github/workflows/`: that is why the nightly's two publish 403s happened, its target
+  cdd6b70fb predating the Electron step in verify.yml. This EL8 changes `release.yml` (one comment line). So it lands, ONE
+  push follows (items 67 and 69 with it), the nightly dispatches on that head, and nothing touching a workflow file pushes
+  to main until it publishes.
+- Logs: `/Volumes/SamsungRed/lanes/hl-el8-0135/logs/`; on the mini, `~/vf-lanes/el8gt/logs-el8-0135/` and `logs-rows/`.
+
+**Owed:**
+- **IDLE's settle** (PT-3's row; ICE's hold pass): the row waits until `perf().frames` is still, but ICE's `HoldPass` and
+  mat submit after a press on a held pane without counting a frame. Either the settle also waits for submits to stop, or
+  ICE counts that draw. It is the harness owner's line, with ICE's owner for the second.
+- **The < 10 quiet-window witness for FieldTerminalTests alone,** owed since the 0.13.4 lane: it passed alone here with the
+  arm read at load 18.
+- **Windows:** field-native's link there is safe by construction (harfrust has no C++ object, so #88's LNK2038 does not
+  arise). A re-verify on the Windows box is still the honest check, and it is the Windows port's.
+- **ghosttea's own open item:** the renderer draws one more frame (11 → 12, +15% worker CPU on its mini A/B). It is
+  ghosttea's docket item, not this pin's.
