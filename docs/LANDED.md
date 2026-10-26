@@ -14965,3 +14965,70 @@ field_native.sidecar.stderr did not arrive". The same bytes were green on main's
   - Each lost run has CI's shape exactly: 21 records accepted and 0 dropped, then the exit, `bring_up_failed` and
     "bridge shutting down" within 1 ms, and no stderr record.
 - Logs: `/Volumes/SamsungRed/lanes/item69/logs/` (`redfirst-vf/`, `proofs/`, `repro/`, `truffle/`).
+
+## WP12 — the release's tag is made at plan time, by its own job, while the planned commit is main's head: GitHub refuses GITHUB_TOKEN a tag at a commit whose workflows differ from main's, and the first signed nightly's publish met that twice (2026-10-26; `e205dff3b`, lane `rel/tag-at-plan`; VF-PM's ruling A, 17:34Z)
+
+**Why — the design's first real execution.** Nightly 40342606623 planned `cdd6b70fb` (dispatched 14:45Z). Attempt 2's
+verify was green on re-run, and James approved the build (about 16:24Z). Everything before publish went green:
+- build: signed and notarized; the LSF-4 gate green for the first time on a signed app (allow-jit read, both helpers'
+  reverse-DNS ids, team 9F79X9D26S, runtime, timestamp, Gatekeeper, staple); host-links green (24 Mach-O, no host link,
+  launched); D11 hashed (field-native `87df7fc8…`).
+- sign: `release-manifest: nightly-20261026 touches shell, fieldd, field-native` (the first signed release, with no
+  previous manifest); `release-sign: signed 6 documents`; release-verify green; converge verified again.
+- publish's first call, `gh release create nightly-20261026 --draft --target cdd6b70fb… --prerelease`, was refused:
+  `HTTP 403: Resource not accessible by integration`. Attempt 2 failed at 17:03Z and attempt 3 at 17:23Z, after a
+  settings change by James. Nothing was created: no draft, no tag, no asset.
+- The job's token held `Contents: write` (its own "GITHUB_TOKEN Permissions" block). No repository ruleset applies to
+  tags, and Immutable Releases (ON, EDP §12.4) is not the cause.
+
+**GitHub's rule** (REST "Create a release", the note block, read by VF-PM 17:30Z): when the target commit's
+`.github/workflows/` differ, the token must be authorized to modify workflows. "Otherwise, this endpoint returns 404 Not
+Found; some authentication paths surface 403 … The GITHUB_TOKEN available to GitHub Actions cannot be authorized for
+this." Main had moved to `8c50052fa` by 16:25Z. `git diff --stat cdd6b70fb 8c50052fa -- .github/` names four files:
+- verify.yml: the Electron step, the prod-builder's own lane (LANDED "CI — Electron's binary is fetched and proven
+  before any test"), and RD-5a-2's prepare-puppeteer removal;
+- release.yml and package-preview.yml (RD-5a-2);
+- the prepare-puppeteer action, deleted.
+So the push that carried that lane's step was half of what made this nightly untaggable. No setting changes the rule.
+
+**What happened** (`e205dff3b`):
+- **The `tag` job**, right after plan: `contents: write`, no environment, no secrets.
+  - It reads the tag through the API (`git/matching-refs`, then `commits/tags/<tag>`, which peels).
+  - `release-plan.mjs tag` answers `create`, `present` (a re-run, or a pushed beta/stable tag), or REFUSES in words
+    when the tag points elsewhere (used once, D7).
+  - Only `create` POSTs `git/refs`, and a refusal there names GitHub's rule and the diff to check.
+  - It runs BEFORE verify (`verify: needs: [plan, tag]`), so the window is seconds after dispatch, and a re-run of a
+    flaked verify continues on the same tag.
+- **publish** first asserts the tag's commit is plan.commit ("The tag points at the planned commit"). `gh release
+  create` drops `--target` for `--verify-tag`: it creates a release ON the tag and never a tag.
+- **release-plan.mjs:** "unchanged since the last nightly" reads the newest PUBLISHED nightly. The plan lists non-draft
+  `nightly-*` releases and passes `--last-published-nightly-commit`. "Today's nightly exists" stays by tag name.
+- **The cost, said:** a red nightly leaves `nightly-<day>` with no release, an honest record that one was attempted,
+  kept like retention's tags.
+- Betas and stables: their `v*` tag exists before the run, so the job only asserts it.
+- release.yml's permissions table gains the row: only tag and publish write.
+
+**Validation:**
+- **Red-first on main's code** (release-scripts.test.ts): 4 rows red.
+  - the newest-published rule (main ignores it);
+  - `tagAction` (not a function);
+  - the jobs list (no `tag`);
+  - the workflow's tag shape (no tag job, `--target`, `--last-nightly-commit`).
+  - "A nightly tag with no release never makes main 'unchanged'" passes on both and stands as the guard.
+- **Green:** release-scripts.test.ts 30/30; actionlint clean.
+- **The endpoints, read-only:**
+  - `matching-refs` gives 0 for the absent tag;
+  - `commits/tags/v0.2.3` on vibefield/puppeteer peels to `ee785ec1…`, as `ls-remote` does;
+  - the published-nightly read runs;
+  - the CLI prints create / present / the refusal (exit 1).
+- **`pnpm verify`** EXIT 0 on `e205dff3b` (run 4, 17:48–17:52Z, nice 19, the shared guard clear), preflight OK with its two warnings, gen:check clean, cargo 459/0/13 in 30 suites. fieldd ran fresh, 2,460/0/29. The other 26 test projects replayed passes that had run fresh in this lane on identical inputs: electron-shell 1,926/0/2 (the release rows), field-app 2,620/0/3, and the rest. The lane was gated twice: first on `8c50052fa` (`41b20ee4d`, run 2 EXIT 0; run 1 red at typecheck alone, the `.d.mts`), then cherry-picked onto `4b6b6eb13` (items 67 and 69; merge-tree rehearsal clean; range-diff `=`). Run 3 there was red on one fieldd row, the kill matrix's "rows 3+6" (`expected terminal.create to fail`, load 241). Re-run alone it passed 13/0/1: load class, as at BP-1b's run 4. The defect is the row's own race, now item 70.
+
+**Owed:**
+- **The next nightly is this design's witness:** its tag job's line (`tag: nightly-<day> at <sha> (create)`), then
+  publish on the existing tag. W10, and W11's N, follow its publish.
+- **J2's two tag rulesets** (WP12-D7), James's settings. The `nightly-*` ruleset must let the release workflow (the
+  GitHub Actions integration) CREATE, and block deletion and non-fast-forward. `v*` stays human-only.
+- **Run 40342606623's bytes are abandoned.** Its publish cannot tag `cdd6b70fb` while main's workflows differ, and the
+  next dispatch plans the head.
+- The draft corpus: WP12-D7 gains a dated note (when the tag is made), and EDP §12.2 its amendment (tag and publish
+  write, nothing else). Both ride VF-PM's next snapshot turn.
